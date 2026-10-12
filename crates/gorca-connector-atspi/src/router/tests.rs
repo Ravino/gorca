@@ -1278,3 +1278,76 @@ async fn an_unknown_start_time_never_matches_the_shell() {
     let e = st.apps.get(":1.1").unwrap();
     assert!(!st.is_shell(e.group, e.start));
 }
+
+/// TOCTOU: the victim is chosen on a snapshot of who is protected. If the Reader protects exactly
+/// that application before the eviction commits, the choice is re-validated and another victim is
+/// taken; the focused application survives.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_victim_that_becomes_focused_before_the_commit_is_spared() {
+    let c = core(|_| Duration::ZERO);
+    let focused = Arc::new(FocusedApp::new());
+    let mut r = filled(&c, Some(Arc::clone(&focused))).await;
+    // Without interference the newest name of the big group (:1.63) would be the victim.
+    let RouteDecision::Route(about_to_be_victim) = r.router.resolve(":1.63") else {
+        panic!("registered")
+    };
+    let fired = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    {
+        let (focused, fired) = (Arc::clone(&focused), Arc::clone(&fired));
+        *r.router.commit_hook.lock().unwrap() = Some(Box::new(move || {
+            if !fired.swap(true, Ordering::SeqCst) {
+                // The Reader accepts a focus on that very application, mid-decision.
+                focused.publish(about_to_be_victim.app);
+            }
+        }));
+    }
+    let newcomer = ":1.200000";
+    assert!(is_retry(&r.router.resolve(newcomer)));
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    assert!(fired.load(Ordering::SeqCst), "the race was exercised");
+    let st = r.router.state();
+    assert!(
+        st.apps.contains_key(":1.63"),
+        "the application that became focused was evicted"
+    );
+    assert!(st.apps.contains_key(newcomer), "the newcomer was served");
+    assert!(!st.apps.contains_key(":1.62"), "the next one gave way");
+}
+
+/// A failed reconciliation costs protection, never reading; the next successful one gives the
+/// protection back.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn dropped_protection_is_restored_by_the_next_good_reconciliation() {
+    let c = core(|_| Duration::ZERO);
+    let focused = Arc::new(FocusedApp::new());
+    let (new_tx, _new_apps) = mpsc::channel(64);
+    let (reg_tx, mut to_register) = mpsc::channel(64);
+    let router = Arc::new(
+        AtspiRouter::new(
+            c.registrar.clone(),
+            Clock::System,
+            Arc::new(PathTable::new()),
+            new_tx,
+            reg_tx,
+            Arc::new(Scripted::singletons()),
+        )
+        .with_focused(Arc::clone(&focused)),
+    );
+    let _ = router.resolve(":1.5");
+    router.complete(to_register.try_recv().unwrap()).await;
+    let RouteDecision::Route(app) = router.resolve(":1.5") else {
+        panic!("registered")
+    };
+    focused.publish(app.app);
+    router.drop_protection();
+    assert!(!focused.protects(app.app), "no protection while unverified");
+    assert!(
+        matches!(router.resolve(":1.5"), RouteDecision::Route(_)),
+        "reading continues"
+    );
+    // The bus answers again and still lists the application.
+    let live: HashSet<String> = [":1.5".to_owned()].into_iter().collect();
+    assert!(router.reconcile_with(&live).is_empty());
+    router.restore_protection();
+    assert!(focused.protects(app.app), "protection is back");
+}

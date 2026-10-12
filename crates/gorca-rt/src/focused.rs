@@ -53,6 +53,11 @@ pub struct FocusedApp {
     since_ms: AtomicU64,
     previous: AtomicU64,
     previous_until_ms: AtomicU64,
+    /// Bumped on every change of who is protected, so a decision made on a snapshot can be
+    /// re-validated at the moment it commits.
+    generation: AtomicU64,
+    /// The application whose protection is suspended because it could not be re-validated.
+    suspended: AtomicU64,
 }
 
 impl FocusedApp {
@@ -62,6 +67,43 @@ impl FocusedApp {
             since_ms: AtomicU64::new(0),
             previous: AtomicU64::new(0),
             previous_until_ms: AtomicU64::new(0),
+            generation: AtomicU64::new(0),
+            suspended: AtomicU64::new(0),
+        }
+    }
+
+    /// Changes whenever the set of protected applications changes.
+    pub fn generation(&self) -> u64 {
+        self.generation.load(Ordering::Acquire)
+    }
+
+    fn bump(&self) {
+        self.generation.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// Protection could not be re-validated: take it away now, but remember who had it, so that
+    /// [`FocusedApp::resume`] can give it back once the bus has confirmed the application.
+    pub fn suspend(&self) {
+        let cur = self.current.swap(0, Ordering::AcqRel);
+        if cur != 0 {
+            self.suspended.store(cur, Ordering::Release);
+        }
+        self.previous.store(0, Ordering::Release);
+        self.bump();
+    }
+
+    /// Re-validation succeeded: restore what [`FocusedApp::suspend`] took, unless the Reader has
+    /// published something newer in the meantime.
+    pub fn resume(&self) {
+        let s = self.suspended.swap(0, Ordering::AcqRel);
+        if s != 0
+            && self
+                .current
+                .compare_exchange(0, s, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+        {
+            self.since_ms.store(now_ms(), Ordering::Release);
+            self.bump();
         }
     }
 
@@ -85,6 +127,8 @@ impl FocusedApp {
         }
         self.since_ms.store(now, Ordering::Release);
         self.current.store(new, Ordering::Release);
+        self.suspended.store(0, Ordering::Release);
+        self.bump();
     }
 
     /// The Reader's focus moved to something it could not validate (or to nothing): the current
@@ -105,6 +149,7 @@ impl FocusedApp {
                 .store(now.saturating_add(GRACE_MS), Ordering::Release);
         }
         self.current.store(0, Ordering::Release);
+        self.bump();
     }
 
     /// `app` is gone (it left the bus, or reconciliation found it missing): no protection at all,
@@ -117,11 +162,17 @@ impl FocusedApp {
         if self.previous.load(Ordering::Acquire) == v {
             self.previous.store(0, Ordering::Release);
         }
+        if self.suspended.load(Ordering::Acquire) == v {
+            self.suspended.store(0, Ordering::Release);
+        }
+        self.bump();
     }
 
     pub fn clear(&self) {
         self.current.store(0, Ordering::Release);
         self.previous.store(0, Ordering::Release);
+        self.suspended.store(0, Ordering::Release);
+        self.bump();
     }
 
     /// The current focused application.
@@ -203,6 +254,32 @@ mod tests {
         g.publish_at(app(8), 200);
         g.forget(app(8));
         assert_eq!(g.get(), None);
+    }
+
+    #[test]
+    fn suspending_removes_protection_at_once_and_resuming_restores_it() {
+        let f = FocusedApp::new();
+        f.publish_at(app(1), 0);
+        let g0 = f.generation();
+        f.suspend();
+        assert_ne!(
+            f.generation(),
+            g0,
+            "a decision made before is detectably stale"
+        );
+        assert!(!f.protects_at(app(1), 1), "no protection while unverified");
+        f.resume();
+        assert!(f.protects_at(app(1), 2), "restored once verified");
+        // A newer validated focus wins over a stale suspension.
+        f.suspend();
+        f.publish_at(app(2), 10);
+        f.resume();
+        assert_eq!(f.get(), Some(app(2)));
+        // A suspended application that is gone is not restored.
+        f.suspend();
+        f.forget(app(2));
+        f.resume();
+        assert_eq!(f.get(), None);
     }
 
     #[test]

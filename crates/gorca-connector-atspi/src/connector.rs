@@ -226,9 +226,11 @@ async fn watch_shell(session: Connection, router: Arc<AtspiRouter>, clock: Clock
         };
         if process != protected {
             tracing::debug!(?process, "the shell process changed");
-            router.set_protected_process(process);
             protected = process;
         }
+        // Applied on every pass, not only on change: a protection dropped by a failed
+        // reconciliation is back within one poll.
+        router.set_protected_process(process);
         let changed = async {
             match stream.as_mut() {
                 Some(s) => s.next().await.is_some(),
@@ -270,6 +272,8 @@ async fn reconcile_loop(conn: Connection, router: Arc<AtspiRouter>, clock: Clock
         if let Some(live) = live_names(&conn, &clock).await {
             failures = 0;
             let gone = router.reconcile_with(&live);
+            // The bus answered: protection suspended by an earlier failure comes back.
+            router.restore_protection();
             if !gone.is_empty() {
                 tracing::warn!(
                     count = gone.len(),

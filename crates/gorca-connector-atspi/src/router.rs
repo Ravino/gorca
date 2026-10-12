@@ -48,6 +48,8 @@ const PARKED_OVERHEAD: usize = 64;
 pub const MAX_NAMES_PER_OWNER: usize = 64;
 /// Registered bus names of connections whose credentials are unknown, in total.
 pub const MAX_UNKNOWN_NAMES: usize = 32;
+/// Rounds of "pick a victim, re-validate" before the newcomer is refused instead.
+const PICK_ATTEMPTS: usize = 3;
 /// Attempts to learn a connection's owner before it is filed under "unknown".
 const CREDENTIALS_TRIES: usize = 3;
 /// Registered applications in total. A process that forks to multiply its per-pid caps meets this
@@ -361,6 +363,9 @@ pub struct AtspiRouter {
     focused: Option<Arc<FocusedApp>>,
     state: Mutex<State>,
     stats: Mutex<RouterStats>,
+    /// Test hook run between choosing a victim and committing to it.
+    #[cfg(test)]
+    commit_hook: Mutex<Option<Box<dyn Fn() + Send>>>,
 }
 
 impl std::fmt::Debug for AtspiRouter {
@@ -388,6 +393,20 @@ impl AtspiRouter {
             focused: None,
             state: Mutex::new(State::default()),
             stats: Mutex::new(RouterStats::default()),
+            #[cfg(test)]
+            commit_hook: Mutex::new(None),
+        }
+    }
+
+    #[cfg(test)]
+    fn run_commit_hook(&self) {
+        if let Some(h) = self
+            .commit_hook
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .as_ref()
+        {
+            h();
         }
     }
 
@@ -504,9 +523,17 @@ impl AtspiRouter {
     /// next successful lookup). Reading is unaffected: every application is still served.
     pub fn drop_protection(&self) {
         if let Some(f) = &self.focused {
-            f.clear();
+            f.suspend();
         }
         self.state().protected_process = None;
+    }
+
+    /// The bus confirmed the registered applications again: give back the protection that
+    /// [`AtspiRouter::drop_protection`] suspended (an application that is gone stays forgotten).
+    pub fn restore_protection(&self) {
+        if let Some(f) = &self.focused {
+            f.resume();
+        }
     }
 
     pub fn known_apps(&self) -> usize {
@@ -639,7 +666,30 @@ impl AtspiRouter {
         // meets this one. The focused application and protected processes never give way.
         let mut victim: Option<Arc<str>> = None;
         if st.apps.len() >= MAX_APPS_TOTAL {
-            match st.pick_victim(&newcomer, focused) {
+            // The decision is made on a snapshot of who is protected; the Reader can change that
+            // at any moment. Re-validate at the moment of commit with a generation counter, and
+            // decide again if anything moved (fail closed: still moving after a few rounds means
+            // the newcomer is refused).
+            let mut decision = Victim::RefuseNewcomer;
+            for _ in 0..PICK_ATTEMPTS {
+                let generation = focused.map(FocusedApp::generation);
+                decision = st.pick_victim(&newcomer, focused);
+                #[cfg(test)]
+                self.run_commit_hook();
+                let unchanged = generation == focused.map(FocusedApp::generation);
+                let still_ok = match &decision {
+                    Victim::Evict(name) => st
+                        .apps
+                        .get(name)
+                        .is_none_or(|e| !focused.is_some_and(|f| f.protects(e.route.app))),
+                    Victim::AdmitOverCap | Victim::RefuseNewcomer => true,
+                };
+                if unchanged && still_ok {
+                    break;
+                }
+                decision = Victim::RefuseNewcomer;
+            }
+            match decision {
                 Victim::Evict(name) => victim = Some(name),
                 Victim::AdmitOverCap => {}
                 Victim::RefuseNewcomer => {
