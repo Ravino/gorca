@@ -48,7 +48,6 @@ fn fill_to_hard_cap(tx: &gorca_ingress::IngressSender, app: u32) {
 /// Finding 1. Teardown of an app (both ends dropped) with slots pending must return them to the
 /// global budget. `Inner` has no `Drop`, so they are leaked forever.
 #[test]
-#[ignore = "audit: fails on the reference (budget leak on drop)"]
 fn audit_budget_released_when_ingress_dropped() {
     let budget = SlotBudget::new(GLOBAL_SLOT_BUDGET);
     {
@@ -71,7 +70,6 @@ fn audit_budget_released_when_ingress_dropped() {
 /// loses its lossless events: a `Window` event and an announcement of a fresh, well-behaved app
 /// are dropped (dirty-all / `announcements_dropped`) although nothing is pending anywhere.
 #[test]
-#[ignore = "audit: fails on the reference (sender churn exhausts the global budget forever)"]
 fn audit_sender_churn_exhausts_global_budget_permanently() {
     let budget = SlotBudget::new(GLOBAL_SLOT_BUDGET);
     for app in 0..5u32 {
@@ -105,7 +103,6 @@ fn audit_sender_churn_exhausts_global_budget_permanently() {
 /// 4,096 distinct senders) still holds the `IngressSender`. Signals still in flight from the dead
 /// sender keep filling an ingress nobody will ever drain, charged to the global budget.
 #[test]
-#[ignore = "audit: fails on the reference (push into a dead ingress is accepted and charged)"]
 fn audit_dead_receiver_does_not_hold_budget() {
     let budget = SlotBudget::new(GLOBAL_SLOT_BUDGET);
     let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
@@ -126,7 +123,6 @@ fn audit_dead_receiver_does_not_hold_budget() {
 /// app with nothing pending then loses its announcement (unrecoverable: a resync cannot
 /// rediscover speech) and its `Removed`/`Window` events (dirty-all).
 #[test]
-#[ignore = "audit: fails on the reference (one hostile process starves every other app)"]
 fn audit_hostile_apps_cannot_starve_a_victim() {
     let budget = SlotBudget::new(GLOBAL_SLOT_BUDGET);
     let hostile: Vec<_> = (0..4u32)

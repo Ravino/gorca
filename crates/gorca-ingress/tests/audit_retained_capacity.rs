@@ -24,7 +24,6 @@ fn rss_mib() -> u64 {
 /// so the global budget never holds more than 65,536 slots and ends at 0. Memory still grows
 /// by about 11 MiB per app and stays allocated while the apps live.
 #[test]
-#[ignore = "audit: fails on the reference (retained HashMap capacity escapes the budget)"]
 fn audit_drained_storm_releases_memory() {
     const APPS: u32 = 16;
     let budget = SlotBudget::new(GLOBAL_SLOT_BUDGET);

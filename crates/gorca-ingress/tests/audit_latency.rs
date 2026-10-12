@@ -35,7 +35,6 @@ fn window(n: u64) -> NodeEvent {
 /// Finding 6a. Fill `hard_cap - 1` lossless slots, then repeat `Removed(x)` on one node: every
 /// ~65.8k pushes one push compacts 65k slots and rebuilds two hash maps under the lock.
 #[test]
-#[ignore = "audit: fails on the reference (O(live) compaction inside one push)"]
 fn audit_single_push_is_bounded_under_tombstone_compaction() {
     let (tx, _rx) = ingress(IngressConfig::default());
     for n in 0..(HARD_CAP as u64 - 1) {
@@ -58,7 +57,6 @@ fn audit_single_push_is_bounded_under_tombstone_compaction() {
 /// Finding 6b. `drain()` builds the whole event vector of up to `hard_cap` slots while holding
 /// the lock the drain thread needs to push the next event of this app.
 #[test]
-#[ignore = "audit: fails on the reference (O(live) drain under the producer lock)"]
 fn audit_drain_critical_section_is_bounded() {
     let (tx, rx) = ingress(IngressConfig::default());
     for n in 0..HARD_CAP as u64 {

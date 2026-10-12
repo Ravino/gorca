@@ -4,13 +4,15 @@ use std::collections::HashSet;
 
 use gorca_model::NodeKey;
 
+use crate::hash::FastState;
+
 /// Overflow bound (PC-7): beyond it the set degrades to "everything is dirty".
 pub const MAX_DIRTY_NODES: usize = 65_536;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct DirtySet {
     all: bool,
-    nodes: HashSet<NodeKey>,
+    nodes: HashSet<NodeKey, FastState>,
 }
 
 impl DirtySet {
@@ -28,7 +30,7 @@ impl DirtySet {
     /// Everything must be resynced (set overflow or drain restart).
     pub fn mark_all(&mut self) {
         self.all = true;
-        self.nodes.clear();
+        self.nodes = HashSet::default();
     }
 
     pub fn is_all(&self) -> bool {
