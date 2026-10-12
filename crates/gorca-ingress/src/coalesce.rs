@@ -172,6 +172,7 @@ pub struct SlotBudget {
     /// Frees the buffers of preempted tables; ends when the budget is dropped.
     reaper: Option<SyncSender<Shed>>,
     reaper_fallbacks: AtomicU64,
+    inline_frees: AtomicU64,
 }
 
 /// The apps that hold more than `R`, behind a mutex that is only ever held for a few loads and
@@ -199,6 +200,9 @@ const REAPER_QUEUE: usize = 256;
 
 const NOT_OVER: usize = usize::MAX;
 
+/// Preempted tables an app carries to its next drain when the reaper is backed up.
+pub const MAX_PARKED: usize = 4;
+
 impl SlotBudget {
     /// A pool of `limit` units on top of the per-app reserves. Starts the reaper thread
     /// (`gorca-reaper`); it ends when the budget is dropped.
@@ -224,6 +228,7 @@ impl SlotBudget {
             over_len: AtomicUsize::new(0),
             reaper,
             reaper_fallbacks: AtomicU64::new(0),
+            inline_frees: AtomicU64::new(0),
         })
     }
 
@@ -243,6 +248,13 @@ impl SlotBudget {
     /// next drain instead.
     pub fn reaper_fallbacks(&self) -> u64 {
         self.reaper_fallbacks.load(Ordering::Relaxed)
+    }
+
+    /// Preempted tables that had to be freed on the preempting thread because the victim already
+    /// carried [`MAX_PARKED`] of them (a stalled app preempted over and over while the reaper is
+    /// backed up).
+    pub fn inline_frees(&self) -> u64 {
+        self.inline_frees.load(Ordering::Relaxed)
     }
 
     /// Units currently taken from the pool (without the per-app reserves).
@@ -339,6 +351,10 @@ impl SlotBudget {
     fn over_remove(&self, sh: &Shared) {
         // Declared before the guard, so it is dropped after it: if this is the last strong
         // reference, `Drop for Shared` calls back into this function and must find the mutex free.
+        // An app that was never over `R` (nearly all of them) is not in the set: no lock, no scan.
+        if sh.over_slot.load(Ordering::Relaxed) == NOT_OVER {
+            return;
+        }
         let moved: Option<Arc<Shared>>;
         let mut o = self.over();
         let hint = sh.over_slot.swap(NOT_OVER, Ordering::Relaxed);
@@ -583,11 +599,23 @@ impl Shared {
         }
     }
 
+    /// Keep a preempted table until this app's next drain, at most [`MAX_PARKED`] of them: a
+    /// stalled app preempted again and again while the reaper is backed up must not accumulate
+    /// memory without bound. Beyond that the table is freed right here, on the preempting
+    /// thread. That breaks the 250 us bound (AU-6) for such a push, and only in this doubly
+    /// pathological case (reaper queue full and a victim that never drains); unbounded memory
+    /// would be worse than one slow push, and the event is counted (`inline_frees`).
     fn park(&self, g: Shed) {
-        self.parked
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(g);
+        let mut p = self.parked.lock().unwrap_or_else(PoisonError::into_inner);
+        if p.len() < MAX_PARKED {
+            p.push(g);
+            return;
+        }
+        drop(p);
+        if let Some(b) = &self.budget {
+            b.inline_frees.fetch_add(1, Ordering::Relaxed);
+        }
+        drop(g);
     }
 
     /// Discard every record of the ring (receiver gone, or preemption). Returns how many.
@@ -885,6 +913,17 @@ impl IngressReceiver {
     /// Resolves when something was pushed into an empty ingress.
     pub async fn notified(&self) {
         self.shared.wake.notified().await;
+    }
+
+    /// Budget units this ingress holds: its pending slots plus the queued text deltas, each
+    /// charged once (SPEC AU-1/AU-4). At quiescence the sum over all ingresses of a budget is
+    /// exactly [`SlotBudget::used`].
+    pub fn charged_units(&self) -> usize {
+        let sh = &*self.shared;
+        let mut t = sh.lock();
+        sh.fold_all(&mut t);
+        sh.settle();
+        t.held()
     }
 
     /// Pending slots (queued events not yet delivered, after coalescing).
@@ -1339,6 +1378,20 @@ mod tests {
         assert_eq!(budget.over_len.load(Ordering::Relaxed), 0);
         drop(o);
         assert_eq!(budget.used(), 0);
+    }
+
+    /// A stalled victim preempted again and again while the reaper is backed up carries at most
+    /// `MAX_PARKED` tables; the rest are freed in place and counted.
+    #[test]
+    fn parked_tables_are_bounded() {
+        let budget = SlotBudget::build(1_000, false);
+        let (_tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+        for _ in 0..10 {
+            rx.shared.park(Shed::default());
+        }
+        assert_eq!(rx.shared.parked.lock().unwrap().len(), MAX_PARKED);
+        assert_eq!(budget.inline_frees(), 10 - MAX_PARKED as u64);
+        assert_eq!(rx.drain().garbage.shed.len(), MAX_PARKED);
     }
 
     #[tokio::test]

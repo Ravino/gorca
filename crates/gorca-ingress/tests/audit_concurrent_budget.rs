@@ -94,20 +94,84 @@ fn audit_concurrent_pushes_never_overshoot_the_budget() {
         "budget used {} at its peak, ceiling {ceiling}",
         worst.load(Ordering::Relaxed)
     );
-    let pending: usize = receivers
+    // AU-1, exact: at quiescence the budget holds precisely the slots and the charged text
+    // deltas of the ingresses.
+    let charged: usize = receivers
         .iter()
-        .map(gorca_ingress::IngressReceiver::pending)
+        .map(gorca_ingress::IngressReceiver::charged_units)
         .sum();
-    // `pending` counts slots; queued text deltas are charged too, so `used` may exceed it, but
-    // never fall below it. Equality of the whole accounting is the `used == 0` below.
-    assert!(
-        budget.used() >= pending,
-        "used {} below pending {pending}",
-        budget.used()
-    );
+    assert_eq!(budget.used(), charged, "AU-1: used != sum of charged units");
     for rx in receivers.iter() {
         rx.check_invariants().unwrap();
         drop(rx.drain());
     }
     assert_eq!(budget.used(), 0);
+}
+
+/// The reviewer's `judge_r4_au1` probe: AU-1 equality at quiescence with text deltas, two
+/// producers per app and a concurrent drainer, measured with the units the drains deliver
+/// (slots and text deltas), for a small pool (deltas collapse) and a large one (deltas queue).
+#[test]
+fn audit_au1_is_exact_at_quiescence() {
+    for round in 0..8u32 {
+        let budget = SlotBudget::new(if round % 2 == 0 { 1_000 } else { 100_000 });
+        let rxs = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let stop = Arc::new(AtomicBool::new(false));
+        let drainer = {
+            let (r, s) = (Arc::clone(&rxs), Arc::clone(&stop));
+            std::thread::spawn(move || {
+                while !s.load(Ordering::Acquire) {
+                    for rx in r.lock().unwrap().iter() {
+                        let rx: &gorca_ingress::IngressReceiver = rx;
+                        drop(rx.drain());
+                    }
+                }
+            })
+        };
+        let mut ps = Vec::new();
+        for app in 0..8u32 {
+            let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+            rxs.lock().unwrap().push(rx);
+            for p in 0..2u64 {
+                let tx = tx.clone();
+                ps.push(std::thread::spawn(move || {
+                    for i in 0..5_000u64 {
+                        tx.push(NodeEvent::WindowEvent {
+                            node: node(app, p * 1_000_000 + i),
+                            kind: WindowKind::Create,
+                        });
+                        tx.push(NodeEvent::TextChanged {
+                            node: node(app, i % 7),
+                            delta: TextDelta::Insert {
+                                offset: u32::try_from(i).unwrap_or(0) * 2,
+                                len: 1,
+                                text: None,
+                            },
+                        });
+                        tx.push(NodeEvent::FocusChanged {
+                            node: node(app, i % 5),
+                        });
+                    }
+                }));
+            }
+        }
+        for p in ps {
+            p.join().unwrap();
+        }
+        stop.store(true, Ordering::Release);
+        drainer.join().unwrap();
+        let rxs = rxs.lock().unwrap();
+        for rx in rxs.iter() {
+            rx.check_invariants().unwrap();
+        }
+        let used = budget.used();
+        let charged: usize = rxs
+            .iter()
+            .map(gorca_ingress::IngressReceiver::charged_units)
+            .sum();
+        assert_eq!(used, charged, "round {round}: used != charged units");
+        let delivered: usize = rxs.iter().map(|rx| rx.drain().events.len()).sum();
+        assert_eq!(delivered, charged, "round {round}: delivered != charged");
+        assert_eq!(budget.used(), 0);
+    }
 }
