@@ -13,3 +13,4 @@ node_modules/
 tests/web/spa/dist/
 tests/web/spa/node_modules/
 research/**/out/*.npy
+.claude/worktrees/
