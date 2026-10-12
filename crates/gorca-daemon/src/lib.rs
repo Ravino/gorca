@@ -1,33 +1,58 @@
 //! The `gorca` daemon: configuration, wiring, signals. The only crate that wires concrete
 //! implementations (ADR-0001 section 11, rule 3).
 //!
-//! Responsibility (section 11): "binary `gorca`: config, wiring, `comm=orca` (ID-2), signals
-//! (ID-3), systemd user unit". Phase 0 does the structural minimum:
+//! Phase 1 (first vertical slice) wires, on one multi-threaded tokio runtime:
 //!
-//! - a multi-threaded tokio runtime for the `workers` pool (section 3.2),
-//! - `tracing` set up from `GORCA_LOG` (falling back to `RUST_LOG`, default `info`),
-//! - SIGINT and SIGTERM cancel one shared `CancellationToken`; every task ends on it,
+//! ```text
+//! AT-SPI connector --announce/events/requests--> core (app actors, Reader lane, fetch)
+//!                                                   | epoch-tagged utterances
+//!                                                   v
+//!                       speech lane --> FailoverClient --> voicego (primary) | speech-dispatcher
+//! ```
+//!
+//! - SIGINT and SIGTERM cancel one shared `CancellationToken`; every task ends on it.
 //! - SIGUSR1 is caught and ignored. ID-3: `orca --setup` sends SIGUSR1 to a process named
-//!   `orca`, whose default action would terminate gorca. Opening gorca settings is TBD.
-//!
-//! Not yet: the hot-lane threads, `prctl(PR_SET_NAME, "orca")` (ID-2; it must run before
-//! `ScreenReaderEnabled` is set, and Phase 0 sets nothing, so it stays off so that Orca keeps
-//! working next to this binary), connector/speech/input wiring, the watchdog, the systemd unit
-//! with `RestartPreventExitStatus=SIGKILL`.
+//!   `orca`, whose default action would terminate gorca.
+//! - The connector is supervised: if the a11y bus is missing or the connector fails, it is
+//!   restarted with backoff while the rest of the daemon (speech, signals) keeps running.
+//! - Keyboard monitoring is not wired in this slice (`--no-keyboard` is accepted; with
+//!   `--impersonate-orca` the daemon would own `org.gnome.Orca.KeyboardMonitor`, which is
+//!   deliberately not done yet). `prctl(comm=orca)` stays off so that a running Orca keeps
+//!   working next to this binary; a running Orca is never killed or replaced.
 //!
 //! Allowed dependencies: everything in the workspace, since this crate is the wiring point.
 
+mod cli;
+
 use std::io::IsTerminal;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use gorca_core::{Core, CoreConfig};
-use gorca_rt::{CancellationToken, TaskSet};
+use gorca_connector_api::{Connector, ConnectorCtx};
+use gorca_connector_atspi::{AtspiConnector, AtspiOptions};
+use gorca_core::{Core, CoreConfig, SpeechOut};
+use gorca_model::{ConnectorId, Prio, Segment, SegmentKind, UttId, Utterance};
+use gorca_output_api::SpeechClient;
+use gorca_rt::{CancellationToken, Clock, EpochCell, TaskSet, mpsc};
+use gorca_speech::{
+    BackendConnectError, FailoverClient, FailoverConfig, FailoverMode, FailoverNotice, FnBackend,
+    LaneConfig, SpeechBackend, SpeechHandle, SpeechLane,
+};
+use gorca_speech_ssip::{SsipClient, SsipOptions};
+use gorca_speech_voicego::{VoicegoClient, VoicegoOptions};
+use smallvec::smallvec;
 use tokio::signal::unix::{Signal, SignalKind, signal};
 use tracing_subscriber::EnvFilter;
 
+pub use cli::{CliError, Options, Parsed, SpeechMode, USAGE, parse};
+
 /// Time given to tasks to finish after shutdown is requested.
 pub const SHUTDOWN_GRACE: Duration = Duration::from_secs(2);
+const CONNECTOR_BACKOFF_MIN: Duration = Duration::from_millis(500);
+const CONNECTOR_BACKOFF_MAX: Duration = Duration::from_secs(5);
+/// Utterance ids of daemon announcements start here, clear of the Reader's counter.
+const NOTICE_UTT_BASE: u64 = 1 << 62;
 
 /// Install the global `tracing` subscriber (stderr). Call once, before the runtime starts.
 pub fn init_tracing() -> Result<()> {
@@ -96,19 +121,207 @@ impl Signals {
     }
 }
 
-/// Run the daemon until `shutdown` is cancelled.
-pub async fn run(shutdown: CancellationToken) -> Result<()> {
+/// Feeds the core's utterances to the speech lane.
+#[derive(Debug, Clone)]
+struct LaneOut(SpeechHandle);
+
+impl SpeechOut for LaneOut {
+    fn submit(&self, utterance: Utterance) {
+        self.0.submit(utterance);
+    }
+
+    fn notify_epoch(&self) {
+        self.0.notify_epoch();
+    }
+}
+
+fn voicego_backend(opts: &Options) -> Arc<dyn SpeechBackend> {
+    let vopts = VoicegoOptions {
+        path: opts.voicego_socket.clone(),
+        ..VoicegoOptions::default()
+    };
+    Arc::new(FnBackend::new("voicego", move |deadline| {
+        let vopts = vopts.clone();
+        async move {
+            VoicegoClient::connect(&vopts, deadline)
+                .await
+                .map(|c| Box::new(c) as Box<dyn SpeechClient>)
+                .map_err(|e| BackendConnectError::new("voicego", e.to_string()))
+        }
+    }))
+}
+
+fn ssip_backend(opts: &Options) -> Arc<dyn SpeechBackend> {
+    let sopts = SsipOptions {
+        path: opts.ssip_socket.clone(),
+        ..SsipOptions::default()
+    };
+    Arc::new(FnBackend::new("speech-dispatcher", move |deadline| {
+        let sopts = sopts.clone();
+        async move {
+            SsipClient::connect(&sopts, deadline)
+                .await
+                .map(|c| Box::new(c) as Box<dyn SpeechClient>)
+                .map_err(|e| BackendConnectError::new("speech-dispatcher", e.to_string()))
+        }
+    }))
+}
+
+/// The speech backends in order and the failover mode for `--speech`.
+fn speech_plan(opts: &Options) -> (Vec<Arc<dyn SpeechBackend>>, FailoverMode) {
+    match opts.speech {
+        SpeechMode::Auto => (
+            vec![voicego_backend(opts), ssip_backend(opts)],
+            FailoverMode::Auto,
+        ),
+        SpeechMode::Voicego => (vec![voicego_backend(opts)], FailoverMode::Only(0)),
+        SpeechMode::Ssip => (vec![ssip_backend(opts)], FailoverMode::Only(0)),
+    }
+}
+
+fn notice_text(n: FailoverNotice) -> String {
+    match n {
+        FailoverNotice::Fallback { from, to } => format!("{from} unavailable, using {to}"),
+        FailoverNotice::Restored { backend } => format!("{backend} restored"),
+        FailoverNotice::Unavailable => "speech service unavailable".to_owned(),
+    }
+}
+
+/// Speaks failover notices ("voicego unavailable, using speech-dispatcher"). They are
+/// announcements, not answers to a key press, so they never cancel and survive focus changes.
+async fn announce_notices(
+    mut notices: mpsc::Receiver<FailoverNotice>,
+    speech: SpeechHandle,
+    epoch: Arc<EpochCell>,
+) {
+    let mut next = NOTICE_UTT_BASE;
+    while let Some(n) = notices.recv().await {
+        tracing::warn!(notice = ?n, "speech backend changed");
+        next += 1;
+        let u = Utterance {
+            id: UttId(next),
+            segments: smallvec![Segment {
+                text: Arc::from(notice_text(n)),
+                kind: SegmentKind::Text,
+            }],
+            lang: None,
+            epoch: epoch.current(),
+            prio: Prio::Message,
+            may_refine: false,
+            survives_focus_change: true,
+        };
+        speech.submit(u);
+    }
+}
+
+/// Keep the AT-SPI connector running: restart it with backoff when it fails (bus missing,
+/// connection lost). Returns when `shutdown` is cancelled.
+async fn supervise_connector(
+    opts: AtspiOptions,
+    registry: gorca_connector_api::AppRegistrar,
+    shutdown: CancellationToken,
+) {
+    let mut backoff = CONNECTOR_BACKOFF_MIN;
+    loop {
+        let started = tokio::time::Instant::now();
+        let ctx = ConnectorCtx {
+            id: registry.connector(),
+            registry: registry.clone(),
+            shutdown: shutdown.child_token(),
+            clock: Clock::System,
+        };
+        let connector = Box::new(AtspiConnector::new(opts.clone()));
+        match connector.run(ctx).await {
+            Ok(()) => return,
+            Err(e) => tracing::warn!(error = %e, ?backoff, "AT-SPI connector failed; retrying"),
+        }
+        tokio::select! {
+            () = shutdown.cancelled() => return,
+            () = tokio::time::sleep(backoff) => {}
+        }
+        // A connector that ran for a while was healthy: start the backoff over.
+        backoff = if started.elapsed() > Duration::from_secs(30) {
+            CONNECTOR_BACKOFF_MIN
+        } else {
+            (backoff * 2).min(CONNECTOR_BACKOFF_MAX)
+        };
+    }
+}
+
+/// Run the daemon with signal handling until a signal or `shutdown`.
+pub async fn run(opts: Options, shutdown: CancellationToken) -> Result<()> {
     // Handlers are installed before the "started" line, so a supervisor (or a test) that
     // signals right after seeing it cannot hit the default action.
     let signals = Signals::install()?;
     let mut tasks = TaskSet::new(shutdown.clone());
     tasks.spawn("signals", signals.serve(shutdown.clone()));
+    let result = run_with(opts, shutdown.clone()).await;
+    shutdown.cancel();
+    tasks.shutdown(SHUTDOWN_GRACE).await;
+    result
+}
 
-    let core = Core::new(CoreConfig {
+/// The daemon without signal handlers (tests run several in one process).
+pub async fn run_with(opts: Options, shutdown: CancellationToken) -> Result<()> {
+    let mut tasks = TaskSet::new(shutdown.clone());
+    let mut core = Core::new(CoreConfig {
         shutdown_grace: SHUTDOWN_GRACE,
+        ..CoreConfig::default()
     });
+    let registry = core.connector_registrar(ConnectorId(1));
+    let epoch = core.epoch();
+
+    // Speech: failover client under the speech lane.
+    let (backends, mode) = speech_plan(&opts);
+    let (client, notices) = FailoverClient::spawn(
+        &mut tasks,
+        backends,
+        FailoverConfig {
+            mode,
+            ..FailoverConfig::default()
+        },
+    );
+    let speech = SpeechLane::spawn(
+        &mut tasks,
+        Arc::clone(&epoch),
+        Box::new(client),
+        LaneConfig::default(),
+    );
+    tasks.spawn(
+        "speech-notices",
+        announce_notices(notices, speech.clone(), Arc::clone(&epoch)),
+    );
+    let core = core.with_speech(Arc::new(LaneOut(speech)));
+
+    if opts.no_keyboard {
+        tracing::info!("keyboard monitoring disabled (--no-keyboard)");
+    } else {
+        tracing::info!("keyboard monitoring is not available in this build");
+    }
+    if opts.impersonate_orca {
+        tracing::warn!(
+            "--impersonate-orca has no effect yet: the keyboard lane is not wired, so \
+             org.gnome.Orca.KeyboardMonitor is not requested"
+        );
+    }
+
+    tasks.spawn(
+        "atspi-connector",
+        supervise_connector(
+            AtspiOptions {
+                a11y_address: opts.a11y_address.clone(),
+                session_address: opts.session_address.clone(),
+                enable_accessibility: !opts.no_enable,
+                register_events: true,
+            },
+            registry,
+            shutdown.clone(),
+        ),
+    );
+
     tracing::info!(
         workers = std::thread::available_parallelism().map_or(1, usize::from),
+        speech = ?opts.speech,
         "gorca started"
     );
     let result = core.run(shutdown.clone()).await;
@@ -136,15 +349,49 @@ mod tests {
     }
 
     #[test]
-    fn run_ends_when_the_token_is_cancelled() {
+    fn notices_are_plain_sentences() {
+        assert_eq!(
+            notice_text(FailoverNotice::Fallback {
+                from: "voicego",
+                to: "speech-dispatcher"
+            }),
+            "voicego unavailable, using speech-dispatcher"
+        );
+    }
+
+    #[test]
+    fn speech_plan_follows_the_flag() {
+        let mut o = Options::default();
+        assert_eq!(speech_plan(&o).0.len(), 2);
+        assert_eq!(speech_plan(&o).1, FailoverMode::Auto);
+        o.speech = SpeechMode::Ssip;
+        let (b, m) = speech_plan(&o);
+        assert_eq!((b.len(), m), (1, FailoverMode::Only(0)));
+        assert_eq!(b[0].name(), "speech-dispatcher");
+        o.speech = SpeechMode::Voicego;
+        assert_eq!(speech_plan(&o).0[0].name(), "voicego");
+    }
+
+    /// The daemon must survive a missing a11y bus and a missing speech service, and stop on
+    /// request.
+    #[test]
+    fn run_survives_missing_services_and_stops_on_cancel() {
         let rt = build_runtime().unwrap();
         rt.block_on(async {
             let token = CancellationToken::new();
-            let h = tokio::spawn(run(token.clone()));
-            tokio::time::sleep(Duration::from_millis(50)).await;
-            assert!(!h.is_finished());
+            let opts = Options {
+                a11y_address: Some("unix:path=/nonexistent/gorca-a11y".to_owned()),
+                session_address: Some("unix:path=/nonexistent/gorca-session".to_owned()),
+                voicego_socket: Some("/nonexistent/voicego.sock".into()),
+                ssip_socket: Some("/nonexistent/speechd.sock".into()),
+                ..Options::default()
+            };
+            let h = tokio::spawn(run_with(opts, token.clone()));
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            assert!(!h.is_finished(), "the daemon stays up without its services");
             token.cancel();
-            h.await.unwrap().unwrap();
+            let r = tokio::time::timeout(Duration::from_secs(5), h).await;
+            assert!(matches!(r, Ok(Ok(Ok(())))), "{r:?}");
         });
     }
 }

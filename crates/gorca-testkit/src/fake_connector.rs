@@ -108,7 +108,9 @@ fn reply_for(op: &BackendOp) -> BackendReply {
         BackendOp::Text(_) => BackendReply::Text(Arc::from("")),
         BackendOp::HitTest { .. } => BackendReply::Hit(None),
         BackendOp::Collection(_) => BackendReply::Matches(Vec::new()),
-        BackendOp::Fetch { .. } | BackendOp::Action(_) => BackendReply::ActionDone,
+        BackendOp::Fetch { .. } | BackendOp::Action(_) | BackendOp::Probe => {
+            BackendReply::ActionDone
+        }
     }
 }
 

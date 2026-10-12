@@ -86,6 +86,12 @@ impl Default for IngressFactory {
 /// app we track": the signal is counted as unrouted and dropped.
 pub trait Router: Send + Sync + 'static {
     fn route(&self, sender: &str) -> Option<AppRoute>;
+
+    /// Called on the drain thread, before the event is pushed, for every `FocusChanged` the
+    /// drain maps. `path` is the object path of the signal, of which `node.local` is the hash
+    /// ([`local_id`]): a connector that must call the object later records the reverse mapping
+    /// here. Rare (focus only) and must be O(1) and non-blocking; the default does nothing.
+    fn focus_seen(&self, _app: AppId, _node: gorca_model::NodeKey, _path: &str) {}
 }
 
 #[derive(Clone, Debug)]

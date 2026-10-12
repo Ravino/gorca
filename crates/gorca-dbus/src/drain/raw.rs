@@ -557,6 +557,9 @@ impl<'a> Conn<'a> {
             self.batch.ignored += 1;
         }
         for ev in self.mapped.drain(..) {
+            if let gorca_model::NodeEvent::FocusChanged { node } = &ev {
+                self.router.focus_seen(route.app, *node, path);
+            }
             route.tx.push(ev);
             self.batch.pushed += 1;
         }

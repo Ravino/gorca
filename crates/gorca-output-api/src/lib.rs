@@ -14,6 +14,7 @@
 
 mod braille;
 mod speech;
+pub mod track;
 
 pub use braille::{BrailleBackend, BrailleCaps, BrailleError, BrailleRegion};
 pub use speech::{

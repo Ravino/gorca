@@ -618,13 +618,20 @@ name = "gorca-connector-atspi"
 version = "0.0.0"
 dependencies = [
  "atspi",
+ "futures-lite",
  "gorca-connector-api",
+ "gorca-core",
  "gorca-dbus",
  "gorca-doc-source-api",
+ "gorca-ingress",
  "gorca-model",
  "gorca-rt",
+ "gorca-testkit",
+ "serde",
+ "thiserror",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "zbus",
 ]
 
@@ -643,6 +650,7 @@ dependencies = [
  "gorca-output-api",
  "gorca-rt",
  "gorca-speech",
+ "gorca-testkit",
  "smallvec",
  "thiserror",
  "tokio",
@@ -654,8 +662,18 @@ name = "gorca-daemon"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "gorca-connector-api",
+ "gorca-connector-atspi",
  "gorca-core",
+ "gorca-model",
+ "gorca-output-api",
  "gorca-rt",
+ "gorca-speech",
+ "gorca-speech-ssip",
+ "gorca-speech-voicego",
+ "gorca-testkit",
+ "smallvec",
+ "thiserror",
  "tokio",
  "tokio-util",
  "tracing",
@@ -799,7 +817,13 @@ dependencies = [
  "gorca-model",
  "gorca-output-api",
  "gorca-rt",
+ "gorca-speech-ssip",
+ "gorca-speech-voicego",
+ "gorca-testkit",
  "smallvec",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -809,7 +833,10 @@ dependencies = [
  "gorca-model",
  "gorca-output-api",
  "gorca-rt",
+ "gorca-testkit",
  "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -819,6 +846,10 @@ dependencies = [
  "gorca-model",
  "gorca-output-api",
  "gorca-rt",
+ "gorca-testkit",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -831,6 +862,7 @@ dependencies = [
  "gorca-model",
  "gorca-rt",
  "smallvec",
+ "thiserror",
  "tokio",
 ]
 

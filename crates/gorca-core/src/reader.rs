@@ -30,6 +30,10 @@ const REPLY_QUEUE: usize = 64;
 const BACKGROUND_QUEUE: usize = 64;
 /// At most this many messages per [`Reader::drain`] call, so one call stays bounded.
 const MAX_BATCH: usize = 256;
+/// A second focus event for the node that just got focus, within this window, is the same
+/// focus change reported twice (GTK3 and atk-bridge emit both `focus:` and
+/// `state-changed:focused`). It must not restart presentation.
+pub const DUPLICATE_FOCUS_WINDOW: std::time::Duration = std::time::Duration::from_millis(150);
 
 #[derive(Clone, Copy, Debug)]
 pub enum FocusLaneMsg {
@@ -125,6 +129,19 @@ pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
 }
 
 impl ReaderInbox {
+    /// Wait for the next message with the same bias as [`ReaderInbox::poll`]: input, focus
+    /// lane, query replies, background lane. `None` once every sender is gone. Cancel-safe.
+    pub async fn next(&mut self) -> Option<ReaderMsg> {
+        tokio::select! {
+            biased;
+            Some(k) = self.key.recv() => Some(ReaderMsg::Key(k)),
+            Some(f) = self.focus.recv() => Some(ReaderMsg::Focus(f)),
+            Some(r) = self.replies.recv() => Some(ReaderMsg::Reply(r)),
+            Some(b) = self.background.recv() => Some(ReaderMsg::Background(b)),
+            else => None,
+        }
+    }
+
     /// Biased poll: input, focus lane, query replies, background lane. Never waits.
     pub fn poll(&mut self) -> Option<ReaderMsg> {
         if let Ok(k) = self.key.try_recv() {
@@ -153,6 +170,8 @@ pub struct Reader {
     next_utt: u64,
     ambiguous_keys: u64,
     stale_replies_dropped: u64,
+    duplicate_focus_dropped: u64,
+    last_focus: Option<(NodeKey, Instant)>,
 }
 
 impl Reader {
@@ -166,7 +185,14 @@ impl Reader {
             next_utt: 0,
             ambiguous_keys: 0,
             stale_replies_dropped: 0,
+            duplicate_focus_dropped: 0,
+            last_focus: None,
         }
+    }
+
+    /// Focus events ignored as duplicates of the one just handled.
+    pub fn duplicate_focus_dropped(&self) -> u64 {
+        self.duplicate_focus_dropped
     }
 
     pub fn focus(&self) -> FocusState {
@@ -247,6 +273,14 @@ impl Reader {
     fn on_focus(&mut self, f: FocusLaneMsg, now: Instant, fx: &mut ReaderEffects) {
         match f {
             FocusLaneMsg::FocusChanged { node } => {
+                if let Some((last, at)) = self.last_focus
+                    && last == node
+                    && now.saturating_duration_since(at) < DUPLICATE_FOCUS_WINDOW
+                {
+                    self.duplicate_focus_dropped += 1;
+                    return;
+                }
+                self.last_focus = Some((node, now));
                 // The epoch advances first, so stale speech cancels now, not after δ (E-2).
                 let epoch = self.epoch.advance();
                 let role = self.dir.lookup(node).hit().map(|n| n.role);

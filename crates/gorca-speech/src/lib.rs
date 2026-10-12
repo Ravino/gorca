@@ -17,10 +17,18 @@
 //! backend (`gorca-speech-*`).
 #![deny(clippy::wildcard_enum_match_arm)]
 
+mod backend;
+mod failover;
+#[cfg(test)]
+mod fake;
+mod lane;
 mod queue;
 mod state;
 mod verbalize;
 
+pub use backend::{BackendConnectError, FnBackend, SpeechBackend};
+pub use failover::{FailoverClient, FailoverConfig, FailoverMode, FailoverNotice};
+pub use lane::{LaneConfig, SpeechHandle, SpeechLane, SpeechStats};
 pub use queue::{FIFO_CAPACITY, SpeechQueue};
 pub use state::{
     REPLACE_DEADLINE, SpeechEffect, SpeechMsg, SpeechState, StepCtx, UttMeta, backoff,

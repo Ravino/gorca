@@ -12,6 +12,12 @@ gorca-model = { workspace = true }
 gorca-rt = { workspace = true }
 gorca-output-api = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["net", "io-util"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+gorca-testkit = { workspace = true }
+tokio = { workspace = true, features = ["net", "io-util", "test-util"] }
 
 [lints]
 workspace = true

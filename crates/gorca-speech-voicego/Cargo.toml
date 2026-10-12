@@ -1,6 +1,6 @@
 [package]
 name = "gorca-speech-voicego"
-description = "voicego native SpeechClient. Skeleton with TBD-V1..V6 markers."
+description = "voicego native SpeechClient (binary-framed SSIP over a UNIX socket)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,6 +11,13 @@ publish.workspace = true
 gorca-model = { workspace = true }
 gorca-rt = { workspace = true }
 gorca-output-api = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["net", "io-util"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+gorca-testkit = { workspace = true }
+tokio = { workspace = true, features = ["net", "io-util", "test-util"] }
 
 [lints]
 workspace = true
