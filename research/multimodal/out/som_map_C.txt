@@ -1,0 +1,64 @@
+[0,0] n= 67 gnome-terminal(23) paragraphs: terminal, tree, view, plugin
+[0,1] n= 54 gedit(35) paragraphs: file, gedit, open, new
+[0,2] n= 16 gnome-terminal(13) paragraphs: include, menubar, notified, fullscreen
+[0,3] n= 78 orca(78) paragraphs: value, checked, default, verbose
+[0,4] (empty)
+[0,5] n= 16 orca(7) headings: existing, profile, changing, new
+[0,6] n= 49 gedit(22) headings: file, introduction, zoom, files
+[0,7] n= 83 orca(45) headings: commands, preferences, plugin, navigation
+[1,0] n= 47 orca(47) paragraphs: orca, commands, where, feature
+[1,1] n=  3 orca(2) paragraphs: following, three, commands, supports
+[1,2] n= 48 gnome-terminal(23) paragraphs: section, shortcuts, options, existing
+[1,3] n=  7 orca(4) paragraphs: value, firefox, thunderbird, checked
+[1,4] (empty)
+[1,5] n= 49 orca(29) headings: enable, speak, plugin, keys
+[1,6] n= 31 orca(18) headings: speech, format, voice, shortcuts
+[1,7] n=  3 orca(2) headings: headings, preferences, orca, terminal
+[2,0] n=106 orca(106) paragraphs: orca, checkbox, checked, announce
+[2,1] n= 23 orca(23) paragraphs: spoken, controls, pressed, option
+[2,2] n= 28 accerciser(15) paragraphs: self, event, focused, last
+[2,3] n= 19 gedit(11) paragraphs: import, visit, drop, drag
+[2,4] (empty)
+[2,5] n= 35 orca(21) headings: automatic, running, web, plugin
+[2,6] n= 51 orca(24) headings: speak, messages, updates, gedit
+[2,7] n= 60 orca(37) headings: getting, started, troubleshooting, application-unique
+[3,0] (empty)
+[3,1] n= 42 gedit(26) paragraphs: text, language, color, document
+[3,2] n= 42 accerciser(28) paragraphs: panel, tree, view, application
+[3,3] n= 30 gedit(13) paragraphs: self, action, click, tab
+[3,4] n=  1 gedit(1) headings: another, one, gedit, move
+[3,5] n= 50 orca(34) headings: during, announce, navigation, changing
+[3,6] n=  4 gedit(2) headings: skip, blank, toggling, mode
+[3,7] (empty)
+[4,0] n= 73 gnome-terminal(25) notes: mode, orca, browse, toggle
+[4,1] (empty)
+[4,2] n=  3 gedit(2) paragraphs: date, time, new, insert
+[4,3] (empty)
+[4,4] n=  1 orca(1) listitems: channels, chat, active, any
+[4,5] (empty)
+[4,6] n= 22 gnome-terminal(22) cells: switch, scroll, tab, one
+[4,7] n= 62 gnome-terminal(62) cells: alt, action, shortcut, keyboard
+[5,0] (empty)
+[5,1] n=  8 gnome-terminal(4) listitems: form, command, able, depending
+[5,2] n= 25 gnome-terminal(9) listitems: address, mail, email, send
+[5,3] n= 42 orca(39) listitems: orca, modifierf, row, dynamic
+[5,4] n= 31 orca(23) listitems: move, moves, attribute, region
+[5,5] n= 26 gnome-terminal(13) listitems: press, exit, compatibility, confirm
+[5,6] (empty)
+[5,7] (empty)
+[6,0] n= 55 accerciser(27) listitems: interface, shows, match, selected
+[6,1] n= 26 gnome-terminal(9) listitems: color, modified, plugin, choose
+[6,2] n= 27 gnome-terminal(19) listitems: click, press, alternatively, return
+[6,3] n= 14 gedit(6) listitems: yes, button, confirm, hold
+[6,4] n= 21 orca(14) listitems: apply, press, button, prompt
+[6,5] n= 22 gnome-terminal(17) listitems: select, scrolling, rename, click
+[6,6] n= 43 gedit(21) listitems: width, tab-width, meson, build
+[6,7] n= 45 orca(45) listitems: unbound, cycle, dot, dots
+[7,0] n= 48 orca(48) listitems: laptop, desktop, orca, double-clicked
+[7,1] n= 25 orca(25) listitems: orca, modifierspace, get, pressing
+[7,2] n= 33 gnome-terminal(30) listitems: top-right, corner, menu, press
+[7,3] n= 31 gnome-terminal(27) listitems: sidebar, section, profiles, profile
+[7,4] n= 29 gnome-terminal(17) listitems: sidebar, select, profile, wish
+[7,5] n= 27 gnome-terminal(21) listitems: select, preferences, edit, scrolling
+[7,6] n= 22 orca(17) listitems: announce, say, lists, notification
+[7,7] n= 61 orca(61) listitems: display, previous, list, heading

@@ -1,0 +1,59 @@
+{
+ "n_icons": 537,
+ "n_labels": 75,
+ "threads": 4,
+ "n_naming_items": 87,
+ "same_control_top1_inkmask": 0.8957169459962756,
+ "clip-q8": {
+  "naming_top1_light1x": 0.20689655172413793,
+  "naming_top3_light1x": 0.25287356321839083,
+  "naming_top1_light2x": 0.20689655172413793,
+  "naming_top3_light2x": 0.27586206896551724,
+  "naming_top1_dark1x": 0.1839080459770115,
+  "naming_top3_dark1x": 0.27586206896551724,
+  "same_control_top1": 0.6033519553072626,
+  "img_ms_b1_p50": 12.564168486278504,
+  "img_ms_b1_p99": 13.878289109561592,
+  "img_ms_per_crop_b32": 8.441192218015203,
+  "text_ms_b1_p50": 2.9673324897885323
+ },
+ "clip": {
+  "naming_top1_light1x": 0.10344827586206896,
+  "naming_top3_light1x": 0.27586206896551724,
+  "naming_top1_light2x": 0.16091954022988506,
+  "naming_top3_light2x": 0.2988505747126437,
+  "naming_top1_dark1x": 0.09195402298850575,
+  "naming_top3_dark1x": 0.22988505747126436,
+  "same_control_top1": 0.5418994413407822,
+  "img_ms_b1_p50": 28.843189007602632,
+  "img_ms_b1_p99": 31.556182501954027,
+  "img_ms_per_crop_b32": 22.673780000332044,
+  "text_ms_b1_p50": 2.729685016674921
+ },
+ "siglip-q8": {
+  "naming_top1_light1x": 0.5402298850574713,
+  "naming_top3_light1x": 0.7471264367816092,
+  "naming_top1_light2x": 0.6091954022988506,
+  "naming_top3_light2x": 0.7471264367816092,
+  "naming_top1_dark1x": 0.5057471264367817,
+  "naming_top3_dark1x": 0.7011494252873564,
+  "same_control_top1": 0.7932960893854749,
+  "img_ms_b1_p50": 38.96315649035387,
+  "img_ms_b1_p99": 41.12540318805259,
+  "img_ms_per_crop_b32": 46.05146112589864,
+  "text_ms_b1_p50": 16.351469472283497
+ },
+ "mobileclip-s0": {
+  "naming_top1_light1x": 0.41379310344827586,
+  "naming_top3_light1x": 0.5287356321839081,
+  "naming_top1_light2x": 0.42528735632183906,
+  "naming_top3_light2x": 0.5632183908045977,
+  "naming_top1_dark1x": 0.367816091954023,
+  "naming_top3_dark1x": 0.5172413793103449,
+  "same_control_top1": 0.8342644320297952,
+  "img_ms_b1_p50": 18.380844994680956,
+  "img_ms_b1_p99": 20.147460093721747,
+  "img_ms_per_crop_b32": 16.596903906247462,
+  "text_ms_b1_p50": 10.013452993007377
+ }
+}
