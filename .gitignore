@@ -1,0 +1,7 @@
+.toolchain/
+target/
+/bin/
+.venv/
+*.prof
+*.trace
+refs/
