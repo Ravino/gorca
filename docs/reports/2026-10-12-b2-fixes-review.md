@@ -162,3 +162,120 @@ An "adaptive doze" to batch wakeups trades latency and was already rejected.
 2. F-2: make failed preemption O(1), with one scan per push, and add an audit test at 2,300 and 10,000 apps.
 
 Follow-ups, in order: F-3 (and restore the B-3 test ceiling), F-4, F-5, F-6, then the SPEC amendment in section 4 and a T7 rerun on a quieter host.
+
+---
+
+# Round 3: fixes-r3 (code fabcfe7, head 2d1c737)
+
+**Verdict: BLOCK** on one item, R3-1. AU-3 is violated under concurrent pool pressure, and the SPEC B-3
+derivation makes two claims that the probes refute. F-1, F-2, F-4 and F-5 are verified as fixed.
+The T7.push4 result is noise, not a regression.
+
+Raw output is in the worktree under `bench/results/b2-ingress/review-r3/`:
+`gates.txt`, `r2-probes-on-r3.txt`, `judge-r3-probes*.txt`, `judge-r3-p5.txt` … `judge-r3-p8.txt`,
+`t7-interleaved.txt`, and the probe source `judge_r3_probe.rs.txt`, which is not part of the branch.
+Load average was 7-16 throughout.
+
+## Gates
+fmt is clean. clippy exits 0. All 40 release ingress tests pass, including `audit_review.rs`. The debug workspace has 0 failures.
+
+## The F-items against my probes
+| Item | Probe | Result |
+|---|---|---|
+| F-1 ring Focus kept | `p1_ring_focus_survives_preemption` (pool limit 230, victim preempted for real) | **fixed**: flooded, Focus kept |
+| F-2 O(apps) scans | r2 `judge_focus_push_scans_registry_32_times`, plus `p4` (5k over-R apps, then a Focus push with only ineligible holders in the window) | **fixed**: 2.2-2.7 µs at 100, 2,300 and 10,000 apps (was 837 µs and 7.6 ms); 0.9-1.5 µs in `p4` |
+| F-3 overshoot, producers only | r2 `judge_reserve_overshoot_with_concurrent_producers` | **fixed**: peak 32 for 1-16 producers |
+| F-3 overshoot, with a concurrent drain | `p3_bound_with_concurrent_drain` | **not fixed**: peak **57-65 vs 33** (R3-2) |
+| F-4 reaper | code | fixed: spawned in `new`, named `gorca-reaper`, falls back to parking on the victim, counter `reaper_fallbacks` |
+| F-5 spin | code `coalesce.rs:743-765` | fixed: 256 spins, 8 yields, then a blocking `lock()`. The summary says 64/16; the code says 256/8 |
+| F-6 reserve outside the pool | `p5_reserve_vs_pool_accounting` | **not fixed** (R3-1) |
+
+## Findings
+
+### R3-1 HIGH: AU-3 is violated; an app at R events gets flooded under concurrent pool pressure
+Root cause: on fold, a record's ring credit holds the app's reserve counter while the table charges the same record again.
+- `Table::acquire` finds the reserve counter full and takes a **pool** unit.
+- The ring's reserve credit is then trimmed, so the reserve goes idle.
+
+`p5` shows this sequentially: one app with 20 or 36 events ends with `pool_used = 20/36` and `reserve = 0`, at limit 100,000 and at limit 100.
+Then 3,000 apps × 20 events (all within R) take 49,936 of a 50,000 pool.
+The `pool_nearly_full` pre-trim in `fold_into` (`coalesce.rs:602-608`) is a racy heuristic.
+If the pool fills in the middle of a group, the table's `try_charge` fails, there is no eligible victim, and the record overflows.
+**Probe** `p8_reserve_under_concurrent_pool_pressure`: 3 hostile apps hold the pool at its edge, and a victim pushes exactly R = 32 events and drains.
+**45,162 of 917,746 and 31,493 of 1,019,333 rounds kept 31 and were flooded.**
+That breaks AU-3 ("an app at or below R is never affected"), and the SPEC text "a pool of N units still holds N units for apps above their reserve" is false.
+**Fix:** on fold, *transfer* each popped record's credit unit to the table, reserve first (`res_units += 1` without a new charge), instead of releasing and recharging.
+That removes the heuristic and two atomic operations per record. Turn `p5` and `p8` into audit tests.
+
+### R3-2 MEDIUM: the B-3 claim "at every instant" is false while a drain runs (transient, at most about 2R per app)
+`release_split` (`coalesce.rs:310-321`) decrements the app counter **before** the global word.
+`take_reserve` (`:260-276`) does a CAS on the app counter and then adds to the global word.
+A take that lands between the two halves of a release counts its units twice in `used()`.
+`p3` (8 producers plus a draining consumer, pool 0) peaked at 57-65 against a bound of 33.
+Nothing leaks: it settles to 0.
+The branch's AU-7 test runs without a concurrent drain, so it cannot see this.
+**Fix:** release the global word first and the app counter second, so the global word never exceeds the sum of the counters. Add a concurrent drainer to `audit_concurrent_pushes_never_overshoot_the_budget`.
+
+### R3-3 MEDIUM: the over-set is not lock-free; it is a `Mutex<Vec<Weak>>`
+The over-set has three hazards.
+- **Re-entrant lock hazard.** `pick_victim` (`:354-379`) upgrades and drops `Arc<Shared>` while holding the `over` mutex. If such an Arc is the last strong reference, `Drop for Shared` (`:713-722`) calls `over_remove`, which locks the same mutex on the same thread. That is a self-deadlock on a drain thread.
+  The trigger is the production drop order: the receiver drops first and runs `over_remove`; a producer push that is already in flight re-inserts the app through `update_over`; then the sender is retired while it is inside a scan.
+  This is not reproduced: about 60M app lifecycles in `p6`/`p7` (3 × 20 s, 3 × 30 s) did not deadlock, so it is substantiated by code reading only.
+  **Fix:** collect the upgraded Arcs and drop them after the guard is released, or have `Drop` use `try_lock` and a tombstone.
+- **Stale slot.** `over_remove` (`:338-349`) does not update the moved entry's `over_slot` when `upgrade` fails because the entry is dying. Its own later `over_remove` then sees `slot >= len` and leaves a dead `Weak` in the set (the ArcInner leaks until the set is cleared). If another removal happened in between, it removes a *live* entry, which stays marked "in set" and is never re-inserted until it next crosses R. That entry is then not preemptible.
+  This was not observed in the `p2` churn test (30 rounds × 2,400 apps, hog always preempted).
+- **Window choice.** The 64-entry window with a rotating cursor cannot exclude a holder forever; it visits every entry within ⌈n/64⌉ preemption attempts.
+  A requester above R can be refused (flooded) on the attempts in between, which the restated AU-3 allows.
+  `update_over`'s check-then-act outside the lock can leave a set membership wrong until the app's next update. An app that stopped pushing and whose actor is stalled keeps its last state.
+
+### R3-4 LOW: the parked table lifecycle
+- `park` overwrites an existing `Some(Shed)`, which frees the old one in place on the preempting thread. That needs two preemptions of one victim with no drain between them while the reaper is backed up.
+- A victim that never drains keeps one parked table (MBs) outside the budget until it is dropped, and the drop can happen on a preempter that holds the last Arc.
+
+Bounded at one table per victim. **Fix:** if `parked` is occupied, merge into it, or count it and refuse to preempt that victim again.
+
+### R3-5 LOW: test and SPEC hygiene
+- `audit_small_holders_are_preempted_for_a_larger_claim` lost its `assert_eq!(hd.events.len(), 100)` for non-shed holders. It was needed only because the filler is in `holders`; when I restored it for the first 15 holders it passes. Restore it.
+- The SPEC T4 note says the governor and core placement go in the result meta, but no code records them.
+- Single-producer `T7.push_p99` rose from 7 to 17-18 ns (gate 1,000): this is the extra reserve CAS on the hot path.
+- `force_charge` writes to the low 32-bit half with no headroom check. `limit.min(POOL_MAX)` leaves 1 unit, so a limit near `u32::MAX` would carry into the reserve half. This is theoretical.
+
+## SPEC changes
+The T4 changes match the decision:
+- `@10k` is info;
+- `@100k ≤ 25` is gated and added to the Gate list;
+- the ranking uses the 100k figure;
+- nothing else in T4 moved.
+
+The B-3 derivation is unsound as written:
+- step 2 (V ≤ apps × R) does not hold at every instant (R3-2);
+- the closing paragraph about the reserve not being taken from the pool is false (R3-1).
+
+The bound formula itself is fine as an at-quiescence bound. Both statements must be corrected after the fixes, or rewritten as "at quiescence, plus at most R per concurrently releasing app".
+
+## T7.push4: noise, not a regression
+I ran 6 interleaved rounds of `df196a0` (A, no budget), `main` (A with budget wiring), and r3, each round `--only t7 --repeats 3`, in one session at load 8.4-10.9 (`t7-interleaved.txt`).
+
+| Arm | push4 p99, median of rounds (range) | push4 p999, median (range) | push p99 |
+|---|---|---|---|
+| df196a0 | 4.3 µs (3.0-4.4) | 29.4 µs (26-38) | 7 ns |
+| main | 3.7 µs (2.5-6.0) | 36.6 µs (33-49) | 6-11 ns |
+| r3 | 2.8 µs (1.4-5.4) | 28.8 µs (26-37) | 17-18 ns |
+
+The same r3 binary measured 1.4 µs and 5.4 µs in consecutive rounds, and main moved between 2.5 and 6.0 µs.
+The spread within an arm (about 4×) exceeds the gap between arms, so r3 is not a regression; if anything it is the best arm on p99.
+The host is **not** quiet enough for a 5 µs gate on a 4-thread contention percentile.
+A real verdict needs:
+- load < 1 (no other tenants);
+- the `performance` governor;
+- producers pinned to P-cores 0-5;
+- ≥ 10 interleaved rounds;
+- the gate applied to the median of rounds, or as a ratio against the reference arm in the same session.
+
+## Required before merge
+1. R3-1: transfer ring credit on fold, then make `p5` and `p8` audit tests.
+2. R3-2: swap the release order and add a concurrent drain to the AU-7 test.
+3. R3-3: fix the re-entrant drop in `pick_victim`. It is small and closes a self-deadlock path on a drain thread.
+4. Correct the SPEC B-3 derivation.
+
+R3-4 and R3-5 can be follow-ups.
