@@ -21,12 +21,13 @@
 //! five crates that may depend on `zbus` (section 11, rule 2).
 
 mod call;
+pub mod drain;
 mod lag;
 pub mod socket;
 
 pub use call::{DbusError, call_method, with_deadline};
 pub use lag::{LagDetector, ShedEvent};
-pub use socket::socket_backlog;
+pub use socket::{set_recv_buffer, socket_backlog};
 
 /// `max_queued` for our own connections (D-6). zbus defaults to 64, which backpressures into the
 /// broker and gets us disconnected.

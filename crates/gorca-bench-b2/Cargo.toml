@@ -1,0 +1,21 @@
+[package]
+name = "gorca-bench-b2"
+description = "Bake-off B-2 harness: wire codec, mock and real bus fixtures, workload generators, conformance model and benchmark runner."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-model = { workspace = true }
+gorca-ingress = { workspace = true }
+gorca-dbus = { workspace = true }
+gorca-rt = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+libc = { workspace = true }
+smallvec = { workspace = true }
+
+[lints]
+workspace = true

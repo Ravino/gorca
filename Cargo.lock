@@ -643,9 +643,13 @@ dependencies = [
 name = "gorca-dbus"
 version = "0.0.0"
 dependencies = [
+ "futures-lite",
+ "gorca-ingress",
+ "gorca-model",
  "gorca-rt",
  "libc",
  "serde",
+ "smallvec",
  "thiserror",
  "tokio",
  "zbus",

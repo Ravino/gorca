@@ -45,6 +45,7 @@ gorca-testkit = { path = "crates/gorca-testkit" }
 tokio = { version = "1.53", default-features = false, features = ["rt", "rt-multi-thread", "sync", "time", "macros", "signal"] }
 tokio-util = { version = "0.7", default-features = false }
 futures-core = "0.3"
+futures-lite = { version = "2", default-features = false, features = ["std"] }
 
 # D-Bus and AT-SPI (allowed only in the crates named in ADR section 11, rule 2).
 zbus = { version = "5.19", default-features = false, features = ["tokio"] }

@@ -18,6 +18,46 @@ pub fn socket_backlog(sock: impl AsFd) -> io::Result<usize> {
     Ok(usize::try_from(pending).unwrap_or(0))
 }
 
+/// `sizeof(int)` as a `socklen_t`.
+const INT_LEN: libc::socklen_t = 4;
+
+/// Ask for a larger kernel receive buffer (`SO_RCVBUF`, PC-6). Returns the size the kernel
+/// reports back, which is twice the request (bookkeeping overhead) and capped by `rmem_max`.
+pub fn set_recv_buffer(sock: impl AsFd, bytes: usize) -> io::Result<usize> {
+    let want = libc::c_int::try_from(bytes).unwrap_or(libc::c_int::MAX);
+    let fd = sock.as_fd().as_raw_fd();
+    // SAFETY: `fd` is valid while `sock` is borrowed; the option value is a live local `c_int`
+    // and the length passed is its size.
+    let rc = unsafe {
+        libc::setsockopt(
+            fd,
+            libc::SOL_SOCKET,
+            libc::SO_RCVBUF,
+            (&raw const want).cast(),
+            INT_LEN,
+        )
+    };
+    if rc < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let mut got: libc::c_int = 0;
+    let mut len = INT_LEN;
+    // SAFETY: as above; `got` and `len` are live locals and `len` holds the buffer size.
+    let rc = unsafe {
+        libc::getsockopt(
+            fd,
+            libc::SOL_SOCKET,
+            libc::SO_RCVBUF,
+            (&raw mut got).cast(),
+            &raw mut len,
+        )
+    };
+    if rc < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(usize::try_from(got).unwrap_or(0))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

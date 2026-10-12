@@ -246,3 +246,64 @@ twice, both pass (27 packages ok); `-tags espeak_ng_real` pass; 5-minute race so
 `FINAL queued=61035 end=54709 canceled=6326 accounted=61035 rejected=11700 stops=3130 |
 lost=0 mustEnd=0 asyncErr=0 proto=0`, daemon alive, no panic or DATA RACE in the log.
 Latency was not re-run (the change is on the open path only).
+
+## Real audio (main at 7cf7a1c, branch fix/real-audio, no code changes)
+
+Result: voicego builds and passes with the real audio backends unchanged. No commits, so
+nothing was pushed and the empty local branch was deleted.
+
+- **Build prerequisite.** `libasound2-dev` and `libjack-jackd2-dev` are installed, but
+  `libsamplerate0-dev` is not (only the runtime `libsamplerate0`), so `pkg-config samplerate`
+  fails and both sink packages refuse to build with their real tags. To proceed without
+  sudo I used a build-only shim in the scratchpad: a `samplerate.h` with the 0.2.x
+  declarations the code uses (`SRC_DATA`, `src_new/process/reset/delete`, the short/float
+  helpers), a `samplerate.pc` and a `libsamplerate.so` symlink to the installed `.so.0`,
+  selected with `PKG_CONFIG_PATH`. Nothing was installed or changed system-wide. The
+  proper fix is `apt-get install --no-install-recommends libsamplerate0-dev`; a build
+  against the real header should be repeated once it is installed.
+- **Build and tests.** `go build` and `go vet` with `alsa_real,jack_real,espeak_ng_real`: no
+  errors. `go test -race -tags 'alsa_real espeak_ng_real' ./...`: all packages pass.
+  `-tags jack_real ./plugins/output/jack2`: pass (build and unit tests only; no JACK
+  server, the live tests need `VOICEGO_JACK_REAL=1` and were skipped). The whole-tree
+  Makefile `REAL_TAGS` also names `espeak_real`, `rhvoice_real`, `piper_real`; their
+  libraries are not installed, so those were not built. ALSA live tests with
+  `VOICEGO_ALSA_REAL_DEVICE=default` (all pass): opened the default PCM, achieved
+  22050 Hz mono, period 470 frames (21.3 ms), buffer 940 frames (42.6 ms), no backend
+  resampling; 3 s of audio written in 2.98 s (real-time pacing).
+- **Host setup.** The default PCM is a `plug` over `dmix:CARD=sofhdadsp` from the user's
+  `~/.asoundrc`: shared, never an exclusive `hw:` device. Default volume in the test
+  config was -90 (wire scale), short utterances. speech-dispatcher and Firefox were not
+  touched; no PipeWire restart.
+- **Live ALSA latency** (voicegod with alsa sink, real espeak-ng, default PCM, n=30 for
+  speak, n=20 for the others): SPEAK to `225` p50 55 us; SPEAK to `701` (first chunk
+  written into the ALSA PCM) p50 2.09 ms, p99 2.55 ms (null sink: 1.75 / 2.5). Audible
+  start adds the device path: at least the 42.6 ms buffer plus dmix; I could not measure
+  that acoustically (no loopback capture). SPEAK to `702` p50 1.0 s for the 0.5-1 s test
+  phrase, i.e. drain waits for real playout. STOP to `210` p50 0.13 ms, p99 0.20 ms;
+  STOP to `703` p50 10.5 ms, p90 21.4 ms, max 22.2 ms (includes the sink cancel,
+  `snd_pcm_drop`); audio already in the dmix/PipeWire path is not included. Pipelined
+  STOP then SPEAK: 20/20 completed, 0 cancelled, with and without waiting for the 210.
+- **Device loss and reopen**, simulated safely without touching the user's audio: a private
+  ALSA config (`ALSA_CONFIG_PATH`, an include of the system `alsa.conf` plus a `file`
+  PCM writing to a FIFO) was given to a separate voicegod, and the FIFO reader was killed.
+  Result with the real libasound path: the SPEAK in flight got `701` then `502`
+  (`snd_pcm_writei: Input/output error`); the log shows "sink failed; will reopen on next
+  use". The reopen then blocks in `snd_pcm_open` (the FIFO has no reader), the cache
+  abandons it after the 10 s attempt timeout ("open timed out after 10s", retry in
+  100 ms), and the abandoned Open's late handle is closed; when the reader came back the
+  next SPEAK opened a new sink and 4 of 4 following SPEAKs ended normally in 6-7 ms.
+  Observation: while the device is down a SPEAK can wait up to the 10 s open timeout
+  before failing; a shorter timeout may suit a screen reader (not changed).
+  A real PipeWire/dmix restart was not simulated.
+- **Soaks, race detector, 5 minutes each.**
+  Real ALSA (default PCM, volume -90, brief utterances, 3 connections, same SPEAK/STOP/
+  CANCEL mix): `queued=642 end=427 canceled=215 accounted=642 stops=111 | lost=0 mustEnd=0
+  asyncErr=0 proto=0`, daemon alive, no panic or DATA RACE, no GORACE file, goroutines
+  41 to 37, RSS 136-138 MB (race build). Throughput is low because audio plays in real
+  time.
+  Null sink (same real-tag binary, standard heavy mix, 6 connections): `queued=61229
+  end=54868 canceled=6361 accounted=61229 stops=3145 | lost=0 mustEnd=0 asyncErr=0
+  proto=0`, no panic or DATA RACE.
+- **Not covered.** JACK live behaviour (no server); acoustic latency and cancel-to-silence at
+  the speakers; a real PipeWire restart; sustained operation beyond 5 minutes.
+- **Review.** Ready for review; there is no diff to review, only this test evidence.
