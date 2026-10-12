@@ -1,6 +1,6 @@
 # ADR-0002: Multimodal perception layer — feature store, vector index, map surface, `gorca-perceive` sidecar
 
-- **Status:** Proposed (2026-10-12). The scheme in §2 was approved by the project owner on 2026-10-12 (`docs/decisions.md`, "Multimodal"). The items in §15 are new and still need sign-off; they are marked *proposed* where they appear.
+- **Status:** Accepted (2026-10-12), with one amendment by the owner: terminal content encoding is user-toggleable and off by default, and obvious secrets are always filtered (§6.2 X-7, X-11). All §17 sign-off items are approved. **§10 (screen-pixel acquisition) stays open** while linux-platform-engineer evaluates a GNOME Shell extension against a Mutter/Shell patch.
 - **Date:** 2026-10-12
 - **Deciders:** project owner
 - **Extends:** ADR-0001 (§3 concurrency model, §6 actors and backpressure, §7.2 Mode, §11 workspace layout, §14 metrics). It does not change any accepted ADR-0001 decision.
@@ -14,6 +14,7 @@
 | Date | Change |
 |---|---|
 | 2026-10-12 | Draft (Proposed). |
+| 2026-10-12 | **Accepted with amendment.** All §17 items approved. X-7 changed: terminal content encoding is a user toggle, default off; new X-11 always filters obvious secrets (password prompts, tokens, private keys), including when the toggle is on; `Exclusion::SecretPattern` added (§5.2, §6.2). §10 (pixel capture) remains open. |
 
 ## 1. Context
 
@@ -317,7 +318,7 @@ pub trait PixelSource: Send + Sync + 'static {
 
 // gorca-features
 pub enum Exclusion { PasswordRole, InsidePassword, EditableContent, SensitiveApp, SystemPrompt,
-                     TerminalContent, UserOptOut, Paused, Offscreen /* visual only */, MaskTooLarge }
+                     TerminalContent, SecretPattern /* X-11 */, UserOptOut, Paused, Offscreen /* visual only */, MaskTooLarge }
 pub enum Eligibility { Allowed(NormalisedInput), Excluded(Exclusion) }
 pub trait PrivacyPolicy: Send + Sync {
     /// Pure, O(depth) at worst (ancestor password check is cached per subtree revision).
@@ -365,10 +366,11 @@ The `MapSurface` and `MapLayout` sketches are in MM §8 and are adopted with the
 | X-4 | **Visual:** every crop has the bounds of all X-1/X-2 nodes and of focused editable nodes **blacked out before it leaves the capture code**. If the mask covers > 30 % of the crop, the crop is dropped (`MaskTooLarge`). | Visual, VisualFingerprint | Masking happens in `gorca-features`, before the memfd is sealed. |
 | X-5 | **Sensitive apps** (user-editable denylist, matched on `AppInfo.app_name` / toolkit / executable): password managers (KeePassXC, Bitwarden, Seahorse), `gcr-prompter`, `pinentry-*`, `ssh-askpass`, polkit agents | all | This is configuration data matched generically, so the "core never branches on app name" rule (ADR-0001 §4.4) is kept. |
 | X-6 | **System prompts:** GNOME Shell unlock, polkit and network-secret dialogs (shell modal dialogs with a password field) | all | Detected structurally: a modal dialog containing an X-1 node excludes the whole dialog subtree. |
-| X-7 | **Terminal content** (VTE terminal text, ADR-0001 §5.6) is excluded by default; terminal chrome (tabs, menus) is allowed. *Proposed.* | Text, Visual | Terminal output often contains secrets and is very dynamic. Opt in per app. |
+| X-7 | **Terminal content** (VTE terminal text, ADR-0001 §5.6) is governed by the user setting `perception.terminal_content` = `off` (**default**) \| `on`, with an optional per-terminal-app override. When `off`, terminal content is excluded; terminal chrome (tabs, menus, profile dialogs) is always allowed. When `on`, terminal **text** is eligible line by line, after X-11. Terminal **visual** crops stay excluded until the pixel path (§10) can mask the row extents of X-11 matches (the mask comes from `Text.GetRangeExtents` on the matched rows); X-4's 30 % rule applies to that mask. Switching the toggle to `off` applies RT-4 at once. | Text (Visual: see note) | Owner amendment, 2026-10-12. Terminal output often holds secrets and churns fast, so it stays off unless the user asks for it. |
 | X-8 | User opt-out per app, per site (web source layer), and a global **"pause perception"** command | all | Pausing also sends `CancelBefore(MAX)` (§4.5). |
 | X-9 | Offscreen or not `SHOWING` | Visual only | Text of offscreen document content stays searchable; that is the point of find. |
 | X-10 | Private or incognito browser windows, when the source layer can tell | all | Detection is open (O-5). |
+| X-11 | **Obvious secrets, always filtered**, whatever X-7 or any other setting says. Applies to every text input that reaches `eligibility` (terminal lines, and also document and chrome text). Detectors, each pure and O(input length): **(a) password prompts:** a line matching the prompt set (`[Pp]assword`, `[Pp]assphrase`, `\bPIN\b`, `[Pp]asscode`, `Enter .* for .*:`, `[sudo] password for`, `Verification code`, OTP/2FA prompts, plus their Russian forms: `[Пп]ароль`, `[Кк]од подтверждения`), and **the next 3 lines** after it, because an echoing prompt can put the secret on the following line; **(b) private keys and certificates with keys:** everything from a `-----BEGIN … PRIVATE KEY-----` / `BEGIN OPENSSH PRIVATE KEY` / `BEGIN PGP PRIVATE KEY BLOCK` line through the matching `END` line, or through 200 lines if no `END` arrives; **(c) tokens with a known format:** prefixes such as `ghp_`, `gho_`, `github_pat_`, `glpat-`, `xox[abposr]-`, `sk-`, `sk_live_`, `rk_live_`, `AKIA`/`ASIA` + 16 chars, `AIza`, `ya29.`, `npm_`, `pypi-`, and JWTs (`eyJ…\.eyJ…\.…`); **(d) assignments:** `(password\|passwd\|secret\|token\|api[_-]?key\|auth\|bearer)\s*[:=]\s*\S+` and `Authorization:` headers; **(e) high-entropy runs:** a whitespace-free run of ≥ 32 characters in the base64, base64url or hex alphabet with Shannon entropy ≥ 4.0 bits per char (base64) or ≥ 3.0 (hex). A match **drops the whole line** (and the ranges in (a) and (b)), never a span, so no partial secret leaks into a key. The pattern list is configuration data and can be extended by the user and by extensions (PR-1), never shrunk below this built-in set. | Text (and Visual via the row mask, see X-7) | Owner amendment, 2026-10-12. False positives (a hash, a UUID-like id) cost one unsearchable line; false negatives are the risk, so detectors favour recall. |
 
 AT-SPI `STATE_SENSITIVE` means "enabled for input", not "private". It plays no part in this policy.
 
@@ -573,6 +575,7 @@ Phases 1–2 need no pixels. Phase 3 is blocked on this decision. Facts checked 
 | PM-12 | naming cascade | spoken "maybe X" precision ≥ 0.9 at reported coverage on Adwaita + a web icon set; amendment p95 ≤ 300 ms | labelled crop set (chrome only) |
 | PM-13 | cache efficiency | content-key hit rate ≥ 90 % on the SPA re-render corpus (`tests/web/`) | testkit replay |
 | PM-14 | idle cost | sidecar 0 % CPU and 0 wakeups/s when idle; exits after `--idle-exit` | `perf sched`, powertop |
+| PM-15 | **secret filter (X-11)** | recall 100 % on a fixed corpus of terminal transcripts with planted secrets (sudo/ssh/gpg prompts, PEM and OpenSSH keys, the token formats in X-11, JWTs, `.env` assignments); false-positive rate reported on 10k lines of ordinary build and shell output; detector cost ≤ 2 µs per 100-byte line; with `terminal_content = off`, 0 terminal keys created | unit corpus in `gorca-features` tests + testkit replay |
 
 ## 13. Phased rollout
 
@@ -619,7 +622,7 @@ No bake-off is proposed. The contested points are settled by measurement: pixel 
 - A second binary and a C++ runtime (libonnxruntime) to package, plus 120 MB to 400 MB of models that users fetch explicitly. Debian packaging of ORT is unverified (O-4).
 - The seccomp and Landlock profiles must be maintained as ORT and Tesseract change (a new syscall turns into `EPERM` and a feature failure, which is caught by the sidecar self-test and PM-4).
 - Encrypted label memory depends on the Secret Service; at the greeter and on keyring-less desktops it is session-only.
-- The privacy policy is conservative (X-1, X-7): password-field names and terminal content are unsearchable by default.
+- The privacy policy is conservative (X-1, X-7, X-11): password-field names are never searchable, terminal content is unsearchable unless the user turns it on, and lines that look like secrets are dropped even then. Detector false positives make some harmless lines (hashes, long ids) unsearchable.
 - `Mode::Find`, `Mode::Map` and `SpeechCmd::Earcon` extend ADR-0001 interfaces and need the owners of `docs/design/modes.md` and of the speech service to follow.
 
 ## 16. Open questions
@@ -636,14 +639,14 @@ No bake-off is proposed. The contested points are settled by measurement: pixel 
 | O-8 | math-researcher | Calibration of the SigLIP margin τ and the OCR confidence threshold on a web icon set; verification of the WebAIM and embedding-inversion citations (MM §11). |
 | O-9 | wasm-engineer | WIT hook for extensions to *add* exclusions (PR-1), without vector access. |
 
-## 17. Sign-off requested
+## 17. Sign-off (all items approved 2026-10-12; item 6 amended)
 
 1. **Sandbox (§4.6):** in-binary seccomp and Landlock are mandatory and fail-closed (perception never runs unsandboxed), with the systemd unit as a second layer.
 2. **Activation (§4.1):** a socket-activated systemd user unit with idle exit, rather than a child process spawned by gorca; one active client per sidecar.
 3. **Pixel capture in the gorca daemon, not the sidecar** (§2 item 4, §10).
 4. **Label memory persistence (§6.4):** encrypted with a Secret Service key; RAM-only when there is no keyring; plaintext only by explicit opt-in.
 5. **Keyed content hash (§7.1)** with a per-user secret.
-6. **Default exclusions (§6.2):** X-1 also excludes the *name* of password fields; X-7 excludes terminal content by default.
+6. **Default exclusions (§6.2):** X-1 also excludes the *name* of password fields; X-7 excludes terminal content by default. *Approved with amendment:* X-7 is a user toggle (default off), and X-11 always filters obvious secrets.
 7. **Hybrid find with a lexical fallback, on by default (§9.1, §13 Phase 1).**
 8. **`SpeechCmd::Earcon` (TBD-E1)**, an amendment to ADR-0001 §8.2.
 9. **`Mode::Find` and `Mode::Map`**, an amendment to ADR-0001 §7.2; the map stays behind a flag until PM-11 passes.
