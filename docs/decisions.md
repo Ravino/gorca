@@ -23,3 +23,4 @@
 | 2026-10-12 | A5: memory is not a constraint (600 MB guard rail, no unbounded growth) | ADR-0001 |
 | 2026-10-12 | Patching/rebuilding at-spi2-core is allowed when it buys speed | user |
 | 2026-10-12 | Dev toggle = user unit `contrib/systemd/gorca.service` (not enabled at login) + `tools/gorca-toggle.sh` (flock, spd-say/espeak-ng feedback) bound to Super+Alt+G via media-keys custom1; `tools/install-dev.sh [--uninstall]` | ADR-0001 §17.2 |
+| 2026-10-12 | SPA corpus + AT-SPI characterization: frameworks look identical over AT-SPI; mirror needs parent revalidation (Chromium silent reorder), remove/add re-matching (Firefox recreates moved nodes), identity ladder path > DOM id (stale in Chromium) > (role,name,tag); AGP not required by SPA data. Firefox tests run in a private headless gnome-shell | docs/reports/2026-10-12-spa-behavior.md |

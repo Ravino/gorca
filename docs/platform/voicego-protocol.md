@@ -4,6 +4,11 @@ Source of truth: `refs/voicego` v2.0.4 (commit 3a0f1f2), verified against the co
 and by running a built `voicegod` on a private socket with the null sink
 (2026-10-12). Cite code as `refs/voicego/<path>:<line>`.
 
+Line numbers below refer to 3a0f1f2. Branch `fix/p0-stability` (not merged yet)
+changes the behaviour described in the marked places: STOP then SPEAK (section 6),
+`SET VOLUME -100` (section 5), panic containment and sink reopen. See
+`docs/reports/2026-10-12-voicego-p0-fixes.md`.
+
 **Key fact.** voicego has no separate native protocol. The "binary protocol" is
 SSIP with length-prefixed framing (`BINARY_SSIP.md`, `internal/ssip/framing.go`).
 The verbs, reply bytes, event bytes and semantics are identical to text SSIP.
@@ -164,9 +169,10 @@ Event semantics (verified in the code):
 - Exactly one of END / CANCELED / error terminates each message id.
 - Errors after `225` arrive as a bare, id-less reply line, for example
   `502 ERR INTERNAL` or `503 ERR ENGINE_DEAD` (`session.go:1946-1966`). The message id
-  is not included, so correlation is by order only. Observed: `SET VOLUME -100` then
-  SPEAK gives `701` then `502 ERR INTERNAL`
-  (espeak-ng reports `ErrSilentSynth` for all-zero audio). A Rust client must treat
+  is not included, so correlation is by order only. (In 3a0f1f2, `SET VOLUME -100`
+  then SPEAK gave `701` then `502 ERR INTERNAL` because espeak-ng reported
+  `ErrSilentSynth` for the all-zero audio; fixed on `fix/p0-stability`, volume -100 is
+  now plain silence ending in `702`.) A Rust client must treat
   any unsolicited 5xx line as "terminal failure of the oldest unfinished message".
 - Delivery is lossy only when the client stops reading: the per-session writer queue
   holds 512 items and drops on overflow (`session.go:~590-680`). A client that
@@ -185,17 +191,17 @@ Event semantics (verified in the code):
   p99 771 us; `STOP`->`703` p50 306 us, p99 804 us, max 5.6 ms. With a real sink,
   add the device buffer: ALSA example config `buffer_us = 30000`, JACK one period
   (about 21 ms at -p1024 / 48 kHz). Estimated, not measured.
-- **Known defect (reproduced): speech sent right after STOP can be lost.**
-  `CancelClient` closes each worker's `quit` channel but the worker only leaves the
-  map after its current request has unwound (`triple.go:95-110`, `144-160`,
-  `dispatch.go:494`). A SPEAK enqueued in that window lands in the dying worker's
-  queue and is drained as `703 CANCELED` (`triple.go:222-260`). Reproduction: pipelined
-  `STOP; SPEAK` lost 65 of 100 new messages with an instant sink. With an artificial
-  3 ms sink-cancel delay, `STOP`, wait for `210`, then `SPEAK` lost 60 of 60.
-  Workaround for the client until fixed: after `STOP`, wait for the `703` of the
-  active message (or a short fixed delay) before sending the next SPEAK. This
-  is the central interrupt-and-speak pattern of a screen reader, so voicego must be
-  fixed before gorca depends on it (see the audit report, item P0-1).
+- **Fixed on `fix/p0-stability` (v2.0.4 and earlier: speech sent right after STOP
+  could be lost).** In 3a0f1f2 `CancelClient` closed each worker's `quit` channel but
+  the worker only left the map after its current request had unwound
+  (`triple.go:95-110`, `144-160`, `dispatch.go:494`), so a SPEAK enqueued in that
+  window was drained as `703 CANCELED` (`triple.go:222-260`): pipelined `STOP; SPEAK`
+  lost 65 of 100 (81 of 100 in the later A/B run) with an instant sink. With the fix the
+  worker is retired under the dispatcher lock before quit is signalled, so a SPEAK sent
+  after STOP, pipelined or after the `210`, always starts a fresh worker; messages
+  accepted before the STOP are still `703`. Against a pre-fix voicegod keep the
+  workaround: after `STOP`, wait for the `703` of the active message before the next
+  SPEAK. Regression test: `TestStopThenSpeakNotLost` (`internal/dispatch`).
 - Priorities (`important > message > text > notification > progress`) only reorder
   messages that are queued in the same triple (`popHighest`, `triple.go:916`). There is
   no preemption of the running message and none of the speech-dispatcher interrupt rules

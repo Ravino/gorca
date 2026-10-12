@@ -4,6 +4,10 @@ Author: go-engineer, 2026-10-12. Source: `refs/voicego` (unmodified). Scratch co
 test client and probes: `.toolchain/scratch/{voicego,lat,probe}` (gitignored).
 Wire details: `docs/platform/voicego-protocol.md`.
 
+> Status update: P0-1 to P0-4 and the `SET VOLUME -100` failure are fixed on branch
+> `fix/p0-stability` of `refs/voicego` (not merged). See
+> `docs/reports/2026-10-12-voicego-p0-fixes.md`. Findings below describe v2.0.4.
+
 ## 0. Verdict
 
 voicego is a sound base for speech-as-a-service (about 77k lines Go, large test
