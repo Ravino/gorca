@@ -2,8 +2,7 @@
 //! included. Several producers per app, text deltas and focus are charged too.
 //!
 //! The pool is compare-and-swap bounded; the only way past `limit` is the per-app reserve and the
-//! newest Focus slot: `used <= limit + apps * (R + 1)`, plus the units that concurrent producers
-//! of one app may admit against the same stale reserve reading.
+//! newest Focus slot: `used <= limit + apps * (R + 1)`, exactly, at every instant.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::sync::Arc;
@@ -27,8 +26,9 @@ fn audit_concurrent_pushes_never_overshoot_the_budget() {
     const APPS: u32 = 8;
     const PRODUCERS_PER_APP: u32 = 2;
     let budget = SlotBudget::new(1_000);
-    let ceiling =
-        budget.limit() + APPS as usize * (RESERVED_SLOTS + 1 + PRODUCERS_PER_APP as usize);
+    // SPEC B-3: the reserve is exact (a per-app compare-and-swap counter) and the pool is
+    // compare-and-swap bounded, so the bound holds at every instant, whatever the producers.
+    let ceiling = budget.limit() + APPS as usize * (RESERVED_SLOTS + 1);
     let stop = Arc::new(AtomicBool::new(false));
     let worst = Arc::new(AtomicUsize::new(0));
     let sampler = {

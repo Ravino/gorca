@@ -159,17 +159,39 @@ unbounded growth, and the lossless classes (the newest `Focus`) still get throug
 | Bytes of one incoming message held in memory | 16 MiB | a larger message is skipped while streaming and counted as `malformed` (the D-Bus limit is 128 MiB). The zbus reference cannot do this; test B-5 is `#[ignore]` and run by `run-all.sh` with `--include-ignored` | B-5 |
 | Counters vs structures | exact | every cap compares against a counter that must equal the real size of the structure after every push, merge, supersede, flood, drop and drain (`IngressReceiver::check_invariants`, `debug_assert` in debug builds) | B-1 |
 
-**B-3 bound (amended 2026-10-12, judge finding; coordinator decision R = 32).** AU-3 gives every
-app a reserved minimum R of slots that other apps cannot take; the reserve is held **outside**
-the shared pool. With a hard global bound equal to the pool the two requirements contradict:
-apps registered after the pool is full still need their reserve, so `SlotBudget::used` rightly
-exceeds the pool (measured on C: 11 484 used against a 10 300 bound with 300 apps). The bound is
-`used <= global_budget + apps x (R + 1)` (the +1 is the lossless Focus slot). R is read from the
-config (`IngressConfig` default 32, added with the AU-3 rework), not hard-coded in tests; until
-that field is merged the harness uses `limits::APP_RESERVE` (32) and must switch to the config
-value. `a_global_budget_bounds_many_apps` asserts both `budget.used()` and the sum of `pending()`
-against this bound; nothing else was relaxed (focus survives, the resync mark is required,
-`used` returns to 0). See `docs/adr/0004-ingress-drain-and-coalescer.md`.
+**B-3 bound (amended 2026-10-12, judge finding; coordinator decision R = 32; derivation added
+after the fixes review, F-3/F-6).** AU-3 gives every app a reserved minimum R of slots that
+other apps cannot take; the reserve is held **outside** the shared pool. With a hard global bound
+equal to the pool the two requirements contradict: apps registered after the pool is full still
+need their reserve, so `SlotBudget::used` rightly exceeds the pool (measured on C: 11 484 used
+against a 10 300 bound with 300 apps). The bound is
+
+    used() <= global_budget + apps x (R + 1)        at every instant, for any number of producers
+
+**Derivation.** `used()` is the sum of two counts kept in one atomic word (so a reader never
+sees a torn sum): *pool units* P and *reserve units* V.
+1. P: every pool unit is taken by a compare-and-swap that refuses when P is already at
+   `global_budget`; hence P <= global_budget, except for the newest Focus slot of an app, which is
+   always admitted (`force_charge`) and exists at most once per app: P <= global_budget + apps.
+2. V: each app has one counter `reserve_used`, shared by its table and its ring credit, that is
+   raised by a compare-and-swap that refuses at R; V is the sum of these counters: V <= apps x R.
+   (A design with two independent, stale views of the reserve, one for the table and one for the
+   ring, overshot to 48..80 units for one app with 2..16 producers; the single CAS counter is what
+   makes the bound exact.)
+3. Adding: used = P + V <= global_budget + apps x (R + 1). Leased ring credit (a producer takes
+   units from the budget in blocks of 16 for its ring) is part of P and V and is bounded by the
+   same two rules; it is returned when the ring drains, so `used` equals the sum of the pending
+   units of all ingresses whenever the ingresses are observed (`drain`, `pending`,
+   `check_invariants`), and exceeds it by at most one lease block per ingress in between.
+The reserve is therefore not taken from the pool: a pool of N units still holds N units for apps
+above their reserve (an earlier version counted both in one total, which shrank the pool by R
+per app and made a failed preemption scan reachable).
+R is read from the config (`IngressConfig::reserved_slots`, default 32), not hard-coded in
+tests: `limits::APP_RESERVE` is `gorca_ingress::RESERVED_SLOTS`. `a_global_budget_bounds_many_apps`
+and `audit_concurrent_pushes_never_overshoot_the_budget` assert both `budget.used()` and the sum
+of `pending()` against this bound with 2 producers per app; nothing else was relaxed (focus
+survives, the resync mark is required, `used` returns to 0). See
+`docs/adr/0004-ingress-drain-and-coalescer.md`.
 
 **B-5 harness note (2026-10-12).** The test must measure the drain, not the harness: the 100 MiB
 payload is dropped right after it is copied into the mock link, the mock link releases queue
@@ -335,7 +357,8 @@ threshold constants live in `crates/gorca-bench-b2/src/limits.rs`; this table is
 | **T2.p50/p99/p999_us@{idle,10k,100k}** | drain latency, socket to coalescer output | Mock broker. A load app at 0 / 10k / 100k events/s (fakeapp mix) and a separate probe app sending a focus probe every 500 us (8000 / 40000 samples per run), 4 / 20 s. Latency of a probe = `now_ns()` after the `drain()` that first returned a focus event with id >= k minus `now_ns()` immediately before the `write` that carried probe k. The consumer is the production path: `notified().await` then `drain()`. | p50 <= 300 us; p99 <= 500 us idle, 1 ms at 10k, 3 ms at 100k; p99.9 <= 3 ms at 10k, 10 ms at 100k |
 | **T3.focus_p99/p999_us** | focus latency under the 40k/s storm | 4 apps x 10k events/s fakeapp mix (the storm of `fakeapp.py`), probes (every 2 ms, 10 000 samples) in the focus app **sharing its ingress with 10k events/s**, 20 s. Same stamps as T2. Mock: thresholded. dbus-daemon, dbus-broker: reported and must survive (they add forwarding latency). | p99 <= 2 ms, p99.9 <= 8 ms (mock) |
 | T3.survived | no disconnect, all fences | any bus | 1 |
-| **T4.cpu_ms_per_10k@10k** | CPU per 10k events | 5 apps x 2k events/s, 15 s. CPU = sum of on-CPU ns (`/proc/self/task/*/schedstat`) of all threads not named `hx-*`, over the feeder window, / (framed messages / 10 000). | `<= 25 ms` |
+| T4.cpu_ms_per_10k@10k | CPU per 10k events at a low rate (info) | 5 apps x 2k events/s, 15 s. CPU = sum of on-CPU ns (`/proc/self/task/*/schedstat`) of all threads not named `hx-*`, over the feeder window, / (framed messages / 10 000). | info (see T4 note) |
+| **T4.cpu_ms_per_10k@100k** | CPU per 10k events where reads batch | 1 app at 100k events/s, 8 s, same CPU definition | `<= 25 ms` |
 | T4.drain_core_pct@100k | drain thread occupancy | 1 app at 100k/s, 8 s; CPU of `gorca-drain*` threads / wall (M-11) | `<= 60 %` |
 | T4.idle_cpu_ms_per_s | idle spin | connected, no traffic, 5 s | `<= 10 ms/s` |
 | **T5.rss_delta_mib@{distinct,stall,stall_lossless}** | memory ceiling | RSS peak (`VmHWM` after reset) minus RSS before the drain was spawned. `distinct`: 50k/s of never-repeated keys with the app actor hung from 1 s to 5 s of 8 s; `stall`: 100k/s realistic mix, app actor hung 1 s to 6 s; `stall_lossless`: 100k/s of Removed/Window/Focus/Announcement heavy mix over 1M nodes, same hang. | `<= 256 MiB` (M-8, A5) |
@@ -348,11 +371,22 @@ threshold constants live in `crates/gorca-bench-b2/src/limits.rs`; this table is
 | FA.*.focus_p99_us | focus latency vs the tap's arrival of the same message | as above | `<= 2 ms` |
 | F3.* | fixture self-test | a reader that does not read is disconnected by dbus-broker and loses signals on dbus-daemon; a reader that keeps up is never disconnected | fixture check, not a candidate metric |
 
+**T4 note (amended 2026-10-12, reviewer, coordinator decision).** CPU per 10k events is gated at
+100k events/s, where the drain's reads batch. At 10k events/s the feeder's 200 us write quantum
+carries less than one message per write, so every message is its own thread wakeup and the cost
+is the wakeup, not the code: on this host (Intel Core Ultra 9 285H, `powersave`, PREEMPT_RT) the
+same drain costs 110 to 561 ms per 10k messages depending on the core it lands on (E-cores 110,
+LP E-cores 167, P-cores 561, unpinned 417; `b2 threads`), a 5x spread from placement alone, and
+no blocking-`recv` drain has been below 160 there (reference 225). At 100k/s every placement
+passes (8 to 18 ms). Reaching 25 ms at 10k/s would need busy polling, which contradicts
+`T4.idle_cpu_ms_per_s`. The 10k figure stays in the report as information (with the governor and
+the core placement in the result meta); absolute load is bounded by `T4.drain_core_pct@100k`.
+
 **Gate.** A candidate is rankable only if it passes **every conformance test** (`cargo test -p
 gorca-bench-b2`, debug and release), every `C.failures`, `T3.survived`, `T5.survived`,
-`T5.pending_max`, `T5.rss_delta`, `FA.*.failures`, `T1.sustained_eps` and `T4.drain_core_pct`.
+`T5.pending_max`, `T5.rss_delta`, `FA.*.failures`, `T1.sustained_eps`, `T4.drain_core_pct` and `T4.cpu_ms_per_10k@100k`.
 **Ranking** among passing candidates: T1.sustained and saturation (higher), T3/T2 p99 and p99.9,
-T4 CPU per 10k, T7 push4 p99, then code size, then reviewer judgment on correctness risks
+T4 CPU per 10k at 100k/s, T7 push4 p99, then code size, then reviewer judgment on correctness risks
 (section 8).
 
 ## 7. Constraints

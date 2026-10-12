@@ -13,6 +13,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 
 use gorca_model::{AppId, ConnectorId, LocalId, NodeEvent, NodeKey, RawEvent, TextDelta};
 use smallvec::SmallVec;
@@ -130,8 +131,10 @@ pub(crate) struct Table {
     dead_behind: usize,
     capacity_hint: usize,
     released: bool,
-    /// Ring records the owner has charged, set before each fold (they share the reserve).
-    pub(crate) ring_units: usize,
+    /// Reserve units this app holds, table and ring together (shared with the ring's credit).
+    app_reserve: Arc<AtomicUsize>,
+    /// How many of `held` came from the reserve; the rest are pool units.
+    res_units: usize,
 }
 
 /// Everything `Table::take` hands over; the heavy conversion happens outside the lock.
@@ -181,7 +184,11 @@ fn to_u32(i: usize) -> u32 {
 }
 
 impl Table {
-    pub(crate) fn new(id: usize, budget: Option<Arc<SlotBudget>>) -> Self {
+    pub(crate) fn new(
+        id: usize,
+        budget: Option<Arc<SlotBudget>>,
+        app_reserve: Arc<AtomicUsize>,
+    ) -> Self {
         Self {
             id,
             budget,
@@ -206,7 +213,8 @@ impl Table {
             dead_behind: 0,
             capacity_hint: 0,
             released: false,
-            ring_units: 0,
+            app_reserve,
+            res_units: 0,
         }
     }
 
@@ -255,22 +263,21 @@ impl Table {
         }
     }
 
-    /// Budget units held besides the focus slot (what the per-app reserve is measured against).
-    fn own(&self) -> usize {
-        self.held - usize::from(self.focus != NONE)
-    }
-
-    /// Take one budget unit. The first `reserve` units of an app are admitted without looking at
-    /// the pool; above that the pool is tried, and when it is exhausted a small app takes slots
-    /// back from a larger holder, of any size (SPEC AU-3).
+    /// Take one budget unit. The first `R` units of an app (table and ring together) come from
+    /// its reserve, outside the pool; above that the pool is tried, and when it is exhausted a
+    /// small app takes slots back from a larger holder, of any size above `R` (SPEC AU-3).
     fn acquire(&mut self, cfg: &IngressConfig) -> bool {
         let Some(b) = self.budget.clone() else {
             self.held += 1;
             return true;
         };
         let reserve = cfg.reserved_slots;
-        if b.admit(self.own() + self.ring_units, reserve)
-            || b.try_charge()
+        if b.take_reserve(&self.app_reserve, reserve, 1) == 1 {
+            self.res_units += 1;
+            self.held += 1;
+            return true;
+        }
+        if b.try_charge()
             || (self.held < PREEMPT_BELOW
                 && b.preempt(self.id, self.held.max(reserve), 1)
                 && b.try_charge())
@@ -286,9 +293,13 @@ impl Table {
             return;
         }
         debug_assert!(self.held >= n, "held counter underflow");
+        // Pool units go back first: the app keeps its reserve for as long as it holds anything.
+        let pool = n.min(self.held - self.res_units);
+        let reserve = n - pool;
+        self.res_units -= reserve;
         self.held -= n;
         if let Some(b) = &self.budget {
-            b.release(n);
+            b.release_split(pool, reserve, &self.app_reserve);
         }
     }
 
@@ -351,22 +362,32 @@ impl Table {
             }
             Kind::Focus => {
                 if self.focus == NONE {
-                    // The newest focus is lossless: when the pool is exhausted it takes a slot
-                    // back from the largest holder; only if nobody holds more than a focus slot
-                    // (limit below the number of apps) is the limit exceeded, by one per app.
-                    let own = self.own();
+                    // The newest focus is lossless: from the reserve, else the pool; when the
+                    // pool is exhausted it takes a slot back from a larger holder (at most
+                    // once: a failed preemption is not repeated); only if nobody can give one is
+                    // the limit exceeded, by one unit per app.
+                    let own = self.held;
                     self.focus = to_u32(self.events.len());
                     self.append(Kind::Focus, ev);
                     self.held += 1;
-                    if let Some(b) = &self.budget
-                        && !b.admit(own + self.ring_units, cfg.reserved_slots)
-                        && !(0..32).any(|_| {
-                            b.try_charge()
-                                || (b.preempt(self.id, own.max(cfg.reserved_slots), 256)
-                                    && b.try_charge())
-                        })
-                    {
-                        b.force_charge();
+                    if let Some(b) = &self.budget {
+                        if b.take_reserve(&self.app_reserve, cfg.reserved_slots, 1) == 1 {
+                            self.res_units += 1;
+                        } else {
+                            let mut got = false;
+                            for _ in 0..32 {
+                                if b.try_charge() {
+                                    got = true;
+                                    break;
+                                }
+                                if !b.preempt(self.id, own.max(cfg.reserved_slots), 256) {
+                                    break;
+                                }
+                            }
+                            if !got {
+                                b.force_charge();
+                            }
+                        }
                     }
                 } else {
                     let at = self.focus as usize;
@@ -675,9 +696,9 @@ impl Table {
 
     /// Give back every slot but the focus one (global budget preemption, SPEC AU-3): the app
     /// is flooded and fully dirty, so its actor resyncs; the newest focus survives.
-    pub(crate) fn shed(&mut self) -> (usize, Shed) {
+    pub(crate) fn shed(&mut self, newer: Option<NodeEvent>) -> (usize, Shed) {
         let before = self.held;
-        let focus = if self.focus == NONE {
+        let old_focus = if self.focus == NONE {
             None
         } else {
             self.events
@@ -685,7 +706,13 @@ impl Table {
                 .map(|e| std::mem::replace(e, placeholder()))
         };
         self.stats.announcements_dropped += self.announcements as u64;
-        let had_focus = focus.is_some();
+        let had_focus = old_focus.is_some();
+        // A Focus that was still in the ring is newer than the one in the table.
+        if let Some(NodeEvent::FocusChanged { node }) = &newer {
+            self.focused = Some(*node);
+            self.stats.focus_sequence += 1;
+        }
+        let focus = newer.or(old_focus);
         // The buffers are moved out, not freed: the caller drops them after releasing the lock.
         let garbage = Shed {
             events: std::mem::take(&mut self.events),
@@ -710,8 +737,15 @@ impl Table {
         if let Some(ev) = focus {
             self.focus = 0;
             self.append(Kind::Focus, ev);
+            if !had_focus {
+                // A Focus that came from the ring has no unit yet; it is always admitted.
+                self.held += 1;
+                if let Some(b) = &self.budget {
+                    b.force_charge();
+                }
+            }
         }
-        (before - self.held, garbage)
+        (before.saturating_sub(self.held), garbage)
     }
 
     /// Hand over the pending events (moved out, not copied) and reset to a fresh drain. Vectors
@@ -910,6 +944,7 @@ impl Taken {
                     nodes: garbage,
                     meta: junk,
                     aux,
+                    shed: None,
                 },
             },
             spare,

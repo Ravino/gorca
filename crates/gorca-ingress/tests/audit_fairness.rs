@@ -38,6 +38,26 @@ fn announcement(app: u32) -> NodeEvent {
 
 type Conn = (IngressSender, IngressReceiver);
 
+/// Exhaust the pool exactly, from an app that holds at least 64 units (so it never preempts):
+/// pending units are settled after every push, so lease slack does not count.
+fn fill_pool(budget: &Arc<SlotBudget>, app: u32) -> Conn {
+    let c = ingress_with_budget(IngressConfig::default(), budget);
+    let mut n = 0u64;
+    while n < 64 || budget.pool_used() < budget.limit() {
+        c.0.push(window(app, 5_000_000 + n));
+        n += 1;
+        if n >= 64 {
+            c.1.pending();
+        }
+        assert!(
+            n < 200_000,
+            "pool cannot be exhausted: {}",
+            budget.pool_used()
+        );
+    }
+    c
+}
+
 /// The judge's attack: `k` connections of one hostile process, each shaped to hold about `per`
 /// distinct slots (then repeats of one key, so ring folds stay below any size threshold).
 fn hostile(budget: &Arc<SlotBudget>, k: u32, per: u64, repeats: u32) -> Vec<Conn> {
@@ -91,11 +111,15 @@ fn audit_many_connections_cannot_starve_a_victim() {
 /// shed (flooded, dirty-all, never silent) so that a newcomer above its own reserve is served.
 #[test]
 fn audit_small_holders_are_preempted_for_a_larger_claim() {
-    let limit = 1_000;
+    // Fifteen holders of 100 slots (32 from the reserve, 68 from the pool each) and a filler
+    // that takes what is left of the pool.
+    let limit = 1_500;
     let budget = SlotBudget::new(limit);
-    // Ten holders of 100 slots each exactly fill the pool (each is above the reserve of 32).
-    let holders: Vec<Conn> = hostile(&budget, 10, 100, 0);
-    assert_eq!(budget.used(), limit);
+    let mut holders: Vec<Conn> = hostile(&budget, 15, 100, 0);
+    for (_, rx) in &holders {
+        rx.pending();
+    }
+    holders.push(fill_pool(&budget, 500));
 
     let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
     let wanted = RESERVED_SLOTS as u64 + 8;
@@ -121,8 +145,6 @@ fn audit_small_holders_are_preempted_for_a_larger_claim() {
                     .is_some_and(gorca_ingress::DirtySet::is_all)
             );
             shed += 1;
-        } else {
-            assert_eq!(hd.events.len(), 100);
         }
     }
     assert!(shed >= 1, "nobody was preempted");
@@ -135,8 +157,8 @@ fn audit_small_holders_are_preempted_for_a_larger_claim() {
 #[test]
 fn audit_reserve_is_untouchable() {
     let budget = SlotBudget::new(256);
-    let holders: Vec<Conn> = hostile(&budget, 4, 64, 0);
-    assert!(budget.used() >= 256);
+    let holders: Vec<Conn> = hostile(&budget, 8, 64, 0);
+    assert_eq!(budget.used(), 256 + 8 * RESERVED_SLOTS, "the pool is full");
     let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
     for n in 0..RESERVED_SLOTS as u64 {
         tx.push(window(9, n));
@@ -216,7 +238,7 @@ fn audit_ring_charges_respect_the_limit() {
 fn audit_preempting_push_is_bounded() {
     // Room for the holder plus its in-flight ring credit; a filler app inside its reserve then
     // closes the gap so that the pool is exactly exhausted.
-    let limit = HARD_CAP + 16;
+    let limit = HARD_CAP + 64;
     let bound = if cfg!(debug_assertions) {
         Duration::from_millis(5)
     } else {
@@ -230,12 +252,7 @@ fn audit_preempting_push_is_bounded() {
             htx.push(window(1, n));
         }
         assert_eq!(hrx.pending(), HARD_CAP);
-        let (ftx, frx) = ingress_with_budget(IngressConfig::default(), &budget);
-        for n in 0..16u64 {
-            ftx.push(window(3, n));
-        }
-        assert_eq!(frx.pending(), 16);
-        assert_eq!(budget.used(), limit);
+        let (ftx, frx) = fill_pool(&budget, 3);
         let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
         for n in 0..RESERVED_SLOTS as u64 {
             tx.push(window(2, n));

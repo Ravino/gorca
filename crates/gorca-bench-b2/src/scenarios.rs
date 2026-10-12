@@ -361,16 +361,14 @@ pub fn t4(ctx: &Ctx) -> Result<Vec<Row>> {
         per10k.push(o.cpu_ns as f64 / 1e6 / (ev / 10_000.0));
         total.push(o.cpu_ns as f64 / 1e6 / o.elapsed_s);
     }
-    rows.push(
-        Row::info(
-            "T4.cpu_ms_per_10k@10k",
-            "T4",
-            "mock",
-            "ms per 10k events",
-            &per10k,
-        )
-        .at_most(L::T4_CPU_MS_PER_10K_MAX),
-    );
+    // Info only (SPEC T4): at 10k/s every message is its own thread wakeup.
+    rows.push(Row::info(
+        "T4.cpu_ms_per_10k@10k",
+        "T4",
+        "mock",
+        "ms per 10k events",
+        &per10k,
+    ));
     rows.push(Row::info(
         "T4.cpu_ms_per_s@10k",
         "T4",

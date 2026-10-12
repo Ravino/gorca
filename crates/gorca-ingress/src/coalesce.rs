@@ -11,12 +11,12 @@
 //! * Hard bounds: the ring holds at most [`RING_CAP`] records; the table is bounded by
 //!   `max_keys`, `hard_cap` and the shared [`SlotBudget`] (SPEC 3.6, 3.7).
 
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError, TryLockError, Weak};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::mpsc::{SyncSender, TrySendError, sync_channel};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, TryLockError, Weak};
 
 use crossbeam_queue::ArrayQueue;
-use gorca_model::{NodeKey, RawEvent};
+use gorca_model::{NodeEvent, NodeKey, RawEvent};
 use gorca_rt::Notify;
 
 use crate::dirty::DirtySet;
@@ -54,13 +54,16 @@ pub const HARD_CAP: usize = 65_536;
 /// Records the lock-free ring holds before a producer folds some into the table.
 pub const RING_CAP: usize = 1024;
 /// Records a producer folds when it finds the ring full (bounds its critical section).
-const HELP_CHUNK: usize = 512;
+const HELP_CHUNK: usize = 1024;
 /// Budget units a producer takes from the shared counter at once for its ring (and the slack
 /// kept when units are given back), so a push usually touches only per-app atomics: one
 /// compare-and-swap on the global counter per push made four producers wait on each other.
 const RING_CREDIT_BLOCK: usize = 16;
 /// Records folded between two returns of ring charges.
 const FOLD_GROUP: usize = 16;
+/// Failed attempts a producer spins, then yields, before it takes the lock and folds itself.
+const SPIN_TRIES: u32 = 256;
+const YIELD_TRIES: u32 = 8;
 /// Records the consumer folds per lock acquisition while draining.
 const DRAIN_CHUNK: usize = 256;
 /// An app holding at least this many slots folds at push time (it is already degraded, and the
@@ -134,6 +137,9 @@ pub(crate) struct Garbage {
     pub(crate) nodes: Option<crate::table::NodeMap>,
     pub(crate) meta: Vec<Meta>,
     pub(crate) aux: Vec<smallvec::SmallVec<[gorca_model::TextDelta; 2]>>,
+    /// The table of an app that was preempted while the reaper was backed up (ADR-0004 section
+    /// 8): freed here, with the batch, on the thread that drains the victim.
+    pub(crate) shed: Option<Shed>,
 }
 
 /// Process-wide bound on pending slots across many ingresses (hostile many-app floods).
@@ -142,177 +148,267 @@ pub(crate) struct Garbage {
 /// text delta beyond the first of a slot and each record still in the lock-free ring is charged
 /// once, and returned when it is drained, superseded, turned into a dirty mark, or when the
 /// ingress is dropped (AU-1): the sum over all ingresses of their pending units is exactly
-/// [`SlotBudget::used`], ring included.
+/// [`SlotBudget::used`], ring included, whenever the ingresses are observed.
 ///
-/// Fairness (AU-3): every app owns a reserved minimum of [`IngressConfig::reserved_slots`]
-/// (`R`) units, ring records included, that never compete for the pool. Above `R` a unit comes
-/// from the pool through a compare-and-swap that never exceeds `limit` (AU-7); an app holding
-/// less than 64 units that finds the pool exhausted takes the slots of a larger holder, of any
-/// size above `R`, back: the victim is flooded and marked dirty-all (never a silent loss) and its
-/// buffers are freed on a reaper thread (AU-6). Hence `used() <= limit + apps * (R + 1)`, the
-/// `+ 1` being the newest `Focus` slot.
+/// Two kinds of units (AU-3, AU-7). The **reserve**: every app may hold up to
+/// [`IngressConfig::reserved_slots`] (`R`) units, table and ring together, outside the pool;
+/// a per-app counter, moved by compare-and-swap, never lets it pass `R`. The **pool**: above
+/// `R`, a unit is taken with a compare-and-swap that never passes `limit`; the newest `Focus`
+/// slot of an app may exceed it by one. Hence, however many threads push,
+/// `used() <= limit + apps * (R + 1)` at every instant (both counts live in one atomic word).
+/// An app holding at most `R` units is never affected by others. An app above `R` can only be
+/// preempted (flooded, dirty-all, newest Focus kept), never silently dropped from.
+/// An app holding fewer than 64 units that finds the pool exhausted preempts another app that
+/// holds more than it and more than `R`; the victim's buffers go to the reaper thread, or to the
+/// victim's next drain when the reaper is backed up (AU-6, ADR-0004 section 8).
 #[derive(Debug)]
 pub struct SlotBudget {
-    used: AtomicUsize,
+    /// Low 32 bits: pool units. High 32 bits: reserve units of all apps.
+    units: AtomicU64,
     limit: usize,
-    registry: Mutex<Vec<Weak<Shared>>>,
-    /// Lazily started thread that frees the buffers of preempted tables; it ends when the budget
-    /// is dropped (the sender is its only owner-side handle).
-    reaper: OnceLock<Option<SyncSender<Reapable>>>,
+    /// Apps whose weight exceeded `R` at their last update: the only possible victims.
+    over: Mutex<OverSet>,
+    over_len: AtomicUsize,
+    /// Frees the buffers of preempted tables; ends when the budget is dropped.
+    reaper: Option<SyncSender<Shed>>,
+    reaper_fallbacks: AtomicU64,
 }
 
-type Reapable = Box<dyn Send + 'static>;
+#[derive(Debug, Default)]
+struct OverSet {
+    apps: Vec<Weak<Shared>>,
+    cursor: usize,
+}
+
+const POOL_MASK: u64 = 0xFFFF_FFFF;
+/// Largest pool the packed counter can represent.
+const POOL_MAX: usize = (u32::MAX - 1) as usize;
+const RESERVE_ONE: u64 = 1 << 32;
+/// Candidates looked at by one preemption: victim choice is O(1), the largest of a window.
+const VICTIM_SAMPLE: usize = 64;
 
 /// Default global pending-slot budget (about 25 MB of slots).
 pub const GLOBAL_SLOT_BUDGET: usize = 262_144;
 
-/// Garbage handed to the reaper before the hand-over falls back to freeing in place.
+/// Garbage handed to the reaper before the hand-over falls back to the victim's next drain.
 const REAPER_QUEUE: usize = 256;
 
+const NOT_OVER: usize = usize::MAX;
+
 impl SlotBudget {
-    /// A pool of `limit` units on top of the per-app reserves.
+    /// A pool of `limit` units on top of the per-app reserves. Starts the reaper thread
+    /// (`gorca-reaper`); it ends when the budget is dropped.
     pub fn new(limit: usize) -> Arc<Self> {
+        Self::build(limit, true)
+    }
+
+    fn build(limit: usize, with_reaper: bool) -> Arc<Self> {
+        let (tx, rx) = sync_channel::<Shed>(REAPER_QUEUE);
+        let reaper = with_reaper
+            .then(|| {
+                std::thread::Builder::new()
+                    .name("gorca-reaper".to_owned())
+                    .spawn(move || while rx.recv().map(drop).is_ok() {})
+                    .ok()
+                    .map(|_| tx)
+            })
+            .flatten();
         Arc::new(Self {
-            used: AtomicUsize::new(0),
-            limit,
-            registry: Mutex::new(Vec::new()),
-            reaper: OnceLock::new(),
+            units: AtomicU64::new(0),
+            limit: limit.min(POOL_MAX),
+            over: Mutex::new(OverSet::default()),
+            over_len: AtomicUsize::new(0),
+            reaper,
+            reaper_fallbacks: AtomicU64::new(0),
         })
     }
 
     /// Slots currently charged to the budget (the sum over all ingresses of their pending units:
-    /// table slots, queued text deltas and records in the ring).
+    /// table slots, queued text deltas and records in the ring), reserve and pool together.
     pub fn used(&self) -> usize {
-        self.used.load(Ordering::Relaxed)
+        let v = self.units.load(Ordering::Relaxed);
+        usize::try_from((v & POOL_MASK) + (v >> 32)).unwrap_or(usize::MAX)
     }
 
-    /// The configured limit.
+    /// The configured pool limit.
     pub fn limit(&self) -> usize {
         self.limit
     }
 
-    /// Take up to `n` units in one atomic operation each: `reserved` of them without looking at
-    /// the pool, the rest from the pool without exceeding the limit. Returns how many.
-    pub(crate) fn charge_up_to(&self, n: usize, reserved: usize) -> usize {
-        let free = n.min(reserved);
-        if free > 0 {
-            self.used.fetch_add(free, Ordering::AcqRel);
-        }
-        let want = n - free;
-        if want == 0 {
-            return free;
-        }
-        let mut cur = self.used.load(Ordering::Relaxed);
+    /// Times a preempted table could not be handed to the reaper and went to the victim's
+    /// next drain instead.
+    pub fn reaper_fallbacks(&self) -> u64 {
+        self.reaper_fallbacks.load(Ordering::Relaxed)
+    }
+
+    /// Units currently taken from the pool (without the per-app reserves).
+    pub fn pool_used(&self) -> usize {
+        (self.units.load(Ordering::Relaxed) & POOL_MASK) as usize
+    }
+
+    pub(crate) fn pool_full(&self) -> bool {
+        self.pool_used() >= self.limit
+    }
+
+    /// The pool has less than `margin` units left.
+    pub(crate) fn pool_nearly_full(&self, margin: usize) -> bool {
+        self.pool_used() + margin >= self.limit
+    }
+
+    /// Take up to `n` reserve units for an app whose reserve counter is `app` (capped at `cap`).
+    /// One compare-and-swap on the app's counter and one add on the global word.
+    pub(crate) fn take_reserve(&self, app: &AtomicUsize, cap: usize, n: usize) -> usize {
+        let mut cur = app.load(Ordering::Relaxed);
         loop {
-            let take = want.min(self.limit.saturating_sub(cur));
+            let take = n.min(cap.saturating_sub(cur));
             if take == 0 {
-                return free;
+                return 0;
             }
-            match self.used.compare_exchange_weak(
+            match app.compare_exchange_weak(cur, cur + take, Ordering::AcqRel, Ordering::Relaxed) {
+                Ok(_) => {
+                    self.units
+                        .fetch_add(take as u64 * RESERVE_ONE, Ordering::AcqRel);
+                    return take;
+                }
+                Err(now) => cur = now,
+            }
+        }
+    }
+
+    /// Take up to `n` pool units in one compare-and-swap, never passing the limit.
+    pub(crate) fn take_pool(&self, n: usize) -> usize {
+        let mut cur = self.units.load(Ordering::Relaxed);
+        loop {
+            let take = n.min(self.limit.saturating_sub((cur & POOL_MASK) as usize));
+            if take == 0 {
+                return 0;
+            }
+            match self.units.compare_exchange_weak(
                 cur,
-                cur + take,
+                cur + take as u64,
                 Ordering::AcqRel,
                 Ordering::Relaxed,
             ) {
-                Ok(_) => return free + take,
+                Ok(_) => return take,
                 Err(now) => cur = now,
             }
         }
     }
 
-    /// Charge a unit of the reserve to an app whose reserved units in use are `own < reserve`.
-    pub(crate) fn admit(&self, own: usize, reserve: usize) -> bool {
-        if own < reserve {
-            self.used.fetch_add(1, Ordering::AcqRel);
-            true
-        } else {
-            false
+    /// Take one pool unit if the pool is not exhausted.
+    pub(crate) fn try_charge(&self) -> bool {
+        self.take_pool(1) == 1
+    }
+
+    /// Charge the newest focus slot of an app that finds the pool exhausted. The overshoot is
+    /// at most one unit per app (the `+ 1` of the bound).
+    pub(crate) fn force_charge(&self) {
+        self.units.fetch_add(1, Ordering::AcqRel);
+    }
+
+    /// Return `pool` pool units and `reserve` units of the app counter `app`.
+    pub(crate) fn release_split(&self, pool: usize, reserve: usize, app: &AtomicUsize) {
+        if reserve > 0 {
+            app.fetch_sub(reserve, Ordering::AcqRel);
+        }
+        let d = pool as u64 + reserve as u64 * RESERVE_ONE;
+        if d > 0 {
+            let prev = self.units.fetch_sub(d, Ordering::AcqRel);
+            debug_assert!(
+                (prev & POOL_MASK) >= pool as u64 && (prev >> 32) >= reserve as u64,
+                "budget underflow"
+            );
         }
     }
 
-    /// Free `g` on the reaper thread when it is large; in place otherwise or when the reaper
-    /// is unavailable or busy. Nothing is ever retained.
-    pub(crate) fn dispose(&self, g: Shed) {
+    fn over(&self) -> MutexGuard<'_, OverSet> {
+        self.over.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn over_insert(&self, sh: &Shared) {
+        let mut o = self.over();
+        if sh.over_slot.load(Ordering::Relaxed) != NOT_OVER {
+            return;
+        }
+        sh.over_slot.store(o.apps.len(), Ordering::Relaxed);
+        o.apps.push(sh.this.clone());
+        self.over_len.store(o.apps.len(), Ordering::Relaxed);
+    }
+
+    fn over_remove(&self, sh: &Shared) {
+        let mut o = self.over();
+        let slot = sh.over_slot.swap(NOT_OVER, Ordering::Relaxed);
+        if slot == NOT_OVER || slot >= o.apps.len() {
+            return;
+        }
+        o.apps.swap_remove(slot);
+        if let Some(moved) = o.apps.get(slot).and_then(Weak::upgrade) {
+            moved.over_slot.store(slot, Ordering::Relaxed);
+        }
+        self.over_len.store(o.apps.len(), Ordering::Relaxed);
+    }
+
+    /// The largest of a window of the apps that hold more than `R`, other than `me`. Never
+    /// scans more than `VICTIM_SAMPLE` entries and never touches an app's lock, so it is O(1)
+    /// whatever the number of apps, and free when nobody is over (SPEC AU-6).
+    fn pick_victim(&self, me: usize) -> Option<Arc<Shared>> {
+        if self.over_len.load(Ordering::Relaxed) == 0 {
+            return None;
+        }
+        let mut o = self.over();
+        let n = o.apps.len();
+        if n == 0 {
+            return None;
+        }
+        let start = o.cursor % n;
+        o.cursor = o.cursor.wrapping_add(VICTIM_SAMPLE);
+        let mut best: Option<(usize, Arc<Shared>)> = None;
+        for i in 0..n.min(VICTIM_SAMPLE) {
+            let Some(s) = o.apps.get((start + i) % n).and_then(Weak::upgrade) else {
+                continue;
+            };
+            if s.id == me {
+                continue;
+            }
+            let w = s.weight();
+            if best.as_ref().is_none_or(|(bw, _)| w > *bw) {
+                best = Some((w, s));
+            }
+        }
+        best.map(|(_, s)| s)
+    }
+
+    /// Free `g` on the reaper thread; when that is backed up (or gone) park it with the victim
+    /// for its next drain. Never freed on the caller's critical path.
+    fn dispose(&self, g: Shed, owner: &Shared) {
         if !g.is_large() {
             return;
         }
-        let tx = self.reaper.get_or_init(|| {
-            let (tx, rx): (SyncSender<Reapable>, Receiver<Reapable>) = sync_channel(REAPER_QUEUE);
-            std::thread::Builder::new()
-                .name("gorca-ingress-reap".to_owned())
-                .spawn(move || while rx.recv().map(drop).is_ok() {})
-                .ok()
-                .map(|_| tx)
-        });
-        if let Some(tx) = tx {
-            // A full or closed channel hands the garbage back inside the error: dropped here.
-            drop(tx.try_send(Box::new(g)));
+        let rejected = match &self.reaper {
+            Some(tx) => match tx.try_send(g) {
+                Ok(()) => None,
+                Err(TrySendError::Full(g) | TrySendError::Disconnected(g)) => Some(g),
+            },
+            None => Some(g),
+        };
+        if let Some(g) = rejected {
+            self.reaper_fallbacks.fetch_add(1, Ordering::Relaxed);
+            owner.park(g);
         }
-    }
-
-    /// Take one unit if the pool is not exhausted. Never exceeds the limit, whatever the
-    /// number of concurrent callers.
-    pub(crate) fn try_charge(&self) -> bool {
-        let mut cur = self.used.load(Ordering::Relaxed);
-        loop {
-            if cur >= self.limit {
-                return false;
-            }
-            match self
-                .used
-                .compare_exchange_weak(cur, cur + 1, Ordering::AcqRel, Ordering::Relaxed)
-            {
-                Ok(_) => return true,
-                Err(now) => cur = now,
-            }
-        }
-    }
-
-    /// Charge the focus slot of an app that holds no other unit and finds the pool exhausted.
-    /// The overshoot is at most one unit per app and only when `limit` is below the app count.
-    pub(crate) fn force_charge(&self) {
-        self.used.fetch_add(1, Ordering::AcqRel);
-    }
-
-    pub(crate) fn release(&self, n: usize) {
-        let prev = self.used.fetch_sub(n, Ordering::AcqRel);
-        debug_assert!(prev >= n, "budget underflow: used {prev}, releasing {n}");
-    }
-
-    fn registry(&self) -> MutexGuard<'_, Vec<Weak<Shared>>> {
-        self.registry.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-
-    fn register(&self, sh: &Arc<Shared>) {
-        let mut r = self.registry();
-        r.retain(|w| w.strong_count() > 0);
-        r.push(Arc::downgrade(sh));
-    }
-
-    fn unregister(&self, id: usize) {
-        self.registry()
-            .retain(|w| w.upgrade().is_some_and(|s| s.id != id));
     }
 
     /// Take the slots of the largest holder (other than `me`) back, if it holds more than
-    /// `floor` units and more than the reserve. Only `try_lock` is used on the victim, so two
-    /// preempting apps cannot deadlock; `tries` bounds how long a busy victim is waited for (a
-    /// victim's critical sections are short and never wait on anything). The victim's buffers go
-    /// to the reaper, so this costs a registry scan and a little bookkeeping whatever the
-    /// victim's size (AU-6).
+    /// `floor` units. Returns false when there is nobody to take from. Only `try_lock` is used
+    /// on the victim, so two preempting apps cannot deadlock; `tries` bounds how long a busy
+    /// victim is waited for (its critical sections are short and wait on nothing).
     pub(crate) fn preempt(&self, me: usize, floor: usize, tries: u32) -> bool {
         for attempt in 0..tries.max(1) {
-            if self.used() < self.limit {
+            if !self.pool_full() {
                 return true;
             }
-            let victim = {
-                let r = self.registry();
-                r.iter()
-                    .filter_map(Weak::upgrade)
-                    .filter(|s| s.id != me)
-                    .max_by_key(|s| s.weight())
+            let Some(v) = self.pick_victim(me) else {
+                return false;
             };
-            let Some(v) = victim else { return false };
             if v.weight() <= floor {
                 return false;
             }
@@ -322,7 +418,7 @@ impl SlotBudget {
                 Err(TryLockError::WouldBlock) => None,
             };
             if let Some((freed, garbage)) = shed {
-                self.dispose(garbage);
+                self.dispose(garbage, &v);
                 return freed > 0;
             }
             if attempt % 8 == 7 {
@@ -353,10 +449,18 @@ struct Shared {
     closed: AtomicBool,
     /// Budget units the table holds, for the eager path and for preemption.
     held_hint: AtomicUsize,
-    /// Units taken from the budget on behalf of the ring (AU-1, AU-3): at least the number of
+    /// Units taken from the budget on behalf of the ring (AU-1, AU-3), packed: low 32 bits the
+    /// credit, high 32 bits how much of it came from the reserve. At least the number of
     /// records in the ring (give or take the producers racing for the last unit), at most a
     /// couple of blocks more; equal to it whenever the ingress is observed (`settle`).
-    ring_credit: Padded<AtomicUsize>,
+    ring_credit: Padded<AtomicU64>,
+    /// Reserve units this app holds, table and ring together, never above `R`.
+    app_reserve: Arc<AtomicUsize>,
+    /// Position in the budget's set of over-reserve apps, or `NOT_OVER`.
+    over_slot: AtomicUsize,
+    this: Weak<Shared>,
+    /// Table of this app, preempted while the reaper was backed up (freed by the next drain).
+    parked: Mutex<Option<Shed>>,
     wake: Notify,
     table: Mutex<Table>,
     /// Meta vector recycled between drains (consumer only).
@@ -372,20 +476,26 @@ impl Shared {
 
     /// Give back credit beyond the records in the ring plus `slack`, once it exceeds that by
     /// two slacks (the cache line is written by the producers too, so surplus returns in bulk).
-    /// Lock-free and safe to race: only the thread whose compare-and-swap wins releases units.
+    /// Pool units go back first, so the app keeps its reserve. Lock-free and safe to race: only
+    /// the thread whose compare-and-swap wins releases units.
     fn trim_credit(&self, slack: usize) {
         let Some(b) = &self.budget else { return };
         let queued = self.ring.len();
-        let credit = self.ring_credit.0.load(Ordering::Acquire);
+        let v = self.ring_credit.0.load(Ordering::Acquire);
+        let (credit, res) = ((v & POOL_MASK) as usize, (v >> 32) as usize);
         if credit > queued + 2 * slack {
             let keep = queued + slack;
+            let k = credit - keep;
+            let pool_part = k.min(credit - res);
+            let res_part = k - pool_part;
+            let new = keep as u64 | ((res - res_part) as u64) << 32;
             if self
                 .ring_credit
                 .0
-                .compare_exchange(credit, keep, Ordering::AcqRel, Ordering::Relaxed)
+                .compare_exchange(v, new, Ordering::AcqRel, Ordering::Relaxed)
                 .is_ok()
             {
-                b.release(credit - keep);
+                b.release_split(pool_part, res_part, &self.app_reserve);
             }
         }
     }
@@ -395,21 +505,45 @@ impl Shared {
         self.trim_credit(0);
     }
 
-    /// Make sure there is credit for one more record in the ring, taking a block from the budget
-    /// when it is used up. False when the pool refuses even one unit.
+    /// Make sure there is credit for one more record in the ring, leasing a block from the
+    /// budget (reserve first) when it is used up. False when not even one unit is available.
     fn cover(&self, b: &SlotBudget) -> bool {
-        let credit = self.ring_credit.0.load(Ordering::Acquire);
-        if self.ring.len() < credit {
+        let v = self.ring_credit.0.load(Ordering::Acquire);
+        if self.ring.len() < (v & POOL_MASK) as usize {
             return true;
         }
-        let held = self.held_hint.load(Ordering::Relaxed);
-        let room = self.cfg.reserved_slots.saturating_sub(credit + held);
-        let got = b.charge_up_to(RING_CREDIT_BLOCK, room);
-        if got == 0 {
+        let res = b.take_reserve(
+            &self.app_reserve,
+            self.cfg.reserved_slots,
+            RING_CREDIT_BLOCK,
+        );
+        let pool = b.take_pool(RING_CREDIT_BLOCK - res);
+        if res + pool == 0 {
             return false;
         }
-        self.ring_credit.0.fetch_add(got, Ordering::AcqRel);
+        self.ring_credit
+            .0
+            .fetch_add((res + pool) as u64 | (res as u64) << 32, Ordering::AcqRel);
+        self.update_over();
         true
+    }
+
+    /// Keep the budget's set of over-reserve apps (the possible victims) up to date.
+    fn update_over(&self) {
+        let Some(b) = &self.budget else { return };
+        let over = self.weight() > self.cfg.reserved_slots;
+        if over == (self.over_slot.load(Ordering::Relaxed) != NOT_OVER) {
+            return;
+        }
+        if over {
+            b.over_insert(self);
+        } else {
+            b.over_remove(self);
+        }
+    }
+
+    fn park(&self, g: Shed) {
+        *self.parked.lock().unwrap_or_else(PoisonError::into_inner) = Some(g);
     }
 
     /// Discard every record of the ring (receiver gone, or preemption). Returns how many.
@@ -425,9 +559,20 @@ impl Shared {
     /// Preemption of this app (AU-3): its ring and table are given up, flooded and fully dirty.
     /// The table's buffers are returned to the caller to be freed outside every lock (AU-6).
     fn shed(&self, t: &mut Table) -> (usize, Shed) {
-        let ring = self.discard_ring();
-        let (freed, garbage) = t.shed();
+        // The newest Focus is lossless (ADR-0004 section 8): a Focus still in the ring survives
+        // the preemption like the one in the table.
+        let mut ring = 0;
+        let mut focus = None;
+        while let Some(ev) = self.ring.pop() {
+            ring += 1;
+            if matches!(ev, NodeEvent::FocusChanged { .. }) {
+                focus = Some(ev);
+            }
+        }
+        self.settle();
+        let (freed, garbage) = t.shed(focus);
         self.held_hint.store(t.held(), Ordering::Relaxed);
+        self.update_over();
         (freed + ring, garbage)
     }
 
@@ -440,7 +585,6 @@ impl Shared {
     /// Fold up to `limit` records of the ring into `t`. Returns how many were folded.
     fn fold_into(&self, t: &mut Table, limit: usize) -> usize {
         let mut n = 0;
-        t.ring_units = self.ring_credit.0.load(Ordering::Relaxed);
         while n < limit {
             // Small groups: the prepaid units of a group go back with two atomic operations
             // instead of two per record (the counters are hot, producers add to them), and
@@ -455,10 +599,13 @@ impl Shared {
                 break;
             }
             // A full pool needs the units of the records just taken at once.
-            if self.budget.as_ref().is_some_and(|b| b.used() >= b.limit()) {
+            if self
+                .budget
+                .as_ref()
+                .is_some_and(|b| b.pool_nearly_full(2 * RING_CREDIT_BLOCK + 2 * FOLD_GROUP))
+            {
                 self.trim_credit(0);
             }
-            t.ring_units = self.ring_credit.0.load(Ordering::Relaxed);
             n += group.len();
             for ev in group {
                 t.push(&self.cfg, ev);
@@ -472,6 +619,9 @@ impl Shared {
         );
         self.trim_credit(RING_CREDIT_BLOCK);
         self.held_hint.store(t.held(), Ordering::Relaxed);
+        if n > 0 {
+            self.update_over();
+        }
         n
     }
 
@@ -481,9 +631,11 @@ impl Shared {
         let mut t = self.lock();
         self.fold_all(&mut t);
         if !self.closed.load(Ordering::Relaxed) {
-            t.ring_units = self.ring_credit.0.load(Ordering::Relaxed);
+            // The reserve and the pool are what this record competes for: give back idle credit.
+            self.trim_credit(0);
             t.push(&self.cfg, ev);
             self.held_hint.store(t.held(), Ordering::Relaxed);
+            self.update_over();
         }
         drop(t);
         self.arm();
@@ -520,22 +672,24 @@ fn ingress_inner(
     budget: Option<Arc<SlotBudget>>,
 ) -> (IngressSender, IngressReceiver) {
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-    let shared = Arc::new(Shared {
+    let app_reserve = Arc::new(AtomicUsize::new(0));
+    let shared = Arc::new_cyclic(|this| Shared {
         id,
         cfg,
         ring: ArrayQueue::new(RING_CAP),
         armed: AtomicBool::new(false),
         closed: AtomicBool::new(false),
         held_hint: AtomicUsize::new(0),
-        ring_credit: Padded(AtomicUsize::new(0)),
+        ring_credit: Padded(AtomicU64::new(0)),
+        app_reserve: Arc::clone(&app_reserve),
+        over_slot: AtomicUsize::new(NOT_OVER),
+        this: this.clone(),
+        parked: Mutex::new(None),
         wake: Notify::new(),
-        table: Mutex::new(Table::new(id, budget.clone())),
+        table: Mutex::new(Table::new(id, budget.clone(), app_reserve)),
         spare: Mutex::new(Vec::new()),
         budget,
     });
-    if let Some(b) = &shared.budget {
-        b.register(&shared);
-    }
     (
         IngressSender {
             shared: Arc::clone(&shared),
@@ -559,9 +713,11 @@ pub struct IngressReceiver {
 impl Drop for Shared {
     fn drop(&mut self) {
         // Records pushed after the receiver was dropped, and their charges, die with the ring.
-        let left = self.ring_credit.0.load(Ordering::Relaxed);
+        let v = self.ring_credit.0.load(Ordering::Relaxed);
+        let (credit, res) = ((v & POOL_MASK) as usize, (v >> 32) as usize);
         if let Some(b) = &self.budget {
-            b.release(left);
+            b.release_split(credit - res, res, &self.app_reserve);
+            b.over_remove(self);
         }
     }
 }
@@ -583,23 +739,32 @@ impl IngressSender {
             }
         }
         let mut ev = ev;
+        let mut waited = 0u32;
         loop {
             match sh.ring.push(ev) {
                 Ok(()) => break,
                 Err(back) => {
                     ev = back;
                     // Whoever holds the lock is folding, which frees ring slots one record at a
-                    // time: wait for a slot, not for the end of its whole critical section.
+                    // time: wait for a slot, not for the end of its whole critical section. The
+                    // wait is bounded (a spinning producer could keep a lock holder of lower
+                    // priority off the CPU): spin, then yield, then take the lock and fold.
+                    waited += 1;
                     let guard = match sh.table.try_lock() {
                         Ok(g) => Some(g),
                         Err(TryLockError::Poisoned(p)) => Some(p.into_inner()),
-                        Err(TryLockError::WouldBlock) => None,
-                    };
-                    match guard {
-                        Some(mut t) => {
-                            sh.fold_into(&mut t, HELP_CHUNK);
+                        Err(TryLockError::WouldBlock) if waited <= SPIN_TRIES => {
+                            std::hint::spin_loop();
+                            None
                         }
-                        None => std::hint::spin_loop(),
+                        Err(TryLockError::WouldBlock) if waited <= SPIN_TRIES + YIELD_TRIES => {
+                            std::thread::yield_now();
+                            None
+                        }
+                        Err(TryLockError::WouldBlock) => Some(sh.lock()),
+                    };
+                    if let Some(mut t) = guard {
+                        sh.fold_into(&mut t, HELP_CHUNK);
                     }
                     if sh.closed.load(Ordering::Relaxed) {
                         return;
@@ -657,6 +822,13 @@ impl IngressReceiver {
             sh.arm();
         }
         sh.settle();
+        sh.update_over();
+        let mut drained = drained;
+        drained.garbage.shed = sh
+            .parked
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
         drained
     }
 
@@ -695,7 +867,7 @@ impl Drop for IngressReceiver {
             sh.held_hint.store(0, Ordering::Relaxed);
         }
         if let Some(b) = &sh.budget {
-            b.unregister(sh.id);
+            b.over_remove(sh);
         }
     }
 }
@@ -1051,6 +1223,32 @@ mod tests {
         assert_eq!(budget.used(), 0);
         tx.push(NodeEvent::FocusChanged { node: key(1) });
         assert_eq!(budget.used(), 0);
+    }
+
+    /// F-4: with the reaper backed up (or gone), the preempting push does not free the victim's
+    /// table; the victim's next drain carries it.
+    #[test]
+    fn a_backed_up_reaper_hands_the_garbage_to_the_victim() {
+        let budget = SlotBudget::build(240, false);
+        let (vtx, vrx) = ingress_with_budget(IngressConfig::default(), &budget);
+        for n in 0..250 {
+            vtx.push(NodeEvent::WindowEvent {
+                node: key(n),
+                kind: WindowKind::Create,
+            });
+        }
+        assert_eq!(vrx.pending(), 250);
+        let (ftx, frx) = ingress_with_budget(IngressConfig::default(), &budget);
+        for n in 0..200 {
+            ftx.push(NodeEvent::WindowEvent {
+                node: key(10_000 + n),
+                kind: WindowKind::Create,
+            });
+        }
+        assert!(budget.reaper_fallbacks() >= 1, "nobody was preempted");
+        let d = vrx.drain();
+        assert!(d.garbage.shed.is_some(), "the victim must carry its table");
+        drop(frx.drain());
     }
 
     #[tokio::test]
