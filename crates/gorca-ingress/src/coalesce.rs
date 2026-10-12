@@ -1,16 +1,31 @@
-//! Keyed, order-preserving coalescing table.
+//! Per-app ingress: a bounded lock-free MPSC ring in front of a consumer-side coalescing table
+//! (B-2 candidate A).
+//!
+//! * `push` appends the event to a bounded `ArrayQueue` (one CAS, no lock, no allocation) and
+//!   wakes the consumer when it is idle. It does no hashing and no coalescing.
+//! * The coalescing (SPEC 4.2) is applied by whoever folds the ring into the table: the
+//!   consumer in `drain()`, or a producer that finds the ring full (bounded chunk) or that
+//!   serves an app already holding more than a ring's worth of slots. The fold applies the
+//!   records in ring order, so a single producer observes exactly the sequence of states of the
+//!   executable model, wherever the fold happens.
+//! * Hard bounds: the ring holds at most [`RING_CAP`] records; the table is bounded by
+//!   `max_keys`, `hard_cap` and the shared [`SlotBudget`] (SPEC 3.6, 3.7).
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, TryLockError, Weak};
 
-use gorca_model::{NodeEvent, NodeKey, PropMask, RawEvent, TextDelta};
+use crossbeam_queue::ArrayQueue;
+use gorca_model::{NodeKey, RawEvent};
 use gorca_rt::Notify;
-use smallvec::SmallVec;
 
 use crate::dirty::DirtySet;
+use crate::table::{Meta, Table, Taken};
 
 /// ADR-0001 section 6.3. `ActiveDescendant` is an addition: the ADR's list omits it although
 /// `NodeEvent::ActiveDescendantChanged` exists; it is last-writer-wins per container.
+///
+/// The set of keys the coalescer merges on. The table indexes them by (node, class) directly;
+/// this enum names them for documentation and for consumers of the key set.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum CoalesceKey {
     /// Last-writer-wins, one slot per app.
@@ -35,6 +50,16 @@ pub enum CoalesceKey {
 /// Default [`IngressConfig::hard_cap`].
 pub const HARD_CAP: usize = 65_536;
 
+/// Records the lock-free ring holds before a producer folds some into the table.
+pub const RING_CAP: usize = 1024;
+/// Records a producer folds when it finds the ring full (bounds its critical section).
+const HELP_CHUNK: usize = 128;
+/// Records the consumer folds per lock acquisition while draining.
+const DRAIN_CHUNK: usize = 256;
+/// An app holding at least this many slots folds at push time (it is already degraded, and the
+/// global accounting stays exact for it).
+const EAGER_AT: usize = RING_CAP;
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct IngressConfig {
     /// Distinct keys per app before the app enters `Flooded` (R-3). ADR: 4096.
@@ -43,8 +68,9 @@ pub struct IngressConfig {
     pub announcement_cap: usize,
     /// More deltas than this on one node collapse to `Replaced` (ADR: 64).
     pub max_text_deltas: usize,
-    /// Hard bound on pending slots, lossless classes included (PC-7, SPEC 4.4 rule H). A new
-    /// key beyond it sets the dirty set to "everything" instead of queueing.
+    /// Hard bound on pending slots, lossless classes included (PC-7, SPEC 4.4 rule H), and on
+    /// the text deltas queued beyond the first of each slot (SPEC AU-4). A new key beyond it
+    /// sets the dirty set to "everything" instead of queueing.
     pub hard_cap: usize,
 }
 
@@ -80,34 +106,34 @@ pub struct Drained {
     /// Present when the app was `Flooded`: nodes to resync lazily.
     pub dirty: Option<DirtySet>,
     pub stats: IngressStats,
+    /// Large buffers of the drained table, freed when the batch is dropped so the draining
+    /// thread does not pay for `munmap` (SPEC AU-6).
+    #[allow(dead_code)]
+    pub(crate) garbage: Garbage,
 }
 
-#[derive(Debug)]
-enum Payload {
-    Event(NodeEvent),
-    Props {
-        node: NodeKey,
-        mask: PropMask,
-    },
-    Text {
-        node: NodeKey,
-        deltas: SmallVec<[TextDelta; 2]>,
-    },
-}
-
-#[derive(Debug)]
-struct Slot {
-    key: CoalesceKey,
-    payload: Payload,
+#[derive(Debug, Default)]
+#[allow(dead_code)]
+pub(crate) struct Garbage {
+    pub(crate) nodes: Option<crate::table::NodeMap>,
+    pub(crate) meta: Vec<Meta>,
+    pub(crate) aux: Vec<smallvec::SmallVec<[gorca_model::TextDelta; 2]>>,
 }
 
 /// Process-wide bound on pending slots across many ingresses (hostile many-app floods).
-/// Shared by every ingress created with [`ingress_with_budget`]; each pending slot is charged
-/// once and released when it is drained, superseded or turned into a dirty mark.
+///
+/// Shared by every ingress created with [`ingress_with_budget`]. Each queued slot, and each
+/// queued text delta beyond the first of a slot, is charged once with a compare-and-swap that
+/// never exceeds the limit (SPEC AU-7), and returned when it is drained, superseded, turned into
+/// a dirty mark, or when the ingress is dropped (AU-1). The newest `Focus` of an app is charged
+/// too but can always be queued. An app holding fewer than `RESERVED_MIN` slots that finds the
+/// pool exhausted takes slots back from the largest holder, which is flooded and fully dirty
+/// (AU-3): no application can starve another.
 #[derive(Debug)]
 pub struct SlotBudget {
-    used: std::sync::atomic::AtomicUsize,
+    used: AtomicUsize,
     limit: usize,
+    registry: Mutex<Vec<Weak<Shared>>>,
 }
 
 /// Default global pending-slot budget (about 25 MB of slots).
@@ -116,54 +142,168 @@ pub const GLOBAL_SLOT_BUDGET: usize = 262_144;
 impl SlotBudget {
     pub fn new(limit: usize) -> Arc<Self> {
         Arc::new(Self {
-            used: std::sync::atomic::AtomicUsize::new(0),
+            used: AtomicUsize::new(0),
             limit,
+            registry: Mutex::new(Vec::new()),
         })
     }
 
-    /// Slots currently charged.
+    /// Slots currently charged to the budget (the sum over all ingresses of their `live` slots
+    /// plus queued text deltas, once their rings are folded).
     pub fn used(&self) -> usize {
-        self.used.load(std::sync::atomic::Ordering::Relaxed)
+        self.used.load(Ordering::Relaxed)
     }
 
-    fn full(&self) -> bool {
-        self.used() >= self.limit
+    /// The configured limit.
+    pub fn limit(&self) -> usize {
+        self.limit
     }
 
-    fn charge(&self, n: usize) {
-        self.used.fetch_add(n, std::sync::atomic::Ordering::Relaxed);
+    /// Take one unit if the pool is not exhausted. Never exceeds the limit, whatever the
+    /// number of concurrent callers.
+    pub(crate) fn try_charge(&self) -> bool {
+        let mut cur = self.used.load(Ordering::Relaxed);
+        loop {
+            if cur >= self.limit {
+                return false;
+            }
+            match self
+                .used
+                .compare_exchange_weak(cur, cur + 1, Ordering::AcqRel, Ordering::Relaxed)
+            {
+                Ok(_) => return true,
+                Err(now) => cur = now,
+            }
+        }
     }
 
-    fn release(&self, n: usize) {
-        self.used.fetch_sub(n, std::sync::atomic::Ordering::Relaxed);
+    /// Charge the focus slot of an app that holds no other unit and finds the pool exhausted.
+    /// The overshoot is at most one unit per app and only when `limit` is below the app count.
+    pub(crate) fn force_charge(&self) {
+        self.used.fetch_add(1, Ordering::AcqRel);
+    }
+
+    pub(crate) fn release(&self, n: usize) {
+        let prev = self.used.fetch_sub(n, Ordering::AcqRel);
+        debug_assert!(prev >= n, "budget underflow: used {prev}, releasing {n}");
+    }
+
+    fn registry(&self) -> MutexGuard<'_, Vec<Weak<Shared>>> {
+        self.registry.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    fn register(&self, sh: &Arc<Shared>) {
+        let mut r = self.registry();
+        r.retain(|w| w.strong_count() > 0);
+        r.push(Arc::downgrade(sh));
+    }
+
+    fn unregister(&self, id: usize) {
+        self.registry()
+            .retain(|w| w.upgrade().is_some_and(|s| s.id != id));
+    }
+
+    /// Take the slots of the largest holder (other than `me`) back, if it holds at least
+    /// `min_victim`. Only `try_lock` is used on the victim, so two preempting apps cannot
+    /// deadlock; `tries` bounds how long a busy victim is waited for (a victim's critical
+    /// sections are short and never wait on anything).
+    pub(crate) fn preempt(&self, me: usize, min_victim: usize, tries: u32) -> bool {
+        for attempt in 0..tries.max(1) {
+            if self.used() < self.limit {
+                return true;
+            }
+            let victim = {
+                let r = self.registry();
+                r.iter()
+                    .filter_map(Weak::upgrade)
+                    .filter(|s| s.id != me)
+                    .max_by_key(|s| s.held_hint.load(Ordering::Relaxed))
+            };
+            let Some(v) = victim else { return false };
+            if v.held_hint.load(Ordering::Relaxed) < min_victim {
+                return false;
+            }
+            match v.table.try_lock() {
+                Ok(mut g) => {
+                    let freed = g.shed();
+                    v.held_hint.store(g.held(), Ordering::Relaxed);
+                    return freed > 0;
+                }
+                Err(TryLockError::Poisoned(p)) => {
+                    let mut g = p.into_inner();
+                    let freed = g.shed();
+                    v.held_hint.store(g.held(), Ordering::Relaxed);
+                    return freed > 0;
+                }
+                Err(TryLockError::WouldBlock) => {
+                    if attempt % 8 == 7 {
+                        std::thread::yield_now();
+                    } else {
+                        std::hint::spin_loop();
+                    }
+                }
+            }
+        }
+        false
     }
 }
 
-#[derive(Debug, Default)]
-struct Inner {
-    budget: Option<Arc<SlotBudget>>,
-    /// Order of first occurrence; `None` = superseded.
-    slots: Vec<Option<Slot>>,
-    index: HashMap<CoalesceKey, usize>,
-    by_node: HashMap<NodeKey, SmallVec<[usize; 4]>>,
-    live: usize,
-    announcements: usize,
-    focused: Option<NodeKey>,
-    flooded: bool,
-    dirty: DirtySet,
-    stats: IngressStats,
-}
+static NEXT_ID: AtomicUsize = AtomicUsize::new(1);
 
 #[derive(Debug)]
 struct Shared {
+    id: usize,
     cfg: IngressConfig,
-    inner: Mutex<Inner>,
+    ring: ArrayQueue<RawEvent>,
+    /// A wake-up for the consumer is outstanding (set by the first push after a drain).
+    armed: AtomicBool,
+    /// The receiver is gone: pushes are discarded and charge nothing (SPEC AU-2).
+    closed: AtomicBool,
+    /// Budget units the table holds, for the eager path and for preemption.
+    held_hint: AtomicUsize,
     wake: Notify,
+    table: Mutex<Table>,
+    /// Meta vector recycled between drains (consumer only).
+    spare: Mutex<Vec<Meta>>,
+    budget: Option<Arc<SlotBudget>>,
 }
 
-fn lock(m: &Mutex<Inner>) -> MutexGuard<'_, Inner> {
-    // A panic while holding the lock cannot leave the table in a state worse than a stale slot.
-    m.lock().unwrap_or_else(PoisonError::into_inner)
+impl Shared {
+    fn lock(&self) -> MutexGuard<'_, Table> {
+        // A panic while holding the lock cannot leave the table in a state worse than a stale
+        // slot: every operation keeps the counters consistent step by step.
+        self.table.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Fold up to `limit` records of the ring into `t`. Returns how many were folded.
+    fn fold_into(&self, t: &mut Table, limit: usize) -> usize {
+        let mut n = 0;
+        while n < limit {
+            let Some(ev) = self.ring.pop() else { break };
+            t.push(&self.cfg, ev);
+            n += 1;
+        }
+        // O(n) check, sampled and limited to small tables so debug builds keep bounded pushes.
+        debug_assert!(
+            n == 0 || t.live() > 2048 || !t.pushed_total().is_multiple_of(509) || t.check().is_ok(),
+            "{:?}",
+            t.check()
+        );
+        self.held_hint.store(t.held(), Ordering::Relaxed);
+        n
+    }
+
+    fn fold_all(&self, t: &mut Table) {
+        let snapshot = self.ring.len();
+        self.fold_into(t, snapshot);
+    }
+
+    /// Set the wake flag and notify if it was not set.
+    fn arm(&self) {
+        if !self.armed.load(Ordering::SeqCst) && !self.armed.swap(true, Ordering::SeqCst) {
+            self.wake.notify_one();
+        }
+    }
 }
 
 /// Create a connected sender and receiver pair for one app.
@@ -183,14 +323,22 @@ fn ingress_inner(
     cfg: IngressConfig,
     budget: Option<Arc<SlotBudget>>,
 ) -> (IngressSender, IngressReceiver) {
+    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
     let shared = Arc::new(Shared {
+        id,
         cfg,
-        inner: Mutex::new(Inner {
-            budget,
-            ..Inner::default()
-        }),
+        ring: ArrayQueue::new(RING_CAP),
+        armed: AtomicBool::new(false),
+        closed: AtomicBool::new(false),
+        held_hint: AtomicUsize::new(0),
         wake: Notify::new(),
+        table: Mutex::new(Table::new(id, budget.clone())),
+        spare: Mutex::new(Vec::new()),
+        budget,
     });
+    if let Some(b) = &shared.budget {
+        b.register(&shared);
+    }
     (
         IngressSender {
             shared: Arc::clone(&shared),
@@ -212,38 +360,82 @@ pub struct IngressReceiver {
 }
 
 impl IngressSender {
-    /// O(1) amortised, never awaits (C-1). May coalesce or mark dirty.
+    /// O(1) amortised, never awaits (C-1). One CAS on the ring in the common case; when the
+    /// ring is full the caller folds a bounded chunk of it into the table first. Events pushed
+    /// after the receiver was dropped are discarded.
     pub fn push(&self, ev: RawEvent) {
-        let was_empty = {
-            let mut g = lock(&self.shared.inner);
-            let was_empty = g.live == 0 && g.dirty.is_empty();
-            g.push(&self.shared.cfg, ev);
-            // O(n): sampled so debug-build tests stay fast.
-            debug_assert!(
-                !g.stats.pushed.is_multiple_of(509) || g.check().is_ok(),
-                "{:?}",
-                g.check()
-            );
-            was_empty
-        };
-        if was_empty {
-            self.shared.wake.notify_one();
+        let sh = &*self.shared;
+        if sh.closed.load(Ordering::Relaxed) {
+            return;
         }
+        let mut ev = ev;
+        loop {
+            match sh.ring.push(ev) {
+                Ok(()) => break,
+                Err(back) => {
+                    ev = back;
+                    let mut t = sh.lock();
+                    sh.fold_into(&mut t, HELP_CHUNK);
+                    drop(t);
+                    if sh.closed.load(Ordering::Relaxed) {
+                        return;
+                    }
+                }
+            }
+        }
+        if sh.held_hint.load(Ordering::Relaxed) >= EAGER_AT {
+            // An app holding this much is already degraded: fold now so that the budget and
+            // `pending()` are exact for it. If the consumer is draining, the ring is enough.
+            let guard = match sh.table.try_lock() {
+                Ok(g) => Some(g),
+                Err(TryLockError::Poisoned(p)) => Some(p.into_inner()),
+                Err(TryLockError::WouldBlock) => None,
+            };
+            if let Some(mut t) = guard {
+                sh.fold_all(&mut t);
+            }
+        }
+        sh.arm();
     }
 }
 
 impl IngressReceiver {
     /// Take everything pending. Non-blocking. Leaves the ingress empty and out of `Flooded`.
     pub fn drain(&self) -> Drained {
-        let mut g = lock(&self.shared.inner);
-        let d = g.take();
-        debug_assert_eq!(g.check(), Ok(()));
-        d
+        let sh = &*self.shared;
+        // Clear the wake flag first: a push after this point either lands in this drain or sets
+        // the flag again and notifies.
+        sh.armed.store(false, Ordering::SeqCst);
+        let spare = std::mem::take(&mut *sh.spare.lock().unwrap_or_else(PoisonError::into_inner));
+        let mut remaining = sh.ring.len();
+        let taken: Taken = loop {
+            let mut t = sh.lock();
+            let n = sh.fold_into(&mut t, remaining.min(DRAIN_CHUNK));
+            remaining = if n == 0 {
+                0
+            } else {
+                remaining.saturating_sub(n)
+            };
+            if remaining == 0 {
+                let taken = t.take(spare);
+                sh.held_hint.store(t.held(), Ordering::Relaxed);
+                break taken;
+            }
+        };
+        let (drained, meta) = taken.finish();
+        *sh.spare.lock().unwrap_or_else(PoisonError::into_inner) = meta;
+        if !sh.ring.is_empty() {
+            sh.arm();
+        }
+        drained
     }
 
     /// Verify that every cap counter equals the real size of its structure (tests).
     pub fn check_invariants(&self) -> Result<(), String> {
-        lock(&self.shared.inner).check()
+        let sh = &*self.shared;
+        let mut t = sh.lock();
+        sh.fold_all(&mut t);
+        t.check()
     }
 
     /// Resolves when something was pushed into an empty ingress.
@@ -251,352 +443,44 @@ impl IngressReceiver {
         self.shared.wake.notified().await;
     }
 
+    /// Pending slots (queued events not yet delivered, after coalescing).
     pub fn pending(&self) -> usize {
-        lock(&self.shared.inner).live
+        let sh = &*self.shared;
+        let mut t = sh.lock();
+        sh.fold_all(&mut t);
+        t.live()
     }
 }
 
-impl Inner {
-    fn kept_when_flooded(&self, key: CoalesceKey) -> bool {
-        match key {
-            CoalesceKey::Focus
-            | CoalesceKey::Removed(_)
-            | CoalesceKey::Window(_)
-            | CoalesceKey::Announcement(_) => true,
-            CoalesceKey::Caret(n) => self.focused == Some(n),
-            CoalesceKey::Props(_)
-            | CoalesceKey::Children(_)
-            | CoalesceKey::Text(_)
-            | CoalesceKey::Selection(_)
-            | CoalesceKey::ActiveDescendant(_)
-            | CoalesceKey::Document(_) => false,
-        }
-    }
-
-    fn key_of(&mut self, ev: &NodeEvent) -> CoalesceKey {
-        match ev {
-            NodeEvent::FocusChanged { .. } => CoalesceKey::Focus,
-            NodeEvent::ActiveDescendantChanged { container, .. } => {
-                CoalesceKey::ActiveDescendant(*container)
-            }
-            NodeEvent::PropertiesChanged { node, .. } => CoalesceKey::Props(*node),
-            NodeEvent::ChildrenChanged { node } => CoalesceKey::Children(*node),
-            NodeEvent::TextChanged { node, .. } => CoalesceKey::Text(*node),
-            NodeEvent::CaretMoved { node, .. } => CoalesceKey::Caret(*node),
-            NodeEvent::SelectionChanged { node } => CoalesceKey::Selection(*node),
-            NodeEvent::Announcement { .. } => {
-                let seq = self.stats.pushed;
-                CoalesceKey::Announcement(seq)
-            }
-            NodeEvent::WindowEvent { node, .. } => CoalesceKey::Window(*node),
-            NodeEvent::DocumentEvent { node, .. } => CoalesceKey::Document(*node),
-            NodeEvent::NodeRemoved { node } => CoalesceKey::Removed(*node),
-        }
-    }
-
-    fn push(&mut self, cfg: &IngressConfig, ev: NodeEvent) {
-        self.stats.pushed += 1;
-        let key = self.key_of(&ev);
-        if let NodeEvent::FocusChanged { node } = &ev {
-            self.focused = Some(*node);
-            self.stats.focus_sequence += 1;
-        }
-
-        if !self.flooded && self.live >= cfg.max_keys && !self.index.contains_key(&key) {
-            self.enter_flooded();
-        }
-        if self.flooded && !self.kept_when_flooded(key) {
-            if let Some(n) = ev.node() {
-                self.dirty.mark(n);
-            } else {
-                self.dirty.mark_all();
-            }
-            self.stats.dirtied += 1;
-            return;
-        }
-
-        // Rule H: even the lossless classes are bounded. Focus is a single slot.
-        if key != CoalesceKey::Focus
-            && (self.live >= cfg.hard_cap || self.budget.as_ref().is_some_and(|b| b.full()))
-            && !self.index.contains_key(&key)
+impl Drop for IngressReceiver {
+    fn drop(&mut self) {
+        let sh = &*self.shared;
+        sh.closed.store(true, Ordering::SeqCst);
         {
-            if !self.flooded {
-                self.enter_flooded();
-            }
-            if matches!(key, CoalesceKey::Announcement(_)) {
-                self.stats.announcements_dropped += 1;
-            } else {
-                self.dirty.mark_all();
-                self.stats.dirtied += 1;
-            }
-            return;
+            let mut t = sh.lock();
+            while sh.ring.pop().is_some() {}
+            t.teardown();
+            sh.held_hint.store(0, Ordering::Relaxed);
         }
-
-        match key {
-            CoalesceKey::Announcement(_) => {
-                if self.announcements >= cfg.announcement_cap {
-                    self.stats.announcements_dropped += 1;
-                    return;
-                }
-                self.announcements += 1;
-                self.insert(key, Payload::Event(ev));
-            }
-            CoalesceKey::Removed(n) => {
-                // R-1: Removed(n) deletes every pending slot for n.
-                self.supersede_node(n);
-                self.insert(key, Payload::Event(ev));
-            }
-            CoalesceKey::Props(n) => {
-                let mask = match &ev {
-                    NodeEvent::PropertiesChanged { mask, .. } => *mask,
-                    _ => PropMask::empty(),
-                };
-                if let Some(&i) = self.index.get(&key) {
-                    if let Some(Slot {
-                        payload: Payload::Props { mask: m, .. },
-                        ..
-                    }) = self.slots.get_mut(i).and_then(Option::as_mut)
-                    {
-                        *m |= mask;
-                    }
-                    self.stats.coalesced += 1;
-                } else {
-                    self.insert(key, Payload::Props { node: n, mask });
-                }
-            }
-            CoalesceKey::Text(n) => {
-                let NodeEvent::TextChanged { delta, .. } = ev else {
-                    return;
-                };
-                if let Some(&i) = self.index.get(&key) {
-                    if let Some(Slot {
-                        payload: Payload::Text { deltas, .. },
-                        ..
-                    }) = self.slots.get_mut(i).and_then(Option::as_mut)
-                    {
-                        merge_text(deltas, delta, cfg.max_text_deltas);
-                    }
-                    self.stats.coalesced += 1;
-                } else {
-                    let mut deltas = SmallVec::new();
-                    deltas.push(delta);
-                    self.insert(key, Payload::Text { node: n, deltas });
-                }
-            }
-            CoalesceKey::Focus
-            | CoalesceKey::Children(_)
-            | CoalesceKey::Caret(_)
-            | CoalesceKey::Selection(_)
-            | CoalesceKey::ActiveDescendant(_)
-            | CoalesceKey::Window(_)
-            | CoalesceKey::Document(_) => {
-                // Last-writer-wins in place; order of first occurrence is kept (R-2).
-                if let Some(&i) = self.index.get(&key) {
-                    if let Some(slot) = self.slots.get_mut(i).and_then(Option::as_mut) {
-                        slot.payload = Payload::Event(ev);
-                    }
-                    self.stats.coalesced += 1;
-                } else {
-                    self.insert(key, Payload::Event(ev));
-                }
-            }
+        if let Some(b) = &sh.budget {
+            b.unregister(sh.id);
         }
-    }
-
-    fn insert(&mut self, key: CoalesceKey, payload: Payload) {
-        let i = self.slots.len();
-        if let Some(n) = node_of(key) {
-            self.by_node.entry(n).or_default().push(i);
-        }
-        self.index.insert(key, i);
-        self.slots.push(Some(Slot { key, payload }));
-        self.live += 1;
-        if let Some(b) = &self.budget {
-            b.charge(1);
-        }
-    }
-
-    fn supersede_node(&mut self, n: NodeKey) {
-        let Some(idxs) = self.by_node.remove(&n) else {
-            return;
-        };
-        for i in idxs {
-            if let Some(slot) = self.slots.get_mut(i).and_then(Option::take) {
-                self.index.remove(&slot.key);
-                debug_assert!(self.live > 0, "live counter underflow");
-                self.live -= 1;
-                if let Some(b) = &self.budget {
-                    b.release(1);
-                }
-                self.stats.coalesced += 1;
-            }
-        }
-        self.compact_if_sparse();
-    }
-
-    /// Superseded slots leave tombstones in `slots`; without this a stream of `Removed(n)` for
-    /// one node grows the vector without bound while `live` stays at 1.
-    fn compact_if_sparse(&mut self) {
-        if self.slots.len() <= 2 * self.live + 256 {
-            return;
-        }
-        let old = std::mem::take(&mut self.slots);
-        self.index.clear();
-        self.by_node.clear();
-        for slot in old.into_iter().flatten() {
-            let i = self.slots.len();
-            if let Some(n) = node_of(slot.key) {
-                self.by_node.entry(n).or_default().push(i);
-            }
-            self.index.insert(slot.key, i);
-            self.slots.push(Some(slot));
-        }
-    }
-
-    /// The counters the caps compare against must equal the real structure sizes.
-    fn check(&self) -> Result<(), String> {
-        let present = self.slots.iter().flatten().count();
-        if self.live != present || self.live != self.index.len() {
-            return Err(format!(
-                "live={} slots(some)={} index={}",
-                self.live,
-                present,
-                self.index.len()
-            ));
-        }
-        let anns = self
-            .slots
-            .iter()
-            .flatten()
-            .filter(|s| matches!(s.key, CoalesceKey::Announcement(_)))
-            .count();
-        if anns != self.announcements {
-            return Err(format!(
-                "announcements={} counted={anns}",
-                self.announcements
-            ));
-        }
-        let by_node: usize = self.by_node.values().map(SmallVec::len).sum();
-        let nodal = self
-            .slots
-            .iter()
-            .flatten()
-            .filter(|s| node_of(s.key).is_some())
-            .count();
-        if by_node != nodal {
-            return Err(format!("by_node entries={by_node} nodal slots={nodal}"));
-        }
-        if let Some(b) = &self.budget
-            && b.used() < self.live
-        {
-            return Err(format!("budget used {} < live {}", b.used(), self.live));
-        }
-        Ok(())
-    }
-
-    /// R-3: keep Focus, Caret on the focused node, Removed, Window and announcements; every
-    /// other pending slot becomes a dirty bit.
-    fn enter_flooded(&mut self) {
-        self.flooded = true;
-        let slots = std::mem::take(&mut self.slots);
-        self.index.clear();
-        self.by_node.clear();
-        if let Some(b) = &self.budget {
-            b.release(self.live);
-        }
-        self.live = 0;
-        for slot in slots.into_iter().flatten() {
-            if self.kept_when_flooded(slot.key) {
-                self.insert(slot.key, slot.payload);
-            } else {
-                if let Some(n) = node_of(slot.key) {
-                    self.dirty.mark(n);
-                }
-                self.stats.dirtied += 1;
-            }
-        }
-    }
-
-    fn take(&mut self) -> Drained {
-        let mut stats = self.stats;
-        stats.flooded = self.flooded;
-        let mut events = Vec::with_capacity(self.live);
-        for slot in std::mem::take(&mut self.slots).into_iter().flatten() {
-            match slot.payload {
-                Payload::Event(e) => events.push(e),
-                Payload::Props { node, mask } => {
-                    events.push(NodeEvent::PropertiesChanged { node, mask });
-                }
-                Payload::Text { node, deltas } => {
-                    events.extend(
-                        deltas
-                            .into_iter()
-                            .map(|delta| NodeEvent::TextChanged { node, delta }),
-                    );
-                }
-            }
-        }
-        let dirty = if self.flooded {
-            Some(std::mem::take(&mut self.dirty))
-        } else {
-            None
-        };
-        self.index.clear();
-        self.by_node.clear();
-        if let Some(b) = &self.budget {
-            b.release(self.live);
-        }
-        self.live = 0;
-        self.announcements = 0;
-        self.flooded = false;
-        self.stats = IngressStats::default();
-        Drained {
-            events,
-            dirty,
-            stats,
-        }
-    }
-}
-
-fn node_of(key: CoalesceKey) -> Option<NodeKey> {
-    match key {
-        CoalesceKey::Focus | CoalesceKey::Announcement(_) => None,
-        CoalesceKey::Props(n)
-        | CoalesceKey::Children(n)
-        | CoalesceKey::Text(n)
-        | CoalesceKey::Caret(n)
-        | CoalesceKey::Selection(n)
-        | CoalesceKey::ActiveDescendant(n)
-        | CoalesceKey::Window(n)
-        | CoalesceKey::Document(n)
-        | CoalesceKey::Removed(n) => Some(n),
-    }
-}
-
-/// T-1 / R-5: a `Delete` followed by an `Insert` becomes `Replaced`; more than `max` deltas
-/// become `Replaced`; `Replaced` absorbs everything after it.
-fn merge_text(deltas: &mut SmallVec<[TextDelta; 2]>, new: TextDelta, max: usize) {
-    let collapse = match (deltas.last(), &new) {
-        (Some(TextDelta::Replaced { .. }), _) => return,
-        (Some(TextDelta::Delete { .. }), TextDelta::Insert { .. }) => true,
-        _ => deltas.len() + 1 > max,
-    };
-    if collapse {
-        let text = match new {
-            TextDelta::Insert { text, .. } | TextDelta::Replaced { text } => text,
-            TextDelta::Delete { .. } => None,
-        };
-        deltas.clear();
-        deltas.push(TextDelta::Replaced { text });
-    } else {
-        deltas.push(new);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap,
+        clippy::cast_sign_loss,
+        clippy::uninlined_format_args
+    )]
     use super::*;
-    use gorca_model::{AppId, CaretOrigin, ConnectorId, LocalId, Politeness};
+    use gorca_model::{
+        AppId, CaretOrigin, ConnectorId, LocalId, NodeEvent, Politeness, PropMask, TextDelta,
+        WindowKind,
+    };
     use std::sync::Arc;
 
     fn key(n: u64) -> NodeKey {
@@ -769,9 +653,8 @@ mod tests {
         tx.push(NodeEvent::NodeRemoved { node: key(3) });
         let d = rx.drain();
         assert!(d.stats.flooded);
-        let kinds: Vec<_> = d.events.iter().map(std::mem::discriminant).collect();
         assert_eq!(
-            kinds.len(),
+            d.events.len(),
             3,
             "focus, focused caret, removed: {:?}",
             d.events
@@ -793,6 +676,149 @@ mod tests {
             tx.push(NodeEvent::ChildrenChanged { node: key(n) });
         }
         assert!(rx.pending() <= 64);
+    }
+
+    #[test]
+    fn a_ring_full_of_one_key_folds_without_loss() {
+        let (tx, rx) = ingress(IngressConfig::default());
+        for i in 0..(RING_CAP as u32 * 5 + 17) {
+            tx.push(NodeEvent::CaretMoved {
+                node: key(1),
+                offset: i,
+                origin: CaretOrigin::Unknown,
+            });
+        }
+        let d = rx.drain();
+        assert_eq!(d.events.len(), 1);
+        assert_eq!(d.stats.pushed, u64::from(RING_CAP as u32 * 5 + 17));
+        assert!(matches!(
+            d.events[0],
+            NodeEvent::CaretMoved { offset, .. } if offset == RING_CAP as u32 * 5 + 16
+        ));
+    }
+
+    #[test]
+    fn four_producers_and_a_consumer_lose_nothing() {
+        let (tx, rx) = ingress(IngressConfig::default());
+        let per = 20_000u32;
+        let handles: Vec<_> = (0..4u64)
+            .map(|p| {
+                let tx = tx.clone();
+                std::thread::spawn(move || {
+                    for i in 0..per {
+                        tx.push(NodeEvent::CaretMoved {
+                            node: key(p),
+                            offset: i,
+                            origin: CaretOrigin::Unknown,
+                        });
+                    }
+                })
+            })
+            .collect();
+        let mut pushed = 0u64;
+        let mut last = [0u32; 4];
+        while handles.iter().any(|h| !h.is_finished()) {
+            let d = rx.drain();
+            pushed += d.stats.pushed;
+            for e in d.events {
+                if let NodeEvent::CaretMoved { node, offset, .. } = e {
+                    let slot = &mut last[node.local.0 as usize];
+                    assert!(offset >= *slot, "per-producer order violated");
+                    *slot = offset;
+                }
+            }
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+        let d = rx.drain();
+        pushed += d.stats.pushed;
+        assert_eq!(pushed, 4 * u64::from(per));
+        for e in d.events {
+            if let NodeEvent::CaretMoved { node, offset, .. } = e {
+                assert_eq!(offset, per - 1, "node {:?} final offset", node);
+            }
+        }
+    }
+
+    #[test]
+    fn concurrent_pushes_never_overshoot_the_global_budget() {
+        let limit = 5_000;
+        let budget = SlotBudget::new(limit);
+        let apps = 6u32;
+        let stop = Arc::new(AtomicBool::new(false));
+        let watcher = {
+            let (budget, stop) = (Arc::clone(&budget), Arc::clone(&stop));
+            std::thread::spawn(move || {
+                let mut worst = 0;
+                while !stop.load(Ordering::Relaxed) {
+                    worst = worst.max(budget.used());
+                }
+                worst
+            })
+        };
+        let handles: Vec<_> = (0..apps)
+            .map(|a| {
+                let budget = Arc::clone(&budget);
+                std::thread::spawn(move || {
+                    let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+                    let app = AppId {
+                        connector: ConnectorId(0),
+                        serial: a,
+                    };
+                    for n in 0..40_000u64 {
+                        tx.push(NodeEvent::WindowEvent {
+                            node: NodeKey {
+                                app,
+                                local: LocalId(n),
+                            },
+                            kind: WindowKind::Create,
+                        });
+                        if n % 97 == 0 {
+                            tx.push(NodeEvent::FocusChanged {
+                                node: NodeKey {
+                                    app,
+                                    local: LocalId(n),
+                                },
+                            });
+                        }
+                        if n % 5_000 == 4_999 {
+                            drop(rx.drain());
+                        }
+                    }
+                    rx.check_invariants().unwrap();
+                    drop(rx.drain());
+                })
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap();
+        }
+        stop.store(true, Ordering::Relaxed);
+        let worst = watcher.join().unwrap();
+        assert!(
+            worst <= limit,
+            "budget reached {worst}, limit {limit}: concurrent charges overshot"
+        );
+        assert_eq!(budget.used(), 0);
+    }
+
+    #[test]
+    fn dropping_the_receiver_returns_the_budget() {
+        let budget = SlotBudget::new(10_000);
+        let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+        for n in 0..500 {
+            tx.push(NodeEvent::WindowEvent {
+                node: key(n),
+                kind: WindowKind::Create,
+            });
+        }
+        assert_eq!(rx.pending(), 500);
+        assert_eq!(budget.used(), 500);
+        drop(rx);
+        assert_eq!(budget.used(), 0);
+        tx.push(NodeEvent::FocusChanged { node: key(1) });
+        assert_eq!(budget.used(), 0);
     }
 
     #[tokio::test]

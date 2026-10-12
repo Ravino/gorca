@@ -7,19 +7,22 @@
 //! socket read on a slow consumer. The exact contract and the pass thresholds are in
 //! `docs/bakeoff/b2-ingress/SPEC.md`.
 //!
-//! [`spawn_drain`] is implemented by the **reference** arm (a): zbus `MessageStream` on a
-//! dedicated thread plus the `Mutex` coalescer of `gorca-ingress`. Bake-off candidates replace
-//! the internals of this module and of `gorca-ingress` and keep every public item below.
+//! [`spawn_drain`] is implemented by B-2 candidate A: a raw-socket reader with its own D-Bus
+//! framing (modules `raw` and `wire`) feeding the lock-free ring of `gorca-ingress`.
 
 mod map;
-mod reference;
+mod raw;
+mod wire;
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use gorca_ingress::IngressSender;
+use gorca_ingress::{
+    GLOBAL_SLOT_BUDGET, IngressConfig, IngressReceiver, IngressSender, SlotBudget,
+    ingress_with_budget,
+};
 use gorca_model::AppId;
 
 pub use map::{MAX_ANNOUNCEMENT_BYTES, Malformed, SignalView, local_id, map_signal};
@@ -27,13 +30,53 @@ pub use map::{MAX_ANNOUNCEMENT_BYTES, Malformed, SignalView, local_id, map_signa
 /// Largest per-connection sender cache; beyond it the cache is dropped and rebuilt (hostile
 /// churn of bus names must not grow memory).
 pub const MAX_ROUTES: usize = 4096;
-pub use reference::spawn_drain;
+pub use raw::spawn_drain;
 
 /// Where events of one sender go.
 #[derive(Clone, Debug)]
 pub struct AppRoute {
     pub app: AppId,
     pub tx: IngressSender,
+}
+
+/// Creates the per-app ingresses of one process. Every ingress made here is charged to the one
+/// shared [`SlotBudget`] (SPEC 3.6, 3.7): a [`Router`] must create the ingress of each new app
+/// through this factory, never with a bare `gorca_ingress::ingress`, so that a flood from many
+/// applications is bounded as a whole and no application can starve another.
+#[derive(Clone, Debug)]
+pub struct IngressFactory {
+    cfg: IngressConfig,
+    budget: Arc<SlotBudget>,
+}
+
+impl IngressFactory {
+    /// The production budget ([`GLOBAL_SLOT_BUDGET`] slots) and default per-app limits.
+    pub fn new() -> Self {
+        Self::with_budget(
+            IngressConfig::default(),
+            SlotBudget::new(GLOBAL_SLOT_BUDGET),
+        )
+    }
+
+    /// A factory over an explicit budget (tests, or several routers sharing one budget).
+    pub fn with_budget(cfg: IngressConfig, budget: Arc<SlotBudget>) -> Self {
+        Self { cfg, budget }
+    }
+
+    /// The ingress of a newly seen app. Dropping the receiver returns its slots.
+    pub fn new_app(&self) -> (IngressSender, IngressReceiver) {
+        ingress_with_budget(self.cfg, &self.budget)
+    }
+
+    pub fn budget(&self) -> &Arc<SlotBudget> {
+        &self.budget
+    }
+}
+
+impl Default for IngressFactory {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Resolves a bus unique name (`:1.42`) to its ingress.
@@ -249,5 +292,43 @@ impl DrainHandle {
             let _ = t.join();
         }
         self.shared.snapshot()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gorca_model::{AppId, ConnectorId, LocalId, NodeEvent, NodeKey, WindowKind};
+
+    fn window(n: u64) -> NodeEvent {
+        NodeEvent::WindowEvent {
+            node: NodeKey {
+                app: AppId {
+                    connector: ConnectorId(0),
+                    serial: 1,
+                },
+                local: LocalId(n),
+            },
+            kind: WindowKind::Create,
+        }
+    }
+
+    /// Every app created by the factory is charged to the one shared budget, and teardown
+    /// returns the slots.
+    #[test]
+    fn apps_of_one_factory_share_one_budget() {
+        let f = IngressFactory::with_budget(IngressConfig::default(), SlotBudget::new(1000));
+        let (tx1, rx1) = f.new_app();
+        let (tx2, rx2) = f.new_app();
+        for n in 0..10 {
+            tx1.push(window(n));
+            tx2.push(window(n));
+        }
+        assert_eq!(rx1.pending() + rx2.pending(), 20);
+        assert_eq!(f.budget().used(), 20);
+        drop(rx1);
+        assert_eq!(f.budget().used(), 10);
+        drop(rx2);
+        assert_eq!(f.budget().used(), 0);
     }
 }

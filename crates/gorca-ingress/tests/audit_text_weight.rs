@@ -21,7 +21,6 @@ fn node(n: u64) -> NodeKey {
 /// one `drain()` returns 262,144 events: four times the SPEC T5 bound (`hard_cap + 4096`) while
 /// the budget believes 4,096 slots are in use. Across apps the budget admits 64 such apps.
 #[test]
-#[ignore = "audit: fails on the reference (text deltas are not accounted)"]
 fn audit_text_deltas_are_charged_and_bounded() {
     let cfg = IngressConfig::default();
     let budget = SlotBudget::new(GLOBAL_SLOT_BUDGET);
