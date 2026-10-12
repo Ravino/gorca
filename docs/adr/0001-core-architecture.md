@@ -8,6 +8,7 @@
   - `docs/reports/2026-10-12-architect-prior-art.md` (Orca/Odilia failure catalog, Newton analysis)
   - `docs/reports/2026-10-12-linux-platform-foundation.md` and `docs/platform/*` (keyboard monitor, broker, VTE, SSIP measurements)
   - `docs/reports/2026-10-12-web-a11y-browsers.md` (Firefox/Chromium AT-SPI behaviour, browse-mode requirements)
+  - `docs/adr/0002-multimodal-perception-layer.md` (Proposed): extends §6 (feature actor, perceive-io), §7.2 (`Find`, `Map` modes), §8.2 (proposed `SpeechCmd::Earcon`), §11 (new crates, dependency rules 8–12), §14 (metrics PM-1…PM-14)
 
 ## 0. Changelog
 
@@ -15,6 +16,7 @@
 |---|---|
 | 2026-10-12 | Draft (Proposed). |
 | 2026-10-12 | **Accepted with amendments.** R1: Orca identity impersonation (bus name, process name), Chrome flag (§5.5). R4 changed: speech is a separate service behind `SpeechClient` with voicego-native and SSIP backends; in-process synthesis and PipeWire tuning dropped; B-3 retired (§8). R6 extended: `SourceLayer` under the web document mirror, identity-reconciliation requirements, bake-off B-6 (§9). New §3, performance and concurrency model: multi-threaded, sharded, single-writer/lock-free-reader state, dedicated hot lanes; Reader, event-bus and per-app bottleneck audit; B-5 upgraded to a measured A/B. Platform facts added: unbounded broker buffering then disconnect, so a dedicated drain is mandatory (§5.3); unicast un-acked `KeyEvent` and re-injection-only pass-through (§7.3); VTE full-screen diffs per frame (§5.6). Open questions P-1…P-6 and W-1…W-4 resolved or narrowed (§16). Final workspace layout (§11). |
+| 2026-10-12 | Cross-reference: ADR-0002 (Proposed) adds the multimodal perception layer. It extends §6, §7.2, §8.2, §11 and §14 without changing any accepted decision here; its amendments take effect only when ADR-0002 is accepted. |
 
 ## 1. Context
 
