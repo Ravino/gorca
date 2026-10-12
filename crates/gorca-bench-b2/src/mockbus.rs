@@ -64,6 +64,9 @@ struct LinkState {
     rng: Rng,
 }
 
+/// Capacity a drained mock queue may keep for reuse.
+const MAX_RETAINED_QUEUE: usize = 4 * 1024 * 1024;
+
 /// Broker-to-reader direction of one connection, with a userspace queue and a quota.
 #[derive(Debug)]
 pub struct Link {
@@ -122,6 +125,11 @@ impl Link {
         if st.head == st.q.len() {
             st.q.clear();
             st.head = 0;
+            // A drained queue must not keep a giant message's capacity alive (it would be
+            // counted as the reader's memory, SPEC B-5).
+            if st.q.capacity() > MAX_RETAINED_QUEUE {
+                st.q = Vec::new();
+            }
         } else if st.head > 4 * 1024 * 1024 {
             st.q.drain(..st.head);
             st.head = 0;

@@ -807,7 +807,7 @@ pub fn fixture(ctx: &Ctx) -> Result<Vec<Row>> {
 pub fn t7(ctx: &Ctx) -> Result<Vec<Row>> {
     use crate::clock::{Rng, now_ns};
     use crate::model::Ev;
-    use gorca_ingress::{IngressConfig, ingress};
+    use gorca_ingress::{GLOBAL_SLOT_BUDGET, IngressConfig, SlotBudget, ingress_with_budget};
     use gorca_model::{AppId, ConnectorId};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -845,7 +845,11 @@ pub fn t7(ctx: &Ctx) -> Result<Vec<Row>> {
     let mut rows = Vec::new();
     let (mut p50, mut p99, mut p999, mut pmax) = (vec![], vec![], vec![], vec![]);
     for r in 0..ctx.reps() {
-        let (tx, rx) = ingress(IngressConfig::default());
+        // Through the budget, as in production: the CAS and any reserve logic are part of a push.
+        let (tx, rx) = ingress_with_budget(
+            IngressConfig::default(),
+            &SlotBudget::new(GLOBAL_SLOT_BUDGET),
+        );
         let evs = script(1 + r as u64, 1500);
         let mut lat = Vec::with_capacity(n);
         for (i, e) in evs.into_iter().enumerate() {
@@ -870,7 +874,11 @@ pub fn t7(ctx: &Ctx) -> Result<Vec<Row>> {
 
     let (mut c50, mut c99, mut c999) = (vec![], vec![], vec![]);
     for r in 0..ctx.reps() {
-        let (tx, rx) = ingress(IngressConfig::default());
+        // Through the budget, as in production: the CAS and any reserve logic are part of a push.
+        let (tx, rx) = ingress_with_budget(
+            IngressConfig::default(),
+            &SlotBudget::new(GLOBAL_SLOT_BUDGET),
+        );
         let stop = Arc::new(AtomicBool::new(false));
         let consumer = {
             let stop = Arc::clone(&stop);

@@ -8,7 +8,9 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use gorca_dbus::drain::{AppRoute, Router};
-use gorca_ingress::{IngressConfig, IngressReceiver, ingress};
+use gorca_ingress::{
+    GLOBAL_SLOT_BUDGET, IngressConfig, IngressReceiver, SlotBudget, ingress_with_budget,
+};
 use gorca_model::{AppId, ConnectorId};
 use tokio::sync::Notify;
 
@@ -106,6 +108,8 @@ pub struct HarnessRouter {
     slots: Mutex<Vec<Arc<Slot>>>,
     next_serial: AtomicU64,
     pub route_calls: AtomicU64,
+    /// One budget shared by every app ingress, as in production (SPEC 3.6 B-3).
+    pub budget: Arc<SlotBudget>,
 }
 
 impl std::fmt::Debug for HarnessRouter {
@@ -148,6 +152,7 @@ impl HarnessRouter {
             slots: Mutex::new(Vec::new()),
             next_serial: AtomicU64::new(1),
             route_calls: AtomicU64::new(0),
+            budget: SlotBudget::new(GLOBAL_SLOT_BUDGET),
         })
     }
 
@@ -164,7 +169,7 @@ impl HarnessRouter {
             connector: ConnectorId(0),
             serial,
         };
-        let (tx, rx) = ingress(cfg.ingress);
+        let (tx, rx) = ingress_with_budget(cfg.ingress, &self.budget);
         let live = Arc::new(Live::default());
         let stop = Arc::new(AtomicBool::new(false));
         let wake = Arc::new(Notify::new());
