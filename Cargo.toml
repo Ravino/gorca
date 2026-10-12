@@ -40,6 +40,7 @@ gorca-braille-brlapi = { path = "crates/gorca-braille-brlapi" }
 gorca-ext-api = { path = "crates/gorca-ext-api" }
 gorca-ext-host = { path = "crates/gorca-ext-host" }
 gorca-testkit = { path = "crates/gorca-testkit" }
+gorca-bench-b2 = { path = "crates/gorca-bench-b2" }
 
 # Async runtime and plumbing.
 tokio = { version = "1.53", default-features = false, features = ["rt", "rt-multi-thread", "sync", "time", "macros", "signal"] }
