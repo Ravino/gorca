@@ -71,6 +71,20 @@ impl Row {
         self
     }
 
+    /// The **worst repeat** must satisfy `max <= threshold`: for counts that must be exactly zero
+    /// (lost events), where a median over repeats would hide one bad run.
+    pub fn at_most_in_every_run(mut self, threshold: f64) -> Self {
+        self.op = "<=";
+        self.threshold = Some(threshold);
+        self.verdict = if self.max <= threshold {
+            Verdict::Pass
+        } else {
+            Verdict::Fail
+        };
+        "gated on the max over repeats".clone_into(&mut self.note);
+        self
+    }
+
     /// `value >= threshold` must hold (throughput).
     pub fn at_least(mut self, threshold: f64) -> Self {
         self.op = ">=";
@@ -189,6 +203,17 @@ pub fn json(meta: &[(String, String)], rows: &[Row]) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn zero_gates_look_at_the_worst_repeat() {
+        let r = super::Row::info("lost", "L3", "b", "events", &[0.0, 0.0, 1.0])
+            .at_most_in_every_run(0.0);
+        assert_eq!(r.value, 0.0, "the median alone would pass");
+        assert!(matches!(r.verdict, super::Verdict::Fail));
+        let ok = super::Row::info("lost", "L3", "b", "events", &[0.0, 0.0, 0.0])
+            .at_most_in_every_run(0.0);
+        assert!(matches!(ok.verdict, super::Verdict::Pass));
+    }
+
     use super::*;
 
     #[test]

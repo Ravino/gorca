@@ -633,6 +633,7 @@ dependencies = [
  "gorca-rt",
  "gorca-testkit",
  "serde",
+ "smallvec",
  "thiserror",
  "tokio",
  "tracing",

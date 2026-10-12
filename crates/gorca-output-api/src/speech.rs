@@ -132,4 +132,8 @@ pub trait SpeechClient: Send + 'static {
     fn events(&mut self) -> &mut mpsc::Receiver<SpeechEvent>;
 
     fn health(&self) -> ClientHealth;
+
+    /// Ask the client to say goodbye to its server (SSIP: `QUIT`) and stop. Never blocks; the
+    /// owner drops the client shortly after (the failover facade waits a bounded flush).
+    fn close(&self) {}
 }

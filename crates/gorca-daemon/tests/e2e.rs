@@ -49,12 +49,12 @@ impl Daemon {
     ) -> Self {
         let opts = Options {
             speech,
-            no_keyboard: true,
-            voicego_socket: Some(voicego.to_owned()),
-            ssip_socket: Some(ssip.to_owned()),
-            a11y_address: Some(session.a11y_address().to_owned()),
-            session_address: Some(session.session_address().to_owned()),
-            ..Options::default()
+            ..Options::isolated(
+                session.a11y_address(),
+                session.session_address(),
+                voicego,
+                ssip,
+            )
         };
         let token = CancellationToken::new();
         let join = tokio::spawn(run_with(opts, token.clone()));
@@ -384,11 +384,13 @@ fn key_presses_are_echoed_through_the_orca_keyboard_monitor_name() {
         let opts = Options {
             speech: SpeechMode::Voicego,
             impersonate_orca: true,
-            voicego_socket: Some(voicego.socket_path().to_owned()),
-            ssip_socket: Some(ssip_path),
-            a11y_address: Some(session.a11y_address().to_owned()),
-            session_address: Some(session.session_address().to_owned()),
-            ..Options::default()
+            no_keyboard: false,
+            ..Options::isolated(
+                session.a11y_address(),
+                session.session_address(),
+                voicego.socket_path(),
+                &ssip_path,
+            )
         };
         let token = CancellationToken::new();
         let join = tokio::spawn(run_with(opts, token.clone()));

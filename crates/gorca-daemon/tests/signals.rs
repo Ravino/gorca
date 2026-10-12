@@ -31,11 +31,10 @@ fn start() -> Daemon {
             "--voicego-socket=/nonexistent/gorca-test-voicego.sock",
             "--ssip-socket=/nonexistent/gorca-test-speechd.sock",
         ])
-        .env_remove("DBUS_SESSION_BUS_ADDRESS")
-        .env_remove("AT_SPI_BUS_ADDRESS")
-        .env_remove("GORCA_A11Y_BUS_ADDRESS")
-        .env_remove("SPEECHD_ADDRESS")
-        .env_remove("SPEECHD_SOCKET")
+        // Nothing from the user's environment: no session or a11y bus, no XDG_RUNTIME_DIR, no
+        // speech-dispatcher variables. The binary reads its environment only in `main`, and
+        // here that environment is empty apart from the log filter.
+        .env_clear()
         .env("GORCA_LOG", "info")
         .stderr(Stdio::piped())
         .stdout(Stdio::null())

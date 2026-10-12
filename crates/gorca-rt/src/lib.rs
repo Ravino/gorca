@@ -16,6 +16,7 @@
 pub mod clock;
 pub mod deadline;
 pub mod epoch;
+pub mod guard;
 pub mod lane;
 pub mod process;
 pub mod supervisor;

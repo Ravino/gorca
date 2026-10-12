@@ -4,14 +4,18 @@
 //!
 //! ```text
 //! a11y bus --- event connection (raw drain thread, ADR-0004) --> per-app ingress (core)
-//! a11y bus --- call connection (zbus) --> one AppServer task per application (requests)
-//!                                     \-> NameOwnerChanged watcher, RegisterEvent
+//!              supervised by its own task, restarted with backoff
+//! a11y bus --- call connection (zbus) --> one AppServer task per application (requests),
+//!                                         credentials lookups, RegisterEvent
+//! a11y bus --- name connection (zbus) --> NameOwnerChanged only, so a flood of name changes
+//!                                         can never stall the replies of the call connection
 //! session bus --- org.a11y.Status (ID-5 enablement)
 //! ```
 //!
-//! Every D-Bus call has a deadline; every task is owned by a `TaskSet`; a drain that the broker
-//! closed is restarted with backoff while the rest of the connector keeps serving.
+//! Every D-Bus call has a deadline. The connector reads no environment: addresses arrive fully
+//! resolved in [`AtspiOptions`].
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -21,30 +25,38 @@ use gorca_dbus::call_method;
 use gorca_dbus::drain::{DrainConfig, DrainEnd, DrainHandle, Router, spawn_drain};
 use gorca_model::ConnectorKind;
 use gorca_rt::{BoxFuture, BudgetClass, CancellationToken, Clock, Deadline, TaskSet, mpsc};
+use tokio::task::JoinSet;
 use zbus::Connection;
+use zbus::zvariant::OwnedValue;
 
 use crate::enablement::Enablement;
 use crate::fetch::{AppServer, Caller};
 use crate::paths::PathTable;
-use crate::router::{AtspiRouter, NewApp};
+use crate::router::{AtspiRouter, Credentials, NewApp};
 use crate::session::{
-    REGISTERED_EVENTS, SessionError, a11y_bus_address, connect, connect_session, read_status,
-    register_events, write_status,
+    REGISTERED_EVENTS, SessionError, a11y_bus_address, connect, read_status, register_events,
+    write_status,
 };
 
 /// Applications announced but not yet picked up by the connector task.
 const NEW_APP_QUEUE: usize = 1024;
+/// Registrations the drain asked for, waiting for the connector task.
+const REGISTER_QUEUE: usize = 256;
 /// How often the connector checks that the drain is alive.
 const DRAIN_POLL: Duration = Duration::from_millis(500);
 const DRAIN_BACKOFF_MIN: Duration = Duration::from_millis(100);
 const DRAIN_BACKOFF_MAX: Duration = Duration::from_secs(5);
+/// Deadline of one `GetConnectionCredentials`.
+const CREDENTIALS_DEADLINE: Duration = Duration::from_millis(250);
 
+/// Fully resolved connection parameters. The connector never looks at the environment (only the
+/// daemon's `main` does), so a test cannot reach the real desktop by leaving a field out.
 #[derive(Clone, Debug)]
 pub struct AtspiOptions {
-    /// Address of the a11y bus. `None`: `GORCA_A11Y_BUS_ADDRESS`, `AT_SPI_BUS_ADDRESS`, then
-    /// `org.a11y.Bus.GetAddress` on the session bus.
+    /// Address of the a11y bus. `None`: ask `org.a11y.Bus.GetAddress` on `session_address`.
     pub a11y_address: Option<String>,
-    /// Address of the session bus. `None`: `DBUS_SESSION_BUS_ADDRESS`.
+    /// Address of the session bus (enablement, and discovery when `a11y_address` is `None`).
+    /// `None`: no enablement, and `a11y_address` is required.
     pub session_address: Option<String>,
     /// ID-5: set `IsEnabled` and `ScreenReaderEnabled` at startup and restore them at shutdown.
     pub enable_accessibility: bool,
@@ -89,34 +101,34 @@ fn startup(e: &SessionError) -> ConnectorError {
     ConnectorError::Startup(e.to_string())
 }
 
-/// The address to use for the a11y bus, and the session connection if it was needed or used for
-/// enablement.
+/// The a11y bus address, and the session connection if there is one.
 async fn resolve_bus(
     opts: &AtspiOptions,
     clock: &Clock,
 ) -> Result<(String, Option<Connection>), ConnectorError> {
-    let explicit = opts
-        .a11y_address
-        .clone()
-        .or_else(|| std::env::var("GORCA_A11Y_BUS_ADDRESS").ok())
-        .or_else(|| std::env::var("AT_SPI_BUS_ADDRESS").ok())
-        .filter(|a| !a.is_empty());
     let deadline = Deadline::for_class(clock, BudgetClass::Startup);
-    let session = connect_session(opts.session_address.as_deref(), deadline).await;
-    match (explicit, session) {
-        (Some(addr), Ok(s)) => Ok((addr, Some(s))),
-        (Some(addr), Err(e)) => {
+    let session = match &opts.session_address {
+        Some(a) => Some(connect(a, deadline).await),
+        None => None,
+    };
+    match (opts.a11y_address.clone().filter(|a| !a.is_empty()), session) {
+        (Some(addr), Some(Ok(s))) => Ok((addr, Some(s))),
+        (Some(addr), Some(Err(e))) => {
             tracing::warn!(error = %e, "no session bus; skipping accessibility enablement");
             Ok((addr, None))
         }
-        (None, Ok(s)) => {
+        (Some(addr), None) => Ok((addr, None)),
+        (None, Some(Ok(s))) => {
             let deadline = Deadline::for_class(clock, BudgetClass::Startup);
             let addr = a11y_bus_address(&s, deadline)
                 .await
                 .map_err(|e| startup(&e))?;
             Ok((addr, Some(s)))
         }
-        (None, Err(e)) => Err(startup(&e)),
+        (None, Some(Err(e))) => Err(startup(&e)),
+        (None, None) => Err(ConnectorError::Startup(
+            "neither an a11y bus address nor a session bus address was given".to_owned(),
+        )),
     }
 }
 
@@ -135,6 +147,34 @@ async fn name_owner(conn: &Connection, clock: &Clock, name: &str) -> Option<Stri
     .await
     .ok()?;
     msg.body().deserialize::<String>().ok()
+}
+
+/// `GetConnectionCredentials` on the a11y bus: who owns a connection.
+struct BusCredentials {
+    conn: Connection,
+    clock: Clock,
+}
+
+impl Credentials for BusCredentials {
+    fn pid_of<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Option<u32>> {
+        Box::pin(async move {
+            let deadline = Deadline::after(&self.clock, CREDENTIALS_DEADLINE);
+            let msg = call_method(
+                &self.conn,
+                deadline,
+                "org.freedesktop.DBus",
+                "/org/freedesktop/DBus",
+                "org.freedesktop.DBus",
+                "GetConnectionCredentials",
+                &name,
+            )
+            .await
+            .ok()?;
+            let creds: HashMap<String, OwnedValue> = msg.body().deserialize().ok()?;
+            let pid = creds.get("ProcessID")?;
+            u32::try_from(pid.clone()).ok()
+        })
+    }
 }
 
 async fn start_drain(address: &str, router: &Arc<AtspiRouter>) -> Result<DrainHandle, String> {
@@ -160,6 +200,52 @@ async fn stop_drain(handle: DrainHandle) {
     }
 }
 
+/// Keeps one drain alive: restarts it with backoff when the broker closed it. Runs in its own
+/// task so that a slow stop, start or backoff never delays the connector's event loop. Stops the
+/// drain itself on cancellation (it is awaited, never dropped mid-flight).
+async fn supervise_drain(address: String, router: Arc<AtspiRouter>, cancel: CancellationToken) {
+    let mut backoff = DRAIN_BACKOFF_MIN;
+    let mut drain: Option<DrainHandle> = None;
+    let mut health = tokio::time::interval(DRAIN_POLL);
+    health.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        if drain.is_none() {
+            match start_drain(&address, &router).await {
+                Ok(h) => {
+                    drain = Some(h);
+                    backoff = DRAIN_BACKOFF_MIN;
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, ?backoff, "drain start failed");
+                    tokio::select! {
+                        () = cancel.cancelled() => break,
+                        () = tokio::time::sleep(backoff) => {}
+                    }
+                    backoff = (backoff * 2).min(DRAIN_BACKOFF_MAX);
+                    continue;
+                }
+            }
+        }
+        tokio::select! {
+            () = cancel.cancelled() => break,
+            _ = health.tick() => {}
+        }
+        let lost = match drain.as_ref().map(DrainHandle::end) {
+            Some(DrainEnd::Disconnected(why)) => Some(why),
+            Some(DrainEnd::Running | DrainEnd::Stopped) | None => None,
+        };
+        if let Some(why) = lost {
+            tracing::warn!(%why, "event drain lost; restarting");
+            if let Some(old) = drain.take() {
+                stop_drain(old).await;
+            }
+        }
+    }
+    if let Some(d) = drain.take() {
+        stop_drain(d).await;
+    }
+}
+
 async fn run(opts: AtspiOptions, ctx: ConnectorCtx) -> Result<(), ConnectorError> {
     let ConnectorCtx {
         registry,
@@ -168,7 +254,7 @@ async fn run(opts: AtspiOptions, ctx: ConnectorCtx) -> Result<(), ConnectorError
         ..
     } = ctx;
     let (address, session) = resolve_bus(&opts, &clock).await?;
-    tracing::info!(%address, "connecting to the accessibility bus");
+    tracing::info!("connecting to the accessibility bus");
 
     // ID-5.
     let mut enablement: Option<(Connection, Enablement)> = None;
@@ -193,6 +279,10 @@ async fn run(opts: AtspiOptions, ctx: ConnectorCtx) -> Result<(), ConnectorError
 
     let deadline = Deadline::for_class(&clock, BudgetClass::Startup);
     let conn = connect(&address, deadline).await.map_err(|e| startup(&e))?;
+    // A connection of its own for NameOwnerChanged: zbus stops delivering to a connection whose
+    // subscription queue is full, and that must never be the connection that carries replies.
+    let deadline = Deadline::for_class(&clock, BudgetClass::Startup);
+    let name_conn = connect(&address, deadline).await.map_err(|e| startup(&e))?;
 
     if opts.register_events {
         match register_events(&conn, &clock, REGISTERED_EVENTS).await {
@@ -205,18 +295,26 @@ async fn run(opts: AtspiOptions, ctx: ConnectorCtx) -> Result<(), ConnectorError
     let mut tasks = TaskSet::new(shutdown.child_token());
     let paths = Arc::new(PathTable::new());
     let (new_tx, mut new_rx) = mpsc::channel::<NewApp>(NEW_APP_QUEUE);
+    let (reg_tx, mut reg_rx) = mpsc::channel::<Arc<str>>(REGISTER_QUEUE);
+    let credentials = Arc::new(BusCredentials {
+        conn: conn.clone(),
+        clock: clock.clone(),
+    });
     let router = Arc::new(AtspiRouter::new(
-        tokio::runtime::Handle::current(),
         registry.clone(),
         clock.clone(),
         Arc::clone(&paths),
         new_tx,
+        reg_tx,
+        credentials,
     ));
     if let Some(owner) = name_owner(&conn, &clock, "org.a11y.atspi.Registry").await {
         router.ignore(&owner);
     }
-    if let Some(me) = conn.unique_name() {
-        router.ignore(me.as_str());
+    for c in [&conn, &name_conn] {
+        if let Some(me) = c.unique_name() {
+            router.ignore(me.as_str());
+        }
     }
 
     let rule = zbus::MatchRule::builder()
@@ -229,19 +327,18 @@ async fn run(opts: AtspiOptions, ctx: ConnectorCtx) -> Result<(), ConnectorError
     let deadline = Deadline::for_class(&clock, BudgetClass::Startup);
     let mut owner_changes = gorca_dbus::with_deadline(
         deadline,
-        zbus::MessageStream::for_match_rule(rule, &conn, Some(256)),
+        zbus::MessageStream::for_match_rule(rule, &name_conn, Some(4096)),
     )
     .await
     .map_err(|e| ConnectorError::Startup(e.to_string()))?;
 
-    let mut drain = Some(
-        start_drain(&address, &router)
-            .await
-            .map_err(ConnectorError::Startup)?,
-    );
-    let mut backoff = DRAIN_BACKOFF_MIN;
-    let mut health = tokio::time::interval(DRAIN_POLL);
-    health.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let drain_cancel = CancellationToken::new();
+    let drain_task = tokio::spawn(supervise_drain(
+        address.clone(),
+        Arc::clone(&router),
+        drain_cancel.clone(),
+    ));
+    let mut registrations: JoinSet<()> = JoinSet::new();
     tracing::info!("atspi connector running");
 
     loop {
@@ -251,42 +348,22 @@ async fn run(opts: AtspiOptions, ctx: ConnectorCtx) -> Result<(), ConnectorError
             Some(new) = new_rx.recv() => {
                 spawn_app(&mut tasks, new, &conn, &paths, &clock, &shutdown);
             }
+            Some(name) = reg_rx.recv() => {
+                // The drain asked for this sender to be registered; it never waits for it.
+                let router = Arc::clone(&router);
+                registrations.spawn(async move { router.complete(name).await });
+            }
+            Some(_) = registrations.join_next() => {}
             Some(msg) = owner_changes.next() => {
                 let Ok(msg) = msg else { continue };
                 let Ok((name, _old, new)) = msg.body().deserialize::<(String, String, String)>() else {
                     continue;
                 };
-                if new.is_empty()
-                    && name.starts_with(':')
-                    && let Some(app) = router.forget(&name)
-                {
-                    tracing::debug!(%name, ?app, "application left the bus");
-                    let _ = registry.retire(app);
-                }
-            }
-            _ = health.tick() => {
-                let dead = match &drain {
-                    Some(d) => match d.end() {
-                        DrainEnd::Running | DrainEnd::Stopped => false,
-                        DrainEnd::Disconnected(why) => {
-                            tracing::warn!(%why, "event drain lost; restarting");
-                            true
-                        }
-                    },
-                    None => true,
-                };
-                if dead {
-                    if let Some(old) = drain.take() { stop_drain(old).await; }
-                    match start_drain(&address, &router).await {
-                        Ok(h) => { drain = Some(h); backoff = DRAIN_BACKOFF_MIN; }
-                        Err(e) => {
-                            tracing::warn!(error = %e, ?backoff, "drain restart failed");
-                            tokio::select! {
-                                () = shutdown.cancelled() => break,
-                                () = tokio::time::sleep(backoff) => {}
-                            }
-                            backoff = (backoff * 2).min(DRAIN_BACKOFF_MAX);
-                        }
+                if new.is_empty() && name.starts_with(':') {
+                    // Also marks a name that is still being registered as departed.
+                    if let Some(app) = router.forget(&name) {
+                        tracing::debug!(%name, ?app, "application left the bus");
+                        let _ = registry.retire(app);
                     }
                 }
             }
@@ -294,9 +371,14 @@ async fn run(opts: AtspiOptions, ctx: ConnectorCtx) -> Result<(), ConnectorError
     }
 
     tracing::info!("atspi connector stopping");
-    if let Some(d) = drain.take() {
-        stop_drain(d).await;
+    drain_cancel.cancel();
+    if tokio::time::timeout(Duration::from_secs(4), drain_task)
+        .await
+        .is_err()
+    {
+        tracing::warn!("drain supervisor did not stop in time");
     }
+    registrations.abort_all();
     tasks.shutdown(Duration::from_secs(1)).await;
     for app in router.take_all() {
         let _ = registry.retire(app);
@@ -338,25 +420,36 @@ mod tests {
     use super::*;
     use gorca_connector_api::registrar_channel;
     use gorca_model::ConnectorId;
-    use std::time::Duration;
 
-    #[tokio::test]
-    async fn run_fails_fast_when_the_bus_is_missing() {
+    fn ctx(shutdown: &CancellationToken) -> ConnectorCtx {
         let (registry, _rx) = registrar_channel(ConnectorId(1), 4);
-        let shutdown = CancellationToken::new();
-        let ctx = ConnectorCtx {
+        ConnectorCtx {
             id: ConnectorId(1),
             registry,
             shutdown: shutdown.clone(),
             clock: Clock::System,
-        };
+        }
+    }
+
+    #[tokio::test]
+    async fn run_fails_fast_when_the_bus_is_missing() {
+        let shutdown = CancellationToken::new();
         let c = Box::new(AtspiConnector::new(AtspiOptions {
             a11y_address: Some("unix:path=/nonexistent/gorca-a11y".to_owned()),
             session_address: Some("unix:path=/nonexistent/gorca-session".to_owned()),
             ..AtspiOptions::default()
         }));
         assert_eq!(c.kind(), ConnectorKind::Atspi);
-        let r = tokio::time::timeout(Duration::from_secs(10), c.run(ctx)).await;
+        let r = tokio::time::timeout(Duration::from_secs(10), c.run(ctx(&shutdown))).await;
+        assert!(matches!(r, Ok(Err(ConnectorError::Startup(_)))), "{r:?}");
+    }
+
+    /// The connector reads no environment: with nothing given it fails, it does not look around.
+    #[tokio::test]
+    async fn missing_addresses_are_an_error_not_an_environment_lookup() {
+        let shutdown = CancellationToken::new();
+        let c = Box::new(AtspiConnector::new(AtspiOptions::default()));
+        let r = tokio::time::timeout(Duration::from_secs(5), c.run(ctx(&shutdown))).await;
         assert!(matches!(r, Ok(Err(ConnectorError::Startup(_)))), "{r:?}");
     }
 }

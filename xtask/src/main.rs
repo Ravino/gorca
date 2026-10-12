@@ -2,16 +2,17 @@
 //! over `cargo metadata`; see [`deps`].
 
 mod deps;
+mod envrule;
 
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
-        Some("deps") => match deps::run() {
-            Ok(true) => ExitCode::SUCCESS,
-            Ok(false) => ExitCode::FAILURE,
-            Err(e) => {
+        Some("deps") => match (deps::run(), envrule::run()) {
+            (Ok(true), Ok(true)) => ExitCode::SUCCESS,
+            (Ok(_), Ok(_)) => ExitCode::FAILURE,
+            (Err(e), _) | (_, Err(e)) => {
                 eprintln!("xtask deps: {e:#}");
                 ExitCode::from(2)
             }

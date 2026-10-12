@@ -282,3 +282,58 @@ async fn a_vanished_app_is_cleaned_up() {
     }
     r.stop().await;
 }
+
+/// A speech sink that panics on every utterance: the Reader panics each time it speaks.
+struct Exploding;
+
+impl SpeechOut for Exploding {
+    fn submit(&self, _u: Utterance) {
+        panic!("speech sink exploded");
+    }
+
+    fn notify_epoch(&self) {}
+}
+
+/// Regression (review F8): when the Reader lane gives up after repeated panics, the core must
+/// stop with an error so the process exits and is restarted, never stay up mute.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_dead_reader_lane_stops_the_core_with_an_error() {
+    let mut core = Core::new(CoreConfig {
+        max_reader_restarts: 2,
+        ..CoreConfig::default()
+    })
+    .with_speech(Arc::new(Exploding) as Arc<dyn SpeechOut>);
+    let registry = core.connector_registrar(ConnectorId(1));
+    let shutdown = CancellationToken::new();
+    let core = tokio::spawn(core.run(shutdown.clone()));
+    let (conn, handle) = ScriptedConnector::new(vec![form("app")]);
+    let ctx = ConnectorCtx {
+        id: ConnectorId(1),
+        registry,
+        shutdown: shutdown.clone(),
+        clock: Clock::System,
+    };
+    let connector = tokio::spawn(Box::new(conn).run(ctx));
+    handle.wait_app("app").await;
+    // Each focus change makes the sink (and so the Reader) panic: more than 2 in the window.
+    let mut node = 1;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !core.is_finished() {
+        node = node % 3 + 1;
+        handle.focus("app", node);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert!(
+            Instant::now() < deadline,
+            "the core never reported the dead lane"
+        );
+    }
+    assert_eq!(
+        core.await.unwrap(),
+        Err(gorca_core::CoreError::ReaderLaneDied)
+    );
+    assert!(
+        shutdown.is_cancelled(),
+        "the rest of the process is told to stop"
+    );
+    let _ = connector.await;
+}

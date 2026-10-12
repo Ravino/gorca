@@ -72,12 +72,12 @@ pub fn decode_key_event(body: (bool, u32, u32, u32, u16)) -> KeyEvent {
 
 #[derive(Clone, Debug, Default)]
 pub struct MutterKeySource {
-    /// Session bus address; `None` means `DBUS_SESSION_BUS_ADDRESS`.
-    pub session_address: Option<String>,
+    /// Session bus address, fully resolved by the caller (this crate reads no environment).
+    pub session_address: String,
 }
 
 impl MutterKeySource {
-    pub fn new(session_address: Option<String>) -> Self {
+    pub fn new(session_address: String) -> Self {
         Self { session_address }
     }
 }
@@ -125,13 +125,11 @@ impl KeySource for MutterKeySource {
 
 async fn session(src: &MutterKeySource, ctx: &KeySourceCtx) -> Result<(), Attempt> {
     let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);
-    let builder = match &src.session_address {
-        Some(a) => zbus::connection::Builder::address(a.as_str()),
-        None => zbus::connection::Builder::session(),
-    }
-    .map_err(DbusError::Zbus)?
-    .max_queued(MAX_QUEUED)
-    .method_timeout(Duration::from_secs(2));
+    gorca_rt::guard::check(&src.session_address);
+    let builder = zbus::connection::Builder::address(src.session_address.as_str())
+        .map_err(DbusError::Zbus)?
+        .max_queued(MAX_QUEUED)
+        .method_timeout(Duration::from_secs(2));
     let conn = with_deadline(deadline, builder.build()).await?;
 
     // ID-1: ask for the name without queueing, so a running Orca is never displaced.

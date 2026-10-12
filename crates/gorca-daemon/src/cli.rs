@@ -76,8 +76,10 @@ impl Options {
     /// service managers). Command-line flags win.
     ///
     /// - `GORCA_IMPERSONATE_ORCA=1`: same as `--impersonate-orca`.
-    /// - `GORCA_A11Y_BUS_ADDRESS`: a11y bus (the connector also reads it, so no
-    ///   `org.a11y.Bus.GetAddress` call is made on the session bus).
+    /// - `GORCA_A11Y_BUS_ADDRESS` or `AT_SPI_BUS_ADDRESS`: a11y bus (no
+    ///   `org.a11y.Bus.GetAddress` call is made when it is set).
+    /// - `DBUS_SESSION_BUS_ADDRESS`, `XDG_RUNTIME_DIR`, `SPEECHD_ADDRESS`, `SPEECHD_SOCKET`:
+    ///   the session bus and the default speech sockets.
     /// - `GORCA_SPEECH_BACKEND=voicego|ssip`: backend, unless `--speech` was given.
     /// - `GORCA_SPEECH_SOCKET`: socket of the selected backend instead of its default.
     #[must_use]
@@ -104,10 +106,47 @@ impl Options {
         if get("GORCA_IMPERSONATE_ORCA").is_some_and(|v| v == "1") {
             o.impersonate_orca = true;
         }
+        // Defaults for what is still open. The daemon's `main` is the only place that reads the
+        // environment; everything below this point receives resolved values.
+        let xdg = get("XDG_RUNTIME_DIR");
+        if o.voicego_socket.is_none() {
+            o.voicego_socket = gorca_speech_voicego::default_voicego_path(xdg.as_deref());
+        }
+        if o.ssip_socket.is_none() {
+            o.ssip_socket = gorca_speech_ssip::ssip_path_from_env_values(
+                get("SPEECHD_ADDRESS").as_deref(),
+                get("SPEECHD_SOCKET").as_deref(),
+                xdg.as_deref(),
+            );
+        }
         if o.a11y_address.is_none() {
-            o.a11y_address = get("GORCA_A11Y_BUS_ADDRESS").filter(|s| !s.is_empty());
+            o.a11y_address = get("GORCA_A11Y_BUS_ADDRESS")
+                .or_else(|| get("AT_SPI_BUS_ADDRESS"))
+                .filter(|s| !s.is_empty());
+        }
+        if o.session_address.is_none() {
+            o.session_address = get("DBUS_SESSION_BUS_ADDRESS").filter(|s| !s.is_empty());
         }
         o
+    }
+
+    /// Everything explicit, nothing from the environment: the constructor tests use, so that a
+    /// forgotten field cannot fall back to the real desktop.
+    #[must_use]
+    pub fn isolated(
+        a11y_address: &str,
+        session_address: &str,
+        voicego_socket: &std::path::Path,
+        ssip_socket: &std::path::Path,
+    ) -> Self {
+        Self {
+            no_keyboard: true,
+            a11y_address: Some(a11y_address.to_owned()),
+            session_address: Some(session_address.to_owned()),
+            voicego_socket: Some(voicego_socket.to_owned()),
+            ssip_socket: Some(ssip_socket.to_owned()),
+            ..Self::default()
+        }
     }
 }
 

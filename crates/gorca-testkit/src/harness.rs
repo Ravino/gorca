@@ -30,6 +30,39 @@ pub enum HarnessError {
     Timeout(&'static str),
 }
 
+/// Arm the isolation tripwire (`gorca_rt::guard`): from now on, in debug builds, any connect path
+/// of this process that targets the *ambient* session bus, a11y bus, voicego or speech-dispatcher
+/// socket panics. Idempotent. [`Session::start`] calls it, so every harness test is covered.
+pub fn forbid_ambient_environment() {
+    let env = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
+    for key in [
+        "DBUS_SESSION_BUS_ADDRESS",
+        "AT_SPI_BUS_ADDRESS",
+        "GORCA_A11Y_BUS_ADDRESS",
+    ] {
+        if let Some(addr) = env(key) {
+            // Forbid the whole address and the socket path inside it.
+            if let Some(path) = addr.split(',').find_map(|part| {
+                part.strip_prefix("unix:path=")
+                    .or_else(|| part.strip_prefix("path="))
+            }) {
+                gorca_rt::guard::forbid(path);
+            }
+            gorca_rt::guard::forbid(addr);
+        }
+    }
+    if let Some(xdg) = env("XDG_RUNTIME_DIR") {
+        for tail in [
+            "bus",
+            "at-spi/bus",
+            "voicego.sock",
+            "speech-dispatcher/speechd.sock",
+        ] {
+            gorca_rt::guard::forbid(format!("{xdg}/{tail}"));
+        }
+    }
+}
+
 /// A private AT-SPI session. Dropping it tears it down.
 #[derive(Debug)]
 pub struct Session {
@@ -77,6 +110,7 @@ impl Session {
 
     /// Start a session and wait until it is ready (about 1.5 s).
     pub fn start() -> Result<Self, HarnessError> {
+        forbid_ambient_environment();
         let script = harness_dir().join("run-isolated.sh");
         let mut child = Command::new(script)
             .arg("--hold")
@@ -125,16 +159,22 @@ impl Session {
         &self.env
     }
 
+    /// The private a11y bus. A missing key is a harness bug, not a reason to fall back to ""
+    /// (and from there to anything ambient).
+    #[allow(clippy::panic)]
     pub fn a11y_address(&self) -> &str {
-        self.env
-            .get("AT_SPI_BUS_ADDRESS")
-            .map_or("", String::as_str)
+        match self.env.get("AT_SPI_BUS_ADDRESS") {
+            Some(a) if a.contains("/gorca-h.") => a,
+            other => panic!("harness session has no private a11y bus address: {other:?}"),
+        }
     }
 
+    #[allow(clippy::panic)]
     pub fn session_address(&self) -> &str {
-        self.env
-            .get("DBUS_SESSION_BUS_ADDRESS")
-            .map_or("", String::as_str)
+        match self.env.get("DBUS_SESSION_BUS_ADDRESS") {
+            Some(a) if a.contains("/gorca-h.") => a,
+            other => panic!("harness session has no private session bus address: {other:?}"),
+        }
     }
 
     /// The temporary directory of the session (sockets for mock servers can live here).

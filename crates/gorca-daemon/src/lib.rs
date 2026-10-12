@@ -139,11 +139,17 @@ impl SpeechOut for LaneOut {
     }
 }
 
+fn unavailable(name: &'static str) -> Arc<dyn SpeechBackend> {
+    Arc::new(FnBackend::new(name, move |_deadline| async move {
+        Err(BackendConnectError::new(name, "no socket path is known"))
+    }))
+}
+
 fn voicego_backend(opts: &Options) -> Arc<dyn SpeechBackend> {
-    let vopts = VoicegoOptions {
-        path: opts.voicego_socket.clone(),
-        ..VoicegoOptions::default()
+    let Some(path) = opts.voicego_socket.clone() else {
+        return unavailable("voicego");
     };
+    let vopts = VoicegoOptions::with_path(path);
     Arc::new(FnBackend::new("voicego", move |deadline| {
         let vopts = vopts.clone();
         async move {
@@ -156,10 +162,10 @@ fn voicego_backend(opts: &Options) -> Arc<dyn SpeechBackend> {
 }
 
 fn ssip_backend(opts: &Options) -> Arc<dyn SpeechBackend> {
-    let sopts = SsipOptions {
-        path: opts.ssip_socket.clone(),
-        ..SsipOptions::default()
+    let Some(path) = opts.ssip_socket.clone() else {
+        return unavailable("speech-dispatcher");
     };
+    let sopts = SsipOptions::with_path(path);
     Arc::new(FnBackend::new("speech-dispatcher", move |deadline| {
         let sopts = sopts.clone();
         async move {
@@ -329,12 +335,16 @@ pub async fn run_with(opts: Options, shutdown: CancellationToken) -> Result<()> 
 
     if opts.no_keyboard {
         tracing::info!("keyboard monitoring disabled (--no-keyboard)");
-    } else if opts.impersonate_orca {
+    } else if opts.impersonate_orca && opts.session_address.is_none() {
+        tracing::warn!("keyboard monitoring needs a session bus address; it stays off");
+    } else if let (true, Some(session_address)) =
+        (opts.impersonate_orca, opts.session_address.clone())
+    {
         // ID-1: Mutter only authorises the owner of org.gnome.Orca.KeyboardMonitor. The name is
         // requested without queueing, so a running Orca is never displaced.
         let (sink, keys) = key_channel();
         let (grabs_tx, grabs) = gorca_rt::watch::channel(GrabSet::default());
-        let source = Box::new(MutterKeySource::new(opts.session_address.clone()));
+        let source = Box::new(MutterKeySource::new(session_address));
         let ctx = KeySourceCtx {
             sink,
             grabs,
@@ -438,13 +448,12 @@ mod tests {
         let rt = build_runtime().unwrap();
         rt.block_on(async {
             let token = CancellationToken::new();
-            let opts = Options {
-                a11y_address: Some("unix:path=/nonexistent/gorca-a11y".to_owned()),
-                session_address: Some("unix:path=/nonexistent/gorca-session".to_owned()),
-                voicego_socket: Some("/nonexistent/voicego.sock".into()),
-                ssip_socket: Some("/nonexistent/speechd.sock".into()),
-                ..Options::default()
-            };
+            let opts = Options::isolated(
+                "unix:path=/nonexistent/gorca-a11y",
+                "unix:path=/nonexistent/gorca-session",
+                std::path::Path::new("/nonexistent/voicego.sock"),
+                std::path::Path::new("/nonexistent/speechd.sock"),
+            );
             let h = tokio::spawn(run_with(opts, token.clone()));
             tokio::time::sleep(Duration::from_millis(300)).await;
             assert!(!h.is_finished(), "the daemon stays up without its services");

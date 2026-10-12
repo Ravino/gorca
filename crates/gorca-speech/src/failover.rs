@@ -10,7 +10,11 @@
 //! - Whatever was in flight on a backend that is left behind is reported `Stopped`, so the
 //!   speech state machine never waits for an `Ended` that cannot come. Commands queued longer
 //!   than [`FailoverConfig::stale_after`] are dropped instead of replayed (section 7.4).
-//! - `submit` never blocks: it pushes into a small bounded queue the supervisor drains.
+//! - Before a client is left behind (a better backend answered; at shutdown the client's own `Drop` does the same, best effort) it is told to
+//!   `StopAll` and `close()` and given a bounded flush ([`RETIRE_FLUSH`]): speech-dispatcher keeps
+//!   playing the queue of a client that merely disappears (review F3).
+//! - `submit` never blocks: it pushes into a small bounded queue the supervisor drains. A stop
+//!   always gets through the queue, speaks are evicted first and reported `Stopped` (F10).
 //!
 //! The facade advertises `atomic_replace = true`: a backend without atomic replace lowers
 //! [`SpeechCmd::Replace`] to `STOP` + `SPEAK` itself (that is the contract of the command).
@@ -24,6 +28,7 @@ use std::task::Poll;
 use std::time::{Duration, Instant};
 
 use gorca_model::UttId;
+use gorca_output_api::queue::{admit, started_utt};
 use gorca_output_api::{
     ClientHealth, SpeechCaps, SpeechClient, SpeechCmd, SpeechErr, SpeechEvent, SubmitError,
 };
@@ -37,6 +42,8 @@ const QUEUE_CAP: usize = 8;
 const EVENT_QUEUE: usize = 128;
 const NOTICE_QUEUE: usize = 8;
 const TERMINAL_SEND_DEADLINE: Duration = Duration::from_secs(1);
+/// How long a client being left behind gets to flush `StopAll` (and `QUIT`) to its server.
+pub const RETIRE_FLUSH: Duration = Duration::from_millis(50);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum FailoverMode {
@@ -99,6 +106,8 @@ struct Shared {
     wake: Notify,
     health: AtomicU8,
     active: Mutex<Option<&'static str>>,
+    /// Terminal events of commands evicted from `queue`, delivered by the supervisor.
+    pending: Mutex<VecDeque<SpeechEvent>>,
 }
 
 impl std::fmt::Debug for Shared {
@@ -155,6 +164,7 @@ impl FailoverClient {
             wake: Notify::new(),
             health: AtomicU8::new(h2u(ClientHealth::Connecting)),
             active: Mutex::new(None),
+            pending: Mutex::new(VecDeque::new()),
         });
         let (etx, erx) = mpsc::channel(EVENT_QUEUE);
         let (ntx, nrx) = mpsc::channel(NOTICE_QUEUE);
@@ -193,17 +203,6 @@ impl FailoverClient {
     }
 }
 
-fn supersedable(c: &SpeechCmd) -> bool {
-    match c {
-        SpeechCmd::Speak { .. } | SpeechCmd::Replace { .. } => true,
-        SpeechCmd::Stop { .. }
-        | SpeechCmd::StopAll
-        | SpeechCmd::Pause
-        | SpeechCmd::Resume
-        | SpeechCmd::SetParams(_) => false,
-    }
-}
-
 impl SpeechClient for FailoverClient {
     fn caps(&self) -> &SpeechCaps {
         &self.caps
@@ -214,20 +213,16 @@ impl SpeechClient for FailoverClient {
             ClientHealth::Connecting | ClientHealth::Down => return Err(SubmitError::Disconnected),
             ClientHealth::Ready | ClientHealth::Degraded => {}
         }
-        {
+        let gone = {
             let mut q = lock(&self.shared.queue);
-            if q.len() >= QUEUE_CAP {
-                if supersedable(&cmd) {
-                    q.retain(|e| !supersedable(&e.cmd));
-                }
-                if q.len() >= QUEUE_CAP {
-                    return Err(SubmitError::Full);
-                }
-            }
-            q.push_back(Queued {
+            let item = Queued {
                 cmd,
                 at: Instant::now(),
-            });
+            };
+            admit(&mut q, item, QUEUE_CAP, |e| &e.cmd, |e| &mut e.cmd)?
+        };
+        if !gone.is_empty() {
+            lock(&self.shared.pending).extend(gone.into_iter().map(SpeechEvent::Stopped));
         }
         self.shared.wake.notify_one();
         Ok(())
@@ -283,15 +278,7 @@ struct Supervisor {
 }
 
 fn cmd_utt(cmd: &SpeechCmd) -> Option<UttId> {
-    match cmd {
-        SpeechCmd::Speak { id, .. } => Some(*id),
-        SpeechCmd::Replace { then, .. } => cmd_utt(then),
-        SpeechCmd::Stop { .. }
-        | SpeechCmd::StopAll
-        | SpeechCmd::Pause
-        | SpeechCmd::Resume
-        | SpeechCmd::SetParams(_) => None,
-    }
+    started_utt(cmd)
 }
 
 impl Supervisor {
@@ -328,6 +315,26 @@ impl Supervisor {
             let _ = tokio::time::timeout(TERMINAL_SEND_DEADLINE, self.events.send(ev)).await;
         } else {
             let _ = self.events.try_send(ev);
+        }
+    }
+
+    /// Deliver the terminal events of commands that `submit` evicted.
+    async fn deliver_pending(&self) {
+        loop {
+            let ev = lock(&self.shared.pending).pop_front();
+            let Some(ev) = ev else { return };
+            self.emit(ev).await;
+        }
+    }
+
+    /// Leave a client behind: stop what it plays, say goodbye and give the bytes a moment to
+    /// reach the server before the connection is dropped.
+    async fn retire(&self, client: Box<dyn SpeechClient>) {
+        let _ = client.submit(SpeechCmd::StopAll);
+        client.close();
+        let end = tokio::time::Instant::now() + RETIRE_FLUSH;
+        while client.health() != ClientHealth::Down && tokio::time::Instant::now() < end {
+            tokio::time::sleep(Duration::from_millis(2)).await;
         }
     }
 
@@ -480,6 +487,7 @@ impl Supervisor {
         poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             // Drain the queue first so a burst of wakeups is one pass.
+            self.deliver_pending().await;
             if !self.flush(&mut *client).await {
                 self.stop_inflight().await;
                 self.shared.set_health(ClientHealth::Down);
@@ -488,7 +496,10 @@ impl Supervisor {
             let probing = idx > self.first_index() && probe.is_none();
             tokio::select! {
                 biased;
-                () = self.cancel.cancelled() => return None,
+                () = self.cancel.cancelled() => {
+                    self.retire(client).await;
+                    return None;
+                }
                 ev = client.events().recv() => {
                     if let Some(ev) = ev {
                         self.forward(ev).await;
@@ -503,6 +514,7 @@ impl Supervisor {
                     probe = None;
                     match r {
                         Ok(better) => {
+                            self.retire(client).await;
                             self.stop_inflight().await;
                             return Some(self.activated(probe_idx, better));
                         }
@@ -710,6 +722,73 @@ mod tests {
         c.submit(speak(8)).unwrap();
         let ctl = a.last().unwrap();
         assert!(eventually(WAIT, || ctl.cmds().len() == 1).await);
+    }
+
+    /// Regression (review F3): the fallback client is told to stop and closed before it is
+    /// dropped, so speech-dispatcher does not keep playing under the returning primary.
+    #[tokio::test]
+    async fn the_client_left_behind_gets_stopall_and_close() {
+        let a = FakeBackend::new("voicego", false);
+        let b = FakeBackend::new("ssip", true);
+        let (c, mut n, _t) = start(vec![dynb(&a), dynb(&b)], cfg());
+        ready(&c).await;
+        assert!(matches!(
+            n.recv().await,
+            Some(FailoverNotice::Fallback { .. })
+        ));
+        c.submit(speak(7)).unwrap();
+        let fb = b.last().unwrap();
+        assert!(eventually(WAIT, || fb.cmds().len() == 1).await);
+        a.set_available(true);
+        assert!(matches!(
+            tokio::time::timeout(WAIT, n.recv()).await.unwrap(),
+            Some(FailoverNotice::Restored { .. })
+        ));
+        assert_eq!(fb.cmds().last(), Some(&SpeechCmd::StopAll));
+        assert!(fb.is_closed());
+        assert!(a.last().is_some_and(|x| !x.is_closed()));
+    }
+
+    /// Regression (review F10): a stop is never lost in the facade's own queue either.
+    #[tokio::test]
+    async fn a_stop_is_never_lost_when_the_facade_queue_is_full() {
+        let a = FakeBackend::new("voicego", true);
+        let (mut c, _n, _t) = start(vec![dynb(&a)], cfg());
+        ready(&c).await;
+        // No wake-up between submits: hold the queue lock path by submitting in one burst
+        // faster than the supervisor drains is racy, so exercise the admission directly.
+        let mut q = VecDeque::new();
+        for i in 0..QUEUE_CAP as u64 {
+            admit(
+                &mut q,
+                Queued {
+                    cmd: speak(i),
+                    at: Instant::now(),
+                },
+                QUEUE_CAP,
+                |e| &e.cmd,
+                |e| &mut e.cmd,
+            )
+            .unwrap();
+        }
+        let gone = admit(
+            &mut q,
+            Queued {
+                cmd: SpeechCmd::StopAll,
+                at: Instant::now(),
+            },
+            QUEUE_CAP,
+            |e| &e.cmd,
+            |e| &mut e.cmd,
+        )
+        .unwrap();
+        assert_eq!(gone.len(), QUEUE_CAP);
+        assert_eq!(q.len(), 1);
+        // And through the real client the stop reaches the backend.
+        c.submit(SpeechCmd::StopAll).unwrap();
+        let ctl = a.last().unwrap();
+        assert!(eventually(WAIT, || ctl.cmds().contains(&SpeechCmd::StopAll)).await);
+        let _ = c.events();
     }
 
     #[tokio::test]

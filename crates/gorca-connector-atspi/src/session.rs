@@ -50,23 +50,10 @@ fn reply_err(what: &'static str, e: &zbus::Error) -> SessionError {
 
 /// Connect to a bus at `address` with our own configuration (D-6: `max_queued` >= 4096).
 pub async fn connect(address: &str, deadline: Deadline) -> Result<Connection, SessionError> {
+    gorca_rt::guard::check(address);
     let builder = zbus::connection::Builder::address(address)
         .map_err(|e| reply_err("bus address", &e))?
         .max_queued(MAX_QUEUED)
-        .method_timeout(Duration::from_secs(2));
-    Ok(with_deadline(deadline, builder.build()).await?)
-}
-
-/// The session bus of the environment (`DBUS_SESSION_BUS_ADDRESS`).
-pub async fn connect_session(
-    address: Option<&str>,
-    deadline: Deadline,
-) -> Result<Connection, SessionError> {
-    if let Some(a) = address {
-        return connect(a, deadline).await;
-    }
-    let builder = zbus::connection::Builder::session()
-        .map_err(|e| reply_err("session bus", &e))?
         .method_timeout(Duration::from_secs(2));
     Ok(with_deadline(deadline, builder.build()).await?)
 }

@@ -12,14 +12,14 @@
 //!   events that overtake their `225`.
 //! - **V4** `701 BEGIN` is first PCM (`Started`), `702 END` is `Ended`, `703` is `Stopped`; there
 //!   is no played-duration event, so `audio_progress = false`.
-//! - **V5** UNIX socket, explicit path or `$XDG_RUNTIME_DIR/voicego.sock`; no auth beyond file
-//!   permissions.
+//! - **V5** UNIX socket at an explicit path (the daemon resolves the default, see
+//!   [`default_voicego_path`]); the peer must run as our uid.
 //! - **V6** Failover is not here: this is a single-connection client that goes `Down` on EOF
 //!   or error. Reconnecting and falling back to SSIP is `gorca_speech::FailoverClient`.
 //!
-//! Pre-fix voicegod loses a `SPEAK` pipelined right behind a `STOP` (it is answered with `703`
-//! without `701`). A speak written within [`STOP_SPEAK_WINDOW`] of a stop is therefore guarded:
-//! if it is cancelled before it started, it is sent once more ([`VoicegoStats::resends`]).
+//! Current voicego has the STOP/SPEAK race fixed (`TestStopThenSpeakNotLost`), so a `SPEAK`
+//! pipelined behind a `STOP` is safe and there is no resend: a stopped utterance is never spoken
+//! again.
 //!
 //! Licensing: voicego is AGPL-3.0-or-later. gorca implements the client from the protocol
 //! specification and does not vendor or link voicego code.
@@ -31,10 +31,11 @@ use std::io;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use gorca_model::UttId;
-use gorca_output_api::track::{Block, Expect, MsgTracker, Reaction, classify};
+use gorca_output_api::peer::{PeerError, check_peer, own_uid};
+use gorca_output_api::queue::admit;
+use gorca_output_api::track::{Block, Expect, MsgTracker, classify};
 use gorca_output_api::{
     ClientHealth, SpeechCaps, SpeechClient, SpeechCmd, SpeechEvent, SubmitError, Verbalized,
     VoiceParams,
@@ -48,8 +49,6 @@ use tokio::net::unix::{OwnedReadHalf, OwnedWriteHalf};
 pub const WRITER_QUEUE: usize = 4;
 /// Event channel bound (section 8.3).
 pub const EVENT_QUEUE: usize = 128;
-/// A speak written this soon after a stop is guarded against the pre-fix lost-speech bug.
-pub const STOP_SPEAK_WINDOW: Duration = Duration::from_millis(100);
 /// A write that takes longer than this marks the client `Degraded` (section 8.3).
 pub const DEGRADED_AFTER: Duration = Duration::from_millis(50);
 /// A write that takes longer than this fails the connection.
@@ -64,49 +63,40 @@ const PREFIX: [u8; 4] = [0xAA, b'V', b'G', 1];
 
 #[derive(Debug, thiserror::Error)]
 pub enum VoicegoError {
-    #[error("XDG_RUNTIME_DIR is not set and no socket path was given")]
-    NoSocketPath,
     #[error("voicego socket: {0}")]
     Io(#[from] io::Error),
     #[error("voicego did not answer in time")]
     Timeout,
     #[error("voicego handshake failed: {0}")]
     Handshake(String),
+    #[error("refusing the voicego socket: {0}")]
+    Peer(#[from] PeerError),
 }
 
 #[derive(Clone, Debug)]
 pub struct VoicegoOptions {
-    /// Socket path; `None` means `$XDG_RUNTIME_DIR/voicego.sock`.
-    pub path: Option<PathBuf>,
+    /// Socket path. This crate never looks at the environment: the daemon resolves it
+    /// ([`default_voicego_path`]) and passes it in.
+    pub path: PathBuf,
     /// `SET self CLIENT_NAME` (cosmetic).
     pub client_name: String,
-}
-
-impl Default for VoicegoOptions {
-    fn default() -> Self {
-        Self {
-            path: None,
-            client_name: "gorca:main:main".to_owned(),
-        }
-    }
 }
 
 impl VoicegoOptions {
     pub fn with_path(path: impl Into<PathBuf>) -> Self {
         Self {
-            path: Some(path.into()),
-            ..Self::default()
+            path: path.into(),
+            client_name: "gorca:main:main".to_owned(),
         }
     }
+}
 
-    /// The socket this client would connect to.
-    pub fn resolve(&self) -> Result<PathBuf, VoicegoError> {
-        if let Some(p) = &self.path {
-            return Ok(p.clone());
-        }
-        let dir = std::env::var_os("XDG_RUNTIME_DIR").ok_or(VoicegoError::NoSocketPath)?;
-        Ok(PathBuf::from(dir).join("voicego.sock"))
-    }
+/// The default socket given the value of `XDG_RUNTIME_DIR` (pure; the caller reads the
+/// environment). `None` when it is unset or empty.
+pub fn default_voicego_path(xdg_runtime_dir: Option<&str>) -> Option<PathBuf> {
+    xdg_runtime_dir
+        .filter(|d| !d.is_empty())
+        .map(|d| PathBuf::from(d).join("voicego.sock"))
 }
 
 /// Capabilities of a voicego connection (TBD-V2..V4 answered).
@@ -124,8 +114,6 @@ pub fn caps() -> SpeechCaps {
 /// Counters for tests and telemetry.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub struct VoicegoStats {
-    /// Speak commands sent a second time after the pre-fix lost-speech bug.
-    pub resends: u64,
     /// `write_all` calls (a batch of commands is one write).
     pub writes: u64,
     /// Commands dropped from the writer queue because a newer one superseded them (S-3).
@@ -153,13 +141,11 @@ fn health_from_u8(v: u8) -> ClientHealth {
 #[derive(Debug, Default)]
 struct WriteQueue {
     cmds: VecDeque<SpeechCmd>,
-    resends: VecDeque<(UttId, Vec<u8>)>,
 }
 
 #[derive(Debug, Default)]
 struct Proto {
     tracker: MsgTracker,
-    last_stop: Option<Instant>,
 }
 
 #[derive(Debug)]
@@ -168,6 +154,9 @@ struct Shared {
     queue: Mutex<WriteQueue>,
     wake: Notify,
     proto: Mutex<Proto>,
+    /// Terminal events of commands that were evicted from the queue before they were written;
+    /// the writer task delivers them (`submit` cannot await).
+    pending: Mutex<VecDeque<SpeechEvent>>,
     cancel: CancellationToken,
     writes: AtomicU64,
     superseded: AtomicU64,
@@ -227,35 +216,25 @@ fn speak_bytes(text: &Verbalized) -> Vec<u8> {
 
 /// Encode one command into `out`, registering what the server will answer. Everything a batch
 /// needs goes into one buffer so that it is one `write_all` (V2).
-fn encode(cmd: &SpeechCmd, proto: &mut Proto, out: &mut Vec<u8>, now: Instant, depth: u8) {
+fn encode(cmd: &SpeechCmd, proto: &mut Proto, out: &mut Vec<u8>, depth: u8) {
     match cmd {
         SpeechCmd::Speak { id, text, .. } => {
-            let bytes = speak_bytes(text);
-            out.extend_from_slice(&bytes);
+            out.extend_from_slice(&speak_bytes(text));
             proto.tracker.expect(Expect::Speak(*id));
-            if proto
-                .last_stop
-                .is_some_and(|t| now.saturating_duration_since(t) <= STOP_SPEAK_WINDOW)
-            {
-                proto.tracker.arm_guard(*id, bytes);
-            }
         }
         SpeechCmd::Replace { stop, then } => {
             push_line(out, proto, "STOP self");
             proto.tracker.mark_replaced(*stop);
-            proto.last_stop = Some(now);
             // A Replace inside a Replace has no meaning; flatten at a small depth.
             if depth < 2 {
-                encode(then, proto, out, now, depth + 1);
+                encode(then, proto, out, depth + 1);
             }
         }
         SpeechCmd::Stop { .. } => {
             push_line(out, proto, "STOP self");
-            proto.last_stop = Some(now);
         }
         SpeechCmd::StopAll => {
             push_line(out, proto, "CANCEL self");
-            proto.last_stop = Some(now);
         }
         SpeechCmd::Pause => push_line(out, proto, "PAUSE self"),
         SpeechCmd::Resume => push_line(out, proto, "RESUME self"),
@@ -324,17 +303,13 @@ async fn reader(shared: Arc<Shared>, mut rd: OwnedReadHalf, tx: mpsc::Sender<Spe
             }
         }
         evs.clear();
-        let reaction = {
+        {
             let mut p = lock(&shared.proto);
             match classify(&buf) {
                 Block::Reply { code, msg_id } => p.tracker.on_reply(code, msg_id, &mut evs),
                 Block::Event { ev, msg } => p.tracker.on_event(ev, msg, &mut evs),
-                Block::Garbage => Reaction::None,
+                Block::Garbage => {}
             }
-        };
-        if let Reaction::Resend { utt, bytes } = reaction {
-            lock(&shared.queue).resends.push_back((utt, bytes));
-            shared.wake.notify_one();
         }
         for ev in evs.drain(..) {
             forward(&tx, ev).await;
@@ -373,7 +348,15 @@ async fn write_batch(
     }
 }
 
-async fn writer(shared: Arc<Shared>, mut wr: OwnedWriteHalf) {
+async fn deliver_pending(shared: &Shared, tx: &mpsc::Sender<SpeechEvent>) {
+    loop {
+        let ev = lock(&shared.pending).pop_front();
+        let Some(ev) = ev else { return };
+        forward(tx, ev).await;
+    }
+}
+
+async fn writer(shared: Arc<Shared>, mut wr: OwnedWriteHalf, tx: mpsc::Sender<SpeechEvent>) {
     let mut buf: Vec<u8> = Vec::with_capacity(1024);
     loop {
         tokio::select! {
@@ -381,19 +364,15 @@ async fn writer(shared: Arc<Shared>, mut wr: OwnedWriteHalf) {
             () = shared.cancel.cancelled() => return,
             () = shared.wake.notified() => {}
         }
+        deliver_pending(&shared, &tx).await;
         loop {
             buf.clear();
             {
                 // Lock order: queue, then proto. The reader never holds proto while taking queue.
                 let mut q = lock(&shared.queue);
                 let mut p = lock(&shared.proto);
-                let now = Instant::now();
-                while let Some((utt, bytes)) = q.resends.pop_front() {
-                    p.tracker.expect(Expect::Speak(utt));
-                    buf.extend_from_slice(&bytes);
-                }
                 while let Some(cmd) = q.cmds.pop_front() {
-                    encode(&cmd, &mut p, &mut buf, now, 0);
+                    encode(&cmd, &mut p, &mut buf, 0);
                 }
             }
             if buf.is_empty() {
@@ -424,10 +403,20 @@ impl VoicegoClient {
         opts: &VoicegoOptions,
         deadline: Deadline,
     ) -> Result<VoicegoClient, VoicegoError> {
-        let path = opts.resolve()?;
-        let stream = with_deadline(deadline, UnixStream::connect(&path))
+        Self::connect_as(opts, deadline, own_uid()).await
+    }
+
+    /// [`connect`](Self::connect) with the uid the peer must have (tests pass a foreign one).
+    pub async fn connect_as(
+        opts: &VoicegoOptions,
+        deadline: Deadline,
+        own: Option<u32>,
+    ) -> Result<VoicegoClient, VoicegoError> {
+        let stream = with_deadline(deadline, UnixStream::connect(&opts.path))
             .await
             .map_err(|_| VoicegoError::Timeout)??;
+        // Everything gorca reads is sent here: only talk to our own user's server.
+        check_peer(stream.peer_cred()?.uid(), own)?;
         let (mut rd, mut wr) = stream.into_split();
         let mut hello = PREFIX.to_vec();
         push_frame(
@@ -457,14 +446,18 @@ impl VoicegoClient {
             queue: Mutex::new(WriteQueue::default()),
             wake: Notify::new(),
             proto: Mutex::new(Proto::default()),
+            pending: Mutex::new(VecDeque::new()),
             cancel: cancel.clone(),
             writes: AtomicU64::new(0),
             superseded: AtomicU64::new(0),
         });
         let (etx, erx) = mpsc::channel(EVENT_QUEUE);
         let mut tasks = TaskSet::new(cancel);
-        tasks.spawn("voicego-reader", reader(Arc::clone(&shared), rd, etx));
-        tasks.spawn("voicego-writer", writer(Arc::clone(&shared), wr));
+        tasks.spawn(
+            "voicego-reader",
+            reader(Arc::clone(&shared), rd, etx.clone()),
+        );
+        tasks.spawn("voicego-writer", writer(Arc::clone(&shared), wr, etx));
         Ok(VoicegoClient {
             caps: caps(),
             shared,
@@ -475,7 +468,6 @@ impl VoicegoClient {
 
     pub fn stats(&self) -> VoicegoStats {
         VoicegoStats {
-            resends: lock(&self.shared.proto).tracker.resends(),
             writes: self.shared.writes.load(Ordering::Relaxed),
             superseded: self.shared.superseded.load(Ordering::Relaxed),
         }
@@ -488,17 +480,6 @@ impl Drop for VoicegoClient {
     }
 }
 
-fn supersedable(c: &SpeechCmd) -> bool {
-    match c {
-        SpeechCmd::Speak { .. } | SpeechCmd::Replace { .. } => true,
-        SpeechCmd::Stop { .. }
-        | SpeechCmd::StopAll
-        | SpeechCmd::Pause
-        | SpeechCmd::Resume
-        | SpeechCmd::SetParams(_) => false,
-    }
-}
-
 impl SpeechClient for VoicegoClient {
     fn caps(&self) -> &SpeechCaps {
         &self.caps
@@ -508,21 +489,16 @@ impl SpeechClient for VoicegoClient {
         if self.shared.is_down() {
             return Err(SubmitError::Disconnected);
         }
-        {
+        let gone = {
             let mut q = lock(&self.shared.queue);
-            if q.cmds.len() >= WRITER_QUEUE {
-                // S-3: the server stopped reading. A newer speak or replace supersedes queued ones.
-                if supersedable(&cmd) {
-                    let before = q.cmds.len();
-                    q.cmds.retain(|c| !supersedable(c));
-                    let dropped = (before - q.cmds.len()) as u64;
-                    self.shared.superseded.fetch_add(dropped, Ordering::Relaxed);
-                }
-                if q.cmds.len() >= WRITER_QUEUE {
-                    return Err(SubmitError::Full);
-                }
-            }
-            q.cmds.push_back(cmd);
+            // S-3: a stop always gets through; speaks are evicted first (review F10).
+            admit(&mut q.cmds, cmd, WRITER_QUEUE, |c| c, |c| c)?
+        };
+        if !gone.is_empty() {
+            self.shared
+                .superseded
+                .fetch_add(gone.len() as u64, Ordering::Relaxed);
+            lock(&self.shared.pending).extend(gone.into_iter().map(SpeechEvent::Stopped));
         }
         self.shared.wake.notify_one();
         Ok(())
@@ -540,8 +516,10 @@ impl SpeechClient for VoicegoClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gorca_model::UttId;
     use gorca_output_api::VoiceRef;
     use gorca_testkit::MockSpeechServer;
+    use std::time::Instant;
 
     fn tmp(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("gv-{}-{name}", std::process::id()));
@@ -595,16 +573,91 @@ mod tests {
     }
 
     #[test]
-    fn default_path_comes_from_xdg_runtime_dir() {
-        let o = VoicegoOptions::with_path("/x/y.sock");
-        assert_eq!(o.resolve().unwrap(), PathBuf::from("/x/y.sock"));
+    fn default_path_is_derived_from_the_runtime_dir_value() {
+        assert_eq!(
+            default_voicego_path(Some("/run/user/1000")),
+            Some(PathBuf::from("/run/user/1000/voicego.sock"))
+        );
+        assert_eq!(default_voicego_path(Some("")), None);
+        assert_eq!(default_voicego_path(None), None);
+    }
+
+    #[tokio::test]
+    async fn a_server_of_another_user_is_refused() {
+        let d = tmp("uid");
+        let srv = MockSpeechServer::start_voicego(&d).await.unwrap();
+        let opts = VoicegoOptions::with_path(srv.socket_path());
+        let ours = own_uid().unwrap();
+        let r = VoicegoClient::connect_as(&opts, dl(2000), Some(ours.wrapping_add(1))).await;
+        assert!(matches!(
+            r,
+            Err(VoicegoError::Peer(PeerError::Other { .. }))
+        ));
+        assert!(
+            VoicegoClient::connect_as(&opts, dl(2000), Some(ours))
+                .await
+                .is_ok()
+        );
+        drop(srv);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Regression (review F10): with the server not reading, a Stop still gets through, evicts
+    /// the queued speaks (each reported `Stopped`) and reaches the server once it reads again.
+    #[tokio::test]
+    async fn a_stop_gets_through_a_full_queue() {
+        let d = tmp("stopq");
+        let srv = MockSpeechServer::start_voicego(&d).await.unwrap();
+        srv.set_speak_time(Duration::from_secs(10));
+        let mut c = connect(&srv).await;
+        c.submit(speak(1, "playing")).unwrap();
+        until(&mut c, SpeechEvent::Started(UttId(1))).await;
+        srv.set_never_read(true);
+        // Large speaks fill the socket buffers, block the writer, then fill the 4-slot queue.
+        let big = "x".repeat(512 * 1024);
+        let mut next = 10;
+        for _ in 0..40 {
+            next += 1;
+            let _ = c.submit(speak(next, &big));
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        let mut stopped = 0;
+        c.submit(SpeechCmd::Stop { id: UttId(1) })
+            .expect("a stop is never refused");
+        c.submit(SpeechCmd::StopAll)
+            .expect("a stop is never refused");
+        srv.set_never_read(false);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let seen = srv.verbs();
+            if seen.iter().any(|v| v.starts_with("STOP")) {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the STOP never arrived: {seen:?}"
+            );
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        while let Ok(Some(ev)) =
+            tokio::time::timeout(Duration::from_millis(300), c.events().recv()).await
+        {
+            if matches!(ev, SpeechEvent::Stopped(u) if u.0 > 10) {
+                stopped += 1;
+            }
+        }
+        assert!(stopped >= 1, "evicted speaks are reported Stopped");
+        assert!(c.stats().superseded >= 1);
+        drop(c);
+        drop(srv);
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]
     fn replace_is_one_write_with_stop_speak_and_data() {
         let mut p = Proto::default();
         let mut out = Vec::new();
-        encode(&replace(1, 2, "hi"), &mut p, &mut out, Instant::now(), 0);
+        encode(&replace(1, 2, "hi"), &mut p, &mut out, 0);
         let mut want = Vec::new();
         push_frame(&mut want, b"STOP self");
         push_frame(&mut want, b"SPEAK 2");
@@ -666,8 +719,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
     }
 
+    /// With a server that still has the old race (`lose_after_stop`), the loss is reported as
+    /// `Stopped` and the text is not sent again.
     #[tokio::test]
-    async fn lost_speech_after_stop_is_resent_once() {
+    async fn a_lost_speech_is_reported_stopped_not_resent() {
         let d = tmp("d");
         let srv = MockSpeechServer::start_voicego(&d).await.unwrap();
         srv.set_speak_time(Duration::from_millis(20));
@@ -676,10 +731,31 @@ mod tests {
         c.submit(speak(1, "first")).unwrap();
         until(&mut c, SpeechEvent::Started(UttId(1))).await;
         c.submit(replace(1, 2, "second")).unwrap();
-        until(&mut c, SpeechEvent::Started(UttId(2))).await;
-        assert_eq!(srv.spoken(), ["first", "second"]);
-        assert_eq!(c.stats().resends, 1);
-        until(&mut c, SpeechEvent::Ended(UttId(2))).await;
+        until(&mut c, SpeechEvent::Stopped(UttId(2))).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert_eq!(srv.spoken(), ["first"], "nothing is spoken a second time");
+        drop(c);
+        drop(srv);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Regression (review F1, probe `voicego_resend_after_stop`): an explicit Stop must never be
+    /// undone. Speak 1 and 2 right after a STOP; 2 is queued behind 1; Stop cancels both; 2
+    /// must not be spoken afterwards.
+    #[tokio::test]
+    async fn an_explicit_stop_is_never_undone_by_a_resend() {
+        let d = tmp("stop");
+        let srv = MockSpeechServer::start_voicego(&d).await.unwrap();
+        srv.set_speak_time(Duration::from_secs(10));
+        let c = connect(&srv).await;
+        c.submit(SpeechCmd::Stop { id: UttId(0) }).unwrap();
+        c.submit(speak(1, "first")).unwrap();
+        c.submit(speak(2, "stale second")).unwrap();
+        assert!(srv.wait_spoken(1, Duration::from_secs(2)).await);
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        c.submit(SpeechCmd::Stop { id: UttId(2) }).unwrap();
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert_eq!(srv.spoken(), ["first"], "stale utterance resent after Stop");
         drop(c);
         drop(srv);
         let _ = std::fs::remove_dir_all(&d);

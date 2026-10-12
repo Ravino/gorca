@@ -19,6 +19,7 @@ tokio = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 futures-lite = { workspace = true }
+smallvec = { workspace = true }
 tracing = { workspace = true }
 
 [lints]

@@ -201,6 +201,49 @@ async fn voicego_down_falls_back_to_ssip_and_back() {
     assert_eq!(voicego.spoken(), ["back on voicego"]);
 }
 
+/// Regression (review F3): leaving the SSIP fallback must cancel what it was playing and quit,
+/// or speech-dispatcher keeps talking over the returning voicego.
+#[tokio::test]
+async fn failback_cancels_and_quits_the_ssip_client_before_dropping_it() {
+    let d = tmp("g");
+    let mut voicego = MockSpeechServer::start_voicego(&d).await.unwrap();
+    let d2 = tmp("g2");
+    let ssip = MockSpeechServer::start_ssip(&d2).await.unwrap();
+    ssip.set_speak_time(Duration::from_secs(30));
+    voicego.stop().await;
+    let mut r = rig(vec![
+        voicego_backend(voicego.socket_path().to_owned()),
+        ssip_backend(ssip.socket_path().to_owned()),
+    ]);
+    let n = tokio::time::timeout(WAIT, r.notices.recv()).await.unwrap();
+    assert!(matches!(n, Some(FailoverNotice::Fallback { .. })));
+    r.focus(1, "long speech on ssip");
+    assert!(ssip.wait_spoken(1, WAIT).await);
+    assert!(ssip.live_connections() >= 1);
+
+    voicego.restart().unwrap();
+    let n = tokio::time::timeout(WAIT, r.notices.recv()).await.unwrap();
+    assert_eq!(n, Some(FailoverNotice::Restored { backend: "voicego" }));
+    assert!(
+        ssip.wait_verbs(WAIT, |v| v.iter().any(|l| l == "QUIT"))
+            .await,
+        "no QUIT: {:?}",
+        ssip.verbs()
+    );
+    let v = ssip.verbs();
+    let cancel = v
+        .iter()
+        .rposition(|l| l.starts_with("CANCEL"))
+        .unwrap_or(usize::MAX);
+    let quit = v.iter().position(|l| l == "QUIT").unwrap();
+    assert!(cancel < quit, "CANCEL must come before QUIT: {v:?}");
+    let end = Instant::now() + WAIT;
+    while ssip.live_connections() != 0 {
+        assert!(Instant::now() < end, "the SSIP connection was left open");
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
 #[tokio::test]
 async fn voicego_dying_mid_session_switches_without_losing_the_next_utterance() {
     let d = tmp("e");

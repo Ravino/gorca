@@ -22,13 +22,16 @@
 mod lower;
 
 use std::collections::VecDeque;
-use std::io;
+use std::io::{self, Write};
+use std::os::fd::{AsFd, OwnedFd};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use gorca_model::{Prio, UttId};
+use gorca_output_api::peer::{PeerError, check_peer, own_uid};
+use gorca_output_api::queue::admit;
 use gorca_output_api::track::{Block, Expect, MsgTracker, classify};
 use gorca_output_api::{
     ClientHealth, SpeechCaps, SpeechClient, SpeechCmd, SpeechEvent, SubmitError,
@@ -51,72 +54,64 @@ pub const DATA_DEADLINE: Duration = Duration::from_secs(2);
 const BLOCK_DEADLINE: Duration = Duration::from_secs(5);
 const TERMINAL_SEND_DEADLINE: Duration = Duration::from_secs(1);
 const MAX_LINE: u64 = 1 << 20;
+/// A reply or event block (`NNN-` continuation lines and all) is cut off at this size.
+const MAX_BLOCK: usize = 64 * 1024;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SsipError {
-    #[error("no speech-dispatcher socket: neither SPEECHD_ADDRESS nor XDG_RUNTIME_DIR is set")]
-    NoSocketPath,
-    #[error("unsupported SPEECHD_ADDRESS `{0}` (only unix_socket:path=... is handled)")]
-    UnsupportedAddress(String),
     #[error("speech-dispatcher socket: {0}")]
     Io(#[from] io::Error),
     #[error("speech-dispatcher did not answer in time")]
     Timeout,
     #[error("SSIP handshake failed: {0}")]
     Handshake(String),
+    #[error("refusing the speech-dispatcher socket: {0}")]
+    Peer(#[from] PeerError),
 }
 
 #[derive(Clone, Debug)]
 pub struct SsipOptions {
-    /// Socket path; `None` means the environment, then `$XDG_RUNTIME_DIR/speech-dispatcher/
-    /// speechd.sock`.
-    pub path: Option<PathBuf>,
+    /// Socket path. This crate never looks at the environment: the daemon resolves it
+    /// ([`ssip_path_from_env_values`]) and passes it in.
+    pub path: PathBuf,
     pub client_name: String,
-}
-
-impl Default for SsipOptions {
-    fn default() -> Self {
-        Self {
-            path: None,
-            client_name: "gorca:main:main".to_owned(),
-        }
-    }
-}
-
-/// `unix_socket:path=/x/y` (the `SPEECHD_ADDRESS` form) or a plain path.
-fn parse_address(v: &str) -> Result<PathBuf, SsipError> {
-    if let Some(p) = v.strip_prefix("unix_socket:path=") {
-        return Ok(PathBuf::from(p));
-    }
-    if v.starts_with('/') {
-        return Ok(PathBuf::from(v));
-    }
-    Err(SsipError::UnsupportedAddress(v.to_owned()))
 }
 
 impl SsipOptions {
     pub fn with_path(path: impl Into<PathBuf>) -> Self {
         Self {
-            path: Some(path.into()),
-            ..Self::default()
+            path: path.into(),
+            client_name: "gorca:main:main".to_owned(),
         }
     }
+}
 
-    /// Resolve from explicit path, `SPEECHD_ADDRESS`, `SPEECHD_SOCKET`, then the default.
-    pub fn resolve(&self) -> Result<PathBuf, SsipError> {
-        if let Some(p) = &self.path {
-            return Ok(p.clone());
-        }
-        for var in ["SPEECHD_ADDRESS", "SPEECHD_SOCKET"] {
-            if let Ok(v) = std::env::var(var)
-                && !v.is_empty()
-            {
-                return parse_address(&v);
-            }
-        }
-        let dir = std::env::var_os("XDG_RUNTIME_DIR").ok_or(SsipError::NoSocketPath)?;
-        Ok(PathBuf::from(dir).join("speech-dispatcher/speechd.sock"))
+/// `unix_socket:path=/x/y` (the `SPEECHD_ADDRESS` form) or a plain absolute path. Anything
+/// else (`inet_socket:...`) is not handled.
+fn parse_address(v: &str) -> Option<PathBuf> {
+    if let Some(p) = v.strip_prefix("unix_socket:path=") {
+        return Some(PathBuf::from(p));
     }
+    v.starts_with('/').then(|| PathBuf::from(v))
+}
+
+/// The speech-dispatcher socket given the values of `SPEECHD_ADDRESS`, `SPEECHD_SOCKET` and
+/// `XDG_RUNTIME_DIR` (pure; the caller reads the environment). The first non-empty of the two
+/// speechd variables wins; if it is not a unix socket address the result is `None` rather than a
+/// silently different server.
+pub fn ssip_path_from_env_values(
+    speechd_address: Option<&str>,
+    speechd_socket: Option<&str>,
+    xdg_runtime_dir: Option<&str>,
+) -> Option<PathBuf> {
+    for v in [speechd_address, speechd_socket].into_iter().flatten() {
+        if !v.is_empty() {
+            return parse_address(v);
+        }
+    }
+    xdg_runtime_dir
+        .filter(|d| !d.is_empty())
+        .map(|d| PathBuf::from(d).join("speech-dispatcher/speechd.sock"))
 }
 
 fn health_to_u8(h: ClientHealth) -> u8 {
@@ -154,6 +149,12 @@ struct Shared {
     queue: Mutex<VecDeque<SpeechCmd>>,
     wake: Notify,
     proto: Mutex<Proto>,
+    /// Terminal events of commands evicted before they were written (see `deliver_pending`).
+    pending: Mutex<VecDeque<SpeechEvent>>,
+    /// `close()` was called: write `QUIT` once the queue is empty.
+    quit: AtomicBool,
+    /// `CANCEL`/`QUIT` went out (by the writer or by `Drop`).
+    goodbye: AtomicBool,
     cancel: CancellationToken,
     writes: AtomicU64,
     superseded: AtomicU64,
@@ -264,6 +265,12 @@ async fn read_block(
         if block.last() != Some(&b'\n') {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "line too long"));
         }
+        if block.len() > MAX_BLOCK {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "block too large",
+            ));
+        }
         let line = block.get(start..).unwrap_or(&[]);
         let final_line = line.get(3) == Some(&b' ') || line.len() < 4;
         if final_line {
@@ -295,11 +302,11 @@ async fn reader(shared: Arc<Shared>, rd: OwnedReadHalf, tx: mpsc::Sender<SpeechE
                     true
                 }
                 Block::Reply { code, msg_id } => {
-                    let _ = p.tracker.on_reply(code, msg_id, &mut evs);
+                    p.tracker.on_reply(code, msg_id, &mut evs);
                     false
                 }
                 Block::Event { ev, msg } => {
-                    let _ = p.tracker.on_event(ev, msg, &mut evs);
+                    p.tracker.on_event(ev, msg, &mut evs);
                     false
                 }
                 Block::Garbage => false,
@@ -344,8 +351,17 @@ async fn write_batch(
     }
 }
 
-async fn writer(shared: Arc<Shared>, mut wr: OwnedWriteHalf) {
+async fn deliver_pending(shared: &Shared, tx: &mpsc::Sender<SpeechEvent>) {
+    loop {
+        let ev = lock(&shared.pending).pop_front();
+        let Some(ev) = ev else { return };
+        forward(tx, ev).await;
+    }
+}
+
+async fn writer(shared: Arc<Shared>, mut wr: OwnedWriteHalf, tx: mpsc::Sender<SpeechEvent>) {
     let mut buf: Vec<u8> = Vec::with_capacity(1024);
+    let mut quit_sent = false;
     loop {
         let awaiting = lock(&shared.proto).awaiting_230;
         let wait = async {
@@ -369,6 +385,7 @@ async fn writer(shared: Arc<Shared>, mut wr: OwnedWriteHalf) {
         } else if !wait.await {
             return;
         }
+        deliver_pending(&shared, &tx).await;
         loop {
             buf.clear();
             {
@@ -384,11 +401,27 @@ async fn writer(shared: Arc<Shared>, mut wr: OwnedWriteHalf) {
                 }
             }
             if buf.is_empty() {
-                break;
+                let idle = {
+                    let p = lock(&shared.proto);
+                    !p.awaiting_230 && p.pending_body.is_none()
+                };
+                if idle && !quit_sent && shared.quit.load(Ordering::Acquire) {
+                    // Everything queued before `close()` is out: say goodbye.
+                    quit_sent = true;
+                    shared.goodbye.store(true, Ordering::Release);
+                    buf.extend_from_slice(b"QUIT\r\n");
+                } else {
+                    break;
+                }
             }
             shared.writes.fetch_add(1, Ordering::Relaxed);
             if let Err(e) = write_batch(&shared, &mut wr, &buf).await {
                 tracing::debug!(error = %e, "SSIP write failed");
+                shared.set_health(ClientHealth::Down);
+                shared.cancel.cancel();
+                return;
+            }
+            if quit_sent {
                 shared.set_health(ClientHealth::Down);
                 shared.cancel.cancel();
                 return;
@@ -409,6 +442,8 @@ pub struct SsipClient {
     caps: SpeechCaps,
     shared: Arc<Shared>,
     events: mpsc::Receiver<SpeechEvent>,
+    /// A duplicate of the socket, so `Drop` can still say goodbye after the tasks are gone.
+    closer: Option<OwnedFd>,
     _tasks: TaskSet,
 }
 
@@ -433,10 +468,21 @@ async fn read_reply(
 impl SsipClient {
     /// Connect and run the handshake (`CLIENT_NAME`, `NOTIFICATION all on`), under `deadline`.
     pub async fn connect(opts: &SsipOptions, deadline: Deadline) -> Result<SsipClient, SsipError> {
-        let path = opts.resolve()?;
-        let stream = with_deadline(deadline, UnixStream::connect(&path))
+        Self::connect_as(opts, deadline, own_uid()).await
+    }
+
+    /// [`connect`](Self::connect) with the uid the peer must have (tests pass a foreign one).
+    pub async fn connect_as(
+        opts: &SsipOptions,
+        deadline: Deadline,
+        own: Option<u32>,
+    ) -> Result<SsipClient, SsipError> {
+        let stream = with_deadline(deadline, UnixStream::connect(&opts.path))
             .await
             .map_err(|_| SsipError::Timeout)??;
+        // Everything gorca reads is sent here: only talk to our own user's server.
+        check_peer(stream.peer_cred()?.uid(), own)?;
+        let closer = stream.as_fd().try_clone_to_owned().ok();
         let (rd, mut wr) = stream.into_split();
         let mut rd = BufReader::new(rd);
         let mut hello = Vec::new();
@@ -471,6 +517,9 @@ impl SsipClient {
             queue: Mutex::new(VecDeque::new()),
             wake: Notify::new(),
             proto: Mutex::new(Proto::default()),
+            pending: Mutex::new(VecDeque::new()),
+            quit: AtomicBool::new(false),
+            goodbye: AtomicBool::new(false),
             cancel: cancel.clone(),
             writes: AtomicU64::new(0),
             superseded: AtomicU64::new(0),
@@ -479,13 +528,14 @@ impl SsipClient {
         let mut tasks = TaskSet::new(cancel);
         tasks.spawn(
             "ssip-reader",
-            reader(Arc::clone(&shared), rd.into_inner(), etx),
+            reader(Arc::clone(&shared), rd.into_inner(), etx.clone()),
         );
-        tasks.spawn("ssip-writer", writer(Arc::clone(&shared), wr));
+        tasks.spawn("ssip-writer", writer(Arc::clone(&shared), wr, etx));
         Ok(SsipClient {
             caps: SsipTransportCaps::caps(),
             shared,
             events: erx,
+            closer,
             _tasks: tasks,
         })
     }
@@ -499,19 +549,22 @@ impl SsipClient {
 }
 
 impl Drop for SsipClient {
+    /// speech-dispatcher keeps playing what a vanished client queued, so a client that is
+    /// dropped (failback, shutdown) cancels its speech and quits first, best effort. Not when a
+    /// `SPEAK` body is half written: the connection is closed right after anyway.
     fn drop(&mut self) {
+        if !self.shared.is_down() && !self.shared.goodbye.swap(true, Ordering::AcqRel) {
+            let idle = {
+                let p = lock(&self.shared.proto);
+                !p.awaiting_230 && p.pending_body.is_none()
+            };
+            if idle && let Some(fd) = self.closer.take() {
+                let mut s = std::os::unix::net::UnixStream::from(fd);
+                let _ = s.set_nonblocking(true);
+                let _ = s.write(b"CANCEL self\r\nQUIT\r\n");
+            }
+        }
         self.shared.cancel.cancel();
-    }
-}
-
-fn supersedable(c: &SpeechCmd) -> bool {
-    match c {
-        SpeechCmd::Speak { .. } | SpeechCmd::Replace { .. } => true,
-        SpeechCmd::Stop { .. }
-        | SpeechCmd::StopAll
-        | SpeechCmd::Pause
-        | SpeechCmd::Resume
-        | SpeechCmd::SetParams(_) => false,
     }
 }
 
@@ -524,24 +577,24 @@ impl SpeechClient for SsipClient {
         if self.shared.is_down() {
             return Err(SubmitError::Disconnected);
         }
-        {
+        let gone = {
             let mut q = lock(&self.shared.queue);
-            if q.len() >= WRITER_QUEUE {
-                if supersedable(&cmd) {
-                    let before = q.len();
-                    q.retain(|c| !supersedable(c));
-                    self.shared
-                        .superseded
-                        .fetch_add((before - q.len()) as u64, Ordering::Relaxed);
-                }
-                if q.len() >= WRITER_QUEUE {
-                    return Err(SubmitError::Full);
-                }
-            }
-            q.push_back(cmd);
+            // S-3: a stop always gets through; speaks are evicted first (review F10).
+            admit(&mut q, cmd, WRITER_QUEUE, |c| c, |c| c)?
+        };
+        if !gone.is_empty() {
+            self.shared
+                .superseded
+                .fetch_add(gone.len() as u64, Ordering::Relaxed);
+            lock(&self.shared.pending).extend(gone.into_iter().map(SpeechEvent::Stopped));
         }
         self.shared.wake.notify_one();
         Ok(())
+    }
+
+    fn close(&self) {
+        self.shared.quit.store(true, Ordering::Release);
+        self.shared.wake.notify_one();
     }
 
     fn events(&mut self) -> &mut mpsc::Receiver<SpeechEvent> {
@@ -604,18 +657,189 @@ mod tests {
     #[test]
     fn addresses() {
         assert_eq!(
-            parse_address("unix_socket:path=/run/x.sock").unwrap(),
-            PathBuf::from("/run/x.sock")
+            parse_address("unix_socket:path=/run/x.sock"),
+            Some(PathBuf::from("/run/x.sock"))
         );
-        assert_eq!(parse_address("/a/b").unwrap(), PathBuf::from("/a/b"));
-        assert!(matches!(
-            parse_address("inet_socket:host=h,port=6560"),
-            Err(SsipError::UnsupportedAddress(_))
-        ));
+        assert_eq!(parse_address("/a/b"), Some(PathBuf::from("/a/b")));
+        assert_eq!(parse_address("inet_socket:host=h,port=6560"), None);
+    }
+
+    #[test]
+    fn the_path_comes_from_values_in_priority_order() {
+        let p = |a, s, x| ssip_path_from_env_values(a, s, x);
         assert_eq!(
-            SsipOptions::with_path("/p").resolve().unwrap(),
-            PathBuf::from("/p")
+            p(
+                Some("unix_socket:path=/a.sock"),
+                Some("/b.sock"),
+                Some("/run/u")
+            ),
+            Some(PathBuf::from("/a.sock"))
         );
+        assert_eq!(
+            p(None, Some("/b.sock"), Some("/run/u")),
+            Some(PathBuf::from("/b.sock"))
+        );
+        assert_eq!(
+            p(Some(""), None, Some("/run/u")),
+            Some(PathBuf::from("/run/u/speech-dispatcher/speechd.sock"))
+        );
+        assert_eq!(p(None, None, None), None);
+        assert_eq!(p(None, None, Some("")), None);
+        // A TCP address is not silently replaced by the default socket.
+        assert_eq!(
+            p(Some("inet_socket:host=h,port=1"), None, Some("/run/u")),
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn a_server_of_another_user_is_refused() {
+        let d = tmp("uid");
+        let srv = MockSpeechServer::start_ssip(&d).await.unwrap();
+        let opts = SsipOptions::with_path(srv.socket_path());
+        let ours = own_uid().unwrap();
+        let r = SsipClient::connect_as(&opts, dl(2000), Some(ours.wrapping_add(1))).await;
+        assert!(matches!(r, Err(SsipError::Peer(PeerError::Other { .. }))));
+        assert!(
+            SsipClient::connect_as(&opts, dl(2000), Some(ours))
+                .await
+                .is_ok()
+        );
+        drop(srv);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// F13: a reply block of continuation lines is cut off at 64 KiB in total.
+    #[tokio::test]
+    async fn an_endless_continuation_block_fails_the_connection() {
+        let d = tmp("blk");
+        let p = d.join("blk.sock");
+        let l = tokio::net::UnixListener::bind(&p).unwrap();
+        let server = tokio::spawn(async move {
+            let (mut s, _) = l.accept().await.unwrap();
+            let mut buf = [0u8; 512];
+            // Answer the two handshake lines normally.
+            let mut got = 0;
+            while got < 2 {
+                let n = s.read(&mut buf).await.unwrap();
+                got += buf[..n].split(|b| *b == b'\n').count() - 1;
+            }
+            s.write_all(b"208 OK\r\n220 OK\r\n").await.unwrap();
+            // Then a block that never ends.
+            let line = format!("249-{}\r\n", "v".repeat(900));
+            for _ in 0..200 {
+                if s.write_all(line.as_bytes()).await.is_err() {
+                    return;
+                }
+            }
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        });
+        let c = SsipClient::connect(&SsipOptions::with_path(&p), dl(2000))
+            .await
+            .unwrap();
+        let end = Instant::now() + Duration::from_secs(3);
+        while c.health() != ClientHealth::Down {
+            assert!(Instant::now() < end, "the oversized block was accepted");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        drop(c);
+        server.abort();
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Regression (review F10): a stop gets through a full queue and evicted speaks are
+    /// reported `Stopped`.
+    #[tokio::test]
+    async fn a_stop_gets_through_a_full_queue() {
+        let d = tmp("stopq");
+        let srv = MockSpeechServer::start_ssip(&d).await.unwrap();
+        srv.set_speak_time(Duration::from_secs(10));
+        let mut c = connect(&srv).await;
+        c.submit(speak(1, "playing")).unwrap();
+        until(&mut c, SpeechEvent::Started(UttId(1))).await;
+        srv.set_never_read(true);
+        let big = "x".repeat(512 * 1024);
+        for i in 11..60 {
+            let _ = c.submit(speak(i, &big));
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        c.submit(SpeechCmd::Stop { id: UttId(1) })
+            .expect("a stop is never refused");
+        c.submit(SpeechCmd::StopAll)
+            .expect("a stop is never refused");
+        assert!(c.stats().superseded >= 1);
+        srv.set_never_read(false);
+        assert!(
+            srv.wait_verbs(Duration::from_secs(5), |v| v
+                .iter()
+                .any(|l| l.starts_with("STOP") || l.starts_with("CANCEL")))
+                .await
+        );
+        let mut stopped = 0;
+        while let Ok(Some(ev)) =
+            tokio::time::timeout(Duration::from_millis(300), c.events().recv()).await
+        {
+            if matches!(ev, SpeechEvent::Stopped(u) if u.0 > 10) {
+                stopped += 1;
+            }
+        }
+        assert!(stopped >= 1, "evicted speaks are reported Stopped");
+        drop(c);
+        drop(srv);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// F3: dropping a client cancels its speech and quits, so speech-dispatcher stops playing.
+    #[tokio::test]
+    async fn dropping_a_client_cancels_and_quits() {
+        let d = tmp("drop");
+        let srv = MockSpeechServer::start_ssip(&d).await.unwrap();
+        srv.set_speak_time(Duration::from_secs(10));
+        let mut c = connect(&srv).await;
+        c.submit(speak(1, "playing")).unwrap();
+        until(&mut c, SpeechEvent::Started(UttId(1))).await;
+        drop(c);
+        assert!(
+            srv.wait_verbs(Duration::from_secs(3), |v| v.iter().any(|l| l == "QUIT"))
+                .await,
+            "{:?}",
+            srv.verbs()
+        );
+        let v = srv.verbs();
+        let cancel = v.iter().rposition(|l| l.starts_with("CANCEL")).unwrap();
+        let quit = v.iter().position(|l| l == "QUIT").unwrap();
+        assert!(cancel < quit, "{v:?}");
+        drop(srv);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// F3: `close()` writes QUIT after everything queued before it.
+    #[tokio::test]
+    async fn close_sends_cancel_then_quit_and_ends_the_connection() {
+        let d = tmp("quit");
+        let srv = MockSpeechServer::start_ssip(&d).await.unwrap();
+        srv.set_speak_time(Duration::from_secs(10));
+        let mut c = connect(&srv).await;
+        c.submit(speak(1, "playing")).unwrap();
+        until(&mut c, SpeechEvent::Started(UttId(1))).await;
+        c.submit(SpeechCmd::StopAll).unwrap();
+        c.close();
+        assert!(
+            srv.wait_verbs(Duration::from_secs(3), |v| v.iter().any(|l| l == "QUIT"))
+                .await
+        );
+        let v = srv.verbs();
+        let cancel = v.iter().position(|l| l.starts_with("CANCEL")).unwrap();
+        let quit = v.iter().position(|l| l == "QUIT").unwrap();
+        assert!(cancel < quit, "{v:?}");
+        let end = Instant::now() + Duration::from_secs(3);
+        while c.health() != ClientHealth::Down {
+            assert!(Instant::now() < end);
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        drop(c);
+        drop(srv);
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[tokio::test]

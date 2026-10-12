@@ -11,9 +11,12 @@
 //!   `UttId`. A `701` may arrive before its `225`: such events are parked and replayed on bind.
 //! - A `5xx` reply with nothing outstanding is an unsolicited failure of the oldest unfinished
 //!   message.
-//! - `703 CANCELED` for an utterance that was replaced by our own `STOP` is swallowed. If the
-//!   *new* utterance is cancelled right after a pipelined `STOP` before it ever started, a
-//!   pre-fix voicegod lost it: the tracker asks the client to resend it once.
+//! - A `4xx`/`5xx` that carries a message id (`502-<id>`, voicego main, binary framing) fails the
+//!   utterance bound to that id and leaves the pending-reply bookkeeping alone.
+//! - `703 CANCELED` for an utterance that was replaced by our own `STOP` is swallowed.
+//!
+//! There is deliberately no resend: a stopped utterance is never spoken again (current voicego
+//! has the STOP/SPEAK race fixed, `TestStopThenSpeakNotLost`).
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
@@ -47,26 +50,6 @@ pub enum ServerEvent {
     Mark(u32),
 }
 
-/// What the client must do besides forwarding events.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Reaction {
-    None,
-    /// Write these bytes again (a whole `SPEAK` command); the client registers
-    /// `Expect::Speak` for it as for any other speak.
-    Resend {
-        utt: UttId,
-        bytes: Vec<u8>,
-    },
-}
-
-#[derive(Debug)]
-struct Guard {
-    utt: UttId,
-    bytes: Vec<u8>,
-    started: bool,
-    resent: bool,
-}
-
 #[derive(Debug, Default)]
 pub struct MsgTracker {
     expects: VecDeque<Expect>,
@@ -74,8 +57,6 @@ pub struct MsgTracker {
     order: VecDeque<u64>,
     early: VecDeque<(u64, ServerEvent)>,
     replaced: VecDeque<UttId>,
-    guard: Option<Guard>,
-    resends: u64,
 }
 
 impl MsgTracker {
@@ -96,22 +77,6 @@ impl MsgTracker {
         self.replaced.push_back(utt);
     }
 
-    /// `utt` was written right after a `STOP`. If it is cancelled before it starts, `bytes` (the
-    /// complete `SPEAK` command) are sent once more.
-    pub fn arm_guard(&mut self, utt: UttId, bytes: Vec<u8>) {
-        self.guard = Some(Guard {
-            utt,
-            bytes,
-            started: false,
-            resent: false,
-        });
-    }
-
-    /// Resends requested so far.
-    pub fn resends(&self) -> u64 {
-        self.resends
-    }
-
     pub fn outstanding(&self) -> usize {
         self.expects.len()
     }
@@ -121,24 +86,26 @@ impl MsgTracker {
     }
 
     /// A non-`7xx` reply frame.
-    pub fn on_reply(
-        &mut self,
-        code: u16,
-        msg_id: Option<u64>,
-        out: &mut Vec<SpeechEvent>,
-    ) -> Reaction {
+    pub fn on_reply(&mut self, code: u16, msg_id: Option<u64>, out: &mut Vec<SpeechEvent>) {
         match code {
             // Intermediate reply of SPEAK ("OK RECEIVING DATA").
-            230 => Reaction::None,
+            230 => {}
             225 => match self.expects.pop_front() {
-                Some(Expect::Speak(u)) => match msg_id {
-                    Some(id) => self.bind(u, id, out),
-                    None => Reaction::None,
-                },
+                Some(Expect::Speak(u)) => {
+                    if let Some(id) = msg_id {
+                        self.bind(u, id, out);
+                    }
+                }
                 // Desynchronised (a reply nobody asked for): ignore rather than guess.
-                Some(Expect::Simple) | None => Reaction::None,
+                Some(Expect::Simple) | None => {}
             },
             400..=599 => {
+                if let Some(id) = msg_id {
+                    // An asynchronous failure names its message: fail that utterance only.
+                    // The pending replies belong to other commands and stay queued.
+                    self.fail_id(id, out, code);
+                    return;
+                }
                 match self.expects.front().copied() {
                     Some(Expect::Speak(u)) => {
                         self.expects.pop_front();
@@ -162,18 +129,27 @@ impl MsgTracker {
                         }
                     }
                 }
-                Reaction::None
             }
             _ => {
                 if self.expects.front() == Some(&Expect::Simple) {
                     self.expects.pop_front();
                 }
-                Reaction::None
             }
         }
     }
 
-    fn bind(&mut self, utt: UttId, id: u64, out: &mut Vec<SpeechEvent>) -> Reaction {
+    fn fail_id(&mut self, id: u64, out: &mut Vec<SpeechEvent>, code: u16) {
+        if let Some(u) = self.ids.remove(&id) {
+            self.order.retain(|m| *m != id);
+            out.push(SpeechEvent::Error(
+                u,
+                SpeechErr::Other(Arc::from(format!("async {code}"))),
+            ));
+        }
+        self.early.retain(|(m, _)| *m != id);
+    }
+
+    fn bind(&mut self, utt: UttId, id: u64, out: &mut Vec<SpeechEvent>) {
         if self.order.len() >= MAX_LIVE
             && let Some(old) = self.order.pop_front()
         {
@@ -182,33 +158,28 @@ impl MsgTracker {
         self.ids.insert(id, utt);
         self.order.push_back(id);
         out.push(SpeechEvent::Accepted(utt));
-        let mut reaction = Reaction::None;
         let mut i = 0;
         while i < self.early.len() {
             if self.early.get(i).is_some_and(|(m, _)| *m == id) {
                 if let Some((_, ev)) = self.early.remove(i) {
-                    let r = self.apply(utt, id, ev, out);
-                    if r != Reaction::None {
-                        reaction = r;
-                    }
+                    self.apply(utt, id, ev, out);
                 }
             } else {
                 i += 1;
             }
         }
-        reaction
     }
 
     /// A `7xx` event for server message `msg`.
-    pub fn on_event(&mut self, ev: ServerEvent, msg: u64, out: &mut Vec<SpeechEvent>) -> Reaction {
+    pub fn on_event(&mut self, ev: ServerEvent, msg: u64, out: &mut Vec<SpeechEvent>) {
         if let Some(u) = self.ids.get(&msg).copied() {
-            return self.apply(u, msg, ev, out);
+            self.apply(u, msg, ev, out);
+            return;
         }
         if self.early.len() >= MAX_EARLY {
             self.early.pop_front();
         }
         self.early.push_back((msg, ev));
-        Reaction::None
     }
 
     fn forget(&mut self, msg: u64) {
@@ -216,56 +187,22 @@ impl MsgTracker {
         self.order.retain(|m| *m != msg);
     }
 
-    fn apply(
-        &mut self,
-        utt: UttId,
-        msg: u64,
-        ev: ServerEvent,
-        out: &mut Vec<SpeechEvent>,
-    ) -> Reaction {
+    fn apply(&mut self, utt: UttId, msg: u64, ev: ServerEvent, out: &mut Vec<SpeechEvent>) {
         match ev {
-            ServerEvent::Begin => {
-                if let Some(g) = self.guard.as_mut()
-                    && g.utt == utt
-                {
-                    g.started = true;
-                }
-                out.push(SpeechEvent::Started(utt));
-                Reaction::None
-            }
+            ServerEvent::Begin => out.push(SpeechEvent::Started(utt)),
             ServerEvent::End => {
                 self.forget(msg);
-                if self.guard.as_ref().is_some_and(|g| g.utt == utt) {
-                    self.guard = None;
-                }
                 out.push(SpeechEvent::Ended(utt));
-                Reaction::None
             }
             ServerEvent::Canceled => {
                 self.forget(msg);
                 if let Some(i) = self.replaced.iter().position(|u| *u == utt) {
                     self.replaced.remove(i);
-                    return Reaction::None;
-                }
-                if let Some(g) = self.guard.as_mut()
-                    && g.utt == utt
-                    && !g.started
-                    && !g.resent
-                {
-                    g.resent = true;
-                    self.resends += 1;
-                    return Reaction::Resend {
-                        utt,
-                        bytes: g.bytes.clone(),
-                    };
+                    return;
                 }
                 out.push(SpeechEvent::Stopped(utt));
-                Reaction::None
             }
-            ServerEvent::Mark(n) => {
-                out.push(SpeechEvent::Mark(utt, n));
-                Reaction::None
-            }
+            ServerEvent::Mark(n) => out.push(SpeechEvent::Mark(utt, n)),
         }
     }
 
@@ -283,7 +220,6 @@ impl MsgTracker {
         }
         self.ids.clear();
         self.early.clear();
-        self.guard = None;
     }
 }
 
@@ -456,51 +392,19 @@ mod tests {
         speak(&mut t, 1, 1, &mut out);
         out.clear();
         t.mark_replaced(u(1));
-        assert_eq!(
-            t.on_event(ServerEvent::Canceled, 1, &mut out),
-            Reaction::None
-        );
+        t.on_event(ServerEvent::Canceled, 1, &mut out);
         assert!(out.is_empty());
     }
 
     #[test]
-    fn lost_speech_after_stop_is_resent_exactly_once() {
+    fn a_cancelled_utterance_is_reported_stopped_and_never_resent() {
         let mut t = MsgTracker::new();
         let mut out = Vec::new();
-        t.arm_guard(u(2), b"SPEAK".to_vec());
         speak(&mut t, 2, 5, &mut out);
-        out.clear();
-        let r = t.on_event(ServerEvent::Canceled, 5, &mut out);
-        assert_eq!(
-            r,
-            Reaction::Resend {
-                utt: u(2),
-                bytes: b"SPEAK".to_vec()
-            }
-        );
-        assert!(out.is_empty(), "the cancel is not reported when resending");
-        assert_eq!(t.resends(), 1);
-        // The resend gets a new id and is cancelled again: now it is reported.
-        speak(&mut t, 2, 6, &mut out);
-        out.clear();
-        assert_eq!(
-            t.on_event(ServerEvent::Canceled, 6, &mut out),
-            Reaction::None
-        );
-        assert_eq!(out, [SpeechEvent::Stopped(u(2))]);
-    }
-
-    #[test]
-    fn a_started_utterance_is_not_resent() {
-        let mut t = MsgTracker::new();
-        let mut out = Vec::new();
-        t.arm_guard(u(2), b"x".to_vec());
-        speak(&mut t, 2, 5, &mut out);
-        t.on_event(ServerEvent::Begin, 5, &mut out);
         out.clear();
         t.on_event(ServerEvent::Canceled, 5, &mut out);
         assert_eq!(out, [SpeechEvent::Stopped(u(2))]);
-        assert_eq!(t.resends(), 0);
+        assert_eq!(t.live(), 0);
     }
 
     #[test]
@@ -518,6 +422,58 @@ mod tests {
         t.on_reply(502, None, &mut out);
         assert!(matches!(out[0], SpeechEvent::Error(id, _) if id == u(2)));
         assert_eq!(t.live(), 0);
+    }
+
+    /// Regression (review F2, probe `tracker_502_with_id`): voicego main sends an async failure
+    /// as `502-<id>` / `502 ERR INTERNAL`. It fails the utterance with that id, not the oldest
+    /// outstanding SPEAK.
+    #[test]
+    fn async_502_with_id_fails_the_utterance_with_that_id() {
+        fn feed(t: &mut MsgTracker, raw: &[u8], out: &mut Vec<SpeechEvent>) {
+            match classify(raw) {
+                Block::Reply { code, msg_id } => {
+                    t.on_reply(code, msg_id, out);
+                }
+                Block::Event { ev, msg } => {
+                    t.on_event(ev, msg, out);
+                }
+                Block::Garbage => {}
+            }
+        }
+        let mut t = MsgTracker::new();
+        let mut out = Vec::new();
+        t.expect(Expect::Speak(u(1)));
+        feed(&mut t, b"230 OK RECEIVING DATA\r\n", &mut out);
+        feed(&mut t, b"225-100\r\n225 OK MESSAGE QUEUED\r\n", &mut out);
+        t.expect(Expect::Speak(u(2)));
+        feed(&mut t, b"502-100\r\n502 ERR INTERNAL\r\n", &mut out);
+        feed(&mut t, b"230 OK RECEIVING DATA\r\n", &mut out);
+        feed(&mut t, b"225-101\r\n225 OK MESSAGE QUEUED\r\n", &mut out);
+        feed(&mut t, b"701-101\r\n701-1\r\n701 BEGIN\r\n", &mut out);
+        feed(&mut t, b"702-101\r\n702-1\r\n702 END\r\n", &mut out);
+        assert!(
+            out.iter()
+                .any(|e| matches!(e, SpeechEvent::Error(x, _) if *x == u(1))),
+            "utt 1 gets its terminal event: {out:?}"
+        );
+        assert!(out.contains(&SpeechEvent::Ended(u(2))), "{out:?}");
+        assert!(
+            !out.iter()
+                .any(|e| matches!(e, SpeechEvent::Error(x, _) if *x == u(2))),
+            "utt 2 was spoken and must not be reported failed: {out:?}"
+        );
+        assert_eq!(t.live(), 0);
+        // An id-less 5xx keeps the old behaviour (oldest unfinished message).
+        speak(&mut t, 3, 200, &mut out);
+        out.clear();
+        t.on_reply(502, None, &mut out);
+        assert!(matches!(out[0], SpeechEvent::Error(x, _) if x == u(3)));
+        // An error for an id nobody knows is ignored.
+        out.clear();
+        t.expect(Expect::Speak(u(4)));
+        t.on_reply(502, Some(999), &mut out);
+        assert!(out.is_empty());
+        assert_eq!(t.outstanding(), 1, "the pending SPEAK is untouched");
     }
 
     #[test]

@@ -36,6 +36,20 @@ const RELATION_LABELLED_BY: u32 = 2;
 /// Characters of an entry's text that are fetched for the focus presentation.
 const ENTRY_TEXT_CHARS: i32 = 1024;
 
+/// Single-line entries present their text on focus. Password fields are no exception: gorca
+/// reads what the application exposes (product decision), and never logs it.
+pub fn wants_entry_text(role: Role, states: gorca_model::StateSet) -> bool {
+    matches!(role, Role::TextEntry | Role::PasswordEntry)
+        && !states.contains(gorca_model::StateSet::MULTILINE)
+}
+
+/// A `LabelledBy` target is read only when it lives in the application being presented: the
+/// relation is app-supplied, and gorca must not let an application aim its calls (and the focus
+/// deadline) at another peer.
+pub fn label_may_be_read(target_bus: &str, app_bus: &str) -> bool {
+    target_bus == app_bus
+}
+
 /// Map a D-Bus failure to the connector error vocabulary (C-2, C-6).
 pub fn backend_error(e: &DbusError) -> BackendError {
     match e {
@@ -225,6 +239,7 @@ impl Caller {
         }
         if raw.name.as_deref().is_none_or(str::is_empty)
             && let Ok(Some((bus, p))) = self.label_target(path, deadline).await
+            && label_may_be_read(&bus, &self.bus_name)
             && let Ok(label) = self.name_of(&bus, &p, deadline).await
         {
             raw.name = Some(label);
@@ -252,11 +267,13 @@ impl Caller {
                     max: max.unwrap_or(f64::NAN),
                 })
             }
-            Role::TextEntry if !states.contains(gorca_model::StateSet::MULTILINE) => {
+            // Product decision: gorca reads whatever the application exposes, password fields
+            // included. The text is never logged.
+            Role::TextEntry | Role::PasswordEntry if wants_entry_text(role, states) => {
                 let t = self.text_prefix(path, deadline).await.ok()?;
                 Some(RawValue::Text(clip(&t, MAX_TEXT_BYTES).to_owned()))
             }
-            // Passwords are never spoken; everything else has no value on focus.
+            // Everything else has no value on focus.
             Role::PasswordEntry
             | Role::TextEntry
             | Role::Unknown
@@ -331,15 +348,33 @@ impl AppServer {
     /// Serve requests until the app is gone or the connector shuts down. Owns the port.
     pub async fn run(self, mut port: AppPort) {
         let mut requests = std::mem::replace(&mut port.requests, closed_receiver());
-        self.announce_info(&port).await;
         let permits = Arc::new(Semaphore::new(MAX_IN_FLIGHT));
         let mut inflight: JoinSet<()> = JoinSet::new();
+        // Identifying the application is informational and may be slow: requests (the first
+        // focus the user is waiting for) are served meanwhile.
+        let (info_tx, mut info_rx) = tokio::sync::oneshot::channel::<(String, String)>();
+        {
+            let (caller, clock) = (self.caller.clone(), self.clock.clone());
+            inflight.spawn(async move {
+                let deadline = Deadline::for_class(&clock, gorca_rt::BudgetClass::Startup);
+                if let Some(found) = caller.app_info(deadline).await {
+                    let _ = info_tx.send(found);
+                }
+            });
+        }
+        let mut info_pending = true;
         loop {
             tokio::select! {
                 biased;
                 () = self.shutdown.cancelled() => break,
                 () = self.gone.cancelled() => break,
                 Some(req) = requests.recv() => self.accept(req, &permits, &mut inflight),
+                found = &mut info_rx, if info_pending => {
+                    info_pending = false;
+                    if let Ok((toolkit, app_name)) = found {
+                        announce_info(&port, &toolkit, &app_name);
+                    }
+                }
                 Some(_) = inflight.join_next() => {}
                 else => break,
             }
@@ -348,23 +383,6 @@ impl AppServer {
         if self.gone.is_cancelled() {
             send_gone(&port).await;
         }
-    }
-
-    async fn announce_info(&self, port: &AppPort) {
-        let deadline = Deadline::for_class(&self.clock, gorca_rt::BudgetClass::Startup);
-        let Some((toolkit, app_name)) = self.caller.app_info(deadline).await else {
-            return;
-        };
-        let class = Toolkit::classify(&toolkit, &app_name);
-        tracing::debug!(app = ?port.app, %toolkit, %app_name, ?class, "application identified");
-        let info = AppInfo {
-            toolkit: Arc::from(clip(&toolkit, 64)),
-            app_name: Arc::from(clip(&app_name, 128)),
-            pid: None,
-            connector_kind: ConnectorKind::Atspi,
-        };
-        // Informational: a full control queue is not worth retrying.
-        let _ = port.lifecycle(AppLifecycle::Appeared(info));
     }
 
     fn accept(&self, req: BackendRequest, permits: &Arc<Semaphore>, inflight: &mut JoinSet<()>) {
@@ -384,6 +402,19 @@ impl AppServer {
             drop(permit);
         });
     }
+}
+
+fn announce_info(port: &AppPort, toolkit: &str, app_name: &str) {
+    let class = Toolkit::classify(toolkit, app_name);
+    tracing::debug!(app = ?port.app, ?class, "application identified");
+    let info = AppInfo {
+        toolkit: Arc::from(clip(toolkit, 64)),
+        app_name: Arc::from(clip(app_name, 128)),
+        pid: None,
+        connector_kind: ConnectorKind::Atspi,
+    };
+    // Informational: a full control queue is not worth retrying.
+    let _ = port.lifecycle(AppLifecycle::Appeared(info));
 }
 
 async fn serve_one(
@@ -433,6 +464,21 @@ fn closed_receiver() -> gorca_rt::mpsc::Receiver<BackendRequest> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn password_fields_are_read_like_any_other_entry() {
+        use gorca_model::StateSet;
+        assert!(wants_entry_text(Role::PasswordEntry, StateSet::empty()));
+        assert!(wants_entry_text(Role::TextEntry, StateSet::empty()));
+        assert!(!wants_entry_text(Role::PasswordEntry, StateSet::MULTILINE));
+        assert!(!wants_entry_text(Role::Button, StateSet::empty()));
+    }
+
+    #[test]
+    fn labels_are_read_only_from_the_same_application() {
+        assert!(label_may_be_read(":1.5", ":1.5"));
+        assert!(!label_may_be_read(":1.9", ":1.5"));
+    }
 
     #[test]
     fn dbus_errors_map_to_backend_errors() {

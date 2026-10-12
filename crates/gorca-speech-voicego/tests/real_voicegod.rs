@@ -99,7 +99,6 @@ async fn replace_latency_and_lost_speech() {
         prev = i;
         tokio::time::sleep(Duration::from_millis(40)).await;
     }
-    let stats = c.stats();
     lat.sort();
     plain.sort();
     let p = |v: &[Duration], num: usize, den: usize| v[(v.len() - 1) * num / den];
@@ -109,12 +108,11 @@ async fn replace_latency_and_lost_speech() {
         plain.last().unwrap()
     );
     eprintln!(
-        "replace -> BEGIN of new: n={} p50 {:?} p99 {:?} max {:?}; lost {lost}; resends {}",
+        "replace -> BEGIN of new: n={} p50 {:?} p99 {:?} max {:?}; lost {lost}",
         lat.len(),
         p(&lat, 1, 2),
         p(&lat, 99, 100),
-        lat.last().unwrap(),
-        stats.resends
+        lat.last().unwrap()
     );
     assert_eq!(lost, 0, "speech was lost after a replace");
 }

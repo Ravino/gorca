@@ -66,6 +66,10 @@ pub struct CoreConfig {
     pub shutdown_grace: Duration,
     /// Global ingress slot budget shared by all applications (ADR-0004 `SlotBudget`).
     pub slot_budget: usize,
+    /// Reader panics tolerated within [`RESTART_WINDOW`] before the lane gives up and the core
+    /// stops with [`CoreError::ReaderLaneDied`] (the process then exits non-zero and the service
+    /// manager restarts it). A reader that is silently gone is worse than a restart.
+    pub max_reader_restarts: usize,
 }
 
 impl Default for CoreConfig {
@@ -73,6 +77,7 @@ impl Default for CoreConfig {
         Self {
             shutdown_grace: Duration::from_secs(2),
             slot_budget: GLOBAL_SLOT_BUDGET,
+            max_reader_restarts: MAX_READER_RESTARTS,
         }
     }
 }
@@ -86,6 +91,10 @@ pub enum CoreError {
     TaskPanicked(&'static str),
     #[error("the reader lane could not be started: {0}")]
     Lane(String),
+    /// The Reader kept panicking and its lane gave up. Never stay up mute: exit so that the
+    /// service manager restarts the process.
+    #[error("the reader lane died after repeated panics")]
+    ReaderLaneDied,
 }
 
 /// Counters, readable from any thread.
@@ -316,16 +325,26 @@ impl Core {
         }
 
         let lane_token = shutdown.child_token();
+        let lane_dead = CancellationToken::new();
         let lane = {
-            let (shared, token) = (Arc::clone(&shared), lane_token.clone());
+            let (shared, token, dead) =
+                (Arc::clone(&shared), lane_token.clone(), lane_dead.clone());
+            let max_restarts = cfg.max_reader_restarts;
             spawn_lane(Lane::Reader, move || {
-                reader_lane(&shared, inbox, &fetch_tx, &token);
+                reader_lane(&shared, inbox, &fetch_tx, &token, &dead, max_restarts);
             })
             .map_err(|e| CoreError::Lane(e.to_string()))?
         };
 
         tracing::debug!("core running");
-        shutdown.cancelled().await;
+        let lane_died = tokio::select! {
+            () = shutdown.cancelled() => false,
+            () = lane_dead.cancelled() => {
+                tracing::error!("the reader lane is dead; stopping so that it is restarted");
+                shutdown.cancel();
+                true
+            }
+        };
         tracing::debug!("core shutting down");
         lane_token.cancel();
         let reports = tasks.shutdown(cfg.shutdown_grace).await;
@@ -336,6 +355,9 @@ impl Core {
             && exit != gorca_rt::LaneExit::Clean
         {
             return Err(CoreError::TaskPanicked("reader"));
+        }
+        if lane_died {
+            return Err(CoreError::ReaderLaneDied);
         }
         match reports.iter().find(|r| r.exit == TaskExit::Panicked) {
             Some(r) => Err(CoreError::TaskPanicked(r.name)),
@@ -603,6 +625,8 @@ fn reader_lane(
     mut inbox: crate::reader::ReaderInbox,
     fetch_tx: &mpsc::Sender<FetchJob>,
     token: &CancellationToken,
+    dead: &CancellationToken,
+    max_restarts: usize,
 ) {
     let rt = match tokio::runtime::Builder::new_current_thread()
         .enable_time()
@@ -611,6 +635,7 @@ fn reader_lane(
         Ok(rt) => rt,
         Err(e) => {
             tracing::error!(error = %e, "reader runtime could not be built");
+            dead.cancel();
             return;
         }
     };
@@ -627,7 +652,11 @@ fn reader_lane(
         restarts.push(now);
         bump(&shared.stats.reader_restarts);
         tracing::error!("the reader panicked; restarting it with fresh state");
-        if restarts.len() > MAX_READER_RESTARTS || token.is_cancelled() {
+        if token.is_cancelled() {
+            return;
+        }
+        if restarts.len() > max_restarts {
+            dead.cancel();
             return;
         }
     }

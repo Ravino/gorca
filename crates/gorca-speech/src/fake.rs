@@ -35,9 +35,15 @@ pub struct FakeCtl {
     pub cmds: Arc<Mutex<Vec<SpeechCmd>>>,
     pub health: Arc<AtomicU8>,
     pub events: mpsc::Sender<SpeechEvent>,
+    /// `SpeechClient::close` was called.
+    pub closed: Arc<AtomicBool>,
 }
 
 impl FakeCtl {
+    pub fn is_closed(&self) -> bool {
+        self.closed.load(Ordering::Acquire)
+    }
+
     pub fn cmds(&self) -> Vec<SpeechCmd> {
         self.cmds.lock().unwrap().clone()
     }
@@ -64,6 +70,7 @@ pub fn fake_client(atomic_replace: bool, health: ClientHealth) -> (FakeClient, F
         cmds: Arc::new(Mutex::new(Vec::new())),
         health: Arc::new(AtomicU8::new(h2u(health))),
         events: tx,
+        closed: Arc::new(AtomicBool::new(false)),
     };
     (
         FakeClient {
@@ -101,6 +108,10 @@ impl SpeechClient for FakeClient {
 
     fn health(&self) -> ClientHealth {
         u2h(self.ctl.health.load(Ordering::Acquire))
+    }
+
+    fn close(&self) {
+        self.ctl.closed.store(true, Ordering::Release);
     }
 }
 

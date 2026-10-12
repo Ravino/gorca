@@ -29,3 +29,21 @@ were not written (already true).
 ## Not done
 P2P calls (D-7), GetItems cache fill, mirror freshness, SetKeyGrabs/command keys, Newton,
 live-region speech, window-activate speech. Real GTK/Shell smoke run not performed.
+
+## Review fixes (BLOCK round, F1-F16)
+- Speech: voicego resend workaround removed; `502-<id>` fails by id; failback sends CANCEL then QUIT
+  (SSIP `Drop` too); Stop always enters the writer and failover queues; SSIP reply blocks capped at
+  64 KiB; both clients check the peer uid.
+- Router contract is `Route | NotAnApp | Retry`; the drain never caches `Retry`, counts `deferred`
+  and hands the event to `Router::park`. Registration is asynchronous (`AtspiRouter::complete`),
+  replays parked events in order under the publish lock, and backs off 10 ms to 1 s on failure.
+- Path quotas belong to the owning pid (`GetConnectionCredentials`), with a 16 MiB global byte cap
+  that evicts the largest holder; 64 names per process; departed-name tombstones expire (300 s).
+- NameOwnerChanged has its own connection; the drain supervisor is its own task.
+- `gorca_rt::guard` tripwire (armed by `Session::start`) panics in debug builds when a connect path
+  targets an ambient address; `cargo xtask deps` rule 8 forbids env reads outside the daemon main.
+- A dead Reader lane stops the core with `CoreError::ReaderLaneDied` (non-zero exit).
+- Password fields are read like any other entry (never logged).
+- Churn test now races registration and departure; with the tombstone check disabled both
+  `registration_and_departure_churn_leaks_nothing` and `an_app_dying_mid_registration_leaks_nothing` fail.
+- Bench: `lost` is gated on the max over repeats; K1 is matched by echoed character and time.

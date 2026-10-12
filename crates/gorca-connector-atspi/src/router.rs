@@ -1,29 +1,51 @@
 //! Sender -> application routing for the event drain.
 //!
-//! The drain asks [`AtspiRouter::route`] once per distinct bus name per connection, on its own
-//! thread (`gorca_dbus::drain::Router`). The first event of an unknown application announces it
-//! to the core through the ordinary `AppRegistrar`, with a short blocking handshake: that cost
-//! is paid once per application, and the contract allows a brief block. Everything after that
-//! is a hash lookup in the drain's own cache.
+//! The drain asks [`AtspiRouter::resolve`] on its own thread and must never wait. The first event
+//! of an unknown application therefore starts an **asynchronous** registration and answers
+//! `Retry`; the drain does not cache that, and hands the event to [`AtspiRouter::park`], which
+//! keeps a bounded number of them. The registration ([`AtspiRouter::complete`], run by the
+//! connector task) asks the bus for the connection's credentials, announces the application to
+//! the core, publishes the route and replays the parked events in order, all under the lock that
+//! also protects `forget`, so an application that vanishes while it is being registered is never
+//! published and leaks nothing.
+//!
+//! Failure never mutes an application for good: a failed registration sets a per-sender
+//! exponential backoff (10 ms to 1 s) during which the drain just drops and counts, and after
+//! which the next event starts a new attempt.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex, PoisonError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use gorca_connector_api::{AppPort, AppRegistrar, RegistrarError, ScopeKey};
-use gorca_dbus::drain::{AppRoute, Router};
-use gorca_model::{AppId, AppInfo, ConnectorKind, NodeKey};
-use gorca_rt::{CancellationToken, Clock, Deadline, mpsc};
-use tokio::runtime::Handle;
+use gorca_dbus::drain::{AppRoute, RouteDecision, Router, SignalView, map_signal};
+use gorca_model::{AppId, AppInfo, ConnectorKind, NodeEvent, NodeKey};
+use gorca_rt::{BoxFuture, CancellationToken, Clock, Deadline, mpsc};
 
-use crate::paths::PathTable;
+use crate::paths::{Owner, PathTable};
 
-/// How long the drain thread may wait for the core to accept a new application. Only a stalled
-/// core ever takes more than a few hundred microseconds.
-pub const ANNOUNCE_WAIT: Duration = Duration::from_millis(250);
+/// Deadline for the core to accept a new application.
+pub const ANNOUNCE_WAIT: Duration = Duration::from_secs(1);
+/// Registrations in flight at once. More senders than this answer `Retry` without parking.
+pub const MAX_PENDING: usize = 64;
+/// Events parked for one sender while it is being registered.
+pub const MAX_PARKED_PER_SENDER: usize = 32;
+/// Events parked in total.
+pub const MAX_PARKED_TOTAL: usize = 1024;
+/// Larger signal bodies are not parked (they are dropped and counted by the drain).
+pub const MAX_PARKED_BODY: usize = 512;
+/// Registered bus names one process may hold at once.
+pub const MAX_NAMES_PER_OWNER: usize = 64;
+const BACKOFF_MIN: Duration = Duration::from_millis(10);
+const BACKOFF_MAX: Duration = Duration::from_secs(1);
+/// Senders with a backoff or a tombstone are remembered this long.
+const DEPARTED_TTL: Duration = Duration::from_secs(300);
+/// Hard cap on remembered departed names.
+const MAX_DEPARTED: usize = 65_536;
+const MAX_BACKOFFS: usize = 4096;
 
-/// A freshly announced application, handed from the drain thread to the connector task, which
-/// owns the task that serves its requests.
+/// A freshly announced application, handed to the connector task, which owns the task that
+/// serves its requests.
 #[derive(Debug)]
 pub struct NewApp {
     pub port: AppPort,
@@ -32,38 +54,90 @@ pub struct NewApp {
     pub gone: CancellationToken,
 }
 
+/// Who owns a bus connection (`org.freedesktop.DBus.GetConnectionCredentials`).
+pub trait Credentials: Send + Sync + 'static {
+    /// The process id of `name`, or `None` if the bus cannot or will not say (deadline inside).
+    fn pid_of<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Option<u32>>;
+}
+
+/// No credentials available: every application is its own small owner.
+#[cfg(test)]
+#[derive(Debug, Default)]
+pub struct NoCredentials;
+
+#[cfg(test)]
+impl Credentials for NoCredentials {
+    fn pid_of<'a>(&'a self, _name: &'a str) -> BoxFuture<'a, Option<u32>> {
+        Box::pin(async { None })
+    }
+}
+
 #[derive(Debug)]
 struct Entry {
     route: AppRoute,
     gone: CancellationToken,
+    owner: Owner,
 }
 
-/// Bus names remembered as departed. Unique names are never reused by the bus, so a name that
-/// left can never come back: remembering it closes the race between an announcement in flight
-/// and the `NameOwnerChanged` that arrives while it is. Bounded; the oldest are forgotten first.
-const MAX_DEPARTED: usize = 8192;
+#[derive(Debug)]
+struct Parked {
+    interface: String,
+    member: String,
+    path: String,
+    body: Vec<u8>,
+    big_endian: bool,
+}
+
+#[derive(Debug, Default)]
+struct Pending {
+    parked: Vec<Parked>,
+}
+
+#[derive(Copy, Clone, Debug)]
+struct Backoff {
+    not_before: Instant,
+    delay: Duration,
+}
 
 #[derive(Debug, Default)]
 struct State {
     apps: HashMap<Arc<str>, Entry>,
     ignored: HashSet<Arc<str>>,
+    pending: HashMap<Arc<str>, Pending>,
+    parked_total: usize,
+    backoff: HashMap<Arc<str>, Backoff>,
+    names_per_owner: HashMap<Owner, usize>,
     departed: HashSet<Arc<str>>,
-    departed_order: VecDeque<Arc<str>>,
+    departed_order: VecDeque<(Instant, Arc<str>)>,
 }
 
 impl State {
-    fn mark_departed(&mut self, name: &str) {
+    /// Unique names are never reused by the bus, so a name that left can never come back:
+    /// remembering it closes the race between a registration in flight and the
+    /// `NameOwnerChanged` that arrives while it is. Entries expire after [`DEPARTED_TTL`].
+    fn mark_departed(&mut self, name: &str, now: Instant) {
+        while let Some((at, old)) = self.departed_order.front() {
+            if now.saturating_duration_since(*at) < DEPARTED_TTL
+                && self.departed_order.len() < MAX_DEPARTED
+            {
+                break;
+            }
+            let old = Arc::clone(old);
+            self.departed_order.pop_front();
+            self.departed.remove(&old);
+        }
         if self.departed.contains(name) {
             return;
         }
-        if self.departed_order.len() >= MAX_DEPARTED
-            && let Some(old) = self.departed_order.pop_front()
-        {
-            self.departed.remove(&old);
-        }
         let name: Arc<str> = Arc::from(name);
         self.departed.insert(Arc::clone(&name));
-        self.departed_order.push_back(name);
+        self.departed_order.push_back((now, name));
+    }
+
+    fn drop_parked(&mut self, name: &str) -> usize {
+        let n = self.pending.remove(name).map_or(0, |p| p.parked.len());
+        self.parked_total = self.parked_total.saturating_sub(n);
+        n
     }
 }
 
@@ -73,33 +147,44 @@ pub struct RouterStats {
     pub announced: u64,
     pub announce_failed: u64,
     pub ignored: u64,
+    pub parked_replayed: u64,
+    pub parked_dropped: u64,
 }
 
-#[derive(Debug)]
 pub struct AtspiRouter {
-    handle: Handle,
     registrar: AppRegistrar,
     clock: Clock,
     paths: Arc<PathTable>,
     new_apps: mpsc::Sender<NewApp>,
+    /// Senders whose registration the connector task must run.
+    to_register: mpsc::Sender<Arc<str>>,
+    credentials: Arc<dyn Credentials>,
     state: Mutex<State>,
     stats: Mutex<RouterStats>,
 }
 
+impl std::fmt::Debug for AtspiRouter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AtspiRouter").finish_non_exhaustive()
+    }
+}
+
 impl AtspiRouter {
     pub fn new(
-        handle: Handle,
         registrar: AppRegistrar,
         clock: Clock,
         paths: Arc<PathTable>,
         new_apps: mpsc::Sender<NewApp>,
+        to_register: mpsc::Sender<Arc<str>>,
+        credentials: Arc<dyn Credentials>,
     ) -> Self {
         Self {
-            handle,
             registrar,
             clock,
             paths,
             new_apps,
+            to_register,
+            credentials,
             state: Mutex::new(State::default()),
             stats: Mutex::new(RouterStats::default()),
         }
@@ -126,15 +211,30 @@ impl AtspiRouter {
     /// The application owning `name` left the bus. Returns its id so the caller can retire it.
     ///
     /// Atomic with respect to registration: the name is marked departed under the same lock
-    /// that [`AtspiRouter::announce`] takes to publish a route, so an application that dies while
-    /// its announcement is in flight is never published (and is retired by the announcer), and
+    /// that [`AtspiRouter::complete`] takes to publish a route, so an application that dies
+    /// while its registration is in flight is never published (the registration retires it), and
     /// one that is already published is removed here. Either way nothing is left behind.
     pub fn forget(&self, name: &str) -> Option<AppId> {
-        let entry = {
+        let (entry, dropped) = {
             let mut st = self.state();
-            st.mark_departed(name);
-            st.apps.remove(name)?
+            st.mark_departed(name, self.clock.now());
+            st.backoff.remove(name);
+            let dropped = st.drop_parked(name);
+            let e = st.apps.remove(name);
+            if let Some(e) = &e
+                && let Some(n) = st.names_per_owner.get_mut(&e.owner)
+            {
+                *n = n.saturating_sub(1);
+                if *n == 0 {
+                    st.names_per_owner.remove(&e.owner);
+                }
+            }
+            (e, dropped)
         };
+        if dropped > 0 {
+            self.bump(|s| s.parked_dropped += dropped as u64);
+        }
+        let entry = entry?;
         entry.gone.cancel();
         self.paths.forget_app(entry.route.app);
         Some(entry.route.app)
@@ -143,7 +243,13 @@ impl AtspiRouter {
     /// Forget every application (connector shutdown or restart) and return their ids, so the
     /// caller can retire them in the core.
     pub fn take_all(&self) -> Vec<AppId> {
-        let apps: Vec<Entry> = self.state().apps.drain().map(|(_, e)| e).collect();
+        let apps: Vec<Entry> = {
+            let mut st = self.state();
+            st.pending.clear();
+            st.parked_total = 0;
+            st.names_per_owner.clear();
+            st.apps.drain().map(|(_, e)| e).collect()
+        };
         apps.into_iter()
             .map(|e| {
                 e.gone.cancel();
@@ -157,97 +263,263 @@ impl AtspiRouter {
         self.state().apps.len()
     }
 
-    fn announce(&self, sender: &str) -> Option<AppRoute> {
-        let scope = ScopeKey(Arc::from(sender));
+    pub fn pending_registrations(&self) -> usize {
+        self.state().pending.len()
+    }
+
+    /// Run the registration the drain started for `sender`. Never blocks a thread; bounded by
+    /// [`ANNOUNCE_WAIT`] plus the credentials deadline.
+    pub async fn complete(&self, sender: Arc<str>) {
+        let pid = self.credentials.pid_of(&sender).await;
+        let owner_known = pid.map(Owner::Pid);
+        if let Some(owner) = owner_known
+            && self
+                .state()
+                .names_per_owner
+                .get(&owner)
+                .copied()
+                .unwrap_or(0)
+                >= MAX_NAMES_PER_OWNER
+        {
+            // One process may not hold arbitrarily many registered names: this is not served.
+            tracing::warn!(
+                sender = &*sender,
+                "too many bus names for one process; ignoring"
+            );
+            let mut st = self.state();
+            let dropped = st.drop_parked(&sender);
+            st.ignored.insert(Arc::clone(&sender));
+            drop(st);
+            self.bump(|s| {
+                s.ignored += 1;
+                s.parked_dropped += dropped as u64;
+            });
+            return;
+        }
         let info = AppInfo {
             // Replaced by `AppLifecycle::Appeared` once the app root has answered.
             toolkit: Arc::from("unknown"),
-            app_name: Arc::from(sender),
-            pid: None,
+            app_name: Arc::from(&*sender),
+            pid,
             connector_kind: ConnectorKind::Atspi,
         };
         let deadline = Deadline::after(&self.clock, ANNOUNCE_WAIT);
-        let port = match self
-            .handle
-            .block_on(self.registrar.announce(scope, info, deadline))
-        {
-            Ok(port) => port,
-            Err(RegistrarError::Duplicate) => {
-                // Lost a race with another drain connection: the other one has the entry.
-                return self.state().apps.get(sender).map(|e| e.route.clone());
-            }
+        let announced = self
+            .registrar
+            .announce(ScopeKey(Arc::clone(&sender)), info, deadline)
+            .await;
+        match announced {
+            Ok(port) => self.publish(&sender, port, owner_known),
             Err(e) => {
-                tracing::warn!(sender, error = %e, "application announce failed");
-                self.bump(|s| s.announce_failed += 1);
-                return None;
+                tracing::warn!(sender = &*sender, error = %e, "application announce failed");
+                self.fail(&sender, e == RegistrarError::Duplicate);
             }
-        };
-        let route = AppRoute {
-            app: port.app,
-            tx: port.ingress_sender(),
-        };
-        let gone = CancellationToken::new();
-        let bus_name: Arc<str> = Arc::from(sender);
-        let app = port.app;
-        let new = NewApp {
-            port,
-            bus_name: Arc::clone(&bus_name),
-            gone: gone.clone(),
-        };
-        // Publish under the lock `forget` takes: check "departed", hand the port over and insert
-        // the route as one step.
+        }
+    }
+
+    /// Registration failed: drop the parked events and back off before the next attempt.
+    fn fail(&self, sender: &str, _duplicate: bool) {
+        let now = self.clock.now();
         let mut st = self.state();
-        if st.departed.contains(sender) {
-            drop(st);
-            // The app left the bus while the core was accepting it. Retiring drops the core half
-            // (ingress, budget); dropping `new` closes the port.
-            tracing::debug!(sender, ?app, "application vanished during registration");
-            let _ = self.registrar.retire(app);
-            self.bump(|s| s.announce_failed += 1);
-            return None;
+        let dropped = st.drop_parked(sender);
+        let delay = st
+            .backoff
+            .get(sender)
+            .map_or(BACKOFF_MIN, |b| (b.delay * 2).min(BACKOFF_MAX));
+        if st.backoff.len() >= MAX_BACKOFFS {
+            st.backoff.clear();
         }
-        if self.new_apps.try_send(new).is_err() {
-            drop(st);
-            tracing::warn!(sender, "connector is not accepting applications");
-            let _ = self.registrar.retire(app);
-            self.bump(|s| s.announce_failed += 1);
-            return None;
-        }
-        st.apps.insert(
-            bus_name,
-            Entry {
-                route: route.clone(),
-                gone,
+        st.backoff.insert(
+            Arc::from(sender),
+            Backoff {
+                not_before: now + delay,
+                delay,
             },
         );
         drop(st);
-        tracing::debug!(sender, ?app, "application announced");
-        self.bump(|s| s.announced += 1);
-        Some(route)
+        self.bump(|s| {
+            s.announce_failed += 1;
+            s.parked_dropped += dropped as u64;
+        });
+    }
+
+    /// Publish under the lock `forget` takes: check "departed", hand the port over, replay the
+    /// parked events in order and insert the route as one step.
+    fn publish(&self, sender: &Arc<str>, port: AppPort, owner: Option<Owner>) {
+        let app = port.app;
+        let owner = owner.unwrap_or(Owner::Unknown(app));
+        let route = AppRoute {
+            app,
+            tx: port.ingress_sender(),
+        };
+        let gone = CancellationToken::new();
+        let new = NewApp {
+            port,
+            bus_name: Arc::clone(sender),
+            gone: gone.clone(),
+        };
+        let mut st = self.state();
+        if st.departed.contains(&**sender) {
+            let dropped = st.drop_parked(sender);
+            drop(st);
+            // The app left the bus while the core was accepting it. Retiring drops the core half
+            // (ingress, budget); dropping `new` closes the port.
+            tracing::debug!(
+                sender = &**sender,
+                ?app,
+                "application vanished during registration"
+            );
+            let _ = self.registrar.retire(app);
+            self.bump(|s| {
+                s.announce_failed += 1;
+                s.parked_dropped += dropped as u64;
+            });
+            return;
+        }
+        if self.new_apps.try_send(new).is_err() {
+            drop(st);
+            tracing::warn!(
+                sender = &**sender,
+                "connector is not accepting applications"
+            );
+            let _ = self.registrar.retire(app);
+            self.fail(sender, false);
+            return;
+        }
+        self.paths.bind_app(app, owner);
+        // Replay what arrived while the registration ran, in arrival order, before any later
+        // event can be routed (the lock is held).
+        let parked = st
+            .pending
+            .remove(&**sender)
+            .map(|p| p.parked)
+            .unwrap_or_default();
+        st.parked_total = st.parked_total.saturating_sub(parked.len());
+        let mut replayed = 0u64;
+        let mut mapped = smallvec::SmallVec::<[NodeEvent; 2]>::new();
+        for p in &parked {
+            let view = SignalView {
+                interface: &p.interface,
+                member: &p.member,
+                path: &p.path,
+                body: &p.body,
+                big_endian: p.big_endian,
+            };
+            mapped.clear();
+            if map_signal(app, &view, &mut mapped).is_err() {
+                continue;
+            }
+            for ev in mapped.drain(..) {
+                if let NodeEvent::FocusChanged { node } = &ev {
+                    self.paths.insert(*node, &p.path);
+                }
+                route.tx.push(ev);
+                replayed += 1;
+            }
+        }
+        st.backoff.remove(&**sender);
+        *st.names_per_owner.entry(owner).or_insert(0) += 1;
+        st.apps.insert(
+            Arc::clone(sender),
+            Entry {
+                route: route.clone(),
+                gone,
+                owner,
+            },
+        );
+        drop(st);
+        tracing::debug!(sender = &**sender, ?app, replayed, "application announced");
+        self.bump(|s| {
+            s.announced += 1;
+            s.parked_replayed += replayed;
+        });
     }
 }
 
 impl Router for AtspiRouter {
     fn route(&self, sender: &str) -> Option<AppRoute> {
-        {
-            let st = self.state();
-            if st.ignored.contains(sender) {
-                drop(st);
-                self.bump(|s| s.ignored += 1);
-                return None;
-            }
-            if st.departed.contains(sender) {
-                return None;
-            }
-            if let Some(e) = st.apps.get(sender) {
-                return Some(e.route.clone());
-            }
+        match self.resolve(sender) {
+            RouteDecision::Route(r) => Some(r),
+            RouteDecision::NotAnApp | RouteDecision::Retry => None,
+        }
+    }
+
+    fn resolve(&self, sender: &str) -> RouteDecision {
+        let now = self.clock.now();
+        let mut st = self.state();
+        if st.ignored.contains(sender) {
+            drop(st);
+            self.bump(|s| s.ignored += 1);
+            return RouteDecision::NotAnApp;
+        }
+        if st.departed.contains(sender) {
+            return RouteDecision::NotAnApp;
+        }
+        if let Some(e) = st.apps.get(sender) {
+            return RouteDecision::Route(e.route.clone());
         }
         // Bus unique names start with ':'; a well-known name never emits signals.
         if !sender.starts_with(':') {
-            return None;
+            return RouteDecision::NotAnApp;
         }
-        self.announce(sender)
+        if st.pending.contains_key(sender) {
+            return RouteDecision::Retry;
+        }
+        if st.backoff.get(sender).is_some_and(|b| now < b.not_before) {
+            return RouteDecision::Retry;
+        }
+        if st.pending.len() >= MAX_PENDING {
+            return RouteDecision::Retry;
+        }
+        let name: Arc<str> = Arc::from(sender);
+        if self.to_register.try_send(Arc::clone(&name)).is_err() {
+            // The connector task is not taking registrations: back off like a failure.
+            let delay = st
+                .backoff
+                .get(sender)
+                .map_or(BACKOFF_MIN, |b| (b.delay * 2).min(BACKOFF_MAX));
+            st.backoff.insert(
+                name,
+                Backoff {
+                    not_before: now + delay,
+                    delay,
+                },
+            );
+            return RouteDecision::Retry;
+        }
+        st.pending.insert(name, Pending::default());
+        RouteDecision::Retry
+    }
+
+    fn park(&self, sender: &str, signal: &SignalView<'_>) {
+        if signal.body.len() > MAX_PARKED_BODY {
+            self.bump(|s| s.parked_dropped += 1);
+            return;
+        }
+        let mut st = self.state();
+        if st.parked_total >= MAX_PARKED_TOTAL {
+            drop(st);
+            self.bump(|s| s.parked_dropped += 1);
+            return;
+        }
+        let Some(p) = st.pending.get_mut(sender) else {
+            drop(st);
+            self.bump(|s| s.parked_dropped += 1);
+            return;
+        };
+        if p.parked.len() >= MAX_PARKED_PER_SENDER {
+            drop(st);
+            self.bump(|s| s.parked_dropped += 1);
+            return;
+        }
+        p.parked.push(Parked {
+            interface: signal.interface.to_owned(),
+            member: signal.member.to_owned(),
+            path: signal.path.to_owned(),
+            body: signal.body.to_vec(),
+            big_endian: signal.big_endian,
+        });
+        st.parked_total += 1;
     }
 
     fn focus_seen(&self, _app: AppId, node: NodeKey, path: &str) {
@@ -256,285 +528,4 @@ impl Router for AtspiRouter {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use gorca_connector_api::{RegistrarRequest, ScopeRegistry, registrar_channel};
-    use gorca_ingress::IngressConfig;
-    use gorca_model::{ConnectorId, LocalId};
-
-    /// A core stand-in on its own runtime thread: answers announcements from a `ScopeRegistry`.
-    struct Core {
-        rt: tokio::runtime::Runtime,
-        registrar: AppRegistrar,
-    }
-
-    fn core(reachable: bool) -> Core {
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
-            .enable_all()
-            .build()
-            .unwrap();
-        let (registrar, mut rx) = registrar_channel(ConnectorId(1), 8);
-        if reachable {
-            rt.spawn(async move {
-                let mut table = ScopeRegistry::unbounded();
-                while let Some(req) = rx.recv().await {
-                    match req {
-                        RegistrarRequest::Announce { scope, reply, .. } => {
-                            let r = table
-                                .register(ConnectorId(1), scope, IngressConfig::default())
-                                .map(|c| {
-                                    // Keep the core half alive for the test's duration.
-                                    std::mem::forget((c.ingress, c.control, c.requests));
-                                    c.port
-                                });
-                            let _ = reply.send(r);
-                        }
-                        RegistrarRequest::Retire { app } => table.retire(app),
-                    }
-                }
-            });
-        } else {
-            rt.spawn(async move {
-                let _keep = rx;
-                std::future::pending::<()>().await;
-            });
-        }
-        Core { rt, registrar }
-    }
-
-    /// A core stand-in that charges a real budget, keeps each app's core half until it is
-    /// retired (like the real app actor), and answers announcements after `delay`.
-    struct Budgeted {
-        rt: tokio::runtime::Runtime,
-        registrar: AppRegistrar,
-        budget: Arc<gorca_ingress::SlotBudget>,
-        table: Arc<std::sync::Mutex<ScopeRegistry>>,
-        held: Arc<std::sync::Mutex<usize>>,
-    }
-
-    fn budgeted(delay: Duration) -> Budgeted {
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
-            .enable_all()
-            .build()
-            .unwrap();
-        let (registrar, mut rx) = registrar_channel(ConnectorId(1), 64);
-        let budget = gorca_ingress::SlotBudget::new(10_000);
-        let table = Arc::new(std::sync::Mutex::new(ScopeRegistry::new(Arc::clone(
-            &budget,
-        ))));
-        let held = Arc::new(std::sync::Mutex::new(0usize));
-        let (t, h) = (Arc::clone(&table), Arc::clone(&held));
-        rt.spawn(async move {
-            let mut halves = HashMap::new();
-            while let Some(req) = rx.recv().await {
-                match req {
-                    RegistrarRequest::Announce { scope, reply, .. } => {
-                        tokio::time::sleep(delay).await;
-                        let r = t.lock().unwrap().register(
-                            ConnectorId(1),
-                            scope,
-                            IngressConfig::default(),
-                        );
-                        let r = r.map(|c| {
-                            let app = c.port.app;
-                            halves.insert(app, (c.ingress, c.control, c.requests));
-                            c.port
-                        });
-                        *h.lock().unwrap() = halves.len();
-                        let _ = reply.send(r);
-                    }
-                    RegistrarRequest::Retire { app } => {
-                        t.lock().unwrap().retire(app);
-                        halves.remove(&app);
-                        *h.lock().unwrap() = halves.len();
-                    }
-                }
-            }
-        });
-        Budgeted {
-            rt,
-            registrar,
-            budget,
-            table,
-            held,
-        }
-    }
-
-    #[allow(clippy::disallowed_methods)]
-    fn wait_until(what: &str, cond: impl Fn() -> bool) {
-        let end = std::time::Instant::now() + Duration::from_secs(5);
-        while !cond() {
-            assert!(std::time::Instant::now() < end, "timed out: {what}");
-            std::thread::sleep(Duration::from_millis(5));
-        }
-    }
-
-    /// Regression (security review): an application that leaves the bus while its announcement
-    /// is in flight must leave no route, no registry entry, no core half and no budget behind.
-    #[test]
-    #[allow(clippy::disallowed_methods)]
-    fn an_app_dying_mid_registration_leaks_nothing() {
-        let c = budgeted(Duration::from_millis(200));
-        let (tx, mut new_apps) = mpsc::channel(8);
-        let r = Arc::new(AtspiRouter::new(
-            c.rt.handle().clone(),
-            c.registrar.clone(),
-            Clock::System,
-            Arc::new(PathTable::new()),
-            tx,
-        ));
-        let r2 = Arc::clone(&r);
-        let t = std::thread::spawn(move || r2.route(":1.77"));
-        // The announce is now waiting for the (slow) core; the app vanishes.
-        std::thread::sleep(Duration::from_millis(60));
-        assert_eq!(r.forget(":1.77"), None, "not published yet");
-        assert!(t.join().unwrap().is_none(), "a dead app gets no route");
-        assert_eq!(r.known_apps(), 0);
-        assert!(new_apps.try_recv().is_err(), "no port was handed over");
-        wait_until("core half retired", || *c.held.lock().unwrap() == 0);
-        assert_eq!(c.table.lock().unwrap().len(), 0);
-        assert_eq!(c.budget.used(), 0);
-        // Stragglers from the dead sender do not bring it back.
-        assert!(r.route(":1.77").is_none());
-        assert_eq!(r.known_apps(), 0);
-    }
-
-    /// Regression (security review): rapid connect/disconnect churn from many threads keeps
-    /// routes, registry entries and budget at zero once everything has left.
-    #[test]
-    fn connect_disconnect_churn_leaks_no_routes_or_budget() {
-        let c = budgeted(Duration::ZERO);
-        let (tx, mut new_apps) = mpsc::channel(4096);
-        let r = Arc::new(AtspiRouter::new(
-            c.rt.handle().clone(),
-            c.registrar.clone(),
-            Clock::System,
-            Arc::new(PathTable::new()),
-            tx,
-        ));
-        let threads: Vec<_> = (0..4u32)
-            .map(|t| {
-                let r = Arc::clone(&r);
-                let registrar = c.registrar.clone();
-                std::thread::spawn(move || {
-                    for i in 0..60u32 {
-                        let name = format!(":1.{}", 1000 + t * 100 + i);
-                        let route = r.route(&name);
-                        if let Some(rt) = &route {
-                            // Some events, so the ingress holds budget.
-                            rt.tx.push(gorca_model::NodeEvent::NodeRemoved {
-                                node: NodeKey {
-                                    app: rt.app,
-                                    local: LocalId(u64::from(i)),
-                                },
-                            });
-                        }
-                        // Half the apps die at once, half after a concurrent second `forget`.
-                        // Like the connector's NameOwnerChanged handler.
-                        if let Some(app) = r.forget(&name) {
-                            let _ = registrar.retire(app);
-                        }
-                        if i % 2 == 0 {
-                            assert!(r.forget(&name).is_none());
-                        }
-                    }
-                })
-            })
-            .collect();
-        for t in threads {
-            t.join().unwrap();
-        }
-        assert_eq!(r.known_apps(), 0);
-        // The connector side drops every port it received; the core retires what was announced.
-        while let Ok(n) = new_apps.try_recv() {
-            drop(n);
-        }
-        wait_until("all core halves retired", || *c.held.lock().unwrap() == 0);
-        assert_eq!(c.table.lock().unwrap().len(), 0);
-        assert_eq!(c.budget.used(), 0, "a dead receiver charges nothing (AU-2)");
-    }
-
-    fn router(c: &Core) -> (AtspiRouter, mpsc::Receiver<NewApp>) {
-        let (tx, rx) = mpsc::channel(8);
-        let r = AtspiRouter::new(
-            c.rt.handle().clone(),
-            c.registrar.clone(),
-            Clock::System,
-            Arc::new(PathTable::new()),
-            tx,
-        );
-        (r, rx)
-    }
-
-    #[test]
-    fn first_event_announces_once_and_hands_the_port_over() {
-        let c = core(true);
-        let (r, mut new_apps) = router(&c);
-        let a = r.route(":1.42").expect("announced");
-        let b = r.route(":1.42").expect("cached");
-        assert_eq!(a.app, b.app);
-        assert_eq!(r.stats().announced, 1);
-        let new = new_apps.try_recv().expect("port handed to the connector");
-        assert_eq!(&*new.bus_name, ":1.42");
-        assert_eq!(new.port.app, a.app);
-        assert!(new_apps.try_recv().is_err(), "exactly one hand-over");
-    }
-
-    #[test]
-    fn ignored_and_well_known_names_are_not_applications() {
-        let c = core(true);
-        let (r, _rx) = router(&c);
-        r.ignore(":1.3");
-        assert!(r.route(":1.3").is_none());
-        assert!(r.route("org.example.Name").is_none());
-        assert_eq!(r.known_apps(), 0);
-        assert_eq!(r.stats().ignored, 1);
-    }
-
-    #[test]
-    fn a_stalled_core_costs_the_drain_a_bounded_wait() {
-        let c = core(false);
-        let (r, _rx) = router(&c);
-        let t = std::time::Instant::now();
-        assert!(r.route(":1.9").is_none());
-        let waited = t.elapsed();
-        assert!(waited < ANNOUNCE_WAIT * 4, "{waited:?}");
-        assert_eq!(r.stats().announce_failed, 1);
-    }
-
-    #[test]
-    fn take_all_returns_every_app_once() {
-        let c = core(true);
-        let (r, mut new_apps) = router(&c);
-        let a = r.route(":1.1").unwrap().app;
-        let b = r.route(":1.2").unwrap().app;
-        let mut all = r.take_all();
-        all.sort();
-        let mut want = vec![a, b];
-        want.sort();
-        assert_eq!(all, want);
-        assert_eq!(r.known_apps(), 0);
-        assert!(new_apps.try_recv().unwrap().gone.is_cancelled());
-    }
-
-    #[test]
-    fn forget_cancels_the_app_and_drops_its_paths() {
-        let c = core(true);
-        let (r, mut new_apps) = router(&c);
-        let route = r.route(":1.5").expect("announced");
-        let node = NodeKey {
-            app: route.app,
-            local: LocalId(1),
-        };
-        r.focus_seen(route.app, node, "/x/1");
-        assert!(r.paths.get(node).is_some());
-        let new = new_apps.try_recv().unwrap();
-        assert!(!new.gone.is_cancelled());
-        assert_eq!(r.forget(":1.5"), Some(route.app));
-        assert!(new.gone.is_cancelled());
-        assert!(r.paths.get(node).is_none());
-        assert_eq!(r.forget(":1.5"), None);
-    }
-}
+mod tests;
