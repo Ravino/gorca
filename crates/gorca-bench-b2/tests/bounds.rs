@@ -52,6 +52,7 @@ fn counters_equal_structure_sizes_after_every_operation() {
             hard_cap: hard,
             announcement_cap: 3,
             max_text_deltas: 4,
+            ..IngressConfig::default()
         };
         let (tx, rx) = ingress(cfg);
         for ev in random_script(&mut rng, 6000, 60) {

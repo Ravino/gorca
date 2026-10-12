@@ -60,6 +60,7 @@ fn cfg_pair(max_keys: usize, ann: usize, text: usize, hard: usize) -> (IngressCo
             announcement_cap: ann,
             max_text_deltas: text,
             hard_cap: hard,
+            ..IngressConfig::default()
         },
         SpecCfg {
             max_keys,

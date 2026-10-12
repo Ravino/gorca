@@ -34,7 +34,7 @@ pub use backend::{
 };
 pub use call::{REPLY_GRACE, request};
 pub use connector::{Connector, ConnectorCtx, ConnectorError};
-pub use port::{AppChannel, AppControl, AppPort, PortError, app_channel};
+pub use port::{AppChannel, AppControl, AppPort, PortError, app_channel, app_channel_with_budget};
 pub use registry::{
     AppRegistrar, RegistrarError, RegistrarRequest, ScopeKey, ScopeRegistry, registrar_channel,
 };
