@@ -1,0 +1,51 @@
+
+/// P7: check-then-act on the per-process name cap: the check runs in `complete()` before the
+/// announce await, the count is taken in `publish()`. Concurrent registrations overshoot.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn review_probe_r3_name_cap_overshoots_under_concurrency() {
+    let c = core(|_| Duration::from_millis(50));
+    let mut r = rig(&c, Arc::new(ByName(Box::new(|_| Some(4242)))));
+    // 60 names first, sequentially.
+    for n in 0..60u32 {
+        let _ = r.router.resolve(&format!(":1.{n}"));
+        r.router.complete(r.to_register.try_recv().unwrap()).await;
+    }
+    // Then MAX_PENDING more at once.
+    let mut names = Vec::new();
+    for n in 1000..(1000 + MAX_PENDING as u32) {
+        let _ = r.router.resolve(&format!(":1.{n}"));
+        names.push(r.to_register.try_recv().unwrap());
+    }
+    let mut set = tokio::task::JoinSet::new();
+    for n in names {
+        let router = Arc::clone(&r.router);
+        set.spawn(async move { router.complete(n).await });
+    }
+    while set.join_next().await.is_some() {}
+    let held = r.router.state().names_per_group.get(&Some(4242)).copied().unwrap_or(0);
+    eprintln!("PROBE P7 names held by one pid = {held} (cap {MAX_NAMES_PER_OWNER})");
+    assert!(held <= MAX_NAMES_PER_OWNER);
+}
+
+/// P6: fork attack where every process holds ONE name (all groups tie at size 1). The global cap
+/// evicts from an arbitrary size-1 group, which can be the focused legitimate app.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn review_probe_r3_fork_singletons_evict_the_victim() {
+    let c = core(|_| Duration::ZERO);
+    let mut r = rig(&c, Arc::new(ByName(Box::new(|n| Some(n + 10)))));
+    let victim = ":1.0"; // e.g. Firefox or GNOME Shell, registered first
+    let mut evicted_at = None;
+    let total = MAX_APPS_TOTAL as u32 + 2000;
+    for n in 0..total {
+        let name = format!(":1.{n}");
+        let _ = r.router.resolve(&name);
+        while let Ok(x) = r.to_register.try_recv() {
+            r.router.complete(x).await;
+        }
+        if evicted_at.is_none() && r.router.state().apps.get(victim).is_none() {
+            evicted_at = Some(n);
+        }
+    }
+    eprintln!("PROBE P6 victim evicted at attacker name #{evicted_at:?} of {total}; known_apps={}", r.router.known_apps());
+    assert!(evicted_at.is_none(), "victim evicted by a singleton fork attack");
+}

@@ -1,0 +1,20 @@
+   Compiling gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-connector-atspi)
+    Finished `release` profile [optimized + debuginfo] target(s) in 16.94s
+     Running unittests src/lib.rs (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/tgt/release/deps/gorca_connector_atspi-d6ba16c52add5457)
+
+running 1 test
+PROBE P6 victim evicted at attacker name #Some(609) of 2512; known_apps=512
+
+thread 'router::tests::review_probe_r3_fork_singletons_evict_the_victim' (2268412) panicked at crates/gorca-connector-atspi/src/router/tests.rs:721:5:
+victim evicted by a singleton fork attack
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test router::tests::review_probe_r3_fork_singletons_evict_the_victim ... FAILED
+
+failures:
+
+failures:
+    router::tests::review_probe_r3_fork_singletons_evict_the_victim
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 48 filtered out; finished in 2.98s
+
+error: test failed, to rerun pass `-p gorca-connector-atspi --lib`

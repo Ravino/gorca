@@ -347,3 +347,93 @@ Every round-1 finding is fixed and verified. The new asynchronous registration, 
 ## Rerun list for round 3
 
 Paste `probes/router_r2_probes.rs.txt` (P1–P5) into `crates/gorca-connector-atspi/src/router/tests.rs` and run them in release with `--test-threads=1`. All five must pass.
+
+---
+
+# Round 3 (head `6bad6da`)
+
+Raw output is in `bench/results/e2e/review-r3/`: `make-check.txt`, `run.log`, the result `.txt`/`.json`, `router-tests-with-P7.txt`, `probe-P6.txt`, and `probes/` with `RESULTS.txt`.
+
+## Verdict: BLOCK, narrowly
+
+R2-1..R2-3 are fixed, and P1–P5 now pass as in-tree tests. The new global application cap, however, is unsafe against a cheap local attack. On top of that, an evicted or refused app is **muted permanently**. Both properties the orchestrator requires are demonstrably violated: "GNOME Shell and the focused app are never evicted or refused", and "caps hold under concurrency". The fix is contained in `router.rs` plus one atomic from the Reader.
+
+## Gates
+
+- `make check`: exit 0.
+- Bench `review-r3` at `6bad6da`, load 12.6, 3 repeats. Values are median / max over repeats:
+
+| Metric | p99 median (ms) | p99 max (ms) |
+|---|---|---|
+| L1 | 2.02 | 2.04 |
+| L1s | 2.17 | 2.20 |
+| L2 | 0.92 | 0.92 |
+| L3-10k | 1.60 | 1.64 |
+| L3-50k | 2.58 | 3.58 |
+| L4 | 1.99 | 2.01 |
+| K1 | 0.92 | 0.95 |
+
+- `lost` = 0 on the max for every series. All gates PASS.
+- `git_dirty` comes from untracked review artefacts only.
+
+## R2 items
+
+| Item | Status | Evidence |
+|---|---|---|
+| R2-1 | fixed | `newest_focus_survives_the_park_cap`, `a_burst_of_other_events_never_displaces_the_focus` |
+| R2-2 | fixed | `resolve_park_race_does_not_lose_the_event`. `park()` delivers through the route once the app is published; a sender with no registration keeps its focus in `orphan_focus`. |
+| R2-3 | fixed | `parked_strings_are_bounded` |
+| R2-4 | fixed | `hostile_parkers_cannot_drop_a_new_apps_focus` |
+| P4 | fixed | `the_ignored_set_does_not_grow_with_churn` |
+
+### Question 3: do the park size limits drop legitimate events?
+
+- **Path limit (256 B):** no impact. Real AT-SPI paths (GTK, Firefox, Chromium, Qt) are under 64 B, and `focus_seen` already refuses longer paths.
+- **Body limit (512 B):** this drops only events whose body is larger, which in practice means `text-changed` events carrying long inserted text, and only while the app is still registering.
+  - Focus bodies (`siiva{sv}` with a small `any_data`) are well under the limit.
+  - Focus has its own slot outside every byte cap, so focus is kept.
+  - This is acceptable as specified. One gap: a dropped parked event does not mark the app `resync_needed`. Low; follow-up.
+
+## New findings
+
+### R3-1 HIGH: the global app cap lets a fork attack evict the focused app or GNOME Shell, and the eviction is permanent
+
+- **Where:** `publish()` → `largest_group()` → `evict_from()`.
+  - When every process holds one name, all groups tie at size 1. `max_by_key` then picks an arbitrary group, and `evict_from` takes an arbitrary app of it (HashMap order, not "oldest").
+  - The a11y bus allows 100,000 connections per user, so about 600 one-name processes are enough.
+- **Probe P6:** the first-registered app (stand-in for Firefox or Shell) is **evicted at attacker name #609 of 2512**.
+- **The eviction is permanent.** `publish` cancels `gone`, forgets the paths and retires the app. Nothing invalidates the drain's per-connection route cache (`raw.rs`: no closed or generation check), so the drain keeps pushing into the retired ingress. The app is silent until its bus name changes.
+- **Severity:** about the implementer's admission that the router does not know which app is focused, the scenario is real and HIGH.
+  - Browsers are *not* the natural largest group in normal use: Firefox and Chromium hold one a11y connection, in the parent or browser process.
+  - The danger is ties and attacks, not legitimate size.
+- **Fix:**
+  - (a) Protected set: the Reader publishes the focused `AppId` through an `AtomicU64`, which the router reads lock-free. The owner pid of `org.gnome.Shell`, resolved at start-up, is also protected. Neither is ever evicted or refused.
+  - (b) Evict only from a group above its fair share (more than 1 name). With all singletons, evict the **most recently registered** group (LIFO), which is the attacker's newest. Never pick an arbitrary member.
+  - (c) Eviction must invalidate the drain's cache, through a router generation counter or a closed-ingress check on push that makes the drain resolve again. Otherwise any eviction is a permanent mute.
+
+### R3-2 HIGH: refusals are permanent, and a victim can be steered into them
+
+- "Its own newcomer is refused" and "too many names" both do `ignored.insert(sender)`, which returns NotAnApp, which the drain caches for the connection's lifetime.
+- **Ways a hostile process gets a victim refused:**
+  - **Tie at app cap:** the victim's pid already holds one name (a second a11y connection, or a reconnect while the old name lingers), so it ties with attacker singletons. If `largest_group()` returns the victim's group, the victim's new connection is refused permanently.
+  - **Unknown-credentials starvation:** flooding the bus makes `GetConnectionCredentials` miss its 250 ms deadline. Lookups then return `None`, so the victim lands in the shared `None` group, capped at 32 and filled by the attacker's own credential-less names. The victim is refused and ignored forever.
+  - **Spoofing a pid group:** not possible. The pid comes from the bus (`GetConnectionCredentials`), not the client.
+- **Fix:**
+  - Never insert into `ignored` for a cap decision. Use the backoff path (`Retry`, not cached) so the app is served when room appears.
+  - Retry the credentials lookup before classifying a name as `None`. Exempt the protected set.
+
+### R3-3 MEDIUM: check-then-act on the name caps (scan finding 2, confirmed)
+
+- **Where:** `complete()` checks `names_per_group` before awaiting `announce`, and `publish()` increments it.
+- **Probe P7:** 60 names, then 64 concurrent registrations from one pid, give **124 names held (cap 64)**. The `None` group (cap 32) overshoots the same way.
+- **What does hold:** the 512-app cap and the park caps are decided and committed under one lock in `publish`/`park`, so they hold under concurrency.
+- **Fix:** reserve-then-commit. Increment the group's count under the lock in `resolve()`, when the registration is started, then release it on `fail`, on departure during registration, or on refusal.
+
+### R3-4 LOW
+
+- `orphan_focus` is cleared wholesale at 256 entries. 256 backing-off hostile senders can flush a victim's orphan focus. Evict one entry instead of clearing.
+- Peer-uid allow-list and tripwire on speech connects: verified in code. `check_peer` unit-tests the allow-list. No issue.
+
+## Required for MERGE
+
+Fix R3-1 (a–c), R3-2 and R3-3. Keep P6 and P7 (`probes/router_r3_probes.rs.txt`) as regression tests: P6 must keep the first-registered or focused app, and P7 must hold at most 64 names.
