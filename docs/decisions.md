@@ -39,3 +39,5 @@
 | 2026-10-12 | B-2 reference ingress extended with hard bounds: per-app hard cap (rule H), global SlotBudget, tombstone compaction, announcement text clip 4 KiB, route-cache cap, exact counter invariants | docs/bakeoff/b2-ingress/SPEC.md section 3.6 |
 | 2026-10-12 | voicego fast-fail open timeout (1.5 s), id-carrying errors on binary framing only, abandoned-open cap — merged and pushed (d049868). Follow-ups: SSIP async error as 7xx event (P1); flaky TestSynthesizeCtxCancel | docs/reports/2026-10-12-voicego-p0-fixes.md |
 | 2026-10-12 | gorca-helper Shell extension enabled live (Looking Glass load + gsettings), ACTIVE; foreign callers verified denied | docs/reports/2026-10-12-screen-capture-options.md |
+| 2026-10-12 | ADR-0003: background tabs build their mirrors in the background and are pre-warmed while the user walks the tab strip (confirmed) | ADR-0003 §6.6 |
+| 2026-10-12 | ADR-0003: the active tab's mirror stays awake when focus leaves the browser for another app (confirmed) | ADR-0003 §6.6 |
