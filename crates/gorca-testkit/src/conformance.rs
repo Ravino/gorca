@@ -106,7 +106,7 @@ mod tests {
         };
         let script = FakeScript::single_app("a", behavior);
         tokio::spawn(Box::new(FakeConnector::new(script)).run(ctx));
-        let mut table = ScopeRegistry::new();
+        let mut table = ScopeRegistry::unbounded();
         let Some(RegistrarRequest::Announce { scope, reply, .. }) = rx.recv().await else {
             panic!("connector did not announce");
         };
@@ -188,7 +188,7 @@ mod tests {
             }]
         }));
         tokio::spawn(Box::new(FakeConnector::new(script)).run(ctx));
-        let mut table = ScopeRegistry::new();
+        let mut table = ScopeRegistry::unbounded();
         let Some(RegistrarRequest::Announce { scope, reply, .. }) = rx.recv().await else {
             panic!("no announce");
         };

@@ -22,6 +22,7 @@ mod table;
 
 pub use coalesce::{
     CoalesceKey, Drained, GLOBAL_SLOT_BUDGET, HARD_CAP, IngressConfig, IngressReceiver,
-    IngressSender, IngressStats, RING_CAP, SlotBudget, ingress, ingress_with_budget,
+    IngressSender, IngressStats, RESERVED_SLOTS, RING_CAP, SlotBudget, ingress,
+    ingress_with_budget,
 };
 pub use dirty::{DirtySet, MAX_DIRTY_NODES};

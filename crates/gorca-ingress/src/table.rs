@@ -13,6 +13,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
 
 use gorca_model::{AppId, ConnectorId, LocalId, NodeEvent, NodeKey, RawEvent, TextDelta};
 use smallvec::SmallVec;
@@ -27,9 +28,28 @@ const NONE: u32 = u32::MAX;
 /// Compaction steps (one position each) done per push while a compaction is in progress.
 const COMPACT_STEPS: usize = 64;
 
-/// An app holding fewer slots than this may take slots back from the largest holder when the
-/// global budget is exhausted (SPEC AU-3).
-pub(crate) const RESERVED_MIN: usize = 64;
+/// An app holding fewer slots than this may take slots back from a larger holder when the
+/// global budget is exhausted (SPEC AU-3). Beyond the flat per-app reserve of the
+/// [`SlotBudget`], which never competes for the pool, this is how a small app grows to this size.
+pub(crate) const PREEMPT_BELOW: usize = 64;
+
+/// Buffers a preempted table gave up. Freed off the critical section (SPEC AU-6): dropping
+/// tens of thousands of events and unmapping their tables costs hundreds of microseconds.
+#[derive(Debug, Default)]
+#[allow(dead_code)]
+pub(crate) struct Shed {
+    events: Vec<NodeEvent>,
+    meta: Vec<Meta>,
+    aux: Vec<SmallVec<[TextDelta; 2]>>,
+    nodes: NodeMap,
+}
+
+impl Shed {
+    /// Worth a trip to the reaper thread (a few cache lines are cheaper to free in place).
+    pub(crate) fn is_large(&self) -> bool {
+        self.events.capacity() + self.nodes.capacity() > 256
+    }
+}
 
 /// A table that grew beyond this many node entries is rebuilt on drain instead of keeping its
 /// capacity (SPEC AU-5).
@@ -111,6 +131,14 @@ pub(crate) struct Table {
     dead_behind: usize,
     capacity_hint: usize,
     released: bool,
+    /// Reserve units this app holds, table and ring together (shared with the ring's credit).
+    app_reserve: Arc<AtomicUsize>,
+    /// How many of `held` came from the reserve; the rest are pool units.
+    res_units: usize,
+    /// Units already charged to the budget on behalf of records being folded in (their ring
+    /// credit), spent by `acquire` before it charges anything new.
+    credit_pool: usize,
+    credit_res: usize,
 }
 
 /// Everything `Table::take` hands over; the heavy conversion happens outside the lock.
@@ -160,7 +188,11 @@ fn to_u32(i: usize) -> u32 {
 }
 
 impl Table {
-    pub(crate) fn new(id: usize, budget: Option<Arc<SlotBudget>>) -> Self {
+    pub(crate) fn new(
+        id: usize,
+        budget: Option<Arc<SlotBudget>>,
+        app_reserve: Arc<AtomicUsize>,
+    ) -> Self {
         Self {
             id,
             budget,
@@ -185,6 +217,10 @@ impl Table {
             dead_behind: 0,
             capacity_hint: 0,
             released: false,
+            app_reserve,
+            res_units: 0,
+            credit_pool: 0,
+            credit_res: 0,
         }
     }
 
@@ -233,16 +269,61 @@ impl Table {
         }
     }
 
-    /// Take one budget unit; when the pool is exhausted, an app below its reserved minimum may
-    /// take slots back from the largest holder (SPEC AU-3).
-    fn acquire(&mut self) -> bool {
+    /// Hand over the ring credit of the records about to be pushed.
+    pub(crate) fn give_credit(&mut self, pool: usize, reserve: usize) {
+        self.credit_pool += pool;
+        self.credit_res += reserve;
+    }
+
+    /// Give back the credit the pushes did not spend (records that coalesced or were dropped).
+    pub(crate) fn return_credit(&mut self) {
+        if self.credit_pool + self.credit_res == 0 {
+            return;
+        }
+        let (pool, res) = (
+            std::mem::take(&mut self.credit_pool),
+            std::mem::take(&mut self.credit_res),
+        );
+        if let Some(b) = &self.budget {
+            b.release_split(pool, res, &self.app_reserve);
+        }
+    }
+
+    /// Spend one unit of credit: reserve first. `Some(true)` when it was a reserve unit.
+    fn spend_credit(&mut self) -> Option<bool> {
+        if self.credit_res > 0 {
+            self.credit_res -= 1;
+            Some(true)
+        } else if self.credit_pool > 0 {
+            self.credit_pool -= 1;
+            Some(false)
+        } else {
+            None
+        }
+    }
+
+    /// Take one budget unit. The first `R` units of an app (table and ring together) come from
+    /// its reserve, outside the pool; above that the pool is tried, and when it is exhausted a
+    /// small app takes slots back from a larger holder, of any size above `R` (SPEC AU-3).
+    fn acquire(&mut self, cfg: &IngressConfig) -> bool {
         let Some(b) = self.budget.clone() else {
             self.held += 1;
             return true;
         };
+        if let Some(from_reserve) = self.spend_credit() {
+            self.res_units += usize::from(from_reserve);
+            self.held += 1;
+            return true;
+        }
+        let reserve = cfg.reserved_slots;
+        if b.take_reserve(&self.app_reserve, reserve, 1) == 1 {
+            self.res_units += 1;
+            self.held += 1;
+            return true;
+        }
         if b.try_charge()
-            || (self.held < RESERVED_MIN
-                && b.preempt(self.id, 2 * RESERVED_MIN, 1)
+            || (self.held < PREEMPT_BELOW
+                && b.preempt(self.id, self.held.max(reserve), 1)
                 && b.try_charge())
         {
             self.held += 1;
@@ -256,9 +337,13 @@ impl Table {
             return;
         }
         debug_assert!(self.held >= n, "held counter underflow");
+        // Pool units go back first: the app keeps its reserve for as long as it holds anything.
+        let pool = n.min(self.held - self.res_units);
+        let reserve = n - pool;
+        self.res_units -= reserve;
         self.held -= n;
         if let Some(b) = &self.budget {
-            b.release(n);
+            b.release_split(pool, reserve, &self.app_reserve);
         }
     }
 
@@ -312,7 +397,7 @@ impl Table {
                     self.stats.announcements_dropped += 1;
                     return;
                 }
-                if !self.acquire() {
+                if !self.acquire(cfg) {
                     self.overflow(kind);
                     return;
                 }
@@ -321,18 +406,34 @@ impl Table {
             }
             Kind::Focus => {
                 if self.focus == NONE {
-                    // The newest focus is lossless: when the pool is exhausted it takes a slot
-                    // back from the largest holder; only if nobody holds more than a focus slot
-                    // (limit below the number of apps) is the limit exceeded, by one per app.
+                    // The newest focus is lossless: from the reserve, else the pool; when the
+                    // pool is exhausted it takes a slot back from a larger holder (at most
+                    // once: a failed preemption is not repeated); only if nobody can give one is
+                    // the limit exceeded, by one unit per app.
+                    let own = self.held;
                     self.focus = to_u32(self.events.len());
                     self.append(Kind::Focus, ev);
                     self.held += 1;
-                    if let Some(b) = &self.budget
-                        && !(0..32).any(|_| {
-                            b.try_charge() || (b.preempt(self.id, 2, 256) && b.try_charge())
-                        })
-                    {
-                        b.force_charge();
+                    if let Some(from_reserve) = self.spend_credit() {
+                        self.res_units += usize::from(from_reserve);
+                    } else if let Some(b) = &self.budget {
+                        if b.take_reserve(&self.app_reserve, cfg.reserved_slots, 1) == 1 {
+                            self.res_units += 1;
+                        } else {
+                            let mut got = false;
+                            for _ in 0..32 {
+                                if b.try_charge() {
+                                    got = true;
+                                    break;
+                                }
+                                if !b.preempt(self.id, own.max(cfg.reserved_slots), 256) {
+                                    break;
+                                }
+                            }
+                            if !got {
+                                b.force_charge();
+                            }
+                        }
                     }
                 } else {
                     let at = self.focus as usize;
@@ -346,7 +447,7 @@ impl Table {
                 if let Some(n) = knode {
                     // R-1: Removed(n) deletes every pending slot for n.
                     self.supersede_node(n);
-                    if self.acquire() {
+                    if self.acquire(cfg) {
                         self.new_node_slot(Kind::Removed, n, ev);
                     } else {
                         self.overflow(kind);
@@ -384,7 +485,7 @@ impl Table {
     fn merge_node_event(&mut self, cfg: &IngressConfig, kind: Kind, n: NodeKey, ev: NodeEvent) {
         let pos = self.nodes.get(&n).map_or(NONE, |e| e[kind as usize]);
         if pos == NONE {
-            if self.acquire() {
+            if self.acquire(cfg) {
                 self.new_node_slot(kind, n, ev);
             } else {
                 self.overflow(kind);
@@ -435,7 +536,7 @@ impl Table {
         };
         if !collapse {
             // The new delta is a queued event: it is charged and bounded (AU-4).
-            if self.extra >= cfg.hard_cap || !self.acquire() {
+            if self.extra >= cfg.hard_cap || !self.acquire(cfg) {
                 collapse = true;
             } else {
                 let idx = if aux_idx == NONE {
@@ -641,9 +742,9 @@ impl Table {
 
     /// Give back every slot but the focus one (global budget preemption, SPEC AU-3): the app
     /// is flooded and fully dirty, so its actor resyncs; the newest focus survives.
-    pub(crate) fn shed(&mut self) -> usize {
+    pub(crate) fn shed(&mut self, newer: Option<NodeEvent>) -> (usize, Shed) {
         let before = self.held;
-        let focus = if self.focus == NONE {
+        let old_focus = if self.focus == NONE {
             None
         } else {
             self.events
@@ -651,13 +752,21 @@ impl Table {
                 .map(|e| std::mem::replace(e, placeholder()))
         };
         self.stats.announcements_dropped += self.announcements as u64;
-        let had_focus = focus.is_some();
-        // Capacity goes back to the allocator: the app is reset, not merely emptied.
-        self.events = Vec::new();
-        self.meta = Vec::new();
-        self.aux = Vec::new();
+        let had_focus = old_focus.is_some();
+        // A Focus that was still in the ring is newer than the one in the table.
+        if let Some(NodeEvent::FocusChanged { node }) = &newer {
+            self.focused = Some(*node);
+            self.stats.focus_sequence += 1;
+        }
+        let focus = newer.or(old_focus);
+        // The buffers are moved out, not freed: the caller drops them after releasing the lock.
+        let garbage = Shed {
+            events: std::mem::take(&mut self.events),
+            meta: std::mem::take(&mut self.meta),
+            aux: std::mem::take(&mut self.aux),
+            nodes: std::mem::replace(&mut self.nodes, HashMap::with_hasher(FastState::default())),
+        };
         self.aux_free.clear();
-        self.nodes = HashMap::with_hasher(FastState::default());
         self.focus = NONE;
         self.live = 0;
         self.dead = 0;
@@ -674,8 +783,15 @@ impl Table {
         if let Some(ev) = focus {
             self.focus = 0;
             self.append(Kind::Focus, ev);
+            if !had_focus {
+                // A Focus that came from the ring has no unit yet; it is always admitted.
+                self.held += 1;
+                if let Some(b) = &self.budget {
+                    b.force_charge();
+                }
+            }
         }
-        before - self.held
+        (before.saturating_sub(self.held), garbage)
     }
 
     /// Hand over the pending events (moved out, not copied) and reset to a fresh drain. Vectors
@@ -874,6 +990,7 @@ impl Taken {
                     nodes: garbage,
                     meta: junk,
                     aux,
+                    shed: Vec::new(),
                 },
             },
             spare,

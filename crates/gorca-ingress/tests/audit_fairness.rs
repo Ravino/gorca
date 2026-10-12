@@ -1,0 +1,283 @@
+//! AU-3 / AU-6 / AU-1 regression tests for the judge's findings on candidate A (B-2 judgement,
+//! section 4.4): many-connection starvation, the cost of a preemption, uncharged ring records.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use gorca_ingress::{
+    GLOBAL_SLOT_BUDGET, HARD_CAP, IngressConfig, IngressReceiver, IngressSender, RESERVED_SLOTS,
+    SlotBudget, ingress_with_budget,
+};
+use gorca_model::{AppId, ConnectorId, LocalId, NodeEvent, NodeKey, Politeness, WindowKind};
+
+fn node(app: u32, n: u64) -> NodeKey {
+    NodeKey {
+        app: AppId {
+            connector: ConnectorId(0),
+            serial: app,
+        },
+        local: LocalId(n),
+    }
+}
+
+fn window(app: u32, n: u64) -> NodeEvent {
+    NodeEvent::WindowEvent {
+        node: node(app, n),
+        kind: WindowKind::Create,
+    }
+}
+
+fn announcement(app: u32) -> NodeEvent {
+    NodeEvent::Announcement {
+        node: Some(node(app, 0)),
+        text: Arc::from("new mail"),
+        politeness: Politeness::Polite,
+    }
+}
+
+type Conn = (IngressSender, IngressReceiver);
+
+/// Exhaust the pool exactly, from an app that holds at least 64 units (so it never preempts):
+/// pending units are settled after every push, so lease slack does not count.
+fn fill_pool(budget: &Arc<SlotBudget>, app: u32) -> Conn {
+    let c = ingress_with_budget(IngressConfig::default(), budget);
+    let mut n = 0u64;
+    while n < 64 || budget.pool_used() < budget.limit() {
+        c.0.push(window(app, 5_000_000 + n));
+        n += 1;
+        if n >= 64 {
+            c.1.pending();
+        }
+        assert!(
+            n < 200_000,
+            "pool cannot be exhausted: {}",
+            budget.pool_used()
+        );
+    }
+    c
+}
+
+/// The judge's attack: `k` connections of one hostile process, each shaped to hold about `per`
+/// distinct slots (then repeats of one key, so ring folds stay below any size threshold).
+fn hostile(budget: &Arc<SlotBudget>, k: u32, per: u64, repeats: u32) -> Vec<Conn> {
+    (0..k)
+        .map(|app| {
+            let (tx, rx) = ingress_with_budget(IngressConfig::default(), budget);
+            for n in 0..per {
+                tx.push(window(app, n));
+            }
+            for _ in 0..repeats {
+                tx.push(NodeEvent::NodeRemoved {
+                    node: node(app, 999_999),
+                });
+            }
+            (tx, rx)
+        })
+        .collect()
+}
+
+/// Judge probe `judge_shaped_holders_below_preempt_threshold`: about 2,300 connections each
+/// holding about 121 slots exhaust the pool; the victim (20 events, announcement included) must
+/// keep every one of them. Before the fix the victim kept 0 of 20.
+#[test]
+fn audit_many_connections_cannot_starve_a_victim() {
+    let budget = SlotBudget::new(GLOBAL_SLOT_BUDGET);
+    let attackers = hostile(&budget, 2_300, 120, 1_200);
+    assert!(
+        budget.used() + 1_000 >= GLOBAL_SLOT_BUDGET,
+        "attack must exhaust the pool"
+    );
+
+    let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+    let victim = 1_000_000u32;
+    tx.push(NodeEvent::NodeRemoved {
+        node: node(victim, 7),
+    });
+    for n in 0..18 {
+        tx.push(window(victim, 8 + n));
+    }
+    tx.push(announcement(victim));
+    let d = rx.drain();
+    assert_eq!(d.events.len(), 20, "victim lost events: {:?}", d.stats);
+    assert_eq!(d.stats.announcements_dropped, 0);
+    assert!(d.dirty.is_none(), "victim was flooded by others");
+    drop(attackers);
+    drop((tx, rx));
+    assert_eq!(budget.used(), 0);
+}
+
+/// Preemption works at any victim size: holders of only a little more than the reserve are
+/// shed (flooded, dirty-all, never silent) so that a newcomer above its own reserve is served.
+#[test]
+fn audit_small_holders_are_preempted_for_a_larger_claim() {
+    // Fifteen holders of 100 slots (32 from the reserve, 68 from the pool each) and a filler
+    // that takes what is left of the pool.
+    let limit = 1_500;
+    let budget = SlotBudget::new(limit);
+    let mut holders: Vec<Conn> = hostile(&budget, 15, 100, 0);
+    for (_, rx) in &holders {
+        rx.pending();
+    }
+    holders.push(fill_pool(&budget, 500));
+
+    let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+    let wanted = RESERVED_SLOTS as u64 + 8;
+    for n in 0..wanted {
+        tx.push(window(77, n));
+    }
+    let d = rx.drain();
+    assert_eq!(
+        d.events.len() as u64,
+        wanted,
+        "newcomer above its reserve was not served: {:?}",
+        d.stats
+    );
+    assert!(d.dirty.is_none());
+    // Somebody paid, and was told so: a shed holder is flooded with a full dirty set.
+    let mut shed = 0;
+    for (i, (_, hrx)) in holders.iter().enumerate() {
+        let hd = hrx.drain();
+        if hd.stats.flooded {
+            assert!(
+                hd.dirty
+                    .as_ref()
+                    .is_some_and(gorca_ingress::DirtySet::is_all)
+            );
+            shed += 1;
+        } else if i < 15 {
+            // A holder that was not preempted lost nothing.
+            assert_eq!(hd.events.len(), 100);
+        }
+    }
+    assert!(shed >= 1, "nobody was preempted");
+    drop(holders);
+    drop((tx, rx));
+    assert_eq!(budget.used(), 0);
+}
+
+/// An app that stays within the reserve is never affected by anybody, however full the pool.
+#[test]
+fn audit_reserve_is_untouchable() {
+    let budget = SlotBudget::new(256);
+    let holders: Vec<Conn> = hostile(&budget, 8, 64, 0);
+    assert_eq!(budget.used(), 256 + 8 * RESERVED_SLOTS, "the pool is full");
+    let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+    for n in 0..RESERVED_SLOTS as u64 {
+        tx.push(window(9, n));
+    }
+    let d = rx.drain();
+    assert_eq!(d.events.len(), RESERVED_SLOTS);
+    assert!(d.dirty.is_none());
+    drop(holders);
+}
+
+/// AU-1: records waiting in the ring are charged at push, so `used()` is exact without any fold.
+#[test]
+fn audit_ring_records_are_charged() {
+    let budget = SlotBudget::new(GLOBAL_SLOT_BUDGET);
+    let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+    // Fewer than the ring and the eager-fold threshold: everything sits in the ring.
+    for n in 0..500 {
+        tx.push(window(1, n));
+    }
+    // A producer takes its credit from the budget in small blocks, so while records sit in the
+    // ring `used()` is at least their number and exceeds it by less than one block.
+    assert!(
+        (500..500 + 16).contains(&budget.used()),
+        "ring records are not charged: used {}",
+        budget.used()
+    );
+    // Repeats of one key coalesce when folded, but they were charged while queued.
+    for _ in 0..100 {
+        tx.push(NodeEvent::NodeRemoved { node: node(1, 5) });
+    }
+    assert!(
+        (600..600 + 16).contains(&budget.used()),
+        "used {}",
+        budget.used()
+    );
+    assert_eq!(rx.pending(), 500, "window 5 is superseded by Removed(5)");
+    assert_eq!(budget.used(), rx.pending());
+    drop(rx.drain());
+    assert_eq!(budget.used(), 0);
+    for n in 0..300 {
+        tx.push(window(1, n));
+    }
+    drop(rx);
+    assert_eq!(
+        budget.used(),
+        0,
+        "dropping the receiver must return the ring"
+    );
+    drop(tx);
+    assert_eq!(budget.used(), 0);
+}
+
+/// Rings alone cannot be used to exhaust the pool beyond the limit: the 1,024 records of every
+/// app are part of the bound.
+#[test]
+fn audit_ring_charges_respect_the_limit() {
+    let limit = 2_000;
+    let budget = SlotBudget::new(limit);
+    let apps: Vec<Conn> = (0..8)
+        .map(|a| {
+            let c = ingress_with_budget(IngressConfig::default(), &budget);
+            for n in 0..900 {
+                c.0.push(window(a, n));
+            }
+            c
+        })
+        .collect();
+    let ceiling = limit + apps.len() * (RESERVED_SLOTS + 1);
+    assert!(budget.used() <= ceiling, "used {}", budget.used());
+    drop(apps);
+    assert_eq!(budget.used(), 0);
+}
+
+/// AU-6: the push that preempts a 65,536-slot holder must not pay for freeing it. The old
+/// implementation took 0.7 to 2 ms (judge, `preempt-cost.txt`); the bound is 250 us.
+#[test]
+fn audit_preempting_push_is_bounded() {
+    // Room for the holder plus its in-flight ring credit; a filler app inside its reserve then
+    // closes the gap so that the pool is exactly exhausted.
+    let limit = HARD_CAP + 64;
+    let bound = if cfg!(debug_assertions) {
+        Duration::from_millis(5)
+    } else {
+        Duration::from_micros(250)
+    };
+    let mut worst = Duration::ZERO;
+    for round in 0..5u32 {
+        let budget = SlotBudget::new(limit);
+        let (htx, hrx) = ingress_with_budget(IngressConfig::default(), &budget);
+        for n in 0..HARD_CAP as u64 {
+            htx.push(window(1, n));
+        }
+        assert_eq!(hrx.pending(), HARD_CAP);
+        let (ftx, frx) = fill_pool(&budget, 3);
+        let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+        for n in 0..RESERVED_SLOTS as u64 {
+            tx.push(window(2, n));
+        }
+        // The next push finds the pool exhausted and takes the holder's slots back.
+        let t = Instant::now();
+        tx.push(window(2, 1_000 + u64::from(round)));
+        let took = t.elapsed();
+        worst = worst.max(took);
+        assert_eq!(rx.drain().events.len(), RESERVED_SLOTS + 1);
+        let hd = hrx.drain();
+        assert!(hd.stats.flooded, "the holder was not preempted");
+        assert!(
+            hd.dirty
+                .as_ref()
+                .is_some_and(gorca_ingress::DirtySet::is_all)
+        );
+        drop((htx, hrx, tx, rx, ftx, frx));
+        assert_eq!(budget.used(), 0);
+    }
+    assert!(
+        worst <= bound,
+        "preempting push took {worst:?}, bound {bound:?}"
+    );
+}

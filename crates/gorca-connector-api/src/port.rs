@@ -1,6 +1,10 @@
 //! `AppPort`: what a connector holds per announced app.
 
-use gorca_ingress::{IngressConfig, IngressReceiver, IngressSender, ingress};
+use std::sync::Arc;
+
+use gorca_ingress::{
+    IngressConfig, IngressReceiver, IngressSender, SlotBudget, ingress, ingress_with_budget,
+};
 use gorca_model::{AppId, AppLifecycle, RawEvent, SnapshotBatch};
 use gorca_rt::mpsc;
 
@@ -70,8 +74,24 @@ pub struct AppChannel {
     pub control: mpsc::Receiver<AppControl>,
 }
 
+/// The channels of one app with an ingress that is not charged to any budget (tests, tools).
+/// Production apps are created through [`app_channel_with_budget`].
 pub fn app_channel(app: AppId, cfg: IngressConfig) -> AppChannel {
-    let (itx, irx) = ingress(cfg);
+    channels(app, ingress(cfg))
+}
+
+/// The channels of one app whose ingress is charged to `budget` (SPEC 3.6): one budget is shared
+/// by every app of the core, so a flood from many applications is bounded as a whole and no
+/// application can starve another (AU-3). The budget is passed explicitly, never global.
+pub fn app_channel_with_budget(
+    app: AppId,
+    cfg: IngressConfig,
+    budget: &Arc<SlotBudget>,
+) -> AppChannel {
+    channels(app, ingress_with_budget(cfg, budget))
+}
+
+fn channels(app: AppId, (itx, irx): (IngressSender, IngressReceiver)) -> AppChannel {
     let (ctx, crx) = mpsc::channel(CONTROL_QUEUE);
     let (rtx, rrx) = mpsc::channel(REQUEST_QUEUE);
     AppChannel {

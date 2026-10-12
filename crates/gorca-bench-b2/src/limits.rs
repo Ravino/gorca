@@ -23,9 +23,8 @@ pub const T3_P99_MAX_US: f64 = 2_000.0;
 pub const T3_P999_MAX_US: f64 = 8_000.0;
 
 /// SPEC 3.6 / AU-3: per-app reserve R held outside the shared pool. B-3 bound =
-/// `global_budget + apps * (R + 1)`. TODO: read `IngressConfig::default()` once the reserve
-/// field is merged (rust-engineer, ADR-0004); this mirrors its default.
-pub const APP_RESERVE: usize = 32;
+/// `global_budget + apps * (R + 1)`. Equals `IngressConfig::default().reserved_slots`.
+pub const APP_RESERVE: usize = gorca_ingress::RESERVED_SLOTS;
 /// T4: CPU milliseconds per 10k events (all non-harness threads).
 pub const T4_CPU_MS_PER_10K_MAX: f64 = 25.0;
 /// T4: drain thread share of one core at 100k ev/s (M-11: < 60 %).

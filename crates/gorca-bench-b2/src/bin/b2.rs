@@ -132,6 +132,19 @@ fn main() -> Result<()> {
         ),
         ("loadavg_at_start".to_owned(), load_start),
         (
+            "cpu_governor".to_owned(),
+            std::fs::read_to_string("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor")
+                .map_or_else(|_| "unknown".to_owned(), |g| g.trim().to_owned()),
+        ),
+        (
+            "cpus_allowed".to_owned(),
+            std::fs::read_to_string("/proc/self/status")
+                .unwrap_or_default()
+                .lines()
+                .find_map(|l| l.strip_prefix("Cpus_allowed_list:"))
+                .map_or_else(|| "unknown".to_owned(), |v| v.trim().to_owned()),
+        ),
+        (
             "profile".to_owned(),
             if cfg!(debug_assertions) {
                 "debug"
