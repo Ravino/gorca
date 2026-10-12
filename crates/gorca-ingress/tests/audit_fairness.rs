@@ -136,7 +136,7 @@ fn audit_small_holders_are_preempted_for_a_larger_claim() {
     assert!(d.dirty.is_none());
     // Somebody paid, and was told so: a shed holder is flooded with a full dirty set.
     let mut shed = 0;
-    for (_, hrx) in &holders {
+    for (i, (_, hrx)) in holders.iter().enumerate() {
         let hd = hrx.drain();
         if hd.stats.flooded {
             assert!(
@@ -145,6 +145,9 @@ fn audit_small_holders_are_preempted_for_a_larger_claim() {
                     .is_some_and(gorca_ingress::DirtySet::is_all)
             );
             shed += 1;
+        } else if i < 15 {
+            // A holder that was not preempted lost nothing.
+            assert_eq!(hd.events.len(), 100);
         }
     }
     assert!(shed >= 1, "nobody was preempted");

@@ -841,8 +841,13 @@ pub fn t7(ctx: &Ctx) -> Result<Vec<Row>> {
             .collect()
     };
     let mut rows = Vec::new();
+    // SPEC T7: at least 7 rounds, each round measuring the single producer and then the four
+    // producers (interleaved), and the gate applies to the median over rounds. A 4-thread
+    // contention percentile moves 4x between consecutive runs on a shared host.
+    let reps = if ctx.quick { 1 } else { ctx.reps().max(7) };
     let (mut p50, mut p99, mut p999, mut pmax) = (vec![], vec![], vec![], vec![]);
-    for r in 0..ctx.reps() {
+    let (mut c50, mut c99, mut c999) = (vec![], vec![], vec![]);
+    for r in 0..reps {
         // Through the budget, as in production: the CAS and any reserve logic are part of a push.
         let (tx, rx) = ingress_with_budget(
             IngressConfig::default(),
@@ -864,14 +869,6 @@ pub fn t7(ctx: &Ctx) -> Result<Vec<Row>> {
         p99.push(s.p99);
         p999.push(s.p999);
         pmax.push(s.max);
-    }
-    rows.push(Row::info("T7.push_p50_ns", "T7", "-", "ns", &p50));
-    rows.push(Row::info("T7.push_p99_ns", "T7", "-", "ns", &p99).at_most(L::T7_PUSH_P99_MAX_NS));
-    rows.push(Row::info("T7.push_p999_ns", "T7", "-", "ns", &p999).at_most(L::T7_PUSH_P999_MAX_NS));
-    rows.push(Row::info("T7.push_max_ns", "T7", "-", "ns", &pmax));
-
-    let (mut c50, mut c99, mut c999) = (vec![], vec![], vec![]);
-    for r in 0..ctx.reps() {
         // Through the budget, as in production: the CAS and any reserve logic are part of a push.
         let (tx, rx) = ingress_with_budget(
             IngressConfig::default(),
@@ -920,6 +917,10 @@ pub fn t7(ctx: &Ctx) -> Result<Vec<Row>> {
         c99.push(s.p99);
         c999.push(s.p999);
     }
+    rows.push(Row::info("T7.push_p50_ns", "T7", "-", "ns", &p50));
+    rows.push(Row::info("T7.push_p99_ns", "T7", "-", "ns", &p99).at_most(L::T7_PUSH_P99_MAX_NS));
+    rows.push(Row::info("T7.push_p999_ns", "T7", "-", "ns", &p999).at_most(L::T7_PUSH_P999_MAX_NS));
+    rows.push(Row::info("T7.push_max_ns", "T7", "-", "ns", &pmax));
     rows.push(Row::info(
         "T7.push4_p50_ns",
         "T7",

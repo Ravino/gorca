@@ -301,3 +301,184 @@ fn audit_help_fold_of_a_full_ring_is_bounded() {
     }
     assert!(worst <= bound, "help fold took {worst:?}");
 }
+
+/// R3-1 (AU-3), concurrent pool pressure. Three hostile apps keep the pool at its edge while a
+/// victim pushes exactly R events and drains, over and over. An app at or below R is never
+/// affected: no round may lose an event or flood. Before the fix 3 to 5 % of the rounds did,
+/// because the fold released the ring's reserve credit and charged the table's slots to the pool.
+#[test]
+fn audit_reserve_holds_under_concurrent_pool_pressure() {
+    let (secs, min_rounds) = if cfg!(debug_assertions) {
+        (2, 1_000)
+    } else {
+        (12, 1_000_000)
+    };
+    let budget = SlotBudget::new(3_000);
+    let stop = Arc::new(AtomicBool::new(false));
+    let hostile: Vec<_> = (0..3u32)
+        .map(|h| {
+            let (b, s) = (Arc::clone(&budget), Arc::clone(&stop));
+            std::thread::spawn(move || {
+                let (tx, rx) = ingress_with_budget(IngressConfig::default(), &b);
+                let mut n = 0u64;
+                while !s.load(Ordering::Relaxed) {
+                    tx.push(window(1_000 + h, n % 3_500));
+                    n += 1;
+                    if n.is_multiple_of(1_500) {
+                        drop(rx.drain());
+                    }
+                }
+            })
+        })
+        .collect();
+    let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+    let (mut bad, mut rounds) = (0u64, 0u64);
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(secs) || rounds < min_rounds {
+        for n in 0..RESERVED_SLOTS as u64 {
+            tx.push(window(7, n));
+        }
+        let d = rx.drain();
+        rounds += 1;
+        if d.events.len() != RESERVED_SLOTS || d.stats.flooded {
+            bad += 1;
+        }
+        if rounds >= min_rounds && cfg!(not(debug_assertions)) && start.elapsed().as_secs() > 60 {
+            break;
+        }
+    }
+    stop.store(true, Ordering::Relaxed);
+    for h in hostile {
+        h.join().unwrap();
+    }
+    assert_eq!(bad, 0, "{bad} of {rounds} rounds lost reserve events");
+}
+
+/// R3-1, sequential form: events within the reserve are charged to the reserve, not to the
+/// pool, and 3,000 apps each within R do not eat a 50,000-unit pool.
+#[test]
+fn audit_events_within_the_reserve_do_not_use_the_pool() {
+    for &(count, pool_expected) in &[(20u64, 0usize), (32, 0), (36, 4)] {
+        let budget = SlotBudget::new(100_000);
+        let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+        for n in 0..count {
+            tx.push(window(1, n));
+        }
+        assert_eq!(rx.pending() as u64, count);
+        assert_eq!(budget.pool_used(), pool_expected, "{count} events");
+        assert_eq!(budget.used() as u64, count);
+    }
+    let budget = SlotBudget::new(50_000);
+    let apps: Vec<Conn> = (0..3_000u32)
+        .map(|a| {
+            let c = ingress_with_budget(IngressConfig::default(), &budget);
+            for n in 0..20u64 {
+                c.0.push(window(a, n));
+            }
+            c.1.pending();
+            c
+        })
+        .collect();
+    assert_eq!(budget.pool_used(), 0);
+    drop(apps);
+    assert_eq!(budget.used(), 0);
+}
+
+/// R3-2. The bound `used() <= limit + apps * (R + 1)` holds at every instant, also while a
+/// consumer drains concurrently (a unit handed back and taken at once was counted twice).
+#[test]
+fn audit_bound_holds_while_a_consumer_drains() {
+    let budget = SlotBudget::new(0);
+    let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+    let rx = Arc::new(rx);
+    let stop = Arc::new(AtomicBool::new(false));
+    let worst = Arc::new(AtomicUsize::new(0));
+    let sampler = {
+        let (b, s, w) = (Arc::clone(&budget), Arc::clone(&stop), Arc::clone(&worst));
+        std::thread::spawn(move || {
+            while !s.load(Ordering::Acquire) {
+                w.fetch_max(b.used(), Ordering::Relaxed);
+            }
+        })
+    };
+    let drainer = {
+        let (rx, s) = (Arc::clone(&rx), Arc::clone(&stop));
+        std::thread::spawn(move || {
+            while !s.load(Ordering::Acquire) {
+                drop(rx.drain());
+            }
+        })
+    };
+    let hs: Vec<_> = (0..8u64)
+        .map(|k| {
+            let tx = tx.clone();
+            std::thread::spawn(move || {
+                for i in 0..100_000u64 {
+                    tx.push(window(1, k * 1_000_000 + (i % 50)));
+                    if i % 97 == 0 {
+                        tx.push(NodeEvent::FocusChanged { node: node(1, i) });
+                    }
+                }
+            })
+        })
+        .collect();
+    for h in hs {
+        h.join().unwrap();
+    }
+    stop.store(true, Ordering::Release);
+    sampler.join().unwrap();
+    drainer.join().unwrap();
+    let peak = worst.load(Ordering::Relaxed);
+    assert!(peak <= RESERVED_SLOTS + 1, "peak {peak}");
+    drop(rx.drain());
+    drop(tx);
+    drop(rx);
+    assert_eq!(budget.used(), 0);
+}
+
+/// R3-3. Apps that come and go while others are preempted never deadlock on the over-reserve
+/// set (the last handle of an app may be dropped by the thread that is scanning it).
+#[test]
+fn audit_app_churn_with_preemption_does_not_deadlock() {
+    let budget = SlotBudget::new(600);
+    let stop = Arc::new(AtomicBool::new(false));
+    let hs: Vec<_> = (0..4u32)
+        .map(|t| {
+            let (b, s) = (Arc::clone(&budget), Arc::clone(&stop));
+            std::thread::spawn(move || {
+                let mut i = 0u64;
+                while !s.load(Ordering::Relaxed) {
+                    let (tx, rx) = ingress_with_budget(IngressConfig::default(), &b);
+                    for n in 0..(40 + (i % 90)) {
+                        tx.push(window(t, n));
+                    }
+                    if i.is_multiple_of(3) {
+                        drop(rx.drain());
+                    }
+                    if i.is_multiple_of(2) {
+                        drop(rx);
+                        drop(tx);
+                    } else {
+                        drop(tx);
+                        drop(rx);
+                    }
+                    i += 1;
+                }
+                i
+            })
+        })
+        .collect();
+    #[allow(clippy::disallowed_methods)] // a test thread, not a lane: lets the churn run
+    std::thread::sleep(Duration::from_secs(2));
+    stop.store(true, Ordering::Relaxed);
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let total: u64 = hs.into_iter().map(|h| h.join().unwrap()).sum();
+        let _ = done_tx.send(total);
+    });
+    let total = done_rx
+        .recv_timeout(Duration::from_secs(30))
+        .expect("deadlock: churn threads did not finish");
+    assert!(total > 0);
+    assert_eq!(budget.used(), 0);
+}

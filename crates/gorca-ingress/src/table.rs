@@ -135,6 +135,10 @@ pub(crate) struct Table {
     app_reserve: Arc<AtomicUsize>,
     /// How many of `held` came from the reserve; the rest are pool units.
     res_units: usize,
+    /// Units already charged to the budget on behalf of records being folded in (their ring
+    /// credit), spent by `acquire` before it charges anything new.
+    credit_pool: usize,
+    credit_res: usize,
 }
 
 /// Everything `Table::take` hands over; the heavy conversion happens outside the lock.
@@ -215,6 +219,8 @@ impl Table {
             released: false,
             app_reserve,
             res_units: 0,
+            credit_pool: 0,
+            credit_res: 0,
         }
     }
 
@@ -263,6 +269,39 @@ impl Table {
         }
     }
 
+    /// Hand over the ring credit of the records about to be pushed.
+    pub(crate) fn give_credit(&mut self, pool: usize, reserve: usize) {
+        self.credit_pool += pool;
+        self.credit_res += reserve;
+    }
+
+    /// Give back the credit the pushes did not spend (records that coalesced or were dropped).
+    pub(crate) fn return_credit(&mut self) {
+        if self.credit_pool + self.credit_res == 0 {
+            return;
+        }
+        let (pool, res) = (
+            std::mem::take(&mut self.credit_pool),
+            std::mem::take(&mut self.credit_res),
+        );
+        if let Some(b) = &self.budget {
+            b.release_split(pool, res, &self.app_reserve);
+        }
+    }
+
+    /// Spend one unit of credit: reserve first. `Some(true)` when it was a reserve unit.
+    fn spend_credit(&mut self) -> Option<bool> {
+        if self.credit_res > 0 {
+            self.credit_res -= 1;
+            Some(true)
+        } else if self.credit_pool > 0 {
+            self.credit_pool -= 1;
+            Some(false)
+        } else {
+            None
+        }
+    }
+
     /// Take one budget unit. The first `R` units of an app (table and ring together) come from
     /// its reserve, outside the pool; above that the pool is tried, and when it is exhausted a
     /// small app takes slots back from a larger holder, of any size above `R` (SPEC AU-3).
@@ -271,6 +310,11 @@ impl Table {
             self.held += 1;
             return true;
         };
+        if let Some(from_reserve) = self.spend_credit() {
+            self.res_units += usize::from(from_reserve);
+            self.held += 1;
+            return true;
+        }
         let reserve = cfg.reserved_slots;
         if b.take_reserve(&self.app_reserve, reserve, 1) == 1 {
             self.res_units += 1;
@@ -370,7 +414,9 @@ impl Table {
                     self.focus = to_u32(self.events.len());
                     self.append(Kind::Focus, ev);
                     self.held += 1;
-                    if let Some(b) = &self.budget {
+                    if let Some(from_reserve) = self.spend_credit() {
+                        self.res_units += usize::from(from_reserve);
+                    } else if let Some(b) = &self.budget {
                         if b.take_reserve(&self.app_reserve, cfg.reserved_slots, 1) == 1 {
                             self.res_units += 1;
                         } else {
@@ -944,7 +990,7 @@ impl Taken {
                     nodes: garbage,
                     meta: junk,
                     aux,
-                    shed: None,
+                    shed: Vec::new(),
                 },
             },
             spare,

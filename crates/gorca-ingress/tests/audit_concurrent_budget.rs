@@ -39,11 +39,25 @@ fn audit_concurrent_pushes_never_overshoot_the_budget() {
             }
         })
     };
-    let mut receivers = Vec::new();
+    let receivers = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let drainer_stop = Arc::clone(&stop);
+    let drainer = {
+        let (receivers, stop) = (Arc::clone(&receivers), Arc::clone(&drainer_stop));
+        std::thread::spawn(move || {
+            // A consumer that drains every app all the time, as the app actors do.
+            while !stop.load(Ordering::Acquire) {
+                let all = receivers.lock().unwrap();
+                for rx in all.iter() {
+                    let rx: &gorca_ingress::IngressReceiver = rx;
+                    drop(rx.drain());
+                }
+            }
+        })
+    };
     let mut producers = Vec::new();
     for app in 0..APPS {
         let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
-        receivers.push(rx);
+        receivers.lock().unwrap().push(rx);
         for p in 0..PRODUCERS_PER_APP {
             let tx = tx.clone();
             producers.push(std::thread::spawn(move || {
@@ -73,6 +87,8 @@ fn audit_concurrent_pushes_never_overshoot_the_budget() {
     }
     stop.store(true, Ordering::Release);
     sampler.join().unwrap();
+    drainer.join().unwrap();
+    let receivers = receivers.lock().unwrap();
     assert!(
         worst.load(Ordering::Relaxed) <= ceiling,
         "budget used {} at its peak, ceiling {ceiling}",
@@ -82,12 +98,14 @@ fn audit_concurrent_pushes_never_overshoot_the_budget() {
         .iter()
         .map(gorca_ingress::IngressReceiver::pending)
         .sum();
-    assert_eq!(
-        budget.used(),
-        pending,
-        "sum of pending units must equal used"
+    // `pending` counts slots; queued text deltas are charged too, so `used` may exceed it, but
+    // never fall below it. Equality of the whole accounting is the `used == 0` below.
+    assert!(
+        budget.used() >= pending,
+        "used {} below pending {pending}",
+        budget.used()
     );
-    for rx in &receivers {
+    for rx in receivers.iter() {
         rx.check_invariants().unwrap();
         drop(rx.drain());
     }

@@ -139,7 +139,7 @@ pub(crate) struct Garbage {
     pub(crate) aux: Vec<smallvec::SmallVec<[gorca_model::TextDelta; 2]>>,
     /// The table of an app that was preempted while the reaper was backed up (ADR-0004 section
     /// 8): freed here, with the batch, on the thread that drains the victim.
-    pub(crate) shed: Option<Shed>,
+    pub(crate) shed: Vec<Shed>,
 }
 
 /// Process-wide bound on pending slots across many ingresses (hostile many-app floods).
@@ -174,9 +174,13 @@ pub struct SlotBudget {
     reaper_fallbacks: AtomicU64,
 }
 
+/// The apps that hold more than `R`, behind a mutex that is only ever held for a few loads and
+/// stores: no `Arc` is dropped, no other lock taken and nothing allocated-and-freed under it
+/// except the vector's own growth.
 #[derive(Debug, Default)]
 struct OverSet {
-    apps: Vec<Weak<Shared>>,
+    /// `(Shared::id, app)`; the id lets an entry be found even when its slot hint went stale.
+    apps: Vec<(usize, Weak<Shared>)>,
     cursor: usize,
 }
 
@@ -250,11 +254,6 @@ impl SlotBudget {
         self.pool_used() >= self.limit
     }
 
-    /// The pool has less than `margin` units left.
-    pub(crate) fn pool_nearly_full(&self, margin: usize) -> bool {
-        self.pool_used() + margin >= self.limit
-    }
-
     /// Take up to `n` reserve units for an app whose reserve counter is `app` (capped at `cap`).
     /// One compare-and-swap on the app's counter and one add on the global word.
     pub(crate) fn take_reserve(&self, app: &AtomicUsize, cap: usize, n: usize) -> usize {
@@ -308,9 +307,8 @@ impl SlotBudget {
 
     /// Return `pool` pool units and `reserve` units of the app counter `app`.
     pub(crate) fn release_split(&self, pool: usize, reserve: usize, app: &AtomicUsize) {
-        if reserve > 0 {
-            app.fetch_sub(reserve, Ordering::AcqRel);
-        }
+        // The global word first: it never exceeds the sum of the app counters, so a unit being
+        // handed back is never counted twice by a take that lands in between.
         let d = pool as u64 + reserve as u64 * RESERVE_ONE;
         if d > 0 {
             let prev = self.units.fetch_sub(d, Ordering::AcqRel);
@@ -318,6 +316,9 @@ impl SlotBudget {
                 (prev & POOL_MASK) >= pool as u64 && (prev >> 32) >= reserve as u64,
                 "budget underflow"
             );
+        }
+        if reserve > 0 {
+            app.fetch_sub(reserve, Ordering::AcqRel);
         }
     }
 
@@ -331,51 +332,66 @@ impl SlotBudget {
             return;
         }
         sh.over_slot.store(o.apps.len(), Ordering::Relaxed);
-        o.apps.push(sh.this.clone());
+        o.apps.push((sh.id, sh.this.clone()));
         self.over_len.store(o.apps.len(), Ordering::Relaxed);
     }
 
     fn over_remove(&self, sh: &Shared) {
+        // Declared before the guard, so it is dropped after it: if this is the last strong
+        // reference, `Drop for Shared` calls back into this function and must find the mutex free.
+        let moved: Option<Arc<Shared>>;
         let mut o = self.over();
-        let slot = sh.over_slot.swap(NOT_OVER, Ordering::Relaxed);
-        if slot == NOT_OVER || slot >= o.apps.len() {
+        let hint = sh.over_slot.swap(NOT_OVER, Ordering::Relaxed);
+        let slot = match o.apps.get(hint) {
+            Some((id, _)) if *id == sh.id => Some(hint),
+            // The hint went stale (a dying neighbour could not be told it moved): search.
+            _ => o.apps.iter().position(|(id, _)| *id == sh.id),
+        };
+        let Some(slot) = slot else {
             return;
-        }
-        o.apps.swap_remove(slot);
-        if let Some(moved) = o.apps.get(slot).and_then(Weak::upgrade) {
-            moved.over_slot.store(slot, Ordering::Relaxed);
+        };
+        drop(o.apps.swap_remove(slot));
+        moved = o.apps.get(slot).and_then(|(_, w)| w.upgrade());
+        if let Some(m) = &moved {
+            m.over_slot.store(slot, Ordering::Relaxed);
         }
         self.over_len.store(o.apps.len(), Ordering::Relaxed);
     }
 
-    /// The largest of a window of the apps that hold more than `R`, other than `me`. Never
-    /// scans more than `VICTIM_SAMPLE` entries and never touches an app's lock, so it is O(1)
-    /// whatever the number of apps, and free when nobody is over (SPEC AU-6).
+    /// The largest of a window of the apps that hold more than `R`, other than `me`. Looks at no
+    /// more than `VICTIM_SAMPLE` entries and takes no lock of an app, so it costs the same
+    /// whatever the number of apps, and nothing when nobody is over (SPEC AU-6).
     fn pick_victim(&self, me: usize) -> Option<Arc<Shared>> {
         if self.over_len.load(Ordering::Relaxed) == 0 {
             return None;
         }
-        let mut o = self.over();
-        let n = o.apps.len();
-        if n == 0 {
-            return None;
-        }
-        let start = o.cursor % n;
-        o.cursor = o.cursor.wrapping_add(VICTIM_SAMPLE);
-        let mut best: Option<(usize, Arc<Shared>)> = None;
-        for i in 0..n.min(VICTIM_SAMPLE) {
-            let Some(s) = o.apps.get((start + i) % n).and_then(Weak::upgrade) else {
-                continue;
-            };
-            if s.id == me {
-                continue;
+        // The upgraded handles are dropped after the mutex is released: dropping the last one
+        // runs `Drop for Shared`, which takes the mutex.
+        let mut window: smallvec::SmallVec<[Arc<Shared>; VICTIM_SAMPLE]> =
+            smallvec::SmallVec::new();
+        {
+            let mut o = self.over();
+            let n = o.apps.len();
+            if n == 0 {
+                return None;
             }
-            let w = s.weight();
-            if best.as_ref().is_none_or(|(bw, _)| w > *bw) {
-                best = Some((w, s));
+            let start = o.cursor % n;
+            o.cursor = o.cursor.wrapping_add(VICTIM_SAMPLE);
+            for i in 0..n.min(VICTIM_SAMPLE) {
+                if let Some((id, w)) = o.apps.get((start + i) % n)
+                    && *id != me
+                    && let Some(s) = w.upgrade()
+                {
+                    window.push(s);
+                }
             }
         }
-        best.map(|(_, s)| s)
+        let best = window
+            .iter()
+            .enumerate()
+            .max_by_key(|(_, s)| s.weight())
+            .map(|(i, _)| i)?;
+        Some(window.swap_remove(best))
     }
 
     /// Free `g` on the reaper thread; when that is backed up (or gone) park it with the victim
@@ -460,7 +476,7 @@ struct Shared {
     over_slot: AtomicUsize,
     this: Weak<Shared>,
     /// Table of this app, preempted while the reaper was backed up (freed by the next drain).
-    parked: Mutex<Option<Shed>>,
+    parked: Mutex<Vec<Shed>>,
     wake: Notify,
     table: Mutex<Table>,
     /// Meta vector recycled between drains (consumer only).
@@ -496,6 +512,31 @@ impl Shared {
                 .is_ok()
             {
                 b.release_split(pool_part, res_part, &self.app_reserve);
+            }
+        }
+    }
+
+    /// Take `n` units of the ring credit for the records just popped: reserve units first.
+    /// Returns `(pool, reserve)`; fewer than `n` when producers raced the credit down.
+    fn take_credit(&self, n: usize) -> Option<(usize, usize)> {
+        self.budget.as_ref()?;
+        let mut v = self.ring_credit.0.load(Ordering::Acquire);
+        loop {
+            let (credit, res) = ((v & POOL_MASK) as usize, (v >> 32) as usize);
+            let take = n.min(credit);
+            if take == 0 {
+                return None;
+            }
+            let res_take = take.min(res);
+            let new = (credit - take) as u64 | ((res - res_take) as u64) << 32;
+            match self.ring_credit.0.compare_exchange_weak(
+                v,
+                new,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            ) {
+                Ok(_) => return Some((take - res_take, res_take)),
+                Err(now) => v = now,
             }
         }
     }
@@ -543,7 +584,10 @@ impl Shared {
     }
 
     fn park(&self, g: Shed) {
-        *self.parked.lock().unwrap_or_else(PoisonError::into_inner) = Some(g);
+        self.parked
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(g);
     }
 
     /// Discard every record of the ring (receiver gone, or preemption). Returns how many.
@@ -598,18 +642,18 @@ impl Shared {
             if group.is_empty() {
                 break;
             }
-            // A full pool needs the units of the records just taken at once.
-            if self
-                .budget
-                .as_ref()
-                .is_some_and(|b| b.pool_nearly_full(2 * RING_CREDIT_BLOCK + 2 * FOLD_GROUP))
-            {
-                self.trim_credit(0);
+            // The credit of the records just taken moves to the table (reserve first), which
+            // spends it on the slots it creates and gives back what it does not use: no unit
+            // is released and charged again, so a full pool cannot refuse a record of an app
+            // that is within its reserve (AU-3).
+            if let Some((pool, res)) = self.take_credit(group.len()) {
+                t.give_credit(pool, res);
             }
             n += group.len();
             for ev in group {
                 t.push(&self.cfg, ev);
             }
+            t.return_credit();
         }
         // O(n) check, sampled and limited to small tables so debug builds keep bounded pushes.
         debug_assert!(
@@ -684,7 +728,7 @@ fn ingress_inner(
         app_reserve: Arc::clone(&app_reserve),
         over_slot: AtomicUsize::new(NOT_OVER),
         this: this.clone(),
-        parked: Mutex::new(None),
+        parked: Mutex::new(Vec::new()),
         wake: Notify::new(),
         table: Mutex::new(Table::new(id, budget.clone(), app_reserve)),
         spare: Mutex::new(Vec::new()),
@@ -824,11 +868,8 @@ impl IngressReceiver {
         sh.settle();
         sh.update_over();
         let mut drained = drained;
-        drained.garbage.shed = sh
-            .parked
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .take();
+        drained.garbage.shed =
+            std::mem::take(&mut *sh.parked.lock().unwrap_or_else(PoisonError::into_inner));
         drained
     }
 
@@ -1247,8 +1288,57 @@ mod tests {
         }
         assert!(budget.reaper_fallbacks() >= 1, "nobody was preempted");
         let d = vrx.drain();
-        assert!(d.garbage.shed.is_some(), "the victim must carry its table");
+        assert!(
+            !d.garbage.shed.is_empty(),
+            "the victim must carry its table"
+        );
         drop(frx.drain());
+    }
+
+    /// R3-3: whatever the order in which apps go away (receiver first, sender first, a neighbour
+    /// mid-removal), the over-reserve set ends empty and never keeps a dead entry.
+    #[test]
+    fn the_over_set_is_empty_after_any_drop_order() {
+        let budget = SlotBudget::build(1_000_000, false);
+        let mut apps: Vec<Option<(IngressSender, IngressReceiver)>> = (0..300u64)
+            .map(|a| {
+                let c = ingress_with_budget(IngressConfig::default(), &budget);
+                for n in 0..60 {
+                    c.0.push(NodeEvent::WindowEvent {
+                        node: key(a * 1_000 + n),
+                        kind: WindowKind::Create,
+                    });
+                }
+                c.1.pending();
+                Some(c)
+            })
+            .collect();
+        assert_eq!(budget.over().apps.len(), 300);
+        // A fixed pseudo-random order, receivers and senders separately.
+        let mut x = 12345u64;
+        let mut order: Vec<usize> = (0..300).collect();
+        for i in (1..order.len()).rev() {
+            x = x.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            order.swap(i, (x >> 33) as usize % (i + 1));
+        }
+        let mut senders = Vec::new();
+        for (k, &i) in order.iter().enumerate() {
+            if let Some((tx, rx)) = apps[i].take() {
+                if k % 2 == 0 {
+                    drop(rx);
+                    senders.push(tx);
+                } else {
+                    drop(tx);
+                    drop(rx);
+                }
+            }
+        }
+        drop(senders);
+        let o = budget.over();
+        assert!(o.apps.is_empty(), "{} dead entries", o.apps.len());
+        assert_eq!(budget.over_len.load(Ordering::Relaxed), 0);
+        drop(o);
+        assert_eq!(budget.used(), 0);
     }
 
     #[tokio::test]

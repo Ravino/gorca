@@ -159,38 +159,61 @@ unbounded growth, and the lossless classes (the newest `Focus`) still get throug
 | Bytes of one incoming message held in memory | 16 MiB | a larger message is skipped while streaming and counted as `malformed` (the D-Bus limit is 128 MiB). The zbus reference cannot do this; test B-5 is `#[ignore]` and run by `run-all.sh` with `--include-ignored` | B-5 |
 | Counters vs structures | exact | every cap compares against a counter that must equal the real size of the structure after every push, merge, supersede, flood, drop and drain (`IngressReceiver::check_invariants`, `debug_assert` in debug builds) | B-1 |
 
-**B-3 bound (amended 2026-10-12, judge finding; coordinator decision R = 32; derivation added
-after the fixes review, F-3/F-6).** AU-3 gives every app a reserved minimum R of slots that
-other apps cannot take; the reserve is held **outside** the shared pool. With a hard global bound
-equal to the pool the two requirements contradict: apps registered after the pool is full still
-need their reserve, so `SlotBudget::used` rightly exceeds the pool (measured on C: 11 484 used
-against a 10 300 bound with 300 apps). The bound is
+**B-3 bound (amended 2026-10-12, judge finding; coordinator decision R = 32; derivation rewritten
+after review rounds 2 and 3).** AU-3 gives every app a reserved minimum R of slots that other
+apps cannot take; the reserve is held **outside** the shared pool. With a hard global bound equal
+to the pool the two requirements contradict: apps registered after the pool is full still need
+their reserve, so `SlotBudget::used` rightly exceeds the pool (measured on C: 11 484 used against
+a 10 300 bound with 300 apps). The bound is
 
-    used() <= global_budget + apps x (R + 1)        at every instant, for any number of producers
+    used() <= global_budget + apps x (R + 1)        at every instant, for any number of threads
 
-**Derivation.** `used()` is the sum of two counts kept in one atomic word (so a reader never
-sees a torn sum): *pool units* P and *reserve units* V.
-1. P: every pool unit is taken by a compare-and-swap that refuses when P is already at
-   `global_budget`; hence P <= global_budget, except for the newest Focus slot of an app, which is
-   always admitted (`force_charge`) and exists at most once per app: P <= global_budget + apps.
-2. V: each app has one counter `reserve_used`, shared by its table and its ring credit, that is
-   raised by a compare-and-swap that refuses at R; V is the sum of these counters: V <= apps x R.
-   (A design with two independent, stale views of the reserve, one for the table and one for the
-   ring, overshot to 48..80 units for one app with 2..16 producers; the single CAS counter is what
-   makes the bound exact.)
-3. Adding: used = P + V <= global_budget + apps x (R + 1). Leased ring credit (a producer takes
-   units from the budget in blocks of 16 for its ring) is part of P and V and is bounded by the
-   same two rules; it is returned when the ring drains, so `used` equals the sum of the pending
-   units of all ingresses whenever the ingresses are observed (`drain`, `pending`,
-   `check_invariants`), and exceeds it by at most one lease block per ingress in between.
-The reserve is therefore not taken from the pool: a pool of N units still holds N units for apps
-above their reserve (an earlier version counted both in one total, which shrank the pool by R
-per app and made a failed preemption scan reachable).
-R is read from the config (`IngressConfig::reserved_slots`, default 32), not hard-coded in
-tests: `limits::APP_RESERVE` is `gorca_ingress::RESERVED_SLOTS`. `a_global_budget_bounds_many_apps`
-and `audit_concurrent_pushes_never_overshoot_the_budget` assert both `budget.used()` and the sum
-of `pending()` against this bound with 2 producers per app; nothing else was relaxed (focus
-survives, the resync mark is required, `used` returns to 0). See
+**State.** The budget keeps one atomic word `G = (P, V)` (pool units in the low half, reserve units
+in the high half), so a reader sees both from one load, and one counter `c_i` per app (the reserve
+units app *i* holds, table and ring credit together). Operations, in program order:
+* `take_pool`: CAS `P -> P + 1`, refused while `P >= global_budget`.
+* `take_reserve`: CAS `c_i -> c_i + 1`, refused while `c_i >= R`; then `V += 1`.
+* `release`: `V -= 1` first, then `c_i -= 1` (the same two steps in the opposite order).
+* `force_charge`: `P += 1`, only for the newest Focus slot of an app, which exists at most once
+  per app at a time (it is created only when the app has none).
+
+**Invariants, each true at every instant.**
+1. `c_i <= R`: only the CAS above raises `c_i`, and it refuses at R.
+2. `V <= sum(c_i)`: `V` is raised only after a `c_i` was raised, and lowered before one is. (Doing
+   the two halves of a release in the other order lets a concurrent take be counted twice for a
+   moment: 57 to 65 units for one app against a bound of 33 were measured with a draining consumer,
+   review round 3.) With 1: `V <= apps x R`.
+3. `P <= global_budget + F`, where F is the number of Focus slots currently force-charged,
+   `F <= apps`: every other raise of `P` is the CAS that refuses at the limit.
+4. `used() = P + V <= global_budget + apps x (R + 1)`.
+Units a producer leases for its ring in blocks of 16 (`RING_CREDIT_BLOCK`) and units the table
+holds pass through the same operations, so they are inside P and V. Credit moves between the ring
+and the table on fold without being released and charged again.
+
+**What the reserve guarantees (AU-3).** A request for a unit is refused only when `c_i = R`
+(reserve full) **and** the pool is exhausted **and** no victim can be preempted. `c_i = R` means
+the app already holds R units, so an app holding fewer than R units is never refused, whatever
+the other apps hold. Two properties make `c_i` a faithful count of what the app holds: reserve
+units are taken first and pool units are returned first (`release_split`), and the ring credit of
+a record moves to the table's slot for it on fold (reserve first, no release and recharge). The
+earlier design released the ring's reserve credit and charged the table's slots to the pool,
+which left the reserve idle and flooded an app holding exactly R events in 3 to 5 % of the rounds
+under concurrent pool pressure (review round 3, probe p8; now the release test
+`audit_reserve_holds_under_concurrent_pool_pressure`). With several producers on one ingress up to
+P - 1 records can lack credit when they race for the last credited slot of the ring; such a record
+is charged normally on fold and is refused only if `c_i = R`.
+The pool is not shortened by the reserve: a pool of N units holds N units for apps above their
+reserve (an app within R uses no pool unit, `audit_events_within_the_reserve_do_not_use_the_pool`).
+
+**Observation.** `used()` equals the sum of the pending units of all ingresses whenever the
+ingresses are quiescent and observed (`drain`, `pending`, `check_invariants`); in between it may
+exceed it by the unused ring credit of each ingress (at most 3 blocks) and, with concurrent
+producers, differ by the units in flight.
+R is read from the config (`IngressConfig::reserved_slots`, default 32), not hard-coded in tests:
+`limits::APP_RESERVE` is `gorca_ingress::RESERVED_SLOTS`. `a_global_budget_bounds_many_apps` and
+`audit_concurrent_pushes_never_overshoot_the_budget` (2 producers per app and a concurrent drain
+of every app) assert `budget.used()` against this bound while the threads run; nothing else was
+relaxed (focus survives, the resync mark is required, `used` returns to 0). See
 `docs/adr/0004-ingress-drain-and-coalescer.md`.
 
 **B-5 harness note (2026-10-12).** The test must measure the drain, not the harness: the 100 MiB
@@ -366,7 +389,7 @@ threshold constants live in `crates/gorca-bench-b2/src/limits.rs`; this table is
 | T5.survived@... | no disconnect while the actor is hung, fences seen, and `C.violations` = 0 after it resumes | | 1 / 0 |
 | **C.failures@{mix}** | correctness at benchmark scale (T6) | 3 concurrent apps per run, 5 s, 50k events/s, mixes fakeapp, terminal, realistic, lossless, plus realistic over 20 000 nodes (overflows `max_keys`, consumer delayed 150 ms per drain so `Flooded` really happens) and distinct. Also fakeapp and realistic on dbus-daemon and dbus-broker. Counts: `compare()` violations, ORD-1 violations, timer wake-ups with work pending (lost wake-ups), misrouted events, apps whose fence never arrived, disconnects. | 0 |
 | **T7.push_p99/p999_ns** | cost of one `push` | in process, 2M pushes of mixed events over 1500 nodes, drain every 512, per-call clock pair with the clock overhead subtracted | p99 <= 1 us, p99.9 <= 5 us |
-| **T7.push4_p99/p999_ns** | contended push | 4 producers on one ingress, a consumer draining every 200 us | p99 <= 5 us, p99.9 <= 50 us |
+| **T7.push4_p99/p999_ns** | contended push | 4 producers on one ingress, a consumer draining every 200 us. At least 7 rounds, each round measuring the single producer and then the four producers (interleaved); the verdict is on the **median over rounds** | p99 <= 5 us, p99.9 <= 50 us |
 | FA.{storm,mixed,hung}.failures | Python fake apps in the isolated AT-SPI harness | `tests/harness/run-isolated.sh b2 fakeapp <s>`: storm 40k/s; mixed = storm 20k/s + form (focus every 50 ms) + terminal (VTE-style); hung = mixed + a hung app + `SIGSTOP` of the storm app for 2 s. A truth tap on the same bus (own decoder) provides the per-sender truth. Zero tolerance for lost events, misrouted events or a disconnect. | 0 |
 | FA.*.focus_p99_us | focus latency vs the tap's arrival of the same message | as above | `<= 2 ms` |
 | F3.* | fixture self-test | a reader that does not read is disconnected by dbus-broker and loses signals on dbus-daemon; a reader that keeps up is never disconnected | fixture check, not a candidate metric |
@@ -380,7 +403,16 @@ LP E-cores 167, P-cores 561, unpinned 417; `b2 threads`), a 5x spread from place
 no blocking-`recv` drain has been below 160 there (reference 225). At 100k/s every placement
 passes (8 to 18 ms). Reaching 25 ms at 10k/s would need busy polling, which contradicts
 `T4.idle_cpu_ms_per_s`. The 10k figure stays in the report as information (with the governor and
-the core placement in the result meta); absolute load is bounded by `T4.drain_core_pct@100k`.
+the allowed cores in the result meta: `cpu_governor`, `cpus_allowed`); absolute load is bounded by `T4.drain_core_pct@100k`.
+
+**T7 methodology (amended 2026-10-12, reviewer round 3).** A percentile of four contending
+threads moves by 4x between consecutive runs of the same binary on a shared host (1.4 us and
+5.4 us measured back to back), more than the difference between the candidates. T7 therefore runs
+at least 7 rounds (`ctx.reps().max(7)`, interleaved single and 4-producer) and is gated on the
+median. An **authoritative** run (the one that decides a gate) needs a quiet host: load average
+below 1, the `performance` governor, producers pinned to the P-cores, and ideally the arms
+interleaved in one session. The result meta records `loadavg_at_start`, `loadavg_at_end`,
+`cpu_governor` and `cpus_allowed`; a run on a loaded host is informative, not authoritative.
 
 **Gate.** A candidate is rankable only if it passes **every conformance test** (`cargo test -p
 gorca-bench-b2`, debug and release), every `C.failures`, `T3.survived`, `T5.survived`,
