@@ -13,7 +13,11 @@ clone_branch() { # name url branch [sparse dirs...]
 }
 clone() { # name url [sparse dirs...]
   local name=$1 url=$2; shift 2
-  if [ -d "$name/.git" ]; then git -C "$name" pull -q --depth 1 && echo "updated $name" || echo "FAILED update $name"; return; fi
+  if [ -d "$name/.git" ]; then
+    # Dev checkouts (SSH remote, e.g. voicego) are worked on directly: never touch them.
+    case "$(git -C "$name" remote get-url origin)" in git@*) echo "skip $name (dev checkout)"; return;; esac
+    git -C "$name" pull -q --depth 1 && echo "updated $name" || echo "FAILED update $name"; return
+  fi
   if [ $# -gt 0 ]; then
     git clone -q --depth 1 --filter=blob:none --sparse "$url" "$name" && git -C "$name" sparse-checkout set "$@" && echo "ok $name (sparse)" || echo "FAILED $name"
   else

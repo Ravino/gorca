@@ -1,0 +1,32 @@
+[Unit]
+Description=gorca screen reader (development unit)
+Documentation=file://<repo>/docs/adr/0001-core-architecture.md
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=<repo>/target/release/gorca
+# ADR-0001 17.2: do not restart after an explicit kill (e.g. an operator or OOM
+# policy); restart only on crashes and non-zero exits.
+Restart=on-failure
+RestartSec=1
+RestartPreventExitStatus=SIGKILL
+TimeoutStopSec=5
+
+# Hardening. Deliberately NOT set: PrivateDevices (evdev/libei fallback, audio),
+# PrivateNetwork/PrivateUsers (D-Bus sockets under XDG_RUNTIME_DIR), RestrictRealtime
+# and MemoryDenyWriteExecute (RT scheduling, wasmtime JIT).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+
+# Not enabled at login: the user toggles it with Super+Alt+G (tools/gorca-toggle.sh).
