@@ -279,3 +279,60 @@ A real verdict needs:
 4. Correct the SPEC B-3 derivation.
 
 R3-4 and R3-5 can be follow-ups.
+
+---
+
+# Round 4: fixes-r4 (code d705bc0, head 52b5815)
+
+**Verdict: BLOCK.** The only blocking item is a test. The **code meets AU-1**, but the AU-7 test's assertion was weakened to something less than AU-1 (coordinator rule: a weaker assert means BLOCK).
+Once that test is restored to exact equality, I recommend **MERGE-WITH-FOLLOWUPS**.
+
+Raw output is in the worktree under `bench/results/b2-ingress/review-r4/`:
+`gates.txt`, `probes.txt`, `spot-t1-t3-t7.txt`, `review-r4-spot/`, and the probe sources `judge_r4_au1.rs.txt`,
+`judge_r2_probe.rs.txt`, `judge_r2_focus_scan.rs.txt` and `judge_r3_probe.rs.txt`, none of which are part of the branch.
+Load average was 7-13 throughout.
+
+## 1. The AU-7 test: `pending == used` became `used >= pending`
+`pending()` returns `live` slots. `used` charges slots **plus queued text deltas beyond the first of a slot** (AU-4), so `used >= pending` is the right direction for that proxy, and the justification is factually correct.
+But the assertion is strictly weaker than AU-1 (Σ pending units == `used` at quiescence): an over-charge or a stuck ring credit would pass it.
+The final `used == 0` after the drains does not close that gap either, because `drain` also settles leftover ring credit.
+
+**Measured** with `judge_au1_exact_at_quiescence`, which uses the AU-7 scenario: 8 apps × 2 producers, windows plus text deltas plus Focus, and a concurrent drainer, over 20 rounds at limits 1,000 and 100,000.
+At quiescence (after `check_invariants` on every app), `used` was compared with Σ `drain().events.len()`. A slot with k deltas drains as k events, so that sum counts exactly the pending units.
+**The gap was 0 in every round** (for example, used 2,306 against 2,306 drained units), and `used` was 0 after the drains. So AU-1 holds and nothing is over-charged or leaked.
+**Required:** replace the `>=` with this exact check, `budget.used() == Σ drain().events.len()` after `check_invariants`, or expose a `pending_units()` and assert equality.
+It is test-only.
+
+## 2. The admitted race: a record can lack credit
+`cover` returns true while `ring.len() < credit`. P producers that all see `len == credit - 1` all push, which leaves up to P - 1 records without credit.
+- **No accumulation:** the next `cover` on that ingress sees `len >= credit` and leases a block; each leasing producer takes up to 16. The deficit is at most P - 1 records per ingress at any instant, and at most the number of concurrently pushing threads process-wide.
+- On fold, `take_credit` hands over what exists. The missing units go through `acquire` (reserve CAS, then pool CAS, then preemption), which are the same operations the derivation covers.
+- **B-3 cannot be exceeded:** the race under-counts. It lets the real pending exceed `used` by at most P - 1 per ingress for a moment, never `used` exceed the bound.
+- Probes agree: the r2 overshoot probe peaked at 32 with 1-16 producers; `p3` (8 producers plus a drainer, pool 0) peaked at **33 = R + 1**.
+
+## 3. The SPEC B-3 derivation: sound
+- Invariant 2 (`V <= Σ c_i`) follows from take ordering (`c_i` CAS, then V) and release ordering (V, then `c_i`), which matches the code (`release_split`, `take_reserve`).
+- Invariant 3 (`P <= limit + F`) holds if F is read as "apps whose current Focus slot was force-charged". A CAS take is refused whenever P ≥ limit, and a forced Focus slot is released only by a drain or teardown of that app; `shed` keeps the focus, and a Focus that came from the ring is forced at most once there.
+- The AU-3 paragraph now matches the code (credit transfer, reserve taken first and pool returned first), and `p5` confirms it: 20 events use reserve 20 and pool 0; 3,000 apps × 20 events use pool 0, and a newcomer keeps 200 of 200.
+- The "Observation" (equality at quiescence) is confirmed by section 1.
+- T4 and T7 wording matches the decisions. The meta records `cpu_governor` and `cpus_allowed` (verified in the spot run's JSON).
+
+## 4. Earlier probes re-run (all pass)
+| Probe | Result |
+|---|---|
+| F-1: Focus in the ring through preemption (r2 and r3 `p1`) | kept |
+| F-2: Focus push with 100 / 2,300 / 10,000 apps | 2.3-2.8 µs |
+| F-3 producers only; `p3` with a concurrent drain | peak 32; **33** (bound 33) |
+| `p5` reserve versus pool | reserve used first; the pool is untouched by apps within R |
+| `p8` AU-3 under concurrent pool pressure | **0 / 1,488,284** rounds violated (was 3-5 %) |
+| `p6`, `p7` deadlock hunts (20 s + 30 s) | none, about 53M app lifecycles |
+| `p2` over-set churn | 0 / 30 escapes |
+| `p4` hog outside the window | the requester (above R) was refused for 126 pushes and flooded before the cursor reached the hog. AU-3 allows this; the worst push was 10 µs |
+
+Gates: fmt is clean, clippy exits 0, 46 of 46 release ingress tests pass (including ignored ones), the debug workspace has 0 failures, and the bench-b2 release conformance tests pass.
+Spot check at load 12.4: T1 800k (median), T3 mock p99 181 µs with 0 unobserved probes, and T7 over 7 rounds with push4 p99 at a median of **4.39 µs** (range 2.1-5.4) and p999 at 29.4 µs, both PASS. Single-producer push p99 is 19 ns.
+
+## 5. Follow-ups (not blocking)
+- **F4-1, Low:** `over_remove` falls back to an O(n) `position()` search under the over-set mutex whenever the hint is `NOT_OVER`. That includes every receiver drop and every `Shared` drop of an app that is **not** in the set, so every app teardown scans the whole set twice. At 10k over-R apps that is tens of µs of mutex hold, which blocks concurrent preemptions. Fix: return immediately when the hint is `NOT_OVER`, and search only when the hint points to the wrong id.
+- **F4-2, Low:** `parked` is now an unbounded `Vec`. If a victim's actor is stalled and it is repeatedly re-preempted while the reaper is backed up, the Vec grows by one table per preemption, outside the budget. Bound it (for example, refuse to preempt a victim whose parked list is non-empty) or count it.
+- The `p4` behaviour (a requester above R can be refused for up to ⌈n/64⌉ attempts) is within AU-3, but it is worth documenting in ADR-0004.
