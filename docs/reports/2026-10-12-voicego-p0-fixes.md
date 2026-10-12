@@ -178,3 +178,71 @@ Build and rig live in the session scratchpad
 lines of Go and can be moved into `scripts/` if wanted. Commands:
 `. ./env.sh; cd refs/voicego; go vet ./... && go test -race ./...` and
 `go test -race -tags espeak_ng_real ./cmd/voicego-engine-espeak-ng`.
+
+## Review round (reviewer verdict: merge after fixes)
+
+New commits on the same branch (no rewrite):
+
+| Hash | Subject |
+|---|---|
+| 48b7f24 | fix(dispatch): honour a STOP that races with request pickup |
+| 3f1fca9 | fix(plugin): cap consecutive manager panics |
+| 616b0e5 | fix(dispatch): bound sink opens in the cache and reopen after the old close |
+| 742576d | fix(server): close the session after a writer panic |
+| f4dc9f8 | test(dispatch): make the Synthesize-start test send a real STOP |
+| 57f8e73 | docs: drop a private issue id from a sink cache comment |
+
+1. **Blocking, regression from the branch.** A request picked up between the run loop's
+   quit check and `process()` registering its cancel func escaped the first STOP, and
+   since `cancelClient` had already removed the worker, a second STOP could not reach it.
+   `process()` now re-checks `w.quit` inside the `activeMu` section (the reviewer's fix).
+   `TestStopRacingWithPickupNeverEscapes`: 1500 rounds of SPEAK, 0-60 us gap, STOP, STOP;
+   fails without the fix, 0 escapes with it. `ARCHITECTURE_V2.md` corrected.
+2. Plugin manager: three consecutive panicking steps mark the engine DEAD
+   (`TestProtectCapsConsecutivePanics`, `TestProtectStreakResets`).
+3. Sink cache enforces the open timeout itself (the Open runs in a goroutine, a late
+   success is closed). `TestSinkHungOpenTimesOut` uses an Open that ignores its context.
+4. A dropped handle's Close runs in the background but the reopen waits for it (max
+   500 ms). `TestSinkReopenWaitsForOldHandleClose`.
+5. A writer panic poisons the session writer and closes the connection
+   (`TestSession_WriterPanicClosesConnection`).
+6. The Synthesize-start test now uses a Synthesize that blocks until its context is
+   cancelled, sends a real STOP, and returns a gRPC Canceled status; it fails without
+   the classification fix.
+7. Comments no longer cite private audit item ids (in the diff of this branch).
+
+### Gates at 57f8e73
+
+- `gofmt -l .` empty; `go vet ./...` clean.
+- `go test -race -count=1 ./...` run twice: both pass (27 packages ok each time).
+- `go test -race -tags espeak_ng_real ./cmd/voicego-engine-espeak-ng ./internal/... ./plugins/...`: pass.
+- Latency, null sink, real espeak-ng, n=500 per run, interleaved, load average about 12.
+  SPEAK to `701` p50 / p99 (ms): base 1.740/2.352, 1.725/2.531, 1.728/2.449; branch
+  1.752/2.520, 1.733/2.486, 1.756/2.493; binary framing base 1.746/2.474, branch
+  1.737/2.427. No regression (p50 within 0.03 ms, p99 within 0.17 ms in both directions).
+- 10-minute soak, race build, null sink, 6 connections, same traffic mix and checks as before:
+  `FINAL queued=117976 end=105887 canceled=12089 accounted=117976 rejected=22665
+  stops=6053 | lost=0 mustEnd=0 asyncErr=0 proto=0`, client rc=0, daemon alive,
+  no `panic` or `DATA RACE` in the log, no GORACE file, goroutines flat at 47.
+
+## Second review round
+
+Commit `7cf7a1c` fix(dispatch,plugin): do not close a handle whose timed-out Open is still running.
+
+- **Blocking (data race introduced by 616b0e5).** On an Open timeout `runOpen` still
+  passed the plugin to `finishAttempt`, which closed it in the background while the
+  abandoned Open used the same instance, and the late-result goroutine closed it again.
+  Ownership now moves to the late-result goroutine on timeout (`finishAttempt` gets nil).
+  Test `TestSinkTimedOutOpenIsNotClosedConcurrently` (Open ignores its context and writes a
+  plain field, 50 ms timeout, factory path): reports DATA RACE under `-race` without the
+  fix, clean with it, and asserts one Open and exactly one Close.
+- **DEAD is terminal.** After three consecutive manager panics the engine is marked DEAD,
+  the health watcher is stopped, the plugin process is killed, and a late crash report is
+  ignored by the manager loop. The test checks the watcher is stopped.
+- **No-factory reuse after a timeout** is documented as test-only in the sink cache.
+
+Gates at 7cf7a1c: `gofmt -l` empty; `go vet ./...` clean; `go test -race -count=1 ./...`
+twice, both pass (27 packages ok); `-tags espeak_ng_real` pass; 5-minute race soak
+`FINAL queued=61035 end=54709 canceled=6326 accounted=61035 rejected=11700 stops=3130 |
+lost=0 mustEnd=0 asyncErr=0 proto=0`, daemon alive, no panic or DATA RACE in the log.
+Latency was not re-run (the change is on the open path only).
