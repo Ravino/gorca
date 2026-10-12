@@ -26,3 +26,6 @@
 | 2026-10-12 | SPA corpus + AT-SPI characterization: frameworks look identical over AT-SPI; mirror needs parent revalidation (Chromium silent reorder), remove/add re-matching (Firefox recreates moved nodes), identity ladder path > DOM id (stale in Chromium) > (role,name,tag); AGP not required by SPA data. Firefox tests run in a private headless gnome-shell | docs/reports/2026-10-12-spa-behavior.md |
 | 2026-10-12 | voicego P0 fixes (STOP/SPEAK race, panic containment, sink open retry, sink reopen, volume -100) made on branch fix/p0-stability of refs/voicego; not merged or pushed, pending reviewer | docs/reports/2026-10-12-voicego-p0-fixes.md |
 | 2026-10-12 | voicego P0 stability fixes merged to main and pushed (7cf7a1c) after 3 review rounds | docs/reports/2026-10-12-voicego-p0-fixes.md |
+| 2026-10-12 | Multimodal: core has feature store (content-keyed, privacy filter) + exact VectorIndex + MapSurface (SOM behind a flag); encoders in a native no-network sidecar `gorca-perceive`; first feature = semantic find, then unlabeled-button naming cascade | docs/reports/2026-10-12-multimodal-vectors-som.md; ADR-0002 pending |
+| 2026-10-12 | License: deferred (Cargo `license = "TBD"`) | user |
+| 2026-10-12 | Super+Alt+G toggle verified by the user on a live keypress | user |
