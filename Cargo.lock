@@ -572,6 +572,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "gorca-bench-b2"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "gorca-dbus",
+ "gorca-ingress",
+ "gorca-model",
+ "gorca-rt",
+ "libc",
+ "smallvec",
+ "tokio",
+]
+
+[[package]]
 name = "gorca-braille-brlapi"
 version = "0.0.0"
 dependencies = [

@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crate::clock::now_ns;
-use crate::gen::{FENCE_ID, Gen, GenEvent, Kind, Mix, Scratch, probe_id};
+use crate::workload::{FENCE_ID, Gen, GenEvent, Kind, Mix, Scratch, probe_id};
 use crate::mockbus::Link;
 
 /// Where a feeder writes. `send` may block (real socket) but must not on the mock link.
@@ -20,6 +20,7 @@ pub trait Sink: Send {
     fn backlog(&self) -> usize;
 }
 
+#[derive(Debug)]
 pub struct MockSink {
     pub link: Arc<Link>,
 }
@@ -35,6 +36,7 @@ impl Sink for MockSink {
 }
 
 /// A client connection to a real bus (dbus-daemon or dbus-broker).
+#[derive(Debug)]
 pub struct SocketSink {
     pub stream: UnixStream,
 }
@@ -122,7 +124,7 @@ pub fn run_feeder(
     duration: Duration,
     stop: &AtomicBool,
 ) -> FeedResult {
-    let mut gen_ = Gen::new(plan.seed, plan.mix, plan.slots);
+    let mut generator = Gen::new(plan.seed, plan.mix, plan.slots);
     let mut sc = Scratch::default();
     let mut out: Vec<u8> = Vec::with_capacity(64 * 1024);
     let mut r = FeedResult::default();
@@ -178,7 +180,7 @@ pub fn run_feeder(
             ev.encode(&mut out, &mut sc, next_serial(), sender);
         }
         for _ in 0..n {
-            gen_.next_event().encode(&mut out, &mut sc, next_serial(), sender);
+            generator.next_event().encode(&mut out, &mut sc, next_serial(), sender);
         }
         if out.is_empty() {
             if sleepy {
@@ -227,7 +229,7 @@ pub fn truth_for(
     res: &FeedResult,
     app: gorca_model::AppId,
 ) -> crate::model::Fold {
-    use crate::gen::local_of;
+    use crate::workload::local_of;
     use crate::model::{Ev, Fold};
     let mut g = Gen::new(plan.seed, plan.mix, plan.slots);
     let mut f = Fold::default();

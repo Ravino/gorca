@@ -57,3 +57,12 @@ pub fn set_send_buffer(sock: impl AsFd, bytes: usize) {
 pub fn cpus() -> usize {
     std::thread::available_parallelism().map_or(1, usize::from)
 }
+
+/// SIGKILL a whole process group (children started with `process_group(0)`).
+pub fn kill_group(pgid: u32) {
+    let Ok(pid) = libc::pid_t::try_from(pgid) else { return };
+    // SAFETY: plain `kill(2)` with a negative pid addresses the group; no memory is involved.
+    unsafe {
+        libc::kill(-pid, libc::SIGKILL);
+    }
+}

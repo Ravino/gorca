@@ -183,7 +183,7 @@ impl Key {
 enum Payload {
     One(Ev),
     Props(u64, u32),
-    Text(u64, Vec<Ev>),
+    Text(Vec<Ev>),
 }
 
 /// What one drain returns, in canonical form.
@@ -362,11 +362,11 @@ impl SpecModel {
             },
             (Key::Text(n), _) => match self.index.get(&key).copied() {
                 Some(i) => {
-                    if let Some((_, Payload::Text(_, deltas))) = self.slots[i].as_mut() {
+                    if let Some((_, Payload::Text(deltas))) = self.slots[i].as_mut() {
                         merge_text(deltas, ev.clone(), self.cfg.max_text_deltas, n);
                     }
                 }
-                None => self.insert(key, Payload::Text(n, vec![ev.clone()])),
+                None => self.insert(key, Payload::Text(vec![ev.clone()])),
             },
             _ => match self.index.get(&key).copied() {
                 // Last writer wins, position of first occurrence kept (R-2).
@@ -382,7 +382,7 @@ impl SpecModel {
             match p {
                 Payload::One(e) => events.push(e),
                 Payload::Props(n, m) => events.push(Ev::Props(n, m)),
-                Payload::Text(_, ds) => events.extend(ds),
+                Payload::Text(ds) => events.extend(ds),
             }
         }
         let b = Batch {

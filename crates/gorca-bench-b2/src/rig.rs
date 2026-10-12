@@ -1,7 +1,7 @@
 //! The consumer side of a run: a router that hands out per-app ingresses, and one consumer
 //! thread per app that plays the role of the app actor (wake on `notified`, `drain`, fold).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
@@ -13,7 +13,7 @@ use gorca_model::{AppId, ConnectorId};
 use tokio::sync::Notify;
 
 use crate::clock::now_ns;
-use crate::gen::{FENCE_ID, canon, local_of, node_app, probe_id};
+use crate::workload::{FENCE_ID, canon, local_of, node_app, probe_id};
 use crate::model::{Ev, Fold};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -74,6 +74,8 @@ pub struct ConsumerResult {
     pub first_order_violation: Option<String>,
     pub flooded_batches: u64,
     pub max_drain_gap_ns: u64,
+    /// Timer wake-ups that found work pending: a missed `notified` wake-up.
+    pub missed_wakes: u64,
 }
 
 struct Slot {
@@ -331,7 +333,11 @@ fn consume(
                         biased;
                         () = wake.notified() => {}
                         () = rx.notified() => {}
-                        () = tokio::time::sleep(Duration::from_millis(100)) => {}
+                        () = tokio::time::sleep(Duration::from_millis(100)) => {
+                            if rx.pending() > 0 {
+                                res.missed_wakes += 1;
+                            }
+                        }
                     }
                 }
                 WakeMode::Spin => {
@@ -351,6 +357,5 @@ fn consume(
         }
     });
     res.fence_ns = live.fence_ns.load(Ordering::Acquire);
-    let _: HashSet<u8> = HashSet::new();
     res
 }

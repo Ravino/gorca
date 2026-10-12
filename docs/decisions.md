@@ -29,3 +29,5 @@
 | 2026-10-12 | Multimodal: core has feature store (content-keyed, privacy filter) + exact VectorIndex + MapSurface (SOM behind a flag); encoders in a native no-network sidecar `gorca-perceive`; first feature = semantic find, then unlabeled-button naming cascade | docs/reports/2026-10-12-multimodal-vectors-som.md; ADR-0002 pending |
 | 2026-10-12 | License: deferred (Cargo `license = "TBD"`) | user |
 | 2026-10-12 | Super+Alt+G toggle verified by the user on a live keypress | user |
+| 2026-10-12 | Web node identity: variant C — AT-SPI path → validated DOM id → (role, name, tag)+sibling order, plus GetChildren revalidation of cursor's parent on read | docs/reports/2026-10-12-spa-behavior.md; ADR-0003 pending |
+| 2026-10-12 | ADR-0002 approved with amendment: terminal content encoding is user-toggleable (default off); obvious secrets always filtered | ADR-0002 |
