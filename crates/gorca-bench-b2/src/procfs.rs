@@ -28,7 +28,11 @@ impl CpuSnapshot {
                 .unwrap_or_default();
             let ns = fs::read_to_string(base.join("schedstat"))
                 .ok()
-                .and_then(|s| s.split_whitespace().next().and_then(|x| x.parse::<u64>().ok()))
+                .and_then(|s| {
+                    s.split_whitespace()
+                        .next()
+                        .and_then(|x| x.parse::<u64>().ok())
+                })
                 .unwrap_or(0);
             threads.insert(tid, (comm, ns));
         }
@@ -48,6 +52,24 @@ impl CpuSnapshot {
         self.sum_since(earlier, |name| name.starts_with(prefix))
     }
 
+    /// Per-thread CPU ns between two snapshots, largest first, harness threads excluded.
+    pub fn by_thread_since(&self, earlier: &CpuSnapshot) -> Vec<(String, u64)> {
+        let mut v: Vec<(String, u64)> = self
+            .threads
+            .iter()
+            .filter(|(_, (name, _))| !name.starts_with(HARNESS_THREAD_PREFIX) && name != "b2")
+            .map(|(tid, (name, ns))| {
+                (
+                    name.clone(),
+                    ns.saturating_sub(earlier.threads.get(tid).map_or(0, |t| t.1)),
+                )
+            })
+            .filter(|(_, ns)| *ns > 0)
+            .collect();
+        v.sort_by_key(|x| std::cmp::Reverse(x.1));
+        v
+    }
+
     fn sum_since(&self, earlier: &CpuSnapshot, keep: impl Fn(&str) -> bool) -> u64 {
         self.threads
             .iter()
@@ -61,9 +83,11 @@ fn status_kib(key: &str) -> u64 {
     fs::read_to_string("/proc/self/status")
         .ok()
         .and_then(|s| {
-            s.lines()
-                .find_map(|l| l.strip_prefix(key))
-                .and_then(|r| r.split_whitespace().next().and_then(|x| x.parse::<u64>().ok()))
+            s.lines().find_map(|l| l.strip_prefix(key)).and_then(|r| {
+                r.split_whitespace()
+                    .next()
+                    .and_then(|x| x.parse::<u64>().ok())
+            })
         })
         .unwrap_or(0)
 }

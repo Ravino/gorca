@@ -13,8 +13,8 @@ use gorca_model::{AppId, ConnectorId};
 use tokio::sync::Notify;
 
 use crate::clock::now_ns;
-use crate::workload::{FENCE_ID, canon, local_of, node_app, probe_id};
 use crate::model::{Ev, Fold};
+use crate::workload::{FENCE_ID, canon, local_of, node_app, probe_id};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum WakeMode {
@@ -32,10 +32,15 @@ pub struct ConsumerCfg {
     pub fold: bool,
     /// Check per-node payload monotonicity (ORD-1) while folding.
     pub check_order: bool,
+    /// Record `(time, node)` of every focus event delivered.
+    pub record_focus: bool,
     /// Probe ids `0..probes` are tracked.
     pub probes: u32,
-    /// Do not drain between these `now_ns()` instants (hung app actor).
+    /// Do not drain between these offsets (ns) from the start of the feeders (hung app actor).
     pub stall: Option<(u64, u64)>,
+    /// Sleep this long after every drain (a busy app actor): batches grow and `Flooded` becomes
+    /// reachable at benchmark rates.
+    pub drain_delay: Duration,
 }
 
 impl Default for ConsumerCfg {
@@ -44,9 +49,11 @@ impl Default for ConsumerCfg {
             ingress: IngressConfig::default(),
             mode: WakeMode::Notify,
             fold: false,
+            record_focus: false,
             check_order: false,
             probes: 0,
             stall: None,
+            drain_delay: Duration::ZERO,
         }
     }
 }
@@ -58,6 +65,8 @@ pub struct Live {
     pub events: AtomicU64,
     pub pending_hwm: AtomicUsize,
     pub last_probe: AtomicU64,
+    /// `now_ns()` when the feeders start; set by the runner. 0 = not started.
+    pub start_ns: AtomicU64,
 }
 
 #[derive(Debug, Default)]
@@ -74,6 +83,8 @@ pub struct ConsumerResult {
     pub first_order_violation: Option<String>,
     pub flooded_batches: u64,
     pub max_drain_gap_ns: u64,
+    /// `(now_ns, node)` of delivered focus events when `record_focus` is set.
+    pub focus_obs: Vec<(u64, u64)>,
     /// Timer wake-ups that found work pending: a missed `notified` wake-up.
     pub missed_wakes: u64,
 }
@@ -90,6 +101,8 @@ struct Slot {
 /// Maps bus unique names to registered apps. Unknown senders are refused (counted by the drain).
 pub struct HarnessRouter {
     routes: Mutex<HashMap<String, AppRoute>>,
+    /// When set, unknown senders are registered on first sight with this config (role = sender).
+    auto: Mutex<Option<ConsumerCfg>>,
     slots: Mutex<Vec<Arc<Slot>>>,
     next_serial: AtomicU64,
     pub route_calls: AtomicU64,
@@ -104,6 +117,21 @@ impl std::fmt::Debug for HarnessRouter {
 impl Router for HarnessRouter {
     fn route(&self, sender: &str) -> Option<AppRoute> {
         self.route_calls.fetch_add(1, Ordering::Relaxed);
+        let known = self
+            .routes
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(sender)
+            .cloned();
+        if known.is_some() {
+            return known;
+        }
+        let cfg = self
+            .auto
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()?;
+        self.register(sender, sender, &cfg);
         self.routes
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -116,15 +144,22 @@ impl HarnessRouter {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             routes: Mutex::new(HashMap::new()),
+            auto: Mutex::new(None),
             slots: Mutex::new(Vec::new()),
             next_serial: AtomicU64::new(1),
             route_calls: AtomicU64::new(0),
         })
     }
 
+    /// Register every sender seen from now on (the isolated AT-SPI harness).
+    pub fn auto_register(&self, cfg: ConsumerCfg) {
+        *self.auto.lock().unwrap_or_else(PoisonError::into_inner) = Some(cfg);
+    }
+
     /// Create the ingress and the consumer thread for `sender`.
     pub fn register(&self, sender: &str, role: &str, cfg: &ConsumerCfg) -> AppId {
-        let serial = u32::try_from(self.next_serial.fetch_add(1, Ordering::Relaxed)).unwrap_or(u32::MAX);
+        let serial =
+            u32::try_from(self.next_serial.fetch_add(1, Ordering::Relaxed)).unwrap_or(u32::MAX);
         let app = AppId {
             connector: ConnectorId(0),
             serial,
@@ -134,20 +169,33 @@ impl HarnessRouter {
         let stop = Arc::new(AtomicBool::new(false));
         let wake = Arc::new(Notify::new());
         let thread = {
-            let (cfg, live, stop, wake) = (cfg.clone(), Arc::clone(&live), Arc::clone(&stop), Arc::clone(&wake));
+            let (cfg, live, stop, wake) = (
+                cfg.clone(),
+                Arc::clone(&live),
+                Arc::clone(&stop),
+                Arc::clone(&wake),
+            );
             std::thread::Builder::new()
-                .name(format!("hx-cons-{role}").chars().take(15).collect::<String>())
+                .name(
+                    format!("hx-cons-{role}")
+                        .chars()
+                        .take(15)
+                        .collect::<String>(),
+                )
                 .spawn(move || consume(app, &rx, &cfg, &live, &stop, &wake))
                 .ok()
         };
-        self.slots.lock().unwrap_or_else(PoisonError::into_inner).push(Arc::new(Slot {
-            role: role.to_owned(),
-            app,
-            live,
-            stop,
-            wake,
-            thread: Mutex::new(thread),
-        }));
+        self.slots
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(Arc::new(Slot {
+                role: role.to_owned(),
+                app,
+                live,
+                stop,
+                wake,
+                thread: Mutex::new(thread),
+            }));
         self.routes
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -174,7 +222,9 @@ impl HarnessRouter {
 
     /// Wait until the consumer of `role` has seen its fence event.
     pub fn wait_fence(&self, role: &str, timeout: Duration) -> bool {
-        let Some(live) = self.live(role) else { return false };
+        let Some(live) = self.live(role) else {
+            return false;
+        };
         let end = Instant::now() + timeout;
         while live.fence_ns.load(Ordering::Acquire) == 0 {
             if Instant::now() >= end {
@@ -190,7 +240,11 @@ impl HarnessRouter {
         let s = self.slot(role)?;
         s.stop.store(true, Ordering::Release);
         s.wake.notify_one();
-        let t = s.thread.lock().unwrap_or_else(PoisonError::into_inner).take()?;
+        let t = s
+            .thread
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()?;
         t.join().ok()
     }
 
@@ -206,10 +260,20 @@ impl HarnessRouter {
 
 impl Drop for HarnessRouter {
     fn drop(&mut self) {
-        for s in self.slots.lock().unwrap_or_else(PoisonError::into_inner).iter() {
+        for s in self
+            .slots
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+        {
             s.stop.store(true, Ordering::Release);
             s.wake.notify_one();
-            if let Some(t) = s.thread.lock().unwrap_or_else(PoisonError::into_inner).take() {
+            if let Some(t) = s
+                .thread
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .take()
+            {
                 let _ = t.join();
             }
         }
@@ -224,7 +288,9 @@ fn consume(
     stop: &AtomicBool,
     wake: &Notify,
 ) -> ConsumerResult {
-    let probe_map: HashMap<u64, u32> = (0..cfg.probes).map(|k| (local_of(probe_id(k)), k)).collect();
+    let probe_map: HashMap<u64, u32> = (0..cfg.probes)
+        .map(|k| (local_of(probe_id(k)), k))
+        .collect();
     let fence_local = local_of(FENCE_ID);
     let mut res = ConsumerResult {
         probe_obs_ns: vec![u64::MAX; cfg.probes as usize],
@@ -241,7 +307,8 @@ fn consume(
         live.drains.fetch_add(1, Ordering::Relaxed);
         res.max_batch = res.max_batch.max(d.events.len());
         res.events += d.events.len() as u64;
-        live.events.fetch_add(d.events.len() as u64, Ordering::Relaxed);
+        live.events
+            .fetch_add(d.events.len() as u64, Ordering::Relaxed);
         if d.stats.flooded {
             res.flooded_batches += 1;
         }
@@ -254,6 +321,9 @@ fn consume(
             }
             let c = canon(ev);
             if let Ev::Focus(n) = &c {
+                if cfg.record_focus {
+                    res.focus_obs.push((t, *n));
+                }
                 if *n == fence_local {
                     res.fence_ns = t;
                     live.fence_ns.store(t.max(1), Ordering::Release);
@@ -274,10 +344,14 @@ fn consume(
             }
             if cfg.check_order {
                 let bad = match &c {
-                    Ev::Caret(n, o) => last_caret.insert(*n, *o).filter(|p| o < p).map(|p| format!("caret {n:#x}: {o} after {p}")),
-                    Ev::TextIns(n, o, _) | Ev::TextDel(n, o, _) => {
-                        last_text.insert(*n, *o).filter(|p| o < p).map(|p| format!("text {n:#x}: {o} after {p}"))
-                    }
+                    Ev::Caret(n, o) => last_caret
+                        .insert(*n, *o)
+                        .filter(|p| o < p)
+                        .map(|p| format!("caret {n:#x}: {o} after {p}")),
+                    Ev::TextIns(n, o, _) | Ev::TextDel(n, o, _) => last_text
+                        .insert(*n, *o)
+                        .filter(|p| o < p)
+                        .map(|p| format!("text {n:#x}: {o} after {p}")),
                     Ev::TextReplaced(n) => {
                         last_text.remove(n);
                         None
@@ -314,15 +388,19 @@ fn consume(
         d.events.len()
     };
 
-    let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_time().build() else {
+    let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+    else {
         return res;
     };
     rt.block_on(async {
         loop {
             if let Some((from, to)) = cfg.stall {
                 while {
+                    let base = live.start_ns.load(Ordering::Acquire);
                     let n = now_ns();
-                    n >= from && n < to && !stop.load(Ordering::Acquire)
+                    base > 0 && n >= base + from && n < base + to && !stop.load(Ordering::Acquire)
                 } {
                     tokio::time::sleep(Duration::from_millis(2)).await;
                 }
@@ -353,6 +431,9 @@ fn consume(
             if stop.load(Ordering::Acquire) {
                 while step(&mut res) > 0 {}
                 break;
+            }
+            if !cfg.drain_delay.is_zero() {
+                tokio::time::sleep(cfg.drain_delay).await;
             }
         }
     });

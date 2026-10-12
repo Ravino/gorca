@@ -35,7 +35,11 @@ pub fn outq(sock: impl AsFd) -> usize {
     let mut n: libc::c_int = 0;
     // SAFETY: valid fd; TIOCOUTQ writes one `c_int` through the pointer to a live local.
     let rc = unsafe { libc::ioctl(sock.as_fd().as_raw_fd(), libc::TIOCOUTQ, &raw mut n) };
-    if rc < 0 { 0 } else { usize::try_from(n).unwrap_or(0) }
+    if rc < 0 {
+        0
+    } else {
+        usize::try_from(n).unwrap_or(0)
+    }
 }
 
 /// Raise the send buffer of a socket (best effort).
@@ -60,7 +64,9 @@ pub fn cpus() -> usize {
 
 /// SIGKILL a whole process group (children started with `process_group(0)`).
 pub fn kill_group(pgid: u32) {
-    let Ok(pid) = libc::pid_t::try_from(pgid) else { return };
+    let Ok(pid) = libc::pid_t::try_from(pgid) else {
+        return;
+    };
     // SAFETY: plain `kill(2)` with a negative pid addresses the group; no memory is involved.
     unsafe {
         libc::kill(-pid, libc::SIGKILL);

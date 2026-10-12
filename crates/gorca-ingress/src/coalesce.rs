@@ -32,6 +32,9 @@ pub enum CoalesceKey {
     Removed(NodeKey),
 }
 
+/// Default [`IngressConfig::hard_cap`].
+pub const HARD_CAP: usize = 65_536;
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct IngressConfig {
     /// Distinct keys per app before the app enters `Flooded` (R-3). ADR: 4096.
@@ -40,6 +43,9 @@ pub struct IngressConfig {
     pub announcement_cap: usize,
     /// More deltas than this on one node collapse to `Replaced` (ADR: 64).
     pub max_text_deltas: usize,
+    /// Hard bound on pending slots, lossless classes included (PC-7, SPEC 4.4 rule H). A new
+    /// key beyond it sets the dirty set to "everything" instead of queueing.
+    pub hard_cap: usize,
 }
 
 impl Default for IngressConfig {
@@ -48,6 +54,7 @@ impl Default for IngressConfig {
             max_keys: 4096,
             announcement_cap: 16,
             max_text_deltas: 64,
+            hard_cap: HARD_CAP,
         }
     }
 }
@@ -234,6 +241,21 @@ impl Inner {
                 self.dirty.mark_all();
             }
             self.stats.dirtied += 1;
+            return;
+        }
+
+        // Rule H: even the lossless classes are bounded. Focus is a single slot.
+        if key != CoalesceKey::Focus && self.live >= cfg.hard_cap && !self.index.contains_key(&key)
+        {
+            if !self.flooded {
+                self.enter_flooded();
+            }
+            if matches!(key, CoalesceKey::Announcement(_)) {
+                self.stats.announcements_dropped += 1;
+            } else {
+                self.dirty.mark_all();
+                self.stats.dirtied += 1;
+            }
             return;
         }
 

@@ -20,10 +20,7 @@ use crate::{call_method, set_recv_buffer, socket_backlog};
 
 /// Open the drain: connect, authenticate, `Hello`, `AddMatch`, then read on a dedicated thread.
 /// Returns once the match rules are installed or the deadline expired.
-pub fn spawn_drain(
-    cfg: DrainConfig,
-    router: Arc<dyn Router>,
-) -> Result<DrainHandle, DrainError> {
+pub fn spawn_drain(cfg: DrainConfig, router: Arc<dyn Router>) -> Result<DrainHandle, DrainError> {
     let shared = DrainShared::new();
     let stop = Arc::new(Notify::new());
     let (ready_tx, ready_rx) = std::sync::mpsc::channel();
@@ -92,7 +89,9 @@ fn run(
     });
 }
 
-async fn connect(cfg: &DrainConfig) -> Result<(zbus::Connection, Option<StdUnixStream>), DrainError> {
+async fn connect(
+    cfg: &DrainConfig,
+) -> Result<(zbus::Connection, Option<StdUnixStream>), DrainError> {
     let err = |e: &dyn std::fmt::Display| DrainError::Connect(e.to_string());
     let (builder, probe) = if let Some(path) = unix_path(&cfg.address) {
         let std_stream = StdUnixStream::connect(path).map_err(|e| err(&e))?;
@@ -167,7 +166,8 @@ async fn read_loop(
         };
         c.messages.fetch_add(1, Ordering::Relaxed);
         c.batches.fetch_add(1, Ordering::Relaxed);
-        c.bytes.fetch_add(msg.data().len() as u64, Ordering::Relaxed);
+        c.bytes
+            .fetch_add(msg.data().len() as u64, Ordering::Relaxed);
         tick = tick.wrapping_add(1);
         if tick.is_multiple_of(64)
             && let Some(sock) = probe

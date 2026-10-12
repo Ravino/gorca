@@ -87,7 +87,14 @@ pub enum Any<'a> {
 }
 
 /// Encode a `(siiva{sv})` body. `seq`, when present, goes into the properties as `"seq": t`.
-pub fn encode_event_body(e: &mut Enc, detail: &str, d1: i32, d2: i32, any: Any<'_>, seq: Option<u64>) {
+pub fn encode_event_body(
+    e: &mut Enc,
+    detail: &str,
+    d1: i32,
+    d2: i32,
+    any: Any<'_>,
+    seq: Option<u64>,
+) {
     e.string(detail);
     e.i32(d1);
     e.i32(d2);
@@ -252,9 +259,11 @@ pub fn parse(buf: &[u8]) -> Parse<'_> {
     if buf[3] != 1 {
         return Parse::Bad;
     }
-    let (Some(body_len), Some(serial), Some(flen)) =
-        (rd_u32(buf, 4, big), rd_u32(buf, 8, big), rd_u32(buf, 12, big))
-    else {
+    let (Some(body_len), Some(serial), Some(flen)) = (
+        rd_u32(buf, 4, big),
+        rd_u32(buf, 8, big),
+        rd_u32(buf, 12, big),
+    ) else {
         return Parse::Bad;
     };
     let (body_len, flen) = (body_len as usize, flen as usize);
@@ -395,7 +404,10 @@ impl BusConn {
             }
         }
         if !line.starts_with(b"OK ") {
-            bail!("authentication rejected: {}", String::from_utf8_lossy(&line));
+            bail!(
+                "authentication rejected: {}",
+                String::from_utf8_lossy(&line)
+            );
         }
         s.write_all(b"BEGIN\r\n")?;
         let mut c = Self {
@@ -476,7 +488,8 @@ impl BusConn {
                 bail!("{member}: no reply within {timeout:?}");
             }
             let left = deadline.saturating_duration_since(Instant::now());
-            self.stream.set_read_timeout(Some(left.max(Duration::from_millis(1))))?;
+            self.stream
+                .set_read_timeout(Some(left.max(Duration::from_millis(1))))?;
             let n = self.stream.read(&mut chunk).context("reading a reply")?;
             if n == 0 {
                 bail!("EOF while waiting for {member}");
@@ -508,7 +521,14 @@ mod tests {
     #[test]
     fn signal_round_trips() {
         let mut body = Enc::default();
-        encode_event_body(&mut body, "insert", 7, -3, Any::Ref(":1.5", "/a/b"), Some(99));
+        encode_event_body(
+            &mut body,
+            "insert",
+            7,
+            -3,
+            Any::Ref(":1.5", "/a/b"),
+            Some(99),
+        );
         let mut out = Vec::new();
         encode_message(
             &mut out,

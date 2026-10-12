@@ -329,8 +329,12 @@ impl SpecModel {
             if !self.flooded {
                 self.enter_flooded();
             }
-            self.dirty_all = true;
-            self.dirty.clear();
+            if matches!(key, Key::Announce(_)) {
+                self.announcements_dropped += 1;
+            } else {
+                self.dirty_all = true;
+                self.dirty.clear();
+            }
             return;
         }
         match (key, ev) {
@@ -482,7 +486,15 @@ impl Fold {
     }
 
     /// Dirty marks first, then the events (a `Removed` clears a dirty mark of its node).
-    pub fn apply_batch(&mut self, events: &[Ev], dirty_all: bool, dirty: impl IntoIterator<Item = u64>, pushed: u64, announcements_dropped: u64, flooded: bool) {
+    pub fn apply_batch(
+        &mut self,
+        events: &[Ev],
+        dirty_all: bool,
+        dirty: impl IntoIterator<Item = u64>,
+        pushed: u64,
+        announcements_dropped: u64,
+        flooded: bool,
+    ) {
         self.batches += 1;
         self.pushed += pushed;
         self.announcements_dropped += announcements_dropped;
@@ -528,9 +540,19 @@ impl Verdict {
 pub fn compare(truth: &Fold, got: &Fold) -> Verdict {
     let mut v = Verdict::default();
     if truth.focus != got.focus {
-        v.bad(format!("final focus: want {:?}, got {:?}", truth.focus, got.focus));
+        v.bad(format!(
+            "final focus: want {:?}, got {:?}",
+            truth.focus, got.focus
+        ));
     }
-    if truth.removed != got.removed {
+    // Under dirty-all (rule H) the removal of a node is rediscovered by the resync; the view
+    // may then lack removals but must never invent one.
+    let removed_ok = if got.dirty_all {
+        got.removed.is_subset(&truth.removed)
+    } else {
+        truth.removed == got.removed
+    };
+    if !removed_ok {
         let lost: Vec<_> = truth.removed.difference(&got.removed).take(5).collect();
         let phantom: Vec<_> = got.removed.difference(&truth.removed).take(5).collect();
         v.bad(format!(
@@ -634,7 +656,10 @@ mod tests {
             ],
         );
         assert!(b.flooded);
-        assert_eq!(b.events, vec![Ev::Focus(100), Ev::Caret(100, 5), Ev::Removed(2)]);
+        assert_eq!(
+            b.events,
+            vec![Ev::Focus(100), Ev::Caret(100, 5), Ev::Removed(2)]
+        );
         assert_eq!(b.dirty, BTreeSet::from([1, 2, 3, 4, 7]));
     }
 
@@ -648,15 +673,24 @@ mod tests {
             Ev::Focus(4),
             Ev::Focus(5),
         ];
-        let mut truth = Fold::default();
-        truth.pushed = evs.len() as u64;
+        let mut truth = Fold {
+            pushed: evs.len() as u64,
+            ..Fold::default()
+        };
         for e in &evs {
             truth.apply(e);
         }
         let mut m = SpecModel::new(SpecCfg::default());
         let b = feed(&mut m, &evs);
         let mut got = Fold::default();
-        got.apply_batch(&b.events, b.dirty_all, b.dirty.iter().copied(), b.pushed, b.announcements_dropped, b.flooded);
+        got.apply_batch(
+            &b.events,
+            b.dirty_all,
+            b.dirty.iter().copied(),
+            b.pushed,
+            b.announcements_dropped,
+            b.flooded,
+        );
         let v = compare(&truth, &got);
         assert!(v.ok(), "{:?}", v.violations);
     }

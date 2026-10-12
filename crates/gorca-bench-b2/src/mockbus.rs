@@ -95,7 +95,10 @@ impl Link {
 
     /// Match rules the reader installed with `AddMatch`.
     pub fn rules(&self) -> Vec<String> {
-        self.rules.lock().unwrap_or_else(PoisonError::into_inner).clone()
+        self.rules
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     fn flush(&self, st: &mut LinkState) {
@@ -129,7 +132,9 @@ impl Link {
         if !st.dead {
             st.dead = true;
             let _ = st.sock.shutdown(Shutdown::Both);
-            self.stats.disconnect_ns.store(crate::clock::now_ns(), Ordering::Relaxed);
+            self.stats
+                .disconnect_ns
+                .store(crate::clock::now_ns(), Ordering::Relaxed);
             self.stats.disconnected.store(true, Ordering::Release);
         }
     }
@@ -145,7 +150,9 @@ impl Link {
         self.flush(&mut st);
         let queued = st.q.len() - st.head;
         self.stats.queued.store(queued as u64, Ordering::Relaxed);
-        self.stats.queued_hwm.fetch_max(queued as u64, Ordering::Relaxed);
+        self.stats
+            .queued_hwm
+            .fetch_max(queued as u64, Ordering::Relaxed);
         if queued > self.quota {
             self.kill(&mut st);
             return false;
@@ -165,6 +172,12 @@ impl Link {
         let o = sys::outq(&st.sock) as u64;
         self.stats.outq_hwm.fetch_max(o, Ordering::Relaxed);
         queued
+    }
+
+    /// Disconnect the reader now (as dbus-broker does when the quota is exceeded).
+    pub fn disconnect(&self) {
+        let mut st = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+        self.kill(&mut st);
     }
 
     /// Wait until everything queued was handed to the kernel, or the deadline passes.
@@ -246,7 +259,10 @@ impl MockBroker {
             if left.is_zero() {
                 bail!("no connection reached the mock broker within {timeout:?}");
             }
-            g = cv.wait_timeout(g, left).unwrap_or_else(PoisonError::into_inner).0;
+            g = cv
+                .wait_timeout(g, left)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
         }
     }
 }
@@ -277,12 +293,19 @@ fn accept_loop(listener: &UnixListener, opts: &MockOpts, links: &LinkList, stop:
                     servers.push(h);
                 }
             }
-            Err(e) if e.kind() == ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(2)),
+            Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                std::thread::sleep(Duration::from_millis(2))
+            }
             Err(_) => break,
         }
     }
     // Reader sockets close when their `Link`s drop; servers end on EOF.
-    for l in links.0.lock().unwrap_or_else(PoisonError::into_inner).iter() {
+    for l in links
+        .0
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .iter()
+    {
         let st = l.state.lock().unwrap_or_else(PoisonError::into_inner);
         let _ = st.sock.shutdown(Shutdown::Both);
     }
@@ -327,6 +350,23 @@ fn serve(mut s: UnixStream, opts: &MockOpts, links: &LinkList, unique: String) {
         sys::set_send_buffer(&wr, n);
     }
     let link = Arc::new(Link::new(wr, opts, unique.clone()));
+    // Pushes queued bytes whenever the feeders are quiet (a large message, a paused feeder).
+    let pumper = {
+        let link = Arc::clone(&link);
+        std::thread::Builder::new()
+            .name("hx-mock-pump".to_owned())
+            .spawn(move || {
+                while !link.is_disconnected() && !link.stats.reader_closed.load(Ordering::Acquire) {
+                    if link.stats.queued.load(Ordering::Relaxed) > 0 {
+                        link.pump();
+                        std::thread::sleep(Duration::from_micros(100));
+                    } else {
+                        std::thread::sleep(Duration::from_millis(1));
+                    }
+                }
+            })
+    };
+    let _ = pumper;
     let mut buf: Vec<u8> = Vec::new();
     let mut chunk = vec![0u8; 64 * 1024];
     let mut registered = false;

@@ -55,7 +55,14 @@ pub fn node_path(id: u64, out: &mut String) {
 pub fn local_of(id: u64) -> u64 {
     let mut s = String::with_capacity(48);
     node_path(id, &mut s);
-    gorca_dbus::drain::local_id(&s).0
+    fnv1a(s.as_bytes())
+}
+
+/// FNV-1a 64, written out here independently of `gorca_dbus::drain::local_id` (SPEC 3.1).
+pub fn fnv1a(bytes: &[u8]) -> u64 {
+    bytes.iter().fold(0xcbf2_9ce4_8422_2325u64, |h, &b| {
+        (h ^ u64::from(b)).wrapping_mul(0x0000_0100_0000_01b3)
+    })
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -70,15 +77,29 @@ pub enum Kind {
     PropRole,
     PropValue,
     PropOther,
-    ChildAdd { child: u64 },
-    ChildRemove { child: u64 },
-    TextIns { off: i32 },
-    TextDel { off: i32 },
-    Caret { off: i32 },
+    ChildAdd {
+        child: u64,
+    },
+    ChildRemove {
+        child: u64,
+    },
+    TextIns {
+        off: i32,
+    },
+    TextDel {
+        off: i32,
+    },
+    Caret {
+        off: i32,
+    },
     Selection,
     TextSelection,
-    Active { child: Option<u64> },
-    Announce { assertive: bool },
+    Active {
+        child: Option<u64>,
+    },
+    Announce {
+        assertive: bool,
+    },
     Window(u8),
     Doc(u8),
     /// A valid AT-SPI signal that maps to nothing (`Object:BoundsChanged`).
@@ -110,9 +131,11 @@ impl GenEvent {
         let (iface, member, detail, d1, d2) = self.shape();
         sc.body.buf.clear();
         let any = match self.kind {
-            Kind::PropName | Kind::PropDesc | Kind::PropRole | Kind::PropValue | Kind::PropOther => {
-                Any::Str("name")
-            }
+            Kind::PropName
+            | Kind::PropDesc
+            | Kind::PropRole
+            | Kind::PropValue
+            | Kind::PropOther => Any::Str("name"),
             Kind::ChildAdd { child } | Kind::ChildRemove { child } => {
                 node_path(child, &mut sc.child);
                 Any::Ref(bus, &sc.child)
@@ -148,13 +171,31 @@ impl GenEvent {
             Kind::FocusSignal => (IFACE_FOCUS, "Focus", "", 0, 0),
             Kind::FocusState => (IFACE_OBJECT, "StateChanged", "focused", 1, 0),
             Kind::FocusLost => (IFACE_OBJECT, "StateChanged", "focused", 0, 0),
-            Kind::State => (IFACE_OBJECT, "StateChanged", "showing", i32::from(self.seq & 1 == 1), 0),
+            Kind::State => (
+                IFACE_OBJECT,
+                "StateChanged",
+                "showing",
+                i32::from(self.seq & 1 == 1),
+                0,
+            ),
             Kind::Defunct => (IFACE_OBJECT, "StateChanged", "defunct", 1, 0),
             Kind::PropName => (IFACE_OBJECT, "PropertyChange", "accessible-name", 0, 0),
-            Kind::PropDesc => (IFACE_OBJECT, "PropertyChange", "accessible-description", 0, 0),
+            Kind::PropDesc => (
+                IFACE_OBJECT,
+                "PropertyChange",
+                "accessible-description",
+                0,
+                0,
+            ),
             Kind::PropRole => (IFACE_OBJECT, "PropertyChange", "accessible-role", 0, 0),
             Kind::PropValue => (IFACE_OBJECT, "PropertyChange", "accessible-value", 0, 0),
-            Kind::PropOther => (IFACE_OBJECT, "PropertyChange", "accessible-table-caption", 0, 0),
+            Kind::PropOther => (
+                IFACE_OBJECT,
+                "PropertyChange",
+                "accessible-table-caption",
+                0,
+                0,
+            ),
             Kind::ChildAdd { .. } => (IFACE_OBJECT, "ChildrenChanged", "add", s & 7, 0),
             Kind::ChildRemove { .. } => (IFACE_OBJECT, "ChildrenChanged", "remove", s & 7, 0),
             Kind::TextIns { off } => (IFACE_OBJECT, "TextChanged", "insert", off, 1),
@@ -163,9 +204,13 @@ impl GenEvent {
             Kind::Selection => (IFACE_OBJECT, "SelectionChanged", "", 0, 0),
             Kind::TextSelection => (IFACE_OBJECT, "TextSelectionChanged", "", 0, 0),
             Kind::Active { .. } => (IFACE_OBJECT, "ActiveDescendantChanged", "", 0, 0),
-            Kind::Announce { assertive } => {
-                (IFACE_OBJECT, "Announcement", "", if assertive { 2 } else { 1 }, 0)
-            }
+            Kind::Announce { assertive } => (
+                IFACE_OBJECT,
+                "Announcement",
+                "",
+                if assertive { 2 } else { 1 },
+                0,
+            ),
             Kind::Window(k) => (
                 IFACE_WINDOW,
                 ["Activate", "Deactivate", "Create", "Destroy"][usize::from(k & 3)],
@@ -405,14 +450,18 @@ impl Gen {
             0 => {
                 let c = self.child_for(slot);
                 if seq % 2 == 1 {
-                    Kind::ChildAdd { child: self.id_at(c) }
+                    Kind::ChildAdd {
+                        child: self.id_at(c),
+                    }
                 } else {
                     let child = self.id_at(c);
                     self.retire(c);
                     Kind::ChildRemove { child }
                 }
             }
-            1 => Kind::TextIns { off: s.wrapping_mul(3) & 0x7fff_fffe },
+            1 => Kind::TextIns {
+                off: s.wrapping_mul(3) & 0x7fff_fffe,
+            },
             2 => Kind::State,
             _ => {
                 if seq % 2 == 1 {
@@ -447,7 +496,9 @@ impl Gen {
             50..=64 => Kind::Caret { off: s },
             65..=69 => {
                 let c = self.child_for(slot);
-                Kind::ChildAdd { child: self.id_at(c) }
+                Kind::ChildAdd {
+                    child: self.id_at(c),
+                }
             }
             70..=74 => {
                 let c = self.child_for(slot);
@@ -459,7 +510,9 @@ impl Gen {
             80..=83 => {
                 if self.rng.below(2) == 0 {
                     let c = self.child_for(slot);
-                    Kind::Active { child: Some(self.id_at(c)) }
+                    Kind::Active {
+                        child: Some(self.id_at(c)),
+                    }
                 } else {
                     Kind::Active { child: None }
                 }
@@ -470,7 +523,9 @@ impl Gen {
             92..=93 => Kind::FocusSignal,
             94 => Kind::Window((seq & 3) as u8),
             95 => Kind::Doc((seq % 3) as u8),
-            96 => Kind::Announce { assertive: seq % 5 == 0 },
+            96 => Kind::Announce {
+                assertive: seq.is_multiple_of(5),
+            },
             97 => Kind::Defunct,
             98 => Kind::TextSelection,
             _ => Kind::Ignored,
@@ -484,7 +539,9 @@ impl Gen {
             0..=14 => Kind::Defunct,
             15..=29 => Kind::Window((seq & 3) as u8),
             30..=44 => Kind::FocusSignal,
-            45..=54 => Kind::Announce { assertive: seq % 3 == 0 },
+            45..=54 => Kind::Announce {
+                assertive: seq.is_multiple_of(3),
+            },
             55..=69 => Kind::Caret { off: s },
             70..=84 => Kind::State,
             85..=92 => Kind::Doc((seq % 3) as u8),
@@ -506,7 +563,13 @@ mod tests {
 
     #[test]
     fn generator_is_deterministic() {
-        for mix in [Mix::Fakeapp, Mix::Terminal, Mix::Distinct, Mix::Realistic, Mix::Lossless] {
+        for mix in [
+            Mix::Fakeapp,
+            Mix::Terminal,
+            Mix::Distinct,
+            Mix::Realistic,
+            Mix::Lossless,
+        ] {
             let mut a = Gen::new(7, mix, 100);
             let mut b = Gen::new(7, mix, 100);
             for _ in 0..1000 {
@@ -531,6 +594,15 @@ mod tests {
                 }
                 _ => {}
             }
+        }
+    }
+
+    #[test]
+    fn harness_and_reference_agree_on_local_ids() {
+        for id in [0u64, 1, 99, 1 << 40, PROBE_SPACE | 5] {
+            let mut p = String::new();
+            node_path(id, &mut p);
+            assert_eq!(local_of(id), gorca_dbus::drain::local_id(&p).0);
         }
     }
 

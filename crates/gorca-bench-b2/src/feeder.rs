@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crate::clock::now_ns;
-use crate::workload::{FENCE_ID, Gen, GenEvent, Kind, Mix, Scratch, probe_id};
 use crate::mockbus::Link;
+use crate::workload::{FENCE_ID, Gen, GenEvent, Kind, Mix, Scratch, probe_id};
 
 /// Where a feeder writes. `send` may block (real socket) but must not on the mock link.
 pub trait Sink: Send {
@@ -72,6 +72,8 @@ pub struct AppPlan {
     pub fence: bool,
     /// Stop after this many data events (in addition to the duration).
     pub max_events: Option<u64>,
+    /// Closed loop: do not write while the sink holds more than this many bytes for the reader.
+    pub backlog_cap: Option<usize>,
 }
 
 impl AppPlan {
@@ -86,6 +88,7 @@ impl AppPlan {
             probe: None,
             fence: true,
             max_events: None,
+            backlog_cap: None,
         }
     }
 }
@@ -134,7 +137,10 @@ pub fn run_feeder(
         serial
     };
     let dur_ns = u64::try_from(duration.as_nanos()).unwrap_or(u64::MAX);
-    let probe_period = plan.probe.as_ref().map(|p| u64::try_from(p.period.as_nanos()).unwrap_or(u64::MAX));
+    let probe_period = plan
+        .probe
+        .as_ref()
+        .map(|p| u64::try_from(p.period.as_nanos()).unwrap_or(u64::MAX));
     let sleepy = plan.rate > 0.0 && plan.rate < 20_000.0;
     let t0 = now_ns();
     r.start_ns = t0;
@@ -147,6 +153,11 @@ pub fn run_feeder(
             break;
         }
         if plan.max_events.is_some_and(|m| r.sent >= m) {
+            if plan.max_events == Some(0) {
+                // An idle app: stay silent for the whole duration.
+                std::thread::sleep(Duration::from_millis(5));
+                continue;
+            }
             break;
         }
         let want: u64 = if plan.rate > 0.0 {
@@ -160,6 +171,12 @@ pub fn run_feeder(
             plan.burst as u64
         };
         let mut n = want;
+        if let Some(cap) = plan.backlog_cap
+            && sink.backlog() >= cap
+        {
+            std::hint::spin_loop();
+            continue;
+        }
         if let Some(m) = plan.max_events {
             n = n.min(m - r.sent);
         }
@@ -180,7 +197,9 @@ pub fn run_feeder(
             ev.encode(&mut out, &mut sc, next_serial(), sender);
         }
         for _ in 0..n {
-            generator.next_event().encode(&mut out, &mut sc, next_serial(), sender);
+            generator
+                .next_event()
+                .encode(&mut out, &mut sc, next_serial(), sender);
         }
         if out.is_empty() {
             if sleepy {
@@ -224,13 +243,9 @@ pub fn run_feeder(
 /// Ground truth for a feeder run: replay the generator for `res.sent` events and fold them,
 /// plus the probes and the fence (focus events). Returns the fold and the number of mapped
 /// events (what `stats.pushed` must add up to).
-pub fn truth_for(
-    plan: &AppPlan,
-    res: &FeedResult,
-    app: gorca_model::AppId,
-) -> crate::model::Fold {
-    use crate::workload::local_of;
+pub fn truth_for(plan: &AppPlan, res: &FeedResult, app: gorca_model::AppId) -> crate::model::Fold {
     use crate::model::{Ev, Fold};
+    use crate::workload::local_of;
     let mut g = Gen::new(plan.seed, plan.mix, plan.slots);
     let mut f = Fold::default();
     for _ in 0..res.sent {

@@ -33,5 +33,5 @@
 | 2026-10-12 | ADR-0002 approved with amendment: terminal content encoding is user-toggleable (default off); obvious secrets always filtered | ADR-0002 |
 | 2026-10-12 | ADR-0003 approved with amendment: one mirror per tab with no fixed cap (N mirrors = M tabs); only the active tab's mirror is awake, all others dormant | ADR-0003 |
 | 2026-10-12 | voicego: cut the sink open timeout to 1–2 s so gorca can fall back to speech-dispatcher quickly | voicego |
-| 2026-10-12 | Secret filtering deferred: no secret/terminal filtering for now (the user works with secrets and must read them); revisit later. Speech output is never filtered | user |
+| 2026-10-12 | ~~Secret filtering deferred~~ — reverted the same day: it was a misunderstanding (reading vs. embedding). Final: speech/braille/navigation output is NEVER filtered (gorca reads passwords, tokens, terminal). The perception layer never embeds or persists secrets; terminal content encoding is opt-in (default off); the on-disk index is encrypted | ADR-0002 |
 | 2026-10-12 | Enable gorca-helper extension now, without logout or reboot | user |
