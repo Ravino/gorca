@@ -13,6 +13,8 @@
 //!
 //! Allowed dependencies: any neutral-layer crate; `criterion` as a dev-dependency.
 
+pub mod e2e;
+
 use gorca_model::{
     AppId, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeKey, NodeSnapshot, Role,
     StateSet,
