@@ -1,0 +1,43 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+use gorca_model::UttId;
+use gorca_output_api::SpeechEvent;
+use gorca_output_api::track::{Block, Expect, MsgTracker, classify};
+
+fn feed(t: &mut MsgTracker, raw: &[u8], out: &mut Vec<SpeechEvent>) {
+    match classify(raw) {
+        Block::Reply { code, msg_id } => {
+            t.on_reply(code, msg_id, out);
+        }
+        Block::Event { ev, msg } => {
+            t.on_event(ev, msg, out);
+        }
+        Block::Garbage => {}
+    }
+}
+
+/// voicego main, binary framing: async failure of msg 100 is `502-100` / `502 ERR INTERNAL`.
+/// It arrives while SPEAK for utt 2 is outstanding (written, no 230 yet).
+#[test]
+fn async_502_with_id_fails_the_right_utterance() {
+    let mut t = MsgTracker::new();
+    let mut out = Vec::new();
+    t.expect(Expect::Speak(UttId(1)));
+    feed(&mut t, b"230 OK RECEIVING DATA\r\n", &mut out);
+    feed(&mut t, b"225-100\r\n225 OK MESSAGE QUEUED\r\n", &mut out);
+    t.expect(Expect::Speak(UttId(2)));
+    feed(&mut t, b"502-100\r\n502 ERR INTERNAL\r\n", &mut out);
+    feed(&mut t, b"230 OK RECEIVING DATA\r\n", &mut out);
+    feed(&mut t, b"225-101\r\n225 OK MESSAGE QUEUED\r\n", &mut out);
+    feed(&mut t, b"701-101\r\n701-1\r\n701 BEGIN\r\n", &mut out);
+    feed(&mut t, b"702-101\r\n702-1\r\n702 END\r\n", &mut out);
+    eprintln!("events: {out:?} live={}", t.live());
+    assert!(
+        out.iter()
+            .any(|e| matches!(e, SpeechEvent::Error(u, _) if *u == UttId(1))),
+        "utt 1 never gets a terminal event"
+    );
+    assert!(
+        out.contains(&SpeechEvent::Ended(UttId(2))),
+        "utt 2 was spoken but reported Error / never Ended"
+    );
+}

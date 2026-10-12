@@ -1,0 +1,34 @@
+//! REVIEW PROBE r2: path table under one-pid many-names and many-pids (fork) attacks.
+#![allow(clippy::unwrap_used, clippy::cast_possible_truncation)]
+use gorca_connector_atspi::{Owner, PathTable};
+use gorca_model::{AppId, ConnectorId, LocalId, NodeKey};
+
+fn rss_kib() -> u64 {
+    let s = std::fs::read_to_string("/proc/self/status").unwrap();
+    s.lines().find(|l| l.starts_with("VmRSS:")).unwrap().split_whitespace().nth(1).unwrap().parse().unwrap()
+}
+fn app(n: u32) -> AppId { AppId { connector: ConnectorId(1), serial: n } }
+
+#[test]
+fn review_probe_r2_paths() {
+    let t = PathTable::new();
+    let before = rss_kib();
+    // Fork attack: 4096 pids, one app each, 1024 distinct 255-byte paths each.
+    for a in 0..4096u32 {
+        t.bind_app(app(a), Owner::Pid(10_000 + a));
+        for n in 0..1024u64 {
+            let p = format!("/{:0>254}", n * 4096 + u64::from(a));
+            t.insert(NodeKey { app: app(a), local: LocalId(n) }, &p);
+        }
+    }
+    let after = rss_kib();
+    let victim = NodeKey { app: app(999_999), local: LocalId(1) };
+    t.bind_app(victim.app, Owner::Pid(1));
+    t.insert(victim, "/org/a11y/atspi/accessible/1");
+    let ok = t.get(victim).is_some();
+    // One more attacker insert right after the victim's focus insert (between insert and fetch).
+    t.insert(NodeKey { app: app(0), local: LocalId(5000) }, &format!("/{:0>254}", 1));
+    let survives = t.get(victim).is_some();
+    eprintln!("PROBE R2-paths entries={} rss_growth_mib={} victim_recorded={ok} victim_survives_next_insert={survives}", t.len(), (after.saturating_sub(before)) / 1024);
+    assert!(ok && survives);
+}

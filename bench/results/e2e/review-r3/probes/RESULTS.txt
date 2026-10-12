@@ -1,0 +1,9 @@
+review-r3 at 6bad6da (release, router tests --test-threads=1)
+P1 newest_focus_survives_the_park_cap                 PASS (now in-tree test)
+P2 hostile_parkers_cannot_drop_a_new_apps_focus       PASS
+P3 resolve_park_race_does_not_lose_the_event          PASS
+P4 the_ignored_set_does_not_grow_with_churn           PASS
+P5 parked_strings_are_bounded                         PASS
+P6 fork singletons (1 name per pid) vs global cap     FAIL  victim (first-registered app) evicted at attacker name #609 of 2512
+P7 per-pid name cap under 64 concurrent registrations FAIL  names held by one pid = 124 (cap 64)
+make check: exit 0

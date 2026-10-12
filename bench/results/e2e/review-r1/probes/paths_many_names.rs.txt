@@ -1,0 +1,30 @@
+//! REVIEW PROBE (phase1 review-r1): per-app quota multiplied by many bus names.
+#![allow(clippy::unwrap_used, clippy::cast_possible_truncation)]
+use gorca_connector_atspi::PathTable;
+use gorca_model::{AppId, ConnectorId, LocalId, NodeKey};
+
+fn rss_kib() -> u64 {
+    let s = std::fs::read_to_string("/proc/self/status").unwrap();
+    s.lines().find(|l| l.starts_with("VmRSS:")).unwrap()
+        .split_whitespace().nth(1).unwrap().parse().unwrap()
+}
+
+#[test]
+fn review_probe_many_names_multiply_the_quota() {
+    let t = PathTable::new();
+    let before = rss_kib();
+    // One hostile process, 4096 connections (one AppId each), 1024 distinct 512-byte paths each.
+    for a in 0..4096u32 {
+        let app = AppId { connector: ConnectorId(1), serial: a };
+        for n in 0..1024u64 {
+            let p = format!("/{:0>510}", n * 4096 + u64::from(a));
+            t.insert(NodeKey { app, local: LocalId(n) }, &p);
+        }
+    }
+    let after = rss_kib();
+    // A legit app arriving now gets no path entries: its focus can never be fetched.
+    let victim = NodeKey { app: AppId { connector: ConnectorId(1), serial: 999_999 }, local: LocalId(1) };
+    t.insert(victim, "/org/a11y/atspi/accessible/1");
+    eprintln!("PROBE entries={} rss_growth_mib={} victim_recorded={}", t.len(), (after - before) / 1024, t.get(victim).is_some());
+    assert!(t.get(victim).is_some(), "victim app locked out of the path table");
+}

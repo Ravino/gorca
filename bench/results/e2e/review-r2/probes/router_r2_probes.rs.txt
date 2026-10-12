@@ -1,0 +1,114 @@
+
+// ===== REVIEW PROBES r2 (phase1 review-r2) =====
+fn last_focus_path(c: &Core, r: &Rig, app: AppId) -> Option<String> {
+    let rx = c.halves.lock().unwrap().remove(&app)?;
+    let d = rx.drain();
+    d.events.iter().rev().find_map(|e| match e {
+        NodeEvent::FocusChanged { node } => r.paths.get(*node).map(|p| p.to_string()),
+        _ => None,
+    })
+}
+
+/// P1: an app that emits more than MAX_PARKED_PER_SENDER events while it registers loses its
+/// newest focus (the cap drops the newest, not the oldest/non-focus).
+#[tokio::test]
+async fn review_probe_newest_focus_survives_the_park_cap() {
+    let c = core(|_| Duration::from_millis(20));
+    let mut r = rig(&c, Arc::new(Fixed(7)));
+    assert!(is_retry(&r.router.resolve(":1.42")));
+    let paths: Vec<String> = (0..40).map(|i| format!("/org/a/{i}")).collect();
+    for p in &paths {
+        r.router.park(":1.42", &focus_signal(p));
+    }
+    let name = r.to_register.try_recv().unwrap();
+    r.router.complete(name).await;
+    let RouteDecision::Route(route) = r.router.resolve(":1.42") else { panic!() };
+    let got = last_focus_path(&c, &r, route.app);
+    eprintln!("PROBE P1 newest=/org/a/39 delivered={got:?} dropped={}", r.router.stats().parked_dropped);
+    assert_eq!(got.as_deref(), Some("/org/a/39"), "newest focus lost");
+}
+
+/// P2: hostile senders fill MAX_PARKED_TOTAL; a legitimate new app's first focus is dropped.
+#[tokio::test]
+async fn review_probe_hostile_parkers_cannot_drop_a_new_apps_focus() {
+    let c = core(|_| Duration::from_secs(60)); // hostile registrations stay pending
+    let mut r = rig(&c, Arc::new(Fixed(9)));
+    for s in 0..32 {
+        let n = format!(":1.{}", 500 + s);
+        assert!(is_retry(&r.router.resolve(&n)));
+        for _ in 0..MAX_PARKED_PER_SENDER {
+            r.router.park(&n, &focus_signal("/h"));
+        }
+    }
+    while r.to_register.try_recv().is_ok() {}
+    assert!(is_retry(&r.router.resolve(":1.900")));
+    let before = r.router.stats().parked_dropped;
+    r.router.park(":1.900", &focus_signal("/victim/focus"));
+    let lost = r.router.stats().parked_dropped - before;
+    eprintln!("PROBE P2 victim focus dropped={lost}");
+    assert_eq!(lost, 0, "victim's first focus dropped because hostile senders filled the global park");
+}
+
+/// P3: race between the drain's resolve() (Retry) and its park(): if the registration publishes
+/// in between, park() finds no pending entry and drops the event (possibly the focus).
+#[tokio::test]
+async fn review_probe_resolve_park_race_loses_the_event() {
+    let c = core(|_| Duration::ZERO);
+    let mut r = rig(&c, Arc::new(Fixed(11)));
+    assert!(is_retry(&r.router.resolve(":1.77"))); // drain: Retry for event #1
+    let name = r.to_register.try_recv().unwrap();
+    r.router.complete(name).await; // registration publishes before the drain parks
+    r.router.park(":1.77", &focus_signal("/org/a/focus")); // drain: park event #1
+    let RouteDecision::Route(route) = r.router.resolve(":1.77") else { panic!() };
+    let got = last_focus_path(&c, &r, route.app);
+    eprintln!("PROBE P3 delivered={got:?} dropped={}", r.router.stats().parked_dropped);
+    assert_eq!(got.as_deref(), Some("/org/a/focus"), "focus lost in the resolve/park window");
+}
+
+/// P4: the per-owner over-limit verdict is permanent: after the process drops back under the
+/// limit, a new name is still ignored? (here: the over-limit name itself stays ignored forever,
+/// and `ignored` grows without bound under churn).
+#[tokio::test]
+async fn review_probe_ignored_set_grows_without_bound() {
+    let c = core(|_| Duration::ZERO);
+    let mut r = rig(&c, Arc::new(Fixed(13)));
+    for i in 0..(MAX_NAMES_PER_OWNER + 2000) {
+        let n = format!(":1.{}", 10_000 + i);
+        let _ = r.router.resolve(&n);
+        if let Ok(name) = r.to_register.try_recv() {
+            r.router.complete(name).await;
+        }
+        if i >= MAX_NAMES_PER_OWNER {
+            // churn: the over-limit connection leaves
+            let _ = r.router.forget(&n);
+        }
+    }
+    let ign = r.router.state().ignored.len();
+    eprintln!("PROBE P4 ignored_len={ign} after 2000 departed over-limit names");
+    assert!(ign < 100, "ignored set keeps departed names: {ign}");
+}
+
+/// P5: the park buffer bounds the body (512 B) but not the object path, interface or member.
+#[tokio::test]
+async fn review_probe_parked_path_is_unbounded() {
+    let c = core(|_| Duration::from_secs(60));
+    let r = rig(&c, Arc::new(Fixed(5)));
+    let rss = || -> u64 {
+        let s = std::fs::read_to_string("/proc/self/status").unwrap();
+        s.lines().find(|l| l.starts_with("VmRSS:")).unwrap().split_whitespace().nth(1).unwrap().parse().unwrap()
+    };
+    let before = rss();
+    let big = format!("/{}", "a".repeat(1 << 20)); // 1 MiB object path (bus allows 1e9-byte messages)
+    let mut n = 0;
+    for s in 0..MAX_PENDING {
+        let name = format!(":1.{}", 700 + s);
+        let _ = r.router.resolve(&name);
+        for _ in 0..MAX_PARKED_PER_SENDER {
+            r.router.park(&name, &focus_signal(&big));
+            n += 1;
+        }
+    }
+    let grown = (rss() - before) / 1024;
+    eprintln!("PROBE P5 parked_attempts={n} dropped={} rss_growth_mib={grown}", r.router.stats().parked_dropped);
+    assert!(grown < 64, "park buffer held {grown} MiB");
+}

@@ -1,0 +1,42 @@
+   Compiling gorca-output-api v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-output-api)
+   Compiling gorca-speech v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-speech)
+   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-core)
+   Compiling gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-connector-atspi)
+    Finished `release` profile [optimized + debuginfo] target(s) in 18.83s
+     Running unittests src/lib.rs (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/tgt/release/deps/gorca_connector_atspi-d6ba16c52add5457)
+
+running 20 tests
+test router::tests::a_burst_of_other_events_never_displaces_the_focus ... ok
+test router::tests::a_failed_registration_backs_off_and_then_succeeds ... ok
+test router::tests::an_app_dying_mid_registration_leaks_nothing ... ok
+test router::tests::focus_during_backoff_or_the_pending_cap_is_kept_for_the_next_attempt ... ok
+test router::tests::forget_cancels_the_app_and_drops_its_paths ... ok
+test router::tests::forget_marks_departed_and_departed_names_expire ... ok
+test router::tests::hostile_parkers_cannot_drop_a_new_apps_focus ... ok
+test router::tests::ignored_and_well_known_names_are_not_applications ... ok
+test router::tests::newest_focus_survives_the_park_cap ... ok
+test router::tests::one_process_cannot_hold_unbounded_names ... ok
+test router::tests::parked_strings_are_bounded ... ok
+test router::tests::registration_and_departure_churn_leaks_nothing ... ok
+test router::tests::registrations_in_flight_and_parked_events_are_bounded ... ok
+test router::tests::resolve_park_race_does_not_lose_the_event ... ok
+test router::tests::review_probe_r3_name_cap_overshoots_under_concurrency ... PROBE P7 names held by one pid = 124 (cap 64)
+
+thread 'router::tests::review_probe_r3_name_cap_overshoots_under_concurrency' (2267508) panicked at crates/gorca-connector-atspi/src/router/tests.rs:726:5:
+assertion failed: held <= MAX_NAMES_PER_OWNER
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test router::tests::take_all_returns_every_app_once ... ok
+test router::tests::the_application_cap_makes_the_largest_group_give_way ... ok
+test router::tests::the_first_event_registers_asynchronously_and_is_replayed_in_order ... ok
+test router::tests::the_ignored_set_does_not_grow_with_churn ... ok
+test router::tests::unknown_credentials_share_one_small_quota ... ok
+
+failures:
+
+failures:
+    router::tests::review_probe_r3_name_cap_overshoots_under_concurrency
+
+test result: FAILED. 19 passed; 1 failed; 0 ignored; 0 measured; 29 filtered out; finished in 4.26s
+
+error: test failed, to rerun pass `-p gorca-connector-atspi --lib`

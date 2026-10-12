@@ -1,0 +1,11 @@
+review-r2 probe results at fc83364 (debug unless noted)
+r1 F1 voicego_resend_after_stop      PASS  spoken after explicit Stop: ["first"]
+r1 F2 tracker_502_with_id            PASS  [Accepted(1), Error(1,"async 502"), Accepted(2), Started(2), Ended(2)] live=0
+r1 F4 drain_transient_route_mute     FAIL  expected: probe uses the simple route() contract (None == NotAnApp, cached by design); Retry path covered by raw.rs a_transient_route_failure_does_not_mute_the_sender
+r1 F5 -> paths_r2_fork (release)     PASS  4096 pids x 1024 paths: entries=52226 rss_growth_mib=279 victim recorded and survives next insert
+churn tests with tombstone check disabled: registration_and_departure_churn_leaks_nothing FAILED, an_app_dying_mid_registration_leaks_nothing FAILED (good)
+r2 P1 newest focus vs park cap        FAIL  newest=/org/a/39 delivered=/org/a/31 dropped=8
+r2 P2 hostile parkers vs victim focus FAIL  victim focus dropped=1
+r2 P3 resolve/park race               FAIL  delivered=None dropped=1
+r2 P4 ignored set growth              FAIL  ignored_len=2000 after 2000 departed over-limit names
+r2 P5 parked path unbounded (release) FAIL  64 senders x 32 parks of 1 MiB path: parked 1024, rss_growth_mib=1025
