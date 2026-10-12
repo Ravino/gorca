@@ -197,6 +197,15 @@ pub fn run_feeder(
         }
         out.clear();
         probes_in_batch.clear();
+        for _ in 0..n {
+            generator
+                .next_event()
+                .encode(&mut out, &mut sc, next_serial(), sender);
+        }
+        // The probe goes last in the write. Focus is last-writer-wins, so a data focus event that
+        // followed it inside the same write (the mixes contain a few percent of them) would
+        // overwrite the probe before the consumer ever saw it: batching by `write_quantum`
+        // turned that into a measured 5 ms "lag" and unobserved probes.
         if let Some(p) = probe_period
             && now >= next_probe
         {
@@ -210,11 +219,6 @@ pub fn run_feeder(
                 seq: 0,
             };
             ev.encode(&mut out, &mut sc, next_serial(), sender);
-        }
-        for _ in 0..n {
-            generator
-                .next_event()
-                .encode(&mut out, &mut sc, next_serial(), sender);
         }
         if out.is_empty() {
             if sleepy {

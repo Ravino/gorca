@@ -54,7 +54,13 @@ pub const HARD_CAP: usize = 65_536;
 /// Records the lock-free ring holds before a producer folds some into the table.
 pub const RING_CAP: usize = 1024;
 /// Records a producer folds when it finds the ring full (bounds its critical section).
-const HELP_CHUNK: usize = 128;
+const HELP_CHUNK: usize = 512;
+/// Budget units a producer takes from the shared counter at once for its ring (and the slack
+/// kept when units are given back), so a push usually touches only per-app atomics: one
+/// compare-and-swap on the global counter per push made four producers wait on each other.
+const RING_CREDIT_BLOCK: usize = 16;
+/// Records folded between two returns of ring charges.
+const FOLD_GROUP: usize = 16;
 /// Records the consumer folds per lock acquisition while draining.
 const DRAIN_CHUNK: usize = 256;
 /// An app holding at least this many slots folds at push time (it is already degraded, and the
@@ -183,6 +189,35 @@ impl SlotBudget {
     /// The configured limit.
     pub fn limit(&self) -> usize {
         self.limit
+    }
+
+    /// Take up to `n` units in one atomic operation each: `reserved` of them without looking at
+    /// the pool, the rest from the pool without exceeding the limit. Returns how many.
+    pub(crate) fn charge_up_to(&self, n: usize, reserved: usize) -> usize {
+        let free = n.min(reserved);
+        if free > 0 {
+            self.used.fetch_add(free, Ordering::AcqRel);
+        }
+        let want = n - free;
+        if want == 0 {
+            return free;
+        }
+        let mut cur = self.used.load(Ordering::Relaxed);
+        loop {
+            let take = want.min(self.limit.saturating_sub(cur));
+            if take == 0 {
+                return free;
+            }
+            match self.used.compare_exchange_weak(
+                cur,
+                cur + take,
+                Ordering::AcqRel,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => return free + take,
+                Err(now) => cur = now,
+            }
+        }
     }
 
     /// Charge a unit of the reserve to an app whose reserved units in use are `own < reserve`.
@@ -318,8 +353,10 @@ struct Shared {
     closed: AtomicBool,
     /// Budget units the table holds, for the eager path and for preemption.
     held_hint: AtomicUsize,
-    /// Budget units charged for records in the ring (or on their way into it), AU-3 / AU-1.
-    ring_charged: Padded<AtomicUsize>,
+    /// Units taken from the budget on behalf of the ring (AU-1, AU-3): at least the number of
+    /// records in the ring (give or take the producers racing for the last unit), at most a
+    /// couple of blocks more; equal to it whenever the ingress is observed (`settle`).
+    ring_credit: Padded<AtomicUsize>,
     wake: Notify,
     table: Mutex<Table>,
     /// Meta vector recycled between drains (consumer only).
@@ -330,17 +367,49 @@ struct Shared {
 impl Shared {
     /// What a preempting app sees of this one: table units plus ring records.
     fn weight(&self) -> usize {
-        self.held_hint.load(Ordering::Relaxed) + self.ring_charged.0.load(Ordering::Relaxed)
+        self.held_hint.load(Ordering::Relaxed) + self.ring.len()
     }
 
-    /// Return `n` ring charges.
-    fn uncharge_ring(&self, n: usize) {
-        if n > 0
-            && let Some(b) = &self.budget
-        {
-            self.ring_charged.0.fetch_sub(n, Ordering::AcqRel);
-            b.release(n);
+    /// Give back credit beyond the records in the ring plus `slack`, once it exceeds that by
+    /// two slacks (the cache line is written by the producers too, so surplus returns in bulk).
+    /// Lock-free and safe to race: only the thread whose compare-and-swap wins releases units.
+    fn trim_credit(&self, slack: usize) {
+        let Some(b) = &self.budget else { return };
+        let queued = self.ring.len();
+        let credit = self.ring_credit.0.load(Ordering::Acquire);
+        if credit > queued + 2 * slack {
+            let keep = queued + slack;
+            if self
+                .ring_credit
+                .0
+                .compare_exchange(credit, keep, Ordering::AcqRel, Ordering::Relaxed)
+                .is_ok()
+            {
+                b.release(credit - keep);
+            }
         }
+    }
+
+    /// Make `used()` exact for this ingress: credit equals the records in the ring.
+    fn settle(&self) {
+        self.trim_credit(0);
+    }
+
+    /// Make sure there is credit for one more record in the ring, taking a block from the budget
+    /// when it is used up. False when the pool refuses even one unit.
+    fn cover(&self, b: &SlotBudget) -> bool {
+        let credit = self.ring_credit.0.load(Ordering::Acquire);
+        if self.ring.len() < credit {
+            return true;
+        }
+        let held = self.held_hint.load(Ordering::Relaxed);
+        let room = self.cfg.reserved_slots.saturating_sub(credit + held);
+        let got = b.charge_up_to(RING_CREDIT_BLOCK, room);
+        if got == 0 {
+            return false;
+        }
+        self.ring_credit.0.fetch_add(got, Ordering::AcqRel);
+        true
     }
 
     /// Discard every record of the ring (receiver gone, or preemption). Returns how many.
@@ -349,7 +418,7 @@ impl Shared {
         while self.ring.pop().is_some() {
             n += 1;
         }
-        self.uncharge_ring(n);
+        self.settle();
         n
     }
 
@@ -371,15 +440,29 @@ impl Shared {
     /// Fold up to `limit` records of the ring into `t`. Returns how many were folded.
     fn fold_into(&self, t: &mut Table, limit: usize) -> usize {
         let mut n = 0;
-        t.ring_units = self.ring_charged.0.load(Ordering::Relaxed);
+        t.ring_units = self.ring_credit.0.load(Ordering::Relaxed);
         while n < limit {
-            let Some(ev) = self.ring.pop() else { break };
-            // The record's prepaid unit goes back before the table charges what it keeps, so a
-            // full pool cannot refuse a record that merely changes form.
-            self.uncharge_ring(1);
-            t.ring_units = t.ring_units.saturating_sub(1);
-            t.push(&self.cfg, ev);
-            n += 1;
+            // Small groups: the prepaid units of a group go back with two atomic operations
+            // instead of two per record (the counters are hot, producers add to them), and
+            // before the table charges what it keeps, so a full pool cannot refuse a record
+            // that merely changes form.
+            let mut group: smallvec::SmallVec<[RawEvent; FOLD_GROUP]> = smallvec::SmallVec::new();
+            while group.len() < FOLD_GROUP.min(limit - n) {
+                let Some(ev) = self.ring.pop() else { break };
+                group.push(ev);
+            }
+            if group.is_empty() {
+                break;
+            }
+            // A full pool needs the units of the records just taken at once.
+            if self.budget.as_ref().is_some_and(|b| b.used() >= b.limit()) {
+                self.trim_credit(0);
+            }
+            t.ring_units = self.ring_credit.0.load(Ordering::Relaxed);
+            n += group.len();
+            for ev in group {
+                t.push(&self.cfg, ev);
+            }
         }
         // O(n) check, sampled and limited to small tables so debug builds keep bounded pushes.
         debug_assert!(
@@ -387,6 +470,7 @@ impl Shared {
             "{:?}",
             t.check()
         );
+        self.trim_credit(RING_CREDIT_BLOCK);
         self.held_hint.store(t.held(), Ordering::Relaxed);
         n
     }
@@ -397,7 +481,7 @@ impl Shared {
         let mut t = self.lock();
         self.fold_all(&mut t);
         if !self.closed.load(Ordering::Relaxed) {
-            t.ring_units = 0;
+            t.ring_units = self.ring_credit.0.load(Ordering::Relaxed);
             t.push(&self.cfg, ev);
             self.held_hint.store(t.held(), Ordering::Relaxed);
         }
@@ -443,7 +527,7 @@ fn ingress_inner(
         armed: AtomicBool::new(false),
         closed: AtomicBool::new(false),
         held_hint: AtomicUsize::new(0),
-        ring_charged: Padded(AtomicUsize::new(0)),
+        ring_credit: Padded(AtomicUsize::new(0)),
         wake: Notify::new(),
         table: Mutex::new(Table::new(id, budget.clone())),
         spare: Mutex::new(Vec::new()),
@@ -475,7 +559,7 @@ pub struct IngressReceiver {
 impl Drop for Shared {
     fn drop(&mut self) {
         // Records pushed after the receiver was dropped, and their charges, die with the ring.
-        let left = self.ring_charged.0.load(Ordering::Relaxed);
+        let left = self.ring_credit.0.load(Ordering::Relaxed);
         if let Some(b) = &self.budget {
             b.release(left);
         }
@@ -493,10 +577,7 @@ impl IngressSender {
         }
         if let Some(b) = &sh.budget {
             // The record is charged before it is queued, so `used()` covers the ring (AU-1).
-            let prior = sh.ring_charged.0.fetch_add(1, Ordering::AcqRel);
-            let reserved = prior + sh.held_hint.load(Ordering::Relaxed);
-            if !b.admit(reserved, sh.cfg.reserved_slots) && !b.try_charge() {
-                sh.ring_charged.0.fetch_sub(1, Ordering::AcqRel);
+            if !sh.cover(b) {
                 sh.push_direct(ev);
                 return;
             }
@@ -507,11 +588,20 @@ impl IngressSender {
                 Ok(()) => break,
                 Err(back) => {
                     ev = back;
-                    let mut t = sh.lock();
-                    sh.fold_into(&mut t, HELP_CHUNK);
-                    drop(t);
+                    // Whoever holds the lock is folding, which frees ring slots one record at a
+                    // time: wait for a slot, not for the end of its whole critical section.
+                    let guard = match sh.table.try_lock() {
+                        Ok(g) => Some(g),
+                        Err(TryLockError::Poisoned(p)) => Some(p.into_inner()),
+                        Err(TryLockError::WouldBlock) => None,
+                    };
+                    match guard {
+                        Some(mut t) => {
+                            sh.fold_into(&mut t, HELP_CHUNK);
+                        }
+                        None => std::hint::spin_loop(),
+                    }
                     if sh.closed.load(Ordering::Relaxed) {
-                        sh.uncharge_ring(1);
                         return;
                     }
                 }
@@ -566,6 +656,7 @@ impl IngressReceiver {
         if !sh.ring.is_empty() {
             sh.arm();
         }
+        sh.settle();
         drained
     }
 
@@ -574,6 +665,7 @@ impl IngressReceiver {
         let sh = &*self.shared;
         let mut t = sh.lock();
         sh.fold_all(&mut t);
+        sh.settle();
         t.check()
     }
 
@@ -587,6 +679,7 @@ impl IngressReceiver {
         let sh = &*self.shared;
         let mut t = sh.lock();
         sh.fold_all(&mut t);
+        sh.settle();
         t.live()
     }
 }

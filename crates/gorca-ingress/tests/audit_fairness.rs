@@ -156,12 +156,22 @@ fn audit_ring_records_are_charged() {
     for n in 0..500 {
         tx.push(window(1, n));
     }
-    assert_eq!(budget.used(), 500, "ring records are not charged");
+    // A producer takes its credit from the budget in small blocks, so while records sit in the
+    // ring `used()` is at least their number and exceeds it by less than one block.
+    assert!(
+        (500..500 + 16).contains(&budget.used()),
+        "ring records are not charged: used {}",
+        budget.used()
+    );
     // Repeats of one key coalesce when folded, but they were charged while queued.
     for _ in 0..100 {
         tx.push(NodeEvent::NodeRemoved { node: node(1, 5) });
     }
-    assert_eq!(budget.used(), 600);
+    assert!(
+        (600..600 + 16).contains(&budget.used()),
+        "used {}",
+        budget.used()
+    );
     assert_eq!(rx.pending(), 500, "window 5 is superseded by Removed(5)");
     assert_eq!(budget.used(), rx.pending());
     drop(rx.drain());
@@ -204,7 +214,9 @@ fn audit_ring_charges_respect_the_limit() {
 /// implementation took 0.7 to 2 ms (judge, `preempt-cost.txt`); the bound is 250 us.
 #[test]
 fn audit_preempting_push_is_bounded() {
-    let limit = HARD_CAP;
+    // Room for the holder plus its in-flight ring credit; a filler app inside its reserve then
+    // closes the gap so that the pool is exactly exhausted.
+    let limit = HARD_CAP + 16;
     let bound = if cfg!(debug_assertions) {
         Duration::from_millis(5)
     } else {
@@ -218,6 +230,12 @@ fn audit_preempting_push_is_bounded() {
             htx.push(window(1, n));
         }
         assert_eq!(hrx.pending(), HARD_CAP);
+        let (ftx, frx) = ingress_with_budget(IngressConfig::default(), &budget);
+        for n in 0..16u64 {
+            ftx.push(window(3, n));
+        }
+        assert_eq!(frx.pending(), 16);
+        assert_eq!(budget.used(), limit);
         let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
         for n in 0..RESERVED_SLOTS as u64 {
             tx.push(window(2, n));
@@ -235,7 +253,7 @@ fn audit_preempting_push_is_bounded() {
                 .as_ref()
                 .is_some_and(gorca_ingress::DirtySet::is_all)
         );
-        drop((htx, hrx, tx, rx));
+        drop((htx, hrx, tx, rx, ftx, frx));
         assert_eq!(budget.used(), 0);
     }
     assert!(

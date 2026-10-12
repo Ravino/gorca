@@ -213,7 +213,11 @@ mod tests {
                 local: gorca_model::LocalId(1),
             },
         });
-        assert_eq!(budget.used(), 1);
+        assert!(
+            (1..=16).contains(&budget.used()),
+            "ring credit: {}",
+            budget.used()
+        );
         drop(ch);
         assert_eq!(budget.used(), 0);
     }
