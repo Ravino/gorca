@@ -1,0 +1,17 @@
+{
+  "meta": {"label": "judge-A-r1", "scenarios": "fakeapp-Mixed"},
+  "rows": [
+    {"id": "FA.mixed.failures", "scenario": "fakeapp", "bus": "isolated", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "count", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "compared 204 nodes over 4 senders; "},
+    {"id": "FA.mixed.storm_emitted_eps", "scenario": "fakeapp", "bus": "isolated", "value": 19997.17791255767, "min": 19997.17791255767, "max": 19997.17791255767, "runs": 1, "unit": "events/s", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FA.mixed.tap_messages", "scenario": "fakeapp", "bus": "isolated", "value": 303731, "min": 303731, "max": 303731, "runs": 1, "unit": "messages", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FA.mixed.drain_messages", "scenario": "fakeapp", "bus": "isolated", "value": 303739, "min": 303739, "max": 303739, "runs": 1, "unit": "messages", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FA.mixed.drain_pushed", "scenario": "fakeapp", "bus": "isolated", "value": 303734, "min": 303734, "max": 303734, "runs": 1, "unit": "events", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FA.mixed.drain_core_pct", "scenario": "fakeapp", "bus": "isolated", "value": 24.994002952474975, "min": 24.994002952474975, "max": 24.994002952474975, "runs": 1, "unit": "% of one core", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FA.mixed.all_cpu_core_pct", "scenario": "fakeapp", "bus": "isolated", "value": 24.994002952474975, "min": 24.994002952474975, "max": 24.994002952474975, "runs": 1, "unit": "% of one core", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FA.mixed.rss_delta_mib", "scenario": "fakeapp", "bus": "isolated", "value": 4.26953125, "min": 4.26953125, "max": 4.26953125, "runs": 1, "unit": "MiB", "op": "<=", "threshold": 256, "verdict": "PASS", "note": ""},
+    {"id": "FA.mixed.focus_p50_us", "scenario": "fakeapp", "bus": "isolated", "value": 17.439, "min": 17.439, "max": 17.439, "runs": 1, "unit": "us vs tap", "op": "", "threshold": null, "verdict": "info", "note": "n=300"},
+    {"id": "FA.mixed.focus_p99_us", "scenario": "fakeapp", "bus": "isolated", "value": 244.069, "min": 244.069, "max": 244.069, "runs": 1, "unit": "us vs tap", "op": "<=", "threshold": 2000, "verdict": "PASS", "note": ""},
+    {"id": "FA.mixed.focus_p999_us", "scenario": "fakeapp", "bus": "isolated", "value": 1071.965, "min": 1071.965, "max": 1071.965, "runs": 1, "unit": "us vs tap", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FA.mixed.focus_max_us", "scenario": "fakeapp", "bus": "isolated", "value": 1071.965, "min": 1071.965, "max": 1071.965, "runs": 1, "unit": "us vs tap", "op": "", "threshold": null, "verdict": "info", "note": ""}
+  ]
+}

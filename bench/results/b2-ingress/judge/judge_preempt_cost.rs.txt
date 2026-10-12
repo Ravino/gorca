@@ -1,0 +1,20 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+use std::time::Instant;
+use gorca_ingress::{GLOBAL_SLOT_BUDGET, HARD_CAP, IngressConfig, SlotBudget, ingress_with_budget};
+use gorca_model::{AppId, ConnectorId, LocalId, NodeEvent, NodeKey, WindowKind};
+fn node(app: u32, n: u64) -> NodeKey { NodeKey { app: AppId { connector: ConnectorId(0), serial: app }, local: LocalId(n) } }
+fn window(app: u32, n: u64) -> NodeEvent { NodeEvent::WindowEvent { node: node(app, n), kind: WindowKind::Create } }
+#[test] fn judge_preempt_cost() {
+    let mut worst_push = 0u128; let mut worst_drain = 0u128;
+    for round in 0..5 {
+        let budget = SlotBudget::new(GLOBAL_SLOT_BUDGET);
+        let hostile: Vec<_> = (0..4u32).map(|a| { let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+            for n in 0..HARD_CAP as u64 { tx.push(window(a, n)); } (tx, rx) }).collect();
+        let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+        for n in 0..20 { let t = Instant::now(); tx.push(window(100 + round, n)); worst_push = worst_push.max(t.elapsed().as_micros()); }
+        let t = Instant::now(); let d = rx.drain(); worst_drain = worst_drain.max(t.elapsed().as_micros());
+        assert!(d.events.len() > 0);
+        drop(hostile);
+    }
+    eprintln!("victim worst push {worst_push} us, worst drain {worst_drain} us (AU-6 limit 250 us)");
+}

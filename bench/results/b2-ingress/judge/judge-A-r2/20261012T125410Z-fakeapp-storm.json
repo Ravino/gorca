@@ -1,0 +1,13 @@
+{
+  "meta": {"label": "judge-A-r2", "scenarios": "fakeapp-Storm"},
+  "rows": [
+    {"id": "FA.storm.failures", "scenario": "fakeapp", "bus": "isolated", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "count", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "compared 199 nodes over 2 senders; "},
+    {"id": "FA.storm.storm_emitted_eps", "scenario": "fakeapp", "bus": "isolated", "value": 39985.40003706385, "min": 39985.40003706385, "max": 39985.40003706385, "runs": 1, "unit": "events/s", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FA.storm.tap_messages", "scenario": "fakeapp", "bus": "isolated", "value": 599790, "min": 599790, "max": 599790, "runs": 1, "unit": "messages", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FA.storm.drain_messages", "scenario": "fakeapp", "bus": "isolated", "value": 599794, "min": 599794, "max": 599794, "runs": 1, "unit": "messages", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FA.storm.drain_pushed", "scenario": "fakeapp", "bus": "isolated", "value": 599791, "min": 599791, "max": 599791, "runs": 1, "unit": "events", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FA.storm.drain_core_pct", "scenario": "fakeapp", "bus": "isolated", "value": 40.857515514862406, "min": 40.857515514862406, "max": 40.857515514862406, "runs": 1, "unit": "% of one core", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FA.storm.all_cpu_core_pct", "scenario": "fakeapp", "bus": "isolated", "value": 40.857515514862406, "min": 40.857515514862406, "max": 40.857515514862406, "runs": 1, "unit": "% of one core", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FA.storm.rss_delta_mib", "scenario": "fakeapp", "bus": "isolated", "value": 7.15625, "min": 7.15625, "max": 7.15625, "runs": 1, "unit": "MiB", "op": "<=", "threshold": 256, "verdict": "PASS", "note": ""}
+  ]
+}

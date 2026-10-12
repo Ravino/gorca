@@ -1,0 +1,40 @@
+=== agent-a51937197a8c8515b as-is
+test a_giant_message_is_skipped_not_buffered ... FAILED
+thread 'a_giant_message_is_skipped_not_buffered' (913792) panicked at crates/gorca-bench-b2/tests/bounds.rs:256:5:
+RSS grew 201 MiB for one 100 MiB message
+--- drop(giant)
+test a_giant_message_is_skipped_not_buffered ... ok
+--- drop + mock shrink
+test a_giant_message_is_skipped_not_buffered ... ok
+=== agent-a7220896a4b874d87 as-is
+test a_giant_message_is_skipped_not_buffered ... FAILED
+thread 'a_giant_message_is_skipped_not_buffered' (916247) panicked at crates/gorca-bench-b2/tests/bounds.rs:256:5:
+RSS grew 201 MiB for one 100 MiB message
+--- drop(giant)
+test a_giant_message_is_skipped_not_buffered ... ok
+--- drop + mock shrink
+test a_giant_message_is_skipped_not_buffered ... ok
+=== agent-a0827b96f409accfc as-is
+test a_giant_message_is_skipped_not_buffered ... ok
+--- drop(giant)
+test a_giant_message_is_skipped_not_buffered ... ok
+--- drop + mock shrink
+test a_giant_message_is_skipped_not_buffered ... ok
+=== agent-a51937197a8c8515b drop+shrink, threshold 1 MiB to print growth
+test a_giant_message_is_skipped_not_buffered ... FAILED
+RSS grew 1 MiB for one 100 MiB message
+test a_giant_message_is_skipped_not_buffered ... FAILED
+RSS grew 70 MiB for one 100 MiB message
+=== agent-a7220896a4b874d87 drop+shrink, threshold 1 MiB to print growth
+test a_giant_message_is_skipped_not_buffered ... FAILED
+RSS grew 1 MiB for one 100 MiB message
+test a_giant_message_is_skipped_not_buffered ... FAILED
+RSS grew 1 MiB for one 100 MiB message
+=== agent-a0827b96f409accfc drop+shrink, threshold 1 MiB to print growth
+test a_giant_message_is_skipped_not_buffered ... FAILED
+RSS grew 44 MiB for one 100 MiB message
+test a_giant_message_is_skipped_not_buffered ... FAILED
+RSS grew 1 MiB for one 100 MiB message
+=== agent-a51937197a8c8515b drop+shrink x6: grew 1 grew 82 grew 1 grew 1 grew 76 grew 72 
+=== agent-a7220896a4b874d87 drop+shrink x6: grew 1 grew 71 grew 77 grew 1 grew 1 grew 1 
+=== agent-a0827b96f409accfc drop+shrink x6: grew 84 grew 94 grew 1 grew 63 grew 1 grew 1 

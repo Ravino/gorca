@@ -1,0 +1,165 @@
+== C 3c65594 loadavg 12.20 9.22 8.24 2/4119 906636
+== fmt
+FMT_OK
+== clippy
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+clippy exit 0
+== test workspace
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 5.59s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.08s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.90s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test reader::tests::a_failed_fetch_falls_back_to_a_stale_cache_entry ... ok
+test result: ok. 50 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test call::tests::zbus_errors_pass_through ... ok
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test node::tests::failed_reply_goes_stale ... ok
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test supervisor::tests::completed_and_panicked_tasks_are_reported_with_names ... ok
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test exit 0
+== audit include-ignored release (loadavg 12.91 9.57 8.38 2/4142 907835)
+test coalesce::tests::announcements_are_never_coalesced_but_capped ... ok
+test coalesce::tests::delete_then_insert_collapses_to_replaced ... ok
+test coalesce::tests::focus_is_last_writer_wins_and_keeps_position ... ok
+test coalesce::tests::memory_is_bounded_under_a_storm_of_distinct_keys ... ok
+test coalesce::tests::more_than_64_deltas_collapse_to_replaced ... ok
+test coalesce::tests::overload_floods_and_keeps_only_the_essentials ... ok
+test coalesce::tests::property_masks_are_ored ... ok
+test coalesce::tests::receiver_is_woken_by_the_first_push ... ok
+test coalesce::tests::removed_supersedes_every_pending_slot_of_the_node ... ok
+test dirty::tests::marks_dedupe ... ok
+test dirty::tests::overflow_degrades_to_all_dirty ... ok
+test hash::tests::spreads_sequential_keys_over_buckets ... ok
+test hash::tests::strings_of_different_length_differ ... ok
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test audit_budget_released_when_ingress_dropped ... ok
+test audit_dead_receiver_does_not_hold_budget ... ok
+test audit_hostile_apps_cannot_starve_a_victim ... ok
+test audit_sender_churn_exhausts_global_budget_permanently ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test audit_drain_critical_section_is_bounded ... ok
+test audit_single_push_is_bounded_under_tombstone_compaction ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test audit_drained_storm_releases_memory ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+test audit_text_deltas_are_charged_and_bounded ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test concurrent_pushes_never_overshoot_the_budget ... ok
+test published_batches_equal_the_raw_stream ... ok
+test publishing_into_a_busy_ingress_floods_like_pushing ... ok
+test the_budget_equals_the_sum_of_what_is_queued ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+test coalesce::tests::announcements_are_never_coalesced_but_capped ... ok
+test coalesce::tests::delete_then_insert_collapses_to_replaced ... ok
+test coalesce::tests::focus_is_last_writer_wins_and_keeps_position ... ok
+test coalesce::tests::memory_is_bounded_under_a_storm_of_distinct_keys ... ok
+test coalesce::tests::more_than_64_deltas_collapse_to_replaced ... ok
+test coalesce::tests::overload_floods_and_keeps_only_the_essentials ... ok
+test coalesce::tests::property_masks_are_ored ... ok
+test coalesce::tests::receiver_is_woken_by_the_first_push ... ok
+test coalesce::tests::removed_supersedes_every_pending_slot_of_the_node ... ok
+test dirty::tests::marks_dedupe ... ok
+test dirty::tests::overflow_degrades_to_all_dirty ... ok
+test hash::tests::spreads_sequential_keys_over_buckets ... ok
+test hash::tests::strings_of_different_length_differ ... ok
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test audit_budget_released_when_ingress_dropped ... ok
+test audit_dead_receiver_does_not_hold_budget ... ok
+test audit_hostile_apps_cannot_starve_a_victim ... ok
+test audit_sender_churn_exhausts_global_budget_permanently ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test audit_drain_critical_section_is_bounded ... ok
+test audit_single_push_is_bounded_under_tombstone_compaction ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test audit_drained_storm_releases_memory ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+test audit_text_deltas_are_charged_and_bounded ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test concurrent_pushes_never_overshoot_the_budget ... ok
+test published_batches_equal_the_raw_stream ... ok
+test publishing_into_a_busy_ingress_floods_like_pushing ... ok
+test the_budget_equals_the_sum_of_what_is_queued ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+test coalesce::tests::announcements_are_never_coalesced_but_capped ... ok
+test coalesce::tests::delete_then_insert_collapses_to_replaced ... ok
+test coalesce::tests::focus_is_last_writer_wins_and_keeps_position ... ok
+test coalesce::tests::memory_is_bounded_under_a_storm_of_distinct_keys ... ok
+test coalesce::tests::more_than_64_deltas_collapse_to_replaced ... ok
+test coalesce::tests::overload_floods_and_keeps_only_the_essentials ... ok
+test coalesce::tests::property_masks_are_ored ... ok
+test coalesce::tests::receiver_is_woken_by_the_first_push ... ok
+test coalesce::tests::removed_supersedes_every_pending_slot_of_the_node ... ok
+test dirty::tests::marks_dedupe ... ok
+test dirty::tests::overflow_degrades_to_all_dirty ... ok
+test hash::tests::spreads_sequential_keys_over_buckets ... ok
+test hash::tests::strings_of_different_length_differ ... ok
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test audit_budget_released_when_ingress_dropped ... ok
+test audit_dead_receiver_does_not_hold_budget ... ok
+test audit_hostile_apps_cannot_starve_a_victim ... ok
+test audit_sender_churn_exhausts_global_budget_permanently ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test audit_drain_critical_section_is_bounded ... ok
+test audit_single_push_is_bounded_under_tombstone_compaction ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test audit_drained_storm_releases_memory ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+test audit_text_deltas_are_charged_and_bounded ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test concurrent_pushes_never_overshoot_the_budget ... ok
+test published_batches_equal_the_raw_stream ... ok
+test publishing_into_a_busy_ingress_floods_like_pushing ... ok
+test the_budget_equals_the_sum_of_what_is_queued ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+== check-deps
+dependency rules: ok (26 workspace crates, 182 packages)
+deps exit 0

@@ -1,0 +1,31 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+use std::sync::Arc;
+use gorca_ingress::{GLOBAL_SLOT_BUDGET, IngressConfig, SlotBudget, ingress_with_budget};
+use gorca_model::{AppId, ConnectorId, LocalId, NodeEvent, NodeKey, Politeness, WindowKind};
+fn node(app: u32, n: u64) -> NodeKey { NodeKey { app: AppId { connector: ConnectorId(0), serial: app }, local: LocalId(n) } }
+fn window(app: u32, n: u64) -> NodeEvent { NodeEvent::WindowEvent { node: node(app, n), kind: WindowKind::Create } }
+
+/// One hostile process opens K connections; each holds fewer than A's preemption threshold.
+fn attack(k: u32, per: u64) {
+    let budget = SlotBudget::new(GLOBAL_SLOT_BUDGET);
+    let hostile: Vec<_> = (0..k).map(|app| {
+        let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+        if per < 1_000_000 { for n in 0..per { tx.push(window(app, n)); } }
+        else { for n in 0..120 { tx.push(window(app, n)); } for _ in 0..1_200 { tx.push(NodeEvent::NodeRemoved { node: node(app, 999_999) }); } }
+        (tx, rx)
+    }).collect();
+    let used_before = budget.used();
+    let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+    let victim = 1_000_000u32;
+    tx.push(NodeEvent::NodeRemoved { node: node(victim, 7) });
+    for n in 0..18 { tx.push(window(victim, 8 + n)); }
+    tx.push(NodeEvent::Announcement { node: Some(node(victim, 0)), text: Arc::from("new mail"), politeness: Politeness::Polite });
+    let d = rx.drain();
+    eprintln!("K={k} per={per} used_before={used_before} limit={GLOBAL_SLOT_BUDGET} used_peak_after={} victim_events={} ann_dropped={} dirty={:?}",
+        budget.used(), d.events.len(), d.stats.announcements_dropped, d.dirty.as_ref().map(|x| x.is_all()));
+    drop(hostile);
+}
+#[test] fn judge_many_small_connections() { attack(2_100, 1_024 + 125); }
+#[test] fn judge_many_tiny_connections() { attack(4_200, 1_024 + 64); }
+#[test] fn judge_four_big_connections() { attack(4, 65_536); }
+#[test] fn judge_shaped_holders_below_preempt_threshold() { attack(2_300, 1_000_000); }

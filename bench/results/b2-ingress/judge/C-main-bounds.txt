@@ -1,0 +1,21 @@
+test a_giant_message_is_skipped_not_buffered ... ignored, reference arm (zbus) buffers whole messages; candidates must pass
+test a_global_budget_bounds_many_apps ... FAILED
+test counters_equal_structure_sizes_after_every_operation ... ok
+test oversized_payloads_and_sender_churn_stay_bounded ... ok
+test supersession_does_not_leak_tombstones ... ok
+budget used 11484
+test result: FAILED. 3 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.68s
+test a_giant_message_is_skipped_not_buffered ... ignored, reference arm (zbus) buffers whole messages; candidates must pass
+test a_global_budget_bounds_many_apps ... FAILED
+test counters_equal_structure_sizes_after_every_operation ... ok
+test oversized_payloads_and_sender_churn_stay_bounded ... ok
+test supersession_does_not_leak_tombstones ... ok
+budget used 11484
+test result: FAILED. 3 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.85s
+test a_giant_message_is_skipped_not_buffered ... ignored, reference arm (zbus) buffers whole messages; candidates must pass
+test a_global_budget_bounds_many_apps ... FAILED
+test counters_equal_structure_sizes_after_every_operation ... ok
+test oversized_payloads_and_sender_churn_stay_bounded ... ok
+test supersession_does_not_leak_tombstones ... ok
+budget used 11484
+test result: FAILED. 3 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.70s

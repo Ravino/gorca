@@ -1,0 +1,30 @@
+=== agent-a51937197a8c8515b
+test judge_four_big_connections ... K=4 per=65536 used_before=262144 limit=262144 used_peak_after=196608 victim_events=8 ann_dropped=0 dirty=None
+test judge_many_small_connections ... K=2100 per=1149 used_before=262144 limit=262144 used_peak_after=262016 victim_events=8 ann_dropped=0 dirty=None
+test judge_many_tiny_connections ... K=4000 per=1090 used_before=262144 limit=262144 used_peak_after=262016 victim_events=8 ann_dropped=0 dirty=None
+=== agent-a7220896a4b874d87
+test judge_four_big_connections ... K=4 per=65536 used_before=262144 limit=262144 used_peak_after=262144 victim_events=8 ann_dropped=0 dirty=None
+test judge_many_small_connections ... K=2100 per=1149 used_before=292080 limit=262144 used_peak_after=292080 victim_events=8 ann_dropped=0 dirty=None
+test judge_many_tiny_connections ... K=4000 per=1090 used_before=322288 limit=262144 used_peak_after=322288 victim_events=8 ann_dropped=0 dirty=None
+=== agent-a0827b96f409accfc
+test judge_four_big_connections ... K=4 per=65536 used_before=262144 limit=262144 used_peak_after=262144 victim_events=4 ann_dropped=1 dirty=Some(true)
+test judge_many_small_connections ... K=2100 per=1149 used_before=269628 limit=262144 used_peak_after=269628 victim_events=4 ann_dropped=1 dirty=Some(true)
+test judge_many_tiny_connections ... K=4000 per=1090 used_before=277180 limit=262144 used_peak_after=277180 victim_events=4 ann_dropped=1 dirty=Some(true)
+=== agent-a51937197a8c8515b (victim pushes 20 events)
+test judge_four_big_connections ... K=4 per=65536 used_before=262144 limit=262144 used_peak_after=196608 victim_events=20 ann_dropped=0 dirty=None
+test judge_many_small_connections ... K=2100 per=1149 used_before=262144 limit=262144 used_peak_after=262016 victim_events=20 ann_dropped=0 dirty=None
+test judge_many_tiny_connections ... K=4200 per=1088 used_before=262144 limit=262144 used_peak_after=262016 victim_events=20 ann_dropped=0 dirty=None
+=== agent-a7220896a4b874d87 (victim pushes 20 events)
+test judge_four_big_connections ... K=4 per=65536 used_before=262144 limit=262144 used_peak_after=262144 victim_events=16 ann_dropped=1 dirty=Some(true)
+test judge_many_small_connections ... K=2100 per=1149 used_before=292080 limit=262144 used_peak_after=292080 victim_events=16 ann_dropped=1 dirty=Some(true)
+test judge_many_tiny_connections ... K=4200 per=1088 used_before=325488 limit=262144 used_peak_after=325488 victim_events=16 ann_dropped=1 dirty=Some(true)
+=== agent-a0827b96f409accfc (victim pushes 20 events)
+test judge_four_big_connections ... K=4 per=65536 used_before=262144 limit=262144 used_peak_after=262144 victim_events=4 ann_dropped=1 dirty=Some(true)
+test judge_many_small_connections ... K=2100 per=1149 used_before=269628 limit=262144 used_peak_after=269628 victim_events=4 ann_dropped=1 dirty=Some(true)
+test judge_many_tiny_connections ... K=4200 per=1088 used_before=277980 limit=262144 used_peak_after=277980 victim_events=4 ann_dropped=1 dirty=Some(true)
+=== agent-a51937197a8c8515b shaped
+test judge_shaped_holders_below_preempt_threshold ... K=2300 per=1000000 used_before=262144 limit=262144 used_peak_after=262144 victim_events=0 ann_dropped=1 dirty=Some(true)
+=== agent-a7220896a4b874d87 shaped
+test judge_shaped_holders_below_preempt_threshold ... K=2300 per=1000000 used_before=264272 limit=262144 used_peak_after=264272 victim_events=16 ann_dropped=1 dirty=Some(true)
+=== agent-a0827b96f409accfc shaped
+test judge_shaped_holders_below_preempt_threshold ... K=2300 per=1000000 used_before=262676 limit=262144 used_peak_after=262676 victim_events=4 ann_dropped=1 dirty=Some(true)

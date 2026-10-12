@@ -1,0 +1,368 @@
+== conformance (debug and release) ==
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench_b2-7477e6172097290d)
+
+running 16 tests
+test model::tests::flooding_dirties_and_keeps_lossless ... ok
+test model::tests::focus_keeps_first_position_and_last_value ... ok
+test model::tests::removed_supersedes_and_later_events_survive ... ok
+test model::tests::fold_equivalence_for_simple_sequence ... ok
+test report::tests::json_is_escaped ... ok
+test report::tests::thresholds_decide_the_verdict ... ok
+test stats::tests::spread_even_and_odd ... ok
+test stats::tests::percentiles_of_1_to_1000 ... ok
+test wire::tests::signal_round_trips ... ok
+test wire::tests::two_messages_in_one_buffer ... ok
+test workload::tests::harness_and_reference_agree_on_local_ids ... ok
+test workload::tests::node_path_is_decimal ... ok
+test workload::tests::generator_is_deterministic ... ok
+test workload::tests::removed_nodes_are_never_reused ... ok
+test tap::tests::tap_decoder_agrees_with_the_expected_mapping ... ok
+test workload::tests::wire_and_expected_agree_with_the_reference_mapping ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running unittests src/bin/b2.rs (target/debug/deps/b2-b480f330da91a0bd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/bounds.rs (target/debug/deps/bounds-30d1c2b6511fad54)
+
+running 5 tests
+test a_giant_message_is_skipped_not_buffered ... ignored, reference arm (zbus) buffers whole messages; candidates must pass
+test counters_equal_structure_sizes_after_every_operation ... ok
+test a_global_budget_bounds_many_apps ... ok
+test oversized_payloads_and_sender_churn_stay_bounded ... ok
+test supersession_does_not_leak_tombstones ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 4.69s
+
+     Running tests/drain.rs (target/debug/deps/drain-4f9a02a7c7352ade)
+
+running 14 tests
+test harness_self_check_focus_probe_ids ... ok
+test match_rules_are_installed ... ok
+test disconnect_is_reported ... ok
+test routes_are_cached_per_sender ... ok
+test stop_is_prompt ... ok
+test big_endian_messages_are_decoded ... ok
+test malformed_bodies_are_survivable ... ok
+test non_events_are_ignored ... ok
+test unknown_senders_are_unrouted ... ok
+test a_huge_message_does_not_break_framing ... ok
+test start_up_has_a_deadline ... ok
+test every_mix_matches_the_ground_truth ... ok
+test fragmented_streams_are_reassembled ... ok
+test a_stalled_consumer_does_not_stall_the_socket ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.09s
+
+     Running tests/ingress.rs (target/debug/deps/ingress-b1dd389eb631e7a2)
+
+running 6 tests
+test events_keep_their_app_and_node ... ok
+test flood_keeps_the_lossless_classes ... ok
+test no_lost_wakeup_with_a_concurrent_consumer ... ok
+test sequential_behaviour_equals_the_model ... ok
+test concurrent_producers_converge_to_the_truth ... ok
+test pending_is_bounded_under_distinct_floods ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+     Running tests/realbus.rs (target/debug/deps/realbus-664f50ed8613b08f)
+
+running 3 tests
+test dbus_daemon_end_to_end ... ok
+test dbus_broker_end_to_end ... ok
+test broker_fixture_reproduces_f3 ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.73s
+
+   Doc-tests gorca_bench_b2
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.05s
+     Running unittests src/lib.rs (target/release/deps/gorca_bench_b2-e7b41811308b5979)
+
+running 16 tests
+test model::tests::flooding_dirties_and_keeps_lossless ... ok
+test model::tests::focus_keeps_first_position_and_last_value ... ok
+test model::tests::removed_supersedes_and_later_events_survive ... ok
+test model::tests::fold_equivalence_for_simple_sequence ... ok
+test report::tests::json_is_escaped ... ok
+test report::tests::thresholds_decide_the_verdict ... ok
+test stats::tests::percentiles_of_1_to_1000 ... ok
+test stats::tests::spread_even_and_odd ... ok
+test wire::tests::two_messages_in_one_buffer ... ok
+test wire::tests::signal_round_trips ... ok
+test workload::tests::harness_and_reference_agree_on_local_ids ... ok
+test workload::tests::node_path_is_decimal ... ok
+test workload::tests::generator_is_deterministic ... ok
+test workload::tests::removed_nodes_are_never_reused ... ok
+test tap::tests::tap_decoder_agrees_with_the_expected_mapping ... ok
+test workload::tests::wire_and_expected_agree_with_the_reference_mapping ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running unittests src/bin/b2.rs (target/release/deps/b2-ed0b9f5b36ce6e3f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/bounds.rs (target/release/deps/bounds-9b8bd088ea1e0d7b)
+
+running 5 tests
+test a_giant_message_is_skipped_not_buffered ... ignored, reference arm (zbus) buffers whole messages; candidates must pass
+test counters_equal_structure_sizes_after_every_operation ... ok
+test a_global_budget_bounds_many_apps ... ok
+test oversized_payloads_and_sender_churn_stay_bounded ... ok
+test supersession_does_not_leak_tombstones ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.77s
+
+     Running tests/drain.rs (target/release/deps/drain-9dd8efce7341fa7c)
+
+running 14 tests
+test harness_self_check_focus_probe_ids ... ok
+test match_rules_are_installed ... ok
+test disconnect_is_reported ... ok
+test stop_is_prompt ... ok
+test routes_are_cached_per_sender ... ok
+test big_endian_messages_are_decoded ... ok
+test malformed_bodies_are_survivable ... ok
+test non_events_are_ignored ... ok
+test a_huge_message_does_not_break_framing ... ok
+test unknown_senders_are_unrouted ... ok
+test start_up_has_a_deadline ... ok
+test every_mix_matches_the_ground_truth ... ok
+test a_stalled_consumer_does_not_stall_the_socket ... ok
+test fragmented_streams_are_reassembled ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.06s
+
+     Running tests/ingress.rs (target/release/deps/ingress-c27a2a473e37b6b1)
+
+running 6 tests
+test flood_keeps_the_lossless_classes ... ok
+test events_keep_their_app_and_node ... ok
+test sequential_behaviour_equals_the_model ... ok
+test no_lost_wakeup_with_a_concurrent_consumer ... ok
+test concurrent_producers_converge_to_the_truth ... ok
+test pending_is_bounded_under_distinct_floods ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/realbus.rs (target/release/deps/realbus-1f9c4a30d3c7ea95)
+
+running 3 tests
+test dbus_daemon_end_to_end ... ok
+test dbus_broker_end_to_end ... ok
+test broker_fixture_reproduces_f3 ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.66s
+
+   Doc-tests gorca_bench_b2
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+== bounds incl. ignored (B-5 giant message: the zbus reference is expected to fail it) ==
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.05s
+     Running tests/bounds.rs (target/release/deps/bounds-9b8bd088ea1e0d7b)
+
+running 5 tests
+test a_giant_message_is_skipped_not_buffered ... FAILED
+test a_global_budget_bounds_many_apps ... ok
+test counters_equal_structure_sizes_after_every_operation ... ok
+test oversized_payloads_and_sender_churn_stay_bounded ... ok
+test supersession_does_not_leak_tombstones ... ok
+
+failures:
+
+---- a_giant_message_is_skipped_not_buffered stdout ----
+
+thread 'a_giant_message_is_skipped_not_buffered' (1011822) panicked at crates/gorca-bench-b2/tests/bounds.rs:256:5:
+RSS grew 201 MiB for one 100 MiB message
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_giant_message_is_skipped_not_buffered
+
+test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.83s
+
+error: test failed, to rerun pass `-p gorca-bench-b2 --test bounds`
+B-5 or a bound FAILED (expected only for B-5 on the reference arm)
+== build release ==
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.05s
+== uptime before: 9.21 10.76 11.84 1/4259 1011849 ==
+== t7 ==
+== t1 ==
+== t2 ==
+== t3 ==
+== t4 ==
+== t5 ==
+== t6 ==
+== fixture ==
+metric                     bus                median          min          max  n op    threshold  res   note
+T7.push_p50_ns             -                       3            3            3  3                  info   [ns]
+T7.push_p99_ns             -                       8            8            8  3 <=         1000  PASS   [ns]
+T7.push_p999_ns            -                      16           15           16  3 <=         5000  PASS   [ns]
+T7.push_max_ns             -                   12541         8376        14760  3                  info   [ns]
+T7.push4_p50_ns            -                      69           62           70  3                  info   [ns (4 producers)]
+T7.push4_p99_ns            -                    4485         4306         4891  3 <=         5000  PASS   [ns (4 producers)]
+T7.push4_p999_ns           -                   27705        27154        30125  3 <=        50000  PASS   [ns (4 producers)]
+T1.sustained_eps           mock               400000       200000       400000  3 >=       100000  PASS  lag p99 381.8 ms at 800000/s [events/s]
+T1.backlog_p99_kib         mock                 98.8        3.750        128.8  3                  info   [KiB at the sustained rate]
+T1.lag_p99_us              mock                10058        10004        15008  3                  info   [us at the sustained rate]
+T1.saturation_eps          mock              5754087      5686010      6053060  3                  info   [messages/s]
+T2.p50_us@idle             mock                 38.9         38.8         42.5  3 <=          300  PASS  n=39999 [us]
+T2.p95_us@idle             mock                198.9        195.8        208.3  3                  info   [us]
+T2.p99_us@idle             mock                278.0        276.0        290.6  3 <=          500  PASS   [us]
+T2.p999_us@idle            mock                535.1        525.1        537.9  3                  info   [us]
+T2.max_us@idle             mock                830.7        825.0        939.3  3                  info   [us]
+T2.p50_us@10k              mock                 32.5         31.5         32.9  3 <=          300  PASS  n=39999 [us]
+T2.p95_us@10k              mock                164.2        153.5        165.3  3                  info   [us]
+T2.p99_us@10k              mock                222.4        213.6        231.3  3 <=         1000  PASS   [us]
+T2.p999_us@10k             mock                544.2        540.6        550.1  3 <=         3000  PASS   [us]
+T2.max_us@10k              mock                972.5        908.9         1093  3                  info   [us]
+T2.p50_us@100k             mock                 22.7         22.5         23.3  3 <=          300  PASS  n=39999 [us]
+T2.p95_us@100k             mock                132.5        127.4        132.6  3                  info   [us]
+T2.p99_us@100k             mock                178.8        178.2        181.6  3 <=         3000  PASS   [us]
+T2.p999_us@100k            mock                703.3        650.1        800.7  3 <=        10000  PASS   [us]
+T2.max_us@100k             mock                 2710         2532         2795  3                  info   [us]
+T3.focus_p50_us            mock                 29.7         29.4         30.2  3 <=          600  PASS   [us]
+T3.focus_p99_us            mock                 1996         1962         2000  3 <=         2000  PASS   [us]
+T3.focus_p999_us           mock                 2109         2090         2118  3 <=         8000  PASS   [us]
+T3.focus_max_us            mock                 4044         4008         4122  3                  info   [us]
+T3.focus_unobserved        mock                    0            0            0  3 <=            0  PASS   [probes]
+T3.survived                mock                    1            1            1  3 >=            1  PASS   [1=yes]
+T3.focus_p50_us            dbus-daemon          76.2         73.0         78.0  3                  info   [us]
+T3.focus_p99_us            dbus-daemon          2110         2097         2129  3                  info   [us]
+T3.focus_p999_us           dbus-daemon          2705         2639         4481  3                  info   [us]
+T3.focus_max_us            dbus-daemon          4585         4267         5569  3                  info   [us]
+T3.focus_unobserved        dbus-daemon             0            0            0  3 <=            0  PASS   [probes]
+T3.survived                dbus-daemon             1            1            1  3 >=            1  PASS   [1=yes]
+T3.focus_p50_us            dbus-broker          84.2         84.1         87.5  3                  info   [us]
+T3.focus_p99_us            dbus-broker          2257         2256         2275  3                  info   [us]
+T3.focus_p999_us           dbus-broker          4203         4165         4236  3                  info   [us]
+T3.focus_max_us            dbus-broker          6414         6127         6565  3                  info   [us]
+T3.focus_unobserved        dbus-broker             0            0            0  3 <=            0  PASS   [probes]
+T3.survived                dbus-broker             1            1            1  3 >=            1  PASS   [1=yes]
+T4.idle_cpu_ms_per_s       mock                0.006        0.005        0.009  3 <=           10  PASS   [ms/s]
+T4.cpu_ms_per_10k@10k      mock                160.7        158.1        167.7  3 <=           25  FAIL   [ms per 10k events]
+T4.cpu_ms_per_s@10k        mock                160.7        158.1        167.7  3                  info   [ms/s]
+T4.drain_core_pct@100k     mock                 68.0         67.5         74.7  3 <=           60  FAIL   [% of one core]
+T4.cpu_ms_per_10k@100k     mock                 68.0         67.5         74.7  3 <=           25  FAIL   [ms per 10k events]
+T4.all_threads_core_pct@100k mock                 68.0         67.5         74.7  3                  info   [% of one core]
+T5.rss_delta_mib@distinct  mock                8.867            0         23.8  3 <=          256  PASS   [MiB]
+T5.pending_max@distinct    mock                  368          122          549  3 <=        69632  PASS   [events in one batch]
+T5.survived@distinct       mock                    1            1            1  3 >=            1  PASS   [1=yes]
+T5.flooded_batches@distinct mock                    1            1            1  3                  info   [batches]
+C.violations@distinct      mock                    0            0            0  3 <=            0  PASS   [count]
+T5.rss_delta_mib@stall     mock                    0            0            0  3 <=          256  PASS   [MiB]
+T5.pending_max@stall       mock                30030        30030        30036  3 <=        69632  PASS   [events in one batch]
+T5.survived@stall          mock                    1            1            1  3 >=            1  PASS   [1=yes]
+T5.flooded_batches@stall   mock                    1            1            1  3                  info   [batches]
+C.violations@stall         mock                    0            0            0  3 <=            0  PASS   [count]
+T5.rss_delta_mib@stall_lossless mock                6.906        4.125         30.0  3 <=          256  PASS   [MiB]
+T5.pending_max@stall_lossless mock                65536        65536        65536  3 <=        69632  PASS   [events in one batch]
+T5.survived@stall_lossless mock                    1            1            1  3 >=            1  PASS   [1=yes]
+T5.flooded_batches@stall_lossless mock                    1            1            1  3                  info   [batches]
+C.violations@stall_lossless mock                    0            0            0  3 <=            0  PASS   [count]
+C.failures@fakeapp         mock                    0            0            0  1 <=            0  PASS  order=0 missed_wakes=0 misrouted=0 unfenced=0 vacuous=0 [count]
+C.compared_nodes@fakeapp   mock                  799          799          799  1                  info   [nodes]
+C.flooded_batches@fakeapp  mock                    0            0            0  1                  info   [batches]
+C.pushed_vs_sent@fakeapp   mock               282742       282742       282742  1                  info   [pushes]
+C.failures@terminal        mock                    0            0            0  1 <=            0  PASS  order=0 missed_wakes=0 misrouted=0 unfenced=0 vacuous=0 [count]
+C.compared_nodes@terminal  mock                   12           12           12  1                  info   [nodes]
+C.flooded_batches@terminal mock                    0            0            0  1                  info   [batches]
+C.pushed_vs_sent@terminal  mock               251497       251497       251497  1                  info   [pushes]
+C.failures@realistic       mock                    0            0            0  1 <=            0  PASS  order=0 missed_wakes=0 misrouted=0 unfenced=0 vacuous=0 [count]
+C.compared_nodes@realistic mock                  830          830          830  1                  info   [nodes]
+C.flooded_batches@realistic mock                    0            0            0  1                  info   [batches]
+C.pushed_vs_sent@realistic mock               261383       261383       261383  1                  info   [pushes]
+C.failures@lossless        mock                    0            0            0  1 <=            0  PASS  order=0 missed_wakes=0 misrouted=0 unfenced=0 vacuous=0 [count]
+C.compared_nodes@lossless  mock                  649          649          649  1                  info   [nodes]
+C.flooded_batches@lossless mock                    0            0            0  1                  info   [batches]
+C.pushed_vs_sent@lossless  mock               269112       269112       269112  1                  info   [pushes]
+C.failures@realistic+flood mock                    0            0            0  1 <=            0  PASS  order=0 missed_wakes=0 misrouted=0 unfenced=0 vacuous=0 [count]
+C.compared_nodes@realistic+flood mock                  148          148          148  1                  info   [nodes]
+C.flooded_batches@realistic+flood mock                   30           30           30  1                  info   [batches]
+C.pushed_vs_sent@realistic+flood mock               261383       261383       261383  1                  info   [pushes]
+C.failures@distinct+flood  mock                    0            0            0  1 <=            0  PASS  order=0 missed_wakes=0 misrouted=0 unfenced=0 vacuous=0 [count]
+C.compared_nodes@distinct+flood mock                    6            6            6  1                  info   [nodes]
+C.flooded_batches@distinct+flood mock                   30           30           30  1                  info   [batches]
+C.pushed_vs_sent@distinct+flood mock               251496       251496       251496  1                  info   [pushes]
+C.failures@fakeapp         dbus-daemon             0            0            0  1 <=            0  PASS  order=0 missed_wakes=0 misrouted=0 unfenced=0 vacuous=0 [count]
+C.compared_nodes@fakeapp   dbus-daemon           770          770          770  1                  info   [nodes]
+C.flooded_batches@fakeapp  dbus-daemon             0            0            0  1                  info   [batches]
+C.pushed_vs_sent@fakeapp   dbus-daemon        114204       114204       114204  1                  info   [pushes]
+C.failures@realistic       dbus-daemon             0            0            0  1 <=            0  PASS  order=0 missed_wakes=0 misrouted=0 unfenced=0 vacuous=0 [count]
+C.compared_nodes@realistic dbus-daemon           823          823          823  1                  info   [nodes]
+C.flooded_batches@realistic dbus-daemon             0            0            0  1                  info   [batches]
+C.pushed_vs_sent@realistic dbus-daemon        105468       105468       105468  1                  info   [pushes]
+C.failures@fakeapp         dbus-broker             0            0            0  1 <=            0  PASS  order=0 missed_wakes=0 misrouted=0 unfenced=0 vacuous=0 [count]
+C.compared_nodes@fakeapp   dbus-broker           770          770          770  1                  info   [nodes]
+C.flooded_batches@fakeapp  dbus-broker             0            0            0  1                  info   [batches]
+C.pushed_vs_sent@fakeapp   dbus-broker        114205       114205       114205  1                  info   [pushes]
+C.failures@realistic       dbus-broker             0            0            0  1 <=            0  PASS  order=0 missed_wakes=0 misrouted=0 unfenced=0 vacuous=0 [count]
+C.compared_nodes@realistic dbus-broker           823          823          823  1                  info   [nodes]
+C.flooded_batches@realistic dbus-broker             0            0            0  1                  info   [batches]
+C.pushed_vs_sent@realistic dbus-broker        105468       105468       105468  1                  info   [pushes]
+F3.slow_reader_eof         dbus-broker             1            1            1  1                  info  sent 1.2 MiB, reader got 1.1 MiB (missing 0.0 MiB), sender_failed=true Broken pipe (os error 32) [1=disconnected]
+F3.active_reader_eof       dbus-broker             0            0            0  1                  info  sent 96.0 MiB, reader got 102.9 MiB (missing 0.0 MiB), sender_failed=false  [1=disconnected]
+F3.slow_reader_eof         dbus-daemon             0            0            0  1                  info  sent 96.0 MiB, reader got 8.6 MiB (missing 87.4 MiB), sender_failed=false  [1=disconnected]
+F3.active_reader_eof       dbus-daemon             0            0            0  1                  info  sent 96.0 MiB, reader got 102.9 MiB (missing 0.0 MiB), sender_failed=false  [1=disconnected]
+
+results: bench/results/b2-ingress/judge-A-r2/20261012T125354Z.{json,txt}   failing metrics: 3
+== fake apps in the isolated AT-SPI harness ==
+metric                     bus                median          min          max  n op    threshold  res   note
+FA.storm.failures          isolated                0            0            0  1 <=            0  PASS  compared 199 nodes over 2 senders;  [count]
+FA.storm.storm_emitted_eps isolated            39985        39985        39985  1                  info   [events/s]
+FA.storm.tap_messages      isolated           599790       599790       599790  1                  info   [messages]
+FA.storm.drain_messages    isolated           599794       599794       599794  1                  info   [messages]
+FA.storm.drain_pushed      isolated           599791       599791       599791  1                  info   [events]
+FA.storm.drain_core_pct    isolated             40.9         40.9         40.9  1                  info   [% of one core]
+FA.storm.all_cpu_core_pct  isolated             40.9         40.9         40.9  1                  info   [% of one core]
+FA.storm.rss_delta_mib     isolated            7.156        7.156        7.156  1 <=          256  PASS   [MiB]
+
+results: bench/results/b2-ingress/judge-A-r2/20261012T125410Z-fakeapp-storm.json
+metric                     bus                median          min          max  n op    threshold  res   note
+FA.mixed.failures          isolated                0            0            0  1 <=            0  PASS  compared 204 nodes over 4 senders;  [count]
+FA.mixed.storm_emitted_eps isolated            19995        19995        19995  1                  info   [events/s]
+FA.mixed.tap_messages      isolated           303733       303733       303733  1                  info   [messages]
+FA.mixed.drain_messages    isolated           303741       303741       303741  1                  info   [messages]
+FA.mixed.drain_pushed      isolated           303736       303736       303736  1                  info   [events]
+FA.mixed.drain_core_pct    isolated             25.2         25.2         25.2  1                  info   [% of one core]
+FA.mixed.all_cpu_core_pct  isolated             25.2         25.2         25.2  1                  info   [% of one core]
+FA.mixed.rss_delta_mib     isolated            4.391        4.391        4.391  1 <=          256  PASS   [MiB]
+FA.mixed.focus_p50_us      isolated             20.4         20.4         20.4  1                  info  n=300 [us vs tap]
+FA.mixed.focus_p99_us      isolated            220.0        220.0        220.0  1 <=         2000  PASS   [us vs tap]
+FA.mixed.focus_p999_us     isolated            315.1        315.1        315.1  1                  info   [us vs tap]
+FA.mixed.focus_max_us      isolated            315.1        315.1        315.1  1                  info   [us vs tap]
+
+results: bench/results/b2-ingress/judge-A-r2/20261012T125428Z-fakeapp-mixed.json
+metric                     bus                median          min          max  n op    threshold  res   note
+FA.hung.failures           isolated                0            0            0  1 <=            0  PASS  compared 204 nodes over 4 senders;  [count]
+FA.hung.storm_emitted_eps  isolated            19997        19997        19997  1                  info   [events/s]
+FA.hung.tap_messages       isolated           303710       303710       303710  1                  info   [messages]
+FA.hung.drain_messages     isolated           303720       303720       303720  1                  info   [messages]
+FA.hung.drain_pushed       isolated           303714       303714       303714  1                  info   [events]
+FA.hung.drain_core_pct     isolated             22.8         22.8         22.8  1                  info   [% of one core]
+FA.hung.all_cpu_core_pct   isolated             22.8         22.8         22.8  1                  info   [% of one core]
+FA.hung.rss_delta_mib      isolated            4.523        4.523        4.523  1 <=          256  PASS   [MiB]
+FA.hung.focus_p50_us       isolated             18.0         18.0         18.0  1                  info  n=300 [us vs tap]
+FA.hung.focus_p99_us       isolated            154.4        154.4        154.4  1 <=         2000  PASS   [us vs tap]
+FA.hung.focus_p999_us      isolated            286.5        286.5        286.5  1                  info   [us vs tap]
+FA.hung.focus_max_us       isolated            286.5        286.5        286.5  1                  info   [us vs tap]
+
+results: bench/results/b2-ingress/judge-A-r2/20261012T125446Z-fakeapp-hung.json
+== done: bench/results/b2-ingress/judge-A-r2 ==

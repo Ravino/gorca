@@ -1,0 +1,119 @@
+== B ffb618a loadavg 11.47 8.92 8.13 1/4153 904974
+== fmt
+FMT_OK
+== clippy
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+clippy exit 0
+== test workspace
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 5.03s
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.08s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.05s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.62s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test reader::tests::a_failed_fetch_falls_back_to_a_stale_cache_entry ... ok
+test result: ok. 50 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+test call::tests::zbus_errors_pass_through ... ok
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.50s
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+test audit_single_push_is_bounded_under_tombstone_compaction ... FAILED
+thread 'audit_single_push_is_bounded_under_tombstone_compaction' (906400) panicked at crates/gorca-ingress/tests/audit_latency.rs:51:5:
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+error: test failed, to rerun pass `-p gorca-ingress --test audit_latency`
+test exit 101
+== audit include-ignored release (loadavg 12.20 9.22 8.24 1/4119 906402)
+test coalesce::tests::announcements_are_never_coalesced_but_capped ... ok
+test coalesce::tests::delete_then_insert_collapses_to_replaced ... ok
+test coalesce::tests::focus_is_last_writer_wins_and_keeps_position ... ok
+test coalesce::tests::memory_is_bounded_under_a_storm_of_distinct_keys ... ok
+test coalesce::tests::more_than_64_deltas_collapse_to_replaced ... ok
+test coalesce::tests::overload_floods_and_keeps_only_the_essentials ... ok
+test coalesce::tests::property_masks_are_ored ... ok
+test coalesce::tests::receiver_is_woken_by_the_first_push ... ok
+test coalesce::tests::removed_supersedes_every_pending_slot_of_the_node ... ok
+test dirty::tests::marks_dedupe ... ok
+test dirty::tests::overflow_degrades_to_all_dirty ... ok
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test audit_budget_released_when_ingress_dropped ... ok
+test audit_dead_receiver_does_not_hold_budget ... ok
+test audit_hostile_apps_cannot_starve_a_victim ... ok
+test audit_sender_churn_exhausts_global_budget_permanently ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test audit_concurrent_pushes_never_overshoot_the_budget ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test audit_drain_critical_section_is_bounded ... ok
+test audit_single_push_is_bounded_under_tombstone_compaction ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test audit_drained_storm_releases_memory ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+test audit_text_deltas_are_charged_and_bounded ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test coalesce::tests::announcements_are_never_coalesced_but_capped ... ok
+test coalesce::tests::delete_then_insert_collapses_to_replaced ... ok
+test coalesce::tests::focus_is_last_writer_wins_and_keeps_position ... ok
+test coalesce::tests::memory_is_bounded_under_a_storm_of_distinct_keys ... ok
+test coalesce::tests::more_than_64_deltas_collapse_to_replaced ... ok
+test coalesce::tests::overload_floods_and_keeps_only_the_essentials ... ok
+test coalesce::tests::property_masks_are_ored ... ok
+test coalesce::tests::receiver_is_woken_by_the_first_push ... ok
+test coalesce::tests::removed_supersedes_every_pending_slot_of_the_node ... ok
+test dirty::tests::marks_dedupe ... ok
+test dirty::tests::overflow_degrades_to_all_dirty ... ok
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test audit_budget_released_when_ingress_dropped ... ok
+test audit_dead_receiver_does_not_hold_budget ... ok
+test audit_hostile_apps_cannot_starve_a_victim ... ok
+test audit_sender_churn_exhausts_global_budget_permanently ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+test audit_concurrent_pushes_never_overshoot_the_budget ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test audit_drain_critical_section_is_bounded ... ok
+test audit_single_push_is_bounded_under_tombstone_compaction ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test audit_drained_storm_releases_memory ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+test audit_text_deltas_are_charged_and_bounded ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test coalesce::tests::announcements_are_never_coalesced_but_capped ... ok
+test coalesce::tests::delete_then_insert_collapses_to_replaced ... ok
+test coalesce::tests::focus_is_last_writer_wins_and_keeps_position ... ok
+test coalesce::tests::memory_is_bounded_under_a_storm_of_distinct_keys ... ok
+test coalesce::tests::more_than_64_deltas_collapse_to_replaced ... ok
+test coalesce::tests::overload_floods_and_keeps_only_the_essentials ... ok
+test coalesce::tests::property_masks_are_ored ... ok
+test coalesce::tests::receiver_is_woken_by_the_first_push ... ok
+test coalesce::tests::removed_supersedes_every_pending_slot_of_the_node ... ok
+test dirty::tests::marks_dedupe ... ok
+test dirty::tests::overflow_degrades_to_all_dirty ... ok
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test audit_budget_released_when_ingress_dropped ... ok
+test audit_dead_receiver_does_not_hold_budget ... ok
+test audit_hostile_apps_cannot_starve_a_victim ... ok
+test audit_sender_churn_exhausts_global_budget_permanently ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test audit_concurrent_pushes_never_overshoot_the_budget ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test audit_drain_critical_section_is_bounded ... ok
+test audit_single_push_is_bounded_under_tombstone_compaction ... ok
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+test audit_drained_storm_releases_memory ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+test audit_text_deltas_are_charged_and_bounded ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+== check-deps
+dependency rules: ok (26 workspace crates, 188 packages)
+deps exit 0
