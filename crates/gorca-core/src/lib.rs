@@ -45,7 +45,7 @@ pub use health::{
     SLOW_RECOVERY, SLOW_WINDOW,
 };
 pub use mode::{Mode, ModeEffect, ModeKeys, ModeMsg, PassScope, ReviewCursor};
-pub use presenter::{PresentJob, PresentKind, SpeechIntent, present_focus};
+pub use presenter::{PresentJob, PresentKind, SpeechIntent, key_echo_text, present_focus};
 pub use reader::{
     BackgroundMsg, DUPLICATE_FOCUS_WINDOW, FocusLaneMsg, QueryReply, Reader, ReaderEffect,
     ReaderInbox, ReaderMsg, ReaderSenders, reader_channels,

@@ -18,6 +18,8 @@ gorca-model = { workspace = true }
 gorca-connector-api = { workspace = true }
 gorca-connector-atspi = { workspace = true }
 gorca-output-api = { workspace = true }
+gorca-input-api = { workspace = true }
+gorca-input-mutter = { workspace = true }
 gorca-speech = { workspace = true }
 gorca-speech-voicego = { workspace = true }
 gorca-speech-ssip = { workspace = true }

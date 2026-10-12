@@ -670,6 +670,8 @@ dependencies = [
  "gorca-connector-api",
  "gorca-connector-atspi",
  "gorca-core",
+ "gorca-input-api",
+ "gorca-input-mutter",
  "gorca-model",
  "gorca-output-api",
  "gorca-rt",
@@ -771,9 +773,14 @@ dependencies = [
 name = "gorca-input-mutter"
 version = "0.0.0"
 dependencies = [
+ "futures-lite",
+ "gorca-dbus",
  "gorca-input-api",
  "gorca-model",
  "gorca-rt",
+ "thiserror",
+ "tokio",
+ "tracing",
  "zbus",
 ]
 

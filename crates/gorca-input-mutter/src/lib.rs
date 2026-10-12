@@ -21,11 +21,13 @@
 #![deny(clippy::wildcard_enum_match_arm)]
 
 mod monitor;
+mod source;
 
 pub use monitor::{
     AUTHORIZE_DEADLINE, GRAB_DEADLINE, GRAB_RETRIES, GrabSetState, MonitorEffect, MonitorMsg,
     MonitorState, Notice, RequestNameReply, SETTLE, StepCtx, lost_backoff,
 };
+pub use source::{MutterKeySource, NameReply, decode_key_event};
 
 /// Well-known name that Mutter allow-lists (ID-1).
 pub const ORCA_MONITOR_NAME: &str = "org.gnome.Orca.KeyboardMonitor";

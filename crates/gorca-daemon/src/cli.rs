@@ -71,6 +71,46 @@ OPTIONS:
     -h, --help                   print this help
 ";
 
+impl Options {
+    /// Fill unset fields from the environment (the seam of the e2e latency harness and of
+    /// service managers). Command-line flags win.
+    ///
+    /// - `GORCA_IMPERSONATE_ORCA=1`: same as `--impersonate-orca`.
+    /// - `GORCA_A11Y_BUS_ADDRESS`: a11y bus (the connector also reads it, so no
+    ///   `org.a11y.Bus.GetAddress` call is made on the session bus).
+    /// - `GORCA_SPEECH_BACKEND=voicego|ssip`: backend, unless `--speech` was given.
+    /// - `GORCA_SPEECH_SOCKET`: socket of the selected backend instead of its default.
+    #[must_use]
+    pub fn with_env(self, get: impl Fn(&str) -> Option<String>) -> Self {
+        let mut o = self;
+        if o.speech == SpeechMode::Auto {
+            match get("GORCA_SPEECH_BACKEND").as_deref() {
+                Some("voicego") => o.speech = SpeechMode::Voicego,
+                Some("ssip") => o.speech = SpeechMode::Ssip,
+                Some(_) | None => {}
+            }
+        }
+        if let Some(sock) = get("GORCA_SPEECH_SOCKET").filter(|s| !s.is_empty()) {
+            let path = PathBuf::from(sock);
+            match o.speech {
+                SpeechMode::Ssip => {
+                    o.ssip_socket.get_or_insert(path);
+                }
+                SpeechMode::Voicego | SpeechMode::Auto => {
+                    o.voicego_socket.get_or_insert(path);
+                }
+            }
+        }
+        if get("GORCA_IMPERSONATE_ORCA").is_some_and(|v| v == "1") {
+            o.impersonate_orca = true;
+        }
+        if o.a11y_address.is_none() {
+            o.a11y_address = get("GORCA_A11Y_BUS_ADDRESS").filter(|s| !s.is_empty());
+        }
+        o
+    }
+}
+
 /// Parse `args` (without the program name).
 pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError> {
     let mut opts = Options::default();
@@ -176,6 +216,42 @@ mod tests {
             Some(std::path::Path::new("/run/s.sock"))
         );
         assert_eq!(o.a11y_address.as_deref(), Some("unix:path=/x"));
+    }
+
+    #[test]
+    fn environment_fills_only_what_flags_left_open() {
+        let env = |k: &str| match k {
+            "GORCA_SPEECH_BACKEND" => Some("ssip".to_owned()),
+            "GORCA_SPEECH_SOCKET" => Some("/run/e.sock".to_owned()),
+            "GORCA_A11Y_BUS_ADDRESS" => Some("unix:path=/e".to_owned()),
+            _ => None,
+        };
+        let o = opts(&[]).with_env(env);
+        assert_eq!(o.speech, SpeechMode::Ssip);
+        assert_eq!(
+            o.ssip_socket.as_deref(),
+            Some(std::path::Path::new("/run/e.sock"))
+        );
+        assert_eq!(o.a11y_address.as_deref(), Some("unix:path=/e"));
+        // Flags win.
+        let o = opts(&[
+            "--speech=voicego",
+            "--voicego-socket=/f.sock",
+            "--a11y-address=unix:path=/f",
+        ])
+        .with_env(env);
+        assert_eq!(o.speech, SpeechMode::Voicego);
+        assert_eq!(
+            o.voicego_socket.as_deref(),
+            Some(std::path::Path::new("/f.sock"))
+        );
+        assert_eq!(o.a11y_address.as_deref(), Some("unix:path=/f"));
+        // A socket without a backend goes to voicego, the primary.
+        let only_sock = |k: &str| (k == "GORCA_SPEECH_SOCKET").then(|| "/s.sock".to_owned());
+        assert_eq!(
+            opts(&[]).with_env(only_sock).voicego_socket.as_deref(),
+            Some(std::path::Path::new("/s.sock"))
+        );
     }
 
     #[test]

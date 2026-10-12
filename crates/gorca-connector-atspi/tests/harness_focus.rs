@@ -74,6 +74,7 @@ fn session() -> Option<Session> {
     Some(Session::start().expect("isolated session"))
 }
 
+#[allow(clippy::unused_async)]
 async fn rig(session: Session) -> Rig {
     let speech = Arc::new(Recording::default());
     let mut core =

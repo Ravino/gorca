@@ -21,7 +21,7 @@ use smallvec::SmallVec;
 use crate::directory::MirrorDirectory;
 use crate::focus::{FocusEffect, FocusMsg, FocusState, settle_delay};
 use crate::mode::{Mode, ModeEffect, ModeKeys, ModeMsg};
-use crate::presenter::{SpeechIntent, message, present_focus};
+use crate::presenter::{SpeechIntent, key_echo, key_echo_text, message, present_focus};
 
 /// Bounds from section 6.2.
 const KEY_QUEUE: usize = 64;
@@ -253,7 +253,16 @@ impl Reader {
         match intent.class {
             KeyClass::Command(cmd) => fx.push(ReaderEffect::RunCommand(cmd)),
             KeyClass::Ambiguous { .. } => self.ambiguous_keys += 1,
-            KeyClass::PassToApp | KeyClass::Injected => {}
+            KeyClass::PassToApp => {
+                if intent.event.pressed
+                    && let Some(text) = key_echo_text(intent.event.unichar, intent.event.keysym)
+                {
+                    let id = self.utt_id();
+                    let u = key_echo(&text, id, intent.epoch);
+                    fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+                }
+            }
+            KeyClass::Injected => {}
         }
     }
 
@@ -600,6 +609,40 @@ mod tests {
         };
         f.reader.handle(ReaderMsg::Key(amb), Instant::now());
         assert_eq!(f.reader.ambiguous_keys(), 1);
+    }
+
+    #[test]
+    fn a_plain_key_press_is_echoed_with_the_epoch_of_the_press() {
+        let mut f = fixture();
+        let ev = |pressed| KeyEvent {
+            keycode: 38,
+            keysym: 0x61,
+            unichar: 0x61,
+            modifiers: Modifiers::empty(),
+            pressed,
+        };
+        let intent = |pressed| KeyIntent {
+            event: ev(pressed),
+            class: KeyClass::PassToApp,
+            epoch: Epoch(7),
+        };
+        let fx = f
+            .reader
+            .handle(ReaderMsg::Key(intent(true)), Instant::now());
+        assert_eq!(spoken(&fx), ["a"]);
+        let ReaderEffect::Speak(s) = &fx[0] else {
+            panic!("expected speech")
+        };
+        assert_eq!(s.utterance.epoch, Epoch(7));
+        assert_eq!(
+            f.epoch.current(),
+            Epoch(7),
+            "the press epoch is adopted (E-4)"
+        );
+        let fx = f
+            .reader
+            .handle(ReaderMsg::Key(intent(false)), Instant::now());
+        assert!(fx.is_empty(), "releases are silent");
     }
 
     #[test]

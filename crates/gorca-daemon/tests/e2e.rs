@@ -371,3 +371,46 @@ fn speech_ssip_mode_never_touches_voicego() {
         d.stop().await;
     });
 }
+
+#[test]
+fn key_presses_are_echoed_through_the_orca_keyboard_monitor_name() {
+    let Some(session) = session() else { return };
+    run(async {
+        let voicego = MockSpeechServer::start_voicego(&sock_dir(&session, "v"))
+            .await
+            .unwrap();
+        let ssip_path = sock_dir(&session, "s").join("none.sock");
+        let mut mutter = FakeApp::start_mutter(&session).unwrap();
+        let opts = Options {
+            speech: SpeechMode::Voicego,
+            impersonate_orca: true,
+            voicego_socket: Some(voicego.socket_path().to_owned()),
+            ssip_socket: Some(ssip_path),
+            a11y_address: Some(session.a11y_address().to_owned()),
+            session_address: Some(session.session_address().to_owned()),
+            ..Options::default()
+        };
+        let token = CancellationToken::new();
+        let join = tokio::spawn(run_with(opts, token.clone()));
+
+        // `a` (keycode 38, keysym 0x61); the keyboard source retries until the manager accepts
+        // it as the owner of org.gnome.Orca.KeyboardMonitor.
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while !voicego.wait_spoken(1, Duration::from_millis(300)).await {
+            mutter.key(38, 0x61, 0x61).unwrap();
+            assert!(
+                Instant::now() < deadline,
+                "no key echo: {:?}",
+                voicego.spoken()
+            );
+        }
+        assert_eq!(voicego.spoken()[0].trim(), "a");
+        // The mock's stats prove it was the unicast signal to the name owner that arrived.
+        let stats = mutter.cmd("\"cmd\":\"stats\"").unwrap();
+        assert!(stats.contains("\"denied\":0"), "{stats}");
+
+        token.cancel();
+        let r = tokio::time::timeout(Duration::from_secs(10), join).await;
+        assert!(matches!(r, Ok(Ok(Ok(())))), "{r:?}");
+    });
+}

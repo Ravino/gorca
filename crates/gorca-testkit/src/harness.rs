@@ -171,8 +171,18 @@ fn json_str<'a>(line: &'a str, key: &str) -> Option<&'a str> {
 impl FakeApp {
     /// Spawn `fakeapp.py` with `args` inside `session` and wait for its `ready` line.
     pub fn start(session: &Session, args: &[&str]) -> Result<Self, HarnessError> {
+        Self::start_script(session, "fakeapp.py", args)
+    }
+
+    /// Spawn `fake_mutter.py`: Mutter's `org.freedesktop.a11y.Manager` on the private session
+    /// bus. Drive it with [`FakeApp::key`].
+    pub fn start_mutter(session: &Session) -> Result<Self, HarnessError> {
+        Self::start_script(session, "fake_mutter.py", &[])
+    }
+
+    fn start_script(session: &Session, script: &str, args: &[&str]) -> Result<Self, HarnessError> {
         let mut cmd = Command::new(PYTHON);
-        cmd.arg(harness_dir().join("fakeapp.py")).args(args);
+        cmd.arg(harness_dir().join(script)).args(args);
         cmd.env_clear();
         for (k, v) in session.env() {
             cmd.env(k, v);
@@ -263,6 +273,16 @@ impl FakeApp {
     pub fn focus(&mut self, node: &str) -> Result<(), HarnessError> {
         self.cmd(&format!("\"cmd\":\"focus\",\"node\":\"{node}\""))
             .map(|_| ())
+    }
+
+    /// Send a key press (and release) from the emulated Mutter.
+    pub fn key(&mut self, keycode: u32, keysym: u32, unichar: u32) -> Result<(), HarnessError> {
+        for released in ["false", "true"] {
+            self.cmd(&format!(
+                "\"cmd\":\"key\",\"keycode\":{keycode},\"keysym\":{keysym},\"unichar\":{unichar},\"state\":0,\"released\":{released}"
+            ))?;
+        }
+        Ok(())
     }
 
     /// Change the hang policy: `mode` is `never`, `delay` or `off`.

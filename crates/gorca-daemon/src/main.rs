@@ -9,7 +9,7 @@ use gorca_rt::CancellationToken;
 
 fn main() -> Result<ExitCode> {
     let opts = match gorca_daemon::parse(std::env::args().skip(1)) {
-        Ok(Parsed::Run(opts)) => opts,
+        Ok(Parsed::Run(opts)) => opts.with_env(|k| std::env::var(k).ok()),
         Ok(Parsed::Help) => {
             print!("{USAGE}");
             return Ok(ExitCode::SUCCESS);

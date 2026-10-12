@@ -32,6 +32,10 @@ use anyhow::{Context, Result};
 use gorca_connector_api::{Connector, ConnectorCtx};
 use gorca_connector_atspi::{AtspiConnector, AtspiOptions};
 use gorca_core::{Core, CoreConfig, SpeechOut};
+use gorca_input_api::{
+    GrabSet, KeyClass, KeyEvent, KeyIntent, KeySource, KeySourceCtx, key_channel,
+};
+use gorca_input_mutter::MutterKeySource;
 use gorca_model::{ConnectorId, Prio, Segment, SegmentKind, UttId, Utterance};
 use gorca_output_api::SpeechClient;
 use gorca_rt::{CancellationToken, Clock, EpochCell, TaskSet, mpsc};
@@ -214,6 +218,35 @@ async fn announce_notices(
     }
 }
 
+/// The input lane's glue between the key source and the Reader (K-3): every key press advances
+/// the epoch, which cancels stale speech at once, and the Reader adopts that epoch (E-4) so the
+/// echo of this key is never cancelled by the key itself.
+async fn pump_keys(
+    mut keys: mpsc::Receiver<KeyEvent>,
+    reader: mpsc::Sender<KeyIntent>,
+    epoch: Arc<EpochCell>,
+    speech: SpeechHandle,
+) {
+    while let Some(event) = keys.recv().await {
+        let e = if event.pressed {
+            let e = epoch.advance();
+            speech.notify_epoch();
+            e
+        } else {
+            epoch.current()
+        };
+        let intent = KeyIntent {
+            event,
+            // No command grabs yet: every key is observed for echo and interrupt only.
+            class: KeyClass::PassToApp,
+            epoch: e,
+        };
+        if reader.try_send(intent).is_err() {
+            tracing::warn!("reader key lane full; dropped a key");
+        }
+    }
+}
+
 /// Keep the AT-SPI connector running: restart it with backoff when it fails (bus missing,
 /// connection lost). Returns when `shutdown` is cancelled.
 async fn supervise_connector(
@@ -291,17 +324,43 @@ pub async fn run_with(opts: Options, shutdown: CancellationToken) -> Result<()> 
         "speech-notices",
         announce_notices(notices, speech.clone(), Arc::clone(&epoch)),
     );
+    let speech_for_keys = speech.clone();
     let core = core.with_speech(Arc::new(LaneOut(speech)));
 
     if opts.no_keyboard {
         tracing::info!("keyboard monitoring disabled (--no-keyboard)");
+    } else if opts.impersonate_orca {
+        // ID-1: Mutter only authorises the owner of org.gnome.Orca.KeyboardMonitor. The name is
+        // requested without queueing, so a running Orca is never displaced.
+        let (sink, keys) = key_channel();
+        let (grabs_tx, grabs) = gorca_rt::watch::channel(GrabSet::default());
+        let source = Box::new(MutterKeySource::new(opts.session_address.clone()));
+        let ctx = KeySourceCtx {
+            sink,
+            grabs,
+            shutdown: shutdown.child_token(),
+            clock: Clock::System,
+        };
+        tasks.spawn("keyboard-source", async move {
+            if let Err(e) = source.run(ctx).await {
+                tracing::warn!(error = %e, "keyboard source ended");
+            }
+            // Keep the (unused) grab sender alive for as long as the source ran.
+            drop(grabs_tx);
+        });
+        tasks.spawn(
+            "key-pump",
+            pump_keys(
+                keys,
+                core.reader_senders().key,
+                Arc::clone(&epoch),
+                speech_for_keys,
+            ),
+        );
     } else {
-        tracing::info!("keyboard monitoring is not available in this build");
-    }
-    if opts.impersonate_orca {
-        tracing::warn!(
-            "--impersonate-orca has no effect yet: the keyboard lane is not wired, so \
-             org.gnome.Orca.KeyboardMonitor is not requested"
+        tracing::info!(
+            "keyboard monitoring is off: it needs org.gnome.Orca.KeyboardMonitor, which is only \
+             requested with --impersonate-orca"
         );
     }
 
