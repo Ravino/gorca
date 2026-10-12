@@ -217,3 +217,133 @@ The `cargo test` process itself inherits the user's `DBUS_SESSION_BUS_ADDRESS` a
    - `paths_many_names` → `crates/gorca-connector-atspi/tests/`;
    - the two speech probes → `crates/gorca-speech-voicego/tests/` and `crates/gorca-output-api/tests/`.
 2. Rerun `bench/e2e/run.sh` and check `lost` per repeat.
+
+---
+
+# Round 2 (head `fc83364`)
+
+Raw output is in `bench/results/e2e/review-r2/`: `make-check.txt`, `run.log`, the result `.txt`/`.json`, and `probes/` with `RESULTS.txt`.
+
+## Verdict: BLOCK, with a narrow scope
+
+Every round-1 finding is fixed and verified. The new asynchronous registration, however, introduces three HIGH defects on the path the reader depends on most: the **first focus of a new application** can be lost, and the park buffer has no bound on memory. Each fix is a few lines in `router.rs`. MERGE once R2-1 to R2-3 are fixed and P1, P3 and P5 are added as regression tests. R2-4 to R2-7 can be follow-ups.
+
+## Gates
+
+- `make check`: exit 0. That covers fmt, clippy `-D warnings`, the workspace tests, and `xtask deps` including rule 8.
+- `bench/e2e/run.sh review-r2 --reader daemon:<release gorca>,--impersonate-orca` at `fc83364`, load 11.3 at the start, 3 repeats. `lost` is now gated on the max over repeats.
+
+| Metric | p99 (ms) | max over repeats (ms) | lost (max) |
+|---|---|---|---|
+| L1 | 2.03 | 2.03 | 0 |
+| L1s | 2.10 | 2.18 | 0 |
+| L2 | 0.93 | 1.60 | 0 |
+| L3-10k | 1.62 | 1.62 | 0 |
+| L3-50k | 2.90 | 3.55 | 0 |
+| L4 | 2.05 | 2.07 | 0 |
+| K1 | 0.94 | 1.52 | 0 |
+
+- All gates PASS.
+- K1 p50 is now 0.36 ms, no longer 0, so matching by key works.
+- `git_dirty=true` in the result header comes only from untracked review artefacts and reviewer memory, not from source changes.
+
+## Round-1 items, re-verified
+
+| Item | Status | Evidence |
+|---|---|---|
+| F1 resend after Stop | fixed | r1 probe: `spoken after explicit Stop: ["first"]` |
+| F2 502 by id | fixed | r1 probe: `Error(1)`, then utt 2 `Started`/`Ended`, `live=0` |
+| F3 failback | fixed | `failback_cancels_and_quits_the_ssip_client_before_dropping_it` checks that CANCEL comes before QUIT and the connection closes. Weakness: `rposition` of *any* CANCEL would also be satisfied by an earlier, unrelated CANCEL. Assert on the CANCEL sent after `Restored`. |
+| F4 mute | fixed for `Retry` | Regression test `a_transient_route_failure_does_not_mute_the_sender`. The r1 probe still "fails" because it uses the simple `route()` contract, where `None` now means NotAnApp by design. |
+| F5 path DoS | fixed in accounting | Fork variant (4096 pids × 1024 paths, release): the victim is recorded and survives. RSS still grows by 279 MiB against the 16 MiB cap; see R2-5. |
+| F6 isolation | mostly fixed | `env_clear` in `signals.rs`, xtask rule 8, tripwire. See R2-7. |
+| F7/F8/F9/F12 | fixed | NameOwnerChanged has its own connection; `a_dead_reader_lane_stops_the_core_with_an_error`; registration is asynchronous; `announce_info` runs in `inflight`. |
+| F10 Stop under pressure | fixed | `a_stop_gets_through_a_full_queue` (both clients) and the eviction tests in `queue.rs`. |
+| F11 churn test | fixed | With the tombstone check disabled, `registration_and_departure_churn_leaks_nothing` and `an_app_dying_mid_registration_leaks_nothing` both FAIL. Verified. |
+| F13 SSIP cap | fixed | `an_endless_continuation_block_fails_the_connection` |
+| F14 peer uid | fixed | Only the pure check is unit-tested, which is acceptable without a second uid. See R2-6. |
+
+## New findings
+
+### R2-1 HIGH: the park cap drops the *newest* event, so a new app's first focus is lost
+
+- **Where:** `router.rs` `park()`: when `p.parked.len() >= MAX_PARKED_PER_SENDER`, the incoming event is dropped.
+- **Probe P1:** 40 focus events are parked during registration. The delivered focus is `/org/a/31` instead of the newest `/org/a/39`, and 8 are dropped.
+- **Scenario:** applications emit bursts of children-changed and property events at start-up before focus settles (Firefox, GTK4 windows). The focus event comes last and is the one discarded. The user hears nothing, or hears a stale node.
+- **Fix (ADR-0004 C-1 spirit):**
+  - Each pending sender gets a dedicated `latest_focus` slot outside the cap, which a newer focus overwrites.
+  - Non-focus events are dropped oldest-first, or simply dropped and the app marked `resync_needed`.
+  - Replay the focus last.
+
+### R2-2 HIGH: an event in the window between `resolve` and `park` is lost
+
+- **Where:** `raw.rs` calls `router.resolve()`, which answers Retry, and only later calls `router.park()`. These are two separate lock acquisitions. If `complete()` publishes in between, `park()` finds no `pending` entry and drops the event.
+- **Probe P3:** the sequence resolve → complete → park ends with `delivered=None dropped=1`.
+- **Scenario:** a fast registration (sub-millisecond core) races the drain thread at the first event, so the first focus is lost.
+- **Fix:**
+  - In `park()`, if `apps` already holds the sender, map and push straight through `entry.route`. Or merge the two into one `resolve_or_park(sender, &view)` under one lock.
+  - Also park while the sender is in backoff or over `MAX_PENDING`, at least the newest focus slot. Today those events are dropped without a pending entry.
+
+### R2-3 HIGH: the park buffer has no bound on bytes; only the body is capped
+
+- **Where:** `park()` copies `path`, `interface` and `member` with `to_owned()` and caps only `body` at 512 B.
+- **Limits that allow it:** the drain accepts messages up to 16 MiB (`wire.rs:6`), and the a11y bus allows 1e9-byte messages (`refs/at-spi2-core/bus/accessibility.conf.in`, `max_message_size`).
+- **Probe P5 (release):** 64 senders × 32 parks of a 1 MiB path give 1024 parked events and **+1025 MiB RSS**. With 16 MiB paths, the ceiling is about 16 GiB.
+- **Fix:**
+  - Refuse to park when `path.len() > MAX_PATH_BYTES` (256), since `focus_seen` refuses those paths anyway.
+  - Cap `interface` and `member` at 255 bytes, the D-Bus name limit.
+  - Make `MAX_PARKED_TOTAL` a byte budget, e.g. 256 KiB.
+
+### R2-4 MEDIUM: hostile senders can exhaust the global park and drop a victim's first focus
+
+- **Probe P2:** 32 hostile pending senders × 32 parks fill `MAX_PARKED_TOTAL` (1024). The victim's first focus is dropped (`dropped=1`).
+- **Fix:** the focus slot from R2-1 is exempt from the global cap, and non-focus parking gets a per-sender fair share. This is the AU-3 reserve idea applied to parking.
+
+### R2-5 MEDIUM: the caps can be defeated or leak (scan finding 1, confirmed in part)
+
+- **Fork multiplies everything per pid.** The a11y bus allows 100,000 connections per user (`accessibility.conf.in`).
+  - Each child gets 64 names, a 1024-entry path quota, and an app actor plus an `AppServer` per name.
+  - There is **no global cap on registered applications**: `ScopeRegistry` has a slot budget but no app count.
+  - The path table's byte cap holds as accounting, but **RSS grew by 279 MiB for 52k live entries**. `clear_bucket` uses `HashMap::clear`, which keeps capacity, and empty buckets of live owners stay allocated. This is the same class as the B-2 audit `HashMap::clear` defect.
+  - Fix: `shrink_to(0)` or replace the map on clear; drop empty buckets; add a per-uid or global application cap with AU-3-style preemption.
+- **`ignored` grows without bound.** Over-limit names are inserted into `ignored` and never removed. `forget` does not touch it.
+  - Probe P4: `ignored_len=2000` after 2000 departed over-limit names. Churn grows it indefinitely.
+  - Fix: remove the name in `forget`, or give it a TTL and cap like `departed`.
+- **The 64-name check races registration.** It runs before `announce`, and the count is incremented only in `publish`. A process can start up to `MAX_PENDING` concurrent registrations past its limit. Fix: reserve the slot in `resolve`.
+- **Credentials unknown (`pid_of` → `None`):** there is no name cap at all. Each name is its own `Unknown` owner with a 64-entry quota, so the multiplier comes back whenever `GetConnectionCredentials` is slow. Apply a small global quota for `Unknown` owners.
+- **Pid reuse:** harmless. Names are forgotten on NameOwnerChanged before a pid can be reused.
+- **Backoff and departed state:** bounded (`MAX_BACKOFFS` 4096 with clear, `MAX_DEPARTED` 65,536 with a 300 s TTL). One caveat: clearing all backoffs at 4096 also resets legitimate senders' backoff, which is harmless.
+
+### R2-6 MEDIUM: the peer-uid check has no escape hatch
+
+- **Where:** `peer.rs` accepts only the exact own uid.
+- **Effect:** a system-wide voicego (its own service uid, or root) is refused, and gorca silently stays on SSIP. If speech-dispatcher also runs system-wide, gorca is mute.
+- **Fix:**
+  - Also accept uid 0, since root can read the session anyway.
+  - Add `--speech-peer-uid=N` or a config allowlist.
+  - Announce the refusal through the speech notice path, not only `warn!`.
+
+### R2-7 LOW: gaps in the isolation tripwire
+
+- The voicego and SSIP connect paths do not call `gorca_rt::guard::check`, so a hard-coded `/run/user/<uid>/voicego.sock` in a test would not trip it. The guard is armed only by `Session::start`, so unit tests outside the harness are unguarded. Rule 8 is textual: `use std::env::var; var("X")` bypasses it.
+- **Fix:**
+  - Call `check` in both speech `connect`s.
+  - Arm the guard from a testkit `#[ctor]`-free helper that every test crate's common module calls.
+  - Add `"var("` after `use std::env` to the scanner, or use `clippy::disallowed_methods` for `std::env::var` and `var_os` workspace-wide with an `allow` in `main.rs`. That is the robust form.
+
+### Not defects
+
+- **NotAnApp caching and late AT-SPI enable (Chromium, Firefox):** this is fine. NotAnApp is returned only for ignored, departed, well-known and over-limit names. A process that enables AT-SPI late is still a fresh unique name whose first event takes the Retry/registration path. One caveat: an over-limit name stays ignored for its lifetime even after the process drops below 64 names, which is acceptable.
+- **The 16 MiB global path cap against a large legitimate app (Firefox with 100k nodes):** this is sound for correctness.
+  - The table holds only paths of *focused* nodes, inserted just before the event is pushed.
+  - Eviction only ever costs re-recording on the next focus. Probe `paths_r2_fork`: the victim's fresh entry survives the next attacker insert.
+  - A residual race remains: an attacker oscillating at the cap while Firefox is the largest holder can evict Firefox's *current* focus path in the few ms between insert and fetch. Mitigation: exempt each owner's most recent entry from eviction.
+- **Password text (scan finding 2):** no leak path found.
+  - Password text never appears in `tracing` at debug level or above, in `eprintln!`/`dbg!`, in panic messages, or in persisted files. No `fs::write` or `File::create` exists in core, connector, speech, mirror or daemon.
+  - No `Debug` of snapshots or utterances is logged. `SpeechErr::Other` carries server reply text only, and `BackendError::Protocol` carries D-Bus error names and details.
+  - The text lives only in in-memory snapshots and the speech socket.
+  - Note: speech-dispatcher itself logs message text at its own high log levels. That is outside gorca's control and worth a line in the user docs.
+
+## Rerun list for round 3
+
+Paste `probes/router_r2_probes.rs.txt` (P1–P5) into `crates/gorca-connector-atspi/src/router/tests.rs` and run them in release with `--test-threads=1`. All five must pass.
