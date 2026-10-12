@@ -339,9 +339,8 @@ async fn one_process_cannot_hold_unbounded_names() {
         r.router.complete(q).await;
     }
     assert_eq!(r.router.known_apps(), MAX_NAMES_PER_OWNER);
-    assert!(matches!(
-        r.router.resolve(&format!(":1.{}", MAX_NAMES_PER_OWNER + 1)),
-        RouteDecision::NotAnApp
+    assert!(is_retry(
+        &r.router.resolve(&format!(":1.{}", MAX_NAMES_PER_OWNER + 1))
     ));
     // Another process is not affected.
     assert!(is_retry(&r.router.resolve(":1.9999")));
@@ -676,10 +675,10 @@ async fn the_application_cap_makes_the_largest_group_give_way() {
     let refused = format!(":1.{}", 100_001);
     assert!(is_retry(&r.router.resolve(&refused)));
     r.router.complete(r.to_register.try_recv().unwrap()).await;
-    assert!(matches!(
-        r.router.resolve(&refused),
-        RouteDecision::NotAnApp
-    ));
+    assert!(
+        is_retry(&r.router.resolve(&refused)),
+        "refused at the cap: a backoff, not a verdict"
+    );
     assert_eq!(r.router.known_apps(), MAX_APPS_TOTAL);
 }
 
@@ -696,4 +695,233 @@ async fn unknown_credentials_share_one_small_quota() {
         }
     }
     assert_eq!(r.router.known_apps(), MAX_UNKNOWN_NAMES);
+}
+
+// ---- review round 3 (R3-1 .. R3-3) --------------------------------------------------------
+
+/// A router whose cap is reached with one big pid group and singletons; pid 1 holds
+/// `MAX_NAMES_PER_OWNER` names (`:1.0` .. `:1.63`), everyone else one.
+async fn filled(c: &Core, extra: Option<Arc<FocusedApp>>) -> Rig {
+    let big = u32::try_from(MAX_NAMES_PER_OWNER).unwrap();
+    let creds = ByName(Box::new(move |n| {
+        Some(if n < big || n == 100_001 { 1 } else { n + 10 })
+    }));
+    let (new_tx, new_apps) = mpsc::channel(1024);
+    let (reg_tx, to_register) = mpsc::channel(1024);
+    let paths = Arc::new(PathTable::new());
+    let mut router = AtspiRouter::new(
+        c.registrar.clone(),
+        Clock::System,
+        Arc::clone(&paths),
+        new_tx,
+        reg_tx,
+        Arc::new(creds),
+    );
+    if let Some(f) = extra {
+        router = router.with_focused(f);
+    }
+    let mut r = Rig {
+        router: Arc::new(router),
+        new_apps,
+        to_register,
+        paths,
+    };
+    for n in 0..u32::try_from(MAX_APPS_TOTAL).unwrap() {
+        assert!(is_retry(&r.router.resolve(&format!(":1.{n}"))));
+        r.router.complete(r.to_register.try_recv().unwrap()).await;
+    }
+    assert_eq!(r.router.known_apps(), MAX_APPS_TOTAL);
+    r
+}
+
+/// P6 / R3-1: a fork attack where every process holds ONE name must not evict an older,
+/// legitimate application: the newest registration gives way, never an arbitrary one.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn singleton_forks_never_evict_the_first_application() {
+    let c = core(|_| Duration::ZERO);
+    let mut r = rig(&c, Arc::new(ByName(Box::new(|n| Some(n + 10)))));
+    let victim = ":1.0";
+    let total = u32::try_from(MAX_APPS_TOTAL).unwrap() + 2000;
+    for n in 0..total {
+        let _ = r.router.resolve(&format!(":1.{n}"));
+        while let Ok(x) = r.to_register.try_recv() {
+            r.router.complete(x).await;
+        }
+        assert!(
+            r.router.state().apps.contains_key(victim),
+            "victim evicted at attacker name #{n}"
+        );
+    }
+    assert!(r.router.known_apps() <= MAX_APPS_TOTAL);
+}
+
+/// P7 / R3-3: the per-process name cap holds under concurrent registrations
+/// (reserve-then-commit).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_name_cap_holds_under_concurrency() {
+    let c = core(|_| Duration::from_millis(50));
+    let mut r = rig(&c, Arc::new(ByName(Box::new(|_| Some(4242)))));
+    for n in 0..60u32 {
+        let _ = r.router.resolve(&format!(":1.{n}"));
+        r.router.complete(r.to_register.try_recv().unwrap()).await;
+    }
+    let mut names = Vec::new();
+    for n in 1000..(1000 + u32::try_from(MAX_PENDING).unwrap()) {
+        let _ = r.router.resolve(&format!(":1.{n}"));
+        names.push(r.to_register.try_recv().unwrap());
+    }
+    let mut set = tokio::task::JoinSet::new();
+    for n in names {
+        let router = Arc::clone(&r.router);
+        set.spawn(async move { router.complete(n).await });
+    }
+    while set.join_next().await.is_some() {}
+    let st = r.router.state();
+    let held = st.names_per_group.get(&Some(4242)).copied().unwrap_or(0);
+    assert_eq!(held, MAX_NAMES_PER_OWNER, "reservations are exact");
+    assert_eq!(st.apps.len(), MAX_NAMES_PER_OWNER);
+}
+
+/// R3-1: the focused application is never evicted, even when it is exactly the one the policy
+/// would pick (the newest name of the largest group).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_focused_application_is_never_evicted() {
+    let c = core(|_| Duration::ZERO);
+    let focused = Arc::new(FocusedApp::new());
+    let mut r = filled(&c, Some(Arc::clone(&focused))).await;
+    // The newest name of pid 1's group is `:1.63` (registered last of the group).
+    let RouteDecision::Route(route) = r.router.resolve(":1.63") else {
+        panic!("registered")
+    };
+    focused.set(route.app);
+    for i in 0..10 {
+        let newcomer = format!(":1.{}", 200_000 + i);
+        assert!(is_retry(&r.router.resolve(&newcomer)));
+        r.router.complete(r.to_register.try_recv().unwrap()).await;
+        assert!(
+            r.router.state().apps.contains_key(":1.63"),
+            "focused app evicted"
+        );
+    }
+    assert_eq!(r.router.known_apps(), MAX_APPS_TOTAL);
+    assert!(r.router.stats().evicted >= 10);
+}
+
+/// R3-1: the shell's process is never evicted nor refused, even as an all-singleton table
+/// would otherwise sacrifice its newest member.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_shell_is_never_evicted_or_refused() {
+    let c = core(|_| Duration::ZERO);
+    let mut r = rig(&c, Arc::new(ByName(Box::new(|n| Some(n + 10)))));
+    // Shell registered last before the cap is hit: it is the newest, hence the usual victim.
+    r.router
+        .protect_pid(10 + u32::try_from(MAX_APPS_TOTAL).unwrap() - 1);
+    for n in 0..u32::try_from(MAX_APPS_TOTAL).unwrap() {
+        let _ = r.router.resolve(&format!(":1.{n}"));
+        r.router.complete(r.to_register.try_recv().unwrap()).await;
+    }
+    let shell = format!(":1.{}", MAX_APPS_TOTAL - 1);
+    for i in 0..5 {
+        let _ = r.router.resolve(&format!(":1.{}", 300_000 + i));
+        r.router.complete(r.to_register.try_recv().unwrap()).await;
+        assert!(
+            r.router.state().apps.contains_key(shell.as_str()),
+            "shell evicted"
+        );
+    }
+}
+
+/// R3-1: an evicted application goes through the backoff path and is not served at once, and
+/// an eviction is not a permanent mute: after the backoff it registers again.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_evicted_application_comes_back_through_the_backoff_path() {
+    let c = core(|_| Duration::ZERO);
+    let mut r = filled(&c, None).await;
+    let newcomer = ":1.200000";
+    assert!(is_retry(&r.router.resolve(newcomer)));
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    // pid 1's newest name was evicted: `:1.63`.
+    assert!(!r.router.state().apps.contains_key(":1.63"));
+    assert!(
+        is_retry(&r.router.resolve(":1.63")),
+        "backoff, not NotAnApp"
+    );
+    assert!(
+        r.to_register.try_recv().is_err(),
+        "no immediate registration"
+    );
+    tokio::time::sleep(BACKOFF_MIN * 4).await;
+    assert!(is_retry(&r.router.resolve(":1.63")));
+    assert!(
+        r.to_register.try_recv().is_ok(),
+        "it registers again after the backoff"
+    );
+}
+
+/// R3-2: a refusal at the cap is temporary: the sender backs off and is retried, never cached
+/// as "not an application".
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_refusal_at_the_cap_is_never_permanent() {
+    let c = core(|_| Duration::ZERO);
+    let mut r = filled(&c, None).await;
+    // pid 1 is the biggest group: its own newcomer is refused...
+    let refused = ":1.100001";
+    // (free one pid-1 slot first so the per-process cap is not what refuses it)
+    let _ = r.router.forget(":1.0");
+    // ...refilled by a newcomer of another process, so the table is full again.
+    assert!(is_retry(&r.router.resolve(":1.250000")));
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    assert_eq!(r.router.known_apps(), MAX_APPS_TOTAL);
+    assert!(is_retry(&r.router.resolve(refused)));
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    assert!(
+        is_retry(&r.router.resolve(refused)),
+        "temporary: Retry, never NotAnApp"
+    );
+    assert!(!r.router.state().ignored.contains(refused));
+    // ...and is tried again after the backoff.
+    tokio::time::sleep(BACKOFF_MIN * 4).await;
+    assert!(is_retry(&r.router.resolve(refused)));
+    assert!(r.to_register.try_recv().is_ok());
+}
+
+/// R3-2: the per-process name cap is temporary too.
+#[tokio::test]
+async fn the_per_process_name_cap_refuses_with_a_backoff_not_a_verdict() {
+    let c = core(|_| Duration::ZERO);
+    let mut r = rig(&c, Arc::new(Fixed(31337)));
+    for i in 0..=MAX_NAMES_PER_OWNER {
+        let _ = r.router.resolve(&format!(":1.{i}"));
+        r.router.complete(r.to_register.try_recv().unwrap()).await;
+    }
+    assert_eq!(r.router.known_apps(), MAX_NAMES_PER_OWNER);
+    let over = format!(":1.{MAX_NAMES_PER_OWNER}");
+    assert!(is_retry(&r.router.resolve(&over)));
+    assert!(!r.router.state().ignored.contains(over.as_str()));
+    // A name of that process leaves: the refused one gets in on its next attempt.
+    r.router.forget(":1.0");
+    tokio::time::sleep(BACKOFF_MIN * 40).await;
+    assert!(is_retry(&r.router.resolve(&over)));
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    assert!(matches!(r.router.resolve(&over), RouteDecision::Route(_)));
+}
+
+/// R3-2: a slow credentials service does not push a name into the "unknown" group: the lookup
+/// is retried first.
+#[tokio::test]
+async fn credentials_are_retried_before_a_name_is_filed_as_unknown() {
+    struct Flaky(std::sync::atomic::AtomicUsize);
+    impl Credentials for Flaky {
+        fn pid_of<'a>(&'a self, _name: &'a str) -> BoxFuture<'a, Option<u32>> {
+            let n = self.0.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async move { (n >= 2).then_some(777) })
+        }
+    }
+    let c = core(|_| Duration::ZERO);
+    let mut r = rig(&c, Arc::new(Flaky(std::sync::atomic::AtomicUsize::new(0))));
+    let _ = r.router.resolve(":1.5");
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    let st = r.router.state();
+    assert_eq!(st.names_per_group.get(&Some(777)), Some(&1));
+    assert_eq!(st.names_per_group.get(&None), None, "not filed as unknown");
 }

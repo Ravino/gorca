@@ -605,10 +605,16 @@ impl<'a> Conn<'a> {
         };
         if let Some(idx) = self.last
             && self.names.get(idx).is_some_and(|n| &**n == sender)
+            && !self.drop_if_closed(idx, sender)
         {
             return cached(&self.routes, idx);
         }
-        let idx = if let Some(&idx) = self.index.get(sender) {
+        let known = self
+            .index
+            .get(sender)
+            .copied()
+            .filter(|&idx| !self.drop_if_closed(idx, sender));
+        let idx = if let Some(idx) = known {
             idx
         } else {
             let decision = match std::str::from_utf8(sender) {
@@ -634,6 +640,23 @@ impl<'a> Conn<'a> {
         };
         self.last = Some(idx);
         cached(&self.routes, idx)
+    }
+
+    /// A cached route whose ingress was closed (the application was retired or evicted) is
+    /// stale: forget it, so the router is asked again on this sender's next event instead of the
+    /// application staying muted. `true` if the entry was dropped.
+    fn drop_if_closed(&mut self, idx: usize, sender: &[u8]) -> bool {
+        let closed = matches!(self.routes.get(idx), Some(Some(r)) if r.tx.is_closed());
+        if closed {
+            self.index.remove(sender);
+            if let Some(slot) = self.routes.get_mut(idx) {
+                *slot = None;
+            }
+            if self.last == Some(idx) {
+                self.last = None;
+            }
+        }
+        closed
     }
 
     /// A unique name that lost its owner: drop its route so its ingress can go away (AU-2).
@@ -968,5 +991,71 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(router.calls.load(Ordering::SeqCst), 1);
         assert_eq!(stats.unrouted, 20);
+    }
+
+    /// Regression (review R3-1c): when an application is evicted, its ingress closes; the drain
+    /// must notice, forget the cached route and ask the router again, instead of pushing into the
+    /// dead ingress for the rest of the connection (a permanent mute).
+    struct GenRouter {
+        calls: AtomicUsize,
+        first: AppRoute,
+        second: AppRoute,
+    }
+
+    impl Router for GenRouter {
+        fn route(&self, _sender: &str) -> Option<AppRoute> {
+            None
+        }
+
+        fn resolve(&self, _sender: &str) -> RouteDecision {
+            if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                RouteDecision::Route(self.first.clone())
+            } else {
+                RouteDecision::Route(self.second.clone())
+            }
+        }
+    }
+
+    #[test]
+    fn an_evicted_apps_cached_route_is_dropped_and_asked_again() {
+        let dir = std::env::temp_dir().join(format!("gorca-drain-evict-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("bus");
+        let _ = std::fs::remove_file(&path);
+        let (send, _rules) = fake_broker(&path);
+        let app = |serial| AppId {
+            connector: ConnectorId(0),
+            serial,
+        };
+        let (tx1, rx1) = ingress(IngressConfig::default());
+        let (tx2, rx2) = ingress(IngressConfig::default());
+        let router = Arc::new(GenRouter {
+            calls: AtomicUsize::new(0),
+            first: AppRoute {
+                app: app(1),
+                tx: tx1,
+            },
+            second: AppRoute {
+                app: app(2),
+                tx: tx2,
+            },
+        });
+        let mut cfg = DrainConfig::new(format!("unix:path={}", path.display()));
+        cfg.connect_deadline = Duration::from_secs(3);
+        let drain = spawn_drain(cfg, Arc::clone(&router) as Arc<dyn Router>).unwrap();
+        send.send(event(":1.5")).unwrap();
+        assert!(wait(&rx1, 1), "the first route works");
+        // The application is evicted: the core drops its receiver.
+        drop(rx1);
+        // Its next events must reach the re-resolved route.
+        for _ in 0..20 {
+            send.send(event(":1.5")).unwrap();
+        }
+        let delivered = wait(&rx2, 1);
+        let _ = drain.stop();
+        drop(send);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(delivered, "the evicted app stayed muted");
+        assert_eq!(router.calls.load(Ordering::SeqCst), 2);
     }
 }

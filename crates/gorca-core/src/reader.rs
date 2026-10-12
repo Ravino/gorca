@@ -15,7 +15,7 @@ use std::time::Instant;
 use gorca_connector_api::BackendError;
 use gorca_input_api::{CmdId, GrabSet, KeyClass, KeyIntent};
 use gorca_model::{AppId, Epoch, NodeKey, NodeSnapshot, Politeness, PropMask, UttId};
-use gorca_rt::{BudgetClass, EpochCell, mpsc};
+use gorca_rt::{BudgetClass, EpochCell, FocusedApp, mpsc};
 use smallvec::SmallVec;
 
 use crate::directory::MirrorDirectory;
@@ -172,6 +172,7 @@ pub struct Reader {
     stale_replies_dropped: u64,
     duplicate_focus_dropped: u64,
     last_focus: Option<(NodeKey, Instant)>,
+    focused_app: Option<Arc<FocusedApp>>,
 }
 
 impl Reader {
@@ -187,7 +188,15 @@ impl Reader {
             stale_replies_dropped: 0,
             duplicate_focus_dropped: 0,
             last_focus: None,
+            focused_app: None,
         }
+    }
+
+    /// Publish the focused application through `focused` (lock-free, read by the connector).
+    #[must_use]
+    pub fn with_focused(mut self, focused: Arc<FocusedApp>) -> Self {
+        self.focused_app = Some(focused);
+        self
     }
 
     /// Focus events ignored as duplicates of the one just handled.
@@ -290,6 +299,9 @@ impl Reader {
                     return;
                 }
                 self.last_focus = Some((node, now));
+                if let Some(f) = &self.focused_app {
+                    f.set(node.app);
+                }
                 // The epoch advances first, so stale speech cancels now, not after δ (E-2).
                 let epoch = self.epoch.advance();
                 let role = self.dir.lookup(node).hit().map(|n| n.role);
@@ -643,6 +655,24 @@ mod tests {
             .reader
             .handle(ReaderMsg::Key(intent(false)), Instant::now());
         assert!(fx.is_empty(), "releases are silent");
+    }
+
+    #[test]
+    fn the_focused_application_is_published() {
+        let mut f = fixture();
+        let published = Arc::new(FocusedApp::new());
+        f.reader = Reader::new(
+            Arc::clone(&f.epoch),
+            Arc::new(MirrorDirectory::new()),
+            ModeKeys::default(),
+        )
+        .with_focused(Arc::clone(&published));
+        assert_eq!(published.get(), None);
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(1) }),
+            Instant::now(),
+        );
+        assert_eq!(published.get(), Some(app()));
     }
 
     #[test]

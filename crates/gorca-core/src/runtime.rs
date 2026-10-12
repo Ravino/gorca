@@ -31,8 +31,8 @@ use gorca_ingress::{GLOBAL_SLOT_BUDGET, IngressConfig, SlotBudget};
 use gorca_mirror::mirror;
 use gorca_model::{AppId, ConnectorId, Epoch, NodeKey, PropMask, ReqId, Utterance};
 use gorca_rt::{
-    BudgetClass, CancellationToken, Clock, Deadline, EpochCell, Lane, TaskExit, TaskSet, mpsc,
-    spawn_lane,
+    BudgetClass, CancellationToken, Clock, Deadline, EpochCell, FocusedApp, Lane, TaskExit,
+    TaskSet, mpsc, spawn_lane,
 };
 use tokio::task::JoinSet;
 
@@ -200,6 +200,7 @@ const REGISTRAR_QUEUE: usize = 64;
 
 struct Shared {
     epoch: Arc<EpochCell>,
+    focused: Arc<FocusedApp>,
     mirrors: Arc<MirrorDirectory>,
     apps: AppDirectory,
     senders: ReaderSenders,
@@ -239,6 +240,7 @@ impl Core {
             cfg,
             shared: Arc::new(Shared {
                 epoch: Arc::new(EpochCell::new()),
+                focused: Arc::new(FocusedApp::new()),
                 mirrors: Arc::new(MirrorDirectory::new()),
                 apps: AppDirectory::default(),
                 senders,
@@ -265,6 +267,11 @@ impl Core {
     /// The process-wide epoch cell (written by the input lane and the Reader).
     pub fn epoch(&self) -> Arc<EpochCell> {
         Arc::clone(&self.shared.epoch)
+    }
+
+    /// The focused application, published by the Reader for the connector's eviction policy.
+    pub fn focused_app(&self) -> Arc<FocusedApp> {
+        Arc::clone(&self.shared.focused)
     }
 
     pub fn mirrors(&self) -> Arc<MirrorDirectory> {
@@ -672,7 +679,8 @@ async fn reader_loop(
         Arc::clone(&shared.epoch),
         Arc::clone(&shared.mirrors),
         ModeKeys::default(),
-    );
+    )
+    .with_focused(Arc::clone(&shared.focused));
     let mut timer: Option<Instant> = None;
     loop {
         let msg = tokio::select! {

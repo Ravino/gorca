@@ -311,6 +311,7 @@ pub async fn run_with(opts: Options, shutdown: CancellationToken) -> Result<()> 
     });
     let registry = core.connector_registrar(ConnectorId(1));
     let epoch = core.epoch();
+    let focused = core.focused_app();
 
     // Speech: failover client under the speech lane.
     let (backends, mode) = speech_plan(&opts);
@@ -384,6 +385,7 @@ pub async fn run_with(opts: Options, shutdown: CancellationToken) -> Result<()> 
                 session_address: opts.session_address.clone(),
                 enable_accessibility: !opts.no_enable,
                 register_events: true,
+                focused: Some(focused),
             },
             registry,
             shutdown.clone(),

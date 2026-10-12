@@ -24,7 +24,9 @@ use gorca_connector_api::{Connector, ConnectorCtx, ConnectorError};
 use gorca_dbus::call_method;
 use gorca_dbus::drain::{DrainConfig, DrainEnd, DrainHandle, Router, spawn_drain};
 use gorca_model::ConnectorKind;
-use gorca_rt::{BoxFuture, BudgetClass, CancellationToken, Clock, Deadline, TaskSet, mpsc};
+use gorca_rt::{
+    BoxFuture, BudgetClass, CancellationToken, Clock, Deadline, FocusedApp, TaskSet, mpsc,
+};
 use tokio::task::JoinSet;
 use zbus::Connection;
 use zbus::zvariant::OwnedValue;
@@ -46,6 +48,8 @@ const REGISTER_QUEUE: usize = 256;
 const DRAIN_POLL: Duration = Duration::from_millis(500);
 const DRAIN_BACKOFF_MIN: Duration = Duration::from_millis(100);
 const DRAIN_BACKOFF_MAX: Duration = Duration::from_secs(5);
+/// How often the shell's owner is looked up (it may start after gorca).
+const SHELL_POLL: Duration = Duration::from_secs(5);
 /// Deadline of one `GetConnectionCredentials`.
 const CREDENTIALS_DEADLINE: Duration = Duration::from_millis(250);
 
@@ -62,6 +66,8 @@ pub struct AtspiOptions {
     pub enable_accessibility: bool,
     /// `Registry.RegisterEvent` for [`REGISTERED_EVENTS`].
     pub register_events: bool,
+    /// The focused application, published by the Reader. The router never evicts or refuses it.
+    pub focused: Option<Arc<FocusedApp>>,
 }
 
 impl Default for AtspiOptions {
@@ -71,6 +77,7 @@ impl Default for AtspiOptions {
             session_address: None,
             enable_accessibility: true,
             register_events: true,
+            focused: None,
         }
     }
 }
@@ -177,6 +184,27 @@ impl Credentials for BusCredentials {
     }
 }
 
+/// Keeps the GNOME Shell process in the router's protected set. The shell owns
+/// `org.gnome.Shell` on the session bus; its a11y connection belongs to the same process.
+async fn watch_shell(session: Connection, router: Arc<AtspiRouter>, clock: Clock) {
+    let creds = BusCredentials {
+        conn: session.clone(),
+        clock: clock.clone(),
+    };
+    let mut known: Option<u32> = None;
+    loop {
+        if let Some(owner) = name_owner(&session, &clock, "org.gnome.Shell").await
+            && let Some(pid) = creds.pid_of(&owner).await
+            && known != Some(pid)
+        {
+            tracing::debug!(pid, "the shell is protected from eviction");
+            router.protect_pid(pid);
+            known = Some(pid);
+        }
+        tokio::time::sleep(SHELL_POLL).await;
+    }
+}
+
 async fn start_drain(address: &str, router: &Arc<AtspiRouter>) -> Result<DrainHandle, String> {
     let cfg = DrainConfig::new(address);
     let router: Arc<dyn Router> = Arc::clone(router) as Arc<dyn Router>;
@@ -256,6 +284,9 @@ async fn run(opts: AtspiOptions, ctx: ConnectorCtx) -> Result<(), ConnectorError
     let (address, session) = resolve_bus(&opts, &clock).await?;
     tracing::info!("connecting to the accessibility bus");
 
+    // The shell is identified through the session bus: its well-known name lives there.
+    let shell_conn = session.clone();
+
     // ID-5.
     let mut enablement: Option<(Connection, Enablement)> = None;
     if opts.enable_accessibility
@@ -300,14 +331,24 @@ async fn run(opts: AtspiOptions, ctx: ConnectorCtx) -> Result<(), ConnectorError
         conn: conn.clone(),
         clock: clock.clone(),
     });
-    let router = Arc::new(AtspiRouter::new(
+    let mut router = AtspiRouter::new(
         registry.clone(),
         clock.clone(),
         Arc::clone(&paths),
         new_tx,
         reg_tx,
         credentials,
-    ));
+    );
+    if let Some(f) = &opts.focused {
+        router = router.with_focused(Arc::clone(f));
+    }
+    let router = Arc::new(router);
+    if let Some(sc) = shell_conn {
+        tasks.spawn(
+            "shell-watch",
+            watch_shell(sc, Arc::clone(&router), clock.clone()),
+        );
+    }
     if let Some(owner) = name_owner(&conn, &clock, "org.a11y.atspi.Registry").await {
         router.ignore(&owner);
     }

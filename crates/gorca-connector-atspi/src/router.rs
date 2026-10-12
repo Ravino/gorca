@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 use gorca_connector_api::{AppPort, AppRegistrar, RegistrarError, ScopeKey};
 use gorca_dbus::drain::{AppRoute, RouteDecision, Router, SignalView, map_signal};
 use gorca_model::{AppId, AppInfo, ConnectorKind, NodeEvent, NodeKey};
-use gorca_rt::{BoxFuture, CancellationToken, Clock, Deadline, mpsc};
+use gorca_rt::{BoxFuture, CancellationToken, Clock, Deadline, FocusedApp, mpsc};
 
 use crate::paths::{MAX_PATH_BYTES, Owner, PathTable};
 
@@ -47,6 +47,8 @@ const PARKED_OVERHEAD: usize = 64;
 pub const MAX_NAMES_PER_OWNER: usize = 64;
 /// Registered bus names of connections whose credentials are unknown, in total.
 pub const MAX_UNKNOWN_NAMES: usize = 32;
+/// Attempts to learn a connection's owner before it is filed under "unknown".
+const CREDENTIALS_TRIES: usize = 3;
 /// Registered applications in total. A process that forks to multiply its per-pid caps meets this
 /// one; the largest process group is the one that gives way.
 pub const MAX_APPS_TOTAL: usize = 512;
@@ -91,6 +93,8 @@ struct Entry {
     route: AppRoute,
     gone: CancellationToken,
     group: Option<u32>,
+    /// Registration order; the highest is the newest.
+    seq: u64,
 }
 
 #[derive(Debug)]
@@ -164,8 +168,12 @@ struct State {
     /// Newest focus of senders that have no registration running (backoff, pending cap).
     orphan_focus: HashMap<Arc<str>, Parked>,
     backoff: HashMap<Arc<str>, Backoff>,
-    /// Registered names per process (`None`: credentials unknown, all such names together).
+    /// Registered names per process (`None`: credentials unknown, all such names together),
+    /// **including names whose registration is in flight** (reserve, then commit).
     names_per_group: HashMap<Option<u32>, usize>,
+    next_seq: u64,
+    /// Processes that are never evicted or refused (the shell).
+    protected_pids: HashSet<u32>,
     departed: HashSet<Arc<str>>,
     departed_order: VecDeque<(Instant, Arc<str>)>,
 }
@@ -212,26 +220,70 @@ impl State {
         }
     }
 
-    /// The process group holding the most registered names.
-    fn largest_group(&self) -> Option<(Option<u32>, usize)> {
-        self.names_per_group
-            .iter()
-            .map(|(g, n)| (*g, *n))
-            .max_by_key(|(_, n)| *n)
+    /// Reserve a name for `group` if it has room (check and increment as one step).
+    fn reserve_name(&mut self, group: Option<u32>) -> bool {
+        let limit = if group.is_some() {
+            MAX_NAMES_PER_OWNER
+        } else {
+            MAX_UNKNOWN_NAMES
+        };
+        let n = self.names_per_group.entry(group).or_insert(0);
+        if *n >= limit {
+            return false;
+        }
+        *n += 1;
+        true
     }
 
-    /// Remove one application of `group` (the oldest by name order is as good as any: the group
-    /// is the problem, not an individual).
-    fn evict_from(&mut self, group: Option<u32>) -> Option<Entry> {
-        let name = self
+    fn is_protected(&self, e: &Entry, focused: Option<AppId>) -> bool {
+        focused == Some(e.route.app) || e.group.is_some_and(|g| self.protected_pids.contains(&g))
+    }
+
+    /// Who gives way when the application cap is reached. Never the focused application or a
+    /// protected process. Only a group holding more than one name is "too big"; its newest name
+    /// goes. If every group holds a single name, the newest registration goes. Never arbitrary.
+    fn pick_victim(&self, newcomer: Option<u32>, focused: Option<AppId>) -> Victim {
+        let newcomer_protected = newcomer.is_some_and(|g| self.protected_pids.contains(&g));
+        let candidates: Vec<(&Arc<str>, &Entry)> = self
             .apps
             .iter()
-            .find(|(_, e)| e.group == group)
-            .map(|(n, _)| Arc::clone(n))?;
-        let e = self.apps.remove(&name)?;
-        self.release_name(group);
-        Some(e)
+            .filter(|(_, e)| !self.is_protected(e, focused))
+            .collect();
+        let count = |g: Option<u32>| self.names_per_group.get(&g).copied().unwrap_or(0);
+        // The biggest group above one name; ties go to the one that registered last.
+        let big = candidates
+            .iter()
+            .filter(|(_, e)| count(e.group) > 1)
+            .map(|(_, e)| e)
+            .max_by_key(|e| (count(e.group), e.seq))
+            .map(|e| e.group);
+        let victim = match big {
+            Some(g) => {
+                if g == newcomer && !newcomer_protected {
+                    return Victim::RefuseNewcomer;
+                }
+                candidates
+                    .iter()
+                    .filter(|(_, e)| e.group == g)
+                    .max_by_key(|(_, e)| e.seq)
+            }
+            None => candidates.iter().max_by_key(|(_, e)| e.seq),
+        };
+        match victim {
+            Some((name, _)) => Victim::Evict(Arc::clone(name)),
+            None if newcomer_protected => Victim::AdmitOverCap,
+            None => Victim::RefuseNewcomer,
+        }
     }
+}
+
+/// Outcome of [`State::pick_victim`].
+#[derive(Debug, Eq, PartialEq)]
+enum Victim {
+    Evict(Arc<str>),
+    RefuseNewcomer,
+    /// Only protected applications are registered and the newcomer is one: admit it anyway.
+    AdmitOverCap,
 }
 
 /// Counters, for tests and diagnostics.
@@ -242,6 +294,7 @@ pub struct RouterStats {
     pub ignored: u64,
     pub parked_replayed: u64,
     pub parked_dropped: u64,
+    pub evicted: u64,
 }
 
 pub struct AtspiRouter {
@@ -252,6 +305,8 @@ pub struct AtspiRouter {
     /// Senders whose registration the connector task must run.
     to_register: mpsc::Sender<Arc<str>>,
     credentials: Arc<dyn Credentials>,
+    /// The focused application, published by the Reader (lock-free).
+    focused: Option<Arc<FocusedApp>>,
     state: Mutex<State>,
     stats: Mutex<RouterStats>,
 }
@@ -278,9 +333,22 @@ impl AtspiRouter {
             new_apps,
             to_register,
             credentials,
+            focused: None,
             state: Mutex::new(State::default()),
             stats: Mutex::new(RouterStats::default()),
         }
+    }
+
+    /// Read the focused application from `focused` when deciding who gives way at the cap.
+    #[must_use]
+    pub fn with_focused(mut self, focused: Arc<FocusedApp>) -> Self {
+        self.focused = Some(focused);
+        self
+    }
+
+    /// Never evict or refuse the applications of process `pid` (the shell).
+    pub fn protect_pid(&self, pid: u32) {
+        self.state().protected_pids.insert(pid);
     }
 
     fn state(&self) -> std::sync::MutexGuard<'_, State> {
@@ -361,27 +429,23 @@ impl AtspiRouter {
     /// Run the registration the drain started for `sender`. Never blocks a thread; bounded by
     /// [`ANNOUNCE_WAIT`] plus the credentials deadline.
     pub async fn complete(&self, sender: Arc<str>) {
-        let pid = self.credentials.pid_of(&sender).await;
+        // The bus may be slow to answer under load; retry before treating the connection as one
+        // of unknown ownership (which is a small, shared, capped group).
+        let mut pid = None;
+        for _ in 0..CREDENTIALS_TRIES {
+            pid = self.credentials.pid_of(&sender).await;
+            if pid.is_some() {
+                break;
+            }
+        }
         let owner_known = pid.map(Owner::Pid);
-        let limit = if pid.is_some() {
-            MAX_NAMES_PER_OWNER
-        } else {
-            MAX_UNKNOWN_NAMES
-        };
-        if self.state().names_per_group.get(&pid).copied().unwrap_or(0) >= limit {
-            // One process may not hold arbitrarily many registered names: this is not served.
-            tracing::warn!(
-                sender = &*sender,
-                "too many bus names for one process; ignoring"
-            );
-            let mut st = self.state();
-            let dropped = st.drop_parked(&sender);
-            st.ignored.insert(Arc::clone(&sender));
-            drop(st);
-            self.bump(|s| {
-                s.ignored += 1;
-                s.parked_dropped += dropped as u64;
-            });
+        // Reserve the name before the first await that matters; give it back on any failure.
+        let reserved = self.state().reserve_name(pid);
+        if !reserved {
+            // One process may not hold arbitrarily many registered names. This is a temporary
+            // verdict: back off and try again when a name has gone, never cache it.
+            tracing::warn!(sender = &*sender, "too many bus names for one process");
+            self.fail(&sender, false);
             return;
         }
         let info = AppInfo {
@@ -400,6 +464,7 @@ impl AtspiRouter {
             Ok(port) => self.publish(&sender, port, owner_known),
             Err(e) => {
                 tracing::warn!(sender = &*sender, error = %e, "application announce failed");
+                self.state().release_name(pid);
                 self.fail(&sender, e == RegistrarError::Duplicate);
             }
         }
@@ -450,8 +515,10 @@ impl AtspiRouter {
             bus_name: Arc::clone(sender),
             gone: gone.clone(),
         };
+        let focused = self.focused.as_ref().and_then(|f| f.get());
         let mut st = self.state();
         if st.departed.contains(&**sender) {
+            st.release_name(group);
             let dropped = st.drop_parked(sender);
             drop(st);
             // The app left the bus while the core was accepting it. Retiring drops the core half
@@ -468,7 +535,26 @@ impl AtspiRouter {
             });
             return;
         }
+        // A global cap on applications: a process that forks to multiply its per-process caps
+        // meets this one. The focused application and protected processes never give way.
+        let mut victim: Option<Arc<str>> = None;
+        if st.apps.len() >= MAX_APPS_TOTAL {
+            match st.pick_victim(group, focused) {
+                Victim::Evict(name) => victim = Some(name),
+                Victim::AdmitOverCap => {}
+                Victim::RefuseNewcomer => {
+                    st.release_name(group);
+                    drop(st);
+                    tracing::warn!(sender = &**sender, "application limit reached; backing off");
+                    let _ = self.registrar.retire(app);
+                    // Temporary: the sender is retried after a backoff, never cached as refused.
+                    self.fail(sender, false);
+                    return;
+                }
+            }
+        }
         if self.new_apps.try_send(new).is_err() {
+            st.release_name(group);
             drop(st);
             tracing::warn!(
                 sender = &**sender,
@@ -478,28 +564,11 @@ impl AtspiRouter {
             self.fail(sender, false);
             return;
         }
-        // A global cap on applications: a process that forks to multiply its per-process caps
-        // meets this one, and the largest group gives way, not the newcomer's.
-        let mut evicted: Option<Entry> = None;
-        if st.apps.len() >= MAX_APPS_TOTAL {
-            match st.largest_group() {
-                Some((big, _)) if big == group => {
-                    // The newcomer belongs to the largest group: it is the one refused.
-                    let dropped = st.drop_parked(sender);
-                    st.ignored.insert(Arc::clone(sender));
-                    drop(st);
-                    tracing::warn!(sender = &**sender, "application limit reached; refusing");
-                    let _ = self.registrar.retire(app);
-                    self.bump(|s| {
-                        s.ignored += 1;
-                        s.parked_dropped += dropped as u64;
-                    });
-                    return;
-                }
-                Some((big, _)) => evicted = st.evict_from(big),
-                None => {}
-            }
-        }
+        let evicted = victim.and_then(|v| {
+            let e = st.apps.remove(&v)?;
+            st.release_name(e.group);
+            Some((v, e))
+        });
         self.paths.bind_app(app, owner);
         // Replay what arrived while the registration ran, in arrival order, before any later
         // event can be routed (the lock is held).
@@ -530,21 +599,40 @@ impl AtspiRouter {
             }
         }
         st.backoff.remove(&**sender);
-        *st.names_per_group.entry(group).or_insert(0) += 1;
+        // The name was reserved in `complete`; the entry commits it.
+        st.next_seq += 1;
+        let seq = st.next_seq;
         st.apps.insert(
             Arc::clone(sender),
             Entry {
                 route: route.clone(),
                 gone,
                 group,
+                seq,
             },
         );
+        if let Some((name, _)) = &evicted {
+            // The evicted application re-announces on its next event (the drain notices that its
+            // ingress is closed), through the backoff path if the table is still full.
+            let delay = st
+                .backoff
+                .get(&**name)
+                .map_or(BACKOFF_MIN, |b| (b.delay * 2).min(BACKOFF_MAX));
+            st.backoff.insert(
+                Arc::clone(name),
+                Backoff {
+                    not_before: self.clock.now() + delay,
+                    delay,
+                },
+            );
+        }
         drop(st);
-        if let Some(e) = evicted {
-            tracing::warn!(app = ?e.route.app, "application limit reached; evicting the largest group");
+        if let Some((name, e)) = evicted {
+            tracing::warn!(app = ?e.route.app, name = &*name, "application limit reached; evicting");
             e.gone.cancel();
             self.paths.forget_app(e.route.app);
             let _ = self.registrar.retire(e.route.app);
+            self.bump(|s| s.evicted += 1);
         }
         tracing::debug!(sender = &**sender, ?app, replayed, "application announced");
         self.bump(|s| {

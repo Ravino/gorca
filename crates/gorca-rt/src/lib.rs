@@ -16,6 +16,7 @@
 pub mod clock;
 pub mod deadline;
 pub mod epoch;
+pub mod focused;
 pub mod guard;
 pub mod lane;
 pub mod process;
@@ -25,6 +26,7 @@ pub mod watchdog;
 pub use clock::{Clock, VirtualClock};
 pub use deadline::{BudgetClass, Deadline, DeadlineExceeded, with_deadline};
 pub use epoch::EpochCell;
+pub use focused::FocusedApp;
 pub use futures_core::future::BoxFuture;
 pub use lane::{Lane, LaneExit, LaneHandle, LanePriority, spawn_lane};
 pub use supervisor::{
