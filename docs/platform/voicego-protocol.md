@@ -167,7 +167,9 @@ Event semantics (verified in the code):
 - `703 CANCELED` is emitted for the active message and every queued message of
   every triple of the connection on STOP/CANCEL, and on disconnect.
 - Exactly one of END / CANCELED / error terminates each message id.
-- Errors after `225` arrive as a bare, id-less reply line, for example
+- **On branch `fix/fast-open-timeout` (not merged), binary-framing sessions get the message
+  id** on a continuation line, like `225`: `502-<id>` then `502 ERR INTERNAL` (same for
+  `503`). Text sessions keep the bare line (stock clients treat only 7xx as async). Against 3a0f1f2..7cf7a1c: errors after `225` arrive as a bare, id-less reply line, for example
   `502 ERR INTERNAL` or `503 ERR ENGINE_DEAD` (`session.go:1946-1966`). The message id
   is not included, so correlation is by order only. (In 3a0f1f2, `SET VOLUME -100`
   then SPEAK gave `701` then `502 ERR INTERNAL` because espeak-ng reported

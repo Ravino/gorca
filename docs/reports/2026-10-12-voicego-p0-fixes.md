@@ -307,3 +307,70 @@ nothing was pushed and the empty local branch was deleted.
 - **Not covered.** JACK live behaviour (no server); acoustic latency and cancel-to-silence at
   the speakers; a real PipeWire restart; sustained operation beyond 5 minutes.
 - **Review.** Ready for review; there is no diff to review, only this test evidence.
+
+## Fast open timeout (branch fix/fast-open-timeout, ready for review, not merged)
+
+Commit `617df9c` feat(dispatch): fail fast when the audio device is down.
+
+- **Timeout.** The device open attempt is bounded by 1.5 s (was 10 s), configurable as
+  `[server] sink_open_timeout_ms` / `dispatch.Config.SinkOpenTimeout` (0 = default,
+  negative rejected). Why 1.5 s: a healthy open is well under 100 ms and the ALSA backend's own
+  EBUSY retries add at most 850 ms, so a working open is never cut short, while a client
+  waits little before falling back to speech-dispatcher.
+- **No pile-up, still recovers.** While a timed-out Open is pending (the FIFO case: blocked
+  in `snd_pcm_open`), further SPEAKs fail immediately instead of starting more Opens; when
+  the abandoned Open returns it is closed and the next attempt opens normally, so the
+  100 ms to 2 s reopen backoff still recovers. A pending Open stops blocking attempts after 30 s.
+- **Message id on the error.** The asynchronous error reply is now `502-<id>` / `502 ERR
+  INTERNAL` (and `503-<id>` / `503 ERR ENGINE_DEAD`), mirroring `225-<id>`. This is a wire
+  change for clients that parse the old bare line: a stock multi-line reader still sees the
+  final `502 ERR INTERNAL` line. Docs: `CONFIG.md`, example config, `ARCHITECTURE_V2.md`,
+  `CHANGELOG.md`, and `docs/platform/voicego-protocol.md` here.
+- **Tests.** `TestSinkDeviceDownFailsFastThenRecovers`, `TestSinkOpenTimeoutConfig`,
+  `TestSession_OnErrorCarriesMessageID`.
+- **Real libsamplerate.** `libsamplerate0-dev` is installed; the scratch shim was deleted
+  and everything rebuilt against `/usr/include/samplerate.h` (libsamplerate 0.2.2, alsa
+  1.2.14, jack 1.9.22): `go build` and `go vet` with `alsa_real,jack_real,espeak_ng_real`
+  clean; `ldd` shows libasound, libjack, libsamplerate.
+
+### Gates at 617df9c
+- `gofmt -l` empty; `go vet ./...` clean.
+- `go test -race -count=1 ./...` twice: pass (27 packages each).
+- `go test -race -tags 'alsa_real espeak_ng_real' ./...`: pass (27 packages).
+- `go test -race -tags jack_real ./plugins/output/jack2`: pass (build and unit tests; no JACK server).
+- FIFO device-loss simulation re-run (private ALSA config, real libasound, never the user's
+  device): healthy SPEAK `702` in 12 ms; reader killed: the in-flight SPEAK got `502-2`
+  after 3 ms, the next SPEAK failed after 1503 ms (`502-3`, open timeout), then SPEAKs 4 to 7
+  failed in 2-3 ms each, all with their ids; reader restored: the next 5 of 5 SPEAKs ended
+  with `702` in 6-8 ms (log: "sink open failed ... open timed out after 1.5s", then "sink opened").
+- Live ALSA on the shared default PCM, volume -90, n=10: SPEAK to `701` p50 2.20 ms, max
+  3.5 ms; `702` p50 852 ms; pipelined STOP then SPEAK 10/10 completed.
+- 5-minute race soak, null sink: `queued=61307 end=54935 canceled=6372 accounted=61307
+  stops=3152 | lost=0 mustEnd=0 asyncErr=0 proto=0`, daemon alive, no panic or DATA RACE.
+
+### Fast open timeout, review round (branch fix/fast-open-timeout, still not merged)
+
+- `987cad7` fix(server): send the id-carrying error reply only to binary-framing sessions.
+  `binaryMode` is recorded in `selectEncoding`; text sessions keep the bare `replyCritical`
+  line (a stock client, for example the Rust ssip-client, would read an unsolicited
+  multi-line 5xx as the answer to its next command and shift every later reply). Tests for
+  both framings: `TestSession_OnErrorTextIsBare`, `TestSession_OnErrorBinaryCarriesMessageID`.
+  Docs corrected (CHANGELOG, ARCHITECTURE_V2, voicego-protocol.md here).
+- `d049868` fix(dispatch): cap abandoned sink opens and count them per open. At most 2
+  abandoned Opens per module (the second only after the 30 s grace), then fail fast until one
+  returns; a counter replaces the bool; the `%!w(<nil>)` message is fixed. Tests:
+  `TestSinkAbandonedOpensAreCapped`, `TestSinkAbandonedOpenCountIsPerOpen`,
+  `TestSinkPendingErrorWithoutLastErr`.
+- **Follow-up, not done (separate P1):** deliver SSIP errors as an asynchronous 7xx-class event
+  that names the message, so stock text clients can attribute failures. Until then text
+  sessions see a bare, id-less 5xx.
+
+Gates at d049868: gofmt and vet clean; `go test -race ./...` twice pass (27 packages);
+`-tags 'alsa_real espeak_ng_real' ./...` pass on a second and third run (the first run failed
+once in `cmd/voicego-engine-espeak` `TestSynthesizeCtxCancel`, a package this branch does not
+touch; 12 of 12 isolated runs passed on both this branch and 7cf7a1c, so it is a timing flake);
+`-tags jack_real ./plugins/output/jack2` pass. FIFO device-loss re-run (text session): healthy
+`702` in 8 ms; device gone: bare `502` after 2 ms, then 1503 ms for the open that times out, then
+2 ms each; device back: 3 of 3 `702` in 5-6 ms. 5-minute race soak, null sink: `queued=63624
+end=56952 canceled=6672 accounted=63624 stops=3296 | lost=0 mustEnd=0 asyncErr=0 proto=0`, no
+panic or DATA RACE.

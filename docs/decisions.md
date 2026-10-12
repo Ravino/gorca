@@ -35,3 +35,6 @@
 | 2026-10-12 | voicego: cut the sink open timeout to 1–2 s so gorca can fall back to speech-dispatcher quickly | voicego |
 | 2026-10-12 | ~~Secret filtering deferred~~ — reverted the same day: it was a misunderstanding (reading vs. embedding). Final: speech/braille/navigation output is NEVER filtered (gorca reads passwords, tokens, terminal). The perception layer never embeds or persists secrets; terminal content encoding is opt-in (default off); the on-disk index is encrypted | ADR-0002 |
 | 2026-10-12 | Enable gorca-helper extension now, without logout or reboot | user |
+| 2026-10-12 | B-2 spec and shared harness done (no candidates yet): drain/ingress API fixed, executable coalescing model, mock/dbus-daemon/dbus-broker fixtures | docs/bakeoff/b2-ingress/SPEC.md |
+| 2026-10-12 | B-2 reference ingress extended with hard bounds: per-app hard cap (rule H), global SlotBudget, tombstone compaction, announcement text clip 4 KiB, route-cache cap, exact counter invariants | docs/bakeoff/b2-ingress/SPEC.md section 3.6 |
+| 2026-10-12 | voicego fast-fail open timeout (1.5 s), id-carrying errors on binary framing only, abandoned-open cap — merged and pushed (d049868). Follow-ups: SSIP async error as 7xx event (P1); flaky TestSynthesizeCtxCancel | docs/reports/2026-10-12-voicego-p0-fixes.md |
