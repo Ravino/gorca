@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 
 use common::{Fixture, random_script};
 use gorca_bench_b2::clock::Rng;
+use gorca_bench_b2::limits::APP_RESERVE;
 use gorca_bench_b2::mockbus::MockOpts;
 use gorca_bench_b2::model::Ev;
 use gorca_bench_b2::procfs::rss_bytes;
@@ -114,13 +115,15 @@ fn a_global_budget_bounds_many_apps() {
         tx.push(Ev::Focus(42).to_node_event(app));
         apps.push((tx, rx));
     }
+    // SPEC 3.6: global bound = pool + apps x (R + 1) (AU-3 reserves sit outside the pool).
+    let bound = 10_000 + apps.len() * (APP_RESERVE + 1);
     assert!(
-        budget.used() <= 10_000 + 300,
-        "budget used {}",
+        budget.used() <= bound,
+        "budget used {} > bound {bound}",
         budget.used()
     );
     let pending: usize = apps.iter().map(|(_, rx)| rx.pending()).sum();
-    assert!(pending <= 10_000 + 300, "pending across apps {pending}");
+    assert!(pending <= bound, "pending across apps {pending} > {bound}");
     for (_, rx) in &apps {
         rx.check_invariants().unwrap();
     }
@@ -239,7 +242,11 @@ fn a_giant_message_is_skipped_not_buffered() {
     );
     let base = rss_bytes();
     let giant = "y".repeat(100 * 1024 * 1024);
-    f.link.send(&announcement(&f.sender, &giant));
+    let giant_msg = announcement(&f.sender, &giant);
+    // The test's own copies must not be counted as the drain's memory.
+    drop(giant);
+    f.link.send(&giant_msg);
+    drop(giant_msg);
     let mut fence = Vec::new();
     gorca_bench_b2::workload::GenEvent {
         node: FENCE_ID,
@@ -254,6 +261,12 @@ fn a_giant_message_is_skipped_not_buffered() {
     );
     f.link.send(&fence);
     assert!(f.router.wait_fence("app", Duration::from_secs(60)));
+    // The mock broker's queue is empty once the giant message was handed to the kernel; wait
+    // for that (and for its capacity to be released) before sampling RSS.
+    assert!(
+        f.link.flush_all(Duration::from_secs(30)),
+        "mock queue never drained"
+    );
     assert!(
         mib_grown(base) < 150,
         "RSS grew {} MiB for one 100 MiB message",

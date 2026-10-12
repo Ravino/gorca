@@ -67,6 +67,11 @@ pub struct AppPlan {
     pub rate: f64,
     /// Upper bound on events per write.
     pub burst: usize,
+    /// Paced feeders (`rate > 0`) accumulate events for this long before one write, so a hot
+    /// app produces multi-message `recv`s like a real dbus-broker socket under load (the
+    /// broker forwards what it has read in one go). `Duration::ZERO` = one write per due
+    /// event, the pre-2026-10-12 behaviour (each `recv` returns a single message).
+    pub write_quantum: Duration,
     pub probe: Option<ProbePlan>,
     /// Send a final fence (a focus event) when done.
     pub fence: bool,
@@ -85,6 +90,7 @@ impl AppPlan {
             slots: 2000,
             rate,
             burst: 64,
+            write_quantum: Duration::from_micros(200),
             probe: None,
             fence: true,
             max_events: None,
@@ -141,6 +147,10 @@ pub fn run_feeder(
         .probe
         .as_ref()
         .map(|p| u64::try_from(p.period.as_nanos()).unwrap_or(u64::MAX));
+    // Events that accrue in one write quantum, at least 1 (slow apps write per event) and at
+    // most `burst`.
+    let min_batch = ((plan.rate * plan.write_quantum.as_secs_f64()).ceil() as u64)
+        .clamp(1, plan.burst.max(1) as u64);
     let sleepy = plan.rate > 0.0 && plan.rate < 20_000.0;
     let t0 = now_ns();
     r.start_ns = t0;
@@ -170,6 +180,11 @@ pub fn run_feeder(
         } else {
             plan.burst as u64
         };
+        let probe_due = probe_period.is_some() && now >= next_probe;
+        if plan.rate > 0.0 && !probe_due && want < min_batch {
+            std::hint::spin_loop();
+            continue;
+        }
         let mut n = want;
         if let Some(cap) = plan.backlog_cap
             && sink.backlog() >= cap
