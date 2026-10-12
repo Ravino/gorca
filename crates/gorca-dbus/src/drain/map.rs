@@ -14,6 +14,21 @@ use gorca_model::{
 };
 use smallvec::SmallVec;
 
+/// Announcement text is cut to this many bytes (at a char boundary): a hostile app must not make
+/// us copy megabytes per event (SPEC 3.6).
+pub const MAX_ANNOUNCEMENT_BYTES: usize = 4096;
+
+fn clip(s: &str) -> &str {
+    if s.len() <= MAX_ANNOUNCEMENT_BYTES {
+        return s;
+    }
+    let mut end = MAX_ANNOUNCEMENT_BYTES;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
 /// A decoded signal header plus the raw body bytes.
 #[derive(Copy, Clone, Debug)]
 pub struct SignalView<'a> {
@@ -243,7 +258,7 @@ pub fn map_signal(
         ("Object", "Announcement") => {
             let h = parse_head(v)?;
             let text: Arc<str> = match h.any {
-                AnyData::Str(s) => Arc::from(s),
+                AnyData::Str(s) => Arc::from(clip(s)),
                 AnyData::Int | AnyData::Ref(_) | AnyData::Other => Arc::from(""),
             };
             out.push(NodeEvent::Announcement {
@@ -361,6 +376,21 @@ mod tests {
             big_endian: false,
         };
         assert_eq!(map_signal(app(), &v, &mut out), Err(Malformed));
+    }
+
+    #[test]
+    fn announcement_text_is_clipped_on_a_char_boundary() {
+        let big = "é".repeat(10_000);
+        let mut any = Vec::new();
+        any.extend_from_slice(&(big.len() as u32).to_le_bytes());
+        any.extend_from_slice(big.as_bytes());
+        any.push(0);
+        let b = body("", 1, 0, "s", &any);
+        let e = run("org.a11y.atspi.Event.Object", "Announcement", "/x", &b);
+        let NodeEvent::Announcement { text, .. } = &e[0] else {
+            panic!("not an announcement");
+        };
+        assert!(text.len() <= MAX_ANNOUNCEMENT_BYTES && text.len() > MAX_ANNOUNCEMENT_BYTES - 4);
     }
 
     #[test]

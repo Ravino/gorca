@@ -16,7 +16,7 @@ mod coalesce;
 mod dirty;
 
 pub use coalesce::{
-    CoalesceKey, Drained, HARD_CAP, IngressConfig, IngressReceiver, IngressSender, IngressStats,
-    ingress,
+    CoalesceKey, Drained, GLOBAL_SLOT_BUDGET, HARD_CAP, IngressConfig, IngressReceiver,
+    IngressSender, IngressStats, SlotBudget, ingress, ingress_with_budget,
 };
 pub use dirty::{DirtySet, MAX_DIRTY_NODES};

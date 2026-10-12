@@ -193,6 +193,9 @@ async fn read_loop(
             continue;
         };
         if !routes.contains_key(sender.as_str()) {
+            if routes.len() >= super::MAX_ROUTES {
+                routes.clear();
+            }
             routes.insert(sender.as_str().to_owned(), router.route(sender.as_str()));
         }
         let Some(Some(route)) = routes.get(sender.as_str()) else {

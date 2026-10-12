@@ -22,7 +22,11 @@ use std::time::Duration;
 use gorca_ingress::IngressSender;
 use gorca_model::AppId;
 
-pub use map::{Malformed, SignalView, local_id, map_signal};
+pub use map::{MAX_ANNOUNCEMENT_BYTES, Malformed, SignalView, local_id, map_signal};
+
+/// Largest per-connection sender cache; beyond it the cache is dropped and rebuilt (hostile
+/// churn of bus names must not grow memory).
+pub const MAX_ROUTES: usize = 4096;
 pub use reference::spawn_drain;
 
 /// Where events of one sender go.

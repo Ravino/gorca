@@ -101,8 +101,47 @@ struct Slot {
     payload: Payload,
 }
 
+/// Process-wide bound on pending slots across many ingresses (hostile many-app floods).
+/// Shared by every ingress created with [`ingress_with_budget`]; each pending slot is charged
+/// once and released when it is drained, superseded or turned into a dirty mark.
+#[derive(Debug)]
+pub struct SlotBudget {
+    used: std::sync::atomic::AtomicUsize,
+    limit: usize,
+}
+
+/// Default global pending-slot budget (about 25 MB of slots).
+pub const GLOBAL_SLOT_BUDGET: usize = 262_144;
+
+impl SlotBudget {
+    pub fn new(limit: usize) -> Arc<Self> {
+        Arc::new(Self {
+            used: std::sync::atomic::AtomicUsize::new(0),
+            limit,
+        })
+    }
+
+    /// Slots currently charged.
+    pub fn used(&self) -> usize {
+        self.used.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn full(&self) -> bool {
+        self.used() >= self.limit
+    }
+
+    fn charge(&self, n: usize) {
+        self.used.fetch_add(n, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    fn release(&self, n: usize) {
+        self.used.fetch_sub(n, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
 #[derive(Debug, Default)]
 struct Inner {
+    budget: Option<Arc<SlotBudget>>,
     /// Order of first occurrence; `None` = superseded.
     slots: Vec<Option<Slot>>,
     index: HashMap<CoalesceKey, usize>,
@@ -129,9 +168,27 @@ fn lock(m: &Mutex<Inner>) -> MutexGuard<'_, Inner> {
 
 /// Create a connected sender and receiver pair for one app.
 pub fn ingress(cfg: IngressConfig) -> (IngressSender, IngressReceiver) {
+    ingress_inner(cfg, None)
+}
+
+/// Like [`ingress`], charging every pending slot to a budget shared with other ingresses.
+pub fn ingress_with_budget(
+    cfg: IngressConfig,
+    budget: &Arc<SlotBudget>,
+) -> (IngressSender, IngressReceiver) {
+    ingress_inner(cfg, Some(Arc::clone(budget)))
+}
+
+fn ingress_inner(
+    cfg: IngressConfig,
+    budget: Option<Arc<SlotBudget>>,
+) -> (IngressSender, IngressReceiver) {
     let shared = Arc::new(Shared {
         cfg,
-        inner: Mutex::new(Inner::default()),
+        inner: Mutex::new(Inner {
+            budget,
+            ..Inner::default()
+        }),
         wake: Notify::new(),
     });
     (
@@ -161,6 +218,12 @@ impl IngressSender {
             let mut g = lock(&self.shared.inner);
             let was_empty = g.live == 0 && g.dirty.is_empty();
             g.push(&self.shared.cfg, ev);
+            // O(n): sampled so debug-build tests stay fast.
+            debug_assert!(
+                !g.stats.pushed.is_multiple_of(509) || g.check().is_ok(),
+                "{:?}",
+                g.check()
+            );
             was_empty
         };
         if was_empty {
@@ -172,7 +235,15 @@ impl IngressSender {
 impl IngressReceiver {
     /// Take everything pending. Non-blocking. Leaves the ingress empty and out of `Flooded`.
     pub fn drain(&self) -> Drained {
-        lock(&self.shared.inner).take()
+        let mut g = lock(&self.shared.inner);
+        let d = g.take();
+        debug_assert_eq!(g.check(), Ok(()));
+        d
+    }
+
+    /// Verify that every cap counter equals the real size of its structure (tests).
+    pub fn check_invariants(&self) -> Result<(), String> {
+        lock(&self.shared.inner).check()
     }
 
     /// Resolves when something was pushed into an empty ingress.
@@ -245,7 +316,9 @@ impl Inner {
         }
 
         // Rule H: even the lossless classes are bounded. Focus is a single slot.
-        if key != CoalesceKey::Focus && self.live >= cfg.hard_cap && !self.index.contains_key(&key)
+        if key != CoalesceKey::Focus
+            && (self.live >= cfg.hard_cap || self.budget.as_ref().is_some_and(|b| b.full()))
+            && !self.index.contains_key(&key)
         {
             if !self.flooded {
                 self.enter_flooded();
@@ -338,6 +411,9 @@ impl Inner {
         self.index.insert(key, i);
         self.slots.push(Some(Slot { key, payload }));
         self.live += 1;
+        if let Some(b) = &self.budget {
+            b.charge(1);
+        }
     }
 
     fn supersede_node(&mut self, n: NodeKey) {
@@ -347,10 +423,75 @@ impl Inner {
         for i in idxs {
             if let Some(slot) = self.slots.get_mut(i).and_then(Option::take) {
                 self.index.remove(&slot.key);
-                self.live = self.live.saturating_sub(1);
+                debug_assert!(self.live > 0, "live counter underflow");
+                self.live -= 1;
+                if let Some(b) = &self.budget {
+                    b.release(1);
+                }
                 self.stats.coalesced += 1;
             }
         }
+        self.compact_if_sparse();
+    }
+
+    /// Superseded slots leave tombstones in `slots`; without this a stream of `Removed(n)` for
+    /// one node grows the vector without bound while `live` stays at 1.
+    fn compact_if_sparse(&mut self) {
+        if self.slots.len() <= 2 * self.live + 256 {
+            return;
+        }
+        let old = std::mem::take(&mut self.slots);
+        self.index.clear();
+        self.by_node.clear();
+        for slot in old.into_iter().flatten() {
+            let i = self.slots.len();
+            if let Some(n) = node_of(slot.key) {
+                self.by_node.entry(n).or_default().push(i);
+            }
+            self.index.insert(slot.key, i);
+            self.slots.push(Some(slot));
+        }
+    }
+
+    /// The counters the caps compare against must equal the real structure sizes.
+    fn check(&self) -> Result<(), String> {
+        let present = self.slots.iter().flatten().count();
+        if self.live != present || self.live != self.index.len() {
+            return Err(format!(
+                "live={} slots(some)={} index={}",
+                self.live,
+                present,
+                self.index.len()
+            ));
+        }
+        let anns = self
+            .slots
+            .iter()
+            .flatten()
+            .filter(|s| matches!(s.key, CoalesceKey::Announcement(_)))
+            .count();
+        if anns != self.announcements {
+            return Err(format!(
+                "announcements={} counted={anns}",
+                self.announcements
+            ));
+        }
+        let by_node: usize = self.by_node.values().map(SmallVec::len).sum();
+        let nodal = self
+            .slots
+            .iter()
+            .flatten()
+            .filter(|s| node_of(s.key).is_some())
+            .count();
+        if by_node != nodal {
+            return Err(format!("by_node entries={by_node} nodal slots={nodal}"));
+        }
+        if let Some(b) = &self.budget
+            && b.used() < self.live
+        {
+            return Err(format!("budget used {} < live {}", b.used(), self.live));
+        }
+        Ok(())
     }
 
     /// R-3: keep Focus, Caret on the focused node, Removed, Window and announcements; every
@@ -360,6 +501,9 @@ impl Inner {
         let slots = std::mem::take(&mut self.slots);
         self.index.clear();
         self.by_node.clear();
+        if let Some(b) = &self.budget {
+            b.release(self.live);
+        }
         self.live = 0;
         for slot in slots.into_iter().flatten() {
             if self.kept_when_flooded(slot.key) {
@@ -399,6 +543,9 @@ impl Inner {
         };
         self.index.clear();
         self.by_node.clear();
+        if let Some(b) = &self.budget {
+            b.release(self.live);
+        }
         self.live = 0;
         self.announcements = 0;
         self.flooded = false;
