@@ -31,9 +31,34 @@ pub fn check_peer(peer_uid: u32, own: Option<u32>) -> Result<(), PeerError> {
     }
 }
 
+/// [`check_peer`] with an explicit allow-list: a peer whose uid is in `allowed` (a system-wide
+/// voicego or speech-dispatcher running as its own service user, for example) passes too. The
+/// default, an empty list, keeps the same-user rule.
+pub fn check_peer_allowed(
+    peer_uid: u32,
+    own: Option<u32>,
+    allowed: &[u32],
+) -> Result<(), PeerError> {
+    if allowed.contains(&peer_uid) {
+        return Ok(());
+    }
+    check_peer(peer_uid, own)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_allow_list_admits_listed_foreign_uids_only() {
+        assert_eq!(check_peer_allowed(0, Some(1000), &[0]), Ok(()));
+        assert_eq!(check_peer_allowed(1000, Some(1000), &[]), Ok(()));
+        assert_eq!(
+            check_peer_allowed(0, Some(1000), &[]),
+            Err(PeerError::Other { peer: 0, own: 1000 })
+        );
+        assert!(check_peer_allowed(115, Some(1000), &[0]).is_err());
+    }
 
     #[test]
     fn only_our_own_uid_passes() {

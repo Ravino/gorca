@@ -47,3 +47,26 @@ live-region speech, window-activate speech. Real GTK/Shell smoke run not perform
 - Churn test now races registration and departure; with the tombstone check disabled both
   `registration_and_departure_churn_leaks_nothing` and `an_app_dying_mid_registration_leaks_nothing` fail.
 - Bench: `lost` is gated on the max over repeats; K1 is matched by echoed character and time.
+
+## Review round 2 (R2-1..R2-7)
+- Park buffer: per pending sender a newest-focus slot outside every cap (a newer focus replaces
+  it, replayed last) plus non-focus events bounded by 32 events and 4 KiB, oldest dropped first;
+  global 256 KiB. `64 x 4 KiB` equals the global cap, so one sender cannot use up another's share.
+- `park()` delivers straight through the route when the registration published between the
+  drain's `resolve` and `park`; a sender with no registration running (backoff, pending cap)
+  keeps its newest focus (256 senders max) and the next attempt adopts it.
+- Ingress limits in `park`: path 256 B, interface/member 255 B, body 512 B; refused, not copied.
+- `ignored` loses a name when NameOwnerChanged reports it; unknown-credential names share a quota
+  of 32; 512 applications in total, and at the cap the largest process group gives way (an
+  application of it is evicted for another group's newcomer; its own newcomer is refused).
+  The router cannot know which application is focused: it assumes the focused one is not in the
+  largest group.
+- Peer uid: `--speech-peer-uid` (repeatable) allow-list, same-uid default kept; both speech
+  connects pass through `gorca_rt::guard::check`.
+
+## Follow-ups
+- The 16 MiB path-table byte cap is accounting only: RSS grew 279 MiB for 52k live entries in the
+  reviewer's release probe (`HashMap::clear` keeps capacity; empty buckets of live owners stay).
+  Shrink or replace maps on clear, drop empty buckets, measure RSS in a test.
+- Reserve a name slot in `resolve` (the 64-name check still races registration).
+- Exempt each owner's newest path from eviction.

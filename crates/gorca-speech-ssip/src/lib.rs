@@ -30,7 +30,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use gorca_model::{Prio, UttId};
-use gorca_output_api::peer::{PeerError, check_peer, own_uid};
+use gorca_output_api::peer::{PeerError, check_peer_allowed, own_uid};
 use gorca_output_api::queue::admit;
 use gorca_output_api::track::{Block, Expect, MsgTracker, classify};
 use gorca_output_api::{
@@ -75,6 +75,8 @@ pub struct SsipOptions {
     /// ([`ssip_path_from_env_values`]) and passes it in.
     pub path: PathBuf,
     pub client_name: String,
+    /// Extra uids whose server gorca accepts (a system-wide service user). Empty: same user only.
+    pub allowed_peer_uids: Vec<u32>,
 }
 
 impl SsipOptions {
@@ -82,6 +84,7 @@ impl SsipOptions {
         Self {
             path: path.into(),
             client_name: "gorca:main:main".to_owned(),
+            allowed_peer_uids: Vec::new(),
         }
     }
 }
@@ -477,11 +480,12 @@ impl SsipClient {
         deadline: Deadline,
         own: Option<u32>,
     ) -> Result<SsipClient, SsipError> {
+        gorca_rt::guard::check(&opts.path.to_string_lossy());
         let stream = with_deadline(deadline, UnixStream::connect(&opts.path))
             .await
             .map_err(|_| SsipError::Timeout)??;
         // Everything gorca reads is sent here: only talk to our own user's server.
-        check_peer(stream.peer_cred()?.uid(), own)?;
+        check_peer_allowed(stream.peer_cred()?.uid(), own, &opts.allowed_peer_uids)?;
         let closer = stream.as_fd().try_clone_to_owned().ok();
         let (rd, mut wr) = stream.into_split();
         let mut rd = BufReader::new(rd);
@@ -707,6 +711,43 @@ mod tests {
         );
         drop(srv);
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// An explicit allow-list admits a server of another uid (a system-wide service user); the
+    /// default, an empty list, keeps the same-user rule.
+    #[tokio::test]
+    async fn the_peer_uid_allow_list_admits_a_listed_foreign_server() {
+        let d = tmp("uidlist");
+        let srv = MockSpeechServer::start_ssip(&d).await.unwrap();
+        let mut opts = SsipOptions::with_path(srv.socket_path());
+        let ours = own_uid().unwrap();
+        // Pretend we are another user: the mock's uid (ours) is foreign to `own`.
+        let other = ours.wrapping_add(1);
+        assert!(
+            SsipClient::connect_as(&opts, dl(2000), Some(other))
+                .await
+                .is_err()
+        );
+        opts.allowed_peer_uids = vec![ours];
+        assert!(
+            SsipClient::connect_as(&opts, dl(2000), Some(other))
+                .await
+                .is_ok()
+        );
+        drop(srv);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Review R2-7: the connect goes through the isolation tripwire, so a test that targets the
+    /// ambient socket dies loudly instead of speaking through the user's server.
+    #[cfg(debug_assertions)]
+    #[tokio::test]
+    #[should_panic(expected = "test isolation tripwire")]
+    async fn connecting_to_a_forbidden_socket_trips_the_wire() {
+        gorca_rt::guard::forbid("/run/user/424244/speech-tripwire-gorca-speech-ssip.sock");
+        let opts =
+            SsipOptions::with_path("/run/user/424244/speech-tripwire-gorca-speech-ssip.sock");
+        let _ = SsipClient::connect(&opts, dl(500)).await;
     }
 
     /// F13: a reply block of continuation lines is cut off at 64 KiB in total.

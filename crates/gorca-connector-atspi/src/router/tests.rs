@@ -108,6 +108,17 @@ fn focus_signal(path: &str) -> SignalView<'_> {
     }
 }
 
+/// A non-focus event.
+fn noise_signal() -> SignalView<'static> {
+    SignalView {
+        interface: "org.a11y.atspi.Event.Window",
+        member: "Create",
+        path: "/w",
+        body: &[],
+        big_endian: false,
+    }
+}
+
 fn is_retry(d: &RouteDecision) -> bool {
     matches!(d, RouteDecision::Retry)
 }
@@ -153,7 +164,11 @@ async fn the_first_event_registers_asynchronously_and_is_replayed_in_order() {
         panic!("expected one FocusChanged, got {:?}", drained.events);
     };
     assert_eq!(r.paths.get(*node).as_deref(), Some("/org/a/2"));
-    assert_eq!(r.router.stats().parked_replayed, 2);
+    assert_eq!(
+        r.router.stats().parked_replayed,
+        1,
+        "two focus events coalesce to the newest"
+    );
 }
 
 #[tokio::test]
@@ -214,7 +229,7 @@ async fn registrations_in_flight_and_parked_events_are_bounded() {
     }
     assert_eq!(asked, MAX_PENDING);
     for _ in 0..(MAX_PARKED_PER_SENDER + 10) {
-        r.router.park(":1.0", &focus_signal("/x"));
+        r.router.park(":1.0", &noise_signal());
     }
     let big = vec![0u8; MAX_PARKED_BODY + 1];
     r.router.park(
@@ -377,4 +392,308 @@ async fn take_all_returns_every_app_once() {
     assert_eq!(r.router.take_all().len(), 2);
     assert_eq!(r.router.known_apps(), 0);
     assert!(r.new_apps.try_recv().unwrap().gone.is_cancelled());
+}
+
+// ---- review round 2 (R2-1 .. R2-5) -------------------------------------------------------
+
+fn last_focus_path(c: &Core, r: &Rig, app: AppId) -> Option<String> {
+    let rx = c.halves.lock().unwrap().remove(&app)?;
+    let d = rx.drain();
+    d.events.iter().rev().find_map(|e| match e {
+        NodeEvent::FocusChanged { node } => r.paths.get(*node).map(|p| p.to_string()),
+        _ => None,
+    })
+}
+
+/// Credentials by bus name: `:1.<n>` is pid `pids(n)`.
+struct ByName(Box<dyn Fn(u32) -> Option<u32> + Send + Sync>);
+
+impl Credentials for ByName {
+    fn pid_of<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Option<u32>> {
+        let n: u32 = name.trim_start_matches(":1.").parse().unwrap_or(0);
+        let pid = (self.0)(n);
+        Box::pin(async move { pid })
+    }
+}
+
+/// P1 / R2-1: an app that emits more events than the park holds while it registers still gets
+/// its newest focus; the newest focus sits in a slot outside the cap.
+#[tokio::test]
+async fn newest_focus_survives_the_park_cap() {
+    let c = core(|_| Duration::from_millis(20));
+    let mut r = rig(&c, Arc::new(Fixed(7)));
+    assert!(is_retry(&r.router.resolve(":1.42")));
+    let paths: Vec<String> = (0..40).map(|i| format!("/org/a/{i}")).collect();
+    for p in &paths {
+        r.router.park(":1.42", &focus_signal(p));
+    }
+    let name = r.to_register.try_recv().unwrap();
+    r.router.complete(name).await;
+    let RouteDecision::Route(route) = r.router.resolve(":1.42") else {
+        panic!("registered")
+    };
+    let got = last_focus_path(&c, &r, route.app);
+    assert_eq!(got.as_deref(), Some("/org/a/39"), "newest focus lost");
+    assert_eq!(
+        r.router.stats().parked_dropped,
+        0,
+        "focus is coalesced, not dropped"
+    );
+}
+
+/// R2-1: a burst of non-focus events does not push the focus out, and the oldest of the burst
+/// go first.
+#[tokio::test]
+async fn a_burst_of_other_events_never_displaces_the_focus() {
+    let c = core(|_| Duration::from_millis(20));
+    let mut r = rig(&c, Arc::new(Fixed(7)));
+    assert!(is_retry(&r.router.resolve(":1.42")));
+    r.router.park(":1.42", &focus_signal("/focus/node"));
+    let noise = SignalView {
+        interface: "org.a11y.atspi.Event.Window",
+        member: "Create",
+        path: "/w",
+        body: &[],
+        big_endian: false,
+    };
+    for _ in 0..500 {
+        r.router.park(":1.42", &noise);
+    }
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    let RouteDecision::Route(route) = r.router.resolve(":1.42") else {
+        panic!("registered")
+    };
+    assert_eq!(
+        last_focus_path(&c, &r, route.app).as_deref(),
+        Some("/focus/node")
+    );
+    assert!(r.router.stats().parked_dropped >= 468);
+}
+
+/// P2 / R2-4: hostile senders fill their own shares; a new app's first focus is still kept.
+#[tokio::test]
+async fn hostile_parkers_cannot_drop_a_new_apps_focus() {
+    let c = core(|_| Duration::from_secs(60)); // hostile registrations stay pending
+    let r = rig(&c, Arc::new(Fixed(9)));
+    let noise = SignalView {
+        interface: "org.a11y.atspi.Event.Window",
+        member: "Create",
+        path: "/h",
+        body: &[0u8; 400],
+        big_endian: false,
+    };
+    for s in 0..(MAX_PENDING - 1) {
+        let n = format!(":1.{}", 500 + s);
+        assert!(is_retry(&r.router.resolve(&n)));
+        for _ in 0..200 {
+            r.router.park(&n, &noise);
+        }
+    }
+    assert!(is_retry(&r.router.resolve(":1.900")), "the last free slot");
+    let before = r.router.stats().parked_dropped;
+    r.router.park(":1.900", &focus_signal("/victim/focus"));
+    r.router.park(":1.900", &noise);
+    assert_eq!(
+        r.router.stats().parked_dropped,
+        before,
+        "nothing of the victim dropped"
+    );
+    let st = r.router.state();
+    assert!(st.parked_bytes <= PARK_BYTES_TOTAL, "{}", st.parked_bytes);
+    assert!(st.pending.get(":1.900").unwrap().focus.is_some());
+}
+
+/// P3 / R2-2: the registration publishes between the drain's `resolve` (Retry) and its `park`:
+/// the event is delivered through the new route, not lost.
+#[tokio::test]
+async fn resolve_park_race_does_not_lose_the_event() {
+    let c = core(|_| Duration::ZERO);
+    let mut r = rig(&c, Arc::new(Fixed(11)));
+    assert!(is_retry(&r.router.resolve(":1.77")));
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    r.router.park(":1.77", &focus_signal("/org/a/focus"));
+    let RouteDecision::Route(route) = r.router.resolve(":1.77") else {
+        panic!("registered")
+    };
+    assert_eq!(
+        last_focus_path(&c, &r, route.app).as_deref(),
+        Some("/org/a/focus"),
+        "focus lost in the resolve/park window"
+    );
+    assert_eq!(r.router.stats().parked_dropped, 0);
+}
+
+/// R2-2: an event for a sender without a running registration (backoff or the pending cap)
+/// keeps its newest focus for the next attempt.
+#[tokio::test]
+async fn focus_during_backoff_or_the_pending_cap_is_kept_for_the_next_attempt() {
+    let c = core(|_| Duration::from_secs(60));
+    let mut r = rig(&c, Arc::new(Fixed(3)));
+    for i in 0..MAX_PENDING {
+        assert!(is_retry(&r.router.resolve(&format!(":1.{i}"))));
+    }
+    while r.to_register.try_recv().is_ok() {}
+    // Over the pending cap: no registration, but the focus is remembered, bounded.
+    assert!(is_retry(&r.router.resolve(":1.4000")));
+    r.router.park(":1.4000", &focus_signal("/first"));
+    r.router.park(":1.4000", &focus_signal("/second"));
+    assert_eq!(r.router.state().orphan_focus.len(), 1);
+    // Once a slot is free the registration starts and adopts it.
+    r.router.forget(":1.0");
+    assert!(is_retry(&r.router.resolve(":1.4000")));
+    {
+        let st = r.router.state();
+        assert_eq!(
+            st.pending
+                .get(":1.4000")
+                .and_then(|p| p.focus.as_ref())
+                .map(|f| f.path.as_str()),
+            Some("/second")
+        );
+    }
+    for i in 0..(MAX_ORPHAN_FOCUS * 3) {
+        r.router
+            .park(&format!(":1.{}", 5000 + i), &focus_signal("/x"));
+    }
+    assert!(r.router.state().orphan_focus.len() <= MAX_ORPHAN_FOCUS);
+}
+
+/// P4 / R2-5: the ignored set does not keep departed names.
+#[tokio::test]
+async fn the_ignored_set_does_not_grow_with_churn() {
+    let c = core(|_| Duration::ZERO);
+    let mut r = rig(&c, Arc::new(Fixed(13)));
+    for i in 0..(MAX_NAMES_PER_OWNER + 2000) {
+        let n = format!(":1.{}", 10_000 + i);
+        let _ = r.router.resolve(&n);
+        if let Ok(name) = r.to_register.try_recv() {
+            r.router.complete(name).await;
+        }
+        if i >= MAX_NAMES_PER_OWNER {
+            let _ = r.router.forget(&n);
+        }
+    }
+    let ign = r.router.state().ignored.len();
+    assert!(ign < 100, "ignored set keeps departed names: {ign}");
+}
+
+/// P5 / R2-3: oversized strings are refused at ingress; the park never holds megabytes.
+#[tokio::test]
+async fn parked_strings_are_bounded() {
+    let c = core(|_| Duration::from_secs(60));
+    let r = rig(&c, Arc::new(Fixed(5)));
+    let rss = || -> u64 {
+        let s = std::fs::read_to_string("/proc/self/status").unwrap();
+        s.lines()
+            .find(|l| l.starts_with("VmRSS:"))
+            .unwrap()
+            .split_whitespace()
+            .nth(1)
+            .unwrap()
+            .parse()
+            .unwrap()
+    };
+    let before = rss();
+    let big = format!("/{}", "a".repeat(1 << 20));
+    let long_name = "m".repeat(1 << 16);
+    for s in 0..MAX_PENDING {
+        let name = format!(":1.{}", 700 + s);
+        let _ = r.router.resolve(&name);
+        for _ in 0..MAX_PARKED_PER_SENDER {
+            r.router.park(&name, &focus_signal(&big));
+            r.router.park(
+                &name,
+                &SignalView {
+                    member: &long_name,
+                    ..focus_signal("/x")
+                },
+            );
+        }
+    }
+    let grown = (rss() - before) / 1024;
+    assert!(grown < 32, "park buffer held {grown} MiB");
+    let st = r.router.state();
+    assert_eq!(st.parked_bytes, 0);
+    assert!(
+        st.pending
+            .values()
+            .all(|p| p.focus.is_none() && p.events.is_empty())
+    );
+    assert_eq!(
+        r.router.stats().parked_dropped,
+        (MAX_PENDING * MAX_PARKED_PER_SENDER * 2) as u64
+    );
+}
+
+/// R2-5: a global cap on applications. A process group that forked its way to the largest share
+/// gives way; the newcomer of another group is served, and the largest group's own newcomer is
+/// refused.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_application_cap_makes_the_largest_group_give_way() {
+    let c = core(|_| Duration::ZERO);
+    // pid 1 holds MAX_NAMES_PER_OWNER names, the rest one name each, until the cap is reached.
+    let big = u32::try_from(MAX_NAMES_PER_OWNER).unwrap();
+    let creds = ByName(Box::new(move |n| {
+        Some(if n < big || n == 100_001 { 1 } else { n })
+    }));
+    let mut r = rig(&c, Arc::new(creds));
+    for n in 0..u32::try_from(MAX_APPS_TOTAL).unwrap() {
+        let name = format!(":1.{n}");
+        assert!(is_retry(&r.router.resolve(&name)), "{name}");
+        r.router.complete(r.to_register.try_recv().unwrap()).await;
+    }
+    assert_eq!(r.router.known_apps(), MAX_APPS_TOTAL);
+    // A newcomer from another process: served; one of pid 1's applications is evicted.
+    let newcomer = format!(":1.{}", 100_000);
+    assert!(is_retry(&r.router.resolve(&newcomer)));
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    assert!(matches!(
+        r.router.resolve(&newcomer),
+        RouteDecision::Route(_)
+    ));
+    assert_eq!(r.router.known_apps(), MAX_APPS_TOTAL);
+    let still_pid1 = (0..big)
+        .filter(|n| {
+            matches!(
+                r.router.resolve(&format!(":1.{n}")),
+                RouteDecision::Route(_)
+            )
+        })
+        .count();
+    // The evicted application asked to register again; that is its own business.
+    while r.to_register.try_recv().is_ok() {}
+    assert_eq!(
+        still_pid1,
+        MAX_NAMES_PER_OWNER - 1,
+        "one of the largest group was evicted"
+    );
+    // The core side saw the retirement: no leaked halves beyond the cap.
+    eventually("evicted app retired", || {
+        c.halves.lock().unwrap().len() <= MAX_APPS_TOTAL
+    })
+    .await;
+    // pid 1 is still the largest group: its own newcomer is refused, not served.
+    let refused = format!(":1.{}", 100_001);
+    assert!(is_retry(&r.router.resolve(&refused)));
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    assert!(matches!(
+        r.router.resolve(&refused),
+        RouteDecision::NotAnApp
+    ));
+    assert_eq!(r.router.known_apps(), MAX_APPS_TOTAL);
+}
+
+/// R2-5: connections without credentials share one small quota, so a slow credentials service
+/// cannot bring the multiplier back.
+#[tokio::test]
+async fn unknown_credentials_share_one_small_quota() {
+    let c = core(|_| Duration::ZERO);
+    let mut r = rig(&c, Arc::new(NoCredentials));
+    for i in 0..(MAX_UNKNOWN_NAMES + 20) {
+        let _ = r.router.resolve(&format!(":1.{i}"));
+        if let Ok(q) = r.to_register.try_recv() {
+            r.router.complete(q).await;
+        }
+    }
+    assert_eq!(r.router.known_apps(), MAX_UNKNOWN_NAMES);
 }

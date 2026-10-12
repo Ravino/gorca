@@ -22,20 +22,34 @@ use gorca_dbus::drain::{AppRoute, RouteDecision, Router, SignalView, map_signal}
 use gorca_model::{AppId, AppInfo, ConnectorKind, NodeEvent, NodeKey};
 use gorca_rt::{BoxFuture, CancellationToken, Clock, Deadline, mpsc};
 
-use crate::paths::{Owner, PathTable};
+use crate::paths::{MAX_PATH_BYTES, Owner, PathTable};
 
 /// Deadline for the core to accept a new application.
 pub const ANNOUNCE_WAIT: Duration = Duration::from_secs(1);
 /// Registrations in flight at once. More senders than this answer `Retry` without parking.
 pub const MAX_PENDING: usize = 64;
-/// Events parked for one sender while it is being registered.
+/// Non-focus events parked for one sender while it is being registered.
 pub const MAX_PARKED_PER_SENDER: usize = 32;
-/// Events parked in total.
-pub const MAX_PARKED_TOTAL: usize = 1024;
+/// Bytes of non-focus events parked for one sender. `MAX_PENDING` senders at this share exactly
+/// fill [`PARK_BYTES_TOTAL`], so no set of senders can use up another sender's share.
+pub const PARK_BYTES_PER_SENDER: usize = 4 * 1024;
+/// Bytes of non-focus events parked in total.
+pub const PARK_BYTES_TOTAL: usize = MAX_PENDING * PARK_BYTES_PER_SENDER;
 /// Larger signal bodies are not parked (they are dropped and counted by the drain).
 pub const MAX_PARKED_BODY: usize = 512;
+/// D-Bus limit for interface and member names.
+pub const MAX_NAME_BYTES: usize = 255;
+/// Senders (not in registration) whose newest focus is kept for their next attempt.
+pub const MAX_ORPHAN_FOCUS: usize = 256;
+/// Accounting overhead of one parked event.
+const PARKED_OVERHEAD: usize = 64;
 /// Registered bus names one process may hold at once.
 pub const MAX_NAMES_PER_OWNER: usize = 64;
+/// Registered bus names of connections whose credentials are unknown, in total.
+pub const MAX_UNKNOWN_NAMES: usize = 32;
+/// Registered applications in total. A process that forks to multiply its per-pid caps meets this
+/// one; the largest process group is the one that gives way.
+pub const MAX_APPS_TOTAL: usize = 512;
 const BACKOFF_MIN: Duration = Duration::from_millis(10);
 const BACKOFF_MAX: Duration = Duration::from_secs(1);
 /// Senders with a backoff or a tombstone are remembered this long.
@@ -76,7 +90,7 @@ impl Credentials for NoCredentials {
 struct Entry {
     route: AppRoute,
     gone: CancellationToken,
-    owner: Owner,
+    group: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -88,9 +102,50 @@ struct Parked {
     big_endian: bool,
 }
 
+impl Parked {
+    fn of(view: &SignalView<'_>) -> Self {
+        Self {
+            interface: view.interface.to_owned(),
+            member: view.member.to_owned(),
+            path: view.path.to_owned(),
+            body: view.body.to_vec(),
+            big_endian: view.big_endian,
+        }
+    }
+
+    fn cost(&self) -> usize {
+        self.interface.len()
+            + self.member.len()
+            + self.path.len()
+            + self.body.len()
+            + PARKED_OVERHEAD
+    }
+}
+
+/// What arrives for a sender while it is being registered: the non-focus events, bounded by
+/// count and bytes (oldest dropped first), and the **newest focus** in a slot of its own, outside
+/// those bounds. Focus is lossless in the sense of ADR-0004: a newer one replaces an older one,
+/// and no other sender can crowd it out.
 #[derive(Debug, Default)]
 struct Pending {
-    parked: Vec<Parked>,
+    events: VecDeque<Parked>,
+    bytes: usize,
+    focus: Option<Parked>,
+}
+
+/// An `AppId` for classifying a signal before the real one exists.
+const PROBE_APP: AppId = AppId {
+    connector: gorca_model::ConnectorId(0),
+    serial: 0,
+};
+
+/// Does this signal carry a focus change?
+fn is_focus(view: &SignalView<'_>) -> bool {
+    let mut out = smallvec::SmallVec::<[NodeEvent; 2]>::new();
+    map_signal(PROBE_APP, view, &mut out).is_ok()
+        && out
+            .iter()
+            .any(|e| matches!(e, NodeEvent::FocusChanged { .. }))
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -104,9 +159,13 @@ struct State {
     apps: HashMap<Arc<str>, Entry>,
     ignored: HashSet<Arc<str>>,
     pending: HashMap<Arc<str>, Pending>,
-    parked_total: usize,
+    /// Bytes of non-focus events parked across all pending senders.
+    parked_bytes: usize,
+    /// Newest focus of senders that have no registration running (backoff, pending cap).
+    orphan_focus: HashMap<Arc<str>, Parked>,
     backoff: HashMap<Arc<str>, Backoff>,
-    names_per_owner: HashMap<Owner, usize>,
+    /// Registered names per process (`None`: credentials unknown, all such names together).
+    names_per_group: HashMap<Option<u32>, usize>,
     departed: HashSet<Arc<str>>,
     departed_order: VecDeque<(Instant, Arc<str>)>,
 }
@@ -134,10 +193,44 @@ impl State {
         self.departed_order.push_back((now, name));
     }
 
+    /// Forget what was parked for `name`; the number of events lost with it.
     fn drop_parked(&mut self, name: &str) -> usize {
-        let n = self.pending.remove(name).map_or(0, |p| p.parked.len());
-        self.parked_total = self.parked_total.saturating_sub(n);
-        n
+        let orphan = usize::from(self.orphan_focus.remove(name).is_some());
+        let Some(p) = self.pending.remove(name) else {
+            return orphan;
+        };
+        self.parked_bytes = self.parked_bytes.saturating_sub(p.bytes);
+        orphan + p.events.len() + usize::from(p.focus.is_some())
+    }
+
+    fn release_name(&mut self, group: Option<u32>) {
+        if let Some(n) = self.names_per_group.get_mut(&group) {
+            *n = n.saturating_sub(1);
+            if *n == 0 {
+                self.names_per_group.remove(&group);
+            }
+        }
+    }
+
+    /// The process group holding the most registered names.
+    fn largest_group(&self) -> Option<(Option<u32>, usize)> {
+        self.names_per_group
+            .iter()
+            .map(|(g, n)| (*g, *n))
+            .max_by_key(|(_, n)| *n)
+    }
+
+    /// Remove one application of `group` (the oldest by name order is as good as any: the group
+    /// is the problem, not an individual).
+    fn evict_from(&mut self, group: Option<u32>) -> Option<Entry> {
+        let name = self
+            .apps
+            .iter()
+            .find(|(_, e)| e.group == group)
+            .map(|(n, _)| Arc::clone(n))?;
+        let e = self.apps.remove(&name)?;
+        self.release_name(group);
+        Some(e)
     }
 }
 
@@ -219,15 +312,12 @@ impl AtspiRouter {
             let mut st = self.state();
             st.mark_departed(name, self.clock.now());
             st.backoff.remove(name);
+            // The name is gone for good; it must not stay in the ignored set (departed covers it).
+            st.ignored.remove(name);
             let dropped = st.drop_parked(name);
             let e = st.apps.remove(name);
-            if let Some(e) = &e
-                && let Some(n) = st.names_per_owner.get_mut(&e.owner)
-            {
-                *n = n.saturating_sub(1);
-                if *n == 0 {
-                    st.names_per_owner.remove(&e.owner);
-                }
+            if let Some(e) = &e {
+                st.release_name(e.group);
             }
             (e, dropped)
         };
@@ -246,8 +336,9 @@ impl AtspiRouter {
         let apps: Vec<Entry> = {
             let mut st = self.state();
             st.pending.clear();
-            st.parked_total = 0;
-            st.names_per_owner.clear();
+            st.orphan_focus.clear();
+            st.parked_bytes = 0;
+            st.names_per_group.clear();
             st.apps.drain().map(|(_, e)| e).collect()
         };
         apps.into_iter()
@@ -272,15 +363,12 @@ impl AtspiRouter {
     pub async fn complete(&self, sender: Arc<str>) {
         let pid = self.credentials.pid_of(&sender).await;
         let owner_known = pid.map(Owner::Pid);
-        if let Some(owner) = owner_known
-            && self
-                .state()
-                .names_per_owner
-                .get(&owner)
-                .copied()
-                .unwrap_or(0)
-                >= MAX_NAMES_PER_OWNER
-        {
+        let limit = if pid.is_some() {
+            MAX_NAMES_PER_OWNER
+        } else {
+            MAX_UNKNOWN_NAMES
+        };
+        if self.state().names_per_group.get(&pid).copied().unwrap_or(0) >= limit {
             // One process may not hold arbitrarily many registered names: this is not served.
             tracing::warn!(
                 sender = &*sender,
@@ -347,6 +435,10 @@ impl AtspiRouter {
     /// parked events in order and insert the route as one step.
     fn publish(&self, sender: &Arc<str>, port: AppPort, owner: Option<Owner>) {
         let app = port.app;
+        let group = match owner {
+            Some(Owner::Pid(p)) => Some(p),
+            Some(Owner::Unknown(_)) | None => None,
+        };
         let owner = owner.unwrap_or(Owner::Unknown(app));
         let route = AppRoute {
             app,
@@ -386,15 +478,35 @@ impl AtspiRouter {
             self.fail(sender, false);
             return;
         }
+        // A global cap on applications: a process that forks to multiply its per-process caps
+        // meets this one, and the largest group gives way, not the newcomer's.
+        let mut evicted: Option<Entry> = None;
+        if st.apps.len() >= MAX_APPS_TOTAL {
+            match st.largest_group() {
+                Some((big, _)) if big == group => {
+                    // The newcomer belongs to the largest group: it is the one refused.
+                    let dropped = st.drop_parked(sender);
+                    st.ignored.insert(Arc::clone(sender));
+                    drop(st);
+                    tracing::warn!(sender = &**sender, "application limit reached; refusing");
+                    let _ = self.registrar.retire(app);
+                    self.bump(|s| {
+                        s.ignored += 1;
+                        s.parked_dropped += dropped as u64;
+                    });
+                    return;
+                }
+                Some((big, _)) => evicted = st.evict_from(big),
+                None => {}
+            }
+        }
         self.paths.bind_app(app, owner);
         // Replay what arrived while the registration ran, in arrival order, before any later
         // event can be routed (the lock is held).
-        let parked = st
-            .pending
-            .remove(&**sender)
-            .map(|p| p.parked)
-            .unwrap_or_default();
-        st.parked_total = st.parked_total.saturating_sub(parked.len());
+        let pending = st.pending.remove(&**sender).unwrap_or_default();
+        st.parked_bytes = st.parked_bytes.saturating_sub(pending.bytes);
+        // Non-focus events first, in arrival order, and the newest focus last.
+        let parked: Vec<Parked> = pending.events.into_iter().chain(pending.focus).collect();
         let mut replayed = 0u64;
         let mut mapped = smallvec::SmallVec::<[NodeEvent; 2]>::new();
         for p in &parked {
@@ -418,16 +530,22 @@ impl AtspiRouter {
             }
         }
         st.backoff.remove(&**sender);
-        *st.names_per_owner.entry(owner).or_insert(0) += 1;
+        *st.names_per_group.entry(group).or_insert(0) += 1;
         st.apps.insert(
             Arc::clone(sender),
             Entry {
                 route: route.clone(),
                 gone,
-                owner,
+                group,
             },
         );
         drop(st);
+        if let Some(e) = evicted {
+            tracing::warn!(app = ?e.route.app, "application limit reached; evicting the largest group");
+            e.gone.cancel();
+            self.paths.forget_app(e.route.app);
+            let _ = self.registrar.retire(e.route.app);
+        }
         tracing::debug!(sender = &**sender, ?app, replayed, "application announced");
         self.bump(|s| {
             s.announced += 1;
@@ -487,39 +605,91 @@ impl Router for AtspiRouter {
             );
             return RouteDecision::Retry;
         }
-        st.pending.insert(name, Pending::default());
+        let pending = Pending {
+            focus: st.orphan_focus.remove(sender),
+            ..Pending::default()
+        };
+        st.pending.insert(name, pending);
         RouteDecision::Retry
     }
 
     fn park(&self, sender: &str, signal: &SignalView<'_>) {
-        if signal.body.len() > MAX_PARKED_BODY {
+        // Ingress limits: oversized strings are refused before anything is copied.
+        if signal.body.len() > MAX_PARKED_BODY
+            || signal.path.len() > MAX_PATH_BYTES
+            || signal.interface.len() > MAX_NAME_BYTES
+            || signal.member.len() > MAX_NAME_BYTES
+        {
             self.bump(|s| s.parked_dropped += 1);
             return;
         }
+        let focus = is_focus(signal);
         let mut st = self.state();
-        if st.parked_total >= MAX_PARKED_TOTAL {
-            drop(st);
-            self.bump(|s| s.parked_dropped += 1);
+        // The registration may have been published between the drain's `resolve` (Retry) and
+        // this call: deliver straight through the route instead of losing the event.
+        if let Some(e) = st.apps.get(sender) {
+            let route = e.route.clone();
+            let mut mapped = smallvec::SmallVec::<[NodeEvent; 2]>::new();
+            if map_signal(route.app, signal, &mut mapped).is_ok() {
+                for ev in mapped.drain(..) {
+                    if let NodeEvent::FocusChanged { node } = &ev {
+                        self.paths.insert(*node, signal.path);
+                    }
+                    route.tx.push(ev);
+                }
+            }
             return;
         }
+        let entry = Parked::of(signal);
+        let parked_now = st.parked_bytes;
         let Some(p) = st.pending.get_mut(sender) else {
-            drop(st);
-            self.bump(|s| s.parked_dropped += 1);
+            // No registration is running (backoff, pending cap): keep the newest focus for the
+            // next attempt, drop the rest.
+            let keep = focus
+                && sender.starts_with(':')
+                && !st.departed.contains(sender)
+                && !st.ignored.contains(sender);
+            if keep {
+                if st.orphan_focus.len() >= MAX_ORPHAN_FOCUS
+                    && !st.orphan_focus.contains_key(sender)
+                {
+                    st.orphan_focus.clear();
+                }
+                st.orphan_focus.insert(Arc::from(sender), entry);
+            } else {
+                drop(st);
+                self.bump(|s| s.parked_dropped += 1);
+            }
             return;
         };
-        if p.parked.len() >= MAX_PARKED_PER_SENDER {
+        if focus {
+            // The newest focus replaces the older one and costs nothing against any cap.
+            p.focus = Some(entry);
+            return;
+        }
+        let cost = entry.cost();
+        if cost > PARK_BYTES_PER_SENDER || parked_now + cost > PARK_BYTES_TOTAL {
             drop(st);
             self.bump(|s| s.parked_dropped += 1);
             return;
         }
-        p.parked.push(Parked {
-            interface: signal.interface.to_owned(),
-            member: signal.member.to_owned(),
-            path: signal.path.to_owned(),
-            body: signal.body.to_vec(),
-            big_endian: signal.big_endian,
-        });
-        st.parked_total += 1;
+        p.bytes += cost;
+        p.events.push_back(entry);
+        let mut dropped = 0u64;
+        let mut freed = 0usize;
+        while p.events.len() > MAX_PARKED_PER_SENDER || p.bytes > PARK_BYTES_PER_SENDER {
+            let Some(old) = p.events.pop_front() else {
+                break;
+            };
+            p.bytes = p.bytes.saturating_sub(old.cost());
+            freed += old.cost();
+            dropped += 1;
+        }
+        st.parked_bytes = (parked_now + cost).saturating_sub(freed);
+        drop(st);
+        if dropped > 0 {
+            self.bump(|s| s.parked_dropped += dropped);
+        }
     }
 
     fn focus_seen(&self, _app: AppId, node: NodeKey, path: &str) {

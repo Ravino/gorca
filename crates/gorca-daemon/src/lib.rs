@@ -149,7 +149,8 @@ fn voicego_backend(opts: &Options) -> Arc<dyn SpeechBackend> {
     let Some(path) = opts.voicego_socket.clone() else {
         return unavailable("voicego");
     };
-    let vopts = VoicegoOptions::with_path(path);
+    let mut vopts = VoicegoOptions::with_path(path);
+    vopts.allowed_peer_uids.clone_from(&opts.speech_peer_uids);
     Arc::new(FnBackend::new("voicego", move |deadline| {
         let vopts = vopts.clone();
         async move {
@@ -165,7 +166,8 @@ fn ssip_backend(opts: &Options) -> Arc<dyn SpeechBackend> {
     let Some(path) = opts.ssip_socket.clone() else {
         return unavailable("speech-dispatcher");
     };
-    let sopts = SsipOptions::with_path(path);
+    let mut sopts = SsipOptions::with_path(path);
+    sopts.allowed_peer_uids.clone_from(&opts.speech_peer_uids);
     Arc::new(FnBackend::new("speech-dispatcher", move |deadline| {
         let sopts = sopts.clone();
         async move {

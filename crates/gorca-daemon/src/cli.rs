@@ -31,6 +31,9 @@ pub struct Options {
     pub session_address: Option<String>,
     /// Do not touch `org.a11y.Status` (ID-5).
     pub no_enable: bool,
+    /// Extra uids whose speech server is trusted (`--speech-peer-uid`, repeatable). By default
+    /// only a server running as our own user is used, because everything read is sent to it.
+    pub speech_peer_uids: Vec<u32>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -67,6 +70,8 @@ OPTIONS:
     --impersonate-orca           own org.gnome.Orca.KeyboardMonitor (never replaces a running Orca)
     --a11y-address=ADDRESS       a11y bus address (default: ask org.a11y.Bus)
     --session-address=ADDRESS    session bus address (testing; default: $DBUS_SESSION_BUS_ADDRESS)
+    --speech-peer-uid=UID        also trust a speech server running as UID (repeatable; default:
+                                 only our own user)
     --no-enable                  do not set org.a11y.Status IsEnabled/ScreenReaderEnabled
     -h, --help                   print this help
 ";
@@ -197,6 +202,15 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError
                 opts.voicego_socket = Some(PathBuf::from(value("--voicego-socket")?));
             }
             "--ssip-socket" => opts.ssip_socket = Some(PathBuf::from(value("--ssip-socket")?)),
+            "--speech-peer-uid" => {
+                let v = value("--speech-peer-uid")?;
+                let uid = v.parse::<u32>().map_err(|_| CliError::BadValue {
+                    flag: "--speech-peer-uid",
+                    value: v,
+                    expected: "a numeric uid",
+                })?;
+                opts.speech_peer_uids.push(uid);
+            }
             "--a11y-address" => opts.a11y_address = Some(value("--a11y-address")?),
             "--session-address" => opts.session_address = Some(value("--session-address")?),
             _ => return Err(CliError::Unknown(arg)),
@@ -291,6 +305,17 @@ mod tests {
             opts(&[]).with_env(only_sock).voicego_socket.as_deref(),
             Some(std::path::Path::new("/s.sock"))
         );
+    }
+
+    #[test]
+    fn peer_uids_are_explicit_and_repeatable() {
+        assert!(opts(&[]).speech_peer_uids.is_empty(), "same-uid default");
+        let o = opts(&["--speech-peer-uid=0", "--speech-peer-uid", "115"]);
+        assert_eq!(o.speech_peer_uids, [0, 115]);
+        assert!(matches!(
+            p(&["--speech-peer-uid=root"]),
+            Err(CliError::BadValue { .. })
+        ));
     }
 
     #[test]
