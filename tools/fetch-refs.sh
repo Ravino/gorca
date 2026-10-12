@@ -35,6 +35,7 @@ clone libei            https://gitlab.freedesktop.org/libinput/libei.git &
 clone speech-dispatcher https://github.com/brailcom/speechd.git &
 clone espeak-ng        https://github.com/espeak-ng/espeak-ng.git &
 clone brltty           https://github.com/brltty/brltty.git &
+clone voicego          https://github.com/Ravino/voicego.git &
 wait
 # Rust prior art and crates
 clone odilia     https://github.com/odilia-app/odilia.git &
@@ -58,6 +59,8 @@ clone_branch newton/libadwaita $NW/libadwaita.git newton &
 wait
 # Other screen readers (design reference)
 clone nvda https://github.com/nvaccess/nvda.git &
+# Terminal accessibility (VTE: GTK3 AtkText implementation used by GNOME Terminal)
+clone vte https://gitlab.gnome.org/GNOME/vte.git &
 # Browsers: accessibility code only
 clone firefox  https://github.com/mozilla-firefox/firefox.git accessible widget/gtk &
 clone chromium https://github.com/chromium/chromium.git ui/accessibility content/browser/accessibility content/renderer/accessibility third_party/blink/renderer/modules/accessibility &
