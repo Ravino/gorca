@@ -1,0 +1,11 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>outer</title></head><body>
+<h1>OUTER HEADING</h1>
+<iframe title="cross-site frame" src="http://127.0.0.1:8102/inner.html" width="400" height="200"></iframe>
+<div id="host"></div>
+<script>
+// closed shadow root: invisible to page JS and to content scripts without openOrClosedShadowRoot
+const r = document.getElementById("host").attachShadow({mode: "closed"});
+r.innerHTML = "<h2>CLOSED SHADOW HEADING</h2><button>closed shadow button</button>";
+</script>
+<canvas width="100" height="50" aria-label="canvas fallback label">canvas fallback text</canvas>
+</body></html>
