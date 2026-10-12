@@ -1,0 +1,17 @@
+[package]
+name = "gorca-ext-host"
+description = "Extension host: wasmtime embedding (later), limits, manifests, matching."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-ext-api = { workspace = true }
+gorca-model = { workspace = true }
+gorca-rt = { workspace = true }
+bitflags = { workspace = true }
+
+[lints]
+workspace = true

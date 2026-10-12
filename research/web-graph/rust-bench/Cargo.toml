@@ -1,0 +1,16 @@
+[package]
+name = "webgraph-bench"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Research benchmark: structural navigation indexes (order-maintenance vs augmented treap)"
+
+[dependencies]
+
+[profile.release]
+opt-level = 3
+debug = 1
+lto = "thin"
+codegen-units = 1
+
+[workspace]

@@ -1,0 +1,112 @@
+# gorca workspace. Layout and dependency rules: docs/adr/0001-core-architecture.md section 11.
+# Dependency rules are enforced by `cargo xtask deps` (tools/check-deps.sh).
+[workspace]
+resolver = "3"
+members = [
+    "crates/*",
+    "extensions/*",
+    "xtask",
+]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.99"
+# TBD: the owner has not chosen a license yet.
+license = "TBD"
+publish = false
+repository = "TBD"
+
+[workspace.dependencies]
+# Internal crates.
+gorca-model = { path = "crates/gorca-model" }
+gorca-rt = { path = "crates/gorca-rt" }
+gorca-ingress = { path = "crates/gorca-ingress" }
+gorca-mirror = { path = "crates/gorca-mirror" }
+gorca-connector-api = { path = "crates/gorca-connector-api" }
+gorca-doc-source-api = { path = "crates/gorca-doc-source-api" }
+gorca-doc = { path = "crates/gorca-doc" }
+gorca-output-api = { path = "crates/gorca-output-api" }
+gorca-speech = { path = "crates/gorca-speech" }
+gorca-speech-ssip = { path = "crates/gorca-speech-ssip" }
+gorca-speech-voicego = { path = "crates/gorca-speech-voicego" }
+gorca-input-api = { path = "crates/gorca-input-api" }
+gorca-input-mutter = { path = "crates/gorca-input-mutter" }
+gorca-input-inject = { path = "crates/gorca-input-inject" }
+gorca-dbus = { path = "crates/gorca-dbus" }
+gorca-connector-atspi = { path = "crates/gorca-connector-atspi" }
+gorca-core = { path = "crates/gorca-core" }
+gorca-braille-brlapi = { path = "crates/gorca-braille-brlapi" }
+gorca-ext-api = { path = "crates/gorca-ext-api" }
+gorca-ext-host = { path = "crates/gorca-ext-host" }
+gorca-testkit = { path = "crates/gorca-testkit" }
+
+# Async runtime and plumbing.
+tokio = { version = "1.53", default-features = false, features = ["rt", "rt-multi-thread", "sync", "time", "macros", "signal"] }
+tokio-util = { version = "0.7", default-features = false }
+futures-core = "0.3"
+
+# D-Bus and AT-SPI (allowed only in the crates named in ADR section 11, rule 2).
+zbus = { version = "5.19", default-features = false, features = ["tokio"] }
+atspi = { version = "0.30", default-features = false, features = ["tokio"] }
+
+# Errors and diagnostics.
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter", "ansi"] }
+
+# Data structures.
+serde = { version = "1", default-features = false }
+smallvec = "1"
+bitflags = "2"
+arc-swap = "1"
+libc = "0.2"
+
+# Pinned for later phases, not yet used by any crate.
+rayon = "1.12"
+wasmtime = { version = "50.0.0-rc.1", default-features = false }
+
+# Tooling and tests.
+cargo_metadata = "0.23"
+criterion = { version = "0.8", default-features = false }
+wit-parser = "0.261"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unused_must_use = "deny"
+missing_debug_implementations = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+# ADR section 11, rule 6. Tests are exempted through clippy.toml (allow-*-in-tests).
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+pedantic = { level = "warn", priority = -1 }
+# Pedantic lints that are noise at this stage of the project.
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+too_many_lines = "allow"
+similar_names = "allow"
+many_single_char_names = "allow"
+# `assert!(x.is_empty())` is clearer in tests than `assert_eq!(x, [] as [T; 0])`.
+assert_is_empty = "allow"
+# The docs quote the ADR heavily; identifiers like AT-SPI, SourceLayer or DocNodeId in prose
+# would need backticks everywhere.
+doc_markdown = "allow"
+
+[profile.release]
+# ADR section 11, rule 7: supervised restarts need unwinding panics.
+panic = "unwind"
+lto = "thin"
+codegen-units = 1
+debug = "line-tables-only"
+
+[profile.dev]
+panic = "unwind"

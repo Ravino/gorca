@@ -1,0 +1,20 @@
+== ../traces/testvec-nav2k.trace: n0=1965 ops=4572 queries=3914
+om-btree   build=   0.13ms | next/prev p50=0.051us p99=0.095us | kth p50=0.091us p99=1.512us | insert p50=0.5us p99=28.5us (0.085us/node) | delete p50=0.2us p99=22.6us (0.070us/node) | mask p50=0.056us | mismatches=0
+treap-aug  build=   0.06ms | next/prev p50=0.164us p99=0.381us | kth p50=0.160us p99=0.337us | insert p50=0.9us p99=19.3us (0.057us/node) | delete p50=0.6us p99=1.1us (0.016us/node) | mask p50=0.129us | mismatches=0
+== ../traces/nav10k.trace: n0=9942 ops=23279 queries=19968
+om-btree   build=   0.69ms | next/prev p50=0.106us p99=0.457us | kth p50=0.344us p99=21.084us | insert p50=0.5us p99=73.9us (0.144us/node) | delete p50=0.5us p99=52.1us (0.123us/node) | mask p50=0.125us | mismatches=0
+treap-aug  build=   0.53ms | next/prev p50=0.197us p99=0.467us | kth p50=0.166us p99=0.352us | insert p50=0.8us p99=24.3us (0.064us/node) | delete p50=0.7us p99=1.2us (0.017us/node) | mask p50=0.140us | mismatches=0
+== ../traces/nav100k.trace: n0=100184 ops=58155 queries=49947
+om-btree   build=   7.70ms | next/prev p50=0.163us p99=0.428us | kth p50=1.274us p99=43.375us | insert p50=1.0us p99=29.4us (0.082us/node) | delete p50=0.6us p99=26.7us (0.080us/node) | mask p50=0.194us | mismatches=0
+treap-aug  build=   7.10ms | next/prev p50=0.411us p99=1.716us | kth p50=0.320us p99=1.528us | insert p50=1.0us p99=21.7us (0.060us/node) | delete p50=1.1us p99=2.8us (0.029us/node) | mask p50=0.359us | mismatches=0
+== ../traces/testvec-nav2k.trace: n0=1965 ops=4572 queries=3914
+om-btree   build=   0.13ms | next/prev p50=0.054us p99=0.100us | kth p50=0.093us p99=1.419us | insert p50=0.5us p99=31.0us (0.087us/node) | delete p50=0.2us p99=23.0us (0.072us/node) | mask p50=0.054us | mismatches=0
+treap-aug  build=   0.06ms | next/prev p50=0.166us p99=0.412us | kth p50=0.162us p99=0.347us | insert p50=0.9us p99=20.8us (0.059us/node) | delete p50=0.7us p99=1.2us (0.017us/node) | mask p50=0.134us | mismatches=0
+== ../traces/nav10k.trace: n0=9942 ops=23279 queries=19968
+om-btree   build=   0.68ms | next/prev p50=0.086us p99=0.379us | kth p50=0.334us p99=18.143us | insert p50=0.5us p99=65.2us (0.134us/node) | delete p50=0.4us p99=47.0us (0.111us/node) | mask p50=0.094us | mismatches=0
+treap-aug  build=   0.34ms | next/prev p50=0.208us p99=0.473us | kth p50=0.176us p99=0.373us | insert p50=0.8us p99=25.7us (0.073us/node) | delete p50=0.7us p99=1.3us (0.018us/node) | mask p50=0.148us | mismatches=0
+== ../traces/nav100k.trace: n0=100184 ops=58155 queries=49947
+om-btree   build=   6.98ms | next/prev p50=0.127us p99=0.470us | kth p50=1.327us p99=44.744us | insert p50=1.1us p99=31.0us (0.086us/node) | delete p50=0.7us p99=28.8us (0.084us/node) | mask p50=0.128us | mismatches=0
+treap-aug  build=   8.60ms | next/prev p50=0.423us p99=1.659us | kth p50=0.329us p99=1.460us | insert p50=1.0us p99=22.1us (0.061us/node) | delete p50=1.1us p99=2.6us (0.029us/node) | mask p50=0.373us | mismatches=0
+adversarial same-point inserts n=100000: OM total 369.9 ms, mean 3.70 us, p99 14.38 us, max 13003 us, relabelled/insert 11.0 | treap total 238.1 ms
+adversarial same-point inserts n=1000000: OM total 29360.3 ms, mean 29.36 us, p99 14.93 us, max 174038 us, relabelled/insert 13.8 | treap total 27628.9 ms

@@ -1,0 +1,17 @@
+[package]
+name = "gorca-input-mutter"
+description = "org.freedesktop.a11y.KeyboardMonitor client: name ownership (ID-1) and MonitorState."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-model = { workspace = true }
+gorca-rt = { workspace = true }
+gorca-input-api = { workspace = true }
+zbus = { workspace = true }
+
+[lints]
+workspace = true

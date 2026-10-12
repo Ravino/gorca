@@ -1,0 +1,23 @@
+[package]
+name = "gorca-bench"
+description = "Criterion microbenchmarks (MB-*) and M-1/M-3/M-11 harness entry points."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-model = { workspace = true }
+gorca-ingress = { workspace = true }
+gorca-mirror = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "ingress_mirror"
+harness = false
+
+[lints]
+workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "gorca-input-api"
+description = "Input boundary: KeyEvent, KeySource, KeyInjector, GrabSet, KeyClass."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-model = { workspace = true }
+gorca-rt = { workspace = true }
+bitflags = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

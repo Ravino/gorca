@@ -1,0 +1,17 @@
+[package]
+name = "gorca-speech"
+description = "SpeechQueue state machine, speech lane and verbalizer."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-model = { workspace = true }
+gorca-rt = { workspace = true }
+gorca-output-api = { workspace = true }
+smallvec = { workspace = true }
+
+[lints]
+workspace = true

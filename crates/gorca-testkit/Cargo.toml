@@ -1,0 +1,20 @@
+[package]
+name = "gorca-testkit"
+description = "Fake connector, fake DocSource, virtual clock, conformance suites, storm generator."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-model = { workspace = true }
+gorca-rt = { workspace = true }
+gorca-ingress = { workspace = true }
+gorca-connector-api = { workspace = true }
+gorca-doc-source-api = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
+smallvec = { workspace = true }
+
+[lints]
+workspace = true

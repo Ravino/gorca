@@ -1,0 +1,10 @@
+[alias]
+xtask = "run --quiet --package xtask --"
+
+[target.x86_64-unknown-linux-gnu]
+# clang + lld for fast links (both are installed on the dev machines).
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[term]
+color = "auto"

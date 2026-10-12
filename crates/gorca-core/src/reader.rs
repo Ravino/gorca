@@ -1,0 +1,656 @@
+//! The Reader (ADR-0001 sections 2.5, 3.3, 6.2).
+//!
+//! > "One Reader owns user-visible state (focus, mode, navigation, epoch). It never awaits. It
+//! > reads mirrors lock-free and sends queries as messages. Its per-message work is bounded and
+//! > O(1) or O(log n). Anything heavier is offloaded."
+//! > "The Reader polls with a biased select: input, focus lane, query replies, background lane."
+//!
+//! [`Reader::handle`] is synchronous and allocation-light: it is the body of the `reader` lane.
+//! [`ReaderInbox::poll`] implements the biased poll with `try_recv`. TBD: the lane thread's
+//! parking/wake mechanism (a shared parker signalled by the four senders), decided with B-5.
+
+use std::sync::Arc;
+use std::time::Instant;
+
+use gorca_connector_api::BackendError;
+use gorca_input_api::{CmdId, GrabSet, KeyClass, KeyIntent};
+use gorca_model::{AppId, Epoch, NodeKey, NodeSnapshot, Politeness, PropMask, UttId};
+use gorca_rt::{BudgetClass, EpochCell, mpsc};
+use smallvec::SmallVec;
+
+use crate::directory::MirrorDirectory;
+use crate::focus::{FocusEffect, FocusMsg, FocusState, settle_delay};
+use crate::mode::{Mode, ModeEffect, ModeKeys, ModeMsg};
+use crate::presenter::{SpeechIntent, message, present_focus};
+
+/// Bounds from section 6.2.
+const KEY_QUEUE: usize = 64;
+const FOCUS_QUEUE: usize = 256;
+const REPLY_QUEUE: usize = 64;
+const BACKGROUND_QUEUE: usize = 64;
+/// At most this many messages per [`Reader::drain`] call, so one call stays bounded.
+const MAX_BATCH: usize = 256;
+
+#[derive(Clone, Copy, Debug)]
+pub enum FocusLaneMsg {
+    FocusChanged { node: NodeKey },
+    NodeRemoved(NodeKey),
+    AppGone(AppId),
+    AppHung(AppId),
+}
+
+/// Reply to a Reader query, tagged with the epoch it was asked in (E-3).
+#[derive(Clone, Debug)]
+pub struct QueryReply {
+    pub node: NodeKey,
+    pub epoch: Epoch,
+    pub result: Result<Arc<NodeSnapshot>, BackendError>,
+}
+
+#[derive(Clone, Debug)]
+pub enum BackgroundMsg {
+    Announcement {
+        text: Arc<str>,
+        politeness: Politeness,
+    },
+    /// A background event was dropped for this app; its mirror may be stale.
+    ResyncNeeded(AppId),
+}
+
+#[derive(Debug)]
+pub enum ReaderMsg {
+    Key(KeyIntent),
+    Focus(FocusLaneMsg),
+    Reply(QueryReply),
+    Background(BackgroundMsg),
+    Mode(ModeMsg),
+    Timer,
+}
+
+#[derive(Clone, Debug)]
+pub enum ReaderEffect {
+    Speak(SpeechIntent),
+    /// Query an app (Interactive), asked in `epoch`.
+    Fetch {
+        node: NodeKey,
+        mask: PropMask,
+        class: BudgetClass,
+        epoch: Epoch,
+    },
+    QueryActiveWindowFocus,
+    /// Wake the Reader at this time with `ReaderMsg::Timer`.
+    ArmTimer(Instant),
+    SetGrabSet(GrabSet),
+    RunCommand(CmdId),
+}
+
+pub type ReaderEffects = SmallVec<[ReaderEffect; 4]>;
+
+/// Producer side handed to the input lane, app actors and workers.
+#[derive(Clone, Debug)]
+pub struct ReaderSenders {
+    pub key: mpsc::Sender<KeyIntent>,
+    pub focus: mpsc::Sender<FocusLaneMsg>,
+    pub replies: mpsc::Sender<QueryReply>,
+    pub background: mpsc::Sender<BackgroundMsg>,
+}
+
+#[derive(Debug)]
+pub struct ReaderInbox {
+    key: mpsc::Receiver<KeyIntent>,
+    focus: mpsc::Receiver<FocusLaneMsg>,
+    replies: mpsc::Receiver<QueryReply>,
+    background: mpsc::Receiver<BackgroundMsg>,
+}
+
+pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
+    let (key_tx, key) = mpsc::channel(KEY_QUEUE);
+    let (focus_tx, focus) = mpsc::channel(FOCUS_QUEUE);
+    let (replies_tx, replies) = mpsc::channel(REPLY_QUEUE);
+    let (background_tx, background) = mpsc::channel(BACKGROUND_QUEUE);
+    (
+        ReaderSenders {
+            key: key_tx,
+            focus: focus_tx,
+            replies: replies_tx,
+            background: background_tx,
+        },
+        ReaderInbox {
+            key,
+            focus,
+            replies,
+            background,
+        },
+    )
+}
+
+impl ReaderInbox {
+    /// Biased poll: input, focus lane, query replies, background lane. Never waits.
+    pub fn poll(&mut self) -> Option<ReaderMsg> {
+        if let Ok(k) = self.key.try_recv() {
+            return Some(ReaderMsg::Key(k));
+        }
+        if let Ok(f) = self.focus.try_recv() {
+            return Some(ReaderMsg::Focus(f));
+        }
+        if let Ok(r) = self.replies.try_recv() {
+            return Some(ReaderMsg::Reply(r));
+        }
+        if let Ok(b) = self.background.try_recv() {
+            return Some(ReaderMsg::Background(b));
+        }
+        None
+    }
+}
+
+#[derive(Debug)]
+pub struct Reader {
+    focus: FocusState,
+    mode: Mode,
+    keys: ModeKeys,
+    epoch: Arc<EpochCell>,
+    dir: Arc<MirrorDirectory>,
+    next_utt: u64,
+    ambiguous_keys: u64,
+    stale_replies_dropped: u64,
+}
+
+impl Reader {
+    pub fn new(epoch: Arc<EpochCell>, dir: Arc<MirrorDirectory>, keys: ModeKeys) -> Self {
+        Self {
+            focus: FocusState::NoFocus,
+            mode: Mode::Focus,
+            keys,
+            epoch,
+            dir,
+            next_utt: 0,
+            ambiguous_keys: 0,
+            stale_replies_dropped: 0,
+        }
+    }
+
+    pub fn focus(&self) -> FocusState {
+        self.focus
+    }
+
+    pub fn mode(&self) -> Mode {
+        self.mode
+    }
+
+    /// Keys classified `Ambiguous` (M-16).
+    pub fn ambiguous_keys(&self) -> u64 {
+        self.ambiguous_keys
+    }
+
+    /// Replies discarded because their epoch was stale (E-3).
+    pub fn stale_replies_dropped(&self) -> u64 {
+        self.stale_replies_dropped
+    }
+
+    fn utt_id(&mut self) -> UttId {
+        self.next_utt += 1;
+        UttId(self.next_utt)
+    }
+
+    /// Process every pending message, biased, at most [`MAX_BATCH`] per call.
+    pub fn drain(&mut self, inbox: &mut ReaderInbox, now: Instant) -> Vec<ReaderEffect> {
+        let mut out = Vec::new();
+        for _ in 0..MAX_BATCH {
+            let Some(msg) = inbox.poll() else { break };
+            out.extend(self.handle(msg, now));
+        }
+        out
+    }
+
+    /// One message, bounded work, no awaits.
+    pub fn handle(&mut self, msg: ReaderMsg, now: Instant) -> ReaderEffects {
+        let mut fx = ReaderEffects::new();
+        match msg {
+            ReaderMsg::Key(intent) => self.on_key(intent, &mut fx),
+            ReaderMsg::Focus(f) => self.on_focus(f, now, &mut fx),
+            ReaderMsg::Reply(r) => self.on_reply(r, &mut fx),
+            ReaderMsg::Background(b) => match b {
+                BackgroundMsg::Announcement { .. } | BackgroundMsg::ResyncNeeded(_) => {
+                    // TBD: live-region policy lives in gorca-doc; resync scheduling in the app actor.
+                }
+            },
+            ReaderMsg::Mode(m) => self.on_mode(m, &mut fx),
+            ReaderMsg::Timer => self.apply_focus(FocusMsg::TimerElapsed { now }, &mut fx),
+        }
+        fx
+    }
+
+    fn on_key(&mut self, intent: KeyIntent, fx: &mut ReaderEffects) {
+        // E-4: adopt the epoch carried by the key press so the utterance answering it is never
+        // cancelled by that same key press.
+        self.epoch.observe(intent.epoch);
+        match intent.class {
+            KeyClass::Command(cmd) => fx.push(ReaderEffect::RunCommand(cmd)),
+            KeyClass::Ambiguous { .. } => self.ambiguous_keys += 1,
+            KeyClass::PassToApp | KeyClass::Injected => {}
+        }
+    }
+
+    fn on_mode(&mut self, m: ModeMsg, fx: &mut ReaderEffects) {
+        let (next, effects) = self.mode.step(m, &self.keys);
+        self.mode = next;
+        for e in effects {
+            match e {
+                ModeEffect::AdvanceEpoch => {
+                    self.epoch.advance();
+                }
+                ModeEffect::SetGrabSet(set) => fx.push(ReaderEffect::SetGrabSet(set)),
+            }
+        }
+    }
+
+    fn on_focus(&mut self, f: FocusLaneMsg, now: Instant, fx: &mut ReaderEffects) {
+        match f {
+            FocusLaneMsg::FocusChanged { node } => {
+                // The epoch advances first, so stale speech cancels now, not after δ (E-2).
+                let epoch = self.epoch.advance();
+                let role = self.dir.lookup(node).hit().map(|n| n.role);
+                let until = now + settle_delay(role);
+                self.apply_focus(FocusMsg::FocusChanged { node, epoch, until }, fx);
+                if let FocusState::Settling { until, .. } = self.focus {
+                    if until <= now {
+                        self.apply_focus(FocusMsg::TimerElapsed { now }, fx);
+                    } else {
+                        fx.push(ReaderEffect::ArmTimer(until));
+                    }
+                }
+            }
+            FocusLaneMsg::NodeRemoved(n) => self.apply_focus(FocusMsg::NodeRemoved(n), fx),
+            FocusLaneMsg::AppGone(a) => self.apply_focus(FocusMsg::AppGone(a), fx),
+            FocusLaneMsg::AppHung(a) => self.apply_focus(FocusMsg::AppHung(a), fx),
+        }
+    }
+
+    fn apply_focus(&mut self, msg: FocusMsg, fx: &mut ReaderEffects) {
+        let (next, effect) = self.focus.step(msg);
+        self.focus = next;
+        let Some(effect) = effect else { return };
+        match effect {
+            FocusEffect::BeginPresent { node, epoch } => {
+                // Mirror read, lock-free. On a miss, fetch and wait for the reply.
+                match self.dir.lookup(node) {
+                    gorca_model::Lookup::Hit(snap) => self.present(&snap, fx),
+                    gorca_model::Lookup::Miss => fx.push(ReaderEffect::Fetch {
+                        node,
+                        mask: PropMask::PRESENT,
+                        class: BudgetClass::Interactive,
+                        epoch,
+                    }),
+                    gorca_model::Lookup::Gone => {
+                        self.apply_focus(FocusMsg::NodeRemoved(node), fx);
+                    }
+                }
+            }
+            FocusEffect::Speak { node, epoch } => {
+                // Reached when `Presented` was stepped by `present`; the snapshot was already
+                // turned into an utterance there, so nothing is left to do for `node`/`epoch`.
+                let _ = (node, epoch);
+            }
+            FocusEffect::QueryActiveWindowFocus => fx.push(ReaderEffect::QueryActiveWindowFocus),
+            FocusEffect::AnnounceNotResponding => {
+                let id = self.utt_id();
+                let u = message("application not responding", id, self.epoch.current());
+                fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+            }
+        }
+    }
+
+    /// Step `Presented` for the snapshot's node and, if that produced the `Speak` effect, build
+    /// the utterance from the snapshot at hand.
+    fn present(&mut self, snap: &Arc<NodeSnapshot>, fx: &mut ReaderEffects) {
+        let (next, effect) = self.focus.step(FocusMsg::Presented { node: snap.key });
+        self.focus = next;
+        match effect {
+            Some(FocusEffect::Speak { epoch, .. }) => {
+                let id = self.utt_id();
+                let u = present_focus(snap, id, epoch);
+                fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+            }
+            Some(
+                FocusEffect::BeginPresent { .. }
+                | FocusEffect::QueryActiveWindowFocus
+                | FocusEffect::AnnounceNotResponding,
+            )
+            | None => {}
+        }
+    }
+
+    fn on_reply(&mut self, r: QueryReply, fx: &mut ReaderEffects) {
+        // E-3: results from a worker with an older epoch are dropped by whoever receives them.
+        if r.epoch < self.epoch.current() {
+            self.stale_replies_dropped += 1;
+            return;
+        }
+        match r.result {
+            Ok(snap) => self.present(&snap, fx),
+            // Timeout, Gone, ...: speak from the cache if there is anything (`may_refine`).
+            Err(_) => {
+                if let Some(snap) = self.dir.lookup(r.node).hit() {
+                    self.present(&snap, fx);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use gorca_input_api::{KeyEvent, Modifiers};
+    use gorca_mirror::{MirrorWriter, mirror};
+    use gorca_model::{
+        ChildList, ConnectorId, Freshness, Ifaces, LocalId, Role, SnapshotBatch, StateSet,
+    };
+    use std::time::Duration;
+
+    fn app() -> AppId {
+        AppId {
+            connector: ConnectorId(1),
+            serial: 1,
+        }
+    }
+
+    fn key(n: u64) -> NodeKey {
+        NodeKey {
+            app: app(),
+            local: LocalId(n),
+        }
+    }
+
+    fn snap(n: u64, role: Role, name: &str) -> Arc<NodeSnapshot> {
+        Arc::new(NodeSnapshot {
+            key: key(n),
+            role,
+            states: StateSet::empty(),
+            name: Some(Arc::from(name)),
+            description: None,
+            value: None,
+            parent: None,
+            children: ChildList::Unknown,
+            interfaces: Ifaces::empty(),
+            attrs: gorca_model::AttrMap::default(),
+            relations: gorca_model::Relations::default(),
+            bounds: None,
+            fresh: Freshness::Fresh { at: Instant::now() },
+        })
+    }
+
+    struct Fixture {
+        reader: Reader,
+        writer: MirrorWriter,
+        epoch: Arc<EpochCell>,
+    }
+
+    fn fixture() -> Fixture {
+        let epoch = Arc::new(EpochCell::new());
+        let dir = Arc::new(MirrorDirectory::new());
+        let (writer, handle) = mirror();
+        dir.insert(app(), &handle);
+        let reader = Reader::new(Arc::clone(&epoch), dir, ModeKeys::default());
+        Fixture {
+            reader,
+            writer,
+            epoch,
+        }
+    }
+
+    fn spoken(fx: &ReaderEffects) -> Vec<String> {
+        fx.iter()
+            .filter_map(|e| match e {
+                ReaderEffect::Speak(s) => Some(
+                    s.utterance
+                        .segments
+                        .iter()
+                        .map(|g| &*g.text)
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                ),
+                ReaderEffect::Fetch { .. }
+                | ReaderEffect::QueryActiveWindowFocus
+                | ReaderEffect::ArmTimer(_)
+                | ReaderEffect::SetGrabSet(_)
+                | ReaderEffect::RunCommand(_) => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn cache_hit_focus_speaks_immediately_with_the_new_epoch() {
+        let mut f = fixture();
+        f.writer.apply(SnapshotBatch {
+            nodes: vec![snap(1, Role::Button, "OK")],
+        });
+        let before = f.epoch.current();
+        let fx = f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(1) }),
+            Instant::now(),
+        );
+        assert_eq!(spoken(&fx), ["OK button"]);
+        assert!(
+            f.epoch.current() > before,
+            "focus change advances the epoch"
+        );
+        let ReaderEffect::Speak(s) = &fx[0] else {
+            panic!("expected speech")
+        };
+        assert_eq!(s.utterance.epoch, f.epoch.current());
+        assert!(matches!(
+            f.reader.focus(),
+            FocusState::Focused {
+                presented: true,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn cache_miss_fetches_then_speaks_on_the_reply() {
+        let mut f = fixture();
+        let now = Instant::now();
+        let fx = f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(2) }),
+            now,
+        );
+        let epoch = f.epoch.current();
+        assert!(matches!(
+            fx.as_slice(),
+            [ReaderEffect::Fetch {
+                class: BudgetClass::Interactive,
+                ..
+            }]
+        ));
+        let reply = QueryReply {
+            node: key(2),
+            epoch,
+            result: Ok(snap(2, Role::Link, "Docs")),
+        };
+        let fx = f.reader.handle(ReaderMsg::Reply(reply), now);
+        assert_eq!(spoken(&fx), ["Docs link"]);
+    }
+
+    #[test]
+    fn a_reply_from_an_older_epoch_is_never_spoken() {
+        let mut f = fixture();
+        let now = Instant::now();
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(2) }),
+            now,
+        );
+        let stale = f.epoch.current();
+        // The user moves on before the reply arrives.
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(3) }),
+            now,
+        );
+        let reply = QueryReply {
+            node: key(2),
+            epoch: stale,
+            result: Ok(snap(2, Role::Link, "Old")),
+        };
+        let fx = f.reader.handle(ReaderMsg::Reply(reply), now);
+        assert!(spoken(&fx).is_empty());
+        assert_eq!(f.reader.stale_replies_dropped(), 1);
+    }
+
+    #[test]
+    fn a_failed_fetch_falls_back_to_a_stale_cache_entry() {
+        let mut f = fixture();
+        let now = Instant::now();
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(2) }),
+            now,
+        );
+        let epoch = f.epoch.current();
+        f.writer.apply(SnapshotBatch {
+            nodes: vec![snap(2, Role::Link, "Docs")],
+        });
+        let reply = QueryReply {
+            node: key(2),
+            epoch,
+            result: Err(BackendError::Timeout),
+        };
+        let fx = f.reader.handle(ReaderMsg::Reply(reply), now);
+        assert_eq!(spoken(&fx), ["Docs link"]);
+    }
+
+    #[test]
+    fn flapping_roles_wait_for_the_settle_timer() {
+        let mut f = fixture();
+        f.writer.apply(SnapshotBatch {
+            nodes: vec![snap(1, Role::MenuItem, "Open")],
+        });
+        let now = Instant::now();
+        let fx = f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(1) }),
+            now,
+        );
+        assert!(spoken(&fx).is_empty());
+        let ReaderEffect::ArmTimer(at) = fx[0] else {
+            panic!("expected a timer")
+        };
+        assert_eq!(at, now + Duration::from_millis(30));
+        let fx = f.reader.handle(ReaderMsg::Timer, at);
+        assert_eq!(spoken(&fx), ["Open menu item"]);
+    }
+
+    #[test]
+    fn key_presses_adopt_their_epoch_and_dispatch_commands() {
+        let mut f = fixture();
+        let ev = KeyEvent {
+            keycode: 1,
+            keysym: 1,
+            unichar: 0,
+            modifiers: Modifiers::empty(),
+            pressed: true,
+        };
+        let intent = KeyIntent {
+            event: ev,
+            class: KeyClass::Command(CmdId(9)),
+            epoch: Epoch(41),
+        };
+        let fx = f.reader.handle(ReaderMsg::Key(intent), Instant::now());
+        assert!(matches!(
+            fx.as_slice(),
+            [ReaderEffect::RunCommand(CmdId(9))]
+        ));
+        assert_eq!(f.epoch.current(), Epoch(41));
+
+        let amb = KeyIntent {
+            class: KeyClass::Ambiguous { committed: None },
+            ..intent
+        };
+        f.reader.handle(ReaderMsg::Key(amb), Instant::now());
+        assert_eq!(f.reader.ambiguous_keys(), 1);
+    }
+
+    #[test]
+    fn hung_focus_app_is_announced() {
+        let mut f = fixture();
+        f.writer.apply(SnapshotBatch {
+            nodes: vec![snap(1, Role::Button, "OK")],
+        });
+        let now = Instant::now();
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(1) }),
+            now,
+        );
+        let fx = f
+            .reader
+            .handle(ReaderMsg::Focus(FocusLaneMsg::AppHung(app())), now);
+        assert_eq!(spoken(&fx), ["application not responding"]);
+    }
+
+    #[test]
+    fn mode_change_advances_the_epoch_and_sets_the_grab_set() {
+        let mut f = fixture();
+        let before = f.epoch.current();
+        let fx = f
+            .reader
+            .handle(ReaderMsg::Mode(ModeMsg::ToggleInputHelp), Instant::now());
+        assert!(f.epoch.current() > before);
+        assert!(matches!(fx.as_slice(), [ReaderEffect::SetGrabSet(g)] if g.grab_all));
+        assert_eq!(f.reader.mode(), Mode::InputHelp);
+    }
+
+    #[test]
+    fn inbox_is_biased_input_then_focus_then_replies_then_background() {
+        let (tx, mut inbox) = reader_channels();
+        tx.background
+            .try_send(BackgroundMsg::ResyncNeeded(app()))
+            .unwrap();
+        tx.replies
+            .try_send(QueryReply {
+                node: key(1),
+                epoch: Epoch(1),
+                result: Err(BackendError::Gone),
+            })
+            .unwrap();
+        tx.focus
+            .try_send(FocusLaneMsg::FocusChanged { node: key(1) })
+            .unwrap();
+        let ev = KeyEvent {
+            keycode: 1,
+            keysym: 1,
+            unichar: 0,
+            modifiers: Modifiers::empty(),
+            pressed: true,
+        };
+        tx.key
+            .try_send(KeyIntent {
+                event: ev,
+                class: KeyClass::PassToApp,
+                epoch: Epoch(1),
+            })
+            .unwrap();
+        let order: Vec<_> = std::iter::from_fn(|| inbox.poll())
+            .map(|m| match m {
+                ReaderMsg::Key(_) => "key",
+                ReaderMsg::Focus(_) => "focus",
+                ReaderMsg::Reply(_) => "reply",
+                ReaderMsg::Background(_) => "background",
+                ReaderMsg::Mode(_) => "mode",
+                ReaderMsg::Timer => "timer",
+            })
+            .collect();
+        assert_eq!(order, ["key", "focus", "reply", "background"]);
+    }
+
+    #[test]
+    fn drain_processes_a_burst_in_one_call() {
+        let mut f = fixture();
+        f.writer.apply(SnapshotBatch {
+            nodes: vec![snap(1, Role::Button, "OK")],
+        });
+        let (tx, mut inbox) = reader_channels();
+        tx.focus
+            .try_send(FocusLaneMsg::FocusChanged { node: key(1) })
+            .unwrap();
+        let fx = f.reader.drain(&mut inbox, Instant::now());
+        assert_eq!(fx.len(), 1);
+    }
+}

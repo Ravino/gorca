@@ -14,3 +14,4 @@
 | 2026-10-12 | R5: no Newton runtime dependency; connector API designed for it; Newton connector deferred | ADR-0001 |
 | 2026-10-12 | R6: per-document mirror for web, viewport-first build; data source layer (AT-SPI vs own gorca protocol) to be researched/benchmarked | ADR-0001 |
 | 2026-10-12 | Performance philosophy: speed over memory/CPU frugality, fully multi-threaded | CLAUDE.md |
+| 2026-10-12 | Test harness: private dbus-daemon session + real at-spi-bus-launcher (forced dbus-daemon) + registryd; fake apps speak AT-SPI directly via python3-dbus (no toolkit); system python3 only | tests/harness/README.md |

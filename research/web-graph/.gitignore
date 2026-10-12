@@ -1,0 +1,5 @@
+traces/*
+!traces/testvec-*.trace
+rust-bench/target/
+__pycache__/
+!traces/*.txt

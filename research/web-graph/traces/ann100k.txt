@@ -1,0 +1,21 @@
+uniq100k: n=1679 d=128
+  numpy brute            build      0.0 ms  query p50    15.4 us p99    18.9 us  recall@10 1.000
+  faiss Flat             build      0.2 ms  query p50    13.0 us p99    17.2 us  recall@10 1.000
+  faiss HNSW M16         build     34.5 ms  query p50    14.9 us p99    21.3 us  recall@10 1.000  add   26.5 us/vec
+  hnswlib M16            build     34.8 ms  query p50    13.5 us p99    19.6 us  recall@10 1.000  add   25.1 us/vec  remove   0.18 us/vec
+  usearch M16 f32        build     40.0 ms  query p50    23.1 us p99    35.6 us  recall@10 1.000  add   31.1 us/vec  remove   0.20 us/vec
+  usearch M16 i8         build     28.1 ms  query p50    21.1 us p99    34.6 us  recall@10 0.762  add   22.5 us/vec  remove   0.24 us/vec
+pool100k: n=16365 d=128
+  numpy brute            build      0.0 ms  query p50   210.4 us p99   246.7 us  recall@10 1.000
+  faiss Flat             build      3.7 ms  query p50   173.6 us p99   212.0 us  recall@10 1.000
+  faiss HNSW M16         build    398.1 ms  query p50    15.8 us p99    24.6 us  recall@10 0.966  add   51.7 us/vec
+  hnswlib M16            build    477.1 ms  query p50    11.8 us p99    22.1 us  recall@10 0.908  add   31.2 us/vec  remove   0.24 us/vec
+  usearch M16 f32        build    760.4 ms  query p50    20.8 us p99    36.1 us  recall@10 0.837  add   52.8 us/vec  remove   0.48 us/vec
+  usearch M16 i8         build    361.6 ms  query p50    15.8 us p99    28.9 us  recall@10 0.610  add   25.5 us/vec  remove   0.23 us/vec
+all100k: n=95177 d=128
+  numpy brute            build      0.0 ms  query p50  2694.2 us p99  5165.7 us  recall@10 1.000
+  faiss Flat             build     23.5 ms  query p50  2009.8 us p99  2867.2 us  recall@10 1.000
+  faiss HNSW M16         build   1432.2 ms  query p50     8.2 us p99    64.9 us  recall@10 0.839  add  182.9 us/vec
+  hnswlib M16            build   4463.6 ms  query p50     5.5 us p99    55.8 us  recall@10 0.930  add   56.3 us/vec  remove   0.31 us/vec
+  usearch M16 f32        build  10956.1 ms  query p50    14.8 us p99    60.2 us  recall@10 0.937  add  131.4 us/vec  remove   0.35 us/vec
+  usearch M16 i8         build   3444.1 ms  query p50    10.5 us p99    46.4 us  recall@10 0.900  add   34.9 us/vec  remove   0.27 us/vec

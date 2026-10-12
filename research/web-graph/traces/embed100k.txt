@@ -1,0 +1,52 @@
+n=100184 soup=False canonical=False -> 100184 nodes; pool=21372, members=9047, unique skeletons=2692
+  Python times: skeleton hashes 169 ms (all nodes); WL features D=128 993 ms (pool); exact kNN pool 3853 ms; exact kNN on unique groups 91.0 ms
+  method                     memP   memR     F1 next-sim clusters
+  baseline: role            0.470  1.000  0.640    0.973       17
+  baseline: role+parent     0.705  0.791  0.746    0.910       32
+  skel-hash (exact)         1.000  0.317  0.481    0.426     2692
+  wl2-label (exact)         0.920  0.332  0.487    0.446     1437
+  knn16 all, tau=.90        0.991  0.178  0.302    0.201      490
+  dedup+knn16 tau=0.80      0.326  0.910  0.480    0.642       71
+  dedup+knn16 tau=0.85      0.949  0.770  0.850    0.644      164
+  dedup+knn16 tau=0.90      0.968  0.590  0.733    0.510      369
+  dedup+knn16 tau=0.95      0.997  0.565  0.721    0.475      874
+  simhash 4x16 LSH          0.188  0.974  0.315    0.533       48
+n=100184 soup=False canonical=True -> 95177 nodes; pool=16365, members=9047, unique skeletons=1679
+  Python times: skeleton hashes 167 ms (all nodes); WL features D=128 811 ms (pool); exact kNN pool 2321 ms; exact kNN on unique groups 15.3 ms
+  method                     memP   memR     F1 next-sim clusters
+  baseline: role            0.470  1.000  0.640    0.973       17
+  baseline: role+parent     0.705  0.791  0.746    0.910       29
+  skel-hash (exact)         1.000  0.411  0.583    0.566     1679
+  wl2-label (exact)         1.000  0.412  0.583    0.567     1325
+  knn16 all, tau=.90        0.999  0.284  0.442    0.355      132
+  dedup+knn16 tau=0.80      0.301  0.956  0.458    0.900       30
+  dedup+knn16 tau=0.85      0.889  0.956  0.921    0.915       34
+  dedup+knn16 tau=0.90      0.869  0.787  0.826    0.804       47
+  dedup+knn16 tau=0.95      0.986  0.705  0.822    0.679      172
+  simhash 4x16 LSH          0.186  0.998  0.313    0.630       12
+n=100184 soup=True canonical=False -> 100184 nodes; pool=21372, members=9047, unique skeletons=2651
+  Python times: skeleton hashes 168 ms (all nodes); WL features D=128 962 ms (pool); exact kNN pool 3867 ms; exact kNN on unique groups 62.8 ms
+  method                     memP   memR     F1 next-sim clusters
+  baseline: role            0.272  1.000  0.427    0.630       12
+  baseline: role+parent     0.288  1.000  0.448    0.636       19
+  skel-hash (exact)         1.000  0.317  0.481    0.426     2651
+  wl2-label (exact)         0.792  0.332  0.468    0.445     1370
+  knn16 all, tau=.90        1.000  0.169  0.290    0.189      459
+  dedup+knn16 tau=0.80      0.288  0.999  0.447    0.633       52
+  dedup+knn16 tau=0.85      0.792  0.901  0.843    0.634      132
+  dedup+knn16 tau=0.90      0.961  0.761  0.849    0.615      337
+  dedup+knn16 tau=0.95      0.992  0.570  0.724    0.484      816
+  simhash 4x16 LSH          0.184  0.998  0.311    0.534       29
+n=100184 soup=True canonical=True -> 94925 nodes; pool=16322, members=9030, unique skeletons=1661
+  Python times: skeleton hashes 160 ms (all nodes); WL features D=128 827 ms (pool); exact kNN pool 2445 ms; exact kNN on unique groups 27.1 ms
+  method                     memP   memR     F1 next-sim clusters
+  baseline: role            0.273  1.000  0.429    0.878       12
+  baseline: role+parent     0.290  1.000  0.449    0.888       16
+  skel-hash (exact)         1.000  0.411  0.583    0.566     1661
+  wl2-label (exact)         1.000  0.412  0.583    0.566     1281
+  knn16 all, tau=.90        0.996  0.279  0.436    0.351      124
+  dedup+knn16 tau=0.80      0.289  0.999  0.448    0.881       15
+  dedup+knn16 tau=0.85      0.695  0.987  0.816    0.915       24
+  dedup+knn16 tau=0.90      0.889  0.956  0.921    0.902       33
+  dedup+knn16 tau=0.95      0.932  0.742  0.826    0.732      153
+  simhash 4x16 LSH          0.187  0.998  0.314    0.652       13

@@ -1,0 +1,18 @@
+[package]
+name = "gorca-doc-source-api"
+description = "SourceLayer boundary: DocSource, DocSourceCtx, SourceCaps, DocRequest."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-model = { workspace = true }
+gorca-rt = { workspace = true }
+bitflags = { workspace = true }
+thiserror = { workspace = true }
+smallvec = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,15 @@
+[package]
+name = "gorca-model"
+description = "Connector-neutral object model: identities, snapshots, events, text units, utterances."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+bitflags = { workspace = true }
+smallvec = { workspace = true }
+
+[lints]
+workspace = true

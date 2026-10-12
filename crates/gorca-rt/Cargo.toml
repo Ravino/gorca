@@ -1,0 +1,23 @@
+[package]
+name = "gorca-rt"
+description = "Lanes, EpochCell, deadlines, budget classes, virtual clock, supervision and watchdog primitives."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-model = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+futures-core = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+libc = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,24 @@
+[package]
+name = "gorca-connector-atspi"
+description = "AT-SPI connector, toolkit normalisation tables, AtspiDocSource, enablement."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-model = { workspace = true }
+gorca-rt = { workspace = true }
+gorca-connector-api = { workspace = true }
+gorca-doc-source-api = { workspace = true }
+gorca-dbus = { workspace = true }
+atspi = { workspace = true }
+zbus = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true }

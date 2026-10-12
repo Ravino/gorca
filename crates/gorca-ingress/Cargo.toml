@@ -1,0 +1,19 @@
+[package]
+name = "gorca-ingress"
+description = "Per-app coalescing ingress: CoalesceKey, slots, push and drain API."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-model = { workspace = true }
+gorca-rt = { workspace = true }
+smallvec = { workspace = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true }

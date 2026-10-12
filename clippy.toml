@@ -1,0 +1,15 @@
+msrv = "1.99"
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-dbg-in-tests = true
+
+# ADR-0001 section 5.3 D-4: all IPC goes through the deadline helper in gorca-dbus.
+# The one allowed call site carries `#[allow(clippy::disallowed_methods)]`.
+disallowed-methods = [
+    { path = "zbus::Proxy::call", reason = "use gorca_dbus::with_deadline (ADR-0001 D-4)" },
+    { path = "zbus::Proxy::call_method", reason = "use gorca_dbus::with_deadline (ADR-0001 D-4)" },
+    { path = "zbus::Proxy::call_with_flags", reason = "bypasses method_timeout; use gorca_dbus::with_deadline (ADR-0001 D-4)" },
+    { path = "zbus::Connection::call_method", reason = "use gorca_dbus::with_deadline (ADR-0001 D-4)" },
+    { path = "std::thread::sleep", reason = "blocks a thread; use tokio::time::sleep, or allow it in a dedicated lane with a comment" },
+]

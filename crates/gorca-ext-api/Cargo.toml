@@ -1,0 +1,16 @@
+[package]
+name = "gorca-ext-api"
+description = "Extension WIT world, Rust trait mirror and (later) generated bindings."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+wit-parser = { workspace = true }
+
+[lints]
+workspace = true

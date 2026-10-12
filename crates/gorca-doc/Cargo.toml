@@ -1,0 +1,17 @@
+[package]
+name = "gorca-doc"
+description = "Document mirror: keyed forest, flat text, indexes, diff, bookmarks. Pure data."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-model = { workspace = true }
+
+[dev-dependencies]
+smallvec = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,109 @@
+// gorca extension world, ADR-0001 section 10.
+// Hooks run on `workers` in the app actor's context, never on the Reader lane.
+package gorca:ext@0.1.0;
+
+interface types {
+  /// (app id, local id) of a core NodeKey.
+  type node-key = tuple<u64, u64>;
+
+  enum role {
+    unknown, application, window, dialog, panel, document, heading, paragraph, link, image,
+    %list, list-item, table, row, cell, column-header, row-header, button, toggle-button,
+    check-box, radio-button, combo-box, text-entry, password-entry, spin-button, slider,
+    progress-bar, menu, menu-bar, menu-item, popover, tab, tab-list, tree, tree-item, toolbar,
+    status-bar, separator, label, static-text, terminal, landmark, alert,
+  }
+
+  record node {
+    key: node-key,
+    role: role,
+    /// StateSet bits.
+    states: u64,
+    name: option<string>,
+    description: option<string>,
+    // TBD: value, attrs, relations, bounds as the host API grows.
+  }
+
+  enum budget { interactive, prefetch, background }
+
+  variant query-error { timeout, gone, not-supported, denied }
+
+  enum prio { interrupt, message, text, progress, notification }
+
+  enum segment-kind { text, role, state, value }
+
+  record segment { text: string, kind: segment-kind }
+
+  /// Normalised events an extension may inspect (subset of core NodeEvent).
+  variant event {
+    focus-changed(node-key),
+    properties-changed(node-key),
+    children-changed(node-key),
+    text-changed(node-key),
+    caret-moved(tuple<node-key, u32>),
+    selection-changed(node-key),
+    announcement(string),
+    window-activated(node-key),
+    node-removed(node-key),
+  }
+
+  /// Verdicts compose left to right across matching extensions.
+  variant event-verdict {
+    pass,
+    suppress,
+    rewrite(list<segment>),
+    /// Ask the host to re-evaluate the node.
+    re-evaluate,
+  }
+
+  enum present-reason { focus, navigation, say-all, review }
+
+  record present-ctx {
+    epoch: u64,
+    reason: present-reason,
+  }
+
+  record nav-unit {
+    id: u32,
+    name: string,
+  }
+
+  variant command-result {
+    handled,
+    not-handled,
+    speak(list<segment>),
+  }
+}
+
+interface host {
+  use types.{node, node-key, budget, query-error, segment, prio};
+
+  /// Mirror only, never blocks.
+  get-node: func(key: node-key) -> option<node>;
+  /// Host-enforced deadline.
+  fetch: func(key: node-key, mask: u32, b: budget) -> result<node, query-error>;
+  text: func(key: node-key, start: u32, end: u32, b: budget) -> result<string, query-error>;
+  /// Tagged with the current epoch by the host.
+  speak: func(segments: list<segment>, prio: prio);
+  /// Own namespace only.
+  set-setting: func(k: string, v: string);
+  log: func(level: u8, msg: string);
+}
+
+interface hooks {
+  use types.{node, event, event-verdict, present-ctx, segment, nav-unit, command-result};
+
+  /// Limit: 2 ms CPU.
+  on-event: func(ev: event) -> event-verdict;
+  /// Limit: 2 ms CPU. `some` replaces the core presentation (first match wins).
+  present: func(n: node, ctx: present-ctx) -> option<list<segment>>;
+  nav-units: func() -> list<nav-unit>;
+  nav-match: func(unit: u32, n: node) -> bool;
+  /// Limit: 20 ms CPU.
+  command: func(id: u32) -> command-result;
+}
+
+world extension {
+  import host;
+  export hooks;
+}

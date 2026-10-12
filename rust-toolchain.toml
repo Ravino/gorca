@@ -1,0 +1,6 @@
+# The toolchain lives in .toolchain/ (see env.sh) and is the rustup default there.
+# "stable" resolves to the installed 1.99.x without a network fetch; the MSRV is
+# enforced by `rust-version` in Cargo.toml.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
