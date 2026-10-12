@@ -166,6 +166,20 @@ counter that drifted below the real size; (4) announcement text and the sender c
 unbounded; (5) there was no bound across apps. (1)-(5) are fixed in the reference; the message-size
 bound (B-5) is open for candidates.
 
+### 3.7 Audit requirements (security audit of 74dbd07, binding on every candidate)
+
+These requirements come from the security audit. Each one has a test in `crates/gorca-ingress/tests/audit_*.rs`. The tests are `#[ignore]` on the reference; every candidate must un-ignore them and pass all of them.
+
+| # | Severity | Requirement | Tests |
+|---|---|---|---|
+| AU-1 | High | Dropping an ingress (or its receiver) returns every charged slot. Σ `live` over all ingresses == `SlotBudget::used` at all times, asserted by tests (`check()` must verify equality, not `used ≥ live`). | `audit_budget_released_when_ingress_dropped`, `audit_sender_churn_exhausts_global_budget_permanently` |
+| AU-2 | High | A push into an ingress whose receiver is gone charges nothing. A sender that has disconnected (NameOwnerChanged) loses its cached route in the drain. | `audit_dead_receiver_does_not_hold_budget` |
+| AU-3 | High | Each app has a reserved minimum of slots that other apps cannot use. Only slots above that minimum come from the shared pool. One app's overflow never drops another app's events. | `audit_hostile_apps_cannot_starve_a_victim` |
+| AU-4 | Medium | The budget and `hard_cap` count queued events, including text deltas (a text slot holding k deltas is charged k). | `audit_text_deltas_are_charged_and_bounded` |
+| AU-5 | Medium | Memory held by an idle, drained ingress is ≤ 1 MiB. Capacity above that is freed on drain. | `audit_drained_storm_releases_memory` |
+| AU-6 | Medium | No single push or drain critical section exceeds 250 µs worst case at `hard_cap`. Amortised O(1) is not sufficient: compaction and drain must be incremental or lock-free. | `audit_single_push_is_bounded_under_tombstone_compaction`, `audit_drain_critical_section_is_bounded` |
+| AU-7 | Low | Concurrent pushes must never overshoot the global budget, including Focus charges. | (candidate adds a test) |
+
 ## 4. The ingress interface (`gorca_ingress`)
 
 ```rust
