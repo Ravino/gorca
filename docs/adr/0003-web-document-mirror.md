@@ -1,6 +1,6 @@
 # ADR-0003: Web document mirror — data model, sources, incremental updates, SPA identity, browse mode
 
-- **Status:** Proposed (2026-10-12). Decisions W, G and the variant C identity scheme were approved by the owner on 2026-10-12 (`docs/decisions.md`). This ADR encodes them; everything else is new and marked *proposed*. §20 lists the items that need sign-off.
+- **Status:** Accepted (2026-10-12). Decisions W, G and the variant C identity scheme were approved earlier the same day; all 11 §20.2 items were then approved, item 4 with an owner amendment (no cap on mirrors; one awake mirror, all others dormant; §6.6). Text still marked *proposed* below refers to those approved items; constants marked *heuristic* remain tunable by measurement.
 - **Date:** 2026-10-12
 - **Deciders:** project owner
 - **Extends:** ADR-0001 §9 (R6), §7.2 (`Mode`), §11 (workspace), §14 (metrics), §15 (B-6). Amendments to ADR-0001 are listed in §2.1 and take effect when this ADR is accepted.
@@ -16,6 +16,7 @@
 | Date | Change |
 |---|---|
 | 2026-10-12 | Draft (Proposed). |
+| 2026-10-12 | **Accepted with amendment.** All §20.2 items approved. Item 4 amended: no fixed cap on mirrors (N mirrors = M tabs, iframes inside their tab's mirror); only the active tab's mirror is awake, the others are dormant and do cheap invalidation marking only; wake = cursor revalidation, dirty-set re-fetch, block-wise drift check, or rebuild-as-resync that keeps logical ids when stale; mirrors are evicted only on tab close. The "8 dormant mirrors per browser" LRU limit is removed. New §6.6, `Waking` state, DM-I5…I8, DM-M1…M3, wake budgets (§14), WM-12/13/14/15. |
 
 ## 1. Context
 
@@ -42,7 +43,7 @@ Prior art. NVDA builds its virtual buffer **inside** the browser process and ans
 
 ## 2. Decision (summary)
 
-1. **Mirror per top-level document** (one doc actor per browser tab document, iframes included as subtrees). The mirror is a typed graph in a generational arena, with an **augmented treap over preorder** as the single navigation index and flat-text map (decision G). The B+tree "sum tree" is the upgrade path behind the same summary trait.
+1. **Mirror per top-level document** (one doc actor per browser tab document, iframes included as subtrees), with **no cap on the number of mirrors**. Only the mirror of the active tab is awake; all others are dormant (invalidation marking only, no IPC) and catch up on wake (§6.6). Mirrors are evicted only when their tab closes. The mirror is a typed graph in a generational arena, with an **augmented treap over preorder** as the single navigation index and flat-text map (decision G). The B+tree "sum tree" is the upgrade path behind the same summary trait.
 2. **Publication by double-buffering** (`left-right`): the doc actor writes, the Reader and `PresentJob`s read wait-free. Mirror operations are deterministic so both copies stay identical. *Proposed.*
 3. **`DocumentSource` abstraction** (decision W; the trait is ADR-0001's `DocSource`, kept under that name in code). Baseline: `AtspiDocSource`, tuned. Opt-in: `HybridDocSource` = AT-SPI (authority for focus, caret, actions) + `AgpFirefoxSource` (bulk and batches). B-6 decides Firefox's default. **No CDP.** Chromium is AT-SPI only.
 4. **Identity: variant C.** `DocNodeId` is the *logical* node. The ladder AT-SPI path → validated DOM id → (role, name, tag) + sibling order maps transport objects to it, and a `GetChildren` revalidation of the cursor's parent on read catches Chromium's silent reorders.
@@ -220,7 +221,7 @@ impl DocRead {
 - **PUB-1 Determinism.** Every mutation is a `MirrorOp` applied to both copies (left-right's operation log). Treap priorities are `xxh3(DocNodeId, doc_seed)`, never an RNG, and the free list is deterministic, so both copies have the same shape and the same slots.
 - **PUB-2 Publish points.** At each `Settled` batch end and each update-round end; during a build, every 50 ms or 2,000 nodes (ADR-0001 §9.4). Readers never see half a batch.
 - **PUB-3 Bounded guards.** Reader-side closures hold the guard ≤ 100 µs (hot-path queries take 1–5 µs). Say-all and the elements list copy out ≤ 256 nodes per guard. `publish()` waits for readers of the old copy, which is therefore bounded by `GUARD_MAX`; the watchdog counts any wait over 1 ms.
-- **PUB-4 Cost.** Memory is about 2× the mirror (≈ 2 × 40 MB at 100k nodes [estimate], inside ADR-0001 M-8's 600 MB with ADR-0002's 96 MiB); write CPU about 2×, off the hot path (PC-6).
+- **PUB-4 Cost.** Memory is about 2× the mirror (≈ 2 × 40 MB at 100k nodes [estimate]; the awake mirror counts inside ADR-0001 M-8's 600 MB with ADR-0002's 96 MiB, dormant mirrors are exempt, DM-M1); write CPU about 2×, off the hot path (PC-6).
 
 Why not the alternatives: messaging every query to the doc actor puts a cross-thread round trip and the actor's slice latency on every key press; persistent maps (im/rpds) cost 2–5× per update and copy on every write (GM §1.3); cloning a `HashMap` snapshot per publish (the current scaffold, `crates/gorca-doc/src/mirror.rs`) is O(n) per batch. The B+tree upgrade path (GM §1.2 option E) with `Arc`'d chunks would allow O(log_B n) path-copy snapshots and could replace double-buffering; microbenchmark **MB-4** compares them (§19).
 
@@ -311,7 +312,8 @@ enum SourceState {
     Building    { phase: BuildPhase },                       // §8
     Live        { since: Instant },
     Resyncing   { scope: ResyncScope, reason: ResyncReason }, // Subtree(root) | Document
-    Dormant     { since: Instant, cursor: Bookmark },         // document not showing (WF-12)
+    Dormant     (Dormancy),                                   // not the active tab, or hidden (WF-12); §6.6
+    Waking      { phase: WakePhase, started: Instant, plan: WakePlan }, // §6.6.3
     Degraded    { from: SourceKind, until_retry: Instant },   // hybrid fell back to AT-SPI
     Gone,
 }
@@ -326,13 +328,121 @@ enum SourceState {
 | Live | dirty set over the overflow bound (§9.5) or `Gap` | Resyncing{Document} | rebuild-as-resync: logical ids preserved by diff |
 | Live | IL-R1 mismatch, unknown node in delta | Resyncing{Subtree} | targeted `GetTree` |
 | Resyncing | done | Live | publish |
-| Live, Resyncing | document loses `SHOWING` or window deactivated and hidden | Dormant | stop planning non-urgent fetches; keep events as dirty marks |
-| Dormant | `SHOWING` again | Resyncing{Document} (drift check) | `GetTree(Name, ChildCount)` of the document, keyed diff against the mirror |
+| Live, Resyncing | `SetActivity(Dormant)` (another tab became current) or the active document loses `SHOWING` | Dormant | full table in §6.6.2 |
+| Dormant | `SetActivity(Awake)` or `SHOWING` back on the active document | Waking → Live | wake catch-up, §6.6.3 |
 | any (hybrid) | AGP detach / 3 gaps in 60 s | Degraded | AT-SPI resync of unreconciled parts; cursor kept (IR-7) |
 | Degraded | retry timer (backoff 30 s → 10 min) | Attaching{Hybrid} | — |
 | any | `DocGone`, app `Gone` | Gone | tombstone; Reader notified |
 
-Mirrors of up to 8 `Dormant` documents per browser are kept (LRU); beyond that the oldest is dropped and rebuilt on return (*proposed*).
+Mirrors are never dropped for memory or by LRU; §6.6 defines dormancy and the only eviction rule (tab close).
+
+### 6.6 Tab activity and dormancy (owner amendment, 2026-10-12)
+
+**Owner decision.** There is no fixed cap on mirrors: **N mirrors = M tabs**, one mirror per top-level tab document, iframes included as subtrees (§2 item 1). Only the mirror of the tab the user is currently in is *awake*; every other mirror is *dormant*. Memory is explicitly not a constraint, so a dormant mirror is never evicted for memory, age or count. It is dropped only when its tab closes (§6.6.6).
+
+#### 6.6.1 Who is awake
+
+- **DA-1 Active document.** The Reader owns `active_doc: Option<DocId>`: the document of the selected tab in the **most recently focused browser window**, across all browser apps. It changes when (a) focus enters a different web document, (b) the selected `page tab` of the focused browser window changes (`STATE_SELECTED` on the tab, or `SHOWING` set on another document of that window), or (c) the document of the active tab is replaced by navigation (§6.6.6). When focus moves to a non-browser app, `active_doc` is **kept**: the user is still "in" that tab when they come back, and keeping one mirror live costs one document's events.
+- **DA-2 Single awake mirror.** The Reader sends `SetActivity(Awake)` to the new active doc actor and `SetActivity(Dormant)` to the previous one, in that order, with the same epoch. Invariant **DM-I5**: at most one doc actor in the whole process is outside `Dormant`/`Detached`/`Gone`, apart from the bounded background prebuild of §6.6.5 and the single pre-warm of DA-4.
+- **DA-3 Hidden awake document.** If the active document's window is minimised, on another workspace or occluded (`SHOWING` lost), Firefox stops updating its tree (WF-12). The doc actor goes `Dormant { cause: Hidden }` while it stays `active_doc`; it wakes when `SHOWING` returns. The wake path is the same as for a tab switch.
+- **DA-4 Pre-warm (optional, default on).** When focus lands on a `page tab` in the browser chrome (the user is walking the tab strip) or on a tab in the tab-search list, the Reader sends `PreWarm` to that tab's doc actor. It runs wake phases W1–W2 (below) at `Prefetch` class without becoming awake, and is cancelled by the next `PreWarm` or by focus leaving the tab strip. At most one pre-warm runs at a time.
+
+#### 6.6.2 State machine
+
+`SourceState::Dormant` and the old "Dormant → Resyncing{Document}" row of §6.5 are replaced by:
+
+```rust
+enum SourceState {
+    Detached,
+    Attaching   { kind: SourceKind, deadline: Instant },
+    Building    { phase: BuildPhase, priority: BuildPriority },   // Active | Background (§6.6.5)
+    Live        { since: Instant },
+    Resyncing   { scope: ResyncScope, reason: ResyncReason },
+    Dormant     (Dormancy),
+    Waking      { phase: WakePhase, started: Instant, plan: WakePlan },
+    Degraded    { from: SourceKind, until_retry: Instant },
+    Gone,
+}
+
+struct Dormancy {
+    since: Instant,
+    cause: DormantCause,          // BackgroundTab | Hidden
+    marks: DormantMarks,
+    resume: Bookmark,             // the Reader's saved cursor (also kept by the Reader, §11)
+    rev_at_sleep: u64,            // mirror revision when it fell asleep
+}
+enum DormantMarks {
+    Tracking { set: DirtySet, events: u32 },   // §9.2 dirty set, filled without any fetch
+    Overflowed { at: Instant },                // UP-5 bound crossed while dormant: marks dropped
+    NeedsRebuild { reason: RebuildReason },    // reload / load-complete / document swap seen while dormant
+}
+enum WakePhase {
+    W1Cursor,      // revalidate the cursor's parent and container (IL-R1), urgent class
+    W2Dirty,       // re-fetch the dormant dirty set, viewport first (§9.4 DP, same budget rounds)
+    W3Drift,       // block-wise drift check of the rest of the document (§6.6.3)
+    Rebuild,       // rebuild-as-resync (§9.5 UP-5): diff keeps DocNodeIds, cursor, live state
+}
+enum WakePlan { CatchUp, Rebuild }
+enum DormantCause { BackgroundTab, Hidden }
+```
+
+| From | Event | To | Effects |
+|---|---|---|---|
+| Live, Resyncing | `SetActivity(Dormant)` or `SHOWING` lost on the active doc (DA-3) | Dormant{Tracking} | cancel queued fetches (generation bump, CC-3); in-flight replies are applied when they arrive (already paid for); live-region queue of this doc flushed; final publish |
+| Building{Active} | `SetActivity(Dormant)` | Building{Background} | the build continues at `Bulk` class under §6.6.5 limits, then Dormant; the viewport block already fetched keeps the doc readable |
+| Dormant{Tracking} | doc event | Dormant{Tracking} | fold into the dirty set (§6.6.4); no IPC |
+| Dormant{Tracking} | marks > `max(50_000, 20 % of nodes)` | Dormant{Overflowed} | drop the dirty set (bounded memory) |
+| Dormant{*} | `load-complete`, `reload`, document name+URL change, `Gap` | Dormant{NeedsRebuild} | drop the dirty set |
+| Dormant | `SetActivity(Awake)` or `SHOWING` back on the active doc | Waking{W1Cursor, plan} | `plan = Rebuild` if marks are `Overflowed`/`NeedsRebuild` or dormancy > `T_stale`; else `CatchUp`. Publish nothing new yet: the snapshot is readable at once (DM-I6) |
+| Dormant | `PreWarm` | Dormant (pre-warming) | run W1 and W2 at Prefetch class; results applied and published; marks cleared for fetched nodes; still Dormant |
+| Waking{W1Cursor} | W1 done or 50 ms deadline | Waking{W2Dirty} (CatchUp) or Waking{Rebuild} | mismatches become `may_refine` corrections (IL-R1) |
+| Waking{W2Dirty} | dirty set empty | Waking{W3Drift} | publish per round (PUB-2) |
+| Waking{W3Drift} | drift ratio of the checked blocks > 25 % | Waking{Rebuild} | the rest of the document is rebuilt, not checked |
+| Waking{W3Drift} | all blocks checked | Live | publish |
+| Waking{Rebuild} | rebuild done | Live | diffed against the mirror: logical ids, cursor and live state kept (UP-5) |
+| Waking{*} | events arrive | same | ordinary Live handling (§9): marks, settle, plan; wake rounds and event rounds share the §9.4 budget, urgent first |
+| Waking{*} | `SetActivity(Dormant)` (fast tab cycling) | Dormant{Tracking} | queued wake fetches cancelled; what was applied stays; unfinished phases leave their marks in the dirty set; W3 progress is discarded and the next wake checks again |
+| any except Gone | `DocGone`, tab closed, app `Gone` | Gone | evict (§6.6.6) |
+
+`T_stale = 30 min` (*heuristic*, tuned by WM-13). A dormant mirror older than that is rebuilt rather than checked because a long-hidden Firefox document can have lost events (WF-12) in any part of the tree, and a block-wise check of everything costs about as much as a rebuild.
+
+#### 6.6.3 Wake catch-up
+
+The order follows what the user hears first.
+
+1. **W0 (instant, no IPC).** **DM-I6:** a `Dormant` or `Waking` mirror is always readable through `DocRead` (wait-free, §4.8); it is the snapshot published when it fell asleep, plus whatever wake rounds have published since. The Reader restores `WebMode` and the cursor from its saved state (§11) and speaks the title and the cursor's line within the key → speech budget. Anything spoken from a waking mirror is marked `may_refine` (ADR-0001 §8.1).
+2. **W1 cursor.** `Revalidate` of the cursor's parent and, if it is in a list, table or grid, of that container (IL-R1), urgent class, deadline 50 ms.
+3. **W2 dirty set.** The marks gathered while dormant are planned with the §9.4 DP, viewport first, then ranked categories, in 20 ms server-time rounds. Each round publishes.
+4. **W3 drift check.** Needed because neither browser's event stream can be trusted for a non-showing document: Firefox stops updating hidden documents (WF-12), and Chromium reorders silently (WF-7). The document is walked in the §8.1 `BlockPlan` order (viewport blocks first) with `GetTree(Name, ChildCount)`; a keyed diff against the mirror turns differences into ordinary dirty marks, which are fetched in the same rounds. BU-1 block splitting applies.
+5. **Rebuild** (when chosen at wake or escalated from W3) is §9.5 UP-5 rebuild-as-resync, viewport block first. Because the result is diffed by `atspi` key and then by the §10 matcher, `DocNodeId`s, bookmarks and live-region state survive.
+
+#### 6.6.4 What a dormant mirror still listens to
+
+**Decision: cheap invalidation marking, not deafness.** The browser's events reach gorca regardless: AT-SPI match rules are per application, not per document, so the app actor receives and decodes them whether the doc actor listens or not (ADR-0001 §6). Folding an event into a dirty mark costs < 2 µs (§14) and makes the wake catch-up proportional to what changed, not to document size. Going deaf would save only those 2 µs per event and would force every wake to run a full drift check.
+
+| Event (routed by the app actor) | Dormant handling |
+|---|---|
+| `children-changed`, `property-change` (name, description, role), `state-changed` (other than below), `text-changed`, attribute changes | dirty mark only (§9.2 bits); `remove` marks the parent, no local subtree drop (no `MirrorOp`, no publish) |
+| `state-changed:showing` on the document, tab `selected` | activity signal to the Reader (DA-1, DA-3) |
+| `focus` / `state-changed:focused` inside the document | activity signal (the tab became current) |
+| `document:load-complete`, `reload`, `load-stopped`, document frame name/URL change | `NeedsRebuild` (a real navigation is handled as `Reset` on wake, §8) |
+| document `defunct`, `children-changed:remove` of the document from its tab, app `Gone` | `Gone` (§6.6.6) |
+| live-region changes | dirty marks only. Nothing is classified or queued: background tabs are muted (§13.2), and messages would exceed their TTL before a wake anyway. On wake, content that arrived while dormant is treated as present at region creation (not announced) |
+| caret, selection, `active-descendant-changed`, `bounds-changed`, `visible-data-changed` | dropped (re-read from the mirror and W1 on wake) |
+
+- **DM-I7** A `Dormant` doc actor issues no IPC call, holds no fetch in a queue and runs no timer except `T_stale` bookkeeping, outside an explicit `PreWarm`.
+- **DM-I8** Dormant work per event is O(1) amortised and allocation-free except dirty-set growth, which is bounded by the `Overflowed` transition.
+- When the app actor is `Flooded` (ADR-0001 R-3), the dormant doc actor is not even woken per event: the app actor sets one `Overflowed` bit for the document and the mirror is rebuilt on wake.
+
+#### 6.6.5 Memory and background tabs
+
+- **DM-M1 No memory eviction.** Dormant mirrors keep both `left-right` copies, the treap, the flat text and the live-region registry. Keeping both copies lets W0 read immediately with no re-copy on wake. Dormant mirrors are **exempt from ADR-0001 M-8** (owner decision); their size is measured and reported (WM-15), never enforced.
+- **DM-M2 Background prebuild.** A tab that has never been active (opened in the background, restored session) gets its mirror built in the background so that its first visit is a wake, not a cold build: `Building{Background}` at `Bulk` class, **one document per browser app at a time**, only while the active document is `Live` with an empty dirty set, and paused whenever the active document has work. Tabs the browser has not loaded (Firefox lazy session restore, Chromium discarded tabs) expose no document and get no mirror until loaded. Setting: `web.prebuild_background_tabs = true`.
+- **DM-M3 Dropping is off the actor.** Freeing a 100k-node mirror takes milliseconds; arenas are moved to a drop task on the `cpu` pool so that closing a window with 100 tabs never stalls an actor.
+
+#### 6.6.6 Eviction: only on tab close
+
+A mirror is evicted when its document leaves the browser: the tab closes (document `defunct`, or removed from its tab), the browser discards the tab's document (it comes back as a new load), or the app goes `Gone`. Navigation inside a tab replaces the document: the old mirror is dropped and the new document is built (`Reset`), with the cursor restored from the RS-4 per-URL bookmark. Nothing else evicts a mirror: not memory, not age, not mirror count.
 
 ## 7. Concurrency and backpressure
 
@@ -490,7 +600,7 @@ enum WebMode {
     Loading { doc: DocId, entered: Instant, focus: Option<DocNodeId> }, // before first-useful
     Browse  { doc: DocId, cur: Bookmark, scope: Scope },                // Scope: Document | Modal(DocNodeId)
     Focus   { doc: DocId, node: DocNodeId, cause: FocusCause, resume: Bookmark, scope: Scope },
-    Dormant { doc: DocId, saved: Box<WebMode> },                        // doc not showing
+    Dormant { doc: DocId, saved: Box<WebMode> },                        // not the active tab, or hidden (§6.6)
 }
 enum FocusCause { Auto, Manual, Application }
 ```
@@ -518,8 +628,8 @@ Pass-through predicate `P(n, reason)` (from NVDA `shouldPassThrough`, `refs/nvda
 | Browse, Focus | `aria-modal` dialog opened | same, `scope = Modal(d)` | cursor confined to `d`; quick nav searches inside `d` only. This differs from NVDA, which treats `dialog` as an application role (focus mode, `browseMode.py:302`); gorca keeps browse mode so long dialogs stay readable, and Tab/focus changes still apply `P` |
 | Browse, Focus | modal closed | same, `scope = Document` | cursor back at the opener's bookmark |
 | any in doc | `RouteSwapped` | same mode | §10.3 |
-| any in doc | doc not showing (tab switch, occlusion) | Dormant{saved} | — |
-| Dormant | showing again | `*saved` | drift check runs (§6.5); cursor restored |
+| any in doc | another tab becomes active, or the doc is hidden (DA-1, DA-3) | Dormant{saved} | the Reader keeps `saved` per `DocId` (`HashMap<DocId, WebMode>`, entry removed on `DocGone`), with no cap |
+| Dormant | doc becomes active or showing again | `*saved` | W0: title and cursor line spoken from the snapshot with `may_refine`; wake catch-up runs (§6.6.3) |
 | any | focus leaves doc | Inactive | bookmark saved (RS-4) |
 | any | `DocGone` | Inactive | — |
 
@@ -598,6 +708,12 @@ All answers come from `DocRead` with no IPC (WEB §4.1). Keys are provisional (`
 | Route swap, 1k nodes / 20k nodes | mirror consistent < 150 ms / < 1 s after the last event (p95) | WM-4 |
 | Matcher (cursor restore) | ≤ 5 ms for ≤ 2k swapped nodes on the doc actor; larger on `cpu`, ≤ 40 ms at 100k [estimate, GM §3.2] | §10 |
 | Parent revalidation | Validate deadline 50 ms; correction only within `may_refine` (150 ms audio) | IL-R1 |
+| Wake W0: tab switch → title and cursor line speech start (from the dormant snapshot) | < 15 ms | no IPC; `may_refine` (§6.6.3) |
+| Wake W1: cursor parent/container revalidated | < 50 ms (Validate deadline) | IL-R1 |
+| Wake W2: dormant dirty set re-fetched, ≤ 1,000 marks | < 150 ms wall p95; viewport marks within the first 20 ms round | §9.4 rounds |
+| Wake W3: drift check complete | 10k nodes < 1 s; 100k < 5 s in the background, viewport blocks < 150 ms | §6.6.3; WM-12 |
+| Wake rebuild-as-resync | viewport consistent < 300 ms; full per WM-1 | §9.5 |
+| Dormant event cost | < 2 µs per event, 0 IPC calls | DM-I7, DM-I8 |
 | Live region: last mutation → speech start | ≤ 50 ms settle + 15 ms | under throttle caps |
 | First-useful (10k nodes) | < 150 ms after load-complete (ADR-0001 M-9) | §8 |
 | First-useful (100k nodes) | < 300 ms after the browser has the tree | viewport block first |
@@ -652,7 +768,12 @@ TBD hooks filled by B-6:
 | `GetTree` missing or erroring | AS-2 | pipelined walk |
 | `GetTree` reply huge / slow | BU-1 server-time EWMA | smaller blocks |
 | Firefox cold cache domain | empty text on a node with children | `Stale`; retry after the push (AS-3) |
-| Hidden or occluded Firefox document | `SHOWING` lost, window inactive | `Dormant`; drift check on return (§6.5) |
+| Hidden or occluded Firefox document | `SHOWING` lost, window inactive | `Dormant{Hidden}`; drift check on wake (§6.6) |
+| Events lost for a dormant document (WF-12, WF-7) | not detectable while dormant | W3 drift check on every wake; rebuild if `T_stale` passed or drift > 25 % |
+| Fast tab cycling (Ctrl+Tab held) | `SetActivity` churn | each wake cancelled at the next switch; only W0 runs per visited tab; no backlog of fetches (§6.6.2) |
+| Wake while the browser is hung | `AppHealth::Hung` | W0 serves the snapshot (stale but present); "not responding" once; catch-up resumes on recovery |
+| Window with 100 tabs closed | 100 `DocGone` | 100 evictions; arenas freed on the `cpu` pool (DM-M3) |
+| Many open tabs (hundreds) | — | by design: one mirror each, memory grows with tabs (DM-M1); reported by WM-15 |
 | Chromium silent reorder | IL-R1 mismatch | `Children` delta; `may_refine` |
 | Wrong re-match | `Validate` failure before an action, user report | action refused and re-resolved; counted (WM-6) |
 | AGP gap, crash, version drift | sequence gap, EOF, alignment mismatches | `Degraded` → AT-SPI, cursor kept (IR-7) |
@@ -696,7 +817,10 @@ TBD hooks filled by B-6:
 | WM-9 | browser jank | no page frame > 50 ms attributable to gorca during build and storms (rAF jitter probe, SRC §8 metric 4) | B-6 harness |
 | WM-10 | memory | ≤ 1 KB per node for both copies plus indexes at 100k nodes [target to validate] (within M-8) | `smem`, heap profiler |
 | WM-11 | re-fetch efficiency | DP plan vs NVDA-style ancestor re-render on the SPA corpus: server time and calls per burst; DP must not be worse on any scenario | planner replay |
-| WM-12 | dormant drift | hidden Firefox document mutated for 60 s: mirror matches the browser < 1 s after it becomes visible (10k nodes) | private headless gnome-shell (SPA §7.2) |
+| WM-12 | dormant drift | background tab and hidden Firefox window mutated for 60 s: mirror matches the browser < 1 s after wake (10k nodes), with `DocNodeId`s of unchanged nodes preserved | private headless gnome-shell (SPA §7.2) |
+| WM-13 | wake latency | Ctrl+Tab between 2, 20 and 200 open tabs (10k nodes each, 0 / 100 / 5,000 changes while dormant, dormant 1 min / 1 h): W0 < 15 ms p99, W1 < 50 ms, W2/W3/rebuild within §14; cursor on the same logical node ≥ 0.95; tunes `T_stale` and the 25 % drift threshold | B-6 harness + `tests/web/spa/` |
+| WM-14 | dormant cost | 50 dormant tabs each receiving 1k ev/s: 0 IPC calls from dormant doc actors, < 2 µs per event, active document's M-1 Δp99 < 1 ms | storm generator |
+| WM-15 | mirror memory | RSS per dormant mirror and total vs open tabs (10, 100, 300 tabs); reported, not gated (DM-M1) | `smem`, heap profiler |
 | MB-4 | publication | `left-right` double buffer vs `ArcSwap` of a chunked persistent B+tree: read p99, publish cost, memory at 100k | microbench (perf-engineer) |
 
 ## 20. Open questions and sign-off
@@ -713,12 +837,12 @@ TBD hooks filled by B-6:
 | TBD-WEB-6 | math-researcher | Re-run the matcher and the grouping on the 46 real trees in `research/web-graph/real-trees/` (GM §9). |
 | TBD-WEB-7 | wasm-engineer | WIT 0.2 hooks of §15. |
 
-### 20.2 Sign-off requested (new decisions)
+### 20.2 Sign-off (all items approved 2026-10-12; item 4 amended)
 
 1. **Canonical text shape (§4.3):** text leaves as nodes; Firefox text runs are synthesised by `AtspiDocSource`.
 2. **Publication by `left-right` double-buffering (§4.8)** with deterministic apply, validated by MB-4 against a persistent B+tree.
 3. **`DocNodeId` as a generational logical identity (§4.1, §5)** that survives re-matching; amends ADR-0001 §9.3.
-4. **One mirror per top-level tab document**, iframes included; up to 8 dormant mirrors per browser (§6.5).
+4. **One mirror per top-level tab document**, iframes included. *Approved with amendment:* no fixed cap (N mirrors = M tabs); only the active tab's mirror is awake, all others dormant; fast wake catch-up; eviction only on tab close (§6.6).
 5. **Update constants and overload rule (§9.3–9.5):** W = 40 ms, W_max = 150 ms, urgent class immediate, 20 ms server-time budget per round, rebuild-as-resync on overflow.
 6. **Browse/focus defaults (§11):** NVDA parity: auto focus mode on focus change on, on caret move off, browse cursor does not move system focus, Escape leaves auto focus mode, `role=application` sticky, modal dialogs confine the cursor.
 7. **Route-swap restore (RS-1):** cursor to the focus target, else the start of the new content; title spoken; no automatic say-all on SPA routes.
