@@ -1,0 +1,7 @@
+{
+  "uuid": "gorca-helper@gorca",
+  "name": "gorca shell helper",
+  "description": "Private D-Bus service for the gorca screen reader: in-memory screen crops and window geometry. Access is restricted to allow-listed executables.",
+  "shell-version": ["48"],
+  "version": 1
+}
