@@ -9,7 +9,8 @@
   - `docs/reports/2026-10-12-linux-platform-foundation.md` and `docs/platform/*` (keyboard monitor, broker, VTE, SSIP measurements)
   - `docs/reports/2026-10-12-web-a11y-browsers.md` (Firefox/Chromium AT-SPI behaviour, browse-mode requirements)
   - `docs/adr/0002-multimodal-perception-layer.md` (Accepted 2026-10-12): extends §6 (feature actor, perceive-io), §7.2 (`Find`, `Map` modes), §8.2 (proposed `SpeechCmd::Earcon`), §11 (new crates, dependency rules 8–12), §14 (metrics PM-1…PM-14)
-  - `docs/adr/0003-web-document-mirror.md` (Proposed): refines §9 (web mirror, sources, identity), §7.2 (browse/focus `WebMode`), §11, §15 (B-6 arms); its amendment list is in its §2.1
+  - `docs/adr/0004-ingress-drain-and-coalescer.md` (Accepted, conditional on its BF-1…BF-4): resolves B-2; §5.3, §6.1, §6.2 and §6.3 amended accordingly
+  - `docs/adr/0003-web-document-mirror.md` (Accepted): refines §9 (web mirror, sources, identity), §7.2 (browse/focus `WebMode`), §11, §15 (B-6 arms); its amendment list is in its §2.1
 
 ## 0. Changelog
 
@@ -19,6 +20,7 @@
 | 2026-10-12 | **Accepted with amendments.** R1: Orca identity impersonation (bus name, process name), Chrome flag (§5.5). R4 changed: speech is a separate service behind `SpeechClient` with voicego-native and SSIP backends; in-process synthesis and PipeWire tuning dropped; B-3 retired (§8). R6 extended: `SourceLayer` under the web document mirror, identity-reconciliation requirements, bake-off B-6 (§9). New §3, performance and concurrency model: multi-threaded, sharded, single-writer/lock-free-reader state, dedicated hot lanes; Reader, event-bus and per-app bottleneck audit; B-5 upgraded to a measured A/B. Platform facts added: unbounded broker buffering then disconnect, so a dedicated drain is mandatory (§5.3); unicast un-acked `KeyEvent` and re-injection-only pass-through (§7.3); VTE full-screen diffs per frame (§5.6). Open questions P-1…P-6 and W-1…W-4 resolved or narrowed (§16). Final workspace layout (§11). |
 | 2026-10-12 | Cross-reference: ADR-0002 (Proposed) adds the multimodal perception layer. It extends §6, §7.2, §8.2, §11 and §14 without changing any accepted decision here; its amendments take effect only when ADR-0002 is accepted. |
 | 2026-10-12 | Cross-reference: ADR-0002 accepted; its amendments to §6, §7.2, §8.2, §11 and §14 are in effect. ADR-0003 (Proposed) amends §9, §11 and §15 (list in ADR-0003 §2.1), effective on its acceptance. |
+| 2026-10-12 | **B-2 resolved → ADR-0004** (candidate A: raw-socket drain, lock-free per-app ring). §6.3 rewritten: rule H (hard cap), `SlotBudget` with a flat per-app reserve and preemption (IB-7), resource bounds IB-1…IB-11 and audit invariants AU-1…AU-8 are now architectural invariants. §3.2, §3.3, §5.3, §6.1, §6.2 and §15 updated: one event connection, sharded event connections (arm c) not adopted. |
 
 ## 1. Context
 
@@ -94,7 +96,7 @@ From `docs/reports/2026-10-12-linux-platform-foundation.md` (LP) and `docs/repor
 | Lane | Threads | Runs | Priority |
 |---|---|---|---|
 | `input` | 1 | session-bus connection dedicated to `KeyEvent`, key classification, epoch bump on interrupting keys | FIFO low (rtkit) |
-| `drain-N` | 1 per event connection (1–4, B-2) | socket read, framing, header peek, routing into per-app ingress | FIFO low |
+| `drain-N` | 1 (one event connection, ADR-0004 D-3) | socket read, framing, header peek, routing into per-app ingress | FIFO low |
 | `reader` | 1 | Reader actor | FIFO low |
 | `speech-io` | 1 | speech queue state machine, `SpeechClient` socket I/O | FIFO low |
 | `watchdog` | 1 | heartbeat monitoring of the lanes above (§6.6) | normal |
@@ -108,12 +110,12 @@ The hot lanes are mostly idle and wake on I/O. Oversubscription is deliberate (P
 | Candidate bottleneck | Why it is serial | How it scales | Bound / metric |
 |---|---|---|---|
 | **Reader** | Focus, mode, epoch and navigation are one user's state. Parallelising them would create order bugs (Orca's and Odilia's reentrancy and lost-ordering failures). | (1) Cache hits are read lock-free from mirror and document snapshots (PC-1), so a hit costs no message round trip. (2) Hot-path presentation (focus, one nav step) runs inline as a pure function over snapshots. Bulk presentation (say-all chunks, tables, live-region diff text) runs as `PresentJob`s on `cpu`, and the results go **straight to the speech lane** with their epoch, without passing back through the Reader. (3) Index lookups (next heading) are O(log n) on immutable document snapshots. (4) Inbound traffic is only what is user-relevant after app-side coalescing and filtering: focus-app events, announcements, key intents, query replies. | Per-message p99 < 100 µs. Occupancy < 10 % of one core under the M-3 storm (M-14). |
-| **Event bus** | There is none (PC-2). | Drains route by sender to per-app ingress. A heavy sender can get its own event connection with a `sender=` match rule, which spreads framing over cores while keeping per-app order (B-2 arm c). | M-3, M-11 |
-| **Socket drain** | A D-Bus connection is one byte stream; framing is sequential. | The drain does header-only work (about 1–2 µs per message). Body decoding is deferred to app actors on `workers`. Sharding across connections as above. Method calls use separate connections (§5.3), so replies never queue behind events. | M-11 |
+| **Event bus** | There is none (PC-2). | The drain routes by sender to per-app ingress. Sharding heavy senders onto their own event connections (B-2 arm c) was measured and not adopted (ADR-0004 §4): one drain saturates at ~6M messages/s. | M-3, M-11 |
+| **Socket drain** | A D-Bus connection is one byte stream; framing is sequential. | The drain does header-only work (about 0.3 µs per message measured in B-2). Body decoding is deferred to app actors on `workers`. Method calls use separate connections (§5.3), so replies never queue behind events. | M-11 |
 | **App actor** | One per app; it owns that app's coalescer and mirror shard. | App actors run in parallel on `workers`. Heavy apps are split: a browser app actor forwards per-document batches to document actors, which run in parallel. Per-event cost in the app actor is O(1) (coalescer drain plus routing). Reply decoding and subtree builds fan out to `cpu`. | M-3: 100k ev/s on one app does not move other apps' M-1. |
 | **Document actor** | One per document; it owns the document mirror. | Initial build: pipelined requests (AT-SPI) or bulk snapshot (own protocol), parallel decode on `cpu`, parallel index build per index type, then one snapshot publish. Updates: dirty-subtree refresh in parallel, applied in one batch. | M-9, M-15 |
 | **Speech queue** | One audio stream. | Bounded O(1) work per command. Verbalisation (symbols, pronunciation) runs before enqueueing, on the producer's thread or `cpu`. | M-5 |
-| **Coalescer** | Per-app, written by the drain, drained by the app actor. | Lock-free MPSC or sharded map (B-2). | M-3 |
+| **Coalescer** | Per-app, written by the drain, drained by the app actor. | Bounded lock-free MPSC ring per app, fold on the consumer (ADR-0004); push is one CAS. | M-3, B-2 T7 |
 
 ### 3.4 The epoch as a lock-free cancellation primitive
 
@@ -325,9 +327,9 @@ impl MirrorWriter {
 ### 5.3 AT-SPI transport: drains, call connections, deadlines (F-3)
 
 ```
-             ┌─ event connection 0 (bus) ── drain-0 ─┐
- a11y bus ───┤  (match rules: all subscribed events)  ├──► per-app ingress (coalescer)
-             └─ event connection k (bus, B-2c) ─ drain-k ┘     (sender=:1.N for heavy apps)
+
+ a11y bus ─── event connection (bus) ── drain-0 ──────────────► per-app ingress (ring + coalescer)
+              (match rules: all subscribed events + NameOwnerChanged)
 
  a11y bus ─── call connection (bus) ──── workers ─── registry calls, fallback calls
  app P2P  ─── call connection per app (GetApplicationBusAddress) ── workers ─── per-app requests
@@ -338,7 +340,7 @@ impl MirrorWriter {
 - **D-3 Replies never share a socket with the flood.** Method calls go over P2P connections per app (WEB §1.6: -35 to -60 % p50) or over a separate bus call connection. Event connections never carry method calls except `AddMatch`/`RemoveMatch`, which are sent with a deadline.
 - **D-4 Deadline helper.** One `call(deadline, ...)` helper wraps `tokio::time::timeout`. Direct zbus proxy calls are banned with `clippy::disallowed_methods`. The connection-wide `method_timeout` (2 s) is a backstop.
 - **D-5 Inflow reduction at the source.** Subscribe to the minimal event set through `org.a11y.atspi.Registry.RegisterEvent` (apps filter unregistered events in-process, LP §2), and install narrow match rules ourselves. atspi-rs `remove_match_rule` actually adds a rule (`refs/atspi-rs/atspi-connection/src/lib.rs:262`), so we do not use it. *Proposed:* when a non-focused terminal floods, deregister `text-changed` for that app with the `app` argument of `RegisterEvent`, and re-register on focus. Whether atk-bridge honours per-app registration is open question P-11. Note that ATK still computes event text before filtering (LP §2), so this saves broker and drain cost, not app cost.
-- **D-6 Own connections.** We build our own zbus connections with `max_queued` ≥ 4096 (zbus default is 64, `DEFAULT_MAX_QUEUED`). We do not use `atspi::AccessibilityConnection`, which cannot be configured and whose `p2p` startup calls every app in sequence with no timeout (`refs/atspi-rs/atspi-connection/src/p2p.rs:304-337`). Whether the event drain uses zbus's `MessageStream` or our own raw framing reader is bake-off B-2.
+- **D-6 Own connections.** We build our own zbus connections with `max_queued` ≥ 4096 (zbus default is 64, `DEFAULT_MAX_QUEUED`). We do not use `atspi::AccessibilityConnection`, which cannot be configured and whose `p2p` startup calls every app in sequence with no timeout (`refs/atspi-rs/atspi-connection/src/p2p.rs:304-337`). The event drain does not use zbus at all: it is our own raw framing reader (B-2 → ADR-0004 D-2); zbus is used for call connections only.
 - **D-7 P2P lifetime.** A P2P connection is opened lazily on the first request, closed when the app's bus name vanishes, and treated as `Gone` on EOF. Opening it has a `Startup`-class deadline. If it fails, requests go over the bus call connection.
 
 ### 5.4 AT-SPI cache fill
@@ -389,7 +391,7 @@ Newton is not a runtime dependency. The connector API (`push`, `push_snapshot`, 
                   hot lanes (dedicated threads)                     workers (tokio MT) + cpu (rayon)
  Mutter KeyEvent ─► [input] ─KeyIntent─►┐
                       │ EpochCell.advance()                    ┌──────────────────────────────┐
- a11y bus ─► [drain-0..k] ─push─► per-app ingress ───────────► │ App actor (1/app)             │
+ a11y bus ─► [drain-0] ────push─► per-app ingress ───────────► │ App actor (1/app)             │
                                                                │  mirror shard (writer)        │
                                                                │  health SM, request mux       │
                                                                │  └─ Doc actors (1/web doc)    │
@@ -413,7 +415,7 @@ Newton is not a runtime dependency. The connector API (`push`, `push_snapshot`, 
 |---|---|---|---|---|
 | Supervisor | 1 | workers | spawn and restart policy, telemetry | a11y logic |
 | Input | 1 | input | keyboard-monitor connection, grab-set SM, keymap, modifier state | IPC to apps |
-| Drain | 1–k | drain | event connection socket | body decoding, awaits on downstream |
+| Drain | 1 | drain | event connection socket | body decoding, awaits on downstream |
 | Connector request tasks | per app | workers | P2P call connection, interners, raw→core mapping | presentation |
 | **App actor** | 1 per app | workers | mirror writer, coalescer drain, `AppHealth` SM, request mux, bound extension instances, child doc actors | user-visible state |
 | **Doc actor** | 1 per web document | workers (+cpu) | document mirror, indexes, flat text, live-region classifier, `SourceLayer` attachment | user-visible state |
@@ -426,7 +428,7 @@ Newton is not a runtime dependency. The connector API (`push`, `push_snapshot`, 
 
 | Edge | Channel | Bound | When full |
 |---|---|---|---|
-| drain → app ingress | coalescing ingress (§6.3) | 4096 distinct keys per app | `Flooded`: dirty marks, no queueing |
+| drain → app ingress | lock-free ring (1,024) + coalescing table (§6.3) | 4,096 distinct keys per app (`Flooded`); 65,536 hard cap (rule H); global `SlotBudget` + per-app reserve (IB-6, IB-7) | ring full: producer folds a bounded chunk; `Flooded`: dirty marks, no queueing; hard cap / budget: dirty-all or preemption of the largest holder. Never waits. |
 | app actor → doc actor | bounded mpsc of event batches | 64 batches | merge into the doc's dirty set |
 | app/doc actor → Reader | bounded mpsc, focus lane + background lane | 256 / 64 | background: drop oldest non-focus event, set `resync_needed`. Focus lane: coalesced in the app actor; `FocusChanged` is never dropped |
 | Reader → app/doc actor (queries) | bounded mpsc | 64 | synthesize `Busy`; the Reader falls back to the snapshot |
@@ -439,30 +441,84 @@ The Reader polls with a **biased select**: input, focus lane, query replies, bac
 
 ### 6.3 Ingress coalescing
 
-The per-app ingress is a keyed, order-preserving structure written by the drain and drained by the app actor:
+The per-app ingress is a keyed, order-preserving structure written by the drain and drained by the app actor. The implementation was decided by B-2 → **ADR-0004** (raw-socket drain, bounded lock-free ring per app, fold in ring order on the consumer or, in bounded chunks, on a producer). The rules and invariants below are architectural: any future implementation must keep them, and each one has a test in `crates/gorca-ingress/tests/` or `crates/gorca-bench-b2/tests/`. The executable model `crates/gorca-bench-b2/src/model.rs` is normative for single-producer output (B-2 SPEC §4.4).
 
 ```rust
 enum CoalesceKey {
     Focus,                     // last-writer-wins, one slot per app
     Props(NodeKey),            // OR the PropMask; value fetched lazily
-    Children(NodeKey),         // collapse; ancestor ChildrenChanged subsumes descendants (depth-limited check)
-    Text(NodeKey),             // TextDelta merge: adjacent inserts concat; insert+delete cancel; > 64 deltas => Replaced
+    Children(NodeKey),         // collapse; ancestor ChildrenChanged subsumes descendants (depth-limited check, TBD)
+    Text(NodeKey),             // TextDelta merge (R-TEXT)
     Caret(NodeKey),            // last-writer-wins
     Selection(NodeKey),
-    Announcement(Seq),         // never coalesced, but rate-capped per politeness
+    ActiveDescendant(NodeKey), // last-writer-wins per container (added by B-2)
+    Announcement(Seq),         // never coalesced, capped per drain
     Window(NodeKey), Document(NodeKey), Removed(NodeKey),
 }
 ```
 
-- **R-1 Supersession.** `Removed(n)` deletes every pending slot for `n`. `Focus` keeps only the newest node; the sequence length is kept for statistics.
-- **R-2 Ordering.** Order-preserving by first occurrence; later events for the same key update the slot in place. Per-app causal order per node; no cross-app ordering.
-- **R-3 Overload.** If distinct keys exceed the bound, or the app actor lags more than 50 ms, the app enters `Flooded`. The ingress then keeps only `Focus`, `Caret` on the focused node, `Removed`, `Window` and the announcement cap; everything else becomes a per-node dirty bit. On drain, the app actor resyncs lazily: nodes the Reader asks for, plus focus ancestry.
-- **R-4 Cost.** Push is O(1) amortised and allocation-free in steady state. Target: 100k pushes/s per app on one core.
+**Coalescing rules**
 
-- **R-5:** T-1 (delete+insert → `Replaced`) applies to all toolkits, not only VTE.
-- **R-6:** Slots hold raw message handles, not decoded bodies (`LazyText`, lazy property values), so superseded events cost no decoding.
+- **R-1 Supersession.** `Removed(n)` deletes every pending slot for `n` (including an older `Removed(n)`) and then takes its own slot; later events for `n` get new slots after it. `Focus` keeps only the newest node; the sequence length is kept for statistics.
+- **R-2 Ordering.** Order-preserving by first occurrence; later events for the same key update the slot in place (last-writer-wins for `Focus`, `Children`, `Caret`, `Selection`, `ActiveDescendant`, `Window`, `Document`, `Removed`; OR for `Props`). Per-app causal order per node (ORD-1: payload counters per node never go backwards across batches); no cross-app ordering. Several producers on one ingress keep each producer's program order.
+- **R-3 Overload (`Flooded`).** When a new key would exceed `max_keys` (4,096), or the app actor lags more than 50 ms, the app enters `Flooded`: every pending slot of a non-kept class becomes a dirty mark of its node, in slot order, and later events of those classes become dirty marks (dirty-all when they have no node). **Kept classes** queue normally: `Focus`, `Removed`, `Window`, announcements (within the cap), and `Caret(n)` when `n` is the node of the latest focus. `Flooded` ends with the drain; `Drained::dirty` is `Some` exactly when the batch was flooded. The app actor resyncs lazily: nodes the Reader asks for, plus focus ancestry.
+- **R-H Hard cap (rule H).** A push of a new key other than `Focus` with `live ≥ hard_cap` (65,536) enters `Flooded` if not yet, sets the dirty set to "everything" (an announcement is counted in `announcements_dropped` instead) and queues nothing. `Focus` is one slot and always queues, so pending slots never exceed `hard_cap + 1`. After dirty-all, the batch may lack removals (the resync rediscovers them) but never invents any.
+- **R-4 Cost.** Push is O(1), lock-free and allocation-free in steady state (one CAS on the ring, one on the budget). Targets: p99 ≤ 1 µs single producer, ≤ 5 µs with four producers (B-2 T7); 100k pushes/s per app on one core.
+- **R-TEXT / R-5.** Text deltas append in order. A `Delete` followed by an `Insert`, more than `max_text_deltas` (64) deltas, or an existing `Replaced` collapse the slot to one `Replaced { text: None }` (T-1, all toolkits). Adjacent-insert concatenation and insert/delete cancellation are deferred to the decoded-text step (R-6); an implementation that adds them must leave every other behaviour identical.
+- **R-6 Lazy bodies.** Slots hold raw message handles, not decoded bodies (`LazyText`, lazy property values), so superseded events cost no decoding.
 
-The implementation is bake-off B-2.
+**Resource bounds** (B-2 SPEC §3.6; every bound degrades to resync, never to unbounded growth or a silently lost lossless event)
+
+| ID | Bound | Value | Beyond it |
+|---|---|---|---|
+| IB-1 | Pending slots per app before `Flooded` (`max_keys`) | 4,096 | R-3 |
+| IB-2 | Pending slots per app, lossless classes included (`hard_cap`, R-H); a text slot holding k deltas counts k (AU-4) | 65,536 (+1 `Focus`) | R-H |
+| IB-3 | Records in the per-app ring (`RING_CAP`) | 1,024 | the pushing producer folds one bounded chunk (≤ 128) into the table |
+| IB-4 | Dirty set nodes | 65,536 | the set becomes "everything" |
+| IB-5 | Announcements per drain / announcement text | 16 / 4,096 bytes (clipped at a char boundary in the mapping) | dropped and counted in `announcements_dropped` |
+| IB-6 | Pending slots across all apps: one shared `SlotBudget` pool (`GLOBAL_SLOT_BUDGET`), plus a flat reserve **R = 32** per app (`IngressConfig` default) outside the pool | global bound `GLOBAL_SLOT_BUDGET + apps × (R + 1)` = 262,144 + 33 per app | IB-7 |
+| IB-8 | Superseded-slot tombstones | ≤ 2 × live + 256 | incremental compaction |
+| IB-9 | Cached sender routes per event connection (`MAX_ROUTES`) | 4,096 | cache dropped and rebuilt; disconnected senders retired on `NameOwnerChanged` |
+| IB-10 | Bytes of one incoming message held in memory | 16 MiB | skipped while streaming, counted `malformed` |
+| IB-11 | Memory held by an idle, drained ingress | ≤ 1 MiB | capacity above it freed on drain (AU-5) |
+
+**IB-7 Budget, reserve and preemption.** What a slot charge does when it needs one:
+
+```rust
+enum Charge {
+    Reserve,              // app holds < R: always granted, from its reserve (never from the pool)
+    Pool,                 // CAS on SlotBudget::used that never exceeds the limit (AU-7)
+    Preempt { holder: AppId }, // pool exhausted: largest holder above its own reserve, holding more than the requester
+    Refuse,               // no eligible holder: the requester applies R-H to itself
+}
+```
+
+| Requester state | Pool | Largest other holder `h` | Result |
+|---|---|---|---|
+| holds < R | any | any | `Reserve` |
+| holds ≥ R | not exhausted | any | `Pool` |
+| holds ≥ R | exhausted | `h.held > R` and `h.held > requester.held` | `Preempt`: `h` is flooded and set dirty-all, all of `h`'s charges above its reserve return to the pool, the requester retries `Pool` once |
+| holds ≥ R | exhausted | otherwise | `Refuse` → R-H on the requester |
+| `Focus` (any) | any | any | always queues (R-H); charged from the reserve or the pool, never refused |
+
+- **IB-7a** Preemption never takes a holder below its reserve and never preempts the requester itself. There is no other minimum holder size (B-2's 128-slot threshold was the AU-3 defect, ADR-0004 BF-1).
+- **IB-7b** Preemption is O(1) under the holder's lock: its table is swapped out and handed to the reaper thread (`gorca-reaper`). If the reaper's bounded channel is full, the table rides on the holder's next `Drained` and is freed by its app actor on `workers`, never on the drain thread.
+- **IB-7c** Fairness is per connection (`AppId` = sender). Per-process fairness is future work and must not add a method call to the drain (D-3).
+
+**Audit invariants** (B-2 SPEC §3.7; binding on every implementation, tests `crates/gorca-ingress/tests/audit_*.rs`)
+
+| ID | Invariant |
+|---|---|
+| **AU-1** | Charges are exact. At every observable point, Σ over live ingresses of (pending slots + extra text deltas + ring records) == `SlotBudget::used` (checked as equality, never `≥`). Dropping an ingress or its receiver returns every charge. |
+| **AU-2** | A push into an ingress whose receiver is gone charges nothing. A sender that disconnects loses its cached route in the drain. |
+| **AU-3** | An app holding at most R pending slots never loses an event because of another app's overflow; an app above R can lose events to another app only by being preempted (flooded + dirty-all, so it resyncs), and only if it is the largest holder. No event is ever lost without a dirty mark or a counter. |
+| **AU-4** | The budget and `hard_cap` count queued events including text deltas (a text slot with k deltas is charged k). |
+| **AU-5** | An idle, drained ingress holds ≤ 1 MiB (IB-11). |
+| **AU-6** | No single push, fold chunk, drain chunk or preemption holds a lock for more than 250 µs worst case at `hard_cap`. Amortised O(1) is not sufficient: compaction, drain and frees are incremental or deferred to the reaper. |
+| **AU-7** | Concurrent charges never overshoot the pool, `Focus` included. |
+| **AU-8** | Counters equal structure sizes after every push, merge, supersede, flood, drop, drain and preemption (`IngressReceiver::check_invariants`, `debug_assert` in debug builds); no `saturating_sub` on a counter that must be exact. |
+
+The budget is created once by `gorca-daemon` and passed explicitly to the router / app-channel factory; there is no process-wide singleton (ADR-0004 D-6).
 
 ### 6.4 Deadlines and app health
 
@@ -865,7 +921,7 @@ crates/
   gorca-rt/                   # lanes (thread spawn, naming, rtkit priority), EpochCell, Deadline,
                               # BudgetClass, virtual Clock, bounded-channel re-exports, supervisor
                               # primitives, watchdog heartbeat
-  gorca-ingress/              # coalescing ingress: CoalesceKey, Slot, push/drain API (B-2 arms behind it)
+  gorca-ingress/              # coalescing ingress: CoalesceKey, ring + fold, SlotBudget (ADR-0004)
   gorca-mirror/               # MirrorRead / MirrorWriter, per-app lock-free snapshot store (MB-1)
   gorca-connector-api/        # Connector, ConnectorCtx, AppPort, BackendRequest/Op/Reply/Error
   gorca-doc-source-api/       # DocSource, DocSourceCtx, SourceCaps, DocDelta, DocRequest, JoinPort, DocNodeId
@@ -878,7 +934,7 @@ crates/
   gorca-input-api/            # KeyEvent, KeySource, KeyInjector, GrabSet, KeyClass
   gorca-input-mutter/         # org.freedesktop.a11y.KeyboardMonitor client, name ownership (ID-1), MonitorState SM
   gorca-input-inject/         # KeyInjector over RemoteDesktop/EIS (libei); expectation table
-  gorca-dbus/                 # deadline call helper, event-connection drain (B-2), P2P pool,
+  gorca-dbus/                 # deadline call helper, event-connection raw drain (ADR-0004), P2P pool,
                               # match-rule/RegisterEvent management, SIOCINQ sampling
   gorca-connector-atspi/      # AT-SPI connector, toolkit normalisation tables, AtspiDocSource,
                               # org.a11y.Status enablement (ID-5)
@@ -974,14 +1030,14 @@ Microbenchmarks (perf-engineer, no bake-off): **MB-1** mirror store read and wri
 
 | Prio | ID | Decision | Arms | Judge on |
 |---|---|---|---|---|
-| 1 | **B-2** | Event drain + ingress coalescer (extended) | (a) zbus `MessageStream` on a drain thread + `Mutex<IndexMap>` coalescer; (b) own raw D-Bus framing reader on a drain thread + lock-free MPSC + generation-tagged lazy dedupe in the app actor; (c) (b) plus sharded event connections with `sender=` match rules for heavy apps | M-11 (no disconnect, backlog), M-3, p99 push cost, drain CPU, M-1 under storm |
+| 1 | ~~**B-2**~~ **Resolved → ADR-0004** (A wins: 80 vs C 77, B 61) | Event drain + ingress coalescer (extended) | (a) zbus `MessageStream` on a drain thread + `Mutex<IndexMap>` coalescer; (b) own raw D-Bus framing reader on a drain thread + lock-free MPSC + generation-tagged lazy dedupe in the app actor; (c) (b) plus sharded event connections with `sender=` match rules for heavy apps | M-11 (no disconnect, backlog), M-3, p99 push cost, drain CPU, M-1 under storm |
 | 2 | **B-5** | Runtime topology (upgraded from "measure only" to a measured A/B; same code, config switch, no separate implementations) | (a) everything on one tokio multi-thread runtime; (b) hot lanes on dedicated threads + workers + rayon (§3.2); (c) (b) plus rtkit `SCHED_FIFO` and core pinning for hot lanes | M-1 and M-5 while M-3 runs **and** all cores are saturated by M-15 builds; M-14 |
 | 3 | **B-1** | Native-app mirror fill strategy | (a) lazy on demand + invalidation; (b) eager `GetItems` per app; (c) hybrid: eager focus-window ancestry and siblings + lazy elsewhere. All arms use P2P and the B-2 winner | M-1/M-2 hit rate, D-Bus msgs/s, M-8, first-focus latency in Shell and Terminal |
 | 4 | **B-6** | Web SourceLayer (new; starts after web-a11y-engineer's feasibility report fills TBD-S1…S4) | (a) AT-SPI only, pipelined P2P; (b) own protocol only where available (CDP for Chromium, WebExtension for Firefox) with AT-SPI for focus and caret; (c) hybrid per TBD-S4 | M-9, M-13, M-15, robustness (source detach, IR-7), setup friction (flags, extension install), security exposure (IR-8) |
 | 5 | **B-4** | First-party extension execution | (a) WASM only; (b) dual native + WASM | M-7, `ext-vte` under T-1 storm, browse build time |
 | — | ~~B-3~~ | Speech backend | **Retired** by R4 (separate service, voicego primary). Replaced by diagnostic M-12. | — |
 
-B-2 comes first because a broker disconnect is the one failure that loses everything. It also feeds B-5's load generator. B-5 is cheap, a configuration switch over the same actors, and fixes the threading layout before others tune against it. B-1 serves the first targets in the polish order (Shell, then Terminal). B-6 waits for research.
+B-2 (now resolved by ADR-0004) came first because a broker disconnect is the one failure that loses everything. It also feeds B-5's load generator. B-5 is cheap, a configuration switch over the same actors, and fixes the threading layout before others tune against it. B-1 serves the first targets in the polish order (Shell, then Terminal). B-6 waits for research.
 
 ## 16. Open questions
 
