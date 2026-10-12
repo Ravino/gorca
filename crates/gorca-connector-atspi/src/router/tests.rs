@@ -1169,3 +1169,112 @@ async fn the_shell_as_a_newcomer_is_admitted_at_the_cap() {
     assert_eq!(r.router.known_apps(), MAX_APPS_TOTAL);
     assert_eq!(r.router.stats().evicted, 1);
 }
+
+// ---- fail-open state drift ----------------------------------------------------------------
+
+/// A `NameOwnerChanged` that was never delivered must not leave a registered name, its quota or
+/// its protection behind: reconciliation against `ListNames` retires it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn reconciliation_retires_names_the_bus_no_longer_has() {
+    let c = core(|_| Duration::ZERO);
+    let focused = Arc::new(FocusedApp::new());
+    let (new_tx, _new_apps) = mpsc::channel(64);
+    let (reg_tx, mut to_register) = mpsc::channel(64);
+    let router = Arc::new(
+        AtspiRouter::new(
+            c.registrar.clone(),
+            Clock::System,
+            Arc::new(PathTable::new()),
+            new_tx,
+            reg_tx,
+            Arc::new(Scripted::singletons()),
+        )
+        .with_focused(Arc::clone(&focused)),
+    );
+    for n in 1..=3 {
+        let _ = router.resolve(&format!(":1.{n}"));
+        router.complete(to_register.try_recv().unwrap()).await;
+    }
+    let RouteDecision::Route(gone_app) = router.resolve(":1.3") else {
+        panic!("registered")
+    };
+    focused.publish(gone_app.app); // the dead application still holds focus protection
+    assert!(focused.protects(gone_app.app));
+
+    // The bus lists :1.1 and :1.2 only; :1.3 left and its NameOwnerChanged was missed.
+    let live: HashSet<String> = [":1.1", ":1.2", "org.freedesktop.DBus"]
+        .iter()
+        .map(|s| (*s).to_owned())
+        .collect();
+    let retired = router.reconcile_with(&live);
+    assert_eq!(retired, [gone_app.app]);
+    assert_eq!(router.known_apps(), 2);
+    assert!(
+        !focused.protects(gone_app.app),
+        "no protection for a name that is gone"
+    );
+    assert!(matches!(router.resolve(":1.3"), RouteDecision::NotAnApp));
+    eventually("core half retired", || c.halves.lock().unwrap().len() == 2).await;
+    {
+        let st = router.state();
+        assert_eq!(st.names_per_group.values().sum::<usize>(), 2);
+        assert_eq!(st.names_per_evg.values().sum::<usize>(), 2);
+    }
+    // Reconciling again, with everything present, changes nothing.
+    assert!(router.reconcile_with(&live).is_empty());
+}
+
+/// When the bus cannot be asked, nothing is trusted: all protection is dropped, while every
+/// application is still served.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn when_revalidation_fails_protection_is_dropped_but_reading_continues() {
+    let c = core(|_| Duration::ZERO);
+    let focused = Arc::new(FocusedApp::new());
+    let (new_tx, _new_apps) = mpsc::channel(64);
+    let (reg_tx, mut to_register) = mpsc::channel(64);
+    let router = Arc::new(
+        AtspiRouter::new(
+            c.registrar.clone(),
+            Clock::System,
+            Arc::new(PathTable::new()),
+            new_tx,
+            reg_tx,
+            Arc::new(Scripted::singletons()),
+        )
+        .with_focused(Arc::clone(&focused)),
+    );
+    let _ = router.resolve(":1.5");
+    router.complete(to_register.try_recv().unwrap()).await;
+    let RouteDecision::Route(app) = router.resolve(":1.5") else {
+        panic!("registered")
+    };
+    focused.publish(app.app);
+    router.set_protected_process(Some((15, 150)));
+    router.drop_protection();
+    assert!(!focused.protects(app.app));
+    assert!(router.state().protected_process.is_none());
+    // Reading is untouched: the application is still routed.
+    assert!(matches!(router.resolve(":1.5"), RouteDecision::Route(_)));
+}
+
+/// Fail closed on unknown identity: a registration whose process start time could not be read
+/// has no identity, so it can never match the shell's protected `(pid, start)`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn an_unknown_start_time_never_matches_the_shell() {
+    let c = core(|_| Duration::ZERO);
+    let creds = Scripted {
+        pid: Box::new(|_| Some(SHELL_PID)),
+        info: Box::new(|pid| ProcInfo {
+            pgrp: Some(pid),
+            start: None, // /proc was unreadable
+        }),
+    };
+    let mut r = rig(&c, Arc::new(creds));
+    r.router
+        .set_protected_process(Some((SHELL_PID, SHELL_START)));
+    let _ = r.router.resolve(":1.1");
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    let st = r.router.state();
+    let e = st.apps.get(":1.1").unwrap();
+    assert!(!st.is_shell(e.group, e.start));
+}

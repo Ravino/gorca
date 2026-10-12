@@ -313,7 +313,12 @@ impl Reader {
                 }
             }
             FocusLaneMsg::NodeRemoved(n) => self.apply_focus(FocusMsg::NodeRemoved(n), fx),
-            FocusLaneMsg::AppGone(a) => self.apply_focus(FocusMsg::AppGone(a), fx),
+            FocusLaneMsg::AppGone(a) => {
+                if let Some(f) = &self.focused_app {
+                    f.forget(a);
+                }
+                self.apply_focus(FocusMsg::AppGone(a), fx);
+            }
             FocusLaneMsg::AppHung(a) => self.apply_focus(FocusMsg::AppHung(a), fx),
         }
     }
@@ -365,11 +370,16 @@ impl Reader {
                 // Protection from eviction is earned only here: the focus passed the state
                 // machine, was presented, and the fetched node itself shows `FOCUSED`. A focus
                 // event alone, from any application, proves nothing.
-                if let Some(f) = &self.focused_app
-                    && snap.states.contains(StateSet::FOCUSED)
-                    && !snap.states.contains(StateSet::DEFUNCT)
-                {
-                    f.publish(snap.key.app);
+                if let Some(f) = &self.focused_app {
+                    if snap.states.contains(StateSet::FOCUSED)
+                        && !snap.states.contains(StateSet::DEFUNCT)
+                    {
+                        f.publish(snap.key.app);
+                    } else {
+                        // The Reader's focus is here now and could not be validated: protection
+                        // must not stay with whoever held it before (fail closed).
+                        f.demote();
+                    }
                 }
             }
             Some(
@@ -699,6 +709,21 @@ mod tests {
         };
         f.reader.handle(ReaderMsg::Reply(reply), now);
         assert_eq!(published.get(), Some(app()));
+
+        // The focus moves to a node that shows no FOCUSED state: protection is not kept by the
+        // application that held it; and an application that is gone loses it outright.
+        let later = now + std::time::Duration::from_secs(2);
+        f.writer.apply(SnapshotBatch {
+            nodes: vec![snap(3, Role::Button, "Unvalidated")],
+        });
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(3) }),
+            later,
+        );
+        assert_eq!(published.get(), None, "current protection dropped");
+        f.reader
+            .handle(ReaderMsg::Focus(FocusLaneMsg::AppGone(app())), later);
+        assert!(!published.protects(app()), "a departed app keeps nothing");
     }
 
     #[test]

@@ -474,6 +474,41 @@ impl AtspiRouter {
             .collect()
     }
 
+    /// Reconciliation against the bus (run every few seconds): every registered application
+    /// whose bus name is not in `live` (the a11y bus's `ListNames`) is forgotten and retired. This
+    /// catches a `NameOwnerChanged` that was never delivered, so no route, quota, name count or
+    /// protection survives a name that is gone. Returns the retired applications.
+    pub fn reconcile_with(&self, live: &HashSet<String>) -> Vec<AppId> {
+        let dead: Vec<Arc<str>> = self
+            .state()
+            .apps
+            .keys()
+            .filter(|n| !live.contains(&***n))
+            .cloned()
+            .collect();
+        let mut retired = Vec::new();
+        for name in dead {
+            if let Some(app) = self.forget(&name) {
+                if let Some(f) = &self.focused {
+                    f.forget(app);
+                }
+                let _ = self.registrar.retire(app);
+                retired.push(app);
+            }
+        }
+        retired
+    }
+
+    /// Re-validation could not be done: grant nothing. The focused-application protection and
+    /// the shell's protection are dropped (they are re-earned by the next validated focus and the
+    /// next successful lookup). Reading is unaffected: every application is still served.
+    pub fn drop_protection(&self) {
+        if let Some(f) = &self.focused {
+            f.clear();
+        }
+        self.state().protected_process = None;
+    }
+
     pub fn known_apps(&self) -> usize {
         self.state().apps.len()
     }

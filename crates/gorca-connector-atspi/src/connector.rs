@@ -49,7 +49,11 @@ const DRAIN_POLL: Duration = Duration::from_millis(500);
 const DRAIN_BACKOFF_MIN: Duration = Duration::from_millis(100);
 const DRAIN_BACKOFF_MAX: Duration = Duration::from_secs(5);
 /// Safety-net interval for re-resolving the shell's owner (changes also arrive as signals).
-const SHELL_POLL: Duration = Duration::from_secs(30);
+const SHELL_POLL: Duration = Duration::from_secs(5);
+/// How often registered applications are reconciled with the bus.
+const RECONCILE_EVERY: Duration = Duration::from_secs(5);
+/// Failed reconciliations in a row after which all protection is dropped (fail closed).
+const RECONCILE_FAILURES: u32 = 2;
 /// Deadline of one `GetConnectionCredentials`.
 const CREDENTIALS_DEADLINE: Duration = Duration::from_millis(250);
 
@@ -238,6 +242,50 @@ async fn watch_shell(session: Connection, router: Arc<AtspiRouter>, clock: Clock
     }
 }
 
+/// `ListNames` on the a11y bus.
+async fn live_names(conn: &Connection, clock: &Clock) -> Option<std::collections::HashSet<String>> {
+    let deadline = Deadline::for_class(clock, BudgetClass::Prefetch);
+    let msg = call_method(
+        conn,
+        deadline,
+        "org.freedesktop.DBus",
+        "/org/freedesktop/DBus",
+        "org.freedesktop.DBus",
+        "ListNames",
+        &(),
+    )
+    .await
+    .ok()?;
+    let names: Vec<String> = msg.body().deserialize().ok()?;
+    Some(names.into_iter().collect())
+}
+
+/// Periodic reconciliation of identity state with the bus. A missed `NameOwnerChanged` must not
+/// leave a route, a quota or a protection behind for a name that is gone; and when the bus cannot
+/// be asked, protection is dropped rather than trusted (applications are still read).
+async fn reconcile_loop(conn: Connection, router: Arc<AtspiRouter>, clock: Clock) {
+    let mut failures = 0u32;
+    loop {
+        tokio::time::sleep(RECONCILE_EVERY).await;
+        if let Some(live) = live_names(&conn, &clock).await {
+            failures = 0;
+            let gone = router.reconcile_with(&live);
+            if !gone.is_empty() {
+                tracing::warn!(
+                    count = gone.len(),
+                    "reconciliation retired vanished applications"
+                );
+            }
+        } else {
+            failures += 1;
+            if failures >= RECONCILE_FAILURES {
+                tracing::warn!("cannot reconcile with the bus; dropping all protection");
+                router.drop_protection();
+            }
+        }
+    }
+}
+
 async fn start_drain(address: &str, router: &Arc<AtspiRouter>) -> Result<DrainHandle, String> {
     let cfg = DrainConfig::new(address);
     let router: Arc<dyn Router> = Arc::clone(router) as Arc<dyn Router>;
@@ -376,6 +424,10 @@ async fn run(opts: AtspiOptions, ctx: ConnectorCtx) -> Result<(), ConnectorError
         router = router.with_focused(Arc::clone(f));
     }
     let router = Arc::new(router);
+    tasks.spawn(
+        "reconcile",
+        reconcile_loop(conn.clone(), Arc::clone(&router), clock.clone()),
+    );
     if let Some(sc) = shell_conn {
         tasks.spawn(
             "shell-watch",

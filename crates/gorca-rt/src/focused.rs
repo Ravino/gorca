@@ -87,8 +87,41 @@ impl FocusedApp {
         self.current.store(new, Ordering::Release);
     }
 
+    /// The Reader's focus moved to something it could not validate (or to nothing): the current
+    /// application stops being protected at once; it keeps the grace period only if it earned it.
+    pub fn demote(&self) {
+        self.demote_at(now_ms());
+    }
+
+    pub fn demote_at(&self, now: u64) {
+        let cur = self.current.load(Ordering::Acquire);
+        if cur == 0 {
+            return;
+        }
+        let held = now.saturating_sub(self.since_ms.load(Ordering::Acquire));
+        if held >= MIN_DWELL_MS {
+            self.previous.store(cur, Ordering::Release);
+            self.previous_until_ms
+                .store(now.saturating_add(GRACE_MS), Ordering::Release);
+        }
+        self.current.store(0, Ordering::Release);
+    }
+
+    /// `app` is gone (it left the bus, or reconciliation found it missing): no protection at all,
+    /// not even a grace period.
+    pub fn forget(&self, app: AppId) {
+        let v = encode(app);
+        if self.current.load(Ordering::Acquire) == v {
+            self.current.store(0, Ordering::Release);
+        }
+        if self.previous.load(Ordering::Acquire) == v {
+            self.previous.store(0, Ordering::Release);
+        }
+    }
+
     pub fn clear(&self) {
         self.current.store(0, Ordering::Release);
+        self.previous.store(0, Ordering::Release);
     }
 
     /// The current focused application.
@@ -148,6 +181,30 @@ mod tests {
 
     /// A hostile app that flips focus quickly cannot push the real focused app out of its
     /// protection: only apps that held focus for the minimum dwell earn the grace slot.
+    /// Fail closed: when the Reader's focus moves to something unvalidated, the old application
+    /// does not keep its immunity; a departed application loses it at once.
+    #[test]
+    fn protection_follows_reality_and_never_outlives_it() {
+        let f = FocusedApp::new();
+        f.publish_at(app(1), 0);
+        f.demote_at(5_000); // focus moved to something unvalidated
+        assert_eq!(f.get(), None, "no current application");
+        assert!(f.protects_at(app(1), 5_001), "earned grace (held 5 s)");
+        f.forget(app(1));
+        assert!(
+            !f.protects_at(app(1), 5_002),
+            "gone means gone, grace or not"
+        );
+
+        let g = FocusedApp::new();
+        g.publish_at(app(7), 0);
+        g.demote_at(100); // held 100 ms: no grace
+        assert!(!g.protects_at(app(7), 101));
+        g.publish_at(app(8), 200);
+        g.forget(app(8));
+        assert_eq!(g.get(), None);
+    }
+
     #[test]
     fn rapid_flipping_does_not_displace_the_real_apps_grace() {
         let f = FocusedApp::new();
