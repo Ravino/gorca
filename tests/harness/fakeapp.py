@@ -128,6 +128,7 @@ class App:
         self.hang = HangPolicy()
         self.malformed = set()
         self.seq = 0
+        self.t_focus_ns = 0
         self.desktop_ref = NULL_REF
         self.stats = {"calls": 0, "hung": 0, "delayed": 0, "events": 0, "storm_events": 0,
                       "term_frames": 0, "term_bytes": 0, "bad_values": 0}
@@ -289,7 +290,12 @@ class App:
             self.ev_state(old, S_FOCUSED, False)
         self.focus_id = n.id
         n.states.add(S_FOCUSED)
+        # Latency probes (crates/gorca-bench e2e): CLOCK_MONOTONIC ns taken right before the
+        # focused=1 signal is queued, then flushed so it leaves this process now, not at the
+        # next main-loop iteration.
+        self.t_focus_ns = time.monotonic_ns()
         self.ev_state(n, S_FOCUSED, True)
+        self.conn.flush()
         self.emit(path_of(n.id), EV_FOCUS, "Focus", "", 0, 0, dbus.Int32(0))
 
     def text_insert(self, n, pos, s):
@@ -946,7 +952,9 @@ def handle(app, cmd):
     c = cmd.get("cmd")
     if c == "focus":
         n = app.node(cmd["node"])
+        app.t_focus_ns = 0
         app.set_focus(n)
+        return {"t_emit_ns": app.t_focus_ns}
     elif c == "type":
         n = app.node(cmd["node"])
         for ch in cmd["text"]:

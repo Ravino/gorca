@@ -574,10 +574,15 @@ dependencies = [
 name = "gorca-bench"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "criterion",
+ "gorca-bench-b2",
+ "gorca-dbus",
  "gorca-ingress",
  "gorca-mirror",
  "gorca-model",
+ "libc",
+ "tokio",
 ]
 
 [[package]]

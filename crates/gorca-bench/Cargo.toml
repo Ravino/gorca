@@ -11,9 +11,23 @@ publish.workspace = true
 gorca-model = { workspace = true }
 gorca-ingress = { workspace = true }
 gorca-mirror = { workspace = true }
+# End-to-end latency harness (src/e2e): reuses the B-2 harness wire codec, stats and report rows.
+gorca-bench-b2 = { workspace = true }
+gorca-dbus = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+libc = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }
+
+[[bin]]
+name = "e2e"
+path = "src/bin/e2e.rs"
+
+[[bin]]
+name = "gorca-stub-reader"
+path = "src/bin/stub_reader.rs"
 
 [[bench]]
 name = "ingress_mirror"

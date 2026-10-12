@@ -1,0 +1,312 @@
+//! `e2e`: end-to-end latency harness runner (Phase 1). Run it inside the isolated session:
+//!
+//! ```text
+//! tests/harness/run-isolated.sh target/release/e2e run [--label L] [--quick] [--repeats N]
+//!       [--reader stub|daemon:/path/to/gorca-daemon[,arg...]] [--backend voicego|ssip]
+//!       [--only L1,L2,L3-10k,L3-50k,L4,L4c,K1,L1s,F0] [--out DIR] [--seed S] [--no-fail]
+//! ```
+//!
+//! or simply `bench/e2e/run.sh <label> [--quick]`. Results: `bench/results/e2e/<label>/<UTC>.{json,txt}`.
+//! Repeats are interleaved (round-robin over scenarios, rotated every round) and every gate
+//! is applied to the **median over repeats** of the per-run percentile, never to a pooled or
+//! single number (the B-2 lesson on a loaded host).
+
+#![allow(clippy::cast_precision_loss, clippy::match_same_arms)]
+
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+
+use anyhow::{Context, Result, bail};
+use gorca_bench::e2e::apps::ReaderSpec;
+use gorca_bench::e2e::host;
+use gorca_bench::e2e::mock::Flavor;
+use gorca_bench::e2e::runner::HostEnv;
+use gorca_bench::e2e::scenarios::{RunOut, Scn, Size, run};
+use gorca_bench_b2::report::{Row, Verdict, json, table};
+use gorca_bench_b2::stats::{Summary, summarize};
+
+/// Gate thresholds (see bench/e2e/README.md for the rationale). Milliseconds unless noted.
+const L1_P99_MS: f64 = 15.0;
+const L2_P99_MS: f64 = 5.0;
+
+fn arg_value(args: &[String], name: &str) -> Option<String> {
+    args.iter()
+        .position(|a| a == name)
+        .and_then(|i| args.get(i + 1).cloned())
+}
+
+fn parse_reader(s: &str) -> Result<ReaderSpec> {
+    if s == "stub" {
+        return Ok(ReaderSpec::Stub);
+    }
+    let Some(rest) = s.strip_prefix("daemon:") else {
+        bail!("--reader must be `stub` or `daemon:<path>[,arg...]`");
+    };
+    let mut it = rest.split(',');
+    let path = it.next().unwrap_or_default();
+    Ok(ReaderSpec::Daemon {
+        path: PathBuf::from(path),
+        args: it.map(str::to_owned).collect(),
+    })
+}
+
+#[derive(Default)]
+struct Acc {
+    /// (scenario, metric) -> per-run summaries
+    samples: BTreeMap<(String, String), Vec<Summary>>,
+    /// (scenario, metric) -> (per-run values, unit)
+    scalars: BTreeMap<(String, String), (Vec<f64>, String)>,
+    ok_runs: BTreeMap<String, usize>,
+    failed_runs: BTreeMap<String, usize>,
+    notes: Vec<String>,
+}
+
+impl Acc {
+    fn add(&mut self, scn: &str, out: RunOut) {
+        for (m, v) in out.samples {
+            self.samples
+                .entry((scn.to_owned(), m))
+                .or_default()
+                .push(summarize(&v));
+        }
+        for (m, v, u) in out.scalars {
+            let e = self
+                .scalars
+                .entry((scn.to_owned(), m))
+                .or_insert_with(|| (Vec::new(), u));
+            e.0.push(v);
+        }
+        for n in out.notes {
+            if !self.notes.contains(&n) {
+                self.notes.push(n);
+            }
+        }
+        *self.ok_runs.entry(scn.to_owned()).or_default() += 1;
+    }
+}
+
+fn pct_of(s: &Summary, p: &str) -> f64 {
+    match p {
+        "p50" => s.p50,
+        "p95" => s.p95,
+        "p99" => s.p99,
+        "p999" => s.p999,
+        "max" => s.max,
+        _ => s.n as f64,
+    }
+}
+
+fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
+    let mut out = Vec::new();
+    for scn in scns {
+        let sid = scn.id();
+        for ((s, metric), runs) in &acc.samples {
+            if *s != sid {
+                continue;
+            }
+            for p in ["n", "p50", "p95", "p99", "p999", "max"] {
+                let vals: Vec<f64> = runs.iter().map(|r| pct_of(r, p)).collect();
+                let id = format!("{sid}.{metric}.{p}");
+                let unit = if p == "n" { "samples" } else { "ms" };
+                let mut row = Row::info(&id, &sid, label, unit, &vals);
+                let thr = match (sid.as_str(), metric.as_str(), p) {
+                    ("L1" | "L1s" | "L3-10k" | "L3-50k" | "L4", "l1_ms", "p99") => Some(L1_P99_MS),
+                    ("K1", "k1_ms", "p99") => Some(L1_P99_MS),
+                    ("L2", "l2_ms", "p99") => Some(L2_P99_MS),
+                    _ => None,
+                };
+                if let Some(t) = thr {
+                    row = row.at_most(t);
+                }
+                if sid == "L1s" {
+                    row = row.note("speech-dispatcher text mock");
+                }
+                if p == "p99" && metric.starts_with("l1g") {
+                    row = row.note("gorca side: bus arrival to SPEAK");
+                }
+                out.push(row);
+            }
+        }
+        for ((s, metric), (vals, unit)) in &acc.scalars {
+            if *s != sid {
+                continue;
+            }
+            let id = format!("{sid}.{metric}");
+            let mut row = Row::info(&id, &sid, label, unit, vals);
+            if metric == "lost" || metric == "stale_not_cancelled" {
+                row = row.at_most(0.0);
+            }
+            if sid == "L4" && metric == "peer_calls_hung" {
+                row = row
+                    .at_least(1.0)
+                    .note("the hang must actually have been exercised");
+            }
+            if metric == "storm_achieved_eps"
+                && let Some((t, _)) = acc.scalars.get(&(sid.clone(), "storm_target_eps".into()))
+            {
+                let target = t.first().copied().unwrap_or(0.0);
+                row = row
+                    .at_least(0.9 * target)
+                    .note("must reach 90% of the target rate");
+            }
+            out.push(row);
+        }
+        let failed = acc.failed_runs.get(&sid).copied().unwrap_or(0);
+        let ok = acc.ok_runs.get(&sid).copied().unwrap_or(0);
+        if failed > 0 || ok == 0 {
+            let mut r = Row::info(
+                &format!("{sid}.failed_runs"),
+                &sid,
+                label,
+                "runs",
+                &[failed as f64],
+            )
+            .at_most(0.0);
+            r.note = format!("{ok} ok, {failed} failed");
+            out.push(r);
+        }
+    }
+    out
+}
+
+fn main() -> Result<()> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) != Some("run") {
+        bail!(
+            "usage: e2e run [--label L] [--quick] [--repeats N] [--reader stub|daemon:PATH] [--backend voicego|ssip] [--only IDS] [--reader-env K=V] [--out DIR] [--no-fail]"
+        );
+    }
+    if cfg!(debug_assertions) && !args.iter().any(|a| a == "--allow-debug") {
+        bail!("debug build: numbers would be meaningless; use --release (or pass --allow-debug)");
+    }
+    let quick = args.iter().any(|a| a == "--quick");
+    let label = arg_value(&args, "--label").unwrap_or_else(|| "adhoc".to_owned());
+    let repeats: usize = arg_value(&args, "--repeats")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(if quick { 1 } else { 3 });
+    let reader = parse_reader(&arg_value(&args, "--reader").unwrap_or_else(|| "stub".to_owned()))?;
+    let flavor = arg_value(&args, "--backend")
+        .map(|s| Flavor::parse(&s).context("--backend must be voicego or ssip"))
+        .transpose()?
+        .unwrap_or(Flavor::Voicego);
+    let seed: u64 = arg_value(&args, "--seed")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1);
+    let size = if quick { Size::quick() } else { Size::full() };
+    let scns: Vec<Scn> = match arg_value(&args, "--only") {
+        Some(s) => s
+            .split(',')
+            .map(|x| Scn::parse(x).with_context(|| format!("unknown scenario {x}")))
+            .collect::<Result<_>>()?,
+        None => Scn::all(),
+    };
+    let mut host_env = HostEnv::from_env()?;
+    for (i, a) in args.iter().enumerate() {
+        if a == "--reader-env"
+            && let Some((k, v)) = args.get(i + 1).and_then(|kv| kv.split_once('='))
+        {
+            host_env.reader_env.push((k.to_owned(), v.to_owned()));
+        }
+    }
+    let out_dir = PathBuf::from(
+        arg_value(&args, "--out").unwrap_or_else(|| format!("bench/results/e2e/{label}")),
+    );
+    let load_before = host::loadavg();
+    eprintln!(
+        "== e2e {label}: reader={} backend={} repeats={repeats} load={load_before}",
+        reader.label(),
+        flavor.name()
+    );
+
+    let mut acc = Acc::default();
+    for round in 0..repeats {
+        // rotate the order every round so no scenario always runs first or last
+        for k in 0..scns.len() {
+            let scn = &scns[(k + round) % scns.len()];
+            let sid = scn.id();
+            eprintln!(
+                "-- round {}/{repeats} {sid} (load {})",
+                round + 1,
+                host::loadavg()
+            );
+            match run(
+                &host_env,
+                scn,
+                &reader,
+                flavor,
+                size,
+                seed + round as u64 * 1000 + k as u64,
+            ) {
+                Ok(o) => acc.add(&sid, o),
+                Err(e) => {
+                    eprintln!("   {sid} FAILED: {e:#}");
+                    *acc.failed_runs.entry(sid.clone()).or_default() += 1;
+                    acc.notes.push(format!("{sid} run failed: {e:#}"));
+                }
+            }
+        }
+    }
+
+    let label_bus = format!(
+        "{}/{}",
+        reader.label().split(':').next().unwrap_or("?"),
+        flavor.name()
+    );
+    let all_rows = rows(&acc, &label_bus, &scns);
+    let mut meta = host::meta(&[
+        ("label", label.clone()),
+        ("reader", reader.label()),
+        ("backend", flavor.name().to_owned()),
+        ("repeats", repeats.to_string()),
+        ("samples_per_series", size.n.to_string()),
+        ("l2_trials", size.trials.to_string()),
+        ("quick", quick.to_string()),
+        ("loadavg_end", host::loadavg()),
+        (
+            "reader_env",
+            host_env
+                .reader_env
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect::<Vec<_>>()
+                .join(" "),
+        ),
+        (
+            "gates",
+            format!(
+                "L1/L3/L4/K1 p99<={L1_P99_MS}ms, L2 p99<={L2_P99_MS}ms, lost==0; median over repeats"
+            ),
+        ),
+    ]);
+    for (i, n) in acc.notes.iter().enumerate() {
+        meta.push((format!("note{i}"), n.clone()));
+    }
+    let text = format!(
+        "# e2e {label}\n# {}\n\n{}",
+        meta.iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect::<Vec<_>>()
+            .join("\n# "),
+        table(&all_rows)
+    );
+    println!("{text}");
+    std::fs::create_dir_all(&out_dir).with_context(|| format!("creating {}", out_dir.display()))?;
+    let stamp = host::stamp();
+    std::fs::write(
+        out_dir.join(format!("{stamp}.json")),
+        json(&meta, &all_rows),
+    )?;
+    std::fs::write(out_dir.join(format!("{stamp}.txt")), &text)?;
+    eprintln!("== wrote {}/{stamp}.{{json,txt}}", out_dir.display());
+    let failed = all_rows
+        .iter()
+        .filter(|r| matches!(r.verdict, Verdict::Fail))
+        .count();
+    if failed > 0 {
+        eprintln!("== {failed} gate(s) FAILED");
+        if !args.iter().any(|a| a == "--no-fail") {
+            std::process::exit(1);
+        }
+    }
+    Ok(())
+}

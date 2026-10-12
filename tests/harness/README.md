@@ -7,6 +7,7 @@ toolkit, no network, nothing from the user's real desktop.
 tests/harness/
   run-isolated.sh       private session bus + a11y bus + registryd; runs <cmd> inside
   fakeapp.py            fake AT-SPI app (speaks the D-Bus interfaces directly)
+  fake_mutter.py        emulated org.freedesktop.a11y.KeyboardMonitor (Mutter) on the private session bus
   fakeapp_ctl.py        Python helpers: FakeApp (spawn + JSON control), A11yWatcher (event collector)
   run-smoke.sh          smoke tests inside a fresh session + real-bus isolation check
   smoke/test_*.py       unittest smoke tests (one process per file)
@@ -120,7 +121,7 @@ JSON lines on stdin; replies `{"event":"reply","id":..,"ok":true,...}` and notif
 
 | `cmd` | Fields | Effect |
 |---|---|---|
-| `focus` | `node` (name/id/path) | state-changed `focused` 0/1 + `Focus:Focus` |
+| `focus` | `node` (name/id/path) | state-changed `focused` 0/1 + `Focus:Focus`; the reply carries `t_emit_ns` (`CLOCK_MONOTONIC`, taken right before the focused=1 signal, which is flushed immediately) for latency probes |
 | `type`, `backspace`, `set_text`, `caret` | `node`, `text`/`offset` | text-changed insert/delete + text-caret-moved |
 | `action` | `node`, `index` | like a client `DoAction`: JSON `action` line, pressed/checked state events |
 | `emit` | `node`, `class` Object/Window/Focus, `member`, `detail`, `d1`, `d2`, `data` | any raw event |
@@ -210,3 +211,13 @@ is 800 ms but 15 s during an app's first 15 s of life, so pyatspi hang tests nee
 * dbus-broker fidelity (F-3) is not covered, see above.
 * Event emission is unconditional (a real atk-bridge filters by `Registry.GetRegisteredEvents`).
 * Rate numbers are from this host (RT kernel, idle); they bound the load generator, not gorca.
+
+## fake_mutter.py (keyboard monitor emulation)
+
+Owns `org.freedesktop.a11y.Manager` at `/org/freedesktop/a11y/Manager` on the private session bus
+(refuses to start outside a harness bus). `WatchKeyboard`, `UnwatchKeyboard`, `GrabKeyboard`,
+`UngrabKeyboard`, `SetKeyGrabs` are access-checked like Mutter: the caller must own
+`org.gnome.Orca.KeyboardMonitor`, otherwise `AccessDenied`. Control: `{"cmd":"key","keycode":38,
+"keysym":97,"unichar":97,"state":0,"released":false}` emits the unicast `KeyEvent(b u u u q)` to every
+watcher and replies with `t_emit_ns`; `stats` returns watcher and denied counts. Used by the
+end-to-end latency harness (`bench/e2e/README.md`).
