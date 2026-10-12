@@ -1,0 +1,33 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::disallowed_methods)]
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+use gorca_model::UttId;
+use gorca_output_api::{SpeechClient, SpeechCmd, Verbalized, VoiceRef};
+use gorca_rt::Deadline;
+use gorca_speech_voicego::{VoicegoClient, VoicegoOptions};
+use gorca_testkit::MockSpeechServer;
+
+fn speak(id: u64, t: &str) -> SpeechCmd {
+    SpeechCmd::Speak { id: UttId(id), text: Verbalized { text: Arc::from(t), lang: None }, voice: VoiceRef::Default, marks: false }
+}
+
+/// Fixed server (no lose_after_stop). Speak 1 and 2 right after a STOP (guard armed on 2);
+/// 2 is queued behind 1. An explicit Stop cancels both; 2 must NOT be spoken afterwards.
+#[tokio::test]
+async fn explicit_stop_is_not_undone_by_the_resend_guard() {
+    let d = std::env::temp_dir().join(format!("zzprobe-{}", std::process::id()));
+    std::fs::create_dir_all(&d).unwrap();
+    let srv = MockSpeechServer::start_voicego(&d).await.unwrap();
+    srv.set_speak_time(Duration::from_secs(10));
+    let c = VoicegoClient::connect(&VoicegoOptions::with_path(srv.socket_path()), Deadline(Instant::now() + Duration::from_secs(2))).await.unwrap();
+    c.submit(SpeechCmd::Stop { id: UttId(0) }).unwrap();
+    c.submit(speak(1, "first")).unwrap();
+    c.submit(speak(2, "stale second")).unwrap();
+    assert!(srv.wait_spoken(1, Duration::from_secs(2)).await);
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    c.submit(SpeechCmd::Stop { id: UttId(2) }).unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let spoken = srv.spoken();
+    eprintln!("spoken after explicit Stop: {spoken:?}; resends={}", c.stats().resends);
+    assert_eq!(spoken, vec!["first".to_string()], "stale utterance resent after an explicit Stop");
+}

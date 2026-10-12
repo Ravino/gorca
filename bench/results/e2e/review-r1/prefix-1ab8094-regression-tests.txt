@@ -1,0 +1,16 @@
+test paths::tests::absurd_paths_are_refused ... ok
+test paths::tests::insert_get_and_forget ... ok
+test router::tests::ignored_and_well_known_names_are_not_applications ... ok
+test router::tests::forget_cancels_the_app_and_drops_its_paths ... ok
+test router::tests::first_event_announces_once_and_hands_the_port_over ... ok
+test router::tests::take_all_returns_every_app_once ... ok
+test paths::tests::the_number_of_apps_is_bounded_and_existing_apps_keep_working ... FAILED
+test paths::tests::one_app_is_bounded_by_its_own_quota ... ok
+test paths::tests::a_hostile_app_cannot_touch_another_apps_entries ... FAILED
+test router::tests::an_app_dying_mid_registration_leaks_nothing ... FAILED
+test router::tests::a_stalled_core_costs_the_drain_a_bounded_wait ... ok
+test router::tests::connect_disconnect_churn_leaks_no_routes_or_budget ... ok
+thread 'paths::tests::the_number_of_apps_is_bounded_and_existing_apps_keep_working' (2083842) panicked at crates/gorca-connector-atspi/src/paths.rs:136:9:
+thread 'paths::tests::a_hostile_app_cannot_touch_another_apps_entries' (2083838) panicked at crates/gorca-connector-atspi/src/paths.rs:121:9:
+thread 'router::tests::an_app_dying_mid_registration_leaks_nothing' (2083844) panicked at crates/gorca-connector-atspi/src/router.rs:344:9:
+test result: FAILED. 9 passed; 3 failed; 0 ignored; 0 measured; 19 filtered out; finished in 0.33s

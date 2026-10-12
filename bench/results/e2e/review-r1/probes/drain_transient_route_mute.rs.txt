@@ -1,0 +1,42 @@
+
+    // REVIEW PROBE (phase1 review-r1): a transient route failure must not mute the sender
+    // forever. The router fails the first lookup (as AtspiRouter::announce does on a 250 ms
+    // core stall, a Duplicate race or a full new_apps queue), then would succeed.
+    struct FlakyRouter {
+        calls: AtomicUsize,
+        route: AppRoute,
+    }
+
+    impl Router for FlakyRouter {
+        fn route(&self, _sender: &str) -> Option<AppRoute> {
+            let n = self.calls.fetch_add(1, Ordering::SeqCst);
+            (n > 0).then(|| self.route.clone())
+        }
+    }
+
+    #[test]
+    fn review_probe_a_transient_route_failure_does_not_mute_the_sender() {
+        let dir = std::env::temp_dir().join(format!("gorca-drain-probe-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("bus");
+        let _ = std::fs::remove_file(&path);
+        let (send, _rules) = fake_broker(&path);
+        let (tx, rx) = ingress(IngressConfig::default());
+        let router = Arc::new(FlakyRouter {
+            calls: AtomicUsize::new(0),
+            route: AppRoute { app: AppId { connector: ConnectorId(0), serial: 1 }, tx },
+        });
+        let mut cfg = DrainConfig::new(format!("unix:path={}", path.display()));
+        cfg.connect_deadline = Duration::from_secs(3);
+        let drain = spawn_drain(cfg, Arc::clone(&router) as Arc<dyn Router>).unwrap();
+        send.send(event(":1.5")).unwrap(); // announce fails
+        for _ in 0..50 {
+            send.send(event(":1.5")).unwrap();
+        }
+        let delivered = wait(&rx, 1);
+        let calls = router.calls.load(Ordering::SeqCst);
+        let _ = drain.stop();
+        drop(send);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(delivered, "50 later events of the app were all dropped; router asked {calls} time(s)");
+    }

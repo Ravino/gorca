@@ -1,0 +1,355 @@
+== host: load 8.77 10.32 10.99 4/4297 2064793 ==
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench-0badb14e7328ca07)
+
+running 5 tests
+test e2e::mono::tests::is_monotonic_and_ns ... ok
+test e2e::scenarios::tests::scenario_ids_round_trip ... ok
+test e2e::scenarios::tests::decoder_understands_stub_tags_and_natural_text ... ok
+test e2e::mock::tests::voicego_binary_speak_then_stop ... ok
+test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
+
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.05s
+== e2e review-r1: reader=daemon:<repo>/.claude/worktrees/agent-a91eb163b53acf271/target/release/gorca backend=voicego repeats=3 load=8.77 10.32 10.99 3/4302 2064895
+-- round 1/3 F0 (load 8.77 10.32 10.99 2/4302 2064895)
+-- round 1/3 L1 (load 9.27 10.40 11.01 1/4303 2064967)
+2026-10-12T21:35:22.014494Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:35:22.016015Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:35:22.020694Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:35:39.734770Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:35:39.735008Z  INFO gorca_daemon: gorca stopped
+-- round 1/3 L1s (load 9.63 10.39 10.99 1/4296 2065501)
+2026-10-12T21:35:39.927436Z  INFO gorca_daemon: gorca started workers=16 speech=Ssip
+2026-10-12T21:35:39.928399Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:35:39.930763Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:35:57.474946Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:35:57.475336Z  INFO gorca_daemon: gorca stopped
+-- round 1/3 L2 (load 10.14 10.47 11.01 2/4298 2066033)
+2026-10-12T21:35:57.617695Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:35:57.618893Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:35:57.625329Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:36:29.925398Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:36:29.925667Z  INFO gorca_daemon: gorca stopped
+-- round 1/3 L3-10k (load 9.77 10.33 10.94 3/4309 2067356)
+2026-10-12T21:36:30.074296Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:36:30.075749Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:36:30.079065Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:36:47.394190Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:36:47.394476Z  INFO gorca_daemon: gorca stopped
+-- round 1/3 L3-50k (load 10.59 10.48 10.98 1/4288 2068765)
+2026-10-12T21:36:47.538200Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:36:47.539094Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:36:47.544188Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:37:04.826619Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:37:04.826917Z  INFO gorca_daemon: gorca stopped
+-- round 1/3 L4 (load 11.64 10.71 11.05 5/4305 2070518)
+2026-10-12T21:37:05.036950Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:37:05.038057Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:37:05.039918Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:37:22.635870Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:37:22.636146Z  INFO gorca_daemon: gorca stopped
+-- round 1/3 L4c (load 12.38 10.92 11.11 3/4288 2071637)
+2026-10-12T21:37:22.858415Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:37:22.859039Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:37:22.864294Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:37:39.695583Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:37:39.695919Z  INFO gorca_daemon: gorca stopped
+-- round 1/3 K1 (load 12.67 11.08 11.16 5/4282 2072172)
+2026-10-12T21:37:39.926904Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:37:39.927960Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:37:39.928541Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-12T21:37:39.930630Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:37:56.423310Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:37:56.423541Z  INFO gorca_daemon: gorca stopped
+-- round 2/3 L1 (load 12.48 11.12 11.17 5/4298 2074152)
+2026-10-12T21:37:56.565905Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:37:56.566759Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:37:56.568816Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:38:14.172634Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:38:14.172814Z  INFO gorca_daemon: gorca stopped
+-- round 2/3 L1s (load 12.11 11.09 11.16 2/4274 2074939)
+2026-10-12T21:38:14.298281Z  INFO gorca_daemon: gorca started workers=16 speech=Ssip
+2026-10-12T21:38:14.299384Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:38:14.304166Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:38:31.736707Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:38:31.737046Z  INFO gorca_daemon: gorca stopped
+-- round 2/3 L2 (load 13.47 11.48 11.29 1/4257 2075421)
+2026-10-12T21:38:31.878343Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:38:31.879415Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:38:31.882293Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:39:04.194313Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:39:04.194564Z  INFO gorca_daemon: gorca stopped
+-- round 2/3 L3-10k (load 12.51 11.44 11.28 1/4268 2076310)
+2026-10-12T21:39:04.320660Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:39:04.321567Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:39:04.323631Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:39:21.579843Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:39:21.580027Z  INFO gorca_daemon: gorca stopped
+-- round 2/3 L3-50k (load 14.17 11.93 11.45 2/4276 2076817)
+2026-10-12T21:39:21.777880Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:39:21.779125Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:39:21.787097Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:39:39.099872Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:39:39.100087Z  INFO gorca_daemon: gorca stopped
+-- round 2/3 L4 (load 13.55 11.88 11.44 1/4274 2077299)
+2026-10-12T21:39:39.311221Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:39:39.312049Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:39:39.314857Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:39:56.275929Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:39:56.276065Z  INFO gorca_daemon: gorca stopped
+-- round 2/3 L4c (load 13.33 11.95 11.47 1/4272 2077780)
+2026-10-12T21:39:56.491832Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:39:56.493031Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:39:56.496930Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:40:13.244317Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:40:13.244579Z  INFO gorca_daemon: gorca stopped
+-- round 2/3 K1 (load 13.47 12.05 11.51 2/4274 2078240)
+2026-10-12T21:40:13.474344Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:40:13.475986Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:40:13.476259Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-12T21:40:13.478335Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:40:29.804414Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:40:29.804733Z  INFO gorca_daemon: gorca stopped
+-- round 2/3 F0 (load 14.56 12.39 11.64 1/4272 2078713)
+-- round 3/3 L1s (load 13.88 12.28 11.61 1/4274 2078814)
+2026-10-12T21:40:34.983832Z  INFO gorca_daemon: gorca started workers=16 speech=Ssip
+2026-10-12T21:40:34.984689Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:40:34.987512Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:40:52.445825Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:40:52.446117Z  INFO gorca_daemon: gorca stopped
+-- round 3/3 L2 (load 14.72 12.55 11.70 2/4274 2079288)
+2026-10-12T21:40:52.589994Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:40:52.590821Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:40:52.596548Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:41:24.627599Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:41:24.628004Z  INFO gorca_daemon: gorca stopped
+-- round 3/3 L3-10k (load 15.01 12.85 11.84 2/4278 2080096)
+2026-10-12T21:41:24.768218Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:41:24.769280Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:41:24.772529Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:41:42.145133Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:41:42.145553Z  INFO gorca_daemon: gorca stopped
+-- round 3/3 L3-50k (load 15.53 13.07 11.93 1/4272 2080572)
+2026-10-12T21:41:42.278234Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:41:42.279990Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:41:42.284426Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:41:59.483489Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:41:59.483700Z  INFO gorca_daemon: gorca stopped
+-- round 3/3 L4 (load 15.88 13.28 12.01 3/4271 2081048)
+2026-10-12T21:41:59.714610Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:41:59.715847Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:41:59.721563Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:42:17.358584Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:42:17.358906Z  INFO gorca_daemon: gorca stopped
+-- round 3/3 L4c (load 14.55 13.15 12.00 4/4275 2081531)
+2026-10-12T21:42:17.591101Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:42:17.591916Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:42:17.600756Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:42:34.421807Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:42:34.422186Z  INFO gorca_daemon: gorca stopped
+-- round 3/3 K1 (load 14.18 13.13 12.01 3/4272 2082001)
+2026-10-12T21:42:34.632955Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:42:34.633774Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:42:34.634170Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-12T21:42:34.635905Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:42:51.015213Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:42:51.015584Z  INFO gorca_daemon: gorca stopped
+-- round 3/3 F0 (load 13.86 13.11 12.03 7/4269 2082423)
+-- round 3/3 L1 (load 14.35 13.22 12.07 5/4269 2082563)
+2026-10-12T21:42:56.163704Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-12T21:42:56.164547Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus address=unix:path=/tmp/gorca-h.Pymv1q/run/at-spi/bus,guid=2a918dab0c09667afc09366f6acd5294
+2026-10-12T21:42:56.166611Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-12T21:43:13.802481Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-12T21:43:13.802733Z  INFO gorca_daemon: gorca stopped
+# e2e review-r1
+# utc=2026-10-12T21:43:13Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=powersave x16
+# loadavg_start=13.84 13.16 12.07 1/4270 2083030
+# git_rev=23845ab
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=review-r1
+# reader=daemon:<repo>/.claude/worktrees/agent-a91eb163b53acf271/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=13.84 13.16 12.07 1/4270 2083027
+# reader_env=
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=K1: correlated by order (speech text carries no key tag)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+F0.f0_mock_ms.n            daemon/voicego         1200         1200         1200  3                  info   [samples]
+F0.f0_mock_ms.p50          daemon/voicego        0.035        0.034        0.036  3                  info   [ms]
+F0.f0_mock_ms.p95          daemon/voicego        0.177        0.171        0.180  3                  info   [ms]
+F0.f0_mock_ms.p99          daemon/voicego        0.216        0.212        0.224  3                  info   [ms]
+F0.f0_mock_ms.p999         daemon/voicego        0.259        0.255        0.266  3                  info   [ms]
+F0.f0_mock_ms.max          daemon/voicego        0.292        0.286        0.351  3                  info   [ms]
+L1.l0_ms.n                 daemon/voicego         1200         1200         1200  3                  info   [samples]
+L1.l0_ms.p50               daemon/voicego        0.176        0.145        0.187  3                  info   [ms]
+L1.l0_ms.p95               daemon/voicego        0.394        0.379        0.403  3                  info   [ms]
+L1.l0_ms.p99               daemon/voicego        0.471        0.448        0.579  3                  info   [ms]
+L1.l0_ms.p999              daemon/voicego        0.592        0.512        3.650  3                  info   [ms]
+L1.l0_ms.max               daemon/voicego        0.828        0.586        4.205  3                  info   [ms]
+L1.l1_ms.n                 daemon/voicego         1200         1200         1200  3                  info   [samples]
+L1.l1_ms.p50               daemon/voicego        0.943        0.886        0.951  3                  info   [ms]
+L1.l1_ms.p95               daemon/voicego        1.731        1.723        1.743  3                  info   [ms]
+L1.l1_ms.p99               daemon/voicego        2.017        1.963        2.814  3 <=           15  PASS   [ms]
+L1.l1_ms.p999              daemon/voicego        2.412        2.146        5.471  3                  info   [ms]
+L1.l1_ms.max               daemon/voicego        2.511        2.193        6.195  3                  info   [ms]
+L1.l1g_ms.n                daemon/voicego         1200         1200         1200  3                  info   [samples]
+L1.l1g_ms.p50              daemon/voicego        0.745        0.725        0.770  3                  info   [ms]
+L1.l1g_ms.p95              daemon/voicego        1.483        1.437        1.521  3                  info   [ms]
+L1.l1g_ms.p99              daemon/voicego        1.750        1.749        2.360  3                  info  gorca side: bus arrival to SPEAK [ms]
+L1.l1g_ms.p999             daemon/voicego        2.043        1.910        4.282  3                  info   [ms]
+L1.l1g_ms.max              daemon/voicego        2.094        2.074        5.046  3                  info   [ms]
+L1.cpu_pct                 daemon/voicego        8.046        7.527        8.296  3                  info   [% of one core]
+L1.cpu_us_per_event        daemon/voicego        309.3        300.0        315.9  3                  info   [us/event]
+L1.idle_cpu_pct            daemon/voicego        0.571        0.375        0.945  3                  info   [% of one core]
+L1.lost                    daemon/voicego            0            0            0  3 <=            0  PASS   [events]
+L1s.l0_ms.n                daemon/voicego         1200         1200         1200  3                  info  speech-dispatcher text mock [samples]
+L1s.l0_ms.p50              daemon/voicego        0.150        0.138        0.165  3                  info  speech-dispatcher text mock [ms]
+L1s.l0_ms.p95              daemon/voicego        0.390        0.379        0.390  3                  info  speech-dispatcher text mock [ms]
+L1s.l0_ms.p99              daemon/voicego        0.472        0.463        0.490  3                  info  speech-dispatcher text mock [ms]
+L1s.l0_ms.p999             daemon/voicego        0.618        0.570        0.636  3                  info  speech-dispatcher text mock [ms]
+L1s.l0_ms.max              daemon/voicego        0.653        0.611        0.654  3                  info  speech-dispatcher text mock [ms]
+L1s.l1_ms.n                daemon/voicego         1200         1200         1200  3                  info  speech-dispatcher text mock [samples]
+L1s.l1_ms.p50              daemon/voicego        1.029        1.011        1.034  3                  info  speech-dispatcher text mock [ms]
+L1s.l1_ms.p95              daemon/voicego        1.877        1.845        1.917  3                  info  speech-dispatcher text mock [ms]
+L1s.l1_ms.p99              daemon/voicego        2.151        2.119        2.309  3 <=           15  PASS  speech-dispatcher text mock [ms]
+L1s.l1_ms.p999             daemon/voicego        2.333        2.324        2.516  3                  info  speech-dispatcher text mock [ms]
+L1s.l1_ms.max              daemon/voicego        2.537        2.388        2.755  3                  info  speech-dispatcher text mock [ms]
+L1s.l1g_ms.n               daemon/voicego         1200         1200         1200  3                  info  speech-dispatcher text mock [samples]
+L1s.l1g_ms.p50             daemon/voicego        0.853        0.836        0.868  3                  info  speech-dispatcher text mock [ms]
+L1s.l1g_ms.p95             daemon/voicego        1.661        1.634        1.702  3                  info  speech-dispatcher text mock [ms]
+L1s.l1g_ms.p99             daemon/voicego        1.908        1.906        2.063  3                  info  gorca side: bus arrival to SPEAK [ms]
+L1s.l1g_ms.p999            daemon/voicego        2.122        2.122        2.269  3                  info  speech-dispatcher text mock [ms]
+L1s.l1g_ms.max             daemon/voicego        2.233        2.154        2.469  3                  info  speech-dispatcher text mock [ms]
+L1s.cpu_pct                daemon/voicego        8.119        7.933        8.238  3                  info   [% of one core]
+L1s.cpu_us_per_event       daemon/voicego        305.1        301.0        307.5  3                  info   [us/event]
+L1s.idle_cpu_pct           daemon/voicego        0.818        0.520        0.998  3                  info   [% of one core]
+L1s.lost                   daemon/voicego            0            0            0  3 <=            0  PASS   [events]
+L2.l2_ms.n                 daemon/voicego          400          400          400  3                  info   [samples]
+L2.l2_ms.p50               daemon/voicego        0.464        0.454        0.483  3                  info   [ms]
+L2.l2_ms.p95               daemon/voicego        0.813        0.770        0.817  3                  info   [ms]
+L2.l2_ms.p99               daemon/voicego        0.926        0.921        0.941  3 <=            5  PASS   [ms]
+L2.l2_ms.p999              daemon/voicego        1.017        1.006        1.076  3                  info   [ms]
+L2.l2_ms.max               daemon/voicego        1.017        1.006        1.076  3                  info   [ms]
+L2.l2s_ms.n                daemon/voicego          400          400          400  3                  info   [samples]
+L2.l2s_ms.p50              daemon/voicego        1.078        1.056        1.168  3                  info   [ms]
+L2.l2s_ms.p95              daemon/voicego        1.832        1.779        1.876  3                  info   [ms]
+L2.l2s_ms.p99              daemon/voicego        2.069        2.053        2.155  3                  info   [ms]
+L2.l2s_ms.p999             daemon/voicego        2.366        2.145        2.484  3                  info   [ms]
+L2.l2s_ms.max              daemon/voicego        2.366        2.145        2.484  3                  info   [ms]
+L2.lost                    daemon/voicego            0            0            0  3 <=            0  PASS   [events]
+L2.stale_not_cancelled     daemon/voicego            0            0            0  3 <=            0  PASS   [trials]
+L3-10k.l0_ms.n             daemon/voicego         1200         1200         1200  3                  info   [samples]
+L3-10k.l0_ms.p50           daemon/voicego        0.148        0.145        0.153  3                  info   [ms]
+L3-10k.l0_ms.p95           daemon/voicego        0.344        0.344        0.348  3                  info   [ms]
+L3-10k.l0_ms.p99           daemon/voicego        0.484        0.464        0.487  3                  info   [ms]
+L3-10k.l0_ms.p999          daemon/voicego        0.663        0.651        0.683  3                  info   [ms]
+L3-10k.l0_ms.max           daemon/voicego        0.700        0.667        0.779  3                  info   [ms]
+L3-10k.l1_ms.n             daemon/voicego         1200         1200         1200  3                  info   [samples]
+L3-10k.l1_ms.p50           daemon/voicego        0.767        0.760        0.770  3                  info   [ms]
+L3-10k.l1_ms.p95           daemon/voicego        1.289        1.246        1.292  3                  info   [ms]
+L3-10k.l1_ms.p99           daemon/voicego        1.486        1.413        1.537  3 <=           15  PASS   [ms]
+L3-10k.l1_ms.p999          daemon/voicego        2.049        1.734        3.426  3                  info   [ms]
+L3-10k.l1_ms.max           daemon/voicego        2.144        1.769        4.034  3                  info   [ms]
+L3-10k.l1g_ms.n            daemon/voicego         1200         1200         1200  3                  info   [samples]
+L3-10k.l1g_ms.p50          daemon/voicego        0.599        0.598        0.601  3                  info   [ms]
+L3-10k.l1g_ms.p95          daemon/voicego        1.059        1.032        1.065  3                  info   [ms]
+L3-10k.l1g_ms.p99          daemon/voicego        1.293        1.241        1.362  3                  info  gorca side: bus arrival to SPEAK [ms]
+L3-10k.l1g_ms.p999         daemon/voicego        1.917        1.397        3.118  3                  info   [ms]
+L3-10k.l1g_ms.max          daemon/voicego        2.069        1.403        3.857  3                  info   [ms]
+L3-10k.cpu_pct             daemon/voicego         39.7         39.1         42.2  3                  info   [% of one core]
+L3-10k.cpu_us_per_event    daemon/voicego         38.8         38.2         41.2  3                  info   [us/event]
+L3-10k.lost                daemon/voicego            0            0            0  3 <=            0  PASS   [events]
+L3-10k.storm_achieved_eps  daemon/voicego        10000        10000        10000  3 >=         9000  PASS  must reach 90% of the target rate [ev/s]
+L3-10k.storm_max_lag_ms    daemon/voicego        0.800        0.700        0.900  3                  info   [ms]
+L3-10k.storm_target_eps    daemon/voicego        10000        10000        10000  3                  info   [ev/s]
+L3-50k.l0_ms.n             daemon/voicego         1200         1200         1200  3                  info   [samples]
+L3-50k.l0_ms.p50           daemon/voicego        0.165        0.163        0.185  3                  info   [ms]
+L3-50k.l0_ms.p95           daemon/voicego        0.425        0.385        0.675  3                  info   [ms]
+L3-50k.l0_ms.p99           daemon/voicego        0.582        0.523        2.040  3                  info   [ms]
+L3-50k.l0_ms.p999          daemon/voicego        1.186        0.776        3.466  3                  info   [ms]
+L3-50k.l0_ms.max           daemon/voicego        1.379        0.796         10.9  3                  info   [ms]
+L3-50k.l1_ms.n             daemon/voicego         1200         1199         1200  3                  info   [samples]
+L3-50k.l1_ms.p50           daemon/voicego        0.821        0.787        0.848  3                  info   [ms]
+L3-50k.l1_ms.p95           daemon/voicego        1.514        1.457        3.448  3                  info   [ms]
+L3-50k.l1_ms.p99           daemon/voicego        3.058        2.421        5.752  3 <=           15  PASS   [ms]
+L3-50k.l1_ms.p999          daemon/voicego        3.904        3.829        8.428  3                  info   [ms]
+L3-50k.l1_ms.max           daemon/voicego        3.986        3.920        8.715  3                  info   [ms]
+L3-50k.l1g_ms.n            daemon/voicego         1200         1199         1200  3                  info   [samples]
+L3-50k.l1g_ms.p50          daemon/voicego        0.650        0.618        0.652  3                  info   [ms]
+L3-50k.l1g_ms.p95          daemon/voicego        1.244        1.168        2.493  3                  info   [ms]
+L3-50k.l1g_ms.p99          daemon/voicego        2.702        1.730        4.572  3                  info  gorca side: bus arrival to SPEAK [ms]
+L3-50k.l1g_ms.p999         daemon/voicego        3.525        3.496        6.604  3                  info   [ms]
+L3-50k.l1g_ms.max          daemon/voicego        3.694        3.635        7.494  3                  info   [ms]
+L3-50k.cpu_pct             daemon/voicego         75.9         72.5         85.3  3                  info   [% of one core]
+L3-50k.cpu_us_per_event    daemon/voicego         15.1         14.4         17.0  3                  info   [us/event]
+L3-50k.lost                daemon/voicego            0            0            1  3 <=            0  PASS   [events]
+L3-50k.storm_achieved_eps  daemon/voicego        50000        50000        50000  3 >=        45000  PASS  must reach 90% of the target rate [ev/s]
+L3-50k.storm_max_lag_ms    daemon/voicego        1.340        0.220         16.2  3                  info   [ms]
+L3-50k.storm_target_eps    daemon/voicego        50000        50000        50000  3                  info   [ev/s]
+L4.l0_ms.n                 daemon/voicego         1200         1200         1200  3                  info   [samples]
+L4.l0_ms.p50               daemon/voicego        0.172        0.168        0.174  3                  info   [ms]
+L4.l0_ms.p95               daemon/voicego        0.385        0.376        0.394  3                  info   [ms]
+L4.l0_ms.p99               daemon/voicego        0.462        0.437        0.464  3                  info   [ms]
+L4.l0_ms.p999              daemon/voicego        0.625        0.519        0.697  3                  info   [ms]
+L4.l0_ms.max               daemon/voicego        0.908        0.630        1.411  3                  info   [ms]
+L4.l1_ms.n                 daemon/voicego         1200         1200         1200  3                  info   [samples]
+L4.l1_ms.p50               daemon/voicego        0.973        0.935        1.022  3                  info   [ms]
+L4.l1_ms.p95               daemon/voicego        1.753        1.686        1.771  3                  info   [ms]
+L4.l1_ms.p99               daemon/voicego        1.964        1.923        1.975  3 <=           15  PASS   [ms]
+L4.l1_ms.p999              daemon/voicego        2.114        2.099        2.277  3                  info   [ms]
+L4.l1_ms.max               daemon/voicego        2.280        2.266        2.306  3                  info   [ms]
+L4.l1g_ms.n                daemon/voicego         1200         1200         1200  3                  info   [samples]
+L4.l1g_ms.p50              daemon/voicego        0.793        0.745        0.830  3                  info   [ms]
+L4.l1g_ms.p95              daemon/voicego        1.487        1.452        1.546  3                  info   [ms]
+L4.l1g_ms.p99              daemon/voicego        1.698        1.693        1.788  3                  info  gorca side: bus arrival to SPEAK [ms]
+L4.l1g_ms.p999             daemon/voicego        1.892        1.886        2.131  3                  info   [ms]
+L4.l1g_ms.max              daemon/voicego        2.064        1.902        2.180  3                  info   [ms]
+L4.lost                    daemon/voicego            0            0            0  3 <=            0  PASS   [events]
+L4.peer_calls_hung         daemon/voicego            6            2            6  3 >=            1  PASS  the hang must actually have been exercised [calls]
+L4.peer_calls_received     daemon/voicego            7            3            7  3                  info   [calls]
+L4c.l0_ms.n                daemon/voicego         1200         1200         1200  3                  info   [samples]
+L4c.l0_ms.p50              daemon/voicego        0.173        0.166        0.195  3                  info   [ms]
+L4c.l0_ms.p95              daemon/voicego        0.398        0.381        0.405  3                  info   [ms]
+L4c.l0_ms.p99              daemon/voicego        0.467        0.454        0.491  3                  info   [ms]
+L4c.l0_ms.p999             daemon/voicego        0.528        0.526        0.556  3                  info   [ms]
+L4c.l0_ms.max              daemon/voicego        0.580        0.556        0.661  3                  info   [ms]
+L4c.l1_ms.n                daemon/voicego         1200         1200         1200  3                  info   [samples]
+L4c.l1_ms.p50              daemon/voicego        1.005        0.965        1.052  3                  info   [ms]
+L4c.l1_ms.p95              daemon/voicego        1.751        1.720        1.758  3                  info   [ms]
+L4c.l1_ms.p99              daemon/voicego        2.042        1.945        2.061  3                  info   [ms]
+L4c.l1_ms.p999             daemon/voicego        2.450        2.103        2.528  3                  info   [ms]
+L4c.l1_ms.max              daemon/voicego        2.453        2.354        2.530  3                  info   [ms]
+L4c.l1g_ms.n               daemon/voicego         1200         1200         1200  3                  info   [samples]
+L4c.l1g_ms.p50             daemon/voicego        0.824        0.782        0.845  3                  info   [ms]
+L4c.l1g_ms.p95             daemon/voicego        1.498        1.493        1.531  3                  info   [ms]
+L4c.l1g_ms.p99             daemon/voicego        1.750        1.683        1.785  3                  info  gorca side: bus arrival to SPEAK [ms]
+L4c.l1g_ms.p999            daemon/voicego        2.199        1.987        2.268  3                  info   [ms]
+L4c.l1g_ms.max             daemon/voicego        2.235        2.061        2.363  3                  info   [ms]
+L4c.lost                   daemon/voicego            0            0            0  3 <=            0  PASS   [events]
+L4c.peer_calls_hung        daemon/voicego            0            0            0  3                  info   [calls]
+L4c.peer_calls_received    daemon/voicego            3            3           96  3                  info   [calls]
+K1.k1_ms.n                 daemon/voicego         1200         1200         1200  3                  info   [samples]
+K1.k1_ms.p50               daemon/voicego            0            0            0  3                  info   [ms]
+K1.k1_ms.p95               daemon/voicego        0.281            0        0.402  3                  info   [ms]
+K1.k1_ms.p99               daemon/voicego        0.613            0        0.687  3 <=           15  PASS   [ms]
+K1.k1_ms.p999              daemon/voicego        0.840        0.497        0.913  3                  info   [ms]
+K1.k1_ms.max               daemon/voicego        0.941        0.698        0.949  3                  info   [ms]
+K1.lost                    daemon/voicego            0            0            0  3 <=            0  PASS   [events]
+
+== wrote bench/results/e2e/review-r1/20261012T214313Z.{json,txt}
+exit=0
