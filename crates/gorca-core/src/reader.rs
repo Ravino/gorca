@@ -14,7 +14,7 @@ use std::time::Instant;
 
 use gorca_connector_api::BackendError;
 use gorca_input_api::{CmdId, GrabSet, KeyClass, KeyIntent};
-use gorca_model::{AppId, Epoch, NodeKey, NodeSnapshot, Politeness, PropMask, UttId};
+use gorca_model::{AppId, Epoch, NodeKey, NodeSnapshot, Politeness, PropMask, StateSet, UttId};
 use gorca_rt::{BudgetClass, EpochCell, FocusedApp, mpsc};
 use smallvec::SmallVec;
 
@@ -299,9 +299,6 @@ impl Reader {
                     return;
                 }
                 self.last_focus = Some((node, now));
-                if let Some(f) = &self.focused_app {
-                    f.set(node.app);
-                }
                 // The epoch advances first, so stale speech cancels now, not after δ (E-2).
                 let epoch = self.epoch.advance();
                 let role = self.dir.lookup(node).hit().map(|n| n.role);
@@ -365,6 +362,15 @@ impl Reader {
                 let id = self.utt_id();
                 let u = present_focus(snap, id, epoch);
                 fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+                // Protection from eviction is earned only here: the focus passed the state
+                // machine, was presented, and the fetched node itself shows `FOCUSED`. A focus
+                // event alone, from any application, proves nothing.
+                if let Some(f) = &self.focused_app
+                    && snap.states.contains(StateSet::FOCUSED)
+                    && !snap.states.contains(StateSet::DEFUNCT)
+                {
+                    f.publish(snap.key.app);
+                }
             }
             Some(
                 FocusEffect::BeginPresent { .. }
@@ -657,21 +663,41 @@ mod tests {
         assert!(fx.is_empty(), "releases are silent");
     }
 
+    /// Eviction immunity is earned by an accepted, presented, validated focus only.
     #[test]
-    fn the_focused_application_is_published() {
+    fn only_a_validated_focus_is_published_for_protection() {
         let mut f = fixture();
         let published = Arc::new(FocusedApp::new());
-        f.reader = Reader::new(
-            Arc::clone(&f.epoch),
-            Arc::new(MirrorDirectory::new()),
-            ModeKeys::default(),
-        )
-        .with_focused(Arc::clone(&published));
-        assert_eq!(published.get(), None);
+        f.reader.focused_app = Some(Arc::clone(&published));
+        let now = Instant::now();
+
+        // A focus event for a node the app has not shown to be FOCUSED (a hostile claim, or a
+        // stale one): spoken as usual, but it earns no protection.
+        f.writer.apply(SnapshotBatch {
+            nodes: vec![snap(1, Role::Button, "Claim")],
+        });
         f.reader.handle(
             ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(1) }),
-            Instant::now(),
+            now,
         );
+        assert_eq!(published.get(), None, "no FOCUSED state, no protection");
+
+        // A cache miss: nothing is presented yet, so nothing is published.
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(2) }),
+            now + std::time::Duration::from_secs(1),
+        );
+        assert_eq!(published.get(), None, "fetch pending");
+
+        // The reply shows the node FOCUSED: accepted, presented and published.
+        let mut focused = (*snap(2, Role::Button, "Real")).clone();
+        focused.states = StateSet::FOCUSED;
+        let reply = QueryReply {
+            node: key(2),
+            epoch: f.epoch.current(),
+            result: Ok(Arc::new(focused)),
+        };
+        f.reader.handle(ReaderMsg::Reply(reply), now);
         assert_eq!(published.get(), Some(app()));
     }
 

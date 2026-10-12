@@ -65,6 +65,14 @@ fn core(delay: impl Fn(u64) -> Duration + Send + 'static) -> Core {
 struct Fixed(u32);
 
 impl Credentials for Fixed {
+    /// Tests use the pid as the process group; the real `/proc` is never read.
+    fn proc_info(&self, pid: u32) -> ProcInfo {
+        ProcInfo {
+            pgrp: Some(pid),
+            start: None,
+        }
+    }
+
     fn pid_of<'a>(&'a self, _name: &'a str) -> BoxFuture<'a, Option<u32>> {
         let pid = self.0;
         Box::pin(async move { Some(pid) })
@@ -408,6 +416,14 @@ fn last_focus_path(c: &Core, r: &Rig, app: AppId) -> Option<String> {
 struct ByName(Box<dyn Fn(u32) -> Option<u32> + Send + Sync>);
 
 impl Credentials for ByName {
+    /// Tests use the pid as the process group; the real `/proc` is never read.
+    fn proc_info(&self, pid: u32) -> ProcInfo {
+        ProcInfo {
+            pgrp: Some(pid),
+            start: None,
+        }
+    }
+
     fn pid_of<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Option<u32>> {
         let n: u32 = name.trim_start_matches(":1.").parse().unwrap_or(0);
         let pid = (self.0)(n);
@@ -793,7 +809,7 @@ async fn the_focused_application_is_never_evicted() {
     let RouteDecision::Route(route) = r.router.resolve(":1.63") else {
         panic!("registered")
     };
-    focused.set(route.app);
+    focused.publish(route.app);
     for i in 0..10 {
         let newcomer = format!(":1.{}", 200_000 + i);
         assert!(is_retry(&r.router.resolve(&newcomer)));
@@ -812,10 +828,10 @@ async fn the_focused_application_is_never_evicted() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn the_shell_is_never_evicted_or_refused() {
     let c = core(|_| Duration::ZERO);
-    let mut r = rig(&c, Arc::new(ByName(Box::new(|n| Some(n + 10)))));
+    let mut r = rig(&c, Arc::new(Scripted::singletons()));
     // Shell registered last before the cap is hit: it is the newest, hence the usual victim.
     r.router
-        .protect_pid(10 + u32::try_from(MAX_APPS_TOTAL).unwrap() - 1);
+        .set_protected_process(Some((SHELL_PID, SHELL_START)));
     for n in 0..u32::try_from(MAX_APPS_TOTAL).unwrap() {
         let _ = r.router.resolve(&format!(":1.{n}"));
         r.router.complete(r.to_register.try_recv().unwrap()).await;
@@ -912,6 +928,14 @@ async fn the_per_process_name_cap_refuses_with_a_backoff_not_a_verdict() {
 async fn credentials_are_retried_before_a_name_is_filed_as_unknown() {
     struct Flaky(std::sync::atomic::AtomicUsize);
     impl Credentials for Flaky {
+        /// Tests use the pid as the process group; the real `/proc` is never read.
+        fn proc_info(&self, pid: u32) -> ProcInfo {
+            ProcInfo {
+                pgrp: Some(pid),
+                start: None,
+            }
+        }
+
         fn pid_of<'a>(&'a self, _name: &'a str) -> BoxFuture<'a, Option<u32>> {
             let n = self.0.fetch_add(1, Ordering::SeqCst);
             Box::pin(async move { (n >= 2).then_some(777) })
@@ -924,4 +948,224 @@ async fn credentials_are_retried_before_a_name_is_filed_as_unknown() {
     let st = r.router.state();
     assert_eq!(st.names_per_group.get(&Some(777)), Some(&1));
     assert_eq!(st.names_per_group.get(&None), None, "not filed as unknown");
+}
+
+// ---- security scan of the round-3 fixes ---------------------------------------------------
+
+/// pid and process info from closures, so a test can say exactly who is who.
+struct Scripted {
+    pid: Box<dyn Fn(u32) -> Option<u32> + Send + Sync>,
+    info: Box<dyn Fn(u32) -> ProcInfo + Send + Sync>,
+}
+
+/// Start time of the shell process in these tests: `SHELL_PID` below, `pid * 10` for the rest.
+const SHELL_START: u64 = 5210;
+const SHELL_PID: u32 = 10 + 511;
+
+impl Scripted {
+    /// Every name `:1.n` is its own process (pid `n + 10`, its own process group).
+    fn singletons() -> Self {
+        Self {
+            pid: Box::new(|n| Some(n + 10)),
+            info: Box::new(|pid| ProcInfo {
+                pgrp: Some(pid),
+                start: Some(u64::from(pid) * 10),
+            }),
+        }
+    }
+}
+
+impl Credentials for Scripted {
+    fn pid_of<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Option<u32>> {
+        let n: u32 = name.trim_start_matches(":1.").parse().unwrap_or(0);
+        let pid = (self.pid)(n);
+        Box::pin(async move { pid })
+    }
+
+    fn proc_info(&self, pid: u32) -> ProcInfo {
+        (self.info)(pid)
+    }
+}
+
+/// Scan item 3: the attacker fills the cap first (one process group, many processes), then a
+/// legitimate application launches, gains focus, and from then on cannot be pushed out by the
+/// attacker's further registrations.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_legitimate_app_launched_after_the_attacker_filled_the_cap_wins_and_stays() {
+    let c = core(|_| Duration::ZERO);
+    // Attacker: names 0..512 are processes 1000.. in ONE process group (5000); the legitimate
+    // application (name 900000) is its own process and group.
+    let creds = Scripted {
+        pid: Box::new(|n| Some(if n < 100_000 { 1000 + n } else { n })),
+        info: Box::new(|pid| ProcInfo {
+            pgrp: Some(if (1000..100_000).contains(&pid) {
+                5000
+            } else {
+                pid
+            }),
+            start: Some(u64::from(pid)),
+        }),
+    };
+    let focused = Arc::new(FocusedApp::new());
+    let (new_tx, mut new_apps) = mpsc::channel(4096);
+    let (reg_tx, mut to_register) = mpsc::channel(4096);
+    let router = Arc::new(
+        AtspiRouter::new(
+            c.registrar.clone(),
+            Clock::System,
+            Arc::new(PathTable::new()),
+            new_tx,
+            reg_tx,
+            Arc::new(creds),
+        )
+        .with_focused(Arc::clone(&focused)),
+    );
+    let mut register = |name: String| {
+        let router = Arc::clone(&router);
+        let q = {
+            let _ = router.resolve(&name);
+            to_register.try_recv().ok()
+        };
+        async move {
+            if let Some(q) = q {
+                router.complete(q).await;
+            }
+        }
+    };
+    for n in 0..u32::try_from(MAX_APPS_TOTAL).unwrap() {
+        register(format!(":1.{n}")).await;
+    }
+    assert_eq!(router.known_apps(), MAX_APPS_TOTAL);
+
+    // The legitimate application launches: it wins a slot at the attacker's expense.
+    register(":1.900000".to_owned()).await;
+    assert!(
+        matches!(router.resolve(":1.900000"), RouteDecision::Route(_)),
+        "the user's new application was not served"
+    );
+    assert_eq!(router.known_apps(), MAX_APPS_TOTAL);
+    // It gains focus: the Reader accepted and presented it.
+    let RouteDecision::Route(legit) = router.resolve(":1.900000") else {
+        panic!("registered")
+    };
+    focused.publish(legit.app);
+
+    // The attacker keeps registering: it only ever evicts or refuses itself.
+    for n in 10_000..10_400u32 {
+        register(format!(":1.{n}")).await;
+        assert!(
+            router.state().apps.contains_key(":1.900000"),
+            "the focused legitimate app was pushed out at attacker name {n}"
+        );
+    }
+    while new_apps.try_recv().is_ok() {}
+}
+
+/// Scan item 3: with every group a singleton there is no group "larger" than the newcomer's, so
+/// the newcomer is refused. Evicting the newest existing application instead would let one more
+/// registration push out an application that had just launched.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn with_only_singletons_the_newcomer_is_refused_and_nobody_is_evicted() {
+    let c = core(|_| Duration::ZERO);
+    let mut r = rig(&c, Arc::new(Scripted::singletons()));
+    for n in 0..u32::try_from(MAX_APPS_TOTAL).unwrap() {
+        let _ = r.router.resolve(&format!(":1.{n}"));
+        r.router.complete(r.to_register.try_recv().unwrap()).await;
+    }
+    let before: std::collections::BTreeSet<String> = r
+        .router
+        .state()
+        .apps
+        .keys()
+        .map(std::string::ToString::to_string)
+        .collect();
+    for n in 0..50u32 {
+        let name = format!(":1.{}", 700_000 + n);
+        let _ = r.router.resolve(&name);
+        r.router.complete(r.to_register.try_recv().unwrap()).await;
+        assert!(
+            is_retry(&r.router.resolve(&name)),
+            "refused with a backoff, not served and not a verdict"
+        );
+    }
+    let after: std::collections::BTreeSet<String> = r
+        .router
+        .state()
+        .apps
+        .keys()
+        .map(std::string::ToString::to_string)
+        .collect();
+    assert_eq!(before, after, "no application was evicted");
+    assert_eq!(r.router.stats().evicted, 0);
+}
+
+/// Scan item 2: protection is keyed on (pid, process start time). An impostor that inherits the
+/// shell's pid after it exited has a different start time and is not protected.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_recycled_shell_pid_does_not_inherit_protection() {
+    let c = core(|_| Duration::ZERO);
+    // Name 511 is the shell's pid with the right start time; name 510 has the SAME pid but a
+    // different start time (a recycled pid).
+    let creds = Scripted {
+        pid: Box::new(|n| Some(if n == 510 { SHELL_PID } else { n + 10 })),
+        info: Box::new(|pid| ProcInfo {
+            pgrp: Some(pid + 100_000),
+            start: Some(u64::from(pid) * 10),
+        }),
+    };
+    let mut r = rig(&c, Arc::new(creds));
+    // Pretend the shell is the process (SHELL_PID, SHELL_START); 510 has start SHELL_PID*10
+    // = 5210 as well in the closure above, so make the shell's start different: the shell is
+    // registered as 5211.
+    r.router
+        .set_protected_process(Some((SHELL_PID, SHELL_START + 1)));
+    for n in 0..u32::try_from(MAX_NAMES_PER_OWNER).unwrap().min(2) {
+        let _ = r.router.resolve(&format!(":1.{}", 510 + n));
+        r.router.complete(r.to_register.try_recv().unwrap()).await;
+    }
+    let st = r.router.state();
+    let impostor = st.apps.get(":1.510").unwrap();
+    assert!(
+        !st.is_shell(impostor.group, impostor.start),
+        "same pid, different start time: not the shell"
+    );
+    drop(st);
+    // And a handover clears the previous protection.
+    r.router
+        .set_protected_process(Some((SHELL_PID, SHELL_START)));
+    {
+        let st = r.router.state();
+        let impostor = st.apps.get(":1.510").unwrap();
+        assert!(
+            st.is_shell(impostor.group, impostor.start),
+            "now it matches"
+        );
+    }
+    r.router.set_protected_process(None);
+    let st = r.router.state();
+    let impostor = st.apps.get(":1.510").unwrap();
+    assert!(!st.is_shell(impostor.group, impostor.start));
+}
+
+/// The shell restarting at a full table is never refused: as a newcomer it takes the newest
+/// unprotected application's slot.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_shell_as_a_newcomer_is_admitted_at_the_cap() {
+    let c = core(|_| Duration::ZERO);
+    let mut r = rig(&c, Arc::new(Scripted::singletons()));
+    for n in 0..u32::try_from(MAX_APPS_TOTAL).unwrap() {
+        let _ = r.router.resolve(&format!(":1.{n}"));
+        r.router.complete(r.to_register.try_recv().unwrap()).await;
+    }
+    // The shell comes back as name 999999: pid 1000009, started at 77.
+    r.router
+        .set_protected_process(Some((1_000_009, 10_000_090)));
+    let _ = r.router.resolve(":1.999999");
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    assert!(
+        matches!(r.router.resolve(":1.999999"), RouteDecision::Route(_)),
+        "the shell must be served"
+    );
+    assert_eq!(r.router.known_apps(), MAX_APPS_TOTAL);
+    assert_eq!(r.router.stats().evicted, 1);
 }

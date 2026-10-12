@@ -32,6 +32,7 @@ mod doc_source;
 mod enablement;
 mod fetch;
 mod paths;
+mod proc;
 mod role_map;
 mod router;
 mod session;

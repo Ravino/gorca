@@ -23,6 +23,7 @@ use gorca_model::{AppId, AppInfo, ConnectorKind, NodeEvent, NodeKey};
 use gorca_rt::{BoxFuture, CancellationToken, Clock, Deadline, FocusedApp, mpsc};
 
 use crate::paths::{MAX_PATH_BYTES, Owner, PathTable};
+use crate::proc::{ProcInfo, read_proc_info};
 
 /// Deadline for the core to accept a new application.
 pub const ANNOUNCE_WAIT: Duration = Duration::from_secs(1);
@@ -74,6 +75,12 @@ pub struct NewApp {
 pub trait Credentials: Send + Sync + 'static {
     /// The process id of `name`, or `None` if the bus cannot or will not say (deadline inside).
     fn pid_of<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Option<u32>>;
+
+    /// Process group and start time of `pid`, read when the application registers. The default
+    /// reads `/proc`; tests supply their own.
+    fn proc_info(&self, pid: u32) -> ProcInfo {
+        read_proc_info(pid)
+    }
 }
 
 /// No credentials available: every application is its own small owner.
@@ -86,13 +93,22 @@ impl Credentials for NoCredentials {
     fn pid_of<'a>(&'a self, _name: &'a str) -> BoxFuture<'a, Option<u32>> {
         Box::pin(async { None })
     }
+
+    fn proc_info(&self, _pid: u32) -> ProcInfo {
+        ProcInfo::default()
+    }
 }
 
 #[derive(Debug)]
 struct Entry {
     route: AppRoute,
     gone: CancellationToken,
+    /// The process (pid) the name limit counts against.
     group: Option<u32>,
+    /// The process group the application cap counts against (a fork attack shares it).
+    evg: Option<u32>,
+    /// Start time of the process: with the pid, its identity (pids are reused).
+    start: Option<u64>,
     /// Registration order; the highest is the newest.
     seq: u64,
 }
@@ -171,9 +187,12 @@ struct State {
     /// Registered names per process (`None`: credentials unknown, all such names together),
     /// **including names whose registration is in flight** (reserve, then commit).
     names_per_group: HashMap<Option<u32>, usize>,
+    /// Registered names per process group (the unit of the application cap).
+    names_per_evg: HashMap<Option<u32>, usize>,
     next_seq: u64,
-    /// Processes that are never evicted or refused (the shell).
-    protected_pids: HashSet<u32>,
+    /// The one process that is never evicted or refused: the current owner of `org.gnome.Shell`,
+    /// as `(pid, start time)`.
+    protected_process: Option<(u32, u64)>,
     departed: HashSet<Arc<str>>,
     departed_order: VecDeque<(Instant, Arc<str>)>,
 }
@@ -235,46 +254,79 @@ impl State {
         true
     }
 
-    fn is_protected(&self, e: &Entry, focused: Option<AppId>) -> bool {
-        focused == Some(e.route.app) || e.group.is_some_and(|g| self.protected_pids.contains(&g))
+    fn is_shell(&self, group: Option<u32>, start: Option<u64>) -> bool {
+        match (self.protected_process, group, start) {
+            (Some((pid, st)), Some(g), Some(s)) => pid == g && st == s,
+            _ => false,
+        }
     }
 
-    /// Who gives way when the application cap is reached. Never the focused application or a
-    /// protected process. Only a group holding more than one name is "too big"; its newest name
-    /// goes. If every group holds a single name, the newest registration goes. Never arbitrary.
-    fn pick_victim(&self, newcomer: Option<u32>, focused: Option<AppId>) -> Victim {
-        let newcomer_protected = newcomer.is_some_and(|g| self.protected_pids.contains(&g));
-        let candidates: Vec<(&Arc<str>, &Entry)> = self
-            .apps
-            .iter()
-            .filter(|(_, e)| !self.is_protected(e, focused))
-            .collect();
-        let count = |g: Option<u32>| self.names_per_group.get(&g).copied().unwrap_or(0);
-        // The biggest group above one name; ties go to the one that registered last.
+    fn forget_evg(&mut self, evg: Option<u32>) {
+        if let Some(n) = self.names_per_evg.get_mut(&evg) {
+            *n = n.saturating_sub(1);
+            if *n == 0 {
+                self.names_per_evg.remove(&evg);
+            }
+        }
+    }
+
+    /// Who gives way when the application cap is reached.
+    ///
+    /// Policy (documented because it is a security decision):
+    ///
+    /// 1. Never the focused application (and the previous one during its grace), and never the
+    ///    shell's process (identified by pid *and* start time).
+    /// 2. Only a process group **strictly larger than the newcomer's own** gives way, and
+    ///    the biggest such group first (ties: the one that registered last); within it, its
+    ///    newest name. A fork attack shares one process group and so is the largest; an
+    ///    application the user just launched is a group of one and wins against it, and it gains
+    ///    focus-based protection as soon as the Reader accepts its focus.
+    /// 3. If no group is larger than the newcomer's (all singletons, or the newcomer's own group is
+    ///    the biggest), **the newcomer is refused** (with a backoff). Evicting the newest
+    ///    existing application instead would let an attacker, by registering one more name,
+    ///    evict a legitimate application that had just launched.
+    /// 4. The shell, as a newcomer, is never refused: it takes the biggest group above one name,
+    ///    else the newest unprotected application, else is admitted over the cap.
+    fn pick_victim(&self, newcomer: &Newcomer, focused: Option<&FocusedApp>) -> Victim {
+        let protected = |e: &Entry| {
+            focused.is_some_and(|f| f.protects(e.route.app)) || self.is_shell(e.group, e.start)
+        };
+        let candidates: Vec<(&Arc<str>, &Entry)> =
+            self.apps.iter().filter(|(_, e)| !protected(e)).collect();
+        let count = |g: Option<u32>| self.names_per_evg.get(&g).copied().unwrap_or(0);
+        // The newcomer joins its group: only a group bigger than that gives way.
+        let floor = if newcomer.shell {
+            1
+        } else {
+            count(newcomer.evg) + 1
+        };
         let big = candidates
             .iter()
-            .filter(|(_, e)| count(e.group) > 1)
+            .filter(|(_, e)| count(e.evg) > floor)
             .map(|(_, e)| e)
-            .max_by_key(|e| (count(e.group), e.seq))
-            .map(|e| e.group);
+            .max_by_key(|e| (count(e.evg), e.seq))
+            .map(|e| e.evg);
         let victim = match big {
-            Some(g) => {
-                if g == newcomer && !newcomer_protected {
-                    return Victim::RefuseNewcomer;
-                }
-                candidates
-                    .iter()
-                    .filter(|(_, e)| e.group == g)
-                    .max_by_key(|(_, e)| e.seq)
-            }
-            None => candidates.iter().max_by_key(|(_, e)| e.seq),
+            Some(g) => candidates
+                .iter()
+                .filter(|(_, e)| e.evg == g)
+                .max_by_key(|(_, e)| e.seq),
+            None if newcomer.shell => candidates.iter().max_by_key(|(_, e)| e.seq),
+            None => return Victim::RefuseNewcomer,
         };
         match victim {
             Some((name, _)) => Victim::Evict(Arc::clone(name)),
-            None if newcomer_protected => Victim::AdmitOverCap,
+            None if newcomer.shell => Victim::AdmitOverCap,
             None => Victim::RefuseNewcomer,
         }
     }
+}
+
+/// What `pick_victim` needs to know about the registration that triggered the decision.
+#[derive(Copy, Clone, Debug)]
+struct Newcomer {
+    evg: Option<u32>,
+    shell: bool,
 }
 
 /// Outcome of [`State::pick_victim`].
@@ -346,9 +398,11 @@ impl AtspiRouter {
         self
     }
 
-    /// Never evict or refuse the applications of process `pid` (the shell).
-    pub fn protect_pid(&self, pid: u32) {
-        self.state().protected_pids.insert(pid);
+    /// Protect the shell: the process `(pid, start time)` that currently owns
+    /// `org.gnome.Shell`, or nothing. It replaces any earlier value, so a process that merely
+    /// inherits a recycled pid is not protected (its start time differs).
+    pub fn set_protected_process(&self, process: Option<(u32, u64)>) {
+        self.state().protected_process = process;
     }
 
     fn state(&self) -> std::sync::MutexGuard<'_, State> {
@@ -386,6 +440,7 @@ impl AtspiRouter {
             let e = st.apps.remove(name);
             if let Some(e) = &e {
                 st.release_name(e.group);
+                st.forget_evg(e.evg);
             }
             (e, dropped)
         };
@@ -407,6 +462,7 @@ impl AtspiRouter {
             st.orphan_focus.clear();
             st.parked_bytes = 0;
             st.names_per_group.clear();
+            st.names_per_evg.clear();
             st.apps.drain().map(|(_, e)| e).collect()
         };
         apps.into_iter()
@@ -439,6 +495,9 @@ impl AtspiRouter {
             }
         }
         let owner_known = pid.map(Owner::Pid);
+        let info_of = pid
+            .map(|p| self.credentials.proc_info(p))
+            .unwrap_or_default();
         // Reserve the name before the first await that matters; give it back on any failure.
         let reserved = self.state().reserve_name(pid);
         if !reserved {
@@ -461,7 +520,7 @@ impl AtspiRouter {
             .announce(ScopeKey(Arc::clone(&sender)), info, deadline)
             .await;
         match announced {
-            Ok(port) => self.publish(&sender, port, owner_known),
+            Ok(port) => self.publish(&sender, port, owner_known, info_of),
             Err(e) => {
                 tracing::warn!(sender = &*sender, error = %e, "application announce failed");
                 self.state().release_name(pid);
@@ -498,7 +557,7 @@ impl AtspiRouter {
 
     /// Publish under the lock `forget` takes: check "departed", hand the port over, replay the
     /// parked events in order and insert the route as one step.
-    fn publish(&self, sender: &Arc<str>, port: AppPort, owner: Option<Owner>) {
+    fn publish(&self, sender: &Arc<str>, port: AppPort, owner: Option<Owner>, info: ProcInfo) {
         let app = port.app;
         let group = match owner {
             Some(Owner::Pid(p)) => Some(p),
@@ -515,8 +574,14 @@ impl AtspiRouter {
             bus_name: Arc::clone(sender),
             gone: gone.clone(),
         };
-        let focused = self.focused.as_ref().and_then(|f| f.get());
+        let focused = self.focused.as_deref();
+        // Fall back to the pid as the cap group when the process group is unknown.
+        let evg = info.pgrp.or(group);
         let mut st = self.state();
+        let newcomer = Newcomer {
+            evg,
+            shell: st.is_shell(group, info.start),
+        };
         if st.departed.contains(&**sender) {
             st.release_name(group);
             let dropped = st.drop_parked(sender);
@@ -539,7 +604,7 @@ impl AtspiRouter {
         // meets this one. The focused application and protected processes never give way.
         let mut victim: Option<Arc<str>> = None;
         if st.apps.len() >= MAX_APPS_TOTAL {
-            match st.pick_victim(group, focused) {
+            match st.pick_victim(&newcomer, focused) {
                 Victim::Evict(name) => victim = Some(name),
                 Victim::AdmitOverCap => {}
                 Victim::RefuseNewcomer => {
@@ -567,6 +632,7 @@ impl AtspiRouter {
         let evicted = victim.and_then(|v| {
             let e = st.apps.remove(&v)?;
             st.release_name(e.group);
+            st.forget_evg(e.evg);
             Some((v, e))
         });
         self.paths.bind_app(app, owner);
@@ -608,9 +674,12 @@ impl AtspiRouter {
                 route: route.clone(),
                 gone,
                 group,
+                evg,
+                start: info.start,
                 seq,
             },
         );
+        *st.names_per_evg.entry(evg).or_insert(0) += 1;
         if let Some((name, _)) = &evicted {
             // The evicted application re-announces on its next event (the drain notices that its
             // ingress is closed), through the backoff path if the table is still full.

@@ -48,8 +48,8 @@ const REGISTER_QUEUE: usize = 256;
 const DRAIN_POLL: Duration = Duration::from_millis(500);
 const DRAIN_BACKOFF_MIN: Duration = Duration::from_millis(100);
 const DRAIN_BACKOFF_MAX: Duration = Duration::from_secs(5);
-/// How often the shell's owner is looked up (it may start after gorca).
-const SHELL_POLL: Duration = Duration::from_secs(5);
+/// Safety-net interval for re-resolving the shell's owner (changes also arrive as signals).
+const SHELL_POLL: Duration = Duration::from_secs(30);
 /// Deadline of one `GetConnectionCredentials`.
 const CREDENTIALS_DEADLINE: Duration = Duration::from_millis(250);
 
@@ -184,24 +184,57 @@ impl Credentials for BusCredentials {
     }
 }
 
-/// Keeps the GNOME Shell process in the router's protected set. The shell owns
-/// `org.gnome.Shell` on the session bus; its a11y connection belongs to the same process.
+/// Keeps the router's one protected process equal to the **current** owner of
+/// `org.gnome.Shell` on the session bus, as `(pid, process start time)`. The owner is re-resolved
+/// whenever the name changes hands (`NameOwnerChanged`, with a slow poll as a safety net), and the
+/// protection replaces the previous value, so a recycled pid or a name handover never leaves
+/// someone else protected: the start time of an impostor differs.
 async fn watch_shell(session: Connection, router: Arc<AtspiRouter>, clock: Clock) {
     let creds = BusCredentials {
         conn: session.clone(),
         clock: clock.clone(),
     };
-    let mut known: Option<u32> = None;
+    let rule = zbus::MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender("org.freedesktop.DBus")
+        .and_then(|b| b.interface("org.freedesktop.DBus"))
+        .and_then(|b| b.member("NameOwnerChanged"))
+        .and_then(|b| b.arg(0, "org.gnome.Shell"))
+        .map(zbus::match_rule::Builder::build);
+    let deadline = Deadline::for_class(&clock, BudgetClass::Startup);
+    let mut stream = match rule {
+        Ok(rule) => gorca_dbus::with_deadline(
+            deadline,
+            zbus::MessageStream::for_match_rule(rule, &session, Some(16)),
+        )
+        .await
+        .ok(),
+        Err(_) => None,
+    };
+    let mut protected: Option<(u32, u64)> = None;
     loop {
-        if let Some(owner) = name_owner(&session, &clock, "org.gnome.Shell").await
-            && let Some(pid) = creds.pid_of(&owner).await
-            && known != Some(pid)
-        {
-            tracing::debug!(pid, "the shell is protected from eviction");
-            router.protect_pid(pid);
-            known = Some(pid);
+        let process = match name_owner(&session, &clock, "org.gnome.Shell").await {
+            Some(owner) => match creds.pid_of(&owner).await {
+                Some(pid) => crate::proc::read_proc_info(pid).start.map(|st| (pid, st)),
+                None => None,
+            },
+            None => None,
+        };
+        if process != protected {
+            tracing::debug!(?process, "the shell process changed");
+            router.set_protected_process(process);
+            protected = process;
         }
-        tokio::time::sleep(SHELL_POLL).await;
+        let changed = async {
+            match stream.as_mut() {
+                Some(s) => s.next().await.is_some(),
+                None => std::future::pending().await,
+            }
+        };
+        tokio::select! {
+            _ = changed => {}
+            () = tokio::time::sleep(SHELL_POLL) => {}
+        }
     }
 }
 

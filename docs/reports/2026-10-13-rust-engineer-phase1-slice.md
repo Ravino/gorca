@@ -70,3 +70,23 @@ live-region speech, window-activate speech. Real GTK/Shell smoke run not perform
   Shrink or replace maps on clear, drop empty buckets, measure RSS in a test.
 - Reserve a name slot in `resolve` (the 64-name check still races registration).
 - Exempt each owner's newest path from eviction.
+
+## Review round 3 and the security scan of its fixes
+Eviction policy at the 512-application cap (`State::pick_victim`, documented in code):
+1. Never the focused application (nor the previous one for 5 s, if it held focus for 1 s), never
+   the shell's process. Focus protection is published by the Reader only after the focus passed
+   the FSM, was presented, and the fetched node itself showed `FOCUSED`; it covers at most two
+   applications and a quick focus flipper earns neither slot. Identity is the `AppId` (per unique
+   bus name, never reused). The shell is identified as the current owner of `org.gnome.Shell`
+   (session bus), as `(pid, process start time)`, re-resolved on its NameOwnerChanged.
+2. Only a process group strictly larger than the newcomer's own gives way: the biggest first,
+   its newest name. A fork attack shares a process group; a freshly launched application is a
+   group of one and wins against it, then is protected once it has focus.
+3. If no group is larger (all singletons, or the newcomer's group is the biggest) the newcomer
+   is refused with a backoff, and nothing is evicted: evicting "the newest" would let an
+   attacker's one extra registration push out an application that had just launched.
+   Known limit: an attacker whose 512 processes each sit in their own process group is
+   indistinguishable from 512 applications; new applications then wait (with backoff) until
+   slots free up. The shell is never refused.
+4. Refusals, evictions and name-cap hits are temporary (backoff, never cached); an evicted
+   application's closed ingress makes the drain forget its cached route, so it re-registers.
