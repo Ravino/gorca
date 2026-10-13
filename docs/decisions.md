@@ -57,3 +57,4 @@
 | 2026-10-13 | Keymap: NVDA-style default, Orca preset also shipped; desktop (numpad review) layout primary, laptop layout as alternative | docs/plan/phase-2.md |
 | 2026-10-13 | Braille (M10) deferred out of Phase 2 | docs/plan/phase-2.md |
 | 2026-10-13 | Phase 2 defaults taken by orchestrator: TOML settings (no GUI, no Orca import), typing echo chars on/words off, full-screen terminal apps best-effort, perception features out of Phase 2 | docs/plan/phase-2.md |
+| 2026-10-13 | B-5 arm (c) = runtime mode of arm (b): rt.mode off/nice/fifo + P-core pinning (0-5); fallback rlimit -> rtkit -> nice; FIFO prio 12-15, SCHED_RESET_ON_FORK, RLIMIT_RTTIME 200 ms + watchdog; tokio workers never FIFO; run whose mode wasn't achieved is INVALID. Needs rtkit installed by user | docs/reports/2026-10-13-p12-realtime-scheduling.md |
