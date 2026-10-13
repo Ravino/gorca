@@ -68,7 +68,7 @@ const CHORD_GAP_MS: u64 = 700;
 /// Longest wait for the reader to bring Mutter's grabs to the state a switch asks for.
 const GRABS_TIMEOUT: Duration = Duration::from_secs(2);
 /// Guard after Mutter applied a grab set: reply latency plus the reader's 1 ms settle.
-const GUARD_MS: u64 = 4;
+const GUARD_MS: u64 = 8;
 /// The normal grab set: Insert, KP_Insert and Caps_Lock.
 const NORMAL_MODIFIERS: u32 = 3;
 /// First node of the K3 series (warm-up uses 1..70).
@@ -683,6 +683,16 @@ pub fn k4(
     }
     let elapsed = started.elapsed().as_secs_f64();
     std::thread::sleep(Duration::from_millis(200));
+    if flag(host, "GORCA_M1_INJECT_DOUBLE") {
+        // Negative control for the scoring: a real double, delivered to the application by
+        // Mutter, must be counted. The last typed letter is pressed and released once more.
+        if let Some(&(kc, sym)) = typed.last() {
+            let m = mutter(&mut rig)?;
+            ty.t_ms += 3;
+            m.key_ex(kc, sym, 0, false, ty.t_ms)?;
+            m.key_ex(kc, sym, 0, true, ty.t_ms + 3)?;
+        }
+    }
     typed_total += typed.len();
     flush_scores(&mut rig, &mut typed, &mut swallowed_live, &mut totals)?;
     let (lost, doubled, _) = totals;
@@ -704,6 +714,11 @@ pub fn k4(
         "runs",
     );
     out.x("chord_resent", resent as f64, "chords");
+    out.x(
+        "chord_resent_per_10k",
+        resent as f64 * 10_000.0 / switches as f64,
+        "chords",
+    );
     out.x("k4_wall_s", elapsed, "s");
     Ok(())
 }
@@ -985,6 +1000,29 @@ mod tests {
         );
         assert_eq!(get("GORCA_XKB_OPTIONS").as_deref(), Some(""));
         assert_eq!(get("GORCA_CLOCK_24H").as_deref(), Some("1"));
+    }
+
+    /// The 16-bit synthetic keycodes wrap during a long walk. Scored in one piece, a wrapped
+    /// keycode looks doubled (this is what m1-r6 saw at 30k switches); scored per chunk it does
+    /// not, and a real duplicate inside a chunk is still found.
+    #[test]
+    fn wrapped_keycodes_are_not_doubles_but_real_doubles_are() {
+        let key = |kc: u16| [(kc, 97, false), (kc, 97, true)];
+        // Keycode 300 typed in chunk one and again in chunk two (after the wrap).
+        let (chunk1, chunk2) = ([(300, 97)], [(300, 97)]);
+        let log1: Vec<_> = key(300).to_vec();
+        let log2: Vec<_> = key(300).to_vec();
+        let whole: Vec<_> = [log1.clone(), log2.clone()].concat();
+        assert_eq!(
+            score_typing(&[chunk1[0], chunk2[0]], &whole),
+            (0, 4),
+            "one piece: false doubles"
+        );
+        assert_eq!(score_typing(&chunk1, &log1), (0, 0));
+        assert_eq!(score_typing(&chunk2, &log2), (0, 0));
+        // A real double inside a chunk.
+        let real: Vec<_> = [log1.clone(), key(300).to_vec()].concat();
+        assert_eq!(score_typing(&chunk1, &real), (0, 2));
     }
 
     #[test]

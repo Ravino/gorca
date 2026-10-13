@@ -161,12 +161,12 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                 // Worst repeat, not the median: one lost focus in three runs is a failure.
                 row = row.at_most_in_every_run(0.0);
             }
-            if sid == "K4" && metric == "chord_resent" {
+            if sid == "K4" && metric == "chord_resent_per_10k" {
                 // A chord that raced a pending grab change is pressed again by the harness; more
                 // than a handful per 10k switches would hide a regression that drops commands.
                 row = row
                     .at_most_in_every_run(5.0)
-                    .note("Ambiguous chords repeated");
+                    .note("Ambiguous chords repeated per 10k switches");
             }
             if sid == "L4" && metric == "peer_calls_hung" {
                 row = row
