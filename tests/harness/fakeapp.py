@@ -13,7 +13,7 @@ Run it ONLY inside run-isolated.sh, with the system interpreter (needs python3-d
 Control channel: JSON lines on stdin (one command per line, optional "id" echoed back);
 JSON lines on stdout ("event": ready | reply | action | ...). EOF on stdin terminates the app.
 
-Scenarios: form, tree, storm, hung, terminal, malformed (see README.md and `--help`).
+Scenarios: form, tree, storm, hung, terminal, malformed, switcher (see README.md and `--help`).
 """
 import argparse
 import json
@@ -925,6 +925,24 @@ def build_form(app):
             states=(S_FOCUSABLE, S_EDITABLE, S_MULTI_LINE))
 
 
+SWITCHER_ITEMS = ("Terminal", "Files", "Firefox", "Settings", "Calculator", "Text Editor")
+
+
+def build_switcher(app):
+    """GNOME Shell's Alt+Tab popup as AT-SPI sees it (St widgets, no Selection interface).
+
+    Run with `--name gnome-shell`. Items are push buttons that never take key focus; moving the
+    selection is `select`: StateChanged selected=0 on the old item, then selected=1 on the new
+    one, and nothing else (refs/gnome-shell/src/st/st-widget.c check_pseudo_class; the switcher
+    only toggles the `selected` style pseudo-class, switcherPopup.js highlight()).
+    """
+    app.add(None, R_APP, app.args.name)
+    popup = app.add(0, R_PANEL, "Window switcher")
+    for name in SWITCHER_ITEMS:
+        app.add(popup.id, R_BUTTON, name, actions=("click",), states=(S_FOCUSABLE,))
+    app.switcher_selected = None
+
+
 def build_tree(app):
     """Balanced tree with `fanout` children per node: nodes=100000,fanout=1 is a 100k-deep chain."""
     a = app.args
@@ -954,6 +972,21 @@ def handle(app, cmd):
         n = app.node(cmd["node"])
         app.t_focus_ns = 0
         app.set_focus(n)
+        return {"t_emit_ns": app.t_focus_ns}
+    elif c == "select":
+        n = app.node(cmd["node"])
+        old = app.nodes[app.switcher_selected] if app.switcher_selected is not None else None
+        if old is n:
+            return {}
+        if old is not None:
+            old.states.discard(STATE_NAMES["selected"])
+            app.ev_state(old, STATE_NAMES["selected"], False)
+        app.switcher_selected = n.id
+        n.states.add(STATE_NAMES["selected"])
+        app.t_focus_ns = time.monotonic_ns()
+        app.ev_state(n, STATE_NAMES["selected"], True)
+        app.conn.flush()
+        return {"t_emit_ns": app.t_focus_ns}
         return {"t_emit_ns": app.t_focus_ns}
     elif c == "type":
         n = app.node(cmd["node"])
@@ -1072,7 +1105,7 @@ def a11y_address():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scenario", default="form",
-                    choices=["form", "tree", "storm", "hung", "terminal", "malformed"])
+                    choices=["form", "tree", "storm", "hung", "terminal", "malformed", "switcher"])
     ap.add_argument("--name", default="fakeapp")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--nodes", type=int, default=1000, help="tree: node count (up to 100k+)")
@@ -1107,6 +1140,8 @@ def main():
         build_form(app)
     elif sc == "terminal":
         build_terminal(app)
+    elif sc == "switcher":
+        build_switcher(app)
     else:
         build_tree(app)
     if args.malformed:

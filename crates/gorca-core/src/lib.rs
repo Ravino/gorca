@@ -27,6 +27,7 @@
 #![deny(clippy::wildcard_enum_match_arm)]
 
 mod app_actor;
+mod builtin_ext;
 mod directory;
 mod doc_actor;
 mod focus;
@@ -37,6 +38,7 @@ mod reader;
 mod runtime;
 
 pub use app_actor::{AppActor, AppRoute, ReaderLinks};
+pub use builtin_ext::AppProfile;
 pub use directory::MirrorDirectory;
 pub use doc_actor::DocActor;
 pub use focus::{FOCUS_FLAP_DELAY, FocusEffect, FocusMsg, FocusState, settle_delay};
@@ -45,7 +47,9 @@ pub use health::{
     SLOW_RECOVERY, SLOW_WINDOW,
 };
 pub use mode::{Mode, ModeEffect, ModeKeys, ModeMsg, PassScope, ReviewCursor};
-pub use presenter::{PresentJob, PresentKind, SpeechIntent, key_echo_text, present_focus};
+pub use presenter::{
+    PresentJob, PresentKind, SpeechIntent, key_echo_text, present_focus, present_selected_item,
+};
 pub use reader::{
     BackgroundMsg, DUPLICATE_FOCUS_WINDOW, FocusLaneMsg, QueryReply, Reader, ReaderEffect,
     ReaderInbox, ReaderMsg, ReaderSenders, reader_channels,

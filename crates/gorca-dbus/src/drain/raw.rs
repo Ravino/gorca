@@ -20,7 +20,7 @@ use smallvec::SmallVec;
 use super::wire::{self, ERROR, Frame, MAX_MESSAGE_BYTES, METHOD_RETURN, SIGNAL};
 use super::{
     AppRoute, DrainConfig, DrainEnd, DrainError, DrainHandle, DrainShared, MAX_ROUTES,
-    RouteDecision, Router, SignalView, map_signal,
+    RouteDecision, Router, SignalView, map_signal, needs_path,
 };
 use crate::{set_recv_buffer, socket_backlog};
 
@@ -587,8 +587,8 @@ impl<'a> Conn<'a> {
             self.batch.ignored += 1;
         }
         for ev in self.mapped.drain(..) {
-            if let gorca_model::NodeEvent::FocusChanged { node } = &ev {
-                self.router.focus_seen(route.app, *node, path);
+            if let Some(node) = needs_path(&ev) {
+                self.router.focus_seen(route.app, node, path);
             }
             route.tx.push(ev);
             self.batch.pushed += 1;

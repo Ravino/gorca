@@ -81,7 +81,7 @@ Why not a real toolkit: GTK3/GTK4 import fine headless, but need a display (Xvfb
 made to hang, storm or lie. Direct implementation gives full control over every byte.
 
 ```
-fakeapp.py --scenario {form,tree,storm,hung,terminal,malformed} [--name N] [--seed S] [options]
+fakeapp.py --scenario {form,tree,storm,hung,terminal,malformed,switcher} [--name N] [--seed S] [options]
 ```
 
 | Scenario | Options | What it is |
@@ -91,6 +91,7 @@ fakeapp.py --scenario {form,tree,storm,hung,terminal,malformed} [--name N] [--se
 | `storm` | `--storm-rate R` (default 5000), `--storm-mix children=1,text=1,state=1,focus=1`, `--storm-duration S` | N events/s of mixed types over random nodes, paced by a monotonic clock (measured: 5k/s exact, 40k/s sustained, received = emitted on a same-user bus). Events are synthetic (the tree is not mutated), so refs can be stale like in real apps |
 | `hung` | `--hang never` or `--hang delay:MS`, `--hang-methods GetText,Get`, `--hang-after N` | never reply / reply late; optionally only for named members, optionally after N good calls. Control channel keeps working. `Get` is the Properties member |
 | `terminal` | `--term-rows/--term-cols`, `--term-gen LINES_PER_FRAME`, `--term-fps 60`, `--[no-]term-charcount-quirk` | `TERMINAL` role node with Text. Every frame rebuilds the screen, diffs by common head/tail and emits **one `delete` + one `insert` covering everything between, then `text-caret-moved`** (VTE behaviour, F-4). `CharacterCount` is 1.5x `len(GetText)` by default |
+| `switcher` | run with `--name gnome-shell`; six push-button items | GNOME Shell's Alt+Tab popup: `select` moves `state-changed:selected` (0 on the old item, 1 on the new one) and nothing else; no focus event |
 | `malformed` | `--malformed bad_refs,neg_offsets,...` or `all` (default for this scenario) | see below; the modes work on every scenario via `--malformed` or the `malformed` command |
 
 Malformed modes (all seeded, so reproducible with `--seed`):
@@ -128,6 +129,7 @@ JSON lines on stdin; replies `{"event":"reply","id":..,"ok":true,...}` and notif
 | `add_child`, `remove` | `parent`/`node`, `name`, `role`, `text` | tree mutation + `Cache.Add/RemoveAccessible` + children-changed |
 | `hang` | `mode` never/delay/off, `ms`, `methods`, `after` | change hang policy at runtime |
 | `storm` / `storm_stop` | `rate`, `mix`, `duration` | start / stop (returns `emitted`, `achieved_rate`, `max_lag_s`) |
+| `select` | `node` | switcher scenario: move the selection (see above) |
 | `malformed` | `modes` (list or `"all"`, `[]` = off) | toggle bad data at runtime |
 | `term_feed`, `term_gen`, `term_stop` | `text`, `lines`, `fps` | terminal output |
 | `stats`, `paths`, `quit` | | counters (`calls hung delayed events storm_events term_frames bad_values`), name->path map |

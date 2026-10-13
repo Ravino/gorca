@@ -25,7 +25,7 @@ use gorca_ingress::{
 };
 use gorca_model::AppId;
 
-pub use map::{MAX_ANNOUNCEMENT_BYTES, Malformed, SignalView, local_id, map_signal};
+pub use map::{MAX_ANNOUNCEMENT_BYTES, Malformed, SignalView, local_id, map_signal, needs_path};
 
 /// Largest per-connection sender cache; beyond it the cache is dropped and rebuilt (hostile
 /// churn of bus names must not grow memory).
@@ -114,10 +114,10 @@ pub trait Router: Send + Sync + 'static {
     /// the registration completes (bounded). The default drops it; the drain counts it either way.
     fn park(&self, _sender: &str, _signal: &SignalView<'_>) {}
 
-    /// Called on the drain thread, before the event is pushed, for every `FocusChanged` the
-    /// drain maps. `path` is the object path of the signal, of which `node.local` is the hash
+    /// Called on the drain thread, before the event is pushed, for every event the drain maps
+    /// for which [`needs_path`] is true (`FocusChanged`, or an item that became selected). `path` is the object path of the signal, of which `node.local` is the hash
     /// ([`local_id`]): a connector that must call the object later records the reverse mapping
-    /// here. Rare (focus only) and must be O(1) and non-blocking; the default does nothing.
+    /// here. Rare and must be O(1) and non-blocking; the default does nothing.
     fn focus_seen(&self, _app: AppId, _node: gorca_model::NodeKey, _path: &str) {}
 }
 

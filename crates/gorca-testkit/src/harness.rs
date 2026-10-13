@@ -325,6 +325,29 @@ impl FakeApp {
         Ok(())
     }
 
+    /// Switcher scenario: move the selection to `node` the way GNOME Shell does
+    /// (`state-changed:selected` 0 on the old item, 1 on the new one, no focus event).
+    pub fn select(&mut self, node: &str) -> Result<(), HarnessError> {
+        self.cmd(&format!("\"cmd\":\"select\",\"node\":\"{node}\""))
+            .map(|_| ())
+    }
+
+    /// Like [`FakeApp::key`], with the modifier mask Mutter reports (`8` is Alt, `64` Super).
+    pub fn key_with_state(
+        &mut self,
+        keycode: u32,
+        keysym: u32,
+        unichar: u32,
+        state: u32,
+    ) -> Result<(), HarnessError> {
+        for released in ["false", "true"] {
+            self.cmd(&format!(
+                "\"cmd\":\"key\",\"keycode\":{keycode},\"keysym\":{keysym},\"unichar\":{unichar},\"state\":{state},\"released\":{released}"
+            ))?;
+        }
+        Ok(())
+    }
+
     /// Change the hang policy: `mode` is `never`, `delay` or `off`.
     pub fn hang(&mut self, mode: &str, ms: u64) -> Result<(), HarnessError> {
         self.cmd(&format!("\"cmd\":\"hang\",\"mode\":\"{mode}\",\"ms\":{ms}"))

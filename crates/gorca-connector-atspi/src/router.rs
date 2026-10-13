@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use gorca_connector_api::{AppPort, AppRegistrar, RegistrarError, ScopeKey};
-use gorca_dbus::drain::{AppRoute, RouteDecision, Router, SignalView, map_signal};
+use gorca_dbus::drain::{AppRoute, RouteDecision, Router, SignalView, map_signal, needs_path};
 use gorca_model::{AppId, AppInfo, ConnectorKind, NodeEvent, NodeKey};
 use gorca_rt::{BoxFuture, CancellationToken, Clock, Deadline, FocusedApp, mpsc};
 
@@ -755,8 +755,8 @@ impl AtspiRouter {
                 continue;
             }
             for ev in mapped.drain(..) {
-                if let NodeEvent::FocusChanged { node } = &ev {
-                    self.paths.insert(*node, &p.path);
+                if let Some(node) = needs_path(&ev) {
+                    self.paths.insert(node, &p.path);
                 }
                 route.tx.push(ev);
                 replayed += 1;
@@ -887,8 +887,8 @@ impl Router for AtspiRouter {
             let mut mapped = smallvec::SmallVec::<[NodeEvent; 2]>::new();
             if map_signal(route.app, signal, &mut mapped).is_ok() {
                 for ev in mapped.drain(..) {
-                    if let NodeEvent::FocusChanged { node } = &ev {
-                        self.paths.insert(*node, signal.path);
+                    if let Some(node) = needs_path(&ev) {
+                        self.paths.insert(node, signal.path);
                     }
                     route.tx.push(ev);
                 }

@@ -67,6 +67,9 @@ bitflags! {
         const ATTRS       = 1 << 6;
         const RELATIONS   = 1 << 7;
         const CHILDREN    = 1 << 8;
+        /// Hint on `PropertiesChanged` only: the node just *became* selected
+        /// (`state-changed:selected(1)`). Never part of a fetch mask.
+        const SELECTED_NOW = 1 << 9;
     }
 }
 

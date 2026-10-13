@@ -7,6 +7,7 @@
 
 use std::sync::Arc;
 
+use gorca_input_api::Modifiers;
 use gorca_model::{
     Epoch, Freshness, NodeKey, NodeSnapshot, Prio, Segment, SegmentKind, StateSet, UttId,
     Utterance, Value,
@@ -56,6 +57,16 @@ fn seg(text: &str, kind: SegmentKind) -> Segment {
 
 /// Presentation of a focused node. Stale nodes are presented too, tagged `may_refine`.
 pub fn present_focus(n: &NodeSnapshot, id: UttId, epoch: Epoch) -> Utterance {
+    present_with(n, id, epoch, StateSet::empty())
+}
+
+/// Presentation of an item that just became selected (a switcher entry). The `selected` word is
+/// left out: being selected is the reason it is spoken at all.
+pub fn present_selected_item(n: &NodeSnapshot, id: UttId, epoch: Epoch) -> Utterance {
+    present_with(n, id, epoch, StateSet::SELECTED)
+}
+
+fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Utterance {
     let mut segments: SmallVec<[Segment; 4]> = SmallVec::new();
     if let Some(name) = n.name.as_deref().filter(|s| !s.is_empty()) {
         segments.push(seg(name, SegmentKind::Text));
@@ -65,7 +76,7 @@ pub fn present_focus(n: &NodeSnapshot, id: UttId, epoch: Epoch) -> Utterance {
         segments.push(seg(role, SegmentKind::Role));
     }
     for (flag, word) in STATE_WORDS {
-        if n.states.contains(*flag) {
+        if n.states.contains(*flag) && !skip.contains(*flag) {
             segments.push(seg(word, SegmentKind::State));
         }
     }
@@ -91,27 +102,41 @@ pub fn present_focus(n: &NodeSnapshot, id: UttId, epoch: Epoch) -> Utterance {
     }
 }
 
-/// Spoken form of a key press (key echo). Modifier keys alone are silent.
-pub fn key_echo_text(unichar: u32, keysym: u32) -> Option<String> {
+/// Modifiers that turn a key press into a command or shortcut. Orca never echoes a key pressed
+/// together with Alt or Control (`typing_echo_presenter.should_echo_keyboard_event`); Super is
+/// treated the same here. Shift, the locks and AltGr (a character modifier) do not count.
+const COMMAND_MODIFIERS: Modifiers = Modifiers::CONTROL
+    .union(Modifiers::MOD1)
+    .union(Modifiers::MOD4);
+
+/// Spoken form of a key press (key echo), following Orca's defaults: alphabetic, numeric,
+/// punctuation, space, function and action keys (enter, tab, backspace, escape, delete) are
+/// echoed; navigation keys and lone modifier keys are not; nothing is echoed while Alt,
+/// Control or Super is held (`Alt+Tab` must not say "tab").
+pub fn key_echo_text(unichar: u32, keysym: u32, modifiers: Modifiers) -> Option<String> {
+    if modifiers.intersects(COMMAND_MODIFIERS) {
+        return None;
+    }
     let named = match keysym {
         0xff0d | 0xff8d => Some("enter"),
         0xff08 => Some("backspace"),
         0xff09 | 0xfe20 => Some("tab"),
         0xff1b => Some("escape"),
         0xffff => Some("delete"),
-        0xff50 => Some("home"),
-        0xff57 => Some("end"),
-        0xff55 => Some("page up"),
-        0xff56 => Some("page down"),
-        0xff51 => Some("left"),
-        0xff52 => Some("up"),
-        0xff53 => Some("right"),
-        0xff54 => Some("down"),
         0x20 => Some("space"),
         _ => None,
     };
     if let Some(n) = named {
         return Some(n.to_owned());
+    }
+    // Navigation keys: Home, Left, Up, Right, Down, Page Up, Page Down, End (and the keypad
+    // copies). Their result is what gets spoken, not the key.
+    if (0xff50..=0xff58).contains(&keysym) || (0xff95..=0xff9c).contains(&keysym) {
+        return None;
+    }
+    // Function keys F1..F35 are named.
+    if (0xffbe..=0xffe0).contains(&keysym) {
+        return Some(format!("f {}", keysym - 0xffbe + 1));
     }
     // Shift, Control, Alt, Super, Caps Lock, Num Lock: pressed on their own they say nothing.
     if (0xffe1..=0xffee).contains(&keysym) || keysym == 0xff7f {
@@ -237,18 +262,82 @@ mod tests {
     }
 
     #[test]
-    fn key_echo_names_special_keys_and_skips_modifiers() {
-        assert_eq!(key_echo_text('a' as u32, 0x61).as_deref(), Some("a"));
-        assert_eq!(key_echo_text(0x20, 0x20).as_deref(), Some("space"));
-        assert_eq!(key_echo_text(0, 0xff0d).as_deref(), Some("enter"));
-        assert_eq!(key_echo_text(0, 0xff52).as_deref(), Some("up"));
-        assert_eq!(key_echo_text(0, 0xffe1), None, "shift alone is silent");
+    fn key_echo_names_action_keys_and_skips_lone_modifiers() {
+        let none = Modifiers::empty();
+        assert_eq!(key_echo_text('a' as u32, 0x61, none).as_deref(), Some("a"));
+        assert_eq!(key_echo_text(0x20, 0x20, none).as_deref(), Some("space"));
+        assert_eq!(key_echo_text(0, 0xff0d, none).as_deref(), Some("enter"));
+        assert_eq!(key_echo_text(0, 0xff09, none).as_deref(), Some("tab"));
         assert_eq!(
-            key_echo_text(0x07, 0x07),
+            key_echo_text(0, 0xffe1, none),
+            None,
+            "shift alone is silent"
+        );
+        assert_eq!(key_echo_text(0, 0xffe9, Modifiers::MOD1), None, "so is alt");
+        assert_eq!(
+            key_echo_text(0x07, 0x07, none),
             None,
             "control characters are not echoed"
         );
-        assert_eq!(key_echo_text('é' as u32, 0xe9).as_deref(), Some("é"));
+        assert_eq!(key_echo_text('é' as u32, 0xe9, none).as_deref(), Some("é"));
+        assert_eq!(key_echo_text(0, 0xffbe, none).as_deref(), Some("f 1"));
+    }
+
+    #[test]
+    fn navigation_keys_are_not_echoed() {
+        for sym in [
+            0xff50, 0xff51, 0xff52, 0xff53, 0xff54, 0xff55, 0xff56, 0xff57,
+        ] {
+            assert_eq!(key_echo_text(0, sym, Modifiers::empty()), None, "{sym:#x}");
+        }
+    }
+
+    #[test]
+    fn nothing_is_echoed_under_alt_control_or_super() {
+        for m in [
+            Modifiers::MOD1,
+            Modifiers::CONTROL,
+            Modifiers::MOD4,
+            Modifiers::MOD1 | Modifiers::SHIFT,
+            Modifiers::CONTROL | Modifiers::MOD2,
+        ] {
+            assert_eq!(key_echo_text(0, 0xff09, m), None, "tab under {m:?}");
+            assert_eq!(key_echo_text('c' as u32, 0x63, m), None, "c under {m:?}");
+        }
+    }
+
+    #[test]
+    fn shift_locks_and_altgr_still_echo() {
+        for m in [
+            Modifiers::SHIFT,
+            Modifiers::LOCK,
+            Modifiers::MOD2,
+            Modifiers::MOD5,
+        ] {
+            assert_eq!(key_echo_text('A' as u32, 0x41, m).as_deref(), Some("A"));
+        }
+        assert_eq!(
+            key_echo_text(0, 0xfe20, Modifiers::SHIFT).as_deref(),
+            Some("tab")
+        );
+    }
+
+    #[test]
+    fn selected_items_do_not_say_selected() {
+        let n = snap(
+            Role::Button,
+            Some("Terminal"),
+            StateSet::SELECTED,
+            Freshness::Fresh { at: Instant::now() },
+        );
+        assert_eq!(
+            texts(&present_focus(&n, UttId(1), Epoch(1))),
+            ["Terminal", "button", "selected"]
+        );
+        assert_eq!(
+            texts(&present_selected_item(&n, UttId(1), Epoch(1))),
+            ["Terminal", "button"]
+        );
     }
 
     #[test]
