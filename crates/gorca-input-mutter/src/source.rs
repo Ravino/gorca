@@ -36,9 +36,6 @@ const BACKOFF_MIN: Duration = Duration::from_millis(100);
 const BACKOFF_MAX: Duration = Duration::from_secs(1);
 /// While another screen reader holds the name, look again this often.
 const HELD_RETRY: Duration = Duration::from_secs(5);
-/// How often the held-modifier watchdog looks, and how long a "held" modifier may be silent.
-const WATCHDOG_TICK: Duration = Duration::from_secs(1);
-const HELD_QUIET: Duration = Duration::from_secs(5);
 /// Results of in-flight calls waiting for the session loop.
 const CALL_RESULTS: usize = 16;
 
@@ -508,10 +505,7 @@ async fn session(
     // modifier grabs while one is held leaves XKB with a stuck key (P-7).
     let mut held: Vec<u32> = Vec::new();
     let mut deferred: Option<GrabSet> = None;
-    let mut last_key = tokio::time::Instant::now();
     let mut key_overflows = 0u64;
-    let mut watchdog = tokio::time::interval(WATCHDOG_TICK);
-    watchdog.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     // F2: grab mutations are strictly ordered: one in flight, the newest wanted set queued.
     let mut writer = GrabWriter::default();
 
@@ -553,17 +547,14 @@ async fn session(
                         .map(|l| l.keymap.load().modifiers.clone())
                         .unwrap_or_default();
                     track_held(&mut held, &state, &may_be_modifiers, &ev);
-                    last_key = tokio::time::Instant::now();
                     if !ctx.sink.push(ev) {
                         // The lane missed an event, so it no longer knows which keys are down
                         // (a dropped release leaves it stale for ever). Never carry on silently:
-                        // make it forget. `held` above already saw the event, so the grab
+                        // the sink marks the next event that gets through, and the lane forgets
+                        // at exactly that point. `held` above already saw the event, so the grab
                         // deferral stays exact.
                         key_overflows += 1;
-                        tracing::warn!(key_overflows, "key channel full; resynchronising the input lane");
-                        if let Some(l) = &src.links {
-                            l.session.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-                        }
+                        tracing::warn!(key_overflows, "key channel full; the lane resynchronises at the gap");
                     }
                 }
                 match take_deferred(&mut deferred, &held) {
@@ -638,22 +629,6 @@ async fn session(
                         MonitorMsg::GrabsTimeout { generation }
                     }
                     _ => continue,
-                }
-            }
-            _ = watchdog.tick() => {
-                // A modifier "held" with no key activity at all for this long is not held: a key
-                // that is down repeats about 23 times a second. The release was lost; forget it
-                // and let the waiting grab change go ahead (re-sync, never a stuck deferral).
-                if !held.is_empty() && last_key.elapsed() >= HELD_QUIET {
-                    tracing::warn!(?held, "no key activity while a modifier is held; resynchronising");
-                    held.clear();
-                    if let Some(l) = &src.links {
-                        l.session.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-                    }
-                }
-                match take_deferred(&mut deferred, &held) {
-                    Some(set) => MonitorMsg::SetGrabSet(set),
-                    None => continue,
                 }
             }
         };

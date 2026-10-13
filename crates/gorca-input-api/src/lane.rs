@@ -140,6 +140,14 @@ impl InputLane {
         self.shift_armed = None;
     }
 
+    /// Forget what is known of the keyboard because events were lost at this exact point of the
+    /// stream (a full key channel): keys that were down may never be seen released.
+    pub fn resync(&mut self) {
+        self.reset();
+        let view = self.links.view.load_full();
+        self.seen = (view.committed_gen, view.wanted_gen);
+    }
+
     /// Reconcile the worlds with the grab sets the source reports (ADR-0005 4.3).
     fn sync(&mut self, view: &GrabView) {
         let now = (view.committed_gen, view.wanted_gen);
@@ -809,6 +817,22 @@ mod tests {
         assert_eq!(o.intent.kind, PressKind::Repeat);
         assert_eq!(o.intent.class, KeyClass::Swallowed, "not repeatable");
         assert!(!o.epoch_advanced);
+    }
+
+    /// Reviewer probe audit_m1_overflow, as a test: the resync happens at the gap. The queue holds
+    /// [Insert press]; the Insert release does not fit and is dropped; the next event that gets
+    /// through is marked. A plain T after the gap is a plain T.
+    #[test]
+    fn a_release_dropped_on_overflow_cannot_make_a_later_t_a_command() {
+        let mut r = rig();
+        r.class(KC_INS, INS, true, 1000);
+        // (the release is lost; the marked event is handled after resync())
+        r.lane.resync();
+        assert_eq!(r.class(KC_T, T, true, 3000), KeyClass::PassToApp);
+        // Without the resync the same sequence is the bug the reviewer found.
+        let mut r = rig();
+        r.class(KC_INS, INS, true, 1000);
+        assert_eq!(r.class(KC_T, T, true, 3000), KeyClass::Command(CmdId(1)));
     }
 
     #[test]

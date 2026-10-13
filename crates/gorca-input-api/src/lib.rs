@@ -36,6 +36,6 @@ pub use keys::{
 pub use lane::{HELP_IDLE, HELP_STALL, InputLane, LaneAlert, LaneOut, LaneStats, SHIFT_TAP_MAX};
 pub use mutter_model::{Ev, Replica, Timing, Verdict};
 pub use traits::{
-    InjectError, InjectKey, KeyError, KeyInjector, KeySink, KeySource, KeySourceCtx, KeySourceKind,
-    key_channel,
+    InjectError, InjectKey, KeyError, KeyInjector, KeyItem, KeySink, KeySource, KeySourceCtx,
+    KeySourceKind, key_channel,
 };

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gorca_core::{ControlMsg, InputNotice, ModeMsg, ReaderSenders};
-use gorca_input_api::{GrabSet, InputContext, InputLane, KeyEvent, LaneAlert, LaneLinks, ModeKind};
+use gorca_input_api::{GrabSet, InputContext, InputLane, KeyItem, LaneAlert, LaneLinks, ModeKind};
 use gorca_input_mutter::Notice;
 use gorca_rt::{CancellationToken, EpochCell, mpsc, watch};
 use gorca_speech::SpeechHandle;
@@ -20,7 +20,7 @@ const STATS_EVERY: u64 = 60;
 
 /// Run the pump until the key channel closes or `shutdown`.
 pub async fn pump_keys(
-    mut keys: mpsc::Receiver<KeyEvent>,
+    mut keys: mpsc::Receiver<KeyItem>,
     senders: ReaderSenders,
     links: Arc<LaneLinks>,
     epoch: Arc<EpochCell>,
@@ -37,8 +37,12 @@ pub async fn pump_keys(
             biased;
             () = shutdown.cancelled() => return,
             ev = keys.recv() => {
-                let Some(ev) = ev else { return };
-                let out = lane.on_key(ev, Instant::now());
+                let Some(item) = ev else { return };
+                if item.resync {
+                    // Events were lost just before this one: forget at the gap, then go on.
+                    lane.resync();
+                }
+                let out = lane.on_key(item.event, Instant::now());
                 if out.epoch_advanced {
                     speech.notify_epoch();
                 }

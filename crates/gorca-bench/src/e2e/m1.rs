@@ -494,15 +494,27 @@ fn flush_scores(
     rig: &mut Rig,
     typed: &mut Vec<(u16, u32)>,
     swallowed: &mut u64,
-    totals: &mut (u64, u64, u64),
+    totals: &mut (u64, u64, u64, Vec<u16>),
 ) -> Result<()> {
     let log = mutter(rig)?.app_log(true)?;
     let (lost, doubled) = score_typing(typed, &log);
     totals.0 += lost + std::mem::take(swallowed);
-    totals.1 += doubled;
+    // A duplicate delivered after the previous flush lands in this chunk's log under a keycode
+    // this chunk did not type: the last few codes of the previous chunk are carried over.
+    totals.1 += doubled + straddling_doubles(&log, &totals.3);
     totals.2 += unbalanced_keys(&log);
+    totals.3 = typed.iter().rev().take(CARRY).map(|(kc, _)| *kc).collect();
     typed.clear();
     Ok(())
+}
+
+/// Keycodes carried across a chunk boundary.
+const CARRY: usize = 64;
+
+/// Entries of `log` under a keycode that only the previous chunk typed (and whose presses and
+/// releases that chunk's log already accounted for): each one is a duplicate.
+fn straddling_doubles(log: &[(u16, u32, bool)], carry: &[u16]) -> u64 {
+    log.iter().filter(|(kc, _, _)| carry.contains(kc)).count() as u64
 }
 
 /// Letters per scoring chunk: well under the 60k synthetic keycodes before they wrap.
@@ -604,7 +616,7 @@ pub fn k4(
     let (mut typed, mut leaked, mut swallowed_live) = (Vec::new(), 0u64, 0u64);
     let (mut escape_unconsumed, mut never_settled, mut resent) = (0u64, 0u64, 0u64);
     let started = std::time::Instant::now();
-    let mut totals = (0u64, 0u64, 0u64);
+    let mut totals = (0u64, 0u64, 0u64, Vec::<u16>::new());
     let mut typed_total = 0usize;
     for round in 0..switches {
         if typed.len() >= SCORE_CHUNK {
@@ -694,8 +706,19 @@ pub fn k4(
         }
     }
     typed_total += typed.len();
+    let last_typed = typed.last().copied();
     flush_scores(&mut rig, &mut typed, &mut swallowed_live, &mut totals)?;
-    let (lost, doubled, _) = totals;
+    if setting(host, "GORCA_M1_INJECT_DOUBLE").as_deref() == Some("straddle")
+        && let Some((kc, sym)) = last_typed
+    {
+        // Negative control for the chunk boundary: the duplicate arrives after the flush.
+        let m = mutter(&mut rig)?;
+        ty.t_ms += 3;
+        m.key_ex(kc, sym, 0, false, ty.t_ms)?;
+        m.key_ex(kc, sym, 0, true, ty.t_ms + 3)?;
+        flush_scores(&mut rig, &mut typed, &mut swallowed_live, &mut totals)?;
+    }
+    let (lost, doubled, _, _) = totals;
     out.notes.push(format!(
         "K4 app_lost parts: lost or swallowed letters {lost}, escape not consumed {escape_unconsumed}; {switches} switches in {elapsed:.1} s"
     ));
@@ -777,7 +800,7 @@ pub fn k4r(
     let (mut typed, mut swallowed_live, mut wrong_state) = (Vec::new(), 0u64, 0u64);
     let (mut stuck, mut wait_timeouts, mut precondition_dirty) = (0u64, 0u64, 0u64);
     let mut continue_round = true;
-    let mut totals = (0u64, 0u64, 0u64);
+    let mut totals = (0u64, 0u64, 0u64, Vec::<u16>::new());
     let mut typed_total = 0usize;
     let started = std::time::Instant::now();
     for _ in 0..rounds {
@@ -899,7 +922,7 @@ pub fn k4r(
     })?;
     typed_total += typed.len();
     flush_scores(&mut rig, &mut typed, &mut swallowed_live, &mut totals)?;
-    let (lost, doubled, unbalanced) = totals;
+    let (lost, doubled, unbalanced, _) = totals;
     out.x("rounds", rounds as f64, "count");
     out.x("typed_keys", typed_total as f64, "count");
     out.x("app_lost", lost as f64, "keys");
@@ -1023,6 +1046,22 @@ mod tests {
         // A real double inside a chunk.
         let real: Vec<_> = [log1.clone(), key(300).to_vec()].concat();
         assert_eq!(score_typing(&chunk1, &real), (0, 2));
+    }
+
+    /// A duplicate that lands after a chunk was scored shows up in the next log under a keycode
+    /// that chunk did not type; the carried codes catch it.
+    #[test]
+    fn a_double_that_straddles_a_chunk_boundary_is_found() {
+        let carry = [300u16, 301];
+        let next_log = [
+            (500, 97, false),
+            (500, 97, true),
+            (301, 98, false),
+            (301, 98, true),
+        ];
+        assert_eq!(straddling_doubles(&next_log, &carry), 2);
+        assert_eq!(straddling_doubles(&next_log[..2], &carry), 0);
+        assert_eq!(straddling_doubles(&[], &carry), 0);
     }
 
     #[test]
