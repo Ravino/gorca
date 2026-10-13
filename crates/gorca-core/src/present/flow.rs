@@ -345,6 +345,10 @@ impl Reader {
             FetchKind::Focus => self.on_focus_reply(r, fx),
             FetchKind::Revalidate => self.on_revalidated(&r, fx),
             FetchKind::StateChange => self.on_state_reply(&r, fx),
+            // An answer to `info.where_am_i` and friends (CR-3), not a focus presentation.
+            FetchKind::Info => {
+                self.take_pending_reply(r.node, r.epoch, r.result.as_ref().ok().cloned(), fx);
+            }
         }
     }
 

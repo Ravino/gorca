@@ -11,6 +11,8 @@ publish.workspace = true
 gorca-model = { workspace = true }
 gorca-rt = { workspace = true }
 bitflags = { workspace = true }
+smallvec = { workspace = true }
+arc-swap = { workspace = true }
 thiserror = { workspace = true }
 
 [lints]

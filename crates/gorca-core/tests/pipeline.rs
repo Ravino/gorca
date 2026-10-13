@@ -172,10 +172,13 @@ async fn focus_is_spoken_with_name_role_and_states() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn a_focus_storm_speaks_only_the_last_focus() {
     let r = rig(vec![form("app")]).await;
-    // Every answer takes 40 ms (inside the 120 ms Interactive deadline), far longer than the burst (a synchronous loop of pushes): all
-    // but the last are superseded before their reply arrives (E-3).
+    // Every answer takes 100 ms (inside the 120 ms Interactive deadline), far longer than the
+    // burst (a synchronous loop of pushes): all but the last are superseded before their reply
+    // arrives (E-3). The margin is wide on purpose: on a loaded host the test thread can be
+    // descheduled for tens of milliseconds in the middle of the burst, and a 40 ms answer would
+    // then be spoken (seen about 1 run in 60 at load 12).
     r.handle
-        .set_behavior("app", Behavior::Delay(Duration::from_millis(40)));
+        .set_behavior("app", Behavior::Delay(Duration::from_millis(100)));
     for i in 0..200u64 {
         r.handle.focus("app", 1 + (i % 3));
     }

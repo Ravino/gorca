@@ -6,8 +6,9 @@ use gorca_input_api::GrabSet;
 pub const AUTHORIZE_DEADLINE: Duration = Duration::from_millis(500);
 /// `SetKeyGrabs` deadline (200 ms).
 pub const GRAB_DEADLINE: Duration = Duration::from_millis(200);
-/// Mutter applies modifier grabs asynchronously on its input thread (5 ms).
-pub const SETTLE: Duration = Duration::from_millis(5);
+/// P-7 (measured): the `SetKeyGrabs` reply is the barrier, grabs are active once it returns; one
+/// millisecond of guard after the reply is enough.
+pub const SETTLE: Duration = Duration::from_millis(1);
 /// "Pending (retry x2) then Lost".
 pub const GRAB_RETRIES: u8 = 2;
 
@@ -115,6 +116,8 @@ pub enum Notice {
     KeyboardCommandsUnavailable,
     /// `WatchKeyboard` was refused or timed out.
     KeyboardMonitorUnavailable,
+    /// The monitor is authorised again and the grabs were re-sent after a loss.
+    KeyboardRestored,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -14,7 +14,7 @@
 //! backend with atomic replace).
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -27,6 +27,21 @@ use gorca_rt::{EpochCell, Notify, TaskSet};
 use crate::queue::{FIFO_CAPACITY, SpeechQueue};
 use crate::state::{SpeechEffect, SpeechMsg, SpeechState, UttMeta};
 use crate::verbalize::Verbalizer;
+
+/// Speech control, applied by the lane before the utterances that follow it (ADR-0005 6.2).
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum SpeechControl {
+    /// Voice parameters; also re-sent after a reconnect.
+    SetParams(VoiceParams),
+    Pause,
+    Resume,
+    /// While muted, new utterances are dropped at `submit`. Utterances already submitted are
+    /// still spoken, so "speech off" can be heard.
+    Mute(bool),
+}
+
+/// Controls queued at once; the oldest is dropped beyond this (they are idempotent toggles).
+const CONTROL_CAPACITY: usize = 16;
 
 #[derive(Clone, Debug)]
 pub struct LaneConfig {
@@ -63,6 +78,8 @@ pub struct SpeechStats {
     pub superseded: u64,
     /// Utterances dropped because the inbox FIFO was full.
     pub inbox_dropped: u64,
+    /// Utterances dropped at submit because speech is muted.
+    pub muted_dropped: u64,
     /// Commands the client refused (`Full`).
     pub submit_failed: u64,
 }
@@ -75,6 +92,7 @@ struct Counters {
     replace_slow: AtomicU64,
     superseded: AtomicU64,
     inbox_dropped: AtomicU64,
+    muted_dropped: AtomicU64,
     submit_failed: AtomicU64,
 }
 
@@ -82,6 +100,8 @@ struct Counters {
 struct LaneShared {
     slot: Mutex<Option<Utterance>>,
     inbox: Mutex<VecDeque<Utterance>>,
+    controls: Mutex<VecDeque<SpeechControl>>,
+    muted: AtomicBool,
     wake: Notify,
     epoch: Arc<EpochCell>,
     /// Epoch of the utterance last handed to the client.
@@ -104,6 +124,10 @@ impl SpeechHandle {
     /// and counted.
     pub fn submit(&self, u: Utterance) {
         let s = &self.shared;
+        if s.muted.load(Ordering::Acquire) {
+            s.stats.muted_dropped.fetch_add(1, Ordering::Relaxed);
+            return;
+        }
         if !u.is_valid(s.epoch.current()) {
             s.stats.stale_dropped.fetch_add(1, Ordering::Relaxed);
             return;
@@ -135,6 +159,22 @@ impl SpeechHandle {
         s.wake.notify_one();
     }
 
+    /// Queue a control. Never blocks. `Mute` takes effect for later `submit`s at once.
+    pub fn control(&self, c: SpeechControl) {
+        let s = &self.shared;
+        if let SpeechControl::Mute(m) = c {
+            s.muted.store(m, Ordering::Release);
+        }
+        {
+            let mut q = lock(&s.controls);
+            if q.len() >= CONTROL_CAPACITY {
+                q.pop_front();
+            }
+            q.push_back(c);
+        }
+        s.wake.notify_one();
+    }
+
     /// The `EpochCell` was advanced: wake the lane so it cancels stale speech now.
     pub fn notify_epoch(&self) {
         self.shared.wake.notify_one();
@@ -150,6 +190,7 @@ impl SpeechHandle {
             replace_slow: g(&c.replace_slow),
             superseded: g(&c.superseded),
             inbox_dropped: g(&c.inbox_dropped),
+            muted_dropped: g(&c.muted_dropped),
             submit_failed: g(&c.submit_failed),
         }
     }
@@ -169,6 +210,8 @@ impl SpeechLane {
         let shared = Arc::new(LaneShared {
             slot: Mutex::new(None),
             inbox: Mutex::new(VecDeque::with_capacity(FIFO_CAPACITY)),
+            controls: Mutex::new(VecDeque::new()),
+            muted: AtomicBool::new(false),
             wake: Notify::new(),
             epoch,
             inflight_epoch: AtomicU64::new(0),
@@ -283,6 +326,11 @@ impl Lane {
 
     /// Everything that may have changed since the last wake-up.
     fn pump(&mut self) {
+        // Controls first: "rate 55" is spoken at rate 55 (ADR-0005 6.2).
+        let controls: Vec<SpeechControl> = lock(&self.shared.controls).drain(..).collect();
+        for c in controls {
+            self.apply_control(c);
+        }
         // New intents first: an interrupt that arrives together with the epoch advance that
         // made the running utterance stale becomes one `Replace`, not `Stop` then `Speak`.
         let slot = lock(&self.shared.slot).take();
@@ -311,6 +359,19 @@ impl Lane {
         // Utterances that were never handed on and are not tracked any more must not pile up.
         if self.store.len() > 4 * FIFO_CAPACITY {
             self.store.clear();
+        }
+    }
+
+    fn apply_control(&mut self, c: SpeechControl) {
+        match c {
+            SpeechControl::SetParams(p) => {
+                self.cfg.voice_params = Some(p);
+                self.send(SpeechCmd::SetParams(p), None);
+            }
+            SpeechControl::Pause => self.feed(SpeechMsg::Pause),
+            SpeechControl::Resume => self.feed(SpeechMsg::Resume),
+            // Applied at `submit`; nothing to do on the lane.
+            SpeechControl::Mute(_) => {}
         }
     }
 
@@ -552,6 +613,54 @@ mod tests {
             other => panic!("expected one Replace, got {other:?}"),
         }
         assert_eq!(h.stats().replaced, 1);
+    }
+
+    #[tokio::test]
+    async fn voice_params_reach_the_client_before_the_utterance_that_follows() {
+        let (h, ctl, epoch, _t) = start(true, ClientHealth::Ready);
+        let p = VoiceParams {
+            rate: 10,
+            pitch: 0,
+            volume: 100,
+        };
+        // Queued together before the lane runs: the control still goes first.
+        h.control(SpeechControl::SetParams(p));
+        let e = epoch.advance();
+        h.submit(utt(1, e.0, Prio::Interrupt, "rate 55"));
+        assert!(eventually(WAIT, || ctl.cmds().len() >= 2).await);
+        let cmds = ctl.cmds();
+        assert_eq!(cmds[0], SpeechCmd::SetParams(p));
+        assert!(matches!(&cmds[1], SpeechCmd::Speak { .. }));
+    }
+
+    #[tokio::test]
+    async fn mute_drops_new_utterances_but_not_the_one_already_submitted() {
+        let (h, ctl, epoch, _t) = start(true, ClientHealth::Ready);
+        let e = epoch.advance();
+        h.submit(utt(1, e.0, Prio::Interrupt, "speech off"));
+        h.control(SpeechControl::Mute(true));
+        h.submit(utt(2, e.0, Prio::Interrupt, "hidden"));
+        assert!(eventually(WAIT, || !ctl.cmds().is_empty()).await);
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        assert_eq!(speaks(&ctl), [1]);
+        assert_eq!(h.stats().muted_dropped, 1);
+        h.control(SpeechControl::Mute(false));
+        let e = epoch.advance();
+        h.submit(utt(3, e.0, Prio::Interrupt, "speech on"));
+        assert!(eventually(WAIT, || speaks(&ctl).contains(&3)).await);
+    }
+
+    #[tokio::test]
+    async fn pause_and_resume_reach_the_client() {
+        let (h, ctl, epoch, _t) = start(true, ClientHealth::Ready);
+        let e = epoch.advance();
+        h.submit(utt(1, e.0, Prio::Interrupt, "long text"));
+        assert!(eventually(WAIT, || !ctl.cmds().is_empty()).await);
+        ctl.send(SpeechEvent::Started(UttId(1)));
+        h.control(SpeechControl::Pause);
+        assert!(eventually(WAIT, || ctl.cmds().contains(&SpeechCmd::Pause)).await);
+        h.control(SpeechControl::Resume);
+        assert!(eventually(WAIT, || ctl.cmds().contains(&SpeechCmd::Resume)).await);
     }
 
     #[tokio::test]

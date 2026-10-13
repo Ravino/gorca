@@ -194,6 +194,19 @@ impl FakeApp {
     }
 }
 
+/// The reader's grab state as the emulated manager holds it.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct GrabState {
+    pub grab_all: bool,
+    pub modifiers: u32,
+    pub applied: u64,
+    pub held: u32,
+    /// Keys the emulated XKB state believes are down.
+    pub xkb_down: u32,
+    /// Lowest keycode among them (debugging).
+    pub xkb_first: u32,
+}
+
 /// Mutter's verdict on one emulated key event (`fake_mutter.py` `key` reply).
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct KeyReply {
@@ -298,6 +311,53 @@ impl FakeMutter {
             .ok()
             .and_then(|r| json_num(&r, "grabbers"))
             .unwrap_or(0.0) as u32
+    }
+
+    /// Tell the emulated manager to apply grab calls after a random delay in `[0, max_ms]`
+    /// (0 turns it off), so that concurrent calls can reorder.
+    pub fn set_latency(&mut self, max_ms: u32, seed: u64) -> Result<()> {
+        self.proc.request(
+            "set_latency",
+            &format!("\"max_ms\":{max_ms},\"seed\":{seed}"),
+            Duration::from_secs(2),
+        )?;
+        Ok(())
+    }
+
+    /// The reader's grab state as Mutter sees it: `(grab_all, number of modifier grabs,
+    /// grab calls applied so far, keys held as grabbed)`.
+    pub fn grab_state(&mut self) -> Result<GrabState> {
+        let r = self
+            .proc
+            .request("grab_state", "", Duration::from_secs(2))?;
+        Ok(GrabState {
+            grab_all: json_num(&r, "grab_all").unwrap_or(0.0) > 0.5,
+            modifiers: json_num(&r, "n_modifiers").unwrap_or(0.0) as u32,
+            applied: json_num(&r, "applied").unwrap_or(0.0) as u64,
+            held: json_num(&r, "held").unwrap_or(0.0) as u32,
+            xkb_down: json_num(&r, "xkb_down").unwrap_or(0.0) as u32,
+            xkb_first: json_num(&r, "xkb_first").unwrap_or(0.0) as u32,
+        })
+    }
+
+    /// Wait (polling, no fixed sleep) until the grab state satisfies `ok`, at most `timeout`.
+    /// Returns the last state seen and whether it satisfied the predicate.
+    pub fn wait_grabs(
+        &mut self,
+        timeout: Duration,
+        ok: impl Fn(&GrabState) -> bool,
+    ) -> Result<(GrabState, bool)> {
+        let end = std::time::Instant::now() + timeout;
+        loop {
+            let st = self.grab_state()?;
+            if ok(&st) {
+                return Ok((st, true));
+            }
+            if std::time::Instant::now() > end {
+                return Ok((st, false));
+            }
+            std::thread::sleep(Duration::from_micros(300));
+        }
     }
 
     pub fn watchers(&mut self) -> u32 {

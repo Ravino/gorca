@@ -18,6 +18,8 @@ gorca-doc = { workspace = true }
 gorca-output-api = { workspace = true }
 gorca-input-api = { workspace = true }
 gorca-speech = { workspace = true }
+gorca-config = { workspace = true }
+chrono = { workspace = true }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
 arc-swap = { workspace = true }

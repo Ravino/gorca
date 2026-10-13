@@ -15,14 +15,20 @@
 //!   `orca`, whose default action would terminate gorca.
 //! - The connector is supervised: if the a11y bus is missing or the connector fails, it is
 //!   restarted with backoff while the rest of the daemon (speech, signals) keeps running.
-//! - Keyboard monitoring is not wired in this slice (`--no-keyboard` is accepted; with
-//!   `--impersonate-orca` the daemon would own `org.gnome.Orca.KeyboardMonitor`, which is
-//!   deliberately not done yet). `prctl(comm=orca)` stays off so that a running Orca keeps
-//!   working next to this binary; a running Orca is never killed or replaced.
+//! - Settings (`gorca.toml`) are loaded, watched (inotify) and published by the config task;
+//!   the keymap and lane settings reach the input lane through `ArcSwap` cells.
+//! - Keyboard monitoring needs `--impersonate-orca` (the daemon then owns
+//!   `org.gnome.Orca.KeyboardMonitor`, never displacing a running Orca). The input lane
+//!   classifies keys, runs commands as Reader messages, and applies grab sets through the
+//!   Mutter key source. `prctl(comm=orca)` stays off so that a running Orca keeps working next
+//!   to this binary.
 //!
 //! Allowed dependencies: everything in the workspace, since this crate is the wiring point.
 
 mod cli;
+mod config_task;
+mod input;
+mod platform;
 mod probe;
 mod wire;
 
@@ -35,13 +41,14 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use gorca_connector_api::{Connector, ConnectorCtx};
 use gorca_connector_atspi::{AtspiConnector, AtspiOptions, AtspiState};
-use gorca_core::{Core, CoreConfig, SpeechOut};
-use gorca_input_api::{KeyClass, KeyEvent, KeyIntent};
+use gorca_core::{Core, CoreConfig, SpeechCtl, SpeechOut};
 use gorca_model::{ConnectorId, Prio, Segment, SegmentKind, UttId, Utterance};
 use gorca_output_api::SpeechClient;
+use gorca_output_api::VoiceParams;
 use gorca_rt::{CancellationToken, Clock, EpochCell, TaskSet, mpsc};
 use gorca_speech::{
-    BackendConnectError, FailoverMode, FailoverNotice, FnBackend, SpeechBackend, SpeechHandle,
+    BackendConnectError, FailoverMode, FailoverNotice, FnBackend, SpeechBackend, SpeechControl,
+    SpeechHandle,
 };
 use gorca_speech_ssip::{SsipClient, SsipOptions};
 use gorca_speech_voicego::{VoicegoClient, VoicegoOptions};
@@ -49,7 +56,9 @@ use smallvec::smallvec;
 use tokio::signal::unix::{Signal, SignalKind, signal};
 use tracing_subscriber::EnvFilter;
 
-pub use cli::{CliError, Options, Parsed, SpeechMode, USAGE, parse};
+pub use cli::{CliError, ConfigCmd, Options, Parsed, SpeechMode, USAGE, parse};
+pub use config_task::{Built, ConfigSource, ConfigTask, build as build_settings, run_config_cmd};
+pub use platform::{PlatformOverrides, probe as probe_platform};
 
 /// Time given to tasks to finish after shutdown is requested.
 pub const SHUTDOWN_GRACE: Duration = Duration::from_secs(2);
@@ -136,6 +145,27 @@ impl SpeechOut for LaneOut {
 
     fn notify_epoch(&self) {
         self.0.notify_epoch();
+    }
+
+    fn control(&self, ctl: SpeechCtl) {
+        self.0.control(match ctl {
+            SpeechCtl::SetParams(l) => SpeechControl::SetParams(voice_params(l)),
+            SpeechCtl::Pause => SpeechControl::Pause,
+            SpeechCtl::Resume => SpeechControl::Resume,
+            SpeechCtl::Mute(m) => SpeechControl::Mute(m),
+        });
+    }
+}
+
+/// Core levels are 0 to 100 with 50 (rate, pitch) and 100 (volume) as the service's default;
+/// the speech clients take -100 to 100 around their own default. Volume only attenuates, so a
+/// default configuration never makes the voice louder than the service's setting.
+fn voice_params(l: gorca_core::VoiceLevels) -> VoiceParams {
+    let centred = |v: u8| i8::try_from((i16::from(v) - 50) * 2).unwrap_or(0);
+    VoiceParams {
+        rate: centred(l.rate),
+        pitch: centred(l.pitch),
+        volume: i8::try_from(i16::from(l.volume) - 100).unwrap_or(0),
     }
 }
 
@@ -224,35 +254,6 @@ async fn announce_notices(
             refines: None,
         };
         speech.submit(u);
-    }
-}
-
-/// The input lane's glue between the key source and the Reader (K-3): every key press advances
-/// the epoch, which cancels stale speech at once, and the Reader adopts that epoch (E-4) so the
-/// echo of this key is never cancelled by the key itself.
-async fn pump_keys(
-    mut keys: mpsc::Receiver<KeyEvent>,
-    reader: mpsc::Sender<KeyIntent>,
-    epoch: Arc<EpochCell>,
-    speech: SpeechHandle,
-) {
-    while let Some(event) = keys.recv().await {
-        let e = if event.pressed {
-            let e = epoch.advance();
-            speech.notify_epoch();
-            e
-        } else {
-            epoch.current()
-        };
-        let intent = KeyIntent {
-            event,
-            // No command grabs yet: every key is observed for echo and interrupt only.
-            class: KeyClass::PassToApp,
-            epoch: e,
-        };
-        if reader.try_send(intent).is_err() {
-            tracing::warn!("reader key lane full; dropped a key");
-        }
     }
 }
 
@@ -359,15 +360,30 @@ async fn run_inner(
     } else {
         let speech = wire::wire_speech(&mut tasks, &opts, &epoch);
         let speech_for_keys = speech.clone();
-        let reader_keys = core.reader_senders().key;
-        let core = core.with_speech(Arc::new(LaneOut(speech)));
-        wire::wire_keyboard(
+        let mut core = core.with_speech(Arc::new(LaneOut(speech)));
+        let senders = core.reader_senders();
+        let links = core.lane_links();
+        // Settings first: the keymap must be in place before the first key is classified.
+        if let Some(requests) = core.take_config_requests() {
+            wire::wire_config(
+                &mut tasks,
+                &opts,
+                &shutdown,
+                Arc::clone(&links),
+                senders.control.clone(),
+                requests,
+            );
+        }
+        wire::wire_input(
             &mut tasks,
             &opts,
             &shutdown,
             &epoch,
             speech_for_keys,
-            reader_keys,
+            senders,
+            links,
+            core.grab_requests(),
+            core.grab_sender(),
         );
         core
     };

@@ -8,12 +8,15 @@ use std::sync::Arc;
 
 use gorca_connector_api::AppRegistrar;
 use gorca_connector_atspi::{AtspiOptions, AtspiState};
-use gorca_input_api::{GrabSet, KeyIntent, KeySource, KeySourceCtx, key_channel};
+use gorca_core::{ConfigRequest, ControlMsg, ReaderSenders};
+use gorca_input_api::{GrabSet, KeySource, KeySourceCtx, LaneLinks, key_channel};
 use gorca_input_mutter::MutterKeySource;
-use gorca_rt::{CancellationToken, Clock, EpochCell, FocusedApp, TaskSet, mpsc};
+use gorca_rt::{CancellationToken, Clock, EpochCell, FocusedApp, TaskSet, mpsc, watch};
 use gorca_speech::{FailoverClient, FailoverConfig, LaneConfig, SpeechHandle, SpeechLane};
 
-use crate::{Options, announce_notices, pump_keys, speech_plan, supervise_connector};
+use crate::config_task::{ConfigSource, ConfigTask};
+use crate::input::{forward_notices, pump_keys};
+use crate::{Options, announce_notices, speech_plan, supervise_connector};
 
 /// Speech: the failover client under the speech lane, plus the failover-notice announcer.
 pub(crate) fn wire_speech(
@@ -43,15 +46,44 @@ pub(crate) fn wire_speech(
     speech
 }
 
-/// Keyboard monitoring: the Mutter key source and the pump into the Reader's key lane. Stays
-/// off unless the daemon impersonates Orca (ID-1) and knows the session bus.
-pub(crate) fn wire_keyboard(
+/// Settings (ADR-0005 7): load `gorca.toml`, publish the keymap and lane settings, tell the
+/// Reader, watch the file and serve `settings.reload` / `settings.save`. Runs without a path
+/// too (built-in defaults), so the Reader always gets its startup configuration.
+pub(crate) fn wire_config(
+    tasks: &mut TaskSet,
+    opts: &Options,
+    shutdown: &CancellationToken,
+    links: Arc<LaneLinks>,
+    control: mpsc::Sender<ControlMsg>,
+    requests: mpsc::Receiver<ConfigRequest>,
+) {
+    let task = ConfigTask {
+        source: ConfigSource {
+            path: opts.config_path.clone(),
+            overrides: opts.platform.clone(),
+            no_probe: opts.no_probe,
+        },
+        links,
+        control,
+        requests,
+    };
+    tasks.spawn("config", task.run(shutdown.clone()));
+}
+
+/// Keyboard monitoring: the Mutter key source, the input lane's pump into the Reader, and the
+/// notices to the user. Stays off unless the daemon impersonates Orca (ID-1) and knows the
+/// session bus.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn wire_input(
     tasks: &mut TaskSet,
     opts: &Options,
     shutdown: &CancellationToken,
     epoch: &Arc<EpochCell>,
     speech: SpeechHandle,
-    reader_keys: mpsc::Sender<KeyIntent>,
+    senders: ReaderSenders,
+    links: Arc<LaneLinks>,
+    grabs: watch::Receiver<GrabSet>,
+    grab_control: Arc<watch::Sender<GrabSet>>,
 ) {
     if opts.no_keyboard {
         tracing::info!("keyboard monitoring disabled (--no-keyboard)");
@@ -63,8 +95,12 @@ pub(crate) fn wire_keyboard(
         // ID-1: Mutter only authorises the owner of org.gnome.Orca.KeyboardMonitor. The name is
         // requested without queueing, so a running Orca is never displaced.
         let (sink, keys) = key_channel();
-        let (grabs_tx, grabs) = gorca_rt::watch::channel(GrabSet::default());
-        let source = Box::new(MutterKeySource::new(session_address));
+        let (notice_tx, notice_rx) = mpsc::channel(8);
+        let source = Box::new(
+            MutterKeySource::new(session_address)
+                .with_links(Arc::clone(&links))
+                .with_notices(notice_tx),
+        );
         let ctx = KeySourceCtx {
             sink,
             grabs,
@@ -75,12 +111,22 @@ pub(crate) fn wire_keyboard(
             if let Err(e) = source.run(ctx).await {
                 tracing::warn!(error = %e, "keyboard source ended");
             }
-            // Keep the (unused) grab sender alive for as long as the source ran.
-            drop(grabs_tx);
         });
         tasks.spawn(
             "key-pump",
-            pump_keys(keys, reader_keys, Arc::clone(epoch), speech),
+            pump_keys(
+                keys,
+                senders.clone(),
+                links,
+                Arc::clone(epoch),
+                speech,
+                grab_control,
+                shutdown.child_token(),
+            ),
+        );
+        tasks.spawn(
+            "key-notices",
+            forward_notices(notice_rx, senders, shutdown.child_token()),
         );
     } else {
         tracing::info!(

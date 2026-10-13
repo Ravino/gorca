@@ -13,13 +13,14 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use gorca_connector_api::BackendError;
-use gorca_input_api::{CmdId, GrabSet, KeyIntent};
+use gorca_input_api::{GrabSet, KeyIntent};
 use gorca_mirror::fill::{DemandOutcome, DemandWhy};
 use gorca_model::{AppId, Epoch, NodeKey, NodeSnapshot, Politeness, PropMask, UttId};
 use gorca_rt::{BudgetClass, EpochCell, FocusedApp, mpsc};
 use smallvec::SmallVec;
 
 use crate::SpeechIntent;
+use crate::commands::{CmdState, ConfigRequest, ControlMsg, SpeechCtl};
 use crate::directory::MirrorDirectory;
 use crate::focus::{FocusMsg, FocusState};
 use crate::mode::{Mode, ModeKeys, ModeMsg};
@@ -28,10 +29,11 @@ use crate::review::ReviewMsg;
 use crate::text::TextMsg;
 
 /// Bounds from section 6.2.
-const KEY_QUEUE: usize = 64;
+const KEY_QUEUE: usize = 1024;
 const FOCUS_QUEUE: usize = 256;
 const REPLY_QUEUE: usize = 64;
 const BACKGROUND_QUEUE: usize = 64;
+const CONTROL_QUEUE: usize = 32;
 /// At most this many messages per [`Reader::drain`] call, so one call stays bounded.
 const MAX_BATCH: usize = 256;
 /// A second focus event for the node that just got focus, within this window, is the same
@@ -70,6 +72,8 @@ pub enum FetchKind {
     Revalidate,
     /// S1: the focused node's state or value changed; speak the change.
     StateChange,
+    /// A command's answer (`info.where_am_i`, `info.window_title`, debug): speak the reply.
+    Info,
 }
 
 /// Reply to a Reader query, tagged with the epoch it was asked in (E-3).
@@ -98,6 +102,8 @@ pub enum ReaderMsg {
     Reply(QueryReply),
     Background(BackgroundMsg),
     Mode(ModeMsg),
+    /// Settings snapshots, input notices and lane alerts (ADR-0005 6, 7.6).
+    Control(ControlMsg),
     Review(ReviewMsg),
     Text(TextMsg),
     Timer,
@@ -128,8 +134,12 @@ pub enum ReaderEffect {
     QueryActiveWindowFocus,
     /// Wake the Reader at this time with `ReaderMsg::Timer`.
     ArmTimer(Instant),
+    /// The grab set Mutter should apply, with the lookup context it goes with.
     SetGrabSet(GrabSet),
-    RunCommand(CmdId),
+    /// Ordered with utterances: applied by the speech lane before the next one.
+    SpeechCtl(SpeechCtl),
+    /// A request for the daemon's config task.
+    Config(ConfigRequest),
 }
 
 pub type ReaderEffects = SmallVec<[ReaderEffect; 4]>;
@@ -141,6 +151,7 @@ pub struct ReaderSenders {
     pub focus: mpsc::Sender<FocusLaneMsg>,
     pub replies: mpsc::Sender<QueryReply>,
     pub background: mpsc::Sender<BackgroundMsg>,
+    pub control: mpsc::Sender<ControlMsg>,
 }
 
 #[derive(Debug)]
@@ -149,6 +160,7 @@ pub struct ReaderInbox {
     focus: mpsc::Receiver<FocusLaneMsg>,
     replies: mpsc::Receiver<QueryReply>,
     background: mpsc::Receiver<BackgroundMsg>,
+    control: mpsc::Receiver<ControlMsg>,
 }
 
 pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
@@ -156,18 +168,21 @@ pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
     let (focus_tx, focus) = mpsc::channel(FOCUS_QUEUE);
     let (replies_tx, replies) = mpsc::channel(REPLY_QUEUE);
     let (background_tx, background) = mpsc::channel(BACKGROUND_QUEUE);
+    let (control_tx, control) = mpsc::channel(CONTROL_QUEUE);
     (
         ReaderSenders {
             key: key_tx,
             focus: focus_tx,
             replies: replies_tx,
             background: background_tx,
+            control: control_tx,
         },
         ReaderInbox {
             key,
             focus,
             replies,
             background,
+            control,
         },
     )
 }
@@ -179,6 +194,7 @@ impl ReaderInbox {
         tokio::select! {
             biased;
             Some(k) = self.key.recv() => Some(ReaderMsg::Key(k)),
+            Some(c) = self.control.recv() => Some(ReaderMsg::Control(c)),
             Some(f) = self.focus.recv() => Some(ReaderMsg::Focus(f)),
             Some(r) = self.replies.recv() => Some(ReaderMsg::Reply(r)),
             Some(b) = self.background.recv() => Some(ReaderMsg::Background(b)),
@@ -190,6 +206,9 @@ impl ReaderInbox {
     pub fn poll(&mut self) -> Option<ReaderMsg> {
         if let Ok(k) = self.key.try_recv() {
             return Some(ReaderMsg::Key(k));
+        }
+        if let Ok(c) = self.control.try_recv() {
+            return Some(ReaderMsg::Control(c));
         }
         if let Ok(f) = self.focus.try_recv() {
             return Some(ReaderMsg::Focus(f));
@@ -220,6 +239,8 @@ pub struct Reader {
     pub(crate) selection_node: Option<NodeKey>,
     pub(crate) focused_app: Option<Arc<FocusedApp>>,
     pub(crate) presenters: PresenterRegistry,
+    /// Settings, speech toggles and the pending command answer (ADR-0005).
+    pub(crate) cmd: CmdState,
     /// The mirror write sequence of the app when the current focus began (RV-1: a presentation
     /// whose content was confirmed at or after it needs no revalidation).
     pub(crate) focus_seq: u64,
@@ -264,6 +285,7 @@ impl Reader {
             selection_node: None,
             focused_app: None,
             presenters: PresenterRegistry::builtin(),
+            cmd: CmdState::new(),
             focus_seq: 0,
             presented: None,
             now: Instant::now(),
@@ -290,6 +312,36 @@ impl Reader {
         self
     }
 
+    /// Share the input lane's cells: the Reader acknowledges keys through them (LM-3).
+    #[must_use]
+    pub fn with_links(mut self, links: Arc<gorca_input_api::LaneLinks>) -> Self {
+        self.cmd.links = Some(links);
+        self
+    }
+
+    /// Publish the effective settings (file plus runtime changes) through `cell`.
+    #[must_use]
+    pub fn with_settings_cell(
+        mut self,
+        cell: Arc<arc_swap::ArcSwap<gorca_config::Settings>>,
+    ) -> Self {
+        self.cmd.published = Some(cell);
+        self.cmd.republish();
+        self
+    }
+
+    /// Replace the wall clock (`info.time_date`); tests use a fixed one.
+    #[must_use]
+    pub fn with_wall_clock(mut self, clock: Arc<dyn crate::commands::WallClock>) -> Self {
+        self.cmd.clock = clock;
+        self
+    }
+
+    /// The effective settings: the file plus runtime changes.
+    pub fn settings(&self) -> Arc<gorca_config::Settings> {
+        Arc::clone(&self.cmd.effective)
+    }
+
     /// Focus events ignored as duplicates of the one just handled.
     pub fn duplicate_focus_dropped(&self) -> u64 {
         self.duplicate_focus_dropped
@@ -303,6 +355,11 @@ impl Reader {
         self.mode
     }
 
+    /// Ambiguous command chords that were not run and answered with "again".
+    pub fn ambiguous_cues(&self) -> u64 {
+        self.cmd.ambiguous_cues
+    }
+
     /// Keys classified `Ambiguous` (M-16).
     pub fn ambiguous_keys(&self) -> u64 {
         self.ambiguous_keys
@@ -311,6 +368,21 @@ impl Reader {
     /// Replies discarded because their epoch was stale (E-3).
     pub fn stale_replies_dropped(&self) -> u64 {
         self.stale_replies_dropped
+    }
+
+    /// `speech.repeat_last` repeats what the user heard last: focus and state speech, not the
+    /// echo of keys or the answers to commands (ADR-0005 6.4).
+    fn remember_spoken(&mut self, from_key_or_control: bool, fx: &ReaderEffects) {
+        if from_key_or_control {
+            return;
+        }
+        if let Some(ReaderEffect::Speak(s)) = fx
+            .iter()
+            .rev()
+            .find(|e| matches!(e, ReaderEffect::Speak(_)))
+        {
+            self.cmd.last_spoken = Some(s.utterance.clone());
+        }
     }
 
     pub(crate) fn utt_id(&mut self) -> UttId {
@@ -331,9 +403,11 @@ impl Reader {
     /// One message, bounded work, no awaits.
     pub fn handle(&mut self, msg: ReaderMsg, now: Instant) -> ReaderEffects {
         let mut fx = ReaderEffects::new();
+        let is_key = matches!(msg, ReaderMsg::Key(_) | ReaderMsg::Control(_));
         self.now = now;
         match msg {
-            ReaderMsg::Key(intent) => self.on_key(intent, &mut fx),
+            ReaderMsg::Key(intent) => self.on_key(intent, now, &mut fx),
+            ReaderMsg::Control(c) => self.on_control(c, now, &mut fx),
             ReaderMsg::Focus(f) => self.on_focus(f, now, &mut fx),
             ReaderMsg::Reply(r) => self.on_reply(r, &mut fx),
             ReaderMsg::Background(b) => match b {
@@ -344,8 +418,12 @@ impl Reader {
             ReaderMsg::Mode(m) => self.on_mode(m, &mut fx),
             ReaderMsg::Review(m) => self.on_review(m, &mut fx),
             ReaderMsg::Text(m) => self.on_text(m, &mut fx),
-            ReaderMsg::Timer => self.apply_focus(FocusMsg::TimerElapsed { now }, &mut fx),
+            ReaderMsg::Timer => {
+                self.apply_focus(FocusMsg::TimerElapsed { now }, &mut fx);
+                self.pass_timer(now, &mut fx);
+            }
         }
+        self.remember_spoken(is_key, &fx);
         fx
     }
 }
@@ -353,7 +431,7 @@ impl Reader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gorca_input_api::{KeyClass, KeyEvent, Modifiers};
+    use gorca_input_api::{CmdId, KeyClass, KeyEvent, Modifiers, PressKind};
     use gorca_mirror::{MirrorWriter, mirror};
     use gorca_model::{
         ChildList, ConnectorId, Freshness, Ifaces, LocalId, Role, SnapshotBatch, StateSet,
@@ -436,7 +514,8 @@ mod tests {
                 | ReaderEffect::QueryActiveWindowFocus
                 | ReaderEffect::ArmTimer(_)
                 | ReaderEffect::SetGrabSet(_)
-                | ReaderEffect::RunCommand(_) => None,
+                | ReaderEffect::SpeechCtl(_)
+                | ReaderEffect::Config(_) => None,
             })
             .collect()
     }
@@ -594,15 +673,17 @@ mod tests {
         };
         let intent = KeyIntent {
             event: ev,
-            class: KeyClass::Command(CmdId(9)),
+            class: KeyClass::Command(crate::commands::CoreCmd::SpeechRepeatLast.id()),
+            kind: PressKind::Press,
+            repeat: 1,
+            chord: None,
+            at: Instant::now(),
             epoch: Epoch(41),
         };
         let fx = f.reader.handle(ReaderMsg::Key(intent), Instant::now());
-        assert!(matches!(
-            fx.as_slice(),
-            [ReaderEffect::RunCommand(CmdId(9))]
-        ));
+        assert_eq!(spoken(&fx), ["nothing to repeat"]);
         assert_eq!(f.epoch.current(), Epoch(41));
+        let _ = CmdId(0);
 
         let amb = KeyIntent {
             class: KeyClass::Ambiguous { committed: None },
@@ -625,6 +706,10 @@ mod tests {
         let intent = |pressed| KeyIntent {
             event: ev(pressed),
             class: KeyClass::PassToApp,
+            kind: PressKind::Press,
+            repeat: 1,
+            chord: None,
+            at: Instant::now(),
             epoch: Epoch(7),
         };
         let fx = f
@@ -662,6 +747,10 @@ mod tests {
                 pressed: true,
             },
             class: KeyClass::PassToApp,
+            kind: PressKind::Press,
+            repeat: 1,
+            chord: None,
+            at: Instant::now(),
             epoch: Epoch(epoch),
         })
     }
@@ -852,7 +941,12 @@ mod tests {
             .handle(ReaderMsg::Mode(ModeMsg::ToggleInputHelp), Instant::now());
         assert!(f.epoch.current() > before);
         assert!(matches!(fx.as_slice(), [ReaderEffect::SetGrabSet(g)] if g.grab_all));
-        assert_eq!(f.reader.mode(), Mode::InputHelp);
+        assert_eq!(
+            f.reader.mode(),
+            Mode::InputHelp {
+                resume: crate::mode::BaseMode::Focus
+            }
+        );
     }
 
     #[test]
@@ -883,6 +977,10 @@ mod tests {
             .try_send(KeyIntent {
                 event: ev,
                 class: KeyClass::PassToApp,
+                kind: PressKind::Press,
+                repeat: 1,
+                chord: None,
+                at: Instant::now(),
                 epoch: Epoch(1),
             })
             .unwrap();
@@ -893,6 +991,9 @@ mod tests {
                 ReaderMsg::Reply(_) => "reply",
                 ReaderMsg::Background(_) => "background",
                 ReaderMsg::Mode(_) => "mode",
+                ReaderMsg::Control(_) => "control",
+                ReaderMsg::Review(_) => "review",
+                ReaderMsg::Text(_) => "text",
                 ReaderMsg::Timer => "timer",
             })
             .collect();
@@ -935,12 +1036,17 @@ mod tests {
                     kind: FetchKind::StateChange,
                     ..
                 } => "fetch-s1",
+                ReaderEffect::Fetch {
+                    kind: FetchKind::Info,
+                    ..
+                } => "fetch-info",
                 ReaderEffect::Demand { .. } => "demand",
                 ReaderEffect::FocusSettled { .. } => "settled",
                 ReaderEffect::QueryActiveWindowFocus => "query",
                 ReaderEffect::ArmTimer(_) => "timer",
                 ReaderEffect::SetGrabSet(_) => "grab",
-                ReaderEffect::RunCommand(_) => "cmd",
+                ReaderEffect::SpeechCtl(_) => "ctl",
+                ReaderEffect::Config(_) => "config",
             })
             .collect()
     }
@@ -955,7 +1061,8 @@ mod tests {
                 | ReaderEffect::QueryActiveWindowFocus
                 | ReaderEffect::ArmTimer(_)
                 | ReaderEffect::SetGrabSet(_)
-                | ReaderEffect::RunCommand(_) => None,
+                | ReaderEffect::SpeechCtl(_)
+                | ReaderEffect::Config(_) => None,
             })
             .expect("an utterance")
     }

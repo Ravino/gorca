@@ -311,5 +311,54 @@ class OwnerLoss(Base):
         self.assertTrue(self.m.key(INSERT, 0, False, T0)["passed"])
 
 
+class Latency(Base):
+    """set_latency: grab calls are applied after a random delay, so concurrent calls reorder."""
+
+    def async_call(self, method, *args, sig=None):
+        done = []
+        f = self.c.mgr.get_dbus_method(method, IFACE)
+        kw = {"reply_handler": lambda *a: done.append(method),
+              "error_handler": lambda e: done.append(("error", str(e)))}
+        if sig:
+            kw["signature"] = sig
+        f(*args, **kw)
+        return done
+
+    def test_concurrent_grab_calls_can_be_applied_out_of_order(self):
+        reordered = 0
+        for seed in range(1, 41):
+            self.m.cmd(cmd="set_latency", max_ms=12, seed=seed)
+            # Sent back to back without waiting for replies, as parallel tasks would.
+            a = self.async_call("GrabKeyboard")
+            b = self.async_call("UngrabKeyboard")
+            self.c.pump(lambda: a and b, 2.0)
+            self.assertTrue(a and b, "both calls are answered")
+            self.c.pump(timeout=0.05)
+            # The call that was SENT last is not always the one applied last.
+            if self.m.cmd(cmd="grab_state")["grab_all"] == 1:
+                reordered += 1
+            self.c.call("UngrabKeyboard")
+            self.m.cmd(cmd="set_latency", max_ms=0)
+        self.assertGreater(reordered, 0, "the latency mode can reproduce a reorder")
+        self.assertLess(reordered, 40, "and it is random, not a constant swap")
+
+    def test_serialised_calls_never_reorder(self):
+        self.m.cmd(cmd="set_latency", max_ms=12, seed=7)
+        for i in range(30):
+            ga = self.async_call("GrabKeyboard")
+            self.c.pump(lambda: ga, 2.0)
+            gb = self.async_call("UngrabKeyboard")
+            self.c.pump(lambda: gb, 2.0)
+            self.assertEqual(self.m.cmd(cmd="grab_state")["grab_all"], 0)
+
+    def test_grab_state_counts_applied_calls_and_held_keys(self):
+        self.c.set_grabs([INSERT], [])
+        st = self.m.cmd(cmd="grab_state")
+        self.assertEqual((st["grab_all"], st["n_modifiers"], st["held"]), (0, 1, 0))
+        self.m.key(INSERT, 0, False, T0)
+        self.assertEqual(self.m.cmd(cmd="grab_state")["held"], 1)
+        self.assertGreaterEqual(st["applied"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

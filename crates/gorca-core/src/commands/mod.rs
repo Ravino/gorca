@@ -1,9 +1,28 @@
-//! Command dispatcher: key intents and mode changes (ADR-0001 sections 7.2, 7.3).
+//! The command layer (ADR-0005): the closed command set, the keymap compiler, and the Reader's
+//! `Key`, `Mode` and `Control` arms.
 //!
-//! Owns the Reader's handling of [`gorca_input_api::KeyIntent`] and [`crate::ModeMsg`]: the
-//! `Key` and `Mode` arms of [`crate::ReaderMsg`]. Milestone M1 grows the command registry
-//! (`CmdId` to action, keymap lookup) here without touching `reader.rs`; commands run as
-//! Reader messages whose results are speech intents (R3).
+//! Commands run as Reader messages whose results are speech intents and effects (R3). The input
+//! lane (`gorca-input-api`) classifies keys against the [`compile`]d keymap and hands the Reader
+//! a [`gorca_input_api::KeyIntent`]; [`handlers`] executes it.
 
+mod compile;
+mod handlers;
+mod info;
 mod keys;
 mod mode;
+mod spec;
+mod state;
+mod table;
+
+pub use compile::{Compiled, PlatformFacts, command_id, compile, gorca_modifiers, lane_settings};
+pub use handlers::PASS_TIMEOUT;
+pub use spec::{Availability, CmdSpec, CommandTable, ContextMask, Milestone};
+pub(crate) use state::CmdState;
+pub use state::{
+    ConfigRequest, ControlMsg, InputNotice, LoadCause, LoadedSettings, LocalTime, SaveResult,
+    SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels, WallClock,
+};
+pub use table::CoreCmd;
+
+#[cfg(test)]
+mod tests;

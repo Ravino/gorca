@@ -10,7 +10,7 @@
 //! | L3-10k, L3-50k | L1 while another app floods the a11y bus | as L1 |
 //! | L4, L4c | L1 while an app hangs on every D-Bus call (L4) / answers normally (L4c, control) | as L1 |
 //! | K1 | emulated Mutter KeyEvent -> SPEAK | `k1_ms` |
-//! | K2, K3, K4 | M1 command layer gates, see [`super::m1`]; skipped until M1 lands | `k2_ms`, `k3_ms`, `lost`... |
+//! | K2, K2s, K3, K4 | M1 command layer gates, see [`super::m1`]; skipped unless `GORCA_M1=1` | `k2_ms`, `k2s_ms`, `k3_ms`, `lost`... |
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -44,8 +44,10 @@ pub enum Scn {
     L4c,
     K1,
     K2,
+    K2s,
     K3,
     K4,
+    K4r,
 }
 
 impl Scn {
@@ -60,8 +62,10 @@ impl Scn {
             Self::L4c => "L4c".into(),
             Self::K1 => "K1".into(),
             Self::K2 => "K2".into(),
+            Self::K2s => "K2s".into(),
             Self::K3 => "K3".into(),
             Self::K4 => "K4".into(),
+            Self::K4r => "K4r".into(),
         }
     }
 
@@ -77,15 +81,18 @@ impl Scn {
             "L4c" => Self::L4c,
             "K1" => Self::K1,
             "K2" => Self::K2,
+            "K2s" => Self::K2s,
             "K3" => Self::K3,
             "K4" => Self::K4,
+            "K4r" => Self::K4r,
             _ => return None,
         })
     }
 
     pub fn all() -> Vec<Self> {
         [
-            "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K3", "K4",
+            "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K2s", "K3",
+            "K4", "K4r",
         ]
         .iter()
         .filter_map(|s| Self::parse(s))
@@ -364,8 +371,10 @@ pub fn run(
             k1(&mut rig, &mut out, size, seed)?;
         }
         Scn::K2 => super::m1::k2(host, reader, flavor, size, seed, &mut out)?,
+        Scn::K2s => super::m1::k2s(host, reader, flavor, size, seed, &mut out)?,
         Scn::K3 => super::m1::k3(host, reader, flavor, size, seed, &mut out)?,
         Scn::K4 => super::m1::k4(host, reader, flavor, size, seed, &mut out)?,
+        Scn::K4r => super::m1::k4r(host, reader, flavor, size, seed, &mut out)?,
     }
     Ok(out)
 }
