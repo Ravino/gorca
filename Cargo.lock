@@ -697,6 +697,7 @@ dependencies = [
  "gorca-rt",
  "gorca-speech",
  "gorca-testkit",
+ "serde_json",
  "smallvec",
  "thiserror",
  "tokio",
@@ -830,7 +831,11 @@ name = "gorca-mirror"
 version = "0.0.0"
 dependencies = [
  "arc-swap",
+ "gorca-ingress",
  "gorca-model",
+ "gorca-rt",
+ "scc",
+ "smallvec",
 ]
 
 [[package]]

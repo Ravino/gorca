@@ -1,5 +1,6 @@
 //! App actor (ADR-0001 section 6.1): one per application. Owns the mirror writer, drains the
-//! ingress, tracks `AppHealth` and routes user-relevant events to the Reader.
+//! ingress, applies the invalidation contract of B-1 section 5.1 to the mirror, tracks
+//! `AppHealth`, runs the shared fill driver and routes user-relevant events to the Reader.
 //!
 //! > "Per-event cost in the app actor is O(1) (coalescer drain plus routing). Reply decoding and
 //! > subtree builds fan out to `cpu`."
@@ -7,17 +8,27 @@
 //! > app actor; `FocusChanged` is never dropped."  (section 6.2)
 //!
 //! [`AppActor::pump`] is the synchronous body of one actor iteration; the async task around it
-//! (wait on `IngressReceiver::notified`, then pump, with a deadline on every await) is TBD with
-//! the supervisor. tokio's bounded channel cannot drop its oldest element, so a full background
-//! lane drops the *newest* event and sets `resync_needed`; the Reader's view of that app is then
-//! refreshed by a resync. That is a stated deviation from "drop oldest".
+//! (`runtime::run_app_actor`: wait on [`AppActor::ready`], pump, send the requests the fill driver
+//! issued under their deadlines, feed replies back) is in the runtime. tokio's bounded channel
+//! cannot drop its oldest element, so a full background lane drops the *newest* event and sets
+//! `resync_needed`; that is a stated deviation from "drop oldest".
 
+use std::sync::Arc;
 use std::time::Instant;
 
-use gorca_connector_api::AppControl;
+use gorca_connector_api::{AppControl, BackendError, BackendReply};
 use gorca_ingress::{DirtySet, IngressReceiver};
-use gorca_mirror::MirrorWriter;
-use gorca_model::{AppId, AppLifecycle, NodeEvent, NodeKey, PropMask};
+use gorca_mirror::driver::{
+    DriverCx, FillDriver, FillError, FillReply, FillStats, GlobalRate, HealthSignal, IssuedFill,
+    ReplyReport,
+};
+use gorca_mirror::fill::{
+    AppClass, DemandOutcome, DemandWhy, FillInput, FillPolicy, FillReqId, HealthView, NullPolicy,
+};
+use gorca_mirror::{FillLimits, MirrorHandle, MirrorRead, MirrorWriter, RemovalCause, SweepStats};
+use gorca_model::{
+    AppId, AppLifecycle, NodeEvent, NodeKey, NodeSnapshot, PropMask, SnapshotBatch, WindowKind,
+};
 use gorca_rt::mpsc;
 use smallvec::SmallVec;
 
@@ -25,8 +36,46 @@ use crate::builtin_ext::AppProfile;
 use crate::health::{AppHealth, HealthEffect, HealthMsg, HealthStepCtx};
 use crate::reader::{BackgroundMsg, FocusLaneMsg};
 
+#[cfg(test)]
+mod tests;
+
 /// Cap on control messages handled per pump, so one app cannot monopolise a worker.
 const MAX_CONTROL_PER_PUMP: usize = 64;
+/// Fill messages (Reader demands, Reader fetch replies) handled per pump.
+const MAX_FILL_MSGS_PER_PUMP: usize = 128;
+/// Queue of Reader-to-actor fill messages.
+pub const FILL_QUEUE: usize = 256;
+/// The fields a property event can invalidate (`BOUNDS` is ignored in M2).
+const EVENTED: PropMask = PropMask::NAME
+    .union(PropMask::DESCRIPTION)
+    .union(PropMask::VALUE)
+    .union(PropMask::ROLE)
+    .union(PropMask::STATES)
+    .union(PropMask::ATTRS);
+/// Known ancestors whose name may derive from content that a NAME change invalidates (P9-3).
+const NAME_ANCESTOR_LEVELS: usize = 8;
+/// On-read TTL of the Shell; every other app uses [`gorca_mirror::DEFAULT_TTL`] (B-1 2.2).
+const SHELL_TTL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// What the Reader tells an app actor about how it used the mirror, and the result of its own
+/// fetches (the shared cold path), so the actor can apply them to the mirror it owns.
+#[derive(Debug)]
+pub enum FillMsg {
+    Demand {
+        node: NodeKey,
+        why: DemandWhy,
+        outcome: DemandOutcome,
+    },
+    /// The focus state machine reached `Presented` for `node`.
+    FocusSettled { node: NodeKey },
+    /// A Reader fetch finished. `issued_at` is the mirror write sequence read when it was
+    /// issued; the reply is applied against it (late-reply rules).
+    ReaderFetch {
+        node: NodeKey,
+        issued_at: u64,
+        result: Result<Arc<NodeSnapshot>, BackendError>,
+    },
+}
 
 /// The Reader-facing half the actor holds.
 #[derive(Clone, Debug)]
@@ -46,6 +95,46 @@ pub struct AppRoute {
     /// Nodes to resync lazily after a flood.
     pub resync: Option<DirtySet>,
     pub gone: bool,
+    /// Fill requests the shell must send now, under their deadlines.
+    pub issued: Vec<IssuedFill>,
+}
+
+pub fn health_view(h: &AppHealth) -> HealthView {
+    match h {
+        AppHealth::Healthy => HealthView::Healthy,
+        AppHealth::Slow { .. } => HealthView::Slow,
+        AppHealth::Hung { .. } => HealthView::Hung,
+        AppHealth::Flooded { .. } => HealthView::Flooded,
+        AppHealth::Gone => HealthView::Gone,
+    }
+}
+
+fn fill_error(e: &BackendError) -> FillError {
+    match e {
+        BackendError::Timeout => FillError::Timeout,
+        BackendError::Gone => FillError::Gone,
+        BackendError::NotSupported => FillError::NotSupported,
+        BackendError::Busy => FillError::Busy,
+        BackendError::Protocol(_) => FillError::Protocol,
+        BackendError::Unresolved => FillError::Unresolved,
+    }
+}
+
+fn fill_reply(r: Result<BackendReply, BackendError>) -> FillReply {
+    match r {
+        Ok(BackendReply::Node(n)) => FillReply::Ok(SnapshotBatch::new(vec![n])),
+        Ok(BackendReply::Subtree(b)) => FillReply::Ok(b),
+        Ok(
+            BackendReply::Children(_)
+            | BackendReply::Text(_)
+            | BackendReply::CaretOffset(_)
+            | BackendReply::TextAttributes(_)
+            | BackendReply::ActionDone
+            | BackendReply::Hit(_)
+            | BackendReply::Matches(_),
+        ) => FillReply::Err(FillError::Protocol),
+        Err(e) => FillReply::Err(fill_error(&e)),
+    }
 }
 
 #[derive(Debug)]
@@ -53,6 +142,7 @@ pub struct AppActor {
     app: AppId,
     health: AppHealth,
     writer: MirrorWriter,
+    read: MirrorHandle,
     ingress: IngressReceiver,
     control: mpsc::Receiver<AppControl>,
     links: ReaderLinks,
@@ -63,6 +153,12 @@ pub struct AppActor {
     pending_control: Option<AppControl>,
     control_closed: bool,
     profile: AppProfile,
+    driver: FillDriver,
+    fill_rx: Option<mpsc::Receiver<FillMsg>>,
+    pending_fill: Option<FillMsg>,
+    fill_closed: bool,
+    /// The focus last routed to the Reader from this app (S1 and the policy's focus).
+    focus: Option<NodeKey>,
 }
 
 impl AppActor {
@@ -73,10 +169,12 @@ impl AppActor {
         control: mpsc::Receiver<AppControl>,
         links: ReaderLinks,
     ) -> Self {
+        let read = writer.reader();
         Self {
             app,
             health: AppHealth::Healthy,
             writer,
+            read,
             ingress,
             control,
             links,
@@ -85,7 +183,38 @@ impl AppActor {
             pending_control: None,
             control_closed: false,
             profile: AppProfile::default(),
+            driver: FillDriver::new(
+                app,
+                AppClass::Unknown,
+                Box::new(NullPolicy),
+                FillLimits::default(),
+                None,
+            ),
+            fill_rx: None,
+            pending_fill: None,
+            fill_closed: false,
+            focus: None,
         }
+    }
+
+    /// Choose the fill policy and its limits; share the all-apps rate cap.
+    #[must_use]
+    pub fn with_policy(
+        mut self,
+        policy: Box<dyn FillPolicy>,
+        limits: FillLimits,
+        global: Option<Arc<GlobalRate>>,
+    ) -> Self {
+        self.driver = FillDriver::new(self.app, AppClass::Unknown, policy, limits, global);
+        self
+    }
+
+    /// The channel the Reader (through the runtime) uses to tell this actor about demands and
+    /// its own fetch replies.
+    #[must_use]
+    pub fn with_fill_channel(mut self, rx: mpsc::Receiver<FillMsg>) -> Self {
+        self.fill_rx = Some(rx);
+        self
     }
 
     /// The per-application behaviour chosen when the app announced itself.
@@ -94,14 +223,23 @@ impl AppActor {
     }
 
     /// Resolves when a [`pump`](Self::pump) has something to do: events were pushed into an
-    /// empty ingress, or the connector sent a control message. A connector that dropped its
-    /// port without saying `Gone` is treated as gone. Cancel-safe.
+    /// empty ingress, the connector sent a control message, or the Reader sent a fill message.
+    /// A connector that dropped its port without saying `Gone` is treated as gone. Cancel-safe.
     pub async fn ready(&mut self) {
-        if self.pending_control.is_some() {
+        if self.pending_control.is_some() || self.pending_fill.is_some() {
             return;
         }
+        let fill = async {
+            match self.fill_rx.as_mut() {
+                Some(rx) if !self.fill_closed => rx.recv().await,
+                Some(_) | None => std::future::pending().await,
+            }
+        };
         if self.control_closed {
-            self.ingress.notified().await;
+            tokio::select! {
+                () = self.ingress.notified() => {}
+                m = fill => self.take_fill(m),
+            }
             return;
         }
         tokio::select! {
@@ -114,6 +252,14 @@ impl AppActor {
                     self.pending_control = Some(AppControl::Lifecycle(AppLifecycle::Gone));
                 }
             }
+            m = fill => self.take_fill(m),
+        }
+    }
+
+    fn take_fill(&mut self, m: Option<FillMsg>) {
+        match m {
+            Some(m) => self.pending_fill = Some(m),
+            None => self.fill_closed = true,
         }
     }
 
@@ -127,6 +273,19 @@ impl AppActor {
 
     pub fn resync_needed(&self) -> bool {
         self.resync_needed
+    }
+
+    /// Read handle of this app's mirror.
+    pub fn mirror(&self) -> &MirrorHandle {
+        &self.read
+    }
+
+    pub fn fill_stats(&self) -> FillStats {
+        self.driver.stats()
+    }
+
+    pub fn fill_policy(&self) -> &'static str {
+        self.driver.policy_name()
     }
 
     /// Feed a health message (timeouts and successes come from the request mux).
@@ -146,10 +305,70 @@ impl AppActor {
         self.links.focus.try_send(msg).is_ok()
     }
 
-    /// One iteration: control messages, then the ingress.
+    /// Requests the shell must send now (also returned by [`AppActor::pump`]).
+    pub fn take_issued(&mut self) -> Vec<IssuedFill> {
+        self.driver.take_issued()
+    }
+
+    /// When the shell should call [`AppActor::poll_timers`] next.
+    pub fn next_wake(&self) -> Option<Instant> {
+        if matches!(self.health, AppHealth::Gone) {
+            None
+        } else {
+            self.driver.next_wake()
+        }
+    }
+
+    pub fn poll_timers(&mut self, now: Instant) -> SweepStats {
+        let health = health_view(&self.health);
+        let cx = DriverCx {
+            now,
+            health,
+            mirror: &self.read,
+            focus: self.focus,
+        };
+        self.driver.poll_timers(&cx, &mut self.writer);
+        self.writer.sweep(now)
+    }
+
+    /// A fill request finished (the shell awaited it under its deadline).
+    pub fn on_fill_reply(
+        &mut self,
+        id: FillReqId,
+        issued_at: u64,
+        result: Result<BackendReply, BackendError>,
+        now: Instant,
+    ) -> SmallVec<[HealthEffect; 3]> {
+        let health = health_view(&self.health);
+        let cx = DriverCx {
+            now,
+            health,
+            mirror: &self.read,
+            focus: self.focus,
+        };
+        let report = self
+            .driver
+            .on_reply(&cx, &mut self.writer, id, issued_at, fill_reply(result));
+        self.health_effects(&report, now)
+    }
+
+    fn health_effects(
+        &mut self,
+        report: &ReplyReport,
+        now: Instant,
+    ) -> SmallVec<[HealthEffect; 3]> {
+        match report.health {
+            HealthSignal::None => SmallVec::new(),
+            HealthSignal::Success => self.on_health(HealthMsg::Success, now),
+            HealthSignal::Timeout(class) => self.on_health(HealthMsg::Timeout { class }, now),
+        }
+    }
+
+    /// One iteration: control messages, Reader fill messages, then the ingress.
     pub fn pump(&mut self, now: Instant) -> AppRoute {
         let mut route = AppRoute::default();
         self.pump_control(now, &mut route);
+        self.pump_fill(now);
 
         if let Some(node) = self.pending_focus.take() {
             if self.send_focus(FocusLaneMsg::FocusChanged { node }) {
@@ -161,6 +380,8 @@ impl AppActor {
 
         let drained = self.ingress.drain();
         route.events = drained.events.len();
+        // 5.1, step 1: the invalidation table, applied before the Reader sees the batch.
+        self.invalidate_for(&drained.events, drained.dirty.as_ref(), now);
         if let Some(dirty) = drained.dirty {
             // Flooded: the ingress kept only the essentials and marked the rest dirty. We have
             // drained the backlog, so the app recovers with a lazy resync (R-3).
@@ -184,19 +405,20 @@ impl AppActor {
                 }
             }
         }
-        // Only the newest "became selected" of a batch is worth speaking: the older ones are
-        // superseded before the user could hear them (stale speech never starts).
+        // 5.1, step 2: route to the Reader. Only the newest "became selected" of a batch is
+        // worth speaking: the older ones are superseded before the user could hear them.
         let last_selected = if self.profile.speak_selection {
             drained.events.iter().rposition(became_selected)
         } else {
             None
         };
-        for (i, ev) in drained.events.into_iter().enumerate() {
-            if became_selected(&ev) {
+        let mut s1_sent = SmallVec::<[NodeKey; 2]>::new();
+        for (i, ev) in drained.events.iter().enumerate() {
+            if became_selected(ev) {
                 if Some(i) == last_selected
                     && let NodeEvent::PropertiesChanged { node, .. } = ev
                 {
-                    if self.send_focus(FocusLaneMsg::ItemSelected { node }) {
+                    if self.send_focus(FocusLaneMsg::ItemSelected { node: *node }) {
                         route.forwarded_to_focus_lane += 1;
                     } else {
                         self.resync_needed = true;
@@ -206,9 +428,108 @@ impl AppActor {
                 }
                 continue;
             }
-            self.route(ev, &mut route);
+            self.route(ev, &mut route, &mut s1_sent);
         }
+        // 5.1, step 3: the policy.
+        self.run_policy(&drained.events, route.resync.as_ref(), now);
+        if !route.gone && !matches!(self.health, AppHealth::Gone) {
+            self.poll_timers(now);
+        }
+        route.issued = self.driver.take_issued();
         route
+    }
+
+    fn run_policy(&mut self, events: &[NodeEvent], dirty: Option<&DirtySet>, now: Instant) {
+        let health = health_view(&self.health);
+        let cx = DriverCx {
+            now,
+            health,
+            mirror: &self.read,
+            focus: self.focus,
+        };
+        if let Some(d) = dirty {
+            self.driver
+                .on_input(&cx, &mut self.writer, FillInput::Resync { dirty: d });
+        }
+        for ev in events {
+            if let NodeEvent::WindowEvent {
+                node,
+                kind: WindowKind::Activate,
+            } = ev
+            {
+                self.driver.on_input(
+                    &cx,
+                    &mut self.writer,
+                    FillInput::WindowActivated { window: *node },
+                );
+            }
+        }
+        if !events.is_empty() {
+            self.driver
+                .on_input(&cx, &mut self.writer, FillInput::Events(events));
+        }
+    }
+
+    fn pump_fill(&mut self, now: Instant) {
+        for _ in 0..MAX_FILL_MSGS_PER_PUMP {
+            let next = match self.pending_fill.take() {
+                Some(m) => Some(m),
+                None => self.fill_rx.as_mut().and_then(|rx| rx.try_recv().ok()),
+            };
+            let Some(msg) = next else { break };
+            self.on_fill_msg(msg, now);
+        }
+    }
+
+    fn on_fill_msg(&mut self, msg: FillMsg, now: Instant) {
+        let health = health_view(&self.health);
+        match msg {
+            FillMsg::Demand { node, why, outcome } => {
+                let cx = DriverCx {
+                    now,
+                    health,
+                    mirror: &self.read,
+                    focus: self.focus,
+                };
+                self.driver.on_input(
+                    &cx,
+                    &mut self.writer,
+                    FillInput::Demand { node, why, outcome },
+                );
+            }
+            FillMsg::FocusSettled { node } => {
+                if node.app == self.app {
+                    self.focus = Some(node);
+                    self.writer.set_focus(Some(node));
+                }
+                let cx = DriverCx {
+                    now,
+                    health,
+                    mirror: &self.read,
+                    focus: self.focus,
+                };
+                self.driver
+                    .on_input(&cx, &mut self.writer, FillInput::FocusSettled { node });
+            }
+            FillMsg::ReaderFetch {
+                node,
+                issued_at,
+                result,
+            } => {
+                let cx = DriverCx {
+                    now,
+                    health,
+                    mirror: &self.read,
+                    focus: self.focus,
+                };
+                let reply = match result {
+                    Ok(n) => FillReply::Ok(SnapshotBatch::new(vec![n])),
+                    Err(e) => FillReply::Err(fill_error(&e)),
+                };
+                self.driver
+                    .on_external_reply(&cx, &mut self.writer, node, issued_at, reply);
+            }
+        }
     }
 
     fn pump_control(&mut self, now: Instant, route: &mut AppRoute) {
@@ -218,34 +539,140 @@ impl AppActor {
                 None => self.control.try_recv(),
             };
             match next {
-                Ok(AppControl::Snapshot(batch)) => self.writer.apply(batch),
+                Ok(AppControl::Snapshot(batch)) => {
+                    self.writer.apply(batch, gorca_mirror::ApplyOrigin::Push);
+                }
                 Ok(AppControl::Lifecycle(AppLifecycle::Gone)) => {
                     self.on_health(HealthMsg::OwnerVanished, now);
                     self.send_focus(FocusLaneMsg::AppGone(self.app));
+                    // 5.1: the whole mirror and its tombstones are released.
+                    self.writer.retire_all();
                     route.gone = true;
                 }
                 Ok(AppControl::Lifecycle(AppLifecycle::Appeared(info))) => {
                     self.profile = AppProfile::for_app(&info);
+                    self.driver.set_class(AppClass::from_info(&info));
+                    self.driver.set_dump_complete(info.dump_complete);
+                    self.writer.set_protected(info.verified_shell);
+                    self.writer.set_ttl(if info.verified_shell {
+                        SHELL_TTL
+                    } else {
+                        gorca_mirror::DEFAULT_TTL
+                    });
                 }
-                Ok(AppControl::Lifecycle(AppLifecycle::Ready)) => {}
+                Ok(AppControl::Lifecycle(AppLifecycle::Ready)) => {
+                    let health = health_view(&self.health);
+                    let cx = DriverCx {
+                        now,
+                        health,
+                        mirror: &self.read,
+                        focus: self.focus,
+                    };
+                    self.driver
+                        .on_input(&cx, &mut self.writer, FillInput::Ready);
+                }
                 Err(_) => break,
             }
         }
     }
 
-    fn route(&mut self, ev: NodeEvent, route: &mut AppRoute) {
+    fn parent_of(&self, k: NodeKey) -> Option<NodeKey> {
+        self.read.view(k).hit().and_then(|v| v.snap.parent)
+    }
+
+    /// B-1 5.1: the event to mirror-effect table (same for every policy).
+    fn invalidate_for(&mut self, events: &[NodeEvent], dirty: Option<&DirtySet>, now: Instant) {
+        if let Some(d) = dirty {
+            if d.is_all() {
+                self.writer.invalidate_all(now);
+            } else {
+                for k in d.iter() {
+                    self.writer.invalidate(k, PropMask::ALL, now);
+                }
+            }
+        }
+        for ev in events {
+            match ev {
+                NodeEvent::PropertiesChanged { node, mask } => {
+                    let m = *mask & EVENTED;
+                    if !m.is_empty() {
+                        self.writer.invalidate(*node, m, now);
+                    }
+                    if m.contains(PropMask::NAME) {
+                        self.invalidate_name_ancestors(*node, now);
+                    }
+                }
+                NodeEvent::ChildrenChanged { node } => {
+                    self.writer.invalidate(*node, PropMask::CHILDREN, now);
+                }
+                NodeEvent::NodeRemoved { node } => {
+                    let parent = self.parent_of(*node);
+                    self.writer.tombstone(*node, now, RemovalCause::Event);
+                    if let Some(p) = parent {
+                        self.writer.invalidate(p, PropMask::CHILDREN, now);
+                    }
+                }
+                NodeEvent::TextChanged { node, .. } => {
+                    self.writer
+                        .invalidate(*node, PropMask::NAME | PropMask::VALUE, now);
+                }
+                NodeEvent::ActiveDescendantChanged { container, .. } => {
+                    self.writer.invalidate(*container, PropMask::STATES, now);
+                }
+                NodeEvent::WindowEvent { node, kind } => match kind {
+                    WindowKind::Destroy => {
+                        self.writer
+                            .tombstone(*node, now, RemovalCause::WindowDestroyed);
+                    }
+                    WindowKind::Activate | WindowKind::Deactivate | WindowKind::Create => {
+                        self.writer
+                            .invalidate(*node, PropMask::STATES | PropMask::NAME, now);
+                    }
+                },
+                NodeEvent::FocusChanged { .. }
+                | NodeEvent::CaretMoved { .. }
+                | NodeEvent::SelectionChanged { .. }
+                | NodeEvent::DocumentEvent { .. }
+                | NodeEvent::Announcement { .. } => {}
+            }
+        }
+    }
+
+    /// P9-3: a changed name may be the name of ancestors that derive theirs from content.
+    fn invalidate_name_ancestors(&mut self, n: NodeKey, now: Instant) {
+        let mut cur = self.parent_of(n);
+        for _ in 0..NAME_ANCESTOR_LEVELS {
+            let Some(a) = cur else { break };
+            let Some(v) = self.read.view(a).hit() else {
+                break;
+            };
+            self.writer.invalidate(a, PropMask::NAME, now);
+            if !v.snap.role.takes_name_from_content() {
+                break;
+            }
+            cur = v.snap.parent;
+        }
+    }
+
+    fn route(
+        &mut self,
+        ev: &NodeEvent,
+        route: &mut AppRoute,
+        s1_sent: &mut SmallVec<[NodeKey; 2]>,
+    ) {
         match ev {
             NodeEvent::FocusChanged { node } => {
-                if self.send_focus(FocusLaneMsg::FocusChanged { node }) {
+                self.focus = Some(*node);
+                self.writer.set_focus(Some(*node));
+                if self.send_focus(FocusLaneMsg::FocusChanged { node: *node }) {
                     route.forwarded_to_focus_lane += 1;
                 } else {
                     // Never dropped: retry on the next pump.
-                    self.pending_focus = Some(node);
+                    self.pending_focus = Some(*node);
                 }
             }
             NodeEvent::NodeRemoved { node } => {
-                self.writer.tombstone(node);
-                if self.send_focus(FocusLaneMsg::NodeRemoved(node)) {
+                if self.send_focus(FocusLaneMsg::NodeRemoved(*node)) {
                     route.forwarded_to_focus_lane += 1;
                 } else {
                     self.resync_needed = true;
@@ -254,20 +681,39 @@ impl AppActor {
             NodeEvent::Announcement {
                 text, politeness, ..
             } => {
-                self.forward_background(BackgroundMsg::Announcement { text, politeness }, route);
+                self.forward_background(
+                    BackgroundMsg::Announcement {
+                        text: Arc::clone(text),
+                        politeness: *politeness,
+                    },
+                    route,
+                );
             }
-            // Events that only dirty the mirror. TBD: refresh scheduling via the request mux;
-            // for now they only mark the mirror as needing a resync.
+            // S1: a state or value change of the focused node is spoken (PW-12).
+            NodeEvent::PropertiesChanged { node, mask } => {
+                if self.focus == Some(*node)
+                    && mask.intersects(PropMask::STATES | PropMask::VALUE)
+                    && !s1_sent.contains(node)
+                {
+                    s1_sent.push(*node);
+                    if self.send_focus(FocusLaneMsg::StateChanged {
+                        node: *node,
+                        mask: *mask & (PropMask::STATES | PropMask::VALUE),
+                    }) {
+                        route.forwarded_to_focus_lane += 1;
+                    } else {
+                        self.resync_needed = true;
+                    }
+                }
+            }
+            // Events that only dirty the mirror, which `invalidate_for` already did.
             NodeEvent::ActiveDescendantChanged { .. }
-            | NodeEvent::PropertiesChanged { .. }
             | NodeEvent::ChildrenChanged { .. }
             | NodeEvent::TextChanged { .. }
             | NodeEvent::CaretMoved { .. }
             | NodeEvent::SelectionChanged { .. }
             | NodeEvent::WindowEvent { .. }
-            | NodeEvent::DocumentEvent { .. } => {
-                self.resync_needed = true;
-            }
+            | NodeEvent::DocumentEvent { .. } => {}
         }
     }
 
@@ -284,268 +730,4 @@ impl AppActor {
 /// `state-changed:selected(1)`, as the connector flags it.
 fn became_selected(ev: &NodeEvent) -> bool {
     matches!(ev, NodeEvent::PropertiesChanged { mask, .. } if mask.contains(PropMask::SELECTED_NOW))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::reader::reader_channels;
-    use gorca_connector_api::app_channel;
-    use gorca_ingress::IngressConfig;
-    use gorca_mirror::{MirrorRead, mirror};
-    use gorca_model::{
-        ChildList, ConnectorId, Freshness, Ifaces, LocalId, Lookup, NodeSnapshot, Politeness,
-        PropMask, Role, SnapshotBatch, StateSet,
-    };
-    use std::sync::Arc;
-
-    fn app() -> AppId {
-        AppId {
-            connector: ConnectorId(1),
-            serial: 1,
-        }
-    }
-
-    fn key(n: u64) -> NodeKey {
-        NodeKey {
-            app: app(),
-            local: LocalId(n),
-        }
-    }
-
-    struct Rig {
-        actor: AppActor,
-        port: gorca_connector_api::AppPort,
-        read: gorca_mirror::MirrorHandle,
-        inbox: crate::reader::ReaderInbox,
-    }
-
-    fn rig(cfg: IngressConfig) -> Rig {
-        let ch = app_channel(app(), cfg);
-        let (writer, read) = mirror();
-        let (tx, inbox) = reader_channels();
-        let links = ReaderLinks {
-            focus: tx.focus,
-            background: tx.background,
-        };
-        Rig {
-            actor: AppActor::new(app(), writer, ch.ingress, ch.control, links),
-            port: ch.port,
-            read,
-            inbox,
-        }
-    }
-
-    fn snap(n: u64) -> Arc<NodeSnapshot> {
-        Arc::new(NodeSnapshot {
-            key: key(n),
-            role: Role::Button,
-            states: StateSet::empty(),
-            name: None,
-            description: None,
-            value: None,
-            parent: None,
-            children: ChildList::Unknown,
-            interfaces: Ifaces::empty(),
-            attrs: gorca_model::AttrMap::default(),
-            relations: gorca_model::Relations::default(),
-            bounds: None,
-            have: gorca_model::PropMask::PRESENT,
-            confirmed_seq: 0,
-            fresh: Freshness::Fresh { at: Instant::now() },
-        })
-    }
-
-    #[test]
-    fn focus_goes_to_the_focus_lane_and_snapshots_fill_the_mirror() {
-        let mut r = rig(IngressConfig::default());
-        r.port
-            .push_snapshot(SnapshotBatch {
-                nodes: vec![snap(1)],
-                ..Default::default()
-            })
-            .unwrap();
-        r.port.push(NodeEvent::FocusChanged { node: key(1) });
-        r.port.push(NodeEvent::FocusChanged { node: key(2) });
-        let route = r.actor.pump(Instant::now());
-        assert_eq!(route.events, 1, "focus events are coalesced");
-        assert_eq!(route.forwarded_to_focus_lane, 1);
-        assert!(r.read.get(key(1)).hit().is_some());
-        assert!(matches!(
-            r.inbox.poll(),
-            Some(crate::reader::ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node })) if node == key(2)
-        ));
-    }
-
-    #[test]
-    fn removal_tombstones_the_mirror_and_tells_the_reader() {
-        let mut r = rig(IngressConfig::default());
-        r.port
-            .push_snapshot(SnapshotBatch {
-                nodes: vec![snap(1)],
-                ..Default::default()
-            })
-            .unwrap();
-        r.actor.pump(Instant::now());
-        r.port.push(NodeEvent::NodeRemoved { node: key(1) });
-        r.actor.pump(Instant::now());
-        assert_eq!(r.read.get(key(1)), Lookup::Gone);
-        assert!(matches!(
-            r.inbox.poll(),
-            Some(crate::reader::ReaderMsg::Focus(FocusLaneMsg::NodeRemoved(
-                _
-            )))
-        ));
-    }
-
-    #[test]
-    fn property_noise_only_marks_the_mirror_for_resync() {
-        let mut r = rig(IngressConfig::default());
-        r.port.push(NodeEvent::PropertiesChanged {
-            node: key(1),
-            mask: PropMask::NAME,
-        });
-        let route = r.actor.pump(Instant::now());
-        assert_eq!(
-            route.forwarded_to_focus_lane + route.forwarded_to_background,
-            0
-        );
-        assert!(r.actor.resync_needed());
-        assert!(r.inbox.poll().is_none());
-    }
-
-    #[test]
-    fn a_flood_ends_with_a_lazy_resync_and_a_healthy_app() {
-        let mut r = rig(IngressConfig {
-            max_keys: 8,
-            ..IngressConfig::default()
-        });
-        for n in 0..100 {
-            r.port.push(NodeEvent::ChildrenChanged { node: key(n) });
-        }
-        let route = r.actor.pump(Instant::now());
-        let dirty = route.resync.expect("flooded ingress yields a resync set");
-        assert!(dirty.contains(key(99)));
-        assert_eq!(*r.actor.health(), AppHealth::Healthy);
-    }
-
-    #[test]
-    fn a_full_background_lane_drops_and_requests_a_resync() {
-        let mut r = rig(IngressConfig::default());
-        for i in 0..70 {
-            r.port.push(NodeEvent::Announcement {
-                node: None,
-                text: Arc::from(format!("a{i}")),
-                politeness: Politeness::Polite,
-            });
-        }
-        let route = r.actor.pump(Instant::now());
-        assert_eq!(
-            route.forwarded_to_background, 16,
-            "ingress caps announcements per drain"
-        );
-        assert_eq!(route.dropped_background, 0);
-        // Fill the lane to its bound, then overflow it.
-        for round in 0..6 {
-            for i in 0..16 {
-                r.port.push(NodeEvent::Announcement {
-                    node: None,
-                    text: Arc::from(format!("r{round}-{i}")),
-                    politeness: Politeness::Polite,
-                });
-            }
-            r.actor.pump(Instant::now());
-        }
-        assert!(r.actor.resync_needed());
-    }
-
-    #[test]
-    fn owner_gone_marks_the_app_gone_and_notifies_the_reader() {
-        let mut r = rig(IngressConfig::default());
-        r.port.lifecycle(AppLifecycle::Gone).unwrap();
-        let route = r.actor.pump(Instant::now());
-        assert!(route.gone);
-        assert_eq!(*r.actor.health(), AppHealth::Gone);
-        assert!(matches!(
-            r.inbox.poll(),
-            Some(crate::reader::ReaderMsg::Focus(FocusLaneMsg::AppGone(_)))
-        ));
-    }
-
-    #[test]
-    fn hung_transition_tells_the_reader_once() {
-        let mut r = rig(IngressConfig::default());
-        let now = Instant::now();
-        let t = || HealthMsg::Timeout {
-            class: gorca_rt::BudgetClass::Interactive,
-        };
-        r.actor.on_health(t(), now);
-        r.actor.on_health(t(), now);
-        r.actor.on_health(t(), now);
-        assert!(matches!(r.actor.health(), AppHealth::Hung { .. }));
-        assert!(matches!(
-            r.inbox.poll(),
-            Some(crate::reader::ReaderMsg::Focus(FocusLaneMsg::AppHung(_)))
-        ));
-        assert!(r.inbox.poll().is_none());
-    }
-
-    fn shell_info() -> gorca_model::AppInfo {
-        gorca_model::AppInfo {
-            toolkit: Arc::from("clutter"),
-            app_name: Arc::from("gnome-shell"),
-            pid: None,
-            connector_kind: gorca_model::ConnectorKind::Atspi,
-            verified_shell: true,
-        }
-    }
-
-    fn selected(n: u64) -> NodeEvent {
-        NodeEvent::PropertiesChanged {
-            node: key(n),
-            mask: PropMask::STATES | PropMask::SELECTED_NOW,
-        }
-    }
-
-    #[test]
-    fn the_shell_forwards_only_the_newest_selection_of_a_batch() {
-        let mut r = rig(IngressConfig::default());
-        r.port
-            .lifecycle(AppLifecycle::Appeared(shell_info()))
-            .unwrap();
-        r.port.push(selected(1));
-        r.port.push(selected(2));
-        r.port.push(selected(3));
-        let route = r.actor.pump(Instant::now());
-        assert!(r.actor.profile().speak_selection);
-        assert_eq!(route.forwarded_to_focus_lane, 1);
-        assert!(matches!(
-            r.inbox.poll(),
-            Some(crate::reader::ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node })) if node == key(3)
-        ));
-        assert!(r.inbox.poll().is_none());
-    }
-
-    #[test]
-    fn a_spoofed_shell_never_speaks_selection() {
-        let mut r = rig(IngressConfig::default());
-        let mut info = shell_info();
-        info.verified_shell = false;
-        r.port.lifecycle(AppLifecycle::Appeared(info)).unwrap();
-        r.port.push(selected(1));
-        let route = r.actor.pump(Instant::now());
-        assert!(!r.actor.profile().speak_selection);
-        assert_eq!(route.forwarded_to_focus_lane, 0);
-        assert!(r.inbox.poll().is_none());
-    }
-
-    #[test]
-    fn other_apps_never_speak_selection() {
-        let mut r = rig(IngressConfig::default());
-        r.port.push(selected(1));
-        let route = r.actor.pump(Instant::now());
-        assert_eq!(route.forwarded_to_focus_lane, 0);
-        assert!(r.inbox.poll().is_none());
-        assert!(r.actor.resync_needed());
-    }
 }

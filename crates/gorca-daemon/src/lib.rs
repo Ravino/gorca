@@ -31,7 +31,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use gorca_connector_api::{Connector, ConnectorCtx};
-use gorca_connector_atspi::{AtspiConnector, AtspiOptions};
+use gorca_connector_atspi::{AtspiConnector, AtspiOptions, AtspiState};
 use gorca_core::{Core, CoreConfig, SpeechOut};
 use gorca_input_api::{KeyClass, KeyEvent, KeyIntent};
 use gorca_model::{ConnectorId, Prio, Segment, SegmentKind, UttId, Utterance};
@@ -218,6 +218,7 @@ async fn announce_notices(
             prio: Prio::Message,
             may_refine: false,
             survives_focus_change: true,
+            refines: None,
         };
         speech.submit(u);
     }
@@ -256,6 +257,7 @@ async fn pump_keys(
 /// connection lost). Returns when `shutdown` is cancelled.
 async fn supervise_connector(
     opts: AtspiOptions,
+    state: AtspiState,
     registry: gorca_connector_api::AppRegistrar,
     shutdown: CancellationToken,
 ) {
@@ -268,7 +270,7 @@ async fn supervise_connector(
             shutdown: shutdown.child_token(),
             clock: Clock::System,
         };
-        let connector = Box::new(AtspiConnector::new(opts.clone()));
+        let connector = Box::new(AtspiConnector::with_state(opts.clone(), state.clone()));
         match connector.run(ctx).await {
             Ok(()) => return,
             Err(e) => tracing::warn!(error = %e, ?backoff, "AT-SPI connector failed; retrying"),
@@ -313,6 +315,8 @@ pub async fn run_with(opts: Options, shutdown: CancellationToken) -> Result<()> 
     let speech = wire::wire_speech(&mut tasks, &opts, &epoch);
     let speech_for_keys = speech.clone();
     let core = core.with_speech(Arc::new(LaneOut(speech)));
+    let atspi_state = AtspiState::default();
+    let core = wire::wire_present_log(core, &opts, &atspi_state);
     wire::wire_keyboard(
         &mut tasks,
         &opts,
@@ -321,7 +325,7 @@ pub async fn run_with(opts: Options, shutdown: CancellationToken) -> Result<()> 
         speech_for_keys,
         core.reader_senders().key,
     );
-    wire::wire_atspi(&mut tasks, &opts, focused, registry, &shutdown);
+    wire::wire_atspi(&mut tasks, &opts, focused, registry, atspi_state, &shutdown);
 
     tracing::info!(
         workers = std::thread::available_parallelism().map_or(1, usize::from),

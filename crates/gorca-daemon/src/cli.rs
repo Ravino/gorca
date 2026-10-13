@@ -34,6 +34,9 @@ pub struct Options {
     /// Extra uids whose speech server is trusted (`--speech-peer-uid`, repeatable). By default
     /// only a server running as our own user is used, because everything read is sent to it.
     pub speech_peer_uids: Vec<u32>,
+    /// `GORCA_PRESENT_LOG=<path>`: record every node presentation as a JSON line (B-1 PW-10).
+    /// Passive: no behaviour depends on it.
+    pub present_log: Option<PathBuf>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -87,6 +90,7 @@ impl Options {
     ///   the session bus and the default speech sockets.
     /// - `GORCA_SPEECH_BACKEND=voicego|ssip`: backend, unless `--speech` was given.
     /// - `GORCA_SPEECH_SOCKET`: socket of the selected backend instead of its default.
+    /// - `GORCA_PRESENT_LOG`: file of the presentation log (PW-10).
     #[must_use]
     pub fn with_env(self, get: impl Fn(&str) -> Option<String>) -> Self {
         let mut o = self;
@@ -107,6 +111,11 @@ impl Options {
                     o.voicego_socket.get_or_insert(path);
                 }
             }
+        }
+        if o.present_log.is_none() {
+            o.present_log = get("GORCA_PRESENT_LOG")
+                .filter(|s| !s.is_empty())
+                .map(PathBuf::from);
         }
         if get("GORCA_IMPERSONATE_ORCA").is_some_and(|v| v == "1") {
             o.impersonate_orca = true;

@@ -40,7 +40,7 @@ mod review;
 mod runtime;
 mod text;
 
-pub use app_actor::{AppActor, AppRoute, ReaderLinks};
+pub use app_actor::{AppActor, AppRoute, FILL_QUEUE, FillMsg, ReaderLinks, health_view};
 pub use builtin_ext::AppProfile;
 pub use directory::MirrorDirectory;
 pub use doc_actor::DocActor;
@@ -51,12 +51,13 @@ pub use health::{
 };
 pub use mode::{Mode, ModeEffect, ModeKeys, ModeMsg, PassScope, ReviewCursor};
 pub use present::{
-    PresentContext, PresentJob, PresentKind, Presenter, PresenterRegistry, SpeechIntent,
-    key_echo_text, present_focus, present_selected_item,
+    NoLabels, NodeLabel, PresentContext, PresentJob, PresentKind, PresentLog, PresentRecord,
+    PresentSource, Presented, Presenter, PresenterRegistry, REFINE_WINDOW, SpeechIntent,
+    focus_need, key_echo_text, present_focus, present_selected_item,
 };
 pub use reader::{
-    BackgroundMsg, DUPLICATE_FOCUS_WINDOW, FocusLaneMsg, QueryReply, Reader, ReaderEffect,
-    ReaderInbox, ReaderMsg, ReaderSenders, reader_channels,
+    BackgroundMsg, DUPLICATE_FOCUS_WINDOW, FetchKind, FocusLaneMsg, QueryReply, Reader,
+    ReaderCounters, ReaderEffect, ReaderInbox, ReaderMsg, ReaderSenders, reader_channels,
 };
 pub use review::ReviewMsg;
 pub use runtime::{
