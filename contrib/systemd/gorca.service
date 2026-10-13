@@ -6,7 +6,7 @@ After=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=<repo>/target/release/gorca
+ExecStart=<repo>/target/release/gorca --speech=auto --impersonate-orca
 # ADR-0001 17.2: do not restart after an explicit kill (e.g. an operator or OOM
 # policy); restart only on crashes and non-zero exits.
 Restart=on-failure
