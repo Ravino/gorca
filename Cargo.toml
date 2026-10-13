@@ -71,6 +71,9 @@ libc = "0.2"
 rayon = "1.12"
 wasmtime = { version = "50.0.0-rc.1", default-features = false }
 
+# Local wall-clock time for info.time_date (pure Rust time zone handling, no libc calls).
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
 # Configuration files (ADR-0005): format-preserving parse and save, no serde.
 toml_edit = { version = "0.25", default-features = false, features = ["parse", "display"] }
 

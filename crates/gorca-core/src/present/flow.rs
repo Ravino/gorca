@@ -141,6 +141,10 @@ impl Reader {
             self.stale_replies_dropped += 1;
             return;
         }
+        // An answer to `info.where_am_i` and friends (CR-3), not a focus presentation.
+        if self.take_pending_reply(r.node, r.epoch, r.result.as_ref().ok().cloned(), fx) {
+            return;
+        }
         match r.result {
             Ok(snap) => self.present(&snap, fx),
             // Timeout, Gone, ...: speak from the cache if there is anything (`may_refine`).

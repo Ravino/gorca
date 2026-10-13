@@ -23,20 +23,23 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
+use gorca_config::Settings;
 use gorca_connector_api::{
     AppRegistrar, BackendError, BackendOp, BackendReply, BackendRequest, RegistrarRequest,
     ScopeRegistry, registrar_channel, request,
 };
 use gorca_ingress::{GLOBAL_SLOT_BUDGET, IngressConfig, SlotBudget};
+use gorca_input_api::{GrabSet, LaneLinks};
 use gorca_mirror::mirror;
 use gorca_model::{AppId, ConnectorId, Epoch, NodeKey, PropMask, ReqId, Utterance};
 use gorca_rt::{
     BudgetClass, CancellationToken, Clock, Deadline, EpochCell, FocusedApp, Lane, TaskExit,
-    TaskSet, mpsc, spawn_lane,
+    TaskSet, mpsc, spawn_lane, watch,
 };
 use tokio::task::JoinSet;
 
 use crate::app_actor::{AppActor, ReaderLinks};
+use crate::commands::{ConfigRequest, SpeechCtl};
 use crate::directory::MirrorDirectory;
 use crate::health::{AppHealth, HealthEffect, HealthMsg};
 use crate::mode::ModeKeys;
@@ -49,6 +52,8 @@ pub trait SpeechOut: Send + Sync + 'static {
     fn submit(&self, utterance: Utterance);
     /// The `EpochCell` advanced: wake the speech lane so it cancels stale speech (E-2).
     fn notify_epoch(&self);
+    /// Speech control, ordered with utterances (ADR-0005 6.2). Never blocks.
+    fn control(&self, _ctl: SpeechCtl) {}
 }
 
 /// Discards everything (tests, `--speech=none`).
@@ -197,6 +202,7 @@ const MAX_FETCHES_IN_FLIGHT: usize = 64;
 const HEALTH_TICK: Duration = Duration::from_millis(250);
 const HEALTH_QUEUE: usize = 32;
 const REGISTRAR_QUEUE: usize = 64;
+const CONFIG_QUEUE: usize = 8;
 
 struct Shared {
     epoch: Arc<EpochCell>,
@@ -208,6 +214,13 @@ struct Shared {
     stats: Arc<CoreStats>,
     clock: Clock,
     next_req: AtomicU64,
+    /// Lane cells shared with the input pump (keymap, settings, grab view, Reader ack).
+    links: Arc<LaneLinks>,
+    /// Effective settings, written by the Reader.
+    settings: Arc<ArcSwap<Settings>>,
+    /// The grab set (with its lookup context) the keyboard source should apply; latest wins.
+    grabs: watch::Sender<GrabSet>,
+    config: mpsc::Sender<ConfigRequest>,
 }
 
 impl std::fmt::Debug for Shared {
@@ -222,6 +235,7 @@ pub struct Core {
     inbox: crate::reader::ReaderInbox,
     registrars: Vec<(ConnectorId, mpsc::Receiver<RegistrarRequest>)>,
     budget: Arc<SlotBudget>,
+    config_rx: Option<mpsc::Receiver<ConfigRequest>>,
 }
 
 impl std::fmt::Debug for Core {
@@ -236,6 +250,8 @@ impl Core {
     pub fn new(cfg: CoreConfig) -> Self {
         let (senders, inbox) = reader_channels();
         let budget = SlotBudget::new(cfg.slot_budget);
+        let (grabs, _) = watch::channel(GrabSet::default());
+        let (config, config_rx) = mpsc::channel(CONFIG_QUEUE);
         Self {
             cfg,
             shared: Arc::new(Shared {
@@ -248,10 +264,15 @@ impl Core {
                 stats: Arc::new(CoreStats::default()),
                 clock: Clock::System,
                 next_req: AtomicU64::new(1),
+                links: LaneLinks::new(),
+                settings: Arc::new(ArcSwap::from_pointee(Settings::default())),
+                grabs,
+                config,
             }),
             inbox,
             registrars: Vec::new(),
             budget,
+            config_rx: Some(config_rx),
         }
     }
 
@@ -287,6 +308,26 @@ impl Core {
         Arc::clone(&self.budget)
     }
 
+    /// The cells the input lane reads and the Reader acknowledges through.
+    pub fn lane_links(&self) -> Arc<LaneLinks> {
+        Arc::clone(&self.shared.links)
+    }
+
+    /// The effective settings (file plus runtime changes); the Reader is the only writer.
+    pub fn settings_cell(&self) -> Arc<ArcSwap<Settings>> {
+        Arc::clone(&self.shared.settings)
+    }
+
+    /// The grab set the keyboard source should apply, with its lookup context. Latest wins.
+    pub fn grab_requests(&self) -> watch::Receiver<GrabSet> {
+        self.shared.grabs.subscribe()
+    }
+
+    /// Requests for the config task (`settings.reload`, `settings.save`). Taken once.
+    pub fn take_config_requests(&mut self) -> Option<mpsc::Receiver<ConfigRequest>> {
+        self.config_rx.take()
+    }
+
     /// Producer side of the Reader's inbox, for the input lane.
     pub fn reader_senders(&self) -> ReaderSenders {
         self.shared.senders.clone()
@@ -308,6 +349,7 @@ impl Core {
             inbox,
             registrars,
             budget,
+            config_rx: _,
         } = self;
         let mut tasks = TaskSet::new(shutdown.child_token());
         let (fetch_tx, fetch_rx) = mpsc::channel::<FetchJob>(FETCH_QUEUE);
@@ -680,7 +722,9 @@ async fn reader_loop(
         Arc::clone(&shared.mirrors),
         ModeKeys::default(),
     )
-    .with_focused(Arc::clone(&shared.focused));
+    .with_focused(Arc::clone(&shared.focused))
+    .with_links(Arc::clone(&shared.links))
+    .with_settings_cell(Arc::clone(&shared.settings));
     let mut timer: Option<Instant> = None;
     loop {
         let msg = tokio::select! {
@@ -735,12 +779,19 @@ async fn reader_loop(
                         let _ = shared.senders.replies.try_send(q);
                     }
                 }
-                ReaderEffect::ArmTimer(at) => timer = Some(at),
+                // One timer slot serves focus settling and pass-next-key: the earliest wins.
+                ReaderEffect::ArmTimer(at) => timer = Some(timer.map_or(at, |t| t.min(at))),
                 ReaderEffect::QueryActiveWindowFocus => {
                     tracing::debug!("active-window focus query is not implemented in this slice");
                 }
-                ReaderEffect::SetGrabSet(_) | ReaderEffect::RunCommand(_) => {
-                    tracing::debug!("input effect ignored: no keyboard lane in this slice");
+                ReaderEffect::SetGrabSet(set) => {
+                    shared.grabs.send_replace(set);
+                }
+                ReaderEffect::SpeechCtl(ctl) => shared.speech.control(ctl),
+                ReaderEffect::Config(req) => {
+                    if shared.config.try_send(req).is_err() {
+                        tracing::warn!("config request queue full; dropped a request");
+                    }
                 }
             }
         }

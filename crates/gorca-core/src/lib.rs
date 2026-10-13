@@ -42,6 +42,12 @@ mod text;
 
 pub use app_actor::{AppActor, AppRoute, ReaderLinks};
 pub use builtin_ext::AppProfile;
+pub use commands::{
+    Availability, CmdSpec, CommandTable, Compiled, ConfigRequest, ContextMask, ControlMsg, CoreCmd,
+    InputNotice, LoadCause, LoadedSettings, LocalTime, Milestone, PASS_TIMEOUT, PlatformFacts,
+    SaveResult, SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels, WallClock, command_id,
+    compile, gorca_modifiers, lane_settings,
+};
 pub use directory::MirrorDirectory;
 pub use doc_actor::DocActor;
 pub use focus::{FOCUS_FLAP_DELAY, FocusEffect, FocusMsg, FocusState, settle_delay};
@@ -49,7 +55,7 @@ pub use health::{
     AppHealth, HUNG_PROBE_MAX, HUNG_PROBE_MIN, HealthEffect, HealthMsg, HealthStepCtx,
     SLOW_RECOVERY, SLOW_WINDOW,
 };
-pub use mode::{Mode, ModeEffect, ModeKeys, ModeMsg, PassScope, ReviewCursor};
+pub use mode::{BaseMode, Mode, ModeEffect, ModeKeys, ModeMsg, PassScope, ReviewCursor};
 pub use present::{
     PresentContext, PresentJob, PresentKind, Presenter, PresenterRegistry, SpeechIntent,
     key_echo_text, present_focus, present_selected_item,

@@ -5,10 +5,10 @@
 //! > auto-switching. Every transition emits `SetGrabSet(mode.grab_set())`; `InputHelp` uses
 //! > `GrabKeyboard`. The full table goes in `docs/design/modes.md` (open item)."
 //!
-//! TBD (open item): the full table, the extension veto hook, and where `PassThrough` returns to
-//! (it returns to `Focus` here; resuming `Browse` needs the modes document).
+//! The table is `docs/design/modes.md` section 3. `PassThrough` and `InputHelp` remember the base
+//! mode they return to ([`BaseMode`], ADR-0005 5.1). TBD: the extension veto hook.
 
-use gorca_input_api::{Chord, GrabSet};
+use gorca_input_api::{Chord, GrabSet, InputContext, ModeKind};
 use gorca_model::{DocId, NodeKey};
 
 use gorca_doc::DocCursor;
@@ -43,9 +43,53 @@ pub enum Mode {
     },
     PassThrough {
         scope: PassScope,
+        resume: BaseMode,
     },
     /// Learn mode: keys are described, not executed.
-    InputHelp,
+    InputHelp {
+        resume: BaseMode,
+    },
+}
+
+/// The modes `PassThrough` and `InputHelp` return to. Never nests.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum BaseMode {
+    Focus,
+    Browse {
+        doc: DocId,
+        cursor: DocCursor,
+        sticky: bool,
+    },
+    Review {
+        origin: NodeKey,
+        cursor: ReviewCursor,
+    },
+}
+
+impl BaseMode {
+    fn into_mode(self) -> Mode {
+        match self {
+            BaseMode::Focus => Mode::Focus,
+            BaseMode::Browse {
+                doc,
+                cursor,
+                sticky,
+            } => Mode::Browse {
+                doc,
+                cursor,
+                sticky,
+            },
+            BaseMode::Review { origin, cursor } => Mode::Review { origin, cursor },
+        }
+    }
+
+    pub fn kind(self) -> ModeKind {
+        match self {
+            BaseMode::Focus => ModeKind::Focus,
+            BaseMode::Browse { .. } => ModeKind::Browse,
+            BaseMode::Review { .. } => ModeKind::Review,
+        }
+    }
 }
 
 /// Key material the grab sets are built from. K-1: grab sets are minimal.
@@ -62,9 +106,65 @@ pub struct ModeKeys {
 }
 
 impl Mode {
-    /// The grab set for this mode.
+    /// The base mode, or `None` while pass-through or learn mode is active.
+    pub fn base(self) -> Option<BaseMode> {
+        match self {
+            Mode::Focus => Some(BaseMode::Focus),
+            Mode::Browse {
+                doc,
+                cursor,
+                sticky,
+            } => Some(BaseMode::Browse {
+                doc,
+                cursor,
+                sticky,
+            }),
+            Mode::Review { origin, cursor } => Some(BaseMode::Review { origin, cursor }),
+            Mode::PassThrough { .. } | Mode::InputHelp { .. } => None,
+        }
+    }
+
+    /// The base mode in effect, looking through pass-through and learn mode.
+    pub fn resume_base(self) -> BaseMode {
+        match self {
+            Mode::PassThrough { resume, .. } | Mode::InputHelp { resume } => resume,
+            Mode::Focus => BaseMode::Focus,
+            Mode::Browse {
+                doc,
+                cursor,
+                sticky,
+            } => BaseMode::Browse {
+                doc,
+                cursor,
+                sticky,
+            },
+            Mode::Review { origin, cursor } => BaseMode::Review { origin, cursor },
+        }
+    }
+
+    /// The fieldless mirror the keymap is keyed by.
+    pub fn context(self) -> InputContext {
+        match self {
+            Mode::Focus => InputContext::of(ModeKind::Focus),
+            Mode::Browse { .. } => InputContext::of(ModeKind::Browse),
+            Mode::Review { .. } => InputContext::of(ModeKind::Review),
+            Mode::PassThrough { resume, .. } => InputContext {
+                mode: ModeKind::PassThrough,
+                resume: resume.kind(),
+            },
+            Mode::InputHelp { resume } => InputContext {
+                mode: ModeKind::InputHelp,
+                resume: resume.kind(),
+            },
+        }
+    }
+
+    /// The grab set for this mode (K-1: minimal), published together with its lookup context.
     pub fn grab_set(&self, keys: &ModeKeys) -> GrabSet {
-        let mut set = GrabSet::default();
+        let mut set = GrabSet {
+            ctx: self.context(),
+            ..GrabSet::default()
+        };
         match self {
             Mode::Focus | Mode::Review { .. } => {
                 set.modifiers.extend(keys.modifiers.iter().copied());
@@ -75,10 +175,16 @@ impl Mode {
                 set.chords.extend(keys.commands.iter().copied());
                 set.chords.extend(keys.quick_nav.iter().copied());
             }
+            // Pass-next-key: nothing is grabbed, not even the modifiers, so the next key or
+            // chord reaches the application natively (ADR-0005 5.3).
             Mode::PassThrough { .. } => {
                 set.chords.extend(keys.pass_through_exit.iter().copied());
             }
-            Mode::InputHelp => set.grab_all = true,
+            // Learn mode: everything, with the modifiers kept so the double tap still works.
+            Mode::InputHelp { .. } => {
+                set.grab_all = true;
+                set.modifiers.extend(keys.modifiers.iter().copied());
+            }
         }
         set
     }
@@ -100,6 +206,8 @@ pub enum ModeMsg {
     /// The single key went through, or the user toggled pass-through off.
     EndPassThrough,
     ToggleInputHelp,
+    /// Escape, idle timeout or Reader stall: leave learn mode.
+    InputHelpExit,
     /// Focus entered a document (auto browse unless the user disabled it).
     FocusEnteredDocument {
         doc: DocId,
@@ -139,43 +247,60 @@ impl Mode {
                     cursor,
                     sticky: false,
                 },
-                Mode::PassThrough { .. } | Mode::InputHelp => self,
+                Mode::PassThrough { .. } | Mode::InputHelp { .. } => self,
             },
             ModeMsg::ExitBrowse => match self {
                 Mode::Browse { .. } => Mode::Focus,
-                Mode::Focus | Mode::Review { .. } | Mode::PassThrough { .. } | Mode::InputHelp => {
-                    self
-                }
+                Mode::Focus
+                | Mode::Review { .. }
+                | Mode::PassThrough { .. }
+                | Mode::InputHelp { .. } => self,
             },
             ModeMsg::EnterReview { origin, cursor } => match self {
                 Mode::Focus | Mode::Browse { .. } | Mode::Review { .. } => {
                     Mode::Review { origin, cursor }
                 }
-                Mode::PassThrough { .. } | Mode::InputHelp => self,
+                Mode::PassThrough { .. } | Mode::InputHelp { .. } => self,
             },
             ModeMsg::ExitReview => match self {
                 Mode::Review { .. } => Mode::Focus,
-                Mode::Focus | Mode::Browse { .. } | Mode::PassThrough { .. } | Mode::InputHelp => {
-                    self
-                }
+                Mode::Focus
+                | Mode::Browse { .. }
+                | Mode::PassThrough { .. }
+                | Mode::InputHelp { .. } => self,
             },
             ModeMsg::StartPassThrough(scope) => match self {
-                Mode::Focus
-                | Mode::Browse { .. }
-                | Mode::Review { .. }
-                | Mode::PassThrough { .. } => Mode::PassThrough { scope },
-                Mode::InputHelp => self,
+                Mode::Focus | Mode::Browse { .. } | Mode::Review { .. } => Mode::PassThrough {
+                    scope,
+                    resume: self.resume_base(),
+                },
+                // Replaces a running pass-through; the base to return to is kept (MD-2).
+                Mode::PassThrough { resume, .. } => Mode::PassThrough { scope, resume },
+                Mode::InputHelp { .. } => self,
             },
             ModeMsg::EndPassThrough => match self {
-                Mode::PassThrough { .. } => Mode::Focus,
-                Mode::Focus | Mode::Browse { .. } | Mode::Review { .. } | Mode::InputHelp => self,
-            },
-            ModeMsg::ToggleInputHelp => match self {
-                Mode::InputHelp => Mode::Focus,
+                Mode::PassThrough { resume, .. } => resume.into_mode(),
                 Mode::Focus
                 | Mode::Browse { .. }
                 | Mode::Review { .. }
-                | Mode::PassThrough { .. } => Mode::InputHelp,
+                | Mode::InputHelp { .. } => self,
+            },
+            ModeMsg::ToggleInputHelp => match self {
+                Mode::InputHelp { resume } => resume.into_mode(),
+                Mode::Focus
+                | Mode::Browse { .. }
+                | Mode::Review { .. }
+                | Mode::PassThrough { .. } => Mode::InputHelp {
+                    resume: self.resume_base(),
+                },
+            },
+            // Escape, the idle timeout and a stalled Reader (LM-3): leave learn mode, never enter.
+            ModeMsg::InputHelpExit => match self {
+                Mode::InputHelp { resume } => resume.into_mode(),
+                Mode::Focus
+                | Mode::Browse { .. }
+                | Mode::Review { .. }
+                | Mode::PassThrough { .. } => self,
             },
             ModeMsg::FocusEnteredDocument { doc, cursor } => match self {
                 Mode::Focus => Mode::Browse {
@@ -186,7 +311,7 @@ impl Mode {
                 Mode::Browse { .. }
                 | Mode::Review { .. }
                 | Mode::PassThrough { .. }
-                | Mode::InputHelp => self,
+                | Mode::InputHelp { .. } => self,
             },
             ModeMsg::FocusEnteredEditable => match self {
                 Mode::Browse { sticky: false, .. } => Mode::Focus,
@@ -194,13 +319,14 @@ impl Mode {
                 | Mode::Focus
                 | Mode::Review { .. }
                 | Mode::PassThrough { .. }
-                | Mode::InputHelp => self,
+                | Mode::InputHelp { .. } => self,
             },
             ModeMsg::FocusLeftDocument => match self {
                 Mode::Browse { .. } => Mode::Focus,
-                Mode::Focus | Mode::Review { .. } | Mode::PassThrough { .. } | Mode::InputHelp => {
-                    self
-                }
+                Mode::Focus
+                | Mode::Review { .. }
+                | Mode::PassThrough { .. }
+                | Mode::InputHelp { .. } => self,
             },
         }
     }
@@ -272,12 +398,27 @@ mod tests {
 
         let pt = Mode::PassThrough {
             scope: PassScope::OneKey,
+            resume: BaseMode::Focus,
         }
         .grab_set(&k);
-        assert!(pt.modifiers.is_empty());
+        assert!(
+            pt.modifiers.is_empty(),
+            "pass-next-key grabs nothing (ADR-0005 5.3)"
+        );
         assert_eq!(pt.chords.len(), 1);
 
-        assert!(Mode::InputHelp.grab_set(&k).grab_all);
+        let help = Mode::InputHelp {
+            resume: BaseMode::Focus,
+        }
+        .grab_set(&k);
+        assert!(help.grab_all);
+        assert!(
+            help.modifiers.contains(&KP_INSERT),
+            "LM-1: modifiers stay grabbed"
+        );
+        assert_eq!(help.ctx.mode, ModeKind::InputHelp);
+        assert_eq!(help.ctx.resume, ModeKind::Focus);
+        assert_eq!(focus.ctx, InputContext::of(ModeKind::Focus));
     }
 
     #[test]
@@ -333,10 +474,16 @@ mod tests {
             browse(),
             Mode::PassThrough {
                 scope: PassScope::UntilToggle,
+                resume: BaseMode::Focus,
             },
         ] {
             let (h, _) = m.step(ModeMsg::ToggleInputHelp, &k);
-            assert_eq!(h, Mode::InputHelp);
+            assert_eq!(
+                h,
+                Mode::InputHelp {
+                    resume: m.resume_base()
+                }
+            );
             assert_eq!(
                 h.step(
                     ModeMsg::EnterBrowse {
@@ -346,10 +493,31 @@ mod tests {
                     &k
                 )
                 .0,
-                Mode::InputHelp
+                h
             );
-            assert_eq!(h.step(ModeMsg::ToggleInputHelp, &k).0, Mode::Focus);
+            // Toggling off returns to the mode learn mode was entered from (never to Focus
+            // by accident once Browse exists).
+            assert_eq!(
+                h.step(ModeMsg::ToggleInputHelp, &k).0,
+                m.resume_base().into_mode()
+            );
+            assert_eq!(
+                h.step(ModeMsg::InputHelpExit, &k).0,
+                m.resume_base().into_mode()
+            );
         }
+        assert_eq!(Mode::Focus.step(ModeMsg::InputHelpExit, &k).0, Mode::Focus);
+    }
+
+    #[test]
+    fn pass_through_and_learn_mode_resume_browse() {
+        let k = keys();
+        let (p, e) = browse().step(ModeMsg::StartPassThrough(PassScope::OneKey), &k);
+        assert_eq!(e.len(), 2);
+        assert_eq!(p.step(ModeMsg::EndPassThrough, &k).0, browse());
+        let (h, _) = p.step(ModeMsg::ToggleInputHelp, &k);
+        assert_eq!(h.step(ModeMsg::ToggleInputHelp, &k).0, browse());
+        assert_eq!(h.context().resume, ModeKind::Browse);
     }
 
     #[test]
@@ -372,9 +540,13 @@ mod tests {
         assert_eq!(
             p,
             Mode::PassThrough {
-                scope: PassScope::OneKey
+                scope: PassScope::OneKey,
+                resume: BaseMode::Review {
+                    origin: node(),
+                    cursor: rc
+                }
             }
         );
-        assert_eq!(p.step(ModeMsg::EndPassThrough, &k).0, Mode::Focus);
+        assert_eq!(p.step(ModeMsg::EndPassThrough, &k).0, r);
     }
 }
