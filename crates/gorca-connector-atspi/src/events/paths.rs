@@ -100,7 +100,7 @@ impl Inner {
 
     /// Evict the largest evictable bucket until the table fits its cap again. A bucket holding
     /// nothing but its newest entry has nothing left to give.
-    fn enforce_cap(&mut self, cap: usize) {
+    fn enforce_cap(&mut self, cap: usize, protect: Owner) {
         while self.total_bytes > cap {
             let Some((&owner, _)) = self
                 .owners
@@ -114,6 +114,27 @@ impl Inner {
             self.clear_bucket(owner);
             if self.total_bytes == before {
                 break;
+            }
+        }
+        // Exempt newest paths still count toward the cap, and the cap still holds: when only
+        // exempt entries are left over it, the largest other owners give theirs up too. The
+        // owner that is inserting keeps its entry, so a newcomer always fits.
+        while self.total_bytes > cap {
+            let Some((&owner, _)) = self
+                .owners
+                .iter()
+                .filter(|(o, b)| **o != protect && !b.map.is_empty())
+                .max_by_key(|(_, b)| b.bytes)
+            else {
+                break;
+            };
+            let referenced = self.app_owner.values().any(|o| *o == owner);
+            if let Some(b) = self.owners.get_mut(&owner) {
+                self.total_bytes = self.total_bytes.saturating_sub(b.bytes);
+                *b = Bucket::default();
+            }
+            if !referenced {
+                self.owners.remove(&owner);
             }
         }
     }
@@ -185,7 +206,7 @@ impl PathTable {
         bucket.bytes = bucket.bytes.saturating_sub(freed) + cost(path);
         g.total_bytes = g.total_bytes.saturating_sub(freed) + cost(path);
         let cap = self.cap;
-        g.enforce_cap(cap);
+        g.enforce_cap(cap, owner);
     }
 
     pub fn get(&self, node: NodeKey) -> Option<Arc<str>> {
@@ -420,5 +441,36 @@ mod tests {
         let b = &g.owners[&Owner::Pid(1)];
         assert_eq!(b.map.len(), 1);
         assert!(b.map.capacity() < 64, "capacity {}", b.map.capacity());
+    }
+
+    /// Security scan: exempt newest paths count toward the cap and cannot defeat it. Many
+    /// owners each holding one max-length path stay inside the byte cap.
+    #[test]
+    fn exempt_newest_paths_never_push_the_total_past_the_cap() {
+        let long = "p".repeat(MAX_PATH_BYTES);
+        // Room for about 40 max-length entries.
+        let cap = 40 * (MAX_PATH_BYTES + ENTRY_OVERHEAD);
+        let t = PathTable::with_byte_cap(cap);
+        for pid in 0..512u32 {
+            t.bind_app(app(pid), Owner::Pid(pid));
+            for i in 0..3u64 {
+                t.insert(key(pid, i), &long);
+            }
+            assert!(t.bytes() <= cap, "{} bytes after owner {pid}", t.bytes());
+        }
+        // The latest inserter always has its newest path.
+        assert!(t.get(key(511, 2)).is_some());
+        // Unbound applications (own small buckets) are bounded the same way.
+        for a in 10_000..10_512u32 {
+            t.insert(key(a, 1), &long);
+            assert!(t.bytes() <= cap);
+        }
+        // With the default cap the exemption alone is bounded by owners x max path.
+        let t = PathTable::new();
+        for pid in 0..512u32 {
+            t.bind_app(app(pid), Owner::Pid(pid));
+            t.insert(key(pid, 1), &long);
+        }
+        assert!(t.bytes() <= 512 * (MAX_PATH_BYTES + ENTRY_OVERHEAD));
     }
 }
