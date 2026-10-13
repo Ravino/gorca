@@ -121,7 +121,16 @@ fn broker_fixture_reproduces_f3() {
         Some(1.0),
         "dbus-broker must disconnect a slow reader"
     );
-    assert_eq!(get("F3.active_reader_eof", "dbus-broker"), Some(0.0));
+    let notes: Vec<String> = rows
+        .iter()
+        .filter(|r| r.id.starts_with("F3."))
+        .map(|r| format!("{} {}: {} ({})", r.id, r.bus, r.value, r.note))
+        .collect();
+    assert_eq!(
+        get("F3.active_reader_eof", "dbus-broker"),
+        Some(0.0),
+        "F3 rows: {notes:#?}"
+    );
     assert_eq!(
         get("F3.slow_reader_eof", "dbus-daemon"),
         Some(0.0),

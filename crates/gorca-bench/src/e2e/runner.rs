@@ -138,7 +138,7 @@ impl Rig {
         if let Some(m) = mutter.as_mut() {
             let end = std::time::Instant::now() + Duration::from_secs(5);
             while std::time::Instant::now() < end {
-                if m.watchers() > 0 {
+                if m.clients() > 0 {
                     keys_ok = true;
                     break;
                 }
