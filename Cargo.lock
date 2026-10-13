@@ -615,6 +615,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "gorca-bench-b1"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "gorca-bench-b2",
+ "serde_json",
+]
+
+[[package]]
 name = "gorca-bench-b2"
 version = "0.0.0"
 dependencies = [
