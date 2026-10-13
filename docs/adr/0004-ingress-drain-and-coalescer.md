@@ -9,12 +9,14 @@
   - `docs/reports/2026-10-12-b2-bakeoff-judgement.md` (JUDGE): reviewer's re-runs, rulings, scores, ports.
   - `docs/bakeoff/b2-ingress/candidate-a/RESULTS.md`: winner's own runs. Raw judge output: `bench/results/b2-ingress/judge/` (not committed).
   - `docs/platform/dbus-broker-a11y.md` (F-3: unbounded broker buffering, then disconnect).
+  - `docs/bakeoff/b1-mirror-fill/SPEC.md` (B-1): its §15 amendment adds the cache-signal rows of D-7 (PW-8).
 
 ## 0. Changelog
 
 | Date | Change |
 |---|---|
 | 2026-10-12 | Accepted, conditional on BF-1…BF-4. ADR-0001 §6.3 rewritten to carry rule H, `SlotBudget`, the per-app reserve and preemption model (IB-7), bounds IB-1…IB-11 and AU-1…AU-7 as invariants, plus AU-8 (counter exactness, from SPEC §3.6 row B-1). AU-3 is restated precisely (see §6 item 7). |
+| 2026-10-13 | **B-1 SPEC §15 amendment** (orchestrator sign-off; `docs/bakeoff/b1-mirror-fill/SPEC.md` PW-8): new D-7, mapping rows for `org.a11y.atspi.Cache.RemoveAccessible`/`AddAccessible`, delivered only under an opt-in match rule (`Subscription.cache_signals`). The B-2 SPEC §3.2 table and its model are extended accordingly; the default subscription and every existing row are unchanged. |
 
 ## 1. Context
 
@@ -52,6 +54,17 @@ Baseline: the reference (arm a) is zbus `MessageStream` + `Mutex` coalescer; it 
 - per app reserve **R = 32** slots (`IngressConfig` default) outside the shared pool; preemption of the largest holder above its reserve when the pool is exhausted; preempted tables are swapped out in O(1) and freed on a reaper thread.
 
 **D-6. Production wiring.** `gorca-daemon` creates one `Arc<SlotBudget>` at start-up and passes it explicitly to the router / app-channel factory (`gorca-connector-api::app_channel` takes it as a parameter). There is no process-wide singleton (`OnceLock`, `static`) for the budget: tests and the bench rig create their own, and two budgets in one process are legal (isolated harnesses).
+
+**D-7. Cache-signal mapping** *(added 2026-10-13, B-1 SPEC §15, PW-8)*. Extends the B-2 SPEC §3.2 mapping table, which otherwise only considers `org.a11y.atspi.Event.*`. The match rule `type='signal',interface='org.a11y.atspi.Cache'` is installed **only** when the active `Subscription` has `cache_signals` set (a B-1 arm decision with a measured msgs/s cost); `default_match_rules()` is unchanged, and without the rule these members never reach the drain. The signal's own object path (`/org/a11y/atspi/cache`) is not a node; the node comes from the body.
+
+| Interface . member | Condition | Events | Body fields read |
+|---|---|---|---|
+| `Cache.RemoveAccessible` | body `(so)`, bus name == sender | `NodeRemoved{node: hash(path)}` (same app) | the `(so)` |
+| | bus name != sender (foreign reference) | nothing, **malformed** | the `(so)` |
+| `Cache.AddAccessible` | body `((so)(so)(so)iiassusau)`, object and parent bus names == sender | `ChildrenChanged{node: hash(parent path)}` (same app) | the first three refs only (object, app, parent); index, counts, interfaces, name, role, description and states are not decoded |
+| | a foreign object or parent bus name | nothing, **malformed** | the first three refs |
+
+Rules: a body that is truncated or does not match the signature is malformed (counted in `DrainStats::malformed`, framing unaffected), as in §3.2. `AddAccessible` does not create a node: it dirties the parent's children, and the mirror fetches the new child on demand; this keeps the drain body-light and avoids trusting a snapshot the app may also report through `GetItems`. `RemoveAccessible` tombstones through the usual `NodeRemoved` path; per ADR-0001 I-1 a later successful reply to a request issued after it revives the key (GTK4 also sends it for contexts that become hidden). Both events coalesce under the existing keys (R-LWW for `Children`; R-1 supersession and a kept class under `Flooded` for `Removed`), so they add no new coalescing rule and no new resource bound. Conformance: C-D tests extended with both members, the foreign-reference cases and truncated bodies; the B-2 executable model gains the two rows.
 
 ## 3. Why A
 
