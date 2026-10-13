@@ -20,6 +20,7 @@
 
 pub mod b1;
 pub mod conformance;
+pub mod cpu;
 mod fake_connector;
 mod fake_source;
 pub mod harness;

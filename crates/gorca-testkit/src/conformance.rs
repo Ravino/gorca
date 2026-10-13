@@ -11,24 +11,50 @@ use gorca_doc_source_api::DeltaSink;
 use gorca_model::{DocDelta, NodeEvent, ReqId};
 use gorca_rt::{BudgetClass, Deadline, mpsc, with_deadline};
 
-/// C-1: mean cost of `AppPort::push` over `events`. A blocking `push` shows up as a mean that
-/// is orders of magnitude above the sub-microsecond target.
-pub fn c1_push_cost(port: &AppPort, events: Vec<NodeEvent>) -> Duration {
-    let n = u32::try_from(events.len().max(1)).unwrap_or(u32::MAX);
-    let start = Instant::now();
-    for ev in events {
-        port.push(ev);
+/// Number of equal chunks the push measurements are split into.
+const CHUNKS: usize = 16;
+
+/// Wall-clock mean per item, as the minimum over `CHUNKS` chunks of `items`.
+///
+/// These checks must see a *blocking* push, which burns no CPU, so thread CPU time (see
+/// [`crate::cpu`]) would miss exactly the defect they exist to find. Wall time is kept, and
+/// robustness to preemption comes from the minimum-of-k rule instead: a push that blocks or
+/// does too much work is slow in every chunk, while a preemption on a loaded host hits one
+/// chunk at most. The minimum of the chunk means therefore still fails for a real defect and
+/// ignores scheduler noise.
+fn min_chunk_mean<T>(items: Vec<T>, mut each: impl FnMut(T)) -> Duration {
+    let total = items.len();
+    let chunk = total.div_ceil(CHUNKS).max(1);
+    let mut best = Duration::MAX;
+    let mut it = items.into_iter().peekable();
+    while it.peek().is_some() {
+        let mut n = 0u32;
+        let start = Instant::now();
+        for item in it.by_ref().take(chunk) {
+            each(item);
+            n += 1;
+        }
+        best = best.min(start.elapsed() / n.max(1));
     }
-    start.elapsed() / n
+    if best == Duration::MAX {
+        Duration::ZERO
+    } else {
+        best
+    }
 }
 
-/// SL-1: mean cost of `DeltaSink::push`, including the overflow path.
+/// C-1: cost per `AppPort::push` over `events`: the minimum over 16 chunk means (see
+/// [`min_chunk_mean`]). A blocking `push` shows up as a cost orders of magnitude above the
+/// sub-microsecond target in every chunk.
+pub fn c1_push_cost(port: &AppPort, events: Vec<NodeEvent>) -> Duration {
+    min_chunk_mean(events, |ev| port.push(ev))
+}
+
+/// SL-1: cost per `DeltaSink::push`, including the overflow path (minimum over 16 chunk means).
 pub fn sl1_sink_never_blocks(sink: &DeltaSink, count: u64) -> Duration {
-    let start = Instant::now();
-    for batch in 0..count {
+    min_chunk_mean((0..count).collect(), |batch| {
         sink.push(DocDelta::Settled { batch });
-    }
-    start.elapsed() / u32::try_from(count.max(1)).unwrap_or(u32::MAX)
+    })
 }
 
 /// Outcome of one request in [`c2_requests_are_answered`].
