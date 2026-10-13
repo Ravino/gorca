@@ -15,6 +15,8 @@ pub enum SpeechMode {
     Ssip,
 }
 
+/// The flags are independent switches mirrored from the command line, not a state machine.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Options {
     pub speech: SpeechMode,
@@ -37,6 +39,10 @@ pub struct Options {
     /// `GORCA_PRESENT_LOG=<path>`: record every node presentation as a JSON line (B-1 PW-10).
     /// Passive: no behaviour depends on it.
     pub present_log: Option<PathBuf>,
+    /// `GORCA_SHADOW=1`: read-only beside the user's real screen reader (B-1 PW-11): no keyboard
+    /// monitor, no Orca identity, no `org.a11y.Status` writes, no event registration, speech
+    /// to a null sink, and only the read calls of the connector's allowlist.
+    pub shadow: bool,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -91,6 +97,7 @@ impl Options {
     /// - `GORCA_SPEECH_BACKEND=voicego|ssip`: backend, unless `--speech` was given.
     /// - `GORCA_SPEECH_SOCKET`: socket of the selected backend instead of its default.
     /// - `GORCA_PRESENT_LOG`: file of the presentation log (PW-10).
+    /// - `GORCA_SHADOW=1`: shadow mode (PW-11).
     #[must_use]
     pub fn with_env(self, get: impl Fn(&str) -> Option<String>) -> Self {
         let mut o = self;
@@ -116,6 +123,15 @@ impl Options {
             o.present_log = get("GORCA_PRESENT_LOG")
                 .filter(|s| !s.is_empty())
                 .map(PathBuf::from);
+        }
+        if get("GORCA_SHADOW").is_some_and(|v| v == "1") {
+            o.shadow = true;
+        }
+        if o.shadow {
+            // Never impersonate, never grab keys, never write the a11y status.
+            o.impersonate_orca = false;
+            o.no_keyboard = true;
+            o.no_enable = true;
         }
         if get("GORCA_IMPERSONATE_ORCA").is_some_and(|v| v == "1") {
             o.impersonate_orca = true;

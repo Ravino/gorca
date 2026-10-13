@@ -22,6 +22,7 @@ use crate::paths::PathTable;
 use crate::toolkit::Toolkit;
 
 pub mod items;
+pub mod shadow;
 mod strategy;
 
 /// Requests served concurrently per application; the rest is answered `Busy` (C-3).
@@ -220,11 +221,24 @@ impl RawBatch {
 pub struct Caller {
     conn: Connection,
     bus_name: Arc<str>,
+    /// Shadow mode (PW-11): `Some` refuses every call outside [`shadow::allowed`] and counts it.
+    shadow: Option<Arc<AtomicU64>>,
 }
 
 impl Caller {
     pub fn new(conn: Connection, bus_name: Arc<str>) -> Self {
-        Self { conn, bus_name }
+        Self {
+            conn,
+            bus_name,
+            shadow: None,
+        }
+    }
+
+    /// Read-only: refuse (and count in `refused`) any call the shadow allowlist does not admit.
+    #[must_use]
+    pub fn shadowed(mut self, refused: Arc<AtomicU64>) -> Self {
+        self.shadow = Some(refused);
+        self
     }
 
     async fn call<B>(
@@ -239,6 +253,14 @@ impl Caller {
     where
         B: serde::Serialize + zbus::zvariant::DynamicType,
     {
+        if let Some(refused) = &self.shadow
+            && !shadow::allowed(iface, member)
+        {
+            refused.fetch_add(1, Ordering::Relaxed);
+            return Err(DbusError::Zbus(zbus::Error::Failure(format!(
+                "shadow mode refuses {iface}.{member}"
+            ))));
+        }
         call_method(&self.conn, deadline, dest, path, iface, member, body).await
     }
 

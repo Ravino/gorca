@@ -74,6 +74,10 @@ pub struct AtspiOptions {
     pub register_events: bool,
     /// The focused application, published by the Reader. The router never evicts or refuses it.
     pub focused: Option<Arc<FocusedApp>>,
+    /// Shadow mode (B-1 PW-11): read-only beside the user's real screen reader. Forces
+    /// `enable_accessibility` and `register_events` off and refuses every call outside the
+    /// allowlist of `fetch::shadow`.
+    pub shadow: bool,
 }
 
 impl Default for AtspiOptions {
@@ -84,6 +88,7 @@ impl Default for AtspiOptions {
             enable_accessibility: true,
             register_events: true,
             focused: None,
+            shadow: false,
         }
     }
 }
@@ -140,9 +145,16 @@ pub struct AtspiState {
     paths: Arc<PathTable>,
     buses: Arc<BusNames>,
     counters: Arc<FetchCounters>,
+    shadow_refused: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl AtspiState {
+    /// Calls shadow mode refused (should stay zero: the connector only reads).
+    pub fn shadow_refused(&self) -> u64 {
+        self.shadow_refused
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     /// Counters of refs and dumps the connector refused to believe.
     pub fn fetch_counters(&self) -> Arc<FetchCounters> {
         Arc::clone(&self.counters)
@@ -480,6 +492,7 @@ async fn run(
     // ID-5.
     let mut enablement: Option<(Connection, Enablement)> = None;
     if opts.enable_accessibility
+        && !opts.shadow
         && let Some(s) = session
     {
         let deadline = Deadline::for_class(&clock, BudgetClass::Startup);
@@ -505,7 +518,7 @@ async fn run(
     let deadline = Deadline::for_class(&clock, BudgetClass::Startup);
     let name_conn = connect(&address, deadline).await.map_err(|e| startup(&e))?;
 
-    if opts.register_events {
+    if opts.register_events && !opts.shadow {
         match register_events(&conn, &clock, REGISTERED_EVENTS).await {
             Ok(n) => tracing::debug!(registered = n, "event listeners registered"),
             // Not fatal: always-on events (state changes) still arrive.
@@ -581,7 +594,7 @@ async fn run(
             biased;
             () = shutdown.cancelled() => break,
             Some(new) = new_rx.recv() => {
-                spawn_app(&mut tasks, new, &conn, &shared, &clock, &shutdown);
+                spawn_app(&mut tasks, new, &conn, &shared, opts.shadow, &clock, &shutdown);
             }
             Some(name) = reg_rx.recv() => {
                 // The drain asked for this sender to be registered; it never waits for it.
@@ -632,6 +645,7 @@ fn spawn_app(
     new: NewApp,
     conn: &Connection,
     shared: &AtspiState,
+    shadow: bool,
     clock: &Clock,
     shutdown: &CancellationToken,
 ) {
@@ -641,10 +655,16 @@ fn spawn_app(
         gone,
         verified_shell,
     } = new;
+    let caller = Caller::new(conn.clone(), Arc::clone(&bus_name));
+    let caller = if shadow {
+        caller.shadowed(Arc::clone(&shared.shadow_refused))
+    } else {
+        caller
+    };
     let app = port.app;
     shared.buses.set(app, Arc::clone(&bus_name));
     let server = AppServer {
-        caller: Caller::new(conn.clone(), bus_name),
+        caller,
         paths: Arc::clone(&shared.paths),
         clock: clock.clone(),
         gone,

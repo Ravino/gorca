@@ -312,19 +312,28 @@ pub async fn run_with(opts: Options, shutdown: CancellationToken) -> Result<()> 
     let epoch = core.epoch();
     let focused = core.focused_app();
 
-    let speech = wire::wire_speech(&mut tasks, &opts, &epoch);
-    let speech_for_keys = speech.clone();
-    let core = core.with_speech(Arc::new(LaneOut(speech)));
+    let core = if opts.shadow {
+        // B-1 PW-11: beside the user's real screen reader gorca only reads. Speech goes to the
+        // core's null sink, and nothing grabs keys or takes the Orca identity.
+        tracing::info!("shadow mode: read-only, no speech, no keyboard, no event registration");
+        core
+    } else {
+        let speech = wire::wire_speech(&mut tasks, &opts, &epoch);
+        let speech_for_keys = speech.clone();
+        let reader_keys = core.reader_senders().key;
+        let core = core.with_speech(Arc::new(LaneOut(speech)));
+        wire::wire_keyboard(
+            &mut tasks,
+            &opts,
+            &shutdown,
+            &epoch,
+            speech_for_keys,
+            reader_keys,
+        );
+        core
+    };
     let atspi_state = AtspiState::default();
     let core = wire::wire_present_log(core, &opts, &atspi_state);
-    wire::wire_keyboard(
-        &mut tasks,
-        &opts,
-        &shutdown,
-        &epoch,
-        speech_for_keys,
-        core.reader_senders().key,
-    );
     wire::wire_atspi(&mut tasks, &opts, focused, registry, atspi_state, &shutdown);
 
     tracing::info!(
