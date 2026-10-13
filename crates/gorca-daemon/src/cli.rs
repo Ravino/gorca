@@ -17,6 +17,16 @@ pub enum SpeechMode {
     Ssip,
 }
 
+/// Which fill policy the apps run (`--bench-fill-policy`, B-1). The product always runs R0.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub enum FillChoice {
+    /// R0: nothing is prefetched; the cache serves revisits.
+    #[default]
+    R0,
+    /// `gorca_mirror::fill::Candidate`, the policy of the bake-off arm this binary was built from.
+    Candidate,
+}
+
 /// The flags are independent switches mirrored from the command line, not a state machine.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -53,6 +63,8 @@ pub struct Options {
     /// monitor, no Orca identity, no `org.a11y.Status` writes, no event registration, speech
     /// to a null sink, and only the read calls of the connector's allowlist.
     pub shadow: bool,
+    /// `--bench-fill-policy=r0|candidate`: benchmarks only (B-1 harness); default R0.
+    pub fill_policy: FillChoice,
 }
 
 /// `gorca config ...`: tools around the settings file (ADR-0005 7.4, CV-3).
@@ -109,6 +121,8 @@ OPTIONS:
     --no-probe                   do not ask gsettings about the keyboard and clock
     --bench-present-log=PATH     benchmarks only: write the presentation log (absolute PATH, mode
                                  0600, created anew; secret text is redacted)
+    --bench-fill-policy=r0|candidate
+                                 benchmarks only: the fill policy of every app (default: r0)
     -h, --help                   print this help
 ";
 
@@ -316,6 +330,20 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError
                 }
                 opts.present_log = Some(path);
             }
+            "--bench-fill-policy" => {
+                let v = value("--bench-fill-policy")?;
+                opts.fill_policy = match v.as_str() {
+                    "r0" => FillChoice::R0,
+                    "candidate" => FillChoice::Candidate,
+                    _ => {
+                        return Err(CliError::BadValue {
+                            flag: "--bench-fill-policy",
+                            value: v,
+                            expected: "r0 or candidate",
+                        });
+                    }
+                };
+            }
             "--a11y-address" => opts.a11y_address = Some(value("--a11y-address")?),
             "--session-address" => opts.session_address = Some(value("--session-address")?),
             _ => return Err(CliError::Unknown(arg)),
@@ -373,6 +401,26 @@ mod tests {
                 "{bad}"
             );
         }
+    }
+
+    #[test]
+    fn the_fill_policy_is_r0_unless_the_bench_flag_asks_otherwise() {
+        assert_eq!(opts(&[]).fill_policy, FillChoice::R0);
+        assert_eq!(
+            opts(&["--bench-fill-policy=candidate"]).fill_policy,
+            FillChoice::Candidate
+        );
+        assert_eq!(
+            opts(&["--bench-fill-policy", "r0"]).fill_policy,
+            FillChoice::R0
+        );
+        // The environment never switches it on.
+        let env = |k: &str| (k == "GORCA_FILL_POLICY").then(|| "candidate".to_owned());
+        assert_eq!(opts(&[]).with_env(env).fill_policy, FillChoice::R0);
+        assert!(matches!(
+            p(&["--bench-fill-policy=zzz"]),
+            Err(CliError::BadValue { .. })
+        ));
     }
 
     #[test]

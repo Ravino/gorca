@@ -4,6 +4,7 @@
 //! |---|---|
 //! | [`proto`], [`service`], [`world`] | H-2: model schema, control commands, truth log, seeded service-time model, the pure state of a fake app |
 //! | [`appctl`] | H-2/H-3: drive the `b1-fakeapp` binary |
+//! | [`keys`] | H-3: the emulated Mutter, to press the daemon's command keys |
 //! | [`sut`], [`sim`], [`verdict`], [`ic`] | H-8: invalidation conformance IC-1..IC-20 against any reader |
 //! | [`audit`], [`items`] | H-8: audit tests MA-1..MA-10 against thin adapter traits |
 //! | [`walk`] | H-3: scripted walk W-1 |
@@ -37,6 +38,7 @@ pub mod appctl;
 pub mod audit;
 pub mod ic;
 pub mod items;
+pub mod keys;
 pub mod proto;
 pub mod real;
 mod selftest;

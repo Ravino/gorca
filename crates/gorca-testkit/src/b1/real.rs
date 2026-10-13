@@ -5,15 +5,25 @@
 //! where its presentation log is. It implements [`Sut`] so the conformance suite and the walk run
 //! unchanged against the real thing.
 //!
-//! Not supported until the daemon offers them: the mirror probe (needs the test-only debug
-//! accessor of SPEC 5.7), `where_am_i` (needs a key or command into the daemon) and the mirror
-//! node count of a retired app. Cases that need them skip (see `Case::needs`).
+//! Supported when the driver provides them: the mirror probe (needs the test-only debug
+//! accessor of SPEC 5.7) and `where_am_i`, which presses the daemon's real command key
+//! (Insert+Tab, ADR-0005) through the emulated Mutter ([`RealSut::with_keyboard`]). Not
+//! supported: the mirror node count of a retired app. Cases that need them skip (see
+//! `Case::needs`).
+//!
+//! **Listener registration.** A GTK4 fake app emits no object event until the registry tells it
+//! that an AT registered its listeners (P9-1), and the registry only says so to apps that are
+//! already running when the AT registers. The daemon registers before the walk starts any app,
+//! so without help every state, value and name event of Settings and Files is swallowed: S1
+//! never fires and "evented" mutations are silent. [`RealConfig::register_listeners`] tells each
+//! app right after it starts, like atk-bridge asking the registry on a real desktop.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use super::appctl::{AppArgs, B1App, read_truth};
+use super::keys::{self, FakeMutter};
 use super::proto::{AppStats, Cmd, CmdReply, ModelSpec, TruthLine};
 use super::sut::{Feature, Presentation, Probe, Source, Sut, SutError, SutResult};
 use super::world::state;
@@ -43,6 +53,10 @@ pub struct RealConfig {
     pub scale_nodes: Option<u32>,
     /// Allow a bus that is not a `/gorca-h.*` harness session (the fake app's own tests).
     pub allow_any_bus: bool,
+    /// Tell every app that starts that an AT registered its listeners (lifts the P9-1 gate), as
+    /// the registry does on a real desktop. Off for the in-process conformance fixture, which
+    /// does it itself and tests the deferred case.
+    pub register_listeners: bool,
 }
 
 #[derive(Debug)]
@@ -59,9 +73,11 @@ pub struct RealSut {
     cfg: RealConfig,
     arm: String,
     inst: Vec<Instance>,
-    clock: Option<(u64, Instant)>,
     n: u32,
     probe: Option<std::sync::Arc<dyn MirrorProbe>>,
+    /// The emulated Mutter whose grabs the daemon registered with: the way into `where_am_i`.
+    keyboard: Option<FakeMutter>,
+    defer_registration: bool,
 }
 
 impl RealSut {
@@ -70,10 +86,19 @@ impl RealSut {
             cfg,
             arm: arm.to_owned(),
             inst: Vec::new(),
-            clock: None,
             n: 0,
             probe: None,
+            keyboard: None,
+            defer_registration: false,
         }
+    }
+
+    /// Give the SUT the emulated Mutter the daemon has registered its key grabs with: `where_am_i`
+    /// then presses the daemon's own command chord.
+    #[must_use]
+    pub fn with_keyboard(mut self, mutter: FakeMutter) -> Self {
+        self.keyboard = Some(mutter);
+        self
     }
 
     /// Attach the debug accessor of an in-process daemon: cases that read the mirror then run.
@@ -114,9 +139,9 @@ impl RealSut {
         a.own_name.clone_from(&spec.owns_name);
         let mut app = B1App::spawn(&self.cfg.fakeapp_bin, &a, &self.cfg.work_dir)
             .map_err(|e| SutError::Other(e.to_string()))?;
-        if self.clock.is_none() {
-            let st = app.stats().map_err(|e| SutError::Other(e.to_string()))?;
-            self.clock = Some((st.now_ns, Instant::now()));
+        if self.cfg.register_listeners && !self.defer_registration {
+            app.cmd_timeout(&Cmd::RegisterListener, Duration::from_secs(10))
+                .map_err(|e| SutError::Other(e.to_string()))?;
         }
         let bus = app.bus_name().to_owned();
         let truth = app.truth_path.clone();
@@ -231,14 +256,14 @@ impl Sut for RealSut {
     }
 
     fn supports(&self, f: Feature) -> bool {
-        // Only the mirror probe exists: the daemon is real time, has no where-am-I command, no
-        // latency knobs, no cache fill (R0) and no hostile-ref counters on the wire.
+        // The daemon is real time, has no latency knobs, no cache-fill signal (R0) and no
+        // hostile-ref counters on the wire. The probe and the command key are opt-in.
         match f {
             Feature::Probe => self.probe.is_some(),
+            Feature::WhereAmI => self.keyboard.is_some(),
             Feature::LatencyKnobs
             | Feature::VirtualTime
             | Feature::CacheFill
-            | Feature::WhereAmI
             | Feature::Malformed => false,
         }
     }
@@ -306,9 +331,41 @@ impl Sut for RealSut {
     }
 
     fn now_ns(&self) -> u64 {
-        self.clock.map_or(0, |(base, t0)| {
-            base + u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX)
-        })
+        // The same `CLOCK_MONOTONIC` the fake apps and the daemon stamp their logs with.
+        gorca_rt::monotonic_ns()
+    }
+
+    fn where_am_i(&mut self) -> SutResult<Vec<String>> {
+        let Some(m) = self.keyboard.as_mut() else {
+            return Err(SutError::Other(
+                "where-am-i needs the emulated keyboard manager (RealSut::with_keyboard)".into(),
+            ));
+        };
+        let reply = m
+            .chord(keys::INSERT, keys::TAB)
+            .map_err(|e| SutError::Other(e.to_string()))?;
+        if !reply.consumed {
+            return Err(SutError::Other(
+                "the where-am-i chord reached the application: the daemon holds no grabs".into(),
+            ));
+        }
+        // The daemon's answer is one spoken sentence, not a node presentation, so there is no
+        // per-node stimulus to log (it would count as a lost focus).
+        Ok(Vec::new())
+    }
+
+    fn defer_listener_registration(&mut self, on: bool) {
+        self.defer_registration = on;
+    }
+
+    fn register_listener(&mut self, app: &str) -> SutResult<()> {
+        let i = self.live(app)?;
+        i.app
+            .as_mut()
+            .ok_or_else(|| SutError::Other("app is gone".into()))?
+            .cmd_timeout(&Cmd::RegisterListener, Duration::from_secs(10))
+            .map(|_| ())
+            .map_err(|e| SutError::Other(e.to_string()))
     }
 
     fn presentations(&self) -> Vec<Presentation> {

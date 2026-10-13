@@ -15,6 +15,11 @@ gorca-model = { workspace = true }
 anyhow = { workspace = true }
 serde_json = "1"
 
+[dev-dependencies]
+# The step bench (H-7) links the tree's `gorca_mirror::fill::Candidate` through its adapter.
+gorca-mirror = { workspace = true }
+gorca-ingress = { workspace = true }
+
 [[bin]]
 name = "b1"
 path = "src/bin/b1.rs"

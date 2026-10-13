@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
-use crate::limits::{CLOCK_SKEW_NS, LATE_WINDOW_NS};
+use crate::limits::{AUDIBLE_AFTER_NS, CLOCK_SKEW_NS, LATE_WINDOW_NS};
 
 /// Fields compared by the verdict (SPEC 6.2: name, role, presented states, value).
 pub const COMPARED: [&str; 4] = ["name", "role", "states", "value"];
@@ -39,6 +39,9 @@ pub enum Source {
     MissReply,
     Refine,
     Followup,
+    /// The daemon's spoken change of a state or value of the node being presented (S1). It is
+    /// a first utterance for the verdicts, but never answers a focus stimulus.
+    S1,
 }
 
 impl Source {
@@ -50,6 +53,7 @@ impl Source {
             "miss_reply" => Self::MissReply,
             "refine" => Self::Refine,
             "followup" => Self::Followup,
+            "s1" => Self::S1,
             _ => return None,
         })
     }
@@ -288,6 +292,8 @@ pub struct Judged {
     pub latency_ns: u64,
     /// Visit of a node whose truth did not change since its previous presentation.
     pub clean_revisit: bool,
+    /// For `Refined` / `Late`: how long after the first utterance the correcting one came.
+    pub fix_delay_ns: Option<u64>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -336,6 +342,34 @@ impl Report {
             corr.len() as f64 / focus.len() as f64
         };
         (rate, ev, corr.len() - ev)
+    }
+
+    /// Corrections the user can hear (SPEC 9, B1-M6.audible): `Late` ones, and `Refined` ones
+    /// whose replacement came after the speech server could have started the wrong audio
+    /// (`AUDIBLE_AFTER_NS`). Returns `(rate over focus presentations, count)`.
+    pub fn m6_audible(&self) -> (f64, usize) {
+        let focus = self.focus_presentations();
+        let n = self
+            .judged
+            .iter()
+            .filter(|j| j.kind == Kind::Focus)
+            .filter(|j| match j.verdict {
+                Verdict::Late => true,
+                Verdict::Refined => j.fix_delay_ns.is_none_or(|d| d > AUDIBLE_AFTER_NS),
+                Verdict::Correct | Verdict::Stale => false,
+            })
+            .count();
+        (ratio(n, focus), n)
+    }
+
+    /// Delays (ms) from a refined first utterance to its replacement, focus presentations only.
+    pub fn refine_delays_ms(&self) -> Vec<f64> {
+        self.judged
+            .iter()
+            .filter(|j| j.kind == Kind::Focus && j.verdict == Verdict::Refined)
+            .filter_map(|j| j.fix_delay_ns)
+            .map(|d| d as f64 / 1e6)
+            .collect()
     }
 
     /// `hit / focus presentations`.
@@ -524,6 +558,7 @@ pub fn classify(truth: &Truth, pres: &[Presentation], mode: KeyMode) -> Report {
         let cause = |bad: &[&'static str]| ix.last_change(&k, bad, p.t_ns).map(|c| c.evented);
 
         let mut verdict = Verdict::Correct;
+        let mut fix_delay_ns = None;
         let mut evented_cause = None;
         if !bad.is_empty() {
             evented_cause = cause(&bad);
@@ -536,12 +571,14 @@ pub fn classify(truth: &Truth, pres: &[Presentation], mode: KeyMode) -> Report {
                 match q.source {
                     Source::Refine if right && q.epoch == p.epoch => {
                         verdict = Verdict::Refined;
+                        fix_delay_ns = Some(q.t_ns.saturating_sub(p.t_ns));
                         break;
                     }
                     Source::Followup
                         if right && q.t_ns.saturating_sub(p.t_ns) <= LATE_WINDOW_NS =>
                     {
                         verdict = Verdict::Late;
+                        fix_delay_ns = Some(q.t_ns.saturating_sub(p.t_ns));
                     }
                     _ => {}
                 }
@@ -568,6 +605,7 @@ pub fn classify(truth: &Truth, pres: &[Presentation], mode: KeyMode) -> Report {
             stimulus_ns: stimulus,
             latency_ns: p.t_ns.saturating_sub(stimulus),
             clean_revisit,
+            fix_delay_ns,
         });
     }
 
@@ -577,6 +615,7 @@ pub fn classify(truth: &Truth, pres: &[Presentation], mode: KeyMode) -> Report {
         let k = key(mode, &f.app, &f.path);
         let spoken = pres.iter().any(|p| {
             p.source.is_first()
+                && p.source != Source::S1
                 && ix.key_of(p) == k
                 && p.t_ns + CLOCK_SKEW_NS >= f.t_ns
                 && p.t_ns <= f.t_ns + horizon
@@ -692,6 +731,56 @@ mod tests {
         let r = run(&t, &[pres(106 * MS, 1, "/x", "hit", "Old", "")]);
         assert_eq!(r.judged[0].verdict, Verdict::Correct);
         assert_eq!(r.judged[0].kind, Kind::StateChange);
+    }
+
+    #[test]
+    fn an_s1_line_is_a_state_change_with_its_own_latency_and_never_answers_a_focus() {
+        // The daemon logs the spoken change of the focused node as source `s1`.
+        let t = [
+            focus(100 * MS, "/x"),
+            change(200 * MS, "/x", "name", "A", "B", true),
+        ];
+        let p = [
+            pres(101 * MS, 1, "/x", "hit", "A", ""),
+            pres(203 * MS, 2, "/x", "s1", "B", ""),
+        ];
+        let r = run(&t, &p);
+        assert_eq!(r.judged.len(), 2);
+        assert_eq!(r.judged[1].source, Source::S1);
+        assert_eq!(r.judged[1].kind, Kind::StateChange);
+        assert_eq!(r.judged[1].verdict, Verdict::Correct);
+        assert_eq!(r.judged[1].latency_ns, 3 * MS);
+        assert_eq!(r.focus_presentations(), 1, "S1 is not a focus presentation");
+        assert_eq!(r.latencies_ms(|j| j.kind == Kind::StateChange), vec![3.0]);
+        // An S1 line alone does not hide a focus that was never spoken.
+        let lost = run(&t, &p[1..]);
+        assert_eq!(lost.lost, 1);
+    }
+
+    #[test]
+    fn a_refine_before_the_audio_can_start_is_a_correction_but_not_an_audible_one() {
+        let t = [
+            change(10 * MS, "/x", "name", "Old", "New", false),
+            focus(100 * MS, "/x"),
+        ];
+        let quick = run(
+            &t,
+            &[
+                pres(101 * MS, 1, "/x", "hit", "Old", ""),
+                pres(104 * MS, 2, "/x", "refine", "New", r#","refines":1"#),
+            ],
+        );
+        assert_eq!(quick.corrections(), 1);
+        assert_eq!(quick.m6_audible().1, 0);
+        assert_eq!(quick.refine_delays_ms(), vec![3.0]);
+        let slow = run(
+            &t,
+            &[
+                pres(101 * MS, 1, "/x", "hit", "Old", ""),
+                pres(140 * MS, 2, "/x", "refine", "New", r#","refines":1"#),
+            ],
+        );
+        assert_eq!(slow.m6_audible().1, 1);
     }
 
     #[test]

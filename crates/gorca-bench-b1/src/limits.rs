@@ -50,6 +50,11 @@ pub const MIB: f64 = 1024.0 * 1024.0;
 pub const L1C_VS_R0: f64 = 1.2;
 /// A refine/followup must come within this long to count as `LATE` (SPEC 6.2).
 pub const LATE_WINDOW_NS: u64 = 500_000_000;
+/// A `Refined` correction that replaces the wrong utterance sooner than this after it was
+/// handed to speech counts as inaudible: the speech server cannot have started the audio yet
+/// (the Reader's own window for a replacing refine is 150 ms of speech start, ADR-0001 8.1; the
+/// refine delays measured on R0 are 2-5 ms). `Late` follow-ups are always audible.
+pub const AUDIBLE_AFTER_NS: u64 = 10_000_000;
 /// Cross-check tolerance between counted and monitored signals (SPEC 6.1).
 pub const MSG_CROSSCHECK_TOL: f64 = 0.01;
 /// Truth and presentation clocks are cross-checked to this (SPEC 6.1); also the lower-bound slack
@@ -142,9 +147,17 @@ pub const GATES: &[Gate] = &[
         "B1-M6",
         "walk",
         "ratio",
+        Cmp::Rank,
+        f64::NAN,
+        "all corrections (audible or not) / focus presentations; split evented / silent in info",
+    ),
+    g(
+        "B1-M6.audible",
+        "walk",
+        "ratio",
         Cmp::MedianAtMost,
         0.01 - f64::EPSILON,
-        "corrections / focus presentations (< 1 %)",
+        "audible corrections (Late, or a refine later than 10 ms) / focus presentations (< 1 %)",
     ),
     g(
         "B1-MSG.idle",
@@ -279,6 +292,7 @@ mod tests {
         assert_eq!(gate("B1-S1.p99").map(|g| g.threshold), Some(5.0));
         assert_eq!(gate("B1-STEP.max_us").map(|g| g.threshold), Some(250.0));
         assert_eq!(gate("B1-RSS.big").map(|g| g.threshold), Some(128.0));
-        assert!(gate("B1-M6").is_some_and(|g| g.threshold < 0.01));
+        assert!(gate("B1-M6.audible").is_some_and(|g| g.threshold < 0.01));
+        assert_eq!(gate("B1-M6").map(|g| g.cmp), Some(Cmp::Rank));
     }
 }

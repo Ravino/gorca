@@ -20,10 +20,12 @@ use smallvec::SmallVec;
 use crate::limits::FillLimits;
 use crate::store::{ApplyOutcome, MirrorRead};
 
+mod candidate;
 mod null;
 #[doc(hidden)]
 pub mod scripted;
 
+pub use candidate::Candidate;
 pub use null::NullPolicy;
 
 /// Coarse toolkit family, for budget tuning only.

@@ -46,6 +46,28 @@ pub fn governors() -> String {
         .join(", ")
 }
 
+/// Idle states of cpu0 that are enabled and cost more than [`DEEP_IDLE_US`] to leave, e.g.
+/// `["C2_ACPI", "C3_ACPI"]`. On the development host a core that waits 0.5 ms for a reply enters
+/// C2 (127 us exit) or C3 (1 ms exit), which is what breaks the +-20 % service-time check.
+pub fn deep_idle_states() -> Vec<String> {
+    let mut v = Vec::new();
+    for i in 0..16 {
+        let d = format!("/sys/devices/system/cpu/cpu0/cpuidle/state{i}");
+        let name = read(&format!("{d}/name"));
+        if name.is_empty() {
+            break;
+        }
+        let latency: u64 = read(&format!("{d}/latency")).parse().unwrap_or(0);
+        if latency > DEEP_IDLE_US && read(&format!("{d}/disable")) != "1" {
+            v.push(name);
+        }
+    }
+    v
+}
+
+/// Exit latency above which an idle state counts as deep (H-12).
+pub const DEEP_IDLE_US: u64 = 20;
+
 /// `Cpus_allowed_list` of this process (affinity), e.g. `0-15` or `2-5`.
 pub fn cpus_allowed() -> String {
     read("/proc/self/status")
@@ -84,13 +106,19 @@ pub fn stamp() -> String {
 
 /// Is this host quiet enough for an authoritative run (H-12)? Returns the list of reasons it is
 /// not; empty means quiet.
-pub fn quiet_problems(load1: f64, governors: &str) -> Vec<String> {
+pub fn quiet_problems(load1: f64, governors: &str, deep_idle: &[String]) -> Vec<String> {
     let mut v = Vec::new();
     if load1.is_nan() || load1 >= 1.0 {
         v.push(format!("load average {load1:.2} >= 1"));
     }
     if !governors.is_empty() && !governors.split(", ").all(|g| g.starts_with("performance")) {
         v.push(format!("governor is not `performance` ({governors})"));
+    }
+    if !deep_idle.is_empty() {
+        v.push(format!(
+            "deep idle states enabled ({}), see bench/b1/quiet-host.sh",
+            deep_idle.join(", ")
+        ));
     }
     v
 }
@@ -99,7 +127,8 @@ pub fn quiet_problems(load1: f64, governors: &str) -> Vec<String> {
 pub fn meta(arms: &[(String, String)], extra: &[(&str, String)]) -> Vec<(String, String)> {
     let gov = governors();
     let load = load1();
-    let quiet = quiet_problems(load, &gov);
+    let idle = deep_idle_states();
+    let quiet = quiet_problems(load, &gov, &idle);
     let mut m: Vec<(String, String)> = vec![
         ("utc".into(), sh("date", &["-u", "+%Y-%m-%dT%H:%M:%SZ"])),
         ("host".into(), sh("uname", &["-n"])),
@@ -113,6 +142,14 @@ pub fn meta(arms: &[(String, String)], extra: &[(&str, String)]) -> Vec<(String,
         ),
         ("cpus_allowed".into(), cpus_allowed()),
         ("governor".into(), gov),
+        (
+            "deep_idle_states".into(),
+            if idle.is_empty() {
+                "none enabled".to_owned()
+            } else {
+                idle.join(", ")
+            },
+        ),
         ("loadavg_start".into(), loadavg()),
         (
             "quiet_host".into(),
@@ -167,9 +204,13 @@ mod tests {
 
     #[test]
     fn quiet_host_rules() {
-        assert!(quiet_problems(0.4, "performance x16").is_empty());
-        assert_eq!(quiet_problems(11.0, "performance x16").len(), 1);
-        assert_eq!(quiet_problems(0.2, "powersave x16").len(), 1);
-        assert_eq!(quiet_problems(f64::NAN, "").len(), 1);
+        assert!(quiet_problems(0.4, "performance x16", &[]).is_empty());
+        assert_eq!(quiet_problems(11.0, "performance x16", &[]).len(), 1);
+        assert_eq!(quiet_problems(0.2, "powersave x16", &[]).len(), 1);
+        assert_eq!(quiet_problems(f64::NAN, "", &[]).len(), 1);
+        assert_eq!(
+            quiet_problems(0.2, "performance x16", &["C3_ACPI".to_owned()]).len(),
+            1
+        );
     }
 }

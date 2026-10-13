@@ -685,6 +685,8 @@ pub struct WalkRun {
     pub start_ns: u64,
     pub end_ns: u64,
     pub steps_failed: Vec<String>,
+    /// Where-am-I demands during which the focused app served no call (B1-HIT.ancestry).
+    pub ancestry_no_ipc: u64,
 }
 
 impl WalkRun {
@@ -703,6 +705,9 @@ fn add_calls(
         *e.entry(k.clone()).or_insert(0) += v;
     }
 }
+
+/// How long the reader gets to answer a where-am-I before the app's call counters are read again.
+const WHERE_AM_I_SETTLE_MS: u64 = 80;
 
 struct Exec<'a, S: Sut + ?Sized> {
     sut: &'a mut S,
@@ -833,13 +838,22 @@ impl<S: Sut + ?Sized> Exec<'_, S> {
             Step::Focus { app, node } => self.focus(app, node, false),
             Step::World { app, cmd, tag } => self.world(app, cmd, *tag),
             Step::WhereAmI => {
+                let app = self.last_focus_app.clone();
+                let calls_before = self.sut.calls(&app).ok().map(|c| c.total_calls());
                 let t = self.sut.now_ns();
                 match self.sut.where_am_i() {
                     Ok(paths) => {
                         self.run.actual.ancestry += 1;
-                        let app = self.last_focus_app.clone();
                         for p in paths {
                             self.run.stimuli.push((t, app.clone(), p));
+                        }
+                        // Answered from memory when the app served nothing while the reader
+                        // produced the answer.
+                        self.sut.advance(WHERE_AM_I_SETTLE_MS);
+                        if let (Some(before), Ok(after)) = (calls_before, self.sut.calls(&app))
+                            && after.total_calls() <= before
+                        {
+                            self.run.ancestry_no_ipc += 1;
                         }
                     }
                     Err(e) => self.fail(format!("where-am-i: {e}")),
@@ -1025,6 +1039,9 @@ pub fn write_run_dir_opts<S: Sut + ?Sized>(
     c.insert("calls".into(), json!(by_app));
     c.insert("scripted".into(), run.scripted.to_json());
     c.insert("actual".into(), run.actual.to_json());
+    // B1-HIT.ancestry reads these two at the top level.
+    c.insert("ancestry_demands".into(), json!(run.actual.ancestry));
+    c.insert("ancestry_no_ipc".into(), json!(run.ancestry_no_ipc));
     if let (Some(a), Some(b)) = (run.mark("l3-start"), run.mark("l3-end")) {
         let storm_calls: u64 = calls
             .get("storm")

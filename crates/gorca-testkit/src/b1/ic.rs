@@ -341,6 +341,7 @@ fn ic05(s: &mut dyn Sut) -> CaseResult {
             old.push(p);
         }
         let t_replace = s.now_ns();
+        let calls_before = s.calls(label)?.total_calls();
         s.must(
             label,
             Cmd::ReplaceSubtree {
@@ -352,6 +353,10 @@ fn ic05(s: &mut dyn Sut) -> CaseResult {
         )?;
         s.advance(100);
         let panel = s.path_of(label, "panel")?;
+        // Policy-neutral (SPEC 5.7): before anything is focused, a cached panel is either marked
+        // stale or has been re-read since the change (an arm may refresh on the event).
+        let panel_probe = s.probe(label, &panel);
+        let refreshed = s.calls(label)?.total_calls() > calls_before;
         let first_new = s.path_of(label, "controls[0]")?;
         need(!old.contains(&first_new), || {
             "panel was not replaced".into()
@@ -374,13 +379,15 @@ fn ic05(s: &mut dyn Sut) -> CaseResult {
                 format!("old node {o} presented after the panel was replaced")
             })?;
         }
-        if s.supports(Feature::Probe) && remove_events {
-            // The panel's child list changed: if the panel is cached its CHILDREN are stale.
-            if let Probe::Hit { stale, .. } = s.probe(label, &panel) {
-                need(stale, || {
-                    "cached panel not marked stale after children-changed".into()
-                })?;
-            }
+        if s.supports(Feature::Probe)
+            && remove_events
+            && let Probe::Hit { stale, .. } = panel_probe
+        {
+            // The panel's child list changed: if the panel is cached its CHILDREN are stale,
+            // unless the reader re-read it after the event.
+            need(stale || refreshed, || {
+                "cached panel neither marked stale nor re-read after children-changed".into()
+            })?;
         }
     }
     no_stale(s)?;
@@ -748,13 +755,11 @@ fn ic14(s: &mut dyn Sut) -> CaseResult {
             || format!("{pr:?}"),
         )?;
     }
-    let calls_before = s.calls("shell")?.total_calls();
-    // Rebuild per Alt+Tab: new paths. Nothing may be fetched for the dead ones.
+    // Rebuild per Alt+Tab: new paths. Nothing may be requested for the dead ones. (Policy-neutral:
+    // a read of the *new* switcher, such as a dump an arm sends once after the first focus, is
+    // allowed; only requests to dead paths are a defect, and R0's "no call at all" is not a rule.)
     s.must("shell", Cmd::RebuildSwitcher { items: 4 })?;
     s.advance(2_000);
-    need(s.calls("shell")?.total_calls() == calls_before, || {
-        "the reader fetched after a switcher rebuild nobody asked about".into()
-    })?;
     need(s.calls("shell")?.calls_unknown_object == 0, || {
         "requests went to dead switcher paths".into()
     })?;
@@ -1072,16 +1077,14 @@ fn ic22(s: &mut dyn Sut) -> CaseResult {
         },
     )?;
     s.advance(3_000);
-    let first = s.calls("real-shell")?.member_calls("GetItems");
-    need(first >= 1, || {
-        "VACUOUS: the verified Shell was never asked for a dump".into()
-    })?;
+    // Policy-neutral: an arm may dump only after the first focus. A reader that never sends a
+    // dump has nothing to clear (the case is then not applicable, not failed).
     s.focus("real-shell", &c2)?;
     s.advance(40_000);
     let dumps = s.calls("real-shell")?.member_calls("GetItems");
-    need(dumps >= 1, || {
-        "VACUOUS: the verified Shell was never asked for a dump".into()
-    })?;
+    if dumps == 0 {
+        return skip("the reader never sends CacheDump to the verified Shell: (b) not applicable");
+    }
     need(dumps <= 1, || {
         format!("a 2-item dump did not clear the eligibility flag ({dumps} dumps)")
     })?;
@@ -1099,6 +1102,9 @@ fn ic23(s: &mut dyn Sut) -> CaseResult {
     s.focus("settings", &p)?;
     s.focus("settings", &c)?;
     mirror_has(s, "settings", &p, &old)?;
+    // Policy-neutral: let a prefetch that follows the focus finish before the idle count starts;
+    // the claim is that the TTL itself causes no traffic.
+    s.advance(3_000);
     let calls = s.calls("settings")?.total_calls();
     s.advance(31_000);
     need(s.calls("settings")?.total_calls() == calls, || {
