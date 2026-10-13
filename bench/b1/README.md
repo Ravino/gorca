@@ -48,13 +48,45 @@ exactly the signals gorca receives (cross-check vs `DrainStats.messages`, 1 %); 
 set it counts everything (idle calls/s, calls to the `storm` app). `msgs = 2 * calls + signals`.
 `b1 bus-probe` prints what the bus offers.
 
+## The `Candidate` hook (arms edit only their own files)
+
+`gorca_mirror::fill::Candidate` (SPEC 10) is a stand-in on `main` that behaves like R0. An arm
+**replaces `crates/gorca-mirror/src/fill/candidate.rs`** (and `candidate/**`, `fetch/strategy.rs`)
+and edits no wiring. The contract is three facts: `Candidate: FillPolicy + Default + Send +
+'static`. Everything else is harness-owned and already wired:
+
+* the daemon: `gorca --bench-fill-policy=candidate` (default `r0`; the product always runs R0);
+  `b1-walk` passes it for every arm except the one labelled `r0` (`B1_FILL_POLICY` overrides).
+  One binary therefore serves R0 and the arm, and a stand-in build must reproduce R0;
+* the step bench: `benches/step.rs` links the tree's `Candidate` through one generic adapter and
+  `driver.sh` runs it in the arm's tree (`GORCA_STEP_SUBJECT=candidate` is the default; `noop` is
+  the floor, `spin:400` the sensitivity check that must FAIL). Arms merge the harness commit;
+* the IC suite: `cargo test -p gorca-daemon --test b1_ic candidate` runs IC-1..IC-23 against
+  `Candidate`.
+
 ## Step bench (H-7)
 
 `cargo bench -p gorca-bench-b1 --bench step` (7 rounds, worst step per round, median gated at
 250 us). The inputs (65 536 nodes, dirty-all, 4 096-event batch, single event, tick) are generated
-by `step::scenarios`; the subject is a trait. Until an arm's `Candidate` exists it runs the noop
-floor (`GORCA_STEP_SUBJECT=noop`) or a deliberate overrun (`spin:400`, sensitivity: must FAIL).
-Wiring: one `impl StepSubject` in `benches/step.rs` (see the header there).
+by `step::scenarios`; the timed unit is one whole adapter step (shared invalidation plus up to six
+`policy.step` calls), a conservative reading of MA-6.
+
+## The walk against the real daemon
+
+`b1-walk` (the `B1_WALK_DRIVER`, built by `run-all.sh`) starts, inside the private session:
+the speech mock, the emulated Mutter (`tests/harness/fake_mutter.py`, `walk|big|soak` only), the
+daemon (with `--impersonate-orca` on the private bus only) and the fake apps. Two things make the
+daemon's numbers real, and a driver that forgets them silently measures nothing:
+
+* **where-am-I** presses the daemon's own chord (Insert+Tab, ADR-0005) through the emulated
+  Mutter. Its answer is one sentence, not a node presentation, so there is no presentation log
+  line; B1-HIT.ancestry is "the focused app served no call while the answer was produced".
+* **listener registration.** A GTK4 fake app emits no object event until the registry tells it an
+  AT registered (P9-1), and the registry only tells apps that are already running. The walk sends
+  `RegisterListener` to every app it starts. Without it Settings and Files swallow every state,
+  value and name event: S1 never fires and "evented" mutations behave as silent ones.
+* S1 lines are logged with source `s1`; the classifier judges them as state changes (latency =
+  fake-app emit to SPEAK) and they never answer a focus stimulus.
 
 ## R0 (H-9)
 
@@ -65,11 +97,18 @@ section 12 from `b1 baseline-md <result.json> r0`. Not runnable end to end befor
 
 ## Quiet-host recipe (H-12; authoritative runs and the reviewer's re-run)
 
-A run on a loaded host is informative only; `meta.quiet_host` records which.
+A run on a loaded host is informative only; `meta.quiet_host` records which. The strict
+service-time check (H-10(a)) needs more than the governor: deep idle states (C2 127 us, C3 1 ms
+exit on the development host) make a 0.5 ms fake service look 0.2-0.6 ms slower. Measured numbers
+in `docs/reports/2026-10-14-b1-harness-gaps.md`. `bench/b1/quiet-host.sh on|off|status` sets the
+governor and the idle states (needs sudo; `cpupower` is not installed).
 
 ```bash
 uptime                                   # load average must be < 1 before starting
-sudo cpupower frequency-set -g performance   # user runs it (sudo needs a password)
+sudo bench/b1/quiet-host.sh on           # user runs it (sudo needs a password): performance + no C2/C3
+# equivalent by hand, no script:
+#   echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
+#   for s in /sys/devices/system/cpu/cpu*/cpuidle/state[23]; do echo 1 | sudo tee $s/disable; done
 # pin the harness and the daemons to a core set; leave the rest for the fake apps and the bus:
 taskset -c 2-9 bench/b1/run-all.sh <label> --arm ...
 # stop other desktop load for the duration (browser, indexers); do not run two harnesses at once
