@@ -377,6 +377,10 @@ async fn session(
     let mut grabs = ctx.grabs.clone();
     let settle = src.settle.unwrap_or(SETTLE);
     let mut published: Option<(u32, Option<u32>)> = None;
+    // Grabbed modifiers that are down, and a grab set waiting for their release: changing the
+    // modifier grabs while one is held leaves XKB with a stuck key (P-7).
+    let mut held: Vec<u32> = Vec::new();
+    let mut deferred: Option<GrabSet> = None;
 
     let mut pending: Vec<MonitorEffect> = effects;
     loop {
@@ -406,11 +410,17 @@ async fn session(
                 if let Ok(m) = m
                     && filter.accept(m.header().sender().map(zbus::names::UniqueName::as_str))
                     && let Ok(body) = m.body().deserialize::<(bool, u32, u32, u32, u16)>()
-                    && !ctx.sink.push(decode_key_event(body))
                 {
-                    tracing::warn!("key channel full; dropped a key event");
+                    let ev = decode_key_event(body);
+                    track_held(&mut held, &state, &ev);
+                    if !ctx.sink.push(ev) {
+                        tracing::warn!("key channel full; dropped a key event");
+                    }
                 }
-                continue;
+                match take_deferred(&mut deferred, &held) {
+                    Some(set) => MonitorMsg::SetGrabSet(set),
+                    None => continue,
+                }
             }
             m = owners.next() => {
                 // Any change of the manager's owner invalidates our grabs: start over.
@@ -438,7 +448,13 @@ async fn session(
                     // The Reader side is gone: the daemon is shutting down.
                     return Ok(());
                 }
-                MonitorMsg::SetGrabSet(grabs.borrow_and_update().clone())
+                let want = grabs.borrow_and_update().clone();
+                if !held.is_empty() && modifiers_change(&state, &want) {
+                    deferred = Some(want);
+                    continue;
+                }
+                deferred = None;
+                MonitorMsg::SetGrabSet(want)
             }
             Some(m) = results.recv() => m,
             () = sleep_until(next_timer), if next_timer.is_some() => {
@@ -467,6 +483,46 @@ async fn session(
 async fn sleep_until(t: Option<tokio::time::Instant>) {
     if let Some(t) = t {
         tokio::time::sleep_until(t).await;
+    }
+}
+
+/// The modifier grabs Mutter has or is about to have.
+fn current_modifiers(state: &MonitorState) -> Option<&std::collections::HashSet<u32>> {
+    match state {
+        MonitorState::Watching {
+            grabs: GrabSetState::Committed { set, .. },
+        } => Some(&set.modifiers),
+        MonitorState::Watching {
+            grabs: GrabSetState::Pending { wanted, .. },
+        } => Some(&wanted.1.modifiers),
+        MonitorState::Unauthorized { .. }
+        | MonitorState::Authorizing { .. }
+        | MonitorState::Lost { .. } => None,
+    }
+}
+
+fn modifiers_change(state: &MonitorState, want: &GrabSet) -> bool {
+    current_modifiers(state).is_some_and(|m| *m != want.modifiers)
+}
+
+/// Remember which grabbed modifiers are down.
+fn track_held(held: &mut Vec<u32>, state: &MonitorState, ev: &KeyEvent) {
+    let grabbed = current_modifiers(state).is_some_and(|m| m.contains(&ev.keysym));
+    if ev.pressed {
+        if grabbed && !held.contains(&ev.keysym) {
+            held.push(ev.keysym);
+        }
+    } else {
+        held.retain(|k| *k != ev.keysym);
+    }
+}
+
+/// The grab set that was waiting for the modifiers to come up, once they have.
+fn take_deferred(deferred: &mut Option<GrabSet>, held: &[u32]) -> Option<GrabSet> {
+    if held.is_empty() {
+        deferred.take()
+    } else {
+        None
     }
 }
 
@@ -624,6 +680,50 @@ mod tests {
         // After a restart under a new unique name, the new owner is accepted, the old one is not.
         let mut f = SenderFilter::new(":1.42".to_owned());
         assert!(f.accept(Some(":1.42")) && !f.accept(Some(":1.7")));
+    }
+
+    #[test]
+    fn modifier_grabs_wait_for_the_modifier_to_come_up() {
+        let mut with_ins = GrabSet::default();
+        with_ins.modifiers.insert(0xff63);
+        let state = MonitorState::Watching {
+            grabs: GrabSetState::Committed {
+                generation: 1,
+                set: with_ins,
+            },
+        };
+        let ev = |sym, pressed| KeyEvent {
+            keycode: 1,
+            keysym: sym,
+            unichar: 0,
+            modifiers: Modifiers::empty(),
+            pressed,
+        };
+        let mut held = Vec::new();
+        track_held(&mut held, &state, &ev(0xff63, true));
+        track_held(&mut held, &state, &ev(0x74, true));
+        assert_eq!(held, [0xff63], "only grabbed modifiers are tracked");
+        let none = GrabSet::default();
+        assert!(
+            modifiers_change(&state, &none),
+            "pass-next-key empties the modifiers"
+        );
+        assert!(
+            !modifiers_change(
+                &state,
+                &GrabSet {
+                    grab_all: true,
+                    modifiers: [0xff63].into_iter().collect(),
+                    ..GrabSet::default()
+                }
+            ),
+            "learn mode keeps them"
+        );
+        let mut deferred = Some(none);
+        assert!(take_deferred(&mut deferred, &held).is_none());
+        track_held(&mut held, &state, &ev(0xff63, false));
+        assert!(take_deferred(&mut deferred, &held).is_some());
+        assert!(deferred.is_none());
     }
 
     #[test]

@@ -33,10 +33,13 @@ impl Default for PlatformFacts {
 }
 
 impl PlatformFacts {
-    /// An XKB option makes Caps Lock switch the layout, so it cannot also be the gorca key.
+    /// An XKB option makes Caps Lock switch the layout (`grp:*caps*`) or turns the key into
+    /// something else (`caps:*`), so it cannot also be the gorca key (U-1).
     pub fn caps_switches_layout(&self) -> bool {
-        self.options()
-            .any(|o| o.starts_with("grp:") && o.contains("caps"))
+        self.options().any(|o| {
+            ((o.starts_with("grp:") || o.starts_with("ctrl:")) && o.contains("caps"))
+                || o.starts_with("caps:")
+        })
     }
 
     /// A lone Shift tap switches the layout, so it cannot also pause speech (4.6).
@@ -351,12 +354,26 @@ mod tests {
             &Presets::builtin(),
         );
         assert_eq!(gorca_modifiers(&l2.settings, &facts).0.len(), 3);
-        // Caps remapped to Ctrl does not switch layouts.
+        // Caps remapped to something else is no gorca key either.
         let remap = PlatformFacts {
             xkb_options: "caps:ctrl_modifier".into(),
             ..PlatformFacts::default()
         };
-        assert!(!remap.caps_switches_layout());
+        assert!(remap.caps_switches_layout());
+        assert!(
+            PlatformFacts {
+                xkb_options: "ctrl:nocaps".into(),
+                ..PlatformFacts::default()
+            }
+            .caps_switches_layout()
+        );
+        assert!(
+            !PlatformFacts {
+                xkb_options: "lv3:ralt_switch".into(),
+                ..PlatformFacts::default()
+            }
+            .caps_switches_layout()
+        );
     }
 
     #[test]

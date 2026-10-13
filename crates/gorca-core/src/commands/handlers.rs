@@ -458,7 +458,7 @@ impl Reader {
         if l.caps_lock_dropped && !self.cmd.told_caps {
             self.cmd.told_caps = true;
             self.announce(
-                "Caps Lock switches keyboard layout, so the gorca key is Insert",
+                "Caps Lock is used for something else, so the gorca key is Insert",
                 fx,
             );
         }

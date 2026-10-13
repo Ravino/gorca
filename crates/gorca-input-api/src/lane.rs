@@ -29,6 +29,9 @@ pub const HELP_STALL: Duration = Duration::from_secs(1);
 /// Replica worlds kept at once (each guard-band event can double them).
 const MAX_WORLDS: usize = 8;
 const MAX_PRESS: u8 = 3;
+/// P-13: a held key produces about 35 `KeyEvent`s in 1.5 s with no repeat flag. Repeats of a
+/// command run at most this often (voice settings repeat; everything else does not repeat).
+pub const REPEAT_MIN: Duration = Duration::from_millis(120);
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum Sel {
@@ -87,6 +90,7 @@ pub struct InputLane {
     shift_armed: Option<Instant>,
     last_key_at: Instant,
     sent: u64,
+    last_repeat_run: Option<Instant>,
     stall_since: Option<Instant>,
     stats: LaneStats,
 }
@@ -111,6 +115,7 @@ impl InputLane {
             shift_armed: None,
             last_key_at: now,
             sent: 0,
+            last_repeat_run: None,
             stall_since: None,
             stats: LaneStats::default(),
         }
@@ -227,7 +232,18 @@ impl InputLane {
                 at,
             ),
         };
-        let (class, bound) = class;
+        let (mut class, bound) = class;
+        if kind == PressKind::Repeat
+            && matches!(class, KeyClass::Command(_))
+            && self
+                .last_repeat_run
+                .is_some_and(|t| at.saturating_duration_since(t) < REPEAT_MIN)
+        {
+            // Debounce: a held key must not flood the Reader and the speech lane.
+            class = KeyClass::Swallowed;
+        } else if kind == PressKind::Repeat && matches!(class, KeyClass::Command(_)) {
+            self.last_repeat_run = Some(at);
+        }
         self.track_shift(&ev, kind, at);
         self.last_key_at = at;
         if ctx.mode == ModeKind::InputHelp
@@ -366,7 +382,11 @@ impl InputLane {
     ) -> (KeyClass, Option<Bound>) {
         if is_gorca_mod {
             return (
-                if v.passed_modifier {
+                // Autorepeat of the held modifier leaks to the application (PF-5, P-13) but is
+                // not a double tap: it must not look like one, 35 times.
+                if kind == PressKind::Repeat {
+                    KeyClass::PassToApp
+                } else if v.passed_modifier {
                     KeyClass::ModifierPassThrough
                 } else if v.swallowed {
                     KeyClass::Swallowed
@@ -745,6 +765,42 @@ mod tests {
         assert_eq!(o.intent.kind, PressKind::Repeat);
         assert_eq!(o.intent.class, KeyClass::Swallowed, "not repeatable");
         assert!(!o.epoch_advanced);
+    }
+
+    #[test]
+    fn a_held_modifier_and_a_held_command_key_are_debounced() {
+        let mut r = rig();
+        let mut km = (*r.links.keymap.load_full()).clone();
+        km.insert(
+            TableKind::Global,
+            ck(KC_A, true),
+            1,
+            Some(Bound {
+                repeatable: true,
+                ..bound(5).unwrap()
+            }),
+        );
+        r.links.keymap.store(Arc::new(km));
+        r.class(KC_INS, INS, true, 1000);
+        // About 35 repeats of Insert in 1.5 s: never a double tap, never an interrupt.
+        let e = r.epoch.current();
+        for i in 0..35 {
+            let o = r.key(KC_INS, INS, true, 1500 + i * 40, Modifiers::empty());
+            assert_eq!(o.intent.kind, PressKind::Repeat);
+            assert_eq!(o.intent.class, KeyClass::PassToApp);
+            assert!(!o.epoch_advanced);
+        }
+        assert_eq!(r.epoch.current(), e);
+        // A repeatable command held at 30 Hz runs about every 120 ms, not on every event.
+        assert_eq!(r.class(KC_A, A, true, 3000), KeyClass::Command(CmdId(5)));
+        let runs = (1..=30)
+            .filter(|i| matches!(r.class(KC_A, A, true, 3000 + i * 33), KeyClass::Command(_)))
+            .count();
+        assert!((6..=9).contains(&runs), "{runs}");
+        // A command that does not repeat is never repeated.
+        r.class(KC_A, A, false, 4100);
+        r.class(KC_T, T, true, 4200);
+        assert!((1..=10).all(|i| r.class(KC_T, T, true, 4200 + i * 33) == KeyClass::Swallowed));
     }
 
     #[test]
