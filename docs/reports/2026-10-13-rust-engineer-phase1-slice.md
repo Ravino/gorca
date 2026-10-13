@@ -90,3 +90,26 @@ Eviction policy at the 512-application cap (`State::pick_victim`, documented in 
    slots free up. The shell is never refused.
 4. Refusals, evictions and name-cap hits are temporary (backoff, never cached); an evicted
    application's closed ingress makes the drain forget its cached route, so it re-registers.
+
+## Live-test fix: GNOME Shell Alt+Tab and key echo
+- Shell emits, per Alt+Tab move, only `object:state-changed:selected` (detail1 0 on the old item,
+  1 on the new one), from `check_pseudo_class` in `refs/gnome-shell/src/st/st-widget.c`
+  (switcherPopup.js `highlight()` toggles the `selected` pseudo-class). St has no Selection
+  interface and the items never take key focus. Orca's gnome-shell script treats `selected(1)`
+  as a focus move for the same reason (`scripts/apps/gnome-shell/script.py`).
+- gorca mapped that event to `PropertiesChanged{STATES}` and dropped it, so only focus-bearing
+  events spoke. Now `selected(1)` carries `PropMask::SELECTED_NOW`, the drain records the object
+  path for it (`gorca_dbus::drain::needs_path`), the app actor forwards the newest one of a
+  batch as `FocusLaneMsg::ItemSelected` when the app's `AppProfile.speak_selection` is set
+  (built-in, `app_name == gnome-shell`), and the Reader presents it without "selected" and
+  without moving the focus protection.
+- Key echo (`presenter::key_echo_text`): nothing under Alt/Ctrl/Super, navigation keys silent,
+  action keys (enter, tab, backspace, escape, delete), function keys and characters echoed.
+  Lone modifier keys stay silent (Orca echoes them by default; deliberate deviation).
+- The echo's epoch is the key press's, so the selection/focus speech that follows (higher epoch)
+  makes the lane drop it as stale.
+- Tests: `every_selection_move_in_a_shell_style_switcher_is_spoken`,
+  `alt_tab_in_the_switcher_speaks_windows_and_never_echoes_tab` (e2e, fakeapp `switcher`).
+- Not observed live: the exact event stream was derived from source, not captured (needs a
+  person pressing Alt+Tab). Why the first two moves did speak before the fix is unexplained;
+  likely focus/window events around popup creation.

@@ -155,6 +155,28 @@ fn non_negative(v: i32) -> u32 {
     u32::try_from(v).unwrap_or(0)
 }
 
+/// Events whose node the core may have to call later, so the connector must remember the object
+/// path behind the hashed [`LocalId`]: a focus change, and an item that just became selected
+/// (spoken for applications whose profile says so). Rare, unlike text or property noise.
+pub fn needs_path(ev: &NodeEvent) -> Option<NodeKey> {
+    match ev {
+        NodeEvent::FocusChanged { node } => Some(*node),
+        NodeEvent::PropertiesChanged { node, mask } if mask.contains(PropMask::SELECTED_NOW) => {
+            Some(*node)
+        }
+        NodeEvent::ActiveDescendantChanged { .. }
+        | NodeEvent::PropertiesChanged { .. }
+        | NodeEvent::ChildrenChanged { .. }
+        | NodeEvent::TextChanged { .. }
+        | NodeEvent::CaretMoved { .. }
+        | NodeEvent::SelectionChanged { .. }
+        | NodeEvent::Announcement { .. }
+        | NodeEvent::WindowEvent { .. }
+        | NodeEvent::DocumentEvent { .. }
+        | NodeEvent::NodeRemoved { .. } => None,
+    }
+}
+
 /// Map one signal. Appends zero, one or two events to `out`; `Ok` with nothing appended means
 /// "valid but not interesting". The caller has already resolved `app` from the sender.
 pub fn map_signal(
@@ -176,6 +198,12 @@ pub fn map_signal(
             match (h.detail, h.d1) {
                 ("focused", 1) => out.push(NodeEvent::FocusChanged { node }),
                 ("defunct", 1) => out.push(NodeEvent::NodeRemoved { node }),
+                // GNOME Shell's Alt+Tab switcher moves a `selected` pseudo-class between items
+                // and emits nothing else (St has no Selection interface).
+                ("selected", 1) => out.push(NodeEvent::PropertiesChanged {
+                    node,
+                    mask: PropMask::STATES | PropMask::SELECTED_NOW,
+                }),
                 _ => out.push(NodeEvent::PropertiesChanged {
                     node,
                     mask: PropMask::STATES,
@@ -346,6 +374,33 @@ mod tests {
         let c = run("org.a11y.atspi.Event.Focus", "Focus", "/x/1", &b);
         assert!(matches!(a[0], NodeEvent::FocusChanged { .. }));
         assert!(matches!(c[0], NodeEvent::FocusChanged { .. }));
+    }
+
+    #[test]
+    fn selected_state_becomes_a_selection_hint_only_when_set() {
+        let on = body("selected", 1, 0, "i", &0i32.to_le_bytes());
+        let off = body("selected", 0, 0, "i", &0i32.to_le_bytes());
+        let a = run("org.a11y.atspi.Event.Object", "StateChanged", "/x/1", &on);
+        let b = run("org.a11y.atspi.Event.Object", "StateChanged", "/x/1", &off);
+        assert!(matches!(
+            a[0],
+            NodeEvent::PropertiesChanged { mask, .. } if mask.contains(PropMask::SELECTED_NOW)
+        ));
+        assert!(matches!(
+            b[0],
+            NodeEvent::PropertiesChanged { mask, .. } if mask == PropMask::STATES
+        ));
+    }
+
+    #[test]
+    fn only_focus_and_new_selection_need_a_remembered_path() {
+        let on = body("selected", 1, 0, "i", &0i32.to_le_bytes());
+        let off = body("selected", 0, 0, "i", &0i32.to_le_bytes());
+        let f = body("focused", 1, 0, "i", &0i32.to_le_bytes());
+        let ev = |b: &[u8]| run("org.a11y.atspi.Event.Object", "StateChanged", "/x/1", b);
+        assert!(needs_path(&ev(&on)[0]).is_some());
+        assert!(needs_path(&ev(&f)[0]).is_some());
+        assert!(needs_path(&ev(&off)[0]).is_none());
     }
 
     #[test]

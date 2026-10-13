@@ -17,10 +17,11 @@ use std::time::Instant;
 use gorca_connector_api::AppControl;
 use gorca_ingress::{DirtySet, IngressReceiver};
 use gorca_mirror::MirrorWriter;
-use gorca_model::{AppId, AppLifecycle, NodeEvent, NodeKey};
+use gorca_model::{AppId, AppLifecycle, NodeEvent, NodeKey, PropMask};
 use gorca_rt::mpsc;
 use smallvec::SmallVec;
 
+use crate::builtin_ext::AppProfile;
 use crate::health::{AppHealth, HealthEffect, HealthMsg, HealthStepCtx};
 use crate::reader::{BackgroundMsg, FocusLaneMsg};
 
@@ -61,6 +62,7 @@ pub struct AppActor {
     /// A control message taken by [`AppActor::ready`], handled first by the next pump.
     pending_control: Option<AppControl>,
     control_closed: bool,
+    profile: AppProfile,
 }
 
 impl AppActor {
@@ -82,7 +84,13 @@ impl AppActor {
             pending_focus: None,
             pending_control: None,
             control_closed: false,
+            profile: AppProfile::default(),
         }
+    }
+
+    /// The per-application behaviour chosen when the app announced itself.
+    pub fn profile(&self) -> AppProfile {
+        self.profile
     }
 
     /// Resolves when a [`pump`](Self::pump) has something to do: events were pushed into an
@@ -176,7 +184,28 @@ impl AppActor {
                 }
             }
         }
-        for ev in drained.events {
+        // Only the newest "became selected" of a batch is worth speaking: the older ones are
+        // superseded before the user could hear them (stale speech never starts).
+        let last_selected = if self.profile.speak_selection {
+            drained.events.iter().rposition(became_selected)
+        } else {
+            None
+        };
+        for (i, ev) in drained.events.into_iter().enumerate() {
+            if became_selected(&ev) {
+                if Some(i) == last_selected
+                    && let NodeEvent::PropertiesChanged { node, .. } = ev
+                {
+                    if self.send_focus(FocusLaneMsg::ItemSelected { node }) {
+                        route.forwarded_to_focus_lane += 1;
+                    } else {
+                        self.resync_needed = true;
+                    }
+                } else {
+                    self.resync_needed = true;
+                }
+                continue;
+            }
             self.route(ev, &mut route);
         }
         route
@@ -195,7 +224,10 @@ impl AppActor {
                     self.send_focus(FocusLaneMsg::AppGone(self.app));
                     route.gone = true;
                 }
-                Ok(AppControl::Lifecycle(AppLifecycle::Appeared(_) | AppLifecycle::Ready)) => {}
+                Ok(AppControl::Lifecycle(AppLifecycle::Appeared(info))) => {
+                    self.profile = AppProfile::for_app(&info);
+                }
+                Ok(AppControl::Lifecycle(AppLifecycle::Ready)) => {}
                 Err(_) => break,
             }
         }
@@ -247,6 +279,11 @@ impl AppActor {
             self.resync_needed = true;
         }
     }
+}
+
+/// `state-changed:selected(1)`, as the connector flags it.
+fn became_selected(ev: &NodeEvent) -> bool {
+    matches!(ev, NodeEvent::PropertiesChanged { mask, .. } if mask.contains(PropMask::SELECTED_NOW))
 }
 
 #[cfg(test)]
@@ -447,5 +484,50 @@ mod tests {
             Some(crate::reader::ReaderMsg::Focus(FocusLaneMsg::AppHung(_)))
         ));
         assert!(r.inbox.poll().is_none());
+    }
+
+    fn shell_info() -> gorca_model::AppInfo {
+        gorca_model::AppInfo {
+            toolkit: Arc::from("clutter"),
+            app_name: Arc::from("gnome-shell"),
+            pid: None,
+            connector_kind: gorca_model::ConnectorKind::Atspi,
+        }
+    }
+
+    fn selected(n: u64) -> NodeEvent {
+        NodeEvent::PropertiesChanged {
+            node: key(n),
+            mask: PropMask::STATES | PropMask::SELECTED_NOW,
+        }
+    }
+
+    #[test]
+    fn the_shell_forwards_only_the_newest_selection_of_a_batch() {
+        let mut r = rig(IngressConfig::default());
+        r.port
+            .lifecycle(AppLifecycle::Appeared(shell_info()))
+            .unwrap();
+        r.port.push(selected(1));
+        r.port.push(selected(2));
+        r.port.push(selected(3));
+        let route = r.actor.pump(Instant::now());
+        assert!(r.actor.profile().speak_selection);
+        assert_eq!(route.forwarded_to_focus_lane, 1);
+        assert!(matches!(
+            r.inbox.poll(),
+            Some(crate::reader::ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node })) if node == key(3)
+        ));
+        assert!(r.inbox.poll().is_none());
+    }
+
+    #[test]
+    fn other_apps_never_speak_selection() {
+        let mut r = rig(IngressConfig::default());
+        r.port.push(selected(1));
+        let route = r.actor.pump(Instant::now());
+        assert_eq!(route.forwarded_to_focus_lane, 0);
+        assert!(r.inbox.poll().is_none());
+        assert!(r.actor.resync_needed());
     }
 }

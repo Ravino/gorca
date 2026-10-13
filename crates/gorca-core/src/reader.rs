@@ -21,7 +21,9 @@ use smallvec::SmallVec;
 use crate::directory::MirrorDirectory;
 use crate::focus::{FocusEffect, FocusMsg, FocusState, settle_delay};
 use crate::mode::{Mode, ModeEffect, ModeKeys, ModeMsg};
-use crate::presenter::{SpeechIntent, key_echo, key_echo_text, message, present_focus};
+use crate::presenter::{
+    SpeechIntent, key_echo, key_echo_text, message, present_focus, present_selected_item,
+};
 
 /// Bounds from section 6.2.
 const KEY_QUEUE: usize = 64;
@@ -37,7 +39,15 @@ pub const DUPLICATE_FOCUS_WINDOW: std::time::Duration = std::time::Duration::fro
 
 #[derive(Clone, Copy, Debug)]
 pub enum FocusLaneMsg {
-    FocusChanged { node: NodeKey },
+    FocusChanged {
+        node: NodeKey,
+    },
+    /// An item became selected in an application whose profile speaks selection moves (GNOME
+    /// Shell's Alt+Tab switcher). Handled like a focus change, except that it never touches
+    /// the focused-application protection: the item does not hold real focus.
+    ItemSelected {
+        node: NodeKey,
+    },
     NodeRemoved(NodeKey),
     AppGone(AppId),
     AppHung(AppId),
@@ -172,6 +182,8 @@ pub struct Reader {
     stale_replies_dropped: u64,
     duplicate_focus_dropped: u64,
     last_focus: Option<(NodeKey, Instant)>,
+    /// The node of the latest `ItemSelected`, until a real focus change replaces it.
+    selection_node: Option<NodeKey>,
     focused_app: Option<Arc<FocusedApp>>,
 }
 
@@ -188,6 +200,7 @@ impl Reader {
             stale_replies_dropped: 0,
             duplicate_focus_dropped: 0,
             last_focus: None,
+            selection_node: None,
             focused_app: None,
         }
     }
@@ -264,7 +277,11 @@ impl Reader {
             KeyClass::Ambiguous { .. } => self.ambiguous_keys += 1,
             KeyClass::PassToApp => {
                 if intent.event.pressed
-                    && let Some(text) = key_echo_text(intent.event.unichar, intent.event.keysym)
+                    && let Some(text) = key_echo_text(
+                        intent.event.unichar,
+                        intent.event.keysym,
+                        intent.event.modifiers,
+                    )
                 {
                     let id = self.utt_id();
                     let u = key_echo(&text, id, intent.epoch);
@@ -291,26 +308,12 @@ impl Reader {
     fn on_focus(&mut self, f: FocusLaneMsg, now: Instant, fx: &mut ReaderEffects) {
         match f {
             FocusLaneMsg::FocusChanged { node } => {
-                if let Some((last, at)) = self.last_focus
-                    && last == node
-                    && now.saturating_duration_since(at) < DUPLICATE_FOCUS_WINDOW
-                {
-                    self.duplicate_focus_dropped += 1;
-                    return;
-                }
-                self.last_focus = Some((node, now));
-                // The epoch advances first, so stale speech cancels now, not after δ (E-2).
-                let epoch = self.epoch.advance();
-                let role = self.dir.lookup(node).hit().map(|n| n.role);
-                let until = now + settle_delay(role);
-                self.apply_focus(FocusMsg::FocusChanged { node, epoch, until }, fx);
-                if let FocusState::Settling { until, .. } = self.focus {
-                    if until <= now {
-                        self.apply_focus(FocusMsg::TimerElapsed { now }, fx);
-                    } else {
-                        fx.push(ReaderEffect::ArmTimer(until));
-                    }
-                }
+                self.selection_node = None;
+                self.begin_focus(node, now, fx);
+            }
+            FocusLaneMsg::ItemSelected { node } => {
+                self.selection_node = Some(node);
+                self.begin_focus(node, now, fx);
             }
             FocusLaneMsg::NodeRemoved(n) => self.apply_focus(FocusMsg::NodeRemoved(n), fx),
             FocusLaneMsg::AppGone(a) => {
@@ -320,6 +323,29 @@ impl Reader {
                 self.apply_focus(FocusMsg::AppGone(a), fx);
             }
             FocusLaneMsg::AppHung(a) => self.apply_focus(FocusMsg::AppHung(a), fx),
+        }
+    }
+
+    fn begin_focus(&mut self, node: NodeKey, now: Instant, fx: &mut ReaderEffects) {
+        if let Some((last, at)) = self.last_focus
+            && last == node
+            && now.saturating_duration_since(at) < DUPLICATE_FOCUS_WINDOW
+        {
+            self.duplicate_focus_dropped += 1;
+            return;
+        }
+        self.last_focus = Some((node, now));
+        // The epoch advances first, so stale speech cancels now, not after δ (E-2).
+        let epoch = self.epoch.advance();
+        let role = self.dir.lookup(node).hit().map(|n| n.role);
+        let until = now + settle_delay(role);
+        self.apply_focus(FocusMsg::FocusChanged { node, epoch, until }, fx);
+        if let FocusState::Settling { until, .. } = self.focus {
+            if until <= now {
+                self.apply_focus(FocusMsg::TimerElapsed { now }, fx);
+            } else {
+                fx.push(ReaderEffect::ArmTimer(until));
+            }
         }
     }
 
@@ -365,12 +391,19 @@ impl Reader {
         match effect {
             Some(FocusEffect::Speak { epoch, .. }) => {
                 let id = self.utt_id();
-                let u = present_focus(snap, id, epoch);
+                let u = if self.selection_node == Some(snap.key) {
+                    present_selected_item(snap, id, epoch)
+                } else {
+                    present_focus(snap, id, epoch)
+                };
                 fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
                 // Protection from eviction is earned only here: the focus passed the state
                 // machine, was presented, and the fetched node itself shows `FOCUSED`. A focus
                 // event alone, from any application, proves nothing.
-                if let Some(f) = &self.focused_app {
+                if self.selection_node == Some(snap.key) {
+                    // A selected item in a switcher: not real focus, so the protection of the
+                    // application that does hold focus stays as it is.
+                } else if let Some(f) = &self.focused_app {
                     if snap.states.contains(StateSet::FOCUSED)
                         && !snap.states.contains(StateSet::DEFUNCT)
                     {
@@ -671,6 +704,108 @@ mod tests {
             .reader
             .handle(ReaderMsg::Key(intent(false)), Instant::now());
         assert!(fx.is_empty(), "releases are silent");
+    }
+
+    fn selected_snap(n: u64, name: &str) -> Arc<NodeSnapshot> {
+        let mut s = (*snap(n, Role::Button, name)).clone();
+        s.states = StateSet::SELECTED;
+        Arc::new(s)
+    }
+
+    fn press(keysym: u32, modifiers: Modifiers, epoch: u64) -> ReaderMsg {
+        ReaderMsg::Key(KeyIntent {
+            event: KeyEvent {
+                keycode: 23,
+                keysym,
+                unichar: 0,
+                modifiers,
+                pressed: true,
+            },
+            class: KeyClass::PassToApp,
+            epoch: Epoch(epoch),
+        })
+    }
+
+    /// The Alt+Tab switcher: every move to a new item is spoken, however many there are, and
+    /// each move cancels the speech before it. The Tab presses themselves are silent.
+    #[test]
+    fn every_switcher_selection_is_spoken_and_alt_tab_is_not_echoed() {
+        let mut f = fixture();
+        let names = ["Terminal", "Files", "Firefox", "Settings", "Terminal"];
+        let ids = [1u64, 2, 3, 4, 1];
+        f.writer.apply(SnapshotBatch {
+            nodes: vec![
+                selected_snap(1, "Terminal"),
+                selected_snap(2, "Files"),
+                selected_snap(3, "Firefox"),
+                selected_snap(4, "Settings"),
+            ],
+        });
+        let mut now = Instant::now();
+        let mut last_epoch = f.epoch.current();
+        for (i, (name, id)) in names.iter().zip(ids).enumerate() {
+            let tab = f.reader.handle(press(0xff09, Modifiers::MOD1, 0), now);
+            assert!(tab.is_empty(), "Alt+Tab press {i} is not echoed");
+            now += std::time::Duration::from_millis(40);
+            let fx = f.reader.handle(
+                ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node: key(id) }),
+                now,
+            );
+            assert_eq!(spoken(&fx), [format!("{name} button")], "selection {i}");
+            let ReaderEffect::Speak(s) = &fx[0] else {
+                panic!("expected speech")
+            };
+            assert!(
+                s.utterance.epoch > last_epoch,
+                "each move supersedes the last"
+            );
+            last_epoch = s.utterance.epoch;
+        }
+    }
+
+    /// A key echo is never newer than the semantic speech it precedes: the focus or selection
+    /// that follows advances the epoch past the echo's, so the speech lane drops the echo.
+    #[test]
+    fn selection_speech_outranks_the_echo_of_the_key_that_caused_it() {
+        let mut f = fixture();
+        f.writer.apply(SnapshotBatch {
+            nodes: vec![selected_snap(1, "Files")],
+        });
+        let now = Instant::now();
+        let echo = f.reader.handle(press(0xff09, Modifiers::empty(), 5), now);
+        let ReaderEffect::Speak(e) = &echo[0] else {
+            panic!("a bare Tab is echoed")
+        };
+        let fx = f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node: key(1) }),
+            now,
+        );
+        let ReaderEffect::Speak(s) = &fx[0] else {
+            panic!("expected speech")
+        };
+        assert!(s.utterance.epoch > e.utterance.epoch);
+        assert!(
+            !e.utterance.is_valid(f.epoch.current()),
+            "the echo is stale once the selection is spoken"
+        );
+        assert!(s.utterance.is_valid(f.epoch.current()));
+    }
+
+    /// A selected item is not real focus: it must not move the eviction protection.
+    #[test]
+    fn item_selection_leaves_focus_protection_alone() {
+        let mut f = fixture();
+        let published = Arc::new(FocusedApp::new());
+        f.reader.focused_app = Some(Arc::clone(&published));
+        f.writer.apply(SnapshotBatch {
+            nodes: vec![selected_snap(1, "Files")],
+        });
+        let before = published.generation();
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node: key(1) }),
+            Instant::now(),
+        );
+        assert_eq!(published.generation(), before);
     }
 
     /// Eviction immunity is earned by an accepted, presented, validated focus only.

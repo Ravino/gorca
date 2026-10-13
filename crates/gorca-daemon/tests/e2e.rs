@@ -91,6 +91,23 @@ async fn wait_text(server: &MockSpeechServer, text: &str, timeout: Duration) -> 
     None
 }
 
+/// Like [`wait_text`], but only over what was spoken after the first `mark` utterances.
+async fn wait_text_since(
+    server: &MockSpeechServer,
+    mark: usize,
+    text: &str,
+    timeout: Duration,
+) -> bool {
+    let t0 = Instant::now();
+    while t0.elapsed() < timeout {
+        if server.spoken().iter().skip(mark).any(|t| t.trim() == text) {
+            return true;
+        }
+        tokio::time::sleep(Duration::from_millis(3)).await;
+    }
+    false
+}
+
 /// Wait until the daemon is really up (speech connected, drain subscribed, app announced):
 /// focus `node` until `server` has heard something. Events sent before the drain's match rules
 /// are installed are lost by design, so a fixed sleep would be a race on a loaded machine.
@@ -411,6 +428,172 @@ fn key_presses_are_echoed_through_the_orca_keyboard_monitor_name() {
         let stats = mutter.cmd("\"cmd\":\"stats\"").unwrap();
         assert!(stats.contains("\"denied\":0"), "{stats}");
 
+        token.cancel();
+        let r = tokio::time::timeout(Duration::from_secs(10), join).await;
+        assert!(matches!(r, Ok(Ok(Ok(())))), "{r:?}");
+    });
+}
+
+const SWITCHER: [&str; 6] = [
+    "Terminal",
+    "Files",
+    "Firefox",
+    "Settings",
+    "Calculator",
+    "Text Editor",
+];
+
+/// Select items of the fake switcher alternately until the daemon speaks one: the profile of
+/// the application and the drain's subscriptions are then both in place.
+async fn prime_switcher(app: &mut FakeApp, server: &MockSpeechServer) {
+    let deadline = Instant::now() + Duration::from_secs(25);
+    let mark = server.spoken().len();
+    let mut flip = false;
+    loop {
+        flip = !flip;
+        app.select(if flip { SWITCHER[0] } else { SWITCHER[1] })
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        if server
+            .spoken()
+            .iter()
+            .skip(mark)
+            .any(|t| t.trim().ends_with(", button"))
+        {
+            return;
+        }
+        assert!(Instant::now() < deadline, "the daemon never became ready");
+    }
+}
+
+/// GNOME Shell's Alt+Tab switcher only moves `state-changed:selected`: every move must be
+/// spoken, not just the first couple (the live-test bug), including coming back to an item.
+#[test]
+fn every_selection_move_in_a_shell_style_switcher_is_spoken() {
+    let Some(session) = session() else { return };
+    run(async {
+        let voicego = MockSpeechServer::start_voicego(&sock_dir(&session, "v"))
+            .await
+            .unwrap();
+        let ssip_path = sock_dir(&session, "s").join("none.sock");
+        let mut app = FakeApp::start(
+            &session,
+            &["--scenario", "switcher", "--name", "gnome-shell"],
+        )
+        .unwrap();
+        let d = Daemon::start(
+            &session,
+            SpeechMode::Voicego,
+            voicego.socket_path(),
+            &ssip_path,
+        );
+        prime_switcher(&mut app, &voicego).await;
+
+        // Two laps over the list, at a pace faster than a person can press Tab.
+        let mut order: Vec<&str> = SWITCHER.to_vec();
+        order.extend(SWITCHER);
+        for name in order {
+            // The last priming selection may still be on this item; step off it first.
+            app.select(if name == SWITCHER[1] {
+                SWITCHER[2]
+            } else {
+                SWITCHER[1]
+            })
+            .unwrap();
+            tokio::time::sleep(Duration::from_millis(170)).await;
+            let mark = voicego.spoken().len();
+            app.select(name).unwrap();
+            let said = format!("{name}, button");
+            assert!(
+                wait_text_since(&voicego, mark, &said, Duration::from_secs(5)).await,
+                "`{said}` not spoken; got {:?}",
+                &voicego.spoken()[mark..]
+            );
+        }
+        assert!(
+            voicego.spoken().iter().all(|t| !t.contains("selected")),
+            "being selected is not announced: {:?}",
+            voicego.spoken()
+        );
+        drop(app);
+        d.stop().await;
+    });
+}
+
+/// Alt+Tab: the Tab presses are not echoed (a held Alt makes it a command), and the item the
+/// switcher moves to is spoken after every press.
+#[test]
+fn alt_tab_in_the_switcher_speaks_windows_and_never_echoes_tab() {
+    let Some(session) = session() else { return };
+    run(async {
+        let voicego = MockSpeechServer::start_voicego(&sock_dir(&session, "v"))
+            .await
+            .unwrap();
+        let ssip_path = sock_dir(&session, "s").join("none.sock");
+        let mut mutter = FakeApp::start_mutter(&session).unwrap();
+        let mut app = FakeApp::start(
+            &session,
+            &["--scenario", "switcher", "--name", "gnome-shell"],
+        )
+        .unwrap();
+        let opts = Options {
+            speech: SpeechMode::Voicego,
+            impersonate_orca: true,
+            no_keyboard: false,
+            ..Options::isolated(
+                session.a11y_address(),
+                session.session_address(),
+                voicego.socket_path(),
+                &ssip_path,
+            )
+        };
+        let token = CancellationToken::new();
+        let join = tokio::spawn(run_with(opts, token.clone()));
+
+        // Both the keyboard source and the switcher profile must be live.
+        let deadline = Instant::now() + Duration::from_secs(25);
+        while wait_text(&voicego, "a", Duration::from_millis(300))
+            .await
+            .is_none()
+        {
+            mutter.key(38, 0x61, 0x61).unwrap();
+            assert!(Instant::now() < deadline, "no key echo");
+        }
+        prime_switcher(&mut app, &voicego).await;
+        // Park the selection on an item the loop below does not start with.
+        app.select(SWITCHER[5]).unwrap();
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let mark = voicego.spoken().len();
+
+        // Alt is held (modifier mask 8); each Tab moves the selection a bit later, the way the
+        // key reaches Shell after gorca saw it. Shift+Alt+Tab goes backwards.
+        for (i, name) in SWITCHER.iter().enumerate() {
+            let state = if i % 2 == 0 { 8 } else { 8 | 1 };
+            mutter.key_with_state(23, 0xff09, 0, state).unwrap();
+            tokio::time::sleep(Duration::from_millis(30)).await;
+            app.select(name).unwrap();
+            let said = format!("{name}, button");
+            assert!(
+                wait_text_since(&voicego, mark, &said, Duration::from_secs(5)).await,
+                "`{said}` not spoken; got {:?}",
+                &voicego.spoken()[mark..]
+            );
+            tokio::time::sleep(Duration::from_millis(170)).await;
+        }
+        let after: Vec<String> = voicego.spoken()[mark..].to_vec();
+        assert!(
+            after.iter().all(|t| t.trim() != "tab"),
+            "Tab under Alt must not be echoed: {after:?}"
+        );
+        // A bare Tab is still echoed (Orca's action-key default).
+        mutter.key(23, 0xff09, 0).unwrap();
+        assert!(
+            wait_text_since(&voicego, mark, "tab", Duration::from_secs(5)).await,
+            "{:?}",
+            &voicego.spoken()[mark..]
+        );
+
+        drop(app);
         token.cancel();
         let r = tokio::time::timeout(Duration::from_secs(10), join).await;
         assert!(matches!(r, Ok(Ok(Ok(())))), "{r:?}");
