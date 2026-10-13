@@ -77,6 +77,9 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 # Configuration files (ADR-0005): format-preserving parse and save, no serde.
 toml_edit = { version = "0.25", default-features = false, features = ["parse", "display"] }
 
+# inotify for the settings file watcher (daemon only).
+inotify = { version = "0.11", default-features = false, features = ["stream"] }
+
 # Tooling and tests.
 cargo_metadata = "0.23"
 criterion = { version = "0.8", default-features = false }

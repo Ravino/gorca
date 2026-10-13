@@ -245,7 +245,13 @@ impl CmdState {
             pass_deadline: None,
             links: None,
             clock: Arc::new(SystemWallClock),
-            sent_levels: None,
+            // The speech service starts at its own defaults, which are the schema defaults: only
+            // a different value needs to be sent.
+            sent_levels: Some(VoiceLevels {
+                rate: 50,
+                pitch: 50,
+                volume: 100,
+            }),
             told_held: false,
             told_lost: false,
             told_caps: false,

@@ -3,6 +3,8 @@
 
 use std::path::PathBuf;
 
+use crate::platform::PlatformOverrides;
+
 /// Which speech backends may be used (`--speech`).
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub enum SpeechMode {
@@ -15,6 +17,7 @@ pub enum SpeechMode {
     Ssip,
 }
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Options {
     pub speech: SpeechMode,
@@ -34,11 +37,28 @@ pub struct Options {
     /// Extra uids whose speech server is trusted (`--speech-peer-uid`, repeatable). By default
     /// only a server running as our own user is used, because everything read is sent to it.
     pub speech_peer_uids: Vec<u32>,
+    /// The settings file. `None`: built-in defaults, nothing is read, watched or saved.
+    pub config_path: Option<PathBuf>,
+    /// Do not run `gsettings` to learn the desktop's repeat delay, XKB options and clock format.
+    pub no_probe: bool,
+    /// Desktop facts given from outside (flags and environment), replacing the probe.
+    pub platform: PlatformOverrides,
+}
+
+/// `gorca config ...`: tools around the settings file (ADR-0005 7.4, CV-3).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ConfigCmd {
+    /// Print the diagnostics of a file (the default path when none is given); exit non-zero if
+    /// there are any. The only place where a bad file is an error.
+    Check(Option<PathBuf>),
+    /// Print the built-in defaults as TOML.
+    Defaults,
 }
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Parsed {
     Run(Options),
+    Config(ConfigCmd),
     Help,
 }
 
@@ -60,6 +80,8 @@ pub const USAGE: &str = "\
 gorca - a screen reader for Linux
 
 USAGE: gorca [OPTIONS]
+       gorca config check [PATH]   report problems in a settings file (exit 1 if any)
+       gorca config defaults       print the default settings
 
 OPTIONS:
     --speech=voicego|ssip|auto   speech backend (default: auto = voicego, then speech-dispatcher)
@@ -73,6 +95,8 @@ OPTIONS:
     --speech-peer-uid=UID        also trust a speech server running as UID (repeatable; default:
                                  only our own user)
     --no-enable                  do not set org.a11y.Status IsEnabled/ScreenReaderEnabled
+    --config=PATH                settings file (default: $XDG_CONFIG_HOME/gorca/gorca.toml)
+    --no-probe                   do not ask gsettings about the keyboard and clock
     -h, --help                   print this help
 ";
 
@@ -87,6 +111,9 @@ impl Options {
     ///   the session bus and the default speech sockets.
     /// - `GORCA_SPEECH_BACKEND=voicego|ssip`: backend, unless `--speech` was given.
     /// - `GORCA_SPEECH_SOCKET`: socket of the selected backend instead of its default.
+    /// - `GORCA_CONFIG`, `XDG_CONFIG_HOME`, `HOME`: the settings file.
+    /// - `GORCA_REPEAT_DELAY_MS`, `GORCA_XKB_OPTIONS`, `GORCA_CLOCK_24H`: desktop facts that
+    ///   replace the `gsettings` probe (the e2e harness and tests use them).
     #[must_use]
     pub fn with_env(self, get: impl Fn(&str) -> Option<String>) -> Self {
         let mut o = self;
@@ -132,6 +159,30 @@ impl Options {
         if o.session_address.is_none() {
             o.session_address = get("DBUS_SESSION_BUS_ADDRESS").filter(|s| !s.is_empty());
         }
+        if o.config_path.is_none() {
+            o.config_path = get("GORCA_CONFIG")
+                .filter(|s| !s.is_empty())
+                .map(PathBuf::from)
+                .or_else(|| {
+                    get("XDG_CONFIG_HOME")
+                        .filter(|s| !s.is_empty())
+                        .map(|d| PathBuf::from(d).join("gorca/gorca.toml"))
+                })
+                .or_else(|| {
+                    get("HOME")
+                        .filter(|s| !s.is_empty())
+                        .map(|d| PathBuf::from(d).join(".config/gorca/gorca.toml"))
+                });
+        }
+        if let Some(v) = get("GORCA_REPEAT_DELAY_MS").and_then(|v| v.parse().ok()) {
+            o.platform.repeat_delay_ms = Some(v);
+        }
+        if let Some(v) = get("GORCA_XKB_OPTIONS") {
+            o.platform.xkb_options = Some(v);
+        }
+        if let Some(v) = get("GORCA_CLOCK_24H") {
+            o.platform.clock_24h = Some(v != "0");
+        }
         o
     }
 
@@ -146,6 +197,7 @@ impl Options {
     ) -> Self {
         Self {
             no_keyboard: true,
+            no_probe: true,
             a11y_address: Some(a11y_address.to_owned()),
             session_address: Some(session_address.to_owned()),
             voicego_socket: Some(voicego_socket.to_owned()),
@@ -158,7 +210,18 @@ impl Options {
 /// Parse `args` (without the program name).
 pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError> {
     let mut opts = Options::default();
-    let mut it = args.into_iter();
+    let mut it = args.into_iter().peekable();
+    if it.peek().is_some_and(|a| a == "config") {
+        it.next();
+        return match (it.next().as_deref(), it.next(), it.next()) {
+            (Some("check"), path, None) => {
+                Ok(Parsed::Config(ConfigCmd::Check(path.map(PathBuf::from))))
+            }
+            (Some("defaults"), None, None) => Ok(Parsed::Config(ConfigCmd::Defaults)),
+            (Some(other), _, _) => Err(CliError::Unknown(format!("config {other}"))),
+            (None, _, _) => Err(CliError::MissingValue("config")),
+        };
+    }
     while let Some(arg) = it.next() {
         let (flag, inline) = match arg.split_once('=') {
             Some((f, v)) if f.starts_with("--") => (f.to_owned(), Some(v.to_owned())),
@@ -167,7 +230,7 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError
         if inline.is_some()
             && matches!(
                 flag.as_str(),
-                "--no-keyboard" | "--impersonate-orca" | "--no-enable" | "--help"
+                "--no-keyboard" | "--impersonate-orca" | "--no-enable" | "--no-probe" | "--help"
             )
         {
             return Err(CliError::Unknown(arg));
@@ -183,6 +246,8 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError
             "--no-keyboard" => opts.no_keyboard = true,
             "--impersonate-orca" => opts.impersonate_orca = true,
             "--no-enable" => opts.no_enable = true,
+            "--no-probe" => opts.no_probe = true,
+            "--config" => opts.config_path = Some(PathBuf::from(value("--config")?)),
             "--speech" => {
                 let v = value("--speech")?;
                 opts.speech = match v.as_str() {
@@ -230,7 +295,7 @@ mod tests {
     fn opts(args: &[&str]) -> Options {
         match p(args).unwrap() {
             Parsed::Run(o) => o,
-            Parsed::Help => panic!("unexpected help"),
+            Parsed::Help | Parsed::Config(_) => panic!("unexpected help or config"),
         }
     }
 
@@ -305,6 +370,69 @@ mod tests {
             opts(&[]).with_env(only_sock).voicego_socket.as_deref(),
             Some(std::path::Path::new("/s.sock"))
         );
+    }
+
+    #[test]
+    fn config_paths_and_platform_facts_come_from_flags_then_the_environment() {
+        let env = |k: &str| match k {
+            "XDG_CONFIG_HOME" => Some("/xdg".to_owned()),
+            "HOME" => Some("/home/u".to_owned()),
+            "GORCA_REPEAT_DELAY_MS" => Some("300".to_owned()),
+            "GORCA_XKB_OPTIONS" => Some("grp:caps_toggle".to_owned()),
+            "GORCA_CLOCK_24H" => Some("0".to_owned()),
+            _ => None,
+        };
+        let o = opts(&[]).with_env(env);
+        assert_eq!(
+            o.config_path.as_deref(),
+            Some(std::path::Path::new("/xdg/gorca/gorca.toml"))
+        );
+        assert_eq!(o.platform.repeat_delay_ms, Some(300));
+        assert_eq!(o.platform.xkb_options.as_deref(), Some("grp:caps_toggle"));
+        assert_eq!(o.platform.clock_24h, Some(false));
+        let home_only = |k: &str| (k == "HOME").then(|| "/home/u".to_owned());
+        assert_eq!(
+            opts(&[]).with_env(home_only).config_path.as_deref(),
+            Some(std::path::Path::new("/home/u/.config/gorca/gorca.toml"))
+        );
+        assert_eq!(
+            opts(&["--config=/etc/g.toml"])
+                .with_env(env)
+                .config_path
+                .as_deref(),
+            Some(std::path::Path::new("/etc/g.toml"))
+        );
+        assert!(opts(&["--no-probe"]).no_probe);
+        assert!(
+            Options::isolated(
+                "a",
+                "b",
+                std::path::Path::new("/v"),
+                std::path::Path::new("/s")
+            )
+            .config_path
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn config_subcommands() {
+        assert_eq!(
+            p(&["config", "check"]),
+            Ok(Parsed::Config(ConfigCmd::Check(None)))
+        );
+        assert_eq!(
+            p(&["config", "check", "/x.toml"]),
+            Ok(Parsed::Config(ConfigCmd::Check(Some(PathBuf::from(
+                "/x.toml"
+            )))))
+        );
+        assert_eq!(
+            p(&["config", "defaults"]),
+            Ok(Parsed::Config(ConfigCmd::Defaults))
+        );
+        assert!(p(&["config"]).is_err());
+        assert!(p(&["config", "frob"]).is_err());
     }
 
     #[test]

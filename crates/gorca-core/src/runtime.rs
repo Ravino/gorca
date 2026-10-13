@@ -219,7 +219,7 @@ struct Shared {
     /// Effective settings, written by the Reader.
     settings: Arc<ArcSwap<Settings>>,
     /// The grab set (with its lookup context) the keyboard source should apply; latest wins.
-    grabs: watch::Sender<GrabSet>,
+    grabs: Arc<watch::Sender<GrabSet>>,
     config: mpsc::Sender<ConfigRequest>,
 }
 
@@ -266,7 +266,7 @@ impl Core {
                 next_req: AtomicU64::new(1),
                 links: LaneLinks::new(),
                 settings: Arc::new(ArcSwap::from_pointee(Settings::default())),
-                grabs,
+                grabs: Arc::new(grabs),
                 config,
             }),
             inbox,
@@ -321,6 +321,12 @@ impl Core {
     /// The grab set the keyboard source should apply, with its lookup context. Latest wins.
     pub fn grab_requests(&self) -> watch::Receiver<GrabSet> {
         self.shared.grabs.subscribe()
+    }
+
+    /// Write access to the grab set, for the input lane's own safety nets (LM-3): when the
+    /// Reader is stalled, the lane must be able to hand the keyboard back by itself.
+    pub fn grab_sender(&self) -> Arc<watch::Sender<GrabSet>> {
+        Arc::clone(&self.shared.grabs)
     }
 
     /// Requests for the config task (`settings.reload`, `settings.save`). Taken once.

@@ -3,8 +3,8 @@
 
 use gorca_config::{ChordSpec, ContextName, Diag, DiagMsg, Loaded, Settings, did_you_mean};
 use gorca_input_api::{
-    Bound, ChordKey, CmdId, CompiledKeymap, KeyResolver, LaneSettings, Modifiers,
-    TableKind, modifier_keysym, sym,
+    Bound, ChordKey, CmdId, CompiledKeymap, KeyResolver, LaneSettings, Modifiers, TableKind,
+    modifier_keysym, sym,
 };
 
 use super::spec::CommandTable;
