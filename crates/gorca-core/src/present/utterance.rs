@@ -60,7 +60,7 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
     }
     let may_refine = match n.fresh {
         Freshness::Fresh { .. } => false,
-        Freshness::Stale { .. } | Freshness::Fetching { .. } | Freshness::Defunct => true,
+        Freshness::Stale { .. } | Freshness::Defunct => true,
     };
     Utterance {
         id,

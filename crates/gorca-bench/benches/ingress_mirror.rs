@@ -45,6 +45,7 @@ fn mirror_ops(c: &mut Criterion) {
     let (mut w, r) = mirror();
     w.apply(SnapshotBatch {
         nodes: (0..10_000).map(snapshot).collect(),
+        ..Default::default()
     });
     g.bench_function("get_hit", |b| {
         b.iter(|| {
@@ -60,6 +61,7 @@ fn mirror_ops(c: &mut Criterion) {
         b.iter(|| {
             w.apply(SnapshotBatch {
                 nodes: vec![snapshot(black_box(4242))],
+                ..Default::default()
             });
         });
     });

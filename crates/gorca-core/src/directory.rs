@@ -85,6 +85,8 @@ mod tests {
             attrs: gorca_model::AttrMap::default(),
             relations: gorca_model::Relations::default(),
             bounds: None,
+            have: gorca_model::PropMask::PRESENT,
+            confirmed_seq: 0,
             fresh: Freshness::Fresh { at: Instant::now() },
         })
     }
@@ -95,6 +97,7 @@ mod tests {
         let (mut w, h) = mirror();
         w.apply(SnapshotBatch {
             nodes: vec![snap(1, 5)],
+            ..Default::default()
         });
         dir.insert(app(1), &h);
         let k = NodeKey {

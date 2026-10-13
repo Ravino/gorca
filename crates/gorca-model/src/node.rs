@@ -7,7 +7,7 @@ use bitflags::bitflags;
 use smallvec::SmallVec;
 
 use crate::geometry::Rect;
-use crate::ids::{NodeKey, ReqId};
+use crate::ids::NodeKey;
 use crate::role::Role;
 
 bitflags! {
@@ -70,6 +70,8 @@ bitflags! {
         /// Hint on `PropertiesChanged` only: the node just *became* selected
         /// (`state-changed:selected(1)`). Never part of a fetch mask.
         const SELECTED_NOW = 1 << 9;
+        /// The node's parent reference (B-1 PW-2). Part of `ALL`, never of `PRESENT`.
+        const PARENT      = 1 << 10;
     }
 }
 
@@ -80,6 +82,28 @@ impl PropMask {
         .union(PropMask::VALUE)
         .union(PropMask::ROLE)
         .union(PropMask::STATES);
+
+    /// Every field a snapshot can carry (no hint bits). `invalidate(k, ALL)` and the app-wide
+    /// stale epoch mean this.
+    pub const ALL: PropMask = PropMask::NAME
+        .union(PropMask::DESCRIPTION)
+        .union(PropMask::VALUE)
+        .union(PropMask::ROLE)
+        .union(PropMask::STATES)
+        .union(PropMask::BOUNDS)
+        .union(PropMask::ATTRS)
+        .union(PropMask::RELATIONS)
+        .union(PropMask::CHILDREN)
+        .union(PropMask::PARENT);
+
+    /// What a `Cache.GetItems` row carries (B-1 F-6): name, description, role, states, child
+    /// count and parent. No value, relations, attributes or bounds.
+    pub const CACHE_ITEM: PropMask = PropMask::NAME
+        .union(PropMask::DESCRIPTION)
+        .union(PropMask::ROLE)
+        .union(PropMask::STATES)
+        .union(PropMask::CHILDREN)
+        .union(PropMask::PARENT);
 }
 
 /// Interned attribute key. The interner lives in the connector; the core only compares keys.
@@ -132,13 +156,46 @@ pub struct NodeSnapshot {
     pub attrs: AttrMap,
     pub relations: Relations,
     pub bounds: Option<Rect>,
+    /// Fields this snapshot actually carries. A `GetItems` node has `PropMask::CACHE_ITEM`; a
+    /// full fetch has what was asked for.
+    pub have: PropMask,
+    /// Mirror write sequence at which the app confirmed this content: the `issued_at` of the
+    /// request whose reply produced it (late-reply and re-dirty rules, B-1 5.4).
+    pub confirmed_seq: u64,
     pub fresh: Freshness,
+}
+
+/// Result of a mirror read with the app-wide stale epoch applied (B-1 5.2).
+#[derive(Clone, Debug, PartialEq)]
+pub struct NodeView {
+    pub snap: Arc<NodeSnapshot>,
+    /// Fields that are no longer trustworthy: the node's own stale mask, plus `ALL` when the
+    /// node was confirmed before the app-wide stale epoch.
+    pub stale: PropMask,
+}
+
+impl NodeView {
+    /// A read is a hit for `need` when the snapshot carries it and none of it is stale.
+    pub fn satisfies(&self, need: PropMask) -> bool {
+        self.snap.have.contains(need) && !self.stale.intersects(need)
+    }
 }
 
 /// A bulk cache fill (`AppPort::push_snapshot`, `MirrorWriter::apply`).
 #[derive(Clone, Debug, Default)]
 pub struct SnapshotBatch {
     pub nodes: Vec<Arc<NodeSnapshot>>,
+    /// The producer stopped at a bound (`ChildSnapshots`, `Ancestry`, `Subtree`, `CacheDump`).
+    pub truncated: bool,
+}
+
+impl SnapshotBatch {
+    pub fn new(nodes: Vec<Arc<NodeSnapshot>>) -> Self {
+        Self {
+            nodes,
+            truncated: false,
+        }
+    }
 }
 
 /// Result of a mirror lookup. I-3: `Gone` never panics and never blocks.
@@ -158,19 +215,15 @@ impl<T> Lookup<T> {
     }
 }
 
-/// ADR-0001 section 4.4. `Fetching` carries one extra field, `redirtied`, that the ADR table
-/// needs ("Fetching (mark re-dirty)" then "Fresh, or Stale if re-dirtied") but its struct omits.
+/// ADR-0001 section 4.4 (B-1 amendment): `Fetching` lives in the driver's in-flight table, not in
+/// the published snapshot, which is immutable. `Stale` carries the fields an event said are no
+/// longer trustworthy.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Freshness {
     /// Confirmed by connector push or reply.
     Fresh { at: Instant },
     /// Invalidated by an event; still usable for presentation with care.
-    Stale { since: Instant },
-    Fetching {
-        req: ReqId,
-        deadline: Instant,
-        redirtied: bool,
-    },
+    Stale { since: Instant, mask: PropMask },
     /// Connector reported removal or the app is gone; a tombstone is kept briefly.
     Defunct,
 }
@@ -179,83 +232,60 @@ pub enum Freshness {
 pub enum FreshnessEvent {
     Invalidate {
         at: Instant,
+        mask: PropMask,
     },
-    FetchIssued {
-        req: ReqId,
-        deadline: Instant,
-    },
-    ReplyOk {
+    /// A reply (or push) confirmed the content that was asked for.
+    Confirm {
         at: Instant,
     },
-    /// Timeout or error. The health penalty is applied by the app actor, not here.
-    ReplyFailed {
+    /// The content was re-dirtied by an event issued after the request that produced it.
+    ConfirmRedirtied {
         at: Instant,
+        mask: PropMask,
     },
     Removed,
 }
 
 impl Freshness {
-    /// Transition function of the section 4.4 table. Cells marked "n/a" leave the state as is.
+    /// Transition function of the section 4.4 table. A defunct node never comes back under the
+    /// same snapshot (I-1); revival is a new snapshot (LR-3).
     #[must_use]
     pub fn step(self, ev: FreshnessEvent) -> Freshness {
         match self {
             Freshness::Fresh { .. } => match ev {
-                FreshnessEvent::Invalidate { at } => Freshness::Stale { since: at },
-                FreshnessEvent::FetchIssued { req, deadline } => Freshness::Fetching {
-                    req,
-                    deadline,
-                    redirtied: false,
-                },
-                FreshnessEvent::ReplyOk { .. } | FreshnessEvent::ReplyFailed { .. } => self,
-                FreshnessEvent::Removed => Freshness::Defunct,
-            },
-            Freshness::Stale { since } => match ev {
-                FreshnessEvent::Invalidate { .. } => Freshness::Stale { since },
-                FreshnessEvent::FetchIssued { req, deadline } => Freshness::Fetching {
-                    req,
-                    deadline,
-                    redirtied: false,
-                },
-                FreshnessEvent::ReplyOk { .. } | FreshnessEvent::ReplyFailed { .. } => self,
-                FreshnessEvent::Removed => Freshness::Defunct,
-            },
-            Freshness::Fetching {
-                req,
-                deadline,
-                redirtied,
-            } => match ev {
-                FreshnessEvent::Invalidate { .. } => Freshness::Fetching {
-                    req,
-                    deadline,
-                    redirtied: true,
-                },
-                // Deduplicated: a fetch is already in flight.
-                FreshnessEvent::FetchIssued { .. } => self,
-                FreshnessEvent::ReplyOk { at } => {
-                    if redirtied {
-                        Freshness::Stale { since: at }
-                    } else {
-                        Freshness::Fresh { at }
-                    }
+                FreshnessEvent::Invalidate { at, mask } => Freshness::Stale { since: at, mask },
+                FreshnessEvent::Confirm { at } => Freshness::Fresh { at },
+                FreshnessEvent::ConfirmRedirtied { at, mask } => {
+                    Freshness::Stale { since: at, mask }
                 }
-                FreshnessEvent::ReplyFailed { at } => Freshness::Stale { since: at },
                 FreshnessEvent::Removed => Freshness::Defunct,
             },
-            // Refused / dropped: a defunct node never comes back under the same key (I-1).
-            Freshness::Defunct => match ev {
-                FreshnessEvent::Invalidate { .. }
-                | FreshnessEvent::FetchIssued { .. }
-                | FreshnessEvent::ReplyOk { .. }
-                | FreshnessEvent::ReplyFailed { .. }
-                | FreshnessEvent::Removed => Freshness::Defunct,
+            Freshness::Stale { since, mask } => match ev {
+                FreshnessEvent::Invalidate { mask: m, .. }
+                | FreshnessEvent::ConfirmRedirtied { mask: m, .. } => Freshness::Stale {
+                    since,
+                    mask: mask | m,
+                },
+                FreshnessEvent::Confirm { at } => Freshness::Fresh { at },
+                FreshnessEvent::Removed => Freshness::Defunct,
             },
+            Freshness::Defunct => Freshness::Defunct,
+        }
+    }
+
+    /// Fields known to be untrustworthy by this snapshot's own marking.
+    pub fn stale_mask(self) -> PropMask {
+        match self {
+            Freshness::Fresh { .. } => PropMask::empty(),
+            Freshness::Stale { mask, .. } => mask,
+            Freshness::Defunct => PropMask::ALL,
         }
     }
 
     /// May the node be presented? Stale nodes may, with the `may_refine` tag.
     pub fn presentable(self) -> bool {
         match self {
-            Freshness::Fresh { .. } | Freshness::Stale { .. } | Freshness::Fetching { .. } => true,
+            Freshness::Fresh { .. } | Freshness::Stale { .. } => true,
             Freshness::Defunct => false,
         }
     }
@@ -264,102 +294,75 @@ impl Freshness {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
 
     fn t0() -> Instant {
         Instant::now()
     }
 
     #[test]
-    fn fresh_invalidate_fetch_reply_cycle() {
+    fn invalidate_accumulates_and_confirm_clears() {
         let t = t0();
-        let d = t + Duration::from_millis(120);
-        let s = Freshness::Fresh { at: t }.step(FreshnessEvent::Invalidate { at: t });
-        assert_eq!(s, Freshness::Stale { since: t });
-        let s = s.step(FreshnessEvent::FetchIssued {
-            req: ReqId(1),
-            deadline: d,
+        let s = Freshness::Fresh { at: t }.step(FreshnessEvent::Invalidate {
+            at: t,
+            mask: PropMask::NAME,
         });
         assert_eq!(
             s,
-            Freshness::Fetching {
-                req: ReqId(1),
-                deadline: d,
-                redirtied: false
+            Freshness::Stale {
+                since: t,
+                mask: PropMask::NAME
             }
         );
+        let s = s.step(FreshnessEvent::Invalidate {
+            at: t,
+            mask: PropMask::STATES,
+        });
+        assert_eq!(s.stale_mask(), PropMask::NAME | PropMask::STATES);
         assert_eq!(
-            s.step(FreshnessEvent::ReplyOk { at: t }),
+            s.step(FreshnessEvent::Confirm { at: t }),
             Freshness::Fresh { at: t }
         );
     }
 
     #[test]
-    fn redirtied_fetch_ends_stale() {
+    fn a_redirtied_confirmation_stays_stale() {
         let t = t0();
-        let s = Freshness::Fetching {
-            req: ReqId(1),
-            deadline: t,
-            redirtied: false,
-        }
-        .step(FreshnessEvent::Invalidate { at: t })
-        .step(FreshnessEvent::ReplyOk { at: t });
-        assert_eq!(s, Freshness::Stale { since: t });
-    }
-
-    #[test]
-    fn duplicate_fetch_is_deduplicated() {
-        let t = t0();
-        let s = Freshness::Fetching {
-            req: ReqId(1),
-            deadline: t,
-            redirtied: false,
-        };
-        assert_eq!(
-            s.step(FreshnessEvent::FetchIssued {
-                req: ReqId(2),
-                deadline: t
-            }),
-            s
-        );
-    }
-
-    #[test]
-    fn failed_reply_goes_stale() {
-        let t = t0();
-        let s = Freshness::Fetching {
-            req: ReqId(1),
-            deadline: t,
-            redirtied: false,
-        };
-        assert_eq!(
-            s.step(FreshnessEvent::ReplyFailed { at: t }),
-            Freshness::Stale { since: t }
-        );
+        let s = Freshness::Fresh { at: t }.step(FreshnessEvent::ConfirmRedirtied {
+            at: t,
+            mask: PropMask::NAME,
+        });
+        assert_eq!(s.stale_mask(), PropMask::NAME);
+        assert!(s.presentable());
     }
 
     #[test]
     fn defunct_is_absorbing() {
         let t = t0();
         let evs = [
-            FreshnessEvent::Invalidate { at: t },
-            FreshnessEvent::FetchIssued {
-                req: ReqId(1),
-                deadline: t,
+            FreshnessEvent::Invalidate {
+                at: t,
+                mask: PropMask::ALL,
             },
-            FreshnessEvent::ReplyOk { at: t },
-            FreshnessEvent::ReplyFailed { at: t },
+            FreshnessEvent::Confirm { at: t },
+            FreshnessEvent::ConfirmRedirtied {
+                at: t,
+                mask: PropMask::ALL,
+            },
             FreshnessEvent::Removed,
         ];
         for ev in evs {
             assert_eq!(Freshness::Defunct.step(ev), Freshness::Defunct);
         }
         assert!(!Freshness::Defunct.presentable());
+        assert_eq!(Freshness::Defunct.stale_mask(), PropMask::ALL);
     }
 
     #[test]
     fn present_mask_contains_name_and_role() {
         assert!(PropMask::PRESENT.contains(PropMask::NAME | PropMask::ROLE));
         assert!(!PropMask::PRESENT.contains(PropMask::BOUNDS));
+        assert!(!PropMask::ALL.contains(PropMask::SELECTED_NOW));
+        assert!(PropMask::ALL.contains(PropMask::PARENT));
+        assert!(!PropMask::CACHE_ITEM.contains(PropMask::VALUE));
     }
 }

@@ -123,6 +123,8 @@ mod tests {
             attrs: gorca_model::AttrMap::default(),
             relations: gorca_model::Relations::default(),
             bounds: None,
+            have: gorca_model::PropMask::PRESENT,
+            confirmed_seq: 0,
             fresh,
         }
     }
@@ -157,6 +159,7 @@ mod tests {
             StateSet::empty(),
             Freshness::Stale {
                 since: Instant::now(),
+                mask: gorca_model::PropMask::NAME,
             },
         );
         let u = present_focus(&n, UttId(1), Epoch(1));

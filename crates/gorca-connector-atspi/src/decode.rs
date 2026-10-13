@@ -128,6 +128,8 @@ pub fn snapshot(key: NodeKey, raw: &RawNode, now: Instant) -> Arc<NodeSnapshot> 
         attrs: AttrMap::default(),
         relations: Relations::default(),
         bounds: None,
+        have: gorca_model::PropMask::PRESENT,
+        confirmed_seq: 0,
         fresh: Freshness::Fresh { at: now },
     })
 }

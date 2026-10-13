@@ -314,6 +314,8 @@ mod tests {
             attrs: gorca_model::AttrMap::default(),
             relations: gorca_model::Relations::default(),
             bounds: None,
+            have: gorca_model::PropMask::PRESENT,
+            confirmed_seq: 0,
             fresh: Freshness::Fresh { at: Instant::now() },
         })
     }
@@ -362,6 +364,7 @@ mod tests {
         let mut f = fixture();
         f.writer.apply(SnapshotBatch {
             nodes: vec![snap(1, Role::Button, "OK")],
+            ..Default::default()
         });
         let before = f.epoch.current();
         let fx = f.reader.handle(
@@ -446,6 +449,7 @@ mod tests {
         let epoch = f.epoch.current();
         f.writer.apply(SnapshotBatch {
             nodes: vec![snap(2, Role::Link, "Docs")],
+            ..Default::default()
         });
         let reply = QueryReply {
             node: key(2),
@@ -461,6 +465,7 @@ mod tests {
         let mut f = fixture();
         f.writer.apply(SnapshotBatch {
             nodes: vec![snap(1, Role::MenuItem, "Open")],
+            ..Default::default()
         });
         let now = Instant::now();
         let fx = f.reader.handle(
@@ -574,6 +579,7 @@ mod tests {
                 selected_snap(3, "Firefox"),
                 selected_snap(4, "Settings"),
             ],
+            ..Default::default()
         });
         let mut now = Instant::now();
         let mut last_epoch = f.epoch.current();
@@ -604,6 +610,7 @@ mod tests {
         let mut f = fixture();
         f.writer.apply(SnapshotBatch {
             nodes: vec![selected_snap(1, "Files")],
+            ..Default::default()
         });
         let now = Instant::now();
         let echo = f.reader.handle(press(0xff09, Modifiers::empty(), 5), now);
@@ -633,6 +640,7 @@ mod tests {
         f.reader.focused_app = Some(Arc::clone(&published));
         f.writer.apply(SnapshotBatch {
             nodes: vec![selected_snap(1, "Files")],
+            ..Default::default()
         });
         let before = published.generation();
         f.reader.handle(
@@ -654,6 +662,7 @@ mod tests {
         // stale one): spoken as usual, but it earns no protection.
         f.writer.apply(SnapshotBatch {
             nodes: vec![snap(1, Role::Button, "Claim")],
+            ..Default::default()
         });
         f.reader.handle(
             ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(1) }),
@@ -684,6 +693,7 @@ mod tests {
         let later = now + std::time::Duration::from_secs(2);
         f.writer.apply(SnapshotBatch {
             nodes: vec![snap(3, Role::Button, "Unvalidated")],
+            ..Default::default()
         });
         f.reader.handle(
             ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(3) }),
@@ -700,6 +710,7 @@ mod tests {
         let mut f = fixture();
         f.writer.apply(SnapshotBatch {
             nodes: vec![snap(1, Role::Button, "OK")],
+            ..Default::default()
         });
         let now = Instant::now();
         f.reader.handle(
@@ -772,6 +783,7 @@ mod tests {
         let mut f = fixture();
         f.writer.apply(SnapshotBatch {
             nodes: vec![snap(1, Role::Button, "OK")],
+            ..Default::default()
         });
         let (tx, mut inbox) = reader_channels();
         tx.focus

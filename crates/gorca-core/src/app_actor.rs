@@ -350,6 +350,8 @@ mod tests {
             attrs: gorca_model::AttrMap::default(),
             relations: gorca_model::Relations::default(),
             bounds: None,
+            have: gorca_model::PropMask::PRESENT,
+            confirmed_seq: 0,
             fresh: Freshness::Fresh { at: Instant::now() },
         })
     }
@@ -360,6 +362,7 @@ mod tests {
         r.port
             .push_snapshot(SnapshotBatch {
                 nodes: vec![snap(1)],
+                ..Default::default()
             })
             .unwrap();
         r.port.push(NodeEvent::FocusChanged { node: key(1) });
@@ -380,6 +383,7 @@ mod tests {
         r.port
             .push_snapshot(SnapshotBatch {
                 nodes: vec![snap(1)],
+                ..Default::default()
             })
             .unwrap();
         r.actor.pump(Instant::now());

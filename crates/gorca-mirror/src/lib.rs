@@ -164,6 +164,8 @@ mod tests {
             attrs: gorca_model::AttrMap::default(),
             relations: gorca_model::Relations::default(),
             bounds: None,
+            have: gorca_model::PropMask::PRESENT,
+            confirmed_seq: 0,
             fresh: Freshness::Fresh { at: Instant::now() },
         })
     }
@@ -174,6 +176,7 @@ mod tests {
         assert_eq!(r.get(key(1)), Lookup::Miss);
         w.apply(SnapshotBatch {
             nodes: vec![node(1, "ok")],
+            ..Default::default()
         });
         let hit = r.get(key(1)).hit().unwrap();
         assert_eq!(hit.name.as_deref(), Some("ok"));
@@ -187,6 +190,7 @@ mod tests {
         w.tombstone(key(1));
         w.apply(SnapshotBatch {
             nodes: vec![node(1, "late reply")],
+            ..Default::default()
         });
         assert_eq!(r.get(key(1)), Lookup::Gone);
     }
@@ -197,6 +201,7 @@ mod tests {
         assert_eq!(r.revision(), 0);
         w.apply(SnapshotBatch {
             nodes: (0..100).map(|n| node(n, "x")).collect(),
+            ..Default::default()
         });
         assert_eq!(r.revision(), 1);
         for n in 0..100 {
@@ -209,6 +214,7 @@ mod tests {
         let (mut w, r) = mirror();
         w.apply(SnapshotBatch {
             nodes: vec![node(1, "v0")],
+            ..Default::default()
         });
         let readers: Vec<_> = (0..4)
             .map(|_| {
@@ -225,6 +231,7 @@ mod tests {
         for i in 1..2000 {
             w.apply(SnapshotBatch {
                 nodes: vec![node(1, &format!("v{i}"))],
+                ..Default::default()
             });
         }
         for h in readers {
