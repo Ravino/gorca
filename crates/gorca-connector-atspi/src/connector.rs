@@ -400,6 +400,40 @@ async fn live_names(conn: &Connection, clock: &Clock) -> Option<std::collections
     Some(names.into_iter().collect())
 }
 
+const REGISTRY_NAME: &str = "org.a11y.atspi.Registry";
+const REGISTRY_ROOT: &str = "/org/a11y/atspi/accessible/root";
+
+/// Ask the registry for the applications it knows and start registering every one that is not
+/// yet routed, so the reader knows an application when it is announced, not when it first
+/// speaks. Cheap when nothing is new.
+async fn discover_apps(conn: &Connection, router: &AtspiRouter, clock: &Clock) {
+    let deadline = Deadline::for_class(clock, BudgetClass::Prefetch);
+    let Ok(msg) = call_method(
+        conn,
+        deadline,
+        REGISTRY_NAME,
+        REGISTRY_ROOT,
+        "org.a11y.atspi.Accessible",
+        "GetChildren",
+        &(),
+    )
+    .await
+    else {
+        return;
+    };
+    let Ok(children) = msg
+        .body()
+        .deserialize::<Vec<(String, zbus::zvariant::OwnedObjectPath)>>()
+    else {
+        return;
+    };
+    for (name, _) in children {
+        if name.starts_with(':') {
+            router.discover(&name);
+        }
+    }
+}
+
 /// Periodic reconciliation of identity state with the bus. A missed `NameOwnerChanged` must not
 /// leave a route, a quota or a protection behind for a name that is gone; and when the bus cannot
 /// be asked, eviction is frozen (the last validated protection stays, nobody is evicted, and
@@ -408,6 +442,8 @@ async fn reconcile_loop(conn: Connection, router: Arc<AtspiRouter>, clock: Clock
     let mut failures = 0u32;
     loop {
         tokio::time::sleep(RECONCILE_EVERY).await;
+        // A missed announcement is picked up here.
+        discover_apps(&conn, &router, &clock).await;
         if let Some(live) = live_names(&conn, &clock).await {
             failures = 0;
             let gone = router.reconcile_with(&live);
@@ -614,6 +650,24 @@ async fn run(
     .await
     .map_err(|e| ConnectorError::Startup(e.to_string()))?;
 
+    // The registry announces an application by a `ChildrenChanged` on its root when it embeds.
+    let rule = zbus::MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .interface("org.a11y.atspi.Event.Object")
+        .and_then(|b| b.member("ChildrenChanged"))
+        .and_then(|b| b.path(REGISTRY_ROOT))
+        .map(zbus::match_rule::Builder::build)
+        .map_err(|e| ConnectorError::Startup(e.to_string()))?;
+    let deadline = Deadline::for_class(&clock, BudgetClass::Startup);
+    let mut announcements = gorca_dbus::with_deadline(
+        deadline,
+        zbus::MessageStream::for_match_rule(rule, &name_conn, Some(256)),
+    )
+    .await
+    .map_err(|e| ConnectorError::Startup(e.to_string()))?;
+    // Applications that were already running.
+    discover_apps(&conn, &router, &clock).await;
+
     let drain_cancel = CancellationToken::new();
     let drain_task = tokio::spawn(supervise_drain(
         address.clone(),
@@ -637,6 +691,12 @@ async fn run(
                 registrations.spawn(async move { router.complete(name).await });
             }
             Some(_) = registrations.join_next() => {}
+            Some(_) = announcements.next() => {
+                // Something embedded or left: ask who is there, off the loop (the call has its
+                // own deadline, and the loop must keep serving the other tasks meanwhile).
+                let (conn, router, clock) = (conn.clone(), Arc::clone(&router), clock.clone());
+                registrations.spawn(async move { discover_apps(&conn, &router, &clock).await });
+            }
             Some(msg) = owner_changes.next() => {
                 let Ok(msg) = msg else { continue };
                 let Ok((name, _old, new)) = msg.body().deserialize::<(String, String, String)>() else {

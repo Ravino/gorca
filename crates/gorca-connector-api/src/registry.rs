@@ -179,6 +179,7 @@ mod tests {
             connector_kind: ConnectorKind::Fake,
             verified_shell: false,
             dump_complete: false,
+            root: None,
         }
     }
 

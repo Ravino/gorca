@@ -204,6 +204,16 @@ impl Sut for DaemonSut {
 /// A fresh desktop with the daemon under test. `fills`: the apps get the test policy that asks
 /// for everything instead of R0, which never requests a thing.
 fn make(fills: bool) -> Box<dyn Sut> {
+    let policy: PolicyFactory = if fills {
+        Arc::new(|| Box::new(PrefetchAllPolicy::default()))
+    } else {
+        Arc::new(|| Box::new(gorca_mirror::fill::NullPolicy))
+    };
+    make_with(policy, fills)
+}
+
+/// [`make`] with the fill policy of the apps given.
+fn make_with(policy: PolicyFactory, fills: bool) -> Box<dyn Sut> {
     let session = Session::start().expect("isolated session");
     let dir = session.dir().join("ic");
     std::fs::create_dir_all(&dir).unwrap();
@@ -235,11 +245,6 @@ fn make(fills: bool) -> Box<dyn Sut> {
                 Options::isolated(&a11y, &sess, voicego.socket_path(), &vdir.join("ssip.sock"));
             opts.speech = SpeechMode::Voicego;
             opts.present_log = Some(log);
-            let policy: PolicyFactory = if fills {
-                Arc::new(|| Box::new(PrefetchAllPolicy::default()))
-            } else {
-                Arc::new(|| Box::new(gorca_mirror::fill::NullPolicy))
-            };
             let _ = run_with_policy(opts, t, policy, move |p| {
                 let _ = tx.send(p);
             })
@@ -338,4 +343,106 @@ fn the_invalidation_suite_passes_against_the_real_daemon() {
         );
         assert!(passed >= 20, "only {passed} cases ran: {skipped} skipped");
     }
+}
+
+/// A policy that writes down what it is told, in order.
+struct Recording(Arc<std::sync::Mutex<Vec<String>>>);
+
+impl gorca_mirror::fill::FillPolicy for Recording {
+    fn name(&self) -> &'static str {
+        "test-recording"
+    }
+    fn step(
+        &mut self,
+        cx: &gorca_mirror::fill::FillCtx<'_>,
+        input: gorca_mirror::fill::FillInput<'_>,
+        _out: &mut gorca_mirror::fill::FillEffects,
+    ) {
+        use gorca_mirror::fill::FillInput as I;
+        let tag = match input {
+            I::Appeared { root } => format!("appeared:{:016x}:{:?}", root.local.0, cx.app_class),
+            I::Ready => "ready".to_owned(),
+            I::FocusSettled { .. } => "settled".to_owned(),
+            I::Tick
+            | I::Events(_)
+            | I::Resync { .. }
+            | I::Demand { .. }
+            | I::WindowActivated { .. }
+            | I::Reply { .. } => return,
+        };
+        if let Ok(mut l) = self.0.lock() {
+            l.push(tag);
+        }
+    }
+    fn memory_bytes(&self) -> usize {
+        0
+    }
+}
+
+/// FNV-1a 64 of the app root path: the key the connector gives the root (`LocalId`).
+fn root_local_id() -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in "/org/a11y/atspi/accessible/root".bytes() {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
+}
+
+/// The reader knows an application when the registry announces it, not at its first event, and
+/// its fill policy is told so (with the root and the verified identity) before the first focus.
+#[test]
+fn the_policy_hears_of_a_new_app_before_it_does_anything() {
+    use gorca_testkit::b1::sut::SutExt;
+    if Session::unavailable_reason().is_some() {
+        assert!(std::env::var_os("GORCA_REQUIRE_HARNESS").is_none());
+        return;
+    }
+    let log = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let l2 = Arc::clone(&log);
+    let mut s = make_with(
+        Arc::new(move || Box::new(Recording(Arc::clone(&l2)))),
+        false,
+    );
+    let seen = || log.lock().map(|l| l.clone()).unwrap_or_default();
+    // A Shell that owns `org.gnome.Shell` (verified) and a plain app, both silent.
+    s.start_app("shell", "shell").unwrap();
+    s.start_app("settings", "settings").unwrap();
+    // No event, no focus: the apps are announced and known.
+    let t0 = Instant::now();
+    while seen().len() < 4 && t0.elapsed() < Duration::from_secs(10) {
+        s.advance(50);
+    }
+    let before = seen();
+    assert!(
+        before.iter().filter(|t| t.starts_with("appeared:")).count() == 2
+            && before.iter().filter(|t| *t == "ready").count() == 2,
+        "{before:?}"
+    );
+    assert!(
+        !before.iter().any(|t| t == "settled"),
+        "nothing focused yet"
+    );
+    let root = format!("appeared:{:016x}:", root_local_id());
+    assert!(
+        before
+            .iter()
+            .all(|t| !t.starts_with("appeared:") || t.starts_with(&root)),
+        "{before:?}"
+    );
+    assert!(
+        before.iter().any(|t| t.ends_with(":Shell")),
+        "the verified Shell is announced as the Shell: {before:?}"
+    );
+    let bus = s.bus_name("settings");
+    assert!(
+        s.mirror_nodes(&bus).is_some(),
+        "the reader has a mirror for the app"
+    );
+    // Then the first focus: it comes after everything above.
+    let c = s.path_of("settings", "controls[1]").unwrap();
+    s.focus("settings", &c).unwrap();
+    let after = seen();
+    assert_eq!(&after[..before.len()], before.as_slice());
+    assert!(after.iter().any(|t| t == "settled"), "{after:?}");
 }

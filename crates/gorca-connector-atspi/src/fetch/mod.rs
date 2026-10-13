@@ -273,13 +273,14 @@ impl AppServer {
                 Some(req) = requests.recv() => self.accept(req, &cx, &permits, &background, &mut inflight),
                 found = &mut info_rx, if info_pending => {
                     info_pending = false;
-                    if let Ok((toolkit, app_name)) = found {
-                        announce_info(&port, &toolkit, &app_name, verified);
-                        // Identified and served: policies that fill at readiness start here
-                        // (once; a later announcement only refines the identity).
-                        let _ = port.lifecycle(AppLifecycle::Ready);
-                        known = Some((toolkit, app_name));
-                    }
+                    // An application that cannot be identified is still announced (with no
+                    // toolkit or name): the reader and the policies know it exists.
+                    let (toolkit, app_name) = found.unwrap_or_default();
+                    announce_info(&port, &toolkit, &app_name, verified);
+                    // Announced and served: policies that fill at readiness start here (once;
+                    // a later announcement only refines the identity).
+                    let _ = port.lifecycle(AppLifecycle::Ready);
+                    known = Some((toolkit, app_name));
                 }
                 ok = shell_changed => {
                     if !ok {
@@ -365,6 +366,10 @@ fn announce_info(port: &AppPort, toolkit: &str, app_name: &str, verified_shell: 
         // Shell is the only toolkit whose dump P-9 verified complete; the flag follows the
         // verified identity, never `app_name` (B-1 2.2).
         dump_complete: verified_shell,
+        root: Some(NodeKey {
+            app: port.app,
+            local: gorca_dbus::drain::local_id(ROOT_PATH),
+        }),
     };
     // Informational: a full control queue is not worth retrying.
     let _ = port.lifecycle(AppLifecycle::Appeared(info));

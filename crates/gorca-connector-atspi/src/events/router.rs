@@ -607,6 +607,7 @@ impl AtspiRouter {
             connector_kind: ConnectorKind::Atspi,
             verified_shell: false,
             dump_complete: false,
+            root: None,
         };
         let deadline = Deadline::after(&self.clock, ANNOUNCE_WAIT);
         let announced = self
@@ -829,6 +830,14 @@ impl AtspiRouter {
             s.announced += 1;
             s.parked_replayed += replayed;
         });
+    }
+}
+
+impl AtspiRouter {
+    /// Start registering `sender` (an application announced by the registry) without waiting for
+    /// its first event. Idempotent: a known, pending, ignored or backing-off name is left alone.
+    pub fn discover(&self, sender: &str) {
+        let _ = self.resolve(sender);
     }
 }
 

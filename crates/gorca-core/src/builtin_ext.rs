@@ -43,6 +43,7 @@ mod tests {
             connector_kind: ConnectorKind::Atspi,
             verified_shell,
             dump_complete: false,
+            root: None,
         }
     }
 

@@ -219,6 +219,7 @@ fn shell_info() -> gorca_model::AppInfo {
         connector_kind: gorca_model::ConnectorKind::Atspi,
         verified_shell: true,
         dump_complete: false,
+        root: None,
     }
 }
 
@@ -585,6 +586,41 @@ fn the_policy_sees_events_after_the_invalidation_and_demands_drive_requests() {
             .iter()
             .any(|t| t.starts_with("demand:Focus:Miss"))
     );
+}
+
+#[test]
+fn the_policy_hears_of_the_app_with_its_root_and_identity_before_the_first_focus() {
+    let spy = Spy::default();
+    let (mut r, _ftx) = spy_rig(&spy);
+    let mut info = shell_info();
+    info.dump_complete = true;
+    info.root = Some(key(1));
+    // Announced: no event has come from the application yet.
+    r.port.lifecycle(AppLifecycle::Appeared(info)).unwrap();
+    r.port.lifecycle(AppLifecycle::Ready).unwrap();
+    r.actor.pump(Instant::now());
+    assert_eq!(
+        spy.seen.lock().unwrap().as_slice(),
+        ["appeared", "ready"],
+        "the policy knows the app before anything happens in it"
+    );
+    // Then the first focus.
+    r.port.push(NodeEvent::FocusChanged { node: key(1) });
+    r.actor.pump(Instant::now());
+    let seen = spy.seen.lock().unwrap().clone();
+    assert_eq!(seen[0], "appeared");
+    assert!(
+        r.actor.profile().speak_selection,
+        "the identity is in place"
+    );
+    // An announcement without a root (a connector that has none) gives the policy no Appeared.
+    let spy2 = Spy::default();
+    let (mut r2, _f2) = spy_rig(&spy2);
+    r2.port
+        .lifecycle(AppLifecycle::Appeared(shell_info()))
+        .unwrap();
+    r2.actor.pump(Instant::now());
+    assert!(spy2.seen.lock().unwrap().is_empty());
 }
 
 #[test]
