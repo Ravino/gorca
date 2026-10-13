@@ -1,7 +1,8 @@
 // M1 platform probes (P-7 grab settle, P-8 re-injection, P-10 key->KeyEvent latency).
 // PRIVATE session only: refuses to run against a bus address under /run/user/ .
-// Build: gcc -O2 -o m1probe m1probe.c $(pkg-config --cflags --libs libei-1.0 gio-unix-2.0) -lm
-// Usage: m1probe latency N | settle-mod N | settle-key N | reinject   (env: DBUS_SESSION_BUS_ADDRESS, GTKKEYS=path)
+// Build: gcc -O2 -o m1probe m1probe.c $(pkg-config --cflags --libs libei-1.0 gio-unix-2.0 xkbcommon) -lm
+// Usage: m1probe latency N | rtt N | settle-key N (SETTLE_INS=1 for Insert modifier) | settle-mod N | reinject | p13 | skew N | keymap | press KC...
+// env: DBUS_SESSION_BUS_ADDRESS, GTKKEYS=path/to/gtkkeys.py, GORCA_WL_DISPLAY=<private wayland display>, SKEW_LO/SKEW_SPAN (ms)
 #define _GNU_SOURCE
 #include <gio/gio.h>
 #include <gio/gunixfdlist.h>
@@ -19,6 +20,8 @@
 #define KC_CAPS 58
 #define KS_A 0x61
 #define KS_CAPS 0xffe5
+#define KS_INSERT 0xff63
+#define KC_INSERT 110
 
 static uint64_t now_ns(void){ struct timespec t; clock_gettime(CLOCK_MONOTONIC,&t); return t.tv_sec*1000000000ull+t.tv_nsec; }
 static GDBusConnection *bus; static struct ei *ei; static struct ei_device *kbd; static char *sess_path;
@@ -87,12 +90,15 @@ static void setup(void){
   if(!ready) die("ei not ready",NULL); ei_device_start_emulating(kbd,1); ei_dispatch(ei);
   printf("EIS keyboard device ready (Mutter RemoteDesktop direct, no prompt)\n"); }
 
-static void start_gtk(void){ const char*p=g_getenv("GTKKEYS"); if(!p) return; char*argv[]={"/usr/bin/python3",(char*)p,NULL}; char**env=g_get_environ(); env=g_environ_setenv(env,"GDK_BACKEND","wayland",TRUE); env=g_environ_setenv(env,"NO_AT_BRIDGE","1",TRUE); env=g_environ_setenv(env,"WAYLAND_DISPLAY","lp-m1-wl",TRUE);
+static void leave_overview(void){ GError*e=NULL; GVariant*r=g_dbus_connection_call_sync(bus,"org.gnome.Shell","/org/gnome/Shell","org.freedesktop.DBus.Properties","Get",g_variant_new("(ss)","org.gnome.Shell","OverviewActive"),G_VARIANT_TYPE("(v)"),0,2000,NULL,&e); if(!r) return;
+  GVariant*v; g_variant_get(r,"(v)",&v); if(g_variant_get_boolean(v)){ uint64_t t; inject(125,TRUE,&t); sleep_ms(20); inject(125,FALSE,&t); sleep_ms(500); printf("left Overview with Super (headless shell starts in Overview, which blocks key focus)\n"); } }
+static void start_gtk(void){ leave_overview(); const char*p=g_getenv("GTKKEYS"); if(!p) return; char*argv[]={"/usr/bin/python3",(char*)p,NULL}; char**env=g_get_environ(); env=g_environ_setenv(env,"GDK_BACKEND","wayland",TRUE); env=g_environ_setenv(env,"NO_AT_BRIDGE","1",TRUE); env=g_environ_setenv(env,"GTK_A11Y","none",TRUE); env=g_environ_setenv(env,"WAYLAND_DISPLAY",g_getenv("GORCA_WL_DISPLAY")?g_getenv("GORCA_WL_DISPLAY"):"gorca-test-0",TRUE);
   gint out; GError*e=NULL; if(!g_spawn_async_with_pipes(NULL,argv,env,G_SPAWN_DO_NOT_REAP_CHILD,NULL,NULL,&gtk_pid,NULL,&out,NULL,&e)) die("spawn gtk",e); gtk_fd=out; 
   uint64_t dl=now_ns()+8000000000ull; while(!gtk_focus&&now_ns()<dl) { pump(); usleep(500);} printf("gtk client focus=%d\n",gtk_focus); 
   if(!gtk_focus){ // nudge focus with a harmless key in the private session
-    uint64_t t; inject(KC_A+1,TRUE,&t); sleep_ms(5); inject(KC_A+1,FALSE,&t); sleep_ms(300); printf("gtk keys seen after nudge: %d\n",ngev); } }
-static int gtk_saw(uint32_t keyval,int since){ for(int i=since;i<ngev;i++) if(gevs[i].press&&gevs[i].keyval==keyval) return 1; return 0; }
+    uint64_t t; inject(1,TRUE,&t); sleep_ms(5); inject(1,FALSE,&t); sleep_ms(800); printf("gtk focus after Esc nudge: %d\n",gtk_focus); } }
+static int count_gtk(uint32_t kv,int since){ int c=0; for(int i=since;i<ngev;i++) if(gevs[i].press&&gevs[i].keyval==kv) c++; return c; }
+static int gtk_saw(uint32_t keyval,int since){ for(int i=since;i<ngev;i++) if(gevs[i].press&&(gevs[i].keyval==keyval||gevs[i].keyval==(keyval&~0x20u))) return 1; return 0; }
 
 static void do_latency(int n){
   ungrab(); uint64_t *lw=malloc(8*n); int nw=0; srand(7);
@@ -128,19 +134,21 @@ static void do_settle_mod(int n){
 
 static void do_settle_key(int n){
   static const int deltas[]={0,100,300,1000,3000};
-  printf("# P-7 keystroke grab ('a' mask 0). applied = GTK client did NOT see 'a'\n");
+  gboolean ins=g_getenv("SETTLE_INS")!=NULL; uint32_t kc=ins?KC_INSERT:KC_A, kv=ins?KS_INSERT:KS_A;
+  GVariant*(*addm)(void)=NULL; (void)addm;
+  printf("# P-7 %s grab, detected by the GTK client (applied = client did NOT see the press)\n",ins?"MODIFIER (Insert)":"KEYSTROKE ('a' mask 0)");
   for(int dir=0;dir<2;dir++){ printf("## %s\n# delta_us trials applied reply_before_inject_and_applied reply_before_inject_but_NOT_applied\n",dir?"REMOVE":"ADD");
     for(unsigned d=0; d<sizeof deltas/sizeof*deltas; d++){ int applied=0,rb_ok=0,rb_bad=0;
-      for(int i=0;i<n;i++){ ungrab(); if(dir) set_grabs(E_MODS,keys_v(KS_A)); sleep_ms(30); int g0=ngev;
-        uint64_t tc=dir? set_grabs_async(E_MODS,E_KEYS): set_grabs_async(E_MODS,keys_v(KS_A));
-        spin_until(tc+deltas[d]*1000ull); uint64_t t; inject(KC_A,TRUE,&t); gboolean rb=t_reply&&t_reply<t; sleep_ms(3); inject(KC_A,FALSE,&t); sleep_ms(40);
-        int saw=gtk_saw(0x61,g0); gboolean ap= dir? saw : !saw; applied+=ap; if(rb){ if(ap) rb_ok++; else rb_bad++; } }
+      for(int i=0;i<n;i++){ ungrab(); if(dir) set_grabs(ins?mods_v(1,KS_INSERT):E_MODS,ins?E_KEYS:keys_v(KS_A)); sleep_ms(ins?620:30); int g0=ngev;
+        uint64_t tc= dir? set_grabs_async(E_MODS,E_KEYS) : set_grabs_async(ins?mods_v(1,KS_INSERT):E_MODS,ins?E_KEYS:keys_v(KS_A));
+        spin_until(tc+deltas[d]*1000ull); uint64_t t; inject(kc,TRUE,&t); gboolean rb=t_reply&&t_reply<t; sleep_ms(3); inject(kc,FALSE,&t); sleep_ms(60);
+        int saw=count_gtk(kv,g0)>0; gboolean ap= dir? saw : !saw; applied+=ap; if(rb){ if(ap) rb_ok++; else rb_bad++; } }
       printf("%6d %4d %4d %4d %4d\n",deltas[d],n,applied,rb_ok,rb_bad); fflush(stdout);} }
   ungrab(); }
 
 static void do_reinject(void){
-  printf("# P-8 re-injection semantics (GTK client sees 'a'?)\n"); int g0;
-  ungrab(); sleep_ms(50); g0=ngev; uint64_t t; inject(KC_A,TRUE,&t); sleep_ms(3); inject(KC_A,FALSE,&t); sleep_ms(80); printf("no grab, inject a            -> app sees a: %d (expect 1)\n",gtk_saw(0x61,g0));
+  printf("# P-8 re-injection semantics (GTK client sees a?) gtk_events_so_far=%d\n",ngev); int g0;
+  ungrab(); sleep_ms(50); g0=ngev; uint64_t t; inject(KC_A,TRUE,&t); sleep_ms(3); inject(KC_A,FALSE,&t); sleep_ms(300); printf("gtk events now %d\n",ngev); printf("no grab, inject a            -> app sees a: %d (expect 1)\n",gtk_saw(0x61,g0));
   set_grabs(E_MODS,keys_v(KS_A)); sleep_ms(30); g0=ngev; inject(KC_A,TRUE,&t); sleep_ms(3); inject(KC_A,FALSE,&t); sleep_ms(80); printf("grab a, inject a             -> app sees a: %d (expect 0: injected key is grabbed again)\n",gtk_saw(0x61,g0));
   int e0=nev; g0=ngev; uint64_t tu; uint64_t t0=now_ns(); set_grabs(E_MODS,E_KEYS); uint64_t t1=now_ns(); inject(KC_A,TRUE,&tu); sleep_ms(3); inject(KC_A,FALSE,&t); sleep_ms(80);
   printf("ungrab (sync, %.0fus) then inject a -> app sees a: %d (expect 1)\n",(t1-t0)/1e3,gtk_saw(0x61,g0)); (void)e0;
@@ -151,9 +159,6 @@ static void do_reinject(void){
   ungrab(); }
 
 
-#define KS_INSERT 0xff63
-#define KC_INSERT 110
-static int count_gtk(uint32_t kv,int since){ int c=0; for(int i=since;i<ngev;i++) if(gevs[i].press&&gevs[i].keyval==kv) c++; return c; }
 static int count_ev(uint32_t ks,int since){ int c=0; for(int i=since;i<nev;i++) if(!evs[i].rel&&evs[i].keysym==ks) c++; return c; }
 static void hold_test(const char*name,uint32_t kc,uint32_t ks,GVariant*mods){
   ungrab(); if(mods) set_grabs(mods,E_KEYS); sleep_ms(700); int g0=ngev,e0=nev; uint64_t t;
@@ -170,14 +175,14 @@ static void do_p13(void){
   hold_test("Caps grabbed as modifier",KC_CAPS,KS_CAPS,mods_v(1,KS_CAPS)); ungrab(); if(caps_state()){ inject(KC_CAPS,TRUE,&t); sleep_ms(5); inject(KC_CAPS,FALSE,&t);} }
 
 static void do_skew(int n){
-  // gap = release1 -> press2 of a grabbed modifier (Caps); passed through iff Caps toggled. Mutter's gap = main-thread EIS handling times.
-  printf("# P-14 double-tap cutoff scan; columns: inject_gap_us recv_gap_us passed\n"); ungrab(); set_grabs(mods_v(1,KS_CAPS),E_KEYS); srand(11);
-  for(int i=0;i<n;i++){ sleep_ms(650); gboolean before=caps_state(); uint64_t t,tr,tp; int base=nev; inject(KC_CAPS,TRUE,&t); sleep_ms(3); inject(KC_CAPS,FALSE,&tr);
-    uint64_t g=g_getenv("SKEW_LO")? atoi(g_getenv("SKEW_LO"))*1000ull+rand()%(atoi(g_getenv("SKEW_SPAN"))*1000): 480000+rand()%40000;
-    spin_until(tr+g); inject(KC_CAPS,TRUE,&tp); sleep_ms(8); inject(KC_CAPS,FALSE,&t); sleep_ms(40);
-    int ir=-1,ip=-1; for(int k=base;k<nev;k++){ if(evs[k].keysym==KS_CAPS){ if(evs[k].rel&&ir<0) ir=k; else if(!evs[k].rel&&k>base+0&&ip<0&&ir>=0) ip=k; } }
-    uint64_t rg= (ir>=0&&ip>=0)? evs[ip].t-evs[ir].t:0; printf("%llu %llu %d\n",(unsigned long long)(tp-tr),(unsigned long long)rg,caps_state()!=before); fflush(stdout);
-    sleep_ms(50); if(caps_state()){ ungrab(); inject(KC_CAPS,TRUE,&t); sleep_ms(5); inject(KC_CAPS,FALSE,&t); sleep_ms(100); set_grabs(mods_v(1,KS_CAPS),E_KEYS);} }
+  // gap = release1 -> press2 of grabbed modifier Insert; "passed" = GTK client received the second press. Mutter measures the gap with
+  // its own event timestamps (EIS path: g_get_monotonic_time() on the compositor main thread); gorca measures KeyEvent receipt times.
+  printf("# P-14 double-tap cutoff scan; columns: inject_gap_us recv_gap_us passed\n"); ungrab(); set_grabs(mods_v(1,KS_INSERT),E_KEYS); srand(11);
+  for(int i=0;i<n;i++){ sleep_ms(900); uint64_t t,tr,tp; int base=nev,g0=ngev; inject(KC_INSERT,TRUE,&t); uint64_t tp1=t; sleep_ms(3); inject(KC_INSERT,FALSE,&tr);
+    uint64_t g=(atoi(g_getenv("SKEW_LO"))*1000ull+rand()%(atoi(g_getenv("SKEW_SPAN"))*1000))*1000ull;
+    spin_until(tr+g); inject(KC_INSERT,TRUE,&tp); sleep_ms(8); uint64_t tr2; inject(KC_INSERT,FALSE,&tr2); sleep_ms(60); if(g_getenv("SKEW_DEBUG")) printf("inj: P1@0 R1@%.1f P2@%.1f R2@%.1f\n",(tr-tp1)/1e6,(tp-tp1)/1e6,(tr2-tp1)/1e6);
+    int ir=-1,ip=-1; for(int k=base;k<nev;k++){ if(evs[k].keysym==KS_INSERT){ if(evs[k].rel&&ir<0) ir=k; else if(!evs[k].rel&&ir>=0&&ip<0) ip=k; } }
+    uint64_t rg= (ir>=0&&ip>=0)? evs[ip].t-evs[ir].t:0; printf("%llu %llu %d",(unsigned long long)((tp-tr)/1000),(unsigned long long)(rg/1000),count_gtk(KS_INSERT,g0)>0); if(g_getenv("SKEW_DEBUG")){ for(int k=g0;k<ngev;k++) printf(" [%s %u @%.1fms]",gevs[k].press?"P":"R",gevs[k].keyval,((double)gevs[k].t-(double)tp1)/1e6); } printf("\n"); fflush(stdout); }
   ungrab(); }
 
 static void switch_layout(void){ uint64_t t; inject(125,TRUE,&t); sleep_ms(20); inject(57,TRUE,&t); sleep_ms(10); inject(57,FALSE,&t); sleep_ms(20); inject(125,FALSE,&t); sleep_ms(400); }
@@ -188,7 +193,7 @@ static int run_keymap_pass(const char*label,struct xkb_keymap*km,int group,gbool
     uint64_t dl=now_ns()+30000000ull; while(now_ns()<dl){ pump(); } 
     for(int k=base;k<nev;k++){ if(evs[k].rel|| evs[k].keycode!=kc+8) continue; tot++;
       xkb_mod_mask_t mods=evs[k].state&0xff; xkb_state_update_mask(st,mods&~(2|16),0,mods&(2|16),0,0,group);
-      xkb_keysym_t mine=xkb_state_key_get_one_sym(st,kc+8); 
+      xkb_keysym_t mine=xkb_state_key_get_one_sym(st,kc+8); if(kc==30||kc==79){ char nb[64]; xkb_keysym_get_name(evs[k].keysym,nb,64); printf("   sample evdev %d: mutter keysym=%s state=0x%x\n",kc,nb,evs[k].state);} 
       if(mine!=evs[k].keysym){ mism++; if(shown++<6){ char a[64],b[64]; xkb_keysym_get_name(mine,a,64); xkb_keysym_get_name(evs[k].keysym,b,64); printf("   MISMATCH evdev %d (xkb %d): gorca-xkb=%s mutter=%s state=0x%x\n",kc,kc+8,a,b,evs[k].state);} } break; } }
   printf("%-44s keys compared=%3d mismatches=%d\n",label,tot,mism); xkb_state_unref(st); return mism; }
 static void do_keymap(void){
@@ -205,6 +210,7 @@ static void do_keymap(void){
   switch_layout(); 
   run_keymap_pass("group1 (ru), plain (assuming switched)",km,1,FALSE,FALSE);
   run_keymap_pass("group1 (ru), Shift held",km,1,FALSE,TRUE);
+  run_keymap_pass("ru active, gorca ASSUMES group 0",km,0,FALSE,FALSE);
   switch_layout(); }
 
 static void do_settle_neg(int n){
@@ -216,11 +222,21 @@ static void do_settle_neg(int n){
       sw+= caps_state()==before; }
     printf("%6d %4d %4d\n",deltas[d],n,sw); fflush(stdout);} ungrab(); }
 
+static void do_sanity(void){ uint64_t t; ungrab(); sleep_ms(100);
+  for(int i=0;i<3;i++){ int b=nev; printf("caps before=%d\n",caps_state()); inject(KC_CAPS,TRUE,&t); sleep_ms(30); printf("  after press=%d\n",caps_state()); inject(KC_CAPS,FALSE,&t); sleep_ms(30); printf("  after release=%d\n",caps_state());
+    for(int k=b;k<nev;k++) printf("  KeyEvent rel=%d state=0x%x keysym=0x%x kc=%u\n",evs[k].rel,evs[k].state,evs[k].keysym,evs[k].keycode); sleep_ms(700);} }
+
+static void do_rtt(int n){ uint64_t *v=malloc(8*n); for(int i=0;i<n;i++){ uint64_t t0=now_ns(); set_grabs(mods_v(1,i&1?KS_INSERT:KS_CAPS),keys_v(i&1?0:KS_A)); v[i]=now_ns()-t0; sleep_ms(2);} stats("SetKeyGrabs reply RTT",v,n); ungrab(); }
+
+static void do_press(int argc,char**argv){ uint64_t t; for(int i=2;i<argc;i++){ int kc=atoi(argv[i]); inject(kc,TRUE,&t); sleep_ms(20); inject(kc,FALSE,&t); sleep_ms(300);} }
+
 int main(int argc,char**argv){ if(argc<2){fprintf(stderr,"usage\n");return 1;} setup();
   if(!strcmp(argv[1],"latency")) do_latency(argc>2?atoi(argv[2]):1000);
   else if(!strcmp(argv[1],"settle-mod")) do_settle_mod(argc>2?atoi(argv[2]):50);
   else if(!strcmp(argv[1],"settle-neg")) do_settle_neg(argc>2?atoi(argv[2]):20);
-  else if(!strcmp(argv[1],"skew")) do_skew(argc>2?atoi(argv[2]):300);
-  else if(!strcmp(argv[1],"keymap")) do_keymap();
-  else { start_gtk(); if(!strcmp(argv[1],"p13")) do_p13(); else if(!strcmp(argv[1],"settle-key")) do_settle_key(argc>2?atoi(argv[2]):50); else if(!strcmp(argv[1],"reinject")) do_reinject(); }
+  else if(!strcmp(argv[1],"rtt")) do_rtt(argc>2?atoi(argv[2]):1000);
+  else if(!strcmp(argv[1],"press")) do_press(argc,argv);
+  else if(!strcmp(argv[1],"sanity")) do_sanity();
+    else if(!strcmp(argv[1],"keymap")) do_keymap();
+  else { start_gtk(); if(!strcmp(argv[1],"p13")) do_p13(); else if(!strcmp(argv[1],"skew")) do_skew(argc>2?atoi(argv[2]):300); else if(!strcmp(argv[1],"settle-key")) do_settle_key(argc>2?atoi(argv[2]):50); else if(!strcmp(argv[1],"reinject")) do_reinject(); }
   ungrab(); call("org.gnome.Mutter.RemoteDesktop",sess_path,"org.gnome.Mutter.RemoteDesktop.Session","Stop",NULL,NULL); if(gtk_fd>=0) kill(gtk_pid,SIGTERM); return 0; }
