@@ -28,7 +28,7 @@ mod verbalize;
 
 pub use backend::{BackendConnectError, FnBackend, SpeechBackend};
 pub use failover::{FailoverClient, FailoverConfig, FailoverMode, FailoverNotice};
-pub use lane::{LaneConfig, SpeechHandle, SpeechLane, SpeechStats};
+pub use lane::{LaneConfig, SpeechControl, SpeechHandle, SpeechLane, SpeechStats};
 pub use queue::{FIFO_CAPACITY, SpeechQueue};
 pub use state::{
     REPLACE_DEADLINE, SpeechEffect, SpeechMsg, SpeechState, StepCtx, UttMeta, backoff,
