@@ -10,6 +10,7 @@
 //! | L3-10k, L3-50k | L1 while another app floods the a11y bus | as L1 |
 //! | L4, L4c | L1 while an app hangs on every D-Bus call (L4) / answers normally (L4c, control) | as L1 |
 //! | K1 | emulated Mutter KeyEvent -> SPEAK | `k1_ms` |
+//! | K2, K3, K4 | M1 command layer gates, see [`super::m1`]; skipped until M1 lands | `k2_ms`, `k3_ms`, `lost`... |
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -42,6 +43,9 @@ pub enum Scn {
     L4,
     L4c,
     K1,
+    K2,
+    K3,
+    K4,
 }
 
 impl Scn {
@@ -55,6 +59,9 @@ impl Scn {
             Self::L4 => "L4".into(),
             Self::L4c => "L4c".into(),
             Self::K1 => "K1".into(),
+            Self::K2 => "K2".into(),
+            Self::K3 => "K3".into(),
+            Self::K4 => "K4".into(),
         }
     }
 
@@ -69,13 +76,16 @@ impl Scn {
             "L4" => Self::L4,
             "L4c" => Self::L4c,
             "K1" => Self::K1,
+            "K2" => Self::K2,
+            "K3" => Self::K3,
+            "K4" => Self::K4,
             _ => return None,
         })
     }
 
     pub fn all() -> Vec<Self> {
         [
-            "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1",
+            "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K3", "K4",
         ]
         .iter()
         .filter_map(|s| Self::parse(s))
@@ -115,20 +125,20 @@ pub struct RunOut {
 }
 
 impl RunOut {
-    fn s(&mut self, id: &str, v: Vec<f64>) {
+    pub(super) fn s(&mut self, id: &str, v: Vec<f64>) {
         self.samples.push((id.to_owned(), v));
     }
 
-    fn x(&mut self, id: &str, v: f64, unit: &str) {
+    pub(super) fn x(&mut self, id: &str, v: f64, unit: &str) {
         self.scalars.push((id.to_owned(), v, unit.to_owned()));
     }
 }
 
-fn ms(ns: u64) -> f64 {
+pub(super) fn ms(ns: u64) -> f64 {
     ns as f64 / 1e6
 }
 
-fn pause(rng: &mut Rng, lo_ms: u64, hi_ms: u64) {
+pub(super) fn pause(rng: &mut Rng, lo_ms: u64, hi_ms: u64) {
     std::thread::sleep(Duration::from_micros(
         lo_ms * 1000 + rng.below((hi_ms - lo_ms) * 1000 + 1),
     ));
@@ -159,14 +169,14 @@ impl Decoder {
     }
 }
 
-fn speaks(recs: &[Rec]) -> impl Iterator<Item = (&Rec, &str)> {
+pub(super) fn speaks(recs: &[Rec]) -> impl Iterator<Item = (&Rec, &str)> {
     recs.iter().filter_map(|r| match &r.kind {
         Kind::Speak { text, .. } => Some((r, text.as_str())),
         _ => None,
     })
 }
 
-fn base_opts(reader: &ReaderSpec, flavor: Flavor) -> RigOpts {
+pub(super) fn base_opts(reader: &ReaderSpec, flavor: Flavor) -> RigOpts {
     RigOpts {
         flavor,
         reader: reader.clone(),
@@ -306,6 +316,9 @@ pub fn run(
                 .configure(Duration::from_millis(1), Duration::from_millis(3));
             k1(&mut rig, &mut out, size, seed)?;
         }
+        Scn::K2 => super::m1::k2(host, reader, flavor, size, seed, &mut out)?,
+        Scn::K3 => super::m1::k3(host, reader, flavor, size, seed, &mut out)?,
+        Scn::K4 => super::m1::k4(host, reader, flavor, size, seed, &mut out)?,
     }
     Ok(out)
 }
@@ -422,12 +435,12 @@ fn l2(rig: &mut Rig, out: &mut RunOut, size: Size, seed: u64) -> Result<()> {
     Ok(())
 }
 
-struct Storm {
-    stop: Arc<AtomicBool>,
-    thread: std::thread::JoinHandle<gorca_bench_b2::feeder::FeedResult>,
+pub(super) struct Storm {
+    pub(super) stop: Arc<AtomicBool>,
+    pub(super) thread: std::thread::JoinHandle<gorca_bench_b2::feeder::FeedResult>,
 }
 
-fn start_storm(a11y: &str, rate: f64, secs: f64) -> Result<Storm> {
+pub(super) fn start_storm(a11y: &str, rate: f64, secs: f64) -> Result<Storm> {
     let c = BusConn::connect(a11y, Duration::from_secs(5))?;
     let stop = Arc::new(AtomicBool::new(false));
     let st = Arc::clone(&stop);

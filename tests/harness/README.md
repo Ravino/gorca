@@ -223,3 +223,22 @@ Owns `org.freedesktop.a11y.Manager` at `/org/freedesktop/a11y/Manager` on the pr
 "keysym":97,"unichar":97,"state":0,"released":false}` emits the unicast `KeyEvent(b u u u q)` to every
 watcher and replies with `t_emit_ns`; `stats` returns watcher and denied counts. Used by the
 end-to-end latency harness (`bench/e2e/README.md`).
+
+It also emulates Mutter's grab semantics (M1 test support), ported from
+`refs/mutter/src/backends/meta-a11y-manager.c` (`handle_set_key_grabs`, `should_grab_keypress`,
+`meta_a11y_manager_notify_clients`, `key_grabber_bus_name_vanished_callback`) and
+`refs/mutter/src/backends/native/meta-seat-impl.c` (`is_a11y_modifier_first_click`):
+
+* `SetKeyGrabs(au, a(uu))` replaces the caller's grab set; a keystroke matches only on exact
+  `keysym` and exact modifier `state` (mouse buttons removed), so NumLock (0x10) and CapsLock
+  (0x02) need the 4 mask variants registered.
+* a key is notified to watchers and would-be grabbers, but only a grab consumes it; watched keys
+  pass through to the app. The `key` reply carries `consumed`, `passed`, `notified`,
+  `first_click`; `app_log` lists what the app received.
+* a11y-modifier first click: the first press and release of a grabbed modifier are swallowed, a
+  second press within the repeat delay (default 500 ms, `set_repeat_delay`) passes through.
+  Pass `time_ms` on `key` for deterministic timing.
+* owner loss: the grab set vanishes with the caller's unique name (or `drop_name`); a new owner
+  must call `SetKeyGrabs` again. `grabs` dumps the state.
+
+Self-tests: `smoke/test_fake_mutter.py` (run by `run-smoke.sh`).
