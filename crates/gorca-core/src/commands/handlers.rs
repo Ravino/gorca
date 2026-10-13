@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 
 use gorca_config::Confirmations;
 use gorca_input_api::{CmdId, KeyIntent, PressKind, is_modifier_keysym, spoken_key_name};
+use gorca_mirror::fill::{DemandOutcome, DemandWhy};
 use gorca_model::{Epoch, Lookup, NodeKey, NodeSnapshot, Prio, PropMask};
 use gorca_rt::BudgetClass;
 
@@ -271,6 +272,20 @@ impl Reader {
             self.say("no focus", fx);
             return;
         };
+        if kind == PendingKind::WhereAmI {
+            // Policies see the ancestry demand, with what the mirror could serve for it.
+            let outcome = match self.dir.view(node) {
+                Lookup::Hit(v) if v.stale.is_empty() => DemandOutcome::Hit,
+                Lookup::Hit(v) => DemandOutcome::Stale { mask: v.stale },
+                Lookup::Miss => DemandOutcome::Miss,
+                Lookup::Gone => DemandOutcome::Gone,
+            };
+            fx.push(ReaderEffect::Demand {
+                node,
+                why: DemandWhy::WhereAmI,
+                outcome,
+            });
+        }
         match self.dir.lookup(node) {
             Lookup::Hit(snap) => self.answer_node(kind, repeat, &snap, fx),
             Lookup::Miss => {
