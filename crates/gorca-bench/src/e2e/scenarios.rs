@@ -527,6 +527,34 @@ fn l4(rig: &mut Rig, out: &mut RunOut, size: Size, seed: u64) -> Result<()> {
     Ok(())
 }
 
+/// Key `i` sent `97 + i % 26` as its character at `sent[i].1`. If every spoken text is a single
+/// character, return for each key the latency of the first unused echo of its character that
+/// arrived at or after the emit time; `None` if there is none (lost). `None` overall when the
+/// texts are not single characters.
+fn match_by_char(sent: &[(u16, u64)], all: &[(&Rec, &str)], n: usize) -> Option<Vec<Option<f64>>> {
+    let single = |t: &str| t.chars().count() == 1;
+    if all.is_empty() || !all.iter().all(|(_, t)| single(t)) || n == 0 {
+        return None;
+    }
+    let mut used = vec![false; all.len()];
+    let mut out = Vec::with_capacity(sent.len());
+    for (i, (_, t)) in sent.iter().enumerate() {
+        let want = char::from(b'a' + u8::try_from(i % 26).unwrap_or(0));
+        let hit = all
+            .iter()
+            .enumerate()
+            .find(|(j, (r, text))| !used[*j] && r.t_ns >= *t && text.starts_with(want));
+        match hit {
+            Some((j, (r, _))) => {
+                used[j] = true;
+                out.push(Some(ms(r.t_ns - *t)));
+            }
+            None => out.push(None),
+        }
+    }
+    Some(out)
+}
+
 fn k1(rig: &mut Rig, out: &mut RunOut, size: Size, seed: u64) -> Result<()> {
     if !rig.keys_ok {
         out.notes.push(
@@ -567,6 +595,17 @@ fn k1(rig: &mut Rig, out: &mut RunOut, size: Size, seed: u64) -> Result<()> {
         for (kc, t) in &sent {
             match by_kc.get(kc) {
                 Some(&s) => k1.push(ms(s.saturating_sub(*t))),
+                None => lost += 1,
+            }
+        }
+    } else if let Some(matched) = match_by_char(&sent, &all, size.n) {
+        // The daemon echoes the typed character; the keys cycle through 26 letters, so a key and
+        // its echo are matched by character and by time (echo after the emit), never by order.
+        out.notes
+            .push("K1: correlated by echoed character and time".into());
+        for m in matched {
+            match m {
+                Some(ms_) => k1.push(ms_),
                 None => lost += 1,
             }
         }

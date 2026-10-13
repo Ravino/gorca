@@ -41,6 +41,12 @@ pub struct AppPort {
 }
 
 impl AppPort {
+    /// A handle on this app's ingress for a transport that pushes from its own thread (the
+    /// socket drain, `gorca_dbus::drain::AppRoute`). Cloning is cheap and not a hot path.
+    pub fn ingress_sender(&self) -> IngressSender {
+        self.ingress.clone()
+    }
+
     /// O(1), never blocks; may coalesce or mark dirty (C-1).
     pub fn push(&self, ev: RawEvent) {
         self.ingress.push(ev);

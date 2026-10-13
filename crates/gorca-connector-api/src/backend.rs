@@ -40,6 +40,9 @@ pub enum BackendOp {
         point: Point,
     },
     Collection(MatchRule),
+    /// The cheapest possible liveness check of the app (AT-SPI: `GetRole` on the app root). Used
+    /// by the `Hung` probe (I-4); answered with `BackendReply::ActionDone`.
+    Probe,
 }
 
 #[derive(Clone, Debug, PartialEq)]

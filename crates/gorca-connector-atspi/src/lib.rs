@@ -13,24 +13,37 @@
 //! > `p2p` startup calls every app in sequence with no timeout." We use `atspi` for its types
 //! > and proxies only, over our own connections from `gorca-dbus`.
 //!
-//! Phase 0 contains the [`Connector`](gorca_connector_api::Connector) and
-//! [`DocSource`](gorca_doc_source_api::DocSource) shells (they run until shutdown and announce
-//! nothing), the role table seed, the toolkit table with its text units (TU-2), and the pure
-//! enablement plan (ID-5). TBD: registry watching, event connections and drains (B-2), P2P
-//! calls (D-7), `GetItems` fill (B-1), `AtspiDocSource` build (section 9.4), and
-//! `atspi::Role` completeness.
+//! Phase 1 (first vertical slice): the connector connects to the a11y bus (`org.a11y.Bus`),
+//! applies ID-5 enablement, registers its event listeners, runs the ADR-0004 raw drain with
+//! an [`AtspiRouter`] that announces each application on its first event, and serves the
+//! core's `Fetch`/`Probe` requests (name, role, state, value) over the call connection with a
+//! deadline on every call. Applications are retired on `NameOwnerChanged`.
+//!
+//! Not yet: P2P calls (D-7; requests use the bus call connection, which D-7 allows),
+//! `GetItems` cache fill (B-1), `AtspiDocSource` build (section 9.4), D-5 per-app
+//! deregistration, and `atspi::Role` completeness.
 //!
 //! Allowed dependencies: `gorca-connector-api`, `gorca-doc-source-api`, `gorca-dbus`,
 //! `gorca-model`, `gorca-rt`, `atspi`, `zbus`.
 
 mod connector;
+mod decode;
 mod doc_source;
 mod enablement;
+mod fetch;
+mod paths;
+mod proc;
 mod role_map;
+mod router;
+mod session;
 mod toolkit;
 
-pub use connector::AtspiConnector;
+pub use connector::{AtspiConnector, AtspiOptions};
+pub use decode::{role_from_raw, states_from_raw};
 pub use doc_source::AtspiDocSource;
 pub use enablement::{Enablement, StatusValues};
+pub use paths::PathTable;
 pub use role_map::map_role;
+pub use router::{AtspiRouter, RouterStats};
+pub use session::REGISTERED_EVENTS;
 pub use toolkit::Toolkit;

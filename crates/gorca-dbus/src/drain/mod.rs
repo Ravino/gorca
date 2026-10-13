@@ -32,6 +32,17 @@ pub use map::{MAX_ANNOUNCEMENT_BYTES, Malformed, SignalView, local_id, map_signa
 pub const MAX_ROUTES: usize = 4096;
 pub use raw::spawn_drain;
 
+/// Answer of [`Router::resolve`].
+#[derive(Clone, Debug)]
+pub enum RouteDecision {
+    /// Events of this sender go here.
+    Route(AppRoute),
+    /// Not an application (the registry, a well-known name, an ignored peer): cache it.
+    NotAnApp,
+    /// Not decided yet; do not cache. The event is parked or dropped.
+    Retry,
+}
+
 /// Where events of one sender go.
 #[derive(Clone, Debug)]
 pub struct AppRoute {
@@ -85,7 +96,29 @@ impl Default for IngressFactory {
 /// drain caches the answer, including `None`. It must not block for long. `None` means "not an
 /// app we track": the signal is counted as unrouted and dropped.
 pub trait Router: Send + Sync + 'static {
+    /// Simple form: a route or "not an application". Routers that can fail transiently or
+    /// register asynchronously implement [`Router::resolve`] instead.
     fn route(&self, sender: &str) -> Option<AppRoute>;
+
+    /// The drain calls this. `Route` and `NotAnApp` are cached for the connection; `Retry` never
+    /// is, and the drain asks again on the sender's next event, so a transient failure (core
+    /// busy, registration in flight) cannot mute an application permanently. Must not block.
+    fn resolve(&self, sender: &str) -> RouteDecision {
+        match self.route(sender) {
+            Some(r) => RouteDecision::Route(r),
+            None => RouteDecision::NotAnApp,
+        }
+    }
+
+    /// An event of a sender that answered `Retry`, handed over so the router can keep it until
+    /// the registration completes (bounded). The default drops it; the drain counts it either way.
+    fn park(&self, _sender: &str, _signal: &SignalView<'_>) {}
+
+    /// Called on the drain thread, before the event is pushed, for every `FocusChanged` the
+    /// drain maps. `path` is the object path of the signal, of which `node.local` is the hash
+    /// ([`local_id`]): a connector that must call the object later records the reverse mapping
+    /// here. Rare (focus only) and must be O(1) and non-blocking; the default does nothing.
+    fn focus_seen(&self, _app: AppId, _node: gorca_model::NodeKey, _path: &str) {}
 }
 
 #[derive(Clone, Debug)]
@@ -161,6 +194,8 @@ pub struct DrainCounters {
     pub pushed: AtomicU64,
     /// Signals whose sender had no route.
     pub unrouted: AtomicU64,
+    /// Signals of senders the router answered `Retry` for (parked by the router or dropped).
+    pub deferred: AtomicU64,
     /// Messages that were valid but not mapped (other interfaces, replies, unknown members).
     pub ignored: AtomicU64,
     /// Signals with a body that did not parse.
@@ -179,6 +214,7 @@ pub struct DrainStats {
     pub batches: u64,
     pub pushed: u64,
     pub unrouted: u64,
+    pub deferred: u64,
     pub ignored: u64,
     pub malformed: u64,
     pub backlog_max: u64,
@@ -211,6 +247,7 @@ impl DrainShared {
             batches: g(&c.batches),
             pushed: g(&c.pushed),
             unrouted: g(&c.unrouted),
+            deferred: g(&c.deferred),
             ignored: g(&c.ignored),
             malformed: g(&c.malformed),
             backlog_max: g(&c.backlog_max),

@@ -21,9 +21,14 @@
 pub mod conformance;
 mod fake_connector;
 mod fake_source;
+pub mod harness;
+mod scripted;
+mod speech_server;
 mod storm;
 
 pub use fake_connector::{Behavior, FakeConnector, FakeScript};
 pub use fake_source::FakeDocSource;
 pub use gorca_rt::VirtualClock;
+pub use scripted::{ScriptedApp, ScriptedConnector, ScriptedHandle, ScriptedNode};
+pub use speech_server::{MockProto, MockSpeechServer, Spoken};
 pub use storm::{StormGen, storm};

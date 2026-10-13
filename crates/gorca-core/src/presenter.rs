@@ -91,6 +91,44 @@ pub fn present_focus(n: &NodeSnapshot, id: UttId, epoch: Epoch) -> Utterance {
     }
 }
 
+/// Spoken form of a key press (key echo). Modifier keys alone are silent.
+pub fn key_echo_text(unichar: u32, keysym: u32) -> Option<String> {
+    let named = match keysym {
+        0xff0d | 0xff8d => Some("enter"),
+        0xff08 => Some("backspace"),
+        0xff09 | 0xfe20 => Some("tab"),
+        0xff1b => Some("escape"),
+        0xffff => Some("delete"),
+        0xff50 => Some("home"),
+        0xff57 => Some("end"),
+        0xff55 => Some("page up"),
+        0xff56 => Some("page down"),
+        0xff51 => Some("left"),
+        0xff52 => Some("up"),
+        0xff53 => Some("right"),
+        0xff54 => Some("down"),
+        0x20 => Some("space"),
+        _ => None,
+    };
+    if let Some(n) = named {
+        return Some(n.to_owned());
+    }
+    // Shift, Control, Alt, Super, Caps Lock, Num Lock: pressed on their own they say nothing.
+    if (0xffe1..=0xffee).contains(&keysym) || keysym == 0xff7f {
+        return None;
+    }
+    char::from_u32(unichar)
+        .filter(|c| !c.is_control())
+        .map(String::from)
+}
+
+/// Key echo: interrupts, carries the epoch of the key press.
+pub fn key_echo(text: &str, id: UttId, epoch: Epoch) -> Utterance {
+    let mut u = message(text, id, epoch);
+    u.prio = Prio::Interrupt;
+    u
+}
+
 /// A plain spoken message (for example "application not responding").
 pub fn message(text: &str, id: UttId, epoch: Epoch) -> Utterance {
     let mut segments = SmallVec::new();
@@ -196,6 +234,21 @@ mod tests {
             texts(&present_focus(&n, UttId(1), Epoch(1))),
             ["Volume", "edit", "hello"]
         );
+    }
+
+    #[test]
+    fn key_echo_names_special_keys_and_skips_modifiers() {
+        assert_eq!(key_echo_text('a' as u32, 0x61).as_deref(), Some("a"));
+        assert_eq!(key_echo_text(0x20, 0x20).as_deref(), Some("space"));
+        assert_eq!(key_echo_text(0, 0xff0d).as_deref(), Some("enter"));
+        assert_eq!(key_echo_text(0, 0xff52).as_deref(), Some("up"));
+        assert_eq!(key_echo_text(0, 0xffe1), None, "shift alone is silent");
+        assert_eq!(
+            key_echo_text(0x07, 0x07),
+            None,
+            "control characters are not echoed"
+        );
+        assert_eq!(key_echo_text('é' as u32, 0xe9).as_deref(), Some("é"));
     }
 
     #[test]

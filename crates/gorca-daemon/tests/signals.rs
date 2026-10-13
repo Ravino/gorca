@@ -19,7 +19,22 @@ struct Daemon {
 }
 
 fn start() -> Daemon {
+    // The daemon must never reach the real desktop from a test: every bus and speech socket is
+    // pointed at a path that does not exist, accessibility is not enabled, and the inherited
+    // session variables are removed.
     let mut child = Command::new(env!("CARGO_BIN_EXE_gorca"))
+        .args([
+            "--no-keyboard",
+            "--no-enable",
+            "--a11y-address=unix:path=/nonexistent/gorca-test-a11y",
+            "--session-address=unix:path=/nonexistent/gorca-test-session",
+            "--voicego-socket=/nonexistent/gorca-test-voicego.sock",
+            "--ssip-socket=/nonexistent/gorca-test-speechd.sock",
+        ])
+        // Nothing from the user's environment: no session or a11y bus, no XDG_RUNTIME_DIR, no
+        // speech-dispatcher variables. The binary reads its environment only in `main`, and
+        // here that environment is empty apart from the log filter.
+        .env_clear()
         .env("GORCA_LOG", "info")
         .stderr(Stdio::piped())
         .stdout(Stdio::null())

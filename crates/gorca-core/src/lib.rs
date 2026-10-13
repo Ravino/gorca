@@ -45,9 +45,11 @@ pub use health::{
     SLOW_RECOVERY, SLOW_WINDOW,
 };
 pub use mode::{Mode, ModeEffect, ModeKeys, ModeMsg, PassScope, ReviewCursor};
-pub use presenter::{PresentJob, PresentKind, SpeechIntent, present_focus};
+pub use presenter::{PresentJob, PresentKind, SpeechIntent, key_echo_text, present_focus};
 pub use reader::{
-    BackgroundMsg, FocusLaneMsg, QueryReply, Reader, ReaderEffect, ReaderInbox, ReaderMsg,
-    ReaderSenders, reader_channels,
+    BackgroundMsg, DUPLICATE_FOCUS_WINDOW, FocusLaneMsg, QueryReply, Reader, ReaderEffect,
+    ReaderInbox, ReaderMsg, ReaderSenders, reader_channels,
 };
-pub use runtime::{Core, CoreConfig, CoreError};
+pub use runtime::{
+    Core, CoreConfig, CoreError, CoreStats, CoreStatsSnapshot, NullSpeech, SpeechOut,
+};

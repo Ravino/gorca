@@ -795,6 +795,12 @@ impl Drop for Shared {
 }
 
 impl IngressSender {
+    /// The receiver is gone (the application was retired or evicted): pushes are discarded. The
+    /// drain uses this to drop a stale cached route and ask the router again.
+    pub fn is_closed(&self) -> bool {
+        self.shared.closed.load(Ordering::Acquire)
+    }
+
     /// O(1) amortised, never awaits (C-1). One CAS on the ring in the common case; when the
     /// ring is full the caller folds a bounded chunk of it into the table first. Events pushed
     /// after the receiver was dropped are discarded.

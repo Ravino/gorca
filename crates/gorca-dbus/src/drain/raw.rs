@@ -19,8 +19,8 @@ use smallvec::SmallVec;
 
 use super::wire::{self, ERROR, Frame, MAX_MESSAGE_BYTES, METHOD_RETURN, SIGNAL};
 use super::{
-    AppRoute, DrainConfig, DrainEnd, DrainError, DrainHandle, DrainShared, MAX_ROUTES, Router,
-    SignalView, map_signal,
+    AppRoute, DrainConfig, DrainEnd, DrainError, DrainHandle, DrainShared, MAX_ROUTES,
+    RouteDecision, Router, SignalView, map_signal,
 };
 use crate::{set_recv_buffer, socket_backlog};
 
@@ -139,6 +139,7 @@ fn run_inner(
 }
 
 fn connect(address: &str) -> Result<UnixStream, String> {
+    gorca_rt::guard::check(address);
     for one in address.split(';') {
         let Some(rest) = one.strip_prefix("unix:") else {
             continue;
@@ -187,8 +188,16 @@ impl Hasher for NameHasher {
     }
 }
 
+/// Outcome of resolving the sender of one signal.
+enum Routed {
+    Idx(usize),
+    NotApp,
+    Retry,
+}
+
 #[derive(Default)]
 struct Batch {
+    deferred: u64,
     messages: u64,
     ignored: u64,
     unrouted: u64,
@@ -409,6 +418,7 @@ impl<'a> Conn<'a> {
             (&c.messages, b.messages),
             (&c.ignored, b.ignored),
             (&c.unrouted, b.unrouted),
+            (&c.deferred, b.deferred),
             (&c.malformed, b.malformed),
             (&c.pushed, b.pushed),
         ] {
@@ -518,10 +528,6 @@ impl<'a> Conn<'a> {
             self.batch.ignored += 1;
             return;
         }
-        let Some(ridx) = self.route(sender) else {
-            self.batch.unrouted += 1;
-            return;
-        };
         let (Ok(path), Ok(iface_s), Ok(member)) = (
             std::str::from_utf8(path),
             std::str::from_utf8(iface),
@@ -529,6 +535,30 @@ impl<'a> Conn<'a> {
         ) else {
             self.batch.malformed += 1;
             return;
+        };
+        let ridx = match self.route(sender) {
+            Routed::Idx(i) => i,
+            Routed::NotApp => {
+                self.batch.unrouted += 1;
+                return;
+            }
+            Routed::Retry => {
+                // The router is still registering this sender (or backing off after a failure).
+                // Nothing is cached, so the next event asks again; this one is handed to the
+                // router to park, or dropped and counted. The drain never waits.
+                self.batch.deferred += 1;
+                if let Ok(name) = std::str::from_utf8(sender) {
+                    let view = SignalView {
+                        interface: iface_s,
+                        member,
+                        path,
+                        body,
+                        big_endian: f.big,
+                    };
+                    self.router.park(name, &view);
+                }
+                return;
+            }
         };
         if iface == OBJECT_IFACE
             && reads_body(member)
@@ -557,30 +587,51 @@ impl<'a> Conn<'a> {
             self.batch.ignored += 1;
         }
         for ev in self.mapped.drain(..) {
+            if let gorca_model::NodeEvent::FocusChanged { node } = &ev {
+                self.router.focus_seen(route.app, *node, path);
+            }
             route.tx.push(ev);
             self.batch.pushed += 1;
         }
     }
 
     /// Index into `routes` of the route for `sender`, asking the router once per distinct name.
-    fn route(&mut self, sender: &[u8]) -> Option<usize> {
+    /// `Route` and `NotAnApp` answers are cached; `Retry` never is (a transient failure must not
+    /// mute an application for the life of the connection).
+    fn route(&mut self, sender: &[u8]) -> Routed {
+        let cached = |routes: &[Option<AppRoute>], idx: usize| match routes.get(idx) {
+            Some(Some(_)) => Routed::Idx(idx),
+            Some(None) | None => Routed::NotApp,
+        };
         if let Some(idx) = self.last
             && self.names.get(idx).is_some_and(|n| &**n == sender)
+            && !self.drop_if_closed(idx, sender)
         {
-            return self.routes.get(idx).and_then(|r| r.as_ref()).map(|_| idx);
+            return cached(&self.routes, idx);
         }
-        let idx = if let Some(&idx) = self.index.get(sender) {
+        let known = self
+            .index
+            .get(sender)
+            .copied()
+            .filter(|&idx| !self.drop_if_closed(idx, sender));
+        let idx = if let Some(idx) = known {
             idx
         } else {
+            let decision = match std::str::from_utf8(sender) {
+                Ok(s) => self.router.resolve(s),
+                Err(_) => RouteDecision::NotAnApp,
+            };
+            let route = match decision {
+                RouteDecision::Route(r) => Some(r),
+                RouteDecision::NotAnApp => None,
+                RouteDecision::Retry => return Routed::Retry,
+            };
             if self.routes.len() >= MAX_ROUTES {
                 self.routes.clear();
                 self.names.clear();
                 self.index.clear();
                 self.last = None;
             }
-            let route = std::str::from_utf8(sender)
-                .ok()
-                .and_then(|s| self.router.route(s));
             self.routes.push(route);
             self.names.push(sender.into());
             let idx = self.routes.len() - 1;
@@ -588,7 +639,24 @@ impl<'a> Conn<'a> {
             idx
         };
         self.last = Some(idx);
-        self.routes.get(idx).and_then(|r| r.as_ref()).map(|_| idx)
+        cached(&self.routes, idx)
+    }
+
+    /// A cached route whose ingress was closed (the application was retired or evicted) is
+    /// stale: forget it, so the router is asked again on this sender's next event instead of the
+    /// application staying muted. `true` if the entry was dropped.
+    fn drop_if_closed(&mut self, idx: usize, sender: &[u8]) -> bool {
+        let closed = matches!(self.routes.get(idx), Some(Some(r)) if r.tx.is_closed());
+        if closed {
+            self.index.remove(sender);
+            if let Some(slot) = self.routes.get_mut(idx) {
+                *slot = None;
+            }
+            if self.last == Some(idx) {
+                self.last = None;
+            }
+        }
+        closed
     }
 
     /// A unique name that lost its owner: drop its route so its ingress can go away (AU-2).
@@ -826,5 +894,168 @@ mod tests {
         assert_eq!(stats.malformed, 0);
         drop(send);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Regression (review F4): the router answers `Retry` once (registration in flight, core
+    /// busy). The answer must not be cached: the sender's later events reach the ingress.
+    struct FlakyRouter {
+        calls: AtomicUsize,
+        parked: AtomicUsize,
+        route: AppRoute,
+    }
+
+    impl Router for FlakyRouter {
+        fn route(&self, _sender: &str) -> Option<AppRoute> {
+            None
+        }
+
+        fn resolve(&self, _sender: &str) -> RouteDecision {
+            let n = self.calls.fetch_add(1, Ordering::SeqCst);
+            if n == 0 {
+                RouteDecision::Retry
+            } else {
+                RouteDecision::Route(self.route.clone())
+            }
+        }
+
+        fn park(&self, _sender: &str, _signal: &SignalView<'_>) {
+            self.parked.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    #[test]
+    fn a_transient_route_failure_does_not_mute_the_sender() {
+        let dir = std::env::temp_dir().join(format!("gorca-drain-retry-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("bus");
+        let _ = std::fs::remove_file(&path);
+        let (send, _rules) = fake_broker(&path);
+        let (tx, rx) = ingress(IngressConfig::default());
+        let router = Arc::new(FlakyRouter {
+            calls: AtomicUsize::new(0),
+            parked: AtomicUsize::new(0),
+            route: AppRoute {
+                app: AppId {
+                    connector: ConnectorId(0),
+                    serial: 1,
+                },
+                tx,
+            },
+        });
+        let mut cfg = DrainConfig::new(format!("unix:path={}", path.display()));
+        cfg.connect_deadline = Duration::from_secs(3);
+        let drain = spawn_drain(cfg, Arc::clone(&router) as Arc<dyn Router>).unwrap();
+        send.send(event(":1.5")).unwrap(); // Retry: parked/dropped, not cached
+        for _ in 0..50 {
+            send.send(event(":1.5")).unwrap();
+        }
+        let delivered = wait(&rx, 1);
+        let stats = drain.stop();
+        drop(send);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(delivered, "later events of the app were dropped");
+        assert_eq!(stats.deferred, 1, "exactly the Retry event was deferred");
+        assert_eq!(router.parked.load(Ordering::SeqCst), 1);
+        assert!(router.calls.load(Ordering::SeqCst) >= 2);
+    }
+
+    /// `NotAnApp` is cached: the router is asked once.
+    #[test]
+    fn not_an_app_is_cached_for_the_connection() {
+        let dir = std::env::temp_dir().join(format!("gorca-drain-notapp-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("bus");
+        let _ = std::fs::remove_file(&path);
+        let (send, _rules) = fake_broker(&path);
+        let (tx, _rx) = ingress(IngressConfig::default());
+        let router = Arc::new(CountingRouter {
+            calls: AtomicUsize::new(0),
+            route: AppRoute {
+                app: AppId {
+                    connector: ConnectorId(0),
+                    serial: 1,
+                },
+                tx,
+            },
+        });
+        let mut cfg = DrainConfig::new(format!("unix:path={}", path.display()));
+        cfg.connect_deadline = Duration::from_secs(3);
+        let drain = spawn_drain(cfg, Arc::clone(&router) as Arc<dyn Router>).unwrap();
+        for _ in 0..20 {
+            send.send(event(":1.99")).unwrap();
+        }
+        #[allow(clippy::disallowed_methods)]
+        std::thread::sleep(Duration::from_millis(300));
+        let stats = drain.stop();
+        drop(send);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(router.calls.load(Ordering::SeqCst), 1);
+        assert_eq!(stats.unrouted, 20);
+    }
+
+    /// Regression (review R3-1c): when an application is evicted, its ingress closes; the drain
+    /// must notice, forget the cached route and ask the router again, instead of pushing into the
+    /// dead ingress for the rest of the connection (a permanent mute).
+    struct GenRouter {
+        calls: AtomicUsize,
+        first: AppRoute,
+        second: AppRoute,
+    }
+
+    impl Router for GenRouter {
+        fn route(&self, _sender: &str) -> Option<AppRoute> {
+            None
+        }
+
+        fn resolve(&self, _sender: &str) -> RouteDecision {
+            if self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                RouteDecision::Route(self.first.clone())
+            } else {
+                RouteDecision::Route(self.second.clone())
+            }
+        }
+    }
+
+    #[test]
+    fn an_evicted_apps_cached_route_is_dropped_and_asked_again() {
+        let dir = std::env::temp_dir().join(format!("gorca-drain-evict-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("bus");
+        let _ = std::fs::remove_file(&path);
+        let (send, _rules) = fake_broker(&path);
+        let app = |serial| AppId {
+            connector: ConnectorId(0),
+            serial,
+        };
+        let (tx1, rx1) = ingress(IngressConfig::default());
+        let (tx2, rx2) = ingress(IngressConfig::default());
+        let router = Arc::new(GenRouter {
+            calls: AtomicUsize::new(0),
+            first: AppRoute {
+                app: app(1),
+                tx: tx1,
+            },
+            second: AppRoute {
+                app: app(2),
+                tx: tx2,
+            },
+        });
+        let mut cfg = DrainConfig::new(format!("unix:path={}", path.display()));
+        cfg.connect_deadline = Duration::from_secs(3);
+        let drain = spawn_drain(cfg, Arc::clone(&router) as Arc<dyn Router>).unwrap();
+        send.send(event(":1.5")).unwrap();
+        assert!(wait(&rx1, 1), "the first route works");
+        // The application is evicted: the core drops its receiver.
+        drop(rx1);
+        // Its next events must reach the re-resolved route.
+        for _ in 0..20 {
+            send.send(event(":1.5")).unwrap();
+        }
+        let delivered = wait(&rx2, 1);
+        let _ = drain.stop();
+        drop(send);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(delivered, "the evicted app stayed muted");
+        assert_eq!(router.calls.load(Ordering::SeqCst), 2);
     }
 }

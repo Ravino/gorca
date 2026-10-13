@@ -134,7 +134,8 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
             let id = format!("{sid}.{metric}");
             let mut row = Row::info(&id, &sid, label, unit, vals);
             if metric == "lost" || metric == "stale_not_cancelled" {
-                row = row.at_most(0.0);
+                // Worst repeat, not the median: one lost focus in three runs is a failure.
+                row = row.at_most_in_every_run(0.0);
             }
             if sid == "L4" && metric == "peer_calls_hung" {
                 row = row

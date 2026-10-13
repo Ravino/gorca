@@ -12,6 +12,15 @@ gorca-model = { workspace = true }
 gorca-rt = { workspace = true }
 gorca-output-api = { workspace = true }
 smallvec = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+gorca-testkit = { workspace = true }
+gorca-speech-voicego = { workspace = true }
+gorca-speech-ssip = { workspace = true }
+tokio = { workspace = true, features = ["test-util", "net", "io-util"] }
 
 [lints]
 workspace = true

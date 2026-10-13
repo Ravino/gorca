@@ -58,6 +58,9 @@ pub struct AppActor {
     resync_needed: bool,
     /// A `FocusChanged` that could not be queued yet; retried first on the next pump.
     pending_focus: Option<NodeKey>,
+    /// A control message taken by [`AppActor::ready`], handled first by the next pump.
+    pending_control: Option<AppControl>,
+    control_closed: bool,
 }
 
 impl AppActor {
@@ -77,6 +80,32 @@ impl AppActor {
             links,
             resync_needed: false,
             pending_focus: None,
+            pending_control: None,
+            control_closed: false,
+        }
+    }
+
+    /// Resolves when a [`pump`](Self::pump) has something to do: events were pushed into an
+    /// empty ingress, or the connector sent a control message. A connector that dropped its
+    /// port without saying `Gone` is treated as gone. Cancel-safe.
+    pub async fn ready(&mut self) {
+        if self.pending_control.is_some() {
+            return;
+        }
+        if self.control_closed {
+            self.ingress.notified().await;
+            return;
+        }
+        tokio::select! {
+            () = self.ingress.notified() => {}
+            msg = self.control.recv() => {
+                if let Some(m) = msg {
+                    self.pending_control = Some(m);
+                } else {
+                    self.control_closed = true;
+                    self.pending_control = Some(AppControl::Lifecycle(AppLifecycle::Gone));
+                }
+            }
         }
     }
 
@@ -155,7 +184,11 @@ impl AppActor {
 
     fn pump_control(&mut self, now: Instant, route: &mut AppRoute) {
         for _ in 0..MAX_CONTROL_PER_PUMP {
-            match self.control.try_recv() {
+            let next = match self.pending_control.take() {
+                Some(m) => Ok(m),
+                None => self.control.try_recv(),
+            };
+            match next {
                 Ok(AppControl::Snapshot(batch)) => self.writer.apply(batch),
                 Ok(AppControl::Lifecycle(AppLifecycle::Gone)) => {
                     self.on_health(HealthMsg::OwnerVanished, now);

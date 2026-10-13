@@ -14,14 +14,14 @@ use std::time::Instant;
 
 use gorca_connector_api::BackendError;
 use gorca_input_api::{CmdId, GrabSet, KeyClass, KeyIntent};
-use gorca_model::{AppId, Epoch, NodeKey, NodeSnapshot, Politeness, PropMask, UttId};
-use gorca_rt::{BudgetClass, EpochCell, mpsc};
+use gorca_model::{AppId, Epoch, NodeKey, NodeSnapshot, Politeness, PropMask, StateSet, UttId};
+use gorca_rt::{BudgetClass, EpochCell, FocusedApp, mpsc};
 use smallvec::SmallVec;
 
 use crate::directory::MirrorDirectory;
 use crate::focus::{FocusEffect, FocusMsg, FocusState, settle_delay};
 use crate::mode::{Mode, ModeEffect, ModeKeys, ModeMsg};
-use crate::presenter::{SpeechIntent, message, present_focus};
+use crate::presenter::{SpeechIntent, key_echo, key_echo_text, message, present_focus};
 
 /// Bounds from section 6.2.
 const KEY_QUEUE: usize = 64;
@@ -30,6 +30,10 @@ const REPLY_QUEUE: usize = 64;
 const BACKGROUND_QUEUE: usize = 64;
 /// At most this many messages per [`Reader::drain`] call, so one call stays bounded.
 const MAX_BATCH: usize = 256;
+/// A second focus event for the node that just got focus, within this window, is the same
+/// focus change reported twice (GTK3 and atk-bridge emit both `focus:` and
+/// `state-changed:focused`). It must not restart presentation.
+pub const DUPLICATE_FOCUS_WINDOW: std::time::Duration = std::time::Duration::from_millis(150);
 
 #[derive(Clone, Copy, Debug)]
 pub enum FocusLaneMsg {
@@ -125,6 +129,19 @@ pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
 }
 
 impl ReaderInbox {
+    /// Wait for the next message with the same bias as [`ReaderInbox::poll`]: input, focus
+    /// lane, query replies, background lane. `None` once every sender is gone. Cancel-safe.
+    pub async fn next(&mut self) -> Option<ReaderMsg> {
+        tokio::select! {
+            biased;
+            Some(k) = self.key.recv() => Some(ReaderMsg::Key(k)),
+            Some(f) = self.focus.recv() => Some(ReaderMsg::Focus(f)),
+            Some(r) = self.replies.recv() => Some(ReaderMsg::Reply(r)),
+            Some(b) = self.background.recv() => Some(ReaderMsg::Background(b)),
+            else => None,
+        }
+    }
+
     /// Biased poll: input, focus lane, query replies, background lane. Never waits.
     pub fn poll(&mut self) -> Option<ReaderMsg> {
         if let Ok(k) = self.key.try_recv() {
@@ -153,6 +170,9 @@ pub struct Reader {
     next_utt: u64,
     ambiguous_keys: u64,
     stale_replies_dropped: u64,
+    duplicate_focus_dropped: u64,
+    last_focus: Option<(NodeKey, Instant)>,
+    focused_app: Option<Arc<FocusedApp>>,
 }
 
 impl Reader {
@@ -166,7 +186,22 @@ impl Reader {
             next_utt: 0,
             ambiguous_keys: 0,
             stale_replies_dropped: 0,
+            duplicate_focus_dropped: 0,
+            last_focus: None,
+            focused_app: None,
         }
+    }
+
+    /// Publish the focused application through `focused` (lock-free, read by the connector).
+    #[must_use]
+    pub fn with_focused(mut self, focused: Arc<FocusedApp>) -> Self {
+        self.focused_app = Some(focused);
+        self
+    }
+
+    /// Focus events ignored as duplicates of the one just handled.
+    pub fn duplicate_focus_dropped(&self) -> u64 {
+        self.duplicate_focus_dropped
     }
 
     pub fn focus(&self) -> FocusState {
@@ -227,7 +262,16 @@ impl Reader {
         match intent.class {
             KeyClass::Command(cmd) => fx.push(ReaderEffect::RunCommand(cmd)),
             KeyClass::Ambiguous { .. } => self.ambiguous_keys += 1,
-            KeyClass::PassToApp | KeyClass::Injected => {}
+            KeyClass::PassToApp => {
+                if intent.event.pressed
+                    && let Some(text) = key_echo_text(intent.event.unichar, intent.event.keysym)
+                {
+                    let id = self.utt_id();
+                    let u = key_echo(&text, id, intent.epoch);
+                    fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+                }
+            }
+            KeyClass::Injected => {}
         }
     }
 
@@ -247,6 +291,14 @@ impl Reader {
     fn on_focus(&mut self, f: FocusLaneMsg, now: Instant, fx: &mut ReaderEffects) {
         match f {
             FocusLaneMsg::FocusChanged { node } => {
+                if let Some((last, at)) = self.last_focus
+                    && last == node
+                    && now.saturating_duration_since(at) < DUPLICATE_FOCUS_WINDOW
+                {
+                    self.duplicate_focus_dropped += 1;
+                    return;
+                }
+                self.last_focus = Some((node, now));
                 // The epoch advances first, so stale speech cancels now, not after δ (E-2).
                 let epoch = self.epoch.advance();
                 let role = self.dir.lookup(node).hit().map(|n| n.role);
@@ -261,7 +313,12 @@ impl Reader {
                 }
             }
             FocusLaneMsg::NodeRemoved(n) => self.apply_focus(FocusMsg::NodeRemoved(n), fx),
-            FocusLaneMsg::AppGone(a) => self.apply_focus(FocusMsg::AppGone(a), fx),
+            FocusLaneMsg::AppGone(a) => {
+                if let Some(f) = &self.focused_app {
+                    f.forget(a);
+                }
+                self.apply_focus(FocusMsg::AppGone(a), fx);
+            }
             FocusLaneMsg::AppHung(a) => self.apply_focus(FocusMsg::AppHung(a), fx),
         }
     }
@@ -310,6 +367,20 @@ impl Reader {
                 let id = self.utt_id();
                 let u = present_focus(snap, id, epoch);
                 fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+                // Protection from eviction is earned only here: the focus passed the state
+                // machine, was presented, and the fetched node itself shows `FOCUSED`. A focus
+                // event alone, from any application, proves nothing.
+                if let Some(f) = &self.focused_app {
+                    if snap.states.contains(StateSet::FOCUSED)
+                        && !snap.states.contains(StateSet::DEFUNCT)
+                    {
+                        f.publish(snap.key.app);
+                    } else {
+                        // The Reader's focus is here now and could not be validated: protection
+                        // must not stay with whoever held it before (fail closed).
+                        f.demote();
+                    }
+                }
             }
             Some(
                 FocusEffect::BeginPresent { .. }
@@ -566,6 +637,93 @@ mod tests {
         };
         f.reader.handle(ReaderMsg::Key(amb), Instant::now());
         assert_eq!(f.reader.ambiguous_keys(), 1);
+    }
+
+    #[test]
+    fn a_plain_key_press_is_echoed_with_the_epoch_of_the_press() {
+        let mut f = fixture();
+        let ev = |pressed| KeyEvent {
+            keycode: 38,
+            keysym: 0x61,
+            unichar: 0x61,
+            modifiers: Modifiers::empty(),
+            pressed,
+        };
+        let intent = |pressed| KeyIntent {
+            event: ev(pressed),
+            class: KeyClass::PassToApp,
+            epoch: Epoch(7),
+        };
+        let fx = f
+            .reader
+            .handle(ReaderMsg::Key(intent(true)), Instant::now());
+        assert_eq!(spoken(&fx), ["a"]);
+        let ReaderEffect::Speak(s) = &fx[0] else {
+            panic!("expected speech")
+        };
+        assert_eq!(s.utterance.epoch, Epoch(7));
+        assert_eq!(
+            f.epoch.current(),
+            Epoch(7),
+            "the press epoch is adopted (E-4)"
+        );
+        let fx = f
+            .reader
+            .handle(ReaderMsg::Key(intent(false)), Instant::now());
+        assert!(fx.is_empty(), "releases are silent");
+    }
+
+    /// Eviction immunity is earned by an accepted, presented, validated focus only.
+    #[test]
+    fn only_a_validated_focus_is_published_for_protection() {
+        let mut f = fixture();
+        let published = Arc::new(FocusedApp::new());
+        f.reader.focused_app = Some(Arc::clone(&published));
+        let now = Instant::now();
+
+        // A focus event for a node the app has not shown to be FOCUSED (a hostile claim, or a
+        // stale one): spoken as usual, but it earns no protection.
+        f.writer.apply(SnapshotBatch {
+            nodes: vec![snap(1, Role::Button, "Claim")],
+        });
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(1) }),
+            now,
+        );
+        assert_eq!(published.get(), None, "no FOCUSED state, no protection");
+
+        // A cache miss: nothing is presented yet, so nothing is published.
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(2) }),
+            now + std::time::Duration::from_secs(1),
+        );
+        assert_eq!(published.get(), None, "fetch pending");
+
+        // The reply shows the node FOCUSED: accepted, presented and published.
+        let mut focused = (*snap(2, Role::Button, "Real")).clone();
+        focused.states = StateSet::FOCUSED;
+        let reply = QueryReply {
+            node: key(2),
+            epoch: f.epoch.current(),
+            result: Ok(Arc::new(focused)),
+        };
+        f.reader.handle(ReaderMsg::Reply(reply), now);
+        assert_eq!(published.get(), Some(app()));
+
+        // The focus moves to a node that shows no FOCUSED state: protection is not kept by the
+        // application that held it; and an application that is gone loses it outright.
+        let later = now + std::time::Duration::from_secs(2);
+        f.writer.apply(SnapshotBatch {
+            nodes: vec![snap(3, Role::Button, "Unvalidated")],
+        });
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(3) }),
+            later,
+        );
+        assert_eq!(published.get(), None, "current protection dropped");
+        f.reader
+            .handle(ReaderMsg::Focus(FocusLaneMsg::AppGone(app())), later);
+        assert!(!published.protects(app()), "a departed app keeps nothing");
     }
 
     #[test]
