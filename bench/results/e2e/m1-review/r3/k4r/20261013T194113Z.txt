@@ -1,0 +1,37 @@
+# e2e m1-review-r3
+# utc=2026-10-13T19:41:13Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=powersave x16
+# loadavg_start=6.88 7.09 6.97 1/2339 780794
+# git_rev=f667cc9
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m1-review-r3
+# reader=daemon:<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=6.88 7.09 6.97 1/2339 780791
+# reader_env=GORCA_M1=1 GORCA_M1_STRICT=1 GORCA_M1_ROUNDS=30000
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+
+metric                     bus                median          min          max  n op    threshold  res   note
+K4r.app_doubled            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+K4r.app_lost               daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+K4r.grab_state_wrong       daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checkpoints]
+K4r.held_keys              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+K4r.k4r_wall_s             daemon/voicego        715.0        715.0        715.0  1                  info   [s]
+K4r.key_unbalanced         daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+K4r.precondition_dirty     daemon/voicego            0            0            0  1                  info   [rounds]
+K4r.rounds                 daemon/voicego        30000        30000        30000  1                  info   [count]
+K4r.typed_keys             daemon/voicego        30092        30092        30092  1                  info   [count]
+K4r.wait_timeouts          daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [waits]
+K4r.xkb_down_at_end        daemon/voicego            0            0            0  1                  info   [keys]
+K4r.xkb_stuck              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]

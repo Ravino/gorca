@@ -1,0 +1,83 @@
+== host: load 6.45 6.48 7.18 2/2266 772864 ==
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench-0badb14e7328ca07)
+
+running 15 tests
+test e2e::m1::tests::gates_skip_until_m1_lands ... ok
+test e2e::m1::tests::default_chords_use_real_keycodes ... ok
+test e2e::m1::tests::strict_mode_makes_the_gate_red ... ok
+test e2e::m1::tests::m1_flag_opens_the_gate ... ok
+test e2e::m1::tests::key_reply_and_app_log_parse ... ok
+test e2e::m1::tests::the_reader_gets_desktop_facts_so_it_never_asks_gsettings ... ok
+test e2e::m1::tests::the_process_environment_never_opens_a_gate ... ok
+test e2e::m1::tests::typing_score_detects_lost_and_doubled ... ok
+test e2e::m1::tests::unpaired_presses_and_releases_are_counted ... ok
+test e2e::m1::tests::wrapped_keycodes_are_not_doubles_but_real_doubles_are ... ok
+test e2e::mono::tests::is_monotonic_and_ns ... ok
+test e2e::scenarios::tests::decoder_understands_stub_tags_and_natural_text ... ok
+test e2e::scenarios::tests::scenario_ids_round_trip ... ok
+test e2e::mock::tests::voicego_binary_speak_then_stop ... ok
+test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
+
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.05s
+== e2e m1-review-r3: reader=daemon:<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/target/release/gorca backend=voicego repeats=1 load=6.45 6.48 7.18 1/2277 772948
+-- round 1/1 K4r (load 6.45 6.48 7.18 2/2277 772948)
+2026-10-13T19:29:17.785907Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-13T19:29:17.787426Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-13T19:29:17.788052Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-13T19:29:17.791156Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-13T19:30:16.787369Z  INFO gorca_daemon::input: input lane statistics keys=25388 ambiguous=7807 band_forks=0
+2026-10-13T19:31:16.786784Z  INFO gorca_daemon::input: input lane statistics keys=51501 ambiguous=15788 band_forks=0
+2026-10-13T19:32:16.787668Z  INFO gorca_daemon::input: input lane statistics keys=78002 ambiguous=24006 band_forks=0
+2026-10-13T19:33:16.787458Z  INFO gorca_daemon::input: input lane statistics keys=103619 ambiguous=31804 band_forks=0
+2026-10-13T19:34:16.787301Z  INFO gorca_daemon::input: input lane statistics keys=130348 ambiguous=39934 band_forks=0
+2026-10-13T19:35:16.786856Z  INFO gorca_daemon::input: input lane statistics keys=156984 ambiguous=48045 band_forks=0
+2026-10-13T19:36:16.786536Z  INFO gorca_daemon::input: input lane statistics keys=183018 ambiguous=55830 band_forks=0
+2026-10-13T19:37:16.787515Z  INFO gorca_daemon::input: input lane statistics keys=209680 ambiguous=64176 band_forks=0
+2026-10-13T19:38:16.786596Z  INFO gorca_daemon::input: input lane statistics keys=236578 ambiguous=72653 band_forks=0
+2026-10-13T19:39:16.786779Z  INFO gorca_daemon::input: input lane statistics keys=263169 ambiguous=80923 band_forks=0
+2026-10-13T19:40:16.786683Z  INFO gorca_daemon::input: input lane statistics keys=289866 ambiguous=89110 band_forks=0
+2026-10-13T19:41:13.876635Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-13T19:41:13.877070Z  INFO gorca_daemon: gorca stopped
+# e2e m1-review-r3
+# utc=2026-10-13T19:41:13Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=powersave x16
+# loadavg_start=6.88 7.09 6.97 1/2339 780794
+# git_rev=f667cc9
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m1-review-r3
+# reader=daemon:<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=6.88 7.09 6.97 1/2339 780791
+# reader_env=GORCA_M1=1 GORCA_M1_STRICT=1 GORCA_M1_ROUNDS=30000
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+
+metric                     bus                median          min          max  n op    threshold  res   note
+K4r.app_doubled            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+K4r.app_lost               daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+K4r.grab_state_wrong       daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checkpoints]
+K4r.held_keys              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+K4r.k4r_wall_s             daemon/voicego        715.0        715.0        715.0  1                  info   [s]
+K4r.key_unbalanced         daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+K4r.precondition_dirty     daemon/voicego            0            0            0  1                  info   [rounds]
+K4r.rounds                 daemon/voicego        30000        30000        30000  1                  info   [count]
+K4r.typed_keys             daemon/voicego        30092        30092        30092  1                  info   [count]
+K4r.wait_timeouts          daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [waits]
+K4r.xkb_down_at_end        daemon/voicego            0            0            0  1                  info   [keys]
+K4r.xkb_stuck              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+
+== wrote <repo>/bench/results/e2e/m1-review/r3/k4r/20261013T194113Z.{json,txt}
+exit=0
