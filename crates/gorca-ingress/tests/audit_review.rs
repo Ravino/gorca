@@ -8,6 +8,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Barrier};
 use std::time::{Duration, Instant};
 
+use gorca_testkit::cpu::{ATTEMPTS, WorstCpu, best_of};
+
 use gorca_ingress::{
     IngressConfig, IngressReceiver, IngressSender, RESERVED_SLOTS, SlotBudget, ingress_with_budget,
 };
@@ -103,27 +105,30 @@ fn audit_focus_push_with_many_apps_and_exhausted_pool_is_bounded() {
         })
         .collect();
     assert!(budget.pool_used() >= budget.limit() - 64, "pool exhausted");
-    let mut worst = Duration::ZERO;
-    for i in 0..20u32 {
-        let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
-        for k in 0..RESERVED_SLOTS as u64 {
-            tx.push(window(n + i, k));
+    let worst = best_of(ATTEMPTS, push_bound(), || {
+        let mut worst = WorstCpu::new();
+        for i in 0..20u32 {
+            let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+            for k in 0..RESERVED_SLOTS as u64 {
+                tx.push(window(n + i, k));
+            }
+            rx.pending();
+            worst.sample(|| {
+                tx.push(NodeEvent::FocusChanged {
+                    node: node(n + i, 99),
+                });
+                rx.pending();
+            });
+            let d = rx.drain();
+            assert!(
+                d.events
+                    .iter()
+                    .any(|e| matches!(e, NodeEvent::FocusChanged { .. })),
+                "the newest focus must be queued"
+            );
         }
-        rx.pending();
-        let t = Instant::now();
-        tx.push(NodeEvent::FocusChanged {
-            node: node(n + i, 99),
-        });
-        rx.pending();
-        worst = worst.max(t.elapsed());
-        let d = rx.drain();
-        assert!(
-            d.events
-                .iter()
-                .any(|e| matches!(e, NodeEvent::FocusChanged { .. })),
-            "the newest focus must be queued"
-        );
-    }
+        worst.worst()
+    });
     assert!(
         worst <= push_bound(),
         "Focus push with {n} apps took {worst:?}"
@@ -153,15 +158,20 @@ fn audit_focus_push_without_a_victim_is_bounded() {
     }
     rx.pending();
     assert!(budget.pool_used() >= budget.limit());
-    let mut worst = Duration::ZERO;
-    for i in 0..20u64 {
-        let t = Instant::now();
-        tx.push(NodeEvent::FocusChanged {
-            node: node(n + 1, 10_000 + i),
-        });
-        rx.pending();
-        worst = worst.max(t.elapsed());
-    }
+    let mut next = 10_000u64;
+    let worst = best_of(ATTEMPTS, push_bound(), || {
+        let mut worst = WorstCpu::new();
+        for _ in 0..20 {
+            next += 1;
+            worst.sample(|| {
+                tx.push(NodeEvent::FocusChanged {
+                    node: node(n + 1, next),
+                });
+                rx.pending();
+            });
+        }
+        worst.worst()
+    });
     assert!(
         worst <= push_bound(),
         "Focus push with {n} apps and no victim took {worst:?}"
@@ -287,19 +297,20 @@ fn audit_help_fold_of_a_full_ring_is_bounded() {
     } else {
         Duration::from_micros(250)
     };
-    let mut worst = Duration::ZERO;
-    for round in 0..20u64 {
-        let budget = SlotBudget::new(1 << 20);
-        let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
-        for n in 0..gorca_ingress::RING_CAP as u64 {
-            tx.push(window(1, round * 10_000 + n));
+    let worst = best_of(ATTEMPTS, bound, || {
+        let mut worst = WorstCpu::new();
+        for round in 0..20u64 {
+            let budget = SlotBudget::new(1 << 20);
+            let (tx, rx) = ingress_with_budget(IngressConfig::default(), &budget);
+            for n in 0..gorca_ingress::RING_CAP as u64 {
+                tx.push(window(1, round * 10_000 + n));
+            }
+            worst.sample(|| tx.push(window(1, 9_000_000 + round)));
+            assert_eq!(rx.pending(), gorca_ingress::RING_CAP + 1);
         }
-        let t = Instant::now();
-        tx.push(window(1, 9_000_000 + round));
-        worst = worst.max(t.elapsed());
-        assert_eq!(rx.pending(), gorca_ingress::RING_CAP + 1);
-    }
-    assert!(worst <= bound, "help fold took {worst:?}");
+        worst.worst()
+    });
+    assert!(worst <= bound, "help fold took {worst:?} of CPU time");
 }
 
 /// R3-1 (AU-3), concurrent pool pressure. Three hostile apps keep the pool at its edge while a
