@@ -201,13 +201,43 @@ enum Timer {
     Retry,
 }
 
+/// The bus daemon's own name: the only legitimate sender of `NameOwnerChanged`.
+const BUS_DAEMON: &str = "org.freedesktop.DBus";
+
+/// Sender validation. `KeyEvent` is a unicast signal, so any client on the session bus can
+/// address one to us; only the current owner of the Mutter a11y manager name may be believed.
+#[derive(Debug)]
+pub(crate) struct SenderFilter {
+    owner: String,
+    rejected: u64,
+}
+
+impl SenderFilter {
+    pub(crate) fn new(owner: String) -> Self {
+        Self { owner, rejected: 0 }
+    }
+
+    /// `true` if the header sender is the expected unique name; otherwise counts a drop.
+    pub(crate) fn accept(&mut self, sender: Option<&str>) -> bool {
+        if sender == Some(self.owner.as_str()) {
+            true
+        } else {
+            self.rejected += 1;
+            false
+        }
+    }
+}
+
 fn rule(
+    sender: &str,
     interface: &str,
     member: &str,
     arg0: Option<&str>,
 ) -> Result<zbus::MatchRule<'static>, Attempt> {
     let b = zbus::MatchRule::builder()
         .msg_type(zbus::message::Type::Signal)
+        .sender(sender.to_owned())
+        .map_err(DbusError::Zbus)?
         .interface(interface.to_owned())
         .and_then(|b| b.member(member.to_owned()))
         .map_err(DbusError::Zbus)?;
@@ -254,12 +284,30 @@ async fn session(
         NameReply::Other(v) => return Err(Attempt::Reply(format!("RequestName returned {v}"))),
     }
 
+    // Who is the manager right now? Everything else claiming to be it is dropped.
+    let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);
+    let reply = call_method(
+        &conn,
+        deadline,
+        BUS_DAEMON,
+        "/org/freedesktop/DBus",
+        BUS_DAEMON,
+        "GetNameOwner",
+        &(MANAGER_NAME,),
+    )
+    .await?;
+    let manager_owner: String = reply
+        .body()
+        .deserialize()
+        .map_err(|e| Attempt::Reply(e.to_string()))?;
+    let mut filter = SenderFilter::new(manager_owner);
+    let mut bus_filter = SenderFilter::new(BUS_DAEMON.to_owned());
     // Subscribe before asking for events: KeyEvent is unicast with no acknowledgement (F-2).
     let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);
     let mut keys = with_deadline(
         deadline,
         zbus::MessageStream::for_match_rule(
-            rule(MONITOR_INTERFACE, "KeyEvent", None)?,
+            rule(MANAGER_NAME, MONITOR_INTERFACE, "KeyEvent", None)?,
             &conn,
             Some(MAX_QUEUED),
         ),
@@ -270,7 +318,8 @@ async fn session(
         deadline,
         zbus::MessageStream::for_match_rule(
             rule(
-                "org.freedesktop.DBus",
+                BUS_DAEMON,
+                BUS_DAEMON,
                 "NameOwnerChanged",
                 Some(MANAGER_NAME),
             )?,
@@ -283,7 +332,8 @@ async fn session(
         deadline,
         zbus::MessageStream::for_match_rule(
             rule(
-                "org.freedesktop.DBus",
+                BUS_DAEMON,
+                BUS_DAEMON,
                 "NameOwnerChanged",
                 Some(ORCA_MONITOR_NAME),
             )?,
@@ -354,6 +404,7 @@ async fn session(
             m = keys.next() => {
                 let Some(m) = m else { return Err(Attempt::StreamEnded) };
                 if let Ok(m) = m
+                    && filter.accept(m.header().sender().map(zbus::names::UniqueName::as_str))
                     && let Ok(body) = m.body().deserialize::<(bool, u32, u32, u32, u16)>()
                     && !ctx.sink.push(decode_key_event(body))
                 {
@@ -363,11 +414,17 @@ async fn session(
             }
             m = owners.next() => {
                 // Any change of the manager's owner invalidates our grabs: start over.
-                let _ = m;
+                if let Some(Ok(m)) = m
+                    && !bus_filter.accept(m.header().sender().map(zbus::names::UniqueName::as_str))
+                {
+                    tracing::warn!("ignored a forged NameOwnerChanged");
+                    continue;
+                }
                 return Err(Attempt::ManagerGone);
             }
             m = own_name.next() => {
                 if let Some(Ok(m)) = m
+                    && bus_filter.accept(m.header().sender().map(zbus::names::UniqueName::as_str))
                     && let Ok((_, _, new)) = m.body().deserialize::<(String, String, String)>()
                     && new.is_empty()
                 {
@@ -472,7 +529,7 @@ fn exec(
             calls.spawn(async move {
                 let deadline = Deadline::after(&clock, GRAB_DEADLINE);
                 let wire = set.to_wire();
-                let r = call_method(
+                let mut r = call_method(
                     &conn,
                     deadline,
                     MANAGER_NAME,
@@ -482,6 +539,25 @@ fn exec(
                     &wire,
                 )
                 .await;
+                if r.is_ok() {
+                    // Learn mode grabs the whole keyboard (LM-1); every other set releases it.
+                    // Both calls are idempotent in Mutter.
+                    let deadline = Deadline::after(&clock, GRAB_DEADLINE);
+                    r = call_method(
+                        &conn,
+                        deadline,
+                        MANAGER_NAME,
+                        MANAGER_PATH,
+                        MONITOR_INTERFACE,
+                        if set.grab_all {
+                            "GrabKeyboard"
+                        } else {
+                            "UngrabKeyboard"
+                        },
+                        &(),
+                    )
+                    .await;
+                }
                 let msg = match r {
                     Ok(_) => MonitorMsg::GrabsOk { generation },
                     Err(e) => {
@@ -532,6 +608,22 @@ mod tests {
         assert_eq!((ev.keycode, ev.keysym, ev.unichar), (38, 0x61, 0x61));
         assert!(ev.modifiers.contains(Modifiers::SHIFT | Modifiers::CONTROL));
         assert!(!decode_key_event((true, 0, 1, 0, 1)).pressed);
+    }
+
+    #[test]
+    fn only_the_manager_owner_is_believed_and_the_rest_is_counted() {
+        let mut f = SenderFilter::new(":1.7".to_owned());
+        assert!(f.accept(Some(":1.7")));
+        assert!(!f.accept(Some(":1.99")), "another client on the bus");
+        assert!(!f.accept(None), "no sender header");
+        assert!(
+            !f.accept(Some("org.freedesktop.a11y.Manager")),
+            "well-known names are not senders"
+        );
+        assert_eq!(f.rejected, 3);
+        // After a restart under a new unique name, the new owner is accepted, the old one is not.
+        let mut f = SenderFilter::new(":1.42".to_owned());
+        assert!(f.accept(Some(":1.42")) && !f.accept(Some(":1.7")));
     }
 
     #[test]

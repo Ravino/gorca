@@ -1,31 +1,26 @@
-//! M1 end-to-end gates K2, K3, K4 (docs/plan/phase-2.md 2.1, ADR-0001 7.3 K-1/K-2/K-6, M-16).
+//! M1 end-to-end gates K2, K3, K4 (docs/plan/phase-2.md 2.1, ADR-0005 10) plus K2s.
 //!
-//! These are harness skeletons: the stimulus side is complete and drives `fake_mutter.py` with
-//! the real grab semantics (exact-mask matching, a11y-modifier first-click rule, consumed vs
-//! passed keys), but the reader side (gorca modifier, command registry, `SetKeyGrabs`) does not
-//! exist until M1 lands. Until then every scenario is **skipped**: it reports `skipped = 1` and a
-//! note, and does not start a rig. Two switches change that:
+//! The stimulus drives `fake_mutter.py`, which ports Mutter's grab semantics (exact-mask matching,
+//! the a11y-modifier first-click rule, consumed vs passed keys). Chords are the ADR-0005 default
+//! keymap (NVDA desktop preset) with the real XKB keycodes the reader matches physically (K-8).
+//! Until M1 is switched on every scenario is **skipped** (`skipped = 1`); two switches change that:
 //!
-//! * `GORCA_M1=1` (as `--reader-env GORCA_M1=1` or in the process environment): M1 has landed,
-//!   run the scenario and enforce its gate.
-//! * `GORCA_M1_STRICT=1`: M1 has not landed and the gate must be **red**: the scenario fails
-//!   with an error instead of skipping (use it to prove the gate is wired and can fail).
+//! * `GORCA_M1=1` (as `--reader-env GORCA_M1=1` or in the process environment): run the scenario
+//!   and enforce its gate.
+//! * `GORCA_M1_STRICT=1`: the scenario fails with an error instead of skipping.
 //!
 //! | id | stimulus | metrics |
 //! |---|---|---|
-//! | K2 | gorca modifier + command key (zero-IPC command), idle | `k2_ms` command-key emit to SPEAK, `lost`, `not_consumed` |
-//! | K3 | the same chord while an L3-50k storm runs | `k3_ms`, `lost`, `not_consumed`, storm rate |
-//! | K4 | 10k randomized mode toggles (chords) interleaved with plain typing | `app_lost`, `app_doubled`, `chord_leaked` |
+//! | K2 | `gorca+F12` (`info.time_date`, zero IPC), idle | `k2_ms` key-down emit to SPEAK, `lost`, `not_consumed` |
+//! | K2s | the same chord while an L3-50k storm runs | `k2s_ms`, `lost`, `not_consumed`, storm rate |
+//! | K3 | `gorca+Tab` (`info.where_am_i`) on a freshly focused node, fake app answering in about 1 ms | `k3_ms`, `lost`, `not_consumed` |
+//! | K4 | 10k randomized grab-set switches (pass-next-key, learn mode) interleaved with typing | `app_lost`, `app_doubled`, `chord_leaked`, `forged_accepted` |
 //!
-//! The chord keys are placeholders until ADR-0005 fixes the modifier and keymap (phase-2.md
-//! section 8 Q1/Q2). Override with `--reader-env` (or the process environment):
-//! `GORCA_M1_MODIFIER` (keysym, default Insert 0xff63), `GORCA_M1_CMD_KEYSYM` (default `t`),
-//! `GORCA_M1_MODE_KEYSYM` (default `m`, the key that switches mode / grab set in K4). The values
-//! are read by the harness only; the reader must be configured with the same keys.
-//!
-//! Event times are virtual (`time_ms` of the emulated key event) so Mutter's first-click rule
-//! is deterministic: every chord starts more than the repeat delay (500 ms) after the previous
+//! Event times are virtual (`time_ms` of the emulated key event) so Mutter's first-click rule is
+//! deterministic: every chord starts more than the repeat delay (500 ms) after the previous
 //! modifier release, so the modifier press is always a fresh first click (swallowed).
+//! The reader gets its desktop facts from `GORCA_*` overrides set by [`m1_env`], so it never
+//! runs `gsettings` or reads a settings file in the harness.
 
 use std::time::Duration;
 
@@ -37,11 +32,43 @@ use super::mock::Flavor;
 use super::runner::{HostEnv, Rig};
 use super::scenarios::{RunOut, Size, base_opts, ms, pause, speaks, start_storm};
 
-const INSERT: u32 = 0xff63;
-const KEY_T: u32 = 0x74;
-const KEY_M: u32 = 0x6d;
+/// A physical key: XKB keycode (evdev + 8) and the keysym it produces.
+#[derive(Copy, Clone, Debug)]
+struct K {
+    code: u16,
+    sym: u32,
+}
+
+const INSERT: K = K {
+    code: 118,
+    sym: 0xff63,
+};
+const F12: K = K {
+    code: 96,
+    sym: 0xffc9,
+};
+const TAB: K = K {
+    code: 23,
+    sym: 0xff09,
+};
+const F2: K = K {
+    code: 68,
+    sym: 0xffbf,
+};
+const KEY_1: K = K {
+    code: 10,
+    sym: 0x31,
+};
+const ESCAPE: K = K {
+    code: 9,
+    sym: 0xff1b,
+};
 /// Virtual gap between chords: above Mutter's default repeat delay (500 ms).
 const CHORD_GAP_MS: u64 = 700;
+/// Real time for the reader to restore the grab set after a switch (P-7 settle plus a margin).
+const SETTLE_REAL_MS: u64 = 40;
+/// First node of the K3 series (warm-up uses 1..70).
+const FIRST_NODE: usize = 100;
 
 fn setting(host: &HostEnv, key: &str) -> Option<String> {
     host.reader_env
@@ -55,15 +82,6 @@ fn flag(host: &HostEnv, key: &str) -> bool {
     setting(host, key).is_some_and(|v| v == "1")
 }
 
-fn keysym(host: &HostEnv, key: &str, default: u32) -> u32 {
-    setting(host, key)
-        .and_then(|v| {
-            v.strip_prefix("0x")
-                .map_or_else(|| v.parse().ok(), |h| u32::from_str_radix(h, 16).ok())
-        })
-        .unwrap_or(default)
-}
-
 /// Decide whether a gate runs. `Ok(false)` = skipped (already noted in `out`).
 fn gate_open(host: &HostEnv, id: &str, out: &mut RunOut) -> Result<bool> {
     if flag(host, "GORCA_M1") {
@@ -73,15 +91,15 @@ fn gate_open(host: &HostEnv, id: &str, out: &mut RunOut) -> Result<bool> {
         bail!("{id}: M1 has not landed and GORCA_M1_STRICT=1 requires a red gate");
     }
     out.notes.push(format!(
-        "{id} SKIPPED: M1 (command layer, SetKeyGrabs) has not landed; set GORCA_M1=1 to run it"
+        "{id} SKIPPED: set GORCA_M1=1 to run the M1 command-layer gates"
     ));
     out.x("skipped", 1.0, "flag");
     Ok(false)
 }
 
 struct Chord {
-    modifier: u32,
-    key: u32,
+    modifier: K,
+    key: K,
 }
 
 /// Virtual clock plus keycode allocator of one scenario.
@@ -94,13 +112,14 @@ impl Typist {
     fn new() -> Self {
         Self {
             t_ms: 1_000_000,
-            next_keycode: 10,
+            next_keycode: 200,
         }
     }
 
+    /// Unique synthetic keycodes for typed letters, so `score_typing` can tell keys apart.
     fn keycode(&mut self) -> u16 {
         let k = self.next_keycode;
-        self.next_keycode = if k >= 60_000 { 10 } else { k + 1 };
+        self.next_keycode = if k >= 60_000 { 200 } else { k + 1 };
         k
     }
 }
@@ -109,23 +128,51 @@ impl Typist {
 /// whether Mutter consumed the key-down.
 fn chord(rig: &mut Rig, ty: &mut Typist, c: &Chord) -> Result<(u64, bool)> {
     ty.t_ms += CHORD_GAP_MS;
-    let (mkc, ckc) = (ty.keycode(), ty.keycode());
     let m = rig
         .mutter
         .as_mut()
         .ok_or_else(|| anyhow::anyhow!("no mutter"))?;
-    m.key_ex(mkc, c.modifier, 0, false, ty.t_ms)?;
-    let down = m.key_ex(ckc, c.key, 0, false, ty.t_ms + 5)?;
-    m.key_ex(ckc, c.key, 0, true, ty.t_ms + 15)?;
-    m.key_ex(mkc, c.modifier, 0, true, ty.t_ms + 25)?;
+    m.key_ex(c.modifier.code, c.modifier.sym, 0, false, ty.t_ms)?;
+    let down = m.key_ex(c.key.code, c.key.sym, 0, false, ty.t_ms + 5)?;
+    m.key_ex(c.key.code, c.key.sym, 0, true, ty.t_ms + 15)?;
+    m.key_ex(c.modifier.code, c.modifier.sym, 0, true, ty.t_ms + 25)?;
     ty.t_ms += 25;
     Ok((down.t_emit_ns, down.consumed))
+}
+
+/// A plain key press and release (Mutter's verdict on both).
+fn tap(rig: &mut Rig, ty: &mut Typist, k: K) -> Result<(bool, bool)> {
+    let m = rig
+        .mutter
+        .as_mut()
+        .ok_or_else(|| anyhow::anyhow!("no mutter"))?;
+    ty.t_ms += 3;
+    let down = m.key_ex(k.code, k.sym, 0, false, ty.t_ms)?;
+    ty.t_ms += 3;
+    let up = m.key_ex(k.code, k.sym, 0, true, ty.t_ms)?;
+    Ok((down.consumed, up.consumed))
+}
+
+/// Desktop facts for the reader, so it never asks `gsettings` in the harness: GNOME's default
+/// repeat delay, no XKB options, a 24-hour clock.
+fn m1_env(host: &HostEnv) -> HostEnv {
+    let mut h = host.clone();
+    for (k, v) in [
+        ("GORCA_REPEAT_DELAY_MS", "500"),
+        ("GORCA_XKB_OPTIONS", ""),
+        ("GORCA_CLOCK_24H", "1"),
+    ] {
+        if !h.reader_env.iter().any(|(e, _)| e == k) {
+            h.reader_env.push((k.to_owned(), v.to_owned()));
+        }
+    }
+    h
 }
 
 fn m1_rig(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor) -> Result<Rig> {
     let mut o = base_opts(reader, flavor);
     o.keys = true;
-    let rig = Rig::start(host, &o)?;
+    let rig = Rig::start(&m1_env(host), &o)?;
     rig.mock
         .configure(Duration::from_millis(1), Duration::from_millis(1));
     if !rig.keys_ok {
@@ -134,7 +181,16 @@ fn m1_rig(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor) -> Result<Rig> {
     Ok(rig)
 }
 
-/// Run `n` chords, score command-key emit to the matching SPEAK by order.
+/// What a series does before each chord.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum Before {
+    Nothing,
+    /// Move focus to a fresh node and press at once: the answer needs a fetch (cache cold).
+    FocusFresh,
+}
+
+/// Run `n` chords, score key-down emit to the first SPEAK after it (the answer; the speech of
+/// the previous action is cancelled by the epoch of the key).
 fn chord_series(
     rig: &mut Rig,
     out: &mut RunOut,
@@ -142,13 +198,21 @@ fn chord_series(
     c: &Chord,
     n: usize,
     seed: u64,
+    before: Before,
 ) -> Result<()> {
     let mut rng = Rng::new(seed);
     let mut ty = Typist::new();
     let mark = rig.mock.mark();
     let mut emits = Vec::with_capacity(n);
     let mut not_consumed = 0u64;
-    for _ in 0..n {
+    for i in 0..n {
+        if before == Before::FocusFresh {
+            let app = rig
+                .apps
+                .get_mut("app")
+                .ok_or_else(|| anyhow::anyhow!("no app"))?;
+            app.focus(FIRST_NODE + i)?;
+        }
         let (t, consumed) = chord(rig, &mut ty, c)?;
         emits.push(t);
         if !consumed {
@@ -161,8 +225,7 @@ fn chord_series(
     let spoken: Vec<u64> = speaks(&recs).map(|(r, _)| r.t_ns).collect();
     let mut lat = Vec::with_capacity(n);
     let mut lost = 0u64;
-    // The first SPEAK in [emit_i, emit_i+1) belongs to chord i (other speech in the window, for
-    // example an echo of the modifier, is tolerated); none in the window means lost.
+    // The first SPEAK in [emit_i, emit_i+1) belongs to chord i; none in the window means lost.
     for (i, t) in emits.iter().enumerate() {
         let next = emits.get(i + 1).copied().unwrap_or(u64::MAX);
         match spoken.iter().find(|s| **s >= *t && **s < next) {
@@ -180,10 +243,11 @@ fn chord_series(
     Ok(())
 }
 
-fn command_chord(host: &HostEnv) -> Chord {
+/// `info.time_date`: zero IPC, always speaks.
+fn time_chord() -> Chord {
     Chord {
-        modifier: keysym(host, "GORCA_M1_MODIFIER", INSERT),
-        key: keysym(host, "GORCA_M1_CMD_KEYSYM", KEY_T),
+        modifier: INSERT,
+        key: F12,
     }
 }
 
@@ -200,12 +264,20 @@ pub fn k2(
         return Ok(());
     }
     let mut rig = m1_rig(host, reader, flavor)?;
-    chord_series(&mut rig, out, "k2_ms", &command_chord(host), size.n, seed)
+    chord_series(
+        &mut rig,
+        out,
+        "k2_ms",
+        &time_chord(),
+        size.n,
+        seed,
+        Before::Nothing,
+    )
 }
 
-/// K3: the same modifier chord while a 50k events/s storm runs on the a11y bus. Gate p99 15 ms
-/// (target 5 ms), `lost = 0`; the modifier must keep being swallowed under the storm.
-pub fn k3(
+/// K2s: the same chord while a 50k events/s storm runs on the a11y bus. Gate: K2's ceiling plus
+/// 1 ms, `lost = 0`; the modifier must keep being swallowed under the storm.
+pub fn k2s(
     host: &HostEnv,
     reader: &ReaderSpec,
     flavor: Flavor,
@@ -213,7 +285,7 @@ pub fn k3(
     seed: u64,
     out: &mut RunOut,
 ) -> Result<()> {
-    if !gate_open(host, "K3", out)? {
+    if !gate_open(host, "K2s", out)? {
         return Ok(());
     }
     const RATE: f64 = 50_000.0;
@@ -221,7 +293,15 @@ pub fn k3(
     let series_s = size.n as f64 * 0.012 + 1.0;
     let storm = start_storm(&rig.env.a11y_addr, RATE, series_s + 3.0)?;
     std::thread::sleep(Duration::from_millis(1000));
-    let r = chord_series(&mut rig, out, "k3_ms", &command_chord(host), size.n, seed);
+    let r = chord_series(
+        &mut rig,
+        out,
+        "k2s_ms",
+        &time_chord(),
+        size.n,
+        seed,
+        Before::Nothing,
+    );
     storm.stop.store(true, std::sync::atomic::Ordering::Release);
     let fr = storm
         .thread
@@ -233,13 +313,79 @@ pub fn k3(
     Ok(())
 }
 
-/// K4: no lost or doubled keys across randomized mode / grab-set switches (ADR-0001 M-16).
+/// K3: `info.where_am_i` on a freshly focused node, the fake app answering in about 1 ms.
+/// Gate p99 15 ms (target 5 ms), `lost = 0`.
+pub fn k3(
+    host: &HostEnv,
+    reader: &ReaderSpec,
+    flavor: Flavor,
+    size: Size,
+    seed: u64,
+    out: &mut RunOut,
+) -> Result<()> {
+    if !gate_open(host, "K3", out)? {
+        return Ok(());
+    }
+    let mut rig = m1_rig(host, reader, flavor)?;
+    let c = Chord {
+        modifier: INSERT,
+        key: TAB,
+    };
+    chord_series(&mut rig, out, "k3_ms", &c, size.n, seed, Before::FocusFresh)
+}
+
+/// Run the forger: a rogue client addressing `KeyEvent` signals to the reader. Returns how many
+/// SPEAKs they caused (must be 0).
+fn forged_keys(rig: &mut Rig) -> Result<u64> {
+    let script = rig.env.harness_dir.join("key_forger.py");
+    let mark = rig.mock.mark();
+    // The system python has the D-Bus bindings (the project venv does not), like fake_mutter.py.
+    let out = std::process::Command::new("/usr/bin/python3")
+        .arg("-I")
+        .arg(&script)
+        .arg(&rig.env.session_addr)
+        .arg("5")
+        .output()?;
+    if !out.status.success() {
+        bail!(
+            "key_forger.py failed: {} {}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    std::thread::sleep(Duration::from_millis(300));
+    Ok(speaks(&rig.mock.since(mark)).count() as u64)
+}
+
+/// Replace the emulated manager by a new process (a new unique name) and time how long the
+/// reader needs to register its grabs with it again.
+fn restart_mutter(rig: &mut Rig) -> Result<f64> {
+    rig.mutter = None;
+    let t0 = std::time::Instant::now();
+    let mut m = super::apps::FakeMutter::spawn(&rig.env.harness_dir)?;
+    let end = t0 + Duration::from_secs(10);
+    while m.clients() == 0 {
+        if std::time::Instant::now() > end {
+            bail!("the reader did not re-register with the restarted manager within 10 s");
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let ms = t0.elapsed().as_secs_f64() * 1000.0;
+    rig.mutter = Some(m);
+    Ok(ms)
+}
+
+/// K4: no lost or doubled keys across randomized grab-set switches (ADR-0001 M-16).
 ///
-/// Plain letters (state 0, never the modifier, command or mode key) are typed between mode
-/// toggles; in no mode may the reader swallow them (`app_lost`) and the app must see each
-/// exactly once (`app_doubled`). The toggle chord itself must always be consumed
-/// (`chord_leaked` counts chords whose key reached the app). Ground truth is Mutter's own
-/// verdict (`consumed`) and the app log of `fake_mutter.py`, never the reader's speech.
+/// Each round switches the grab set with a chord (`input.pass_next_key`, which empties it and
+/// restores it on the next key, or `input.learn_mode_toggle` followed by Escape, which grabs
+/// everything and releases it), then types plain letters. Letters are typed only while the
+/// grabs are restored, after [`SETTLE_REAL_MS`]; in no round may the reader swallow a letter
+/// (`app_lost`), and the app must see each exactly once (`app_doubled`). A chord must be
+/// consumed whenever it is sent in the normal mode (`chord_leaked` counts those that reached the
+/// app). Ground truth is Mutter's own verdict (`consumed`) and the app log of `fake_mutter.py`,
+/// never the reader's speech. A forged `KeyEvent` from another client must do nothing
+/// (`forged_accepted`).
 pub fn k4(
     host: &HostEnv,
     reader: &ReaderSpec,
@@ -252,15 +398,31 @@ pub fn k4(
         return Ok(());
     }
     let switches: usize = if size.n >= 1000 { 10_000 } else { 500 };
-    let mode = Chord {
-        modifier: keysym(host, "GORCA_M1_MODIFIER", INSERT),
-        key: keysym(host, "GORCA_M1_MODE_KEYSYM", KEY_M),
+    let pass = Chord {
+        modifier: INSERT,
+        key: F2,
     };
-    let reserved = [mode.modifier, mode.key, command_chord(host).key];
-    let letters: Vec<u32> = (u32::from(b'a')..=u32::from(b'z'))
-        .filter(|l| !reserved.contains(l))
-        .collect();
+    let learn = Chord {
+        modifier: INSERT,
+        key: KEY_1,
+    };
+    let letters: Vec<u32> = (u32::from(b'a')..=u32::from(b'z')).collect();
     let mut rig = m1_rig(host, reader, flavor)?;
+    rig.mutter
+        .as_mut()
+        .ok_or_else(|| anyhow::anyhow!("no mutter"))?
+        .app_log(true)?;
+    let mut forged = forged_keys(&mut rig)?;
+    // The shell restarts: the manager comes back under a new unique name. The reader must
+    // re-authorise and restore its grabs within 2 s, accept the new owner, and still ignore
+    // forgeries (ADR-0005 8.2).
+    let restored_ms = restart_mutter(&mut rig)?;
+    forged += forged_keys(&mut rig)?;
+    let mut ty0 = Typist::new();
+    let before = rig.mock.mark();
+    let (_, consumed) = chord(&mut rig, &mut ty0, &time_chord())?;
+    std::thread::sleep(Duration::from_millis(300));
+    let after_restart_ok = consumed && speaks(&rig.mock.since(before)).count() > 0;
     rig.mutter
         .as_mut()
         .ok_or_else(|| anyhow::anyhow!("no mutter"))?
@@ -268,12 +430,28 @@ pub fn k4(
     let mut rng = Rng::new(seed);
     let mut ty = Typist::new();
     let (mut typed, mut leaked, mut swallowed_live) = (Vec::new(), 0u64, 0u64);
+    let mut escape_unconsumed = 0u64;
     for _ in 0..switches {
-        let (_, consumed) = chord(&mut rig, &mut ty, &mode)?;
-        if !consumed {
-            leaked += 1;
+        let use_learn = rng.below(4) == 0;
+        if use_learn {
+            let (_, consumed) = chord(&mut rig, &mut ty, &learn)?;
+            if !consumed {
+                leaked += 1;
+            }
+            std::thread::sleep(Duration::from_millis(SETTLE_REAL_MS));
+            // Learn mode holds the keyboard: Escape is delivered to the reader, not the app.
+            let (d, u) = tap(&mut rig, &mut ty, ESCAPE)?;
+            if !(d && u) {
+                escape_unconsumed += 1;
+            }
+        } else {
+            let (_, consumed) = chord(&mut rig, &mut ty, &pass)?;
+            if !consumed {
+                leaked += 1;
+            }
         }
-        for _ in 0..=rng.below(4) {
+        std::thread::sleep(Duration::from_millis(SETTLE_REAL_MS));
+        for _ in 0..=rng.below(3) {
             let sym = letters[rng.below(letters.len() as u64) as usize];
             let kc = ty.keycode();
             let m = rig
@@ -288,7 +466,12 @@ pub fn k4(
                 swallowed_live += 1;
             }
             typed.push((kc, sym));
+            if !use_learn {
+                // The first letter ended pass-next-key; give the restore time before the next.
+                std::thread::sleep(Duration::from_millis(SETTLE_REAL_MS));
+            }
         }
+        std::thread::sleep(Duration::from_millis(SETTLE_REAL_MS));
     }
     std::thread::sleep(Duration::from_millis(200));
     let log = rig
@@ -299,9 +482,23 @@ pub fn k4(
     let (lost, doubled) = score_typing(&typed, &log);
     out.x("switches", switches as f64, "count");
     out.x("typed_keys", typed.len() as f64, "count");
-    out.x("app_lost", (lost + swallowed_live) as f64, "keys");
+    out.notes.push(format!(
+        "K4 app_lost parts: missing in app log {lost}, swallowed live {swallowed_live}, escape not consumed {escape_unconsumed}"
+    ));
+    out.x(
+        "app_lost",
+        (lost + swallowed_live + escape_unconsumed) as f64,
+        "keys",
+    );
     out.x("app_doubled", doubled as f64, "keys");
     out.x("chord_leaked", leaked as f64, "chords");
+    out.x("forged_accepted", forged as f64, "speeches");
+    out.x("restore_ms", restored_ms, "ms");
+    out.x(
+        "restore_failed",
+        f64::from(u8::from(!(after_restart_ok && restored_ms <= 2000.0))),
+        "runs",
+    );
     Ok(())
 }
 
@@ -369,10 +566,37 @@ mod tests {
     }
 
     #[test]
-    fn keysym_overrides_parse_hex_and_decimal() {
-        assert_eq!(keysym(&host(&[]), "K", 7), 7);
-        assert_eq!(keysym(&host(&[("K", "0xff63")]), "K", 7), 0xff63);
-        assert_eq!(keysym(&host(&[("K", "116")]), "K", 7), 116);
+    fn the_reader_gets_desktop_facts_so_it_never_asks_gsettings() {
+        let h = m1_env(&host(&[("GORCA_REPEAT_DELAY_MS", "300")]));
+        let get = |k: &str| {
+            h.reader_env
+                .iter()
+                .find(|(e, _)| e == k)
+                .map(|(_, v)| v.clone())
+        };
+        assert_eq!(
+            get("GORCA_REPEAT_DELAY_MS").as_deref(),
+            Some("300"),
+            "explicit wins"
+        );
+        assert_eq!(get("GORCA_XKB_OPTIONS").as_deref(), Some(""));
+        assert_eq!(get("GORCA_CLOCK_24H").as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn default_chords_use_real_keycodes() {
+        // XKB keycode = evdev + 8: Insert 110, F12 88, Tab 15, F2 60, 1 is 2, Escape 1.
+        assert_eq!(
+            [
+                INSERT.code,
+                F12.code,
+                TAB.code,
+                F2.code,
+                KEY_1.code,
+                ESCAPE.code
+            ],
+            [118, 96, 23, 68, 10, 9]
+        );
     }
 
     #[test]

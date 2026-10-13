@@ -31,6 +31,8 @@ const L2_P99_MS: f64 = 5.0;
 /// M1 gates (docs/plan/phase-2.md 2.1): ceilings; targets are 2 ms (K2) and 5 ms (K3).
 const K2_P99_MS: f64 = 5.0;
 const K3_P99_MS: f64 = 15.0;
+/// K2 under the L3-50k storm: K2's ceiling plus the 1 ms allowed by ADR-0005 10.1.
+const K2S_P99_MS: f64 = 6.0;
 
 fn arg_value(args: &[String], name: &str) -> Option<String> {
     args.iter()
@@ -117,6 +119,7 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     ("K1", "k1_ms", "p99") => Some(L1_P99_MS),
                     ("L2", "l2_ms", "p99") => Some(L2_P99_MS),
                     ("K2", "k2_ms", "p99") => Some(K2_P99_MS),
+                    ("K2s", "k2s_ms", "p99") => Some(K2S_P99_MS),
                     ("K3", "k3_ms", "p99") => Some(K3_P99_MS),
                     _ => None,
                 };
@@ -146,6 +149,8 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "app_lost"
                     | "app_doubled"
                     | "chord_leaked"
+                    | "forged_accepted"
+                    | "restore_failed"
             ) {
                 // Worst repeat, not the median: one lost focus in three runs is a failure.
                 row = row.at_most_in_every_run(0.0);
