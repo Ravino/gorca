@@ -1,0 +1,222 @@
+== host: load 15.17 13.32 11.86 9/2310 164871 ==
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling libc v0.2.190
+   Compiling winnow v1.0.4
+   Compiling serde v1.0.229
+   Compiling pin-project-lite v0.2.17
+   Compiling hashbrown v0.17.1
+   Compiling equivalent v1.0.2
+   Compiling toml_datetime v1.1.2+spec-1.1.0
+   Compiling futures-core v0.3.34
+   Compiling endi v1.1.1
+   Compiling bitflags v2.13.2
+   Compiling parking v2.2.1
+   Compiling once_cell v1.21.4
+   Compiling bytes v1.12.1
+   Compiling smallvec v1.16.3
+   Compiling crossbeam-utils v0.8.23
+   Compiling thiserror v2.0.21
+   Compiling tracing-core v0.1.36
+   Compiling zerocopy v0.8.62
+   Compiling event-listener v5.4.2
+   Compiling find-msvc-tools v0.1.14
+   Compiling shlex v2.0.1
+   Compiling gorca-model v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-model)
+   Compiling futures-sink v0.3.34
+   Compiling zmij v1.0.23
+   Compiling rustix v1.1.5
+   Compiling cc v1.8.0
+   Compiling indexmap v2.14.2
+   Compiling event-listener-strategy v0.5.4
+   Compiling futures-io v0.3.34
+   Compiling fastrand v2.5.0
+   Compiling linux-raw-sys v0.12.1
+   Compiling serde_json v1.0.154
+   Compiling rustversion v1.0.23
+   Compiling cfg-if v1.0.5
+   Compiling autocfg v1.5.1
+   Compiling crossbeam-queue v0.3.14
+   Compiling futures-lite v2.6.1
+   Compiling toml_parser v1.1.5+spec-1.1.0
+   Compiling syn v3.0.8
+   Compiling syn v2.0.119
+   Compiling async-broadcast v0.7.2
+   Compiling ordered-stream v0.2.0
+   Compiling itoa v1.0.18
+   Compiling num-traits v0.2.19
+   Compiling regex-syntax v0.8.11
+   Compiling errno v0.3.14
+   Compiling mio v1.2.4
+   Compiling socket2 v0.6.5
+   Compiling either v1.19.0
+   Compiling toml_edit v0.25.17+spec-1.1.0
+   Compiling signal-hook-registry v1.4.8
+   Compiling memchr v2.8.3
+   Compiling hex v0.4.3
+   Compiling ciborium-io v0.2.2
+   Compiling anyhow v1.0.104
+   Compiling clap_lex v1.1.1
+   Compiling anstyle v1.0.14
+   Compiling itertools v0.13.0
+   Compiling clap_builder v4.6.7
+   Compiling proc-macro-crate v3.5.0
+   Compiling cast v0.3.0
+   Compiling uuid v1.28.0
+   Compiling same-file v1.0.6
+   Compiling alloca v0.4.0
+   Compiling regex-automata v0.4.18
+   Compiling walkdir v2.5.0
+   Compiling page_size v0.6.0
+   Compiling oorandom v11.1.5
+   Compiling arc-swap v1.9.2
+   Compiling anes v0.1.6
+   Compiling gorca-mirror v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-mirror)
+   Compiling criterion-plot v0.8.2
+   Compiling regex v1.13.1
+   Compiling clap v4.6.7
+   Compiling enumflags2_derive v0.7.12
+   Compiling tracing-attributes v0.1.31
+   Compiling zerocopy-derive v0.8.62
+   Compiling tracing v0.1.44
+   Compiling serde_derive v1.0.229
+   Compiling tokio-macros v2.7.2
+   Compiling thiserror-impl v2.0.21
+   Compiling serde_repr v0.1.21
+   Compiling async-recursion v1.2.0
+   Compiling async-trait v0.1.92
+   Compiling tokio v1.53.2
+   Compiling zvariant_utils v4.2.0
+   Compiling enumflags2 v0.7.12
+   Compiling zcheapstr v1.1.0
+   Compiling tinytemplate v1.2.1
+   Compiling zvariant_derive v5.15.0
+   Compiling half v2.7.1
+   Compiling zvariant v5.15.0
+   Compiling ciborium-ll v0.2.2
+   Compiling ciborium v0.2.2
+   Compiling criterion v0.8.2
+   Compiling tokio-util v0.7.20
+   Compiling gorca-rt v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-ingress)
+   Compiling zbus_names v4.3.4
+   Compiling zbus_macros v5.19.0
+   Compiling zbus v5.19.0
+   Compiling gorca-dbus v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-bench-b2)
+   Compiling gorca-bench v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-bench)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.61s
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench-1dcf1d8e39749383)
+
+running 14 tests
+test e2e::m1::tests::gates_skip_until_m1_lands ... ok
+test e2e::m1::tests::default_chords_use_real_keycodes ... ok
+test e2e::m1::tests::key_reply_and_app_log_parse ... ok
+test e2e::m1::tests::strict_mode_makes_the_gate_red ... ok
+test e2e::m1::tests::m1_flag_opens_the_gate ... ok
+test e2e::m1::tests::the_process_environment_never_opens_a_gate ... ok
+test e2e::m1::tests::the_reader_gets_desktop_facts_so_it_never_asks_gsettings ... ok
+test e2e::m1::tests::typing_score_detects_lost_and_doubled ... ok
+test e2e::m1::tests::unpaired_presses_and_releases_are_counted ... ok
+test e2e::mono::tests::is_monotonic_and_ns ... ok
+test e2e::scenarios::tests::decoder_understands_stub_tags_and_natural_text ... ok
+test e2e::scenarios::tests::scenario_ids_round_trip ... ok
+test e2e::mock::tests::voicego_binary_speak_then_stop ... ok
+test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
+
+   Compiling syn v2.0.119
+   Compiling rustix v1.1.5
+   Compiling fastrand v2.5.0
+   Compiling futures-lite v2.6.1
+   Compiling enumflags2_derive v0.7.12
+   Compiling tracing-attributes v0.1.31
+   Compiling enumflags2 v0.7.12
+   Compiling zvariant v5.15.0
+   Compiling tracing v0.1.44
+   Compiling gorca-rt v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-ingress)
+   Compiling zbus_names v4.3.4
+   Compiling zbus_macros v5.19.0
+   Compiling zbus v5.19.0
+   Compiling gorca-dbus v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-bench-b2)
+   Compiling gorca-bench v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-bench)
+    Finished `release` profile [optimized + debuginfo] target(s) in 15.44s
+== e2e m1-review-negbus: reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/target/release/gorca backend=voicego repeats=1 load=16.04 13.72 12.03 4/2260 168421
+-- round 1/1 K4 (load 16.04 13.72 12.03 3/2260 168421)
+2026-10-13T15:39:20.190864Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-13T15:39:20.192595Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-13T15:39:20.195275Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-13T15:39:20.198217Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-13T15:39:20.902022Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.8") got=Some(":1.11") dropped=1
+2026-10-13T15:39:20.902073Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.8") got=Some(":1.11") dropped=2
+2026-10-13T15:39:20.902080Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.8") got=Some(":1.11") dropped=4
+2026-10-13T15:39:20.902278Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.8") got=Some(":1.11") dropped=8
+2026-10-13T15:39:20.902652Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.8") got=Some(":1.11") dropped=16
+2026-10-13T15:39:20.903628Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.8") got=Some(":1.11") dropped=32
+2026-10-13T15:39:21.235855Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.8") got=Some(":1.12") dropped=64
+2026-10-13T15:39:21.252039Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.8") got=Some(":1.12") dropped=128
+2026-10-13T15:39:21.284735Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.8") got=Some(":1.12") dropped=256
+2026-10-13T15:39:21.339521Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.8") got=Some(":1.12") dropped=512
+2026-10-13T15:39:21.368970Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=the keyboard manager restarted backoff=100ms
+2026-10-13T15:39:21.472509Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-13T15:39:21.472577Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.13") got=Some(":1.12") dropped=1
+2026-10-13T15:39:21.472592Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.13") got=Some(":1.12") dropped=2
+2026-10-13T15:39:21.472603Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.13") got=Some(":1.12") dropped=4
+2026-10-13T15:39:21.473339Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.13") got=Some(":1.12") dropped=8
+2026-10-13T15:39:21.474246Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.13") got=Some(":1.12") dropped=16
+2026-10-13T15:39:21.476097Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.13") got=Some(":1.12") dropped=32
+2026-10-13T15:39:21.480214Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.13") got=Some(":1.12") dropped=64
+2026-10-13T15:39:21.490959Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.13") got=Some(":1.12") dropped=128
+2026-10-13T15:39:21.523797Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.13") got=Some(":1.12") dropped=256
+2026-10-13T15:39:21.558480Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.13") got=Some(":1.12") dropped=512
+2026-10-13T15:39:21.652153Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.13") got=Some(":1.12") dropped=1024
+2026-10-13T15:39:21.855563Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.13") got=Some(":1.12") dropped=2048
+2026-10-13T15:39:22.293132Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.13") got=Some(":1.12") dropped=4096
+2026-10-13T15:39:23.059953Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.13") got=Some(":1.12") dropped=8192
+2026-10-13T15:39:31.141439Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-13T15:39:31.142168Z  INFO gorca_daemon: gorca stopped
+# e2e m1-review-negbus
+# utc=2026-10-13T15:39:31Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=powersave x16
+# loadavg_start=15.10 13.60 12.01 2/2281 168572
+# git_rev=344b3e2
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m1-review-negbus
+# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=15.10 13.60 12.01 3/2281 168569
+# reader_env=GORCA_M1=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=K4 app_lost parts: missing in app log 0, swallowed live 0, escape not consumed 0; 500 switches in 5.9 s
+
+metric                     bus                median          min          max  n op    threshold  res   note
+K4.app_doubled             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+K4.app_lost                daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+K4.chord_leaked            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [chords]
+K4.chord_resent            daemon/voicego            0            0            0  1                  info   [chords]
+K4.forged_accepted         daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [speeches]
+K4.grab_state_wrong        daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [switches]
+K4.k4_wall_s               daemon/voicego        5.872        5.872        5.872  1                  info   [s]
+K4.restore_failed          daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [runs]
+K4.restore_ms              daemon/voicego        105.4        105.4        105.4  1                  info   [ms]
+K4.switches                daemon/voicego          500          500          500  1                  info   [count]
+K4.typed_keys              daemon/voicego         1005         1005         1005  1                  info   [count]
+
+== wrote <repo>/bench/results/e2e/m1-review/r2/negbus/20261013T153931Z.{json,txt}
+exit=0
