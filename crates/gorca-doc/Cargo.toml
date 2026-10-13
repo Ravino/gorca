@@ -9,9 +9,15 @@ publish.workspace = true
 
 [dependencies]
 gorca-model = { workspace = true }
+arc-swap = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 smallvec = { workspace = true }
+
+[[bench]]
+name = "doc_mb"
+harness = false
 
 [lints]
 workspace = true

@@ -826,8 +826,10 @@ dependencies = [
 name = "gorca-doc"
 version = "0.0.0"
 dependencies = [
+ "arc-swap",
  "gorca-model",
  "smallvec",
+ "thiserror",
 ]
 
 [[package]]
