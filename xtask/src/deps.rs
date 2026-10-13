@@ -30,6 +30,7 @@ const NEUTRAL: &[&str] = &[
     "gorca-input-api",
     "gorca-core",
     "gorca-speech",
+    "gorca-config",
 ];
 const MAY_USE_ZBUS: &[&str] = &[
     "gorca-dbus",
@@ -39,7 +40,7 @@ const MAY_USE_ZBUS: &[&str] = &[
     "gorca-daemon",
 ];
 const MAY_USE_ATSPI: &[&str] = &["gorca-connector-atspi"];
-const TOKIO_FREE: &[&str] = &["gorca-model", "gorca-doc"];
+const TOKIO_FREE: &[&str] = &["gorca-model", "gorca-doc", "gorca-config"];
 /// Concrete implementations that only `gorca-daemon` wires (rule 3, second sentence).
 const CONCRETE: &[&str] = &[
     "gorca-connector-atspi",

@@ -1,0 +1,15 @@
+[package]
+name = "gorca-config"
+description = "Pure settings and keymap data: schema, defaults, validation that never fails, presets, save."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+toml_edit = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true
