@@ -653,7 +653,8 @@ serves revisits). It validates the harness and is the baseline for "unchanged" g
 | **B1-L1c.p99** | focus → SPEAK on a miss | walk | ≤ 15 ms and ≤ 1.2 × R0's median (cold path unchanged) |
 | **B1-FF.p99@{shell,settings,files,files-big,gtk3}** | first focus of a newly appeared app → SPEAK | `ff` | **≤ 15 ms** each; rank on the worst p50 and p99 |
 | **B1-S1.p99** | state change on focused node → SPEAK | walk | **≤ 5 ms** |
-| **B1-M6** | corrections / focus presentations | walk | **< 1 %**; split evented / silent reported |
+| B1-M6 | all corrections (REFINED + LATE) / focus presentations | walk | rank (lower); split evented / silent reported |
+| **B1-M6.audible** | corrections the user can hear: LATE, or a refine that replaced the wrong utterance later than 10 ms after it was handed to speech / focus presentations | walk | **< 1 %** |
 | **B1-MSG.idle** | gorca-originated calls/s, 60 s after settle | `idle` | **≤ 0.5 calls/s per app** (no polling); signals/s reported |
 | B1-MSG.walk | msgs/s and calls per focus presentation | walk | rank (lower) |
 | **B1-MSG.l3** | calls/s to the `storm` app during L3-50k | walk | ≤ 500 calls/s (fill rate bound); L3 lost = 0 |
@@ -824,6 +825,14 @@ lazy plus a useless dump on every app except Shell, and Shell's case is covered 
 * ADR-0001 §8.1: every cache-served presentation is tagged `may_refine`; RV-1 (5.3).
 * ADR-0004 mapping table: `Cache.AddAccessible`/`RemoveAccessible` rows (PW-8), opt-in match rule.
 * `gorca-connector-api`: `ChildSnapshots`, `Ancestry`, `CacheDump`, `BackendError::Unresolved`.
+
+* **B-1 harness amendments of 2026-10-14 (need sign-off):** (1) 9: B1-M6 stays as a ranking row
+  and the gate is B1-M6.audible; reason in `docs/reports/2026-10-14-b1-harness-gaps.md` (silent
+  GTK4 row recycling is unavoidable for any mirror that serves a revisit, and RV-1 replaces the
+  wrong utterance 2-5 ms later, before any audio). (2) 10: `Candidate` is selected at run time by
+  the daemon's `--bench-fill-policy=candidate` instead of at build time. (3) IC-5, IC-12, IC-14,
+  IC-22, IC-23 made policy-neutral (they encoded R0's "no calls" behaviour); the probe's `stale`
+  includes the on-read TTL (`aged`).
 
 Applied to ADR-0001 and ADR-0004 on 2026-10-13. Added after P-9 (same date, needs a changelog line
 in ADR-0001 §4.4/§5.1 when PW-1/PW-4 land): `AppInfo.dump_complete` and the on-read TTL (2.2).

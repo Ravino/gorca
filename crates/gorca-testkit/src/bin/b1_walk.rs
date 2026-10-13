@@ -6,7 +6,13 @@
 //! `B1_SEED`; and from the isolated session `AT_SPI_BUS_ADDRESS`, `DBUS_SESSION_BUS_ADDRESS`.
 //! Optional: `B1_FAKEAPP` (the `b1-fakeapp` binary; default: next to this one), `B1_WALK_SPEC`
 //! (default `tests/harness/b1/walks/w1.toml`), `B1_DAEMON_ARGS` (extra daemon arguments),
-//! `B1_SOAK_S` (soak length, default 3600), `B1_QUICK=1` (a short walk for smoke runs).
+//! `B1_SOAK_S` (soak length, default 3600), `B1_QUICK=1` (a short walk for smoke runs),
+//! `B1_FILL_POLICY=r0|candidate` (the daemon's `--bench-fill-policy`; default: `r0` for the arm
+//! labelled `r0`, `candidate` for every other arm), `B1_FAKE_MUTTER` (path of `fake_mutter.py`).
+//!
+//! **Keyboard.** `walk`, `big` and `soak` runs start the emulated Mutter first and the daemon
+//! with `--impersonate-orca`, so the walk's where-am-I step presses the daemon's real command
+//! chord (Insert+Tab). The other kinds run the daemon without a keyboard.
 //!
 //! Output: the run directory of `crates/gorca-bench-b1/src/rundir.rs`.
 //!
@@ -21,6 +27,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use gorca_testkit::MockSpeechServer;
+use gorca_testkit::b1::keys::{self, FakeMutter};
 use gorca_testkit::b1::real::{RealConfig, RealSut, default_models_dir, proc_cpu_ns, proc_rss_kib};
 use gorca_testkit::b1::sim::{Fault, SimSut};
 use gorca_testkit::b1::sut::Sut;
@@ -178,9 +185,34 @@ fn real(kind: &str, dir: &Path, seed: u64) {
         .unwrap_or_else(|e| die(&format!("mock speech server: {e}")));
 
     let daemon_bin = env("B1_DAEMON").unwrap_or_else(|| die("B1_DAEMON is not set"));
+    let arm = env("B1_ARM").unwrap_or_else(|| "arm".into());
+    let policy = env("B1_FILL_POLICY")
+        .unwrap_or_else(|| if arm == "r0" { "r0" } else { "candidate" }.to_owned());
+    if !matches!(policy.as_str(), "r0" | "candidate") {
+        die(&format!(
+            "B1_FILL_POLICY={policy}: expected r0 or candidate"
+        ));
+    }
+    // The emulated Mutter must own its name before the daemon looks for it.
+    let keyboard = matches!(kind, "walk" | "big" | "soak");
+    if keyboard && !session.as_deref().is_some_and(|s| s.contains("/gorca-h.")) {
+        die("refusing to take the Orca identity: the session bus is not a harness session");
+    }
+    let mutter = keyboard.then(|| {
+        let script = env("B1_FAKE_MUTTER").map_or_else(keys::default_script, PathBuf::from);
+        FakeMutter::spawn(&script).unwrap_or_else(|e| die(&format!("{}: {e}", script.display())))
+    });
     let mut cmd = Command::new(&daemon_bin);
     cmd.args(env("B1_DAEMON_ARGS").unwrap_or_default().split_whitespace())
-        .env("GORCA_A11Y_BUS_ADDRESS", &a11y)
+        .arg(format!("--bench-fill-policy={policy}"));
+    if keyboard {
+        // Desktop facts the daemon would ask `gsettings` for: GNOME defaults, no XKB options.
+        cmd.arg("--impersonate-orca")
+            .env("GORCA_REPEAT_DELAY_MS", "500")
+            .env("GORCA_XKB_OPTIONS", "")
+            .env("GORCA_CLOCK_24H", "1");
+    }
+    cmd.env("GORCA_A11Y_BUS_ADDRESS", &a11y)
         .env("GORCA_SPEECH_BACKEND", "voicego")
         .env("GORCA_SPEECH_SOCKET", speech.socket_path())
         .arg(format!("--bench-present-log={}", present.display()))
@@ -196,6 +228,12 @@ fn real(kind: &str, dir: &Path, seed: u64) {
     #[allow(clippy::disallowed_methods)] // a driver process: real time must pass
     std::thread::sleep(Duration::from_millis(2_000)); // startup, registration
 
+    let mut mutter = mutter;
+    if let Some(m) = mutter.as_mut()
+        && !m.wait_grabs(Duration::from_secs(15))
+    {
+        die("the daemon never registered key grabs with the emulated Mutter (--impersonate-orca)");
+    }
     let cfg = RealConfig {
         fakeapp_bin: find_fakeapp(),
         models_dir: default_models_dir(),
@@ -205,8 +243,12 @@ fn real(kind: &str, dir: &Path, seed: u64) {
         present_log: present,
         scale_nodes: (kind == "big").then_some(20_000),
         allow_any_bus: false,
+        register_listeners: true,
     };
-    let mut sut = RealSut::new(cfg, &env("B1_ARM").unwrap_or_else(|| "arm".into()));
+    let mut sut = RealSut::new(cfg, &arm);
+    if let Some(m) = mutter {
+        sut = sut.with_keyboard(m);
+    }
 
     // RSS and CPU of the daemon.
     let rss_before = proc_rss_kib(pid);

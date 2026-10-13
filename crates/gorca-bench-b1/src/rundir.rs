@@ -272,6 +272,16 @@ fn walk_metrics(
     }
     let (m6, ev, sil) = r.m6();
     out.metrics.insert("B1-M6".into(), m6);
+    let (aud, n_aud) = r.m6_audible();
+    out.metrics.insert("B1-M6.audible".into(), aud);
+    out.info.insert("m6_audible".into(), n_aud as f64);
+    let mut delays = r.refine_delays_ms();
+    delays.sort_by(f64::total_cmp);
+    if let Some(p99) = delays.get(delays.len().saturating_sub(1) * 99 / 100) {
+        out.info.insert("refine_delay_p99_ms".into(), *p99);
+        out.info
+            .insert("refine_delay_max_ms".into(), delays[delays.len() - 1]);
+    }
     out.info.insert("m6_evented".into(), ev as f64);
     out.info.insert("m6_silent".into(), sil as f64);
     if let (Some(d), Some(n)) = (num(c, "ancestry_demands"), num(c, "ancestry_no_ipc"))

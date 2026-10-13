@@ -270,6 +270,7 @@ fn make_with(policy: PolicyFactory, fills: bool) -> Box<dyn Sut> {
         present_log,
         scale_nodes: None,
         allow_any_bus: false,
+        register_listeners: false,
     };
     let sut = RealSut::new(cfg, "r0").with_probe(Arc::new(Probing(probe)));
     Box::new(DaemonSut {
@@ -315,9 +316,42 @@ fn the_invalidation_suite_passes_against_the_real_daemon() {
             *slot = f;
         }
     }
+    judge(&reports, &only, 20);
+}
+
+/// The whole suite against the policy of the bake-off arm this tree was built from
+/// (`gorca_mirror::fill::Candidate`, SPEC 10). Every case runs once with a policy that is free to
+/// request things, so the cases that need one (IC-12, IC-22) apply to it. A case that is only
+/// true of R0 or of the test policy is a harness defect (cases are policy-neutral, SPEC 5.7):
+/// report it, do not weaken the arm.
+#[test]
+fn the_invalidation_suite_passes_with_the_candidate_policy() {
+    if let Some(why) = Session::unavailable_reason() {
+        assert!(
+            std::env::var_os("GORCA_REQUIRE_HARNESS").is_none(),
+            "the IC suite cannot run here: {why}"
+        );
+        eprintln!("SKIPPED (harness unavailable): {why}");
+        return;
+    }
+    let only = std::env::var("GORCA_IC_CASES").unwrap_or_default();
+    let only: Vec<&str> = only.split(',').filter(|x| !x.is_empty()).collect();
+    let reports = ic::run_cases(&only, &|| {
+        make_with(
+            Arc::new(|| Box::<gorca_mirror::fill::Candidate>::default()),
+            true,
+        )
+    });
+    // IC-22 (b) is not applicable to a policy that never dumps, and IC-10, 11, 16 and 23b need
+    // capabilities the real daemon lacks: 18 is the floor, not a target.
+    judge(&reports, &only, 18);
+}
+
+/// Print every case and assert that none failed (and, for a full run, that enough ran).
+fn judge(reports: &[ic::CaseReport], only: &[&str], min_passed: usize) {
     let mut failed = Vec::new();
     let (mut passed, mut skipped) = (0, 0);
-    for r in &reports {
+    for r in reports {
         match &r.result {
             Ok(Outcome::Pass) => {
                 passed += 1;
@@ -341,7 +375,10 @@ fn the_invalidation_suite_passes_against_the_real_daemon() {
             24,
             "IC-1..IC-23 with IC-23b are all accounted for"
         );
-        assert!(passed >= 20, "only {passed} cases ran: {skipped} skipped");
+        assert!(
+            passed >= min_passed,
+            "only {passed} cases ran: {skipped} skipped"
+        );
     }
 }
 

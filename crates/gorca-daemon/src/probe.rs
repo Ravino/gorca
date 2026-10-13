@@ -66,7 +66,8 @@ impl DaemonProbe {
                     name: v.snap.name.as_deref().unwrap_or("").to_owned(),
                     states: gorca_core::snapshot_state_names(&v.snap).to_vec(),
                     value: gorca_core::value_text(v.snap.value.as_ref()),
-                    stale: v.stale.intersects(PropMask::PRESENT),
+                    // Aged past the on-read TTL counts as stale (SPEC IC-12: "aged by TTL").
+                    stale: v.stale.intersects(PropMask::PRESENT) || v.aged,
                     partial: !v.snap.have.contains(need),
                 }
             }

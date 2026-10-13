@@ -32,6 +32,7 @@ fn cfg(bus: &Bus) -> RealConfig {
         present_log: bus.dir.join("present.jsonl"),
         scale_nodes: None,
         allow_any_bus: true,
+        register_listeners: false,
     }
 }
 

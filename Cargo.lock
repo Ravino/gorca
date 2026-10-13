@@ -673,6 +673,8 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "gorca-bench-b2",
+ "gorca-ingress",
+ "gorca-mirror",
  "gorca-model",
  "serde_json",
 ]

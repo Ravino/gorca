@@ -9,7 +9,7 @@
 # 2. release build of `b1`;
 # 3. `b1 run` with bench/b1/driver.sh as the per-slot driver (or --rundirs for recorded runs).
 #
-# Without a real walk driver (B1_WALK_DRIVER) only `--plan step=N` or `--rundirs` can run.
+# B1_WALK_DRIVER defaults to target/release/b1-walk (built here).
 # Results: bench/results/b1-mirror-fill/<label>/<UTC>.{json,txt}. `soak` is separate:
 #   bench/b1/run-all.sh <label> --plan soak=1 --arm ...
 # Quiet-host recipe (authoritative runs only): bench/b1/README.md.
@@ -36,6 +36,9 @@ else
 fi
 echo "== fidelity: $B1_FIDELITY =="
 cargo build --release -p gorca-bench-b1 --bins --offline
+# The walk driver and the fake app (H-3, H-2), next to each other in target/release.
+cargo build --release -p gorca-testkit --bin b1-walk -p b1-fakeapp --offline
+export B1_WALK_DRIVER="${B1_WALK_DRIVER:-$PWD/target/release/b1-walk}"
 plan=()
 has_plan=0; has_rundirs=0
 for a in "${args[@]}"; do

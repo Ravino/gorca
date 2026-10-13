@@ -56,7 +56,7 @@ use smallvec::smallvec;
 use tokio::signal::unix::{Signal, SignalKind, signal};
 use tracing_subscriber::EnvFilter;
 
-pub use cli::{CliError, ConfigCmd, Options, Parsed, SpeechMode, USAGE, parse};
+pub use cli::{CliError, ConfigCmd, FillChoice, Options, Parsed, SpeechMode, USAGE, parse};
 pub use config_task::{Built, ConfigSource, ConfigTask, build as build_settings, run_config_cmd};
 pub use platform::{PlatformOverrides, probe as probe_platform};
 
@@ -344,6 +344,14 @@ async fn run_inner(
     let mut core = Core::new(CoreConfig {
         shutdown_grace: SHUTDOWN_GRACE,
         ..CoreConfig::default()
+    });
+    // A caller-supplied factory (tests of the shared fill code) wins over the flag.
+    let policy = policy.or_else(|| match opts.fill_policy {
+        cli::FillChoice::R0 => None,
+        cli::FillChoice::Candidate => {
+            let f: PolicyFactory = Arc::new(|| Box::<gorca_mirror::fill::Candidate>::default());
+            Some(f)
+        }
     });
     if let Some(p) = policy {
         core = core.with_fill_policy(p);
