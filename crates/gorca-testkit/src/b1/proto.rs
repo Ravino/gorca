@@ -354,10 +354,11 @@ pub struct TruthLine {
     pub path: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub field: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub old: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub new: String,
+    /// Previous and new value. `name` strings, `value` numbers, `states` arrays of state names.
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    pub old: serde_json::Value,
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    pub new: serde_json::Value,
     #[serde(default)]
     pub evented: bool,
     /// `true` on a focus line.

@@ -76,7 +76,7 @@ fn control_channel_truth_log_and_restart_with_the_same_paths() {
     assert!(r.ok);
     let t = a.truth();
     assert_eq!(t.len(), 1);
-    assert_eq!((t[0].path.as_str(), t[0].new.as_str()), (first_path.as_str(), "Hello"));
+    assert_eq!((t[0].path.as_str(), t[0].new.as_str().unwrap()), (first_path.as_str(), "Hello"));
     assert!(!a.cmd(&Cmd::Rename { node: "nope".into(), name: "x".into(), evented: true }).unwrap().ok);
     let stats = a.stats().unwrap();
     assert!(stats.nodes_live > 700);

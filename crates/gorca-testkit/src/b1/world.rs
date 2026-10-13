@@ -86,6 +86,18 @@ pub mod state {
         NAMES.iter().find(|(n, _)| *n == name).map(|(_, v)| *v)
     }
 
+    /// Names of the set bits as the run-directory contract wants them: sorted, without the focus
+    /// ring (`focused`, `focusable`), which is not a mutation.
+    pub fn names_of(states: u64) -> Vec<&'static str> {
+        let mut v: Vec<&'static str> = NAMES
+            .iter()
+            .filter(|(n, bit)| states & (1u64 << bit) != 0 && !matches!(*n, "focused" | "focusable"))
+            .map(|(n, _)| *n)
+            .collect();
+        v.sort_unstable();
+        v
+    }
+
     pub fn name_of(bit: u32) -> &'static str {
         NAMES
             .iter()
@@ -904,14 +916,22 @@ impl World {
 
     // ---- mutations -----------------------------------------------------------------------
 
-    fn tl(&mut self, now_ns: u64, path: &str, field: &str, old: String, new: String, evented: bool) {
+    fn tl(
+        &mut self,
+        now_ns: u64,
+        path: &str,
+        field: &str,
+        old: impl Into<Json>,
+        new: impl Into<Json>,
+        evented: bool,
+    ) {
         self.truth.push(TruthLine {
             t_ns: now_ns,
             app: self.label.clone(),
             path: path.to_owned(),
             field: field.to_owned(),
-            old,
-            new,
+            old: old.into(),
+            new: new.into(),
             evented,
             focus: false,
         });
@@ -1045,20 +1065,21 @@ impl World {
         fx: &mut Vec<Effect>,
     ) {
         let Some(n) = self.node_mut(id) else { return };
-        let was = n.has_state(bit);
+        let before = n.states;
         if on {
             n.states |= 1u64 << bit;
         } else {
             n.states &= !(1u64 << bit);
         }
+        let after = n.states;
         let path = n.path.clone();
-        if bit != state::FOCUSED {
+        if bit != state::FOCUSED && before != after {
             self.tl(
                 now_ns,
                 &path,
-                &format!("state:{}", state::name_of(bit)),
-                u8::from(was).to_string(),
-                u8::from(on).to_string(),
+                "states",
+                json!(state::names_of(before)),
+                json!(state::names_of(after)),
                 evented,
             );
         }
@@ -1119,7 +1140,7 @@ impl World {
                     }
                     let old = std::mem::replace(&mut n.value, *value);
                     let path = n.path.clone();
-                    self.tl(now_ns, &path, "value", format!("{old}"), format!("{value}"), *evented);
+                    self.tl(now_ns, &path, "value", old, *value, *evented);
                     if *evented {
                         fx.push(Effect::Prop {
                             path: path.clone(),
@@ -1165,7 +1186,7 @@ impl World {
                     if let Some(n) = self.node_mut(id) {
                         n.lease_expired = true;
                         let p = n.path.clone();
-                        self.tl(now_ns, &p, "lease", "alive".into(), "expired".into(), false);
+                        self.tl(now_ns, &p, "lease", "alive", "expired", false);
                     }
                     CmdReply::ok(json!({"path": self.nodes.get(id as usize).map(|n| n.path.clone())}))
                 }
@@ -1316,8 +1337,8 @@ impl World {
             now_ns,
             &root_path,
             "subtree",
-            n_old.to_string(),
-            used.to_string(),
+            n_old,
+            used,
             remove_events || add_events,
         );
         let top: Vec<String> = new_top
@@ -1395,8 +1416,8 @@ impl World {
             now_ns,
             &path,
             "destroyed",
-            "alive".into(),
-            "dead".into(),
+            "alive",
+            "dead",
             events != DestroyEvents::Silent,
         );
         CmdReply::ok(json!({"path": path}))
@@ -1518,7 +1539,7 @@ impl World {
                 fx.push(Effect::CacheAdd(item));
             }
         }
-        self.tl(now_ns, &path, "added", String::new(), name.to_owned(), !silent);
+        self.tl(now_ns, &path, "added", Json::Null, name.to_owned(), !silent);
         CmdReply::ok(json!({"path": path, "cache_invisible": invisible}))
     }
 
@@ -1559,7 +1580,7 @@ impl World {
                 });
             }
         }
-        self.tl(now_ns, &rpath, "subtree", old.len().to_string(), items.to_string(), true);
+        self.tl(now_ns, &rpath, "subtree", old.len(), items, true);
         CmdReply::ok(json!({"root": rpath, "items": items}))
     }
 
@@ -1690,7 +1711,7 @@ mod tests {
         let t = w.take_truth();
         assert_eq!(t.len(), 2);
         assert!(t[0].evented && !t[1].evented);
-        assert_eq!((t[1].new.as_str(), t[1].t_ns), ("Quiet", 20));
+        assert_eq!((t[1].new.as_str(), t[1].t_ns), (Some("Quiet"), 20));
     }
 
     #[test]

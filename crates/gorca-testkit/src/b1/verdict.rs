@@ -7,6 +7,8 @@
 
 use std::collections::BTreeMap;
 
+use serde_json::Value;
+
 use super::proto::TruthLine;
 use super::sut::{Presentation, Source};
 use super::world::state;
@@ -19,26 +21,26 @@ pub enum Verdict {
     Stale,
 }
 
-/// Value timeline of one (path, field): `(start_ns, value)` ascending; the first entry is the
-/// value before the first mutation (`start 0`).
+/// Value timeline of one (app, path, field): `(start_ns, value)` ascending; the first entry is
+/// the value before the first mutation (`start 0`).
 #[derive(Debug, Default)]
-struct Timeline(Vec<(u64, String)>);
+struct Timeline(Vec<(u64, Value)>);
 
 impl Timeline {
     /// Values valid at some instant in `[from, to]`.
-    fn valid(&self, from: u64, to: u64) -> Vec<&str> {
+    fn valid(&self, from: u64, to: u64) -> Vec<&Value> {
         let mut out = Vec::new();
         for (i, (start, v)) in self.0.iter().enumerate() {
             let end = self.0.get(i + 1).map_or(u64::MAX, |n| n.0);
             if *start <= to && end > from {
-                out.push(v.as_str());
+                out.push(v);
             }
         }
         out
     }
 }
 
-/// Truth versions per (path, field).
+/// Truth versions per (app, path, field).
 #[derive(Debug, Default)]
 pub struct TruthDb {
     by: BTreeMap<(String, String, String), Timeline>,
@@ -62,7 +64,7 @@ impl TruthDb {
         db
     }
 
-    fn valid(&self, app: &str, path: &str, field: &str, from: u64, to: u64) -> Option<Vec<&str>> {
+    fn valid(&self, app: &str, path: &str, field: &str, from: u64, to: u64) -> Option<Vec<&Value>> {
         self.by
             .get(&(app.to_owned(), path.to_owned(), field.to_owned()))
             .map(|t| t.valid(from, to))
@@ -72,32 +74,26 @@ impl TruthDb {
     /// Fields that never mutated are not constrained (their value cannot be stale).
     pub fn matches(&self, p: &Presentation, from: u64, to: u64) -> bool {
         if let Some(v) = self.valid(&p.app, &p.path, "name", from, to)
-            && !v.contains(&p.name.as_str())
+            && !v.iter().any(|x| x.as_str() == Some(p.name.as_str()))
         {
             return false;
         }
         if let Some(v) = self.valid(&p.app, &p.path, "value", from, to) {
-            let said = p.value.clone().unwrap_or_default();
-            if !v.contains(&said.as_str()) {
+            let said = p.value.as_deref().and_then(|x| x.parse::<f64>().ok());
+            if !v.iter().any(|x| x.as_f64() == said) {
                 return false;
             }
         }
-        for bit in 0..32u32 {
-            if state::TRACKED & (1u64 << bit) == 0 {
-                continue;
-            }
-            let field = format!("state:{}", state::name_of(bit));
-            if let Some(v) = self.valid(&p.app, &p.path, &field, from, to) {
-                let said = if p.states & (1u64 << bit) != 0 { "1" } else { "0" };
-                if !v.contains(&said) {
-                    return false;
-                }
+        if let Some(v) = self.valid(&p.app, &p.path, "states", from, to) {
+            let said = serde_json::json!(state::names_of(p.states));
+            if !v.iter().any(|x| **x == said) {
+                return false;
             }
         }
         true
     }
 
-    /// Was the node destroyed (or its lease expired) before `t`?
+/// Was the node destroyed (or its lease expired) before `t`?
     pub fn dead_before(&self, app: &str, path: &str, t: u64) -> bool {
         ["destroyed", "lease"].iter().any(|f| {
             self.by
@@ -155,14 +151,14 @@ pub fn corrections(v: &[(Presentation, Verdict)]) -> usize {
 mod tests {
     use super::*;
 
-    fn line(t: u64, path: &str, field: &str, old: &str, new: &str) -> TruthLine {
+    fn line(t: u64, path: &str, field: &str, old: Value, new: Value) -> TruthLine {
         TruthLine {
             t_ns: t,
             app: "a".into(),
             path: path.into(),
             field: field.into(),
-            old: old.into(),
-            new: new.into(),
+            old,
+            new,
             evented: true,
             focus: false,
         }
@@ -188,7 +184,7 @@ mod tests {
 
     #[test]
     fn correct_when_the_name_is_a_valid_version() {
-        let db = TruthDb::new(&[line(100, "/p", "name", "Old", "New")]);
+        let db = TruthDb::new(&[line(100, "/p", "name", "Old".into(), "New".into())]);
         let p = pres(1, 300, 200, "New", Source::MissReply, None);
         assert_eq!(classify(&p, &[p.clone()], &db), Verdict::Correct);
     }
@@ -196,7 +192,7 @@ mod tests {
     #[test]
     fn a_version_replaced_inside_the_window_is_still_valid() {
         // Mutation at 250 is inside [200, 300]: both Old and New are acceptable.
-        let db = TruthDb::new(&[line(250, "/p", "name", "Old", "New")]);
+        let db = TruthDb::new(&[line(250, "/p", "name", "Old".into(), "New".into())]);
         for n in ["Old", "New"] {
             let p = pres(1, 300, 200, n, Source::Hit, None);
             assert_eq!(classify(&p, &[p.clone()], &db), Verdict::Correct, "{n}");
@@ -205,7 +201,7 @@ mod tests {
 
     #[test]
     fn old_name_long_after_the_change_is_stale_unless_corrected() {
-        let db = TruthDb::new(&[line(100, "/p", "name", "Old", "New")]);
+        let db = TruthDb::new(&[line(100, "/p", "name", "Old".into(), "New".into())]);
         let bad = pres(1, 300, 200, "Old", Source::Hit, None);
         assert_eq!(classify(&bad, &[bad.clone()], &db), Verdict::Stale);
         let refine = pres(2, 350, 200, "New", Source::Refine, Some(1));
@@ -218,7 +214,7 @@ mod tests {
 
     #[test]
     fn tracked_state_bits_are_compared() {
-        let db = TruthDb::new(&[line(100, "/p", "state:checked", "0", "1")]);
+        let db = TruthDb::new(&[line(100, "/p", "states", serde_json::json!([]), serde_json::json!(["checked"]))]);
         let mut p = pres(1, 300, 200, "x", Source::Hit, None);
         assert_eq!(classify(&p, &[p.clone()], &db), Verdict::Stale);
         p.states = 1 << state::CHECKED;

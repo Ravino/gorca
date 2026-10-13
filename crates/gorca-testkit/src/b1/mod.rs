@@ -20,3 +20,5 @@ pub mod sut;
 pub mod ic;
 pub mod verdict;
 mod selftest;
+pub mod audit;
+pub mod items;
