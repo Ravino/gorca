@@ -79,6 +79,8 @@ impl Bus {
             truth_path: Some(self.dir.join(format!("{label}.truth"))),
             register: false,
             peer_dir: self.dir.clone(),
+            session_bus: None,
+            own_name: None,
         })
         .await
         .unwrap()

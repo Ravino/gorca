@@ -86,6 +86,10 @@ pub enum Feature {
     VirtualTime,
     /// The reader subscribes to cache signals / dumps (arm B style): IC-12 and IC-13 bite.
     CacheFill,
+    /// [`Sut::where_am_i`] works.
+    WhereAmI,
+    /// The fake app can plant hostile refs ([`Cmd::Malform`]) and the SUT counts what it drops.
+    Malformed,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -129,6 +133,11 @@ pub trait Sut {
     fn bus_name(&self, app: &str) -> String;
     /// Call counters of the current instance of `app`.
     fn calls(&mut self, app: &str) -> SutResult<AppStats>;
+    /// The where-am-I command: speak the focused node and its ancestors (5.3: every spoken
+    /// node served from the mirror is revalidated). `WhereAmI` only.
+    fn where_am_i(&mut self) -> SutResult<()> {
+        Err(SutError::Other("where-am-i is not supported by this SUT".into()))
+    }
     /// Set event (bus signal) and reply (call) travel times, microseconds. `LatencyKnobs` only.
     fn set_latency(&mut self, event_us: u64, reply_us: u64);
 }

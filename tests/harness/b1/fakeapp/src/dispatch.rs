@@ -74,6 +74,8 @@ pub struct Ctx {
     pub app_bus_address: String,
     pub p2p: P2pMode,
     pub toolkit: String,
+    /// IC-16 / MA-3: hostile refs; the value is the foreign bus name to plant.
+    pub malform: Option<String>,
 }
 
 pub fn opath(p: &str) -> OwnedObjectPath {
@@ -114,6 +116,24 @@ fn role_name(r: u32) -> &'static str {
         role::IMAGE => "image",
         role::COMBO_BOX => "combo box",
         _ => "unknown",
+    }
+}
+
+/// Plant hostile refs in a dump (IC-16): foreign parents, self-parents and a parent cycle.
+fn malform_items(items: &mut [ItemWire], foreign: &str) {
+    let paths: Vec<OwnedObjectPath> = items.iter().map(|i| i.0.1.clone()).collect();
+    for (n, it) in items.iter_mut().enumerate() {
+        match n % 17 {
+            7 => it.2 = (foreign.to_owned(), paths[n].clone()),
+            11 => it.2 = (it.0.0.clone(), paths[n].clone()),
+            13 | 14 => {
+                let other = if n % 17 == 13 { n + 1 } else { n - 1 };
+                if let Some(p) = paths.get(other) {
+                    it.2 = (it.0.0.clone(), p.clone());
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -225,12 +245,17 @@ pub fn handle(
     }
     if path == CACHE_PATH {
         return match (interface, member) {
-            ("org.a11y.atspi.Cache", "GetItems") => Ok(Reply::Items(
-                w.dump(max_items)
+            ("org.a11y.atspi.Cache", "GetItems") => {
+                let mut items: Vec<ItemWire> = w
+                    .dump(max_items)
                     .iter()
                     .map(|i| item_wire(ctx, root_path, i))
-                    .collect(),
-            )),
+                    .collect();
+                if let Some(foreign) = &ctx.malform {
+                    malform_items(&mut items, foreign);
+                }
+                Ok(Reply::Items(items))
+            }
             _ => Err(DbusErr::UnknownMethod),
         };
     }
@@ -256,13 +281,21 @@ pub fn handle(
             Ok(Reply::Str(role_name(view.role).to_owned()))
         }
         ("org.a11y.atspi.Accessible", "GetState") => Ok(Reply::U32s(state_words(view.states).to_vec())),
-        ("org.a11y.atspi.Accessible", "GetChildren") => Ok(Reply::Refs(
-            w.child_paths(path)
+        ("org.a11y.atspi.Accessible", "GetChildren") => {
+            let mut kids: Vec<Ref> = w
+                .child_paths(path)
                 .unwrap_or_default()
                 .iter()
                 .map(|p| mk_ref(ctx, p))
-                .collect(),
-        )),
+                .collect();
+            if let Some(foreign) = &ctx.malform {
+                // A child that lives in another application, one that is the node itself, and
+                // a self-parented duplicate of the first child.
+                kids.push((foreign.clone(), opath(path)));
+                kids.push(mk_ref(ctx, path));
+            }
+            Ok(Reply::Refs(kids))
+        }
         ("org.a11y.atspi.Accessible", "GetChildAtIndex") => {
             let i = usize::try_from(args.i1.ok_or(DbusErr::InvalidArgs)?).map_err(|_| DbusErr::InvalidArgs)?;
             w.child_paths(path)
@@ -322,6 +355,7 @@ mod tests {
             app_bus_address: String::new(),
             p2p: P2pMode::None,
             toolkit: "GTK".into(),
+            malform: None,
         };
         (ctx, World::new(spec, "s"))
     }

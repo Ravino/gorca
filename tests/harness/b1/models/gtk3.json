@@ -1,0 +1,7 @@
+{
+  "name": "gtk3", "app_name": "gedit", "toolkit": "GTK", "shape": "gtk3",
+  "p2p": "peer", "path_style": "counter", "seed": 707,
+  "nodes_idle": 488, "nodes_peak": 800, "depth_min": 10, "depth_max": 18,
+  "service": { "p50_ms": 0.13, "p99_ms": 1.0 }, "getitems_us_per_item": 15.0,
+  "quirks": { "dump_omits_transient": true, "silent_derived_names": true }
+}

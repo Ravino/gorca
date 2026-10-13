@@ -52,6 +52,17 @@ pub struct Quirks {
     pub dump_omits_transient: bool,
     /// S-2: the switcher is rebuilt (new paths) on every `rebuild_switcher`.
     pub switcher_rebuild: bool,
+    /// P-9: `GetItems` returns only realised contexts (root, window, and nodes a client has
+    /// read); a fresh app answers 2 items.
+    pub dump_realised_only: bool,
+    /// P-9 H1: widget removal never sends `RemoveAccessible`.
+    pub never_remove_accessible: bool,
+    /// P9-2: a child property/state update also sends `ChildrenChanged:add` on the parent.
+    pub spurious_parent_add: bool,
+    /// P-9: a hidden context stays in the tree with `SHOWING` set (a ghost): hiding is silent.
+    pub hidden_ghost: bool,
+    /// P9-1: no `Object` event is emitted before an AT listener registered.
+    pub listener_gate: bool,
 }
 
 impl Quirks {
@@ -65,6 +76,11 @@ impl Quirks {
             recycle_evented: false,
             dump_omits_transient: false,
             switcher_rebuild: false,
+            dump_realised_only: false,
+            never_remove_accessible: true,
+            spurious_parent_add: true,
+            hidden_ghost: false,
+            listener_gate: false,
         }
     }
 }
@@ -94,6 +110,8 @@ pub enum Shape {
     Shell,
     Settings,
     Files,
+    /// GTK3 (gedit): a `MANAGES_DESCENDANTS` list that `GetItems` does not descend into.
+    Gtk3,
     /// Firefox chrome with one `DocumentWeb` child (IC-20).
     FfChrome,
     /// One terminal node and nothing else: the `storm` model.
@@ -128,6 +146,9 @@ pub struct ModelSpec {
     pub list_items: u32,
     /// Nodes per list row (row, icon, label, size, date, check).
     pub row_nodes: u32,
+    /// Own this well-known name on the harness session bus (the verified gnome-shell of the
+    /// eligibility check, SPEC 2.2). The driver passes `--own-name`.
+    pub owns_name: Option<String>,
 }
 
 impl Default for ModelSpec {
@@ -151,6 +172,7 @@ impl Default for ModelSpec {
             list_rows: 0,
             list_items: 0,
             row_nodes: 6,
+            owns_name: None,
         }
     }
 }
@@ -270,8 +292,13 @@ pub enum Cmd {
     Storm { rate_per_s: u64, duration_ms: u64 },
     /// Drop every peer connection (EOF mid-request, IC-19).
     ClosePeers,
+    /// An AT listener registers (lifts the P9-1 gate when the model has it).
+    RegisterListener,
     /// Delay accepting new peer connections by `ms` (connect hang, IC-19).
     PeerAcceptDelay { ms: u64 },
+    /// Make refs in `GetChildren` / `GetItems` hostile: a foreign bus name (`foreign_bus`), a
+    /// self-parent and a parent cycle (IC-16, MA-3).
+    Malform { on: bool, foreign_bus: String },
     /// Current truth of one node.
     Get { node: String },
     /// Names of the landmarks and the paths behind them.

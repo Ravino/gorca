@@ -54,6 +54,8 @@ async fn main() -> Result<()> {
     let mut quirks = None;
     let mut dir = std::env::var("GORCA_HARNESS_DIR").map_or_else(|_| std::env::temp_dir(), PathBuf::from);
     let mut allow_any = false;
+    let mut session_bus = None;
+    let mut own_name = None;
     while let Some(a) = args.next() {
         let mut val = || args.next().with_context(|| format!("{a} needs a value"));
         match a.as_str() {
@@ -67,6 +69,8 @@ async fn main() -> Result<()> {
             "--quirks" => quirks = Some(val()?),
             "--dir" => dir = PathBuf::from(val()?),
             "--allow-any-bus" => allow_any = true,
+            "--session-bus" => session_bus = Some(val()?),
+            "--own-name" => own_name = Some(val()?),
             other => bail!("unknown argument {other}"),
         }
     }
@@ -93,6 +97,18 @@ async fn main() -> Result<()> {
     if !allow_any && !bus_address.contains("/gorca-h.") {
         bail!("refusing to connect to {bus_address}: not a harness session bus (use --allow-any-bus for a test dbus-daemon)");
     }
+    if let Some(sb) = &session_bus
+        && !allow_any
+        && !sb.contains("/gorca-h.")
+    {
+        bail!("refusing to connect to {sb}: not a harness session bus");
+    }
+    if own_name.is_none() {
+        own_name.clone_from(&spec.owns_name);
+        if own_name.is_some() && session_bus.is_none() {
+            session_bus = std::env::var("DBUS_SESSION_BUS_ADDRESS").ok();
+        }
+    }
     let label = label.unwrap_or_else(|| spec.name.clone());
     let app = FakeApp::start(Options {
         spec,
@@ -101,6 +117,8 @@ async fn main() -> Result<()> {
         truth_path: truth,
         register,
         peer_dir: dir,
+        session_bus,
+        own_name,
     })
     .await?;
     let r = &app.ready;

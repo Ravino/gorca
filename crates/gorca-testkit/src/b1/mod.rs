@@ -15,3 +15,8 @@ pub mod appctl;
 pub mod proto;
 pub mod service;
 pub mod world;
+pub mod sim;
+pub mod sut;
+pub mod ic;
+pub mod verdict;
+mod selftest;

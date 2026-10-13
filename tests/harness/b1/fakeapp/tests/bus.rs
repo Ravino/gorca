@@ -9,7 +9,6 @@ use std::time::{Duration, Instant};
 use common::{Bus, call};
 use futures_lite::StreamExt;
 use gorca_testkit::b1::proto::{Cmd, ConnKind, ModelSpec, P2pMode, ServiceSpec, Shape};
-use gorca_testkit::b1::service::percentile;
 use zbus::MessageStream;
 use zvariant::OwnedObjectPath;
 
@@ -23,6 +22,11 @@ fn spec(shape: Shape, p2p: P2pMode, p50: f64, p99: f64) -> ModelSpec {
         sidebar_rows: 20,
         list_rows: 20,
         list_items: 200,
+        quirks: gorca_testkit::b1::proto::Quirks {
+            spurious_parent_add: false,
+            never_remove_accessible: false,
+            ..gorca_testkit::b1::proto::Quirks::pessimistic_gtk4()
+        },
         service: ServiceSpec {
             p50_ms: p50,
             p99_ms: p99,
@@ -73,37 +77,6 @@ async fn answers_accessible_calls_and_unknown_objects() {
     assert_eq!(s.member_calls("GetItems"), 1);
     assert_eq!(s.calls_unknown_object, 1);
     assert_eq!(s.bus_callers, 1);
-}
-
-async fn rtts(c: &zbus::Connection, dest: &str, path: &str, n: usize) -> Vec<u64> {
-    let mut v = Vec::with_capacity(n);
-    for _ in 0..n {
-        let t = Instant::now();
-        call(c, dest, path, ACC, "GetRole", &()).await.unwrap();
-        v.push(u64::try_from(t.elapsed().as_nanos()).unwrap());
-    }
-    v
-}
-
-/// H-10(a): the replies a client sees match the service-time model. The bus and the client add
-/// a constant; it is measured with a near-zero model and subtracted.
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn service_time_fidelity() {
-    let bus = Bus::start();
-    let c = bus.client().await;
-    let base_app = bus.app(spec(Shape::Settings, P2pMode::SameBus, 0.001, 0.002), "base").await;
-    let model_app = bus.app(spec(Shape::Settings, P2pMode::SameBus, 0.5, 2.0), "model").await;
-    let b = rtts(&c, &base_app.ready.bus_name, &base_app.ready.root, 600).await;
-    let m = rtts(&c, &model_app.ready.bus_name, &model_app.ready.root, 2500).await;
-    let (b50, b99) = (percentile(&b, 50.0) as f64 / 1e6, percentile(&b, 99.0) as f64 / 1e6);
-    let (m50, m99) = (percentile(&m, 50.0) as f64 / 1e6, percentile(&m, 99.0) as f64 / 1e6);
-    let d50 = m50 - b50;
-    eprintln!("base p50 {b50:.3} p99 {b99:.3} ms; model p50 {m50:.3} p99 {m99:.3} ms; delta p50 {d50:.3}");
-    // The SPEC gate is +-20 % on a quiet host (H-12). `make check` runs on shared, loaded
-    // machines (load 10+ measured), so this test allows +-35 % + 50 us; the runner applies the
-    // strict gate to its own measurement.
-    assert!((d50 - 0.5).abs() <= 0.5 * 0.35 + 0.05, "p50 off: delta {d50:.3} ms vs 0.5 ms");
-    assert!(m99 - b99 <= 2.0 + 1.0, "p99 off: {m99:.3} - {b99:.3} ms vs 2.0 + 1 ms");
 }
 
 /// D-1: one request at a time across all connections.
@@ -290,4 +263,82 @@ async fn storm_emits_signals_at_roughly_the_requested_rate() {
         }
     }
     assert!((3500..=6000).contains(&n), "{n} events in 0.5 s at 10k/s");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn listener_gate_and_realised_dump_follow_the_p9_profile() {
+    let bus = Bus::start();
+    let mut sp = spec(Shape::Settings, P2pMode::None, 0.01, 0.05);
+    sp.quirks.listener_gate = true;
+    sp.quirks.dump_realised_only = true;
+    let app = bus.app(sp, "gate").await;
+    let c = bus.client().await;
+    let rule = zbus::MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .interface("org.a11y.atspi.Event.Object")
+        .unwrap()
+        .build();
+    let mut stream = MessageStream::for_match_rule(rule, &c, None).await.unwrap();
+    // No listener: an evented rename emits nothing (P9-1).
+    app.control(Cmd::Rename { node: "controls[0]".into(), name: "a".into(), evented: true }).await;
+    assert!(tokio::time::timeout(Duration::from_millis(200), stream.next()).await.is_err());
+    app.control(Cmd::RegisterListener).await;
+    app.control(Cmd::Rename { node: "controls[0]".into(), name: "b".into(), evented: true }).await;
+    assert!(tokio::time::timeout(Duration::from_secs(1), stream.next()).await.is_ok());
+    // A fresh dump has 2 items; it grows once a client walks the tree (P-9).
+    type Items = Vec<(
+        (String, OwnedObjectPath),
+        (String, OwnedObjectPath),
+        (String, OwnedObjectPath),
+        i32,
+        i32,
+        Vec<String>,
+        String,
+        u32,
+        String,
+        Vec<u32>,
+    )>;
+    let dump = |c: &zbus::Connection| {
+        let (c, d) = (c.clone(), app.ready.bus_name.clone());
+        async move {
+            let r = call(&c, &d, "/org/a11y/atspi/cache", "org.a11y.atspi.Cache", "GetItems", &())
+                .await
+                .unwrap();
+            r.body().deserialize::<Items>().unwrap().len()
+        }
+    };
+    assert_eq!(dump(&c).await, 2);
+    let r = call(&c, &app.ready.bus_name, &app.ready.root, ACC, "GetChildren", &()).await.unwrap();
+    let kids: Vec<(String, OwnedObjectPath)> = r.body().deserialize().unwrap();
+    call(&c, &app.ready.bus_name, kids[0].1.as_str(), ACC, "GetChildren", &()).await.unwrap();
+    assert!(dump(&c).await > 2);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn closing_peers_ends_the_peer_connection_and_new_ones_work() {
+    let bus = Bus::start();
+    let app = bus.app(spec(Shape::Settings, P2pMode::Peer, 0.01, 0.05), "peer2").await;
+    let path = app
+        .ready
+        .p2p_address
+        .trim_start_matches("unix:path=")
+        .split(',')
+        .next()
+        .unwrap()
+        .to_owned();
+    let connect = || async {
+        let s = tokio::net::UnixStream::connect(&path).await.unwrap();
+        zbus::connection::Builder::unix_stream(s).p2p().build().await.unwrap()
+    };
+    let p = connect().await;
+    p.call_method(None::<&str>, app.ready.root.as_str(), Some(ACC), "GetRole", &()).await.unwrap();
+    app.control(Cmd::ClosePeers).await;
+    let r = tokio::time::timeout(
+        Duration::from_secs(2),
+        p.call_method(None::<&str>, app.ready.root.as_str(), Some(ACC), "GetRole", &()),
+    )
+    .await;
+    assert!(matches!(r, Ok(Err(_))), "the old peer connection must fail: {r:?}");
+    let p2 = connect().await;
+    p2.call_method(None::<&str>, app.ready.root.as_str(), Some(ACC), "GetRole", &()).await.unwrap();
 }

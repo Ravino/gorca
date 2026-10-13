@@ -1,8 +1,10 @@
 {
-  "name": "settings", "app_name": "gnome-control-center", "toolkit": "gtk4", "shape": "settings",
-  "p2p": "same_bus", "path_style": "uuid", "seed": 202,
+  "name": "settings", "app_name": "gnome-control-center", "toolkit": "GTK", "shape": "settings",
+  "p2p": "none", "path_style": "uuid", "seed": 202,
   "nodes_idle": 800, "nodes_peak": 2000, "depth_min": 15, "depth_max": 25, "sidebar_rows": 45,
-  "service": { "p50_ms": 0.15, "p99_ms": 1.0 }, "getitems_us_per_item": 15.0,
-  "quirks": { "silent_derived_names": true, "hidden_skips_cache": true, "add_during_dump_invisible": true,
-              "recycle_rows": true, "recycle_evented": false, "dump_omits_transient": false, "switcher_rebuild": false }
+  "service": { "p50_ms": 0.13, "p99_ms": 1.0 }, "getitems_us_per_item": 45.0,
+  "quirks": { "silent_derived_names": true, "hidden_skips_cache": false, "add_during_dump_invisible": true,
+              "recycle_rows": true, "recycle_evented": false, "dump_omits_transient": false, "switcher_rebuild": false,
+              "dump_realised_only": true, "never_remove_accessible": true, "spurious_parent_add": true,
+              "hidden_ghost": true, "listener_gate": true }
 }

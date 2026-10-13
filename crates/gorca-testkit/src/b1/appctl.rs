@@ -37,6 +37,9 @@ pub struct AppArgs {
     /// Test buses that do not live under a `/gorca-h.` session directory.
     pub allow_any_bus: bool,
     pub dir: Option<PathBuf>,
+    /// Own `own_name` on this session bus (the fake gnome-shell, IC-22).
+    pub session_bus: Option<String>,
+    pub own_name: Option<String>,
 }
 
 impl AppArgs {
@@ -51,6 +54,8 @@ impl AppArgs {
             quirks: None,
             allow_any_bus: false,
             dir: None,
+            session_bus: None,
+            own_name: None,
         }
     }
 }
@@ -86,6 +91,9 @@ impl B1App {
         }
         if a.allow_any_bus {
             cmd.arg("--allow-any-bus");
+        }
+        if let (Some(sb), Some(n)) = (&a.session_bus, &a.own_name) {
+            cmd.args(["--session-bus", sb, "--own-name", n]);
         }
         if let Some(d) = &a.dir {
             cmd.arg("--dir").arg(d);

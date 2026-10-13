@@ -7,7 +7,7 @@
 //!
 //! Time is an argument (`now_ns`), never read here: a seed reproduces a run exactly.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use serde_json::{Value as Json, json};
 
@@ -281,6 +281,7 @@ pub struct World {
     list_offset: u32,
     truth: Vec<TruthLine>,
     doc_root: Option<NodeId>,
+    realised: HashSet<NodeId>,
 }
 
 fn kib(i: u32) -> String {
@@ -307,6 +308,7 @@ impl World {
             list_offset: 0,
             truth: Vec::new(),
             doc_root: None,
+            realised: HashSet::new(),
         };
         w.build();
         w
@@ -511,6 +513,7 @@ impl World {
             }
             Shape::Settings => self.build_settings(win, depth),
             Shape::Files => self.build_files(win, depth),
+            Shape::Gtk3 => self.build_gtk3(win, depth),
             Shape::Shell => self.build_shell(win, depth),
             Shape::FfChrome => self.build_ff(win, depth),
         }
@@ -585,6 +588,36 @@ impl World {
         let budget = self.spec.nodes_idle.saturating_sub(self.live_count());
         let chrome = self.container(main, role::PANEL, "status");
         self.fill(chrome, budget, 3);
+    }
+
+    /// GTK3 (gedit-like): menus, a text view and a `MANAGES_DESCENDANTS` list holding most nodes.
+    fn build_gtk3(&mut self, win: NodeId, depth: u32) {
+        self.build_headerbar(win, &["Open", "Save", "Menu"]);
+        let inner = self.pad_chain(win, depth.saturating_sub(5));
+        let list = self.add_node(
+            Some(inner),
+            role::LIST,
+            "documents",
+            BASE_STATES | (1 << state::MANAGES_DESCENDANTS),
+            0,
+        );
+        self.lm("list", vec![list]);
+        let hidden_rows = (self.spec.nodes_idle * 63 / 100).max(1);
+        for i in 0..hidden_rows {
+            self.control(list, role::LIST_ITEM, &format!("Row {i}"));
+        }
+        let ed = self.add_node(
+            Some(inner),
+            role::TEXT,
+            "editor",
+            BASE_STATES | (1 << state::FOCUSABLE),
+            iface::TEXT,
+        );
+        self.lm("editor", vec![ed]);
+        let panel = self.container(inner, role::PANEL, "panel");
+        self.lm("panel", vec![panel]);
+        let budget = self.spec.nodes_idle.saturating_sub(self.live_count());
+        self.fill(panel, budget, 3);
     }
 
     fn build_shell(&mut self, win: NodeId, depth: u32) {
@@ -736,13 +769,17 @@ impl World {
             .collect()
     }
 
+    /// The path answers calls (not unknown, not dead, lease not expired).
     pub fn is_alive_path(&self, path: &str) -> bool {
-        self.by_path.contains_key(path)
+        self.by_path(path).is_some()
     }
 
     /// The node answering at `path`, `None` when the path is unknown or dead (`UnknownObject`).
     pub fn by_path(&self, path: &str) -> Option<&Node> {
-        self.by_path.get(path).and_then(|id| self.node(*id))
+        self.by_path
+            .get(path)
+            .and_then(|id| self.node(*id))
+            .filter(|n| !n.lease_expired)
     }
 
     pub fn view(&self, path: &str) -> Option<NodeView> {
@@ -799,7 +836,11 @@ impl World {
             path: n.path.clone(),
             parent: parent.map(|p| p.path.clone()),
             index,
-            child_count: i32::try_from(n.children.len()).unwrap_or(i32::MAX),
+            child_count: if n.has_state(state::MANAGES_DESCENDANTS) {
+                -1
+            } else {
+                i32::try_from(n.children.len()).unwrap_or(i32::MAX)
+            },
             ifaces: iface::names(n.ifaces),
             name: n.name.clone(),
             role: n.role,
@@ -813,6 +854,12 @@ impl World {
             return false;
         }
         if n.hidden && self.spec.quirks.hidden_skips_cache {
+            return false;
+        }
+        if self.spec.quirks.dump_realised_only
+            && n.id > 1
+            && !self.realised.contains(&n.id)
+        {
             return false;
         }
         if self.spec.quirks.dump_omits_transient {
@@ -910,6 +957,9 @@ impl World {
     }
 
     fn effects_remove_subtree(&self, id: NodeId, out: &mut Vec<Effect>) {
+        if self.spec.quirks.never_remove_accessible {
+            return; // P-9 H1: GTK4 never sends RemoveAccessible for widget removal
+        }
         let mut ids = self.descendants(id);
         ids.reverse();
         for d in ids {
@@ -952,10 +1002,36 @@ impl World {
                 path,
                 kind: PropKind::Name,
             });
+            self.spurious_parent_add(id, fx);
         }
         for dep in self.name_dependents(id) {
             let silent = self.spec.quirks.silent_derived_names;
             self.set_name(dep, name, !silent, now_ns, fx);
+        }
+    }
+
+    /// P9-2: a child update also announces `ChildrenChanged:add` on the parent.
+    fn spurious_parent_add(&self, id: NodeId, fx: &mut Vec<Effect>) {
+        if !self.spec.quirks.spurious_parent_add {
+            return;
+        }
+        let Some(n) = self.node(id) else { return };
+        let Some(p) = n.parent.and_then(|p| self.node(p)) else { return };
+        fx.push(Effect::Children {
+            parent: p.path.clone(),
+            add: true,
+            index: p.children.iter().position(|c| *c == id).and_then(|i| i32::try_from(i).ok()).unwrap_or(0),
+            child: n.path.clone(),
+        });
+    }
+
+    /// A client read this node (or listed its children): GTK4 realises its context (P-9).
+    pub fn mark_realised(&mut self, path: &str, with_children: bool) {
+        let Some(id) = self.by_path.get(path).copied() else { return };
+        self.realised.insert(id);
+        if with_children {
+            let kids = self.node(id).map(|n| n.children.clone()).unwrap_or_default();
+            self.realised.extend(kids);
         }
     }
 
@@ -992,6 +1068,9 @@ impl World {
                 state: bit,
                 on,
             });
+            if bit != state::FOCUSED {
+                self.spurious_parent_add(id, fx);
+            }
         }
     }
 
@@ -1063,7 +1142,9 @@ impl World {
                     if let Some(n) = self.node_mut(id) {
                         n.hidden = true;
                     }
-                    self.set_state_bit(id, state::SHOWING, false, true, now_ns, &mut fx);
+                    if !self.spec.quirks.hidden_ghost {
+                        self.set_state_bit(id, state::SHOWING, false, true, now_ns, &mut fx);
+                    }
                     CmdReply::ok(json!({"path": self.path_of(node)}))
                 }
                 None => CmdReply::err(format!("no node {node}")),
@@ -1084,7 +1165,6 @@ impl World {
                     if let Some(n) = self.node_mut(id) {
                         n.lease_expired = true;
                         let p = n.path.clone();
-                        self.by_path.remove(&p);
                         self.tl(now_ns, &p, "lease", "alive".into(), "expired".into(), false);
                     }
                     CmdReply::ok(json!({"path": self.nodes.get(id as usize).map(|n| n.path.clone())}))
@@ -1130,6 +1210,7 @@ impl World {
                     "path": n.path, "name": n.name, "desc": n.desc, "role": n.role,
                     "states": n.states, "value": n.value, "alive": n.alive && !n.lease_expired,
                     "children": n.children.len(),
+                    "parent": n.parent.and_then(|p| self.node(p)).map(|p| p.path.clone()),
                 })),
                 None => CmdReply::err(format!("no node {node}")),
             },
@@ -1140,6 +1221,8 @@ impl World {
             | Cmd::DelayReplies { .. }
             | Cmd::Storm { .. }
             | Cmd::ClosePeers
+            | Cmd::RegisterListener
+            | Cmd::Malform { .. }
             | Cmd::PeerAcceptDelay { .. }
             | Cmd::Stats
             | Cmd::Kill
@@ -1156,7 +1239,8 @@ impl World {
         let Some(path) = self.node(id).map(|n| n.path.clone()) else {
             return CmdReply::err("dead");
         };
-        if !self.is_alive_path(&path) {
+        // The toolkit can announce focus on an object whose lease expired; a dead one it cannot.
+        if !self.by_path.contains_key(&path) {
             return CmdReply::err(format!("{node} is not alive"));
         }
         if let Some(old) = self.focus.filter(|o| *o != id) {
@@ -1376,7 +1460,7 @@ impl World {
                             index: idx,
                             child: cn.path.clone(),
                         });
-                        if self.cache_signalled(cn) {
+                        if self.cache_signalled(cn) && !self.spec.quirks.never_remove_accessible {
                             fx.push(Effect::CacheRemove {
                                 path: cn.path.clone(),
                             });
@@ -1505,6 +1589,12 @@ mod tests {
             depth_max: 25,
             sidebar_rows: 45,
             p2p: P2pMode::SameBus,
+            quirks: Quirks {
+                // The tests below count effects; the P-9 flags have their own tests.
+                never_remove_accessible: false,
+                spurious_parent_add: false,
+                ..Quirks::pessimistic_gtk4()
+            },
             ..ModelSpec::default()
         }
     }
@@ -1736,6 +1826,7 @@ mod tests {
             ..ModelSpec::default()
         };
         spec.quirks.switcher_rebuild = true;
+        spec.quirks.spurious_parent_add = false;
         let mut w = World::new(spec, "shell");
         w.apply(&Cmd::RebuildSwitcher { items: 4 }, 1);
         let first = w.path_of("switcher[0]").unwrap();
@@ -1776,6 +1867,74 @@ mod tests {
         let t = w.take_truth();
         assert_eq!(t.iter().filter(|l| l.focus).count(), 2);
         assert_eq!(w.focus_path(), w.path_of("controls[1]"));
+    }
+
+    #[test]
+    fn p9_quirks_never_remove_accessible_and_spurious_parent_add() {
+        let mut spec = settings();
+        spec.quirks.never_remove_accessible = true;
+        spec.quirks.spurious_parent_add = true;
+        let mut w = World::new(spec, "s");
+        let (_, fx) = w.apply(
+            &Cmd::ReplaceSubtree { root: "panel".into(), nodes: 100, remove_events: true, add_events: true },
+            1,
+        );
+        assert!(!fx.iter().any(|e| matches!(e, Effect::CacheRemove { .. })));
+        assert!(fx.iter().any(|e| matches!(e, Effect::CacheAdd(_))));
+        let (_, fx) = w.apply(
+            &Cmd::Rename { node: "controls[0]".into(), name: "x".into(), evented: true },
+            2,
+        );
+        assert!(matches!(fx[0], Effect::Prop { .. }));
+        assert!(matches!(fx[1], Effect::Children { add: true, .. }), "P9-2: {fx:?}");
+    }
+
+    #[test]
+    fn dump_realised_only_grows_when_a_client_reads() {
+        let mut spec = settings();
+        spec.quirks.dump_realised_only = true;
+        let mut w = World::new(spec, "s");
+        assert_eq!(w.dump(usize::MAX).len(), 2, "a fresh GTK4 app dumps 2 items");
+        let root = w.path_of("root").unwrap();
+        w.mark_realised(&root, true);
+        let win = w.path_of("window").unwrap();
+        w.mark_realised(&win, true);
+        assert!(w.dump(usize::MAX).len() >= 2);
+    }
+
+    #[test]
+    fn hidden_ghost_keeps_showing_and_stays_silent() {
+        let mut spec = settings();
+        spec.quirks.hidden_ghost = true;
+        spec.quirks.hidden_skips_cache = false;
+        let mut w = World::new(spec, "s");
+        let n = w.dump(usize::MAX).len();
+        let (_, fx) = w.apply(&Cmd::Hide { node: "controls[0]".into() }, 1);
+        assert!(fx.is_empty());
+        assert_eq!(w.dump(usize::MAX).len(), n);
+        let v = w.view(&w.path_of("controls[0]").unwrap()).unwrap();
+        assert!(v.states & (1 << state::SHOWING) != 0);
+    }
+
+    #[test]
+    fn gtk3_dump_omits_the_managed_list_and_reports_minus_one() {
+        let mut spec = ModelSpec {
+            shape: Shape::Gtk3,
+            nodes_idle: 488,
+            depth_min: 10,
+            depth_max: 18,
+            p2p: P2pMode::Peer,
+            ..ModelSpec::default()
+        };
+        spec.quirks = Quirks { dump_omits_transient: true, ..Quirks::default() };
+        let w = World::new(spec, "gedit");
+        let live = w.live_count();
+        let dump = w.dump(usize::MAX);
+        assert!((470..=530).contains(&live), "{live}");
+        let frac = dump.len() as f64 / f64::from(live);
+        assert!((0.30..=0.45).contains(&frac), "dump {} of {live}", dump.len());
+        let list = w.path_of("list").unwrap();
+        assert_eq!(dump.iter().find(|i| i.path == list).unwrap().child_count, -1);
     }
 
     #[test]

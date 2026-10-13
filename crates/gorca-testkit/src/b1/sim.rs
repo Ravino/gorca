@@ -276,6 +276,8 @@ struct SimApp {
     timeouts: u32,
     hung: bool,
     flood: Flood,
+    /// P9-1: an AT listener is registered (always true for models without the gate).
+    listeners: bool,
 }
 
 pub struct SimSut {
@@ -306,6 +308,15 @@ impl std::fmt::Debug for SimSut {
             .field("now_us", &self.now)
             .finish_non_exhaustive()
     }
+}
+
+/// Roles that take their accessible name from their content (P9-3).
+fn content_named(role: u32) -> bool {
+    use super::world::role as r;
+    matches!(
+        role,
+        r::PUSH_BUTTON | r::CHECK_BOX | r::TOGGLE_BUTTON | r::LIST_ITEM | r::MENU_ITEM | r::LABEL
+    )
 }
 
 fn fmt_value(v: Option<f64>) -> Option<String> {
@@ -393,6 +404,7 @@ impl SimSut {
         if app.hung && purpose != Purpose::Probe && fault != Fault::IgnoreHealth {
             return; // I-4: only probes reach a hung app
         }
+        app.listeners = true; // the shared base registers before the first fill request (P9-1)
         let issued_seq = app.mirror.as_ref().map_or(0, |m| m.seq);
         let id = self.next_req;
         self.next_req += 1;
@@ -509,6 +521,22 @@ impl SimSut {
                 };
                 if let Some(m) = self.apps[idx].mirror.as_mut() {
                     m.invalidate(&path, mask, fault);
+                    if mask == M_NAME {
+                        // P9-3: names derived from content change silently; invalidate NAME on the
+                        // known ancestors up to the first role that does not take its name from
+                        // content (at most 8 levels).
+                        let mut cur = m.entries.get(&path).and_then(|e| e.snap.parent.clone());
+                        for _ in 0..8 {
+                            let Some(a) = cur else { break };
+                            let role = m.entries.get(&a).map(|e| e.snap.role);
+                            let next = m.entries.get(&a).and_then(|e| e.snap.parent.clone());
+                            m.invalidate(&a, M_NAME, fault);
+                            if role.is_none_or(|r| !content_named(r)) {
+                                break;
+                            }
+                            cur = next;
+                        }
+                    }
                 }
                 if kind == PropKind::Value && self.is_focus(idx, &path) {
                     self.issue(idx, &path, Purpose::S1, stim_us, None);
@@ -674,12 +702,7 @@ impl SimSut {
             Msg::Reply(id, r) => self.on_reply(id, r),
             Msg::Timeout(id) => self.on_timeout(id),
             Msg::AppGone(idx) => {
-                if self.cfg.fault == Fault::NoRetire {
-                    if let Some(m) = self.apps[idx].mirror.take() {
-                        let key = self.apps[idx].label.clone();
-                        self.saved_mirrors.insert(key, m);
-                    }
-                } else {
+                if self.cfg.fault != Fault::NoRetire {
                     self.apps[idx].mirror = None;
                 }
                 self.reqs.retain(|_, r| r.idx != idx);
@@ -720,7 +743,7 @@ impl SimSut {
             f.flooded = false;
         }
         f.count += u64::from(per_ms);
-        let flooded_now = f.count > 5_000 && fault != Fault::IgnoreFlood;
+        let flooded_now = f.count > 2_500 && fault != Fault::IgnoreFlood;
         if let Some(m) = app.mirror.as_mut() {
             if flooded_now {
                 if !f.flooded {
@@ -739,6 +762,7 @@ impl SimSut {
     fn spawn_app(&mut self, spec: ModelSpec, label: &str) -> usize {
         self.bus_n += 1;
         let idx = self.apps.len();
+        let spec_gate = spec.quirks.listener_gate;
         let world = World::new(spec.clone(), label);
         let mirror = if self.cfg.fault == Fault::NoRetire {
             self.saved_mirrors.remove(label).or_else(|| Some(Mirror::default()))
@@ -760,6 +784,7 @@ impl SimSut {
             timeouts: 0,
             hung: false,
             flood: Flood::default(),
+            listeners: !spec_gate,
         });
         self.live.insert(label.to_owned(), idx);
         if self.cfg.fault == Fault::DumpEvery100ms {
@@ -773,6 +798,12 @@ impl SimSut {
         let label = self.apps[idx].label.clone();
         if self.live.get(&label) == Some(&idx) {
             self.live.remove(&label);
+        }
+        if self.cfg.fault == Fault::NoRetire {
+            // The defect: the mirror outlives the app and is handed to the next instance.
+            if let Some(m) = self.apps[idx].mirror.take() {
+                self.saved_mirrors.insert(label, m);
+            }
         }
         let at = self.now + self.cfg.event_us + 1000;
         self.push(at, Msg::AppGone(idx));
@@ -793,8 +824,8 @@ impl Sut for SimSut {
 
     fn supports(&self, f: Feature) -> bool {
         match f {
-            Feature::LatencyKnobs | Feature::Probe | Feature::VirtualTime => true,
-            Feature::CacheFill => false,
+            Feature::LatencyKnobs | Feature::Probe | Feature::VirtualTime | Feature::WhereAmI => true,
+            Feature::CacheFill | Feature::Malformed => false,
         }
     }
 
@@ -858,6 +889,10 @@ impl Sut for SimSut {
                 Ok(CmdReply::ok(serde_json::to_value(s).unwrap_or_default()))
             }
             Cmd::ClosePeers | Cmd::PeerAcceptDelay { .. } => Ok(CmdReply::ok(serde_json::Value::Null)),
+            Cmd::RegisterListener => {
+                self.apps[idx].listeners = true;
+                Ok(CmdReply::ok(serde_json::Value::Null))
+            }
             Cmd::Kill | Cmd::Quit => {
                 self.retire(idx);
                 Ok(CmdReply::ok(serde_json::Value::Null))
@@ -866,7 +901,16 @@ impl Sut for SimSut {
                 let (reply, fx) = self.apps[idx].world.apply(&other, t_ns);
                 let lines = self.apps[idx].world.take_truth();
                 self.truth.extend(lines);
+                let gated = !self.apps[idx].listeners;
                 for e in fx {
+                    if gated
+                        && matches!(
+                            e,
+                            Effect::Prop { .. } | Effect::State { .. } | Effect::Children { .. }
+                        )
+                    {
+                        continue; // P9-1: GTK4 sends no Object event without a listener
+                    }
                     self.push(self.now + self.cfg.event_us, Msg::Event(idx, e));
                 }
                 Ok(reply)
@@ -938,6 +982,45 @@ impl Sut for SimSut {
         s.nodes_live = u64::from(self.apps[idx].world.live_count());
         s.bus_callers = 1;
         Ok(s)
+    }
+
+    fn where_am_i(&mut self) -> SutResult<()> {
+        let Some((idx, path)) = self.focus.clone() else {
+            return Err(SutError::Other("no focus".into()));
+        };
+        let fault = self.cfg.fault;
+        let mut chain = vec![path];
+        for _ in 0..3 {
+            let next = chain.last().and_then(|p| {
+                self.apps[idx]
+                    .mirror
+                    .as_ref()
+                    .and_then(|m| m.entries.get(p))
+                    .and_then(|e| e.snap.parent.clone())
+            });
+            match next {
+                Some(n) => chain.push(n),
+                None => break,
+            }
+        }
+        let stim = self.now;
+        for p in chain {
+            let snap = self.apps[idx]
+                .mirror
+                .as_ref()
+                .and_then(|m| m.entries.get(&p))
+                .map(|e| e.snap.clone());
+            match snap {
+                Some(snap) => {
+                    let utt = self.present(idx, &p, &snap, Source::Hit, true, stim, None);
+                    if fault != Fault::NoRv1 && fault != Fault::NeverInvalidate {
+                        self.issue(idx, &p, Purpose::Rv1(utt), stim, Some(snap.said()));
+                    }
+                }
+                None => self.issue(idx, &p, Purpose::Present(Source::MissReply), stim, None),
+            }
+        }
+        Ok(())
     }
 
     fn set_latency(&mut self, event_us: u64, reply_us: u64) {

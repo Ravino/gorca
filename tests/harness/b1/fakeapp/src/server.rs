@@ -37,6 +37,10 @@ pub struct Options {
     pub register: bool,
     /// Directory for the peer socket.
     pub peer_dir: PathBuf,
+    /// Also connect to this (session) bus and own `own_name` on it: the fake gnome-shell of the
+    /// eligibility check (SPEC 2.2, IC-22). The same process holds both connections.
+    pub session_bus: Option<String>,
+    pub own_name: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -83,6 +87,8 @@ struct Core {
     callers: BTreeSet<String>,
     storm_stop: Arc<AtomicBool>,
     peer: Arc<PeerCtl>,
+    /// P9-1: false while no AT listener registered and the model has the gate.
+    listeners: Arc<AtomicBool>,
 }
 
 /// Wait until `d` has passed with sub-millisecond accuracy: sleep most of it, spin the rest.
@@ -138,7 +144,16 @@ impl Core {
 
     fn emit_effects(&mut self, fx: &[Effect]) {
         const OBJ: &str = "org.a11y.atspi.Event.Object";
+        let gated = self.world.spec.quirks.listener_gate && !self.listeners.load(Ordering::SeqCst);
         for e in fx {
+            if gated
+                && matches!(
+                    e,
+                    Effect::Prop { .. } | Effect::State { .. } | Effect::Children { .. }
+                )
+            {
+                continue; // P9-1: GTK4 emits no Object event without a listener
+            }
             match e {
                 Effect::Prop { path, kind } => {
                     let any: Value<'_> = if matches!(kind, gorca_testkit::b1::world::PropKind::Value) {
@@ -246,6 +261,14 @@ impl Core {
                 }
                 None => CmdReply::err("no terminal node in this model"),
             },
+            Cmd::Malform { on, foreign_bus } => {
+                self.ctx.malform = on.then(|| foreign_bus.clone());
+                CmdReply::ok(serde_json::Value::Null)
+            }
+            Cmd::RegisterListener => {
+                self.listeners.store(true, Ordering::SeqCst);
+                CmdReply::ok(serde_json::Value::Null)
+            }
             Cmd::ClosePeers => {
                 self.peer.generation.send_modify(|g| *g += 1);
                 CmdReply::ok(serde_json::Value::Null)
@@ -307,6 +330,13 @@ impl Core {
             );
         }
         precise_wait(Duration::from_nanos(ns));
+        if self.world.spec.quirks.dump_realised_only
+            && interface == "org.a11y.atspi.Accessible"
+            && member != "GetItems"
+        {
+            // A client walking the tree realises GTK4 contexts (P-9).
+            self.world.mark_realised(&path, member == "GetChildren");
+        }
         let args = decode_args(&job.msg, &interface, &member);
         let result = dispatch::handle(&self.ctx, &self.world, &path, &interface, &member, &args, MAX_DUMP_ITEMS);
         let mut delay_ms = if self.hang.0 == HangMode::Delay { self.hang.1 } else { 0 };
@@ -428,6 +458,7 @@ fn spawn_storm(
 
 /// The running fake app.
 pub struct FakeApp {
+    _session: Option<Connection>,
     tx: Sender<Work>,
     thread: Option<std::thread::JoinHandle<()>>,
     pub ready: Ready,
@@ -491,6 +522,7 @@ impl FakeApp {
             .ok_or_else(|| anyhow!("no unique name"))?;
         let (tx, rx) = channel::<Work>();
         let handle = Handle::current();
+        let listeners = Arc::new(AtomicBool::new(false));
         let peer = Arc::new(PeerCtl {
             generation: tokio::sync::watch::channel(0u64).0,
             accept_delay_ms: std::sync::atomic::AtomicU64::new(0),
@@ -558,6 +590,7 @@ impl FakeApp {
             app_bus_address,
             p2p: spec.p2p,
             toolkit: spec.toolkit.clone(),
+            malform: None,
         };
         let svc = ServiceModel::new(spec.service, spec.seed ^ 0xA5A5);
         let core = Core {
@@ -573,6 +606,7 @@ impl FakeApp {
             callers: BTreeSet::new(),
             storm_stop: Arc::new(AtomicBool::new(false)),
             peer: Arc::clone(&peer),
+            listeners: Arc::clone(&listeners),
         };
         let thread = std::thread::Builder::new()
             .name("b1-main-loop".into())
@@ -580,6 +614,37 @@ impl FakeApp {
             .context("spawn main loop")?;
         tokio::spawn(recv_loop(bus.clone(), ConnKind::Bus, tx.clone(), None));
 
+        // Registry broadcast: an AT registered an event listener (lifts the P9-1 gate).
+        {
+            let rule = zbus::MatchRule::builder()
+                .msg_type(MsgType::Signal)
+                .interface("org.a11y.atspi.Registry")
+                .map_err(|e| anyhow!("{e}"))?
+                .member("EventListenerRegistered")
+                .map_err(|e| anyhow!("{e}"))?
+                .build();
+            if let Ok(mut st) = MessageStream::for_match_rule(rule, &bus, None).await {
+                let l = Arc::clone(&listeners);
+                tokio::spawn(async move {
+                    while st.next().await.is_some() {
+                        l.store(true, Ordering::SeqCst);
+                    }
+                });
+            }
+        }
+        let session_conn = match (&opts.session_bus, &opts.own_name) {
+            (Some(addr), Some(name)) => {
+                let c = zbus::connection::Builder::address(addr.as_str())
+                    .context("session bus address")?
+                    .name(name.as_str())
+                    .context("own name")?
+                    .build()
+                    .await
+                    .context("connect to the session bus")?;
+                Some(c)
+            }
+            _ => None,
+        };
         if opts.register {
             // Embed into the registry so the app shows up under the desktop root.
             let me = (unique.clone(), dispatch::opath(&root));
@@ -602,6 +667,7 @@ impl FakeApp {
             tx,
             thread: Some(thread),
             ready,
+            _session: session_conn,
         })
     }
 
