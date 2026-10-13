@@ -31,6 +31,7 @@ const FORBIDDEN: &[&str] = &[
 const EXEMPT: &[&str] = &[
     "crates/gorca-daemon/src/main.rs",
     "crates/gorca-bench/",
+    "crates/gorca-bench-b1/",
     "crates/gorca-bench-b2/",
     "crates/gorca-testkit/",
     "xtask/",
