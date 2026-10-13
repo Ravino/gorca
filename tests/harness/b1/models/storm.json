@@ -1,0 +1,7 @@
+{
+  "name": "storm", "app_name": "storm-terminal", "toolkit": "raw", "shape": "storm",
+  "p2p": "none", "path_style": "counter", "seed": 404,
+  "nodes_idle": 3, "nodes_peak": 3, "depth_min": 2, "depth_max": 2,
+  "service": { "p50_ms": 0.05, "p99_ms": 0.3 }, "getitems_us_per_item": 15.0,
+  "quirks": {}
+}

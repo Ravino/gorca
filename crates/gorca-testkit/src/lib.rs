@@ -18,6 +18,7 @@
 //! This is a dev-support crate: it may depend on anything in the neutral layer and on tokio's
 //! `test-util`, but never on a transport crate, so conformance runs without a bus.
 
+pub mod b1;
 pub mod conformance;
 mod fake_connector;
 mod fake_source;
