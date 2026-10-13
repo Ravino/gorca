@@ -1,0 +1,3 @@
+best-of-5 worst apply(64) = 76 us
+best-of-5 worst apply(64) = 78 us
+best-of-5 worst apply(64) = 77 us

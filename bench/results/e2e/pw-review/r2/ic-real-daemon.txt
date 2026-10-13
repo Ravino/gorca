@@ -1,0 +1,25 @@
+IC-1: PASS
+IC-2: PASS
+IC-3: PASS
+IC-4: PASS
+IC-5: PASS
+IC-6: PASS
+IC-7: PASS
+IC-8: PASS
+IC-9: PASS
+IC-10: SKIPPED (needs exact timing)
+IC-11: SKIPPED (needs per-direction latency control)
+IC-12: SKIPPED (needs a reader that fills from GetItems/prefetch)
+IC-13: PASS
+IC-14: PASS
+IC-15: PASS
+IC-16: SKIPPED (needs the malformed-ref mode of the fake app)
+IC-17: PASS
+IC-18: PASS
+IC-19: PASS
+IC-20: PASS
+IC-21: PASS
+IC-22: SKIPPED (needs a reader that can send CacheDump)
+IC-23: SKIPPED (needs the where-am-I command)
+IC against the real daemon: 17 passed, 6 skipped
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 74.20s

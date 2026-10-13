@@ -284,3 +284,136 @@ daemon CPU per focus event** (the invalidation table, the presentation bookkeepi
 - **Store probes** (`probes/review_probe.rs`, `review_probe_rss.rs`, `inline_probes.diff`): 5 of the
   6 store probes fail (F2, F3, F5, F6, F10, F13); the concurrency probe passes. The RV-1 probe (F1)
   and the dedup probe (F7) fail.
+
+---
+
+## Round 2 (head `467412b`, main merged including 9ecdc12; 2026-10-13)
+
+### Verdict: MERGE-WITH-FOLLOWUPS
+
+Every round-1 finding I could probe is fixed, and `make check` is green. Two items in the
+"before the arms start" list below change what the conformance gate proves; the orchestrator should
+schedule them before H-9/H-10, but they do not block merging shared code.
+
+Raw output is in `bench/results/e2e/pw-review/r2/`: `make-check.log`, `storm-counts.txt`, `l4/`,
+`l4-summary.log`, `ic-real-daemon.txt`, `ma6.txt`.
+
+### 1. My probes rerun on 467412b
+
+| Probe | Round 1 | Round 2 |
+|---|---|---|
+| F1 RV-1 on a quiet-app revisit | no `fetch-rv1` | `["speak","settled","fetch-rv1","demand"]` **fixed** |
+| F2 invalidation of a tombstoned key, then revival | Fresh | NAME stale **fixed** |
+| F3 10 M invalidations of one uncached key (release) | +229 MiB | **+28 KiB, fixed** |
+| F4 SPEAKs for a 300-focus storm (7 runs each, bound removed) | main 1–2, branch 164–261 | main `1,1,1,1,1,2,1`; **branch `2,2,2,2,2,2,2`**, fixed |
+| F5 partial reply keeps PARENT, CHILDREN, DESCRIPTION | lost | kept **fixed** |
+| F6 global cap overshoot | 2.00× | **1.00×**; the victim sheds only the excess (100 → 98 nodes) |
+| F7 deduplicated request answered to the policy | 1 of 2 | 2 of 2 **fixed**; Interactive is no longer deduplicated onto Prefetch |
+| F10 revivals and the node cap | live 20 at cap 10 | live 10 **fixed** |
+| F13 budget after the writer is dropped | 54 900 bytes leaked | 0 **fixed** |
+| Concurrency (lost keys under index churn) | 0 of 40.6 M | **0 of 33.2 M** |
+
+I also confirmed these by reading the code:
+- F8: `AppServer` watches `shell_rx` and re-announces `AppInfo` when the Shell is verified late.
+- F9: `DEFUNCT` in a focus, RV-1 or S1 reply is treated as a removal.
+- F12: `Caller` lives in `fetch/caller.rs`, and a test bans `call_method`, `.conn` and `gorca_dbus::`
+  in strategy files. The shadow override is applied last.
+- The focused app is now protected through `FocusedApp`.
+
+The focus storm now gives 2 SPEAKs where main gives 1. Hits closer than `RAPID_FOCUS` (20 ms)
+are held for `STORM_HOLD` (4 ms). The W-1 walk's 30 Hz bursts are 33 ms apart, so B1-L1h is not
+affected. Key repeat faster than 50 Hz pays 4 ms per hit (follow-up R2-6).
+
+### 2. IC against the real daemon, skips and the IC-17 gate
+
+My own run reproduces the implementer's: **17 pass, 6 skip** (`ic-real-daemon.txt`, 74 s).
+
+- **IC-17 `Feature::FloodDirtySet`.** This is not a capability gate. The real daemon does have the
+  flood→dirty-set path; the scripted storm hits a single node, and the real ingress folds that into
+  one slot, so the case cannot produce a flood. The disabled assertion is a scripting gap that the
+  feature flag hides. It is mitigated: `app_actor/tests.rs`
+  `a_flood_invalidates_the_dirty_nodes_and_dirty_all_is_o1` covers the dirty-set to stale step at
+  the unit level. The fix: storm more distinct nodes than the ingress `max_keys`, and drop the flag
+  for the real SUT. Do this before the arms start, because IC-17's rate-limit clause only means
+  something with a filling arm.
+- **IC-10** (virtual time) and **IC-11** (latency knobs) are legitimate R0 skips. MA-4/MA-5 and the
+  store tests cover the late-reply and re-dirty rules at the store level. The knobs should still
+  exist before the arms are judged, because IC-11's P2P-delayed-reply variant is exactly the race
+  RV-1 exists for.
+- **IC-12** (hidden ghost) and **IC-22** (dump eligibility) cannot run with `NullPolicy`. Both test
+  **shared** code: tombstone-on-failed-fetch and the TTL, and the `dump_complete` flag and its
+  clearing on a 2-item dump. SPEC §14 says a defect in that code is a harness bug that forces both
+  arms to re-run. **They must run before the arms start**, using a test-only scripted policy (for
+  example a `DumpAlways`/`PrefetchAll` policy in `gorca-mirror` tests). Today IC-22(a) would also
+  pass vacuously with R0, since nothing ever requests a dump.
+- **IC-16** (malformed refs) is a harness gap in the fake app, not a reader capability. Foreign refs
+  in replies go through shared connector code (`CallCx::resolve_ref`, the decoder). The decoder
+  tests and MA-3 cover it partly. Build it before the arms start.
+- **IC-23** (TTL): only the where-am-I clause needs the command. The focus clause (aged, presented
+  with `may_refine`, then revalidated; no TTL calls when idle) is shared and runnable today. Split
+  the case and run the focus half before the arms start.
+
+### 3. L4/L4c
+
+The deleted pw-r3 file cannot be recovered: it was never committed. The committed `pw-r3` result
+was produced at `git_rev=d64bfb1` with a dirty tree, with the old harness (it has no `superseded`
+rows). Deleting a failing result was wrong; main now forbids it (7d5253a). I re-ran L4/L4c
+myself, 5 repeats per run, branch and main interleaved:
+
+| Run (load at start) | branch L4 lost / superseded (max run) | branch L4c | main L4 | main L4c |
+|---|---|---|---|---|
+| r1 (≈9.7 / 10.0) | 0 / 0 (0) | 0 / 0 | 0 / 0 | 0 / 0 |
+| r2 (≈7.7 / 6.9) | 0 / 0 (0) | 0 / 0 | 0 / 0 | 0 / 0 |
+| hot (26 busy loops of mine, load ≈36) | 0 / 0–2 (≤2) | 0 / 0–5 (≤2) | 0 / 0–5 (≤3) | 0 / 0 |
+
+In the hot run, L4 l1 p99 was 8.3 ms on the branch and 9.4 ms on main; both pass. **No probe was
+lost in 30 repeats per arm.** At load 36, both arms show a few *superseded* probes, well under the
+run limit of 10. The deleted run's "lost 2 / 12" is consistent with overtaken probes under
+overload, counted by the old strict accounting. It is not a branch regression; main behaves the
+same. Note: `peer_calls_hung` is 2 on the branch against 17 on main (both ≥ 1, so the hang was
+exercised); the branch stops calling the hung peer sooner.
+
+### 4. Test-wrapper changes
+
+- **Shell model owns `org.gnome.Shell`** (`b1_ic.rs` `start_app_with`). This is legitimate: it is
+  the same identity rule as on the desktop. IC-22(a) still overrides it with `owns_name = None`
+  after the wrapper runs, so the impostor stays unverified. No masking.
+- **Registry stand-in** (`listener_registered` sends `RegisterListener` to each fake app right
+  after it starts). This **masks IC-21**. The case's "before registration" phase now runs on an app
+  whose listener gate is already open, so P9-1 is never exercised against the real daemon. The
+  stand-in only models "gorca started before the app"; the risky order, "app running before gorca
+  registers", is untested. Fix: let IC-21 (or a flag on the case) start its app without the
+  stand-in and register it explicitly after the pre-registration mutation.
+- **Caller count ignores `Properties.Set`** (`fakeapp/src/server.rs`). It filters by member, not by
+  sender. A `Properties.Set` from gorca itself would be dropped from the distinct-callers set (it
+  still shows in the per-member counts that MA-10 uses). Filter on the registry's unique name
+  instead. This is low risk today.
+
+### Other observations (round 2)
+
+- **R2-1 Low.** MA-6 apply: `ma6_one_apply_slice_stays_within_250_us` (ignored by default) reports
+  the **best of 5** runs' worst slice. I measured 76–78 µs for 64 nodes at load about 12–20, which
+  passes. Best-of-k follows the project's convention (f0ac318), but for a worst-case gate it should
+  also print the max over runs. The audit itself was redefined from "4 096 nodes per apply" to "per
+  64-node slice"; record that reinterpretation in `decisions.md`.
+- **R2-2 Low.** `ma6_policy_step_is_bounded_r0` uses a 250 000 µs budget (1 000× SPEC MA-6). It is
+  harmless for `NullPolicy`, but the arms' step gate must come from H-7 at 250 µs, not from this test.
+- **R2-3 Low.** The IC-3 S1 bound is 25 ms in debug builds. B1-CONF says "debug + release"; record
+  the deviation or run IC-3 timing in release only.
+- **R2-4 Info.** The Reader now bumps the write sequence on every focus (`dir.bump_seq`), so
+  `confirmed_seq > focus_seq` is true only for a reply issued after a focus, which the cached path
+  never has. As a result, **every cached presentation is revalidated**. This is correct and
+  conservative, and the cost is the same for both arms, but B1-MSG.walk will show one Fetch per hit.
+- **R2-5 Low.** `b1_ic.rs` returns early with "SKIPPED (harness unavailable)" and the test passes
+  when `Session::unavailable_reason()` is set. On a host without dbus-daemon, `make check` would be
+  green with 0 IC cases run. Fail instead under a CI flag.
+- **R2-6 Low.** `STORM_HOLD` adds 4 ms to hits under key repeat faster than 50 Hz. Document it next
+  to the B1-L1h gate.
+
+### Required before the arms start (follow-ups)
+
+1. IC-12 and IC-22 against the real daemon, through a test-only scripted fill policy.
+2. IC-17 with a storm over more than `max_keys` distinct nodes; remove `FloodDirtySet` for the real
+   SUT.
+3. IC-21 without the registry stand-in for its app.
+4. IC-23 split, with the focus/TTL half run now; IC-16 malformed-ref mode in the fake app.

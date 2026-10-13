@@ -1,0 +1,71 @@
+# e2e pw-review-r2-l4/pw2-r2
+# utc=2026-10-13T17:09:38Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=powersave x16
+# loadavg_start=6.89 8.47 9.81 3/2251 367695
+# git_rev=467412b
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=pw-review-r2-l4/pw2-r2
+# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/bin/gorca-pw2
+# backend=voicego
+# repeats=5
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=6.89 8.47 9.81 1/2251 367692
+# reader_env=
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+
+metric                     bus                median          min          max  n op    threshold  res   note
+L4.l0_ms.n                 daemon/voicego         1200         1200         1200  5                  info   [samples]
+L4.l0_ms.p50               daemon/voicego        0.199        0.193        0.234  5                  info   [ms]
+L4.l0_ms.p95               daemon/voicego        0.427        0.414        0.460  5                  info   [ms]
+L4.l0_ms.p99               daemon/voicego        0.559        0.488        0.575  5                  info   [ms]
+L4.l0_ms.p999              daemon/voicego        0.694        0.620        0.719  5                  info   [ms]
+L4.l0_ms.max               daemon/voicego        0.727        0.675        0.785  5                  info   [ms]
+L4.l1_ms.n                 daemon/voicego         1200         1200         1200  5                  info   [samples]
+L4.l1_ms.p50               daemon/voicego        1.286        1.223        1.434  5                  info   [ms]
+L4.l1_ms.p95               daemon/voicego        2.143        2.055        2.235  5                  info   [ms]
+L4.l1_ms.p99               daemon/voicego        2.525        2.391        2.691  5 <=           15  PASS   [ms]
+L4.l1_ms.p999              daemon/voicego        2.805        2.718        2.937  5                  info   [ms]
+L4.l1_ms.max               daemon/voicego        3.099        2.760        3.260  5                  info   [ms]
+L4.l1g_ms.n                daemon/voicego         1200         1200         1200  5                  info   [samples]
+L4.l1g_ms.p50              daemon/voicego        1.071        1.022        1.189  5                  info   [ms]
+L4.l1g_ms.p95              daemon/voicego        1.922        1.865        1.963  5                  info   [ms]
+L4.l1g_ms.p99              daemon/voicego        2.175        2.123        2.312  5                  info  gorca side: bus arrival to SPEAK [ms]
+L4.l1g_ms.p999             daemon/voicego        2.617        2.486        2.793  5                  info   [ms]
+L4.l1g_ms.max              daemon/voicego        2.749        2.510        3.017  5                  info   [ms]
+L4.lost                    daemon/voicego            0            0            0  5 <=            0  PASS  gated on the max over repeats [events]
+L4.peer_calls_hung         daemon/voicego            2            2           17  5 >=            1  PASS  the hang must actually have been exercised [calls]
+L4.peer_calls_received     daemon/voicego            3            3           18  5                  info   [calls]
+L4.superseded              daemon/voicego            0            0            0  5                  info   [events]
+L4.superseded_max_run      daemon/voicego            0            0            0  5 <=           10  PASS  consecutive focus probes overtaken by a newer one (ADR-0001 R-1) [events]
+L4c.l0_ms.n                daemon/voicego         1200         1200         1200  5                  info   [samples]
+L4c.l0_ms.p50              daemon/voicego        0.217        0.176        0.231  5                  info   [ms]
+L4c.l0_ms.p95              daemon/voicego        0.423        0.414        0.468  5                  info   [ms]
+L4c.l0_ms.p99              daemon/voicego        0.534        0.523        0.553  5                  info   [ms]
+L4c.l0_ms.p999             daemon/voicego        0.635        0.601        0.692  5                  info   [ms]
+L4c.l0_ms.max              daemon/voicego        0.705        0.638        0.712  5                  info   [ms]
+L4c.l1_ms.n                daemon/voicego         1200         1200         1200  5                  info   [samples]
+L4c.l1_ms.p50              daemon/voicego        1.413        1.224        1.499  5                  info   [ms]
+L4c.l1_ms.p95              daemon/voicego        2.222        2.106        2.241  5                  info   [ms]
+L4c.l1_ms.p99              daemon/voicego        2.479        2.430        2.615  5                  info   [ms]
+L4c.l1_ms.p999             daemon/voicego        2.855        2.716        3.100  5                  info   [ms]
+L4c.l1_ms.max              daemon/voicego        3.112        2.737        3.206  5                  info   [ms]
+L4c.l1g_ms.n               daemon/voicego         1200         1200         1200  5                  info   [samples]
+L4c.l1g_ms.p50             daemon/voicego        1.188        1.039        1.256  5                  info   [ms]
+L4c.l1g_ms.p95             daemon/voicego        1.950        1.874        1.961  5                  info   [ms]
+L4c.l1g_ms.p99             daemon/voicego        2.242        2.127        2.363  5                  info  gorca side: bus arrival to SPEAK [ms]
+L4c.l1g_ms.p999            daemon/voicego        2.629        2.387        2.810  5                  info   [ms]
+L4c.l1g_ms.max             daemon/voicego        2.796        2.660        3.012  5                  info   [ms]
+L4c.lost                   daemon/voicego            0            0            0  5 <=            0  PASS  gated on the max over repeats [events]
+L4c.peer_calls_hung        daemon/voicego            0            0            0  5                  info   [calls]
+L4c.peer_calls_received    daemon/voicego          186            3          186  5                  info   [calls]
+L4c.superseded             daemon/voicego            0            0            0  5                  info   [events]
+L4c.superseded_max_run     daemon/voicego            0            0            0  5 <=           10  PASS  consecutive focus probes overtaken by a newer one (ADR-0001 R-1) [events]
