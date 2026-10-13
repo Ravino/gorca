@@ -157,6 +157,9 @@ impl KeySource for MutterKeySource {
                 };
                 if watching {
                     told_held = false;
+                    if let Some(l) = &self.links {
+                        l.session.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                    }
                 }
                 if watching && !told_lost {
                     // The keyboard was working and is gone: say so once, not on every retry.
@@ -223,6 +226,16 @@ impl SenderFilter {
             true
         } else {
             self.rejected += 1;
+            if self.rejected.is_power_of_two() {
+                // Rate limited: 1st, 2nd, 4th, 8th, ... A real manager that we mis-identified
+                // would otherwise leave the commands dead without a trace (F4).
+                tracing::warn!(
+                    expected = %self.owner,
+                    got = ?sender,
+                    dropped = self.rejected,
+                    "dropped a signal from an unexpected sender"
+                );
+            }
             false
         }
     }
@@ -284,23 +297,6 @@ async fn session(
         NameReply::Other(v) => return Err(Attempt::Reply(format!("RequestName returned {v}"))),
     }
 
-    // Who is the manager right now? Everything else claiming to be it is dropped.
-    let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);
-    let reply = call_method(
-        &conn,
-        deadline,
-        BUS_DAEMON,
-        "/org/freedesktop/DBus",
-        BUS_DAEMON,
-        "GetNameOwner",
-        &(MANAGER_NAME,),
-    )
-    .await?;
-    let manager_owner: String = reply
-        .body()
-        .deserialize()
-        .map_err(|e| Attempt::Reply(e.to_string()))?;
-    let mut filter = SenderFilter::new(manager_owner);
     let mut bus_filter = SenderFilter::new(BUS_DAEMON.to_owned());
     // Subscribe before asking for events: KeyEvent is unicast with no acknowledgement (F-2).
     let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);
@@ -343,6 +339,31 @@ async fn session(
     )
     .await?;
 
+    // Who is the manager right now? Everything else claiming to be it is dropped. This comes
+    // after the owner subscriptions, so a replace in between is seen, never missed (F4).
+    let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);
+    let reply = call_method(
+        &conn,
+        deadline,
+        BUS_DAEMON,
+        "/org/freedesktop/DBus",
+        BUS_DAEMON,
+        "GetNameOwner",
+        &(MANAGER_NAME,),
+    )
+    .await?;
+    let manager_owner: String = reply
+        .body()
+        .deserialize()
+        .map_err(|e| Attempt::Reply(e.to_string()))?;
+    let mut filter = SenderFilter::new(manager_owner);
+    // An owner change that happened while we resolved: our answer may already be stale.
+    if futures_lite::future::poll_once(owners.next())
+        .await
+        .is_some()
+    {
+        return Err(Attempt::ManagerGone);
+    }
     let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);
     call_method(
         &conn,
@@ -354,8 +375,18 @@ async fn session(
         &(),
     )
     .await?;
+    if futures_lite::future::poll_once(owners.next())
+        .await
+        .is_some()
+    {
+        return Err(Attempt::ManagerGone);
+    }
     tracing::info!("keyboard monitor active");
     *watching = true;
+    if let Some(l) = &src.links {
+        // F3: the lane forgets what it knew of the previous connection.
+        l.session.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    }
     if *told_lost {
         *told_lost = false;
         src.notify(Notice::KeyboardRestored);
@@ -381,6 +412,8 @@ async fn session(
     // modifier grabs while one is held leaves XKB with a stuck key (P-7).
     let mut held: Vec<u32> = Vec::new();
     let mut deferred: Option<GrabSet> = None;
+    // F2: grab mutations are strictly ordered: one in flight, the newest wanted set queued.
+    let mut writer = GrabWriter::default();
 
     let mut pending: Vec<MonitorEffect> = effects;
     loop {
@@ -396,6 +429,7 @@ async fn session(
                 &mut timers,
                 &mut state,
                 &mut pending,
+                &mut writer,
                 ctx,
             );
         }
@@ -404,7 +438,10 @@ async fn session(
             return Err(Attempt::GrabsFailed);
         }
         let next_timer = timers.iter().map(|(t, _)| *t).min();
+        // Biased: key events first. A grab change must see every key that was already
+        // delivered, or it could change a modifier's grab while that modifier is down (F1).
         let msg: MonitorMsg = tokio::select! {
+            biased;
             m = keys.next() => {
                 let Some(m) = m else { return Err(Attempt::StreamEnded) };
                 if let Ok(m) = m
@@ -412,7 +449,12 @@ async fn session(
                     && let Ok(body) = m.body().deserialize::<(bool, u32, u32, u32, u16)>()
                 {
                     let ev = decode_key_event(body);
-                    track_held(&mut held, &state, &ev);
+                    let may_be_modifiers = src
+                        .links
+                        .as_ref()
+                        .map(|l| l.keymap.load().modifiers.clone())
+                        .unwrap_or_default();
+                    track_held(&mut held, &state, &may_be_modifiers, &ev);
                     if !ctx.sink.push(ev) {
                         tracing::warn!("key channel full; dropped a key event");
                     }
@@ -456,7 +498,12 @@ async fn session(
                 deferred = None;
                 MonitorMsg::SetGrabSet(want)
             }
-            Some(m) = results.recv() => m,
+            Some(m) = results.recv() => {
+                if let Some((generation, set)) = writer.done() {
+                    spawn_grab_call(&mut calls, &conn, &res_tx, &ctx.clock, generation, set);
+                }
+                m
+            }
             () = sleep_until(next_timer), if next_timer.is_some() => {
                 let now = tokio::time::Instant::now();
                 match timers.iter().position(|(t, _)| *t <= now) {
@@ -467,7 +514,17 @@ async fn session(
                     None => continue,
                 }
             }
-            Some(_) = calls.join_next(), if !calls.is_empty() => continue,
+            Some(r) = calls.join_next(), if !calls.is_empty() => {
+                // A call task that panicked never reported: treat it as a failed attempt so the
+                // machine does not wait for ever.
+                match (r.is_err(), writer.inflight) {
+                    (true, Some(generation)) => {
+                        writer.inflight = None;
+                        MonitorMsg::GrabsTimeout { generation }
+                    }
+                    _ => continue,
+                }
+            }
         };
         let (next, effects) = state.step(
             msg,
@@ -506,8 +563,13 @@ fn modifiers_change(state: &MonitorState, want: &GrabSet) -> bool {
 }
 
 /// Remember which grabbed modifiers are down.
-fn track_held(held: &mut Vec<u32>, state: &MonitorState, ev: &KeyEvent) {
-    let grabbed = current_modifiers(state).is_some_and(|m| m.contains(&ev.keysym));
+///
+/// Every key that is, or may become, a gorca modifier counts, whether or not it is grabbed right
+/// now: after pass-next-key nothing is grabbed, and the modifier still held must not have its
+/// grab changed under it either (F1).
+fn track_held(held: &mut Vec<u32>, state: &MonitorState, may_be: &[u32], ev: &KeyEvent) {
+    let grabbed = may_be.contains(&ev.keysym)
+        || current_modifiers(state).is_some_and(|m| m.contains(&ev.keysym));
     if ev.pressed {
         if grabbed && !held.contains(&ev.keysym) {
             held.push(ev.keysym);
@@ -564,6 +626,91 @@ fn publish(
     links.view.store(Arc::new(view));
 }
 
+/// Serialises every grab mutation (F2). Mutter applies calls in arrival order, so the order
+/// of the wire calls is the order of the machine's generations: at most one set is in flight,
+/// and a newer wanted set replaces any that is still waiting.
+#[derive(Debug, Default)]
+struct GrabWriter {
+    inflight: Option<u32>,
+    queued: Option<(u32, GrabSet)>,
+}
+
+impl GrabWriter {
+    /// A set to send now, if none is in flight; otherwise it waits (replacing an older waiter).
+    fn submit(&mut self, generation: u32, set: GrabSet) -> Option<(u32, GrabSet)> {
+        if self.inflight.is_some() {
+            self.queued = Some((generation, set));
+            None
+        } else {
+            self.inflight = Some(generation);
+            Some((generation, set))
+        }
+    }
+
+    /// The in-flight call finished: the next set to send, if one waited.
+    fn done(&mut self) -> Option<(u32, GrabSet)> {
+        self.inflight = None;
+        let next = self.queued.take()?;
+        self.inflight = Some(next.0);
+        Some(next)
+    }
+}
+
+/// `SetKeyGrabs` then `GrabKeyboard` or `UngrabKeyboard`, back to back in one task, so nothing
+/// can interleave between the two calls of one set.
+fn spawn_grab_call(
+    calls: &mut JoinSet<()>,
+    conn: &zbus::Connection,
+    tx: &mpsc::Sender<MonitorMsg>,
+    clock: &gorca_rt::Clock,
+    generation: u32,
+    set: GrabSet,
+) {
+    let conn = conn.clone();
+    let tx = tx.clone();
+    let clock = clock.clone();
+    calls.spawn(async move {
+        let deadline = Deadline::after(&clock, GRAB_DEADLINE);
+        let wire = set.to_wire();
+        let mut r = call_method(
+            &conn,
+            deadline,
+            MANAGER_NAME,
+            MANAGER_PATH,
+            MONITOR_INTERFACE,
+            "SetKeyGrabs",
+            &wire,
+        )
+        .await;
+        if r.is_ok() {
+            // Learn mode grabs the whole keyboard (LM-1); every other set releases it.
+            let deadline = Deadline::after(&clock, GRAB_DEADLINE);
+            r = call_method(
+                &conn,
+                deadline,
+                MANAGER_NAME,
+                MANAGER_PATH,
+                MONITOR_INTERFACE,
+                if set.grab_all {
+                    "GrabKeyboard"
+                } else {
+                    "UngrabKeyboard"
+                },
+                &(),
+            )
+            .await;
+        }
+        let msg = match r {
+            Ok(_) => MonitorMsg::GrabsOk { generation },
+            Err(e) => {
+                tracing::warn!(error = %e, generation, "SetKeyGrabs failed");
+                MonitorMsg::GrabsTimeout { generation }
+            }
+        };
+        let _ = tx.send(msg).await;
+    });
+}
+
 #[allow(clippy::too_many_arguments)]
 fn exec(
     e: MonitorEffect,
@@ -575,54 +722,14 @@ fn exec(
     timers: &mut Vec<(tokio::time::Instant, Timer)>,
     state: &mut MonitorState,
     pending: &mut Vec<MonitorEffect>,
+    writer: &mut GrabWriter,
     ctx: &KeySourceCtx,
 ) {
     match e {
         MonitorEffect::SendGrabs { generation, set } => {
-            let conn = conn.clone();
-            let tx = res_tx.clone();
-            let clock = ctx.clock.clone();
-            calls.spawn(async move {
-                let deadline = Deadline::after(&clock, GRAB_DEADLINE);
-                let wire = set.to_wire();
-                let mut r = call_method(
-                    &conn,
-                    deadline,
-                    MANAGER_NAME,
-                    MANAGER_PATH,
-                    MONITOR_INTERFACE,
-                    "SetKeyGrabs",
-                    &wire,
-                )
-                .await;
-                if r.is_ok() {
-                    // Learn mode grabs the whole keyboard (LM-1); every other set releases it.
-                    // Both calls are idempotent in Mutter.
-                    let deadline = Deadline::after(&clock, GRAB_DEADLINE);
-                    r = call_method(
-                        &conn,
-                        deadline,
-                        MANAGER_NAME,
-                        MANAGER_PATH,
-                        MONITOR_INTERFACE,
-                        if set.grab_all {
-                            "GrabKeyboard"
-                        } else {
-                            "UngrabKeyboard"
-                        },
-                        &(),
-                    )
-                    .await;
-                }
-                let msg = match r {
-                    Ok(_) => MonitorMsg::GrabsOk { generation },
-                    Err(e) => {
-                        tracing::warn!(error = %e, generation, "SetKeyGrabs failed");
-                        MonitorMsg::GrabsTimeout { generation }
-                    }
-                };
-                let _ = tx.send(msg).await;
-            });
+            if let Some((generation, set)) = writer.submit(generation, set) {
+                spawn_grab_call(calls, conn, res_tx, &ctx.clock, generation, set);
+            }
         }
         MonitorEffect::ArmSettle { generation, after } => {
             let _ = after;
@@ -700,8 +807,8 @@ mod tests {
             pressed,
         };
         let mut held = Vec::new();
-        track_held(&mut held, &state, &ev(0xff63, true));
-        track_held(&mut held, &state, &ev(0x74, true));
+        track_held(&mut held, &state, &[], &ev(0xff63, true));
+        track_held(&mut held, &state, &[], &ev(0x74, true));
         assert_eq!(held, [0xff63], "only grabbed modifiers are tracked");
         let none = GrabSet::default();
         assert!(
@@ -721,9 +828,60 @@ mod tests {
         );
         let mut deferred = Some(none);
         assert!(take_deferred(&mut deferred, &held).is_none());
-        track_held(&mut held, &state, &ev(0xff63, false));
+        track_held(&mut held, &state, &[], &ev(0xff63, false));
         assert!(take_deferred(&mut deferred, &held).is_some());
         assert!(deferred.is_none());
+    }
+
+    #[test]
+    fn a_modifier_held_after_pass_next_key_is_still_tracked_and_defers_the_restore() {
+        // Pass-next-key emptied the grab set; Insert goes down and is not grabbed any more.
+        let state = MonitorState::Watching {
+            grabs: GrabSetState::Committed {
+                generation: 2,
+                set: GrabSet::default(),
+            },
+        };
+        let ev = |pressed| KeyEvent {
+            keycode: 118,
+            keysym: 0xff63,
+            unichar: 0,
+            modifiers: Modifiers::empty(),
+            pressed,
+        };
+        let mut held = Vec::new();
+        track_held(&mut held, &state, &[0xff63], &ev(true));
+        assert_eq!(held, [0xff63], "tracked although nothing is grabbed (F1)");
+        let mut restore = GrabSet::default();
+        restore.modifiers.insert(0xff63);
+        let mut deferred = Some(restore);
+        assert!(
+            take_deferred(&mut deferred, &held).is_none(),
+            "not while Insert is down"
+        );
+        track_held(&mut held, &state, &[0xff63], &ev(false));
+        assert!(take_deferred(&mut deferred, &held).is_some());
+    }
+
+    #[test]
+    fn grab_calls_are_serialised_and_only_the_newest_waiter_survives() {
+        let set = |n: u32| {
+            let mut g = GrabSet::default();
+            g.modifiers.insert(n);
+            g
+        };
+        let mut w = GrabWriter::default();
+        assert_eq!(w.submit(1, set(1)).map(|(g, _)| g), Some(1));
+        // While generation 1 is in flight, 2 and 3 wait; only 3 survives.
+        assert!(w.submit(2, set(2)).is_none());
+        assert!(w.submit(3, set(3)).is_none());
+        assert_eq!(w.inflight, Some(1));
+        let (g, s) = w.done().expect("the newest waiter goes next");
+        assert_eq!((g, s), (3, set(3)));
+        assert_eq!(w.inflight, Some(3));
+        assert!(w.done().is_none(), "nothing left, the writer is idle");
+        assert!(w.inflight.is_none());
+        assert_eq!(w.submit(4, set(4)).map(|(g, _)| g), Some(4));
     }
 
     #[test]

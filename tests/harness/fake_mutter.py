@@ -53,10 +53,19 @@ Grab semantics (M1 test support; ADR-0001 section 7.3 K-1/K-2/K-6). A port of re
   {"cmd":"app_log","clear":false} -> {"keys":[[keycode,keysym,released],...]} delivered to the app
   {"cmd":"grabs"} -> per-grabber state, all_grabbed_modifiers, grabbed_keypresses
   {"cmd":"set_repeat_delay","ms":500}   (Mutter uses the GNOME keyboard repeat delay, default 500)
+  {"cmd":"set_latency","max_ms":8,"seed":1}
+      grab calls (SetKeyGrabs, GrabKeyboard, UngrabKeyboard) are applied after a random delay in
+      [0, max_ms] and replied to afterwards, so calls sent concurrently can be applied (and
+      replied to) out of order, like a busy Mutter input thread. 0 = apply at once (default).
+  {"cmd":"grab_state"} -> {"grab_all":0|1,"n_modifiers":N,"applied":N,"held":N,"xkb_down":N}
+      the first grabber's state, the number of grab calls applied so far, and the number of keys
+      Mutter currently holds as grabbed, and the keys XKB believes are down (both must be 0 when
+      no key is down; a non-zero xkb_down is a stuck key).
   {"cmd":"drop_name","name":":1.7"}     forget a grabber as if its bus name had vanished
 """
 import json
 import os
+import random
 import sys
 import time
 
@@ -132,6 +141,14 @@ class Manager(dbus.service.Object):
         self.grabbed_keypresses = set()
         self.app_log = []
         self.stats = {"calls": 0, "denied": 0, "keys": 0}
+        # Keys XKB believes are down. meta_seat_impl_notify_key_in_impl skips
+        # xkb_state_update_key for events that is_a11y_modifier_first_click ignores, so a press
+        # that passed followed by a release that is ignored leaves the key down for good (the
+        # stuck-key hazard of changing a modifier grab while the modifier is held, P-7).
+        self.xkb_down = set()
+        self.latency_ms = 0
+        self.rng = random.Random(1)
+        self.applied = 0
         conn.add_signal_receiver(self.owner_changed, "NameOwnerChanged",
                                  "org.freedesktop.DBus", "org.freedesktop.DBus",
                                  "/org/freedesktop/DBus")
@@ -181,23 +198,47 @@ class Manager(dbus.service.Object):
         self.check(s)
         self.grabber(s).watch_all = False
 
-    @dbus.service.method(IFACE, in_signature="", out_signature="", sender_keyword="s")
-    def GrabKeyboard(self, s=None):
-        self.check(s)
-        self.grabber(s).grab_all = True
+    def later(self, fn, ok, err):
+        """Apply `fn` after a random delay (set_latency) and reply when it ran."""
+        def run():
+            try:
+                fn()
+                self.applied += 1
+                ok()
+            except Exception as ex:  # noqa: BLE001
+                err(ex)
+            return False
+        if self.latency_ms > 0:
+            GLib.timeout_add(max(1, int(self.rng.uniform(0, self.latency_ms))), run)
+        else:
+            run()
 
-    @dbus.service.method(IFACE, in_signature="", out_signature="", sender_keyword="s")
-    def UngrabKeyboard(self, s=None):
-        self.check(s)
-        self.grabber(s).grab_all = False
+    @dbus.service.method(IFACE, in_signature="", out_signature="", sender_keyword="s",
+                         async_callbacks=("ok", "err"))
+    def GrabKeyboard(self, s=None, ok=None, err=None):
+        def fn():
+            self.check(s)
+            self.grabber(s).grab_all = True
+        self.later(fn, ok, err)
 
-    @dbus.service.method(IFACE, in_signature="aua(uu)", out_signature="", sender_keyword="s")
-    def SetKeyGrabs(self, modifiers, keystrokes, s=None):
-        self.check(s)
-        g = self.grabber(s)
-        g.modifiers = [int(m) for m in modifiers]
-        g.keystrokes = [(int(k), int(m)) for k, m in keystrokes]
-        self.rebuild_modifiers()
+    @dbus.service.method(IFACE, in_signature="", out_signature="", sender_keyword="s",
+                         async_callbacks=("ok", "err"))
+    def UngrabKeyboard(self, s=None, ok=None, err=None):
+        def fn():
+            self.check(s)
+            self.grabber(s).grab_all = False
+        self.later(fn, ok, err)
+
+    @dbus.service.method(IFACE, in_signature="aua(uu)", out_signature="", sender_keyword="s",
+                         async_callbacks=("ok", "err"))
+    def SetKeyGrabs(self, modifiers, keystrokes, s=None, ok=None, err=None):
+        def fn():
+            self.check(s)
+            g = self.grabber(s)
+            g.modifiers = [int(m) for m in modifiers]
+            g.keystrokes = [(int(k), int(m)) for k, m in keystrokes]
+            self.rebuild_modifiers()
+        self.later(fn, ok, err)
 
     def should_grab(self, g, keysym, mods):
         if g.grab_all:
@@ -219,6 +260,11 @@ class Manager(dbus.service.Object):
         if time_ms is None:
             time_ms = (t // 1_000_000) & 0xFFFFFFFF
         ignorable = self.seat.first_click(keysym, time_ms, not released)
+        if not ignorable:
+            if released:
+                self.xkb_down.discard(keycode)
+            else:
+                self.xkb_down.add(keycode)
         mods = state & ~MOUSE_BUTTONS_MASK
         notified = 0
         for dest, g in list(self.grabbers.items()):
@@ -249,6 +295,13 @@ class Manager(dbus.service.Object):
             self.app_log.append([keycode, keysym, bool(released)])
         return {"t_emit_ns": t, "sent": notified, "notified": notified, "consumed": consumed,
                 "first_click": ignorable, "passed": not consumed}
+
+    def grab_state(self):
+        g = next(iter(self.grabbers.values()), None)
+        return {"grab_all": int(bool(g and g.grab_all)),
+                "n_modifiers": len(g.modifiers or ()) if g else 0,
+                "applied": self.applied, "held": len(self.grabbed_keypresses),
+                "xkb_down": len(self.xkb_down), "xkb_first": min(self.xkb_down, default=0)}
 
     def dump(self):
         return {
@@ -302,6 +355,11 @@ class Stdin:
                     res = self.mgr.dump()
                 elif c == "set_repeat_delay":
                     self.mgr.seat.repeat_delay = int(cmd["ms"])
+                elif c == "set_latency":
+                    self.mgr.latency_ms = float(cmd["max_ms"])
+                    self.mgr.rng = random.Random(int(cmd.get("seed", 1)))
+                elif c == "grab_state":
+                    res = self.mgr.grab_state()
                 elif c == "drop_name":
                     self.mgr.drop(cmd["name"])
                 elif c == "quit":

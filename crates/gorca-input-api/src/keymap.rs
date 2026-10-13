@@ -211,6 +211,9 @@ pub struct LaneLinks {
     /// Key intents the Reader has handled: the lane's evidence that the Reader is alive while
     /// learn mode holds the keyboard (LM-3).
     pub reader_ack: std::sync::atomic::AtomicU64,
+    /// Bumped by the key source whenever its connection to the keyboard manager starts or ends:
+    /// Mutter's key state is unknown across that boundary, so the lane forgets its own (F3).
+    pub session: std::sync::atomic::AtomicU64,
 }
 
 impl LaneLinks {

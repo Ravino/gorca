@@ -145,6 +145,9 @@ async fn write_atomic(path: &Path, text: String) -> std::io::Result<()> {
     let p = path.to_owned();
     tokio::task::spawn_blocking(move || {
         use std::io::Write;
+        // A symlinked settings file (dotfile managers) is written through: the link stays a
+        // link and its target gets the new text (F6).
+        let p = std::fs::canonicalize(&p).unwrap_or(p);
         if let Some(dir) = p.parent() {
             std::fs::create_dir_all(dir)?;
         }
@@ -154,9 +157,19 @@ async fn write_atomic(path: &Path, text: String) -> std::io::Result<()> {
         {
             let mut f = std::fs::File::create(&tmp)?;
             f.write_all(text.as_bytes())?;
+            if let Ok(m) = std::fs::metadata(&p) {
+                // Keep the file's mode (a private settings file stays private).
+                f.set_permissions(m.permissions())?;
+            }
             f.sync_all()?;
         }
-        std::fs::rename(&tmp, &p)
+        std::fs::rename(&tmp, &p)?;
+        if let Some(dir) = p.parent()
+            && let Ok(d) = std::fs::File::open(dir)
+        {
+            let _ = d.sync_all();
+        }
+        Ok(())
     })
     .await
     .map_err(|e| std::io::Error::other(e.to_string()))?
@@ -174,8 +187,6 @@ struct State {
     facts: PlatformFacts,
     /// Hash of the text of the last load (of the empty string for a missing file).
     last_hash: u64,
-    /// Hash of the text we wrote ourselves: its inotify event is not a reload.
-    own_hash: Option<u64>,
     last_good: Option<Arc<LoadedSettings>>,
 }
 
@@ -221,7 +232,10 @@ impl ConfigTask {
     async fn reload(&self, st: &mut State, cause: LoadCause) {
         let (text, read_err) = self.read().await;
         let hash = fnv1a(text.as_deref().unwrap_or("").as_bytes());
-        if cause == LoadCause::FileChanged && (hash == st.last_hash || Some(hash) == st.own_hash) {
+        // Content, not provenance: the file is reloaded whenever its text differs from what is
+        // active. Our own save sets `last_hash`, so its inotify event changes nothing, and a
+        // later revert to that same text is a real change (F5).
+        if cause == LoadCause::FileChanged && hash == st.last_hash {
             return;
         }
         let mut b = build(text.as_deref(), &st.facts, cause);
@@ -300,10 +314,8 @@ impl ConfigTask {
                 return;
             }
         };
-        st.own_hash = Some(fnv1a(new_text.as_bytes()));
         if let Err(e) = write_atomic(&path, new_text.clone()).await {
             tracing::warn!(error = %e, "settings.save: write failed");
-            st.own_hash = None;
             self.send(SettingsMsg::SaveResult(SaveResult::Failed)).await;
             return;
         }
@@ -342,7 +354,6 @@ impl ConfigTask {
         let mut st = State {
             facts: self.facts().await,
             last_hash: 0,
-            own_hash: None,
             last_good: None,
         };
         self.reload(&mut st, LoadCause::Startup).await;
@@ -665,6 +676,77 @@ mod tests {
                 break;
             }
         }
+        stop.cancel();
+        let _ = h.await;
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn reverting_to_our_own_saved_text_is_reloaded() {
+        let dir = tmpdir("revert");
+        let path = dir.join("gorca.toml");
+        std::fs::write(&path, "[speech]\nrate = 40\n").unwrap();
+        let (t, mut rx, req) = task(&dir);
+        let stop = CancellationToken::new();
+        let h = tokio::spawn(t.run(stop.clone()));
+        let _ = loaded(&mut rx).await;
+        req.send(ConfigRequest::Save(gorca_config::Overlay {
+            pitch: Some(33),
+            ..gorca_config::Overlay::default()
+        }))
+        .await
+        .unwrap();
+        let _ = loaded(&mut rx).await;
+        let saved = std::fs::read_to_string(&path).unwrap();
+        // The user edits the file, then puts our saved text back.
+        std::fs::write(&path, "[speech]\nrate = 99\n").unwrap();
+        assert_eq!(loaded(&mut rx).await.settings.speech.rate, 99);
+        std::fs::write(&path, &saved).unwrap();
+        let l = loaded(&mut rx).await;
+        assert_eq!((l.settings.speech.rate, l.settings.speech.pitch), (40, 33));
+        stop.cancel();
+        let _ = h.await;
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn save_writes_through_a_symlinked_settings_file_and_keeps_its_mode() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tmpdir("link");
+        let real = dir.join("dotfiles");
+        std::fs::create_dir_all(&real).unwrap();
+        let target = real.join("gorca.toml");
+        std::fs::write(&target, "[speech]\nrate = 40\n").unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o600)).unwrap();
+        let link = dir.join("gorca.toml");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let (t, mut rx, req) = task(&dir);
+        let stop = CancellationToken::new();
+        let h = tokio::spawn(t.run(stop.clone()));
+        let _ = loaded(&mut rx).await;
+        req.send(ConfigRequest::Save(gorca_config::Overlay {
+            volume: Some(70),
+            ..gorca_config::Overlay::default()
+        }))
+        .await
+        .unwrap();
+        let _ = loaded(&mut rx).await;
+        assert!(
+            std::fs::symlink_metadata(&link)
+                .unwrap()
+                .file_type()
+                .is_symlink(),
+            "the link is still a link"
+        );
+        assert!(
+            std::fs::read_to_string(&target)
+                .unwrap()
+                .contains("volume = 70")
+        );
+        assert_eq!(
+            std::fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
         stop.cancel();
         let _ = h.await;
         let _ = std::fs::remove_dir_all(&dir);

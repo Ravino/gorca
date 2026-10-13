@@ -47,6 +47,7 @@ pub enum Scn {
     K2s,
     K3,
     K4,
+    K4r,
 }
 
 impl Scn {
@@ -64,6 +65,7 @@ impl Scn {
             Self::K2s => "K2s".into(),
             Self::K3 => "K3".into(),
             Self::K4 => "K4".into(),
+            Self::K4r => "K4r".into(),
         }
     }
 
@@ -82,13 +84,15 @@ impl Scn {
             "K2s" => Self::K2s,
             "K3" => Self::K3,
             "K4" => Self::K4,
+            "K4r" => Self::K4r,
             _ => return None,
         })
     }
 
     pub fn all() -> Vec<Self> {
         [
-            "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K2s", "K3", "K4",
+            "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K2s", "K3",
+            "K4", "K4r",
         ]
         .iter()
         .filter_map(|s| Self::parse(s))
@@ -323,6 +327,7 @@ pub fn run(
         Scn::K2s => super::m1::k2s(host, reader, flavor, size, seed, &mut out)?,
         Scn::K3 => super::m1::k3(host, reader, flavor, size, seed, &mut out)?,
         Scn::K4 => super::m1::k4(host, reader, flavor, size, seed, &mut out)?,
+        Scn::K4r => super::m1::k4r(host, reader, flavor, size, seed, &mut out)?,
     }
     Ok(out)
 }

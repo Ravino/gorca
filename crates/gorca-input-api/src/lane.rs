@@ -91,6 +91,7 @@ pub struct InputLane {
     last_key_at: Instant,
     sent: u64,
     last_repeat_run: Option<Instant>,
+    session: u64,
     stall_since: Option<Instant>,
     stats: LaneStats,
 }
@@ -116,6 +117,7 @@ impl InputLane {
             last_key_at: now,
             sent: 0,
             last_repeat_run: None,
+            session: 0,
             stall_since: None,
             stats: LaneStats::default(),
         }
@@ -189,6 +191,14 @@ impl InputLane {
         let settings = self.links.settings.load_full();
         let keymap = self.links.keymap.load_full();
         let view = self.links.view.load_full();
+        let session = self.links.session.load(Ordering::Acquire);
+        if session != self.session {
+            // The monitor connection changed: keys that were down will never be released on the
+            // new one, and Mutter's replica state is gone.
+            self.session = session;
+            self.reset();
+            self.seen = (view.committed_gen, view.wanted_gen);
+        }
         self.sync(&view);
 
         let kind = self.press_kind(&ev);
@@ -765,6 +775,22 @@ mod tests {
         assert_eq!(o.intent.kind, PressKind::Repeat);
         assert_eq!(o.intent.class, KeyClass::Swallowed, "not repeatable");
         assert!(!o.epoch_advanced);
+    }
+
+    #[test]
+    fn a_new_monitor_session_forgets_held_keys() {
+        let mut r = rig();
+        r.class(KC_INS, INS, true, 1000);
+        // The shell restarts: Insert is still "down" in the lane, but the manager is new.
+        r.links.session.fetch_add(1, Ordering::AcqRel);
+        assert_eq!(
+            r.class(KC_T, T, true, 1500),
+            KeyClass::PassToApp,
+            "a plain T is not Insert+T after a restart"
+        );
+        r.class(KC_T, T, false, 1510);
+        assert_eq!(r.class(KC_INS, INS, true, 3000), KeyClass::Swallowed);
+        assert_eq!(r.class(KC_T, T, true, 3050), KeyClass::Command(CmdId(1)));
     }
 
     #[test]

@@ -5,8 +5,8 @@
 //! keymap (NVDA desktop preset) with the real XKB keycodes the reader matches physically (K-8).
 //! Until M1 is switched on every scenario is **skipped** (`skipped = 1`); two switches change that:
 //!
-//! * `GORCA_M1=1` (as `--reader-env GORCA_M1=1` or in the process environment): run the scenario
-//!   and enforce its gate.
+//! * `GORCA_M1=1`, given as `--reader-env GORCA_M1=1` (the process environment is never read, so
+//!   the unit tests do not depend on it): run the scenario and enforce its gate.
 //! * `GORCA_M1_STRICT=1`: the scenario fails with an error instead of skipping.
 //!
 //! | id | stimulus | metrics |
@@ -65,8 +65,12 @@ const ESCAPE: K = K {
 };
 /// Virtual gap between chords: above Mutter's default repeat delay (500 ms).
 const CHORD_GAP_MS: u64 = 700;
-/// Real time for the reader to restore the grab set after a switch (P-7 settle plus a margin).
-const SETTLE_REAL_MS: u64 = 40;
+/// Longest wait for the reader to bring Mutter's grabs to the state a switch asks for.
+const GRABS_TIMEOUT: Duration = Duration::from_secs(2);
+/// Guard after Mutter applied a grab set: reply latency plus the reader's 1 ms settle.
+const GUARD_MS: u64 = 4;
+/// The normal grab set: Insert, KP_Insert and Caps_Lock.
+const NORMAL_MODIFIERS: u32 = 3;
 /// First node of the K3 series (warm-up uses 1..70).
 const FIRST_NODE: usize = 100;
 
@@ -75,7 +79,6 @@ fn setting(host: &HostEnv, key: &str) -> Option<String> {
         .iter()
         .find(|(k, _)| k == key)
         .map(|(_, v)| v.clone())
-        .or_else(|| std::env::var(key).ok())
 }
 
 fn flag(host: &HostEnv, key: &str) -> bool {
@@ -375,17 +378,55 @@ fn restart_mutter(rig: &mut Rig) -> Result<f64> {
     Ok(ms)
 }
 
+/// A plain typed letter with a unique synthetic keycode; returns Mutter's verdict
+/// (`down.consumed || up.consumed`).
+fn type_letter(
+    rig: &mut Rig,
+    ty: &mut Typist,
+    rng: &mut Rng,
+    typed: &mut Vec<(u16, u32)>,
+    letters: &[u32],
+) -> Result<bool> {
+    let sym = letters[rng.below(letters.len() as u64) as usize];
+    let kc = ty.keycode();
+    let m = rig
+        .mutter
+        .as_mut()
+        .ok_or_else(|| anyhow::anyhow!("no mutter"))?;
+    ty.t_ms += 3;
+    let down = m.key_ex(kc, sym, 0, false, ty.t_ms)?;
+    ty.t_ms += 3;
+    let up = m.key_ex(kc, sym, 0, true, ty.t_ms)?;
+    typed.push((kc, sym));
+    Ok(down.consumed || up.consumed)
+}
+
+/// Wait until Mutter holds the grab state `ok`, then give the reader the time it needs to learn
+/// that: the `SetKeyGrabs` reply travels back and the machine settles for 1 ms (P-7). Keys typed
+/// earlier would meet a grab set the reader still sees as pending and be `Ambiguous` by design.
+fn settle_grabs(rig: &mut Rig, ok: impl Fn(&super::apps::GrabState) -> bool) -> Result<bool> {
+    let (_, ok) = mutter(rig)?.wait_grabs(GRABS_TIMEOUT, ok)?;
+    std::thread::sleep(Duration::from_millis(GUARD_MS));
+    Ok(ok)
+}
+
+fn mutter(rig: &mut Rig) -> Result<&mut super::apps::FakeMutter> {
+    rig.mutter
+        .as_mut()
+        .ok_or_else(|| anyhow::anyhow!("no mutter"))
+}
+
 /// K4: no lost or doubled keys across randomized grab-set switches (ADR-0001 M-16).
 ///
 /// Each round switches the grab set with a chord (`input.pass_next_key`, which empties it and
 /// restores it on the next key, or `input.learn_mode_toggle` followed by Escape, which grabs
-/// everything and releases it), then types plain letters. Letters are typed only while the
-/// grabs are restored, after [`SETTLE_REAL_MS`]; in no round may the reader swallow a letter
-/// (`app_lost`), and the app must see each exactly once (`app_doubled`). A chord must be
-/// consumed whenever it is sent in the normal mode (`chord_leaked` counts those that reached the
-/// app). Ground truth is Mutter's own verdict (`consumed`) and the app log of `fake_mutter.py`,
-/// never the reader's speech. A forged `KeyEvent` from another client must do nothing
-/// (`forged_accepted`).
+/// everything and releases it), waits **on the emulated manager's own state** until the reader's
+/// grab calls have been applied (no fixed sleeps, a few ms per switch), then types plain
+/// letters. In no round may the reader swallow a letter (`app_lost`), and the app must see
+/// each exactly once (`app_doubled`). A chord must be consumed whenever it is sent in the
+/// normal mode (`chord_leaked`). Ground truth is Mutter's own verdict (`consumed`) and the app
+/// log of `fake_mutter.py`, never the reader's speech. A forged `KeyEvent` from another client
+/// must do nothing (`forged_accepted`), also after the manager restarted under a new name.
 pub fn k4(
     host: &HostEnv,
     reader: &ReaderSpec,
@@ -408,10 +449,7 @@ pub fn k4(
     };
     let letters: Vec<u32> = (u32::from(b'a')..=u32::from(b'z')).collect();
     let mut rig = m1_rig(host, reader, flavor)?;
-    rig.mutter
-        .as_mut()
-        .ok_or_else(|| anyhow::anyhow!("no mutter"))?
-        .app_log(true)?;
+    mutter(&mut rig)?.app_log(true)?;
     let mut forged = forged_keys(&mut rig)?;
     // The shell restarts: the manager comes back under a new unique name. The reader must
     // re-authorise and restore its grabs within 2 s, accept the new owner, and still ignore
@@ -423,14 +461,12 @@ pub fn k4(
     let (_, consumed) = chord(&mut rig, &mut ty0, &time_chord())?;
     std::thread::sleep(Duration::from_millis(300));
     let after_restart_ok = consumed && speaks(&rig.mock.since(before)).count() > 0;
-    rig.mutter
-        .as_mut()
-        .ok_or_else(|| anyhow::anyhow!("no mutter"))?
-        .app_log(true)?;
+    mutter(&mut rig)?.app_log(true)?;
     let mut rng = Rng::new(seed);
     let mut ty = Typist::new();
     let (mut typed, mut leaked, mut swallowed_live) = (Vec::new(), 0u64, 0u64);
-    let mut escape_unconsumed = 0u64;
+    let (mut escape_unconsumed, mut never_settled) = (0u64, 0u64);
+    let started = std::time::Instant::now();
     for _ in 0..switches {
         let use_learn = rng.below(4) == 0;
         if use_learn {
@@ -438,53 +474,44 @@ pub fn k4(
             if !consumed {
                 leaked += 1;
             }
-            std::thread::sleep(Duration::from_millis(SETTLE_REAL_MS));
+            let ok = settle_grabs(&mut rig, |g| g.grab_all)?;
+            never_settled += u64::from(!ok);
             // Learn mode holds the keyboard: Escape is delivered to the reader, not the app.
             let (d, u) = tap(&mut rig, &mut ty, ESCAPE)?;
             if !(d && u) {
                 escape_unconsumed += 1;
             }
+            let ok = settle_grabs(&mut rig, |g| !g.grab_all && g.modifiers == NORMAL_MODIFIERS)?;
+            never_settled += u64::from(!ok);
         } else {
             let (_, consumed) = chord(&mut rig, &mut ty, &pass)?;
             if !consumed {
                 leaked += 1;
             }
+            // The modifier grab is emptied once Insert is up (never while it is held).
+            let ok = settle_grabs(&mut rig, |g| g.modifiers == 0 && !g.grab_all)?;
+            never_settled += u64::from(!ok);
         }
-        std::thread::sleep(Duration::from_millis(SETTLE_REAL_MS));
-        for _ in 0..=rng.below(3) {
-            let sym = letters[rng.below(letters.len() as u64) as usize];
-            let kc = ty.keycode();
-            let m = rig
-                .mutter
-                .as_mut()
-                .ok_or_else(|| anyhow::anyhow!("no mutter"))?;
-            ty.t_ms += 3;
-            let down = m.key_ex(kc, sym, 0, false, ty.t_ms)?;
-            ty.t_ms += 3;
-            let up = m.key_ex(kc, sym, 0, true, ty.t_ms)?;
-            if down.consumed || up.consumed {
+        for i in 0..=rng.below(3) {
+            if type_letter(&mut rig, &mut ty, &mut rng, &mut typed, &letters)? {
                 swallowed_live += 1;
             }
-            typed.push((kc, sym));
-            if !use_learn {
-                // The first letter ended pass-next-key; give the restore time before the next.
-                std::thread::sleep(Duration::from_millis(SETTLE_REAL_MS));
+            if i == 0 && !use_learn {
+                // The first letter ended pass-next-key: the modifiers come back.
+                let ok = settle_grabs(&mut rig, |g| g.modifiers == NORMAL_MODIFIERS)?;
+                never_settled += u64::from(!ok);
             }
         }
-        std::thread::sleep(Duration::from_millis(SETTLE_REAL_MS));
     }
+    let elapsed = started.elapsed().as_secs_f64();
     std::thread::sleep(Duration::from_millis(200));
-    let log = rig
-        .mutter
-        .as_mut()
-        .ok_or_else(|| anyhow::anyhow!("no mutter"))?
-        .app_log(true)?;
+    let log = mutter(&mut rig)?.app_log(true)?;
     let (lost, doubled) = score_typing(&typed, &log);
+    out.notes.push(format!(
+        "K4 app_lost parts: missing in app log {lost}, swallowed live {swallowed_live}, escape not consumed {escape_unconsumed}; {switches} switches in {elapsed:.1} s"
+    ));
     out.x("switches", switches as f64, "count");
     out.x("typed_keys", typed.len() as f64, "count");
-    out.notes.push(format!(
-        "K4 app_lost parts: missing in app log {lost}, swallowed live {swallowed_live}, escape not consumed {escape_unconsumed}"
-    ));
     out.x(
         "app_lost",
         (lost + swallowed_live + escape_unconsumed) as f64,
@@ -492,6 +519,7 @@ pub fn k4(
     );
     out.x("app_doubled", doubled as f64, "keys");
     out.x("chord_leaked", leaked as f64, "chords");
+    out.x("grab_state_wrong", never_settled as f64, "switches");
     out.x("forged_accepted", forged as f64, "speeches");
     out.x("restore_ms", restored_ms, "ms");
     out.x(
@@ -499,6 +527,166 @@ pub fn k4(
         f64::from(u8::from(!(after_restart_ok && restored_ms <= 2000.0))),
         "runs",
     );
+    out.x("k4_wall_s", elapsed, "s");
+    Ok(())
+}
+
+/// Keys per keycode whose presses and releases do not pair up in the app log: a modifier whose
+/// release was eaten (or whose press was) is the signature of changing a modifier grab while the
+/// modifier was held, which leaves XKB with a stuck key (P-7).
+fn unbalanced_keys(log: &[(u16, u32, bool)]) -> u64 {
+    use std::collections::HashMap;
+    let mut d: HashMap<u16, i64> = HashMap::new();
+    for (kc, _, rel) in log {
+        *d.entry(*kc).or_default() += if *rel { -1 } else { 1 };
+    }
+    d.values().filter(|v| **v != 0).count() as u64
+}
+
+/// K4r: the race variant. The same kind of random walk with **no waiting**: after a
+/// pass-next-key chord the next chord or letters follow at once, while the emulated manager
+/// applies grab calls after a random 0 to 8 ms delay and may reorder concurrent ones. Plain
+/// letters are never swallowed in any grab state, so `app_lost` and `app_doubled` stay 0 on
+/// Mutter's own verdict. Once all keys are up and the system is quiet, Mutter must hold exactly
+/// the grab set the reader's mode asks for (`grab_state_wrong`: a reordered grab call leaves the
+/// whole keyboard grabbed or the modifiers missing), nothing may be left held (`held_keys`), and
+/// no key may be left down in the emulated XKB state (`xkb_stuck`: a modifier grab changed while the modifier was held eats its release), every key's presses and releases must pair up in the app log (`key_unbalanced`: a modifier
+/// grab changed while the modifier was held).
+pub fn k4r(
+    host: &HostEnv,
+    reader: &ReaderSpec,
+    flavor: Flavor,
+    size: Size,
+    seed: u64,
+    out: &mut RunOut,
+) -> Result<()> {
+    if !gate_open(host, "K4r", out)? {
+        return Ok(());
+    }
+    let rounds: usize = if size.n >= 1000 { 10_000 } else { 500 };
+    let pass = Chord {
+        modifier: INSERT,
+        key: F2,
+    };
+    // Insert+T straight after pass-next-key: the T ends pass mode while Insert is still down.
+    let chord_t = Chord {
+        modifier: INSERT,
+        key: K {
+            code: 28,
+            sym: 0x74,
+        },
+    };
+    let letters: Vec<u32> = (u32::from(b'a')..=u32::from(b'z')).collect();
+    let mut rig = m1_rig(host, reader, flavor)?;
+    mutter(&mut rig)?.set_latency(8, seed)?;
+    mutter(&mut rig)?.app_log(true)?;
+    let mut rng = Rng::new(seed);
+    let mut ty = Typist::new();
+    let (mut typed, mut swallowed_live, mut wrong_state) = (Vec::new(), 0u64, 0u64);
+    let mut stuck = 0u64;
+    let started = std::time::Instant::now();
+    for _ in 0..rounds {
+        chord(&mut rig, &mut ty, &pass)?;
+        match rng.below(4) {
+            0 => {
+                for _ in 0..=rng.below(3) {
+                    if type_letter(&mut rig, &mut ty, &mut rng, &mut typed, &letters)? {
+                        swallowed_live += 1;
+                    }
+                }
+            }
+            1 => {
+                chord(&mut rig, &mut ty, &chord_t)?;
+            }
+            2 => {
+                // The grabs are really empty when Insert goes down: it reaches the application,
+                // and the T that follows asks for the modifier grabs back while Insert is held.
+                // Changing the grab then would eat Insert's release (a stuck key).
+                // Start from a quiet state: end the pass mode just entered, let every in-flight
+                // grab call land, then enter pass mode again and wait for the empty grab set.
+                if type_letter(&mut rig, &mut ty, &mut rng, &mut typed, &letters)? {
+                    swallowed_live += 1;
+                }
+                let _ = settle_grabs(&mut rig, |g| g.modifiers == NORMAL_MODIFIERS)?;
+                std::thread::sleep(Duration::from_millis(30));
+                chord(&mut rig, &mut ty, &pass)?;
+                let _ = settle_grabs(&mut rig, |g| g.modifiers == 0)?;
+                // A plain Insert tap while nothing is grabbed clears any key an earlier,
+                // deliberately racy round left down in the emulated XKB state, so the check
+                // below judges this round alone.
+                tap(&mut rig, &mut ty, INSERT)?;
+                ty.t_ms += CHORD_GAP_MS;
+                let m = mutter(&mut rig)?;
+                m.key_ex(INSERT.code, INSERT.sym, 0, false, ty.t_ms)?;
+                m.key_ex(28, 0x74, 0, false, ty.t_ms + 5)?;
+                m.key_ex(28, 0x74, 0, true, ty.t_ms + 15)?;
+                // Insert stays down while the reader asks for the modifier grabs back and
+                // Mutter (up to 8 ms of latency) applies them.
+                std::thread::sleep(Duration::from_millis(20));
+                mutter(&mut rig)?.key_ex(INSERT.code, INSERT.sym, 0, true, ty.t_ms + 25)?;
+                ty.t_ms += 25;
+                // Every key is up again: XKB must agree (it heals on later events, so look now).
+                std::thread::sleep(Duration::from_millis(30));
+                let st = mutter(&mut rig)?.grab_state()?;
+                if st.xkb_down > 0 {
+                    eprintln!("K4r DEBUG stuck code {} now {:?}", st.xkb_first, st);
+                }
+                stuck += u64::from(st.xkb_down > 0);
+            }
+            _ => {
+                // Insert goes down and stays down while the letters are typed (a chord).
+                ty.t_ms += CHORD_GAP_MS;
+                let m = mutter(&mut rig)?;
+                m.key_ex(INSERT.code, INSERT.sym, 0, false, ty.t_ms)?;
+                ty.t_ms += 5;
+                m.key_ex(28, 0x74, 0, false, ty.t_ms)?;
+                m.key_ex(28, 0x74, 0, true, ty.t_ms + 5)?;
+                m.key_ex(INSERT.code, INSERT.sym, 0, true, ty.t_ms + 10)?;
+            }
+        }
+        // Checkpoint: after a plain key the reader's mode is normal again. Let in-flight grab calls finish (latency is at most 8 ms), then
+        // Mutter must hold exactly the normal grab set. A reordered pair of calls shows up here.
+        if rng.below(4) == 0 {
+            // A chord that raced the grab change may have been swallowed, leaving the reader in
+            // pass mode with the grabs emptied (legitimate). One plain key ends it.
+            if type_letter(&mut rig, &mut ty, &mut rng, &mut typed, &letters)? {
+                swallowed_live += 1;
+            }
+            std::thread::sleep(Duration::from_millis(30));
+            let st = mutter(&mut rig)?.grab_state()?;
+            if st.modifiers != NORMAL_MODIFIERS || st.grab_all {
+                wrong_state += 1;
+            }
+        }
+    }
+    let elapsed = started.elapsed().as_secs_f64();
+    // Quiet: every key is up. The reader's mode is back to normal after any key, so settle with
+    // one plain letter (it ends a pending pass-next-key) and look at Mutter's state.
+    if type_letter(&mut rig, &mut ty, &mut rng, &mut typed, &letters)? {
+        swallowed_live += 1;
+    }
+    let (state, settled) = mutter(&mut rig)?.wait_grabs(Duration::from_secs(3), |g| {
+        g.modifiers == NORMAL_MODIFIERS && !g.grab_all
+    })?;
+    let log = mutter(&mut rig)?.app_log(true)?;
+    let (lost, doubled) = score_typing(&typed, &log);
+    out.x("rounds", rounds as f64, "count");
+    out.x("typed_keys", typed.len() as f64, "count");
+    out.x("app_lost", (lost + swallowed_live) as f64, "keys");
+    out.x("app_doubled", doubled as f64, "keys");
+    out.x(
+        "grab_state_wrong",
+        (wrong_state + u64::from(!settled)) as f64,
+        "checkpoints",
+    );
+    out.x("held_keys", f64::from(state.held), "keys");
+    out.x(
+        "xkb_stuck",
+        (stuck + u64::from(state.xkb_down)) as f64,
+        "keys",
+    );
+    out.x("key_unbalanced", unbalanced_keys(&log) as f64, "keys");
+    out.x("k4r_wall_s", elapsed, "s");
     Ok(())
 }
 
@@ -581,6 +769,21 @@ mod tests {
         );
         assert_eq!(get("GORCA_XKB_OPTIONS").as_deref(), Some(""));
         assert_eq!(get("GORCA_CLOCK_24H").as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn unpaired_presses_and_releases_are_counted() {
+        let log = [(10, 1, false), (10, 1, true), (11, 2, false), (12, 3, true)];
+        assert_eq!(unbalanced_keys(&log), 2);
+        assert_eq!(unbalanced_keys(&[]), 0);
+    }
+
+    #[test]
+    fn the_process_environment_never_opens_a_gate() {
+        // Whatever the test runner exports, a gate opens only through --reader-env.
+        let mut out = RunOut::default();
+        assert!(!gate_open(&host(&[]), "K2", &mut out).unwrap() || flag(&host(&[]), "GORCA_M1"));
+        assert!(!flag(&host(&[]), "GORCA_M1"));
     }
 
     #[test]

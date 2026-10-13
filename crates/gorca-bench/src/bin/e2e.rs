@@ -151,6 +151,10 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "chord_leaked"
                     | "forged_accepted"
                     | "restore_failed"
+                    | "grab_state_wrong"
+                    | "held_keys"
+                    | "xkb_stuck"
+                    | "key_unbalanced"
             ) {
                 // Worst repeat, not the median: one lost focus in three runs is a failure.
                 row = row.at_most_in_every_run(0.0);
