@@ -207,38 +207,137 @@ enum Timer {
 /// The bus daemon's own name: the only legitimate sender of `NameOwnerChanged`.
 const BUS_DAEMON: &str = "org.freedesktop.DBus";
 
-/// Sender validation. `KeyEvent` is a unicast signal, so any client on the session bus can
-/// address one to us; only the current owner of the Mutter a11y manager name may be believed.
-#[derive(Debug)]
-pub(crate) struct SenderFilter {
-    owner: String,
+/// Where a message claims to come from, and therefore who may have sent it.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub(crate) enum Origin {
+    /// The Mutter a11y manager: only the unique name that owns [`MANAGER_NAME`] right now.
+    Manager,
+    /// The bus daemon: only [`BUS_DAEMON`].
+    BusDaemon,
+}
+
+/// The one gate every inbound message passes before it can change anything.
+///
+/// Signals can be unicast to us by any client on the bus, and a unicast signal ignores the match
+/// rule, so the rule's `sender=` proves nothing: the header is checked here, together with the
+/// message type, interface, member and path. A forged `KeyEvent` must not type or run commands,
+/// and a forged `NameOwnerChanged` must neither restart the session (a denial of service) nor
+/// move the owner we trust. Until the manager's owner is known nothing from it is believed.
+#[derive(Debug, Default)]
+pub(crate) struct Gate {
+    manager: Option<String>,
     rejected: u64,
 }
 
-impl SenderFilter {
-    pub(crate) fn new(owner: String) -> Self {
-        Self { owner, rejected: 0 }
+impl Gate {
+    pub(crate) fn new() -> Self {
+        Self::default()
     }
 
-    /// `true` if the header sender is the expected unique name; otherwise counts a drop.
-    pub(crate) fn accept(&mut self, sender: Option<&str>) -> bool {
-        if sender == Some(self.owner.as_str()) {
+    /// The unique name that owns the manager's well-known name (resolved after subscribing).
+    pub(crate) fn set_manager(&mut self, owner: String) {
+        self.manager = Some(owner);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn rejected(&self) -> u64 {
+        self.rejected
+    }
+
+    fn reject(&mut self, what: &str, sender: Option<&str>) {
+        self.rejected += 1;
+        if self.rejected.is_power_of_two() {
+            // Rate limited: 1st, 2nd, 4th, 8th, ... A real manager that we mis-identified would
+            // otherwise leave the commands dead without a trace.
+            tracing::warn!(
+                what,
+                expected = ?self.manager,
+                got = ?sender,
+                dropped = self.rejected,
+                "dropped a message that failed the sender gate"
+            );
+        }
+    }
+
+    /// May `msg` be believed as a signal from `origin` with this interface, member and path?
+    pub(crate) fn admit(
+        &mut self,
+        origin: Origin,
+        msg: &zbus::Message,
+        interface: &str,
+        member: &str,
+        path: &str,
+    ) -> bool {
+        let h = msg.header();
+        let sender = h.sender().map(zbus::names::UniqueName::as_str);
+        let sender_ok = match origin {
+            Origin::Manager => matches!((sender, &self.manager), (Some(s), Some(m)) if s == m),
+            Origin::BusDaemon => sender == Some(BUS_DAEMON),
+        };
+        let shape_ok = msg.message_type() == zbus::message::Type::Signal
+            && h.interface().is_some_and(|i| i.as_str() == interface)
+            && h.member().is_some_and(|m| m.as_str() == member)
+            && h.path().is_some_and(|p| p.as_str() == path);
+        if sender_ok && shape_ok {
             true
         } else {
-            self.rejected += 1;
-            if self.rejected.is_power_of_two() {
-                // Rate limited: 1st, 2nd, 4th, 8th, ... A real manager that we mis-identified
-                // would otherwise leave the commands dead without a trace (F4).
-                tracing::warn!(
-                    expected = %self.owner,
-                    got = ?sender,
-                    dropped = self.rejected,
-                    "dropped a signal from an unexpected sender"
-                );
-            }
+            self.reject(member, sender);
             false
         }
     }
+
+    /// A `KeyEvent` from the manager, or `None` (forged, malformed or another signal).
+    pub(crate) fn key_event(&mut self, msg: &zbus::Message) -> Option<KeyEvent> {
+        if !self.admit(
+            Origin::Manager,
+            msg,
+            MONITOR_INTERFACE,
+            "KeyEvent",
+            MANAGER_PATH,
+        ) {
+            return None;
+        }
+        msg.body()
+            .deserialize::<(bool, u32, u32, u32, u16)>()
+            .ok()
+            .map(decode_key_event)
+    }
+
+    /// `(old, new)` of a `NameOwnerChanged` about `name`, only if the bus daemon sent it.
+    pub(crate) fn owner_change(
+        &mut self,
+        msg: &zbus::Message,
+        name: &str,
+    ) -> Option<(String, String)> {
+        if !self.admit(
+            Origin::BusDaemon,
+            msg,
+            BUS_DAEMON,
+            "NameOwnerChanged",
+            "/org/freedesktop/DBus",
+        ) {
+            return None;
+        }
+        let (n, old, new) = msg.body().deserialize::<(String, String, String)>().ok()?;
+        (n == name).then_some((old, new))
+    }
+}
+
+/// Has the owner of `name` changed, as far as the stream has delivered? Looks at what is ready
+/// and never waits. Forged items are skipped; a closed stream counts as a change (restart).
+async fn owner_moved(gate: &mut Gate, stream: &mut zbus::MessageStream, name: &str) -> bool {
+    while let Some(item) = futures_lite::future::poll_once(stream.next()).await {
+        match item {
+            None => return true,
+            Some(Err(_)) => {}
+            Some(Ok(m)) => {
+                if gate.owner_change(&m, name).is_some() {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 fn rule(
@@ -297,7 +396,7 @@ async fn session(
         NameReply::Other(v) => return Err(Attempt::Reply(format!("RequestName returned {v}"))),
     }
 
-    let mut bus_filter = SenderFilter::new(BUS_DAEMON.to_owned());
+    let mut gate = Gate::new();
     // Subscribe before asking for events: KeyEvent is unicast with no acknowledgement (F-2).
     let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);
     let mut keys = with_deadline(
@@ -356,12 +455,9 @@ async fn session(
         .body()
         .deserialize()
         .map_err(|e| Attempt::Reply(e.to_string()))?;
-    let mut filter = SenderFilter::new(manager_owner);
+    gate.set_manager(manager_owner);
     // An owner change that happened while we resolved: our answer may already be stale.
-    if futures_lite::future::poll_once(owners.next())
-        .await
-        .is_some()
-    {
+    if owner_moved(&mut gate, &mut owners, MANAGER_NAME).await {
         return Err(Attempt::ManagerGone);
     }
     let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);
@@ -375,10 +471,7 @@ async fn session(
         &(),
     )
     .await?;
-    if futures_lite::future::poll_once(owners.next())
-        .await
-        .is_some()
-    {
+    if owner_moved(&mut gate, &mut owners, MANAGER_NAME).await {
         return Err(Attempt::ManagerGone);
     }
     tracing::info!("keyboard monitor active");
@@ -445,10 +538,8 @@ async fn session(
             m = keys.next() => {
                 let Some(m) = m else { return Err(Attempt::StreamEnded) };
                 if let Ok(m) = m
-                    && filter.accept(m.header().sender().map(zbus::names::UniqueName::as_str))
-                    && let Ok(body) = m.body().deserialize::<(bool, u32, u32, u32, u16)>()
+                    && let Some(ev) = gate.key_event(&m)
                 {
-                    let ev = decode_key_event(body);
                     let may_be_modifiers = src
                         .links
                         .as_ref()
@@ -465,24 +556,29 @@ async fn session(
                 }
             }
             m = owners.next() => {
-                // Any change of the manager's owner invalidates our grabs: start over.
-                if let Some(Ok(m)) = m
-                    && !bus_filter.accept(m.header().sender().map(zbus::names::UniqueName::as_str))
-                {
-                    tracing::warn!("ignored a forged NameOwnerChanged");
-                    continue;
+                // Any change of the manager's owner invalidates our grabs: start over. Only the
+                // bus daemon's signal about the manager's name counts; a forged one is dropped.
+                match m {
+                    None => return Err(Attempt::StreamEnded),
+                    Some(Ok(m)) if gate.owner_change(&m, MANAGER_NAME).is_some() => {
+                        return Err(Attempt::ManagerGone);
+                    }
+                    Some(Ok(_) | Err(_)) => continue,
                 }
-                return Err(Attempt::ManagerGone);
             }
             m = own_name.next() => {
-                if let Some(Ok(m)) = m
-                    && bus_filter.accept(m.header().sender().map(zbus::names::UniqueName::as_str))
-                    && let Ok((_, _, new)) = m.body().deserialize::<(String, String, String)>()
-                    && new.is_empty()
-                {
-                    return Err(Attempt::NameLost);
+                match m {
+                    None => return Err(Attempt::StreamEnded),
+                    Some(Ok(m)) => {
+                        // Our name lost: it now has no owner, or someone else.
+                        if let Some((_, new)) = gate.owner_change(&m, ORCA_MONITOR_NAME)
+                            && new.is_empty()
+                        {
+                            return Err(Attempt::NameLost);
+                        }
+                    }
+                    Some(Err(_)) => {}
                 }
-                // The owner changed to someone else, or to us (our own acquisition echo).
                 continue;
             }
             r = grabs.changed() => {
@@ -773,20 +869,117 @@ mod tests {
         assert!(!decode_key_event((true, 0, 1, 0, 1)).pressed);
     }
 
+    fn signal(
+        path: &str,
+        iface: &str,
+        member: &str,
+        sender: &str,
+        body: &(impl zbus::export::serde::Serialize + zbus::zvariant::DynamicType),
+    ) -> zbus::Message {
+        zbus::Message::signal(path, iface, member)
+            .and_then(|b| b.sender(sender))
+            .and_then(|b| b.build(body))
+            .unwrap()
+    }
+
+    fn key_signal(sender: &str) -> zbus::Message {
+        signal(
+            MANAGER_PATH,
+            MONITOR_INTERFACE,
+            "KeyEvent",
+            sender,
+            &(false, 0u32, 0x61u32, 0x61u32, 38u16),
+        )
+    }
+
+    fn owner_signal(sender: &str, name: &str, new: &str) -> zbus::Message {
+        signal(
+            "/org/freedesktop/DBus",
+            BUS_DAEMON,
+            "NameOwnerChanged",
+            sender,
+            &(name, ":1.7", new),
+        )
+    }
+
     #[test]
     fn only_the_manager_owner_is_believed_and_the_rest_is_counted() {
-        let mut f = SenderFilter::new(":1.7".to_owned());
-        assert!(f.accept(Some(":1.7")));
-        assert!(!f.accept(Some(":1.99")), "another client on the bus");
-        assert!(!f.accept(None), "no sender header");
-        assert!(
-            !f.accept(Some("org.freedesktop.a11y.Manager")),
-            "well-known names are not senders"
+        let mut g = Gate::new();
+        // Before the owner is known nothing from the manager is believed (not even a real one).
+        assert!(g.key_event(&key_signal(":1.7")).is_none());
+        g.set_manager(":1.7".to_owned());
+        assert_eq!(
+            g.key_event(&key_signal(":1.7")).map(|e| e.keysym),
+            Some(0x61)
         );
-        assert_eq!(f.rejected, 3);
-        // After a restart under a new unique name, the new owner is accepted, the old one is not.
-        let mut f = SenderFilter::new(":1.42".to_owned());
-        assert!(f.accept(Some(":1.42")) && !f.accept(Some(":1.7")));
+        assert!(
+            g.key_event(&key_signal(":1.99")).is_none(),
+            "another client"
+        );
+        assert!(g.key_event(&key_signal(":1.8")).is_none());
+        assert_eq!(g.rejected(), 3);
+        // After a restart under a new unique name, the new owner is accepted, the old one not.
+        let mut g = Gate::new();
+        g.set_manager(":1.42".to_owned());
+        assert!(g.key_event(&key_signal(":1.42")).is_some());
+        assert!(g.key_event(&key_signal(":1.7")).is_none());
+    }
+
+    #[test]
+    fn the_right_sender_with_the_wrong_shape_is_still_dropped() {
+        let mut g = Gate::new();
+        g.set_manager(":1.7".to_owned());
+        let body = (false, 0u32, 0x61u32, 0x61u32, 38u16);
+        for (path, iface, member) in [
+            ("/x", MONITOR_INTERFACE, "KeyEvent"),
+            (MANAGER_PATH, "org.example.Other", "KeyEvent"),
+            (MANAGER_PATH, MONITOR_INTERFACE, "Other"),
+        ] {
+            assert!(
+                g.key_event(&signal(path, iface, member, ":1.7", &body))
+                    .is_none()
+            );
+        }
+        // A method call is not a signal, whoever sends it.
+        let call = zbus::Message::method_call(MANAGER_PATH, "KeyEvent")
+            .and_then(|b| b.interface(MONITOR_INTERFACE))
+            .and_then(|b| b.sender(":1.7"))
+            .and_then(|b| b.build(&body))
+            .unwrap();
+        assert!(g.key_event(&call).is_none());
+        // A malformed body from the right sender is dropped without a panic.
+        let bad = signal(MANAGER_PATH, MONITOR_INTERFACE, "KeyEvent", ":1.7", &"text");
+        assert!(g.key_event(&bad).is_none());
+    }
+
+    #[test]
+    fn owner_changes_count_only_from_the_bus_daemon_about_the_right_name() {
+        let mut g = Gate::new();
+        g.set_manager(":1.7".to_owned());
+        // Forged by a client (even by the manager itself): no state change.
+        assert!(
+            g.owner_change(&owner_signal(":1.99", MANAGER_NAME, ""), MANAGER_NAME)
+                .is_none()
+        );
+        assert!(
+            g.owner_change(&owner_signal(":1.7", MANAGER_NAME, ""), MANAGER_NAME)
+                .is_none()
+        );
+        // The real daemon, but about another name.
+        assert!(
+            g.owner_change(&owner_signal(BUS_DAEMON, "org.other", ""), MANAGER_NAME)
+                .is_none()
+        );
+        // The real one.
+        assert_eq!(
+            g.owner_change(&owner_signal(BUS_DAEMON, MANAGER_NAME, ""), MANAGER_NAME),
+            Some((":1.7".to_owned(), String::new()))
+        );
+        assert_eq!(
+            g.rejected(),
+            2,
+            "the daemon's signal about another name is not forged, just not ours"
+        );
     }
 
     #[test]

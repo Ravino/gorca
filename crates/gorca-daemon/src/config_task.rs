@@ -503,7 +503,6 @@ mod tests {
                 .is_empty()
         );
         assert!(!run_config_cmd(&crate::ConfigCmd::Check(None), None).1);
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -575,11 +574,33 @@ mod tests {
         }
     }
 
-    fn tmpdir(tag: &str) -> PathBuf {
+    /// A private temporary directory, removed on every exit path, panics included.
+    struct TmpDir(PathBuf);
+
+    impl std::ops::Deref for TmpDir {
+        type Target = PathBuf;
+        fn deref(&self) -> &PathBuf {
+            &self.0
+        }
+    }
+
+    impl AsRef<Path> for TmpDir {
+        fn as_ref(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TmpDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn tmpdir(tag: &str) -> TmpDir {
         let d = std::env::temp_dir().join(format!("gorca-cfg-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
-        d
+        TmpDir(d)
     }
 
     #[tokio::test]
@@ -678,7 +699,6 @@ mod tests {
         }
         stop.cancel();
         let _ = h.await;
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]
@@ -706,7 +726,6 @@ mod tests {
         assert_eq!((l.settings.speech.rate, l.settings.speech.pitch), (40, 33));
         stop.cancel();
         let _ = h.await;
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]
@@ -749,7 +768,6 @@ mod tests {
         );
         stop.cancel();
         let _ = h.await;
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]
@@ -770,7 +788,6 @@ mod tests {
         assert_eq!(l.settings.speech.rate, 20);
         stop.cancel();
         let _ = h.await;
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]

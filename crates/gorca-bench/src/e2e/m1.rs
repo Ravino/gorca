@@ -337,18 +337,26 @@ pub fn k3(
     chord_series(&mut rig, out, "k3_ms", &c, size.n, seed, Before::FocusFresh)
 }
 
-/// Run the forger: a rogue client addressing `KeyEvent` signals to the reader. Returns how many
-/// SPEAKs they caused (must be 0).
-fn forged_keys(rig: &mut Rig) -> Result<u64> {
-    let script = rig.env.harness_dir.join("key_forger.py");
-    let mark = rig.mock.mark();
+fn forger_command(rig: &Rig, args: &[&str]) -> std::process::Command {
+    let mut c = std::process::Command::new("/usr/bin/python3");
     // The system python has the D-Bus bindings (the project venv does not), like fake_mutter.py.
-    let out = std::process::Command::new("/usr/bin/python3")
-        .arg("-I")
-        .arg(&script)
+    c.arg("-I")
+        .arg(rig.env.harness_dir.join("key_forger.py"))
         .arg(&rig.env.session_addr)
-        .arg("5")
-        .output()?;
+        .args(args)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    c
+}
+
+/// Run the forger: a rogue client addressing every kind of forged manager and bus signal to the
+/// reader (forged `KeyEvent`s, a forged chord, wrong-shaped signals, forged `NameOwnerChanged`).
+/// Returns how much they achieved: SPEAKs they caused, plus grab calls the reader made afterwards
+/// (a forged owner change would restart its keyboard session and re-send its grabs). Must be 0.
+fn forged_keys(rig: &mut Rig) -> Result<u64> {
+    let applied0 = mutter(rig)?.grab_state()?.applied;
+    let mark = rig.mock.mark();
+    let out = forger_command(rig, &["5", "all"]).output()?;
     if !out.status.success() {
         bail!(
             "key_forger.py failed: {} {}",
@@ -357,7 +365,30 @@ fn forged_keys(rig: &mut Rig) -> Result<u64> {
         );
     }
     std::thread::sleep(Duration::from_millis(300));
-    Ok(speaks(&rig.mock.since(mark)).count() as u64)
+    let speeches = speaks(&rig.mock.since(mark)).count() as u64;
+    let regrabbed = mutter(rig)?.grab_state()?.applied.saturating_sub(applied0);
+    Ok(speeches + regrabbed)
+}
+
+/// Like [`restart_mutter`], with a forger flooding every kind of forged signal the whole time:
+/// during the owner transition a forged signal must neither get through nor stop the genuine
+/// restart. Returns `(restore ms, speeches the forgeries caused)`.
+fn restart_mutter_under_flood(rig: &mut Rig) -> Result<(f64, u64)> {
+    let mark = rig.mock.mark();
+    let mut child = forger_command(rig, &["1", "flood:2500"]).spawn()?;
+    std::thread::sleep(Duration::from_millis(150));
+    let restored = restart_mutter(rig);
+    // Reap on every path: no stray process, no leftover pipes.
+    let waited = child.wait();
+    let restored = restored?;
+    waited?;
+    std::thread::sleep(Duration::from_millis(300));
+    // The genuine restart is announced ("keyboard commands unavailable", "... restored"); any
+    // other speech was caused by a forged signal.
+    let n = speaks(&rig.mock.since(mark))
+        .filter(|(_, t)| !t.starts_with("keyboard commands"))
+        .count() as u64;
+    Ok((restored, n))
 }
 
 /// Replace the emulated manager by a new process (a new unique name) and time how long the
@@ -454,7 +485,8 @@ pub fn k4(
     // The shell restarts: the manager comes back under a new unique name. The reader must
     // re-authorise and restore its grabs within 2 s, accept the new owner, and still ignore
     // forgeries (ADR-0005 8.2).
-    let restored_ms = restart_mutter(&mut rig)?;
+    let (restored_ms, flooded) = restart_mutter_under_flood(&mut rig)?;
+    forged += flooded;
     forged += forged_keys(&mut rig)?;
     let mut ty0 = Typist::new();
     let before = rig.mock.mark();
