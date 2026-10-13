@@ -812,6 +812,7 @@ dependencies = [
  "crossbeam-queue",
  "gorca-model",
  "gorca-rt",
+ "gorca-testkit",
  "smallvec",
  "tokio",
 ]
@@ -944,6 +945,7 @@ dependencies = [
  "gorca-ingress",
  "gorca-model",
  "gorca-rt",
+ "libc",
  "serde",
  "serde_json",
  "smallvec",

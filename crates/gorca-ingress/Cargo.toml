@@ -18,3 +18,5 @@ workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true }
+# CPU-time helper shared by every latency-bound test (cargo allows this dev-dependency cycle).
+gorca-testkit = { workspace = true }
