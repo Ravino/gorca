@@ -1,0 +1,13 @@
+date: 2026-10-13T15:14:42+03:00
+kernel: 7.1.8+deb13-rt-amd64
+cpus: 16
+cpu_model: model name	: Intel(R) Core(TM) Ultra 9 285H
+governor: powersave
+loadavg_start: 11.09 12.49 11.39 3/4277 3645013
+rustc: rustc 1.99.0 (b940084d7 2026-09-28)
+timer_overhead_ns (Instant pair): 23.7
+reps: 3  secs/cell: 2  readers: 4
+sizes: [1000, 10000, 100000, 1000000]
+rates: ["0", "1000", "10000", "50000", "max"]
+stores: ["papaya", "papaya-pin", "scc-map", "scc-index", "left-right", "arcswap-sharded", "dashmap"]
+loadavg_end: 18.01 18.04 15.63 8/4440 3710644
