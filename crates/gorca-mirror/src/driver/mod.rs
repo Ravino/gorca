@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use gorca_model::{AppId, NodeKey, SnapshotBatch};
+use gorca_model::{AppId, NodeKey, NodeSnapshot, SnapshotBatch};
 use gorca_rt::BudgetClass;
 
 use crate::fill::{
@@ -29,6 +29,10 @@ mod tests;
 pub const TICK_INTERVAL: Duration = Duration::from_millis(50);
 /// A queued Prefetch/Background request older than this is dropped unsent.
 const QUEUE_EXPIRY: Duration = Duration::from_millis(1_000);
+/// Nodes applied to the mirror per slice (MA-6: one slice stays under 250 us on the app actor).
+/// A bigger reply (a dump) is applied slice by slice from `poll_timers`, so the actor keeps
+/// serving its Reader and its ingress in between.
+pub const APPLY_SLICE: usize = 128;
 /// Refusal notices delivered to the policy per top-level call; a policy that reacts to a refusal
 /// with the same request cannot loop.
 const MAX_NOTICES: usize = 64;
@@ -190,6 +194,41 @@ impl Bucket {
     }
 }
 
+/// What the policy is told once a reply has been applied completely.
+#[derive(Debug)]
+struct ApplyDone {
+    id: FillReqId,
+    op: FillOp,
+    keys: Vec<NodeKey>,
+    nodes: usize,
+}
+
+/// The rest of a big reply, applied slice by slice.
+#[derive(Debug)]
+struct PendingApply {
+    origin: ApplyOrigin,
+    rest: VecDeque<Arc<NodeSnapshot>>,
+    truncated: bool,
+    outcome: ApplyOutcome,
+    notify: Option<ApplyDone>,
+}
+
+enum Sliced {
+    Done(ApplyOutcome, Option<ApplyDone>),
+    Deferred(ApplyOutcome),
+}
+
+fn add_outcome(a: &mut ApplyOutcome, b: &ApplyOutcome) {
+    a.applied += b.applied;
+    a.kept_stale += b.kept_stale;
+    a.dropped_tombstoned += b.dropped_tombstoned;
+    a.dropped_foreign += b.dropped_foreign;
+    a.superseded += b.superseded;
+    a.revived += b.revived;
+    a.evicted += b.evicted;
+    a.truncated |= b.truncated;
+}
+
 #[derive(Debug)]
 struct Flight {
     op: FillOp,
@@ -247,6 +286,7 @@ pub struct FillDriver {
     last_dump: Option<Instant>,
     wake_at: Option<Instant>,
     last_tick: Option<Instant>,
+    pending: VecDeque<PendingApply>,
     outbox: Vec<IssuedFill>,
     stats: FillStats,
 }
@@ -289,6 +329,7 @@ impl FillDriver {
             last_dump: None,
             wake_at: None,
             last_tick: None,
+            pending: VecDeque::new(),
             outbox: Vec::new(),
             stats: FillStats::default(),
         }
@@ -333,11 +374,14 @@ impl FillDriver {
     }
 
     pub fn has_work(&self) -> bool {
-        !self.inflight.is_empty() || !self.queue.is_empty()
+        !self.inflight.is_empty() || !self.queue.is_empty() || !self.pending.is_empty()
     }
 
     /// When the shell should call [`FillDriver::poll_timers`] next.
     pub fn next_wake(&self) -> Option<Instant> {
+        if !self.pending.is_empty() {
+            return Some(Instant::now());
+        }
         let tick = if self.has_work() {
             Some(
                 self.last_tick
@@ -401,6 +445,7 @@ impl FillDriver {
 
     /// Run `Tick` / wake-ups that are due. Call when `next_wake()` has passed.
     pub fn poll_timers(&mut self, cx: &DriverCx<'_>, writer: &mut MirrorWriter) {
+        self.run_pending(cx, writer);
         let due = self.wake_at.is_some_and(|t| t <= cx.now)
             || (self.has_work()
                 && self
@@ -697,12 +742,11 @@ impl FillDriver {
         self.active_ops.remove(&flight.op);
         let slot = slot_index(flight.class);
         self.n_inflight[slot] = self.n_inflight[slot].saturating_sub(1);
-        let mut keys: Vec<NodeKey> = Vec::new();
-        let mut nodes = 0usize;
         let (report, result) = match reply {
             FillReply::Ok(mut batch) => {
                 Self::cap_batch(&flight.op, &mut batch);
-                nodes = batch.nodes.len();
+                let nodes = batch.nodes.len();
+                let mut keys: Vec<NodeKey> = Vec::new();
                 if nodes <= self.limits.max_subtree_nodes as usize {
                     keys.extend(batch.nodes.iter().map(|n| n.key));
                 }
@@ -712,20 +756,35 @@ impl FillDriver {
                 } else {
                     ApplyOrigin::Reply { issued_at }
                 };
-                let outcome = writer.apply(batch, origin);
-                self.account(&outcome);
                 self.stats.replies_ok += 1;
                 if implausible && self.dump_complete {
                     self.dump_complete = false;
                     self.stats.dump_flag_cleared += 1;
                 }
-                (
-                    ReplyReport {
-                        health: HealthSignal::Success,
-                        outcome: Some(outcome),
-                    },
-                    None,
-                )
+                let notify = (!flight.cancelled).then(|| ApplyDone {
+                    id,
+                    op: flight.op.clone(),
+                    keys,
+                    nodes,
+                });
+                let report = |o| ReplyReport {
+                    health: HealthSignal::Success,
+                    outcome: Some(o),
+                };
+                match self.apply_sliced(writer, origin, batch, notify) {
+                    Sliced::Done(outcome, done) => {
+                        if let Some(done) = done {
+                            self.deliver_applied(cx, writer, &done, outcome);
+                        }
+                        self.start_queued(cx, writer);
+                        return report(outcome);
+                    }
+                    Sliced::Deferred(first) => {
+                        // The policy hears of it when the last slice is in.
+                        self.start_queued(cx, writer);
+                        return report(first);
+                    }
+                }
             }
             FillReply::Err(e) => {
                 self.stats.replies_err += 1;
@@ -759,18 +818,12 @@ impl FillDriver {
             }
         };
         if !flight.cancelled && !matches!(cx.health, HealthView::Gone) {
-            let outcome = report.outcome.unwrap_or_default();
             let fr = match result {
-                None => FillResult::Applied {
-                    keys: &keys,
-                    nodes,
-                    outcome,
-                },
                 Some(FillResultKind::Gone) => FillResult::Gone,
                 Some(FillResultKind::Unresolved) => FillResult::Unresolved,
                 Some(FillResultKind::Timeout) => FillResult::Timeout,
                 Some(FillResultKind::NotSupported) => FillResult::NotSupported,
-                Some(FillResultKind::Failed) => FillResult::Failed,
+                Some(FillResultKind::Failed) | None => FillResult::Failed,
                 Some(FillResultKind::Refused(r)) => FillResult::Refused(r),
             };
             let mut notices = VecDeque::new();
@@ -787,6 +840,112 @@ impl FillDriver {
         }
         self.start_queued(cx, writer);
         report
+    }
+
+    /// Apply `nodes` in slices of [`APPLY_SLICE`]: the first now, the rest from `poll_timers`.
+    fn apply_sliced(
+        &mut self,
+        writer: &mut MirrorWriter,
+        origin: ApplyOrigin,
+        batch: SnapshotBatch,
+        notify: Option<ApplyDone>,
+    ) -> Sliced {
+        let SnapshotBatch { nodes, truncated } = batch;
+        if nodes.len() <= APPLY_SLICE {
+            let o = writer.apply(SnapshotBatch { nodes, truncated }, origin);
+            self.account(&o);
+            return Sliced::Done(o, notify);
+        }
+        let mut rest: VecDeque<Arc<NodeSnapshot>> = nodes.into();
+        let head: Vec<_> = rest.drain(..APPLY_SLICE).collect();
+        let o = writer.apply(
+            SnapshotBatch {
+                nodes: head,
+                truncated: false,
+            },
+            origin,
+        );
+        self.account(&o);
+        self.pending.push_back(PendingApply {
+            origin,
+            rest,
+            truncated,
+            outcome: o,
+            notify,
+        });
+        Sliced::Deferred(o)
+    }
+
+    /// A connector push (`AppControl::Snapshot`): applied in slices like any big reply.
+    pub fn apply_push(&mut self, writer: &mut MirrorWriter, batch: SnapshotBatch) {
+        let _ = self.apply_sliced(writer, ApplyOrigin::Push, batch, None);
+    }
+
+    /// Apply one more slice of the oldest big reply; tell the policy when it is complete.
+    fn run_pending(&mut self, cx: &DriverCx<'_>, writer: &mut MirrorWriter) {
+        let Some(p) = self.pending.front_mut() else {
+            return;
+        };
+        let n = p.rest.len().min(APPLY_SLICE);
+        let nodes: Vec<_> = p.rest.drain(..n).collect();
+        let last = p.rest.is_empty();
+        let o = writer.apply(
+            SnapshotBatch {
+                nodes,
+                truncated: last && p.truncated,
+            },
+            p.origin,
+        );
+        add_outcome(&mut p.outcome, &o);
+        if !last {
+            self.account(&o);
+            return;
+        }
+        let Some(done) = self.pending.pop_front() else {
+            return;
+        };
+        self.account(&o);
+        if let Some(n) = done.notify {
+            self.deliver_applied(cx, writer, &n, done.outcome);
+        }
+    }
+
+    fn deliver_applied(
+        &mut self,
+        cx: &DriverCx<'_>,
+        writer: &mut MirrorWriter,
+        done: &ApplyDone,
+        outcome: ApplyOutcome,
+    ) {
+        if matches!(cx.health, HealthView::Gone) {
+            return;
+        }
+        let mut notices = VecDeque::new();
+        let effects = self.step(
+            cx,
+            FillInput::Reply {
+                id: done.id,
+                op: &done.op,
+                result: FillResult::Applied {
+                    keys: &done.keys,
+                    nodes: done.nodes,
+                    outcome,
+                },
+            },
+        );
+        self.apply_effects(cx, writer, effects, &mut notices);
+        self.deliver_notices(cx, writer, &mut notices);
+    }
+
+    /// The app is gone: forget everything in flight, queued or half applied.
+    pub fn on_gone(&mut self) {
+        self.inflight.clear();
+        self.active_ops.clear();
+        self.n_inflight = [0; 3];
+        self.queue.clear();
+        self.pending.clear();
+        self.outbox.clear();
+        self.wake_at = None;
     }
 
     /// The Reader's own fetch (the shared cold path) finished: apply its reply to the mirror.

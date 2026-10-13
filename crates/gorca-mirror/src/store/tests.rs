@@ -503,3 +503,29 @@ fn revision_bumps_per_batch() {
         assert!(r.get(key(n)).hit().is_some());
     }
 }
+
+#[test]
+#[allow(clippy::disallowed_methods)] // aging is wall-clock based: the test must really wait
+fn a_fresh_node_ages_on_read_after_the_ttl_and_a_stale_one_does_not() {
+    let (mut w, r) = mirror();
+    w.apply(batch(vec![node(1, "a"), node(2, "b")]), ApplyOrigin::Push);
+    assert!(!r.view(key(1)).hit().unwrap().aged);
+    w.set_ttl(Duration::from_millis(20));
+    std::thread::sleep(Duration::from_millis(40));
+    let v = r.view(key(1)).hit().unwrap();
+    assert!(v.aged, "no timer: evaluated on read");
+    assert!(
+        v.stale.is_empty(),
+        "aged is not stale: it may still be presented"
+    );
+    // Zero disables aging; a refresh resets it.
+    w.set_ttl(Duration::ZERO);
+    assert!(!r.view(key(1)).hit().unwrap().aged);
+    w.set_ttl(Duration::from_millis(20));
+    w.apply(batch(vec![node(1, "a2")]), reply_at(&w));
+    assert!(!r.view(key(1)).hit().unwrap().aged);
+    // Stale nodes are not "aged": they are already marked.
+    w.invalidate(key(2), PropMask::NAME, Instant::now());
+    std::thread::sleep(Duration::from_millis(40));
+    assert!(!r.view(key(2)).hit().unwrap().aged);
+}

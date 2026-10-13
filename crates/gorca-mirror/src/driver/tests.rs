@@ -580,3 +580,113 @@ fn the_null_policy_issues_nothing() {
     assert_eq!(d.policy_name(), "r0");
     assert!(d.next_wake().is_none());
 }
+
+#[test]
+fn a_big_reply_is_applied_slice_by_slice_and_the_policy_hears_at_the_end() {
+    let dump = FillEffect::Request {
+        op: FillOp::CacheDump { max_nodes: 5_000 },
+        class: BudgetClass::Background,
+    };
+    let mut r = rig(vec![dump]);
+    r.driver.set_dump_complete(true);
+    let f = r.tick(HealthView::Healthy).remove(0);
+    let total = APPLY_SLICE * 3 + 10;
+    let nodes: Vec<_> = (0..total as u64).map(node).collect();
+    r.reply(&f, FillReply::Ok(SnapshotBatch::new(nodes)));
+    assert_eq!(
+        r.reader.stats().live,
+        APPLY_SLICE as u64,
+        "only the first slice is in"
+    );
+    assert!(r.log().is_empty(), "the policy is told when it is complete");
+    assert!(r.driver.has_work());
+    assert!(r.driver.next_wake().is_some());
+    let mut calls = 0;
+    while r.driver.has_work() {
+        let cx = DriverCx {
+            now: r.now,
+            health: HealthView::Healthy,
+            mirror: &r.reader,
+            focus: None,
+        };
+        r.driver.poll_timers(&cx, &mut r.writer);
+        calls += 1;
+        assert!(calls < 20);
+    }
+    assert_eq!(r.reader.stats().live, total as u64);
+    assert_eq!(r.log(), [format!("applied:{total}")]);
+    assert_eq!(r.driver.stats().nodes_applied, total as u64);
+}
+
+#[test]
+fn a_node_removed_while_its_slice_waits_is_not_revived() {
+    let dump = FillEffect::Request {
+        op: FillOp::CacheDump { max_nodes: 5_000 },
+        class: BudgetClass::Background,
+    };
+    let mut r = rig(vec![dump]);
+    r.driver.set_dump_complete(true);
+    let f = r.tick(HealthView::Healthy).remove(0);
+    let total = APPLY_SLICE * 2;
+    let nodes: Vec<_> = (0..total as u64).map(node).collect();
+    r.reply(&f, FillReply::Ok(SnapshotBatch::new(nodes)));
+    // Node 200 sits in the second slice; it is removed before that slice is applied.
+    r.writer
+        .tombstone(key(200), r.now, crate::store::RemovalCause::Event);
+    let cx = DriverCx {
+        now: r.now,
+        health: HealthView::Healthy,
+        mirror: &r.reader,
+        focus: None,
+    };
+    r.driver.poll_timers(&cx, &mut r.writer);
+    assert_eq!(r.reader.get(key(200)), gorca_model::Lookup::Gone);
+    assert_eq!(r.reader.stats().live, total as u64 - 1);
+}
+
+#[test]
+fn a_policy_over_its_state_budget_is_counted() {
+    struct Hog;
+    impl FillPolicy for Hog {
+        fn name(&self) -> &'static str {
+            "hog"
+        }
+        fn step(&mut self, _: &FillCtx<'_>, _: FillInput<'_>, _: &mut FillEffects) {}
+        fn memory_bytes(&self) -> usize {
+            crate::limits::FILL_STATE_MAX_BYTES + 1
+        }
+    }
+    let (mut w, rd) = mirror_for(app(), None);
+    let mut d = FillDriver::new(
+        app(),
+        AppClass::Unknown,
+        Box::new(Hog),
+        FillLimits::default(),
+        None,
+    );
+    let cx = DriverCx {
+        now: Instant::now(),
+        health: HealthView::Healthy,
+        mirror: &rd,
+        focus: None,
+    };
+    d.on_input(&cx, &mut w, FillInput::Ready);
+    assert_eq!(d.stats().policy_over_budget, 1);
+}
+
+#[test]
+fn gone_forgets_everything_in_flight() {
+    let mut r = rig(vec![
+        fetch(1, BudgetClass::Prefetch),
+        fetch(2, BudgetClass::Prefetch),
+    ]);
+    let f = r.tick(HealthView::Healthy);
+    assert_eq!(f.len(), 2);
+    r.driver.on_gone();
+    assert_eq!(r.driver.in_flight(), 0);
+    assert!(!r.driver.has_work());
+    // A late reply of a forgotten request is ignored.
+    let rep = r.reply(&f[0], FillReply::Ok(SnapshotBatch::new(vec![node(1)])));
+    assert_eq!(rep.outcome, None);
+    assert!(r.reader.get(key(1)).hit().is_none());
+}

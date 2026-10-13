@@ -540,12 +540,13 @@ impl AppActor {
             };
             match next {
                 Ok(AppControl::Snapshot(batch)) => {
-                    self.writer.apply(batch, gorca_mirror::ApplyOrigin::Push);
+                    self.driver.apply_push(&mut self.writer, batch);
                 }
                 Ok(AppControl::Lifecycle(AppLifecycle::Gone)) => {
                     self.on_health(HealthMsg::OwnerVanished, now);
                     self.send_focus(FocusLaneMsg::AppGone(self.app));
                     // 5.1: the whole mirror and its tombstones are released.
+                    self.driver.on_gone();
                     self.writer.retire_all();
                     route.gone = true;
                 }
