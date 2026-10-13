@@ -1,0 +1,4 @@
+main r1 exit 1
+pw r1 exit 0
+main r2 exit 1
+pw r2 exit 0
