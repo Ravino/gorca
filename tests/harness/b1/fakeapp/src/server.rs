@@ -333,7 +333,11 @@ impl Core {
         if job.kind != ConnKind::Peer
             && let Some(s) = hdr.sender()
         {
-            self.callers.insert(s.to_string());
+            // The registry's `Properties.Set` of `Application.Id` on the root while embedding is
+            // not a reader's connection; every other caller is.
+            if member != "Set" {
+                self.callers.insert(s.to_string());
+            }
         }
         if self.world.below_document(&path) {
             self.stats.calls_below_document += 1;
