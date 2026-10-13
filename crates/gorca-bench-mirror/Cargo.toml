@@ -1,0 +1,22 @@
+[package]
+name = "gorca-bench-mirror"
+description = "MB-1 microbenchmark: concurrent store candidates for the native accessible-object mirror (MS-3)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+arc-swap = { workspace = true }
+papaya = "0.2"
+scc = "3"
+left-right = "0.11"
+dashmap = "6"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "mb1"
+path = "src/main.rs"
