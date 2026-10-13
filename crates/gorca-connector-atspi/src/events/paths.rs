@@ -13,6 +13,11 @@
 //!   evicted (preemption of the biggest holder), never a newcomer: a new application always
 //!   gets room, and a hostile process only ever loses its own entries.
 //! - One path is at most [`MAX_PATH_BYTES`] long.
+//! - Every owner's **newest** path is exempt from eviction (quota clears and cap preemption
+//!   keep it): the entry the reader most likely needs next is never the one thrown away.
+//! - The byte cap tracks real memory: a cleared bucket gives its allocation back (the map is
+//!   replaced, not `clear`ed, because `HashMap::clear` keeps capacity), buckets of owners that
+//!   no bound application references are dropped, and `forget_app` shrinks what it leaves.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -52,6 +57,8 @@ impl Owner {
 struct Bucket {
     map: HashMap<(AppId, LocalId), Arc<str>>,
     bytes: usize,
+    /// The most recently recorded entry; survives every eviction.
+    newest: Option<(AppId, LocalId)>,
 }
 
 fn cost(path: &str) -> usize {
@@ -66,18 +73,41 @@ struct Inner {
 }
 
 impl Inner {
+    /// Evict everything of `owner` except its newest entry, handing the memory back. An owner
+    /// no bound application refers to loses its bucket altogether.
     fn clear_bucket(&mut self, owner: Owner) {
-        if let Some(b) = self.owners.get_mut(&owner) {
-            self.total_bytes = self.total_bytes.saturating_sub(b.bytes);
-            b.map.clear();
-            b.bytes = 0;
+        let referenced = self.app_owner.values().any(|o| *o == owner);
+        let Some(b) = self.owners.get_mut(&owner) else {
+            return;
+        };
+        let kept = b
+            .newest
+            .and_then(|k| b.map.remove(&k).map(|path| (k, path)));
+        self.total_bytes = self.total_bytes.saturating_sub(b.bytes);
+        // A fresh map: `HashMap::clear` would keep the whole table allocated (RSS gap).
+        b.map = HashMap::new();
+        b.bytes = 0;
+        b.newest = None;
+        if let Some((k, path)) = kept {
+            b.bytes = cost(&path);
+            self.total_bytes += b.bytes;
+            b.map.insert(k, path);
+            b.newest = Some(k);
+        } else if !referenced {
+            self.owners.remove(&owner);
         }
     }
 
-    /// Evict the largest bucket until the table fits its cap again.
+    /// Evict the largest evictable bucket until the table fits its cap again. A bucket holding
+    /// nothing but its newest entry has nothing left to give.
     fn enforce_cap(&mut self, cap: usize) {
         while self.total_bytes > cap {
-            let Some((&owner, _)) = self.owners.iter().max_by_key(|(_, b)| b.bytes) else {
+            let Some((&owner, _)) = self
+                .owners
+                .iter()
+                .filter(|(_, b)| b.map.len() > 1)
+                .max_by_key(|(_, b)| b.bytes)
+            else {
                 break;
             };
             let before = self.total_bytes;
@@ -141,6 +171,7 @@ impl PathTable {
         let key = (node.app, node.local);
         let bucket = g.owners.entry(owner).or_default();
         if bucket.map.get(&key).is_some_and(|p| &**p == path) {
+            bucket.newest = Some(key);
             return;
         }
         let replacing = bucket.map.contains_key(&key);
@@ -149,6 +180,7 @@ impl PathTable {
         }
         let bucket = g.owners.entry(owner).or_default();
         let old = bucket.map.insert(key, Arc::from(path));
+        bucket.newest = Some(key);
         let freed = old.map_or(0, |p| cost(&p));
         bucket.bytes = bucket.bytes.saturating_sub(freed) + cost(path);
         g.total_bytes = g.total_bytes.saturating_sub(freed) + cost(path);
@@ -184,6 +216,13 @@ impl PathTable {
             });
             b.bytes = b.bytes.saturating_sub(freed);
             empty = b.map.is_empty();
+            if b.newest.is_some_and(|(a, _)| a == app) {
+                b.newest = None;
+            }
+            // Retain keeps the table's capacity; hand back what the survivors do not need.
+            if b.map.capacity() > 4 * b.map.len().max(4) {
+                b.map.shrink_to_fit();
+            }
         }
         g.total_bytes = g.total_bytes.saturating_sub(freed);
         if empty && !g.app_owner.values().any(|o| *o == owner) {
@@ -334,5 +373,52 @@ mod tests {
         assert_eq!(t.get(key(2, 1)).as_deref(), Some("/b"));
         t.forget_app(app(2));
         assert_eq!((t.len(), t.bytes()), (0, 0));
+    }
+
+    #[test]
+    fn an_owners_newest_path_survives_quota_clears() {
+        let t = PathTable::new();
+        t.bind_app(app(1), Owner::Pid(10));
+        let n = MAX_PATHS_PER_OWNER as u64;
+        for i in 0..n {
+            t.insert(key(1, i), "/x");
+        }
+        // The next insert clears the bucket: the previous newest (n - 1) must survive it.
+        t.insert(key(1, n), "/y");
+        assert_eq!(t.get(key(1, n - 1)).as_deref(), Some("/x"));
+        assert_eq!(t.get(key(1, n)).as_deref(), Some("/y"));
+        assert_eq!(t.get(key(1, 0)), None);
+        assert_eq!(t.owner_len(app(1)), 2);
+    }
+
+    #[test]
+    fn cap_preemption_keeps_every_owners_newest_path() {
+        let t = PathTable::with_byte_cap(100 * 1024);
+        for pid in 0..64u32 {
+            t.bind_app(app(pid), Owner::Pid(pid));
+            for i in 0..512u64 {
+                t.insert(key(pid, i), "/some/object/path/of/ordinary/length");
+            }
+        }
+        assert!(t.bytes() <= 100 * 1024, "{} bytes", t.bytes());
+        // Owners that were preempted still have the entry they recorded last.
+        let kept = (0..64u32).filter(|p| t.get(key(*p, 511)).is_some()).count();
+        assert_eq!(kept, 64, "every owner keeps its newest path");
+    }
+
+    #[test]
+    fn a_cleared_bucket_of_a_gone_owner_is_dropped_and_survivors_shrink() {
+        let t = PathTable::new();
+        t.bind_app(app(1), Owner::Pid(1));
+        t.bind_app(app(2), Owner::Pid(1));
+        for i in 0..1000u64 {
+            t.insert(key(1, i), "/x");
+        }
+        t.insert(key(2, 1), "/keep");
+        t.forget_app(app(1));
+        let g = t.lock();
+        let b = &g.owners[&Owner::Pid(1)];
+        assert_eq!(b.map.len(), 1);
+        assert!(b.map.capacity() < 64, "capacity {}", b.map.capacity());
     }
 }
