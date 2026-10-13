@@ -124,17 +124,18 @@ impl Options {
                 .filter(|s| !s.is_empty())
                 .map(PathBuf::from);
         }
+        if get("GORCA_IMPERSONATE_ORCA").is_some_and(|v| v == "1") {
+            o.impersonate_orca = true;
+        }
         if get("GORCA_SHADOW").is_some_and(|v| v == "1") {
             o.shadow = true;
         }
+        // Last, so nothing above can switch it back on: shadow mode never impersonates Orca,
+        // never grabs keys and never writes the a11y status.
         if o.shadow {
-            // Never impersonate, never grab keys, never write the a11y status.
             o.impersonate_orca = false;
             o.no_keyboard = true;
             o.no_enable = true;
-        }
-        if get("GORCA_IMPERSONATE_ORCA").is_some_and(|v| v == "1") {
-            o.impersonate_orca = true;
         }
         // Defaults for what is still open. The daemon's `main` is the only place that reads the
         // environment; everything below this point receives resolved values.

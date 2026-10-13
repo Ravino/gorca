@@ -221,12 +221,8 @@ fn a_focus_storm_ends_with_only_the_last_focus_audible() {
             "the last focus is the last thing said: {:?}",
             &spoken[spoken.len().saturating_sub(5)..]
         );
-        // Revisits are served from the mirror and start speaking at once (B-1), so a SPEAK
-        // reaches the server even when the next focus supersedes it a millisecond later; a
-        // storm still must not be spoken in full. (Before the mirror was filled every focus
-        // waited for a fetch, which coalesced far more, hence the old bound of n / 2.)
         assert!(
-            spoken.len() < n * 4 / 5,
+            spoken.len() < n / 2,
             "{} utterances for {n} focus events: events were not coalesced or superseded",
             spoken.len()
         );

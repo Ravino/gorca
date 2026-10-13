@@ -23,7 +23,10 @@
 //! Allowed dependencies: everything in the workspace, since this crate is the wiring point.
 
 mod cli;
+mod probe;
 mod wire;
+
+pub use probe::{DaemonProbe, ProbeRead};
 
 use std::io::IsTerminal;
 use std::sync::Arc;
@@ -303,6 +306,24 @@ pub async fn run(opts: Options, shutdown: CancellationToken) -> Result<()> {
 
 /// The daemon without signal handlers (tests run several in one process).
 pub async fn run_with(opts: Options, shutdown: CancellationToken) -> Result<()> {
+    run_inner(opts, shutdown, None).await
+}
+
+/// [`run_with`] that hands a [`DaemonProbe`] to `on_ready` once the daemon is wired (the
+/// test-only debug accessor of the B-1 conformance suite).
+pub async fn run_with_probe(
+    opts: Options,
+    shutdown: CancellationToken,
+    on_ready: impl FnOnce(DaemonProbe) + Send + 'static,
+) -> Result<()> {
+    run_inner(opts, shutdown, Some(Box::new(on_ready))).await
+}
+
+async fn run_inner(
+    opts: Options,
+    shutdown: CancellationToken,
+    on_ready: Option<Box<dyn FnOnce(DaemonProbe) + Send>>,
+) -> Result<()> {
     let mut tasks = TaskSet::new(shutdown.clone());
     let mut core = Core::new(CoreConfig {
         shutdown_grace: SHUTDOWN_GRACE,
@@ -334,6 +355,9 @@ pub async fn run_with(opts: Options, shutdown: CancellationToken) -> Result<()> 
     };
     let atspi_state = AtspiState::default();
     let core = wire::wire_present_log(core, &opts, &atspi_state);
+    if let Some(f) = on_ready {
+        f(DaemonProbe::new(core.mirrors(), atspi_state.clone()));
+    }
     wire::wire_atspi(&mut tasks, &opts, focused, registry, atspi_state, &shutdown);
 
     tracing::info!(
