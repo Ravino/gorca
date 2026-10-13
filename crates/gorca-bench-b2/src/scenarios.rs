@@ -637,6 +637,7 @@ struct F3 {
     sender_err: String,
     read: u64,
     reader_eof: bool,
+    reader_why: String,
 }
 
 /// One reader subscribes to every AT-SPI event; a sender floods `push_bytes`. The reader either
@@ -649,7 +650,15 @@ fn f3_run(kind: BusKind, push_bytes: u64, active: bool) -> Result<F3> {
     }
     let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let counted = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(rd.leftover.len() as u64));
+    // Set by the active reader when the broker closed its connection, so the paced sender stops.
+    let dead = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    // Whole D-Bus messages the reader has received: the active sender paces itself on this.
+    let msgs = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let why = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
     let reader = {
+        let dead = std::sync::Arc::clone(&dead);
+        let why = std::sync::Arc::clone(&why);
+        let msgs = std::sync::Arc::clone(&msgs);
         let (stop, counted) = (
             std::sync::Arc::clone(&stop),
             std::sync::Arc::clone(&counted),
@@ -660,6 +669,7 @@ fn f3_run(kind: BusKind, push_bytes: u64, active: bool) -> Result<F3> {
             .name("hx-f3-reader".to_owned())
             .spawn(move || {
                 let mut buf = vec![0u8; 1 << 20];
+                let mut frames = Vec::new();
                 let mut eof = false;
                 while !stop.load(std::sync::atomic::Ordering::Acquire) || !active {
                     if !active && !stop.load(std::sync::atomic::Ordering::Acquire) {
@@ -669,10 +679,24 @@ fn f3_run(kind: BusKind, push_bytes: u64, active: bool) -> Result<F3> {
                     match stream.read(&mut buf) {
                         Ok(0) => {
                             eof = true;
+                            if let Ok(mut w) = why.lock() {
+                                "read returned 0 (peer closed)".clone_into(&mut w);
+                            }
                             break;
                         }
                         Ok(n) => {
                             counted.fetch_add(n as u64, std::sync::atomic::Ordering::Relaxed);
+                            frames.extend_from_slice(&buf[..n]);
+                            let (mut at, mut whole) = (0usize, 0u64);
+                            while let Some(len) = crate::wire::peek_len(&frames[at..]) {
+                                if frames.len() - at < len {
+                                    break;
+                                }
+                                at += len;
+                                whole += 1;
+                            }
+                            frames.drain(..at);
+                            msgs.fetch_add(whole, std::sync::atomic::Ordering::Release);
                         }
                         Err(e)
                             if matches!(
@@ -684,11 +708,17 @@ fn f3_run(kind: BusKind, push_bytes: u64, active: bool) -> Result<F3> {
                                 break;
                             }
                         }
-                        Err(_) => {
+                        Err(e) => {
                             eof = true;
+                            if let Ok(mut w) = why.lock() {
+                                *w = format!("read error {e}");
+                            }
                             break;
                         }
                     }
+                }
+                if eof {
+                    dead.store(true, std::sync::atomic::Ordering::Release);
                 }
                 eof
             })?
@@ -698,9 +728,40 @@ fn f3_run(kind: BusKind, push_bytes: u64, active: bool) -> Result<F3> {
     let mut sc = crate::workload::Scratch::default();
     let mut g = crate::workload::Gen::new(1, Mix::Fakeapp, 100);
     let mut out = Vec::new();
-    let (mut sent, mut serial, mut sender_failed) = (0u64, 1u32, false);
+    let (mut sent, mut sent_msgs, mut serial, mut sender_failed) = (0u64, 0u64, 1u32, false);
     let mut sender_err = String::new();
     while sent < push_bytes {
+        if active {
+            // Root cause of the old flake: an unpaced sender outruns an active reader whenever the
+            // reader thread is descheduled for a few ms on a loaded host. dbus-broker's effective
+            // per-peer queue limit is small (a non-reading peer is cut off after about 1.1 MiB
+            // delivered, measured by the "slow" arm below, not the configured pool of 8 MiB), so a
+            // reader that falls ~1 MiB behind is disconnected: a false "slow reader" that depends
+            // on host load, not on the broker. The active reader's pace is therefore explicit:
+            // the sender keeps at most ACTIVE_WINDOW bytes in flight, 4x below the measured limit,
+            // and a stalled reader only stalls the sender.
+            //
+            // In-flight is counted in whole messages, not bytes: the broker adds a sender header
+            // to every delivered signal (+7.5% bytes), so `sent - received` in bytes drifts and
+            // understates the backlog by ~1 MiB after 12 MiB. Messages are exact; their delivered
+            // size is bounded by the average sent size plus 64 bytes of broker-added header.
+            // The wait is bounded: a reader that never catches up ends the run through the `dead`
+            // flag or the deadline.
+            const ACTIVE_WINDOW: u64 = 256 * 1024;
+            let avg = (sent / sent_msgs.max(1)).max(1) + 64;
+            let allowed = (ACTIVE_WINDOW / avg).max(256);
+            let deadline = std::time::Instant::now() + Duration::from_secs(60);
+            while sent_msgs.saturating_sub(msgs.load(std::sync::atomic::Ordering::Acquire))
+                > allowed
+                && !dead.load(std::sync::atomic::Ordering::Acquire)
+                && std::time::Instant::now() < deadline
+            {
+                std::thread::sleep(Duration::from_micros(200));
+            }
+            if dead.load(std::sync::atomic::Ordering::Acquire) {
+                break;
+            }
+        }
         out.clear();
         for _ in 0..256 {
             serial += 1;
@@ -712,6 +773,7 @@ fn f3_run(kind: BusKind, push_bytes: u64, active: bool) -> Result<F3> {
             break;
         }
         sent += out.len() as u64;
+        sent_msgs += 256;
     }
     std::thread::sleep(Duration::from_millis(300));
     let mut reader_eof = false;
@@ -755,6 +817,7 @@ fn f3_run(kind: BusKind, push_bytes: u64, active: bool) -> Result<F3> {
         sender_err,
         read,
         reader_eof,
+        reader_why: why.lock().map(|w| w.clone()).unwrap_or_default(),
     })
 }
 
@@ -773,12 +836,13 @@ pub fn fixture(ctx: &Ctx) -> Result<Vec<Row>> {
                     let lost = r.sent.saturating_sub(r.read);
                     rows.push(
                         Row::info(&format!("F3.{tag}_reader_eof"), "fixture", label, "1=disconnected", &[f64::from(u8::from(r.reader_eof))]).note(format!(
-                            "sent {:.1} MiB, reader got {:.1} MiB (missing {:.1} MiB), sender_failed={} {}",
+                            "sent {:.1} MiB, reader got {:.1} MiB (missing {:.1} MiB), sender_failed={} {} reader: {}",
                             r.sent as f64 / 1048576.0,
                             r.read as f64 / 1048576.0,
                             lost as f64 / 1048576.0,
                             r.sender_failed,
-                            r.sender_err
+                            r.sender_err,
+                            r.reader_why
                         )),
                     );
                 }

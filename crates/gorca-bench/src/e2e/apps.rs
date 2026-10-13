@@ -194,6 +194,47 @@ impl FakeApp {
     }
 }
 
+/// Mutter's verdict on one emulated key event (`fake_mutter.py` `key` reply).
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct KeyReply {
+    pub t_emit_ns: u64,
+    /// Clients a `KeyEvent` was sent to.
+    pub notified: u32,
+    /// A client grabbed it: the app never sees it.
+    pub consumed: bool,
+}
+
+impl KeyReply {
+    pub fn parse(line: &str) -> Self {
+        Self {
+            t_emit_ns: json_num(line, "t_emit_ns").unwrap_or(0.0) as u64,
+            notified: json_num(line, "notified").unwrap_or(0.0) as u32,
+            consumed: line.contains("\"consumed\":true"),
+        }
+    }
+}
+
+/// Parse `"keys":[[kc,sym,released],...]` of an `app_log` reply.
+pub fn parse_app_log(line: &str) -> Vec<(u16, u32, bool)> {
+    let Some(i) = line.find("\"keys\":[") else {
+        return Vec::new();
+    };
+    let body = &line[i + 8..];
+    let Some(end) = body.find("]]") else {
+        return Vec::new(); // "[]" or malformed
+    };
+    body[1..end]
+        .split("],[")
+        .filter_map(|item| {
+            let mut f = item.trim_matches(['[', ']']).split(',');
+            let kc = f.next()?.parse::<u16>().ok()?;
+            let sym = f.next()?.parse::<u32>().ok()?;
+            let rel = f.next()? == "true";
+            Some((kc, sym, rel))
+        })
+        .collect()
+}
+
 /// The emulated Mutter keyboard monitor on the private session bus.
 #[derive(Debug)]
 pub struct FakeMutter {
@@ -217,6 +258,46 @@ impl FakeMutter {
             json_num(&r, "t_emit_ns").unwrap_or(0.0) as u64,
             json_num(&r, "sent").unwrap_or(0.0) as u32,
         ))
+    }
+
+    /// One key event with full control of state and event time (`time_ms` is what Mutter's
+    /// first-click rule sees). The reply carries Mutter's verdict: was it notified to a client,
+    /// consumed (never reaches the app) or passed to the app.
+    pub fn key_ex(
+        &mut self,
+        keycode: u16,
+        keysym: u32,
+        state: u32,
+        released: bool,
+        time_ms: u64,
+    ) -> Result<KeyReply> {
+        let r = self.proc.request(
+            "key",
+            &format!(
+                "\"keycode\":{keycode},\"keysym\":{keysym},\"unichar\":0,\"state\":{state},\"released\":{released},\"time_ms\":{time_ms}"
+            ),
+            Duration::from_secs(5),
+        )?;
+        Ok(KeyReply::parse(&r))
+    }
+
+    /// Keys that reached the app so far: `(keycode, keysym, released)`.
+    pub fn app_log(&mut self, clear: bool) -> Result<Vec<(u16, u32, bool)>> {
+        let r = self.proc.request(
+            "app_log",
+            &format!("\"clear\":{clear}"),
+            Duration::from_secs(20),
+        )?;
+        Ok(parse_app_log(&r))
+    }
+
+    /// Clients currently registered with the monitor (watching, grabbing or with a grab set).
+    pub fn clients(&mut self) -> u32 {
+        self.proc
+            .request("stats", "", Duration::from_secs(2))
+            .ok()
+            .and_then(|r| json_num(&r, "grabbers"))
+            .unwrap_or(0.0) as u32
     }
 
     pub fn watchers(&mut self) -> u32 {

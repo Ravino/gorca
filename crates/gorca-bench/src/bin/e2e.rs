@@ -28,6 +28,9 @@ use gorca_bench_b2::stats::{Summary, summarize};
 /// Gate thresholds (see bench/e2e/README.md for the rationale). Milliseconds unless noted.
 const L1_P99_MS: f64 = 15.0;
 const L2_P99_MS: f64 = 5.0;
+/// M1 gates (docs/plan/phase-2.md 2.1): ceilings; targets are 2 ms (K2) and 5 ms (K3).
+const K2_P99_MS: f64 = 5.0;
+const K3_P99_MS: f64 = 15.0;
 
 fn arg_value(args: &[String], name: &str) -> Option<String> {
     args.iter()
@@ -113,6 +116,8 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     ("L1" | "L1s" | "L3-10k" | "L3-50k" | "L4", "l1_ms", "p99") => Some(L1_P99_MS),
                     ("K1", "k1_ms", "p99") => Some(L1_P99_MS),
                     ("L2", "l2_ms", "p99") => Some(L2_P99_MS),
+                    ("K2", "k2_ms", "p99") => Some(K2_P99_MS),
+                    ("K3", "k3_ms", "p99") => Some(K3_P99_MS),
                     _ => None,
                 };
                 if let Some(t) = thr {
@@ -133,7 +138,15 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
             }
             let id = format!("{sid}.{metric}");
             let mut row = Row::info(&id, &sid, label, unit, vals);
-            if metric == "lost" || metric == "stale_not_cancelled" {
+            if matches!(
+                metric.as_str(),
+                "lost"
+                    | "stale_not_cancelled"
+                    | "not_consumed"
+                    | "app_lost"
+                    | "app_doubled"
+                    | "chord_leaked"
+            ) {
                 // Worst repeat, not the median: one lost focus in three runs is a failure.
                 row = row.at_most_in_every_run(0.0);
             }

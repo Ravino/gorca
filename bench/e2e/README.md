@@ -40,6 +40,20 @@ cannot touch the real session. It never signals anything it did not spawn.
 | L3-10k, L3-50k | L1 while another app (terminal-style delete/insert/caret flood) emits 10k / 50k signals/s | as L1, plus achieved storm rate, reader CPU |
 | L4 / L4c | L1 while a second app never answers any D-Bus call (L4) or answers normally (L4c control); reader runs with peer calls on (deadline 100 ms) | as L1, plus `peer_calls_hung` (proof the hang was exercised) |
 | K1 | emulated Mutter `KeyEvent` 8-16 ms apart | `k1_ms` key emit to SPEAK |
+| K2 | M1: gorca modifier + command key (zero-IPC command), idle | `k2_ms` command-key emit to SPEAK, `lost`, `not_consumed` |
+| K3 | M1: the same chord while an L3-50k storm runs | `k3_ms`, `lost`, `not_consumed`, storm rate |
+| K4 | M1: randomized mode / grab-set toggles (10k; 500 with `--quick`) interleaved with plain typing | `app_lost`, `app_doubled`, `chord_leaked` |
+
+K2-K4 (`crates/gorca-bench/src/e2e/m1.rs`) are skeletons for the M1 command layer and are
+**skipped** until it lands (`K<n>.skipped = 1`). `--reader-env GORCA_M1=1` runs them and enforces
+the gates; `--reader-env GORCA_M1_STRICT=1` makes them fail instead of skip (proves the gate is
+wired). They drive `tests/harness/fake_mutter.py`, which emulates Mutter's real grab semantics
+(exact-mask `SetKeyGrabs` matching with the NumLock/CapsLock variants, consumed vs pass-through
+keys, the a11y-modifier first-click rule, owner loss), and use its verdict (`consumed`, app
+log) as ground truth. Chord keys are placeholders until ADR-0005: `GORCA_M1_MODIFIER` (default
+Insert), `GORCA_M1_CMD_KEYSYM` (default `t`), `GORCA_M1_MODE_KEYSYM` (default `m`). Note: the
+K3 here is "modifier chord under storm"; phase-2.md 2.1 lists K3 as "where am I", which stays
+a later scenario under another id.
 
 Every scenario also reports `lost` (probes that never produced a SPEAK) and reader CPU:
 `cpu_us_per_event` is the reader's on-CPU time (all threads, `/proc/<pid>/task/*/schedstat`)
@@ -66,6 +80,8 @@ per-event cost under a storm (L3).
 | L1 under storm 10k and 50k, L4, K1 | <= 15 ms | the goal must hold under the stress the product promises to sustain; same bound as idle |
 | L2 p99 (newer focus to STOP of stale speech) | <= 5 ms | cancelling must be cheaper than starting: one write on an already open socket; leaves 3x margin over the stub baseline |
 | `lost` | == 0 | focus events are lossless-class (ADR section 6.3) |
+| K2 p99 / K3 p99 | <= 5 ms / <= 15 ms | phase-2.md 2.1 ceilings (targets 2 / 5 ms) |
+| `not_consumed`, `app_lost`, `app_doubled`, `chord_leaked` (K2-K4) | == 0 in every run | a command key that reaches the app, or a typed key lost or doubled, is a correctness failure |
 | storm rate | >= 90% of target | otherwise the stress is not what its name says |
 | `peer_calls_hung` (L4) | >= 1 | otherwise L4 is vacuous |
 
