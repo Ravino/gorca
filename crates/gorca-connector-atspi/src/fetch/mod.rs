@@ -275,6 +275,9 @@ impl AppServer {
                     info_pending = false;
                     if let Ok((toolkit, app_name)) = found {
                         announce_info(&port, &toolkit, &app_name, verified);
+                        // Identified and served: policies that fill at readiness start here
+                        // (once; a later announcement only refines the identity).
+                        let _ = port.lifecycle(AppLifecycle::Ready);
                         known = Some((toolkit, app_name));
                     }
                 }

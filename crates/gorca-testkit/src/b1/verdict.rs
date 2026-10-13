@@ -9,6 +9,8 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 
+use gorca_model::RedactKey;
+
 use super::proto::TruthLine;
 use super::sut::{Presentation, Source};
 use super::world::state;
@@ -79,8 +81,14 @@ impl TruthDb {
             return false;
         }
         if let Some(v) = self.valid(&p.app, &p.path, "value", from, to) {
+            // A secret field's value reaches the log as a keyed tag, and its truth is the tag too.
+            let redacted = p.value.as_deref().filter(|x| x.starts_with("redacted("));
             let said = p.value.as_deref().and_then(|x| x.parse::<f64>().ok());
-            if !v.iter().any(|x| x.as_f64() == said) {
+            let ok = match redacted {
+                Some(tag) => v.iter().any(|x| x.as_str() == Some(tag)),
+                None => v.iter().any(|x| x.as_f64() == said),
+            };
+            if !ok {
                 return false;
             }
         }
@@ -100,6 +108,27 @@ impl TruthDb {
                 .get(&(app.to_owned(), path.to_owned(), (*f).to_owned()))
                 .is_some_and(|tl| tl.0.iter().skip(1).any(|(s, _)| *s <= t))
         })
+    }
+}
+
+/// The key of a presentation log: its header line (`{"redaction_key":"<hex>"}`).
+pub fn redaction_key(log: &str) -> Option<RedactKey> {
+    let first = log.lines().next()?;
+    let v: Value = serde_json::from_str(first).ok()?;
+    RedactKey::from_hex(v.get("redaction_key")?.as_str()?)
+}
+
+/// Redact the secret fields of a truth log the way the daemon redacts its presentation log, so
+/// that the two still compare. Strings and numbers of a `sensitive` line become tags.
+pub fn redact_truth(lines: &mut [TruthLine], key: &RedactKey) {
+    let tag = |v: &Value| match v {
+        Value::String(s) => Value::String(key.tag(s)),
+        Value::Number(n) => Value::String(key.tag(&n.as_f64().unwrap_or(f64::NAN).to_string())),
+        other => other.clone(),
+    };
+    for l in lines.iter_mut().filter(|l| l.sensitive && !l.focus) {
+        l.old = tag(&l.old);
+        l.new = tag(&l.new);
     }
 }
 
@@ -160,6 +189,7 @@ mod tests {
             old,
             new,
             evented: true,
+            sensitive: false,
             focus: false,
         }
     }
@@ -187,6 +217,32 @@ mod tests {
             may_refine: false,
             refines,
         }
+    }
+
+    #[test]
+    fn a_secret_field_compares_through_the_same_keyed_tag_on_both_sides() {
+        let key = RedactKey::from_bytes([9; 16]);
+        let mut l = line(100, "/p", "name", "old pw".into(), "new pw".into());
+        l.sensitive = true;
+        let mut truth = [l];
+        redact_truth(&mut truth, &key);
+        assert!(!format!("{:?}", truth[0]).contains("new pw"));
+        let db = TruthDb::new(&truth);
+        // The daemon logged the tag of what it presented.
+        let p = pres(1, 300, 200, &key.tag("new pw"), Source::MissReply, None);
+        assert_eq!(
+            classify(&p, std::slice::from_ref(&p), &db),
+            Verdict::Correct
+        );
+        let stale = pres(2, 900, 800, &key.tag("old pw"), Source::Hit, None);
+        assert_eq!(
+            classify(&stale, std::slice::from_ref(&stale), &db),
+            Verdict::Stale
+        );
+        // The key comes from the log's header.
+        let log = format!("{{\"redaction_key\":\"{}\"}}\n{{}}\n", key.to_hex());
+        assert_eq!(redaction_key(&log), Some(key));
+        assert_eq!(redaction_key("{}\n"), None);
     }
 
     #[test]

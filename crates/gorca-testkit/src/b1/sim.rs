@@ -898,11 +898,9 @@ impl Sut for SimSut {
 
     fn supports(&self, f: Feature) -> bool {
         match f {
-            Feature::LatencyKnobs
-            | Feature::Probe
-            | Feature::VirtualTime
-            | Feature::WhereAmI
-            | Feature::FloodDirtySet => true,
+            Feature::LatencyKnobs | Feature::Probe | Feature::VirtualTime | Feature::WhereAmI => {
+                true
+            }
             Feature::CacheFill | Feature::Malformed => false,
         }
     }
@@ -959,6 +957,7 @@ impl Sut for SimSut {
             Cmd::Storm {
                 rate_per_s,
                 duration_ms,
+                ..
             } => {
                 let per_ms = u32::try_from(rate_per_s / 1000).unwrap_or(u32::MAX).max(1);
                 let ms = u32::try_from(duration_ms).unwrap_or(u32::MAX).max(1);

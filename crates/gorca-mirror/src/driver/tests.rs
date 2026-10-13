@@ -401,6 +401,25 @@ impl Rig {
 }
 
 #[test]
+fn a_repeated_announcement_does_not_revive_a_refuted_dump_claim() {
+    let dump = FillEffect::Request {
+        op: FillOp::CacheDump { max_nodes: 100 },
+        class: BudgetClass::Background,
+    };
+    let mut r = rig(vec![dump]);
+    r.driver.set_dump_complete(true);
+    let f = r.tick(HealthView::Healthy).remove(0);
+    r.reply(
+        &f,
+        FillReply::Ok(SnapshotBatch::new(vec![node(1), node(2)])),
+    );
+    assert!(!r.driver.dump_complete());
+    // The connector announces the app again (its identity was verified late) with the same claim.
+    r.driver.set_dump_complete(true);
+    assert!(!r.driver.dump_complete(), "the refuted claim stays refuted");
+}
+
+#[test]
 fn an_implausible_dump_clears_the_eligibility_for_good() {
     let dump = FillEffect::Request {
         op: FillOp::CacheDump { max_nodes: 100 },

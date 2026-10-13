@@ -306,8 +306,11 @@ pub async fn run(opts: Options, shutdown: CancellationToken) -> Result<()> {
 
 /// The daemon without signal handlers (tests run several in one process).
 pub async fn run_with(opts: Options, shutdown: CancellationToken) -> Result<()> {
-    run_inner(opts, shutdown, None).await
+    run_inner(opts, shutdown, None, None).await
 }
+
+/// How a test chooses the fill policy of every application (the product always runs R0).
+pub type PolicyFactory = Arc<dyn Fn() -> Box<dyn gorca_mirror::fill::FillPolicy> + Send + Sync>;
 
 /// [`run_with`] that hands a [`DaemonProbe`] to `on_ready` once the daemon is wired (the
 /// test-only debug accessor of the B-1 conformance suite).
@@ -316,12 +319,24 @@ pub async fn run_with_probe(
     shutdown: CancellationToken,
     on_ready: impl FnOnce(DaemonProbe) + Send + 'static,
 ) -> Result<()> {
-    run_inner(opts, shutdown, Some(Box::new(on_ready))).await
+    run_inner(opts, shutdown, None, Some(Box::new(on_ready))).await
+}
+
+/// [`run_with_probe`] with the fill policy of the apps chosen by the caller. Only tests of the
+/// shared fill code need it (the null policy never requests anything).
+pub async fn run_with_policy(
+    opts: Options,
+    shutdown: CancellationToken,
+    policy: PolicyFactory,
+    on_ready: impl FnOnce(DaemonProbe) + Send + 'static,
+) -> Result<()> {
+    run_inner(opts, shutdown, Some(policy), Some(Box::new(on_ready))).await
 }
 
 async fn run_inner(
     opts: Options,
     shutdown: CancellationToken,
+    policy: Option<PolicyFactory>,
     on_ready: Option<Box<dyn FnOnce(DaemonProbe) + Send>>,
 ) -> Result<()> {
     let mut tasks = TaskSet::new(shutdown.clone());
@@ -329,6 +344,9 @@ async fn run_inner(
         shutdown_grace: SHUTDOWN_GRACE,
         ..CoreConfig::default()
     });
+    if let Some(p) = policy {
+        core = core.with_fill_policy(p);
+    }
     let registry = core.connector_registrar(ConnectorId(1));
     let epoch = core.epoch();
     let focused = core.focused_app();

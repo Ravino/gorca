@@ -307,10 +307,19 @@ pub enum Cmd {
         count: u32,
         conn: Option<ConnKind>,
     },
-    /// Flood `TextChanged` events on the terminal node at `rate_per_s` for `duration_ms`.
+    /// Flood `TextChanged` events at `rate_per_s` for `duration_ms`: on the terminal node, or
+    /// when `distinct_nodes` is set, spread over that many distinct objects (a reader that
+    /// folds events per node needs more distinct nodes than it holds to see a flood).
     Storm {
         rate_per_s: u64,
         duration_ms: u64,
+        #[serde(default)]
+        distinct_nodes: u32,
+        /// Real objects (paths) that are flooded too, after each round of the distinct ones: a
+        /// node that is flooded once the reader's table is full is the one that must come out
+        /// dirty.
+        #[serde(default)]
+        targets: Vec<String>,
     },
     /// Drop every peer connection (EOF mid-request, IC-19).
     ClosePeers,
@@ -390,6 +399,11 @@ pub struct TruthLine {
     pub new: serde_json::Value,
     #[serde(default)]
     pub evented: bool,
+    /// The node is a secret field (a password entry): a harness that compares this log with a
+    /// presentation log redacts `old` and `new` with the same key and function
+    /// (`gorca_model::RedactKey::tag`), because the daemon never logs such text.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sensitive: bool,
     /// `true` on a focus line.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub focus: bool,

@@ -19,7 +19,8 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use gorca_daemon::{DaemonProbe, Options, ProbeRead, SpeechMode, run_with_probe};
+use gorca_daemon::{DaemonProbe, Options, PolicyFactory, ProbeRead, SpeechMode, run_with_policy};
+use gorca_mirror::fill::scripted::PrefetchAllPolicy;
 use gorca_rt::CancellationToken;
 use gorca_testkit::MockSpeechServer;
 use gorca_testkit::b1::ic::{self, Outcome};
@@ -28,6 +29,9 @@ use gorca_testkit::b1::real::{MirrorProbe, RealConfig, RealSut, default_models_d
 use gorca_testkit::b1::sut::{Feature, Presentation, Probe, Sut, SutResult};
 use gorca_testkit::b1::world::state;
 use gorca_testkit::harness::Session;
+
+/// Worker threads of the daemon's runtime in these tests.
+const DAEMON_WORKERS: usize = 4;
 
 static BUILT: std::sync::Once = std::sync::Once::new();
 
@@ -88,6 +92,12 @@ struct DaemonSut {
     sut: RealSut,
     token: CancellationToken,
     thread: Option<JoinHandle<()>>,
+    /// The fill policy is the test policy that requests everything (IC-12, IC-22).
+    fills: bool,
+    /// The daemon's runtime, to keep its workers busy (`stall_reader`).
+    runtime: tokio::runtime::Handle,
+    /// Apps are not told that a listener registered until the case says so (IC-21).
+    defer_registration: bool,
     _session: Session,
 }
 
@@ -105,6 +115,9 @@ impl DaemonSut {
     /// real desktop tells a starting application so (atk-bridge lifts the GTK4 listener gate on
     /// it); the isolated bus has no registry daemon, so the fixture says it.
     fn listener_registered(&mut self, label: &str) -> SutResult<()> {
+        if self.defer_registration {
+            return Ok(());
+        }
         self.sut.cmd(label, Cmd::RegisterListener).map(|_| ())
     }
 }
@@ -118,7 +131,6 @@ macro_rules! delegate {
 impl Sut for DaemonSut {
     delegate! {
         fn arm(&self) -> String;
-        fn supports(&self, f: Feature) -> bool;
         fn now_ns(&self) -> u64;
         fn presentations(&self) -> Vec<Presentation>;
         fn truth(&self) -> Vec<TruthLine>;
@@ -127,6 +139,31 @@ impl Sut for DaemonSut {
         fn bus_name(&self, app: &str) -> String;
     }
 
+    fn supports(&self, f: Feature) -> bool {
+        match f {
+            Feature::CacheFill => self.fills,
+            Feature::LatencyKnobs
+            | Feature::Probe
+            | Feature::VirtualTime
+            | Feature::WhereAmI
+            | Feature::Malformed => self.sut.supports(f),
+        }
+    }
+    fn stall_reader(&mut self, ms: u64) {
+        // Every worker of the daemon's runtime sleeps: the app actors cannot run, while the
+        // event drain (a thread of its own) keeps filling their ingress.
+        for _ in 0..DAEMON_WORKERS {
+            self.runtime.spawn(async move {
+                std::thread::sleep(Duration::from_millis(ms));
+            });
+        }
+    }
+    fn defer_listener_registration(&mut self, on: bool) {
+        self.defer_registration = on;
+    }
+    fn register_listener(&mut self, app: &str) -> SutResult<()> {
+        self.sut.cmd(app, Cmd::RegisterListener).map(|_| ())
+    }
     fn start_app(&mut self, model: &str, label: &str) -> SutResult<()> {
         self.start_app_with(model, label, &|_| {})
     }
@@ -164,7 +201,9 @@ impl Sut for DaemonSut {
     }
 }
 
-fn make() -> Box<dyn Sut> {
+/// A fresh desktop with the daemon under test. `fills`: the apps get the test policy that asks
+/// for everything instead of R0, which never requests a thing.
+fn make(fills: bool) -> Box<dyn Sut> {
     let session = Session::start().expect("isolated session");
     let dir = session.dir().join("ic");
     std::fs::create_dir_all(&dir).unwrap();
@@ -177,14 +216,16 @@ fn make() -> Box<dyn Sut> {
     );
     let token = CancellationToken::new();
     let (tx, rx) = std::sync::mpsc::channel();
+    let (rt_tx, rt_rx) = std::sync::mpsc::channel();
     let t = token.clone();
     let log = present_log.clone();
     let thread = std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(4)
+            .worker_threads(DAEMON_WORKERS)
             .enable_all()
             .build()
             .unwrap();
+        let _ = rt_tx.send(rt.handle().clone());
         rt.block_on(async move {
             // The speech server the daemon talks to; the cases judge the presentation log.
             let Ok(voicego) = MockSpeechServer::start_voicego(&vdir).await else {
@@ -194,12 +235,20 @@ fn make() -> Box<dyn Sut> {
                 Options::isolated(&a11y, &sess, voicego.socket_path(), &vdir.join("ssip.sock"));
             opts.speech = SpeechMode::Voicego;
             opts.present_log = Some(log);
-            let _ = run_with_probe(opts, t, move |p| {
+            let policy: PolicyFactory = if fills {
+                Arc::new(|| Box::new(PrefetchAllPolicy::default()))
+            } else {
+                Arc::new(|| Box::new(gorca_mirror::fill::NullPolicy))
+            };
+            let _ = run_with_policy(opts, t, policy, move |p| {
                 let _ = tx.send(p);
             })
             .await;
         });
     });
+    let runtime = rt_rx
+        .recv_timeout(Duration::from_secs(20))
+        .expect("runtime");
     let probe = rx.recv_timeout(Duration::from_secs(20)).expect("daemon up");
     // Events sent before the drain installed its match rules are lost: start the apps after.
     let t0 = Instant::now();
@@ -222,6 +271,9 @@ fn make() -> Box<dyn Sut> {
         sut,
         token,
         thread: Some(thread),
+        fills,
+        runtime,
+        defer_registration: false,
         _session: session,
     })
 }
@@ -229,10 +281,35 @@ fn make() -> Box<dyn Sut> {
 #[test]
 fn the_invalidation_suite_passes_against_the_real_daemon() {
     if let Some(why) = Session::unavailable_reason() {
+        // A host without the harness must not turn the gate green by running nothing.
+        assert!(
+            std::env::var_os("GORCA_REQUIRE_HARNESS").is_none(),
+            "the IC suite cannot run here: {why}"
+        );
         eprintln!("SKIPPED (harness unavailable): {why}");
         return;
     }
-    let reports = ic::run_suite(&make);
+    // R0 for every case; the two cases that exercise shared fill code (hidden ghosts, dump
+    // eligibility) need a policy that requests things, so they run again with the test policy
+    // and that result replaces R0's skip.
+    // `GORCA_IC_CASES=IC-17,IC-3` runs just those (debugging); the totals are then not checked.
+    let only = std::env::var("GORCA_IC_CASES").unwrap_or_default();
+    let only: Vec<&str> = only.split(',').filter(|x| !x.is_empty()).collect();
+    let mut reports = ic::run_cases(&only, &|| make(false));
+    let fill_ids: Vec<&str> = ["IC-12", "IC-22"]
+        .into_iter()
+        .filter(|id| only.is_empty() || only.contains(id))
+        .collect();
+    let filled = if fill_ids.is_empty() {
+        Vec::new()
+    } else {
+        ic::run_cases(&fill_ids, &|| make(true))
+    };
+    for f in filled {
+        if let Some(slot) = reports.iter_mut().find(|r| r.id == f.id) {
+            *slot = f;
+        }
+    }
     let mut failed = Vec::new();
     let (mut passed, mut skipped) = (0, 0);
     for r in &reports {
@@ -253,6 +330,12 @@ fn the_invalidation_suite_passes_against_the_real_daemon() {
     }
     eprintln!("IC against the real daemon: {passed} passed, {skipped} skipped");
     assert!(failed.is_empty(), "{failed:#?}");
-    assert_eq!(reports.len(), 23, "all 23 cases are accounted for");
-    assert!(passed >= 15, "only {passed} cases ran: {skipped} skipped");
+    if only.is_empty() {
+        assert_eq!(
+            reports.len(),
+            24,
+            "IC-1..IC-23 with IC-23b are all accounted for"
+        );
+        assert!(passed >= 20, "only {passed} cases ran: {skipped} skipped");
+    }
 }
