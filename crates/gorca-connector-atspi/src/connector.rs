@@ -114,6 +114,15 @@ impl BusNames {
             .remove(&app);
     }
 
+    fn app_of(&self, bus: &str) -> Option<AppId> {
+        self.map
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .find(|(_, name)| &***name == bus)
+            .map(|(app, _)| *app)
+    }
+
     fn get(&self, app: AppId) -> Option<Arc<str>> {
         self.map
             .lock()
@@ -133,6 +142,16 @@ pub struct AtspiLabels {
 }
 
 impl AtspiLabels {
+    /// The key of `path` in the application with unique name `bus`, if that application is
+    /// currently served. A diagnostics aid (tests, the debug probe).
+    pub fn key_of(&self, bus: &str, path: &str) -> Option<NodeKey> {
+        let app = self.buses.app_of(bus)?;
+        Some(NodeKey {
+            app,
+            local: gorca_dbus::drain::local_id(path),
+        })
+    }
+
     pub fn lookup(&self, key: NodeKey) -> Option<(Arc<str>, Arc<str>)> {
         Some((self.buses.get(key.app)?, self.paths.get(key)?))
     }
@@ -146,9 +165,17 @@ pub struct AtspiState {
     buses: Arc<BusNames>,
     counters: Arc<FetchCounters>,
     shadow_refused: Arc<std::sync::atomic::AtomicU64>,
+    /// The event drain is connected and its match rules are installed.
+    drain_ready: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl AtspiState {
+    /// Events are being received (the drain installed its match rules). Tests wait for it before
+    /// starting applications, because events sent earlier are lost.
+    pub fn drain_ready(&self) -> bool {
+        self.drain_ready.load(std::sync::atomic::Ordering::Acquire)
+    }
+
     /// Calls shadow mode refused (should stay zero: the connector only reads).
     pub fn shadow_refused(&self) -> u64 {
         self.shadow_refused
@@ -429,7 +456,12 @@ async fn stop_drain(handle: DrainHandle) {
 /// Keeps one drain alive: restarts it with backoff when the broker closed it. Runs in its own
 /// task so that a slow stop, start or backoff never delays the connector's event loop. Stops the
 /// drain itself on cancellation (it is awaited, never dropped mid-flight).
-async fn supervise_drain(address: String, router: Arc<AtspiRouter>, cancel: CancellationToken) {
+async fn supervise_drain(
+    address: String,
+    router: Arc<AtspiRouter>,
+    cancel: CancellationToken,
+    ready: Arc<std::sync::atomic::AtomicBool>,
+) {
     let mut backoff = DRAIN_BACKOFF_MIN;
     let mut drain: Option<DrainHandle> = None;
     let mut health = tokio::time::interval(DRAIN_POLL);
@@ -439,6 +471,7 @@ async fn supervise_drain(address: String, router: Arc<AtspiRouter>, cancel: Canc
             match start_drain(&address, &router).await {
                 Ok(h) => {
                     drain = Some(h);
+                    ready.store(true, std::sync::atomic::Ordering::Release);
                     backoff = DRAIN_BACKOFF_MIN;
                 }
                 Err(e) => {
@@ -462,6 +495,7 @@ async fn supervise_drain(address: String, router: Arc<AtspiRouter>, cancel: Canc
         };
         if let Some(why) = lost {
             tracing::warn!(%why, "event drain lost; restarting");
+            ready.store(false, std::sync::atomic::Ordering::Release);
             if let Some(old) = drain.take() {
                 stop_drain(old).await;
             }
@@ -585,6 +619,7 @@ async fn run(
         address.clone(),
         Arc::clone(&router),
         drain_cancel.clone(),
+        Arc::clone(&shared.drain_ready),
     ));
     let mut registrations: JoinSet<()> = JoinSet::new();
     tracing::info!("atspi connector running");
@@ -654,6 +689,8 @@ fn spawn_app(
         bus_name,
         gone,
         verified_shell,
+        identity,
+        shell_rx,
     } = new;
     let caller = Caller::new(conn.clone(), Arc::clone(&bus_name));
     let caller = if shadow {
@@ -669,6 +706,8 @@ fn spawn_app(
         clock: clock.clone(),
         gone,
         verified_shell,
+        identity,
+        shell_rx: Some(shell_rx),
         counters: Arc::clone(&shared.counters),
         shutdown: shutdown.child_token(),
     };

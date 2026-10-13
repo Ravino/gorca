@@ -267,3 +267,42 @@ fn a_dead_node_is_gone_and_an_unknown_key_is_unresolved() {
         let _ = BudgetClass::Interactive;
     });
 }
+
+/// F12: strategy code (which an arm replaces) must not be able to reach the raw connection or
+/// `call_method`, or it could bypass the shadow-mode allowlist.
+#[test]
+fn strategy_sources_cannot_reach_the_raw_connection() {
+    fn sources(dir: &std::path::Path, out: &mut Vec<(String, String)>) {
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for e in rd.flatten() {
+            let p = e.path();
+            let name = e.file_name().to_string_lossy().into_owned();
+            if p.is_dir() && name.starts_with("strategy") {
+                sources(&p, out);
+            } else if p.is_file()
+                && name.starts_with("strategy")
+                && p.extension().is_some_and(|x| x == "rs")
+                && let Ok(t) = std::fs::read_to_string(&p)
+            {
+                out.push((name, t));
+            }
+        }
+    }
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fetch");
+    let mut found = Vec::new();
+    sources(&root, &mut found);
+    // strategy.rs itself, and any strategy/ directory or strategy_*.rs an arm adds. The tests
+    // of this reference strategy are excluded: they build a connection to talk to a fake app.
+    found.retain(|(n, _)| !n.contains("_tests"));
+    assert!(!found.is_empty(), "no strategy sources found");
+    for (name, text) in &found {
+        for banned in ["call_method", ".conn", "zbus::Connection", "gorca_dbus::"] {
+            assert!(
+                !text.contains(banned),
+                "{name} names `{banned}`: strategies may only use the operations of `Caller`"
+            );
+        }
+    }
+}

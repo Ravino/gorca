@@ -1199,6 +1199,44 @@ async fn only_the_protected_process_is_announced_as_the_verified_shell() {
     assert_eq!(seen.get(":1.512"), Some(&false));
 }
 
+/// F8: the Shell's first signal can be routed before `org.gnome.Shell` was resolved. The
+/// registration then carries its identity and the watch, so verification happens later.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_shell_published_before_it_is_resolved_is_verified_when_the_process_becomes_known() {
+    let c = core(|_| Duration::ZERO);
+    let creds = Scripted {
+        pid: Box::new(|n| Some(n + 10)),
+        info: Box::new(|pid| ProcInfo {
+            pgrp: Some(pid),
+            start: Some(u64::from(pid) * 10),
+            ..ProcInfo::default()
+        }),
+    };
+    let mut r = rig(&c, Arc::new(creds));
+    // Nothing is protected yet: the race the reviewer found.
+    let _ = r.router.resolve(":1.511");
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    let new = r.new_apps.try_recv().unwrap();
+    assert!(!new.verified_shell);
+    assert_eq!(new.identity, Some((SHELL_PID, SHELL_START)));
+    assert!(!crate::fetch::is_the_shell(
+        *new.shell_rx.borrow(),
+        new.identity
+    ));
+    // The connector resolves org.gnome.Shell a moment later.
+    r.router
+        .set_protected_process(Some((SHELL_PID, SHELL_START)));
+    assert!(crate::fetch::is_the_shell(
+        *new.shell_rx.borrow(),
+        new.identity
+    ));
+    // An impostor with the same pid and another start time never matches.
+    assert!(!crate::fetch::is_the_shell(
+        *new.shell_rx.borrow(),
+        Some((SHELL_PID, SHELL_START + 1))
+    ));
+}
+
 /// The shell restarting at a full table is never refused: as a newcomer it takes the newest
 /// unprotected application's slot.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

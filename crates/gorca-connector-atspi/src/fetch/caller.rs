@@ -1,0 +1,312 @@
+//! The call connection of one application, with the shadow-mode gate.
+//!
+//! The connection, the bus name and the shadow flag are private to this module: strategy code
+//! (`strategy.rs`, which a fill strategy replaces) can only use the operations below, so it cannot
+//! reach `call_method` or the raw connection and bypass the allowlist of [`super::shadow`]. A test
+//! reads the strategy sources and fails if they name either.
+
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use gorca_dbus::{DbusError, call_method};
+use gorca_rt::Deadline;
+use zbus::Connection;
+use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value as Zv};
+
+use super::{
+    ACCESSIBLE, APPLICATION, CACHE, CACHE_PATH, ENTRY_TEXT_CHARS, MAX_SUBTREE_NODES, NULL_PATH,
+    PROPS, RELATION_LABELLED_BY, ROOT_PATH, TEXT, VALUE, items, shadow,
+};
+
+/// `(so)` as a variant: `Some((bus, path))`, `None` for the null object or a wrong shape.
+fn ref_of_value(v: &Zv<'_>) -> Option<(String, String)> {
+    match v {
+        Zv::Value(inner) => ref_of_value(inner),
+        // The path is `o` on the wire; some applications send `s`: both are read.
+        Zv::Structure(s) => {
+            let [Zv::Str(bus), path] = s.fields() else {
+                return None;
+            };
+            let path = match path {
+                Zv::ObjectPath(p) => p.as_str(),
+                Zv::Str(p) => p.as_str(),
+                _ => return None,
+            };
+            (path != NULL_PATH && !bus.is_empty()).then(|| (bus.to_string(), path.to_owned()))
+        }
+        _ => None,
+    }
+}
+
+/// One application on the call connection.
+#[derive(Clone, Debug)]
+pub struct Caller {
+    conn: Connection,
+    bus_name: Arc<str>,
+    /// Shadow mode (PW-11): `Some` refuses every call outside [`shadow::allowed`] and counts it.
+    shadow: Option<Arc<AtomicU64>>,
+}
+
+impl Caller {
+    pub fn new(conn: Connection, bus_name: Arc<str>) -> Self {
+        Self {
+            conn,
+            bus_name,
+            shadow: None,
+        }
+    }
+
+    /// Read-only: refuse (and count in `refused`) any call the shadow allowlist does not admit.
+    #[must_use]
+    pub fn shadowed(mut self, refused: Arc<AtomicU64>) -> Self {
+        self.shadow = Some(refused);
+        self
+    }
+
+    async fn call<B>(
+        &self,
+        dest: &str,
+        deadline: Deadline,
+        path: &str,
+        iface: &str,
+        member: &str,
+        body: &B,
+    ) -> Result<zbus::Message, DbusError>
+    where
+        B: serde::Serialize + zbus::zvariant::DynamicType,
+    {
+        if let Some(refused) = &self.shadow
+            && !shadow::allowed(iface, member)
+        {
+            refused.fetch_add(1, Ordering::Relaxed);
+            return Err(DbusError::Zbus(zbus::Error::Failure(format!(
+                "shadow mode refuses {iface}.{member}"
+            ))));
+        }
+        call_method(&self.conn, deadline, dest, path, iface, member, body).await
+    }
+
+    pub async fn role(&self, path: &str, deadline: Deadline) -> Result<u32, DbusError> {
+        let m = self
+            .call(&self.bus_name, deadline, path, ACCESSIBLE, "GetRole", &())
+            .await?;
+        m.body().deserialize::<u32>().map_err(DbusError::Zbus)
+    }
+
+    pub async fn state(&self, path: &str, deadline: Deadline) -> Result<Vec<u32>, DbusError> {
+        let m = self
+            .call(&self.bus_name, deadline, path, ACCESSIBLE, "GetState", &())
+            .await?;
+        m.body().deserialize::<Vec<u32>>().map_err(DbusError::Zbus)
+    }
+
+    pub(super) async fn prop(
+        &self,
+        dest: &str,
+        path: &str,
+        iface: &str,
+        prop: &str,
+        deadline: Deadline,
+    ) -> Result<OwnedValue, DbusError> {
+        let m = self
+            .call(dest, deadline, path, PROPS, "Get", &(iface, prop))
+            .await?;
+        m.body()
+            .deserialize::<OwnedValue>()
+            .map_err(DbusError::Zbus)
+    }
+
+    pub(super) async fn string_prop(
+        &self,
+        dest: &str,
+        path: &str,
+        iface: &str,
+        prop: &str,
+        deadline: Deadline,
+    ) -> Result<String, DbusError> {
+        let v = self.prop(dest, path, iface, prop, deadline).await?;
+        String::try_from(v).map_err(|e| DbusError::Zbus(e.into()))
+    }
+
+    pub(super) async fn f64_prop(
+        &self,
+        path: &str,
+        prop: &str,
+        deadline: Deadline,
+    ) -> Result<f64, DbusError> {
+        let v = self
+            .prop(&self.bus_name, path, VALUE, prop, deadline)
+            .await?;
+        f64::try_from(v).map_err(|e| DbusError::Zbus(e.into()))
+    }
+
+    /// `Name` of an object, in this application or (for label relations) another peer.
+    pub(super) async fn name_of(
+        &self,
+        dest: &str,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<String, DbusError> {
+        self.string_prop(dest, path, ACCESSIBLE, "Name", deadline)
+            .await
+    }
+
+    /// The first `LabelledBy` target: `(bus name, path)`.
+    pub(super) async fn label_target(
+        &self,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<Option<(String, String)>, DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                ACCESSIBLE,
+                "GetRelationSet",
+                &(),
+            )
+            .await?;
+        let sets = m
+            .body()
+            .deserialize::<Vec<(u32, Vec<(String, OwnedObjectPath)>)>>()
+            .map_err(DbusError::Zbus)?;
+        Ok(sets
+            .into_iter()
+            .find(|(kind, _)| *kind == RELATION_LABELLED_BY)
+            .and_then(|(_, targets)| targets.into_iter().next())
+            .map(|(bus, p)| (bus, p.as_str().to_owned())))
+    }
+
+    pub(super) async fn text_prefix(
+        &self,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<String, DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                TEXT,
+                "GetText",
+                &(0i32, ENTRY_TEXT_CHARS),
+            )
+            .await?;
+        m.body().deserialize::<String>().map_err(DbusError::Zbus)
+    }
+
+    pub fn bus_name(&self) -> &str {
+        &self.bus_name
+    }
+
+    pub(super) async fn description_of(
+        &self,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<String, DbusError> {
+        self.string_prop(&self.bus_name, path, ACCESSIBLE, "Description", deadline)
+            .await
+    }
+
+    /// The `Parent` property: `Some((bus, path))`, or `None` for the root (null object).
+    pub(super) async fn parent_of(
+        &self,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<Option<(String, String)>, DbusError> {
+        let v = self
+            .prop(&self.bus_name, path, ACCESSIBLE, "Parent", deadline)
+            .await?;
+        Ok(ref_of_value(&v))
+    }
+
+    pub(super) async fn child_count_of(
+        &self,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<i32, DbusError> {
+        let v = self
+            .prop(&self.bus_name, path, ACCESSIBLE, "ChildCount", deadline)
+            .await?;
+        i32::try_from(v).map_err(|e| DbusError::Zbus(e.into()))
+    }
+
+    /// `GetChildAtIndex`: `None` past the end.
+    pub(super) async fn child_at(
+        &self,
+        path: &str,
+        index: u32,
+        deadline: Deadline,
+    ) -> Result<Option<(String, String)>, DbusError> {
+        let i = i32::try_from(index).unwrap_or(i32::MAX);
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                ACCESSIBLE,
+                "GetChildAtIndex",
+                &(i,),
+            )
+            .await?;
+        let (bus, p) = m
+            .body()
+            .deserialize::<(String, OwnedObjectPath)>()
+            .map_err(DbusError::Zbus)?;
+        Ok((p.as_str() != NULL_PATH && !bus.is_empty()).then(|| (bus, p.as_str().to_owned())))
+    }
+
+    /// `GetChildren`, at most `MAX_SUBTREE_NODES` refs of a reply of at most 16 MiB.
+    pub(super) async fn children_of(
+        &self,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<Vec<(String, String)>, DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                ACCESSIBLE,
+                "GetChildren",
+                &(),
+            )
+            .await?;
+        if m.body().data().len() > items::MAX_DUMP_BYTES {
+            return Err(DbusError::Zbus(zbus::Error::Failure(
+                "GetChildren reply too large".to_owned(),
+            )));
+        }
+        let kids = m
+            .body()
+            .deserialize::<Vec<(String, OwnedObjectPath)>>()
+            .map_err(DbusError::Zbus)?;
+        Ok(kids
+            .into_iter()
+            .take(MAX_SUBTREE_NODES as usize)
+            .map(|(b, p)| (b, p.as_str().to_owned()))
+            .collect())
+    }
+
+    /// `Cache.GetItems`; the reply is decoded by the caller (it can be large).
+    pub(super) async fn get_items(&self, deadline: Deadline) -> Result<zbus::Message, DbusError> {
+        self.call(&self.bus_name, deadline, CACHE_PATH, CACHE, "GetItems", &())
+            .await
+    }
+
+    /// Toolkit and application name of the app root, for `AppInfo` (best effort).
+    pub async fn app_info(&self, deadline: Deadline) -> Option<(String, String)> {
+        let (toolkit, name) = tokio::join!(
+            self.string_prop(
+                &self.bus_name,
+                ROOT_PATH,
+                APPLICATION,
+                "ToolkitName",
+                deadline
+            ),
+            self.name_of(&self.bus_name, ROOT_PATH, deadline)
+        );
+        Some((toolkit.ok()?, name.ok()?))
+    }
+}
