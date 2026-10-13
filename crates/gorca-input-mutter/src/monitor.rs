@@ -115,6 +115,8 @@ pub enum Notice {
     KeyboardCommandsUnavailable,
     /// `WatchKeyboard` was refused or timed out.
     KeyboardMonitorUnavailable,
+    /// The monitor is authorised again and the grabs were re-sent after a loss.
+    KeyboardRestored,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
