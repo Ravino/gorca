@@ -57,3 +57,4 @@
 | 2026-10-13 | Keymap: NVDA-style default, Orca preset also shipped; desktop (numpad review) layout primary, laptop layout as alternative | docs/plan/phase-2.md |
 | 2026-10-13 | Braille (M10) deferred out of Phase 2 | docs/plan/phase-2.md |
 | 2026-10-13 | Phase 2 defaults taken by orchestrator: TOML settings (no GUI, no Orca import), typing echo chars on/words off, full-screen terminal apps best-effort, perception features out of Phase 2 | docs/plan/phase-2.md |
+| 2026-10-13 | P0 seams: core split into commands/present/review/text, connector into events/fetch/text/doc_source, daemon wire_* fns; path table frees memory on eviction and exempts each owner newest path (still byte-capped); name slots were already reserved-then-committed in complete() | docs/plan/phase-2.md |
