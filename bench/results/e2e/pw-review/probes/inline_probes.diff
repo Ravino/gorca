@@ -1,0 +1,69 @@
+diff --git a/crates/gorca-core/src/reader.rs b/crates/gorca-core/src/reader.rs
+index bbf56fa..c89b970 100644
+--- a/crates/gorca-core/src/reader.rs
++++ b/crates/gorca-core/src/reader.rs
+@@ -1084,6 +1084,31 @@ mod tests {
+         assert_eq!(f.reader.counters().followups, 1);
+     }
+ 
++    /// REVIEW PROBE: a quiet app (one old event, then nothing) whose node was fetched on an
++    /// earlier visit and then renamed silently (GTK4 G-1). The revisit must be revalidated (RV-1).
++    #[test]
++    fn review_probe_quiet_app_revisit_is_revalidated() {
++        let mut f = fixture();
++        let t0 = Instant::now();
++        f.writer.invalidate(key(9), PropMask::NAME, t0); // one event long ago: seq = 1
++        // Visit 1: the Reader fetched node 1 at the current seq; the reply is in the mirror.
++        let issued_at = f.writer.seq();
++        f.writer.apply(
++            SnapshotBatch::new(vec![with_name(1, "Old", StateSet::empty())]),
++            gorca_mirror::ApplyOrigin::Reply { issued_at },
++        );
++        let _ = focus_on(&mut f, 1, t0);
++        let _ = focus_on(&mut f, 2, t0 + Duration::from_secs(2));
++        // Node 1 is renamed silently; no event, so the seq does not move. Revisit 10 s later.
++        let fx = focus_on(&mut f, 1, t0 + Duration::from_secs(10));
++        eprintln!("revisit effects: {:?}", effects_of(&fx));
++        assert!(
++            effects_of(&fx).contains(&"fetch-rv1"),
++            "revisit served from the mirror without RV-1: {:?}",
++            effects_of(&fx)
++        );
++    }
++
+     /// A reply issued after the focus began confirmed the content: nothing left to revalidate.
+     #[test]
+     fn content_confirmed_after_the_focus_began_needs_no_revalidation() {
+diff --git a/crates/gorca-mirror/src/driver/tests.rs b/crates/gorca-mirror/src/driver/tests.rs
+index 306b491..867feef 100644
+--- a/crates/gorca-mirror/src/driver/tests.rs
++++ b/crates/gorca-mirror/src/driver/tests.rs
+@@ -690,3 +690,19 @@ fn gone_forgets_everything_in_flight() {
+     assert_eq!(rep.outcome, None);
+     assert!(r.reader.get(key(1)).hit().is_none());
+ }
++
++/// REVIEW PROBE: every Request effect the driver accepted (Ok) must eventually be answered to the
++/// policy by a Reply input; a deduplicated request is never answered.
++#[test]
++fn review_probe_deduplicated_request_gets_a_reply() {
++    let mut r = rig(vec![
++        fetch(1, BudgetClass::Prefetch),
++        fetch(1, BudgetClass::Interactive),
++    ]);
++    let issued = r.tick(HealthView::Healthy);
++    eprintln!("issued {} deduped {} first class {:?}", issued.len(), r.driver.stats().deduped, issued[0].class);
++    let f = issued[0].clone();
++    r.reply(&f, FillReply::Ok(SnapshotBatch::new(vec![node(1)])));
++    eprintln!("policy heard: {:?}", r.log());
++    assert_eq!(r.log().len(), 2, "2 requests accepted, replies delivered: {:?}", r.log());
++}
+diff --git a/crates/gorca-testkit/Cargo.toml b/crates/gorca-testkit/Cargo.toml
+index 6fa7e81..b1332fc 100644
+--- a/crates/gorca-testkit/Cargo.toml
++++ b/crates/gorca-testkit/Cargo.toml
+@@ -30,3 +30,4 @@ path = "src/bin/b1_walk.rs"
+ [dev-dependencies]
+ # Contract test: the run directories of the walk driver are evaluated by the real runner code.
+ gorca-bench-b1 = { path = "../gorca-bench-b1" }
++gorca-mirror = { workspace = true }

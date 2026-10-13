@@ -11,6 +11,7 @@
   - `docs/adr/0002-multimodal-perception-layer.md` (Accepted 2026-10-12): extends §6 (feature actor, perceive-io), §7.2 (`Find`, `Map` modes), §8.2 (proposed `SpeechCmd::Earcon`), §11 (new crates, dependency rules 8–12), §14 (metrics PM-1…PM-14)
   - `docs/adr/0004-ingress-drain-and-coalescer.md` (Accepted, conditional on its BF-1…BF-4): resolves B-2; §5.3, §6.1, §6.2 and §6.3 amended accordingly
   - `docs/adr/0003-web-document-mirror.md` (Accepted): refines §9 (web mirror, sources, identity), §7.2 (browse/focus `WebMode`), §11, §15 (B-6 arms); its amendment list is in its §2.1
+  - `docs/bakeoff/b1-mirror-fill/SPEC.md` (B-1 native mirror fill): its §15 amendments are applied to §4.1 (I-1), §4.2, §4.4, §5.1 and §8.1 (2026-10-13)
 
 ## 0. Changelog
 
@@ -21,6 +22,7 @@
 | 2026-10-12 | Cross-reference: ADR-0002 (Proposed) adds the multimodal perception layer. It extends §6, §7.2, §8.2, §11 and §14 without changing any accepted decision here; its amendments take effect only when ADR-0002 is accepted. |
 | 2026-10-12 | Cross-reference: ADR-0002 accepted; its amendments to §6, §7.2, §8.2, §11 and §14 are in effect. ADR-0003 (Proposed) amends §9, §11 and §15 (list in ADR-0003 §2.1), effective on its acceptance. |
 | 2026-10-12 | **B-2 resolved → ADR-0004** (candidate A: raw-socket drain, lock-free per-app ring). §6.3 rewritten: rule H (hard cap), `SlotBudget` with a flat per-app reserve and preemption (IB-7), resource bounds IB-1…IB-11 and audit invariants AU-1…AU-8 are now architectural invariants. §3.2, §3.3, §5.3, §6.1, §6.2 and §15 updated: one event connection, sharded event connections (arm c) not adopted. |
+| 2026-10-13 | **B-1 SPEC §15 amendments applied** (orchestrator sign-off; `docs/bakeoff/b1-mirror-fill/SPEC.md`). §4.1: I-1 restated — removal is not final for path-unique toolkits, a successful reply to a request issued after the tombstone revives the key (LR-3); AT-SPI `LocalId` is the path hash, no generation. §4.2: `NodeSnapshot` gains `have` and `confirmed_seq`; `PropMask::PARENT`. §4.4: `Fetching` leaves the published snapshot (in-flight table of the fill driver), `Stale` carries a mask, ordering rules LR-1…LR-4 and the app-wide stale epoch; transition table rewritten, semantics otherwise unchanged. §5.1: `BackendOp::{ChildSnapshots, Ancestry, CacheDump}`, `SnapshotBatch.truncated`, `BackendError::Unresolved`. §8.1: every cache-served presentation is tagged `may_refine` and revalidated once (RV-1). Cache-signal mapping rows: ADR-0004 §2 D-7. |
 
 ## 1. Context
 
@@ -144,7 +146,8 @@ pub struct ConnectorId(u16);
 /// Unit of isolation. AT-SPI: one bus unique name. Newton (later): one surface.
 /// Never reused within a gorca process lifetime.
 pub struct AppId { connector: ConnectorId, serial: u32 }
-/// Connector-local handle, opaque to core. AT-SPI: interned (bus_name, object_path, generation).
+/// Connector-local handle, opaque to core. AT-SPI: FNV-1a hash of the object path (ADR-0004; the
+/// bus name is the `AppId`); no generation for path-unique toolkits (I-1).
 pub struct LocalId(u64);
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct NodeKey { app: AppId, local: LocalId }
@@ -152,7 +155,7 @@ pub struct NodeKey { app: AppId, local: LocalId }
 
 Invariants:
 
-- **I-1:** A `NodeKey` never denotes two different objects. If a connector cannot guarantee freshness, it bumps a generation on reuse. For AT-SPI this happens on `RemoveAccessible`, `children-changed::remove`, or a `defunct`/`UnknownObject` reply. Browsers may drop hide events (WEB §1.7), so defunct replies are the authoritative fallback.
+- **I-1:** A `NodeKey` never denotes two different objects. If a connector cannot guarantee that an object id is never reused, it bumps a generation on reuse. *(Amended 2026-10-13, B-1 SPEC §15.)* **Removal is not final for a path-unique toolkit:** a successful reply to a request issued after the tombstone revives the key (B-1 LR-3, §4.4); a reply to a request issued before it never does (LR-1). This is safe only because the toolkit never reuses the id for another object: GTK4 paths are `<base>/<uuid>` (`refs/gtk/gtk/a11y/gtkatspicontext.c:1610-1611`) and atk-bridge (GTK3, St/Shell, Firefox, Chromium) numbers objects with a monotonic counter (`refs/at-spi2-core/atk-adaptor/accessible-register.c:155-162`). It is what makes a reorder (`remove` + `add` of the same path) and `RemoveAccessible` for a hidden-but-alive GTK4 context work. For AT-SPI, `LocalId` is therefore the path hash (ADR-0004) without a generation; `RemoveAccessible`, `children-changed::remove` and `defunct` tombstone the key, and an `UnknownObject` reply is authoritative and keeps it dead (atk-bridge leases event-only objects, so a key may die without any event). Browsers may drop hide events (WEB §1.7), so defunct/`UnknownObject` replies are the authoritative fallback. A toolkit that can reuse paths (Qt, out of scope) must bump a generation and its replies never revive; unexpected revivals are counted (`paths_revived_unexpectedly`).
 - **I-2:** The core holds no connector type.
 - **I-3:** Resolving a `Gone` key yields `Lookup::Gone`. It never panics and never blocks.
 
@@ -172,9 +175,17 @@ pub struct NodeSnapshot {
     pub attrs: AttrMap,             // small, interned keys (xml-roles, level, tag, live-*, ...)
     pub relations: Relations,       // labelled-by, controls, flows-to, ... (keys)
     pub bounds: Option<Rect>,
+    /// Fields this snapshot actually carries (B-1). A `Cache.GetItems` node has
+    /// NAME|DESCRIPTION|ROLE|STATES|CHILDREN(count)|PARENT; a fetch has what was asked for.
+    pub have: PropMask,
+    /// Mirror write sequence at which the app confirmed this content: the `issued_at` of the
+    /// request whose reply produced it (B-1). Drives the ordering rules of §4.4.
+    pub confirmed_seq: u64,
     pub fresh: Freshness,           // see 4.4
 }
 ```
+
+`PropMask` gains `PARENT` (bit 10); `PropMask::PRESENT` is unchanged. A snapshot whose `have` does not cover what a consumer needs is **partial**; it is never padded with defaults.
 
 Text is not in the snapshot. It goes through a `TextQuery` (`GetText(range)`, `CaretOffset`, `Attributes(range)`), because text is large and changes often. For web content the document mirror holds it (§9).
 
@@ -188,23 +199,33 @@ The **interfaces** field is advisory. Browsers advertise `Action`, `EditableText
 
 ### 4.4 Freshness and events
 
+*(Amended 2026-10-13, B-1 SPEC §15: representation change; the semantics of the original table are kept, plus the revival rule of I-1.)* A published snapshot is immutable, so the in-flight state no longer lives in it: `Fetching` moved into the fill driver's in-flight table, owned by the app actor.
+
 ```rust
 pub enum Freshness {
-    Fresh { at: Instant },           // confirmed by connector push or reply
-    Stale { since: Instant },        // invalidated by an event; still usable for presentation with care
-    Fetching { req: ReqId, deadline: Instant },
-    Defunct,                         // connector reported removal / app gone; tombstone kept briefly
+    Fresh { at: Instant },                    // confirmed by connector push or reply
+    /// Invalidated by an event; `mask` = fields that are no longer trustworthy.
+    /// Still usable for presentation with care (§8.1).
+    Stale { since: Instant, mask: PropMask },
+    Defunct,                                  // tombstone: removal / app gone; kept briefly
 }
+/// Driver-side, never published. At most one entry per key (dedupe).
+struct InFlight { req: ReqId, issued_at: u64 /* MirrorWriter::seq() */, deadline: Instant }
 ```
 
-| From \ Event | invalidate | fetch issued | reply ok | reply timeout/err | removed |
-|---|---|---|---|---|---|
-| Fresh | Stale | Fetching | n/a | n/a | Defunct |
-| Stale | Stale | Fetching | n/a | n/a | Defunct |
-| Fetching | Fetching (mark re-dirty) | no-op (dedupe) | Fresh, or Stale if re-dirtied | Stale (+ health penalty) | Defunct |
-| Defunct | Defunct | refused | dropped | dropped | Defunct |
+Every mirror write (apply, invalidate, tombstone) advances a per-app monotonic sequence `seq`; every request records `issued_at = seq` when it is issued; invalidations and tombstones record the `seq` at which they happened. Published state × event:
 
-Tombstones are evicted after N seconds or when the app becomes `Gone`. A `Stale` node may be presented; the utterance is then tagged `may_refine` (§8.1).
+| From \ Event | invalidate(m) at `t` | fetch issued | reply ok to request issued at `s` | reply timeout/err | removed at `t` / `UnknownObject` reply |
+|---|---|---|---|---|---|
+| Fresh | Stale{m} | unchanged; in-flight entry added (dedupe if present) | Fresh, `confirmed_seq = s` | unchanged (+ health penalty) | Defunct |
+| Stale{m₀} | Stale{m₀ ∪ m} | unchanged; in-flight entry added (dedupe if present) | Fresh if no invalidation after `s`; else stored but Stale with the masks invalidated after `s` (**LR-2**, the old "re-dirty") | Stale (+ health penalty) | Defunct |
+| Defunct | Defunct | refused, except the proof-of-life fetch (B-1 §5.5) | dropped if `s < t` (**LR-1**); **revived** Fresh if `s > t` (**LR-3**, I-1) | dropped | Defunct |
+
+- **LR-4:** a `CacheDump` applies per node with the same rules. A node absent from a dump is **not** removed by the dump (GTK4 suppresses `AddAccessible` while serving `GetItems`, so a dump may be incomplete); only an event, a cache signal or a failed fetch removes it.
+- **Stale epoch:** `invalidate_all` (flood resync, dirty-all, §6.3) is O(1): it records an app-wide epoch, and a read treats every node with `confirmed_seq` below it as `Stale{ALL}`. Reads return `NodeView { snap, stale }` with the epoch folded in.
+- **Focus on a `Gone` key is not final:** `FocusChanged` for a tombstoned key issues one Interactive proof-of-life `Fetch` (LR-3) instead of dropping the focus; `UnknownObject` keeps it dead; `BackendError::Unresolved` (path evicted) is a miss, never `Gone`.
+
+Tombstones are evicted after N seconds or when the app becomes `Gone`. A `Stale` or partial node may be presented; the utterance is then tagged `may_refine` and revalidated (§8.1, RV-1). Normative event → mirror effect table, ordering tests and conformance suite: B-1 SPEC §5.
 
 Connectors normalise raw events into a small closed set, and coalescing works on this set:
 
@@ -285,8 +306,23 @@ pub enum BackendOp {
     Action(ActionReq),                   // DoDefault, Focus, SetCaret, Select, ScrollTo, SetValue
     HitTest { point: Point },
     Collection(MatchRule),
+    // Added 2026-10-13 (B-1 SPEC §15). Replies: BackendReply::Subtree(SnapshotBatch); partial
+    // nodes carry their `have`.
+    /// Children of `node` in `range`, each as a snapshot with at least `want`.
+    ChildSnapshots { node: NodeKey, range: Range<u32>, want: PropMask },
+    /// `node`, its parent, its parent's parent ... up to `max_depth` (<= 64) or the app root;
+    /// stops at a cycle, a foreign reference or a `Document*` role.
+    Ancestry { node: NodeKey, max_depth: u8, want: PropMask },
+    /// Whole-app bulk dump (AT-SPI: `Cache.GetItems`). `NotSupported` when the app has none.
+    CacheDump { max_nodes: u32 },
 }
-pub enum BackendError { Timeout, Gone, NotSupported, Busy, Protocol(String) }
+pub enum BackendError {
+    Timeout, Gone, NotSupported, Busy, Protocol(String),
+    /// The key has no known address (its path was evicted from the connector's path table).
+    /// A miss, never `Gone` (B-1 §5.5).
+    Unresolved,
+}
+// SnapshotBatch gains `truncated: bool`: the op hit `max_nodes`, `max_depth` or a size cap.
 ```
 
 `RawEvent` is a `NodeEvent` whose payload may still be lazy (`LazyText`, R-6); the app actor finishes decoding only for events that survive coalescing.
@@ -370,7 +406,7 @@ Toolkit quirks that more than one consumer needs live in the connector's normali
 | Firefox lazy cache domains | One warm-up query set per document, off the hot path; "empty text on a node with children" is treated as `Stale`, not as a value (WEB §1.5) |
 | Chromium `text-caret-moved(0)` on document | `CaretOrigin::ScrollToAnchor` |
 | Chromium no text events for static text | `children-changed` on a parent marks its subtree text dirty |
-| Firefox dropped hide events | I-1 generation bump on `defunct` replies |
+| Firefox dropped hide events | I-1: `defunct`/`UnknownObject` replies tombstone the key |
 | VTE attribute runs in UTF-8 bytes | TU-2 |
 | VTE `CharacterCount` ≠ `GetText` length | Never use `CharacterCount`; length comes from the last `GetText` |
 
@@ -692,6 +728,11 @@ Reader (hot path) / cpu PresentJob ─► Utterance{segments, lang, epoch, prio,
   ─► Speech lane: SpeechQueue SM ─► SpeechClient ─► separate speech service process
   ─► Braille actor (same segments, same epoch)
 ```
+
+*(Amended 2026-10-13, B-1 SPEC §15.)* **Every presentation served from the mirror is tagged `may_refine`**, not only `Stale` ones: GTK4 and St names change silently (no `accessible-name` event for content- or `labelled-by`-derived names), and replies and events travel on different connections with no mutual order, so even a `Fresh` hit can be wrong. Rules:
+
+- **Present or fetch.** A stale or partial read is presented from the mirror only if the missing or stale fields are not NAME or ROLE; otherwise the Reader fetches (Interactive) and presents the reply.
+- **RV-1 revalidation.** Every cache-served presentation (focus, state change of the focused node, where-am-I) is followed by exactly one `Fetch{node, PRESENT}` with class Interactive, unless the presented snapshot was confirmed by a request issued after the triggering event. If the reply differs in a presented field, the Reader refines (rule below) or, past the threshold, speaks a short follow-up with the changed field. Both count as corrections for M-6.
 
 The `may_refine` rule: a refined utterance replaces the original only if the epoch is unchanged and less than 150 ms of audio has been played (threshold validated by M-6). The Speech lane needs `Started` and audio-progress events from the backend to apply it. If the backend has no audio-progress events, refinement is limited to utterances that have not yet been `Started`.
 

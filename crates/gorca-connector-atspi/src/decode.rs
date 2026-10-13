@@ -6,8 +6,10 @@ use std::time::Instant;
 
 use atspi::State as Raw;
 use gorca_model::{
-    AttrMap, ChildList, Freshness, Ifaces, NodeKey, NodeSnapshot, Relations, Role, StateSet, Value,
+    AttrMap, ChildList, Freshness, Ifaces, NodeKey, NodeSnapshot, PropMask, Relations, Role,
+    StateSet, Value,
 };
+use smallvec::SmallVec;
 
 use crate::role_map::map_role;
 
@@ -68,6 +70,10 @@ pub fn states_from_raw(words: &[u32]) -> StateSet {
         (Raw::HasPopup, StateSet::HAS_POPUP),
         (Raw::Active, StateSet::ACTIVE),
         (Raw::Defunct, StateSet::DEFUNCT),
+        (Raw::Enabled, StateSet::ENABLED),
+        (Raw::Selectable, StateSet::SELECTABLE),
+        (Raw::Transient, StateSet::TRANSIENT),
+        (Raw::ManagesDescendants, StateSet::MANAGES_DESCENDANTS),
     ];
     for (raw, core) in table {
         if has(bits, raw) {
@@ -88,6 +94,24 @@ pub struct RawNode {
     pub name: Option<String>,
     pub description: Option<String>,
     pub value: Option<RawValue>,
+    /// Parent reference, already resolved to a key of this app (foreign refs are dropped).
+    pub parent: Option<NodeKey>,
+    /// Child count as the app reported it, clipped to `[0, MAX_CHILD_COUNT]`.
+    pub child_count: Option<u32>,
+    /// Child keys when the whole list is known (a dump, a children walk).
+    pub children: Option<SmallVec<[NodeKey; 8]>>,
+    pub interfaces: Ifaces,
+    /// Fields this node actually carries.
+    pub have: PropMask,
+}
+
+/// The app's child count is untrusted: negative is zero, and nothing above this is believed.
+pub const MAX_CHILD_COUNT: u32 = 65_536;
+
+pub fn clip_child_count(n: i64) -> u32 {
+    u32::try_from(n.max(0))
+        .unwrap_or(u32::MAX)
+        .min(MAX_CHILD_COUNT)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -122,12 +146,18 @@ pub fn snapshot(key: NodeKey, raw: &RawNode, now: Instant) -> Arc<NodeSnapshot> 
         name: non_empty(raw.name.as_deref()),
         description: non_empty(raw.description.as_deref()),
         value,
-        parent: None,
-        children: ChildList::Unknown,
-        interfaces: Ifaces::empty(),
+        parent: raw.parent,
+        children: match (&raw.children, raw.child_count) {
+            (Some(c), _) => ChildList::Known(c.clone()),
+            (None, Some(n)) => ChildList::Count(n),
+            (None, None) => ChildList::Unknown,
+        },
+        interfaces: raw.interfaces,
         attrs: AttrMap::default(),
         relations: Relations::default(),
         bounds: None,
+        have: raw.have,
+        confirmed_seq: 0,
         fresh: Freshness::Fresh { at: now },
     })
 }
@@ -215,6 +245,7 @@ mod tests {
                 min: 0.0,
                 max: 1.0,
             }),
+            ..RawNode::default()
         };
         let n = snapshot(key(), &raw, Instant::now());
         assert_eq!(n.role, Role::Slider);

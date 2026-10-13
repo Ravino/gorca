@@ -111,6 +111,9 @@ mod tests {
             app_name: Arc::from(name),
             pid: None,
             connector_kind: ConnectorKind::Atspi,
+            verified_shell: false,
+            dump_complete: false,
+            root: None,
         }
     }
 

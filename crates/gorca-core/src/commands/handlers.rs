@@ -286,6 +286,7 @@ impl Reader {
                     mask: PropMask::PRESENT,
                     class: BudgetClass::Interactive,
                     epoch,
+                    kind: crate::reader::FetchKind::Info,
                 });
             }
             Lookup::Gone => self.say("focused object is gone", fx),

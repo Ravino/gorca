@@ -146,6 +146,17 @@ pub struct AppInfo {
     pub app_name: Arc<str>,
     pub pid: Option<u32>,
     pub connector_kind: ConnectorKind,
+    /// Set by the connector only when the registration matched the protected Shell identity
+    /// (same process group and start time as the verified compositor shell process). Never
+    /// derived from `app_name` or `toolkit`, which the application reports about itself.
+    pub verified_shell: bool,
+    /// The connector verified that a bulk `CacheDump` returns the whole tree of this app (B-1
+    /// 2.2). True only for a verified gnome-shell today; computed from verified identity, never
+    /// from self-reported names. A policy may use `CacheDump` only when this holds.
+    pub dump_complete: bool,
+    /// The application's root node, when the connector knows it. A fill policy that starts at
+    /// the root (an eager dump, a window prefetch) gets it with `FillInput::Appeared`.
+    pub root: Option<crate::NodeKey>,
 }
 
 #[derive(Clone, Debug)]

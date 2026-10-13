@@ -52,6 +52,9 @@ impl FakeScript {
                     app_name: Arc::from(name),
                     pid: None,
                     connector_kind: ConnectorKind::Fake,
+                    verified_shell: false,
+                    dump_complete: false,
+                    root: None,
                 },
             )],
             behavior,
@@ -104,7 +107,12 @@ async fn serve(mut requests: gorca_rt::mpsc::Receiver<BackendRequest>, behavior:
 fn reply_for(op: &BackendOp) -> BackendReply {
     match op {
         BackendOp::Children { .. } => BackendReply::Children(Vec::new()),
-        BackendOp::Subtree { .. } => BackendReply::Subtree(gorca_model::SnapshotBatch::default()),
+        BackendOp::Subtree { .. }
+        | BackendOp::ChildSnapshots { .. }
+        | BackendOp::Ancestry { .. }
+        | BackendOp::CacheDump { .. } => {
+            BackendReply::Subtree(gorca_model::SnapshotBatch::default())
+        }
         BackendOp::Text(_) => BackendReply::Text(Arc::from("")),
         BackendOp::HitTest { .. } => BackendReply::Hit(None),
         BackendOp::Collection(_) => BackendReply::Matches(Vec::new()),

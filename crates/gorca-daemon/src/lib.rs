@@ -29,7 +29,10 @@ mod cli;
 mod config_task;
 mod input;
 mod platform;
+mod probe;
 mod wire;
+
+pub use probe::{DaemonProbe, ProbeRead};
 
 use std::io::IsTerminal;
 use std::sync::Arc;
@@ -37,7 +40,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use gorca_connector_api::{Connector, ConnectorCtx};
-use gorca_connector_atspi::{AtspiConnector, AtspiOptions};
+use gorca_connector_atspi::{AtspiConnector, AtspiOptions, AtspiState};
 use gorca_core::{Core, CoreConfig, SpeechCtl, SpeechOut};
 use gorca_model::{ConnectorId, Prio, Segment, SegmentKind, UttId, Utterance};
 use gorca_output_api::SpeechClient;
@@ -248,6 +251,7 @@ async fn announce_notices(
             prio: Prio::Message,
             may_refine: false,
             survives_focus_change: true,
+            refines: None,
         };
         speech.submit(u);
     }
@@ -257,6 +261,7 @@ async fn announce_notices(
 /// connection lost). Returns when `shutdown` is cancelled.
 async fn supervise_connector(
     opts: AtspiOptions,
+    state: AtspiState,
     registry: gorca_connector_api::AppRegistrar,
     shutdown: CancellationToken,
 ) {
@@ -269,7 +274,7 @@ async fn supervise_connector(
             shutdown: shutdown.child_token(),
             clock: Clock::System,
         };
-        let connector = Box::new(AtspiConnector::new(opts.clone()));
+        let connector = Box::new(AtspiConnector::with_state(opts.clone(), state.clone()));
         match connector.run(ctx).await {
             Ok(()) => return,
             Err(e) => tracing::warn!(error = %e, ?backoff, "AT-SPI connector failed; retrying"),
@@ -302,43 +307,92 @@ pub async fn run(opts: Options, shutdown: CancellationToken) -> Result<()> {
 
 /// The daemon without signal handlers (tests run several in one process).
 pub async fn run_with(opts: Options, shutdown: CancellationToken) -> Result<()> {
+    run_inner(opts, shutdown, None, None).await
+}
+
+/// How a test chooses the fill policy of every application (the product always runs R0).
+pub type PolicyFactory = Arc<dyn Fn() -> Box<dyn gorca_mirror::fill::FillPolicy> + Send + Sync>;
+
+/// [`run_with`] that hands a [`DaemonProbe`] to `on_ready` once the daemon is wired (the
+/// test-only debug accessor of the B-1 conformance suite).
+pub async fn run_with_probe(
+    opts: Options,
+    shutdown: CancellationToken,
+    on_ready: impl FnOnce(DaemonProbe) + Send + 'static,
+) -> Result<()> {
+    run_inner(opts, shutdown, None, Some(Box::new(on_ready))).await
+}
+
+/// [`run_with_probe`] with the fill policy of the apps chosen by the caller. Only tests of the
+/// shared fill code need it (the null policy never requests anything).
+pub async fn run_with_policy(
+    opts: Options,
+    shutdown: CancellationToken,
+    policy: PolicyFactory,
+    on_ready: impl FnOnce(DaemonProbe) + Send + 'static,
+) -> Result<()> {
+    run_inner(opts, shutdown, Some(policy), Some(Box::new(on_ready))).await
+}
+
+async fn run_inner(
+    opts: Options,
+    shutdown: CancellationToken,
+    policy: Option<PolicyFactory>,
+    on_ready: Option<Box<dyn FnOnce(DaemonProbe) + Send>>,
+) -> Result<()> {
     let mut tasks = TaskSet::new(shutdown.clone());
     let mut core = Core::new(CoreConfig {
         shutdown_grace: SHUTDOWN_GRACE,
         ..CoreConfig::default()
     });
+    if let Some(p) = policy {
+        core = core.with_fill_policy(p);
+    }
     let registry = core.connector_registrar(ConnectorId(1));
     let epoch = core.epoch();
     let focused = core.focused_app();
 
-    let speech = wire::wire_speech(&mut tasks, &opts, &epoch);
-    let speech_for_keys = speech.clone();
-    let mut core = core.with_speech(Arc::new(LaneOut(speech)));
-    let senders = core.reader_senders();
-    let links = core.lane_links();
-    // Settings first: the keymap must be in place before the first key is classified.
-    if let Some(requests) = core.take_config_requests() {
-        wire::wire_config(
+    let core = if opts.shadow {
+        // B-1 PW-11: beside the user's real screen reader gorca only reads. Speech goes to the
+        // core's null sink, and nothing grabs keys or takes the Orca identity.
+        tracing::info!("shadow mode: read-only, no speech, no keyboard, no event registration");
+        core
+    } else {
+        let speech = wire::wire_speech(&mut tasks, &opts, &epoch);
+        let speech_for_keys = speech.clone();
+        let mut core = core.with_speech(Arc::new(LaneOut(speech)));
+        let senders = core.reader_senders();
+        let links = core.lane_links();
+        // Settings first: the keymap must be in place before the first key is classified.
+        if let Some(requests) = core.take_config_requests() {
+            wire::wire_config(
+                &mut tasks,
+                &opts,
+                &shutdown,
+                Arc::clone(&links),
+                senders.control.clone(),
+                requests,
+            );
+        }
+        wire::wire_input(
             &mut tasks,
             &opts,
             &shutdown,
-            Arc::clone(&links),
-            senders.control.clone(),
-            requests,
+            &epoch,
+            speech_for_keys,
+            senders,
+            links,
+            core.grab_requests(),
+            core.grab_sender(),
         );
+        core
+    };
+    let atspi_state = AtspiState::default();
+    let core = wire::wire_present_log(core, &opts, &atspi_state);
+    if let Some(f) = on_ready {
+        f(DaemonProbe::new(core.mirrors(), atspi_state.clone()));
     }
-    wire::wire_input(
-        &mut tasks,
-        &opts,
-        &shutdown,
-        &epoch,
-        speech_for_keys,
-        senders,
-        links,
-        core.grab_requests(),
-        core.grab_sender(),
-    );
-    wire::wire_atspi(&mut tasks, &opts, focused, registry, &shutdown);
+    wire::wire_atspi(&mut tasks, &opts, focused, registry, atspi_state, &shutdown);
 
     tracing::info!(
         workers = std::thread::available_parallelism().map_or(1, usize::from),

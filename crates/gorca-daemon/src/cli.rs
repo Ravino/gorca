@@ -17,6 +17,7 @@ pub enum SpeechMode {
     Ssip,
 }
 
+/// The flags are independent switches mirrored from the command line, not a state machine.
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Options {
@@ -43,6 +44,15 @@ pub struct Options {
     pub no_probe: bool,
     /// Desktop facts given from outside (flags and environment), replacing the probe.
     pub platform: PlatformOverrides,
+    /// `--bench-present-log=<path>`: record every node presentation as a JSON line (B-1 PW-10).
+    /// Only a command-line flag turns it on, never the environment or a config file: the log
+    /// holds what the screen reader presents (secret text is redacted, see `PresentLog`).
+    /// Passive: no behaviour depends on it.
+    pub present_log: Option<PathBuf>,
+    /// `GORCA_SHADOW=1`: read-only beside the user's real screen reader (B-1 PW-11): no keyboard
+    /// monitor, no Orca identity, no `org.a11y.Status` writes, no event registration, speech
+    /// to a null sink, and only the read calls of the connector's allowlist.
+    pub shadow: bool,
 }
 
 /// `gorca config ...`: tools around the settings file (ADR-0005 7.4, CV-3).
@@ -97,6 +107,8 @@ OPTIONS:
     --no-enable                  do not set org.a11y.Status IsEnabled/ScreenReaderEnabled
     --config=PATH                settings file (default: $XDG_CONFIG_HOME/gorca/gorca.toml)
     --no-probe                   do not ask gsettings about the keyboard and clock
+    --bench-present-log=PATH     benchmarks only: write the presentation log (absolute PATH, mode
+                                 0600, created anew; secret text is redacted)
     -h, --help                   print this help
 ";
 
@@ -114,6 +126,7 @@ impl Options {
     /// - `GORCA_CONFIG`, `XDG_CONFIG_HOME`, `HOME`: the settings file.
     /// - `GORCA_REPEAT_DELAY_MS`, `GORCA_XKB_OPTIONS`, `GORCA_CLOCK_24H`: desktop facts that
     ///   replace the `gsettings` probe (the e2e harness and tests use them).
+    /// - `GORCA_SHADOW=1`: shadow mode (PW-11).
     #[must_use]
     pub fn with_env(self, get: impl Fn(&str) -> Option<String>) -> Self {
         let mut o = self;
@@ -137,6 +150,16 @@ impl Options {
         }
         if get("GORCA_IMPERSONATE_ORCA").is_some_and(|v| v == "1") {
             o.impersonate_orca = true;
+        }
+        if get("GORCA_SHADOW").is_some_and(|v| v == "1") {
+            o.shadow = true;
+        }
+        // Last, so nothing above can switch it back on: shadow mode never impersonates Orca,
+        // never grabs keys and never writes the a11y status.
+        if o.shadow {
+            o.impersonate_orca = false;
+            o.no_keyboard = true;
+            o.no_enable = true;
         }
         // Defaults for what is still open. The daemon's `main` is the only place that reads the
         // environment; everything below this point receives resolved values.
@@ -276,6 +299,23 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError
                 })?;
                 opts.speech_peer_uids.push(uid);
             }
+            "--bench-present-log" => {
+                let v = value("--bench-present-log")?;
+                let path = PathBuf::from(&v);
+                let plain = path.is_absolute()
+                    && path
+                        .components()
+                        .all(|c| !matches!(c, std::path::Component::ParentDir))
+                    && path.file_name().is_some();
+                if !plain {
+                    return Err(CliError::BadValue {
+                        flag: "--bench-present-log",
+                        value: v,
+                        expected: "an absolute path to a file without `..`",
+                    });
+                }
+                opts.present_log = Some(path);
+            }
             "--a11y-address" => opts.a11y_address = Some(value("--a11y-address")?),
             "--session-address" => opts.session_address = Some(value("--session-address")?),
             _ => return Err(CliError::Unknown(arg)),
@@ -311,6 +351,28 @@ mod tests {
         assert_eq!(opts(&["--speech=voicego"]).speech, SpeechMode::Voicego);
         assert_eq!(opts(&["--speech", "ssip"]).speech, SpeechMode::Ssip);
         assert_eq!(opts(&["--speech=auto"]).speech, SpeechMode::Auto);
+    }
+
+    #[test]
+    fn the_presentation_log_needs_the_bench_flag_and_a_plain_absolute_path() {
+        let o = opts(&["--bench-present-log=/run/user/1/p.jsonl"]);
+        assert_eq!(
+            o.present_log.as_deref(),
+            Some(std::path::Path::new("/run/user/1/p.jsonl"))
+        );
+        assert!(opts(&[]).present_log.is_none());
+        // The environment never switches it on.
+        let env = |k: &str| (k == "GORCA_PRESENT_LOG").then(|| "/tmp/x.jsonl".to_owned());
+        assert!(opts(&[]).with_env(env).present_log.is_none());
+        for bad in ["rel.jsonl", "/a/../etc/x", "/", ""] {
+            assert!(
+                matches!(
+                    p(&[&format!("--bench-present-log={bad}")]),
+                    Err(CliError::BadValue { .. })
+                ),
+                "{bad}"
+            );
+        }
     }
 
     #[test]

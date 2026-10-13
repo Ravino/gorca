@@ -1,0 +1,47 @@
+# e2e l1s-n3
+# utc=2026-10-13T14:45:48Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=powersave x16
+# loadavg_start=12.06 11.33 11.21 3/2279 62750
+# git_rev=4541bd3
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=l1s-n3
+# reader=daemon:<repo>/.toolchain/scratch/aeebce-gorca-pw
+# backend=voicego
+# repeats=5
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=12.06 11.33 11.21 2/2279 62747
+# reader_env=
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+
+metric                     bus                median          min          max  n op    threshold  res   note
+L1s.l0_ms.n                daemon/voicego         1200         1200         1200  5                  info  speech-dispatcher text mock [samples]
+L1s.l0_ms.p50              daemon/voicego        0.154        0.143        0.164  5                  info  speech-dispatcher text mock [ms]
+L1s.l0_ms.p95              daemon/voicego        0.386        0.373        0.393  5                  info  speech-dispatcher text mock [ms]
+L1s.l0_ms.p99              daemon/voicego        0.468        0.463        0.494  5                  info  speech-dispatcher text mock [ms]
+L1s.l0_ms.p999             daemon/voicego        0.589        0.532        0.667  5                  info  speech-dispatcher text mock [ms]
+L1s.l0_ms.max              daemon/voicego        0.670        0.545        1.541  5                  info  speech-dispatcher text mock [ms]
+L1s.l1_ms.n                daemon/voicego         1200         1200         1200  5                  info  speech-dispatcher text mock [samples]
+L1s.l1_ms.p50              daemon/voicego        1.129        1.096        1.145  5                  info  speech-dispatcher text mock [ms]
+L1s.l1_ms.p95              daemon/voicego        1.955        1.902        1.971  5                  info  speech-dispatcher text mock [ms]
+L1s.l1_ms.p99              daemon/voicego        2.256        2.197        2.335  5 <=           15  PASS  speech-dispatcher text mock [ms]
+L1s.l1_ms.p999             daemon/voicego        2.487        2.390        2.799  5                  info  speech-dispatcher text mock [ms]
+L1s.l1_ms.max              daemon/voicego        2.545        2.413        2.803  5                  info  speech-dispatcher text mock [ms]
+L1s.l1g_ms.n               daemon/voicego         1200         1200         1200  5                  info  speech-dispatcher text mock [samples]
+L1s.l1g_ms.p50             daemon/voicego        0.945        0.919        0.972  5                  info  speech-dispatcher text mock [ms]
+L1s.l1g_ms.p95             daemon/voicego        1.728        1.698        1.760  5                  info  speech-dispatcher text mock [ms]
+L1s.l1g_ms.p99             daemon/voicego        2.046        2.030        2.061  5                  info  gorca side: bus arrival to SPEAK [ms]
+L1s.l1g_ms.p999            daemon/voicego        2.218        2.138        2.670  5                  info  speech-dispatcher text mock [ms]
+L1s.l1g_ms.max             daemon/voicego        2.285        2.187        2.752  5                  info  speech-dispatcher text mock [ms]
+L1s.cpu_pct                daemon/voicego         11.0         10.7         11.1  5                  info   [% of one core]
+L1s.cpu_us_per_event       daemon/voicego        426.1        418.5        435.0  5                  info   [us/event]
+L1s.idle_cpu_pct           daemon/voicego        0.636        0.496        1.040  5                  info   [% of one core]
+L1s.lost                   daemon/voicego            0            0            0  5 <=            0  PASS  gated on the max over repeats [events]

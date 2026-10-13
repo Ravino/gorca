@@ -30,5 +30,6 @@ tracing = { workspace = true }
 workspace = true
 
 [dev-dependencies]
+serde_json = "1"
 tokio = { workspace = true, features = ["test-util"] }
 gorca-testkit = { workspace = true }

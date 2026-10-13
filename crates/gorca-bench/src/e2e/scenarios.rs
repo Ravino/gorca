@@ -225,6 +225,45 @@ fn focus_series(
     Ok(out)
 }
 
+/// How an unspoken probe is accounted for.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Accounting {
+    /// Idle reader: every unspoken probe is `lost`.
+    Strict,
+    /// Reader under stress (flood, hung peer): a probe is legitimately dropped when a newer focus
+    /// event overtakes it before it is processed (ADR-0001 R-1: the ingress slot `Focus` keeps
+    /// only the newest node), so the user hears the newest focus and not the stale one. Only an
+    /// unspoken probe with no spoken successor is `lost` (the newest focus never reached
+    /// speech); the others are `superseded`, and the longest run of them is bounded.
+    Coalescing,
+}
+
+/// Longest tolerated run of consecutive superseded probes under stress: at the 8-16 ms probe
+/// gap, 10 probes are about 120 ms of staleness.
+pub const SUPERSEDED_RUN_MAX: f64 = 10.0;
+
+/// `(lost, superseded, longest superseded run)` for probes in emit order; `spoken[i]` says the
+/// reader spoke probe `i`.
+fn account(spoken: &[bool], mode: Accounting) -> (u64, u64, u64) {
+    let last_spoken = spoken.iter().rposition(|s| *s);
+    let (mut lost, mut sup, mut run, mut max_run) = (0u64, 0u64, 0u64, 0u64);
+    for (i, s) in spoken.iter().enumerate() {
+        if *s {
+            run = 0;
+            continue;
+        }
+        let overtaken = mode == Accounting::Coalescing && last_spoken.is_some_and(|l| l > i);
+        if overtaken {
+            sup += 1;
+            run += 1;
+            max_run = max_run.max(run);
+        } else {
+            lost += 1;
+        }
+    }
+    (lost, sup, max_run)
+}
+
 /// L1 / L0 / L1g samples for a finished series.
 fn score_series(
     rig: &Rig,
@@ -233,6 +272,7 @@ fn score_series(
     mark: usize,
     out: &mut RunOut,
     suffix: &str,
+    mode: Accounting,
 ) {
     let dec = Decoder::new(FIRST_NODE + probes.len() + 8);
     let recs = rig.mock.since(mark);
@@ -248,26 +288,33 @@ fn score_series(
         .map(|a| a.bus_name.clone())
         .unwrap_or_default();
     let (mut l1, mut l1g, mut l0) = (Vec::new(), Vec::new(), Vec::new());
-    let mut lost = 0u64;
+    let mut spoken = Vec::with_capacity(probes.len());
     for p in probes {
         let tap = rig.tap.arrival(&bus, p.node);
         if let Some(t) = tap {
             l0.push(ms(t.saturating_sub(p.t_emit)));
         }
-        match first.get(&p.node) {
-            Some(&t) => {
-                l1.push(ms(t.saturating_sub(p.t_emit)));
-                if let Some(a) = tap {
-                    l1g.push(ms(t.saturating_sub(a)));
-                }
+        if let Some(&t) = first.get(&p.node) {
+            l1.push(ms(t.saturating_sub(p.t_emit)));
+            if let Some(a) = tap {
+                l1g.push(ms(t.saturating_sub(a)));
             }
-            None => lost += 1,
         }
+        spoken.push(first.contains_key(&p.node));
     }
+    let (lost, superseded, max_run) = account(&spoken, mode);
     out.s(&format!("l1_ms{suffix}"), l1);
     out.s(&format!("l1g_ms{suffix}"), l1g);
     out.s(&format!("l0_ms{suffix}"), l0);
     out.x(&format!("lost{suffix}"), lost as f64, "events");
+    if mode == Accounting::Coalescing {
+        out.x(&format!("superseded{suffix}"), superseded as f64, "events");
+        out.x(
+            &format!("superseded_max_run{suffix}"),
+            max_run as f64,
+            "events",
+        );
+    }
 }
 
 pub fn run(
@@ -375,7 +422,7 @@ fn l1(rig: &mut Rig, out: &mut RunOut, size: Size, seed: u64, role: &str) -> Res
         |rig| focus_series(rig, role, size.n, (8, 16), seed),
     )?;
     std::thread::sleep(Duration::from_millis(400));
-    score_series(rig, role, &probes, mark, out, "");
+    score_series(rig, role, &probes, mark, out, "", Accounting::Strict);
     Ok(())
 }
 
@@ -479,7 +526,7 @@ fn l3(rig: &mut Rig, out: &mut RunOut, size: Size, seed: u64, rate: f64) -> Resu
         .thread
         .join()
         .map_err(|_| anyhow::anyhow!("storm thread panicked"))?;
-    score_series(rig, "app", &probes, mark, out, "");
+    score_series(rig, "app", &probes, mark, out, "", Accounting::Coalescing);
     out.x("storm_target_eps", rate, "ev/s");
     out.x("storm_achieved_eps", fr.achieved_rate(), "ev/s");
     out.x("storm_max_lag_ms", ms(fr.max_lag_ns), "ms");
@@ -545,7 +592,7 @@ fn l4(rig: &mut Rig, out: &mut RunOut, size: Size, seed: u64) -> Result<()> {
             "calls",
         );
     }
-    score_series(rig, "app", &probes, mark, out, "");
+    score_series(rig, "app", &probes, mark, out, "", Accounting::Coalescing);
     Ok(())
 }
 
@@ -701,6 +748,20 @@ fn floor(host: &HostEnv, out: &mut RunOut, flavor: Flavor, size: Size) -> Result
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn accounting_separates_superseded_from_lost() {
+        let t = true;
+        let f = false;
+        // idle: every unspoken probe is lost
+        assert_eq!(account(&[t, f, t, f], Accounting::Strict), (2, 0, 0));
+        // stress: only the unspoken tail (no spoken successor) is lost
+        assert_eq!(account(&[t, f, t, f], Accounting::Coalescing), (1, 1, 1));
+        assert_eq!(account(&[f, f, t, f, t], Accounting::Coalescing), (0, 3, 2));
+        // a reader that spoke nothing lost everything
+        assert_eq!(account(&[f, f, f], Accounting::Coalescing), (3, 0, 0));
+        assert_eq!(account(&[], Accounting::Coalescing), (0, 0, 0));
+    }
 
     #[test]
     fn decoder_understands_stub_tags_and_natural_text() {

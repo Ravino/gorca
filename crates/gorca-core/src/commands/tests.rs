@@ -45,6 +45,8 @@ fn snap(n: u64, role: Role, name: &str, parent: Option<u64>) -> Arc<NodeSnapshot
         attrs: gorca_model::AttrMap::default(),
         relations: gorca_model::Relations::default(),
         bounds: None,
+        have: gorca_model::PropMask::PRESENT,
+        confirmed_seq: 0,
         fresh: Freshness::Fresh { at: Instant::now() },
     })
 }
@@ -117,9 +119,13 @@ impl Fx {
     }
 
     fn focus(&mut self, n: u64) {
-        self.writer.apply(SnapshotBatch {
-            nodes: vec![snap(n, Role::Button, "OK", Some(2))],
-        });
+        self.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(n, Role::Button, "OK", Some(2))],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
         self.reader.handle(
             ReaderMsg::Focus(crate::FocusLaneMsg::FocusChanged { node: key(n) }),
             self.now,
@@ -139,6 +145,8 @@ fn spoken(fx: &ReaderEffects) -> Vec<String> {
                     .join(" "),
             ),
             ReaderEffect::Fetch { .. }
+            | ReaderEffect::Demand { .. }
+            | ReaderEffect::FocusSettled { .. }
             | ReaderEffect::QueryActiveWindowFocus
             | ReaderEffect::ArmTimer(_)
             | ReaderEffect::SetGrabSet(_)
@@ -154,6 +162,8 @@ fn ctls(fx: &ReaderEffects) -> Vec<SpeechCtl> {
             ReaderEffect::SpeechCtl(c) => Some(*c),
             ReaderEffect::Speak(_)
             | ReaderEffect::Fetch { .. }
+            | ReaderEffect::Demand { .. }
+            | ReaderEffect::FocusSettled { .. }
             | ReaderEffect::QueryActiveWindowFocus
             | ReaderEffect::ArmTimer(_)
             | ReaderEffect::SetGrabSet(_)
@@ -368,13 +378,17 @@ fn time_and_date() {
 #[test]
 fn where_am_i_uses_the_mirror_and_repeats_escalate() {
     let mut f = fixture();
-    f.writer.apply(SnapshotBatch {
-        nodes: vec![
-            snap(1, Role::Application, "Files", None),
-            snap(2, Role::Window, "Downloads", Some(1)),
-            snap(3, Role::Button, "Save", Some(2)),
-        ],
-    });
+    f.writer.apply(
+        SnapshotBatch {
+            nodes: vec![
+                snap(1, Role::Application, "Files", None),
+                snap(2, Role::Window, "Downloads", Some(1)),
+                snap(3, Role::Button, "Save", Some(2)),
+            ],
+            ..Default::default()
+        },
+        gorca_mirror::ApplyOrigin::Push,
+    );
     f.reader.handle(
         ReaderMsg::Focus(crate::FocusLaneMsg::FocusChanged { node: key(3) }),
         f.now,
@@ -419,6 +433,7 @@ fn where_am_i_on_a_miss_fetches_once_and_answers_on_the_reply() {
     let reply = QueryReply {
         node: key(5),
         epoch,
+        kind: crate::reader::FetchKind::Focus,
         result: Ok(snap(5, Role::Link, "Docs", None)),
     };
     let fx = f.reader.handle(ReaderMsg::Reply(reply), f.now);
@@ -440,6 +455,7 @@ fn a_late_reply_after_a_newer_key_is_dropped_and_a_timeout_speaks_the_partial_an
     let reply = QueryReply {
         node: key(5),
         epoch: asked,
+        kind: crate::reader::FetchKind::Info,
         result: Ok(snap(5, Role::Link, "Docs", None)),
     };
     assert!(spoken(&f.reader.handle(ReaderMsg::Reply(reply), f.now)).is_empty());
@@ -450,6 +466,7 @@ fn a_late_reply_after_a_newer_key_is_dropped_and_a_timeout_speaks_the_partial_an
     let reply = QueryReply {
         node: key(5),
         epoch: f.epoch.current(),
+        kind: crate::reader::FetchKind::Info,
         result: Err(gorca_connector_api::BackendError::Timeout),
     };
     let fx = f.reader.handle(ReaderMsg::Reply(reply), f.now);

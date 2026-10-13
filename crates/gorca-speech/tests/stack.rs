@@ -38,6 +38,7 @@ fn utt(id: u64, epoch: Epoch, text: &str) -> Utterance {
         prio: Prio::Interrupt,
         may_refine: false,
         survives_focus_change: false,
+        refines: None,
     }
 }
 

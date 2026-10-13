@@ -168,6 +168,11 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     .at_most_in_every_run(5.0)
                     .note("Ambiguous chords repeated per 10k switches");
             }
+            if metric == "superseded_max_run" {
+                row = row
+                    .at_most_in_every_run(gorca_bench::e2e::scenarios::SUPERSEDED_RUN_MAX)
+                    .note("consecutive focus probes overtaken by a newer one (ADR-0001 R-1)");
+            }
             if sid == "L4" && metric == "peer_calls_hung" {
                 row = row
                     .at_least(1.0)

@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use gorca_connector_api::AppRegistrar;
-use gorca_connector_atspi::AtspiOptions;
+use gorca_connector_atspi::{AtspiOptions, AtspiState};
 use gorca_core::{ConfigRequest, ControlMsg, ReaderSenders};
 use gorca_input_api::{GrabSet, KeySource, KeySourceCtx, LaneLinks, key_channel};
 use gorca_input_mutter::MutterKeySource;
@@ -142,6 +142,7 @@ pub(crate) fn wire_atspi(
     opts: &Options,
     focused: Arc<FocusedApp>,
     registry: AppRegistrar,
+    state: AtspiState,
     shutdown: &CancellationToken,
 ) {
     tasks.spawn(
@@ -151,11 +152,46 @@ pub(crate) fn wire_atspi(
                 a11y_address: opts.a11y_address.clone(),
                 session_address: opts.session_address.clone(),
                 enable_accessibility: !opts.no_enable,
-                register_events: true,
+                register_events: !opts.shadow,
                 focused: Some(focused),
+                shadow: opts.shadow,
             },
+            state,
             registry,
             shutdown.clone(),
         ),
     );
+}
+
+/// B-1 PW-10: `--bench-present-log=<path>` (the only way to turn it on) records every node
+/// presentation as a JSON line. The object paths come from the connector's path table through
+/// [`PathLabels`]; the core never sees them. Passive: unset means nothing happens, and an
+/// unwritable file only costs the log.
+pub(crate) fn wire_present_log(
+    core: gorca_core::Core,
+    opts: &Options,
+    state: &AtspiState,
+) -> gorca_core::Core {
+    let Some(path) = &opts.present_log else {
+        return core;
+    };
+    let labels = Arc::new(PathLabels(state.labels()));
+    match gorca_core::PresentLog::to_file(path, labels) {
+        Ok(log) => core.with_present_log(log),
+        Err(e) => {
+            tracing::warn!(error = %e, path = %path.display(), "presentation log not opened");
+            core
+        }
+    }
+}
+
+/// The connector's `NodeKey` to `(bus, path)` table as the core's presentation-log labeller.
+struct PathLabels(gorca_connector_atspi::AtspiLabels);
+
+impl gorca_core::NodeLabel for PathLabels {
+    fn label(&self, key: gorca_model::NodeKey) -> Option<(String, String)> {
+        self.0
+            .lookup(key)
+            .map(|(bus, path)| (bus.to_string(), path.to_string()))
+    }
 }

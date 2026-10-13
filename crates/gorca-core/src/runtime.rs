@@ -30,7 +30,10 @@ use gorca_connector_api::{
 };
 use gorca_ingress::{GLOBAL_SLOT_BUDGET, IngressConfig, SlotBudget};
 use gorca_input_api::{GrabSet, LaneLinks};
-use gorca_mirror::mirror;
+use gorca_mirror::driver::GlobalRate;
+use gorca_mirror::fill::{FillOp, FillPolicy, NullPolicy};
+use gorca_mirror::limits::FILL_RATE_GLOBAL;
+use gorca_mirror::{FillLimits, MirrorBudget, mirror_for};
 use gorca_model::{AppId, ConnectorId, Epoch, NodeKey, PropMask, ReqId, Utterance};
 use gorca_rt::{
     BudgetClass, CancellationToken, Clock, Deadline, EpochCell, FocusedApp, Lane, TaskExit,
@@ -38,12 +41,15 @@ use gorca_rt::{
 };
 use tokio::task::JoinSet;
 
-use crate::app_actor::{AppActor, ReaderLinks};
+use crate::app_actor::{AppActor, FILL_QUEUE, FillMsg, ReaderLinks};
 use crate::commands::{ConfigRequest, SpeechCtl};
 use crate::directory::MirrorDirectory;
 use crate::health::{AppHealth, HealthEffect, HealthMsg};
 use crate::mode::ModeKeys;
-use crate::reader::{QueryReply, Reader, ReaderEffect, ReaderMsg, ReaderSenders, reader_channels};
+use crate::present::PresentLog;
+use crate::reader::{
+    FetchKind, QueryReply, Reader, ReaderEffect, ReaderMsg, ReaderSenders, reader_channels,
+};
 
 /// Where utterances go. Implemented by the speech lane (`gorca-speech`), wired by the daemon.
 /// Both methods must return immediately (S-3).
@@ -157,6 +163,8 @@ struct AppHandle {
     health: mpsc::Sender<HealthMsg>,
     /// `AppHealth::admits_requests`, published by the app actor (I-4).
     admits: Arc<AtomicBool>,
+    /// Reader demands and Reader fetch replies for the app actor's fill driver.
+    fill: mpsc::Sender<FillMsg>,
 }
 
 /// Lock-free app table, copy-on-write like the mirror directory.
@@ -194,6 +202,9 @@ struct FetchJob {
     mask: PropMask,
     class: BudgetClass,
     epoch: Epoch,
+    kind: FetchKind,
+    /// The app's mirror write sequence when the Reader asked (late-reply rules).
+    issued_at: u64,
 }
 
 const FETCH_QUEUE: usize = 64;
@@ -221,6 +232,12 @@ struct Shared {
     /// The grab set (with its lookup context) the keyboard source should apply; latest wins.
     grabs: Arc<watch::Sender<GrabSet>>,
     config: mpsc::Sender<ConfigRequest>,
+    /// Builds the fill policy of each new app (R0 unless the daemon chooses another).
+    policy: Arc<dyn Fn() -> Box<dyn FillPolicy> + Send + Sync>,
+    limits: FillLimits,
+    mirror_budget: Arc<MirrorBudget>,
+    global_rate: Arc<GlobalRate>,
+    present_log: Option<Arc<PresentLog>>,
 }
 
 impl std::fmt::Debug for Shared {
@@ -268,6 +285,11 @@ impl Core {
                 settings: Arc::new(ArcSwap::from_pointee(Settings::default())),
                 grabs: Arc::new(grabs),
                 config,
+                policy: Arc::new(|| Box::new(NullPolicy)),
+                limits: FillLimits::default(),
+                mirror_budget: MirrorBudget::global(),
+                global_rate: GlobalRate::new(FILL_RATE_GLOBAL),
+                present_log: None,
             }),
             inbox,
             registrars: Vec::new(),
@@ -281,6 +303,27 @@ impl Core {
     pub fn with_speech(mut self, speech: Arc<dyn SpeechOut>) -> Self {
         if let Some(sh) = Arc::get_mut(&mut self.shared) {
             sh.speech = speech;
+        }
+        self
+    }
+
+    /// Choose the fill policy of every app announced from now on (default: R0, `NullPolicy`).
+    #[must_use]
+    pub fn with_fill_policy(
+        mut self,
+        policy: Arc<dyn Fn() -> Box<dyn FillPolicy> + Send + Sync>,
+    ) -> Self {
+        if let Some(sh) = Arc::get_mut(&mut self.shared) {
+            sh.policy = policy;
+        }
+        self
+    }
+
+    /// Record every node presentation in `log` (B-1 PW-10).
+    #[must_use]
+    pub fn with_present_log(mut self, log: Arc<PresentLog>) -> Self {
+        if let Some(sh) = Arc::get_mut(&mut self.shared) {
+            sh.present_log = Some(log);
         }
         self
     }
@@ -483,9 +526,10 @@ fn spawn_app_actor(
     app: AppId,
     token: CancellationToken,
 ) {
-    let (writer, handle) = mirror();
+    let (writer, handle) = mirror_for(app, Some(Arc::clone(&shared.mirror_budget)));
     shared.mirrors.insert(app, &handle);
     let (health_tx, health_rx) = mpsc::channel(HEALTH_QUEUE);
+    let (fill_tx, fill_rx) = mpsc::channel(FILL_QUEUE);
     let admits = Arc::new(AtomicBool::new(true));
     shared.apps.insert(
         app,
@@ -493,13 +537,21 @@ fn spawn_app_actor(
             requests: requests.clone(),
             health: health_tx.clone(),
             admits: Arc::clone(&admits),
+            fill: fill_tx,
         },
     );
     let links = ReaderLinks {
         focus: shared.senders.focus.clone(),
         background: shared.senders.background.clone(),
     };
-    let actor = AppActor::new(app, writer, ingress, control, links);
+    let actor = AppActor::new(app, writer, ingress, control, links)
+        .with_policy(
+            (shared.policy)(),
+            shared.limits.clone(),
+            Some(Arc::clone(&shared.global_rate)),
+        )
+        .with_fill_channel(fill_rx)
+        .with_focused(Arc::clone(&shared.focused));
     let shared = Arc::clone(shared);
     actors.spawn(
         "app-actor",
@@ -507,7 +559,9 @@ fn spawn_app_actor(
     );
 }
 
-/// The async shell around [`AppActor::pump`].
+/// The async shell around [`AppActor::pump`]: waits for work, pumps, sends the requests the fill
+/// driver issued under their deadlines (each in a task owned by `fills`, cancelled with the
+/// actor) and feeds their replies back.
 async fn run_app_actor(
     mut actor: AppActor,
     mut health_rx: mpsc::Receiver<HealthMsg>,
@@ -521,8 +575,10 @@ async fn run_app_actor(
     let mut ticker = tokio::time::interval(HEALTH_TICK);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut probes: JoinSet<()> = JoinSet::new();
+    let mut fills: JoinSet<FillDone> = JoinSet::new();
     loop {
         let mut effects = Vec::new();
+        let wake = actor.next_wake();
         tokio::select! {
             biased;
             () = token.cancelled() => break,
@@ -534,9 +590,37 @@ async fn run_app_actor(
                 effects.extend(actor.on_health(HealthMsg::Tick, Instant::now()));
             }
             Some(_) = probes.join_next() => {}
+            Some(done) = fills.join_next() => {
+                if let Ok(d) = done {
+                    effects.extend(actor.on_fill_reply(d.id, d.issued_at, d.result, Instant::now()));
+                }
+            }
+            () = sleep_until(wake), if wake.is_some() => {
+                actor.poll_timers(Instant::now());
+            }
         }
         let route = actor.pump(Instant::now());
         admits.store(actor.health().admits_requests(), Ordering::Release);
+        let mut issued = route.issued;
+        issued.extend(actor.take_issued());
+        for f in issued {
+            if fills.len() >= FILL_TASKS_MAX {
+                // The driver bounds this far below the cap; a refused task is a lost reply.
+                tracing::warn!(?app, "fill task cap reached; dropping a request");
+                continue;
+            }
+            let requests = requests.clone();
+            let id = ReqId(shared.next_req.fetch_add(1, Ordering::Relaxed));
+            fills.spawn(async move {
+                let op = backend_op(&f.op);
+                let result = request(&requests, id, f.class, op, Deadline(f.deadline)).await;
+                FillDone {
+                    id: f.id,
+                    issued_at: f.issued_at,
+                    result,
+                }
+            });
+        }
         for e in effects {
             if matches!(e, HealthEffect::SendProbe) && probes.is_empty() {
                 let (requests, health, clock) =
@@ -567,8 +651,48 @@ async fn run_app_actor(
         }
     }
     probes.abort_all();
+    fills.abort_all();
     shared.mirrors.remove(app);
     shared.apps.remove(app);
+}
+
+/// Most fill requests an app actor awaits at once (the driver admits at most 8).
+const FILL_TASKS_MAX: usize = 64;
+
+struct FillDone {
+    id: gorca_mirror::fill::FillReqId,
+    issued_at: u64,
+    result: Result<BackendReply, BackendError>,
+}
+
+fn backend_op(op: &FillOp) -> BackendOp {
+    match op {
+        FillOp::Fetch { node, want } => BackendOp::Fetch {
+            node: *node,
+            want: *want,
+        },
+        FillOp::ChildSnapshots { node, range, want } => BackendOp::ChildSnapshots {
+            node: *node,
+            range: range.clone(),
+            want: *want,
+        },
+        FillOp::Ancestry {
+            node,
+            max_depth,
+            want,
+        } => BackendOp::Ancestry {
+            node: *node,
+            max_depth: *max_depth,
+            want: *want,
+        },
+        FillOp::Subtree { root, max_nodes } => BackendOp::Subtree {
+            root: *root,
+            max_nodes: *max_nodes,
+        },
+        FillOp::CacheDump { max_nodes } => BackendOp::CacheDump {
+            max_nodes: *max_nodes,
+        },
+    }
 }
 
 async fn fetch_dispatcher(shared: Arc<Shared>, mut rx: mpsc::Receiver<FetchJob>) {
@@ -604,6 +728,7 @@ fn reply(
     let q = QueryReply {
         node: job.node,
         epoch: job.epoch,
+        kind: job.kind,
         result,
     };
     if shared.senders.replies.try_send(q).is_err() {
@@ -645,7 +770,12 @@ async fn do_fetch(shared: Arc<Shared>, job: FetchJob) {
             bump(&shared.stats.fetch_refused);
             None
         }
-        Err(BackendError::Gone | BackendError::NotSupported | BackendError::Protocol(_)) => {
+        Err(
+            BackendError::Gone
+            | BackendError::NotSupported
+            | BackendError::Protocol(_)
+            | BackendError::Unresolved,
+        ) => {
             bump(&shared.stats.fetch_failed);
             None
         }
@@ -665,6 +795,13 @@ async fn do_fetch(shared: Arc<Shared>, job: FetchJob) {
         | BackendReply::Matches(_) => {
             Err(BackendError::Protocol("unexpected reply kind".to_owned()))
         }
+    });
+    // The app actor owns the mirror: it applies the reply (late-reply rules, tombstone on Gone).
+    // The Reader gets the answer first; this is off the latency path.
+    let _ = handle.fill.try_send(FillMsg::ReaderFetch {
+        node: job.node,
+        issued_at: job.issued_at,
+        result: result.clone(),
     });
     reply(&shared, job, result);
 }
@@ -731,6 +868,9 @@ async fn reader_loop(
     .with_focused(Arc::clone(&shared.focused))
     .with_links(Arc::clone(&shared.links))
     .with_settings_cell(Arc::clone(&shared.settings));
+    if let Some(log) = &shared.present_log {
+        reader = reader.with_present_log(Arc::clone(log));
+    }
     let mut timer: Option<Instant> = None;
     loop {
         let msg = tokio::select! {
@@ -768,21 +908,35 @@ async fn reader_loop(
                     mask,
                     class,
                     epoch,
+                    kind,
                 } => {
                     let job = FetchJob {
                         node,
                         mask,
                         class,
                         epoch,
+                        kind,
+                        issued_at: shared.mirrors.bump_seq(node.app),
                     };
                     if fetch_tx.try_send(job).is_err() {
                         bump(&shared.stats.fetch_refused);
                         let q = QueryReply {
                             node,
                             epoch,
+                            kind,
                             result: Err(BackendError::Busy),
                         };
                         let _ = shared.senders.replies.try_send(q);
+                    }
+                }
+                ReaderEffect::Demand { node, why, outcome } => {
+                    if let Some(h) = shared.apps.get(node.app) {
+                        let _ = h.fill.try_send(FillMsg::Demand { node, why, outcome });
+                    }
+                }
+                ReaderEffect::FocusSettled { node } => {
+                    if let Some(h) = shared.apps.get(node.app) {
+                        let _ = h.fill.try_send(FillMsg::FocusSettled { node });
                     }
                 }
                 // One timer slot serves focus settling and pass-next-key: the earliest wins.

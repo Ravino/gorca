@@ -1,6 +1,6 @@
 [package]
 name = "gorca-mirror"
-description = "Per-app lock-free snapshot store: MirrorRead and MirrorWriter."
+description = "Per-app lock-free snapshot store (MirrorRead, MirrorWriter), the fill policy trait and the shared fill driver."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,7 +9,15 @@ publish.workspace = true
 
 [dependencies]
 gorca-model = { workspace = true }
+gorca-rt = { workspace = true }
+gorca-ingress = { workspace = true }
+smallvec = { workspace = true }
+scc = { workspace = true }
 arc-swap = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+# The audits of the B-1 conformance kit run against the real store (MA-1..MA-6).
+gorca-testkit = { workspace = true }

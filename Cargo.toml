@@ -5,6 +5,7 @@ resolver = "3"
 members = [
     "crates/*",
     "extensions/*",
+    "tests/harness/b1/fakeapp",
     "xtask",
 ]
 
@@ -64,6 +65,7 @@ serde = { version = "1", default-features = false }
 smallvec = "1"
 bitflags = "2"
 arc-swap = "1"
+scc = "3"
 crossbeam-queue = "0.3"
 libc = "0.2"
 

@@ -33,6 +33,26 @@ pub enum BackendOp {
         root: NodeKey,
         max_nodes: u32,
     },
+    /// Children of `node` in `range`, each as a snapshot with at least `want`. Answered with
+    /// `BackendReply::Subtree`; partial nodes carry their `have`.
+    ChildSnapshots {
+        node: NodeKey,
+        range: Range<u32>,
+        want: PropMask,
+    },
+    /// `node`, its parent, its parent's parent ... up to `max_depth` (at most 64) or the app
+    /// root; stops at a cycle, a foreign reference or a `Document*` role. Answered with
+    /// `BackendReply::Subtree`, `truncated` set when it stopped early.
+    Ancestry {
+        node: NodeKey,
+        max_depth: u8,
+        want: PropMask,
+    },
+    /// Whole-app bulk dump (AT-SPI: `Cache.GetItems`). `NotSupported` when the app has none.
+    /// Answered with `BackendReply::Subtree`.
+    CacheDump {
+        max_nodes: u32,
+    },
     Text(TextQuery),
     /// `DoDefault`, `Focus`, `SetCaret`, `Select`, `ScrollTo`, `SetValue`.
     Action(ActionReq),
@@ -96,4 +116,8 @@ pub enum BackendError {
     Busy,
     #[error("protocol error: {0}")]
     Protocol(String),
+    /// The connector has no path for this key (evicted from its path table). A miss, never
+    /// `Gone`: the object may well exist.
+    #[error("the key has no known path")]
+    Unresolved,
 }

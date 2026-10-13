@@ -145,11 +145,22 @@ async fn eventually(what: &str, cond: impl Fn() -> bool) {
 #[tokio::test]
 async fn the_first_event_registers_asynchronously_and_is_replayed_in_order() {
     let c = core(|_| Duration::from_millis(20));
+    // The drain never waits: the answer is immediate even though the core takes 20 ms. Wall
+    // time is the property here (a waiting resolve burns no CPU), so robustness to preemption
+    // comes from the minimum of five first-resolves on fresh routers: a resolve that waits
+    // for the core takes >= 20 ms every time, a preempted one is slow once at most.
+    let fastest = (0..5)
+        .map(|_| {
+            let probe = rig(&c, Arc::new(Fixed(4242)));
+            let t = std::time::Instant::now();
+            assert!(is_retry(&probe.router.resolve(":1.42")));
+            t.elapsed()
+        })
+        .min()
+        .unwrap_or(Duration::MAX);
+    assert!(fastest < Duration::from_millis(10), "{fastest:?}");
     let mut r = rig(&c, Arc::new(Fixed(4242)));
-    // The drain never waits: the answer is immediate even though the core takes 20 ms.
-    let t = std::time::Instant::now();
     assert!(is_retry(&r.router.resolve(":1.42")));
-    assert!(t.elapsed() < Duration::from_millis(10));
     // Two more events while the registration runs: parked, not lost.
     r.router.park(":1.42", &focus_signal("/org/a/1"));
     r.router.park(":1.42", &focus_signal("/org/a/2"));
@@ -1158,6 +1169,72 @@ async fn a_recycled_shell_pid_does_not_inherit_protection() {
     let st = r.router.state();
     let impostor = st.apps.get(":1.510").unwrap();
     assert!(!st.is_shell(impostor.group, impostor.start));
+}
+
+/// The Shell profile is granted by the router's verified identity, never by what the application
+/// says about itself: only the registration matching the protected process is `verified_shell`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn only_the_protected_process_is_announced_as_the_verified_shell() {
+    let c = core(|_| Duration::ZERO);
+    let creds = Scripted {
+        pid: Box::new(|n| Some(n + 10)),
+        info: Box::new(|pid| ProcInfo {
+            pgrp: Some(pid),
+            start: Some(u64::from(pid) * 10),
+            ..ProcInfo::default()
+        }),
+    };
+    let mut r = rig(&c, Arc::new(creds));
+    r.router
+        .set_protected_process(Some((SHELL_PID, SHELL_START)));
+    for n in [511u32, 512] {
+        let _ = r.router.resolve(&format!(":1.{n}"));
+        r.router.complete(r.to_register.try_recv().unwrap()).await;
+    }
+    let mut seen = std::collections::HashMap::new();
+    while let Ok(n) = r.new_apps.try_recv() {
+        seen.insert(n.bus_name.to_string(), n.verified_shell);
+    }
+    assert_eq!(seen.get(":1.511"), Some(&true));
+    assert_eq!(seen.get(":1.512"), Some(&false));
+}
+
+/// F8: the Shell's first signal can be routed before `org.gnome.Shell` was resolved. The
+/// registration then carries its identity and the watch, so verification happens later.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn a_shell_published_before_it_is_resolved_is_verified_when_the_process_becomes_known() {
+    let c = core(|_| Duration::ZERO);
+    let creds = Scripted {
+        pid: Box::new(|n| Some(n + 10)),
+        info: Box::new(|pid| ProcInfo {
+            pgrp: Some(pid),
+            start: Some(u64::from(pid) * 10),
+            ..ProcInfo::default()
+        }),
+    };
+    let mut r = rig(&c, Arc::new(creds));
+    // Nothing is protected yet: the race the reviewer found.
+    let _ = r.router.resolve(":1.511");
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    let new = r.new_apps.try_recv().unwrap();
+    assert!(!new.verified_shell);
+    assert_eq!(new.identity, Some((SHELL_PID, SHELL_START)));
+    assert!(!crate::fetch::is_the_shell(
+        *new.shell_rx.borrow(),
+        new.identity
+    ));
+    // The connector resolves org.gnome.Shell a moment later.
+    r.router
+        .set_protected_process(Some((SHELL_PID, SHELL_START)));
+    assert!(crate::fetch::is_the_shell(
+        *new.shell_rx.borrow(),
+        new.identity
+    ));
+    // An impostor with the same pid and another start time never matches.
+    assert!(!crate::fetch::is_the_shell(
+        *new.shell_rx.borrow(),
+        Some((SHELL_PID, SHELL_START + 1))
+    ));
 }
 
 /// The shell restarting at a full table is never refused: as a newcomer it takes the newest

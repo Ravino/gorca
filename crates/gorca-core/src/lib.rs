@@ -40,7 +40,7 @@ mod review;
 mod runtime;
 mod text;
 
-pub use app_actor::{AppActor, AppRoute, ReaderLinks};
+pub use app_actor::{AppActor, AppRoute, FILL_QUEUE, FillMsg, ReaderLinks, health_view};
 pub use builtin_ext::AppProfile;
 pub use commands::{
     Availability, CmdSpec, CommandTable, Compiled, ConfigRequest, ContextMask, ControlMsg, CoreCmd,
@@ -56,13 +56,17 @@ pub use health::{
     SLOW_RECOVERY, SLOW_WINDOW,
 };
 pub use mode::{BaseMode, Mode, ModeEffect, ModeKeys, ModeMsg, PassScope, ReviewCursor};
+pub use present::log_states as snapshot_state_names;
+pub use present::value_text;
 pub use present::{
-    PresentContext, PresentJob, PresentKind, Presenter, PresenterRegistry, SpeechIntent,
-    key_echo_text, present_focus, present_selected_item,
+    FOCUS_FIELDS, NoLabels, NodeLabel, PresentContext, PresentJob, PresentKind, PresentLog,
+    PresentRecord, PresentSource, Presented, Presenter, PresenterRegistry, RAPID_FOCUS,
+    REFINE_WINDOW, STORM_HOLD, SpeechIntent, focus_need, key_echo_text, present_focus,
+    present_selected_item,
 };
 pub use reader::{
-    BackgroundMsg, DUPLICATE_FOCUS_WINDOW, FocusLaneMsg, QueryReply, Reader, ReaderEffect,
-    ReaderInbox, ReaderMsg, ReaderSenders, reader_channels,
+    BackgroundMsg, DUPLICATE_FOCUS_WINDOW, FetchKind, FocusLaneMsg, QueryReply, Reader,
+    ReaderCounters, ReaderEffect, ReaderInbox, ReaderMsg, ReaderSenders, reader_channels,
 };
 pub use review::ReviewMsg;
 pub use runtime::{

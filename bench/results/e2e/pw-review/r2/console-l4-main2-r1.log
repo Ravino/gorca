@@ -1,0 +1,245 @@
+== host: load 9.98 9.38 10.51 3/2282 365953 ==
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench-b4921a7a1562f132)
+
+running 12 tests
+test e2e::m1::tests::m1_flag_opens_the_gate ... ok
+test e2e::m1::tests::gates_skip_until_m1_lands ... ok
+test e2e::m1::tests::strict_mode_makes_the_gate_red ... ok
+test e2e::m1::tests::key_reply_and_app_log_parse ... ok
+test e2e::m1::tests::keysym_overrides_parse_hex_and_decimal ... ok
+test e2e::m1::tests::typing_score_detects_lost_and_doubled ... ok
+test e2e::mono::tests::is_monotonic_and_ns ... ok
+test e2e::scenarios::tests::accounting_separates_superseded_from_lost ... ok
+test e2e::scenarios::tests::scenario_ids_round_trip ... ok
+test e2e::scenarios::tests::decoder_understands_stub_tags_and_natural_text ... ok
+test e2e::mock::tests::voicego_binary_speak_then_stop ... ok
+test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
+
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.05s
+== e2e pw-review-r2-l4/main2-r1: reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/bin/gorca-main2 backend=voicego repeats=5 load=9.98 9.38 10.51 2/2293 366035
+-- round 1/5 L4 (load 9.98 9.38 10.51 3/2293 366035)
+2026-10-13T17:03:49.823709Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-13T17:03:49.824399Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-13T17:03:49.824677Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=100ms
+2026-10-13T17:03:49.826717Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-13T17:03:49.927836Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=200ms
+2026-10-13T17:03:50.130244Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=400ms
+2026-10-13T17:03:50.533431Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=800ms
+2026-10-13T17:03:51.336181Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=1.6s
+2026-10-13T17:03:52.937725Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=3.2s
+2026-10-13T17:03:56.139888Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:04:01.143305Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:04:06.145648Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:04:06.825521Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-13T17:04:06.825857Z  INFO gorca_daemon: gorca stopped
+-- round 1/5 L4c (load 10.05 9.44 10.51 1/2291 366102)
+2026-10-13T17:04:07.047709Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-13T17:04:07.048669Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-13T17:04:07.048864Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=100ms
+2026-10-13T17:04:07.050448Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-13T17:04:07.150679Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=200ms
+2026-10-13T17:04:07.351770Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=400ms
+2026-10-13T17:04:07.753441Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=800ms
+2026-10-13T17:04:08.555697Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=1.6s
+2026-10-13T17:04:10.157726Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=3.2s
+2026-10-13T17:04:13.358922Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:04:18.360992Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:04:23.363182Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:04:24.086447Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-13T17:04:24.086958Z  INFO gorca_daemon: gorca stopped
+-- round 2/5 L4c (load 10.18 9.50 10.51 2/2293 366168)
+2026-10-13T17:04:24.330130Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-13T17:04:24.330936Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-13T17:04:24.331252Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=100ms
+2026-10-13T17:04:24.335423Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-13T17:04:24.433596Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=200ms
+2026-10-13T17:04:24.636051Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=400ms
+2026-10-13T17:04:25.038821Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=800ms
+2026-10-13T17:04:25.843060Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=1.6s
+2026-10-13T17:04:27.445132Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=3.2s
+2026-10-13T17:04:30.648170Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:04:35.650343Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:04:40.652002Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:04:41.200835Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-13T17:04:41.201175Z  INFO gorca_daemon: gorca stopped
+-- round 2/5 L4 (load 9.72 9.44 10.47 1/2292 366238)
+2026-10-13T17:04:41.456316Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-13T17:04:41.457858Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-13T17:04:41.458365Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=100ms
+2026-10-13T17:04:41.462973Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-13T17:04:41.560547Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=200ms
+2026-10-13T17:04:41.763878Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=400ms
+2026-10-13T17:04:42.167980Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=800ms
+2026-10-13T17:04:42.970999Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=1.6s
+2026-10-13T17:04:44.573214Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=3.2s
+2026-10-13T17:04:47.775217Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:04:52.777713Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:04:57.780047Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:04:58.988543Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-13T17:04:58.989112Z  INFO gorca_daemon: gorca stopped
+-- round 3/5 L4 (load 9.66 9.44 10.45 3/2282 366299)
+2026-10-13T17:04:59.207840Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-13T17:04:59.208817Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-13T17:04:59.208994Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=100ms
+2026-10-13T17:04:59.213467Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-13T17:04:59.311529Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=200ms
+2026-10-13T17:04:59.513482Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=400ms
+2026-10-13T17:04:59.916804Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=800ms
+2026-10-13T17:05:00.720253Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=1.6s
+2026-10-13T17:05:02.323392Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=3.2s
+2026-10-13T17:05:05.525398Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:05:10.527336Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:05:15.528634Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:05:16.769917Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-13T17:05:16.770318Z  INFO gorca_daemon: gorca stopped
+-- round 3/5 L4c (load 9.39 9.38 10.41 1/2277 366376)
+2026-10-13T17:05:17.014677Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-13T17:05:17.016245Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-13T17:05:17.016624Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=100ms
+2026-10-13T17:05:17.023367Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-13T17:05:17.118462Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=200ms
+2026-10-13T17:05:17.321042Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=400ms
+2026-10-13T17:05:17.723520Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=800ms
+2026-10-13T17:05:18.526308Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=1.6s
+2026-10-13T17:05:20.128675Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=3.2s
+2026-10-13T17:05:23.332897Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:05:28.336711Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:05:33.340740Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:05:34.097452Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-13T17:05:34.097733Z  INFO gorca_daemon: gorca stopped
+-- round 4/5 L4c (load 9.46 9.41 10.40 1/2277 366448)
+2026-10-13T17:05:34.336808Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-13T17:05:34.338434Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-13T17:05:34.338435Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=100ms
+2026-10-13T17:05:34.341668Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-13T17:05:34.441351Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=200ms
+2026-10-13T17:05:34.643488Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=400ms
+2026-10-13T17:05:35.047564Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=800ms
+2026-10-13T17:05:35.850196Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=1.6s
+2026-10-13T17:05:37.452529Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=3.2s
+2026-10-13T17:05:40.655095Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:05:45.657777Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:05:50.662423Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:05:51.380895Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-13T17:05:51.381170Z  INFO gorca_daemon: gorca stopped
+-- round 4/5 L4 (load 9.48 9.42 10.38 2/2259 366513)
+2026-10-13T17:05:51.680525Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-13T17:05:51.681625Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-13T17:05:51.682082Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=100ms
+2026-10-13T17:05:51.687536Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-13T17:05:51.783879Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=200ms
+2026-10-13T17:05:51.985972Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=400ms
+2026-10-13T17:05:52.388429Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=800ms
+2026-10-13T17:05:53.190260Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=1.6s
+2026-10-13T17:05:54.792487Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=3.2s
+2026-10-13T17:05:57.996182Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:06:02.997551Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:06:07.999669Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:06:08.548256Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-13T17:06:08.548472Z  INFO gorca_daemon: gorca stopped
+-- round 5/5 L4 (load 9.90 9.53 10.40 1/2250 366590)
+2026-10-13T17:06:08.823217Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-13T17:06:08.824382Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-13T17:06:08.824676Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=100ms
+2026-10-13T17:06:08.826494Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-13T17:06:08.927339Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=200ms
+2026-10-13T17:06:09.129387Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=400ms
+2026-10-13T17:06:09.532298Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=800ms
+2026-10-13T17:06:10.334635Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=1.6s
+2026-10-13T17:06:11.936340Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=3.2s
+2026-10-13T17:06:15.139214Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:06:20.142573Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:06:25.145732Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:06:26.340092Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-13T17:06:26.340537Z  INFO gorca_daemon: gorca stopped
+-- round 5/5 L4c (load 8.87 9.31 10.32 1/2250 366657)
+2026-10-13T17:06:26.569999Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-13T17:06:26.571411Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-13T17:06:26.572595Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=100ms
+2026-10-13T17:06:26.581245Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-13T17:06:26.675220Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=200ms
+2026-10-13T17:06:26.878355Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=400ms
+2026-10-13T17:06:27.280148Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=800ms
+2026-10-13T17:06:28.081816Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=1.6s
+2026-10-13T17:06:29.684964Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=3.2s
+2026-10-13T17:06:32.887763Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:06:37.891366Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:06:42.893910Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.a11y.Manager was not provided by any .service files backoff=5s
+2026-10-13T17:06:43.492557Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-13T17:06:43.492905Z  INFO gorca_daemon: gorca stopped
+# e2e pw-review-r2-l4/main2-r1
+# utc=2026-10-13T17:06:43Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=powersave x16
+# loadavg_start=7.71 9.04 10.21 1/2247 366728
+# git_rev=467412b
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=pw-review-r2-l4/main2-r1
+# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/bin/gorca-main2
+# backend=voicego
+# repeats=5
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=7.71 9.04 10.21 2/2247 366725
+# reader_env=
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+
+metric                     bus                median          min          max  n op    threshold  res   note
+L4.l0_ms.n                 daemon/voicego         1200         1200         1200  5                  info   [samples]
+L4.l0_ms.p50               daemon/voicego        0.196        0.182        0.203  5                  info   [ms]
+L4.l0_ms.p95               daemon/voicego        0.433        0.424        0.442  5                  info   [ms]
+L4.l0_ms.p99               daemon/voicego        0.536        0.528        0.544  5                  info   [ms]
+L4.l0_ms.p999              daemon/voicego        0.618        0.576        0.660  5                  info   [ms]
+L4.l0_ms.max               daemon/voicego        0.635        0.583        0.758  5                  info   [ms]
+L4.l1_ms.n                 daemon/voicego         1200         1200         1200  5                  info   [samples]
+L4.l1_ms.p50               daemon/voicego        1.127        1.111        1.227  5                  info   [ms]
+L4.l1_ms.p95               daemon/voicego        2.030        1.972        2.080  5                  info   [ms]
+L4.l1_ms.p99               daemon/voicego        2.373        2.295        2.508  5 <=           15  PASS   [ms]
+L4.l1_ms.p999              daemon/voicego        2.781        2.500        2.966  5                  info   [ms]
+L4.l1_ms.max               daemon/voicego        2.972        2.543        3.171  5                  info   [ms]
+L4.l1g_ms.n                daemon/voicego         1200         1200         1200  5                  info   [samples]
+L4.l1g_ms.p50              daemon/voicego        0.924        0.902        1.024  5                  info   [ms]
+L4.l1g_ms.p95              daemon/voicego        1.776        1.716        1.841  5                  info   [ms]
+L4.l1g_ms.p99              daemon/voicego        2.088        2.021        2.170  5                  info  gorca side: bus arrival to SPEAK [ms]
+L4.l1g_ms.p999             daemon/voicego        2.442        2.215        2.585  5                  info   [ms]
+L4.l1g_ms.max              daemon/voicego        2.667        2.430        2.835  5                  info   [ms]
+L4.lost                    daemon/voicego            0            0            0  5 <=            0  PASS  gated on the max over repeats [events]
+L4.peer_calls_hung         daemon/voicego           17            2           17  5 >=            1  PASS  the hang must actually have been exercised [calls]
+L4.peer_calls_received     daemon/voicego           18            3           18  5                  info   [calls]
+L4.superseded              daemon/voicego            0            0            0  5                  info   [events]
+L4.superseded_max_run      daemon/voicego            0            0            0  5 <=           10  PASS  consecutive focus probes overtaken by a newer one (ADR-0001 R-1) [events]
+L4c.l0_ms.n                daemon/voicego         1200         1200         1200  5                  info   [samples]
+L4c.l0_ms.p50              daemon/voicego        0.183        0.174        0.186  5                  info   [ms]
+L4c.l0_ms.p95              daemon/voicego        0.429        0.395        0.455  5                  info   [ms]
+L4c.l0_ms.p99              daemon/voicego        0.549        0.503        0.578  5                  info   [ms]
+L4c.l0_ms.p999             daemon/voicego        0.677        0.607        0.712  5                  info   [ms]
+L4c.l0_ms.max              daemon/voicego        0.763        0.658        0.793  5                  info   [ms]
+L4c.l1_ms.n                daemon/voicego         1200         1200         1200  5                  info   [samples]
+L4c.l1_ms.p50              daemon/voicego        1.156        1.050        1.207  5                  info   [ms]
+L4c.l1_ms.p95              daemon/voicego        1.994        1.963        2.076  5                  info   [ms]
+L4c.l1_ms.p99              daemon/voicego        2.384        2.212        2.466  5                  info   [ms]
+L4c.l1_ms.p999             daemon/voicego        2.726        2.509        2.785  5                  info   [ms]
+L4c.l1_ms.max              daemon/voicego        2.863        2.796        3.108  5                  info   [ms]
+L4c.l1g_ms.n               daemon/voicego         1200         1200         1200  5                  info   [samples]
+L4c.l1g_ms.p50             daemon/voicego        0.950        0.847        1.004  5                  info   [ms]
+L4c.l1g_ms.p95             daemon/voicego        1.774        1.723        1.831  5                  info   [ms]
+L4c.l1g_ms.p99             daemon/voicego        2.090        2.003        2.168  5                  info  gorca side: bus arrival to SPEAK [ms]
+L4c.l1g_ms.p999            daemon/voicego        2.443        2.340        2.530  5                  info   [ms]
+L4c.l1g_ms.max             daemon/voicego        2.541        2.430        2.594  5                  info   [ms]
+L4c.lost                   daemon/voicego            0            0            0  5 <=            0  PASS  gated on the max over repeats [events]
+L4c.peer_calls_hung        daemon/voicego            0            0            0  5                  info   [calls]
+L4c.peer_calls_received    daemon/voicego           96            3           96  5                  info   [calls]
+L4c.superseded             daemon/voicego            0            0            0  5                  info   [events]
+L4c.superseded_max_run     daemon/voicego            0            0            0  5 <=           10  PASS  consecutive focus probes overtaken by a newer one (ADR-0001 R-1) [events]
+
+== wrote bench/results/e2e/pw-review-r2-l4/main2-r1/20261013T170643Z.{json,txt}

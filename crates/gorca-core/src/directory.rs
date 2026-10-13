@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use gorca_mirror::{MirrorHandle, MirrorRead};
-use gorca_model::{AppId, Lookup, NodeKey, NodeSnapshot};
+use gorca_model::{AppId, Lookup, NodeKey, NodeSnapshot, NodeView};
 
 /// Maps an `AppId` to its mirror read handle. Readers load the current map without a lock;
 /// the supervisor replaces it (copy-on-write) when an app appears or goes away, which is rare.
@@ -41,6 +41,31 @@ impl MirrorDirectory {
             Some(m) => m.get(k),
             None => Lookup::Gone,
         }
+    }
+
+    /// Like [`MirrorDirectory::lookup`] with the stale mask and aging applied (B-1 5.2).
+    pub fn view(&self, k: NodeKey) -> Lookup<NodeView> {
+        match self.apps.load().get(&k.app) {
+            Some(m) => m.view(k),
+            None => Lookup::Gone,
+        }
+    }
+
+    /// The app's mirror write sequence (what a request issued now records as `issued_at`); 0 for
+    /// an unknown app.
+    pub fn seq(&self, app: AppId) -> u64 {
+        self.apps.load().get(&app).map_or(0, MirrorRead::seq)
+    }
+
+    /// A fresh sequence point of the app's mirror: for a trigger (a focus change) or a request
+    /// about to be issued. 0 for an unknown app.
+    pub fn bump_seq(&self, app: AppId) -> u64 {
+        self.apps.load().get(&app).map_or(0, MirrorRead::bump_seq)
+    }
+
+    /// Counters of an app's mirror; `None` once the app is gone and its mirror released.
+    pub fn stats(&self, app: AppId) -> Option<gorca_mirror::MirrorStats> {
+        self.apps.load().get(&app).map(MirrorRead::stats)
     }
 
     pub fn len(&self) -> usize {
@@ -85,6 +110,8 @@ mod tests {
             attrs: gorca_model::AttrMap::default(),
             relations: gorca_model::Relations::default(),
             bounds: None,
+            have: gorca_model::PropMask::PRESENT,
+            confirmed_seq: 0,
             fresh: Freshness::Fresh { at: Instant::now() },
         })
     }
@@ -93,9 +120,13 @@ mod tests {
     fn lookup_routes_by_app_and_unknown_apps_are_gone() {
         let dir = MirrorDirectory::new();
         let (mut w, h) = mirror();
-        w.apply(SnapshotBatch {
-            nodes: vec![snap(1, 5)],
-        });
+        w.apply(
+            SnapshotBatch {
+                nodes: vec![snap(1, 5)],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
         dir.insert(app(1), &h);
         let k = NodeKey {
             app: app(1),

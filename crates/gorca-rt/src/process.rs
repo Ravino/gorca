@@ -21,6 +21,21 @@ pub fn set_thread_comm(name: &str) -> io::Result<()> {
     }
 }
 
+/// Nanoseconds on `CLOCK_MONOTONIC`: the one clock every process of a bench run shares (the
+/// presentation log and the fake apps' truth log are joined on it).
+#[inline]
+pub fn monotonic_ns() -> u64 {
+    let mut ts = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // SAFETY: `ts` is a live local; clock_gettime only writes through the pointer.
+    unsafe {
+        libc::clock_gettime(libc::CLOCK_MONOTONIC, &raw mut ts);
+    }
+    ts.tv_sec.cast_unsigned() * 1_000_000_000 + ts.tv_nsec.cast_unsigned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

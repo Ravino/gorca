@@ -225,6 +225,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
+name = "b1-fakeapp"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "futures-lite",
+ "gorca-testkit",
+ "libc",
+ "serde",
+ "serde_json",
+ "tokio",
+ "zbus",
+ "zvariant",
+]
+
+[[package]]
 name = "bitflags"
 version = "2.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -653,6 +668,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gorca-bench-b1"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "gorca-bench-b2",
+ "gorca-model",
+ "serde_json",
+]
+
+[[package]]
 name = "gorca-bench-b2"
 version = "0.0.0"
 dependencies = [
@@ -745,6 +770,7 @@ dependencies = [
  "gorca-rt",
  "gorca-speech",
  "gorca-testkit",
+ "serde_json",
  "smallvec",
  "thiserror",
  "tokio",
@@ -763,6 +789,7 @@ dependencies = [
  "gorca-core",
  "gorca-input-api",
  "gorca-input-mutter",
+ "gorca-mirror",
  "gorca-model",
  "gorca-output-api",
  "gorca-rt",
@@ -838,6 +865,7 @@ dependencies = [
  "crossbeam-queue",
  "gorca-model",
  "gorca-rt",
+ "gorca-testkit",
  "smallvec",
  "tokio",
 ]
@@ -883,7 +911,12 @@ name = "gorca-mirror"
 version = "0.0.0"
 dependencies = [
  "arc-swap",
+ "gorca-ingress",
  "gorca-model",
+ "gorca-rt",
+ "gorca-testkit",
+ "scc",
+ "smallvec",
 ]
 
 [[package]]
@@ -962,11 +995,15 @@ dependencies = [
 name = "gorca-testkit"
 version = "0.0.0"
 dependencies = [
+ "gorca-bench-b1",
  "gorca-connector-api",
  "gorca-doc-source-api",
  "gorca-ingress",
  "gorca-model",
  "gorca-rt",
+ "libc",
+ "serde",
+ "serde_json",
  "smallvec",
  "thiserror",
  "tokio",
@@ -1801,6 +1838,7 @@ version = "1.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cc1186384beb7dd8eedea376413fd654937285ea6c9cfbb928dc3043ea4b606"
 dependencies = [
+ "getrandom",
  "js-sys",
  "serde_core",
  "wasm-bindgen",

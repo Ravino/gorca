@@ -212,7 +212,6 @@ pub(crate) fn node_info(chain: &[Arc<NodeSnapshot>]) -> String {
     let fresh = match n.fresh {
         Freshness::Fresh { .. } => "fresh",
         Freshness::Stale { .. } => "stale",
-        Freshness::Fetching { .. } => "fetching",
         Freshness::Defunct => "defunct",
     };
     let states = state_words(n.states);
@@ -313,6 +312,8 @@ mod tests {
             attrs: AttrMap::default(),
             relations: Relations::default(),
             bounds: None,
+            have: gorca_model::PropMask::PRESENT,
+            confirmed_seq: 0,
             fresh: Freshness::Fresh { at: Instant::now() },
         }
     }

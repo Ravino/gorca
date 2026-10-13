@@ -8,10 +8,15 @@
 mod echo;
 mod flow;
 mod job;
+mod log;
 mod utterance;
 
 pub use echo::{key_echo, key_echo_text, message};
+pub use flow::{FOCUS_FIELDS, Presented, RAPID_FOCUS, REFINE_WINDOW, STORM_HOLD, focus_need};
 pub use job::{PresentJob, PresentKind, SpeechIntent};
+pub use log::{NoLabels, NodeLabel, PresentLog, PresentRecord, PresentSource};
+pub(crate) use utterance::{changed, present_change};
+pub use utterance::{log_states, value_text};
 pub use utterance::{present_focus, present_selected_item};
 
 use gorca_model::{Epoch, NodeSnapshot, Role, UttId, Utterance};
@@ -123,6 +128,8 @@ mod tests {
             attrs: gorca_model::AttrMap::default(),
             relations: gorca_model::Relations::default(),
             bounds: None,
+            have: gorca_model::PropMask::PRESENT,
+            confirmed_seq: 0,
             fresh,
         }
     }
@@ -157,6 +164,7 @@ mod tests {
             StateSet::empty(),
             Freshness::Stale {
                 since: Instant::now(),
+                mask: gorca_model::PropMask::NAME,
             },
         );
         let u = present_focus(&n, UttId(1), Epoch(1));

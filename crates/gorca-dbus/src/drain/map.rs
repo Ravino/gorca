@@ -177,6 +177,71 @@ pub fn needs_path(ev: &NodeEvent) -> Option<NodeKey> {
     }
 }
 
+/// The interface of the bulk-cache signals (opt-in match rule, B-1 PW-8).
+pub const CACHE_IFACE: &str = "org.a11y.atspi.Cache";
+
+/// `(so)`: a struct (8-aligned) of a bus name and an object path.
+fn read_ref<'b>(r: &mut Reader<'b>) -> Result<(&'b str, &'b str), Malformed> {
+    r.align(8);
+    let bus = r.string()?;
+    let path = r.string()?;
+    Ok((bus, path))
+}
+
+/// Map one `org.a11y.atspi.Cache` signal (ADR-0004 mapping table, B-1 PW-8):
+///
+/// - `RemoveAccessible (so)` becomes `NodeRemoved{hash(path)}`;
+/// - `AddAccessible` becomes `ChildrenChanged{hash(parent path)}`; only the first three refs of
+///   the body are read (object, application, parent).
+///
+/// A foreign bus name in a ref that is read (Remove's ref; Add's object or parent ref) is
+/// `Malformed`: no event, and the drain counts it. `sender` is the unique name of the emitting
+/// connection, which every honest ref carries.
+pub fn map_cache_signal(
+    app: AppId,
+    sender: &str,
+    v: &SignalView<'_>,
+    out: &mut SmallVec<[NodeEvent; 2]>,
+) -> Result<(), Malformed> {
+    let mut r = Reader {
+        buf: v.body,
+        pos: 0,
+        big: v.big_endian,
+    };
+    match v.member {
+        "RemoveAccessible" => {
+            let (bus, path) = read_ref(&mut r)?;
+            if bus != sender {
+                return Err(Malformed);
+            }
+            out.push(NodeEvent::NodeRemoved {
+                node: NodeKey {
+                    app,
+                    local: local_id(path),
+                },
+            });
+        }
+        "AddAccessible" => {
+            // The signal body is one struct: align to 8, then the refs follow back to back.
+            r.align(8);
+            let (obj_bus, _obj) = read_ref(&mut r)?;
+            let _app_ref = read_ref(&mut r)?;
+            let (parent_bus, parent) = read_ref(&mut r)?;
+            if obj_bus != sender || parent_bus != sender {
+                return Err(Malformed);
+            }
+            out.push(NodeEvent::ChildrenChanged {
+                node: NodeKey {
+                    app,
+                    local: local_id(parent),
+                },
+            });
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 /// Map one signal. Appends zero, one or two events to `out`; `Ok` with nothing appended means
 /// "valid but not interesting". The caller has already resolved `app` from the sender.
 pub fn map_signal(
@@ -446,6 +511,86 @@ mod tests {
             panic!("not an announcement");
         };
         assert!(text.len() <= MAX_ANNOUNCEMENT_BYTES && text.len() > MAX_ANNOUNCEMENT_BYTES - 4);
+    }
+
+    fn put_ref(b: &mut Vec<u8>, bus: &str, path: &str) {
+        while !b.len().is_multiple_of(8) {
+            b.push(0);
+        }
+        for s in [bus, path] {
+            b.extend_from_slice(&(s.len() as u32).to_le_bytes());
+            b.extend_from_slice(s.as_bytes());
+            b.push(0);
+            while !b.len().is_multiple_of(4) {
+                b.push(0);
+            }
+        }
+    }
+
+    fn cache(
+        member: &str,
+        body: &[u8],
+        sender: &str,
+    ) -> Result<SmallVec<[NodeEvent; 2]>, Malformed> {
+        let mut out = SmallVec::new();
+        let v = SignalView {
+            interface: CACHE_IFACE,
+            member,
+            path: "/org/a11y/atspi/cache",
+            body,
+            big_endian: false,
+        };
+        map_cache_signal(app(), sender, &v, &mut out).map(|()| out)
+    }
+
+    #[test]
+    fn cache_remove_is_a_node_removal() {
+        let mut b = Vec::new();
+        put_ref(&mut b, ":1.7", "/x/9");
+        let out = cache("RemoveAccessible", &b, ":1.7").unwrap();
+        assert!(matches!(
+            out[0],
+            NodeEvent::NodeRemoved { node } if node.local == local_id("/x/9")
+        ));
+    }
+
+    #[test]
+    fn cache_add_dirties_the_parents_children_and_reads_three_refs_only() {
+        let mut b = Vec::new();
+        put_ref(&mut b, ":1.7", "/x/new");
+        put_ref(&mut b, ":1.7", "/org/a11y/atspi/accessible/root");
+        put_ref(&mut b, ":1.7", "/x/parent");
+        // Whatever follows (indices, name, ...) is never read: garbage is fine.
+        b.extend_from_slice(&[0xff; 7]);
+        let out = cache("AddAccessible", &b, ":1.7").unwrap();
+        assert!(matches!(
+            out[0],
+            NodeEvent::ChildrenChanged { node } if node.local == local_id("/x/parent")
+        ));
+    }
+
+    #[test]
+    fn foreign_bus_names_in_cache_signals_are_malformed() {
+        let mut b = Vec::new();
+        put_ref(&mut b, ":1.99", "/x/9");
+        assert!(cache("RemoveAccessible", &b, ":1.7").is_err());
+        let mut b = Vec::new();
+        put_ref(&mut b, ":1.7", "/x/new");
+        put_ref(&mut b, ":1.7", "/root");
+        put_ref(&mut b, ":1.99", "/x/parent");
+        assert!(cache("AddAccessible", &b, ":1.7").is_err());
+        let mut b = Vec::new();
+        put_ref(&mut b, ":1.99", "/x/new");
+        put_ref(&mut b, ":1.7", "/root");
+        put_ref(&mut b, ":1.7", "/x/parent");
+        assert!(cache("AddAccessible", &b, ":1.7").is_err());
+    }
+
+    #[test]
+    fn truncated_cache_bodies_are_malformed_and_unknown_members_ignored() {
+        assert!(cache("RemoveAccessible", &[1, 0], ":1.7").is_err());
+        assert!(cache("AddAccessible", &[], ":1.7").is_err());
+        assert!(cache("Unknown", &[], ":1.7").unwrap().is_empty());
     }
 
     #[test]

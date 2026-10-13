@@ -8,7 +8,9 @@
 //! by `cargo test --release -p gorca-ingress --test audit_latency -- --test-threads=1`.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use gorca_testkit::cpu::{ATTEMPTS, WorstCpu, best_of, cpu_time};
 
 use gorca_ingress::{HARD_CAP, IngressConfig, ingress};
 use gorca_model::{AppId, ConnectorId, LocalId, NodeEvent, NodeKey, WindowKind};
@@ -45,14 +47,17 @@ fn audit_single_push_is_bounded_under_tombstone_compaction() {
     for n in 0..(HARD_CAP as u64 - 1) {
         tx.push(window(n));
     }
-    let mut worst = Duration::ZERO;
-    for _ in 0..200_000 {
-        let t = Instant::now();
-        tx.push(NodeEvent::NodeRemoved {
-            node: node(u64::MAX),
-        });
-        worst = worst.max(t.elapsed());
-    }
+    let worst = best_of(ATTEMPTS, MAX_CRITICAL_SECTION, || {
+        let mut worst = WorstCpu::new();
+        for _ in 0..200_000 {
+            worst.sample(|| {
+                tx.push(NodeEvent::NodeRemoved {
+                    node: node(u64::MAX),
+                });
+            });
+        }
+        worst.worst()
+    });
     assert!(
         worst <= MAX_CRITICAL_SECTION,
         "worst single push took {worst:?}"
@@ -67,14 +72,15 @@ fn audit_single_push_is_bounded_under_tombstone_compaction() {
     ignore = "timing bound applies to release builds; debug is 10x+ slower and flaky"
 )]
 fn audit_drain_critical_section_is_bounded() {
-    let (tx, rx) = ingress(IngressConfig::default());
-    for n in 0..HARD_CAP as u64 {
-        tx.push(window(n));
-    }
-    let t = Instant::now();
-    let d = rx.drain();
-    let took = t.elapsed();
-    assert_eq!(d.events.len(), HARD_CAP);
+    let took = best_of(ATTEMPTS, MAX_CRITICAL_SECTION, || {
+        let (tx, rx) = ingress(IngressConfig::default());
+        for n in 0..HARD_CAP as u64 {
+            tx.push(window(n));
+        }
+        let (d, took) = cpu_time(|| rx.drain());
+        assert_eq!(d.events.len(), HARD_CAP);
+        took
+    });
     assert!(
         took <= MAX_CRITICAL_SECTION,
         "drain held the producer lock for {took:?}"

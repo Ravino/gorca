@@ -4,3 +4,4 @@
 pub(crate) mod paths;
 pub(crate) mod router;
 pub(crate) mod session;
+pub(crate) mod subscription;

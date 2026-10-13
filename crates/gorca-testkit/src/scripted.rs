@@ -161,6 +161,8 @@ fn snapshot(key: NodeKey, n: &ScriptedNode) -> Arc<NodeSnapshot> {
         attrs: gorca_model::AttrMap::default(),
         relations: gorca_model::Relations::default(),
         bounds: None,
+        have: gorca_model::PropMask::PRESENT,
+        confirmed_seq: 0,
         fresh: Freshness::Fresh { at: Instant::now() },
     })
 }
@@ -229,6 +231,9 @@ impl Connector for ScriptedConnector {
                     app_name: Arc::from(app.scope.as_str()),
                     pid: None,
                     connector_kind: ConnectorKind::Fake,
+                    verified_shell: false,
+                    dump_complete: false,
+                    root: None,
                 };
                 let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);
                 let mut port = ctx

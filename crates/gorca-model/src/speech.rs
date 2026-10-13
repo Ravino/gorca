@@ -43,6 +43,9 @@ pub struct Utterance {
     pub may_refine: bool,
     /// Policy escape from the E-2 check, for example say-all progress.
     pub survives_focus_change: bool,
+    /// A correction of an earlier utterance (B-1 RV-1): the cache-served presentation `id` was
+    /// wrong in a presented field. A refine replaces it; a follow-up only adds the change.
+    pub refines: Option<UttId>,
 }
 
 impl Utterance {
@@ -65,6 +68,7 @@ mod tests {
             prio: Prio::Text,
             may_refine: false,
             survives_focus_change: survives,
+            refines: None,
         }
     }
 

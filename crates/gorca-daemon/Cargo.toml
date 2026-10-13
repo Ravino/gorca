@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 gorca-core = { workspace = true }
+gorca-mirror = { workspace = true }
 gorca-rt = { workspace = true }
 gorca-config = { workspace = true }
 gorca-model = { workspace = true }

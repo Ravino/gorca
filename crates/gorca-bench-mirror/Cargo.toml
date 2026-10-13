@@ -10,7 +10,7 @@ publish.workspace = true
 [dependencies]
 arc-swap = { workspace = true }
 papaya = "0.2"
-scc = "3"
+scc = { workspace = true }
 left-right = "0.11"
 dashmap = "6"
 

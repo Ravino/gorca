@@ -1,0 +1,53 @@
+# W-1: the scripted walk of docs/bakeoff/b1-mirror-fill/SPEC.md section 8.2.
+# Integers only (the subset parsed by gorca_testkit::b1::walk::parse_toml); every key is
+# optional and defaults to the value written here. The seed comes from B1_SEED.
+
+[pacing]
+step_ms_min = 150        # human pacing between steps
+step_ms_max = 400
+burst_hz = 30            # held arrow key
+burst_s = 3
+pause_every = 20         # a 2-5 s pause roughly every 20 steps
+pause_ms_min = 2_000
+pause_ms_max = 5_000
+
+[loops]
+loops = 3                # one loop is about 6 minutes
+storm_loop = 1           # this loop runs under L3-50k
+hung_loop = 2            # this loop has the `hung` app take 2 s to answer
+restart_every = 3        # every third loop kills and restarts settings (IC-6 path)
+
+[shell]
+search_results_replaced = 3
+overview_nodes = 1_200
+results_nodes = 30
+settings_first_focus_ms = 50   # first focus 50 ms after Ready (even loops; odd loops 0 ms)
+
+[settings]
+header_tabs = 3
+initial_tabs = 30
+sidebar_arrows = 20
+panels = 5
+panel_tabs = 30
+switches = 3
+slider_steps = 5
+silent_rename_pct = 10
+where_am_i = 5
+panel_nodes = 700
+
+[files]
+list_arrows = 200
+page_down = 5
+list_replace_nodes = 300
+
+[revisit]
+count = 30
+mutate_pct = 50
+evented_pct = 70
+
+[l3]
+rate = 50_000
+duration_ms = 20_000
+
+[hung]
+delay_ms = 2_000

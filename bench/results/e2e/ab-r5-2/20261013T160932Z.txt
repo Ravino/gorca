@@ -1,0 +1,70 @@
+# e2e ab-r5-2
+# utc=2026-10-13T16:09:32Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=powersave x16
+# loadavg_start=10.16 11.12 11.42 2/2241 215679
+# git_rev=a8686d0
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=ab-r5-2
+# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/bin/gorca-r5
+# backend=voicego
+# repeats=6
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=10.16 11.12 11.42 2/2241 215676
+# reader_env=
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+
+metric                     bus                median          min          max  n op    threshold  res   note
+L3-50k.l0_ms.n             daemon/voicego         1200         1200         1200  6                  info   [samples]
+L3-50k.l0_ms.p50           daemon/voicego        0.189        0.176        0.207  6                  info   [ms]
+L3-50k.l0_ms.p95           daemon/voicego        0.450        0.409        0.482  6                  info   [ms]
+L3-50k.l0_ms.p99           daemon/voicego        0.647        0.615        0.836  6                  info   [ms]
+L3-50k.l0_ms.p999          daemon/voicego        1.255        0.813        5.481  6                  info   [ms]
+L3-50k.l0_ms.max           daemon/voicego        1.417        1.195        7.247  6                  info   [ms]
+L3-50k.l1_ms.n             daemon/voicego         1200         1200         1200  6                  info   [samples]
+L3-50k.l1_ms.p50           daemon/voicego        0.956        0.899        0.999  6                  info   [ms]
+L3-50k.l1_ms.p95           daemon/voicego        1.657        1.582        1.742  6                  info   [ms]
+L3-50k.l1_ms.p99           daemon/voicego        3.365        1.967        4.012  6 <=           15  PASS   [ms]
+L3-50k.l1_ms.p999          daemon/voicego        4.381        3.926        8.168  6                  info   [ms]
+L3-50k.l1_ms.max           daemon/voicego        5.386        4.026        8.866  6                  info   [ms]
+L3-50k.l1g_ms.n            daemon/voicego         1200         1200         1200  6                  info   [samples]
+L3-50k.l1g_ms.p50          daemon/voicego        0.753        0.701        0.774  6                  info   [ms]
+L3-50k.l1g_ms.p95          daemon/voicego        1.364        1.314        1.466  6                  info   [ms]
+L3-50k.l1g_ms.p99          daemon/voicego        2.713        1.632        3.415  6                  info  gorca side: bus arrival to SPEAK [ms]
+L3-50k.l1g_ms.p999         daemon/voicego        3.754        3.267        6.570  6                  info   [ms]
+L3-50k.l1g_ms.max          daemon/voicego        4.746        3.601        7.479  6                  info   [ms]
+L3-50k.cpu_pct             daemon/voicego         82.1         79.9         87.5  6                  info   [% of one core]
+L3-50k.cpu_us_per_event    daemon/voicego         16.3         15.9         17.4  6                  info   [us/event]
+L3-50k.lost                daemon/voicego            0            0            0  6 <=            0  PASS  gated on the max over repeats [events]
+L3-50k.storm_achieved_eps  daemon/voicego        50000        49999        50000  6 >=        45000  PASS  must reach 90% of the target rate [ev/s]
+L3-50k.storm_max_lag_ms    daemon/voicego        0.950        0.200        8.060  6                  info   [ms]
+L3-50k.storm_target_eps    daemon/voicego        50000        50000        50000  6                  info   [ev/s]
+L4.l0_ms.n                 daemon/voicego         1200         1200         1200  6                  info   [samples]
+L4.l0_ms.p50               daemon/voicego        0.254        0.230        0.283  6                  info   [ms]
+L4.l0_ms.p95               daemon/voicego        0.458        0.450        0.479  6                  info   [ms]
+L4.l0_ms.p99               daemon/voicego        0.534        0.528        0.557  6                  info   [ms]
+L4.l0_ms.p999              daemon/voicego        0.663        0.615        0.703  6                  info   [ms]
+L4.l0_ms.max               daemon/voicego        0.687        0.641        0.727  6                  info   [ms]
+L4.l1_ms.n                 daemon/voicego         1200         1200         1200  6                  info   [samples]
+L4.l1_ms.p50               daemon/voicego        1.446        1.290        1.462  6                  info   [ms]
+L4.l1_ms.p95               daemon/voicego        2.173        2.148        2.269  6                  info   [ms]
+L4.l1_ms.p99               daemon/voicego        2.489        2.399        2.554  6 <=           15  PASS   [ms]
+L4.l1_ms.p999              daemon/voicego        2.802        2.660        2.993  6                  info   [ms]
+L4.l1_ms.max               daemon/voicego        3.047        2.883        3.141  6                  info   [ms]
+L4.l1g_ms.n                daemon/voicego         1200         1200         1200  6                  info   [samples]
+L4.l1g_ms.p50              daemon/voicego        1.178        1.020        1.199  6                  info   [ms]
+L4.l1g_ms.p95              daemon/voicego        1.871        1.848        1.969  6                  info   [ms]
+L4.l1g_ms.p99              daemon/voicego        2.155        2.093        2.227  6                  info  gorca side: bus arrival to SPEAK [ms]
+L4.l1g_ms.p999             daemon/voicego        2.449        2.277        2.564  6                  info   [ms]
+L4.l1g_ms.max              daemon/voicego        2.539        2.424        2.696  6                  info   [ms]
+L4.lost                    daemon/voicego            0            0            0  6 <=            0  PASS  gated on the max over repeats [events]
+L4.peer_calls_hung         daemon/voicego            2            2           17  6 >=            1  PASS  the hang must actually have been exercised [calls]
+L4.peer_calls_received     daemon/voicego            3            3           18  6                  info   [calls]
