@@ -19,8 +19,8 @@ use smallvec::SmallVec;
 
 use super::wire::{self, ERROR, Frame, MAX_MESSAGE_BYTES, METHOD_RETURN, SIGNAL};
 use super::{
-    AppRoute, DrainConfig, DrainEnd, DrainError, DrainHandle, DrainShared, MAX_ROUTES,
-    RouteDecision, Router, SignalView, map_signal, needs_path,
+    AppRoute, CACHE_IFACE, DrainConfig, DrainEnd, DrainError, DrainHandle, DrainShared, MAX_ROUTES,
+    RouteDecision, Router, SignalView, map_cache_signal, map_signal, needs_path,
 };
 use crate::{set_recv_buffer, socket_backlog};
 
@@ -524,7 +524,8 @@ impl<'a> Conn<'a> {
             self.name_owner_changed(body, f.big);
             return;
         }
-        if !iface.starts_with(EVENT_PREFIX) {
+        let is_cache = iface == CACHE_IFACE.as_bytes();
+        if !iface.starts_with(EVENT_PREFIX) && !is_cache {
             self.batch.ignored += 1;
             return;
         }
@@ -579,7 +580,13 @@ impl<'a> Conn<'a> {
             big_endian: f.big,
         };
         self.mapped.clear();
-        if map_signal(route.app, &view, &mut self.mapped).is_err() {
+        let mapped = if is_cache {
+            let sender_s = std::str::from_utf8(sender).unwrap_or("");
+            map_cache_signal(route.app, sender_s, &view, &mut self.mapped)
+        } else {
+            map_signal(route.app, &view, &mut self.mapped)
+        };
+        if mapped.is_err() {
             self.batch.malformed += 1;
             return;
         }

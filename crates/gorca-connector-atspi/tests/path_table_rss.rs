@@ -1,4 +1,4 @@
-//! The path table's 16 MiB byte cap must bound real memory, not just its own accounting.
+//! The path table's byte cap must bound real memory, not just its own accounting.
 //!
 //! Review finding (phase 1): with 52k live entries RSS grew 279 MiB, because `HashMap::clear`
 //! keeps its allocation and the buckets of evicted owners stayed behind with that capacity.
@@ -47,10 +47,10 @@ fn rss_stays_near_the_byte_cap_under_owner_churn() {
         "accounted {} bytes",
         table.bytes()
     );
-    // The accounted cap is 16 MiB; allow allocator slack and map load factor, but nothing near
-    // the 279 MiB seen before the fix.
+    // The accounted cap is 64 MiB (B-1 PW-7); allow allocator slack and map load factor (three
+    // times the cap), but nothing near the 17x seen before the fix.
     assert!(
-        grown < 80 * 1024 * 1024,
+        grown < 3 * gorca_connector_atspi::PATH_TABLE_BYTE_CAP,
         "RSS grew {} MiB for {} live entries",
         grown / (1024 * 1024),
         table.len()

@@ -23,7 +23,7 @@ use futures_lite::StreamExt;
 use gorca_connector_api::{Connector, ConnectorCtx, ConnectorError};
 use gorca_dbus::call_method;
 use gorca_dbus::drain::{DrainConfig, DrainEnd, DrainHandle, Router, spawn_drain};
-use gorca_model::ConnectorKind;
+use gorca_model::{AppId, ConnectorKind, NodeKey};
 use gorca_rt::{
     BoxFuture, BudgetClass, CancellationToken, Clock, Deadline, FocusedApp, TaskSet, mpsc,
 };
@@ -32,6 +32,7 @@ use zbus::Connection;
 use zbus::zvariant::OwnedValue;
 
 use crate::enablement::Enablement;
+use crate::fetch::FetchCounters;
 use crate::fetch::{AppServer, Caller};
 use crate::paths::PathTable;
 use crate::router::{AtspiRouter, Credentials, NewApp};
@@ -39,6 +40,7 @@ use crate::session::{
     REGISTERED_EVENTS, SessionError, a11y_bus_address, connect, read_status, register_events,
     write_status,
 };
+use crate::subscription::extra_subscription;
 
 /// Applications announced but not yet picked up by the connector task.
 const NEW_APP_QUEUE: usize = 1024;
@@ -86,15 +88,106 @@ impl Default for AtspiOptions {
     }
 }
 
+/// Bus names of the applications currently served, for diagnostics (the presentation log).
+#[derive(Debug, Default)]
+struct BusNames {
+    map: std::sync::Mutex<HashMap<AppId, Arc<str>>>,
+}
+
+impl BusNames {
+    fn set(&self, app: AppId, name: Arc<str>) {
+        self.map
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(app, name);
+    }
+
+    fn remove(&self, app: AppId) {
+        self.map
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&app);
+    }
+
+    fn get(&self, app: AppId) -> Option<Arc<str>> {
+        self.map
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&app)
+            .cloned()
+    }
+}
+
+/// Resolves a `NodeKey` to `(bus name, object path)` from the path table. A diagnostics aid
+/// (the presentation log, B-1 PW-10): the core never sees paths and nothing in the hot path
+/// calls this.
+#[derive(Clone, Debug)]
+pub struct AtspiLabels {
+    paths: Arc<PathTable>,
+    buses: Arc<BusNames>,
+}
+
+impl AtspiLabels {
+    pub fn lookup(&self, key: NodeKey) -> Option<(Arc<str>, Arc<str>)> {
+        Some((self.buses.get(key.app)?, self.paths.get(key)?))
+    }
+}
+
+/// State that outlives one run of the connector (the daemon restarts it with backoff): the path
+/// table, bus names and counters. Cloning shares it.
+#[derive(Clone, Debug, Default)]
+pub struct AtspiState {
+    paths: Arc<PathTable>,
+    buses: Arc<BusNames>,
+    counters: Arc<FetchCounters>,
+}
+
+impl AtspiState {
+    /// Counters of refs and dumps the connector refused to believe.
+    pub fn fetch_counters(&self) -> Arc<FetchCounters> {
+        Arc::clone(&self.counters)
+    }
+
+    /// The `NodeKey` to `(bus, path)` resolver for logs.
+    pub fn labels(&self) -> AtspiLabels {
+        AtspiLabels {
+            paths: Arc::clone(&self.paths),
+            buses: Arc::clone(&self.buses),
+        }
+    }
+
+    /// The reverse path table (tests and tools).
+    pub fn path_table(&self) -> Arc<PathTable> {
+        Arc::clone(&self.paths)
+    }
+}
+
 /// The AT-SPI connector.
 #[derive(Debug, Default)]
 pub struct AtspiConnector {
     opts: AtspiOptions,
+    shared: AtspiState,
 }
 
 impl AtspiConnector {
     pub fn new(opts: AtspiOptions) -> Self {
-        Self { opts }
+        Self {
+            opts,
+            shared: AtspiState::default(),
+        }
+    }
+
+    /// A connector whose paths, bus names and counters live in `state`, so they survive a
+    /// restart of the connector.
+    pub fn with_state(opts: AtspiOptions, state: AtspiState) -> Self {
+        Self {
+            opts,
+            shared: state,
+        }
+    }
+
+    pub fn state(&self) -> AtspiState {
+        self.shared.clone()
     }
 }
 
@@ -104,7 +197,7 @@ impl Connector for AtspiConnector {
     }
 
     fn run(self: Box<Self>, ctx: ConnectorCtx) -> BoxFuture<'static, Result<(), ConnectorError>> {
-        Box::pin(async move { run(self.opts, ctx).await })
+        Box::pin(async move { run(self.opts, self.shared, ctx).await })
     }
 }
 
@@ -298,7 +391,8 @@ async fn reconcile_loop(conn: Connection, router: Arc<AtspiRouter>, clock: Clock
 }
 
 async fn start_drain(address: &str, router: &Arc<AtspiRouter>) -> Result<DrainHandle, String> {
-    let cfg = DrainConfig::new(address);
+    let mut cfg = DrainConfig::new(address);
+    cfg.match_rules = extra_subscription().match_rules();
     let router: Arc<dyn Router> = Arc::clone(router) as Arc<dyn Router>;
     // `spawn_drain` waits for the match rules to be installed; keep that off the workers.
     let joined = tokio::task::spawn_blocking(move || spawn_drain(cfg, router)).await;
@@ -366,7 +460,11 @@ async fn supervise_drain(address: String, router: Arc<AtspiRouter>, cancel: Canc
     }
 }
 
-async fn run(opts: AtspiOptions, ctx: ConnectorCtx) -> Result<(), ConnectorError> {
+async fn run(
+    opts: AtspiOptions,
+    shared: AtspiState,
+    ctx: ConnectorCtx,
+) -> Result<(), ConnectorError> {
     let ConnectorCtx {
         registry,
         shutdown,
@@ -416,7 +514,7 @@ async fn run(opts: AtspiOptions, ctx: ConnectorCtx) -> Result<(), ConnectorError
     }
 
     let mut tasks = TaskSet::new(shutdown.child_token());
-    let paths = Arc::new(PathTable::new());
+    let paths = Arc::clone(&shared.paths);
     let (new_tx, mut new_rx) = mpsc::channel::<NewApp>(NEW_APP_QUEUE);
     let (reg_tx, mut reg_rx) = mpsc::channel::<Arc<str>>(REGISTER_QUEUE);
     let credentials = Arc::new(BusCredentials {
@@ -483,7 +581,7 @@ async fn run(opts: AtspiOptions, ctx: ConnectorCtx) -> Result<(), ConnectorError
             biased;
             () = shutdown.cancelled() => break,
             Some(new) = new_rx.recv() => {
-                spawn_app(&mut tasks, new, &conn, &paths, &clock, &shutdown);
+                spawn_app(&mut tasks, new, &conn, &shared, &clock, &shutdown);
             }
             Some(name) = reg_rx.recv() => {
                 // The drain asked for this sender to be registered; it never waits for it.
@@ -533,7 +631,7 @@ fn spawn_app(
     tasks: &mut TaskSet,
     new: NewApp,
     conn: &Connection,
-    paths: &Arc<PathTable>,
+    shared: &AtspiState,
     clock: &Clock,
     shutdown: &CancellationToken,
 ) {
@@ -543,15 +641,22 @@ fn spawn_app(
         gone,
         verified_shell,
     } = new;
+    let app = port.app;
+    shared.buses.set(app, Arc::clone(&bus_name));
     let server = AppServer {
         caller: Caller::new(conn.clone(), bus_name),
-        paths: Arc::clone(paths),
+        paths: Arc::clone(&shared.paths),
         clock: clock.clone(),
         gone,
         verified_shell,
+        counters: Arc::clone(&shared.counters),
         shutdown: shutdown.child_token(),
     };
-    tasks.spawn("atspi-app", server.run(port));
+    let buses = Arc::clone(&shared.buses);
+    tasks.spawn("atspi-app", async move {
+        server.run(port).await;
+        buses.remove(app);
+    });
 }
 
 #[cfg(test)]

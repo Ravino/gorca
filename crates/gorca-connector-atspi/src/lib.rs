@@ -38,14 +38,19 @@ mod text;
 mod toolkit;
 
 // Kept at the crate root so intra-crate paths (`crate::router`, ...) stay stable.
-use events::{paths, router, session};
+use events::{paths, router, session, subscription};
 
-pub use connector::{AtspiConnector, AtspiOptions};
+pub use connector::{AtspiConnector, AtspiLabels, AtspiOptions, AtspiState};
 pub use decode::{role_from_raw, states_from_raw};
 pub use doc_source::AtspiDocSource;
 pub use enablement::{Enablement, StatusValues};
+pub use fetch::items::{
+    Decoded, DumpStats, ItemsError, MAX_DUMP_BYTES, MAX_DUMP_NODES, decode_get_items,
+};
+pub use fetch::{FetchCounters, FetchCountersSnapshot};
 pub use paths::{GLOBAL_BYTE_CAP as PATH_TABLE_BYTE_CAP, Owner, PathTable};
 pub use role_map::map_role;
 pub use router::{AtspiRouter, RouterStats};
 pub use session::REGISTERED_EVENTS;
+pub use subscription::Subscription;
 pub use toolkit::Toolkit;

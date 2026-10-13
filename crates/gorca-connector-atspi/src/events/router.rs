@@ -591,6 +591,7 @@ impl AtspiRouter {
             pid,
             connector_kind: ConnectorKind::Atspi,
             verified_shell: false,
+            dump_complete: false,
         };
         let deadline = Deadline::after(&self.clock, ANNOUNCE_WAIT);
         let announced = self

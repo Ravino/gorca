@@ -3,25 +3,43 @@
 //! flight is bounded per application (C-3), so a hung application costs its own actor only.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Instant;
 
 use gorca_connector_api::{
     AppPort, BackendError, BackendOp, BackendReply, BackendRequest, PortError,
 };
 use gorca_dbus::{DbusError, call_method};
-use gorca_model::{AppInfo, AppLifecycle, ConnectorKind, NodeKey, PropMask, Role};
+use gorca_model::{AppId, AppInfo, AppLifecycle, ConnectorKind, NodeKey, Role, SnapshotBatch};
 use gorca_rt::{CancellationToken, Clock, Deadline};
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 use zbus::Connection;
-use zbus::zvariant::{OwnedObjectPath, OwnedValue};
+use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value as Zv};
 
-use crate::decode::{MAX_TEXT_BYTES, RawNode, RawValue, clip, snapshot};
+use crate::decode::{RawNode, clip, snapshot};
 use crate::paths::PathTable;
 use crate::toolkit::Toolkit;
 
+pub mod items;
+mod strategy;
+
 /// Requests served concurrently per application; the rest is answered `Busy` (C-3).
 pub const MAX_IN_FLIGHT: usize = 8;
+/// Slots only Interactive requests may take: Prefetch and Background never wait an Interactive
+/// request out (section 7, MA-8).
+pub const INTERACTIVE_RESERVED: usize = 2;
+/// Background requests (including `CacheDump`) served at once per application.
+pub const BACKGROUND_MAX: usize = 2;
+/// Hard bounds of the section 7 table, repeated here because the connector may not depend on
+/// `gorca-mirror`.
+pub const MAX_ANCESTRY_DEPTH: u8 = 64;
+pub const MAX_SUBTREE_NODES: u32 = 4_096;
+pub const MAX_CHILD_RANGE: u32 = 1_024;
+
+const NULL_PATH: &str = "/org/a11y/atspi/null";
+const CACHE_PATH: &str = "/org/a11y/atspi/cache";
+const CACHE: &str = "org.a11y.atspi.Cache";
 
 /// Object path of every application's root (`Registry.GetChildren` entries).
 pub const ROOT_PATH: &str = "/org/a11y/atspi/accessible/root";
@@ -69,6 +87,131 @@ pub fn backend_error(e: &DbusError) -> BackendError {
             }
         },
         DbusError::Zbus(other) => BackendError::Protocol(other.to_string()),
+    }
+}
+
+/// `(so)` as a variant: `Some((bus, path))`, `None` for the null object or a wrong shape.
+fn ref_of_value(v: &Zv<'_>) -> Option<(String, String)> {
+    match v {
+        Zv::Value(inner) => ref_of_value(inner),
+        Zv::Structure(s) => match s.fields() {
+            [Zv::Str(bus), Zv::ObjectPath(p)] if p.as_str() != NULL_PATH && !bus.is_empty() => {
+                Some((bus.to_string(), p.as_str().to_owned()))
+            }
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Counters of what the connector refused to believe (IC-16, MA-3). Shared by every app.
+#[derive(Debug, Default)]
+pub struct FetchCounters {
+    foreign_refs: AtomicU64,
+    dump_rejected: AtomicU64,
+    dump_items_dropped: AtomicU64,
+    dumps: AtomicU64,
+}
+
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct FetchCountersSnapshot {
+    /// Refs (children, parents, ancestors) that named another bus name and were dropped.
+    pub foreign_refs: u64,
+    /// Dump replies rejected whole (too large, malformed).
+    pub dump_rejected: u64,
+    /// Dump items or parent refs dropped for naming another bus name.
+    pub dump_items_dropped: u64,
+    /// Dumps decoded.
+    pub dumps: u64,
+}
+
+impl FetchCounters {
+    pub(crate) fn foreign_refs(&self) {
+        self.foreign_refs.fetch_add(1, Ordering::Relaxed);
+    }
+    pub(crate) fn dump_rejected(&self) {
+        self.dump_rejected.fetch_add(1, Ordering::Relaxed);
+    }
+    pub(crate) fn dump_items(&self, dropped: u32) {
+        self.dumps.fetch_add(1, Ordering::Relaxed);
+        self.dump_items_dropped
+            .fetch_add(u64::from(dropped), Ordering::Relaxed);
+    }
+    pub fn snapshot(&self) -> FetchCountersSnapshot {
+        let g = |a: &AtomicU64| a.load(Ordering::Relaxed);
+        FetchCountersSnapshot {
+            foreign_refs: g(&self.foreign_refs),
+            dump_rejected: g(&self.dump_rejected),
+            dump_items_dropped: g(&self.dump_items_dropped),
+            dumps: g(&self.dumps),
+        }
+    }
+}
+
+/// What a strategy needs for one app: its call connection, the path table (every ref seen in a
+/// reply is recorded there) and the counters. Cheap to clone.
+#[derive(Clone, Debug)]
+pub(crate) struct CallCx {
+    pub caller: Caller,
+    pub paths: Arc<PathTable>,
+    pub app: AppId,
+    pub counters: Arc<FetchCounters>,
+}
+
+/// A node whose path is known.
+#[derive(Clone, Debug)]
+pub(crate) struct Resolved {
+    pub key: NodeKey,
+    pub path: Arc<str>,
+}
+
+impl CallCx {
+    /// A ref from a reply, resolved and recorded; `None` when it names another bus name (the app
+    /// must not aim our calls or our mirror at a peer) or the path is unusable.
+    pub(crate) fn resolve_ref(&self, bus: &str, path: &str) -> Option<Resolved> {
+        if bus != self.caller.bus_name()
+            || path.is_empty()
+            || path.len() > crate::paths::MAX_PATH_BYTES
+        {
+            return None;
+        }
+        let key = NodeKey {
+            app: self.app,
+            local: gorca_dbus::drain::local_id(path),
+        };
+        self.paths.insert(key, path);
+        Some(Resolved {
+            key,
+            path: Arc::from(path),
+        })
+    }
+
+    pub(crate) fn key_of_ref(&self, bus: &str, path: &str) -> Option<NodeKey> {
+        let r = self.resolve_ref(bus, path);
+        if r.is_none() {
+            self.counters.foreign_refs();
+        }
+        r.map(|r| r.key)
+    }
+}
+
+/// The nodes a strategy learned, still raw (decoded and bounded, not yet snapshots).
+#[derive(Debug, Default)]
+pub(crate) struct RawBatch {
+    pub nodes: Vec<(NodeKey, RawNode)>,
+    pub truncated: bool,
+}
+
+impl RawBatch {
+    fn into_batch(self, now: Instant) -> SnapshotBatch {
+        SnapshotBatch {
+            nodes: self
+                .nodes
+                .iter()
+                .map(|(k, raw)| snapshot(*k, raw, now))
+                .collect(),
+            truncated: self.truncated,
+        }
     }
 }
 
@@ -200,121 +343,95 @@ impl Caller {
         m.body().deserialize::<String>().map_err(DbusError::Zbus)
     }
 
-    /// Name, role, state (and what the role needs on top) of one object. The three base calls run
-    /// concurrently; all share one deadline. Failures of the optional parts are not errors: the
-    /// utterance is simply poorer.
-    pub async fn fetch(
-        &self,
-        key: NodeKey,
-        path: &str,
-        want: PropMask,
-        deadline: Deadline,
-    ) -> Result<Arc<gorca_model::NodeSnapshot>, BackendError> {
-        let name_fut = async {
-            if want.contains(PropMask::NAME) {
-                self.name_of(&self.bus_name, path, deadline).await.map(Some)
-            } else {
-                Ok(None)
-            }
-        };
-        let (role, state, name) = tokio::join!(
-            self.role(path, deadline),
-            self.state(path, deadline),
-            name_fut
-        );
-        // Role and state are required; a failed name only costs the name.
-        let role = role.map_err(|e| backend_error(&e))?;
-        let state_words = state.map_err(|e| backend_error(&e))?;
-        let mut raw = RawNode {
-            role,
-            state_words,
-            name: name.ok().flatten(),
-            ..RawNode::default()
-        };
-        let core_role = crate::decode::role_from_raw(role);
-        let states = crate::decode::states_from_raw(&raw.state_words);
-
-        if want.contains(PropMask::VALUE) {
-            raw.value = self.value_for(core_role, states, path, deadline).await;
-        }
-        if raw.name.as_deref().is_none_or(str::is_empty)
-            && let Ok(Some((bus, p))) = self.label_target(path, deadline).await
-            && label_may_be_read(&bus, &self.bus_name)
-            && let Ok(label) = self.name_of(&bus, &p, deadline).await
-        {
-            raw.name = Some(label);
-        }
-        Ok(snapshot(key, &raw, Instant::now()))
+    pub fn bus_name(&self) -> &str {
+        &self.bus_name
     }
 
-    async fn value_for(
+    async fn description_of(&self, path: &str, deadline: Deadline) -> Result<String, DbusError> {
+        self.string_prop(&self.bus_name, path, ACCESSIBLE, "Description", deadline)
+            .await
+    }
+
+    /// The `Parent` property: `Some((bus, path))`, or `None` for the root (null object).
+    async fn parent_of(
         &self,
-        role: Role,
-        states: gorca_model::StateSet,
         path: &str,
         deadline: Deadline,
-    ) -> Option<RawValue> {
-        match role {
-            Role::Slider | Role::ProgressBar | Role::SpinButton => {
-                let (cur, min, max) = tokio::join!(
-                    self.f64_prop(path, "CurrentValue", deadline),
-                    self.f64_prop(path, "MinimumValue", deadline),
-                    self.f64_prop(path, "MaximumValue", deadline)
-                );
-                Some(RawValue::Number {
-                    current: cur.ok()?,
-                    min: min.unwrap_or(f64::NAN),
-                    max: max.unwrap_or(f64::NAN),
-                })
-            }
-            // Product decision: gorca reads whatever the application exposes, password fields
-            // included. The text is never logged.
-            Role::TextEntry | Role::PasswordEntry if wants_entry_text(role, states) => {
-                let t = self.text_prefix(path, deadline).await.ok()?;
-                Some(RawValue::Text(clip(&t, MAX_TEXT_BYTES).to_owned()))
-            }
-            // Everything else has no value on focus.
-            Role::PasswordEntry
-            | Role::TextEntry
-            | Role::Unknown
-            | Role::Application
-            | Role::Window
-            | Role::Dialog
-            | Role::Panel
-            | Role::Document
-            | Role::Heading
-            | Role::Paragraph
-            | Role::Link
-            | Role::Image
-            | Role::List
-            | Role::ListItem
-            | Role::Table
-            | Role::Row
-            | Role::Cell
-            | Role::ColumnHeader
-            | Role::RowHeader
-            | Role::Button
-            | Role::ToggleButton
-            | Role::CheckBox
-            | Role::RadioButton
-            | Role::ComboBox
-            | Role::Menu
-            | Role::MenuBar
-            | Role::MenuItem
-            | Role::Popover
-            | Role::Tab
-            | Role::TabList
-            | Role::Tree
-            | Role::TreeItem
-            | Role::Toolbar
-            | Role::StatusBar
-            | Role::Separator
-            | Role::Label
-            | Role::StaticText
-            | Role::Terminal
-            | Role::Landmark
-            | Role::Alert => None,
+    ) -> Result<Option<(String, String)>, DbusError> {
+        let v = self
+            .prop(&self.bus_name, path, ACCESSIBLE, "Parent", deadline)
+            .await?;
+        Ok(ref_of_value(&v))
+    }
+
+    async fn child_count_of(&self, path: &str, deadline: Deadline) -> Result<i32, DbusError> {
+        let v = self
+            .prop(&self.bus_name, path, ACCESSIBLE, "ChildCount", deadline)
+            .await?;
+        i32::try_from(v).map_err(|e| DbusError::Zbus(e.into()))
+    }
+
+    /// `GetChildAtIndex`: `None` past the end.
+    async fn child_at(
+        &self,
+        path: &str,
+        index: u32,
+        deadline: Deadline,
+    ) -> Result<Option<(String, String)>, DbusError> {
+        let i = i32::try_from(index).unwrap_or(i32::MAX);
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                ACCESSIBLE,
+                "GetChildAtIndex",
+                &(i,),
+            )
+            .await?;
+        let (bus, p) = m
+            .body()
+            .deserialize::<(String, OwnedObjectPath)>()
+            .map_err(DbusError::Zbus)?;
+        Ok((p.as_str() != NULL_PATH && !bus.is_empty()).then(|| (bus, p.as_str().to_owned())))
+    }
+
+    /// `GetChildren`, at most `MAX_SUBTREE_NODES` refs of a reply of at most 16 MiB.
+    async fn children_of(
+        &self,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<Vec<(String, String)>, DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                ACCESSIBLE,
+                "GetChildren",
+                &(),
+            )
+            .await?;
+        if m.body().data().len() > items::MAX_DUMP_BYTES {
+            return Err(DbusError::Zbus(zbus::Error::Failure(
+                "GetChildren reply too large".to_owned(),
+            )));
         }
+        let kids = m
+            .body()
+            .deserialize::<Vec<(String, OwnedObjectPath)>>()
+            .map_err(DbusError::Zbus)?;
+        Ok(kids
+            .into_iter()
+            .take(MAX_SUBTREE_NODES as usize)
+            .map(|(b, p)| (b, p.as_str().to_owned()))
+            .collect())
+    }
+
+    /// `Cache.GetItems`; the reply is decoded by the caller (it can be large).
+    async fn get_items(&self, deadline: Deadline) -> Result<zbus::Message, DbusError> {
+        self.call(&self.bus_name, deadline, CACHE_PATH, CACHE, "GetItems", &())
+            .await
     }
 
     /// Toolkit and application name of the app root, for `AppInfo` (best effort).
@@ -343,6 +460,7 @@ pub struct AppServer {
     pub gone: CancellationToken,
     /// Verified by the router against the protected Shell identity; never self-reported.
     pub verified_shell: bool,
+    pub counters: Arc<FetchCounters>,
     pub shutdown: CancellationToken,
 }
 
@@ -351,6 +469,13 @@ impl AppServer {
     pub async fn run(self, mut port: AppPort) {
         let mut requests = std::mem::replace(&mut port.requests, closed_receiver());
         let permits = Arc::new(Semaphore::new(MAX_IN_FLIGHT));
+        let background = Arc::new(AtomicUsize::new(0));
+        let cx = CallCx {
+            caller: self.caller.clone(),
+            paths: Arc::clone(&self.paths),
+            app: port.app,
+            counters: Arc::clone(&self.counters),
+        };
         let mut inflight: JoinSet<()> = JoinSet::new();
         // Identifying the application is informational and may be slow: requests (the first
         // focus the user is waiting for) are served meanwhile.
@@ -370,7 +495,7 @@ impl AppServer {
                 biased;
                 () = self.shutdown.cancelled() => break,
                 () = self.gone.cancelled() => break,
-                Some(req) = requests.recv() => self.accept(req, &permits, &mut inflight),
+                Some(req) = requests.recv() => self.accept(req, &cx, &permits, &background, &mut inflight),
                 found = &mut info_rx, if info_pending => {
                     info_pending = false;
                     if let Ok((toolkit, app_name)) = found {
@@ -387,20 +512,52 @@ impl AppServer {
         }
     }
 
-    fn accept(&self, req: BackendRequest, permits: &Arc<Semaphore>, inflight: &mut JoinSet<()>) {
+    fn accept(
+        &self,
+        req: BackendRequest,
+        cx: &CallCx,
+        permits: &Arc<Semaphore>,
+        background: &Arc<AtomicUsize>,
+        inflight: &mut JoinSet<()>,
+    ) {
         if req.deadline.expired(self.clock.now()) {
             // Too late to be useful; dropping the sender counts as Timeout (C-2).
             return;
         }
-        let Ok(permit) = Arc::clone(permits).try_acquire_owned() else {
+        // Interactive requests may use every slot; the others leave INTERACTIVE_RESERVED free,
+        // and Background (dumps) at most BACKGROUND_MAX at a time (section 7).
+        let is_background = matches!(
+            req.class,
+            gorca_rt::BudgetClass::Background | gorca_rt::BudgetClass::Startup
+        );
+        let class_ok = match req.class {
+            gorca_rt::BudgetClass::Interactive => true,
+            gorca_rt::BudgetClass::Prefetch => permits.available_permits() > INTERACTIVE_RESERVED,
+            gorca_rt::BudgetClass::Background | gorca_rt::BudgetClass::Startup => {
+                permits.available_permits() > INTERACTIVE_RESERVED
+                    && background.load(Ordering::Acquire) < BACKGROUND_MAX
+            }
+        };
+        let permit = if class_ok {
+            Arc::clone(permits).try_acquire_owned().ok()
+        } else {
+            None
+        };
+        let Some(permit) = permit else {
             let _ = req.reply.send(Err(BackendError::Busy));
             return;
         };
-        let caller = self.caller.clone();
-        let paths = Arc::clone(&self.paths);
+        if is_background {
+            background.fetch_add(1, Ordering::AcqRel);
+        }
+        let cx = cx.clone();
+        let background = Arc::clone(background);
         inflight.spawn(async move {
-            let result = serve_one(&caller, &paths, &req).await;
+            let result = serve_one(&cx, &req).await;
             let _ = req.reply.send(result);
+            if is_background {
+                background.fetch_sub(1, Ordering::AcqRel);
+            }
             drop(permit);
         });
     }
@@ -415,33 +572,62 @@ fn announce_info(port: &AppPort, toolkit: &str, app_name: &str, verified_shell: 
         pid: None,
         connector_kind: ConnectorKind::Atspi,
         verified_shell,
+        // Shell is the only toolkit whose dump P-9 verified complete; the flag follows the
+        // verified identity, never `app_name` (B-1 2.2).
+        dump_complete: verified_shell,
     };
     // Informational: a full control queue is not worth retrying.
     let _ = port.lifecycle(AppLifecycle::Appeared(info));
 }
 
-async fn serve_one(
-    caller: &Caller,
-    paths: &PathTable,
-    req: &BackendRequest,
-) -> Result<BackendReply, BackendError> {
+/// A key the path table no longer holds is `Unresolved`, never `Gone`: the object may well
+/// exist (PW-7).
+fn resolve(cx: &CallCx, key: NodeKey) -> Result<Resolved, BackendError> {
+    cx.paths
+        .get(key)
+        .map(|path| Resolved { key, path })
+        .ok_or(BackendError::Unresolved)
+}
+
+async fn serve_one(cx: &CallCx, req: &BackendRequest) -> Result<BackendReply, BackendError> {
+    let dl = req.deadline;
+    let now = Instant::now();
     match &req.op {
         BackendOp::Fetch { node, want } => {
-            let Some(path) = paths.get(*node) else {
-                return Err(BackendError::Gone);
-            };
-            caller
-                .fetch(*node, &path, *want, req.deadline)
-                .await
-                .map(BackendReply::Node)
+            let n = resolve(cx, *node)?;
+            let raw = strategy::fetch(cx, &n, *want, dl).await?;
+            Ok(BackendReply::Node(snapshot(n.key, &raw, now)))
         }
-        BackendOp::Probe => caller
-            .role(ROOT_PATH, req.deadline)
+        BackendOp::ChildSnapshots { node, range, want } => {
+            let n = resolve(cx, *node)?;
+            let b = strategy::child_snapshots(cx, &n, range.clone(), *want, dl).await?;
+            Ok(BackendReply::Subtree(b.into_batch(now)))
+        }
+        BackendOp::Ancestry {
+            node,
+            max_depth,
+            want,
+        } => {
+            let n = resolve(cx, *node)?;
+            let b = strategy::ancestry(cx, &n, *max_depth, *want, dl).await?;
+            Ok(BackendReply::Subtree(b.into_batch(now)))
+        }
+        BackendOp::Subtree { root, max_nodes } => {
+            let n = resolve(cx, *root)?;
+            let b = strategy::subtree(cx, &n, *max_nodes, dl).await?;
+            Ok(BackendReply::Subtree(b.into_batch(now)))
+        }
+        BackendOp::CacheDump { max_nodes } => {
+            let b = strategy::cache_dump(cx, *max_nodes, dl).await?;
+            Ok(BackendReply::Subtree(b.into_batch(now)))
+        }
+        BackendOp::Probe => cx
+            .caller
+            .role(ROOT_PATH, dl)
             .await
             .map(|_| BackendReply::ActionDone)
             .map_err(|e| backend_error(&e)),
         BackendOp::Children { .. }
-        | BackendOp::Subtree { .. }
         | BackendOp::Text(_)
         | BackendOp::Action(_)
         | BackendOp::HitTest { .. }
