@@ -488,6 +488,26 @@ fn chord_until(
     Ok((false, first_consumed, resent))
 }
 
+/// Score the letters typed so far against the app log and start over. Synthetic keycodes wrap at
+/// 16 bits, so a long walk is scored in chunks (a wrapped keycode would look doubled).
+fn flush_scores(
+    rig: &mut Rig,
+    typed: &mut Vec<(u16, u32)>,
+    swallowed: &mut u64,
+    totals: &mut (u64, u64, u64),
+) -> Result<()> {
+    let log = mutter(rig)?.app_log(true)?;
+    let (lost, doubled) = score_typing(typed, &log);
+    totals.0 += lost + std::mem::take(swallowed);
+    totals.1 += doubled;
+    totals.2 += unbalanced_keys(&log);
+    typed.clear();
+    Ok(())
+}
+
+/// Letters per scoring chunk: well under the 60k synthetic keycodes before they wrap.
+const SCORE_CHUNK: usize = 20_000;
+
 fn mutter(rig: &mut Rig) -> Result<&mut super::apps::FakeMutter> {
     rig.mutter
         .as_mut()
@@ -584,7 +604,13 @@ pub fn k4(
     let (mut typed, mut leaked, mut swallowed_live) = (Vec::new(), 0u64, 0u64);
     let (mut escape_unconsumed, mut never_settled, mut resent) = (0u64, 0u64, 0u64);
     let started = std::time::Instant::now();
+    let mut totals = (0u64, 0u64, 0u64);
+    let mut typed_total = 0usize;
     for round in 0..switches {
+        if typed.len() >= SCORE_CHUNK {
+            typed_total += typed.len();
+            flush_scores(&mut rig, &mut typed, &mut swallowed_live, &mut totals)?;
+        }
         let use_learn = rng.below(4) == 0;
         if use_learn {
             let (ok, consumed, again) = chord_until(&mut rig, &mut ty, &learn, |g| g.grab_all)?;
@@ -657,18 +683,15 @@ pub fn k4(
     }
     let elapsed = started.elapsed().as_secs_f64();
     std::thread::sleep(Duration::from_millis(200));
-    let log = mutter(&mut rig)?.app_log(true)?;
-    let (lost, doubled) = score_typing(&typed, &log);
+    typed_total += typed.len();
+    flush_scores(&mut rig, &mut typed, &mut swallowed_live, &mut totals)?;
+    let (lost, doubled, _) = totals;
     out.notes.push(format!(
-        "K4 app_lost parts: missing in app log {lost}, swallowed live {swallowed_live}, escape not consumed {escape_unconsumed}; {switches} switches in {elapsed:.1} s"
+        "K4 app_lost parts: lost or swallowed letters {lost}, escape not consumed {escape_unconsumed}; {switches} switches in {elapsed:.1} s"
     ));
     out.x("switches", switches as f64, "count");
-    out.x("typed_keys", typed.len() as f64, "count");
-    out.x(
-        "app_lost",
-        (lost + swallowed_live + escape_unconsumed) as f64,
-        "keys",
-    );
+    out.x("typed_keys", typed_total as f64, "count");
+    out.x("app_lost", (lost + escape_unconsumed) as f64, "keys");
     out.x("app_doubled", doubled as f64, "keys");
     out.x("chord_leaked", leaked as f64, "chords");
     out.x("wait_timeouts", never_settled as f64, "waits");
@@ -739,8 +762,14 @@ pub fn k4r(
     let (mut typed, mut swallowed_live, mut wrong_state) = (Vec::new(), 0u64, 0u64);
     let (mut stuck, mut wait_timeouts, mut precondition_dirty) = (0u64, 0u64, 0u64);
     let mut continue_round = true;
+    let mut totals = (0u64, 0u64, 0u64);
+    let mut typed_total = 0usize;
     let started = std::time::Instant::now();
     for _ in 0..rounds {
+        if typed.len() >= SCORE_CHUNK {
+            typed_total += typed.len();
+            flush_scores(&mut rig, &mut typed, &mut swallowed_live, &mut totals)?;
+        }
         chord(&mut rig, &mut ty, &pass)?;
         let round_type = rng.below(4);
         match round_type {
@@ -796,9 +825,18 @@ pub fn k4r(
                     ty.t_ms += 25;
                     // Every key is up again: XKB must agree (it heals on later events, so look
                     // now).
-                    std::thread::sleep(Duration::from_millis(30));
-                    let st = mutter(&mut rig)?.grab_state()?;
-                    if st.xkb_down > 0 {
+                    let (st, landed) = mutter(&mut rig)?
+                        .wait_grabs(Duration::from_millis(500), |g| {
+                            g.modifiers == NORMAL_MODIFIERS
+                        })?;
+                    wait_timeouts += u64::from(!landed);
+                    std::thread::sleep(Duration::from_millis(5));
+                    let st = if landed {
+                        mutter(&mut rig)?.grab_state()?
+                    } else {
+                        st
+                    };
+                    if landed && st.xkb_down > 0 {
                         eprintln!("K4r DEBUG stuck code {} state {:?}", st.xkb_first, st);
                         stuck += 1;
                     }
@@ -824,9 +862,12 @@ pub fn k4r(
             if type_letter(&mut rig, &mut ty, &mut rng, &mut typed, &letters)? {
                 swallowed_live += 1;
             }
-            std::thread::sleep(Duration::from_millis(30));
-            let st = mutter(&mut rig)?.grab_state()?;
-            if st.modifiers != NORMAL_MODIFIERS || st.grab_all {
+            // Up to four sequential calls with up to 8 ms of latency each can still be in flight:
+            // poll for the state instead of guessing a sleep.
+            let (st, reached) = mutter(&mut rig)?.wait_grabs(Duration::from_millis(500), |g| {
+                g.modifiers == NORMAL_MODIFIERS && !g.grab_all
+            })?;
+            if !reached {
                 wrong_state += 1;
                 eprintln!("K4r DEBUG wrong checkpoint after round type {round_type}: {st:?}");
             }
@@ -841,11 +882,12 @@ pub fn k4r(
     let (state, settled) = mutter(&mut rig)?.wait_grabs(Duration::from_secs(3), |g| {
         g.modifiers == NORMAL_MODIFIERS && !g.grab_all
     })?;
-    let log = mutter(&mut rig)?.app_log(true)?;
-    let (lost, doubled) = score_typing(&typed, &log);
+    typed_total += typed.len();
+    flush_scores(&mut rig, &mut typed, &mut swallowed_live, &mut totals)?;
+    let (lost, doubled, unbalanced) = totals;
     out.x("rounds", rounds as f64, "count");
-    out.x("typed_keys", typed.len() as f64, "count");
-    out.x("app_lost", (lost + swallowed_live) as f64, "keys");
+    out.x("typed_keys", typed_total as f64, "count");
+    out.x("app_lost", lost as f64, "keys");
     out.x("app_doubled", doubled as f64, "keys");
     out.x(
         "grab_state_wrong",
@@ -859,7 +901,7 @@ pub fn k4r(
     out.x("xkb_down_at_end", f64::from(state.xkb_down), "keys");
     out.x("wait_timeouts", wait_timeouts as f64, "waits");
     out.x("precondition_dirty", precondition_dirty as f64, "rounds");
-    out.x("key_unbalanced", unbalanced_keys(&log) as f64, "keys");
+    out.x("key_unbalanced", unbalanced as f64, "keys");
     out.x("k4r_wall_s", elapsed, "s");
     Ok(())
 }
