@@ -12,6 +12,13 @@ use gorca_model::{
 };
 use gorca_rt::BudgetClass;
 
+/// Focus changes closer together than this are a storm (held key, scripted walk, a list
+/// scrolling under the pointer): hits are then held for [`STORM_HOLD`], so the last focus wins
+/// and the speech server is not flooded with fragments. An isolated focus speaks at once.
+pub const RAPID_FOCUS: Duration = Duration::from_millis(20);
+/// How long a hit in a storm waits for a newer focus to supersede it.
+pub const STORM_HOLD: Duration = Duration::from_millis(4);
+
 use super::log::{PresentRecord, PresentSource};
 use super::{PresentContext, changed, message, present_change};
 use crate::SpeechIntent;
@@ -81,7 +88,8 @@ impl Reader {
     }
 
     pub(crate) fn begin_focus(&mut self, node: NodeKey, now: Instant, fx: &mut ReaderEffects) {
-        if let Some((last, at)) = self.last_focus
+        let previous = self.last_focus;
+        if let Some((last, at)) = previous
             && last == node
             && now.saturating_duration_since(at) < DUPLICATE_FOCUS_WINDOW
         {
@@ -89,11 +97,21 @@ impl Reader {
             return;
         }
         self.last_focus = Some((node, now));
-        self.focus_seq = self.dir.seq(node.app);
+        // The trigger gets its own sequence point: only a request issued after it can have
+        // confirmed the mirror's content for this focus (RV-1, 5.3).
+        self.focus_seq = self.dir.bump_seq(node.app);
         // The epoch advances first, so stale speech cancels now, not after δ (E-2).
         let epoch = self.epoch.advance();
-        let role = self.dir.lookup(node).hit().map(|n| n.role);
-        let until = now + settle_delay(role);
+        let cached = self.dir.lookup(node).hit();
+        let role = cached.as_ref().map(|n| n.role);
+        let rapid = previous.is_some_and(|(_, at)| now.saturating_duration_since(at) < RAPID_FOCUS);
+        // Hits do not bypass the coalescer: in a storm they wait like a flapping role does.
+        let hold = if cached.is_some() && rapid {
+            STORM_HOLD
+        } else {
+            Duration::ZERO
+        };
+        let until = now + settle_delay(role).max(hold);
         self.apply_focus(FocusMsg::FocusChanged { node, epoch, until }, fx);
         if let FocusState::Settling { until, .. } = self.focus {
             if until <= now {
@@ -217,10 +235,9 @@ impl Reader {
     ) {
         self.counters.cached_presentations += 1;
         self.present_with(&v.snap, source, true, fx);
-        let confirmed_after_trigger = v.snap.confirmed_seq >= self.focus_seq
-            && v.stale.is_empty()
-            && !v.aged
-            && v.snap.confirmed_seq > 0;
+        // Only a request issued strictly after the focus began can have confirmed the content.
+        let confirmed_after_trigger =
+            v.snap.confirmed_seq > self.focus_seq && v.stale.is_empty() && !v.aged;
         if revalidate && !confirmed_after_trigger {
             self.counters.revalidations += 1;
             fx.push(Self::fetch_effect(
@@ -333,6 +350,10 @@ impl Reader {
 
     fn on_focus_reply(&mut self, r: QueryReply, fx: &mut ReaderEffects) {
         match r.result {
+            // A reply that says `defunct` is a removal: nothing is spoken from a dead key.
+            Ok(snap) if snap.states.contains(StateSet::DEFUNCT) => {
+                self.apply_focus(FocusMsg::NodeRemoved(r.node), fx);
+            }
             Ok(snap) => self.present(&snap, fx),
             // The object is gone for good (5.5): nothing from the cache may be spoken.
             Err(gorca_connector_api::BackendError::Gone) => {
@@ -368,6 +389,9 @@ impl Reader {
             return;
         }
         match &r.result {
+            Ok(new) if new.states.contains(StateSet::DEFUNCT) => {
+                self.apply_focus(FocusMsg::NodeRemoved(r.node), fx);
+            }
             Ok(new) => {
                 let ch = changed(&p.snap, new, skip_states(p.ctx));
                 if ch.is_empty() {
@@ -442,7 +466,18 @@ impl Reader {
         if p.node != r.node {
             return;
         }
-        let Ok(new) = &r.result else { return };
+        let new = match &r.result {
+            Ok(n) if n.states.contains(StateSet::DEFUNCT) => {
+                self.apply_focus(FocusMsg::NodeRemoved(r.node), fx);
+                return;
+            }
+            Ok(n) => n,
+            Err(gorca_connector_api::BackendError::Gone) => {
+                self.apply_focus(FocusMsg::NodeRemoved(r.node), fx);
+                return;
+            }
+            Err(_) => return,
+        };
         let ch = changed(&p.snap, new, skip_states(p.ctx));
         if ch.is_empty() {
             return;
@@ -450,7 +485,7 @@ impl Reader {
         let id = self.utt_id();
         let u = present_change(new, ch, id, self.epoch.current(), None);
         self.counters.state_changes_spoken += 1;
-        self.log_presentation(&u, new, PresentSource::MissReply, None);
+        self.log_presentation(&u, new, PresentSource::StateChange, None);
         self.presented = Some(Presented {
             node: p.node,
             snap: Arc::clone(new),

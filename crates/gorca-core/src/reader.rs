@@ -1084,19 +1084,145 @@ mod tests {
         assert_eq!(f.reader.counters().followups, 1);
     }
 
-    /// A reply issued after the focus began confirmed the content: nothing left to revalidate.
+    /// A request issued after the focus began confirmed the content: nothing left to revalidate.
+    /// (The role flaps, so the focus settles for 30 ms; a prefetch lands in between.)
     #[test]
-    fn content_confirmed_after_the_focus_began_needs_no_revalidation() {
+    fn content_confirmed_by_a_request_issued_after_the_focus_began_needs_no_revalidation() {
         let mut f = fixture();
-        // Move the write sequence on so that "confirmed after" is distinguishable from zero.
-        f.writer.invalidate(key(9), PropMask::NAME, Instant::now());
-        let issued_at = f.writer.seq();
+        let mut menu = (*with_name(1, "Open", StateSet::empty())).clone();
+        menu.role = Role::MenuItem;
+        let now = Instant::now();
         f.writer.apply(
-            SnapshotBatch::new(vec![with_name(1, "Fresh", StateSet::empty())]),
+            SnapshotBatch::new(vec![Arc::new(menu.clone())]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let fx = focus_on(&mut f, 1, now);
+        assert!(spoken(&fx).is_empty(), "settling");
+        // A prefetch issued after the focus event lands before the settle timer.
+        let issued_at = f.writer.next_seq();
+        f.writer.apply(
+            SnapshotBatch::new(vec![Arc::new(menu)]),
             gorca_mirror::ApplyOrigin::Reply { issued_at },
         );
-        let fx = focus_on(&mut f, 1, Instant::now());
+        let fx = f
+            .reader
+            .handle(ReaderMsg::Timer, now + Duration::from_millis(31));
         assert_eq!(effects_of(&fx), ["speak", "settled", "demand"]);
+    }
+
+    /// Reviewer probe F1: a quiet app (one old event, then nothing) whose node was fetched on an
+    /// earlier visit and renamed silently (GTK4 G-1). The revisit is revalidated.
+    #[test]
+    fn a_revisit_in_a_quiet_app_is_revalidated() {
+        let mut f = fixture();
+        let t0 = Instant::now();
+        f.writer.invalidate(key(9), PropMask::NAME, t0);
+        let issued_at = f.writer.next_seq();
+        f.writer.apply(
+            SnapshotBatch::new(vec![with_name(1, "Old", StateSet::empty())]),
+            gorca_mirror::ApplyOrigin::Reply { issued_at },
+        );
+        let _ = focus_on(&mut f, 1, t0);
+        let _ = focus_on(&mut f, 2, t0 + Duration::from_secs(2));
+        let fx = focus_on(&mut f, 1, t0 + Duration::from_secs(10));
+        assert!(
+            effects_of(&fx).contains(&"fetch-rv1"),
+            "revisit served from the mirror without RV-1: {:?}",
+            effects_of(&fx)
+        );
+        // And the silent rename is found and corrected.
+        let fx = f.reader.handle(
+            reply(
+                &f,
+                1,
+                FetchKind::Revalidate,
+                with_name(1, "New", StateSet::empty()),
+            ),
+            t0 + Duration::from_secs(10),
+        );
+        assert_eq!(f.reader.counters().refined, 1, "{:?}", effects_of(&fx));
+    }
+
+    /// F4: a storm of focus events on cached nodes is coalesced: last focus wins, one utterance.
+    #[test]
+    fn a_focus_storm_on_cached_nodes_speaks_once() {
+        let mut f = fixture();
+        f.writer.apply(
+            SnapshotBatch::new(
+                (1..=4)
+                    .map(|n| with_name(n, "n", StateSet::empty()))
+                    .collect(),
+            ),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let t0 = Instant::now();
+        // 300 focus events, one millisecond apart, across four cached nodes.
+        let mut all = Vec::new();
+        let mut timer = None;
+        for i in 0..300u64 {
+            let now = t0 + Duration::from_millis(i);
+            all.extend(focus_on(&mut f, 1 + i % 4, now));
+            // The runtime would fire the timer only when it is due.
+            if let Some(at) = timer
+                && at <= now
+            {
+                timer = None;
+                all.extend(f.reader.handle(ReaderMsg::Timer, now));
+            }
+            for e in all.iter().rev().take(4) {
+                if let ReaderEffect::ArmTimer(at) = e {
+                    timer = Some(*at);
+                    break;
+                }
+            }
+        }
+        let end = t0 + Duration::from_millis(400);
+        all.extend(f.reader.handle(ReaderMsg::Timer, end));
+        let speaks = all
+            .iter()
+            .filter(|e| matches!(e, ReaderEffect::Speak(_)))
+            .count();
+        assert!(speaks <= 2, "{speaks} utterances for 300 focus events");
+        assert!(speaks >= 1, "the last focus is spoken");
+    }
+
+    /// An isolated focus on a cached node is still spoken at once (L1h).
+    #[test]
+    fn an_isolated_hit_is_not_delayed() {
+        let mut f = fixture();
+        f.writer.apply(
+            SnapshotBatch::new(vec![with_name(1, "n", StateSet::empty())]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let t0 = Instant::now();
+        let fx = focus_on(&mut f, 1, t0);
+        assert_eq!(spoken(&fx).len(), 1);
+        // Slower than a storm (30 Hz key repeat): also at once.
+        f.writer.apply(
+            SnapshotBatch::new(vec![with_name(2, "m", StateSet::empty())]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let fx = focus_on(&mut f, 2, t0 + Duration::from_millis(33));
+        assert_eq!(spoken(&fx).len(), 1);
+    }
+
+    /// 5.1: a fetch reply that says `defunct` is a removal; nothing is spoken from it.
+    #[test]
+    fn a_defunct_reply_is_not_spoken() {
+        let mut f = fixture();
+        let now = Instant::now();
+        focus_on(&mut f, 2, now);
+        let fx = f.reader.handle(
+            reply(
+                &f,
+                2,
+                FetchKind::Focus,
+                with_name(2, "dying", StateSet::DEFUNCT),
+            ),
+            now,
+        );
+        assert!(spoken(&fx).is_empty());
+        assert!(matches!(f.reader.focus(), FocusState::Orphaned { .. }));
     }
 
     /// 5.2: a stale NAME is not presented from memory; the node is fetched and the reply spoken.

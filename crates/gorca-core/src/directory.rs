@@ -57,6 +57,17 @@ impl MirrorDirectory {
         self.apps.load().get(&app).map_or(0, MirrorRead::seq)
     }
 
+    /// A fresh sequence point of the app's mirror: for a trigger (a focus change) or a request
+    /// about to be issued. 0 for an unknown app.
+    pub fn bump_seq(&self, app: AppId) -> u64 {
+        self.apps.load().get(&app).map_or(0, MirrorRead::bump_seq)
+    }
+
+    /// Counters of an app's mirror; `None` once the app is gone and its mirror released.
+    pub fn stats(&self, app: AppId) -> Option<gorca_mirror::MirrorStats> {
+        self.apps.load().get(&app).map(MirrorRead::stats)
+    }
+
     pub fn len(&self) -> usize {
         self.apps.load().len()
     }

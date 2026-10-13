@@ -262,13 +262,30 @@ fn a_spoofed_shell_never_speaks_selection() {
 }
 
 #[test]
-fn other_apps_never_speak_selection() {
+fn other_apps_never_speak_selection_but_a_selected_focus_is_an_s1_change() {
     let mut r = rig(IngressConfig::default());
     r.port.push(selected(1));
     let route = r.actor.pump(Instant::now());
-    assert_eq!(route.forwarded_to_focus_lane, 0);
+    assert_eq!(route.forwarded_to_focus_lane, 0, "not the focus: nothing");
     assert!(r.inbox.poll().is_none());
-    assert!(r.actor.resync_needed());
+    // The focused node of an ordinary app that becomes `selected` is a state change like any
+    // other (IC-3 against the real daemon: it used to be dropped as selection speech).
+    r.port.push(NodeEvent::FocusChanged { node: key(2) });
+    r.actor.pump(Instant::now());
+    assert!(matches!(
+        r.inbox.poll(),
+        Some(crate::reader::ReaderMsg::Focus(
+            FocusLaneMsg::FocusChanged { .. }
+        ))
+    ));
+    r.port.push(selected(2));
+    let route = r.actor.pump(Instant::now());
+    assert_eq!(route.forwarded_to_focus_lane, 1);
+    assert!(matches!(
+        r.inbox.poll(),
+        Some(crate::reader::ReaderMsg::Focus(FocusLaneMsg::StateChanged { node, .. })) if node == key(2)
+    ));
+    assert!(r.inbox.poll().is_none());
 }
 
 // ---- B-1 5.1: the invalidation table, the policy inputs and the fill wiring ----
@@ -659,4 +676,26 @@ fn only_a_verified_shell_is_protected_and_may_dump() {
     r2.port.lifecycle(AppLifecycle::Appeared(spoof)).unwrap();
     r2.actor.pump(Instant::now());
     assert!(!r2.actor.profile().speak_selection);
+}
+
+#[test]
+fn the_focused_app_is_protected_from_global_shedding_until_the_focus_leaves() {
+    let focused = Arc::new(gorca_rt::FocusedApp::new());
+    let ch = app_channel(app(), IngressConfig::default());
+    let (writer, _read) = mirror();
+    let (tx, _inbox) = reader_channels();
+    let links = ReaderLinks {
+        focus: tx.focus,
+        background: tx.background,
+    };
+    let mut actor = AppActor::new(app(), writer, ch.ingress, ch.control, links)
+        .with_focused(Arc::clone(&focused));
+    actor.pump(Instant::now());
+    assert!(!actor.mirror_protected());
+    focused.publish(app());
+    actor.pump(Instant::now());
+    assert!(actor.mirror_protected(), "the focused app is protected");
+    focused.demote();
+    actor.pump(Instant::now());
+    assert!(!actor.mirror_protected());
 }

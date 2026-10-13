@@ -138,6 +138,8 @@ fn fill_reply(r: Result<BackendReply, BackendError>) -> FillReply {
 }
 
 #[derive(Debug)]
+// Four independent latches (resync, two closed channels, shell); an enum would only rename them.
+#[allow(clippy::struct_excessive_bools)]
 pub struct AppActor {
     app: AppId,
     health: AppHealth,
@@ -159,6 +161,10 @@ pub struct AppActor {
     fill_closed: bool,
     /// The focus last routed to the Reader from this app (S1 and the policy's focus).
     focus: Option<NodeKey>,
+    /// The connector verified this app as the Shell.
+    shell: bool,
+    /// The focused application, published by the Reader: it is protected like the Shell.
+    focused: Option<Arc<gorca_rt::FocusedApp>>,
 }
 
 impl AppActor {
@@ -194,7 +200,22 @@ impl AppActor {
             pending_fill: None,
             fill_closed: false,
             focus: None,
+            shell: false,
+            focused: None,
         }
+    }
+
+    /// The focused-application cell: while this app holds the user's focus its mirror is not
+    /// asked to shed for other apps.
+    #[must_use]
+    pub fn with_focused(mut self, focused: Arc<gorca_rt::FocusedApp>) -> Self {
+        self.focused = Some(focused);
+        self
+    }
+
+    fn refresh_protection(&mut self) {
+        let focused = self.focused.as_ref().is_some_and(|f| f.protects(self.app));
+        self.writer.set_protected(self.shell || focused);
     }
 
     /// Choose the fill policy and its limits; share the all-apps rate cap.
@@ -273,6 +294,11 @@ impl AppActor {
 
     pub fn resync_needed(&self) -> bool {
         self.resync_needed
+    }
+
+    /// Is this app's mirror protected from shedding for other apps (focused app or Shell)?
+    pub fn mirror_protected(&self) -> bool {
+        self.writer.usage().protected()
     }
 
     /// Read handle of this app's mirror.
@@ -367,6 +393,7 @@ impl AppActor {
     /// One iteration: control messages, Reader fill messages, then the ingress.
     pub fn pump(&mut self, now: Instant) -> AppRoute {
         let mut route = AppRoute::default();
+        self.refresh_protection();
         self.pump_control(now, &mut route);
         self.pump_fill(now);
 
@@ -414,7 +441,7 @@ impl AppActor {
         };
         let mut s1_sent = SmallVec::<[NodeKey; 2]>::new();
         for (i, ev) in drained.events.iter().enumerate() {
-            if became_selected(ev) {
+            if self.profile.speak_selection && became_selected(ev) {
                 if Some(i) == last_selected
                     && let NodeEvent::PropertiesChanged { node, .. } = ev
                 {
@@ -554,7 +581,8 @@ impl AppActor {
                     self.profile = AppProfile::for_app(&info);
                     self.driver.set_class(AppClass::from_info(&info));
                     self.driver.set_dump_complete(info.dump_complete);
-                    self.writer.set_protected(info.verified_shell);
+                    self.shell = info.verified_shell;
+                    self.refresh_protection();
                     self.writer.set_ttl(if info.verified_shell {
                         SHELL_TTL
                     } else {

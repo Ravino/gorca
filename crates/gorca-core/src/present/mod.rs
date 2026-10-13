@@ -12,10 +12,11 @@ mod log;
 mod utterance;
 
 pub use echo::{key_echo, key_echo_text, message};
-pub use flow::{FOCUS_FIELDS, Presented, REFINE_WINDOW, focus_need};
+pub use flow::{FOCUS_FIELDS, Presented, RAPID_FOCUS, REFINE_WINDOW, STORM_HOLD, focus_need};
 pub use job::{PresentJob, PresentKind, SpeechIntent};
 pub use log::{NoLabels, NodeLabel, PresentLog, PresentRecord, PresentSource};
-pub(crate) use utterance::{changed, log_states, present_change};
+pub(crate) use utterance::{changed, present_change};
+pub use utterance::{log_states, value_text};
 pub use utterance::{present_focus, present_selected_item};
 
 use gorca_model::{Epoch, NodeSnapshot, Role, UttId, Utterance};

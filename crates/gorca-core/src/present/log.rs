@@ -51,6 +51,8 @@ pub enum PresentSource {
     Refine,
     /// A correction spoken after the earlier utterance was too far gone to replace.
     Followup,
+    /// The change of a state or value of the node being presented (B-1 S1).
+    StateChange,
 }
 
 impl PresentSource {
@@ -62,6 +64,7 @@ impl PresentSource {
             PresentSource::MissReply => "miss_reply",
             PresentSource::Refine => "refine",
             PresentSource::Followup => "followup",
+            PresentSource::StateChange => "s1",
         }
     }
 }

@@ -502,7 +502,8 @@ fn spawn_app_actor(
             shared.limits.clone(),
             Some(Arc::clone(&shared.global_rate)),
         )
-        .with_fill_channel(fill_rx);
+        .with_fill_channel(fill_rx)
+        .with_focused(Arc::clone(&shared.focused));
     let shared = Arc::clone(shared);
     actors.spawn(
         "app-actor",
@@ -865,7 +866,7 @@ async fn reader_loop(
                         class,
                         epoch,
                         kind,
-                        issued_at: shared.mirrors.seq(node.app),
+                        issued_at: shared.mirrors.bump_seq(node.app),
                     };
                     if fetch_tx.try_send(job).is_err() {
                         bump(&shared.stats.fetch_refused);

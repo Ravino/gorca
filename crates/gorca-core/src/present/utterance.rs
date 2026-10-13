@@ -71,7 +71,7 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
 }
 
 /// The spoken form of a value, if it has one.
-pub(crate) fn value_text(v: Option<&Value>) -> Option<String> {
+pub fn value_text(v: Option<&Value>) -> Option<String> {
     match v {
         Some(Value::Text(t)) if !t.is_empty() => Some(t.to_string()),
         Some(Value::Range { current, .. }) => Some(format!("{current}")),
@@ -88,7 +88,7 @@ fn spoken_states(n: &NodeSnapshot) -> StateSet {
 
 /// Every state name of a snapshot, for the presentation log: the AT-SPI names of the states the
 /// connector decoded, plus `sensitive` (the core records its absence as `DISABLED`).
-pub(crate) fn log_states(n: &NodeSnapshot) -> SmallVec<[&'static str; 8]> {
+pub fn log_states(n: &NodeSnapshot) -> SmallVec<[&'static str; 8]> {
     const NAMES: &[(StateSet, &str)] = &[
         (StateSet::ACTIVE, "active"),
         (StateSet::CHECKED, "checked"),
