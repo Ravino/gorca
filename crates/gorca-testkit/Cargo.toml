@@ -16,6 +16,16 @@ gorca-doc-source-api = { workspace = true }
 tokio = { workspace = true, features = ["test-util", "net", "io-util"] }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
+serde = { workspace = true, features = ["derive", "std"] }
+serde_json = "1"
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "b1-walk"
+path = "src/bin/b1_walk.rs"
+
+[dev-dependencies]
+# Contract test: the run directories of the walk driver are evaluated by the real runner code.
+gorca-bench-b1 = { path = "../gorca-bench-b1" }

@@ -54,3 +54,14 @@ Where Orca blocks (all on its single GLib main loop thread):
   active window with `AXUtilities.can_be_active_window(...)` (state/role queries) and may walk the tree
   (`find_active_window`) before the key is processed/spoken.
 * libatspi `SetKeyGrabs`/`WatchKeyboard` to Mutter are sync with no deadline.
+
+## Verified per-toolkit behaviour (P-9, 2026-10-13)
+
+Full table and evidence: `docs/reports/2026-10-13-p9-cache-p2p.md`. Short form:
+* GTK4: `GetItems` = realised contexts only (2 items on a fresh app, grows as an AT walks); `AddAccessible` per realised node without its
+  children; `RemoveAccessible` not emitted for widget removal; all `Object` events gated on registered listeners; content-derived names
+  not re-signalled on ancestors.
+* atk-bridge (GTK3, Shell, Firefox, Chromium): eager traversal at init + on `children-changed::add`; skips `MANAGES_DESCENDANTS`; complete for
+  Shell (1765/1765), partial for GTK3 lists/trees (gedit 181/488), 2 items for Firefox.
+* Qt: `GetItems` returns an empty array, signals never emitted.
+* `Cache.version` is not readable on any toolkit and `Ready` is not in the live GTK4 introspection: detect by reply signature.

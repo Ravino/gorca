@@ -1,0 +1,10 @@
+{
+  "name": "shell", "app_name": "gnome-shell", "toolkit": "gnome-shell", "shape": "shell",
+  "p2p": "peer", "path_style": "counter", "seed": 101,
+  "nodes_idle": 1765, "nodes_peak": 3000, "depth_min": 12, "depth_max": 20,
+  "service": { "p50_ms": 0.11, "p99_ms": 0.34 }, "getitems_us_per_item": 10.0,
+  "quirks": { "silent_derived_names": true, "hidden_skips_cache": false, "add_during_dump_invisible": false,
+              "recycle_rows": false, "recycle_evented": false, "dump_omits_transient": false, "switcher_rebuild": true,
+              "dump_realised_only": false, "never_remove_accessible": false, "spurious_parent_add": false,
+              "hidden_ghost": false, "listener_gate": false }
+}

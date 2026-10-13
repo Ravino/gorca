@@ -11,3 +11,10 @@ Run with the system `/usr/bin/python3` (needs `python3-gi`); none of them modifi
 * `ssip_lat.py <socket>`, `ssip_prio.py <socket>` SSIP latency/priority tests against a PRIVATE speech-dispatcher:
   `speech-dispatcher -s -t 0 -c unix_socket -S <sock> -C <conf-copy-with-AudioOutputMethod "alsa" and AudioALSADevice "null" and an AddModule espeak-ng line> -P <pid> -L <logdir>`.
   Never point them at the user's daemon.
+
+* `p9live.py BUS[@LIMIT] ...` (2026-10-13) read-only P-9 survey on the CURRENT a11y bus: GetItems vs bounded tree walk, idle staleness,
+  MANAGES_DESCENDANTS nodes, P2P reachability/latency/socket modes.
+* `p9probe.py APP.py [--nolisten] [--steps a,b]` scripted-mutation consistency test (GetItems + Cache signals vs ground-truth walk) against a
+  PRIVATE session only (it registers as an event listener); apps in `p9apps/`. Needs the private rig described in
+  `docs/reports/2026-10-13-p9-cache-p2p.md` section 6. Use `/usr/bin/python3 -I`.
+* `p9enum.py` one-line summary per app (toolkit, child count, cache items, P2P address) on the current bus.
