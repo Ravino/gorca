@@ -903,6 +903,96 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    fn cache_signal(sender: &str, member: &str, refs: &[(&str, &str)]) -> Vec<u8> {
+        let mut body = Vec::new();
+        for (bus, path) in refs {
+            while !body.len().is_multiple_of(8) {
+                body.push(0);
+            }
+            for s in [bus, path] {
+                while !body.len().is_multiple_of(4) {
+                    body.push(0);
+                }
+                body.extend_from_slice(&(s.len() as u32).to_le_bytes());
+                body.extend_from_slice(s.as_bytes());
+                body.push(0);
+            }
+        }
+        message(
+            SIGNAL,
+            11,
+            &[
+                (1, b'o', "/org/a11y/atspi/cache"),
+                (2, b's', "org.a11y.atspi.Cache"),
+                (3, b's', member),
+                (7, b's', sender),
+            ],
+            None,
+            None,
+            &body,
+        )
+    }
+
+    /// B-1 PW-8 through the real drain: cache signals become events, and a ref that names another
+    /// bus name is malformed (counted, never pushed).
+    #[test]
+    fn cache_signals_map_to_events_and_foreign_refs_are_counted_malformed() {
+        let dir = std::env::temp_dir().join(format!("gorca-drain-cache-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("bus");
+        let _ = std::fs::remove_file(&path);
+        let (send, _rules) = fake_broker(&path);
+        let (tx, rx) = ingress(IngressConfig::default());
+        let router = Arc::new(CountingRouter {
+            calls: AtomicUsize::new(0),
+            route: AppRoute {
+                app: AppId {
+                    connector: ConnectorId(0),
+                    serial: 1,
+                },
+                tx,
+            },
+        });
+        let mut cfg = DrainConfig::new(format!("unix:path={}", path.display()));
+        cfg.connect_deadline = Duration::from_secs(3);
+        let drain = spawn_drain(cfg, Arc::clone(&router) as Arc<dyn Router>).unwrap();
+        // An honest remove, an honest add, then one remove and one add naming another bus name.
+        send.send(cache_signal(
+            ":1.5",
+            "RemoveAccessible",
+            &[(":1.5", "/x/9")],
+        ))
+        .unwrap();
+        send.send(cache_signal(
+            ":1.5",
+            "AddAccessible",
+            &[(":1.5", "/x/new"), (":1.5", "/root"), (":1.5", "/x/parent")],
+        ))
+        .unwrap();
+        send.send(cache_signal(
+            ":1.5",
+            "RemoveAccessible",
+            &[(":1.99", "/x/9")],
+        ))
+        .unwrap();
+        send.send(cache_signal(
+            ":1.5",
+            "AddAccessible",
+            &[
+                (":1.5", "/x/new"),
+                (":1.5", "/root"),
+                (":1.99", "/x/parent"),
+            ],
+        ))
+        .unwrap();
+        assert!(wait(&rx, 2), "the two honest signals reach the ingress");
+        let stats = drain.stop();
+        assert_eq!(stats.malformed, 2, "{stats:?}");
+        assert_eq!(stats.pushed, 2);
+        drop(send);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// Regression (review F4): the router answers `Retry` once (registration in flight, core
     /// busy). The answer must not be cached: the sender's later events reach the ingress.
     struct FlakyRouter {

@@ -38,11 +38,16 @@ pub struct Presented {
     pub ctx: PresentContext,
 }
 
-/// What a focus presentation needs from a snapshot (B-1 5.2): `PRESENT`, minus `VALUE` when the
+/// The fields a focus presentation reads and a Reader fetch asks for: `PRESENT` without
+/// `DESCRIPTION`, which no presenter speaks yet. Asking for it would add a call to the cold
+/// path for nothing (B-1: the cold path stays what Phase 1 measured).
+pub const FOCUS_FIELDS: PropMask = PropMask::PRESENT.difference(PropMask::DESCRIPTION);
+
+/// What a focus presentation needs from a snapshot (B-1 5.2): `FOCUS_FIELDS`, minus `VALUE` when the
 /// node is known to have neither a Value nor a Text interface, plus `RELATIONS` when it has no
 /// name (a label may name it).
 pub fn focus_need(n: &NodeSnapshot) -> PropMask {
-    let mut need = PropMask::PRESENT;
+    let mut need = FOCUS_FIELDS;
     if !n.interfaces.is_empty() && !n.interfaces.intersects(Ifaces::VALUE | Ifaces::TEXT) {
         need.remove(PropMask::VALUE);
     }
@@ -149,7 +154,7 @@ impl Reader {
                 if (missing | stale).intersects(PropMask::NAME | PropMask::ROLE) {
                     fx.push(Self::fetch_effect(
                         node,
-                        PropMask::PRESENT,
+                        FOCUS_FIELDS,
                         epoch,
                         FetchKind::Focus,
                     ));
@@ -173,7 +178,7 @@ impl Reader {
             gorca_model::Lookup::Miss => {
                 fx.push(Self::fetch_effect(
                     node,
-                    PropMask::PRESENT,
+                    FOCUS_FIELDS,
                     epoch,
                     FetchKind::Focus,
                 ));
@@ -187,7 +192,7 @@ impl Reader {
                 // The key may come back (a reorder re-adds the same path): ask once (5.5).
                 fx.push(Self::fetch_effect(
                     node,
-                    PropMask::PRESENT,
+                    FOCUS_FIELDS,
                     epoch,
                     FetchKind::Focus,
                 ));
@@ -220,7 +225,7 @@ impl Reader {
             self.counters.revalidations += 1;
             fx.push(Self::fetch_effect(
                 v.snap.key,
-                PropMask::PRESENT,
+                FOCUS_FIELDS,
                 self.epoch.current(),
                 FetchKind::Revalidate,
             ));

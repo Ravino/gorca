@@ -12,7 +12,7 @@ mod log;
 mod utterance;
 
 pub use echo::{key_echo, key_echo_text, message};
-pub use flow::{Presented, REFINE_WINDOW, focus_need};
+pub use flow::{FOCUS_FIELDS, Presented, REFINE_WINDOW, focus_need};
 pub use job::{PresentJob, PresentKind, SpeechIntent};
 pub use log::{NoLabels, NodeLabel, PresentLog, PresentRecord, PresentSource};
 pub(crate) use utterance::{changed, log_states, present_change};
