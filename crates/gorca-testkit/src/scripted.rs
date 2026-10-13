@@ -233,6 +233,7 @@ impl Connector for ScriptedConnector {
                     connector_kind: ConnectorKind::Fake,
                     verified_shell: false,
                     dump_complete: false,
+                    root: None,
                 };
                 let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);
                 let mut port = ctx

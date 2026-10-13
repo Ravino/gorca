@@ -588,6 +588,19 @@ impl AppActor {
                     } else {
                         gorca_mirror::DEFAULT_TTL
                     });
+                    // The policy learns of the app (class and dump eligibility are already set,
+                    // so its context carries the verified identity) before anything is focused.
+                    // Announced again when the identity is verified late: it is told again.
+                    if let Some(root) = info.root {
+                        let cx = DriverCx {
+                            now,
+                            health: health_view(&self.health),
+                            mirror: &self.read,
+                            focus: self.focus,
+                        };
+                        self.driver
+                            .on_input(&cx, &mut self.writer, FillInput::Appeared { root });
+                    }
                 }
                 Ok(AppControl::Lifecycle(AppLifecycle::Ready)) => {
                     let health = health_view(&self.health);

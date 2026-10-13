@@ -113,6 +113,7 @@ mod tests {
             connector_kind: ConnectorKind::Atspi,
             verified_shell: false,
             dump_complete: false,
+            root: None,
         }
     }
 
