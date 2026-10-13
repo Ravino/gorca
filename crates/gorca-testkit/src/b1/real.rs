@@ -1,5 +1,5 @@
 //! `RealSut`: `b1-fakeapp` processes on an isolated a11y bus, observed through the presentation
-//! log of the daemon under test (PW-10, `GORCA_PRESENT_LOG`).
+//! log of the daemon under test (PW-10, `--bench-present-log`).
 //!
 //! The daemon itself is started by the driver binary (`b1-walk`); this type only needs to know
 //! where its presentation log is. It implements [`Sut`] so the conformance suite and the walk run
@@ -239,8 +239,7 @@ impl Sut for RealSut {
             | Feature::VirtualTime
             | Feature::CacheFill
             | Feature::WhereAmI
-            | Feature::Malformed
-            | Feature::FloodDirtySet => false,
+            | Feature::Malformed => false,
         }
     }
 
@@ -346,6 +345,13 @@ impl Sut for RealSut {
                 l.app.clone_from(&i.label);
             }
             all.extend(t);
+        }
+        // The daemon never logs the text of a secret field; its tags are compared instead.
+        if let Some(key) = std::fs::read_to_string(&self.cfg.present_log)
+            .ok()
+            .and_then(|t| super::verdict::redaction_key(&t))
+        {
+            super::verdict::redact_truth(&mut all, &key);
         }
         all.sort_by_key(|l| l.t_ns);
         all

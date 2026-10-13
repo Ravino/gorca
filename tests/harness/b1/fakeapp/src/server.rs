@@ -83,6 +83,8 @@ struct Core {
     hang: (HangMode, u64),
     delays: Vec<DelayRule>,
     callers: BTreeSet<String>,
+    /// Unique name of the owner of `org.a11y.atspi.Registry`, once seen.
+    registry: Option<String>,
     storm_stop: Arc<AtomicBool>,
     peer: Arc<PeerCtl>,
     /// P9-1: false while no AT listener registered and the model has the gate.
@@ -272,15 +274,22 @@ impl Core {
             Cmd::Storm {
                 rate_per_s,
                 duration_ms,
+                distinct_nodes,
+                targets,
             } => match self.world.storm_target() {
                 Some(path) => {
                     self.storm_stop.store(false, Ordering::SeqCst);
+                    let shape = StormShape {
+                        rate: *rate_per_s,
+                        duration_ms: *duration_ms,
+                        distinct_nodes: *distinct_nodes as usize,
+                        targets: targets.clone(),
+                    };
                     spawn_storm(
                         &self.handle,
                         self.bus.clone(),
                         path,
-                        *rate_per_s,
-                        *duration_ms,
+                        shape,
                         Arc::clone(&self.storm_stop),
                     );
                     CmdReply::ok(serde_json::Value::Null)
@@ -315,6 +324,30 @@ impl Core {
         }
     }
 
+    /// Is `sender` the registry? Asked of the bus daemon until it answers, then remembered.
+    fn is_registry(&mut self, sender: &str) -> bool {
+        if self.registry.is_none() {
+            let conn = self.bus.clone();
+            #[allow(clippy::disallowed_methods)] // test fixture, bounded by the timeout below
+            let owner = self.handle.block_on(async {
+                let call = conn.call_method(
+                    Some("org.freedesktop.DBus"),
+                    "/org/freedesktop/DBus",
+                    Some("org.freedesktop.DBus"),
+                    "GetNameOwner",
+                    &("org.a11y.atspi.Registry",),
+                );
+                tokio::time::timeout(Duration::from_millis(500), call)
+                    .await
+                    .ok()
+                    .and_then(Result::ok)
+                    .and_then(|m| m.body().deserialize::<String>().ok())
+            });
+            self.registry = owner;
+        }
+        self.registry.as_deref() == Some(sender)
+    }
+
     fn on_call(&mut self, job: Job) {
         let hdr = job.msg.header();
         let path = hdr.path().map(ToString::to_string).unwrap_or_default();
@@ -333,9 +366,9 @@ impl Core {
         if job.kind != ConnKind::Peer
             && let Some(s) = hdr.sender()
         {
-            // The registry's `Properties.Set` of `Application.Id` on the root while embedding is
-            // not a reader's connection; every other caller is.
-            if member != "Set" {
+            // The registry (it sets `Application.Id` on the root while embedding) is not a
+            // reader's connection; every other sender is, whatever it calls.
+            if !self.is_registry(s.as_str()) {
                 self.callers.insert(s.to_string());
             }
         }
@@ -461,20 +494,35 @@ async fn send_reply(conn: &Connection, msg: &Message, result: Result<Reply, Dbus
     let _ = r;
 }
 
+/// What a storm sends: `rate` events a second for `duration_ms`, on the terminal node or (when
+/// `distinct_nodes` is set) spread over that many made-up objects followed by `targets`.
+struct StormShape {
+    rate: u64,
+    duration_ms: u64,
+    distinct_nodes: usize,
+    targets: Vec<String>,
+}
+
 fn spawn_storm(
     handle: &Handle,
     conn: Connection,
     path: String,
-    rate: u64,
-    duration_ms: u64,
+    shape: StormShape,
     stop: Arc<AtomicBool>,
 ) {
+    let StormShape {
+        rate,
+        duration_ms,
+        distinct_nodes,
+        targets,
+    } = shape;
     handle.spawn(async move {
         let end = Instant::now() + Duration::from_millis(duration_ms);
         let mut tick = tokio::time::interval(Duration::from_millis(1));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Burst);
         let mut owed = 0.0f64;
         let mut offset = 0i32;
+        let mut n = 0usize;
         #[allow(clippy::cast_precision_loss)]
         let per_tick = rate as f64 / 1000.0;
         while Instant::now() < end && !stop.load(Ordering::Relaxed) {
@@ -484,10 +532,19 @@ fn spawn_storm(
                 owed -= 1.0;
                 offset = (offset + 1) % 4096;
                 let props: HashMap<String, OwnedValue> = HashMap::new();
+                let at = if distinct_nodes == 0 {
+                    path.clone()
+                } else {
+                    n = (n + 1) % (distinct_nodes + targets.len());
+                    match targets.get(n.wrapping_sub(distinct_nodes)) {
+                        Some(t) => t.clone(),
+                        None => format!("/org/a11y/atspi/accessible/flood{n}"),
+                    }
+                };
                 let _ = conn
                     .emit_signal(
                         None::<&str>,
-                        path.as_str(),
+                        at.as_str(),
                         "org.a11y.atspi.Event.Object",
                         "TextChanged",
                         &("insert", offset, 1i32, Value::from("x"), props),
@@ -653,6 +710,7 @@ impl FakeApp {
             hang: (HangMode::Off, 0),
             delays: Vec::new(),
             callers: BTreeSet::new(),
+            registry: None,
             storm_stop: Arc::new(AtomicBool::new(false)),
             peer: Arc::clone(&peer),
             listeners: Arc::clone(&listeners),

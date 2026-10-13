@@ -21,6 +21,8 @@ use crate::limits::FillLimits;
 use crate::store::{ApplyOutcome, MirrorRead};
 
 mod null;
+#[doc(hidden)]
+pub mod scripted;
 
 pub use null::NullPolicy;
 

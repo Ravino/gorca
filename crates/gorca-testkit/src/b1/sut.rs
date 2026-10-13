@@ -90,9 +90,6 @@ pub enum Feature {
     WhereAmI,
     /// The fake app can plant hostile refs ([`Cmd::Malform`]) and the SUT counts what it drops.
     Malformed,
-    /// A flood marks the app's nodes dirty. A SUT whose ingress folds a storm on one node into
-    /// one slot (the real daemon) has no flood to observe, and the case then checks the rest.
-    FloodDirtySet,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -147,6 +144,20 @@ pub trait Sut {
             "where-am-i is not supported by this SUT".into(),
         ))
     }
+    /// Apps started from now on are *not* told that an AT registered its event listeners (on a
+    /// desktop the registry daemon tells every app, and GTK4 apps emit no object events until
+    /// then, P9-1). The default does nothing: the simulation models the gate itself.
+    fn defer_listener_registration(&mut self, _on: bool) {}
+    /// The registry tells `app` that an AT registered its event listeners (see
+    /// [`Sut::defer_listener_registration`]).
+    fn register_listener(&mut self, _app: &str) -> SutResult<()> {
+        Ok(())
+    }
+    /// Keep the reader from running for `ms`, as a long operation or a descheduled process
+    /// would, while the applications go on emitting: a flood needs events to pile up faster than
+    /// they are drained, and a reader that keeps up has none. The default does nothing (the
+    /// simulation floods by rate).
+    fn stall_reader(&mut self, _ms: u64) {}
     /// Set event (bus signal) and reply (call) travel times, microseconds. `LatencyKnobs` only.
     fn set_latency(&mut self, event_us: u64, reply_us: u64);
 }

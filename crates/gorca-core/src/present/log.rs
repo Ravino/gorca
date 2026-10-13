@@ -1,7 +1,8 @@
 //! The presentation log (B-1 PW-10): one JSON line per utterance that presents a node, and one per
 //! refine or follow-up of it, so a harness can judge every presentation against the truth.
 //!
-//! Passive (the daemon opens it for `GORCA_PRESENT_LOG=<path>`): compiled in all builds, written by its own thread through a bounded channel, never
+//! Passive (the daemon opens it only for the bench flag `--bench-present-log=<path>`): compiled in
+//! all builds, written by its own thread through a bounded channel, never
 //! blocks the Reader (a full channel drops the record and counts it), and no behaviour depends on
 //! it. The core holds no object paths: a [`NodeLabel`] supplied by the daemon (backed by the
 //! connector's path table) turns a `NodeKey` into `(bus name, path)` on the writer thread.
@@ -13,6 +14,12 @@
 //!  "key":"1:4:00ff","source":"hit","role":"check_box","states":["checked"],"name":"Wi-Fi",
 //!  "value":null,"may_refine":true,"refines":null}
 //! ```
+//!
+//! The first line of a file is a header, `{"redaction_key":"<32 hex digits>"}`. Text of a sensitive
+//! node (a password entry, see `gorca_model::redact`) is never written: its `name` and `value`
+//! are `redacted(len=<chars>,h=<keyed hash>)` under that per-run key, so a harness can compare
+//! them with a truth source that redacts with the same function. The file is created readable by
+//! its owner only.
 //!
 //! `role` is the snake_case name of the core `Role`; `states` lists every state the connector
 //! decoded by its AT-SPI name (`checked`, `enabled`, `sensitive`, `showing`, ...), sorted; `name`/`value` are those of the snapshot the utterance was
@@ -27,7 +34,7 @@ use std::sync::mpsc::{SyncSender, TrySendError, sync_channel};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
 
-use gorca_model::{NodeKey, NodeSnapshot, Value};
+use gorca_model::{NodeKey, NodeSnapshot, RedactKey, Value};
 
 use super::log_states;
 
@@ -111,6 +118,15 @@ impl PresentLog {
         out: W,
         labels: Arc<dyn NodeLabel>,
     ) -> std::io::Result<Arc<Self>> {
+        Self::with_key(out, labels, RedactKey::random())
+    }
+
+    /// [`PresentLog::new`] with the redaction key given (tests).
+    pub fn with_key<W: Write + Send + 'static>(
+        out: W,
+        labels: Arc<dyn NodeLabel>,
+        key: RedactKey,
+    ) -> std::io::Result<Arc<Self>> {
         let (tx, rx) = sync_channel::<PresentRecord>(LOG_QUEUE);
         let written = Arc::new(AtomicU64::new(0));
         let w = Arc::clone(&written);
@@ -119,11 +135,15 @@ impl PresentLog {
             .spawn(move || {
                 let mut out = std::io::BufWriter::new(out);
                 let mut line = String::with_capacity(256);
+                let header = format!("{{\"redaction_key\":\"{}\"}}\n", key.to_hex());
+                if out.write_all(header.as_bytes()).is_err() || out.flush().is_err() {
+                    return;
+                }
                 while let Ok(first) = rx.recv() {
                     let mut next = Some(first);
                     while let Some(rec) = next {
                         line.clear();
-                        format_record(&mut line, &rec, labels.as_ref());
+                        format_record(&mut line, &rec, labels.as_ref(), &key);
                         if out.write_all(line.as_bytes()).is_err() {
                             return;
                         }
@@ -144,9 +164,11 @@ impl PresentLog {
         }))
     }
 
-    /// Log to the file `path` (created or truncated).
+    /// Log to the new file `path`, readable by its owner only (0600). The file is created
+    /// exclusively, so a symbolic link or another special file at `path` is never followed or
+    /// written; a regular file left by an earlier run is replaced.
     pub fn to_file(path: &Path, labels: Arc<dyn NodeLabel>) -> std::io::Result<Arc<Self>> {
-        Self::new(std::fs::File::create(path)?, labels)
+        Self::new(create_private(path)?, labels)
     }
 
     /// Never blocks: a full queue drops the record and counts it.
@@ -194,6 +216,28 @@ impl Drop for PresentLog {
     }
 }
 
+fn create_private(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let open = || {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(path)
+    };
+    match open() {
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            let meta = std::fs::symlink_metadata(path)?;
+            if !meta.file_type().is_file() {
+                return Err(e);
+            }
+            std::fs::remove_file(path)?;
+            open()
+        }
+        other => other,
+    }
+}
+
 fn json_str(out: &mut String, s: &str) {
     out.push('"');
     for c in s.chars() {
@@ -212,7 +256,7 @@ fn json_str(out: &mut String, s: &str) {
     out.push('"');
 }
 
-fn format_record(out: &mut String, r: &PresentRecord, labels: &dyn NodeLabel) {
+fn format_record(out: &mut String, r: &PresentRecord, labels: &dyn NodeLabel, key: &RedactKey) {
     let n = &*r.snap;
     let (bus, path) = labels.label(n.key).unwrap_or_default();
     let _ = write!(
@@ -238,17 +282,29 @@ fn format_record(out: &mut String, r: &PresentRecord, labels: &dyn NodeLabel) {
         }
         let _ = write!(out, "\"{s}\"");
     }
+    let secret = n.is_sensitive();
+    let text = |out: &mut String, t: &str| {
+        if secret {
+            json_str(out, &key.tag(t));
+        } else {
+            json_str(out, t);
+        }
+    };
     out.push_str("],\"name\":");
     match n.name.as_deref() {
-        Some(name) if !name.is_empty() => json_str(out, name),
+        Some(name) if !name.is_empty() => text(out, name),
         Some(_) | None => out.push_str("null"),
     }
     out.push_str(",\"value\":");
     match &n.value {
+        // A number on a password field would still be its content.
+        Some(Value::Range { current, .. }) if secret && current.is_finite() => {
+            json_str(out, &key.tag(&current.to_string()));
+        }
         Some(Value::Range { current, .. }) if current.is_finite() => {
             let _ = write!(out, "{current}");
         }
-        Some(Value::Text(t)) if !t.is_empty() => json_str(out, t),
+        Some(Value::Text(t)) if !t.is_empty() => text(out, t),
         Some(Value::Range { .. } | Value::Text(_)) | None => out.push_str("null"),
     }
     let _ = write!(out, ",\"may_refine\":{},\"refines\":", r.may_refine);
@@ -365,7 +421,7 @@ mod tests {
         ));
         drop(log);
         let text = String::from_utf8(sink.0.lock().unwrap().clone()).unwrap();
-        let lines: Vec<_> = text.lines().collect();
+        let lines: Vec<_> = text.lines().skip(1).collect();
         assert_eq!(lines.len(), 2);
         let a: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
         assert_eq!(a["t_ns"], 123);
@@ -420,5 +476,71 @@ mod tests {
         }
         assert!(t0.elapsed() < std::time::Duration::from_secs(2));
         assert!(log.dropped() > 0);
+    }
+
+    fn password(name: &str, text: &str) -> Arc<NodeSnapshot> {
+        let mut s = (*snap(5, Some(name), Some(Value::Text(Arc::from(text))))).clone();
+        s.role = Role::PasswordEntry;
+        Arc::new(s)
+    }
+
+    #[test]
+    fn password_text_is_never_written_only_its_length_and_a_keyed_hash() {
+        let sink = Sink::default();
+        let key = RedactKey::from_bytes([3; 16]);
+        let log = PresentLog::with_key(sink.clone(), Arc::new(NoLabels), key).unwrap();
+        log.record(rec(
+            password("Pass phrase hunter2", "correct horse"),
+            PresentSource::Hit,
+            None,
+        ));
+        log.record(rec(snap(6, Some("Plain"), None), PresentSource::Hit, None));
+        drop(log);
+        let raw = String::from_utf8(sink.0.lock().unwrap().clone()).unwrap();
+        assert!(
+            !raw.contains("hunter2") && !raw.contains("correct horse"),
+            "{raw}"
+        );
+        let lines: Vec<serde_json::Value> = raw
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect();
+        assert_eq!(lines[0]["redaction_key"], key.to_hex());
+        assert_eq!(lines[1]["role"], "password_entry");
+        assert_eq!(lines[1]["name"], key.tag("Pass phrase hunter2"));
+        assert_eq!(lines[1]["value"], key.tag("correct horse"));
+        assert_eq!(
+            lines[1]["value"],
+            "redacted(len=13,h=".to_owned() + &key.tag("correct horse")[18..]
+        );
+        assert_eq!(
+            lines[2]["name"], "Plain",
+            "other nodes are logged as before"
+        );
+    }
+
+    #[test]
+    fn the_file_is_private_and_a_link_is_never_followed() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("gorca-plog-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("present.jsonl");
+        // A file left over from an earlier run, with loose permissions, is replaced by 0600.
+        std::fs::write(&path, "old").unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o666)).unwrap();
+        let log = PresentLog::to_file(&path, Arc::new(NoLabels)).unwrap();
+        log.record(rec(snap(1, Some("x"), None), PresentSource::Hit, None));
+        drop(log);
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        assert!(!std::fs::read_to_string(&path).unwrap().contains("old"));
+        // A symlink at the path (to a file someone else would like us to write) is refused.
+        let target = dir.join("victim");
+        std::fs::write(&target, "keep").unwrap();
+        let link = dir.join("link.jsonl");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        assert!(PresentLog::to_file(&link, Arc::new(NoLabels)).is_err());
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "keep");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

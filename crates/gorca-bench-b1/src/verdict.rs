@@ -68,6 +68,8 @@ pub struct Change {
     pub old: Value,
     pub new: Value,
     pub evented: bool,
+    /// A secret field: the presentation log carries a keyed tag instead of its text.
+    pub sensitive: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -83,6 +85,35 @@ pub struct Truth {
     pub focus: Vec<FocusLine>,
     /// (key, field) -> value before any mutation.
     pub inits: BTreeMap<(String, String), Value>,
+    /// Keys of `inits` that are secret.
+    secret_inits: BTreeSet<(String, String)>,
+}
+
+impl Truth {
+    /// Replace the text of secret fields by the tags the daemon logs for them (same key, same
+    /// function: `gorca_model::RedactKey::tag`), so both logs still compare.
+    pub fn redact(&mut self, key: &gorca_model::RedactKey) {
+        let tag = |v: &Value| match v {
+            Value::String(s) => Value::String(key.tag(s)),
+            Value::Number(n) => Value::String(key.tag(&n.as_f64().unwrap_or(f64::NAN).to_string())),
+            other => other.clone(),
+        };
+        for c in self.changes.iter_mut().filter(|c| c.sensitive) {
+            c.old = tag(&c.old);
+            c.new = tag(&c.new);
+        }
+        for (k, v) in &mut self.inits {
+            if self.secret_inits.contains(k) {
+                *v = tag(v);
+            }
+        }
+    }
+}
+
+/// The key in the header line of a presentation log (`{"redaction_key":"<32 hex digits>"}`).
+pub fn redaction_key(presentations: &str) -> Option<gorca_model::RedactKey> {
+    let v: Value = serde_json::from_str(presentations.lines().next()?).ok()?;
+    gorca_model::RedactKey::from_hex(v.get("redaction_key")?.as_str()?)
 }
 
 #[derive(Clone, Debug)]
@@ -136,8 +167,11 @@ pub fn parse_truth(text: &str) -> Result<Truth> {
                 path: s(&v, "path"),
             });
         } else if let Some(init) = v.get("init") {
-            t.inits
-                .insert((s(&v, "path"), s(&v, "field")), norm(&s(&v, "field"), init));
+            let key = (s(&v, "path"), s(&v, "field"));
+            if v.get("sensitive").and_then(Value::as_bool) == Some(true) {
+                t.secret_inits.insert(key.clone());
+            }
+            t.inits.insert(key, norm(&s(&v, "field"), init));
         } else {
             t.changes.push(Change {
                 t_ns: u(&v, "t_ns").with_context(ctx)?,
@@ -147,6 +181,7 @@ pub fn parse_truth(text: &str) -> Result<Truth> {
                 old: v.get("old").cloned().unwrap_or(Value::Null),
                 new: v.get("new").cloned().unwrap_or(Value::Null),
                 evented: v.get("evented").and_then(Value::as_bool).unwrap_or(false),
+                sensitive: v.get("sensitive").and_then(Value::as_bool) == Some(true),
             });
         }
     }
@@ -159,6 +194,10 @@ pub fn parse_presentations(text: &str) -> Result<Vec<Presentation>> {
     let mut out = Vec::new();
     for (n, v) in lines(text)? {
         let ctx = || format!("presentation line {n}");
+        // The header line carries the per-run redaction key, not a presentation.
+        if v.get("redaction_key").is_some() && v.get("source").is_none() {
+            continue;
+        }
         let src = s(&v, "source");
         let Some(source) = Source::parse(&src) else {
             bail!("presentation line {n}: unknown source `{src}`");
@@ -589,6 +628,34 @@ mod tests {
             &parse_presentations(&p.join("\n")).unwrap(),
             KeyMode::PathOnly,
         )
+    }
+
+    #[test]
+    fn a_secret_field_is_judged_through_the_keyed_tag_of_the_log_header() {
+        let key = gorca_model::RedactKey::from_bytes([5; 16]);
+        let header = format!(r#"{{"redaction_key":"{}"}}"#, key.to_hex());
+        let mut c = change(10 * MS, "/pw", "name", "old secret", "new secret", true);
+        c.truncate(c.len() - 1);
+        c.push_str(r#","sensitive":true}"#);
+        let t = [c, focus(100 * MS, "/pw")];
+        let new = key.tag("new secret");
+        let old = key.tag("old secret");
+        let p = [
+            header.clone(),
+            pres(101 * MS, 1, "/pw", "hit", &new, ""),
+            pres(201 * MS, 2, "/pw", "hit", &old, ""),
+        ]
+        .join("\n");
+        // The header line is not a presentation; it carries the key.
+        assert_eq!(redaction_key(&p), Some(key));
+        let mut truth = truth(&t);
+        truth.redact(&key);
+        let r = classify(&truth, &parse_presentations(&p).unwrap(), KeyMode::PathOnly);
+        assert_eq!(r.judged[0].verdict, Verdict::Correct);
+        assert!(
+            !format!("{truth:?}").contains("new secret"),
+            "the truth is redacted too"
+        );
     }
 
     #[test]

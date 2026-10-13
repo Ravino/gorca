@@ -687,6 +687,12 @@ fn ic12(s: &mut dyn Sut) -> CaseResult {
     }
     s.start_app("settings", "settings")?;
     let n = s.path_of("settings", "controls[3]")?;
+    // The node was focused (so the policy under test keeps it fresh), then left: it is in the
+    // mirror, and nobody is looking at it when it goes.
+    let other = s.path_of("settings", "controls[0]")?;
+    s.focus("settings", &n)?;
+    s.focus("settings", &other)?;
+    cached(s, "settings", &n)?;
     s.must("settings", Cmd::Hide { node: n.clone() })?;
     s.must(
         "settings",
@@ -828,20 +834,23 @@ fn ic17(s: &mut dyn Sut) -> CaseResult {
     let c = s.path_of("settings", "controls[1]")?;
     s.focus("settings", &c)?;
     let before = s.calls("storm")?.total_calls();
+    s.stall_reader(1_800);
     s.must(
         "storm",
+        // More distinct objects than the ingress keeps keys for (4 096 per app) arrive while the
+        // reader cannot drain: a flood, not a storm that folds into one slot per node.
         Cmd::Storm {
-            rate_per_s: 50_000,
-            duration_ms: 200,
+            rate_per_s: 100_000,
+            duration_ms: 1_500,
+            distinct_nodes: 6_000,
+            targets: vec![win.clone()],
         },
     )?;
-    s.advance(400);
+    s.advance(2_600);
     // Dirty nodes are stale, not dropped.
     match s.probe("storm", &win) {
         Probe::Hit { stale, .. } => {
-            need(stale || !s.supports(Feature::FloodDirtySet), || {
-                "flood did not mark the app's nodes dirty".into()
-            })?;
+            need(stale, || "flood did not mark the app's nodes dirty".into())?;
         }
         other => {
             return Err(Fail(format!(
@@ -982,6 +991,9 @@ fn ic20(s: &mut dyn Sut) -> CaseResult {
 }
 
 fn ic21(s: &mut dyn Sut) -> CaseResult {
+    // The app runs before any listener is registered: the order that matters on a desktop where
+    // the reader starts late.
+    s.defer_listener_registration(true);
     s.start_app("settings", "settings")?;
     let n = s.path_of("settings", "controls[2]")?;
     let m = s.path_of("settings", "controls[0]")?;
@@ -1004,6 +1016,7 @@ fn ic21(s: &mut dyn Sut) -> CaseResult {
     s.focus("settings", &m)?;
     mirror_has(s, "settings", &n, "Before registration")?;
     // Registered now: the same mutation is announced and invalidates.
+    s.register_listener("settings")?;
     s.must(
         "settings",
         Cmd::Rename {
@@ -1047,16 +1060,81 @@ fn ic22(s: &mut dyn Sut) -> CaseResult {
         m.quirks.dump_realised_only = true;
     })?;
     let c2 = s.path_of("real-shell", "clock")?;
+    // Left alone first, with one event so that the reader notices the app: nothing has been read
+    // yet, so the dump is the 2 items of a fresh GTK4 app (a client reading nodes makes the
+    // toolkit realise them and the dump grow).
+    s.must(
+        "real-shell",
+        Cmd::Rename {
+            node: c2.clone(),
+            name: "Clock renamed".into(),
+            evented: true,
+        },
+    )?;
+    s.advance(3_000);
+    let first = s.calls("real-shell")?.member_calls("GetItems");
+    need(first >= 1, || {
+        "VACUOUS: the verified Shell was never asked for a dump".into()
+    })?;
     s.focus("real-shell", &c2)?;
     s.advance(40_000);
-    need(s.calls("real-shell")?.member_calls("GetItems") <= 1, || {
-        "a 2-item dump did not clear the eligibility flag".into()
+    let dumps = s.calls("real-shell")?.member_calls("GetItems");
+    need(dumps >= 1, || {
+        "VACUOUS: the verified Shell was never asked for a dump".into()
+    })?;
+    need(dumps <= 1, || {
+        format!("a 2-item dump did not clear the eligibility flag ({dumps} dumps)")
     })?;
     no_stale(s)?;
     ok()
 }
 
+/// IC-23, focus half: a node older than the TTL is presented from the mirror as refinable and
+/// then revalidated; an idle app costs no calls.
 fn ic23(s: &mut dyn Sut) -> CaseResult {
+    s.start_app("settings", "settings")?;
+    let c = s.path_of("settings", "controls[3]")?;
+    let p = parent_of(s, "settings", &c)?;
+    let old = name_of(s, "settings", &p)?;
+    s.focus("settings", &p)?;
+    s.focus("settings", &c)?;
+    mirror_has(s, "settings", &p, &old)?;
+    let calls = s.calls("settings")?.total_calls();
+    s.advance(31_000);
+    need(s.calls("settings")?.total_calls() == calls, || {
+        "TTL caused calls while idle".into()
+    })?;
+    s.must(
+        "settings",
+        Cmd::Rename {
+            node: p.clone(),
+            name: "Parent renamed".into(),
+            evented: false,
+        },
+    )?;
+    let before = s.presentations().len();
+    s.focus("settings", &p)?;
+    s.advance(500);
+    let new: Vec<Presentation> = s.presentations().split_off(before);
+    let spoke = new
+        .iter()
+        .find(|x| x.path == p && x.source == Source::Hit)
+        .ok_or_else(|| Fail("the aged node was not presented from the mirror".into()))?;
+    need(spoke.may_refine, || {
+        "aged node presented without may_refine".into()
+    })?;
+    let fixed = new
+        .iter()
+        .any(|x| x.path == p && x.refines.is_some() && x.name == "Parent renamed");
+    need(fixed, || {
+        "the aged node was not revalidated after being presented".into()
+    })?;
+    no_stale(s)?;
+    ok()
+}
+
+/// IC-23, where-am-I half: the aged ancestors are spoken as context and revalidated.
+fn ic23b(s: &mut dyn Sut) -> CaseResult {
     if !s.supports(Feature::WhereAmI) {
         return skip("needs the where-am-I command");
     }
@@ -1143,7 +1221,8 @@ pub fn all_cases() -> Vec<Case> {
         c!("IC-20", "document boundary", ic20),
         c!("IC-21", "listener gate", ic21, probe),
         c!("IC-22", "dump eligibility", ic22),
-        c!("IC-23", "TTL", ic23, probe),
+        c!("IC-23", "TTL, focus", ic23, probe),
+        c!("IC-23b", "TTL, where-am-I", ic23b, probe),
     ]
 }
 
@@ -1156,8 +1235,14 @@ pub struct CaseReport {
 
 /// Run every case, each against a fresh SUT from `make`.
 pub fn run_suite(make: &dyn Fn() -> Box<dyn Sut>) -> Vec<CaseReport> {
+    run_cases(&[], make)
+}
+
+/// Run the cases named in `ids` (all of them when `ids` is empty), each against a fresh SUT.
+pub fn run_cases(ids: &[&str], make: &dyn Fn() -> Box<dyn Sut>) -> Vec<CaseReport> {
     all_cases()
         .into_iter()
+        .filter(|c| ids.is_empty() || ids.contains(&c.id))
         .map(|c| {
             let mut sut = make();
             let result = if c.needs_probe && !sut.supports(Feature::Probe) {

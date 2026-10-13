@@ -1468,6 +1468,7 @@ mod tests {
         let text = String::from_utf8(sink.0.lock().unwrap().clone()).unwrap();
         let lines: Vec<serde_json::Value> = text
             .lines()
+            .skip(1) // the header line with the redaction key
             .map(|l| serde_json::from_str(l).unwrap())
             .collect();
         assert_eq!(lines.len(), 2, "{text}");

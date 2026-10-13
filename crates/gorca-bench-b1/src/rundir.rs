@@ -120,11 +120,14 @@ pub fn evaluate(kind: &str, dir: &Path, mode: KeyMode) -> Result<RunMetrics> {
 
     match kind {
         "walk" | "soak" | "ff" => {
-            let truth = verdict::parse_truth(&read_opt(dir, "truth.jsonl")?.unwrap_or_default())
-                .context("truth.jsonl")?;
-            let pres =
-                verdict::parse_presentations(&read_opt(dir, "present.jsonl")?.unwrap_or_default())
-                    .context("present.jsonl")?;
+            let mut truth =
+                verdict::parse_truth(&read_opt(dir, "truth.jsonl")?.unwrap_or_default())
+                    .context("truth.jsonl")?;
+            let present = read_opt(dir, "present.jsonl")?.unwrap_or_default();
+            if let Some(key) = verdict::redaction_key(&present) {
+                truth.redact(&key);
+            }
+            let pres = verdict::parse_presentations(&present).context("present.jsonl")?;
             let r = verdict::classify(&truth, &pres, mode);
             let stale = r.count(verdict::Verdict::Stale) as f64;
             match kind {

@@ -400,6 +400,8 @@ async fn storm_emits_signals_at_roughly_the_requested_rate() {
         .control(Cmd::Storm {
             rate_per_s: 10_000,
             duration_ms: 500,
+            distinct_nodes: 0,
+            targets: Vec::new(),
         })
         .await;
     assert!(r.ok);

@@ -163,7 +163,8 @@ fn real(kind: &str, dir: &Path, seed: u64) {
     let work = std::env::temp_dir().join(format!("b1-walk-{}", std::process::id()));
     std::fs::create_dir_all(&work).unwrap_or_else(|e| die(&e.to_string()));
     std::fs::create_dir_all(dir).unwrap_or_else(|e| die(&e.to_string()));
-    let present = dir.join("present.jsonl");
+    let present = std::path::absolute(dir.join("present.jsonl"))
+        .unwrap_or_else(|e| die(&format!("run directory: {e}")));
     let _ = std::fs::remove_file(&present);
 
     // The speech server the daemon talks to.
@@ -182,7 +183,7 @@ fn real(kind: &str, dir: &Path, seed: u64) {
         .env("GORCA_A11Y_BUS_ADDRESS", &a11y)
         .env("GORCA_SPEECH_BACKEND", "voicego")
         .env("GORCA_SPEECH_SOCKET", speech.socket_path())
-        .env("GORCA_PRESENT_LOG", &present)
+        .arg(format!("--bench-present-log={}", present.display()))
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::inherit());

@@ -40,6 +40,7 @@ pub mod role {
     pub const TOGGLE_BUTTON: u32 = 62;
     pub const TOOL_BAR: u32 = 63;
     pub const APPLICATION: u32 = 75;
+    pub const PASSWORD_TEXT: u32 = 40;
     pub const ENTRY: u32 = 79;
     pub const DOCUMENT_WEB: u32 = 95;
 }
@@ -996,6 +997,11 @@ impl World {
         new: impl Into<Json>,
         evented: bool,
     ) {
+        let sensitive = self
+            .by_path
+            .get(path)
+            .and_then(|id| self.node(*id))
+            .is_some_and(|n| n.role == role::PASSWORD_TEXT);
         self.truth.push(TruthLine {
             t_ns: now_ns,
             app: self.label.clone(),
@@ -1004,6 +1010,7 @@ impl World {
             old: old.into(),
             new: new.into(),
             evented,
+            sensitive,
             focus: false,
         });
     }

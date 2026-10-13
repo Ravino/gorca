@@ -286,6 +286,10 @@ pub struct FillDriver {
     policy: Box<dyn FillPolicy>,
     limits: FillLimits,
     dump_complete: bool,
+    /// A dump of this app came back implausibly small: the connector's claim that dumps are
+    /// complete is refuted for good, and a later announcement of the same claim (the app is
+    /// announced again when its identity is verified late) must not revive it.
+    dump_refuted: bool,
     next_id: u64,
     inflight: HashMap<FillReqId, Flight>,
     /// Op -> the request (in flight or queued) that carries it, and its class.
@@ -331,6 +335,7 @@ impl FillDriver {
             policy,
             limits,
             dump_complete: false,
+            dump_refuted: false,
             next_id: 1,
             inflight: HashMap::new(),
             active_ops: HashMap::new(),
@@ -375,7 +380,7 @@ impl FillDriver {
 
     /// The connector's verified eligibility for `CacheDump` (B-1 2.2).
     pub fn set_dump_complete(&mut self, complete: bool) {
-        self.dump_complete = complete;
+        self.dump_complete = complete && !self.dump_refuted;
     }
 
     pub fn dump_complete(&self) -> bool {
@@ -823,6 +828,7 @@ impl FillDriver {
                 self.stats.replies_ok += 1;
                 if implausible && self.dump_complete {
                     self.dump_complete = false;
+                    self.dump_refuted = true;
                     self.stats.dump_flag_cleared += 1;
                 }
                 let mut ids = aliases.clone();

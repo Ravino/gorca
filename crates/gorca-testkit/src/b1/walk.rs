@@ -363,6 +363,8 @@ pub fn plan_loop(spec: &WalkSpec, seed: u64, idx: u32) -> Vec<Timed> {
             cmd: Cmd::Storm {
                 rate_per_s: spec.l3_rate,
                 duration_ms: spec.l3_duration_ms,
+                distinct_nodes: 0,
+                targets: Vec::new(),
             },
             tag: Tag::None,
         });
