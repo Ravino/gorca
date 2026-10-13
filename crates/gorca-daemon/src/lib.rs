@@ -23,6 +23,7 @@
 //! Allowed dependencies: everything in the workspace, since this crate is the wiring point.
 
 mod cli;
+mod wire;
 
 use std::io::IsTerminal;
 use std::sync::Arc;
@@ -32,16 +33,12 @@ use anyhow::{Context, Result};
 use gorca_connector_api::{Connector, ConnectorCtx};
 use gorca_connector_atspi::{AtspiConnector, AtspiOptions};
 use gorca_core::{Core, CoreConfig, SpeechOut};
-use gorca_input_api::{
-    GrabSet, KeyClass, KeyEvent, KeyIntent, KeySource, KeySourceCtx, key_channel,
-};
-use gorca_input_mutter::MutterKeySource;
+use gorca_input_api::{KeyClass, KeyEvent, KeyIntent};
 use gorca_model::{ConnectorId, Prio, Segment, SegmentKind, UttId, Utterance};
 use gorca_output_api::SpeechClient;
 use gorca_rt::{CancellationToken, Clock, EpochCell, TaskSet, mpsc};
 use gorca_speech::{
-    BackendConnectError, FailoverClient, FailoverConfig, FailoverMode, FailoverNotice, FnBackend,
-    LaneConfig, SpeechBackend, SpeechHandle, SpeechLane,
+    BackendConnectError, FailoverMode, FailoverNotice, FnBackend, SpeechBackend, SpeechHandle,
 };
 use gorca_speech_ssip::{SsipClient, SsipOptions};
 use gorca_speech_voicego::{VoicegoClient, VoicegoOptions};
@@ -313,84 +310,18 @@ pub async fn run_with(opts: Options, shutdown: CancellationToken) -> Result<()> 
     let epoch = core.epoch();
     let focused = core.focused_app();
 
-    // Speech: failover client under the speech lane.
-    let (backends, mode) = speech_plan(&opts);
-    let (client, notices) = FailoverClient::spawn(
-        &mut tasks,
-        backends,
-        FailoverConfig {
-            mode,
-            ..FailoverConfig::default()
-        },
-    );
-    let speech = SpeechLane::spawn(
-        &mut tasks,
-        Arc::clone(&epoch),
-        Box::new(client),
-        LaneConfig::default(),
-    );
-    tasks.spawn(
-        "speech-notices",
-        announce_notices(notices, speech.clone(), Arc::clone(&epoch)),
-    );
+    let speech = wire::wire_speech(&mut tasks, &opts, &epoch);
     let speech_for_keys = speech.clone();
     let core = core.with_speech(Arc::new(LaneOut(speech)));
-
-    if opts.no_keyboard {
-        tracing::info!("keyboard monitoring disabled (--no-keyboard)");
-    } else if opts.impersonate_orca && opts.session_address.is_none() {
-        tracing::warn!("keyboard monitoring needs a session bus address; it stays off");
-    } else if let (true, Some(session_address)) =
-        (opts.impersonate_orca, opts.session_address.clone())
-    {
-        // ID-1: Mutter only authorises the owner of org.gnome.Orca.KeyboardMonitor. The name is
-        // requested without queueing, so a running Orca is never displaced.
-        let (sink, keys) = key_channel();
-        let (grabs_tx, grabs) = gorca_rt::watch::channel(GrabSet::default());
-        let source = Box::new(MutterKeySource::new(session_address));
-        let ctx = KeySourceCtx {
-            sink,
-            grabs,
-            shutdown: shutdown.child_token(),
-            clock: Clock::System,
-        };
-        tasks.spawn("keyboard-source", async move {
-            if let Err(e) = source.run(ctx).await {
-                tracing::warn!(error = %e, "keyboard source ended");
-            }
-            // Keep the (unused) grab sender alive for as long as the source ran.
-            drop(grabs_tx);
-        });
-        tasks.spawn(
-            "key-pump",
-            pump_keys(
-                keys,
-                core.reader_senders().key,
-                Arc::clone(&epoch),
-                speech_for_keys,
-            ),
-        );
-    } else {
-        tracing::info!(
-            "keyboard monitoring is off: it needs org.gnome.Orca.KeyboardMonitor, which is only \
-             requested with --impersonate-orca"
-        );
-    }
-
-    tasks.spawn(
-        "atspi-connector",
-        supervise_connector(
-            AtspiOptions {
-                a11y_address: opts.a11y_address.clone(),
-                session_address: opts.session_address.clone(),
-                enable_accessibility: !opts.no_enable,
-                register_events: true,
-                focused: Some(focused),
-            },
-            registry,
-            shutdown.clone(),
-        ),
+    wire::wire_keyboard(
+        &mut tasks,
+        &opts,
+        &shutdown,
+        &epoch,
+        speech_for_keys,
+        core.reader_senders().key,
     );
+    wire::wire_atspi(&mut tasks, &opts, focused, registry, &shutdown);
 
     tracing::info!(
         workers = std::thread::available_parallelism().map_or(1, usize::from),

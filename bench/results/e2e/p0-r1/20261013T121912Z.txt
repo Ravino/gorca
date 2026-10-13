@@ -1,0 +1,63 @@
+# e2e p0-r1
+# utc=2026-10-13T12:19:12Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=powersave x16
+# loadavg_start=17.22 15.10 12.77 3/4298 3662161
+# git_rev=200cadc
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=p0-r1
+# reader=daemon:<repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=17.22 15.10 12.77 4/4298 3662158
+# reader_env=
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=L1 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note1=L1s run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note2=L2 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note3=L3-10k run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note4=L3-50k run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note5=L4 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note6=L4c run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note7=K1 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note8=L1 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note9=L1s run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note10=L2 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note11=L3-10k run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note12=L3-50k run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note13=L4 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note14=L4c run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note15=K1 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note16=L1s run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note17=L2 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note18=L3-10k run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note19=L3-50k run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note20=L4 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note21=L4c run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note22=K1 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note23=L1 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+F0.f0_mock_ms.n            daemon/voicego         1200         1200         1200  3                  info   [samples]
+F0.f0_mock_ms.p50          daemon/voicego        0.037        0.035        0.037  3                  info   [ms]
+F0.f0_mock_ms.p95          daemon/voicego        0.143        0.129        0.149  3                  info   [ms]
+F0.f0_mock_ms.p99          daemon/voicego        0.180        0.166        0.188  3                  info   [ms]
+F0.f0_mock_ms.p999         daemon/voicego        0.221        0.201        0.403  3                  info   [ms]
+F0.f0_mock_ms.max          daemon/voicego        0.574        0.506        1.186  3                  info   [ms]
+L1.failed_runs             daemon/voicego            3            3            3  1 <=            0  FAIL  0 ok, 3 failed [runs]
+L1s.failed_runs            daemon/voicego            3            3            3  1 <=            0  FAIL  0 ok, 3 failed [runs]
+L2.failed_runs             daemon/voicego            3            3            3  1 <=            0  FAIL  0 ok, 3 failed [runs]
+L3-10k.failed_runs         daemon/voicego            3            3            3  1 <=            0  FAIL  0 ok, 3 failed [runs]
+L3-50k.failed_runs         daemon/voicego            3            3            3  1 <=            0  FAIL  0 ok, 3 failed [runs]
+L4.failed_runs             daemon/voicego            3            3            3  1 <=            0  FAIL  0 ok, 3 failed [runs]
+L4c.failed_runs            daemon/voicego            3            3            3  1 <=            0  FAIL  0 ok, 3 failed [runs]
+K1.failed_runs             daemon/voicego            3            3            3  1 <=            0  FAIL  0 ok, 3 failed [runs]

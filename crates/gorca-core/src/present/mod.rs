@@ -5,174 +5,102 @@
 //! > `cpu`, and the results go straight to the speech lane with their epoch, without passing
 //! > back through the Reader."
 
-use std::sync::Arc;
+mod echo;
+mod flow;
+mod job;
+mod utterance;
 
-use gorca_input_api::Modifiers;
-use gorca_model::{
-    Epoch, Freshness, NodeKey, NodeSnapshot, Prio, Segment, SegmentKind, StateSet, UttId,
-    Utterance, Value,
-};
-use smallvec::SmallVec;
+pub use echo::{key_echo, key_echo_text, message};
+pub use job::{PresentJob, PresentKind, SpeechIntent};
+pub use utterance::{present_focus, present_selected_item};
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum PresentKind {
+use gorca_model::{Epoch, NodeSnapshot, Role, UttId, Utterance};
+
+/// Why a node is being presented. A presenter is looked up by this and the node's role, so an
+/// extension or a milestone (text, windows, notifications) adds its own without editing the
+/// others.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum PresentContext {
+    /// The node just took focus.
     Focus,
-    Table,
-    SayAllChunk,
-    LiveRegionDiff,
+    /// An item became selected without holding focus (a switcher entry).
+    SelectedItem,
 }
 
-/// Bulk work for the `cpu` pool. The result carries `epoch` (E-1, E-3).
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct PresentJob {
-    pub node: NodeKey,
-    pub epoch: Epoch,
-    pub kind: PresentKind,
-}
+/// A hot-path presenter: pure over the snapshot.
+pub type Presenter = fn(&NodeSnapshot, UttId, Epoch) -> Utterance;
 
-/// Reader or `cpu` to the speech lane. The utterance carries its epoch.
+/// Presenters keyed by (context, role). The per-context default covers every role that has no
+/// override; overrides are few, so the lookup is a short linear scan with no allocation.
 #[derive(Clone, Debug)]
-pub struct SpeechIntent {
-    pub utterance: Utterance,
+pub struct PresenterRegistry {
+    focus: Presenter,
+    selected_item: Presenter,
+    overrides: Vec<(PresentContext, Role, Presenter)>,
 }
 
-/// State words in speaking order. TBD: localisation and verbosity settings.
-const STATE_WORDS: &[(StateSet, &str)] = &[
-    (StateSet::DISABLED, "unavailable"),
-    (StateSet::CHECKED, "checked"),
-    (StateSet::PRESSED, "pressed"),
-    (StateSet::SELECTED, "selected"),
-    (StateSet::EXPANDED, "expanded"),
-    (StateSet::COLLAPSED, "collapsed"),
-    (StateSet::REQUIRED, "required"),
-    (StateSet::INVALID, "invalid entry"),
-];
-
-fn seg(text: &str, kind: SegmentKind) -> Segment {
-    Segment {
-        text: Arc::from(text),
-        kind,
-    }
-}
-
-/// Presentation of a focused node. Stale nodes are presented too, tagged `may_refine`.
-pub fn present_focus(n: &NodeSnapshot, id: UttId, epoch: Epoch) -> Utterance {
-    present_with(n, id, epoch, StateSet::empty())
-}
-
-/// Presentation of an item that just became selected (a switcher entry). The `selected` word is
-/// left out: being selected is the reason it is spoken at all.
-pub fn present_selected_item(n: &NodeSnapshot, id: UttId, epoch: Epoch) -> Utterance {
-    present_with(n, id, epoch, StateSet::SELECTED)
-}
-
-fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Utterance {
-    let mut segments: SmallVec<[Segment; 4]> = SmallVec::new();
-    if let Some(name) = n.name.as_deref().filter(|s| !s.is_empty()) {
-        segments.push(seg(name, SegmentKind::Text));
-    }
-    let role = n.role.spoken();
-    if !role.is_empty() {
-        segments.push(seg(role, SegmentKind::Role));
-    }
-    for (flag, word) in STATE_WORDS {
-        if n.states.contains(*flag) && !skip.contains(*flag) {
-            segments.push(seg(word, SegmentKind::State));
+impl PresenterRegistry {
+    /// The built-in presenters: one default per context, no role overrides.
+    pub fn builtin() -> Self {
+        Self {
+            focus: present_focus,
+            selected_item: present_selected_item,
+            overrides: Vec::new(),
         }
     }
-    match &n.value {
-        Some(Value::Text(t)) if !t.is_empty() => segments.push(seg(t, SegmentKind::Value)),
-        Some(Value::Range { current, .. }) => {
-            segments.push(seg(&format!("{current}"), SegmentKind::Value));
+
+    /// Install `presenter` for nodes of `role` in `ctx`, replacing an earlier override.
+    pub fn register(&mut self, ctx: PresentContext, role: Role, presenter: Presenter) {
+        if let Some(slot) = self
+            .overrides
+            .iter_mut()
+            .find(|(c, r, _)| *c == ctx && *r == role)
+        {
+            slot.2 = presenter;
+        } else {
+            self.overrides.push((ctx, role, presenter));
         }
-        Some(Value::Text(_)) | None => {}
     }
-    let may_refine = match n.fresh {
-        Freshness::Fresh { .. } => false,
-        Freshness::Stale { .. } | Freshness::Fetching { .. } | Freshness::Defunct => true,
-    };
-    Utterance {
-        id,
-        segments,
-        lang: None,
-        epoch,
-        prio: Prio::Interrupt,
-        may_refine,
-        survives_focus_change: false,
+
+    /// The presenter for `role` in `ctx`.
+    pub fn get(&self, ctx: PresentContext, role: Role) -> Presenter {
+        self.overrides
+            .iter()
+            .find(|(c, r, _)| *c == ctx && *r == role)
+            .map_or(
+                match ctx {
+                    PresentContext::Focus => self.focus,
+                    PresentContext::SelectedItem => self.selected_item,
+                },
+                |(_, _, p)| *p,
+            )
+    }
+
+    /// Present `n` in `ctx`.
+    pub fn present(
+        &self,
+        ctx: PresentContext,
+        n: &NodeSnapshot,
+        id: UttId,
+        epoch: Epoch,
+    ) -> Utterance {
+        self.get(ctx, n.role)(n, id, epoch)
     }
 }
 
-/// Modifiers that turn a key press into a command or shortcut. Orca never echoes a key pressed
-/// together with Alt or Control (`typing_echo_presenter.should_echo_keyboard_event`); Super is
-/// treated the same here. Shift, the locks and AltGr (a character modifier) do not count.
-const COMMAND_MODIFIERS: Modifiers = Modifiers::CONTROL
-    .union(Modifiers::MOD1)
-    .union(Modifiers::MOD4);
-
-/// Spoken form of a key press (key echo), following Orca's defaults: alphabetic, numeric,
-/// punctuation, space, function and action keys (enter, tab, backspace, escape, delete) are
-/// echoed; navigation keys and lone modifier keys are not; nothing is echoed while Alt,
-/// Control or Super is held (`Alt+Tab` must not say "tab").
-pub fn key_echo_text(unichar: u32, keysym: u32, modifiers: Modifiers) -> Option<String> {
-    if modifiers.intersects(COMMAND_MODIFIERS) {
-        return None;
-    }
-    let named = match keysym {
-        0xff0d | 0xff8d => Some("enter"),
-        0xff08 => Some("backspace"),
-        0xff09 | 0xfe20 => Some("tab"),
-        0xff1b => Some("escape"),
-        0xffff => Some("delete"),
-        0x20 => Some("space"),
-        _ => None,
-    };
-    if let Some(n) = named {
-        return Some(n.to_owned());
-    }
-    // Navigation keys: Home, Left, Up, Right, Down, Page Up, Page Down, End (and the keypad
-    // copies). Their result is what gets spoken, not the key.
-    if (0xff50..=0xff58).contains(&keysym) || (0xff95..=0xff9c).contains(&keysym) {
-        return None;
-    }
-    // Function keys F1..F35 are named.
-    if (0xffbe..=0xffe0).contains(&keysym) {
-        return Some(format!("f {}", keysym - 0xffbe + 1));
-    }
-    // Shift, Control, Alt, Super, Caps Lock, Num Lock: pressed on their own they say nothing.
-    if (0xffe1..=0xffee).contains(&keysym) || keysym == 0xff7f {
-        return None;
-    }
-    char::from_u32(unichar)
-        .filter(|c| !c.is_control())
-        .map(String::from)
-}
-
-/// Key echo: interrupts, carries the epoch of the key press.
-pub fn key_echo(text: &str, id: UttId, epoch: Epoch) -> Utterance {
-    let mut u = message(text, id, epoch);
-    u.prio = Prio::Interrupt;
-    u
-}
-
-/// A plain spoken message (for example "application not responding").
-pub fn message(text: &str, id: UttId, epoch: Epoch) -> Utterance {
-    let mut segments = SmallVec::new();
-    segments.push(seg(text, SegmentKind::Text));
-    Utterance {
-        id,
-        segments,
-        lang: None,
-        epoch,
-        prio: Prio::Message,
-        may_refine: false,
-        survives_focus_change: false,
+impl Default for PresenterRegistry {
+    fn default() -> Self {
+        Self::builtin()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gorca_input_api::Modifiers;
     use gorca_model::{AppId, ChildList, ConnectorId, Ifaces, LocalId, Role};
+    use gorca_model::{Freshness, NodeKey, Prio, StateSet, Value};
+    use std::sync::Arc;
     use std::time::Instant;
 
     fn snap(role: Role, name: Option<&str>, states: StateSet, fresh: Freshness) -> NodeSnapshot {
@@ -345,5 +273,53 @@ mod tests {
         let u = message("application not responding", UttId(2), Epoch(3));
         assert_eq!(u.prio, Prio::Message);
         assert_eq!(texts(&u), ["application not responding"]);
+    }
+
+    fn shouting(_n: &NodeSnapshot, id: UttId, epoch: Epoch) -> Utterance {
+        message("override", id, epoch)
+    }
+
+    #[test]
+    fn registry_falls_back_to_the_context_default_and_honours_role_overrides() {
+        let mut reg = PresenterRegistry::builtin();
+        let button = snap(
+            Role::Button,
+            Some("OK"),
+            StateSet::SELECTED,
+            Freshness::Fresh { at: Instant::now() },
+        );
+        let link = snap(
+            Role::Link,
+            Some("Home"),
+            StateSet::empty(),
+            Freshness::Fresh { at: Instant::now() },
+        );
+        let id = UttId(1);
+        let e = Epoch(1);
+        assert_eq!(
+            texts(&reg.present(PresentContext::Focus, &button, id, e)),
+            ["OK", "button", "selected"]
+        );
+        assert_eq!(
+            texts(&reg.present(PresentContext::SelectedItem, &button, id, e)),
+            ["OK", "button"]
+        );
+        reg.register(PresentContext::Focus, Role::Link, shouting);
+        reg.register(PresentContext::Focus, Role::Link, shouting);
+        assert_eq!(
+            texts(&reg.present(PresentContext::Focus, &link, id, e)),
+            ["override"]
+        );
+        assert_eq!(reg.overrides.len(), 1, "re-registering replaces");
+        assert_eq!(
+            texts(&reg.present(PresentContext::SelectedItem, &link, id, e)),
+            ["Home", "link"],
+            "other contexts keep the default"
+        );
+        assert_eq!(
+            texts(&reg.present(PresentContext::Focus, &button, id, e)),
+            ["OK", "button", "selected"],
+            "other roles keep the default"
+        );
     }
 }

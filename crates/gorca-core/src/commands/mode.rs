@@ -1,0 +1,19 @@
+//! The `Mode` arm: mode state machine steps and their effects.
+
+use crate::mode::{ModeEffect, ModeMsg};
+use crate::reader::{Reader, ReaderEffect, ReaderEffects};
+
+impl Reader {
+    pub(crate) fn on_mode(&mut self, m: ModeMsg, fx: &mut ReaderEffects) {
+        let (next, effects) = self.mode.step(m, &self.keys);
+        self.mode = next;
+        for e in effects {
+            match e {
+                ModeEffect::AdvanceEpoch => {
+                    self.epoch.advance();
+                }
+                ModeEffect::SetGrabSet(set) => fx.push(ReaderEffect::SetGrabSet(set)),
+            }
+        }
+    }
+}

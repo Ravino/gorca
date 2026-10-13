@@ -30,19 +30,21 @@ mod connector;
 mod decode;
 mod doc_source;
 mod enablement;
+mod events;
 mod fetch;
-mod paths;
 mod proc;
 mod role_map;
-mod router;
-mod session;
+mod text;
 mod toolkit;
+
+// Kept at the crate root so intra-crate paths (`crate::router`, ...) stay stable.
+use events::{paths, router, session};
 
 pub use connector::{AtspiConnector, AtspiOptions};
 pub use decode::{role_from_raw, states_from_raw};
 pub use doc_source::AtspiDocSource;
 pub use enablement::{Enablement, StatusValues};
-pub use paths::PathTable;
+pub use paths::{GLOBAL_BYTE_CAP as PATH_TABLE_BYTE_CAP, Owner, PathTable};
 pub use role_map::map_role;
 pub use router::{AtspiRouter, RouterStats};
 pub use session::REGISTERED_EVENTS;
