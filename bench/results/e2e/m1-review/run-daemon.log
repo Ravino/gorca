@@ -1,0 +1,118 @@
+== host: load 8.56 11.83 13.04 12/2298 4431 ==
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench-0badb14e7328ca07)
+
+running 12 tests
+test e2e::m1::tests::default_chords_use_real_keycodes ... ok
+test e2e::m1::tests::gates_skip_until_m1_lands ... ok
+test e2e::m1::tests::key_reply_and_app_log_parse ... ok
+test e2e::m1::tests::m1_flag_opens_the_gate ... ok
+test e2e::m1::tests::strict_mode_makes_the_gate_red ... ok
+test e2e::m1::tests::the_reader_gets_desktop_facts_so_it_never_asks_gsettings ... ok
+test e2e::m1::tests::typing_score_detects_lost_and_doubled ... ok
+test e2e::mono::tests::is_monotonic_and_ns ... ok
+test e2e::scenarios::tests::decoder_understands_stub_tags_and_natural_text ... ok
+test e2e::scenarios::tests::scenario_ids_round_trip ... ok
+test e2e::mock::tests::voicego_binary_speak_then_stop ... ok
+test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.04s
+
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.07s
+== e2e m1-review: reader=daemon:<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/target/release/gorca backend=voicego repeats=1 load=8.56 11.83 13.04 16/2318 4667
+-- round 1/1 K2 (load 8.56 11.83 13.04 24/2318 4667)
+2026-10-13T14:17:19.819959Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-13T14:17:19.821665Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-13T14:17:19.822434Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-13T14:17:19.825224Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-13T14:17:23.346156Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-13T14:17:23.346616Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 K2s (load 9.16 11.90 13.06 2/2286 5326)
+2026-10-13T14:17:23.616455Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-13T14:17:23.618478Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-13T14:17:23.619339Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-13T14:17:23.620947Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-13T14:17:28.100969Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-13T14:17:28.101488Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 K3 (load 9.15 11.86 13.04 2/2293 6047)
+2026-10-13T14:17:28.321694Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-13T14:17:28.323136Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-13T14:17:28.324228Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-13T14:17:28.329549Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-13T14:17:31.912583Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-13T14:17:31.912935Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 K4 (load 9.15 11.86 13.04 2/2293 6090)
+2026-10-13T14:17:32.141308Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-13T14:17:32.142554Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-13T14:17:32.144388Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-13T14:17:32.147043Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-13T14:17:33.164851Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=the keyboard manager restarted backoff=100ms
+2026-10-13T14:17:33.267490Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-13T14:18:51.394025Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-13T14:18:51.395035Z  INFO gorca_daemon: gorca stopped
+# e2e m1-review
+# utc=2026-10-13T14:18:51Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=powersave x16
+# loadavg_start=12.88 12.43 13.14 2/2302 22337
+# git_rev=522bdf7
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m1-review
+# reader=daemon:<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=12.88 12.43 13.14 5/2302 22334
+# reader_env=GORCA_M1=1 GORCA_M1_STRICT=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=k2_ms: first SPEAK between a command key and the next one (150 spoken for 150 chords)
+# note1=k2s_ms: first SPEAK between a command key and the next one (150 spoken for 150 chords)
+# note2=k3_ms: first SPEAK between a command key and the next one (236 spoken for 150 chords)
+# note3=K4 app_lost parts: missing in app log 0, swallowed live 0, escape not consumed 0
+
+metric                     bus                median          min          max  n op    threshold  res   note
+K2.k2_ms.n                 daemon/voicego          150          150          150  1                  info   [samples]
+K2.k2_ms.p50               daemon/voicego        0.348        0.348        0.348  1                  info   [ms]
+K2.k2_ms.p95               daemon/voicego        0.655        0.655        0.655  1                  info   [ms]
+K2.k2_ms.p99               daemon/voicego        0.782        0.782        0.782  1 <=            5  PASS   [ms]
+K2.k2_ms.p999              daemon/voicego        0.919        0.919        0.919  1                  info   [ms]
+K2.k2_ms.max               daemon/voicego        0.919        0.919        0.919  1                  info   [ms]
+K2.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+K2.not_consumed            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+K2s.k2s_ms.n               daemon/voicego          150          150          150  1                  info   [samples]
+K2s.k2s_ms.p50             daemon/voicego        0.220        0.220        0.220  1                  info   [ms]
+K2s.k2s_ms.p95             daemon/voicego        0.456        0.456        0.456  1                  info   [ms]
+K2s.k2s_ms.p99             daemon/voicego        0.694        0.694        0.694  1 <=            6  PASS   [ms]
+K2s.k2s_ms.p999            daemon/voicego        4.018        4.018        4.018  1                  info   [ms]
+K2s.k2s_ms.max             daemon/voicego        4.018        4.018        4.018  1                  info   [ms]
+K2s.lost                   daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+K2s.not_consumed           daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+K2s.storm_achieved_eps     daemon/voicego        49999        49999        49999  1 >=        45000  PASS  must reach 90% of the target rate [ev/s]
+K2s.storm_target_eps       daemon/voicego        50000        50000        50000  1                  info   [ev/s]
+K3.k3_ms.n                 daemon/voicego          150          150          150  1                  info   [samples]
+K3.k3_ms.p50               daemon/voicego        0.705        0.705        0.705  1                  info   [ms]
+K3.k3_ms.p95               daemon/voicego        1.622        1.622        1.622  1                  info   [ms]
+K3.k3_ms.p99               daemon/voicego        1.922        1.922        1.922  1 <=           15  PASS   [ms]
+K3.k3_ms.p999              daemon/voicego        2.002        2.002        2.002  1                  info   [ms]
+K3.k3_ms.max               daemon/voicego        2.002        2.002        2.002  1                  info   [ms]
+K3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+K3.not_consumed            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+K4.app_doubled             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+K4.app_lost                daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+K4.chord_leaked            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [chords]
+K4.forged_accepted         daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [speeches]
+K4.restore_failed          daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [runs]
+K4.restore_ms              daemon/voicego        122.7        122.7        122.7  1                  info   [ms]
+K4.switches                daemon/voicego          500          500          500  1                  info   [count]
+K4.typed_keys              daemon/voicego         1001         1001         1001  1                  info   [count]
+
+== wrote <repo>/bench/results/e2e/m1-review/20261013T141851Z.{json,txt}
+exit=0

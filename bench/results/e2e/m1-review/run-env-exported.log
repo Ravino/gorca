@@ -1,0 +1,40 @@
+== host: load 9.60 12.27 13.21 4/2248 4127 ==
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench-0badb14e7328ca07)
+
+running 12 tests
+test e2e::m1::tests::gates_skip_until_m1_lands ... FAILED
+test e2e::m1::tests::default_chords_use_real_keycodes ... ok
+test e2e::m1::tests::strict_mode_makes_the_gate_red ... FAILED
+test e2e::m1::tests::key_reply_and_app_log_parse ... ok
+test e2e::m1::tests::m1_flag_opens_the_gate ... ok
+test e2e::m1::tests::the_reader_gets_desktop_facts_so_it_never_asks_gsettings ... ok
+test e2e::m1::tests::typing_score_detects_lost_and_doubled ... ok
+test e2e::mono::tests::is_monotonic_and_ns ... ok
+test e2e::scenarios::tests::decoder_understands_stub_tags_and_natural_text ... ok
+test e2e::scenarios::tests::scenario_ids_round_trip ... ok
+test e2e::mock::tests::voicego_binary_speak_then_stop ... ok
+test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
+
+failures:
+
+---- e2e::m1::tests::gates_skip_until_m1_lands stdout ----
+
+thread 'e2e::m1::tests::gates_skip_until_m1_lands' (4145) panicked at crates/gorca-bench/src/e2e/m1.rs:549:9:
+assertion failed: !gate_open(&host(&[]), "K2", &mut out).unwrap()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- e2e::m1::tests::strict_mode_makes_the_gate_red stdout ----
+
+thread 'e2e::m1::tests::strict_mode_makes_the_gate_red' (4148) panicked at crates/gorca-bench/src/e2e/m1.rs:557:79:
+called `Result::unwrap_err()` on an `Ok` value: true
+
+
+failures:
+    e2e::m1::tests::gates_skip_until_m1_lands
+    e2e::m1::tests::strict_mode_makes_the_gate_red
+
+test result: FAILED. 10 passed; 2 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.04s
+
+error: test failed, to rerun pass `-p gorca-bench --lib`
+exit=101
