@@ -25,6 +25,16 @@ for a in "$@"; do
 done
 echo "== host: load $(cat /proc/loadavg) governor $(sort -u /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null | tr '\n' ' ') =="
 cargo test -p gorca-bench-b1 --offline
+# Authoritative runs: the full +-20 % service-time fidelity check (H-10(a)). The result goes into
+# the run's host meta (`fidelity`); a failure marks the run INVALID (see b1.rs).
+export B1_STRICT=1
+if fid_out=$(cargo test -p b1-fakeapp --test fidelity --offline 2>&1); then
+  export B1_FIDELITY=pass
+else
+  echo "$fid_out" | tail -20
+  export B1_FIDELITY="fail: $(echo "$fid_out" | grep -m1 'model off' | tr -d '"' || true)"
+fi
+echo "== fidelity: $B1_FIDELITY =="
 cargo build --release -p gorca-bench-b1 --bins --offline
 plan=()
 has_plan=0; has_rundirs=0
