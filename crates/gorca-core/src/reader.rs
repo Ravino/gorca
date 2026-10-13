@@ -28,7 +28,7 @@ use crate::review::ReviewMsg;
 use crate::text::TextMsg;
 
 /// Bounds from section 6.2.
-const KEY_QUEUE: usize = 64;
+const KEY_QUEUE: usize = 1024;
 const FOCUS_QUEUE: usize = 256;
 const REPLY_QUEUE: usize = 64;
 const BACKGROUND_QUEUE: usize = 64;
@@ -278,6 +278,11 @@ impl Reader {
 
     pub fn mode(&self) -> Mode {
         self.mode
+    }
+
+    /// Ambiguous command chords that were not run and answered with "again".
+    pub fn ambiguous_cues(&self) -> u64 {
+        self.cmd.ambiguous_cues
     }
 
     /// Keys classified `Ambiguous` (M-16).

@@ -36,8 +36,10 @@ impl KeySink {
     }
 }
 
-/// Bound of the input to Reader priority lane (section 6.2: 64).
-pub const KEY_QUEUE: usize = 64;
+/// Bound of the key channel from the source to the input lane. Large on purpose (speed beats
+/// frugality): a held key repeats about 23 times a second, and a key event must never be lost to
+/// a pump that is briefly descheduled. If it ever fills, the source resynchronises the lane.
+pub const KEY_QUEUE: usize = 4096;
 
 pub fn key_channel() -> (KeySink, mpsc::Receiver<KeyEvent>) {
     let (tx, rx) = mpsc::channel(KEY_QUEUE);

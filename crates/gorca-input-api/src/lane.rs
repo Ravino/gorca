@@ -204,13 +204,13 @@ impl InputLane {
         let kind = self.press_kind(&ev);
         let time_ms =
             u32::try_from(at.saturating_duration_since(self.start).as_millis()).unwrap_or(u32::MAX);
-        let verdict = self.verdict(&ev, kind, time_ms, &view, &settings);
+        let (verdict, nominal) = self.verdict(&ev, kind, time_ms, &view, &settings);
         let ctx = view.committed.ctx;
         let is_gorca_mod = view.committed.modifiers.contains(&ev.keysym);
         let is_mod_key = is_gorca_mod || is_modifier_keysym(ev.keysym);
 
         let chord = (!is_mod_key && ev.pressed).then(|| ChordKey {
-            mods: if matches!(verdict, Some(v) if v.gorca_held) {
+            mods: if verdict.unwrap_or(nominal).gorca_held {
                 ev.modifiers.without_locks() | Modifiers::GORCA
             } else {
                 ev.modifiers.without_locks()
@@ -222,12 +222,29 @@ impl InputLane {
         let class = match verdict {
             None => {
                 self.stats.ambiguous += 1;
-                let committed = chord.and_then(|c| {
-                    keymap
-                        .lookup(lookup_mode(ctx), c, 1)
-                        .filter(|b| b.active)
-                        .map(|b| b.cmd)
-                });
+                let in_help = ctx.mode == ModeKind::InputHelp
+                    || view
+                        .wanted
+                        .as_ref()
+                        .is_some_and(|w| w.ctx.mode == ModeKind::InputHelp);
+                let plain_escape = ev.pressed
+                    && ev.keysym == sym::ESCAPE
+                    && ev
+                        .modifiers
+                        .without_locks()
+                        .difference(Modifiers::SHIFT)
+                        .is_empty();
+                let committed = if in_help && plain_escape {
+                    // Escape leaves learn mode: if it raced the grab change, say "again".
+                    keymap.learn_toggle
+                } else {
+                    chord.and_then(|c| {
+                        keymap
+                            .lookup(lookup_mode(ctx), c, 1)
+                            .filter(|b| b.active)
+                            .map(|b| b.cmd)
+                    })
+                };
                 (KeyClass::Ambiguous { committed }, None)
             }
             Some(v) => self.classify(
@@ -312,7 +329,7 @@ impl InputLane {
         time_ms: u32,
         view: &GrabView,
         settings: &LaneSettings,
-    ) -> Option<Verdict> {
+    ) -> (Option<Verdict>, Verdict) {
         let e = Ev {
             keysym: ev.keysym,
             pressed: ev.pressed,
@@ -351,8 +368,19 @@ impl InputLane {
         dedupe(&mut next);
         next.truncate(MAX_WORLDS);
         self.worlds = next;
-        let first = verdicts.first().map(|(_, v)| *v)?;
-        verdicts.iter().all(|(_, v)| *v == first).then_some(first)
+        let Some(first) = verdicts.first().map(|(_, v)| *v) else {
+            return (None, Verdict::default());
+        };
+        // `first` is the committed grab set's most likely world: what to look the chord up with
+        // when the worlds disagree.
+        let mut nominal = first;
+        // If any world has the gorca modifier held, the key may be a command chord: look it up
+        // so the Reader can ask the user to press again.
+        nominal.gorca_held = verdicts.iter().any(|(_, v)| v.gorca_held);
+        (
+            verdicts.iter().all(|(_, v)| *v == first).then_some(first),
+            nominal,
+        )
     }
 
     fn press_count(
@@ -726,7 +754,13 @@ mod tests {
         let c = r.class(KC_INS, INS, true, 1050 + 495);
         assert!(matches!(c, KeyClass::Ambiguous { .. }), "{c:?}");
         let c = r.class(KC_T, T, true, 1560);
-        assert!(matches!(c, KeyClass::Ambiguous { .. }), "{c:?}");
+        // The chord key matches a command: the Reader is told which one, to say "again".
+        assert_eq!(
+            c,
+            KeyClass::Ambiguous {
+                committed: Some(CmdId(1))
+            }
+        );
         assert!(r.lane.stats().ambiguous >= 2);
         // After a different key event the worlds agree again.
         r.class(KC_T, T, false, 1580);
@@ -948,6 +982,37 @@ mod tests {
         assert_eq!(
             r.class(9, sym::ESCAPE, true, 1400),
             KeyClass::Command(CmdId(102))
+        );
+    }
+
+    #[test]
+    fn escape_that_races_entering_learn_mode_asks_for_another_press() {
+        let mut r = rig();
+        let help = GrabSet {
+            grab_all: true,
+            modifiers: [INS].into_iter().collect(),
+            ctx: InputContext {
+                mode: ModeKind::InputHelp,
+                resume: ModeKind::Focus,
+            },
+            ..GrabSet::default()
+        };
+        // Learn mode is wanted but not committed yet: the Escape could go either way.
+        pending_view(&r, help);
+        let c = r.class(9, sym::ESCAPE, true, 1000);
+        assert_eq!(
+            c,
+            KeyClass::Ambiguous {
+                committed: Some(CmdId(102))
+            },
+            "never run, but the Reader says \"again\""
+        );
+        // A plain key in the same window gets no cue.
+        r.class(9, sym::ESCAPE, false, 1010);
+        assert_eq!(
+            r.class(KC_A, A, true, 1100),
+            KeyClass::Ambiguous { committed: None },
+            "an unbound key in the window is counted but gets no cue"
         );
     }
 

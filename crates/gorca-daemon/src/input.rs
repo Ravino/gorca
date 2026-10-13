@@ -15,6 +15,8 @@ use gorca_rt::{CancellationToken, EpochCell, mpsc, watch};
 use gorca_speech::SpeechHandle;
 
 const TICK: Duration = Duration::from_secs(1);
+/// Log the lane statistics every this many ticks (when they changed).
+const STATS_EVERY: u64 = 60;
 
 /// Run the pump until the key channel closes or `shutdown`.
 pub async fn pump_keys(
@@ -27,6 +29,7 @@ pub async fn pump_keys(
     shutdown: CancellationToken,
 ) {
     let mut lane = InputLane::new(Arc::clone(&links), epoch, Instant::now());
+    let (mut ticks, mut last_stats) = (0u64, lane.stats());
     let mut tick = tokio::time::interval(TICK);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
@@ -44,6 +47,18 @@ pub async fn pump_keys(
                 }
             }
             _ = tick.tick() => {
+                ticks += 1;
+                if ticks % STATS_EVERY == 0 && lane.stats() != last_stats {
+                    // So that Ambiguous keys (grab changes in flight, the double-tap guard band)
+                    // are visible in the log, not only counted (M-16).
+                    last_stats = lane.stats();
+                    tracing::info!(
+                        keys = last_stats.keys,
+                        ambiguous = last_stats.ambiguous,
+                        band_forks = last_stats.band_forks,
+                        "input lane statistics"
+                    );
+                }
                 if let Some(alert) = lane.tick(Instant::now()) {
                     handle_alert(alert, &links, &senders, &grabs);
                 }

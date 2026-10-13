@@ -222,6 +222,8 @@ pub(crate) struct CmdState {
     pub told_lost: bool,
     pub told_caps: bool,
     pub told_unavailable: bool,
+    /// Ambiguous command chords answered with "again" (never executed).
+    pub ambiguous_cues: u64,
 }
 
 impl CmdState {
@@ -256,6 +258,7 @@ impl CmdState {
             told_lost: false,
             told_caps: false,
             told_unavailable: false,
+            ambiguous_cues: 0,
         }
     }
 

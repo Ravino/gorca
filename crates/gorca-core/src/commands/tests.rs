@@ -746,6 +746,38 @@ fn the_reader_acknowledges_keys_to_the_lane() {
 }
 
 #[test]
+fn an_ambiguous_chord_is_never_run_but_the_user_is_told_to_press_again() {
+    let mut f = fixture();
+    let mut i = intent(CoreCmd::SettingsSave, 1, 1);
+    // The chord matches settings.save but Mutter's fate for the key is unknown.
+    i.class = KeyClass::Ambiguous {
+        committed: Some(CoreCmd::SettingsSave.id()),
+    };
+    let fx = f.reader.handle(ReaderMsg::Key(i), f.now);
+    assert_eq!(spoken(&fx), ["again"]);
+    assert!(
+        fx.iter().all(|e| !matches!(e, ReaderEffect::Config(_))),
+        "the command did not run"
+    );
+    assert_eq!(
+        (f.reader.ambiguous_keys(), f.reader.ambiguous_cues()),
+        (1, 1)
+    );
+    // No command behind it (a modifier, an unbound key) or a release: silent, still counted.
+    i.class = KeyClass::Ambiguous { committed: None };
+    assert!(f.reader.handle(ReaderMsg::Key(i), f.now).is_empty());
+    i.class = KeyClass::Ambiguous {
+        committed: Some(CoreCmd::SettingsSave.id()),
+    };
+    i.kind = PressKind::Release;
+    assert!(f.reader.handle(ReaderMsg::Key(i), f.now).is_empty());
+    assert_eq!(
+        (f.reader.ambiguous_keys(), f.reader.ambiguous_cues()),
+        (3, 1)
+    );
+}
+
+#[test]
 fn unknown_command_ids_are_ignored() {
     let mut f = fixture();
     let mut i = intent(CoreCmd::SpeechStop, 1, 1);

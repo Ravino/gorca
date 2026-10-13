@@ -24,9 +24,17 @@ impl Reader {
                 self.run_command(cmd, &intent, now, fx);
             }
             KeyClass::Described(cmd) => self.describe(&intent, cmd, fx),
-            KeyClass::Ambiguous { .. } => {
+            KeyClass::Ambiguous { committed } => {
                 self.ambiguous_keys += 1;
                 self.pass_key_seen(&intent, fx);
+                // A chord that matches a command but whose fate Mutter's rules leave unknown is
+                // never executed (it might also have reached the application). Tell the user to
+                // press it again, so silence is not mistaken for a broken screen reader. Only
+                // for a real command chord, never for a modifier or an unbound key.
+                if committed.is_some() && intent.kind == gorca_input_api::PressKind::Press {
+                    self.cmd.ambiguous_cues += 1;
+                    self.say("again", fx);
+                }
             }
             KeyClass::ModifierPassThrough => {
                 // LM-5: the double tap still reaches the application in learn mode.

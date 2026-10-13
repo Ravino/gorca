@@ -36,6 +36,9 @@ const BACKOFF_MIN: Duration = Duration::from_millis(100);
 const BACKOFF_MAX: Duration = Duration::from_secs(1);
 /// While another screen reader holds the name, look again this often.
 const HELD_RETRY: Duration = Duration::from_secs(5);
+/// How often the held-modifier watchdog looks, and how long a "held" modifier may be silent.
+const WATCHDOG_TICK: Duration = Duration::from_secs(1);
+const HELD_QUIET: Duration = Duration::from_secs(5);
 /// Results of in-flight calls waiting for the session loop.
 const CALL_RESULTS: usize = 16;
 
@@ -505,6 +508,10 @@ async fn session(
     // modifier grabs while one is held leaves XKB with a stuck key (P-7).
     let mut held: Vec<u32> = Vec::new();
     let mut deferred: Option<GrabSet> = None;
+    let mut last_key = tokio::time::Instant::now();
+    let mut key_overflows = 0u64;
+    let mut watchdog = tokio::time::interval(WATCHDOG_TICK);
+    watchdog.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     // F2: grab mutations are strictly ordered: one in flight, the newest wanted set queued.
     let mut writer = GrabWriter::default();
 
@@ -546,8 +553,17 @@ async fn session(
                         .map(|l| l.keymap.load().modifiers.clone())
                         .unwrap_or_default();
                     track_held(&mut held, &state, &may_be_modifiers, &ev);
+                    last_key = tokio::time::Instant::now();
                     if !ctx.sink.push(ev) {
-                        tracing::warn!("key channel full; dropped a key event");
+                        // The lane missed an event, so it no longer knows which keys are down
+                        // (a dropped release leaves it stale for ever). Never carry on silently:
+                        // make it forget. `held` above already saw the event, so the grab
+                        // deferral stays exact.
+                        key_overflows += 1;
+                        tracing::warn!(key_overflows, "key channel full; resynchronising the input lane");
+                        if let Some(l) = &src.links {
+                            l.session.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                        }
                     }
                 }
                 match take_deferred(&mut deferred, &held) {
@@ -615,10 +631,29 @@ async fn session(
                 // machine does not wait for ever.
                 match (r.is_err(), writer.inflight) {
                     (true, Some(generation)) => {
+                        // Nothing queued behind the dead call may be sent later: it would land
+                        // after a newer set and leave Mutter with the older one.
                         writer.inflight = None;
+                        writer.queued = None;
                         MonitorMsg::GrabsTimeout { generation }
                     }
                     _ => continue,
+                }
+            }
+            _ = watchdog.tick() => {
+                // A modifier "held" with no key activity at all for this long is not held: a key
+                // that is down repeats about 23 times a second. The release was lost; forget it
+                // and let the waiting grab change go ahead (re-sync, never a stuck deferral).
+                if !held.is_empty() && last_key.elapsed() >= HELD_QUIET {
+                    tracing::warn!(?held, "no key activity while a modifier is held; resynchronising");
+                    held.clear();
+                    if let Some(l) = &src.links {
+                        l.session.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                    }
+                }
+                match take_deferred(&mut deferred, &held) {
+                    Some(set) => MonitorMsg::SetGrabSet(set),
+                    None => continue,
                 }
             }
         };
@@ -979,6 +1014,48 @@ mod tests {
             g.rejected(),
             2,
             "the daemon's signal about another name is not forged, just not ours"
+        );
+    }
+
+    /// zbus decides what a match rule with `sender=org.freedesktop.DBus` lets through. The gate
+    /// does not rely on it, but a zbus upgrade that changed it should be noticed.
+    #[test]
+    fn the_owner_rule_does_not_match_a_forged_sender_in_this_zbus() {
+        let r = rule(
+            BUS_DAEMON,
+            BUS_DAEMON,
+            "NameOwnerChanged",
+            Some(MANAGER_NAME),
+        )
+        .unwrap();
+        let forged = owner_signal(":1.99", MANAGER_NAME, "");
+        let genuine = owner_signal(BUS_DAEMON, MANAGER_NAME, "");
+        // Pinned today: the forged one is filtered by zbus itself. If this ever flips the gate
+        // above still drops it, and this test says where to look.
+        assert!(
+            !r.matches(&forged).unwrap_or(false),
+            "zbus now lets a forged owner change through the rule"
+        );
+        let _ = genuine;
+    }
+
+    #[test]
+    fn a_dead_grab_task_cannot_leave_an_older_set_queued() {
+        let set = |n: u32| {
+            let mut g = GrabSet::default();
+            g.modifiers.insert(n);
+            g
+        };
+        let mut w = GrabWriter::default();
+        w.submit(1, set(1));
+        w.submit(2, set(2));
+        // The task for generation 1 panicked: the loop clears both fields.
+        w.inflight = None;
+        w.queued = None;
+        assert_eq!(w.submit(3, set(3)).map(|(g, _)| g), Some(3));
+        assert!(
+            w.done().is_none(),
+            "no stale generation 2 comes out after 3"
         );
     }
 

@@ -380,7 +380,12 @@ def main():
         sys.exit(2)
     DBusGMainLoop(set_as_default=True)
     conn = dbus.bus.BusConnection(addr)
-    conn.request_name(NAME, dbus.bus.NAME_FLAG_DO_NOT_QUEUE)
+    # Take the name for real: a flapping client (name_flapper.py) may hold it for a moment.
+    end = time.monotonic() + 10
+    while conn.request_name(NAME, dbus.bus.NAME_FLAG_DO_NOT_QUEUE) != dbus.bus.REQUEST_NAME_REPLY_PRIMARY_OWNER:
+        if time.monotonic() > end:
+            sys.exit("fake_mutter: could not take %s" % NAME)
+        time.sleep(0.002)
     mgr = Manager(conn)
     loop = GLib.MainLoop()
     Stdin(mgr, loop)
