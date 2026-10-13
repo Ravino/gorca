@@ -13,17 +13,18 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use gorca_connector_api::BackendError;
-use gorca_input_api::{CmdId, GrabSet, KeyClass, KeyIntent};
-use gorca_model::{AppId, Epoch, NodeKey, NodeSnapshot, Politeness, PropMask, StateSet, UttId};
+use gorca_input_api::{CmdId, GrabSet, KeyIntent};
+use gorca_model::{AppId, Epoch, NodeKey, NodeSnapshot, Politeness, PropMask, UttId};
 use gorca_rt::{BudgetClass, EpochCell, FocusedApp, mpsc};
 use smallvec::SmallVec;
 
+use crate::SpeechIntent;
 use crate::directory::MirrorDirectory;
-use crate::focus::{FocusEffect, FocusMsg, FocusState, settle_delay};
-use crate::mode::{Mode, ModeEffect, ModeKeys, ModeMsg};
-use crate::presenter::{
-    SpeechIntent, key_echo, key_echo_text, message, present_focus, present_selected_item,
-};
+use crate::focus::{FocusMsg, FocusState};
+use crate::mode::{Mode, ModeKeys, ModeMsg};
+use crate::present::PresenterRegistry;
+use crate::review::ReviewMsg;
+use crate::text::TextMsg;
 
 /// Bounds from section 6.2.
 const KEY_QUEUE: usize = 64;
@@ -78,6 +79,8 @@ pub enum ReaderMsg {
     Reply(QueryReply),
     Background(BackgroundMsg),
     Mode(ModeMsg),
+    Review(ReviewMsg),
+    Text(TextMsg),
     Timer,
 }
 
@@ -172,19 +175,20 @@ impl ReaderInbox {
 
 #[derive(Debug)]
 pub struct Reader {
-    focus: FocusState,
-    mode: Mode,
-    keys: ModeKeys,
-    epoch: Arc<EpochCell>,
-    dir: Arc<MirrorDirectory>,
-    next_utt: u64,
-    ambiguous_keys: u64,
-    stale_replies_dropped: u64,
-    duplicate_focus_dropped: u64,
-    last_focus: Option<(NodeKey, Instant)>,
+    pub(crate) focus: FocusState,
+    pub(crate) mode: Mode,
+    pub(crate) keys: ModeKeys,
+    pub(crate) epoch: Arc<EpochCell>,
+    pub(crate) dir: Arc<MirrorDirectory>,
+    pub(crate) next_utt: u64,
+    pub(crate) ambiguous_keys: u64,
+    pub(crate) stale_replies_dropped: u64,
+    pub(crate) duplicate_focus_dropped: u64,
+    pub(crate) last_focus: Option<(NodeKey, Instant)>,
     /// The node of the latest `ItemSelected`, until a real focus change replaces it.
-    selection_node: Option<NodeKey>,
-    focused_app: Option<Arc<FocusedApp>>,
+    pub(crate) selection_node: Option<NodeKey>,
+    pub(crate) focused_app: Option<Arc<FocusedApp>>,
+    pub(crate) presenters: PresenterRegistry,
 }
 
 impl Reader {
@@ -202,6 +206,7 @@ impl Reader {
             last_focus: None,
             selection_node: None,
             focused_app: None,
+            presenters: PresenterRegistry::builtin(),
         }
     }
 
@@ -235,7 +240,7 @@ impl Reader {
         self.stale_replies_dropped
     }
 
-    fn utt_id(&mut self) -> UttId {
+    pub(crate) fn utt_id(&mut self) -> UttId {
         self.next_utt += 1;
         UttId(self.next_utt)
     }
@@ -263,189 +268,18 @@ impl Reader {
                 }
             },
             ReaderMsg::Mode(m) => self.on_mode(m, &mut fx),
+            ReaderMsg::Review(m) => self.on_review(m, &mut fx),
+            ReaderMsg::Text(m) => self.on_text(m, &mut fx),
             ReaderMsg::Timer => self.apply_focus(FocusMsg::TimerElapsed { now }, &mut fx),
         }
         fx
-    }
-
-    fn on_key(&mut self, intent: KeyIntent, fx: &mut ReaderEffects) {
-        // E-4: adopt the epoch carried by the key press so the utterance answering it is never
-        // cancelled by that same key press.
-        self.epoch.observe(intent.epoch);
-        match intent.class {
-            KeyClass::Command(cmd) => fx.push(ReaderEffect::RunCommand(cmd)),
-            KeyClass::Ambiguous { .. } => self.ambiguous_keys += 1,
-            KeyClass::PassToApp => {
-                if intent.event.pressed
-                    && let Some(text) = key_echo_text(
-                        intent.event.unichar,
-                        intent.event.keysym,
-                        intent.event.modifiers,
-                    )
-                {
-                    let id = self.utt_id();
-                    let u = key_echo(&text, id, intent.epoch);
-                    fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
-                }
-            }
-            KeyClass::Injected => {}
-        }
-    }
-
-    fn on_mode(&mut self, m: ModeMsg, fx: &mut ReaderEffects) {
-        let (next, effects) = self.mode.step(m, &self.keys);
-        self.mode = next;
-        for e in effects {
-            match e {
-                ModeEffect::AdvanceEpoch => {
-                    self.epoch.advance();
-                }
-                ModeEffect::SetGrabSet(set) => fx.push(ReaderEffect::SetGrabSet(set)),
-            }
-        }
-    }
-
-    fn on_focus(&mut self, f: FocusLaneMsg, now: Instant, fx: &mut ReaderEffects) {
-        match f {
-            FocusLaneMsg::FocusChanged { node } => {
-                self.selection_node = None;
-                self.begin_focus(node, now, fx);
-            }
-            FocusLaneMsg::ItemSelected { node } => {
-                self.selection_node = Some(node);
-                self.begin_focus(node, now, fx);
-            }
-            FocusLaneMsg::NodeRemoved(n) => self.apply_focus(FocusMsg::NodeRemoved(n), fx),
-            FocusLaneMsg::AppGone(a) => {
-                if let Some(f) = &self.focused_app {
-                    f.forget(a);
-                }
-                self.apply_focus(FocusMsg::AppGone(a), fx);
-            }
-            FocusLaneMsg::AppHung(a) => self.apply_focus(FocusMsg::AppHung(a), fx),
-        }
-    }
-
-    fn begin_focus(&mut self, node: NodeKey, now: Instant, fx: &mut ReaderEffects) {
-        if let Some((last, at)) = self.last_focus
-            && last == node
-            && now.saturating_duration_since(at) < DUPLICATE_FOCUS_WINDOW
-        {
-            self.duplicate_focus_dropped += 1;
-            return;
-        }
-        self.last_focus = Some((node, now));
-        // The epoch advances first, so stale speech cancels now, not after δ (E-2).
-        let epoch = self.epoch.advance();
-        let role = self.dir.lookup(node).hit().map(|n| n.role);
-        let until = now + settle_delay(role);
-        self.apply_focus(FocusMsg::FocusChanged { node, epoch, until }, fx);
-        if let FocusState::Settling { until, .. } = self.focus {
-            if until <= now {
-                self.apply_focus(FocusMsg::TimerElapsed { now }, fx);
-            } else {
-                fx.push(ReaderEffect::ArmTimer(until));
-            }
-        }
-    }
-
-    fn apply_focus(&mut self, msg: FocusMsg, fx: &mut ReaderEffects) {
-        let (next, effect) = self.focus.step(msg);
-        self.focus = next;
-        let Some(effect) = effect else { return };
-        match effect {
-            FocusEffect::BeginPresent { node, epoch } => {
-                // Mirror read, lock-free. On a miss, fetch and wait for the reply.
-                match self.dir.lookup(node) {
-                    gorca_model::Lookup::Hit(snap) => self.present(&snap, fx),
-                    gorca_model::Lookup::Miss => fx.push(ReaderEffect::Fetch {
-                        node,
-                        mask: PropMask::PRESENT,
-                        class: BudgetClass::Interactive,
-                        epoch,
-                    }),
-                    gorca_model::Lookup::Gone => {
-                        self.apply_focus(FocusMsg::NodeRemoved(node), fx);
-                    }
-                }
-            }
-            FocusEffect::Speak { node, epoch } => {
-                // Reached when `Presented` was stepped by `present`; the snapshot was already
-                // turned into an utterance there, so nothing is left to do for `node`/`epoch`.
-                let _ = (node, epoch);
-            }
-            FocusEffect::QueryActiveWindowFocus => fx.push(ReaderEffect::QueryActiveWindowFocus),
-            FocusEffect::AnnounceNotResponding => {
-                let id = self.utt_id();
-                let u = message("application not responding", id, self.epoch.current());
-                fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
-            }
-        }
-    }
-
-    /// Step `Presented` for the snapshot's node and, if that produced the `Speak` effect, build
-    /// the utterance from the snapshot at hand.
-    fn present(&mut self, snap: &Arc<NodeSnapshot>, fx: &mut ReaderEffects) {
-        let (next, effect) = self.focus.step(FocusMsg::Presented { node: snap.key });
-        self.focus = next;
-        match effect {
-            Some(FocusEffect::Speak { epoch, .. }) => {
-                let id = self.utt_id();
-                let u = if self.selection_node == Some(snap.key) {
-                    present_selected_item(snap, id, epoch)
-                } else {
-                    present_focus(snap, id, epoch)
-                };
-                fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
-                // Protection from eviction is earned only here: the focus passed the state
-                // machine, was presented, and the fetched node itself shows `FOCUSED`. A focus
-                // event alone, from any application, proves nothing.
-                if self.selection_node == Some(snap.key) {
-                    // A selected item in a switcher: not real focus, so the protection of the
-                    // application that does hold focus stays as it is.
-                } else if let Some(f) = &self.focused_app {
-                    if snap.states.contains(StateSet::FOCUSED)
-                        && !snap.states.contains(StateSet::DEFUNCT)
-                    {
-                        f.publish(snap.key.app);
-                    } else {
-                        // The Reader's focus is here now and could not be validated: protection
-                        // must not stay with whoever held it before (fail closed).
-                        f.demote();
-                    }
-                }
-            }
-            Some(
-                FocusEffect::BeginPresent { .. }
-                | FocusEffect::QueryActiveWindowFocus
-                | FocusEffect::AnnounceNotResponding,
-            )
-            | None => {}
-        }
-    }
-
-    fn on_reply(&mut self, r: QueryReply, fx: &mut ReaderEffects) {
-        // E-3: results from a worker with an older epoch are dropped by whoever receives them.
-        if r.epoch < self.epoch.current() {
-            self.stale_replies_dropped += 1;
-            return;
-        }
-        match r.result {
-            Ok(snap) => self.present(&snap, fx),
-            // Timeout, Gone, ...: speak from the cache if there is anything (`may_refine`).
-            Err(_) => {
-                if let Some(snap) = self.dir.lookup(r.node).hit() {
-                    self.present(&snap, fx);
-                }
-            }
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gorca_input_api::{KeyEvent, Modifiers};
+    use gorca_input_api::{KeyClass, KeyEvent, Modifiers};
     use gorca_mirror::{MirrorWriter, mirror};
     use gorca_model::{
         ChildList, ConnectorId, Freshness, Ifaces, LocalId, Role, SnapshotBatch, StateSet,

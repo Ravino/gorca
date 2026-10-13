@@ -28,14 +28,17 @@
 
 mod app_actor;
 mod builtin_ext;
+mod commands;
 mod directory;
 mod doc_actor;
 mod focus;
 mod health;
 mod mode;
-mod presenter;
+mod present;
 mod reader;
+mod review;
 mod runtime;
+mod text;
 
 pub use app_actor::{AppActor, AppRoute, ReaderLinks};
 pub use builtin_ext::AppProfile;
@@ -47,13 +50,16 @@ pub use health::{
     SLOW_RECOVERY, SLOW_WINDOW,
 };
 pub use mode::{Mode, ModeEffect, ModeKeys, ModeMsg, PassScope, ReviewCursor};
-pub use presenter::{
-    PresentJob, PresentKind, SpeechIntent, key_echo_text, present_focus, present_selected_item,
+pub use present::{
+    PresentContext, PresentJob, PresentKind, Presenter, PresenterRegistry, SpeechIntent,
+    key_echo_text, present_focus, present_selected_item,
 };
 pub use reader::{
     BackgroundMsg, DUPLICATE_FOCUS_WINDOW, FocusLaneMsg, QueryReply, Reader, ReaderEffect,
     ReaderInbox, ReaderMsg, ReaderSenders, reader_channels,
 };
+pub use review::ReviewMsg;
 pub use runtime::{
     Core, CoreConfig, CoreError, CoreStats, CoreStatsSnapshot, NullSpeech, SpeechOut,
 };
+pub use text::TextMsg;
