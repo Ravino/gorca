@@ -441,6 +441,36 @@ fn settle_grabs(rig: &mut Rig, ok: impl Fn(&super::apps::GrabState) -> bool) -> 
     Ok(ok)
 }
 
+/// Send `c` until Mutter holds the grab state `ok`. A chord that arrives while the reader still
+/// sees the previous grab change as pending is `Ambiguous` by design (counted, never run, never
+/// re-executed); like a user who heard nothing, the harness presses it again. Returns whether the
+/// state was reached, the first attempt's `consumed`, and how many chords had to be repeated.
+fn chord_until(
+    rig: &mut Rig,
+    ty: &mut Typist,
+    c: &Chord,
+    ok: impl Fn(&super::apps::GrabState) -> bool + Copy,
+) -> Result<(bool, bool, u64)> {
+    let mut resent = 0;
+    let mut first = true;
+    let mut first_consumed = true;
+    for _ in 0..4 {
+        let (_, consumed) = chord(rig, ty, c)?;
+        if first {
+            first_consumed = consumed;
+            first = false;
+        }
+        let (_, reached) = mutter(rig)?.wait_grabs(Duration::from_millis(300), ok)?;
+        std::thread::sleep(Duration::from_millis(GUARD_MS));
+        if reached {
+            return Ok((true, first_consumed, resent));
+        }
+        resent += 1;
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    Ok((false, first_consumed, resent))
+}
+
 fn mutter(rig: &mut Rig) -> Result<&mut super::apps::FakeMutter> {
     rig.mutter
         .as_mut()
@@ -497,16 +527,16 @@ pub fn k4(
     let mut rng = Rng::new(seed);
     let mut ty = Typist::new();
     let (mut typed, mut leaked, mut swallowed_live) = (Vec::new(), 0u64, 0u64);
-    let (mut escape_unconsumed, mut never_settled) = (0u64, 0u64);
+    let (mut escape_unconsumed, mut never_settled, mut resent) = (0u64, 0u64, 0u64);
     let started = std::time::Instant::now();
     for _ in 0..switches {
         let use_learn = rng.below(4) == 0;
         if use_learn {
-            let (_, consumed) = chord(&mut rig, &mut ty, &learn)?;
+            let (ok, consumed, again) = chord_until(&mut rig, &mut ty, &learn, |g| g.grab_all)?;
+            resent += again;
             if !consumed {
                 leaked += 1;
             }
-            let ok = settle_grabs(&mut rig, |g| g.grab_all)?;
             never_settled += u64::from(!ok);
             // Learn mode holds the keyboard: Escape is delivered to the reader, not the app.
             let (d, u) = tap(&mut rig, &mut ty, ESCAPE)?;
@@ -516,12 +546,14 @@ pub fn k4(
             let ok = settle_grabs(&mut rig, |g| !g.grab_all && g.modifiers == NORMAL_MODIFIERS)?;
             never_settled += u64::from(!ok);
         } else {
-            let (_, consumed) = chord(&mut rig, &mut ty, &pass)?;
+            // The modifier grab is emptied once Insert is up (never while it is held).
+            let (ok, consumed, again) = chord_until(&mut rig, &mut ty, &pass, |g| {
+                g.modifiers == 0 && !g.grab_all
+            })?;
+            resent += again;
             if !consumed {
                 leaked += 1;
             }
-            // The modifier grab is emptied once Insert is up (never while it is held).
-            let ok = settle_grabs(&mut rig, |g| g.modifiers == 0 && !g.grab_all)?;
             never_settled += u64::from(!ok);
         }
         for i in 0..=rng.below(3) {
@@ -559,6 +591,7 @@ pub fn k4(
         f64::from(u8::from(!(after_restart_ok && restored_ms <= 2000.0))),
         "runs",
     );
+    out.x("chord_resent", resent as f64, "chords");
     out.x("k4_wall_s", elapsed, "s");
     Ok(())
 }
