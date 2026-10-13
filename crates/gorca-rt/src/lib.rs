@@ -29,6 +29,7 @@ pub use epoch::EpochCell;
 pub use focused::FocusedApp;
 pub use futures_core::future::BoxFuture;
 pub use lane::{Lane, LaneExit, LaneHandle, LanePriority, spawn_lane};
+pub use process::monotonic_ns;
 pub use supervisor::{
     RestartDecision, RestartPolicy, RestartTracker, TaskExit, TaskReport, TaskSet,
 };

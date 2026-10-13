@@ -14,6 +14,7 @@ use std::time::Instant;
 
 use gorca_connector_api::BackendError;
 use gorca_input_api::{CmdId, GrabSet, KeyIntent};
+use gorca_mirror::fill::{DemandOutcome, DemandWhy};
 use gorca_model::{AppId, Epoch, NodeKey, NodeSnapshot, Politeness, PropMask, UttId};
 use gorca_rt::{BudgetClass, EpochCell, FocusedApp, mpsc};
 use smallvec::SmallVec;
@@ -22,7 +23,7 @@ use crate::SpeechIntent;
 use crate::directory::MirrorDirectory;
 use crate::focus::{FocusMsg, FocusState};
 use crate::mode::{Mode, ModeKeys, ModeMsg};
-use crate::present::PresenterRegistry;
+use crate::present::{PresentLog, PresenterRegistry};
 use crate::review::ReviewMsg;
 use crate::text::TextMsg;
 
@@ -52,6 +53,23 @@ pub enum FocusLaneMsg {
     NodeRemoved(NodeKey),
     AppGone(AppId),
     AppHung(AppId),
+    /// The state or value of the focused node changed (B-1 S1, PW-12): the Reader fetches it
+    /// and speaks the change.
+    StateChanged {
+        node: NodeKey,
+        mask: PropMask,
+    },
+}
+
+/// Why the Reader asked for a node, so the reply is handled the right way when it comes back.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum FetchKind {
+    /// The cold path of a focus change: present the reply.
+    Focus,
+    /// RV-1: the node was presented from the mirror; compare and correct.
+    Revalidate,
+    /// S1: the focused node's state or value changed; speak the change.
+    StateChange,
 }
 
 /// Reply to a Reader query, tagged with the epoch it was asked in (E-3).
@@ -59,6 +77,7 @@ pub enum FocusLaneMsg {
 pub struct QueryReply {
     pub node: NodeKey,
     pub epoch: Epoch,
+    pub kind: FetchKind,
     pub result: Result<Arc<NodeSnapshot>, BackendError>,
 }
 
@@ -93,6 +112,18 @@ pub enum ReaderEffect {
         mask: PropMask,
         class: BudgetClass,
         epoch: Epoch,
+        kind: FetchKind,
+    },
+    /// Tell the node's app actor how the mirror served (or failed) a read, so its fill policy
+    /// can react. Never blocks the Reader; dropped when the actor is behind.
+    Demand {
+        node: NodeKey,
+        why: DemandWhy,
+        outcome: DemandOutcome,
+    },
+    /// The focus state machine reached `Presented` for `node`.
+    FocusSettled {
+        node: NodeKey,
     },
     QueryActiveWindowFocus,
     /// Wake the Reader at this time with `ReaderMsg::Timer`.
@@ -189,6 +220,32 @@ pub struct Reader {
     pub(crate) selection_node: Option<NodeKey>,
     pub(crate) focused_app: Option<Arc<FocusedApp>>,
     pub(crate) presenters: PresenterRegistry,
+    /// The mirror write sequence of the app when the current focus began (RV-1: a presentation
+    /// whose content was confirmed at or after it needs no revalidation).
+    pub(crate) focus_seq: u64,
+    /// The latest node presentation, for revalidation, refines and state-change speech.
+    pub(crate) presented: Option<crate::present::Presented>,
+    /// Time of the message being handled.
+    pub(crate) now: Instant,
+    pub(crate) present_log: Option<Arc<PresentLog>>,
+    pub(crate) counters: ReaderCounters,
+}
+
+/// Revalidation and correction counters (B-1 M-6).
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct ReaderCounters {
+    /// Presentations served from the mirror.
+    pub cached_presentations: u64,
+    /// RV-1 fetches issued.
+    pub revalidations: u64,
+    /// RV-1 replies that agreed with what was presented.
+    pub revalidations_agreed: u64,
+    /// Corrections that replaced the earlier utterance.
+    pub refined: u64,
+    /// Corrections spoken as a follow-up.
+    pub followups: u64,
+    /// State-change (S1) utterances.
+    pub state_changes_spoken: u64,
 }
 
 impl Reader {
@@ -207,7 +264,23 @@ impl Reader {
             selection_node: None,
             focused_app: None,
             presenters: PresenterRegistry::builtin(),
+            focus_seq: 0,
+            presented: None,
+            now: Instant::now(),
+            present_log: None,
+            counters: ReaderCounters::default(),
         }
+    }
+
+    /// Record every node presentation in `log` (PW-10).
+    #[must_use]
+    pub fn with_present_log(mut self, log: Arc<PresentLog>) -> Self {
+        self.present_log = Some(log);
+        self
+    }
+
+    pub fn counters(&self) -> ReaderCounters {
+        self.counters
     }
 
     /// Publish the focused application through `focused` (lock-free, read by the connector).
@@ -258,6 +331,7 @@ impl Reader {
     /// One message, bounded work, no awaits.
     pub fn handle(&mut self, msg: ReaderMsg, now: Instant) -> ReaderEffects {
         let mut fx = ReaderEffects::new();
+        self.now = now;
         match msg {
             ReaderMsg::Key(intent) => self.on_key(intent, &mut fx),
             ReaderMsg::Focus(f) => self.on_focus(f, now, &mut fx),
@@ -314,6 +388,8 @@ mod tests {
             attrs: gorca_model::AttrMap::default(),
             relations: gorca_model::Relations::default(),
             bounds: None,
+            have: gorca_model::PropMask::PRESENT,
+            confirmed_seq: 0,
             fresh: Freshness::Fresh { at: Instant::now() },
         })
     }
@@ -337,6 +413,12 @@ mod tests {
         }
     }
 
+    fn spoken_fx(fx: &[ReaderEffect]) -> Vec<&ReaderEffect> {
+        fx.iter()
+            .filter(|e| matches!(e, ReaderEffect::Speak(_)))
+            .collect()
+    }
+
     fn spoken(fx: &ReaderEffects) -> Vec<String> {
         fx.iter()
             .filter_map(|e| match e {
@@ -349,6 +431,8 @@ mod tests {
                         .join(" "),
                 ),
                 ReaderEffect::Fetch { .. }
+                | ReaderEffect::Demand { .. }
+                | ReaderEffect::FocusSettled { .. }
                 | ReaderEffect::QueryActiveWindowFocus
                 | ReaderEffect::ArmTimer(_)
                 | ReaderEffect::SetGrabSet(_)
@@ -360,9 +444,13 @@ mod tests {
     #[test]
     fn cache_hit_focus_speaks_immediately_with_the_new_epoch() {
         let mut f = fixture();
-        f.writer.apply(SnapshotBatch {
-            nodes: vec![snap(1, Role::Button, "OK")],
-        });
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(1, Role::Button, "OK")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
         let before = f.epoch.current();
         let fx = f.reader.handle(
             ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(1) }),
@@ -397,14 +485,22 @@ mod tests {
         let epoch = f.epoch.current();
         assert!(matches!(
             fx.as_slice(),
-            [ReaderEffect::Fetch {
-                class: BudgetClass::Interactive,
-                ..
-            }]
+            [
+                ReaderEffect::Fetch {
+                    class: BudgetClass::Interactive,
+                    kind: FetchKind::Focus,
+                    ..
+                },
+                ReaderEffect::Demand {
+                    outcome: DemandOutcome::Miss,
+                    ..
+                }
+            ]
         ));
         let reply = QueryReply {
             node: key(2),
             epoch,
+            kind: FetchKind::Focus,
             result: Ok(snap(2, Role::Link, "Docs")),
         };
         let fx = f.reader.handle(ReaderMsg::Reply(reply), now);
@@ -428,6 +524,7 @@ mod tests {
         let reply = QueryReply {
             node: key(2),
             epoch: stale,
+            kind: FetchKind::Focus,
             result: Ok(snap(2, Role::Link, "Old")),
         };
         let fx = f.reader.handle(ReaderMsg::Reply(reply), now);
@@ -444,12 +541,17 @@ mod tests {
             now,
         );
         let epoch = f.epoch.current();
-        f.writer.apply(SnapshotBatch {
-            nodes: vec![snap(2, Role::Link, "Docs")],
-        });
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(2, Role::Link, "Docs")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
         let reply = QueryReply {
             node: key(2),
             epoch,
+            kind: FetchKind::Focus,
             result: Err(BackendError::Timeout),
         };
         let fx = f.reader.handle(ReaderMsg::Reply(reply), now);
@@ -459,9 +561,13 @@ mod tests {
     #[test]
     fn flapping_roles_wait_for_the_settle_timer() {
         let mut f = fixture();
-        f.writer.apply(SnapshotBatch {
-            nodes: vec![snap(1, Role::MenuItem, "Open")],
-        });
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(1, Role::MenuItem, "Open")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
         let now = Instant::now();
         let fx = f.reader.handle(
             ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(1) }),
@@ -567,14 +673,18 @@ mod tests {
         let mut f = fixture();
         let names = ["Terminal", "Files", "Firefox", "Settings", "Terminal"];
         let ids = [1u64, 2, 3, 4, 1];
-        f.writer.apply(SnapshotBatch {
-            nodes: vec![
-                selected_snap(1, "Terminal"),
-                selected_snap(2, "Files"),
-                selected_snap(3, "Firefox"),
-                selected_snap(4, "Settings"),
-            ],
-        });
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![
+                    selected_snap(1, "Terminal"),
+                    selected_snap(2, "Files"),
+                    selected_snap(3, "Firefox"),
+                    selected_snap(4, "Settings"),
+                ],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
         let mut now = Instant::now();
         let mut last_epoch = f.epoch.current();
         for (i, (name, id)) in names.iter().zip(ids).enumerate() {
@@ -602,9 +712,13 @@ mod tests {
     #[test]
     fn selection_speech_outranks_the_echo_of_the_key_that_caused_it() {
         let mut f = fixture();
-        f.writer.apply(SnapshotBatch {
-            nodes: vec![selected_snap(1, "Files")],
-        });
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![selected_snap(1, "Files")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
         let now = Instant::now();
         let echo = f.reader.handle(press(0xff09, Modifiers::empty(), 5), now);
         let ReaderEffect::Speak(e) = &echo[0] else {
@@ -631,9 +745,13 @@ mod tests {
         let mut f = fixture();
         let published = Arc::new(FocusedApp::new());
         f.reader.focused_app = Some(Arc::clone(&published));
-        f.writer.apply(SnapshotBatch {
-            nodes: vec![selected_snap(1, "Files")],
-        });
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![selected_snap(1, "Files")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
         let before = published.generation();
         f.reader.handle(
             ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node: key(1) }),
@@ -652,9 +770,13 @@ mod tests {
 
         // A focus event for a node the app has not shown to be FOCUSED (a hostile claim, or a
         // stale one): spoken as usual, but it earns no protection.
-        f.writer.apply(SnapshotBatch {
-            nodes: vec![snap(1, Role::Button, "Claim")],
-        });
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(1, Role::Button, "Claim")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
         f.reader.handle(
             ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(1) }),
             now,
@@ -674,6 +796,7 @@ mod tests {
         let reply = QueryReply {
             node: key(2),
             epoch: f.epoch.current(),
+            kind: FetchKind::Focus,
             result: Ok(Arc::new(focused)),
         };
         f.reader.handle(ReaderMsg::Reply(reply), now);
@@ -682,9 +805,13 @@ mod tests {
         // The focus moves to a node that shows no FOCUSED state: protection is not kept by the
         // application that held it; and an application that is gone loses it outright.
         let later = now + std::time::Duration::from_secs(2);
-        f.writer.apply(SnapshotBatch {
-            nodes: vec![snap(3, Role::Button, "Unvalidated")],
-        });
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(3, Role::Button, "Unvalidated")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
         f.reader.handle(
             ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(3) }),
             later,
@@ -698,9 +825,13 @@ mod tests {
     #[test]
     fn hung_focus_app_is_announced() {
         let mut f = fixture();
-        f.writer.apply(SnapshotBatch {
-            nodes: vec![snap(1, Role::Button, "OK")],
-        });
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(1, Role::Button, "OK")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
         let now = Instant::now();
         f.reader.handle(
             ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(1) }),
@@ -734,6 +865,7 @@ mod tests {
             .try_send(QueryReply {
                 node: key(1),
                 epoch: Epoch(1),
+                kind: FetchKind::Focus,
                 result: Err(BackendError::Gone),
             })
             .unwrap();
@@ -770,14 +902,581 @@ mod tests {
     #[test]
     fn drain_processes_a_burst_in_one_call() {
         let mut f = fixture();
-        f.writer.apply(SnapshotBatch {
-            nodes: vec![snap(1, Role::Button, "OK")],
-        });
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(1, Role::Button, "OK")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
         let (tx, mut inbox) = reader_channels();
         tx.focus
             .try_send(FocusLaneMsg::FocusChanged { node: key(1) })
             .unwrap();
         let fx = f.reader.drain(&mut inbox, Instant::now());
-        assert_eq!(fx.len(), 1);
+        assert_eq!(spoken_fx(&fx).len(), 1);
+    }
+
+    // ---- B-1: mirror reads, RV-1, S1 and the removed-focus rule ----
+
+    fn effects_of(fx: &ReaderEffects) -> Vec<&'static str> {
+        fx.iter()
+            .map(|e| match e {
+                ReaderEffect::Speak(_) => "speak",
+                ReaderEffect::Fetch {
+                    kind: FetchKind::Focus,
+                    ..
+                } => "fetch-focus",
+                ReaderEffect::Fetch {
+                    kind: FetchKind::Revalidate,
+                    ..
+                } => "fetch-rv1",
+                ReaderEffect::Fetch {
+                    kind: FetchKind::StateChange,
+                    ..
+                } => "fetch-s1",
+                ReaderEffect::Demand { .. } => "demand",
+                ReaderEffect::FocusSettled { .. } => "settled",
+                ReaderEffect::QueryActiveWindowFocus => "query",
+                ReaderEffect::ArmTimer(_) => "timer",
+                ReaderEffect::SetGrabSet(_) => "grab",
+                ReaderEffect::RunCommand(_) => "cmd",
+            })
+            .collect()
+    }
+
+    fn utterance(fx: &ReaderEffects) -> gorca_model::Utterance {
+        fx.iter()
+            .find_map(|e| match e {
+                ReaderEffect::Speak(s) => Some(s.utterance.clone()),
+                ReaderEffect::Fetch { .. }
+                | ReaderEffect::Demand { .. }
+                | ReaderEffect::FocusSettled { .. }
+                | ReaderEffect::QueryActiveWindowFocus
+                | ReaderEffect::ArmTimer(_)
+                | ReaderEffect::SetGrabSet(_)
+                | ReaderEffect::RunCommand(_) => None,
+            })
+            .expect("an utterance")
+    }
+
+    fn focus_on(f: &mut Fixture, n: u64, now: Instant) -> ReaderEffects {
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(n) }),
+            now,
+        )
+    }
+
+    fn reply(f: &Fixture, n: u64, kind: FetchKind, snap: Arc<NodeSnapshot>) -> ReaderMsg {
+        ReaderMsg::Reply(QueryReply {
+            node: key(n),
+            epoch: f.epoch.current(),
+            kind,
+            result: Ok(snap),
+        })
+    }
+
+    fn with_name(n: u64, name: &str, states: StateSet) -> Arc<NodeSnapshot> {
+        let mut s = (*snap(n, Role::CheckBox, name)).clone();
+        s.states = states;
+        Arc::new(s)
+    }
+
+    /// A node confirmed before the focus began is served from memory, spoken as `may_refine`,
+    /// and revalidated (5.3); the speech comes first.
+    #[test]
+    fn a_mirror_hit_is_spoken_first_tagged_may_refine_and_revalidated() {
+        let mut f = fixture();
+        f.writer.apply(
+            SnapshotBatch::new(vec![with_name(1, "Wi-Fi", StateSet::empty())]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let fx = focus_on(&mut f, 1, Instant::now());
+        assert_eq!(
+            effects_of(&fx),
+            ["speak", "settled", "fetch-rv1", "demand"],
+            "speech first, bookkeeping after"
+        );
+        assert!(utterance(&fx).may_refine, "every cache-served utterance");
+        assert!(matches!(
+            fx.last(),
+            Some(ReaderEffect::Demand {
+                outcome: DemandOutcome::Hit,
+                ..
+            })
+        ));
+        assert_eq!(f.reader.counters().revalidations, 1);
+    }
+
+    #[test]
+    fn a_revalidation_that_agrees_is_silent() {
+        let mut f = fixture();
+        let s = with_name(1, "Wi-Fi", StateSet::CHECKED);
+        f.writer.apply(
+            SnapshotBatch::new(vec![Arc::clone(&s)]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        let fx = f.reader.handle(reply(&f, 1, FetchKind::Revalidate, s), now);
+        assert!(fx.is_empty());
+        assert_eq!(f.reader.counters().revalidations_agreed, 1);
+        assert_eq!(f.reader.counters().refined, 0);
+    }
+
+    /// A silent rename (G-1) is found by RV-1 and replaces the utterance while it is young.
+    #[test]
+    fn a_young_stale_presentation_is_refined_by_replacement() {
+        let mut f = fixture();
+        f.writer.apply(
+            SnapshotBatch::new(vec![with_name(1, "Old name", StateSet::empty())]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let now = Instant::now();
+        let first = utterance(&focus_on(&mut f, 1, now));
+        let fx = f.reader.handle(
+            reply(
+                &f,
+                1,
+                FetchKind::Revalidate,
+                with_name(1, "New name", StateSet::empty()),
+            ),
+            now + Duration::from_millis(40),
+        );
+        let u = utterance(&fx);
+        assert_eq!(u.refines, Some(first.id));
+        assert_eq!(
+            u.prio,
+            gorca_model::Prio::Interrupt,
+            "it replaces the old one"
+        );
+        assert!(!u.may_refine);
+        assert_eq!(u.epoch, first.epoch);
+        let words: Vec<_> = u.segments.iter().map(|s| s.text.to_string()).collect();
+        assert_eq!(words, ["New name", "check box"]);
+        assert_eq!(f.reader.counters().refined, 1);
+    }
+
+    /// Too late to replace: a short follow-up with the changed field only.
+    #[test]
+    fn an_old_stale_presentation_gets_a_followup() {
+        let mut f = fixture();
+        f.writer.apply(
+            SnapshotBatch::new(vec![with_name(1, "Wi-Fi", StateSet::empty())]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let now = Instant::now();
+        let first = utterance(&focus_on(&mut f, 1, now));
+        let fx = f.reader.handle(
+            reply(
+                &f,
+                1,
+                FetchKind::Revalidate,
+                with_name(1, "Wi-Fi", StateSet::CHECKED),
+            ),
+            now + Duration::from_millis(400),
+        );
+        let u = utterance(&fx);
+        assert_eq!(u.refines, Some(first.id));
+        assert_eq!(u.prio, gorca_model::Prio::Message);
+        let words: Vec<_> = u.segments.iter().map(|s| s.text.to_string()).collect();
+        assert_eq!(words, ["checked"]);
+        assert_eq!(f.reader.counters().followups, 1);
+    }
+
+    /// A request issued after the focus began confirmed the content: nothing left to revalidate.
+    /// (The role flaps, so the focus settles for 30 ms; a prefetch lands in between.)
+    #[test]
+    fn content_confirmed_by_a_request_issued_after_the_focus_began_needs_no_revalidation() {
+        let mut f = fixture();
+        let mut menu = (*with_name(1, "Open", StateSet::empty())).clone();
+        menu.role = Role::MenuItem;
+        let now = Instant::now();
+        f.writer.apply(
+            SnapshotBatch::new(vec![Arc::new(menu.clone())]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let fx = focus_on(&mut f, 1, now);
+        assert!(spoken(&fx).is_empty(), "settling");
+        // A prefetch issued after the focus event lands before the settle timer.
+        let issued_at = f.writer.next_seq();
+        f.writer.apply(
+            SnapshotBatch::new(vec![Arc::new(menu)]),
+            gorca_mirror::ApplyOrigin::Reply { issued_at },
+        );
+        let fx = f
+            .reader
+            .handle(ReaderMsg::Timer, now + Duration::from_millis(31));
+        assert_eq!(effects_of(&fx), ["speak", "settled", "demand"]);
+    }
+
+    /// Reviewer probe F1: a quiet app (one old event, then nothing) whose node was fetched on an
+    /// earlier visit and renamed silently (GTK4 G-1). The revisit is revalidated.
+    #[test]
+    fn a_revisit_in_a_quiet_app_is_revalidated() {
+        let mut f = fixture();
+        let t0 = Instant::now();
+        f.writer.invalidate(key(9), PropMask::NAME, t0);
+        let issued_at = f.writer.next_seq();
+        f.writer.apply(
+            SnapshotBatch::new(vec![with_name(1, "Old", StateSet::empty())]),
+            gorca_mirror::ApplyOrigin::Reply { issued_at },
+        );
+        let _ = focus_on(&mut f, 1, t0);
+        let _ = focus_on(&mut f, 2, t0 + Duration::from_secs(2));
+        let fx = focus_on(&mut f, 1, t0 + Duration::from_secs(10));
+        assert!(
+            effects_of(&fx).contains(&"fetch-rv1"),
+            "revisit served from the mirror without RV-1: {:?}",
+            effects_of(&fx)
+        );
+        // And the silent rename is found and corrected.
+        let fx = f.reader.handle(
+            reply(
+                &f,
+                1,
+                FetchKind::Revalidate,
+                with_name(1, "New", StateSet::empty()),
+            ),
+            t0 + Duration::from_secs(10),
+        );
+        assert_eq!(f.reader.counters().refined, 1, "{:?}", effects_of(&fx));
+    }
+
+    /// F4: a storm of focus events on cached nodes is coalesced: last focus wins, one utterance.
+    #[test]
+    fn a_focus_storm_on_cached_nodes_speaks_once() {
+        let mut f = fixture();
+        f.writer.apply(
+            SnapshotBatch::new(
+                (1..=4)
+                    .map(|n| with_name(n, "n", StateSet::empty()))
+                    .collect(),
+            ),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let t0 = Instant::now();
+        // 300 focus events, one millisecond apart, across four cached nodes.
+        let mut all = Vec::new();
+        let mut timer = None;
+        for i in 0..300u64 {
+            let now = t0 + Duration::from_millis(i);
+            all.extend(focus_on(&mut f, 1 + i % 4, now));
+            // The runtime would fire the timer only when it is due.
+            if let Some(at) = timer
+                && at <= now
+            {
+                timer = None;
+                all.extend(f.reader.handle(ReaderMsg::Timer, now));
+            }
+            for e in all.iter().rev().take(4) {
+                if let ReaderEffect::ArmTimer(at) = e {
+                    timer = Some(*at);
+                    break;
+                }
+            }
+        }
+        let end = t0 + Duration::from_millis(400);
+        all.extend(f.reader.handle(ReaderMsg::Timer, end));
+        let speaks = all
+            .iter()
+            .filter(|e| matches!(e, ReaderEffect::Speak(_)))
+            .count();
+        assert!(speaks <= 2, "{speaks} utterances for 300 focus events");
+        assert!(speaks >= 1, "the last focus is spoken");
+    }
+
+    /// An isolated focus on a cached node is still spoken at once (L1h).
+    #[test]
+    fn an_isolated_hit_is_not_delayed() {
+        let mut f = fixture();
+        f.writer.apply(
+            SnapshotBatch::new(vec![with_name(1, "n", StateSet::empty())]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let t0 = Instant::now();
+        let fx = focus_on(&mut f, 1, t0);
+        assert_eq!(spoken(&fx).len(), 1);
+        // Slower than a storm (30 Hz key repeat): also at once.
+        f.writer.apply(
+            SnapshotBatch::new(vec![with_name(2, "m", StateSet::empty())]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let fx = focus_on(&mut f, 2, t0 + Duration::from_millis(33));
+        assert_eq!(spoken(&fx).len(), 1);
+    }
+
+    /// 5.1: a fetch reply that says `defunct` is a removal; nothing is spoken from it.
+    #[test]
+    fn a_defunct_reply_is_not_spoken() {
+        let mut f = fixture();
+        let now = Instant::now();
+        focus_on(&mut f, 2, now);
+        let fx = f.reader.handle(
+            reply(
+                &f,
+                2,
+                FetchKind::Focus,
+                with_name(2, "dying", StateSet::DEFUNCT),
+            ),
+            now,
+        );
+        assert!(spoken(&fx).is_empty());
+        assert!(matches!(f.reader.focus(), FocusState::Orphaned { .. }));
+    }
+
+    /// 5.2: a stale NAME is not presented from memory; the node is fetched and the reply spoken.
+    #[test]
+    fn a_stale_name_is_fetched_but_a_stale_state_is_spoken_from_memory() {
+        let mut f = fixture();
+        f.writer.apply(
+            SnapshotBatch::new(vec![
+                with_name(1, "Renamed?", StateSet::empty()),
+                with_name(2, "Toggle", StateSet::empty()),
+            ]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        f.writer.invalidate(key(1), PropMask::NAME, Instant::now());
+        f.writer
+            .invalidate(key(2), PropMask::STATES, Instant::now());
+        let fx = focus_on(&mut f, 1, Instant::now());
+        assert_eq!(effects_of(&fx), ["fetch-focus", "demand"]);
+        let fx = focus_on(&mut f, 2, Instant::now() + Duration::from_secs(1));
+        assert_eq!(effects_of(&fx), ["speak", "settled", "fetch-rv1", "demand"]);
+        assert!(matches!(
+            fx.last(),
+            Some(ReaderEffect::Demand {
+                outcome: DemandOutcome::Stale { .. },
+                ..
+            })
+        ));
+    }
+
+    /// A partial node (a dump row without a value) that lacks nothing blocking is spoken.
+    #[test]
+    fn a_partial_node_missing_only_non_blocking_fields_is_spoken() {
+        let mut f = fixture();
+        let mut row = (*with_name(1, "Row", StateSet::empty())).clone();
+        row.have = PropMask::CACHE_ITEM;
+        row.interfaces = gorca_model::Ifaces::ACTION;
+        f.writer.apply(
+            SnapshotBatch::new(vec![Arc::new(row)]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let fx = focus_on(&mut f, 1, Instant::now());
+        // No Value or Text interface: VALUE is not needed, so this is a full hit.
+        assert!(matches!(
+            fx.last(),
+            Some(ReaderEffect::Demand {
+                outcome: DemandOutcome::Hit,
+                ..
+            })
+        ));
+        let mut slider = (*with_name(2, "Vol", StateSet::empty())).clone();
+        slider.have = PropMask::CACHE_ITEM;
+        slider.interfaces = gorca_model::Ifaces::VALUE;
+        f.writer.apply(
+            SnapshotBatch::new(vec![Arc::new(slider)]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let fx = focus_on(&mut f, 2, Instant::now() + Duration::from_secs(1));
+        assert!(matches!(
+            fx.last(),
+            Some(ReaderEffect::Demand {
+                outcome: DemandOutcome::Partial { .. },
+                ..
+            })
+        ));
+        assert_eq!(utterance(&fx).segments[0].text.as_ref(), "Vol");
+    }
+
+    /// 5.5: focus on a removed key is not final; one Interactive fetch decides.
+    #[test]
+    fn focus_on_a_removed_key_asks_once_and_a_live_reply_revives_it() {
+        let mut f = fixture();
+        f.writer.apply(
+            SnapshotBatch::new(vec![with_name(1, "Row", StateSet::empty())]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        f.writer
+            .tombstone(key(1), Instant::now(), gorca_mirror::RemovalCause::Event);
+        let now = Instant::now();
+        let fx = focus_on(&mut f, 1, now);
+        assert_eq!(effects_of(&fx), ["fetch-focus", "demand"]);
+        assert!(!matches!(f.reader.focus(), FocusState::Orphaned { .. }));
+        let fx = f.reader.handle(
+            reply(
+                &f,
+                1,
+                FetchKind::Focus,
+                with_name(1, "Row", StateSet::empty()),
+            ),
+            now,
+        );
+        assert_eq!(spoken(&fx), ["Row check box"]);
+    }
+
+    #[test]
+    fn unknown_object_keeps_a_removed_focus_dead() {
+        let mut f = fixture();
+        f.writer
+            .tombstone(key(1), Instant::now(), gorca_mirror::RemovalCause::Event);
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        let fx = f.reader.handle(
+            ReaderMsg::Reply(QueryReply {
+                node: key(1),
+                epoch: f.epoch.current(),
+                kind: FetchKind::Focus,
+                result: Err(BackendError::Gone),
+            }),
+            now,
+        );
+        assert!(spoken(&fx).is_empty());
+        assert!(matches!(f.reader.focus(), FocusState::Orphaned { .. }));
+    }
+
+    /// `Unresolved` (path evicted) is a miss, never a removal: the cache answers.
+    #[test]
+    fn unresolved_falls_back_to_the_cache_not_to_removal() {
+        let mut f = fixture();
+        f.writer.apply(
+            SnapshotBatch::new(vec![with_name(1, "Row", StateSet::empty())]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        f.writer.invalidate(key(1), PropMask::NAME, Instant::now());
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        let fx = f.reader.handle(
+            ReaderMsg::Reply(QueryReply {
+                node: key(1),
+                epoch: f.epoch.current(),
+                kind: FetchKind::Focus,
+                result: Err(BackendError::Unresolved),
+            }),
+            now,
+        );
+        assert_eq!(spoken(&fx), ["Row check box"]);
+        assert!(utterance(&fx).may_refine);
+        assert!(!matches!(f.reader.focus(), FocusState::Orphaned { .. }));
+    }
+
+    /// S1 (5.6): a state change of the focused node is fetched and spoken as the change.
+    #[test]
+    fn a_state_change_of_the_focused_node_is_spoken() {
+        let mut f = fixture();
+        f.writer.apply(
+            SnapshotBatch::new(vec![with_name(1, "Wi-Fi", StateSet::empty())]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        let fx = f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::StateChanged {
+                node: key(1),
+                mask: PropMask::STATES,
+            }),
+            now,
+        );
+        assert!(effects_of(&fx).contains(&"fetch-s1"));
+        let fx = f.reader.handle(
+            reply(
+                &f,
+                1,
+                FetchKind::StateChange,
+                with_name(1, "Wi-Fi", StateSet::CHECKED),
+            ),
+            now,
+        );
+        assert_eq!(spoken(&fx), ["checked"]);
+        // And back: the opposite flip is spoken too.
+        let fx = f.reader.handle(
+            reply(
+                &f,
+                1,
+                FetchKind::StateChange,
+                with_name(1, "Wi-Fi", StateSet::empty()),
+            ),
+            now,
+        );
+        assert_eq!(spoken(&fx), ["not checked"]);
+        assert_eq!(f.reader.counters().state_changes_spoken, 2);
+    }
+
+    #[test]
+    fn a_state_change_of_another_node_is_not_the_readers_business() {
+        let mut f = fixture();
+        f.writer.apply(
+            SnapshotBatch::new(vec![with_name(1, "A", StateSet::empty())]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        let fx = f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::StateChanged {
+                node: key(2),
+                mask: PropMask::STATES,
+            }),
+            now,
+        );
+        assert!(fx.is_empty());
+    }
+
+    /// PW-10: presentations and corrections are logged in the documented shape.
+    #[test]
+    fn the_presentation_log_records_hits_and_corrections() {
+        use crate::present::{NoLabels, PresentLog};
+        use std::io::Write;
+        use std::sync::Mutex;
+
+        #[derive(Clone, Default)]
+        struct Sink(Arc<Mutex<Vec<u8>>>);
+        impl Write for Sink {
+            fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(b);
+                Ok(b.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let sink = Sink::default();
+        let log = PresentLog::new(sink.clone(), Arc::new(NoLabels)).unwrap();
+        let mut f = fixture();
+        f.reader = f.reader.with_present_log(Arc::clone(&log));
+        f.writer.apply(
+            SnapshotBatch::new(vec![with_name(1, "Old", StateSet::empty())]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        f.reader.handle(
+            reply(
+                &f,
+                1,
+                FetchKind::Revalidate,
+                with_name(1, "New", StateSet::empty()),
+            ),
+            now,
+        );
+        f.reader = Reader::new(
+            Arc::clone(&f.epoch),
+            Arc::new(MirrorDirectory::new()),
+            ModeKeys::default(),
+        );
+        drop(log);
+        let text = String::from_utf8(sink.0.lock().unwrap().clone()).unwrap();
+        let lines: Vec<serde_json::Value> = text
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect();
+        assert_eq!(lines.len(), 2, "{text}");
+        assert_eq!(lines[0]["source"], "hit");
+        assert_eq!(lines[0]["name"], "Old");
+        assert_eq!(lines[0]["may_refine"], true);
+        assert_eq!(lines[1]["source"], "refine");
+        assert_eq!(lines[1]["name"], "New");
+        assert_eq!(lines[1]["refines"], lines[0]["utt_id"]);
+        assert_eq!(lines[1]["role"], "check_box");
     }
 }

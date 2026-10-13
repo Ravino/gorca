@@ -29,8 +29,8 @@ pub use event::{
 pub use geometry::{Point, Rect};
 pub use ids::{AppId, ConnectorId, Epoch, LocalId, NodeKey, ReqId, UttId};
 pub use node::{
-    AttrKey, AttrMap, ChildList, Freshness, FreshnessEvent, Ifaces, Lookup, NodeSnapshot, PropMask,
-    RelationKind, Relations, SnapshotBatch, StateSet, Value,
+    AttrKey, AttrMap, ChildList, Freshness, FreshnessEvent, Ifaces, Lookup, NodeSnapshot, NodeView,
+    PropMask, RelationKind, Relations, SnapshotBatch, StateSet, Value,
 };
 pub use role::Role;
 pub use speech::{Prio, Segment, SegmentKind, Utterance};

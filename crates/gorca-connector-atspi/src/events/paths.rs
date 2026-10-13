@@ -1,5 +1,10 @@
 //! Reverse mapping `NodeKey` -> object path, bounded **per owning process** and globally.
 //!
+//! B-1 PW-7: the per-owner quota is at least `MAX_MIRROR_NODES` (every node the mirror may hold
+//! stays fetchable), the global cap is 64 MiB, and paths are recorded from replies (children,
+//! ancestry, dumps) as well as from focus events. A key whose path was evicted is `Unresolved`
+//! (a miss), never `Gone`.
+//!
 //! The drain hashes the object path into the `LocalId` (`gorca_dbus::drain::local_id`), which is
 //! what keeps the hot path allocation-free but loses the path. Focus events, the only ones the
 //! connector must call back on, record it here (`Router::focus_seen`) before they are pushed.
@@ -26,13 +31,13 @@ use gorca_model::{AppId, LocalId, NodeKey};
 
 /// Entries one owner (process) may keep. Past it, that owner's bucket is cleared and refilled by
 /// its next focus events; no other owner is touched.
-pub const MAX_PATHS_PER_OWNER: usize = 1024;
+pub const MAX_PATHS_PER_OWNER: usize = 65_536;
 /// Entries of a connection with unknown credentials.
-pub const MAX_PATHS_UNKNOWN_OWNER: usize = 64;
+pub const MAX_PATHS_UNKNOWN_OWNER: usize = 4_096;
 /// Longest object path kept. Real AT-SPI paths are under 64 bytes.
 pub const MAX_PATH_BYTES: usize = 256;
 /// Bytes the whole table may hold, counting a fixed per-entry overhead.
-pub const GLOBAL_BYTE_CAP: usize = 16 * 1024 * 1024;
+pub const GLOBAL_BYTE_CAP: usize = 64 * 1024 * 1024;
 /// Accounting overhead of one entry (map slot, `Arc` header, key).
 pub const ENTRY_OVERHEAD: usize = 64;
 

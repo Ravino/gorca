@@ -18,6 +18,14 @@ use super::proto::{AppStats, Cmd, CmdReply, ModelSpec, TruthLine};
 use super::sut::{Feature, Presentation, Probe, Source, Sut, SutError, SutResult};
 use super::world::state;
 
+/// The test-only debug accessor of the daemon under test (SPEC 5.7): reads of its mirror,
+/// addressed by the unique bus name and object path of the fake application.
+pub trait MirrorProbe: Send + Sync + std::fmt::Debug {
+    fn probe(&self, bus: &str, path: &str) -> Probe;
+    /// Live nodes of the mirror of `bus`; `None` once the application's mirror was released.
+    fn nodes(&self, bus: &str) -> Option<usize>;
+}
+
 /// Where things are.
 #[derive(Clone, Debug)]
 pub struct RealConfig {
@@ -53,6 +61,7 @@ pub struct RealSut {
     inst: Vec<Instance>,
     clock: Option<(u64, Instant)>,
     n: u32,
+    probe: Option<std::sync::Arc<dyn MirrorProbe>>,
 }
 
 impl RealSut {
@@ -63,7 +72,15 @@ impl RealSut {
             inst: Vec::new(),
             clock: None,
             n: 0,
+            probe: None,
         }
+    }
+
+    /// Attach the debug accessor of an in-process daemon: cases that read the mirror then run.
+    #[must_use]
+    pub fn with_probe(mut self, probe: std::sync::Arc<dyn MirrorProbe>) -> Self {
+        self.probe = Some(probe);
+        self
     }
 
     fn live(&mut self, label: &str) -> SutResult<&mut Instance> {
@@ -214,9 +231,17 @@ impl Sut for RealSut {
     }
 
     fn supports(&self, f: Feature) -> bool {
-        // The daemon exposes none of these yet (probe accessor, where-am-I, latency knobs).
-        let _ = f;
-        false
+        // Only the mirror probe exists: the daemon is real time, has no where-am-I command, no
+        // latency knobs, no cache fill (R0) and no hostile-ref counters on the wire.
+        match f {
+            Feature::Probe => self.probe.is_some(),
+            Feature::LatencyKnobs
+            | Feature::VirtualTime
+            | Feature::CacheFill
+            | Feature::WhereAmI
+            | Feature::Malformed
+            | Feature::FloodDirtySet => false,
+        }
     }
 
     fn start_app(&mut self, model: &str, label: &str) -> SutResult<()> {
@@ -326,12 +351,15 @@ impl Sut for RealSut {
         all
     }
 
-    fn probe(&self, _app: &str, _path: &str) -> Probe {
-        Probe::Miss
+    fn probe(&self, app: &str, path: &str) -> Probe {
+        match &self.probe {
+            Some(p) => p.probe(&self.bus_name(app), path),
+            None => Probe::Miss,
+        }
     }
 
-    fn mirror_nodes(&self, _bus_name: &str) -> Option<usize> {
-        None
+    fn mirror_nodes(&self, bus_name: &str) -> Option<usize> {
+        self.probe.as_ref().and_then(|p| p.nodes(bus_name))
     }
 
     fn bus_name(&self, app: &str) -> String {

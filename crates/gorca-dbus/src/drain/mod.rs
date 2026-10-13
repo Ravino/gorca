@@ -25,7 +25,10 @@ use gorca_ingress::{
 };
 use gorca_model::AppId;
 
-pub use map::{MAX_ANNOUNCEMENT_BYTES, Malformed, SignalView, local_id, map_signal, needs_path};
+pub use map::{
+    CACHE_IFACE, MAX_ANNOUNCEMENT_BYTES, Malformed, SignalView, local_id, map_cache_signal,
+    map_signal, needs_path,
+};
 
 /// Largest per-connection sender cache; beyond it the cache is dropped and rebuilt (hostile
 /// churn of bus names must not grow memory).
@@ -151,6 +154,12 @@ impl DrainConfig {
             max_event_connections: 1,
         }
     }
+}
+
+/// The opt-in rule for the bulk-cache signals (`AddAccessible`/`RemoveAccessible`): they are not
+/// events and need an explicit interface match (B-1 C-S, PW-8).
+pub fn cache_match_rule() -> String {
+    format!("type='signal',interface='{CACHE_IFACE}'")
 }
 
 /// One rule per AT-SPI event interface gorca subscribes to.

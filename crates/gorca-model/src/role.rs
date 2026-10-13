@@ -99,6 +99,105 @@ impl Role {
         }
     }
 
+    /// Stable machine identifier (snake_case of the variant), used by the presentation log.
+    pub fn log_name(self) -> &'static str {
+        match self {
+            Role::Unknown => "unknown",
+            Role::Application => "application",
+            Role::Window => "window",
+            Role::Dialog => "dialog",
+            Role::Panel => "panel",
+            Role::Document => "document",
+            Role::Heading => "heading",
+            Role::Paragraph => "paragraph",
+            Role::Link => "link",
+            Role::Image => "image",
+            Role::List => "list",
+            Role::ListItem => "list_item",
+            Role::Table => "table",
+            Role::Row => "row",
+            Role::Cell => "cell",
+            Role::ColumnHeader => "column_header",
+            Role::RowHeader => "row_header",
+            Role::Button => "button",
+            Role::ToggleButton => "toggle_button",
+            Role::CheckBox => "check_box",
+            Role::RadioButton => "radio_button",
+            Role::ComboBox => "combo_box",
+            Role::TextEntry => "text_entry",
+            Role::PasswordEntry => "password_entry",
+            Role::SpinButton => "spin_button",
+            Role::Slider => "slider",
+            Role::ProgressBar => "progress_bar",
+            Role::Menu => "menu",
+            Role::MenuBar => "menu_bar",
+            Role::MenuItem => "menu_item",
+            Role::Popover => "popover",
+            Role::Tab => "tab",
+            Role::TabList => "tab_list",
+            Role::Tree => "tree",
+            Role::TreeItem => "tree_item",
+            Role::Toolbar => "toolbar",
+            Role::StatusBar => "status_bar",
+            Role::Separator => "separator",
+            Role::Label => "label",
+            Role::StaticText => "static_text",
+            Role::Terminal => "terminal",
+            Role::Landmark => "landmark",
+            Role::Alert => "alert",
+        }
+    }
+
+    /// Roles whose accessible name is computed from their content (B-1 P9-3): a name change of a
+    /// descendant label changes the name of such an ancestor without an event on it.
+    pub fn takes_name_from_content(self) -> bool {
+        match self {
+            Role::Heading
+            | Role::Link
+            | Role::ListItem
+            | Role::Row
+            | Role::Cell
+            | Role::ColumnHeader
+            | Role::RowHeader
+            | Role::Button
+            | Role::ToggleButton
+            | Role::CheckBox
+            | Role::RadioButton
+            | Role::MenuItem
+            | Role::Tab
+            | Role::TreeItem => true,
+            Role::Unknown
+            | Role::Application
+            | Role::Window
+            | Role::Dialog
+            | Role::Panel
+            | Role::Document
+            | Role::Paragraph
+            | Role::Image
+            | Role::List
+            | Role::Table
+            | Role::ComboBox
+            | Role::TextEntry
+            | Role::PasswordEntry
+            | Role::SpinButton
+            | Role::Slider
+            | Role::ProgressBar
+            | Role::Menu
+            | Role::MenuBar
+            | Role::Popover
+            | Role::TabList
+            | Role::Tree
+            | Role::Toolbar
+            | Role::StatusBar
+            | Role::Separator
+            | Role::Label
+            | Role::StaticText
+            | Role::Terminal
+            | Role::Landmark
+            | Role::Alert => false,
+        }
+    }
+
     /// Short English spoken name, used by the hot-path presenter until verbalisation tables exist.
     pub fn spoken(self) -> &'static str {
         match self {

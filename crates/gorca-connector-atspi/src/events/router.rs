@@ -71,6 +71,14 @@ pub struct NewApp {
     pub bus_name: Arc<str>,
     /// Cancelled when the application's bus name vanishes.
     pub gone: CancellationToken,
+    /// The registration matched the protected Shell identity (`State::is_shell`).
+    pub verified_shell: bool,
+    /// `(owner pid, process start time)` of the registration, to be checked against the Shell
+    /// again when the protected process changes after publication (the first Shell signal can
+    /// be routed before `org.gnome.Shell` has been resolved).
+    pub identity: Option<(u32, u64)>,
+    /// The protected Shell process as it changes.
+    pub shell_rx: tokio::sync::watch::Receiver<Option<(u32, u64)>>,
 }
 
 /// Who owns a bus connection (`org.freedesktop.DBus.GetConnectionCredentials`).
@@ -371,6 +379,8 @@ pub struct AtspiRouter {
     credentials: Arc<dyn Credentials>,
     /// The focused application, published by the Reader (lock-free).
     focused: Option<Arc<FocusedApp>>,
+    /// The protected Shell process, published as it changes.
+    shell_tx: tokio::sync::watch::Sender<Option<(u32, u64)>>,
     state: Mutex<State>,
     stats: Mutex<RouterStats>,
     /// Test hook run between choosing a victim and committing to it.
@@ -401,6 +411,7 @@ impl AtspiRouter {
             to_register,
             credentials,
             focused: None,
+            shell_tx: tokio::sync::watch::channel(None).0,
             state: Mutex::new(State::default()),
             stats: Mutex::new(RouterStats::default()),
             #[cfg(test)]
@@ -432,6 +443,12 @@ impl AtspiRouter {
     /// inherits a recycled pid is not protected (its start time differs).
     pub fn set_protected_process(&self, process: Option<(u32, u64)>) {
         self.state().protected_process = process;
+        self.shell_tx.send_replace(process);
+    }
+
+    /// The protected Shell process as it changes (`None` until it is known).
+    pub fn shell_watch(&self) -> tokio::sync::watch::Receiver<Option<(u32, u64)>> {
+        self.shell_tx.subscribe()
     }
 
     fn state(&self) -> std::sync::MutexGuard<'_, State> {
@@ -588,6 +605,8 @@ impl AtspiRouter {
             app_name: Arc::from(&*sender),
             pid,
             connector_kind: ConnectorKind::Atspi,
+            verified_shell: false,
+            dump_complete: false,
         };
         let deadline = Deadline::after(&self.clock, ANNOUNCE_WAIT);
         let announced = self
@@ -644,10 +663,14 @@ impl AtspiRouter {
             tx: port.ingress_sender(),
         };
         let gone = CancellationToken::new();
+        let verified_shell = self.state().is_shell(group, info.start);
         let new = NewApp {
             port,
             bus_name: Arc::clone(sender),
             gone: gone.clone(),
+            verified_shell,
+            identity: group.zip(info.start),
+            shell_rx: self.shell_tx.subscribe(),
         };
         let focused = self.focused.as_deref();
         // Fall back to the pid as the cap group when the process group is unknown.

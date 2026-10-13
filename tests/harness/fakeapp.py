@@ -1124,9 +1124,16 @@ def main():
     ap.add_argument("--term-gen", type=int, default=0, help="auto-generate N lines per frame")
     ap.add_argument("--term-charcount-quirk", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--no-register", action="store_true", help="do not call Registry Socket.Embed")
+    ap.add_argument("--own-shell-name", action="store_true",
+                    help="own org.gnome.Shell on the session bus from this process, so the daemon "
+                         "verifies it as the Shell (the connector never trusts self-reported names)")
     args = ap.parse_args()
 
     DBusGMainLoop(set_as_default=True)
+    shell_bus = None
+    if args.own_shell_name:
+        shell_bus = dbus.bus.BusConnection(os.environ["DBUS_SESSION_BUS_ADDRESS"])
+        shell_bus.request_name("org.gnome.Shell")   # held for the process lifetime
     conn = dbus.bus.BusConnection(a11y_address())
     app = App(args, conn)
     app.loop = GLib.MainLoop()

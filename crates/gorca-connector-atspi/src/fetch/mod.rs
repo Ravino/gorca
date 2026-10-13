@@ -3,25 +3,43 @@
 //! flight is bounded per application (C-3), so a hung application costs its own actor only.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Instant;
 
 use gorca_connector_api::{
     AppPort, BackendError, BackendOp, BackendReply, BackendRequest, PortError,
 };
-use gorca_dbus::{DbusError, call_method};
-use gorca_model::{AppInfo, AppLifecycle, ConnectorKind, NodeKey, PropMask, Role};
+use gorca_dbus::DbusError;
+use gorca_model::{AppId, AppInfo, AppLifecycle, ConnectorKind, NodeKey, Role, SnapshotBatch};
 use gorca_rt::{CancellationToken, Clock, Deadline};
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
-use zbus::Connection;
-use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 
-use crate::decode::{MAX_TEXT_BYTES, RawNode, RawValue, clip, snapshot};
+use crate::decode::{RawNode, clip, snapshot};
 use crate::paths::PathTable;
 use crate::toolkit::Toolkit;
 
+mod caller;
+pub mod items;
+pub mod shadow;
+mod strategy;
+
 /// Requests served concurrently per application; the rest is answered `Busy` (C-3).
 pub const MAX_IN_FLIGHT: usize = 8;
+/// Slots only Interactive requests may take: Prefetch and Background never wait an Interactive
+/// request out (section 7, MA-8).
+pub const INTERACTIVE_RESERVED: usize = 2;
+/// Background requests (including `CacheDump`) served at once per application.
+pub const BACKGROUND_MAX: usize = 2;
+/// Hard bounds of the section 7 table, repeated here because the connector may not depend on
+/// `gorca-mirror`.
+pub const MAX_ANCESTRY_DEPTH: u8 = 64;
+pub const MAX_SUBTREE_NODES: u32 = 4_096;
+pub const MAX_CHILD_RANGE: u32 = 1_024;
+
+const NULL_PATH: &str = "/org/a11y/atspi/null";
+const CACHE_PATH: &str = "/org/a11y/atspi/cache";
+const CACHE: &str = "org.a11y.atspi.Cache";
 
 /// Object path of every application's root (`Registry.GetChildren` entries).
 pub const ROOT_PATH: &str = "/org/a11y/atspi/accessible/root";
@@ -72,264 +90,116 @@ pub fn backend_error(e: &DbusError) -> BackendError {
     }
 }
 
-/// One application on the call connection.
-#[derive(Clone, Debug)]
-pub struct Caller {
-    conn: Connection,
-    bus_name: Arc<str>,
+pub use caller::Caller;
+
+/// Counters of what the connector refused to believe (IC-16, MA-3). Shared by every app.
+#[derive(Debug, Default)]
+pub struct FetchCounters {
+    foreign_refs: AtomicU64,
+    dump_rejected: AtomicU64,
+    dump_items_dropped: AtomicU64,
+    dumps: AtomicU64,
 }
 
-impl Caller {
-    pub fn new(conn: Connection, bus_name: Arc<str>) -> Self {
-        Self { conn, bus_name }
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct FetchCountersSnapshot {
+    /// Refs (children, parents, ancestors) that named another bus name and were dropped.
+    pub foreign_refs: u64,
+    /// Dump replies rejected whole (too large, malformed).
+    pub dump_rejected: u64,
+    /// Dump items or parent refs dropped for naming another bus name.
+    pub dump_items_dropped: u64,
+    /// Dumps decoded.
+    pub dumps: u64,
+}
+
+impl FetchCounters {
+    pub(crate) fn foreign_refs(&self) {
+        self.foreign_refs.fetch_add(1, Ordering::Relaxed);
     }
-
-    async fn call<B>(
-        &self,
-        dest: &str,
-        deadline: Deadline,
-        path: &str,
-        iface: &str,
-        member: &str,
-        body: &B,
-    ) -> Result<zbus::Message, DbusError>
-    where
-        B: serde::Serialize + zbus::zvariant::DynamicType,
-    {
-        call_method(&self.conn, deadline, dest, path, iface, member, body).await
+    pub(crate) fn dump_rejected(&self) {
+        self.dump_rejected.fetch_add(1, Ordering::Relaxed);
     }
-
-    pub async fn role(&self, path: &str, deadline: Deadline) -> Result<u32, DbusError> {
-        let m = self
-            .call(&self.bus_name, deadline, path, ACCESSIBLE, "GetRole", &())
-            .await?;
-        m.body().deserialize::<u32>().map_err(DbusError::Zbus)
+    pub(crate) fn dump_items(&self, dropped: u32) {
+        self.dumps.fetch_add(1, Ordering::Relaxed);
+        self.dump_items_dropped
+            .fetch_add(u64::from(dropped), Ordering::Relaxed);
     }
-
-    pub async fn state(&self, path: &str, deadline: Deadline) -> Result<Vec<u32>, DbusError> {
-        let m = self
-            .call(&self.bus_name, deadline, path, ACCESSIBLE, "GetState", &())
-            .await?;
-        m.body().deserialize::<Vec<u32>>().map_err(DbusError::Zbus)
-    }
-
-    async fn prop(
-        &self,
-        dest: &str,
-        path: &str,
-        iface: &str,
-        prop: &str,
-        deadline: Deadline,
-    ) -> Result<OwnedValue, DbusError> {
-        let m = self
-            .call(dest, deadline, path, PROPS, "Get", &(iface, prop))
-            .await?;
-        m.body()
-            .deserialize::<OwnedValue>()
-            .map_err(DbusError::Zbus)
-    }
-
-    async fn string_prop(
-        &self,
-        dest: &str,
-        path: &str,
-        iface: &str,
-        prop: &str,
-        deadline: Deadline,
-    ) -> Result<String, DbusError> {
-        let v = self.prop(dest, path, iface, prop, deadline).await?;
-        String::try_from(v).map_err(|e| DbusError::Zbus(e.into()))
-    }
-
-    async fn f64_prop(&self, path: &str, prop: &str, deadline: Deadline) -> Result<f64, DbusError> {
-        let v = self
-            .prop(&self.bus_name, path, VALUE, prop, deadline)
-            .await?;
-        f64::try_from(v).map_err(|e| DbusError::Zbus(e.into()))
-    }
-
-    /// `Name` of an object, in this application or (for label relations) another peer.
-    async fn name_of(
-        &self,
-        dest: &str,
-        path: &str,
-        deadline: Deadline,
-    ) -> Result<String, DbusError> {
-        self.string_prop(dest, path, ACCESSIBLE, "Name", deadline)
-            .await
-    }
-
-    /// The first `LabelledBy` target: `(bus name, path)`.
-    async fn label_target(
-        &self,
-        path: &str,
-        deadline: Deadline,
-    ) -> Result<Option<(String, String)>, DbusError> {
-        let m = self
-            .call(
-                &self.bus_name,
-                deadline,
-                path,
-                ACCESSIBLE,
-                "GetRelationSet",
-                &(),
-            )
-            .await?;
-        let sets = m
-            .body()
-            .deserialize::<Vec<(u32, Vec<(String, OwnedObjectPath)>)>>()
-            .map_err(DbusError::Zbus)?;
-        Ok(sets
-            .into_iter()
-            .find(|(kind, _)| *kind == RELATION_LABELLED_BY)
-            .and_then(|(_, targets)| targets.into_iter().next())
-            .map(|(bus, p)| (bus, p.as_str().to_owned())))
-    }
-
-    async fn text_prefix(&self, path: &str, deadline: Deadline) -> Result<String, DbusError> {
-        let m = self
-            .call(
-                &self.bus_name,
-                deadline,
-                path,
-                TEXT,
-                "GetText",
-                &(0i32, ENTRY_TEXT_CHARS),
-            )
-            .await?;
-        m.body().deserialize::<String>().map_err(DbusError::Zbus)
-    }
-
-    /// Name, role, state (and what the role needs on top) of one object. The three base calls run
-    /// concurrently; all share one deadline. Failures of the optional parts are not errors: the
-    /// utterance is simply poorer.
-    pub async fn fetch(
-        &self,
-        key: NodeKey,
-        path: &str,
-        want: PropMask,
-        deadline: Deadline,
-    ) -> Result<Arc<gorca_model::NodeSnapshot>, BackendError> {
-        let name_fut = async {
-            if want.contains(PropMask::NAME) {
-                self.name_of(&self.bus_name, path, deadline).await.map(Some)
-            } else {
-                Ok(None)
-            }
-        };
-        let (role, state, name) = tokio::join!(
-            self.role(path, deadline),
-            self.state(path, deadline),
-            name_fut
-        );
-        // Role and state are required; a failed name only costs the name.
-        let role = role.map_err(|e| backend_error(&e))?;
-        let state_words = state.map_err(|e| backend_error(&e))?;
-        let mut raw = RawNode {
-            role,
-            state_words,
-            name: name.ok().flatten(),
-            ..RawNode::default()
-        };
-        let core_role = crate::decode::role_from_raw(role);
-        let states = crate::decode::states_from_raw(&raw.state_words);
-
-        if want.contains(PropMask::VALUE) {
-            raw.value = self.value_for(core_role, states, path, deadline).await;
+    pub fn snapshot(&self) -> FetchCountersSnapshot {
+        let g = |a: &AtomicU64| a.load(Ordering::Relaxed);
+        FetchCountersSnapshot {
+            foreign_refs: g(&self.foreign_refs),
+            dump_rejected: g(&self.dump_rejected),
+            dump_items_dropped: g(&self.dump_items_dropped),
+            dumps: g(&self.dumps),
         }
-        if raw.name.as_deref().is_none_or(str::is_empty)
-            && let Ok(Some((bus, p))) = self.label_target(path, deadline).await
-            && label_may_be_read(&bus, &self.bus_name)
-            && let Ok(label) = self.name_of(&bus, &p, deadline).await
+    }
+}
+
+/// What a strategy needs for one app: its call connection, the path table (every ref seen in a
+/// reply is recorded there) and the counters. Cheap to clone.
+#[derive(Clone, Debug)]
+pub(crate) struct CallCx {
+    pub caller: Caller,
+    pub paths: Arc<PathTable>,
+    pub app: AppId,
+    pub counters: Arc<FetchCounters>,
+}
+
+/// A node whose path is known.
+#[derive(Clone, Debug)]
+pub(crate) struct Resolved {
+    pub key: NodeKey,
+    pub path: Arc<str>,
+}
+
+impl CallCx {
+    /// A ref from a reply, resolved and recorded; `None` when it names another bus name (the app
+    /// must not aim our calls or our mirror at a peer) or the path is unusable.
+    pub(crate) fn resolve_ref(&self, bus: &str, path: &str) -> Option<Resolved> {
+        if bus != self.caller.bus_name()
+            || path.is_empty()
+            || path.len() > crate::paths::MAX_PATH_BYTES
         {
-            raw.name = Some(label);
+            return None;
         }
-        Ok(snapshot(key, &raw, Instant::now()))
+        let key = NodeKey {
+            app: self.app,
+            local: gorca_dbus::drain::local_id(path),
+        };
+        self.paths.insert(key, path);
+        Some(Resolved {
+            key,
+            path: Arc::from(path),
+        })
     }
 
-    async fn value_for(
-        &self,
-        role: Role,
-        states: gorca_model::StateSet,
-        path: &str,
-        deadline: Deadline,
-    ) -> Option<RawValue> {
-        match role {
-            Role::Slider | Role::ProgressBar | Role::SpinButton => {
-                let (cur, min, max) = tokio::join!(
-                    self.f64_prop(path, "CurrentValue", deadline),
-                    self.f64_prop(path, "MinimumValue", deadline),
-                    self.f64_prop(path, "MaximumValue", deadline)
-                );
-                Some(RawValue::Number {
-                    current: cur.ok()?,
-                    min: min.unwrap_or(f64::NAN),
-                    max: max.unwrap_or(f64::NAN),
-                })
-            }
-            // Product decision: gorca reads whatever the application exposes, password fields
-            // included. The text is never logged.
-            Role::TextEntry | Role::PasswordEntry if wants_entry_text(role, states) => {
-                let t = self.text_prefix(path, deadline).await.ok()?;
-                Some(RawValue::Text(clip(&t, MAX_TEXT_BYTES).to_owned()))
-            }
-            // Everything else has no value on focus.
-            Role::PasswordEntry
-            | Role::TextEntry
-            | Role::Unknown
-            | Role::Application
-            | Role::Window
-            | Role::Dialog
-            | Role::Panel
-            | Role::Document
-            | Role::Heading
-            | Role::Paragraph
-            | Role::Link
-            | Role::Image
-            | Role::List
-            | Role::ListItem
-            | Role::Table
-            | Role::Row
-            | Role::Cell
-            | Role::ColumnHeader
-            | Role::RowHeader
-            | Role::Button
-            | Role::ToggleButton
-            | Role::CheckBox
-            | Role::RadioButton
-            | Role::ComboBox
-            | Role::Menu
-            | Role::MenuBar
-            | Role::MenuItem
-            | Role::Popover
-            | Role::Tab
-            | Role::TabList
-            | Role::Tree
-            | Role::TreeItem
-            | Role::Toolbar
-            | Role::StatusBar
-            | Role::Separator
-            | Role::Label
-            | Role::StaticText
-            | Role::Terminal
-            | Role::Landmark
-            | Role::Alert => None,
+    pub(crate) fn key_of_ref(&self, bus: &str, path: &str) -> Option<NodeKey> {
+        let r = self.resolve_ref(bus, path);
+        if r.is_none() {
+            self.counters.foreign_refs();
         }
+        r.map(|r| r.key)
     }
+}
 
-    /// Toolkit and application name of the app root, for `AppInfo` (best effort).
-    pub async fn app_info(&self, deadline: Deadline) -> Option<(String, String)> {
-        let (toolkit, name) = tokio::join!(
-            self.string_prop(
-                &self.bus_name,
-                ROOT_PATH,
-                APPLICATION,
-                "ToolkitName",
-                deadline
-            ),
-            self.name_of(&self.bus_name, ROOT_PATH, deadline)
-        );
-        Some((toolkit.ok()?, name.ok()?))
+/// The nodes a strategy learned, still raw (decoded and bounded, not yet snapshots).
+#[derive(Debug, Default)]
+pub(crate) struct RawBatch {
+    pub nodes: Vec<(NodeKey, RawNode)>,
+    pub truncated: bool,
+}
+
+impl RawBatch {
+    fn into_batch(self, now: Instant) -> SnapshotBatch {
+        SnapshotBatch {
+            nodes: self
+                .nodes
+                .iter()
+                .map(|(k, raw)| snapshot(*k, raw, now))
+                .collect(),
+            truncated: self.truncated,
+        }
     }
 }
 
@@ -341,7 +211,18 @@ pub struct AppServer {
     pub clock: Clock,
     /// Cancelled when the application's bus name vanishes.
     pub gone: CancellationToken,
+    /// Verified by the router against the protected Shell identity; never self-reported.
+    pub verified_shell: bool,
+    /// `(owner pid, start time)` of the registration, for re-verification (F8).
+    pub identity: Option<(u32, u64)>,
+    pub shell_rx: Option<tokio::sync::watch::Receiver<Option<(u32, u64)>>>,
+    pub counters: Arc<FetchCounters>,
     pub shutdown: CancellationToken,
+}
+
+/// Does the registration with `identity` belong to the verified Shell process?
+pub(crate) fn is_the_shell(shell: Option<(u32, u64)>, identity: Option<(u32, u64)>) -> bool {
+    matches!((shell, identity), (Some(s), Some(i)) if s == i)
 }
 
 impl AppServer {
@@ -349,6 +230,13 @@ impl AppServer {
     pub async fn run(self, mut port: AppPort) {
         let mut requests = std::mem::replace(&mut port.requests, closed_receiver());
         let permits = Arc::new(Semaphore::new(MAX_IN_FLIGHT));
+        let background = Arc::new(AtomicUsize::new(0));
+        let cx = CallCx {
+            caller: self.caller.clone(),
+            paths: Arc::clone(&self.paths),
+            app: port.app,
+            counters: Arc::clone(&self.counters),
+        };
         let mut inflight: JoinSet<()> = JoinSet::new();
         // Identifying the application is informational and may be slow: requests (the first
         // focus the user is waiting for) are served meanwhile.
@@ -363,16 +251,45 @@ impl AppServer {
             });
         }
         let mut info_pending = true;
+        // The Shell can be routed before `org.gnome.Shell` was resolved: verification is
+        // re-evaluated whenever the protected process changes, not once at publication.
+        let mut verified = self.verified_shell;
+        let mut shell_rx = self.shell_rx.clone();
+        let mut known: Option<(String, String)> = None;
+        if !verified && let Some(rx) = &shell_rx {
+            verified = is_the_shell(*rx.borrow(), self.identity);
+        }
         loop {
+            let shell_changed = async {
+                match shell_rx.as_mut() {
+                    Some(rx) if !verified => rx.changed().await.is_ok(),
+                    Some(_) | None => std::future::pending().await,
+                }
+            };
             tokio::select! {
                 biased;
                 () = self.shutdown.cancelled() => break,
                 () = self.gone.cancelled() => break,
-                Some(req) = requests.recv() => self.accept(req, &permits, &mut inflight),
+                Some(req) = requests.recv() => self.accept(req, &cx, &permits, &background, &mut inflight),
                 found = &mut info_rx, if info_pending => {
                     info_pending = false;
                     if let Ok((toolkit, app_name)) = found {
-                        announce_info(&port, &toolkit, &app_name);
+                        announce_info(&port, &toolkit, &app_name, verified);
+                        known = Some((toolkit, app_name));
+                    }
+                }
+                ok = shell_changed => {
+                    if !ok {
+                        shell_rx = None;
+                    } else if let Some(rx) = &shell_rx
+                        && is_the_shell(*rx.borrow(), self.identity)
+                    {
+                        verified = true;
+                        // Announce again: the profile, the dump eligibility and the protection
+                        // follow the verified identity.
+                        if let Some((t, n)) = &known {
+                            announce_info(&port, t, n, true);
+                        }
                     }
                 }
                 Some(_) = inflight.join_next() => {}
@@ -385,26 +302,55 @@ impl AppServer {
         }
     }
 
-    fn accept(&self, req: BackendRequest, permits: &Arc<Semaphore>, inflight: &mut JoinSet<()>) {
+    fn accept(
+        &self,
+        req: BackendRequest,
+        cx: &CallCx,
+        permits: &Arc<Semaphore>,
+        background: &Arc<AtomicUsize>,
+        inflight: &mut JoinSet<()>,
+    ) {
         if req.deadline.expired(self.clock.now()) {
             // Too late to be useful; dropping the sender counts as Timeout (C-2).
             return;
         }
-        let Ok(permit) = Arc::clone(permits).try_acquire_owned() else {
+        // Interactive requests may use every slot; the others leave INTERACTIVE_RESERVED free,
+        // and Background (dumps) at most BACKGROUND_MAX at a time (section 7).
+        let is_background = matches!(
+            req.class,
+            gorca_rt::BudgetClass::Background | gorca_rt::BudgetClass::Startup
+        );
+        let class_ok = class_admitted(
+            req.class,
+            permits.available_permits(),
+            background.load(Ordering::Acquire),
+        );
+        let permit = if class_ok {
+            Arc::clone(permits).try_acquire_owned().ok()
+        } else {
+            None
+        };
+        let Some(permit) = permit else {
             let _ = req.reply.send(Err(BackendError::Busy));
             return;
         };
-        let caller = self.caller.clone();
-        let paths = Arc::clone(&self.paths);
+        if is_background {
+            background.fetch_add(1, Ordering::AcqRel);
+        }
+        let cx = cx.clone();
+        let background = Arc::clone(background);
         inflight.spawn(async move {
-            let result = serve_one(&caller, &paths, &req).await;
+            let result = serve_one(&cx, &req).await;
             let _ = req.reply.send(result);
+            if is_background {
+                background.fetch_sub(1, Ordering::AcqRel);
+            }
             drop(permit);
         });
     }
 }
 
-fn announce_info(port: &AppPort, toolkit: &str, app_name: &str) {
+fn announce_info(port: &AppPort, toolkit: &str, app_name: &str, verified_shell: bool) {
     let class = Toolkit::classify(toolkit, app_name);
     tracing::debug!(app = ?port.app, ?class, "application identified");
     let info = AppInfo {
@@ -412,33 +358,80 @@ fn announce_info(port: &AppPort, toolkit: &str, app_name: &str) {
         app_name: Arc::from(clip(app_name, 128)),
         pid: None,
         connector_kind: ConnectorKind::Atspi,
+        verified_shell,
+        // Shell is the only toolkit whose dump P-9 verified complete; the flag follows the
+        // verified identity, never `app_name` (B-1 2.2).
+        dump_complete: verified_shell,
     };
     // Informational: a full control queue is not worth retrying.
     let _ = port.lifecycle(AppLifecycle::Appeared(info));
 }
 
-async fn serve_one(
-    caller: &Caller,
-    paths: &PathTable,
-    req: &BackendRequest,
-) -> Result<BackendReply, BackendError> {
+/// Admission by class (section 7, MA-8): Interactive may take any free slot; Prefetch and
+/// Background leave [`INTERACTIVE_RESERVED`] free, and Background (dumps) at most
+/// [`BACKGROUND_MAX`] at a time.
+pub(crate) fn class_admitted(
+    class: gorca_rt::BudgetClass,
+    available: usize,
+    background_in_flight: usize,
+) -> bool {
+    match class {
+        gorca_rt::BudgetClass::Interactive => available > 0,
+        gorca_rt::BudgetClass::Prefetch => available > INTERACTIVE_RESERVED,
+        gorca_rt::BudgetClass::Background | gorca_rt::BudgetClass::Startup => {
+            available > INTERACTIVE_RESERVED && background_in_flight < BACKGROUND_MAX
+        }
+    }
+}
+
+/// A key the path table no longer holds is `Unresolved`, never `Gone`: the object may well
+/// exist (PW-7).
+fn resolve(cx: &CallCx, key: NodeKey) -> Result<Resolved, BackendError> {
+    cx.paths
+        .get(key)
+        .map(|path| Resolved { key, path })
+        .ok_or(BackendError::Unresolved)
+}
+
+async fn serve_one(cx: &CallCx, req: &BackendRequest) -> Result<BackendReply, BackendError> {
+    let dl = req.deadline;
+    let now = Instant::now();
     match &req.op {
         BackendOp::Fetch { node, want } => {
-            let Some(path) = paths.get(*node) else {
-                return Err(BackendError::Gone);
-            };
-            caller
-                .fetch(*node, &path, *want, req.deadline)
-                .await
-                .map(BackendReply::Node)
+            let n = resolve(cx, *node)?;
+            let raw = strategy::fetch(cx, &n, *want, dl).await?;
+            Ok(BackendReply::Node(snapshot(n.key, &raw, now)))
         }
-        BackendOp::Probe => caller
-            .role(ROOT_PATH, req.deadline)
+        BackendOp::ChildSnapshots { node, range, want } => {
+            let n = resolve(cx, *node)?;
+            let b = strategy::child_snapshots(cx, &n, range.clone(), *want, dl).await?;
+            Ok(BackendReply::Subtree(b.into_batch(now)))
+        }
+        BackendOp::Ancestry {
+            node,
+            max_depth,
+            want,
+        } => {
+            let n = resolve(cx, *node)?;
+            let b = strategy::ancestry(cx, &n, *max_depth, *want, dl).await?;
+            Ok(BackendReply::Subtree(b.into_batch(now)))
+        }
+        BackendOp::Subtree { root, max_nodes } => {
+            let n = resolve(cx, *root)?;
+            let b = strategy::subtree(cx, &n, *max_nodes, dl).await?;
+            Ok(BackendReply::Subtree(b.into_batch(now)))
+        }
+        BackendOp::CacheDump { max_nodes } => {
+            let b = strategy::cache_dump(cx, *max_nodes, dl).await?;
+            Ok(BackendReply::Subtree(b.into_batch(now)))
+        }
+        BackendOp::Probe => cx
+            .caller
+            .role(ROOT_PATH, dl)
             .await
             .map(|_| BackendReply::ActionDone)
             .map_err(|e| backend_error(&e)),
         BackendOp::Children { .. }
-        | BackendOp::Subtree { .. }
         | BackendOp::Text(_)
         | BackendOp::Action(_)
         | BackendOp::HitTest { .. }
@@ -485,5 +478,42 @@ mod tests {
         assert_eq!(backend_error(&DbusError::Timeout), BackendError::Timeout);
         let other = DbusError::Zbus(zbus::Error::InterfaceNotFound);
         assert!(matches!(backend_error(&other), BackendError::Protocol(_)));
+    }
+}
+
+#[cfg(test)]
+mod strategy_ref_tests;
+
+#[cfg(test)]
+mod admission_tests {
+    use super::*;
+    use gorca_rt::BudgetClass as C;
+
+    #[test]
+    fn interactive_keeps_two_slots_nobody_else_may_take() {
+        // 8 slots: with 2 or fewer free only Interactive is admitted.
+        for free in 0..=MAX_IN_FLIGHT {
+            assert_eq!(class_admitted(C::Interactive, free, 0), free > 0);
+            assert_eq!(
+                class_admitted(C::Prefetch, free, 0),
+                free > INTERACTIVE_RESERVED
+            );
+            assert_eq!(
+                class_admitted(C::Background, free, 0),
+                free > INTERACTIVE_RESERVED
+            );
+        }
+    }
+
+    #[test]
+    fn background_is_capped_whatever_is_free() {
+        assert!(class_admitted(C::Background, 8, BACKGROUND_MAX - 1));
+        assert!(!class_admitted(C::Background, 8, BACKGROUND_MAX));
+        assert!(!class_admitted(C::Startup, 8, BACKGROUND_MAX));
+        assert!(
+            class_admitted(C::Prefetch, 8, BACKGROUND_MAX),
+            "Prefetch is not Background"
+        );
+        assert!(class_admitted(C::Interactive, 1, BACKGROUND_MAX));
     }
 }

@@ -898,9 +898,11 @@ impl Sut for SimSut {
 
     fn supports(&self, f: Feature) -> bool {
         match f {
-            Feature::LatencyKnobs | Feature::Probe | Feature::VirtualTime | Feature::WhereAmI => {
-                true
-            }
+            Feature::LatencyKnobs
+            | Feature::Probe
+            | Feature::VirtualTime
+            | Feature::WhereAmI
+            | Feature::FloodDirtySet => true,
             Feature::CacheFill | Feature::Malformed => false,
         }
     }

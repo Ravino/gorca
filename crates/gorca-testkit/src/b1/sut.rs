@@ -90,6 +90,9 @@ pub enum Feature {
     WhereAmI,
     /// The fake app can plant hostile refs ([`Cmd::Malform`]) and the SUT counts what it drops.
     Malformed,
+    /// A flood marks the app's nodes dirty. A SUT whose ingress folds a storm on one node into
+    /// one slot (the real daemon) has no flood to observe, and the case then checks the rest.
+    FloodDirtySet,
 }
 
 #[derive(Debug, thiserror::Error)]

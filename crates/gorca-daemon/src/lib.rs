@@ -23,7 +23,10 @@
 //! Allowed dependencies: everything in the workspace, since this crate is the wiring point.
 
 mod cli;
+mod probe;
 mod wire;
+
+pub use probe::{DaemonProbe, ProbeRead};
 
 use std::io::IsTerminal;
 use std::sync::Arc;
@@ -31,7 +34,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use gorca_connector_api::{Connector, ConnectorCtx};
-use gorca_connector_atspi::{AtspiConnector, AtspiOptions};
+use gorca_connector_atspi::{AtspiConnector, AtspiOptions, AtspiState};
 use gorca_core::{Core, CoreConfig, SpeechOut};
 use gorca_input_api::{KeyClass, KeyEvent, KeyIntent};
 use gorca_model::{ConnectorId, Prio, Segment, SegmentKind, UttId, Utterance};
@@ -218,6 +221,7 @@ async fn announce_notices(
             prio: Prio::Message,
             may_refine: false,
             survives_focus_change: true,
+            refines: None,
         };
         speech.submit(u);
     }
@@ -256,6 +260,7 @@ async fn pump_keys(
 /// connection lost). Returns when `shutdown` is cancelled.
 async fn supervise_connector(
     opts: AtspiOptions,
+    state: AtspiState,
     registry: gorca_connector_api::AppRegistrar,
     shutdown: CancellationToken,
 ) {
@@ -268,7 +273,7 @@ async fn supervise_connector(
             shutdown: shutdown.child_token(),
             clock: Clock::System,
         };
-        let connector = Box::new(AtspiConnector::new(opts.clone()));
+        let connector = Box::new(AtspiConnector::with_state(opts.clone(), state.clone()));
         match connector.run(ctx).await {
             Ok(()) => return,
             Err(e) => tracing::warn!(error = %e, ?backoff, "AT-SPI connector failed; retrying"),
@@ -301,6 +306,24 @@ pub async fn run(opts: Options, shutdown: CancellationToken) -> Result<()> {
 
 /// The daemon without signal handlers (tests run several in one process).
 pub async fn run_with(opts: Options, shutdown: CancellationToken) -> Result<()> {
+    run_inner(opts, shutdown, None).await
+}
+
+/// [`run_with`] that hands a [`DaemonProbe`] to `on_ready` once the daemon is wired (the
+/// test-only debug accessor of the B-1 conformance suite).
+pub async fn run_with_probe(
+    opts: Options,
+    shutdown: CancellationToken,
+    on_ready: impl FnOnce(DaemonProbe) + Send + 'static,
+) -> Result<()> {
+    run_inner(opts, shutdown, Some(Box::new(on_ready))).await
+}
+
+async fn run_inner(
+    opts: Options,
+    shutdown: CancellationToken,
+    on_ready: Option<Box<dyn FnOnce(DaemonProbe) + Send>>,
+) -> Result<()> {
     let mut tasks = TaskSet::new(shutdown.clone());
     let mut core = Core::new(CoreConfig {
         shutdown_grace: SHUTDOWN_GRACE,
@@ -310,18 +333,32 @@ pub async fn run_with(opts: Options, shutdown: CancellationToken) -> Result<()> 
     let epoch = core.epoch();
     let focused = core.focused_app();
 
-    let speech = wire::wire_speech(&mut tasks, &opts, &epoch);
-    let speech_for_keys = speech.clone();
-    let core = core.with_speech(Arc::new(LaneOut(speech)));
-    wire::wire_keyboard(
-        &mut tasks,
-        &opts,
-        &shutdown,
-        &epoch,
-        speech_for_keys,
-        core.reader_senders().key,
-    );
-    wire::wire_atspi(&mut tasks, &opts, focused, registry, &shutdown);
+    let core = if opts.shadow {
+        // B-1 PW-11: beside the user's real screen reader gorca only reads. Speech goes to the
+        // core's null sink, and nothing grabs keys or takes the Orca identity.
+        tracing::info!("shadow mode: read-only, no speech, no keyboard, no event registration");
+        core
+    } else {
+        let speech = wire::wire_speech(&mut tasks, &opts, &epoch);
+        let speech_for_keys = speech.clone();
+        let reader_keys = core.reader_senders().key;
+        let core = core.with_speech(Arc::new(LaneOut(speech)));
+        wire::wire_keyboard(
+            &mut tasks,
+            &opts,
+            &shutdown,
+            &epoch,
+            speech_for_keys,
+            reader_keys,
+        );
+        core
+    };
+    let atspi_state = AtspiState::default();
+    let core = wire::wire_present_log(core, &opts, &atspi_state);
+    if let Some(f) = on_ready {
+        f(DaemonProbe::new(core.mirrors(), atspi_state.clone()));
+    }
+    wire::wire_atspi(&mut tasks, &opts, focused, registry, atspi_state, &shutdown);
 
     tracing::info!(
         workers = std::thread::available_parallelism().map_or(1, usize::from),

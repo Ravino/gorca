@@ -53,6 +53,7 @@ mod tests {
             prio: Prio::Text,
             may_refine: false,
             survives_focus_change: false,
+            refines: None,
         };
         let v = Verbalizer.verbalize(&u);
         assert_eq!(&*v.text, "OK, button");
