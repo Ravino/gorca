@@ -146,6 +146,10 @@ pub struct AppInfo {
     pub app_name: Arc<str>,
     pub pid: Option<u32>,
     pub connector_kind: ConnectorKind,
+    /// Set by the connector only when the registration matched the protected Shell identity
+    /// (same process group and start time as the verified compositor shell process). Never
+    /// derived from `app_name` or `toolkit`, which the application reports about itself.
+    pub verified_shell: bool,
 }
 
 #[derive(Clone, Debug)]

@@ -541,12 +541,14 @@ fn spawn_app(
         port,
         bus_name,
         gone,
+        verified_shell,
     } = new;
     let server = AppServer {
         caller: Caller::new(conn.clone(), bus_name),
         paths: Arc::clone(paths),
         clock: clock.clone(),
         gone,
+        verified_shell,
         shutdown: shutdown.child_token(),
     };
     tasks.spawn("atspi-app", server.run(port));

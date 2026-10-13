@@ -71,6 +71,8 @@ pub struct NewApp {
     pub bus_name: Arc<str>,
     /// Cancelled when the application's bus name vanishes.
     pub gone: CancellationToken,
+    /// The registration matched the protected Shell identity (`State::is_shell`).
+    pub verified_shell: bool,
 }
 
 /// Who owns a bus connection (`org.freedesktop.DBus.GetConnectionCredentials`).
@@ -588,6 +590,7 @@ impl AtspiRouter {
             app_name: Arc::from(&*sender),
             pid,
             connector_kind: ConnectorKind::Atspi,
+            verified_shell: false,
         };
         let deadline = Deadline::after(&self.clock, ANNOUNCE_WAIT);
         let announced = self
@@ -644,10 +647,12 @@ impl AtspiRouter {
             tx: port.ingress_sender(),
         };
         let gone = CancellationToken::new();
+        let verified_shell = self.state().is_shell(group, info.start);
         let new = NewApp {
             port,
             bus_name: Arc::clone(sender),
             gone: gone.clone(),
+            verified_shell,
         };
         let focused = self.focused.as_deref();
         // Fall back to the pid as the cap group when the process group is unknown.

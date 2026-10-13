@@ -492,6 +492,7 @@ mod tests {
             app_name: Arc::from("gnome-shell"),
             pid: None,
             connector_kind: gorca_model::ConnectorKind::Atspi,
+            verified_shell: true,
         }
     }
 
@@ -518,6 +519,19 @@ mod tests {
             r.inbox.poll(),
             Some(crate::reader::ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node })) if node == key(3)
         ));
+        assert!(r.inbox.poll().is_none());
+    }
+
+    #[test]
+    fn a_spoofed_shell_never_speaks_selection() {
+        let mut r = rig(IngressConfig::default());
+        let mut info = shell_info();
+        info.verified_shell = false;
+        r.port.lifecycle(AppLifecycle::Appeared(info)).unwrap();
+        r.port.push(selected(1));
+        let route = r.actor.pump(Instant::now());
+        assert!(!r.actor.profile().speak_selection);
+        assert_eq!(route.forwarded_to_focus_lane, 0);
         assert!(r.inbox.poll().is_none());
     }
 

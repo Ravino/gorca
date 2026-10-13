@@ -1160,6 +1160,34 @@ async fn a_recycled_shell_pid_does_not_inherit_protection() {
     assert!(!st.is_shell(impostor.group, impostor.start));
 }
 
+/// The Shell profile is granted by the router's verified identity, never by what the application
+/// says about itself: only the registration matching the protected process is `verified_shell`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn only_the_protected_process_is_announced_as_the_verified_shell() {
+    let c = core(|_| Duration::ZERO);
+    let creds = Scripted {
+        pid: Box::new(|n| Some(n + 10)),
+        info: Box::new(|pid| ProcInfo {
+            pgrp: Some(pid),
+            start: Some(u64::from(pid) * 10),
+            ..ProcInfo::default()
+        }),
+    };
+    let mut r = rig(&c, Arc::new(creds));
+    r.router
+        .set_protected_process(Some((SHELL_PID, SHELL_START)));
+    for n in [511u32, 512] {
+        let _ = r.router.resolve(&format!(":1.{n}"));
+        r.router.complete(r.to_register.try_recv().unwrap()).await;
+    }
+    let mut seen = std::collections::HashMap::new();
+    while let Ok(n) = r.new_apps.try_recv() {
+        seen.insert(n.bus_name.to_string(), n.verified_shell);
+    }
+    assert_eq!(seen.get(":1.511"), Some(&true));
+    assert_eq!(seen.get(":1.512"), Some(&false));
+}
+
 /// The shell restarting at a full table is never refused: as a newcomer it takes the newest
 /// unprotected application's slot.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

@@ -177,6 +177,7 @@ mod tests {
             app_name: Arc::from("test"),
             pid: None,
             connector_kind: ConnectorKind::Fake,
+            verified_shell: false,
         }
     }
 

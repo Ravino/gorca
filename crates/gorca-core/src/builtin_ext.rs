@@ -23,7 +23,8 @@ pub struct AppProfile {
 impl AppProfile {
     pub fn for_app(info: &AppInfo) -> Self {
         Self {
-            speak_selection: info.app_name.eq_ignore_ascii_case("gnome-shell"),
+            // Only the connector-verified Shell: a self-reported name grants nothing.
+            speak_selection: info.verified_shell,
         }
     }
 }
@@ -34,20 +35,26 @@ mod tests {
     use gorca_model::ConnectorKind;
     use std::sync::Arc;
 
-    fn info(name: &str) -> AppInfo {
+    fn info(name: &str, verified_shell: bool) -> AppInfo {
         AppInfo {
             toolkit: Arc::from("clutter"),
             app_name: Arc::from(name),
             pid: None,
             connector_kind: ConnectorKind::Atspi,
+            verified_shell,
         }
     }
 
     #[test]
-    fn only_the_shell_speaks_selection() {
-        assert!(AppProfile::for_app(&info("gnome-shell")).speak_selection);
-        assert!(AppProfile::for_app(&info("GNOME-Shell")).speak_selection);
-        assert!(!AppProfile::for_app(&info("nautilus")).speak_selection);
+    fn only_the_verified_shell_speaks_selection() {
+        assert!(AppProfile::for_app(&info("gnome-shell", true)).speak_selection);
+        assert!(!AppProfile::for_app(&info("nautilus", false)).speak_selection);
         assert!(!AppProfile::default().speak_selection);
+    }
+
+    #[test]
+    fn a_spoofed_shell_name_gets_no_profile() {
+        assert!(!AppProfile::for_app(&info("gnome-shell", false)).speak_selection);
+        assert!(!AppProfile::for_app(&info("GNOME-Shell", false)).speak_selection);
     }
 }

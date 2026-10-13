@@ -229,6 +229,7 @@ impl Connector for ScriptedConnector {
                     app_name: Arc::from(app.scope.as_str()),
                     pid: None,
                     connector_kind: ConnectorKind::Fake,
+                    verified_shell: false,
                 };
                 let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);
                 let mut port = ctx

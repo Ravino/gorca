@@ -52,6 +52,7 @@ impl FakeScript {
                     app_name: Arc::from(name),
                     pid: None,
                     connector_kind: ConnectorKind::Fake,
+                    verified_shell: false,
                 },
             )],
             behavior,

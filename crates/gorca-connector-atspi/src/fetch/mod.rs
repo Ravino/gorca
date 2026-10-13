@@ -341,6 +341,8 @@ pub struct AppServer {
     pub clock: Clock,
     /// Cancelled when the application's bus name vanishes.
     pub gone: CancellationToken,
+    /// Verified by the router against the protected Shell identity; never self-reported.
+    pub verified_shell: bool,
     pub shutdown: CancellationToken,
 }
 
@@ -372,7 +374,7 @@ impl AppServer {
                 found = &mut info_rx, if info_pending => {
                     info_pending = false;
                     if let Ok((toolkit, app_name)) = found {
-                        announce_info(&port, &toolkit, &app_name);
+                        announce_info(&port, &toolkit, &app_name, self.verified_shell);
                     }
                 }
                 Some(_) = inflight.join_next() => {}
@@ -404,7 +406,7 @@ impl AppServer {
     }
 }
 
-fn announce_info(port: &AppPort, toolkit: &str, app_name: &str) {
+fn announce_info(port: &AppPort, toolkit: &str, app_name: &str, verified_shell: bool) {
     let class = Toolkit::classify(toolkit, app_name);
     tracing::debug!(app = ?port.app, ?class, "application identified");
     let info = AppInfo {
@@ -412,6 +414,7 @@ fn announce_info(port: &AppPort, toolkit: &str, app_name: &str) {
         app_name: Arc::from(clip(app_name, 128)),
         pid: None,
         connector_kind: ConnectorKind::Atspi,
+        verified_shell,
     };
     // Informational: a full control queue is not worth retrying.
     let _ = port.lifecycle(AppLifecycle::Appeared(info));
