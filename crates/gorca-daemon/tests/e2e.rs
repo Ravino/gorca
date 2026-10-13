@@ -478,7 +478,13 @@ fn every_selection_move_in_a_shell_style_switcher_is_spoken() {
         let ssip_path = sock_dir(&session, "s").join("none.sock");
         let mut app = FakeApp::start(
             &session,
-            &["--scenario", "switcher", "--name", "gnome-shell"],
+            &[
+                "--scenario",
+                "switcher",
+                "--name",
+                "gnome-shell",
+                "--own-shell-name",
+            ],
         )
         .unwrap();
         let d = Daemon::start(
@@ -533,7 +539,13 @@ fn alt_tab_in_the_switcher_speaks_windows_and_never_echoes_tab() {
         let mut mutter = FakeApp::start_mutter(&session).unwrap();
         let mut app = FakeApp::start(
             &session,
-            &["--scenario", "switcher", "--name", "gnome-shell"],
+            &[
+                "--scenario",
+                "switcher",
+                "--name",
+                "gnome-shell",
+                "--own-shell-name",
+            ],
         )
         .unwrap();
         let opts = Options {
