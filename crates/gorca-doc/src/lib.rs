@@ -14,6 +14,7 @@
 //! never depend, even transitively, on `tokio` (section 11, rule 4) or any transport crate.
 
 mod mirror;
+pub mod web;
 
 pub use mirror::{
     ApplyOutcome, Bookmark, DocCursor, DocNode, DocSnapshot, DocumentMirror, SNAPSHOT_EVERY_MS,
