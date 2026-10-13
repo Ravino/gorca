@@ -80,7 +80,9 @@ pub struct Ctx {
 
 pub fn opath(p: &str) -> OwnedObjectPath {
     OwnedObjectPath::try_from(p).unwrap_or_else(|_| {
-        OwnedObjectPath::try_from(NULL_PATH).unwrap_or_else(|_| OwnedObjectPath::from(zvariant::ObjectPath::from_static_str_unchecked(NULL_PATH)))
+        OwnedObjectPath::try_from(NULL_PATH).unwrap_or_else(|_| {
+            OwnedObjectPath::from(zvariant::ObjectPath::from_static_str_unchecked(NULL_PATH))
+        })
     })
 }
 
@@ -93,9 +95,7 @@ fn mk_ref(ctx: &Ctx, path: &str) -> Ref {
 }
 
 fn variant<'a, T: Into<Value<'a>>>(v: T) -> Result<OwnedValue, DbusErr> {
-    Value::from(v.into())
-        .try_to_owned()
-        .map_err(|_| DbusErr::InvalidArgs)
+    v.into().try_to_owned().map_err(|_| DbusErr::InvalidArgs)
 }
 
 fn role_name(r: u32) -> &'static str {
@@ -280,7 +280,9 @@ pub fn handle(
         ("org.a11y.atspi.Accessible", "GetRoleName" | "GetLocalizedRoleName") => {
             Ok(Reply::Str(role_name(view.role).to_owned()))
         }
-        ("org.a11y.atspi.Accessible", "GetState") => Ok(Reply::U32s(state_words(view.states).to_vec())),
+        ("org.a11y.atspi.Accessible", "GetState") => {
+            Ok(Reply::U32s(state_words(view.states).to_vec()))
+        }
         ("org.a11y.atspi.Accessible", "GetChildren") => {
             let mut kids: Vec<Ref> = w
                 .child_paths(path)
@@ -297,7 +299,8 @@ pub fn handle(
             Ok(Reply::Refs(kids))
         }
         ("org.a11y.atspi.Accessible", "GetChildAtIndex") => {
-            let i = usize::try_from(args.i1.ok_or(DbusErr::InvalidArgs)?).map_err(|_| DbusErr::InvalidArgs)?;
+            let i = usize::try_from(args.i1.ok_or(DbusErr::InvalidArgs)?)
+                .map_err(|_| DbusErr::InvalidArgs)?;
             w.child_paths(path)
                 .and_then(|c| c.get(i).map(|p| Reply::Ref(mk_ref(ctx, p))))
                 .ok_or(DbusErr::InvalidArgs)
@@ -313,7 +316,10 @@ pub fn handle(
         }
         ("org.a11y.atspi.Accessible", "GetAttributes") => Ok(Reply::StrMap(HashMap::new())),
         ("org.a11y.atspi.Accessible", "GetInterfaces") => Ok(Reply::Strs(
-            iface::names(view.ifaces).iter().map(|s| (*s).to_owned()).collect(),
+            iface::names(view.ifaces)
+                .iter()
+                .map(|s| (*s).to_owned())
+                .collect(),
         )),
         ("org.a11y.atspi.Accessible", "GetApplication") => Ok(Reply::Ref(mk_ref(ctx, root_path))),
         ("org.a11y.atspi.Accessible", "GetRelationSet") => Ok(Reply::Relations(Vec::new())),
@@ -332,7 +338,9 @@ pub fn handle(
         ("org.a11y.atspi.Application", "GetApplicationBusAddress") if path == root_path => {
             Ok(Reply::Str(ctx.app_bus_address.clone()))
         }
-        ("org.a11y.atspi.Application", "GetLocale") if path == root_path => Ok(Reply::Str("C".to_owned())),
+        ("org.a11y.atspi.Application", "GetLocale") if path == root_path => {
+            Ok(Reply::Str("C".to_owned()))
+        }
         _ => Err(DbusErr::UnknownMethod),
     }
 }
@@ -366,12 +374,26 @@ mod tests {
         let root = w.node(0).unwrap().path.clone();
         let a = Args::default();
         assert!(matches!(
-            handle(&ctx, &w, &root, "org.a11y.atspi.Accessible", "GetRole", &a, 10),
+            handle(
+                &ctx,
+                &w,
+                &root,
+                "org.a11y.atspi.Accessible",
+                "GetRole",
+                &a,
+                10
+            ),
             Ok(Reply::U32(75))
         ));
-        let Ok(Reply::Refs(kids)) =
-            handle(&ctx, &w, &root, "org.a11y.atspi.Accessible", "GetChildren", &a, 10)
-        else {
+        let Ok(Reply::Refs(kids)) = handle(
+            &ctx,
+            &w,
+            &root,
+            "org.a11y.atspi.Accessible",
+            "GetChildren",
+            &a,
+            10,
+        ) else {
             panic!("children");
         };
         assert_eq!(kids.len(), 1);
@@ -382,12 +404,30 @@ mod tests {
         let (ctx, w) = setup();
         let a = Args::default();
         assert_eq!(
-            handle(&ctx, &w, "/org/a11y/atspi/accessible/nope", "org.a11y.atspi.Accessible", "GetRole", &a, 1).unwrap_err(),
+            handle(
+                &ctx,
+                &w,
+                "/org/a11y/atspi/accessible/nope",
+                "org.a11y.atspi.Accessible",
+                "GetRole",
+                &a,
+                1
+            )
+            .unwrap_err(),
             DbusErr::UnknownObject
         );
         let root = w.node(0).unwrap().path.clone();
         assert_eq!(
-            handle(&ctx, &w, &root, "org.a11y.atspi.Accessible", "Frobnicate", &a, 1).unwrap_err(),
+            handle(
+                &ctx,
+                &w,
+                &root,
+                "org.a11y.atspi.Accessible",
+                "Frobnicate",
+                &a,
+                1
+            )
+            .unwrap_err(),
             DbusErr::UnknownMethod
         );
     }
@@ -402,12 +442,26 @@ mod tests {
             ..Args::default()
         };
         assert!(matches!(
-            handle(&ctx, &w, &root, "org.freedesktop.DBus.Properties", "Get", &a, 1),
+            handle(
+                &ctx,
+                &w,
+                &root,
+                "org.freedesktop.DBus.Properties",
+                "Get",
+                &a,
+                1
+            ),
             Ok(Reply::Variant(_))
         ));
-        let Ok(Reply::Props(m)) =
-            handle(&ctx, &w, &root, "org.freedesktop.DBus.Properties", "GetAll", &a, 1)
-        else {
+        let Ok(Reply::Props(m)) = handle(
+            &ctx,
+            &w,
+            &root,
+            "org.freedesktop.DBus.Properties",
+            "GetAll",
+            &a,
+            1,
+        ) else {
             panic!("getall");
         };
         assert!(m.contains_key("ChildCount") && m.contains_key("Parent"));
@@ -417,9 +471,15 @@ mod tests {
     fn get_items_respects_the_cap_and_the_cache_path() {
         let (ctx, w) = setup();
         let a = Args::default();
-        let Ok(Reply::Items(v)) =
-            handle(&ctx, &w, CACHE_PATH, "org.a11y.atspi.Cache", "GetItems", &a, 50)
-        else {
+        let Ok(Reply::Items(v)) = handle(
+            &ctx,
+            &w,
+            CACHE_PATH,
+            "org.a11y.atspi.Cache",
+            "GetItems",
+            &a,
+            50,
+        ) else {
             panic!("items");
         };
         assert_eq!(v.len(), 50);

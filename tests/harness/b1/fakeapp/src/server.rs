@@ -10,9 +10,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, anyhow};
 use futures_lite::StreamExt;
-use gorca_testkit::b1::proto::{
-    AppStats, Cmd, CmdReply, ConnKind, HangMode, ModelSpec, P2pMode,
-};
+use gorca_testkit::b1::proto::{AppStats, Cmd, CmdReply, ConnKind, HangMode, ModelSpec, P2pMode};
 use gorca_testkit::b1::service::ServiceModel;
 use gorca_testkit::b1::world::{Effect, World};
 use serde_json::json;
@@ -99,7 +97,7 @@ fn precise_wait(d: Duration) {
     // A sleep wakes late under host load (measured: +0.4 ms), so only long waits sleep, and
     // they leave 1.5 ms of spinning for accuracy.
     if d > Duration::from_micros(2_500) {
-        std::thread::sleep(d - Duration::from_micros(1_500));
+        std::thread::sleep(d.saturating_sub(Duration::from_micros(1_500)));
     }
     while Instant::now() < end {
         std::hint::spin_loop();
@@ -136,7 +134,15 @@ impl Core {
             .block_on(async { conn.emit_signal(None::<&str>, p, i, m, body).await });
     }
 
-    fn emit_event(&mut self, path: &str, iface: &str, member: &str, detail: &str, d1: i32, any: Value<'_>) {
+    fn emit_event(
+        &mut self,
+        path: &str,
+        iface: &str,
+        member: &str,
+        detail: &str,
+        d1: i32,
+        any: Value<'_>,
+    ) {
         let props: HashMap<String, OwnedValue> = HashMap::new();
         self.emit(path, iface, member, &(detail, d1, 0i32, any, props));
         self.stats.signals_sent += 1;
@@ -156,11 +162,12 @@ impl Core {
             }
             match e {
                 Effect::Prop { path, kind } => {
-                    let any: Value<'_> = if matches!(kind, gorca_testkit::b1::world::PropKind::Value) {
-                        Value::from(0i32)
-                    } else {
-                        Value::from("")
-                    };
+                    let any: Value<'_> =
+                        if matches!(kind, gorca_testkit::b1::world::PropKind::Value) {
+                            Value::from(0i32)
+                        } else {
+                            Value::from("")
+                        };
                     self.emit_event(path, OBJ, "PropertyChange", kind.atspi_kind(), 0, any);
                 }
                 Effect::State { path, state, on } => {
@@ -196,13 +203,31 @@ impl Core {
                         "deactivate" => "Deactivate",
                         _ => "Create",
                     };
-                    self.emit_event(path, "org.a11y.atspi.Event.Window", member, "", 0, Value::from(0i32));
+                    self.emit_event(
+                        path,
+                        "org.a11y.atspi.Event.Window",
+                        member,
+                        "",
+                        0,
+                        Value::from(0i32),
+                    );
                 }
                 Effect::Focus { path } => {
-                    self.emit_event(path, "org.a11y.atspi.Event.Focus", "Focus", "", 0, Value::from(0i32));
+                    self.emit_event(
+                        path,
+                        "org.a11y.atspi.Event.Focus",
+                        "Focus",
+                        "",
+                        0,
+                        Value::from(0i32),
+                    );
                 }
                 Effect::CacheAdd(item) => {
-                    let root = self.world.node(0).map(|n| n.path.clone()).unwrap_or_default();
+                    let root = self
+                        .world
+                        .node(0)
+                        .map(|n| n.path.clone())
+                        .unwrap_or_default();
                     let wire = dispatch::item_wire(&self.ctx, &root, item);
                     self.emit(CACHE_PATH, "org.a11y.atspi.Cache", "AddAccessible", &wire);
                     self.stats.signals_sent += 1;
@@ -220,6 +245,7 @@ impl Core {
         let mut s = self.stats.clone();
         s.nodes_live = u64::from(self.world.live_count());
         s.bus_callers = self.callers.len() as u64;
+        s.now_ns = now_ns();
         s
     }
 
@@ -250,7 +276,7 @@ impl Core {
                 Some(path) => {
                     self.storm_stop.store(false, Ordering::SeqCst);
                     spawn_storm(
-                        self.handle.clone(),
+                        &self.handle,
                         self.bus.clone(),
                         path,
                         *rate_per_s,
@@ -338,8 +364,20 @@ impl Core {
             self.world.mark_realised(&path, member == "GetChildren");
         }
         let args = decode_args(&job.msg, &interface, &member);
-        let result = dispatch::handle(&self.ctx, &self.world, &path, &interface, &member, &args, MAX_DUMP_ITEMS);
-        let mut delay_ms = if self.hang.0 == HangMode::Delay { self.hang.1 } else { 0 };
+        let result = dispatch::handle(
+            &self.ctx,
+            &self.world,
+            &path,
+            &interface,
+            &member,
+            &args,
+            MAX_DUMP_ITEMS,
+        );
+        let mut delay_ms = if self.hang.0 == HangMode::Delay {
+            self.hang.1
+        } else {
+            0
+        };
         for r in &mut self.delays {
             if r.remaining > 0
                 && (r.member.is_empty() || r.member == member)
@@ -420,7 +458,7 @@ async fn send_reply(conn: &Connection, msg: &Message, result: Result<Reply, Dbus
 }
 
 fn spawn_storm(
-    handle: Handle,
+    handle: &Handle,
     conn: Connection,
     path: String,
     rate: u64,
@@ -466,7 +504,9 @@ pub struct FakeApp {
 
 impl std::fmt::Debug for FakeApp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FakeApp").field("ready", &self.ready).finish_non_exhaustive()
+        f.debug_struct("FakeApp")
+            .field("ready", &self.ready)
+            .finish_non_exhaustive()
     }
 }
 
@@ -531,7 +571,9 @@ impl FakeApp {
         // Peer socket.
         let mut p2p_address = String::new();
         if spec.p2p == P2pMode::Peer {
-            let sock = opts.peer_dir.join(format!("b1-{}-{}.sock", opts.label, std::process::id()));
+            let sock = opts
+                .peer_dir
+                .join(format!("b1-{}-{}.sock", opts.label, std::process::id()));
             let _ = std::fs::remove_file(&sock);
             let listener = tokio::net::UnixListener::bind(&sock).context("bind peer socket")?;
             let guid = zbus::Guid::generate();
@@ -577,7 +619,10 @@ impl FakeApp {
         };
         let truth = match &opts.truth_path {
             Some(p) => Some(std::io::BufWriter::new(
-                std::fs::OpenOptions::new().create(true).append(true).open(p)?,
+                std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(p)?,
             )),
             None => None,
         };
@@ -678,7 +723,8 @@ impl FakeApp {
         if self.tx.send(Work::Control(cmd, rtx)).is_err() {
             return CmdReply::err("main loop is gone");
         }
-        rrx.await.unwrap_or_else(|_| CmdReply::err("main loop is gone"))
+        rrx.await
+            .unwrap_or_else(|_| CmdReply::err("main loop is gone"))
     }
 }
 

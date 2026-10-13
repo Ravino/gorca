@@ -227,7 +227,9 @@ pub enum DestroyEvents {
 #[serde(tag = "cmd", rename_all = "snake_case")]
 pub enum Cmd {
     /// Move focus: `state-changed:focused` off/on plus `Focus:Focus`.
-    Focus { node: String },
+    Focus {
+        node: String,
+    },
     Rename {
         node: String,
         name: String,
@@ -253,8 +255,12 @@ pub enum Cmd {
         add_events: bool,
     },
     /// Scroll the realised rows of the files list by `steps` items.
-    Scroll { steps: i32 },
-    Hide { node: String },
+    Scroll {
+        steps: i32,
+    },
+    Hide {
+        node: String,
+    },
     Destroy {
         node: String,
         events: DestroyEvents,
@@ -271,15 +277,28 @@ pub enum Cmd {
         silent: bool,
     },
     /// A-2: the path starts answering `UnknownObject` (lease expiry) without any event.
-    ExpireLease { node: String },
+    ExpireLease {
+        node: String,
+    },
     /// S-2: rebuild the switcher with `items` new entries (new paths).
-    RebuildSwitcher { items: u32 },
+    RebuildSwitcher {
+        items: u32,
+    },
     /// `state-changed:selected` 0 on the old item, 1 on the new one, no focus event.
-    Select { node: String },
+    Select {
+        node: String,
+    },
     /// `Window:Destroy` on a window and everything below it dies.
-    WindowDestroy { node: String },
-    WindowActivate { node: String },
-    Hang { mode: HangMode, ms: u64 },
+    WindowDestroy {
+        node: String,
+    },
+    WindowActivate {
+        node: String,
+    },
+    Hang {
+        mode: HangMode,
+        ms: u64,
+    },
     /// Delay the reply to the next `count` calls of `member` (`Accessible.GetState`, ...; empty
     /// matches any) by `ms`. The reply content is computed at service time (pre-mutation).
     DelayReplies {
@@ -289,18 +308,28 @@ pub enum Cmd {
         conn: Option<ConnKind>,
     },
     /// Flood `TextChanged` events on the terminal node at `rate_per_s` for `duration_ms`.
-    Storm { rate_per_s: u64, duration_ms: u64 },
+    Storm {
+        rate_per_s: u64,
+        duration_ms: u64,
+    },
     /// Drop every peer connection (EOF mid-request, IC-19).
     ClosePeers,
     /// An AT listener registers (lifts the P9-1 gate when the model has it).
     RegisterListener,
     /// Delay accepting new peer connections by `ms` (connect hang, IC-19).
-    PeerAcceptDelay { ms: u64 },
+    PeerAcceptDelay {
+        ms: u64,
+    },
     /// Make refs in `GetChildren` / `GetItems` hostile: a foreign bus name (`foreign_bus`), a
     /// self-parent and a parent cycle (IC-16, MA-3).
-    Malform { on: bool, foreign_bus: String },
+    Malform {
+        on: bool,
+        foreign_bus: String,
+    },
     /// Current truth of one node.
-    Get { node: String },
+    Get {
+        node: String,
+    },
     /// Names of the landmarks and the paths behind them.
     Landmarks,
     /// Call counters.
@@ -379,6 +408,8 @@ pub struct AppStats {
     pub nodes_live: u64,
     /// Distinct callers seen on the bus connection (IC-19: no duplicate connection in `SameBus`).
     pub bus_callers: u64,
+    /// `CLOCK_MONOTONIC` ns when the counters were read (lets a driver align clocks).
+    pub now_ns: u64,
 }
 
 impl AppStats {

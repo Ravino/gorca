@@ -380,7 +380,9 @@ impl SimSut {
     // ---- the reader ----------------------------------------------------------------------
 
     fn is_focus(&self, idx: usize, path: &str) -> bool {
-        self.focus.as_ref().is_some_and(|(i, p)| *i == idx && p == path)
+        self.focus
+            .as_ref()
+            .is_some_and(|(i, p)| *i == idx && p == path)
     }
 
     fn snap_of(app: &SimApp, path: &str) -> Option<Snap> {
@@ -395,7 +397,14 @@ impl SimSut {
         })
     }
 
-    fn issue(&mut self, idx: usize, path: &str, purpose: Purpose, stim_us: u64, said: Option<Said>) {
+    fn issue(
+        &mut self,
+        idx: usize,
+        path: &str,
+        purpose: Purpose,
+        stim_us: u64,
+        said: Option<Said>,
+    ) {
         let fault = self.cfg.fault;
         let app = &mut self.apps[idx];
         if app.retired {
@@ -408,8 +417,15 @@ impl SimSut {
         let issued_seq = app.mirror.as_ref().map_or(0, |m| m.seq);
         let id = self.next_req;
         self.next_req += 1;
-        let conn = if app.spec.p2p == P2pMode::Peer { "peer" } else { "bus" };
-        *app.calls.calls.entry(format!("{conn}/Accessible.Fetch")).or_insert(0) += 1;
+        let conn = if app.spec.p2p == P2pMode::Peer {
+            "peer"
+        } else {
+            "bus"
+        };
+        *app.calls
+            .calls
+            .entry(format!("{conn}/Accessible.Fetch"))
+            .or_insert(0) += 1;
         let arrive = self.now + self.cfg.event_us;
         let start = arrive.max(app.busy_until);
         let svc_us = (app.svc.sample_ns() / 1000).max(1);
@@ -435,7 +451,16 @@ impl SimSut {
         self.push(self.now + self.cfg.interactive_ms * 1000, Msg::Timeout(id));
     }
 
-    fn present(&mut self, idx: usize, path: &str, snap: &Snap, source: Source, may_refine: bool, stim_us: u64, refines: Option<u64>) -> u64 {
+    fn present(
+        &mut self,
+        idx: usize,
+        path: &str,
+        snap: &Snap,
+        source: Source,
+        may_refine: bool,
+        stim_us: u64,
+        refines: Option<u64>,
+    ) -> u64 {
         let utt = self.next_utt;
         self.next_utt += 1;
         let t = self.now + self.cfg.overhead_us;
@@ -461,7 +486,9 @@ impl SimSut {
     fn begin_present(&mut self, idx: usize, path: &str, stim_us: u64, ev_seq: u64) {
         let fault = self.cfg.fault;
         let decision = {
-            let Some(m) = self.apps[idx].mirror.as_ref() else { return };
+            let Some(m) = self.apps[idx].mirror.as_ref() else {
+                return;
+            };
             match m.view(path) {
                 View::Gone => {
                     if fault == Fault::GoneIsFinal {
@@ -478,7 +505,10 @@ impl SimSut {
                         M_PRESENT & !M_VALUE
                     };
                     if stale & need == 0 {
-                        Some((Some((e.snap.clone(), Source::Hit, e.confirmed >= ev_seq)), false))
+                        Some((
+                            Some((e.snap.clone(), Source::Hit, e.confirmed >= ev_seq)),
+                            false,
+                        ))
                     } else if stale & (M_NAME | M_ROLE) == 0 {
                         Some((Some((e.snap.clone(), Source::Stale, false)), false))
                     } else {
@@ -490,7 +520,11 @@ impl SimSut {
         match decision {
             None => {}
             Some((None, proof)) => {
-                let p = if proof { Purpose::Proof } else { Purpose::Present(Source::MissReply) };
+                let p = if proof {
+                    Purpose::Proof
+                } else {
+                    Purpose::Present(Source::MissReply)
+                };
                 self.issue(idx, path, p, stim_us, None);
             }
             Some((Some((snap, src, confirmed_after)), _)) => {
@@ -508,7 +542,9 @@ impl SimSut {
             return;
         }
         let ev_seq = {
-            let Some(m) = self.apps[idx].mirror.as_mut() else { return };
+            let Some(m) = self.apps[idx].mirror.as_mut() else {
+                return;
+            };
             m.seq += 1;
             m.seq
         };
@@ -542,7 +578,11 @@ impl SimSut {
                     self.issue(idx, &path, Purpose::S1, stim_us, None);
                 }
             }
-            Effect::State { path, state: st, on } => {
+            Effect::State {
+                path,
+                state: st,
+                on,
+            } => {
                 if st == state::FOCUSED || st == state::ACTIVE {
                     return;
                 }
@@ -561,7 +601,9 @@ impl SimSut {
                     self.issue(idx, &path, Purpose::S1, stim_us, None);
                 }
             }
-            Effect::Children { parent, add, child, .. } => {
+            Effect::Children {
+                parent, add, child, ..
+            } => {
                 if let Some(m) = self.apps[idx].mirror.as_mut() {
                     m.invalidate(&parent, M_CHILDREN, fault);
                     if !add {
@@ -589,7 +631,8 @@ impl SimSut {
                                         if hops > 64 {
                                             break;
                                         }
-                                        cur = m.entries.get(c).and_then(|x| x.snap.parent.as_deref());
+                                        cur =
+                                            m.entries.get(c).and_then(|x| x.snap.parent.as_deref());
                                     }
                                     under
                                 }
@@ -615,7 +658,9 @@ impl SimSut {
 
     fn on_reply(&mut self, id: u64, res: Result<Snap, ()>) {
         let fault = self.cfg.fault;
-        let Some(req) = self.reqs.remove(&id) else { return };
+        let Some(req) = self.reqs.remove(&id) else {
+            return;
+        };
         let idx = req.idx;
         if self.apps[idx].retired {
             return;
@@ -638,7 +683,15 @@ impl SimSut {
                         self.present(idx, &path, &snap, src, false, req.stim_us, None);
                     }
                     Purpose::Proof => {
-                        self.present(idx, &path, &snap, Source::MissReply, false, req.stim_us, None);
+                        self.present(
+                            idx,
+                            &path,
+                            &snap,
+                            Source::MissReply,
+                            false,
+                            req.stim_us,
+                            None,
+                        );
                     }
                     Purpose::S1 => {
                         self.present(idx, &path, &snap, Source::S1, false, req.stim_us, None);
@@ -648,7 +701,11 @@ impl SimSut {
                             let fresh_audio = self
                                 .cur_utt
                                 .is_some_and(|(u, start)| u == utt && self.now - start < 150_000);
-                            let src = if fresh_audio { Source::Refine } else { Source::Followup };
+                            let src = if fresh_audio {
+                                Source::Refine
+                            } else {
+                                Source::Followup
+                            };
                             self.present(idx, &path, &snap, src, false, req.stim_us, Some(utt));
                         }
                     }
@@ -659,7 +716,9 @@ impl SimSut {
     }
 
     fn on_serve(&mut self, id: u64) {
-        let Some(req) = self.reqs.get(&id) else { return };
+        let Some(req) = self.reqs.get(&id) else {
+            return;
+        };
         let idx = req.idx;
         let app = &mut self.apps[idx];
         if app.retired {
@@ -667,7 +726,11 @@ impl SimSut {
         }
         let path = req.path.clone();
         let res = Self::snap_of(app, &path).ok_or(());
-        let mut extra = if app.hang.0 == HangMode::Delay { app.hang.1 } else { 0 };
+        let mut extra = if app.hang.0 == HangMode::Delay {
+            app.hang.1
+        } else {
+            0
+        };
         if let Some(r) = app.delays.iter_mut().find(|r| r.2 > 0) {
             r.2 -= 1;
             extra += r.1;
@@ -678,7 +741,9 @@ impl SimSut {
     }
 
     fn on_timeout(&mut self, id: u64) {
-        let Some(req) = self.reqs.remove(&id) else { return };
+        let Some(req) = self.reqs.remove(&id) else {
+            return;
+        };
         let idx = req.idx;
         let app = &mut self.apps[idx];
         if app.retired {
@@ -710,7 +775,11 @@ impl SimSut {
             Msg::ProbeTick(idx) => {
                 let app = &self.apps[idx];
                 if !app.retired && app.hung {
-                    let root = app.world.node(0).map(|n| n.path.clone()).unwrap_or_default();
+                    let root = app
+                        .world
+                        .node(0)
+                        .map(|n| n.path.clone())
+                        .unwrap_or_default();
                     self.issue(idx, &root, Purpose::Probe, self.now, None);
                     let at = self.now + 1_000_000;
                     self.push(at, Msg::ProbeTick(idx));
@@ -719,7 +788,10 @@ impl SimSut {
             Msg::DumpTick(idx) => {
                 let app = &mut self.apps[idx];
                 if !app.retired {
-                    *app.calls.calls.entry("bus/Cache.GetItems".to_owned()).or_insert(0) += 1;
+                    *app.calls
+                        .calls
+                        .entry("bus/Cache.GetItems".to_owned())
+                        .or_insert(0) += 1;
                     let at = self.now + 100_000;
                     self.push(at, Msg::DumpTick(idx));
                 }
@@ -765,7 +837,9 @@ impl SimSut {
         let spec_gate = spec.quirks.listener_gate;
         let world = World::new(spec.clone(), label);
         let mirror = if self.cfg.fault == Fault::NoRetire {
-            self.saved_mirrors.remove(label).or_else(|| Some(Mirror::default()))
+            self.saved_mirrors
+                .remove(label)
+                .or_else(|| Some(Mirror::default()))
         } else {
             Some(Mirror::default())
         };
@@ -824,7 +898,9 @@ impl Sut for SimSut {
 
     fn supports(&self, f: Feature) -> bool {
         match f {
-            Feature::LatencyKnobs | Feature::Probe | Feature::VirtualTime | Feature::WhereAmI => true,
+            Feature::LatencyKnobs | Feature::Probe | Feature::VirtualTime | Feature::WhereAmI => {
+                true
+            }
             Feature::CacheFill | Feature::Malformed => false,
         }
     }
@@ -872,11 +948,16 @@ impl Sut for SimSut {
                 self.apps[idx].hang = (mode, ms);
                 Ok(CmdReply::ok(serde_json::Value::Null))
             }
-            Cmd::DelayReplies { member, ms, count, .. } => {
+            Cmd::DelayReplies {
+                member, ms, count, ..
+            } => {
                 self.apps[idx].delays.push((member, ms, count));
                 Ok(CmdReply::ok(serde_json::Value::Null))
             }
-            Cmd::Storm { rate_per_s, duration_ms } => {
+            Cmd::Storm {
+                rate_per_s,
+                duration_ms,
+            } => {
                 let per_ms = u32::try_from(rate_per_s / 1000).unwrap_or(u32::MAX).max(1);
                 let ms = u32::try_from(duration_ms).unwrap_or(u32::MAX).max(1);
                 self.push(self.now, Msg::StormTick(idx, ms, per_ms));
@@ -888,7 +969,9 @@ impl Sut for SimSut {
                 s.bus_callers = 1;
                 Ok(CmdReply::ok(serde_json::to_value(s).unwrap_or_default()))
             }
-            Cmd::ClosePeers | Cmd::PeerAcceptDelay { .. } => Ok(CmdReply::ok(serde_json::Value::Null)),
+            Cmd::ClosePeers | Cmd::PeerAcceptDelay { .. } => {
+                Ok(CmdReply::ok(serde_json::Value::Null))
+            }
             Cmd::RegisterListener => {
                 self.apps[idx].listeners = true;
                 Ok(CmdReply::ok(serde_json::Value::Null))
@@ -924,7 +1007,9 @@ impl Sut for SimSut {
             if top.at > target {
                 break;
             }
-            let Some(Reverse(t)) = self.queue.pop() else { break };
+            let Some(Reverse(t)) = self.queue.pop() else {
+                break;
+            };
             self.now = self.now.max(t.at);
             self.handle(t.msg);
         }
@@ -946,8 +1031,12 @@ impl Sut for SimSut {
     }
 
     fn probe(&self, app: &str, path: &str) -> Probe {
-        let Some(idx) = self.live.get(app) else { return Probe::Miss };
-        let Some(m) = self.apps[*idx].mirror.as_ref() else { return Probe::Miss };
+        let Some(idx) = self.live.get(app) else {
+            return Probe::Miss;
+        };
+        let Some(m) = self.apps[*idx].mirror.as_ref() else {
+            return Probe::Miss;
+        };
         match m.view(path) {
             View::Miss => Probe::Miss,
             View::Gone => Probe::Gone,
@@ -984,7 +1073,7 @@ impl Sut for SimSut {
         Ok(s)
     }
 
-    fn where_am_i(&mut self) -> SutResult<()> {
+    fn where_am_i(&mut self) -> SutResult<Vec<String>> {
         let Some((idx, path)) = self.focus.clone() else {
             return Err(SutError::Other("no focus".into()));
         };
@@ -1004,6 +1093,7 @@ impl Sut for SimSut {
             }
         }
         let stim = self.now;
+        let spoken = chain.clone();
         for p in chain {
             let snap = self.apps[idx]
                 .mirror
@@ -1020,7 +1110,7 @@ impl Sut for SimSut {
                 None => self.issue(idx, &p, Purpose::Present(Source::MissReply), stim, None),
             }
         }
-        Ok(())
+        Ok(spoken)
     }
 
     fn set_latency(&mut self, event_us: u64, reply_us: u64) {

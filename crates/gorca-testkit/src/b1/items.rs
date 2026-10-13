@@ -152,7 +152,10 @@ impl R<'_> {
     }
     fn u32(&mut self) -> Result<u32, DecodeError> {
         self.align(4)?;
-        let s = self.b.get(self.p..self.p + 4).ok_or_else(|| proto("short u32"))?;
+        let s = self
+            .b
+            .get(self.p..self.p + 4)
+            .ok_or_else(|| proto("short u32"))?;
         self.p += 4;
         Ok(u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
     }
@@ -161,8 +164,14 @@ impl R<'_> {
     }
     fn string(&mut self, cap: usize) -> Result<String, DecodeError> {
         let n = self.u32()? as usize;
-        let end = self.p.checked_add(n).ok_or_else(|| proto("length overflow"))?;
-        let s = self.b.get(self.p..end).ok_or_else(|| proto("string past the end"))?;
+        let end = self
+            .p
+            .checked_add(n)
+            .ok_or_else(|| proto("length overflow"))?;
+        let s = self
+            .b
+            .get(self.p..end)
+            .ok_or_else(|| proto("string past the end"))?;
         if self.b.get(end) != Some(&0) {
             return Err(proto("missing NUL"));
         }
@@ -201,8 +210,16 @@ impl ItemsDecoder for RefDecoder {
         }
         let mut r = R { b: bytes, p: 0 };
         let total = r.u32()? as usize;
-        r.align(8).or_else(|_| if total == 0 { Ok(()) } else { Err(proto("no data")) })?;
-        let end = r.p.checked_add(total).ok_or_else(|| proto("length overflow"))?;
+        r.align(8).or_else(|_| {
+            if total == 0 {
+                Ok(())
+            } else {
+                Err(proto("no data"))
+            }
+        })?;
+        let end =
+            r.p.checked_add(total)
+                .ok_or_else(|| proto("length overflow"))?;
         if end > bytes.len() {
             return Err(proto("array longer than the body"));
         }
@@ -221,7 +238,9 @@ impl ItemsDecoder for RefDecoder {
             let index = r.i32()?;
             let child_count = r.i32()?.clamp(0, l.max_child_count);
             let alen = r.u32()? as usize;
-            let aend = r.p.checked_add(alen).ok_or_else(|| proto("length overflow"))?;
+            let aend =
+                r.p.checked_add(alen)
+                    .ok_or_else(|| proto("length overflow"))?;
             if aend > end {
                 return Err(proto("interface array past the dump"));
             }
@@ -287,7 +306,8 @@ impl ItemsDecoder for CarelessDecoder {
         let mut p = 8;
         while p < 8 + total {
             // Unchecked reads: panics on a truncated or inflated dump.
-            let n = u32::from_le_bytes([bytes[p], bytes[p + 1], bytes[p + 2], bytes[p + 3]]) as usize;
+            let n =
+                u32::from_le_bytes([bytes[p], bytes[p + 1], bytes[p + 2], bytes[p + 3]]) as usize;
             let s = String::from_utf8_lossy(&bytes[p + 4..p + 4 + n]).into_owned();
             out.items.push(DItem {
                 bus: own_bus.to_owned(),
@@ -314,7 +334,10 @@ pub fn sample_dump(bus: &str, n: usize) -> Vec<DItem> {
             parent_path: format!("/org/a11y/atspi/accessible/{}", i / 4),
             index: i32::try_from(i % 4).unwrap_or(0),
             child_count: i32::try_from(i % 5).unwrap_or(0),
-            ifaces: vec!["org.a11y.atspi.Accessible".into(), "org.a11y.atspi.Component".into()],
+            ifaces: vec![
+                "org.a11y.atspi.Accessible".into(),
+                "org.a11y.atspi.Component".into(),
+            ],
             name: format!("item {i}"),
             role: 43,
             desc: String::new(),
@@ -348,7 +371,9 @@ mod tests {
         let mut items = sample_dump(":1.5", 10);
         items[3].bus = ":1.9".into();
         items[4].parent_bus = ":1.9".into();
-        let d = RefDecoder::default().decode(":1.5", &encode_items(&items)).unwrap();
+        let d = RefDecoder::default()
+            .decode(":1.5", &encode_items(&items))
+            .unwrap();
         assert_eq!(d.items.len(), 9);
         assert_eq!(d.foreign_dropped, 1);
         assert_eq!(d.foreign_parents_dropped, 1);
@@ -362,7 +387,10 @@ mod tests {
         items[1].child_count = i32::MAX;
         items[2].child_count = -5;
         let dec = RefDecoder {
-            limits: DecodeLimits { max_items: 20, ..DecodeLimits::default() },
+            limits: DecodeLimits {
+                max_items: 20,
+                ..DecodeLimits::default()
+            },
         };
         let d = dec.decode(":1.5", &encode_items(&items)).unwrap();
         assert_eq!(d.items.len(), 20);

@@ -135,8 +135,14 @@ pub trait Sut {
     fn calls(&mut self, app: &str) -> SutResult<AppStats>;
     /// The where-am-I command: speak the focused node and its ancestors (5.3: every spoken
     /// node served from the mirror is revalidated). `WhereAmI` only.
-    fn where_am_i(&mut self) -> SutResult<()> {
-        Err(SutError::Other("where-am-i is not supported by this SUT".into()))
+    ///
+    /// Returns the paths it will speak (the focused node and its known ancestors), so the walk
+    /// can log them as stimuli: the run-directory classifier derives latency from the last
+    /// stimulus on a path.
+    fn where_am_i(&mut self) -> SutResult<Vec<String>> {
+        Err(SutError::Other(
+            "where-am-i is not supported by this SUT".into(),
+        ))
     }
     /// Set event (bus signal) and reply (call) travel times, microseconds. `LatencyKnobs` only.
     fn set_latency(&mut self, event_us: u64, reply_us: u64);
@@ -159,7 +165,12 @@ pub trait SutExt: Sut {
 
     /// Path of a node reference, via `Get`.
     fn path_of(&mut self, app: &str, node: &str) -> SutResult<String> {
-        let r = self.must(app, Cmd::Get { node: node.to_owned() })?;
+        let r = self.must(
+            app,
+            Cmd::Get {
+                node: node.to_owned(),
+            },
+        )?;
         r.str("path")
             .map(str::to_owned)
             .ok_or_else(|| SutError::Other(format!("no path for {node}")))

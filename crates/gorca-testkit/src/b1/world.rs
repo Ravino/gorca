@@ -91,7 +91,9 @@ pub mod state {
     pub fn names_of(states: u64) -> Vec<&'static str> {
         let mut v: Vec<&'static str> = NAMES
             .iter()
-            .filter(|(n, bit)| states & (1u64 << bit) != 0 && !matches!(*n, "focused" | "focusable"))
+            .filter(|(n, bit)| {
+                states & (1u64 << bit) != 0 && !matches!(*n, "focused" | "focusable")
+            })
             .map(|(n, _)| *n)
             .collect();
         v.sort_unstable();
@@ -249,9 +251,31 @@ pub enum Effect {
 }
 
 const WORDS: &[&str] = &[
-    "Wi-Fi", "Bluetooth", "Network", "Display", "Sound", "Power", "Mouse", "Keyboard", "Privacy",
-    "Sharing", "Users", "About", "Date", "Region", "Apps", "Notifications", "Search", "Multitasking",
-    "Wallpaper", "Accessibility", "Online", "Printers", "Storage", "Color", "Thunderbolt",
+    "Wi-Fi",
+    "Bluetooth",
+    "Network",
+    "Display",
+    "Sound",
+    "Power",
+    "Mouse",
+    "Keyboard",
+    "Privacy",
+    "Sharing",
+    "Users",
+    "About",
+    "Date",
+    "Region",
+    "Apps",
+    "Notifications",
+    "Search",
+    "Multitasking",
+    "Wallpaper",
+    "Accessibility",
+    "Online",
+    "Printers",
+    "Storage",
+    "Color",
+    "Thunderbolt",
 ];
 
 const CONTROL_ROLES: &[u32] = &[
@@ -266,10 +290,8 @@ const CONTROL_ROLES: &[u32] = &[
     role::MENU_ITEM,
 ];
 
-const BASE_STATES: u64 = (1 << state::ENABLED)
-    | (1 << state::SENSITIVE)
-    | (1 << state::SHOWING)
-    | (1 << state::VISIBLE);
+const BASE_STATES: u64 =
+    (1 << state::ENABLED) | (1 << state::SENSITIVE) | (1 << state::SHOWING) | (1 << state::VISIBLE);
 
 /// `Node.states` bits as the `au` words of `GetState` / cache items.
 pub fn state_words(states: u64) -> [u32; 2] {
@@ -342,7 +364,14 @@ impl World {
         }
     }
 
-    fn add_node(&mut self, parent: Option<NodeId>, r: u32, name: &str, states: u64, ifc: u8) -> NodeId {
+    fn add_node(
+        &mut self,
+        parent: Option<NodeId>,
+        r: u32,
+        name: &str,
+        states: u64,
+        ifc: u8,
+    ) -> NodeId {
         let id = NodeId::try_from(self.nodes.len()).unwrap_or(NodeId::MAX);
         let path = if parent.is_none() {
             ROOT_PATH.to_owned()
@@ -428,7 +457,13 @@ impl World {
         let w = self.word();
         match self.rng.range(0, 99) {
             0..=29 => {
-                self.add_node(Some(parent), role::LABEL, &format!("{w} label"), BASE_STATES, 0);
+                self.add_node(
+                    Some(parent),
+                    role::LABEL,
+                    &format!("{w} label"),
+                    BASE_STATES,
+                    0,
+                );
                 1
             }
             30..=44 => {
@@ -467,7 +502,13 @@ impl World {
                 1
             }
             _ => {
-                self.add_node(Some(parent), role::IMAGE, &format!("{w} icon"), BASE_STATES, 0);
+                self.add_node(
+                    Some(parent),
+                    role::IMAGE,
+                    &format!("{w} icon"),
+                    BASE_STATES,
+                    0,
+                );
                 1
             }
         }
@@ -495,7 +536,13 @@ impl World {
     }
 
     fn build(&mut self) {
-        let root = self.add_node(None, role::APPLICATION, &self.spec.app_name.clone(), BASE_STATES, 0);
+        let root = self.add_node(
+            None,
+            role::APPLICATION,
+            &self.spec.app_name.clone(),
+            BASE_STATES,
+            0,
+        );
         self.lm("root", vec![root]);
         let win = self.add_node(
             Some(root),
@@ -534,9 +581,11 @@ impl World {
 
     fn build_headerbar(&mut self, win: NodeId, buttons: &[&str]) {
         let hb = self.container(win, role::TOOL_BAR, "header bar");
-        for b in buttons {
-            self.control(hb, role::PUSH_BUTTON, b);
-        }
+        let ids: Vec<NodeId> = buttons
+            .iter()
+            .map(|b| self.control(hb, role::PUSH_BUTTON, b))
+            .collect();
+        self.lm("header", ids);
         self.add_node(Some(hb), role::LABEL, "title", BASE_STATES, 0);
     }
 
@@ -567,14 +616,27 @@ impl World {
         let inner = self.pad_chain(win, depth.saturating_sub(8));
         let split = self.container(inner, role::PANEL, "split view");
         let sb = self.container(split, role::LIST, "places");
-        for w in ["Recent", "Home", "Documents", "Downloads", "Music", "Pictures", "Videos", "Trash"] {
-            self.control(sb, role::LIST_ITEM, w);
-        }
+        let places: Vec<NodeId> = [
+            "Recent",
+            "Home",
+            "Documents",
+            "Downloads",
+            "Music",
+            "Pictures",
+            "Videos",
+            "Trash",
+        ]
+        .iter()
+        .map(|w| self.control(sb, role::LIST_ITEM, w))
+        .collect();
+        self.lm("places", places);
         let main = self.container(split, role::PANEL, "main");
         let path = self.container(main, role::PANEL, "path bar");
-        for w in ["Home", "Documents", "Projects"] {
-            self.control(path, role::PUSH_BUTTON, w);
-        }
+        let crumbs: Vec<NodeId> = ["Home", "Documents", "Projects"]
+            .iter()
+            .map(|w| self.control(path, role::PUSH_BUTTON, w))
+            .collect();
+        self.lm("pathbar", crumbs);
         let scroller = self.container(main, role::SCROLL_PANE, "list scroller");
         let list = self.add_node(
             Some(scroller),
@@ -646,6 +708,7 @@ impl World {
         let results = self.container(overview, role::LIST, "search results");
         self.lm("results_root", vec![results]);
         let grid = self.container(overview, role::PANEL, "app grid");
+        self.lm("grid", vec![grid]);
         let sw = self.container(inner, role::LIST, "switcher");
         self.lm("switcher_root", vec![sw]);
         let budget = self.spec.nodes_idle.saturating_sub(self.live_count());
@@ -661,7 +724,13 @@ impl World {
         self.doc_root = Some(doc);
         self.lm("document", vec![doc]);
         for i in 0..50 {
-            self.add_node(Some(doc), role::LABEL, &format!("paragraph {i}"), BASE_STATES, 0);
+            self.add_node(
+                Some(doc),
+                role::LABEL,
+                &format!("paragraph {i}"),
+                BASE_STATES,
+                0,
+            );
         }
     }
 
@@ -698,7 +767,9 @@ impl World {
             let mut controls = Vec::new();
             let mut stack = vec![panel];
             while let Some(id) = stack.pop() {
-                let Some(n) = self.nodes.get(id as usize) else { continue };
+                let Some(n) = self.nodes.get(id as usize) else {
+                    continue;
+                };
                 if id != panel && CONTROL_ROLES.contains(&n.role) {
                     controls.push(id);
                 }
@@ -713,7 +784,9 @@ impl World {
                     .filter(|id| w.nodes.get(*id as usize).is_some_and(f))
                     .collect()
             };
-            let switches = pick(self, &|n| matches!(n.role, role::TOGGLE_BUTTON | role::CHECK_BOX));
+            let switches = pick(self, &|n| {
+                matches!(n.role, role::TOGGLE_BUTTON | role::CHECK_BOX)
+            });
             let sliders = pick(self, &|n| n.role == role::SLIDER);
             let derived = pick(self, &|n| n.name_from.is_some());
             let derived_labels = derived
@@ -805,10 +878,7 @@ impl World {
             value: (n.ifaces & iface::VALUE != 0).then_some(n.value),
             ifaces: n.ifaces,
             child_count: n.children.len(),
-            parent: n
-                .parent
-                .and_then(|p| self.node(p))
-                .map(|p| p.path.clone()),
+            parent: n.parent.and_then(|p| self.node(p)).map(|p| p.path.clone()),
         })
     }
 
@@ -825,7 +895,9 @@ impl World {
 
     /// True when `path` lies strictly below a `Document*` node (IC-20).
     pub fn below_document(&self, path: &str) -> bool {
-        let Some(doc) = self.doc_root else { return false };
+        let Some(doc) = self.doc_root else {
+            return false;
+        };
         let mut cur = self.by_path.get(path).copied();
         while let Some(id) = cur {
             let Some(n) = self.node(id) else { return false };
@@ -868,10 +940,7 @@ impl World {
         if n.hidden && self.spec.quirks.hidden_skips_cache {
             return false;
         }
-        if self.spec.quirks.dump_realised_only
-            && n.id > 1
-            && !self.realised.contains(&n.id)
-        {
+        if self.spec.quirks.dump_realised_only && n.id > 1 && !self.realised.contains(&n.id) {
             return false;
         }
         if self.spec.quirks.dump_omits_transient {
@@ -899,7 +968,9 @@ impl World {
     }
 
     pub fn focus_path(&self) -> Option<String> {
-        self.focus.and_then(|f| self.node(f)).map(|n| n.path.clone())
+        self.focus
+            .and_then(|f| self.node(f))
+            .map(|n| n.path.clone())
     }
 
     pub fn take_truth(&mut self) -> Vec<TruthLine> {
@@ -1012,7 +1083,14 @@ impl World {
             .collect()
     }
 
-    fn set_name(&mut self, id: NodeId, name: &str, evented: bool, now_ns: u64, fx: &mut Vec<Effect>) {
+    fn set_name(
+        &mut self,
+        id: NodeId,
+        name: &str,
+        evented: bool,
+        now_ns: u64,
+        fx: &mut Vec<Effect>,
+    ) {
         let Some(n) = self.node_mut(id) else { return };
         let old = std::mem::replace(&mut n.name, name.to_owned());
         let path = n.path.clone();
@@ -1036,21 +1114,33 @@ impl World {
             return;
         }
         let Some(n) = self.node(id) else { return };
-        let Some(p) = n.parent.and_then(|p| self.node(p)) else { return };
+        let Some(p) = n.parent.and_then(|p| self.node(p)) else {
+            return;
+        };
         fx.push(Effect::Children {
             parent: p.path.clone(),
             add: true,
-            index: p.children.iter().position(|c| *c == id).and_then(|i| i32::try_from(i).ok()).unwrap_or(0),
+            index: p
+                .children
+                .iter()
+                .position(|c| *c == id)
+                .and_then(|i| i32::try_from(i).ok())
+                .unwrap_or(0),
             child: n.path.clone(),
         });
     }
 
     /// A client read this node (or listed its children): GTK4 realises its context (P-9).
     pub fn mark_realised(&mut self, path: &str, with_children: bool) {
-        let Some(id) = self.by_path.get(path).copied() else { return };
+        let Some(id) = self.by_path.get(path).copied() else {
+            return;
+        };
         self.realised.insert(id);
         if with_children {
-            let kids = self.node(id).map(|n| n.children.clone()).unwrap_or_default();
+            let kids = self
+                .node(id)
+                .map(|n| n.children.clone())
+                .unwrap_or_default();
             self.realised.extend(kids);
         }
     }
@@ -1188,7 +1278,9 @@ impl World {
                         let p = n.path.clone();
                         self.tl(now_ns, &p, "lease", "alive", "expired", false);
                     }
-                    CmdReply::ok(json!({"path": self.nodes.get(id as usize).map(|n| n.path.clone())}))
+                    CmdReply::ok(
+                        json!({"path": self.nodes.get(id as usize).map(|n| n.path.clone())}),
+                    )
                 }
                 None => CmdReply::err(format!("no node {node}")),
             },
@@ -1292,7 +1384,10 @@ impl World {
         let Some(rid) = self.resolve(root) else {
             return CmdReply::err(format!("no node {root}"));
         };
-        let old_children: Vec<NodeId> = self.node(rid).map(|n| n.children.clone()).unwrap_or_default();
+        let old_children: Vec<NodeId> = self
+            .node(rid)
+            .map(|n| n.children.clone())
+            .unwrap_or_default();
         let mut n_old = 0u32;
         let root_path = self.node(rid).map(|n| n.path.clone()).unwrap_or_default();
         for (i, c) in old_children.iter().enumerate() {
@@ -1308,7 +1403,10 @@ impl World {
                 }
                 self.effects_remove_subtree(*c, fx);
             }
-            if self.focus.is_some_and(|f| self.descendants(*c).contains(&f)) {
+            if self
+                .focus
+                .is_some_and(|f| self.descendants(*c).contains(&f))
+            {
                 self.focus = None;
             }
             self.kill(*c);
@@ -1318,7 +1416,10 @@ impl World {
         }
         let before = self.nodes.len();
         let used = self.fill(rid, count, 4);
-        let new_top: Vec<NodeId> = self.node(rid).map(|n| n.children.clone()).unwrap_or_default();
+        let new_top: Vec<NodeId> = self
+            .node(rid)
+            .map(|n| n.children.clone())
+            .unwrap_or_default();
         if add_events {
             for (i, c) in new_top.iter().enumerate() {
                 if let Some(cn) = self.node(*c) {
@@ -1366,7 +1467,10 @@ impl World {
         let mut changed = 0u32;
         for (i, row) in rows.iter().enumerate() {
             let item = off + u32::try_from(i).unwrap_or(0);
-            let kids: Vec<NodeId> = self.node(*row).map(|n| n.children.clone()).unwrap_or_default();
+            let kids: Vec<NodeId> = self
+                .node(*row)
+                .map(|n| n.children.clone())
+                .unwrap_or_default();
             // children: icon, label, size, date, check
             if let Some(label) = kids.get(1).copied() {
                 self.set_name(label, &item_name(item), evented, now_ns, fx);
@@ -1423,7 +1527,13 @@ impl World {
         CmdReply::ok(json!({"path": path}))
     }
 
-    fn do_reorder(&mut self, parent: &str, mode: ReorderMode, now_ns: u64, fx: &mut Vec<Effect>) -> CmdReply {
+    fn do_reorder(
+        &mut self,
+        parent: &str,
+        mode: ReorderMode,
+        now_ns: u64,
+        fx: &mut Vec<Effect>,
+    ) -> CmdReply {
         let Some(pid) = self.resolve(parent) else {
             return CmdReply::err(format!("no node {parent}"));
         };
@@ -1544,11 +1654,19 @@ impl World {
     }
 
     fn do_rebuild_switcher(&mut self, items: u32, now_ns: u64, fx: &mut Vec<Effect>) -> CmdReply {
-        let Some(root) = self.landmarks.get("switcher_root").and_then(|v| v.first()).copied() else {
+        let Some(root) = self
+            .landmarks
+            .get("switcher_root")
+            .and_then(|v| v.first())
+            .copied()
+        else {
             return CmdReply::err("no switcher");
         };
         let rpath = self.node(root).map(|n| n.path.clone()).unwrap_or_default();
-        let old: Vec<NodeId> = self.node(root).map(|n| n.children.clone()).unwrap_or_default();
+        let old: Vec<NodeId> = self
+            .node(root)
+            .map(|n| n.children.clone())
+            .unwrap_or_default();
         for (i, c) in old.iter().enumerate() {
             if let Some(cn) = self.node(*c) {
                 fx.push(Effect::Children {
@@ -1645,15 +1763,28 @@ mod tests {
     }
 
     fn max_depth(w: &World) -> u32 {
-        w.nodes.iter().filter(|n| n.alive).map(|n| depth_of(w, n.id)).max().unwrap_or(0)
+        w.nodes
+            .iter()
+            .filter(|n| n.alive)
+            .map(|n| depth_of(w, n.id))
+            .max()
+            .unwrap_or(0)
     }
 
     #[test]
     fn same_seed_same_tree() {
         let a = World::new(settings(), "s");
         let b = World::new(settings(), "s");
-        let pa: Vec<_> = a.nodes.iter().map(|n| (n.path.clone(), n.name.clone(), n.role)).collect();
-        let pb: Vec<_> = b.nodes.iter().map(|n| (n.path.clone(), n.name.clone(), n.role)).collect();
+        let pa: Vec<_> = a
+            .nodes
+            .iter()
+            .map(|n| (n.path.clone(), n.name.clone(), n.role))
+            .collect();
+        let pb: Vec<_> = b
+            .nodes
+            .iter()
+            .map(|n| (n.path.clone(), n.name.clone(), n.role))
+            .collect();
         assert_eq!(pa, pb);
         let mut other = settings();
         other.seed = 2;
@@ -1698,13 +1829,27 @@ mod tests {
     fn rename_evented_and_silent_are_logged_with_the_flag() {
         let mut w = World::new(settings(), "s");
         let (r, fx) = w.apply(
-            &Cmd::Rename { node: "controls[0]".into(), name: "New".into(), evented: true },
+            &Cmd::Rename {
+                node: "controls[0]".into(),
+                name: "New".into(),
+                evented: true,
+            },
             10,
         );
         assert!(r.ok);
-        assert!(matches!(fx.first(), Some(Effect::Prop { kind: PropKind::Name, .. })));
+        assert!(matches!(
+            fx.first(),
+            Some(Effect::Prop {
+                kind: PropKind::Name,
+                ..
+            })
+        ));
         let (_, fx) = w.apply(
-            &Cmd::Rename { node: "controls[1]".into(), name: "Quiet".into(), evented: false },
+            &Cmd::Rename {
+                node: "controls[1]".into(),
+                name: "Quiet".into(),
+                evented: false,
+            },
             20,
         );
         assert!(fx.is_empty());
@@ -1720,7 +1865,11 @@ mod tests {
         let label = w.landmarks["derived_labels"][0];
         let ctrl = w.landmarks["derived"][0];
         let (_, fx) = w.apply(
-            &Cmd::Rename { node: format!("id:{label}"), name: "Renamed".into(), evented: true },
+            &Cmd::Rename {
+                node: format!("id:{label}"),
+                name: "Renamed".into(),
+                evented: true,
+            },
             1,
         );
         assert_eq!(fx.len(), 1, "only the label announces (G-1)");
@@ -1736,13 +1885,24 @@ mod tests {
         let old = w.path_of("controls[2]").unwrap();
         assert!(w.is_alive_path(&old));
         let (r, fx) = w.apply(
-            &Cmd::ReplaceSubtree { root: "panel".into(), nodes: 300, remove_events: true, add_events: true },
+            &Cmd::ReplaceSubtree {
+                root: "panel".into(),
+                nodes: 300,
+                remove_events: true,
+                add_events: true,
+            },
             1,
         );
         assert!(r.ok, "{r:?}");
         assert!(!w.is_alive_path(&old));
-        assert!(fx.iter().any(|e| matches!(e, Effect::Children { add: false, .. })));
-        assert!(fx.iter().any(|e| matches!(e, Effect::Children { add: true, .. })));
+        assert!(
+            fx.iter()
+                .any(|e| matches!(e, Effect::Children { add: false, .. }))
+        );
+        assert!(
+            fx.iter()
+                .any(|e| matches!(e, Effect::Children { add: true, .. }))
+        );
         assert!(fx.iter().any(|e| matches!(e, Effect::CacheRemove { .. })));
         assert!(fx.iter().any(|e| matches!(e, Effect::CacheAdd(_))));
         let new = w.path_of("controls[2]").unwrap();
@@ -1753,7 +1913,12 @@ mod tests {
     fn replace_subtree_without_events_is_silent() {
         let mut w = World::new(settings(), "s");
         let (_, fx) = w.apply(
-            &Cmd::ReplaceSubtree { root: "panel".into(), nodes: 100, remove_events: false, add_events: false },
+            &Cmd::ReplaceSubtree {
+                root: "panel".into(),
+                nodes: 100,
+                remove_events: false,
+                add_events: false,
+            },
             1,
         );
         assert!(fx.is_empty());
@@ -1764,18 +1929,35 @@ mod tests {
         let mut w = World::new(settings(), "s");
         let p = w.path_of("controls[0]").unwrap();
         let n = w.dump(usize::MAX).len();
-        w.apply(&Cmd::Hide { node: "controls[0]".into() }, 1);
+        w.apply(
+            &Cmd::Hide {
+                node: "controls[0]".into(),
+            },
+            1,
+        );
         assert_eq!(w.dump(usize::MAX).len(), n - 1);
         let (_, fx) = w.apply(
-            &Cmd::Destroy { node: "controls[0]".into(), events: DestroyEvents::Full },
+            &Cmd::Destroy {
+                node: "controls[0]".into(),
+                events: DestroyEvents::Full,
+            },
             2,
         );
-        assert!(!fx.iter().any(|e| matches!(e, Effect::CacheRemove { path } if *path == p)), "G-2");
+        assert!(
+            !fx.iter()
+                .any(|e| matches!(e, Effect::CacheRemove { path } if *path == p)),
+            "G-2"
+        );
         let mut spec = settings();
         spec.quirks = Quirks::default();
         let mut w = World::new(spec, "s");
         let n = w.dump(usize::MAX).len();
-        w.apply(&Cmd::Hide { node: "controls[0]".into() }, 1);
+        w.apply(
+            &Cmd::Hide {
+                node: "controls[0]".into(),
+            },
+            1,
+        );
         assert_eq!(w.dump(usize::MAX).len(), n);
     }
 
@@ -1783,11 +1965,19 @@ mod tests {
     fn add_during_dump_is_invisible_to_the_cache() {
         let mut w = World::new(settings(), "s");
         let (r, fx) = w.apply(
-            &Cmd::Add { parent: "panel".into(), name: "late".into(), during_dump: true, silent: false },
+            &Cmd::Add {
+                parent: "panel".into(),
+                name: "late".into(),
+                during_dump: true,
+                silent: false,
+            },
             1,
         );
         assert!(r.ok);
-        assert!(fx.iter().any(|e| matches!(e, Effect::Children { add: true, .. })));
+        assert!(
+            fx.iter()
+                .any(|e| matches!(e, Effect::Children { add: true, .. }))
+        );
         assert!(!fx.iter().any(|e| matches!(e, Effect::CacheAdd(_))), "G-3");
         let path = r.str("path").unwrap().to_owned();
         assert!(w.dump(usize::MAX).iter().all(|i| i.path != path));
@@ -1815,7 +2005,10 @@ mod tests {
         let mut w = World::new(settings(), "s");
         let before = w.child_paths(&w.path_of("sidebar_list").unwrap()).unwrap();
         let (r, fx) = w.apply(
-            &Cmd::Reorder { parent: "sidebar_list".into(), mode: ReorderMode::RemoveAdd },
+            &Cmd::Reorder {
+                parent: "sidebar_list".into(),
+                mode: ReorderMode::RemoveAdd,
+            },
             1,
         );
         assert!(r.ok);
@@ -1826,14 +2019,24 @@ mod tests {
         a.sort();
         b.sort();
         assert_eq!(a, b);
-        assert_eq!(fx.iter().filter(|e| matches!(e, Effect::CacheAdd(_))).count(), 45);
+        assert_eq!(
+            fx.iter()
+                .filter(|e| matches!(e, Effect::CacheAdd(_)))
+                .count(),
+            45
+        );
     }
 
     #[test]
     fn lease_expiry_makes_the_path_unknown_without_an_event() {
         let mut w = World::new(settings(), "s");
         let p = w.path_of("controls[1]").unwrap();
-        let (_, fx) = w.apply(&Cmd::ExpireLease { node: "controls[1]".into() }, 1);
+        let (_, fx) = w.apply(
+            &Cmd::ExpireLease {
+                node: "controls[1]".into(),
+            },
+            1,
+        );
         assert!(fx.is_empty());
         assert!(w.view(&p).is_none());
     }
@@ -1856,9 +2059,19 @@ mod tests {
         assert_ne!(first, second);
         assert!(!fx.iter().any(|e| matches!(e, Effect::CacheAdd(_))));
         assert!(w.dump(usize::MAX).iter().all(|i| i.path != second));
-        let (_, fx) = w.apply(&Cmd::Select { node: "switcher[1]".into() }, 3);
+        let (_, fx) = w.apply(
+            &Cmd::Select {
+                node: "switcher[1]".into(),
+            },
+            3,
+        );
         assert_eq!(fx.len(), 1);
-        let (_, fx) = w.apply(&Cmd::Select { node: "switcher[2]".into() }, 4);
+        let (_, fx) = w.apply(
+            &Cmd::Select {
+                node: "switcher[2]".into(),
+            },
+            4,
+        );
         assert_eq!(fx.len(), 2, "off on the old item, on on the new one");
     }
 
@@ -1876,14 +2089,28 @@ mod tests {
         assert!(w.below_document(&below[0]));
         assert!(!w.below_document(&doc));
         let items = w.dump(usize::MAX);
-        assert!(items.iter().all(|i| i.path != doc && !below.contains(&i.path)));
+        assert!(
+            items
+                .iter()
+                .all(|i| i.path != doc && !below.contains(&i.path))
+        );
     }
 
     #[test]
     fn focus_moves_and_is_logged() {
         let mut w = World::new(settings(), "s");
-        w.apply(&Cmd::Focus { node: "controls[0]".into() }, 5);
-        let (_, fx) = w.apply(&Cmd::Focus { node: "controls[1]".into() }, 6);
+        w.apply(
+            &Cmd::Focus {
+                node: "controls[0]".into(),
+            },
+            5,
+        );
+        let (_, fx) = w.apply(
+            &Cmd::Focus {
+                node: "controls[1]".into(),
+            },
+            6,
+        );
         assert_eq!(fx.len(), 3, "unfocus old, focus new, Focus event");
         let t = w.take_truth();
         assert_eq!(t.iter().filter(|l| l.focus).count(), 2);
@@ -1897,17 +2124,29 @@ mod tests {
         spec.quirks.spurious_parent_add = true;
         let mut w = World::new(spec, "s");
         let (_, fx) = w.apply(
-            &Cmd::ReplaceSubtree { root: "panel".into(), nodes: 100, remove_events: true, add_events: true },
+            &Cmd::ReplaceSubtree {
+                root: "panel".into(),
+                nodes: 100,
+                remove_events: true,
+                add_events: true,
+            },
             1,
         );
         assert!(!fx.iter().any(|e| matches!(e, Effect::CacheRemove { .. })));
         assert!(fx.iter().any(|e| matches!(e, Effect::CacheAdd(_))));
         let (_, fx) = w.apply(
-            &Cmd::Rename { node: "controls[0]".into(), name: "x".into(), evented: true },
+            &Cmd::Rename {
+                node: "controls[0]".into(),
+                name: "x".into(),
+                evented: true,
+            },
             2,
         );
         assert!(matches!(fx[0], Effect::Prop { .. }));
-        assert!(matches!(fx[1], Effect::Children { add: true, .. }), "P9-2: {fx:?}");
+        assert!(
+            matches!(fx[1], Effect::Children { add: true, .. }),
+            "P9-2: {fx:?}"
+        );
     }
 
     #[test]
@@ -1915,7 +2154,11 @@ mod tests {
         let mut spec = settings();
         spec.quirks.dump_realised_only = true;
         let mut w = World::new(spec, "s");
-        assert_eq!(w.dump(usize::MAX).len(), 2, "a fresh GTK4 app dumps 2 items");
+        assert_eq!(
+            w.dump(usize::MAX).len(),
+            2,
+            "a fresh GTK4 app dumps 2 items"
+        );
         let root = w.path_of("root").unwrap();
         w.mark_realised(&root, true);
         let win = w.path_of("window").unwrap();
@@ -1930,7 +2173,12 @@ mod tests {
         spec.quirks.hidden_skips_cache = false;
         let mut w = World::new(spec, "s");
         let n = w.dump(usize::MAX).len();
-        let (_, fx) = w.apply(&Cmd::Hide { node: "controls[0]".into() }, 1);
+        let (_, fx) = w.apply(
+            &Cmd::Hide {
+                node: "controls[0]".into(),
+            },
+            1,
+        );
         assert!(fx.is_empty());
         assert_eq!(w.dump(usize::MAX).len(), n);
         let v = w.view(&w.path_of("controls[0]").unwrap()).unwrap();
@@ -1947,24 +2195,44 @@ mod tests {
             p2p: P2pMode::Peer,
             ..ModelSpec::default()
         };
-        spec.quirks = Quirks { dump_omits_transient: true, ..Quirks::default() };
+        spec.quirks = Quirks {
+            dump_omits_transient: true,
+            ..Quirks::default()
+        };
         let w = World::new(spec, "gedit");
         let live = w.live_count();
         let dump = w.dump(usize::MAX);
         assert!((470..=530).contains(&live), "{live}");
         let frac = dump.len() as f64 / f64::from(live);
-        assert!((0.30..=0.45).contains(&frac), "dump {} of {live}", dump.len());
+        assert!(
+            (0.30..=0.45).contains(&frac),
+            "dump {} of {live}",
+            dump.len()
+        );
         let list = w.path_of("list").unwrap();
-        assert_eq!(dump.iter().find(|i| i.path == list).unwrap().child_count, -1);
+        assert_eq!(
+            dump.iter().find(|i| i.path == list).unwrap().child_count,
+            -1
+        );
     }
 
     #[test]
     fn stray_references_are_errors_not_panics() {
         let mut w = World::new(settings(), "s");
         for c in [
-            Cmd::Rename { node: "nope".into(), name: "x".into(), evented: true },
-            Cmd::Focus { node: "controls[9999]".into() },
-            Cmd::SetValue { node: "controls[0]".into(), value: 1.0, evented: true },
+            Cmd::Rename {
+                node: "nope".into(),
+                name: "x".into(),
+                evented: true,
+            },
+            Cmd::Focus {
+                node: "controls[9999]".into(),
+            },
+            Cmd::SetValue {
+                node: "controls[0]".into(),
+                value: 1.0,
+                evented: true,
+            },
             Cmd::Scroll { steps: 1 },
         ] {
             let (r, _) = w.apply(&c, 1);

@@ -933,6 +933,7 @@ dependencies = [
 name = "gorca-testkit"
 version = "0.0.0"
 dependencies = [
+ "gorca-bench-b1",
  "gorca-connector-api",
  "gorca-doc-source-api",
  "gorca-ingress",

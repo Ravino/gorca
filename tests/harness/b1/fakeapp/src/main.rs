@@ -26,12 +26,13 @@ fn models_dir() -> PathBuf {
 }
 
 fn load_model(arg: &str) -> Result<ModelSpec> {
-    let path = if arg.ends_with(".json") || arg.contains('/') {
+    let path = if Path::new(arg).extension().is_some_and(|e| e == "json") || arg.contains('/') {
         PathBuf::from(arg)
     } else {
         models_dir().join(format!("{arg}.json"))
     };
-    let text = std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+    let text =
+        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
     serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))
 }
 
@@ -52,7 +53,8 @@ async fn main() -> Result<()> {
     let mut seed = None;
     let mut p2p = None;
     let mut quirks = None;
-    let mut dir = std::env::var("GORCA_HARNESS_DIR").map_or_else(|_| std::env::temp_dir(), PathBuf::from);
+    let mut dir =
+        std::env::var("GORCA_HARNESS_DIR").map_or_else(|_| std::env::temp_dir(), PathBuf::from);
     let mut allow_any = false;
     let mut session_bus = None;
     let mut own_name = None;
@@ -95,7 +97,9 @@ async fn main() -> Result<()> {
     let bus_address = bus.context("no --bus and no AT_SPI_BUS_ADDRESS")?;
     // Isolation: never touch an a11y bus that is not a harness session's.
     if !allow_any && !bus_address.contains("/gorca-h.") {
-        bail!("refusing to connect to {bus_address}: not a harness session bus (use --allow-any-bus for a test dbus-daemon)");
+        bail!(
+            "refusing to connect to {bus_address}: not a harness session bus (use --allow-any-bus for a test dbus-daemon)"
+        );
     }
     if let Some(sb) = &session_bus
         && !allow_any
@@ -142,13 +146,17 @@ async fn main() -> Result<()> {
         let cmd: Cmd = match serde_json::from_value(v) {
             Ok(c) => c,
             Err(e) => {
-                emit(&json!({"event": "reply", "id": id, "ok": false, "error": format!("bad command: {e}")}));
+                emit(
+                    &json!({"event": "reply", "id": id, "ok": false, "error": format!("bad command: {e}")}),
+                );
                 continue;
             }
         };
         let quit = matches!(cmd, Cmd::Quit);
         let reply = app.control(cmd).await;
-        emit(&json!({"event": "reply", "id": id, "ok": reply.ok, "error": reply.error, "data": reply.data}));
+        emit(
+            &json!({"event": "reply", "id": id, "ok": reply.ok, "error": reply.error, "data": reply.data}),
+        );
         if quit {
             break;
         }

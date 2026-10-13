@@ -75,7 +75,9 @@ impl B1App {
     pub fn spawn(bin: &Path, a: &AppArgs, truth_dir: &Path) -> Result<Self, AppCtlError> {
         let truth_path = truth_dir.join(format!("{}.truth.jsonl", a.label));
         let mut cmd = Command::new(bin);
-        cmd.args(["--model", &a.model, "--label", &a.label, "--bus", &a.bus, "--truth"]);
+        cmd.args([
+            "--model", &a.model, "--label", &a.label, "--bus", &a.bus, "--truth",
+        ]);
         cmd.arg(&truth_path);
         if !a.register {
             cmd.arg("--no-register");
@@ -125,9 +127,11 @@ impl B1App {
             ready: serde_json::Value::Null,
             truth_path,
         };
-        let line = app.wait_line(Duration::from_secs(30), "ready", |l| l.contains("\"event\":\"ready\""))?;
-        app.ready =
-            serde_json::from_str(&line).map_err(|e| AppCtlError::Protocol(format!("ready: {e}")))?;
+        let line = app.wait_line(Duration::from_secs(30), "ready", |l| {
+            l.contains("\"event\":\"ready\"")
+        })?;
+        app.ready = serde_json::from_str(&line)
+            .map_err(|e| AppCtlError::Protocol(format!("ready: {e}")))?;
         Ok(app)
     }
 
@@ -152,11 +156,17 @@ impl B1App {
     }
 
     pub fn bus_name(&self) -> &str {
-        self.ready.get("bus_name").and_then(|v| v.as_str()).unwrap_or("")
+        self.ready
+            .get("bus_name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
     }
 
     pub fn root(&self) -> &str {
-        self.ready.get("root").and_then(|v| v.as_str()).unwrap_or("")
+        self.ready
+            .get("root")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
     }
 
     /// Send a command and wait for its answer (`timeout` covers a busy or hung app).
@@ -180,7 +190,10 @@ impl B1App {
         let j: serde_json::Value =
             serde_json::from_str(&line).map_err(|e| AppCtlError::Protocol(e.to_string()))?;
         Ok(CmdReply {
-            ok: j.get("ok").and_then(serde_json::Value::as_bool).unwrap_or(false),
+            ok: j
+                .get("ok")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
             error: j.get("error").and_then(|e| e.as_str()).map(str::to_owned),
             data: j.get("data").cloned().unwrap_or_default(),
         })

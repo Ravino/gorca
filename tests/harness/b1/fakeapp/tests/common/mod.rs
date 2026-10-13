@@ -1,7 +1,18 @@
 //! Private dbus-daemon for the fake app's own tests. Isolated: its own socket under a fresh
 //! temporary directory, no service directories (nothing can be activated), no ambient bus.
 
-#![allow(dead_code, clippy::disallowed_methods)]
+#![allow(
+    dead_code,
+    clippy::disallowed_methods,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::cast_precision_loss,
+    clippy::type_complexity,
+    clippy::redundant_closure_for_method_calls,
+    clippy::items_after_statements,
+    clippy::too_many_lines
+)]
 
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
@@ -106,5 +117,6 @@ pub async fn call<B>(
 where
     B: Serialize + DynamicType,
 {
-    c.call_method(Some(dest), path, Some(iface), member, body).await
+    c.call_method(Some(dest), path, Some(iface), member, body)
+        .await
 }

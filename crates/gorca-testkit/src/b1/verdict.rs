@@ -93,7 +93,7 @@ impl TruthDb {
         true
     }
 
-/// Was the node destroyed (or its lease expired) before `t`?
+    /// Was the node destroyed (or its lease expired) before `t`?
     pub fn dead_before(&self, app: &str, path: &str, t: u64) -> bool {
         ["destroyed", "lease"].iter().any(|f| {
             self.by
@@ -164,7 +164,14 @@ mod tests {
         }
     }
 
-    fn pres(utt: u64, t: u64, stim: u64, name: &str, src: Source, refines: Option<u64>) -> Presentation {
+    fn pres(
+        utt: u64,
+        t: u64,
+        stim: u64,
+        name: &str,
+        src: Source,
+        refines: Option<u64>,
+    ) -> Presentation {
         Presentation {
             t_ns: t,
             stimulus_ns: stim,
@@ -186,7 +193,10 @@ mod tests {
     fn correct_when_the_name_is_a_valid_version() {
         let db = TruthDb::new(&[line(100, "/p", "name", "Old".into(), "New".into())]);
         let p = pres(1, 300, 200, "New", Source::MissReply, None);
-        assert_eq!(classify(&p, &[p.clone()], &db), Verdict::Correct);
+        assert_eq!(
+            classify(&p, std::slice::from_ref(&p), &db),
+            Verdict::Correct
+        );
     }
 
     #[test]
@@ -195,7 +205,11 @@ mod tests {
         let db = TruthDb::new(&[line(250, "/p", "name", "Old".into(), "New".into())]);
         for n in ["Old", "New"] {
             let p = pres(1, 300, 200, n, Source::Hit, None);
-            assert_eq!(classify(&p, &[p.clone()], &db), Verdict::Correct, "{n}");
+            assert_eq!(
+                classify(&p, std::slice::from_ref(&p), &db),
+                Verdict::Correct,
+                "{n}"
+            );
         }
     }
 
@@ -203,29 +217,50 @@ mod tests {
     fn old_name_long_after_the_change_is_stale_unless_corrected() {
         let db = TruthDb::new(&[line(100, "/p", "name", "Old".into(), "New".into())]);
         let bad = pres(1, 300, 200, "Old", Source::Hit, None);
-        assert_eq!(classify(&bad, &[bad.clone()], &db), Verdict::Stale);
+        assert_eq!(
+            classify(&bad, std::slice::from_ref(&bad), &db),
+            Verdict::Stale
+        );
         let refine = pres(2, 350, 200, "New", Source::Refine, Some(1));
-        assert_eq!(classify(&bad, &[bad.clone(), refine], &db), Verdict::Refined);
+        assert_eq!(
+            classify(&bad, &[bad.clone(), refine], &db),
+            Verdict::Refined
+        );
         let late = pres(3, 300 + 400_000_000, 200, "New", Source::Followup, Some(1));
         assert_eq!(classify(&bad, &[bad.clone(), late], &db), Verdict::Late);
         let too_late = pres(4, 300 + 600_000_000, 200, "New", Source::Followup, Some(1));
-        assert_eq!(classify(&bad, &[bad.clone(), too_late], &db), Verdict::Stale);
+        assert_eq!(
+            classify(&bad, &[bad.clone(), too_late], &db),
+            Verdict::Stale
+        );
     }
 
     #[test]
     fn tracked_state_bits_are_compared() {
-        let db = TruthDb::new(&[line(100, "/p", "states", serde_json::json!([]), serde_json::json!(["checked"]))]);
+        let db = TruthDb::new(&[line(
+            100,
+            "/p",
+            "states",
+            serde_json::json!([]),
+            serde_json::json!(["checked"]),
+        )]);
         let mut p = pres(1, 300, 200, "x", Source::Hit, None);
-        assert_eq!(classify(&p, &[p.clone()], &db), Verdict::Stale);
+        assert_eq!(classify(&p, std::slice::from_ref(&p), &db), Verdict::Stale);
         p.states = 1 << state::CHECKED;
-        assert_eq!(classify(&p, &[p.clone()], &db), Verdict::Correct);
+        assert_eq!(
+            classify(&p, std::slice::from_ref(&p), &db),
+            Verdict::Correct
+        );
     }
 
     #[test]
     fn unmutated_fields_are_unconstrained_and_corrections_count() {
         let db = TruthDb::new(&[]);
         let p = pres(1, 3, 2, "anything", Source::Hit, None);
-        assert_eq!(classify(&p, &[p.clone()], &db), Verdict::Correct);
+        assert_eq!(
+            classify(&p, std::slice::from_ref(&p), &db),
+            Verdict::Correct
+        );
         let v = vec![(p, Verdict::Refined)];
         assert_eq!(corrections(&v), 1);
     }

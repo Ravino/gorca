@@ -190,7 +190,12 @@ impl MirrorAdapter for RefMirror {
                 .nodes
                 .insert(
                     n.key,
-                    RNode { name: n.name, have: n.have, stale, confirmed: issued },
+                    RNode {
+                        name: n.name,
+                        have: n.have,
+                        stale,
+                        confirmed: issued,
+                    },
                 )
                 .is_none()
             {
@@ -268,7 +273,11 @@ impl MirrorAdapter for RefMirror {
         match self.nodes.get(&k) {
             Some(n) => AView::Hit {
                 name: n.name.clone(),
-                stale: if n.confirmed < self.epoch { ALL } else { n.stale },
+                stale: if n.confirmed < self.epoch {
+                    ALL
+                } else {
+                    n.stale
+                },
                 have: n.have,
             },
             None if self.tomb.contains_key(&k) => AView::Gone,
@@ -286,7 +295,11 @@ impl MirrorAdapter for RefMirror {
                 .filter(|n| n.stale != 0 || n.confirmed < self.epoch)
                 .count() as u64,
             bytes: self.nodes.values().map(|n| 64 + n.name.len() as u64).sum(),
-            partial: self.nodes.values().filter(|n| n.have & PRESENT != PRESENT).count() as u64,
+            partial: self
+                .nodes
+                .values()
+                .filter(|n| n.have & PRESENT != PRESENT)
+                .count() as u64,
             evictions: self.evictions,
             revivals: self.revivals,
         }
@@ -294,7 +307,11 @@ impl MirrorAdapter for RefMirror {
 
     fn check_invariants(&self) -> Result<(), String> {
         if self.live != self.nodes.len() as u64 {
-            return Err(format!("live counter {} != {} nodes", self.live, self.nodes.len()));
+            return Err(format!(
+                "live counter {} != {} nodes",
+                self.live,
+                self.nodes.len()
+            ));
         }
         if let Some(k) = self.nodes.keys().find(|k| self.tomb.contains_key(k)) {
             return Err(format!("{k:?} is both live and tombstoned"));
@@ -306,14 +323,22 @@ impl MirrorAdapter for RefMirror {
 // ---- helpers --------------------------------------------------------------------------------
 
 pub fn node(app: u32, id: u64, name: &str) -> ANode {
-    ANode { key: (app, id), name: name.to_owned(), parent: None, have: PRESENT }
+    ANode {
+        key: (app, id),
+        name: name.to_owned(),
+        parent: None,
+        have: PRESENT,
+    }
 }
 
 /// Tiny seeded generator for op sequences.
 struct Lcg(u64);
 impl Lcg {
     fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.0 = self
+            .0
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         self.0 >> 33
     }
 }
@@ -360,7 +385,8 @@ pub fn run_mirror_counters_exact<M: MirrorAdapter>(seed: u64, ops: usize) -> Res
                 "retire"
             }
         };
-        m.check_invariants().map_err(|e| format!("op {i} ({what}): {e}"))?;
+        m.check_invariants()
+            .map_err(|e| format!("op {i} ({what}): {e}"))?;
         let (mut live, mut tomb) = (0u64, 0u64);
         for id in 0..UNIVERSE {
             match m.view((1, id)) {
@@ -371,10 +397,16 @@ pub fn run_mirror_counters_exact<M: MirrorAdapter>(seed: u64, ops: usize) -> Res
         }
         let s = m.stats();
         if s.live != live {
-            return Err(format!("op {i} ({what}): stats.live {} but census {live}", s.live));
+            return Err(format!(
+                "op {i} ({what}): stats.live {} but census {live}",
+                s.live
+            ));
         }
         if s.tombstones < tomb {
-            return Err(format!("op {i} ({what}): stats.tombstones {} < census {tomb}", s.tombstones));
+            return Err(format!(
+                "op {i} ({what}): stats.tombstones {} < census {tomb}",
+                s.tombstones
+            ));
         }
     }
     Ok(())
@@ -388,7 +420,9 @@ pub fn run_app_churn<M: MirrorAdapter>(cycles: u32, check_rss: bool) -> Result<(
     let rss0 = rss_kib();
     for c in 0..cycles {
         let mut m = M::new(c);
-        let nodes: Vec<ANode> = (0..5_000).map(|i| node(c, i, &format!("node number {i}"))).collect();
+        let nodes: Vec<ANode> = (0..5_000)
+            .map(|i| node(c, i, &format!("node number {i}")))
+            .collect();
         m.apply(nodes, Origin::Push);
         for i in (0..5_000).step_by(3) {
             m.tombstone((c, i));
@@ -404,7 +438,9 @@ pub fn run_app_churn<M: MirrorAdapter>(cycles: u32, check_rss: bool) -> Result<(
     }
     let grown = rss_kib().saturating_sub(rss0);
     if check_rss && grown > 4 * 1024 {
-        return Err(format!("RSS grew {grown} KiB over {cycles} app cycles (limit 4096 KiB)"));
+        return Err(format!(
+            "RSS grew {grown} KiB over {cycles} app cycles (limit 4096 KiB)"
+        ));
     }
     Ok(())
 }
@@ -428,7 +464,10 @@ pub fn run_foreign_refs<M: MirrorAdapter>() -> Result<(), String> {
     let mut m = M::new(1);
     let mut batch: Vec<ANode> = (0..10).map(|i| node(1, i, "own")).collect();
     batch.extend((0..7).map(|i| node(2, i, "foreign")));
-    batch.push(ANode { parent: Some((3, 1)), ..node(1, 99, "own with foreign parent") });
+    batch.push(ANode {
+        parent: Some((3, 1)),
+        ..node(1, 99, "own with foreign parent")
+    });
     let out = m.apply(batch, Origin::Reply { issued_at: m.seq() });
     if out.dropped_foreign != 7 {
         return Err(format!("dropped_foreign {} != 7", out.dropped_foreign));
@@ -451,12 +490,18 @@ pub fn run_late_reply_never_revives<M: MirrorAdapter>() -> Result<(), String> {
     let mut m = M::new(1);
     let issued = m.seq();
     m.tombstone((1, 5));
-    let out = m.apply(vec![node(1, 5, "ghost")], Origin::Reply { issued_at: issued });
+    let out = m.apply(
+        vec![node(1, 5, "ghost")],
+        Origin::Reply { issued_at: issued },
+    );
     if m.view((1, 5)) != AView::Gone || out.dropped_tombstoned != 1 {
         return Err(format!("ghost revived: {:?} {out:?}", m.view((1, 5))));
     }
     // A pushed snapshot has no issue time before the tombstone either.
-    let out = m.apply(vec![node(1, 5, "ghost")], Origin::CacheDump { issued_at: issued });
+    let out = m.apply(
+        vec![node(1, 5, "ghost")],
+        Origin::CacheDump { issued_at: issued },
+    );
     if m.view((1, 5)) != AView::Gone || out.applied != 0 {
         return Err("a cache dump issued before the removal revived the key (LR-4)".into());
     }
@@ -468,9 +513,16 @@ pub fn run_proof_of_life_revives<M: MirrorAdapter>() -> Result<(), String> {
     let mut m = M::new(1);
     m.tombstone((1, 5));
     let issued = m.seq();
-    let out = m.apply(vec![node(1, 5, "alive")], Origin::Reply { issued_at: issued });
+    let out = m.apply(
+        vec![node(1, 5, "alive")],
+        Origin::Reply { issued_at: issued },
+    );
     match m.view((1, 5)) {
-        AView::Hit { name, .. } if name == "alive" && out.revived == 1 && m.stats().revivals == 1 => Ok(()),
+        AView::Hit { name, .. }
+            if name == "alive" && out.revived == 1 && m.stats().revivals == 1 =>
+        {
+            Ok(())
+        }
         other => Err(format!("no revival after proof of life: {other:?} {out:?}")),
     }
 }
@@ -482,7 +534,10 @@ pub fn run_redirty_during_fetch<M: MirrorAdapter>() -> Result<(), String> {
     m.apply(vec![node(1, 5, "v0")], Origin::Push);
     let issued = m.seq(); // fetch issued here
     m.invalidate((1, 5), NAME); // event arrives while it is in flight
-    m.apply(vec![node(1, 5, "v0 (pre-mutation)")], Origin::Reply { issued_at: issued });
+    m.apply(
+        vec![node(1, 5, "v0 (pre-mutation)")],
+        Origin::Reply { issued_at: issued },
+    );
     match m.view((1, 5)) {
         AView::Hit { stale, .. } if stale & NAME != 0 => {}
         other => return Err(format!("Fresh with pre-invalidation content: {other:?}")),
@@ -493,7 +548,9 @@ pub fn run_redirty_during_fetch<M: MirrorAdapter>() -> Result<(), String> {
     m.apply(vec![node(1, 6, "old")], Origin::Reply { issued_at: issued });
     match m.view((1, 6)) {
         AView::Hit { stale, .. } if stale & NAME != 0 => Ok(()),
-        other => Err(format!("unseen key stored Fresh after an invalidation: {other:?}")),
+        other => Err(format!(
+            "unseen key stored Fresh after an invalidation: {other:?}"
+        )),
     }
 }
 
@@ -505,13 +562,17 @@ pub fn run_apply_bounded<M: MirrorAdapter>(rounds: u32, budget_us: u64) -> Resul
     let mut worst = 0u64;
     let mut m = M::new(1);
     for r in 0..rounds {
-        let nodes: Vec<ANode> = (0..4_096).map(|i| node(1, u64::from(r) * 4_096 + i, "node")).collect();
+        let nodes: Vec<ANode> = (0..4_096)
+            .map(|i| node(1, u64::from(r) * 4_096 + i, "node"))
+            .collect();
         let t = std::time::Instant::now();
         m.apply(nodes, Origin::Push);
         worst = worst.max(u64::try_from(t.elapsed().as_micros()).unwrap_or(u64::MAX));
     }
     if worst > budget_us {
-        return Err(format!("apply of 4096 nodes took {worst} us (budget {budget_us} us)"));
+        return Err(format!(
+            "apply of 4096 nodes took {worst} us (budget {budget_us} us)"
+        ));
     }
     Ok(worst)
 }
@@ -578,7 +639,9 @@ pub fn run_fuzz_get_items<D: ItemsDecoder>(d: &D, seed: u64, iters: u32) -> Resu
         }),
     ];
     let mut r = Lcg(seed);
-    let secs: Option<u64> = std::env::var("GORCA_FUZZ_SECS").ok().and_then(|v| v.parse().ok());
+    let secs: Option<u64> = std::env::var("GORCA_FUZZ_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok());
     let start = std::time::Instant::now();
     let mut n = 0u32;
     loop {
@@ -592,14 +655,24 @@ pub fn run_fuzz_get_items<D: ItemsDecoder>(d: &D, seed: u64, iters: u32) -> Resu
         n += 1;
         let base = &corpus[(r.next() as usize) % corpus.len()];
         let input = if r.next() % 5 == 0 {
-            (0..(r.next() as usize) % 256).map(|_| r.next() as u8).collect()
+            (0..(r.next() as usize) % 256)
+                .map(|_| r.next() as u8)
+                .collect()
         } else {
             mutate(base, &mut r)
         };
-        let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| d.decode(":1.5", &input)));
+        let res =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| d.decode(":1.5", &input)));
         match res {
-            Err(_) => return Err(format!("decoder panicked on mutation {n} ({} bytes)", input.len())),
-            Ok(Ok(dec)) => check_caps(&dec.items, &lim).map_err(|e| format!("mutation {n}: {e}"))?,
+            Err(_) => {
+                return Err(format!(
+                    "decoder panicked on mutation {n} ({} bytes)",
+                    input.len()
+                ));
+            }
+            Ok(Ok(dec)) => {
+                check_caps(&dec.items, &lim).map_err(|e| format!("mutation {n}: {e}"))?
+            }
             Ok(Err(_)) => {}
         }
     }
@@ -659,7 +732,11 @@ pub fn run_dump_caps<D: ItemsDecoder>(d: &D) -> Result<(), String> {
     let dec = safe_decode(d, &bytes)??;
     check_caps(&dec.items, &lim)?;
     if dec.items.len() != lim.max_items || !dec.truncated {
-        return Err(format!("70000 items gave {} (truncated {})", dec.items.len(), dec.truncated));
+        return Err(format!(
+            "70000 items gave {} (truncated {})",
+            dec.items.len(),
+            dec.truncated
+        ));
     }
     // A reply beyond the byte cap is refused whole.
     let huge = vec![0u8; lim.max_bytes + 1];
@@ -732,13 +809,20 @@ pub fn run_policy_memory_accounting<P: PolicyAdapter>(mut p: P) -> Result<(), St
         p.step(Health::Healthy, PInput::FocusSettled(chunk));
         let m = p.memory_bytes();
         if m > FILL_STATE_MAX_BYTES {
-            return Err(format!("{}: memory_bytes {m} > cap {FILL_STATE_MAX_BYTES} after chunk {chunk}", p.name()));
+            return Err(format!(
+                "{}: memory_bytes {m} > cap {FILL_STATE_MAX_BYTES} after chunk {chunk}",
+                p.name()
+            ));
         }
         last = last.max(m);
     }
     p.step(Health::Gone, PInput::Gone);
     if p.memory_bytes() > floor + 1024 {
-        return Err(format!("{}: state not released on Gone ({} > floor {floor})", p.name(), p.memory_bytes()));
+        return Err(format!(
+            "{}: state not released on Gone ({} > floor {floor})",
+            p.name(),
+            p.memory_bytes()
+        ));
     }
     let _ = last;
     Ok(())
@@ -761,7 +845,10 @@ pub fn run_step_bounded<P: PolicyAdapter>(mut p: P, budget_us: u64) -> Result<u6
         worst = worst.max(u64::try_from(t.elapsed().as_micros()).unwrap_or(u64::MAX));
     }
     if worst > budget_us {
-        return Err(format!("{}: step took {worst} us (budget {budget_us} us)", p.name()));
+        return Err(format!(
+            "{}: step took {worst} us (budget {budget_us} us)",
+            p.name()
+        ));
     }
     Ok(worst)
 }
@@ -786,7 +873,11 @@ pub fn run_policy_respects_health<P: PolicyAdapter>(mut p: P) -> Result<(), Stri
                     _ => matches!(r.class, Class::Prefetch | Class::Background),
                 };
                 if bad {
-                    return Err(format!("{}: {:?} request {r:?} to a {h:?} app on {i:?}", p.name(), r.class));
+                    return Err(format!(
+                        "{}: {:?} request {r:?} to a {h:?} app on {i:?}",
+                        p.name(),
+                        r.class
+                    ));
                 }
             }
         }
@@ -817,10 +908,19 @@ impl PolicyAdapter for RefPolicy {
                 }
             }
             PInput::FocusSettled(n) | PInput::WindowActivated(n) => {
-                out.push(PRequest { class: Class::Prefetch, node: n });
-                out.push(PRequest { class: Class::Interactive, node: n });
+                out.push(PRequest {
+                    class: Class::Prefetch,
+                    node: n,
+                });
+                out.push(PRequest {
+                    class: Class::Interactive,
+                    node: n,
+                });
             }
-            PInput::Tick | PInput::Resync => out.push(PRequest { class: Class::Background, node: 0 }),
+            PInput::Tick | PInput::Resync => out.push(PRequest {
+                class: Class::Background,
+                node: 0,
+            }),
             PInput::Gone => self.state.clear(),
             PInput::Appeared => {}
         }
@@ -875,11 +975,15 @@ pub fn run_interactive_not_starved<A: AdmissionAdapter>() -> Result<(), String> 
         }
     }
     if bg > 6 {
-        return Err(format!("{bg} non-interactive requests in flight (limit 8 - 2 reserved)"));
+        return Err(format!(
+            "{bg} non-interactive requests in flight (limit 8 - 2 reserved)"
+        ));
     }
     for n in 0..2 {
         if a.admit(Class::Interactive, false) != Admit::Granted {
-            return Err(format!("Interactive request {n} refused behind background work"));
+            return Err(format!(
+                "Interactive request {n} refused behind background work"
+            ));
         }
     }
     Ok(())
@@ -1211,39 +1315,58 @@ mod tests {
     mutant_adapter!(DriftM, Bug::CounterDriftOnEvict);
     mutant_adapter!(RetainM, Bug::RetainOnRetire);
 
+    struct NoReserve(u32);
+    impl AdmissionAdapter for NoReserve {
+        fn new() -> Self {
+            Self(0)
+        }
+        fn admit(&mut self, _: Class, _: bool) -> Admit {
+            if self.0 < 8 {
+                self.0 += 1;
+                Admit::Granted
+            } else {
+                Admit::Refused
+            }
+        }
+        fn complete(&mut self, _: Class, _: bool) {
+            self.0 = self.0.saturating_sub(1);
+        }
+    }
+
     #[test]
     fn the_audits_catch_their_mutants() {
         let _ = mutant(Bug::None);
-        assert!(run_late_reply_never_revives::<ReviveM>().is_err(), "MA-4 LR-1");
+        assert!(
+            run_late_reply_never_revives::<ReviveM>().is_err(),
+            "MA-4 LR-1"
+        );
         assert!(run_redirty_during_fetch::<RedirtyM>().is_err(), "MA-5");
         assert!(run_foreign_refs::<ForeignM>().is_err(), "MA-3");
-        assert!(run_mirror_counters_exact::<DriftM>(1, 3_000).is_err(), "MA-1");
+        assert!(
+            run_mirror_counters_exact::<DriftM>(1, 3_000).is_err(),
+            "MA-1"
+        );
         assert!(run_app_churn::<RetainM>(3, false).is_err(), "MA-2");
         // A mirror that stores nothing cannot satisfy proof-of-life.
         assert!(run_proof_of_life_revives::<Late>().is_err(), "MA-4 LR-3");
         // Decoder: trusting lengths panics or overruns.
-        assert!(run_fuzz_get_items(&super::super::items::CarelessDecoder, 7, 2_000).is_err(), "MA-7");
-        assert!(run_dump_caps(&super::super::items::CarelessDecoder).is_err(), "MA-7 caps");
+        assert!(
+            run_fuzz_get_items(&super::super::items::CarelessDecoder, 7, 2_000).is_err(),
+            "MA-7"
+        );
+        assert!(
+            run_dump_caps(&super::super::items::CarelessDecoder).is_err(),
+            "MA-7 caps"
+        );
         // Policies.
-        assert!(run_policy_respects_health(RefPolicy { ignore_health: true, ..RefPolicy::default() }).is_err());
+        assert!(
+            run_policy_respects_health(RefPolicy {
+                ignore_health: true,
+                ..RefPolicy::default()
+            })
+            .is_err()
+        );
         // Admission: a limiter without reservation starves Interactive.
-        struct NoReserve(u32);
-        impl AdmissionAdapter for NoReserve {
-            fn new() -> Self {
-                Self(0)
-            }
-            fn admit(&mut self, _: Class, _: bool) -> Admit {
-                if self.0 < 8 {
-                    self.0 += 1;
-                    Admit::Granted
-                } else {
-                    Admit::Refused
-                }
-            }
-            fn complete(&mut self, _: Class, _: bool) {
-                self.0 = self.0.saturating_sub(1);
-            }
-        }
         assert!(run_interactive_not_starved::<NoReserve>().is_err(), "MA-8");
     }
 }

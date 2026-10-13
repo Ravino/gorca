@@ -1,6 +1,16 @@
 //! The binary: control channel, truth log, isolation refusal, every shipped model loads.
 
-#![allow(clippy::disallowed_methods)]
+#![allow(
+    clippy::disallowed_methods,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::cast_precision_loss,
+    clippy::type_complexity,
+    clippy::redundant_closure_for_method_calls,
+    clippy::items_after_statements,
+    clippy::too_many_lines
+)]
 
 mod common;
 
@@ -54,7 +64,12 @@ fn every_shipped_model_parses_and_builds_a_sane_tree() {
 #[test]
 fn refuses_a_bus_that_is_not_a_harness_session() {
     let out = Command::new(bin())
-        .args(["--model", "settings", "--bus", "unix:path=/run/user/1000/at-spi/bus_0"])
+        .args([
+            "--model",
+            "settings",
+            "--bus",
+            "unix:path=/run/user/1000/at-spi/bus_0",
+        ])
         .stdin(Stdio::null())
         .output()
         .unwrap();
@@ -69,15 +84,33 @@ fn control_channel_truth_log_and_restart_with_the_same_paths() {
     assert!(a.bus_name().starts_with(':'));
     let lm = a.cmd(&Cmd::Landmarks).unwrap();
     assert!(lm.ok);
-    let first_path = lm.data["landmarks"]["controls"][0].as_str().unwrap().to_owned();
+    let first_path = lm.data["landmarks"]["controls"][0]
+        .as_str()
+        .unwrap()
+        .to_owned();
     let r = a
-        .cmd(&Cmd::Rename { node: "controls[0]".into(), name: "Hello".into(), evented: false })
+        .cmd(&Cmd::Rename {
+            node: "controls[0]".into(),
+            name: "Hello".into(),
+            evented: false,
+        })
         .unwrap();
     assert!(r.ok);
     let t = a.truth();
     assert_eq!(t.len(), 1);
-    assert_eq!((t[0].path.as_str(), t[0].new.as_str().unwrap()), (first_path.as_str(), "Hello"));
-    assert!(!a.cmd(&Cmd::Rename { node: "nope".into(), name: "x".into(), evented: true }).unwrap().ok);
+    assert_eq!(
+        (t[0].path.as_str(), t[0].new.as_str().unwrap()),
+        (first_path.as_str(), "Hello")
+    );
+    assert!(
+        !a.cmd(&Cmd::Rename {
+            node: "nope".into(),
+            name: "x".into(),
+            evented: true
+        })
+        .unwrap()
+        .ok
+    );
     let stats = a.stats().unwrap();
     assert!(stats.nodes_live > 700);
     // Crash and restart: same seed gives the same paths under a new bus name (IC-6).
@@ -86,5 +119,8 @@ fn control_channel_truth_log_and_restart_with_the_same_paths() {
     let mut b = B1App::spawn(&bin(), &args(&bus, "settings", "s1b"), &bus.dir).unwrap();
     assert_ne!(b.bus_name(), old_name);
     let lm2 = b.cmd(&Cmd::Landmarks).unwrap();
-    assert_eq!(lm2.data["landmarks"]["controls"][0].as_str().unwrap(), first_path);
+    assert_eq!(
+        lm2.data["landmarks"]["controls"][0].as_str().unwrap(),
+        first_path
+    );
 }
