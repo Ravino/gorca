@@ -60,9 +60,9 @@ Baseline: the reference (arm a) is zbus `MessageStream` + `Mutex` coalescer; it 
 | Interface . member | Condition | Events | Body fields read |
 |---|---|---|---|
 | `Cache.RemoveAccessible` | body `(so)`, bus name == sender | `NodeRemoved{node: hash(path)}` (same app) | the `(so)` |
-| | bus name != sender (foreign reference) | nothing, **malformed** | the `(so)` |
+| | bus name != sender (foreign reference) | nothing, **malformed**, counted in `DrainStats::malformed` (B-1 SPEC PW-8, IC-16) | the `(so)` |
 | `Cache.AddAccessible` | body `((so)(so)(so)iiassusau)`, object and parent bus names == sender | `ChildrenChanged{node: hash(parent path)}` (same app) | the first three refs only (object, app, parent); index, counts, interfaces, name, role, description and states are not decoded |
-| | a foreign object or parent bus name | nothing, **malformed** | the first three refs |
+| | a foreign object or parent bus name | nothing, **malformed**, counted in `DrainStats::malformed` (B-1 SPEC PW-8, IC-16) | the first three refs |
 
 Rules: a body that is truncated or does not match the signature is malformed (counted in `DrainStats::malformed`, framing unaffected), as in §3.2. `AddAccessible` does not create a node: it dirties the parent's children, and the mirror fetches the new child on demand; this keeps the drain body-light and avoids trusting a snapshot the app may also report through `GetItems`. `RemoveAccessible` tombstones through the usual `NodeRemoved` path; per ADR-0001 I-1 a later successful reply to a request issued after it revives the key (GTK4 also sends it for contexts that become hidden). Both events coalesce under the existing keys (R-LWW for `Children`; R-1 supersession and a kept class under `Flooded` for `Removed`), so they add no new coalescing rule and no new resource bound. Conformance: C-D tests extended with both members, the foreign-reference cases and truncated bodies; the B-2 executable model gains the two rows.
 
