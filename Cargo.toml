@@ -5,6 +5,7 @@ resolver = "3"
 members = [
     "crates/*",
     "extensions/*",
+    "tests/harness/b1/fakeapp",
     "xtask",
 ]
 

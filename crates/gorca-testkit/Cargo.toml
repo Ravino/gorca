@@ -16,6 +16,8 @@ gorca-doc-source-api = { workspace = true }
 tokio = { workspace = true, features = ["test-util", "net", "io-util"] }
 smallvec = { workspace = true }
 thiserror = { workspace = true }
+serde = { workspace = true, features = ["derive", "std"] }
+serde_json = "1"
 
 [lints]
 workspace = true

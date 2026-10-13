@@ -37,6 +37,8 @@ const MAY_USE_ZBUS: &[&str] = &[
     "gorca-input-mutter",
     "gorca-input-inject",
     "gorca-daemon",
+    // B-1 harness fake application (tests/harness/b1/fakeapp): serves the AT-SPI interfaces.
+    "b1-fakeapp",
 ];
 const MAY_USE_ATSPI: &[&str] = &["gorca-connector-atspi"];
 const TOKIO_FREE: &[&str] = &["gorca-model", "gorca-doc"];

@@ -1,0 +1,8 @@
+{
+  "name": "shell", "app_name": "gnome-shell", "toolkit": "atk-bridge/St", "shape": "shell",
+  "p2p": "peer", "path_style": "counter", "seed": 101,
+  "nodes_idle": 400, "nodes_peak": 1500, "depth_min": 12, "depth_max": 20,
+  "service": { "p50_ms": 0.12, "p99_ms": 0.8 }, "getitems_us_per_item": 15.0,
+  "quirks": { "silent_derived_names": true, "hidden_skips_cache": false, "add_during_dump_invisible": false,
+              "recycle_rows": false, "recycle_evented": false, "dump_omits_transient": true, "switcher_rebuild": true }
+}
