@@ -43,10 +43,13 @@ fn ingress_pair() -> (gorca_ingress::IngressSender, gorca_ingress::IngressReceiv
 fn mirror_ops(c: &mut Criterion) {
     let mut g = c.benchmark_group("mirror");
     let (mut w, r) = mirror();
-    w.apply(SnapshotBatch {
-        nodes: (0..10_000).map(snapshot).collect(),
-        ..Default::default()
-    });
+    w.apply(
+        SnapshotBatch {
+            nodes: (0..10_000).map(snapshot).collect(),
+            ..Default::default()
+        },
+        gorca_mirror::ApplyOrigin::Push,
+    );
     g.bench_function("get_hit", |b| {
         b.iter(|| {
             black_box(r.get(key(black_box(4242))));
@@ -59,10 +62,13 @@ fn mirror_ops(c: &mut Criterion) {
     });
     g.bench_function("apply_one_node", |b| {
         b.iter(|| {
-            w.apply(SnapshotBatch {
-                nodes: vec![snapshot(black_box(4242))],
-                ..Default::default()
-            });
+            w.apply(
+                SnapshotBatch {
+                    nodes: vec![snapshot(black_box(4242))],
+                    ..Default::default()
+                },
+                gorca_mirror::ApplyOrigin::Push,
+            );
         });
     });
     g.finish();
