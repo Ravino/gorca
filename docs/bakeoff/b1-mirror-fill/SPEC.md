@@ -6,8 +6,9 @@ Decision under test: ADR-0001 §15, B-1 ("Native-app mirror fill strategy"), Pha
 Planned harness: `crates/gorca-bench-b1`, `docs/bakeoff/b1-mirror-fill/harness/`, the fake app
 `tests/harness/b1/` (section 11).
 Blocking inputs: shared pre-arm work PW-1…PW-12 (section 4.7) merged on `main`; harness H-1…H-12
-(section 11) merged on `main`; **P-9** (GTK4 `AddAccessible`/`RemoveAccessible` consistency,
-linux-platform-engineer, in progress) answered before arm B is judged (section 2.2).
+(section 11) merged on `main`. **P-9 answered 2026-10-13** (`docs/reports/2026-10-13-p9-cache-p2p.md`):
+eager `GetItems` is complete only for gnome-shell, so B-1 runs **two arms, A and C**; pure-eager
+arm B is dropped (orchestrator decision, `docs/decisions.md` 2026-10-13; section 2.2).
 
 ## 1. Problem
 
@@ -30,8 +31,8 @@ tombstones, bounds, the store) is shared code that exists before the arms start.
 | Arm | Idea | Expected strength | Expected weakness |
 |---|---|---|---|
 | **A lazy** | fetch on demand; events invalidate; nothing prefetched | fewest calls and bytes, no head-of-line blocking in the app | misses on first visits; ancestry for "where am I" costs round trips |
-| **B eager** | `Cache.GetItems` per app, kept current by `AddAccessible`/`RemoveAccessible` and events | highest hit rate including first visits | startup burst; GetItems blocks the app's main loop (head-of-line for the first focus); RSS grows with app size; depends on P-9 |
-| **C hybrid** | on focus/window activation: prefetch ancestry to the window and the focus's siblings; lazy elsewhere | hit rate close to B for Tab/arrow walks at a cost close to A | prefetch misses jumps (search results, new panels); more policy state |
+| ~~**B eager**~~ | *dropped after P-9:* `GetItems` is incomplete on GTK4 (realised objects only, no `RemoveAccessible`), GTK3 (partial), Firefox and Qt (empty) | — | — |
+| **C hybrid** | lazy everywhere; eager `GetItems` only for apps whose dump is verified complete (gnome-shell); on focus/window activation prefetch ancestry to the window and the focus's siblings | hit rate of an eager mirror on Shell and of a focus-window prefetch elsewhere, at a cost close to A | Shell main-loop stall during the dump; prefetch misses jumps (search results, new panels); more policy state |
 
 Out of scope: web documents (ADR-0003 doc actor; `GetItems` does not return document nodes,
 ADR-0001 §5.4), text content and caret (M3, `TextQuery`), review/object navigation commands (M4),
@@ -48,7 +49,7 @@ the store implementation (MS-3 decided: `scc::HashIndex`,
 | G-1 | GTK4 emits `accessible-name` only when the `LABEL` property changes; names computed from content or `labelled-by` change silently | `refs/gtk/gtk/a11y/gtkatspicontext.c:1231-1236` | Event invalidation alone cannot keep GTK4 names fresh → revalidation RV-1 (section 5.3) |
 | G-2 | GTK4 skips `AddAccessible` and `RemoveAccessible` for contexts in the hidden state | `gtkatspicache.c:222-229, 251-259` | An eager cache can keep ghosts and miss additions (P-9 H1) |
 | G-3 | GTK4 suppresses `AddAccessible` while it serves `GetItems` | `gtkatspicache.c:439-443` | Objects added during a dump may be neither in the reply nor signalled (P-9 H2) |
-| G-4 | GTK4 `GetApplicationBusAddress` returns the a11y **bus** address, not a peer socket | `gtkatspiroot.c:191-196`, root created with `get_bus_address(display)` at `gtkatspicontext.c:1589` | For Settings and Files, "P2P" (D-7) is a second bus connection: replies still cross the broker. The P2P pool must detect it and reuse the call connection instead of opening a duplicate |
+| G-4 | GTK4 `GetApplicationBusAddress` returns the a11y **bus** address, not a peer socket | `gtkatspiroot.c:191-196`, root created with `get_bus_address(display)` at `gtkatspicontext.c:1589` | For Settings and Files, "P2P" (D-7) is a second bus connection: replies still cross the broker. The P2P pool must detect it and reuse the call connection instead of opening a duplicate. **Superseded live by P-9:** GTK4 4.18 answers `UnknownMethod` (method missing from the interface info), so GTK4 apps are mode `None`; `SameBus` stays as a defensive mode |
 | G-5 | GTK4 paths are `<base>/<uuid>` | `gtkatspicontext.c:1610-1611` | Paths are never reused → `LocalId = FNV-1a(path)` (ADR-0004) satisfies I-1 for GTK4 |
 | G-6 | GTK4 list and grid views (`GtkListView`, `GtkColumnView`, `GtkGridView`, used by Files) recycle row widgets while scrolling; a row keeps its path and shows another item (unverified on the wire: P-9 H4) | GTK design; to confirm in P-9 | Same key, different logical item, name possibly changed silently (G-1): a cached row name is suspect after any scroll |
 | A-1 | atk-bridge (GTK3, St/Shell via Cally) numbers objects with a monotonic counter `/org/a11y/atspi/accessible/<n>` | `refs/at-spi2-core/atk-adaptor/accessible-register.c:155-162, 180-182` | Paths are never reused (until 2^32 wrap) → I-1 holds |
@@ -59,24 +60,71 @@ the store implementation (MS-3 decided: `scc::HashIndex`,
 | S-2 | Shell's Alt+Tab switcher announces only `state-changed:selected` and is rebuilt per invocation (new paths) | `docs/decisions.md` 2026-10-13 (switcher fix) | Subtree-replace pattern; the fill must not prefetch dead switchers |
 | D-1 | A toolkit main loop serves D-Bus requests one at a time | GLib/GDBus dispatch | A 50 ms `GetItems` delays every request queued behind it, including the Interactive focus fetch (head-of-line). The fake app must model this (H-2) |
 
-### 2.2 P-9 dependency
+### 2.2 P-9 results and what they change (answered 2026-10-13)
 
-P-9 (ADR-0001 §16.3) answers, on GTK 4 of Debian 13 with Settings and Files:
+Source: `docs/reports/2026-10-13-p9-cache-p2p.md` (LIVE-real read-only probes on this desktop,
+LIVE-private scripted GTK4 4.18.6 / GTK3 3.24.49 apps under a private headless Shell, SRC reading).
+"Complete" = the set reachable by a `GetChildren` walk equals the `GetItems` set.
 
-* **H1** Are `RemoveAccessible`/`AddAccessible` missing for hidden or unmapped contexts (G-2)?
-* **H2** Can an object created during `GetItems` be missed by both the reply and the signals (G-3)?
-* **H3** Does a GTK4 reorder (`GtkListBox` sort, sidebar reorder) emit `children-changed:remove` + `:add`
-  of the **same** path, and/or `RemoveAccessible` + `AddAccessible`?
-* **H4** Do recycled list rows (G-6) emit `accessible-name` / `children-changed` when rebound?
-* **H5** `GetItems` size and time for Settings (each panel) and Files (directories of 100, 1 000, 10 000
-  entries).
+| Toolkit | `GetItems` complete? | Cache signals | P2P (D-7) |
+|---|---|---|---|
+| gnome-shell (St, atk-bridge) | **yes**: 1 765 items in 17.0 ms (~10 µs/item), walk found exactly 1 765; 0 idle diffs | `ChildrenChanged` add/remove on every actor add/remove | yes (`GetChildren` p50/p99 0.108/0.337 ms vs bus 0.140/1.088 ms) |
+| GTK4 (Settings, Nautilus) | **no**: only realised contexts; a fresh app or Nautilus returns **2 items**; grows only when a client walks (Nautilus 2 → 307, 13.8 ms, ~45 µs/item) | `AddAccessible` per realised node only (not its children), none for hidden widgets; **`RemoveAccessible` never observed** (removal gives `ChildrenChanged:remove` + `defunct` only) | **no** (`UnknownMethod`) |
+| GTK3 (atk-bridge) | **partial**: gnome-terminal 170 of 173; gedit 181 of 488 (no descent into `MANAGES_DESCENDANTS`, menus, popovers) | Add correct for normal containers; Remove only on finalisation | yes |
+| Firefox | **no**: 2 items vs 400+ reachable | — | yes |
+| Qt | **no**: always empty | never emitted | no |
 
-Rules: the fake GTK4 profile (H-2) ships with the **pessimistic** answer to H1-H4 (every quirk on)
-until P-9 lands; then the orchestrator updates the profile parameters from the P-9 report and the
-harness is re-validated (H-10). Arms A and C may be run before P-9 lands; **arm B is not judged
-until P-9 is merged and the profile updated**. If P-9 shows H1 or H2 are real, arm B may still use
-`GetItems`, but its correctness may not depend on cache signals alone (the conformance cases IC-12
-and IC-13 enforce this).
+Answers to the hypotheses: **H1 yes**, worse than assumed (GTK4 never sends `RemoveAccessible`
+for widget removal and skips hidden contexts). **H2** source-only (`in_get_items` race), unobserved:
+the profile keeps it on. **H3, H4** not exercised by P-9: the profile keeps the pessimistic
+answer (reorder may re-use paths with `remove`+`add`; recycled rows rename silently). **H5**
+GTK4 dump cost ~45 µs/item when populated; the 10 000-entry directory is still unmeasured
+(section 16).
+
+Further P-9 facts that bind the harness and every arm:
+
+* **P9-1** GTK4 emits **no `Object` event at all** while no AT listener is registered
+  (`gtk_at_spi_root_has_event_listeners`). The shared base registers listeners before the first
+  fill request; the fake GTK4 profile reproduces the gate, and IC-21 checks that nothing in the
+  mirror is trusted from before registration.
+* **P9-2** GTK4 sends a spurious `ChildrenChanged:add` on the parent for most child property or
+  state updates. `ChildrenChanged` stays "children list dirty", never a delta (5.1 already).
+* **P9-3** GTK4 names derived from content (`Button.set_label`, expander content) or from
+  `labelled-by` change without an event on the named node; only the inner label fires
+  `accessible-name`. Shared invalidation rule added to 5.1: `PropertiesChanged{n, NAME}` also
+  invalidates NAME on the known ancestors of `n` up to the first role that does not take its name
+  from content (at most 8 levels). RV-1 is unchanged and still covers the silent case.
+* **P9-4** GTK4 `sensitive=false` leaves `ENABLED` set; a presenter must not infer "dimmed" from
+  `ENABLED` alone (PW-12).
+* **P9-5** atk-bridge leases event-only objects for 15 s, then answers `UnknownObject`: normal, not
+  an error (IC-7 already).
+* **P9-6** `GetItems` order is a hash order (children may precede parents); `Cache.version` is not
+  readable on any toolkit. The decoder (PW-9) builds the tree in two passes by parent ref and
+  detects the layout by reply signature.
+* **P9-7** Calling `GetItems` or `GetApplicationBusAddress` registers gorca as an AT client in the
+  app's bridge (it starts event emission to us); it is not side-effect-free (relevant to shadow
+  mode, 8.4).
+
+**Shared rules decided after P-9 (identical for both arms, harness-owned):**
+
+* **Revalidate the focused node on every focus.** RV-1 (5.3) is unchanged and already does this for
+  every presentation served from the mirror; P-9 confirms it is mandatory, not an optimisation.
+* **TTL safety net (30–60 s).** A node whose last confirmation is older than its TTL reads as
+  `aged`: it may still be presented (tagged `may_refine`), but any read that speaks it, including
+  ancestors and context spoken by where-am-I, is followed by a revalidation `Fetch` (Interactive for
+  the presented node, Prefetch for context). TTL by verified toolkit class: GTK4 30 s; GTK3 and
+  Shell 60 s; browser chrome and unknown 30 s. It is evaluated on read: **no timer, no periodic
+  refetch**, so B1-MSG.idle is unaffected. Implemented in `view()` (PW-1) and the Reader (PW-4).
+* **Eager eligibility is decided by shared code, never by an arm or by self-reported names.** The
+  connector computes `AppInfo.dump_complete: bool` and passes it to the policy as
+  `FillCtx.dump_complete`. It is `true` only when (a) the app's identity is **verified**: for
+  gnome-shell, the a11y-bus sender's PID (`GetConnectionCredentials`) equals the PID of the
+  session-bus owner of `org.gnome.Shell`; `Application.ToolkitName`, the accessible name and
+  `/proc/<pid>/comm` are self-reported and never sufficient; and (b) the toolkit is on the
+  P-9-verified list, which today is gnome-shell only. A dump that comes back implausible (≤ 2
+  items, or the root's child count disagrees with the dump) clears the flag for that app's
+  lifetime. The harness's fake Shell owns `org.gnome.Shell` on the harness session bus with its own
+  PID, so the same code path runs in the harness and on the desktop (no harness detection).
 
 ### 2.3 ADR rules
 
@@ -110,7 +158,7 @@ and IC-13 enforce this).
 * **Odilia** calls `GetItems` per app and then resolves every item with further async lookups
   (`refs/odilia/cache/src/lib.rs:295-311`), and handles `AddAccessible`/`RemoveAccessible`
   (`cache/src/event_handlers.rs:375-393`). Lesson: a bulk dump followed by N per-item calls loses the
-  point of the dump; arm B must build nodes from the dump itself.
+  point of the dump; an eager fill (arm C on Shell) must build nodes from the dump itself.
 * **NVDA** (IAccessible2) queries live and caches only in virtual buffers; **AccessKit/Newton** push
   full tree updates (push model). Lesson: the driver must support a push source (`push_snapshot`)
   with a trivial policy, so B-1 does not bake AT-SPI into the core.
@@ -237,6 +285,9 @@ pub struct FillCtx<'a> {
     pub app_class: AppClass,            // Shell | Toolkit(GenericToolkit) | Browser | Terminal | Unknown,
                                         // from AppInfo; budget tuning only, never per-app behaviour
     pub health: HealthView,             // Healthy | Slow | Hung | Flooded | Gone
+    /// Shared eligibility (2.2): the connector verified that `CacheDump` returns the whole tree
+    /// for this app. Today true only for a verified gnome-shell.
+    pub dump_complete: bool,
     pub mirror: &'a dyn MirrorRead,
     pub focus: Option<NodeKey>,         // the Reader's settled focus if it is in this app
     pub slots: SlotView,                // free in-flight slots per class, rate-limit tokens left
@@ -278,8 +329,8 @@ pub type FillEffects = SmallVec<[FillEffect; 8]>;
 
 Arm constraints on effects: arm A may use `Fetch`, `ChildSnapshots` and `Ancestry` only on demand
 (in reaction to `Demand`), never on `Events`/`FocusSettled`/`WindowActivated`/`Tick` except to
-refetch the focused node; arm B must use `CacheDump` as its primary fill; arm C may not use
-`CacheDump`. Everything else is free.
+refetch the focused node; arm C may use `CacheDump` **only** when `cx.dump_complete` is true (the
+driver refuses it otherwise, `fill_refused{dump_ineligible}`). Everything else is free.
 
 ### 4.5 The shared driver (`gorca-mirror::driver` + app-actor wiring in `gorca-core`, PW-3/PW-4)
 
@@ -338,7 +389,7 @@ pub struct Subscription { pub cache_signals: bool }    // adds interface='org.a1
 | PW-5 | `BackendOp::{ChildSnapshots, Ancestry, CacheDump}`, `BackendError::Unresolved`, `SnapshotBatch.truncated`; connector skeleton with a naive reference `strategy.rs` | rust-engineer | the naive strategy is R0's |
 | PW-6 | P2P pool in `gorca-dbus`: lazy connect with `Startup` deadline, modes `Peer` / `SameBus` (G-4: address equals the a11y bus address → reuse the call connection) / `None` (A-3: empty) / fallback on EOF | linux-platform-engineer | D-7 |
 | PW-7 | Path table for mirrored keys: per-owner quota ≥ `MAX_MIRROR_NODES`, global byte cap 64 MiB, paths recorded from replies (refs in children, ancestry, dumps), eviction yields `Unresolved` | rust-engineer | today's quota is 1 024 per owner, focus paths only |
-| PW-8 | Drain mapping of cache signals (ADR-0004 mapping-table amendment): `Cache.RemoveAccessible (so)` → `NodeRemoved{hash(path)}` (foreign bus name → malformed); `Cache.AddAccessible` → `ChildrenChanged{hash(parent path)}` (only the first three refs are read); match rule added only when `Subscription.cache_signals` | rust-engineer | conformance C-D tests extended; B-2 model updated |
+| PW-8 | Drain mapping of cache signals (ADR-0004 mapping-table amendment): `Cache.RemoveAccessible (so)` → `NodeRemoved{hash(path)}`; `Cache.AddAccessible` → `ChildrenChanged{hash(parent path)}` (only the first three refs are read); **a foreign bus name in any ref read (Remove's ref; Add's object or parent ref) is malformed: no event, counted in `DrainStats::malformed`** (decided 2026-10-13; ADR-0004 D-7; IC-16 asserts the count); match rule added only when `Subscription.cache_signals` | rust-engineer | conformance C-D tests extended; B-2 model updated |
 | PW-9 | `GetItems` decoder `fetch/items.rs`: streaming over the reply, caps of section 7, foreign refs dropped, fuzz target | rust-engineer + test-engineer | MA-7 |
 | PW-10 | Presentation log (`GORCA_PRESENT_LOG=<path>`): one JSON line per utterance and per refine (section 6.1) | rust-engineer | passive; compiled in all builds; no behaviour depends on it |
 | PW-11 | Shadow mode (`GORCA_SHADOW=1`): read-only call allowlist (section 8.4) | rust-engineer + linux-platform-engineer | for the optional live run |
@@ -351,6 +402,7 @@ pub struct Subscription { pub cache_signals: bool }    // adds interface='org.a1
 | `NodeEvent` (after ADR-0004 mapping) | Mirror effect |
 |---|---|
 | `PropertiesChanged{n, mask}` | `invalidate(n, mask ∩ (NAME∣DESCRIPTION∣VALUE∣ROLE∣STATES∣ATTRS))`; `BOUNDS` ignored (M2 scope) |
+| `PropertiesChanged{n, mask ∋ NAME}` (P9-3) | additionally `invalidate(a, NAME)` for each known ancestor `a` of `n` up to and including the first whose role does not take its name from content, at most 8 levels |
 | `ChildrenChanged{n}` | `invalidate(n, CHILDREN)` |
 | `NodeRemoved{n}` | `tombstone(n, Event)`; `invalidate(parent(n), CHILDREN)` if the parent is known |
 | `TextChanged{n, _}` | `invalidate(n, NAME∣VALUE)` (St/GTK labels derive names from text) |
@@ -430,15 +482,18 @@ mutation, read through a test-only `MirrorRead` probe), so a case cannot pass va
 | IC-9 recycled rows | Files scroll: rows keep paths, names change (silent or evented per H4) | focus on a recycled row never `STALE` |
 | IC-10 late reply | reply delayed past a removal (LR-1); reply issued after removal (LR-3) | no ghost; revival only with proof of life |
 | IC-11 reply/event race | name changed while a Fetch is in flight: event-before-reply, reply-before-event, pre-mutation reply delayed on P2P | never `Fresh` with the old value (LR-2) |
-| IC-12 hidden ghost | GTK4 node hidden then destroyed without `RemoveAccessible` (G-2/H1) | never presented; arm B must not keep it as live forever (tombstone on failed fetch or TTL) |
+| IC-12 hidden ghost | GTK4 node hidden then destroyed without `RemoveAccessible` (G-2/H1) | never presented; an eager mirror must not keep it as live forever (tombstone on failed fetch; aged by TTL) |
 | IC-13 add during dump | node added while `GetItems` runs, no `AddAccessible` (G-3/H2) | focus on it works (miss path) |
 | IC-14 Shell rebuilds | Alt+Tab switcher and a popup menu rebuilt per open (S-2) | selections spoken correctly; dead switchers not prefetched after `WindowEvent::Destroy` |
 | IC-15 window destroy | window destroyed, focus moves | no presentation of descendants |
 | IC-16 foreign refs | GetItems/relations/children referencing another bus name; self-parent; cycles | dropped, counted; no cross-app write (MA-3) |
 | IC-17 flood | background app at 50k ev/s → `Flooded` + dirty set | dirty nodes Stale, not dropped; refetch rate-limited (section 7); focused app's L1h unaffected |
 | IC-18 hung app | app stops answering mid-walk and mid-`GetItems` | from-cache presentations tagged `may_refine`; `Hung` after 3 timeouts; only probes afterwards (I-4) |
-| IC-19 P2P modes | `Peer`, `SameBus` (GTK4), `None` (A-3), P2P EOF mid-request, P2P connect hang | all work; fallback within `Startup` deadline; no duplicate connection in `SameBus` |
+| IC-19 P2P modes | `Peer`, `SameBus` (defensive, G-4), `None` (GTK4 per P-9, Qt, A-3), P2P EOF mid-request, P2P connect hang | all work; fallback within `Startup` deadline; no duplicate connection in `SameBus` |
 | IC-20 document boundary | Firefox-chrome model with a `DocumentWeb` child | no fill request below the document node |
+| IC-21 listener gate | GTK4 model emits no `Object` event before `RegisterEvent` (P9-1); mutate, register, focus | nothing presented from pre-registration state without RV-1 |
+| IC-22 dump eligibility | (a) a model that claims `ToolkitName = "gnome-shell"` and name "GNOME Shell" without owning `org.gnome.Shell`; (b) the verified Shell returning a 2-item dump | (a) `dump_complete = false`, no `CacheDump` sent; (b) flag cleared, lazy fill, no `STALE` |
+| IC-23 TTL | node confirmed, no event for TTL + 1 s, silent rename, focus it and speak it as where-am-I context | presented `may_refine` and revalidated; idle run shows no TTL-driven calls |
 
 ## 6. Measurement definitions
 
@@ -495,19 +550,30 @@ to unbounded growth, a wrong presentation, or starvation of the Interactive clas
 
 ## 8. Workloads
 
-### 8.1 App models (fake apps, H-2), calibrated by the census (H-1)
+### 8.1 App models (fake apps, H-2), calibrated by the census (H-1) and P-9
 
-Provisional values until the census lands; the census replaces every number in this table and the
-table is then regenerated from `tests/harness/b1/models/*.json`.
+Live numbers from P-9 (`docs/reports/2026-10-13-p9-cache-p2p.md`) replace the provisional
+`GetItems` and P2P columns; the census (H-1) still replaces node counts, depths and event patterns,
+and the table is then regenerated from `tests/harness/b1/models/*.json`.
+
+**P-9 calibration (live, this host):**
+
+| App | Reachable by walk | `GetItems` | Dump time | P2P | Call service time |
+|---|---|---|---|---|---|
+| gnome-shell | 1 765 | 1 765 (complete) | 17.0 ms (~10 µs/item) | `Peer` | `GetChildren` p50/p99 0.108/0.337 ms P2P, 0.140/1.088 ms bus |
+| gnome-terminal (GTK3) | 173 | 170 | — | `Peer` | `Properties.Get` p50 0.12–0.15 ms, p99 0.6–1.5 ms (all apps) |
+| gedit (GTK3) | 488 | 181 (63 % missing: list boxes, tree views, popovers, menus) | — | `Peer` | as above |
+| Nautilus (GTK4) | ≥ 307 (bounded walk) | 2 when fresh; 307 after a client walk realised them | 13.8 ms for 307 (~45 µs/item) | `None` | as above |
 
 | Model | Toolkit profile | Nodes (idle / peak) | Depth | Event pattern | Service time per call (p50 / p99) | GetItems |
 |---|---|---|---|---|---|---|
-| `shell` | atk-bridge (A-1…A-3, S-1, S-2), P2P `Peer` (or `None` variant) | 400 / 1 500 (overview with app grid and search results) | 12-20 | clock rename every 60 s (evented); overview open/close: 1-2k `children-changed` + `state-changed:showing` within 250 ms; switcher rebuild per Alt+Tab; notifications | 0.12 / 0.8 ms | 15 µs/item; omits `TRANSIENT` and `MANAGES_DESCENDANTS` children |
-| `settings` | GTK4 (G-1…G-6), P2P `SameBus` | 800 / 2 000 per panel; sidebar ~45 rows | 15-25 | panel switch = subtree replace (300-1 500 nodes); toggles, sliders, combo rows; computed-name changes silent | 0.15 / 1.0 ms | 15 µs/item; hidden contexts excluded |
-| `files` | GTK4, `SameBus` | 900 / 1 500 with ~60 realized rows of 6 nodes; `files-big` variant: 10 000-entry directory, rows recycled | 15-25 | scroll = row recycling (G-6); rename (evented on the label, silent on the row); folder open = subtree replace | 0.15 / 1.0 ms | 15 µs/item |
+| `shell` | atk-bridge (A-1…A-3, S-1, S-2), P2P `Peer` (or `None` variant, A-3); owns `org.gnome.Shell` on the harness session bus (2.2 eligibility) | **1 765** / 3 000 (overview with app grid and search results) | 12-20 | clock rename every 60 s (evented); overview open/close: 1-2k `children-changed` + `state-changed:showing` within 250 ms; switcher rebuild per Alt+Tab; notifications | 0.11 / 0.34 ms P2P; 0.14 / 1.1 ms bus | **complete**, 10 µs/item (17 ms for 1 765), served on the app's serial loop |
+| `settings` | GTK4 (G-1…G-6, P9-1…P9-4), P2P **`None`** | 800 / 2 000 per panel; sidebar ~45 rows | 15-25 | panel switch = subtree replace (300-1 500 nodes); toggles, sliders, combo rows; computed-name changes silent; `RemoveAccessible` never sent; spurious parent `ChildrenChanged:add` on child updates | 0.13 / 1.0 ms | realised contexts only (2 when fresh), 45 µs/item; hidden contexts kept as `SHOWING` ghosts |
+| `files` | GTK4 (Nautilus), P2P **`None`** | 2 when fresh → ≥ 307 realised; ~60 realised rows of 6 nodes; `files-big` variant: 10 000-entry directory, rows recycled | 15-25 | scroll = row recycling (G-6); rename (evented on the label, silent on the row); folder open = subtree replace | 0.13 / 1.0 ms | as `settings` |
+| `gtk3` | atk-bridge, calibrated on gedit: 488 reachable, 181 in `GetItems`; `MANAGES_DESCENDANTS` list/tree, menus with child count −1; P2P `Peer` | 488 / 800 | 10-18 | `RowInserted/RowDeleted` instead of `ChildrenChanged` in lists; tooltip changes silent | 0.13 / 1.0 ms | partial (eligibility must stay false; used in `ff` and IC-22) |
 | `storm` | raw | — | — | terminal-style text flood 10k / 50k ev/s (L3) | — | — |
 | `hung` | any | — | — | stops answering on command | ∞ | — |
-| `ff-chrome` | Gecko chrome with one `DocumentWeb` child (IC-20 only) | 300 | — | — | 0.15 / 1.0 ms | yes |
+| `ff-chrome` | Gecko chrome with one `DocumentWeb` child (IC-20 only); P2P `Peer` | 300 | — | — | 0.15 / 1.0 ms | 2 items (Firefox live: root + frame) |
 
 Every app model is served **serially** (D-1): one request at a time, in arrival order, across all
 its connections, with the service-time distribution above plus GetItems' per-item cost.
@@ -542,16 +608,16 @@ S1 stimuli, ancestry demands, app starts. A run with fewer than the scripted cou
 | Run | Content | Duration | Repeats |
 |---|---|---|---|
 | `walk` | W-1 × 3 loops (one of them under L3-50k, one with `hung`) | ~20 min | 5, interleaved across arms (round-robin, rotated each round) |
-| `ff` | first focus only: each model appears 50 times with first-focus delays {0, 50, 300} ms; `files-big` included | ~5 min | 5, interleaved |
+| `ff` | first focus only: each model (`shell`, `settings`, `files`, `files-big`, `gtk3`) appears 50 times with first-focus delays {0, 50, 300} ms | ~5 min | 5, interleaved |
 | `idle` | after one loop, 120 s with no input; clock rename only | 2 min | 3 |
 | `big` | three 20 000-node apps (`settings` scaled) + walk inside them, for RSS | 10 min | 3 |
 | `soak` | W-1 repeated for 1 h | 60 min | 1 per arm (reviewer) |
-| `conf` | IC-1…IC-20, MA-1…MA-10, bounds | ~10 min | debug and release, 3× for flaky detection |
+| `conf` | IC-1…IC-23, MA-1…MA-10, bounds | ~10 min | debug and release, 3× for flaky detection |
 | `step` | in-process policy-step microbench at the caps (MA-6) | 1 min | 7 rounds, median |
 
 ### 8.4 Optional live read-only run (information only, never gating)
 
-On the user's real GNOME 48 desktop, the three arm daemons run **simultaneously in shadow mode**
+On the user's real GNOME 48 desktop, the two arm daemons run **simultaneously in shadow mode**
 (PW-11) beside the user's normal screen reader while the user follows the W-1 checklist by hand
 (`docs/bakeoff/b1-mirror-fill/harness/live-checklist.md`, ~15 min). One manual walk gives paired
 data for all arms.
@@ -565,7 +631,7 @@ of the a11y bus; any call outside it aborts the run.
 
 Reported per arm: hit rate, first-focus latency, own calls/s, RSS, RV-1 disagreements (which
 measure the real rate of silent mutations: the best calibration input for G-1/S-1), P2P mode per
-app. The three daemons load the apps three times; latency numbers are relative only.
+app. The two daemons load the apps twice; latency numbers are relative only.
 
 ## 9. Metrics and gates
 
@@ -579,13 +645,13 @@ serves revisits). It validates the harness and is the baseline for "unchanged" g
 |---|---|---|---|
 | **B1-STALE@{walk,conf,soak}** | uncorrected wrong presentations | verdicts (6.2) | **0** |
 | **B1-LOST@walk** | focus stimuli with no SPEAK | e2e correlation | **0** |
-| **B1-CONF** | IC-1…IC-20, MA-1…MA-10, bounds | `cargo test -p gorca-testkit -p gorca-mirror -p gorca-bench-b1` debug + release, 3× | all pass |
+| **B1-CONF** | IC-1…IC-23, MA-1…MA-10, bounds | `cargo test -p gorca-testkit -p gorca-mirror -p gorca-bench-b1` debug + release, 3× | all pass |
 | **B1-L1h.p99** | focus → SPEAK when served from the mirror (`source=hit`) | walk | **≤ 2 ms** (target 1 ms); p50 reported |
 | B1-HIT.all | `source ∈ {hit}` / focus presentations | walk | rank (higher) |
 | **B1-HIT.revisit** | hit rate on revisits of nodes not mutated since the last visit | walk | **≥ 0.95** (guards against a policy that never caches) |
 | B1-HIT.ancestry | where-am-I demands answered without IPC | walk | rank |
 | **B1-L1c.p99** | focus → SPEAK on a miss | walk | ≤ 15 ms and ≤ 1.2 × R0's median (cold path unchanged) |
-| **B1-FF.p99@{shell,settings,files,files-big}** | first focus of a newly appeared app → SPEAK | `ff` | **≤ 15 ms** each; rank on the worst p50 and p99 |
+| **B1-FF.p99@{shell,settings,files,files-big,gtk3}** | first focus of a newly appeared app → SPEAK | `ff` | **≤ 15 ms** each; rank on the worst p50 and p99 |
 | **B1-S1.p99** | state change on focused node → SPEAK | walk | **≤ 5 ms** |
 | **B1-M6** | corrections / focus presentations | walk | **< 1 %**; split evented / silent reported |
 | **B1-MSG.idle** | gorca-originated calls/s, 60 s after settle | `idle` | **≤ 0.5 calls/s per app** (no polling); signals/s reported |
@@ -651,7 +717,7 @@ orchestrator):
 | Wall time per arm | 6 h from branch to `RESULTS.md`; one implementation pass + at most two fix passes after the first harness run |
 | Code size | ≤ 1 200 added non-test lines in the arm-owned paths (`git diff --numstat`, `#[cfg(test)]` excluded) |
 | Deliverables | the branch; `RESULTS.md` with raw `run-all.sh <label>` output; result files in `bench/results/b1-mirror-fill/<label>/`; a 1-page design note (what is fetched when, what bounds what, which P-9 answers it relies on) |
-| Runs | `run-all.sh` without `soak` ~2.5 h for three arms interleaved; `soak` separately |
+| Runs | `run-all.sh` without `soak` ~2 h for two arms interleaved; `soak` separately |
 
 ## 11. Harness work (before any arm starts)
 
@@ -664,7 +730,7 @@ orchestrator):
 | H-5 | Message accounting: fake-app counters, drain stats, bus monitor cross-check (verify whether the Debian dbus-daemon exposes `org.freedesktop.DBus.Debug.Stats`; else count with `BecomeMonitor`) | perf-engineer | `crates/gorca-bench-b1/src/msgs.rs` |
 | H-6 | Runner: interleaved repeats across arms (`--arm <label>:<path-to-gorca-daemon>`), median gating, `limits.rs`, report rows in the B-2/e2e format with host meta (load average start/end, governor, `cpus_allowed`, git rev per arm), `compare.py`, `run-all.sh` | perf-engineer | `crates/gorca-bench-b1`, `docs/bakeoff/b1-mirror-fill/harness/` |
 | H-7 | Policy-step microbench at the caps (MA-6) linking an arm's `Candidate` directly | perf-engineer | `crates/gorca-bench-b1/benches/step.rs` |
-| H-8 | Conformance suite IC-1…IC-20, audit tests MA-1…MA-10, bounds tests MB-B1…MB-B10 | test-engineer | `crates/gorca-testkit/src/b1/`, `crates/gorca-mirror/tests/` |
+| H-8 | Conformance suite IC-1…IC-23, audit tests MA-1…MA-10, bounds tests MB-B1…MB-B10 | test-engineer | `crates/gorca-testkit/src/b1/`, `crates/gorca-mirror/tests/` |
 | H-9 | R0 run end to end; baseline numbers in this SPEC (section 12) | perf-engineer | `bench/results/b1-mirror-fill/r0/` |
 | H-10 | **Harness self-tests** (the harness must measure the arm, not itself): (a) service-time fidelity: fake replies measured at gorca's socket match the model within ±20 % at p50 and +1 ms at p99, else the run is invalid; (b) a deliberately broken policy that never invalidates (`StaleProbe`) must fail B1-STALE; one that never caches must fail B1-HIT.revisit; one that dumps every 100 ms must fail B1-MSG.idle; (c) the verdict classifier on hand-made logs; (d) msgs cross-check within 1 %; (e) P-9 profile update re-runs (a)-(c) | test-engineer + perf-engineer | `crates/gorca-bench-b1/tests/selftest.rs` |
 | H-11 | Live shadow runner and checklist (8.4); `dbus-monitor` allowlist audit | linux-platform-engineer + tech-writer | `docs/bakeoff/b1-mirror-fill/harness/{live.sh,live-checklist.md}` |
@@ -690,32 +756,41 @@ L3-50k 3.1 ms, lost 0 (`docs/decisions.md`, 2026-10-13).
   `labelled-by` concurrently on the app's connection), `Properties.GetAll` where it saves round trips.
 * **Should win:** B1-MSG.*, B1-RSS.big, B1-FF.files-big (no dump in the way). **Risk:** B1-HIT.all.
 
-### Arm B: eager `GetItems` per app
+### Arm B: dropped (P-9)
 
-* **Fill.** `CacheDump` (Background) per app after its first focus has been presented (not at
-  `Appeared`, to avoid head-of-line blocking of the first focus), and when the app's window is
-  activated after being `Flooded` or after > 30 s of dirty-all. Partial nodes completed lazily
-  (value, relations) on demand. Subscribes to cache signals; `AddAccessible` → refetch the parent's
-  children if the parent is cached, `RemoveAccessible` → tombstone.
-* **Must handle** G-2/G-3/IC-12/IC-13 without trusting cache signals alone; dump size versus the
-  caps (`files-big`); A-2 TRANSIENT/MANAGES_DESCENDANTS gaps (lazy fill below them).
-* **Should win:** B1-HIT.all, B1-HIT.ancestry. **Risks:** B1-FF (head-of-line when the dump runs
-  before the user's next focus), B1-MSG.startup, B1-RSS.big, P-9.
+Pure eager `GetItems` per app is not run. P-9 shows the dump is complete only for gnome-shell;
+on GTK4 it is empty until something walks the tree and is never pruned (`RemoveAccessible` never
+sent), GTK3 misses 63 % of gedit, Firefox and Qt return nothing. An eager-everywhere arm would be
+lazy plus a useless dump on every app except Shell, and Shell's case is covered by arm C.
 
-### Arm C: hybrid around the focus window
+### Arm C: hybrid (lazy + verified-complete eager + focus-window prefetch)
 
-* **Fill.** On `FocusSettled`: `Ancestry` to the window (Prefetch) and `ChildSnapshots` of the
-  focus's parent (± 32 siblings, Prefetch). On `WindowActivated`: the window's first two levels.
-  While the focused app is idle for > 500 ms: Background `Subtree` of the focus window up to
-  2 048 nodes, rate-limited. Lazy elsewhere; no `CacheDump`.
-* **Should win:** B1-HIT.all close to B for Tab/arrow walks with B1-MSG close to A; B1-FF.
-* **Risks:** misses on jumps (search results, new panels), policy state size, prefetch of nodes
-  that die immediately (switcher, menus).
+* **Fill, everywhere.** Lazy as arm A, plus on `FocusSettled`: `Ancestry` to the window (Prefetch)
+  and `ChildSnapshots` of the focus's parent (± 32 siblings, Prefetch). On `WindowActivated`: the
+  window's first two levels. While the focused app is idle for > 500 ms: Background `Subtree` of
+  the focus window up to 2 048 nodes, rate-limited.
+* **Fill, apps with `cx.dump_complete` (today: verified gnome-shell only).** One `CacheDump`
+  (Background) after the app's first focus has been presented, never at `Appeared`; again only
+  after a dirty-all or `Flooded` resync older than 30 s, and only when Shell has had no focus
+  change for 500 ms (the dump runs on Shell's main loop: ~17 ms of compositor-thread work). Kept
+  current by events (`ChildrenChanged` → refetch the parent's child list lazily), not by cache
+  signals alone. The arm may subscribe to cache signals; their msgs/s are counted.
+* **Must handle:** a dump that races a mutation (IC-13, LR-4: absence from a dump removes
+  nothing); the eligibility flag cleared mid-run (IC-22); prefetch of nodes that die immediately
+  (switcher, menus, IC-14).
+* **Should win:** B1-HIT.all and B1-HIT.ancestry, especially on `shell`; B1-FF on revisited apps.
+* **Risks:** B1-L1c/B1-FF on `shell` if a dump is in flight when the user moves (head-of-line on
+  Shell's serial loop); B1-MSG.startup; B1-RSS.big; misses on jumps; policy state size. A Shell
+  frame drop during the dump is not measurable in the harness and goes to the reviewer and the
+  optional live run (8.4).
 
 ### Not allowed
 
 * A periodic TTL refetch of the whole mirror (Orca's 60 s clear) as the way to stay correct: it
-  fails B1-MSG.idle and hides the question RV-1 answers.
+  fails B1-MSG.idle and hides the question RV-1 answers. The shared on-read TTL of 2.2 is not a
+  refetch and is not arm-tunable.
+* Choosing eager behaviour by app name, `ToolkitName`, process name or anything else the app
+  reports about itself; only `cx.dump_complete` (2.2) enables `CacheDump`.
 * Presenting from the mirror without RV-1, changing the invalidation table, or turning a metric
   green by shrinking what it measures.
 
@@ -731,10 +806,14 @@ L3-50k 3.1 ms, lost 0 (`docs/decisions.md`, 2026-10-13).
    navigation and to `ext-*` hints.
 4. Weights as in B-2: metrics 50, correctness 30, simplicity 10, extensibility 10. On a tie within
    noise (overlapping min..max ranges on every ranking metric), the simpler arm wins (expected: A).
-5. The reviewer names a winner and the ideas to port (for example C's sibling prefetch into A, or
-   B's dump for small apps only); a combination is adopted only if re-measured with this harness.
-6. Arm B's verdict waits for P-9 (2.2). If P-9 is late, the orchestrator may decide A vs C first
-   and run B as a follow-up challenger against the winner.
+5. Two arms only (A, C; B dropped after P-9, 2.2). C's two mechanisms are judged separately as
+   well as together: the reviewer reports B1-HIT.all and B1-FF per model, so the Shell dump's
+   gain (`shell`) and the focus-window prefetch's gain (`settings`, `files`, `gtk3`) are visible on
+   their own. If C wins only on `shell`, the outcome is "A plus the Shell dump", which must be
+   re-measured with this harness before adoption; likewise for any other port between arms.
+6. The shared rules decided after P-9 (focus revalidation on every focus, on-read TTL, verified
+   eligibility, the ancestor NAME invalidation of P9-3) are not judged: a defect in them is a
+   harness bug, fixed on `main` and re-run for both arms.
 
 ## 15. Amendments this bake-off needs (for sign-off before PW work starts)
 
@@ -746,13 +825,22 @@ L3-50k 3.1 ms, lost 0 (`docs/decisions.md`, 2026-10-13).
 * ADR-0004 mapping table: `Cache.AddAccessible`/`RemoveAccessible` rows (PW-8), opt-in match rule.
 * `gorca-connector-api`: `ChildSnapshots`, `Ancestry`, `CacheDump`, `BackendError::Unresolved`.
 
+Applied to ADR-0001 and ADR-0004 on 2026-10-13. Added after P-9 (same date, needs a changelog line
+in ADR-0001 §4.4/§5.1 when PW-1/PW-4 land): `AppInfo.dump_complete` and the on-read TTL (2.2).
+
 ## 16. Open items
 
-* All of section 8.1 is provisional until H-1; G-6, S-1 and P-9 H1-H5 are hypotheses until measured.
+* Section 8.1 node counts, depths and event patterns are provisional until H-1; `GetItems` and P2P
+  columns are P-9 live values. G-6, S-1, P-9 H2 (source only), H3 and H4 (not exercised) remain
+  hypotheses; their profile flags stay pessimistic.
+* Chromium statements in P-9 are source-only (not installed on this host).
 * The isolated harness runs dbus-daemon, not dbus-broker (`tests/harness/README.md`); broker
   forwarding cost is covered only by the live run.
 * Whether Debian's dbus-daemon has the Stats interface (H-5) is unverified.
 * Real GTK4 GetItems cost for 10 000-entry directories is unmeasured (P-9 H5); `files-big` uses
-  the linear 15 µs/item extrapolation of F-6.
+  P-9's 45 µs/item linearly. Irrelevant to the dump (GTK4 is never eligible) but it calibrates the
+  per-item cost of `Subtree`/`ChildSnapshots` there.
+* The Shell identity check (2.2) assumes gnome-shell owns `org.gnome.Shell` on the session bus and
+  is the same process as its a11y-bus connection; to be confirmed live by PW-6/linux-platform-engineer.
 * Python is not used for the B-1 fake app because its per-call overhead is of the same order as
   the modelled service time; H-10(a) verifies the Rust fake instead.
