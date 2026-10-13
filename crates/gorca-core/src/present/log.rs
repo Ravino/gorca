@@ -14,8 +14,8 @@
 //!  "value":null,"may_refine":true,"refines":null}
 //! ```
 //!
-//! `role` is the snake_case name of the core `Role`; `states` lists the *presented* states by
-//! lowercase `StateSet` flag name; `name`/`value` are those of the snapshot the utterance was
+//! `role` is the snake_case name of the core `Role`; `states` lists every state the connector
+//! decoded by its AT-SPI name (`checked`, `enabled`, `sensitive`, `showing`, ...), sorted; `name`/`value` are those of the snapshot the utterance was
 //! built from (for a follow-up: the corrected snapshot, not the spoken delta). `key` is the stable
 //! join key `<connector>:<app serial>:<local id hex>`, present even when the path is unknown.
 
@@ -29,7 +29,7 @@ use std::thread::JoinHandle;
 
 use gorca_model::{NodeKey, NodeSnapshot, Value};
 
-use super::{spoken_states, state_log_names};
+use super::log_states;
 
 /// Records waiting for the writer thread.
 const LOG_QUEUE: usize = 8_192;
@@ -229,7 +229,7 @@ fn format_record(out: &mut String, r: &PresentRecord, labels: &dyn NodeLabel) {
         r.source.as_str(),
         n.role.log_name()
     );
-    for (i, s) in state_log_names(spoken_states(n)).iter().enumerate() {
+    for (i, s) in log_states(n).iter().enumerate() {
         if i > 0 {
             out.push(',');
         }
@@ -373,7 +373,10 @@ mod tests {
         assert_eq!(a["key"], "1:4:0000000000000009");
         assert_eq!(a["source"], "hit");
         assert_eq!(a["role"], "check_box");
-        assert_eq!(a["states"], serde_json::json!(["checked"]));
+        assert_eq!(
+            a["states"],
+            serde_json::json!(["checked", "focused", "sensitive"])
+        );
         assert_eq!(a["name"], "Wi\"Fi\n");
         assert!(a["value"].is_null());
         assert_eq!(a["may_refine"], true);

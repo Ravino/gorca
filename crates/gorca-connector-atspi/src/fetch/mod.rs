@@ -95,12 +95,18 @@ pub fn backend_error(e: &DbusError) -> BackendError {
 fn ref_of_value(v: &Zv<'_>) -> Option<(String, String)> {
     match v {
         Zv::Value(inner) => ref_of_value(inner),
-        Zv::Structure(s) => match s.fields() {
-            [Zv::Str(bus), Zv::ObjectPath(p)] if p.as_str() != NULL_PATH && !bus.is_empty() => {
-                Some((bus.to_string(), p.as_str().to_owned()))
-            }
-            _ => None,
-        },
+        // The path is `o` on the wire; some applications send `s`: both are read.
+        Zv::Structure(s) => {
+            let [Zv::Str(bus), path] = s.fields() else {
+                return None;
+            };
+            let path = match path {
+                Zv::ObjectPath(p) => p.as_str(),
+                Zv::Str(p) => p.as_str(),
+                _ => return None,
+            };
+            (path != NULL_PATH && !bus.is_empty()).then(|| (bus.to_string(), path.to_owned()))
+        }
         _ => None,
     }
 }
@@ -552,14 +558,11 @@ impl AppServer {
             req.class,
             gorca_rt::BudgetClass::Background | gorca_rt::BudgetClass::Startup
         );
-        let class_ok = match req.class {
-            gorca_rt::BudgetClass::Interactive => true,
-            gorca_rt::BudgetClass::Prefetch => permits.available_permits() > INTERACTIVE_RESERVED,
-            gorca_rt::BudgetClass::Background | gorca_rt::BudgetClass::Startup => {
-                permits.available_permits() > INTERACTIVE_RESERVED
-                    && background.load(Ordering::Acquire) < BACKGROUND_MAX
-            }
-        };
+        let class_ok = class_admitted(
+            req.class,
+            permits.available_permits(),
+            background.load(Ordering::Acquire),
+        );
         let permit = if class_ok {
             Arc::clone(permits).try_acquire_owned().ok()
         } else {
@@ -600,6 +603,23 @@ fn announce_info(port: &AppPort, toolkit: &str, app_name: &str, verified_shell: 
     };
     // Informational: a full control queue is not worth retrying.
     let _ = port.lifecycle(AppLifecycle::Appeared(info));
+}
+
+/// Admission by class (section 7, MA-8): Interactive may take any free slot; Prefetch and
+/// Background leave [`INTERACTIVE_RESERVED`] free, and Background (dumps) at most
+/// [`BACKGROUND_MAX`] at a time.
+pub(crate) fn class_admitted(
+    class: gorca_rt::BudgetClass,
+    available: usize,
+    background_in_flight: usize,
+) -> bool {
+    match class {
+        gorca_rt::BudgetClass::Interactive => available > 0,
+        gorca_rt::BudgetClass::Prefetch => available > INTERACTIVE_RESERVED,
+        gorca_rt::BudgetClass::Background | gorca_rt::BudgetClass::Startup => {
+            available > INTERACTIVE_RESERVED && background_in_flight < BACKGROUND_MAX
+        }
+    }
 }
 
 /// A key the path table no longer holds is `Unresolved`, never `Gone`: the object may well
@@ -696,5 +716,42 @@ mod tests {
         assert_eq!(backend_error(&DbusError::Timeout), BackendError::Timeout);
         let other = DbusError::Zbus(zbus::Error::InterfaceNotFound);
         assert!(matches!(backend_error(&other), BackendError::Protocol(_)));
+    }
+}
+
+#[cfg(test)]
+mod strategy_ref_tests;
+
+#[cfg(test)]
+mod admission_tests {
+    use super::*;
+    use gorca_rt::BudgetClass as C;
+
+    #[test]
+    fn interactive_keeps_two_slots_nobody_else_may_take() {
+        // 8 slots: with 2 or fewer free only Interactive is admitted.
+        for free in 0..=MAX_IN_FLIGHT {
+            assert_eq!(class_admitted(C::Interactive, free, 0), free > 0);
+            assert_eq!(
+                class_admitted(C::Prefetch, free, 0),
+                free > INTERACTIVE_RESERVED
+            );
+            assert_eq!(
+                class_admitted(C::Background, free, 0),
+                free > INTERACTIVE_RESERVED
+            );
+        }
+    }
+
+    #[test]
+    fn background_is_capped_whatever_is_free() {
+        assert!(class_admitted(C::Background, 8, BACKGROUND_MAX - 1));
+        assert!(!class_admitted(C::Background, 8, BACKGROUND_MAX));
+        assert!(!class_admitted(C::Startup, 8, BACKGROUND_MAX));
+        assert!(
+            class_admitted(C::Prefetch, 8, BACKGROUND_MAX),
+            "Prefetch is not Background"
+        );
+        assert!(class_admitted(C::Interactive, 1, BACKGROUND_MAX));
     }
 }

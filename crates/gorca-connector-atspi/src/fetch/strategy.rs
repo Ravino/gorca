@@ -41,7 +41,37 @@ pub(crate) async fn fetch(
             Ok(None)
         }
     };
-    let (role, state, name) = tokio::join!(c.role(path, dl), c.state(path, dl), name_fut);
+    // Everything asked for is requested at once: the calls pipeline on the app's connection, so
+    // an extra field costs no extra round trip on the cold path.
+    let desc_fut = async {
+        if want.contains(PropMask::DESCRIPTION) {
+            c.description_of(path, dl).await.map(Some)
+        } else {
+            Ok(None)
+        }
+    };
+    let parent_fut = async {
+        if want.contains(PropMask::PARENT) {
+            c.parent_of(path, dl).await.map(Some)
+        } else {
+            Ok(None)
+        }
+    };
+    let count_fut = async {
+        if want.contains(PropMask::CHILDREN) {
+            c.child_count_of(path, dl).await.map(Some)
+        } else {
+            Ok(None)
+        }
+    };
+    let (role, state, name, desc, parent, count) = tokio::join!(
+        c.role(path, dl),
+        c.state(path, dl),
+        name_fut,
+        desc_fut,
+        parent_fut,
+        count_fut
+    );
     // Role and state are required; a failed name only costs the name.
     let role = role.map_err(|e| backend_error(&e))?;
     let state_words = state.map_err(|e| backend_error(&e))?;
@@ -58,6 +88,18 @@ pub(crate) async fn fetch(
     if want.contains(PropMask::NAME) && name_ok {
         have |= PropMask::NAME;
     }
+    if let Ok(Some(d)) = desc {
+        raw.description = Some(clip(&d, MAX_TEXT_BYTES).to_owned());
+        have |= PropMask::DESCRIPTION;
+    }
+    if let Ok(Some(parent)) = parent {
+        raw.parent = parent.and_then(|(bus, p)| cx.key_of_ref(&bus, &p));
+        have |= PropMask::PARENT;
+    }
+    if let Ok(Some(n)) = count {
+        raw.child_count = Some(clip_child_count(i64::from(n)));
+        have |= PropMask::CHILDREN;
+    }
     if want.contains(PropMask::VALUE) {
         raw.value = value_for(cx, core_role, states, path, dl).await;
         have |= PropMask::VALUE;
@@ -70,24 +112,6 @@ pub(crate) async fn fetch(
         {
             raw.name = Some(label);
         }
-    }
-    if want.contains(PropMask::DESCRIPTION)
-        && let Ok(d) = c.description_of(path, dl).await
-    {
-        raw.description = Some(clip(&d, MAX_TEXT_BYTES).to_owned());
-        have |= PropMask::DESCRIPTION;
-    }
-    if want.contains(PropMask::PARENT)
-        && let Ok(parent) = c.parent_of(path, dl).await
-    {
-        raw.parent = parent.and_then(|(bus, p)| cx.key_of_ref(&bus, &p));
-        have |= PropMask::PARENT;
-    }
-    if want.contains(PropMask::CHILDREN)
-        && let Ok(n) = c.child_count_of(path, dl).await
-    {
-        raw.child_count = Some(clip_child_count(i64::from(n)));
-        have |= PropMask::CHILDREN;
     }
     raw.have = have;
     Ok(raw)
@@ -242,7 +266,14 @@ pub(crate) async fn ancestry(
             batch.truncated = true;
             break;
         }
-        let parent_path = cx.caller.parent_of(&cur.path, dl).await.unwrap_or_default();
+        // The application root is the top: its own parent is the desktop, on another bus name,
+        // which is the normal end of the chain and not a foreign reference.
+        let at_root = crate::decode::role_from_raw(raw.role) == Role::Application;
+        let parent_path = if at_root {
+            None
+        } else {
+            cx.caller.parent_of(&cur.path, dl).await.unwrap_or_default()
+        };
         let key = cur.key;
         batch.nodes.push((key, raw));
         let Some((bus, p)) = parent_path else { break };

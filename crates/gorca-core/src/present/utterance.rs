@@ -80,29 +80,42 @@ pub(crate) fn value_text(v: Option<&Value>) -> Option<String> {
 }
 
 /// The states a presentation speaks (and the presentation log records), as a set.
-pub(crate) fn spoken_states(n: &NodeSnapshot) -> StateSet {
+fn spoken_states(n: &NodeSnapshot) -> StateSet {
     STATE_WORDS
         .iter()
         .fold(StateSet::empty(), |acc, (flag, _)| acc | (n.states & *flag))
 }
 
-/// Machine names of the spoken states, for the presentation log.
-pub(crate) fn state_log_names(states: StateSet) -> SmallVec<[&'static str; 4]> {
+/// Every state name of a snapshot, for the presentation log: the AT-SPI names of the states the
+/// connector decoded, plus `sensitive` (the core records its absence as `DISABLED`).
+pub(crate) fn log_states(n: &NodeSnapshot) -> SmallVec<[&'static str; 8]> {
     const NAMES: &[(StateSet, &str)] = &[
-        (StateSet::DISABLED, "disabled"),
+        (StateSet::ACTIVE, "active"),
         (StateSet::CHECKED, "checked"),
-        (StateSet::PRESSED, "pressed"),
-        (StateSet::SELECTED, "selected"),
-        (StateSet::EXPANDED, "expanded"),
         (StateSet::COLLAPSED, "collapsed"),
-        (StateSet::REQUIRED, "required"),
-        (StateSet::INVALID, "invalid"),
+        (StateSet::DEFUNCT, "defunct"),
+        (StateSet::ENABLED, "enabled"),
+        (StateSet::EXPANDED, "expanded"),
+        (StateSet::FOCUSABLE, "focusable"),
+        (StateSet::FOCUSED, "focused"),
+        (StateSet::PRESSED, "pressed"),
+        (StateSet::SELECTABLE, "selectable"),
+        (StateSet::SELECTED, "selected"),
+        (StateSet::SHOWING, "showing"),
+        (StateSet::TRANSIENT, "transient"),
+        (StateSet::VISIBLE, "visible"),
+        (StateSet::MANAGES_DESCENDANTS, "manages-descendants"),
     ];
-    NAMES
+    let mut out: SmallVec<[&'static str; 8]> = NAMES
         .iter()
-        .filter(|(f, _)| states.contains(*f))
-        .map(|(_, n)| *n)
-        .collect()
+        .filter(|(f, _)| n.states.contains(*f))
+        .map(|(_, name)| *name)
+        .collect();
+    if !n.states.is_empty() && !n.states.contains(StateSet::DISABLED) {
+        out.push("sensitive");
+    }
+    out.sort_unstable();
+    out
 }
 
 /// What differs between two snapshots in the fields a presentation speaks.
@@ -284,8 +297,18 @@ mod change_tests {
     }
 
     #[test]
-    fn log_names_use_flag_names() {
-        let n = state_log_names(StateSet::CHECKED | StateSet::DISABLED);
-        assert_eq!(n.as_slice(), ["disabled", "checked"]);
+    fn the_log_lists_every_decoded_state_by_its_atspi_name() {
+        let s = snap(
+            "x",
+            StateSet::CHECKED | StateSet::ENABLED | StateSet::SHOWING | StateSet::FOCUSED,
+            None,
+        );
+        assert_eq!(
+            log_states(&s).as_slice(),
+            ["checked", "enabled", "focused", "sensitive", "showing"]
+        );
+        let off = snap("x", StateSet::DISABLED | StateSet::SHOWING, None);
+        assert_eq!(log_states(&off).as_slice(), ["showing"], "no sensitive");
+        assert!(log_states(&snap("x", StateSet::empty(), None)).is_empty());
     }
 }

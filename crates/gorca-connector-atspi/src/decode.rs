@@ -70,6 +70,10 @@ pub fn states_from_raw(words: &[u32]) -> StateSet {
         (Raw::HasPopup, StateSet::HAS_POPUP),
         (Raw::Active, StateSet::ACTIVE),
         (Raw::Defunct, StateSet::DEFUNCT),
+        (Raw::Enabled, StateSet::ENABLED),
+        (Raw::Selectable, StateSet::SELECTABLE),
+        (Raw::Transient, StateSet::TRANSIENT),
+        (Raw::ManagesDescendants, StateSet::MANAGES_DESCENDANTS),
     ];
     for (raw, core) in table {
         if has(bits, raw) {

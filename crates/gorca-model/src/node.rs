@@ -34,6 +34,11 @@ bitflags! {
         const HAS_POPUP  = 1 << 17;
         const ACTIVE     = 1 << 18;
         const DEFUNCT    = 1 << 19;
+        /// AT-SPI `Enabled`. Not spoken; the presentation log and revalidation compare it.
+        const ENABLED    = 1 << 20;
+        const SELECTABLE = 1 << 21;
+        const TRANSIENT  = 1 << 22;
+        const MANAGES_DESCENDANTS = 1 << 23;
     }
 }
 

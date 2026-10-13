@@ -15,7 +15,7 @@ pub use echo::{key_echo, key_echo_text, message};
 pub use flow::{Presented, REFINE_WINDOW, focus_need};
 pub use job::{PresentJob, PresentKind, SpeechIntent};
 pub use log::{NoLabels, NodeLabel, PresentLog, PresentRecord, PresentSource};
-pub(crate) use utterance::{changed, present_change, spoken_states, state_log_names};
+pub(crate) use utterance::{changed, log_states, present_change};
 pub use utterance::{present_focus, present_selected_item};
 
 use gorca_model::{Epoch, NodeSnapshot, Role, UttId, Utterance};
