@@ -66,11 +66,14 @@ struct Fixed(u32);
 
 impl Credentials for Fixed {
     /// Tests use the pid as the process group; the real `/proc` is never read.
-    fn proc_info(&self, pid: u32) -> ProcInfo {
-        ProcInfo {
-            pgrp: Some(pid),
-            start: None,
-        }
+    fn proc_info(&self, pid: u32) -> BoxFuture<'_, ProcInfo> {
+        Box::pin(async move {
+            ProcInfo {
+                pgrp: Some(pid),
+                start: None,
+                ..ProcInfo::default()
+            }
+        })
     }
 
     fn pid_of<'a>(&'a self, _name: &'a str) -> BoxFuture<'a, Option<u32>> {
@@ -417,11 +420,14 @@ struct ByName(Box<dyn Fn(u32) -> Option<u32> + Send + Sync>);
 
 impl Credentials for ByName {
     /// Tests use the pid as the process group; the real `/proc` is never read.
-    fn proc_info(&self, pid: u32) -> ProcInfo {
-        ProcInfo {
-            pgrp: Some(pid),
-            start: None,
-        }
+    fn proc_info(&self, pid: u32) -> BoxFuture<'_, ProcInfo> {
+        Box::pin(async move {
+            ProcInfo {
+                pgrp: Some(pid),
+                start: None,
+                ..ProcInfo::default()
+            }
+        })
     }
 
     fn pid_of<'a>(&'a self, name: &'a str) -> BoxFuture<'a, Option<u32>> {
@@ -929,11 +935,14 @@ async fn credentials_are_retried_before_a_name_is_filed_as_unknown() {
     struct Flaky(std::sync::atomic::AtomicUsize);
     impl Credentials for Flaky {
         /// Tests use the pid as the process group; the real `/proc` is never read.
-        fn proc_info(&self, pid: u32) -> ProcInfo {
-            ProcInfo {
-                pgrp: Some(pid),
-                start: None,
-            }
+        fn proc_info(&self, pid: u32) -> BoxFuture<'_, ProcInfo> {
+            Box::pin(async move {
+                ProcInfo {
+                    pgrp: Some(pid),
+                    start: None,
+                    ..ProcInfo::default()
+                }
+            })
         }
 
         fn pid_of<'a>(&'a self, _name: &'a str) -> BoxFuture<'a, Option<u32>> {
@@ -970,6 +979,7 @@ impl Scripted {
             info: Box::new(|pid| ProcInfo {
                 pgrp: Some(pid),
                 start: Some(u64::from(pid) * 10),
+                ..ProcInfo::default()
             }),
         }
     }
@@ -982,8 +992,9 @@ impl Credentials for Scripted {
         Box::pin(async move { pid })
     }
 
-    fn proc_info(&self, pid: u32) -> ProcInfo {
-        (self.info)(pid)
+    fn proc_info(&self, pid: u32) -> BoxFuture<'_, ProcInfo> {
+        let info = (self.info)(pid);
+        Box::pin(async move { info })
     }
 }
 
@@ -1004,6 +1015,7 @@ async fn a_legitimate_app_launched_after_the_attacker_filled_the_cap_wins_and_st
                 pid
             }),
             start: Some(u64::from(pid)),
+            ..ProcInfo::default()
         }),
     };
     let focused = Arc::new(FocusedApp::new());
@@ -1111,6 +1123,7 @@ async fn a_recycled_shell_pid_does_not_inherit_protection() {
         info: Box::new(|pid| ProcInfo {
             pgrp: Some(pid + 100_000),
             start: Some(u64::from(pid) * 10),
+            ..ProcInfo::default()
         }),
     };
     let mut r = rig(&c, Arc::new(creds));
@@ -1224,10 +1237,10 @@ async fn reconciliation_retires_names_the_bus_no_longer_has() {
     assert!(router.reconcile_with(&live).is_empty());
 }
 
-/// When the bus cannot be asked, nothing is trusted: all protection is dropped, while every
-/// application is still served.
+/// When the bus cannot be asked, eviction is frozen: the validated protection is kept (not
+/// cleared), and every application is still served.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn when_revalidation_fails_protection_is_dropped_but_reading_continues() {
+async fn when_revalidation_fails_eviction_freezes_and_reading_continues() {
     let c = core(|_| Duration::ZERO);
     let focused = Arc::new(FocusedApp::new());
     let (new_tx, _new_apps) = mpsc::channel(64);
@@ -1250,9 +1263,16 @@ async fn when_revalidation_fails_protection_is_dropped_but_reading_continues() {
     };
     focused.publish(app.app);
     router.set_protected_process(Some((15, 150)));
-    router.drop_protection();
-    assert!(!focused.protects(app.app));
-    assert!(router.state().protected_process.is_none());
+    router.freeze_eviction();
+    assert!(router.eviction_frozen());
+    assert!(
+        focused.protects(app.app),
+        "the validated protection is kept"
+    );
+    assert!(
+        router.state().protected_process.is_some(),
+        "the shell identity is kept"
+    );
     // Reading is untouched: the application is still routed.
     assert!(matches!(router.resolve(":1.5"), RouteDecision::Route(_)));
 }
@@ -1267,6 +1287,7 @@ async fn an_unknown_start_time_never_matches_the_shell() {
         info: Box::new(|pid| ProcInfo {
             pgrp: Some(pid),
             start: None, // /proc was unreadable
+            ..ProcInfo::default()
         }),
     };
     let mut r = rig(&c, Arc::new(creds));
@@ -1317,7 +1338,7 @@ async fn a_victim_that_becomes_focused_before_the_commit_is_spared() {
 /// A failed reconciliation costs protection, never reading; the next successful one gives the
 /// protection back.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn dropped_protection_is_restored_by_the_next_good_reconciliation() {
+async fn frozen_eviction_thaws_at_the_next_good_reconciliation() {
     let c = core(|_| Duration::ZERO);
     let focused = Arc::new(FocusedApp::new());
     let (new_tx, _new_apps) = mpsc::channel(64);
@@ -1339,8 +1360,11 @@ async fn dropped_protection_is_restored_by_the_next_good_reconciliation() {
         panic!("registered")
     };
     focused.publish(app.app);
-    router.drop_protection();
-    assert!(!focused.protects(app.app), "no protection while unverified");
+    router.freeze_eviction();
+    assert!(
+        focused.protects(app.app),
+        "protection is kept while unverified"
+    );
     assert!(
         matches!(router.resolve(":1.5"), RouteDecision::Route(_)),
         "reading continues"
@@ -1348,6 +1372,127 @@ async fn dropped_protection_is_restored_by_the_next_good_reconciliation() {
     // The bus answers again and still lists the application.
     let live: HashSet<String> = [":1.5".to_owned()].into_iter().collect();
     assert!(router.reconcile_with(&live).is_empty());
-    router.restore_protection();
-    assert!(focused.protects(app.app), "protection is back");
+    router.resume_eviction();
+    assert!(!router.eviction_frozen());
+    assert!(focused.protects(app.app), "still protected after the thaw");
+}
+
+/// P8 / R4-1: while protection cannot be verified (ListNames failing), the focused application
+/// must not be evictable. Eviction is frozen: at the cap the newcomer is refused with a backoff,
+/// nobody is evicted, and the newcomer is served after the thaw.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_focused_app_survives_a_newcomer_while_protection_is_unverified() {
+    let c = core(|_| Duration::ZERO);
+    let focused = Arc::new(FocusedApp::new());
+    let mut r = filled(&c, Some(Arc::clone(&focused))).await;
+    let RouteDecision::Route(route) = r.router.resolve(":1.63") else {
+        panic!("registered")
+    };
+    focused.publish(route.app);
+    r.router.freeze_eviction(); // reconcile_loop: ListNames failed
+    let newcomer = ":1.200000";
+    assert!(is_retry(&r.router.resolve(newcomer)));
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    assert!(
+        r.router.state().apps.contains_key(":1.63"),
+        "focused app evicted while protection was unverified"
+    );
+    assert_eq!(r.router.stats().evicted, 0, "nobody was evicted");
+    assert!(
+        is_retry(&r.router.resolve(newcomer)),
+        "the newcomer backs off instead"
+    );
+    // The bus answers again: after its backoff the newcomer is served, at the big group's cost.
+    r.router.resume_eviction();
+    tokio::time::sleep(BACKOFF_MIN * 4).await;
+    assert!(is_retry(&r.router.resolve(newcomer)));
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    assert!(matches!(
+        r.router.resolve(newcomer),
+        RouteDecision::Route(_)
+    ));
+    assert!(
+        r.router.state().apps.contains_key(":1.63"),
+        "still the focused one"
+    );
+}
+
+/// The shell, the one newcomer that is never refused, is admitted over the cap while eviction is
+/// frozen, without evicting anybody.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_shell_is_admitted_over_the_cap_while_eviction_is_frozen() {
+    let c = core(|_| Duration::ZERO);
+    let mut r = rig(&c, Arc::new(Scripted::singletons()));
+    for n in 0..u32::try_from(MAX_APPS_TOTAL).unwrap() {
+        let _ = r.router.resolve(&format!(":1.{n}"));
+        r.router.complete(r.to_register.try_recv().unwrap()).await;
+    }
+    r.router
+        .set_protected_process(Some((1_000_009, 10_000_090)));
+    r.router.freeze_eviction();
+    let _ = r.router.resolve(":1.999999");
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    assert!(matches!(
+        r.router.resolve(":1.999999"),
+        RouteDecision::Route(_)
+    ));
+    assert_eq!(r.router.stats().evicted, 0);
+    assert_eq!(r.router.known_apps(), MAX_APPS_TOTAL + 1);
+}
+
+/// R4-2: applications the shell launched share the shell's process group but each has its own
+/// systemd scope. A user's freshly launched application must not be grouped with the shell
+/// and its siblings: with the scope as the key it is a group of one and gets served at the cap,
+/// at the expense of the big attacker group.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn shell_launched_apps_are_grouped_by_scope_not_by_process_group() {
+    let c = core(|_| Duration::ZERO);
+    // Every name shares process group 532394 (the shell's). Names below 500 are an attacker's
+    // children in ONE scope; the rest are ordinary applications, one scope each.
+    let creds = Scripted {
+        pid: Box::new(|n| Some(n + 10)),
+        info: Box::new(|pid| ProcInfo {
+            pgrp: Some(532_394),
+            start: Some(u64::from(pid)),
+            scope: Some(if pid < 510 {
+                "app-attacker-1.scope".to_owned()
+            } else {
+                format!("app-gnome-thing-{pid}.scope")
+            }),
+        }),
+    };
+    let (new_tx, mut new_apps) = mpsc::channel(4096);
+    let (reg_tx, mut to_register) = mpsc::channel(4096);
+    let router = Arc::new(AtspiRouter::new(
+        c.registrar.clone(),
+        Clock::System,
+        Arc::new(PathTable::new()),
+        new_tx,
+        reg_tx,
+        Arc::new(creds),
+    ));
+    for n in 0..u32::try_from(MAX_APPS_TOTAL).unwrap() {
+        let _ = router.resolve(&format!(":1.{n}"));
+        router.complete(to_register.try_recv().unwrap()).await;
+    }
+    // With the process group as the key all 512 would be ONE group (the newcomer's own) and the
+    // newcomer would be refused. By scope the attacker's 500 are the biggest group.
+    let _ = router.resolve(":1.700000");
+    router.complete(to_register.try_recv().unwrap()).await;
+    assert!(
+        matches!(router.resolve(":1.700000"), RouteDecision::Route(_)),
+        "a freshly launched application was refused because it shared the shell's process group"
+    );
+    assert_eq!(router.stats().evicted, 1);
+    // The evicted one was the attacker's newest name, not an ordinary application.
+    let st = router.state();
+    assert!(
+        (0..500u32).any(|n| !st.apps.contains_key(format!(":1.{n}").as_str())),
+        "an attacker name was evicted"
+    );
+    assert!(
+        (500..512u32).all(|n| st.apps.contains_key(format!(":1.{n}").as_str())),
+        "ordinary applications survived"
+    );
+    while new_apps.try_recv().is_ok() {}
 }

@@ -6,12 +6,50 @@
 //! a fork attack shares its group, a legitimately launched application does not.
 
 /// What `/proc/<pid>/stat` tells about a process.
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ProcInfo {
     /// Process group id.
     pub pgrp: Option<u32>,
     /// Start time in clock ticks since boot.
     pub start: Option<u64>,
+    /// The systemd unit the process runs in (`app-gnome-firefox-123.scope`, a service), from
+    /// `/proc/<pid>/cgroup`. `None` when there is none (root cgroup, no systemd).
+    pub scope: Option<String>,
+}
+
+impl ProcInfo {
+    /// The key the application cap groups by: the systemd unit if there is one (GNOME starts
+    /// every application in its own scope, while all of them share the shell's process group),
+    /// else the process group.
+    pub fn group_key(&self) -> Option<u64> {
+        match (&self.scope, self.pgrp) {
+            (Some(unit), _) => Some(fnv(unit.as_bytes()) | (1 << 63)),
+            (None, Some(g)) => Some(u64::from(g)),
+            (None, None) => None,
+        }
+    }
+}
+
+fn fnv(bytes: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in bytes {
+        h ^= u64::from(*b);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
+}
+
+/// The innermost `.scope` or `.service` component of the cgroup path in the contents of
+/// `/proc/<pid>/cgroup` (cgroup v2: `0::/user.slice/.../app-foo-1.scope`), else `None`.
+#[allow(clippy::case_sensitive_file_extension_comparisons)]
+pub fn parse_cgroup(contents: &str) -> Option<String> {
+    contents.lines().find_map(|line| {
+        let path = line.rsplit(':').next()?;
+        path.rsplit('/')
+            // Unit names are case-sensitive; this is not a file extension.
+            .find(|c| c.ends_with(".scope") || c.ends_with(".service"))
+            .map(str::to_owned)
+    })
 }
 
 /// Parse the contents of `/proc/<pid>/stat`. The command name (field 2) is in parentheses and
@@ -25,14 +63,29 @@ pub fn parse_stat(contents: &str) -> ProcInfo {
     ProcInfo {
         pgrp: fields.get(2).and_then(|f| f.parse().ok()),
         start: fields.get(19).and_then(|f| f.parse().ok()),
+        scope: None,
     }
 }
 
 /// Read `/proc/<pid>/stat`. Unknown (not running, not readable) is `ProcInfo::default()`.
 pub fn read_proc_info(pid: u32) -> ProcInfo {
-    std::fs::read_to_string(format!("/proc/{pid}/stat"))
+    let mut info = std::fs::read_to_string(format!("/proc/{pid}/stat"))
         .map(|s| parse_stat(&s))
-        .unwrap_or_default()
+        .unwrap_or_default();
+    info.scope = std::fs::read_to_string(format!("/proc/{pid}/cgroup"))
+        .ok()
+        .and_then(|s| parse_cgroup(&s));
+    info
+}
+
+/// [`read_proc_info`] off the async executor: `/proc` reads are fast but they are synchronous
+/// file I/O, so they run on a blocking thread under a deadline. Unknown on timeout.
+pub async fn read_proc_info_async(pid: u32) -> ProcInfo {
+    let job = tokio::task::spawn_blocking(move || read_proc_info(pid));
+    match tokio::time::timeout(std::time::Duration::from_millis(250), job).await {
+        Ok(Ok(info)) => info,
+        Ok(Err(_)) | Err(_) => ProcInfo::default(),
+    }
 }
 
 #[cfg(test)]
@@ -54,6 +107,62 @@ mod tests {
         let p = parse_stat(&evil);
         assert_eq!(p.start, Some(98_765));
         assert_eq!(p.pgrp, Some(1234));
+    }
+
+    #[test]
+    fn the_systemd_unit_comes_from_the_cgroup_path() {
+        let gnome = "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-gnome-firefox-533563.scope\n";
+        assert_eq!(
+            parse_cgroup(gnome).as_deref(),
+            Some("app-gnome-firefox-533563.scope")
+        );
+        // A process inside a service's sub-cgroup belongs to the service.
+        let svc = "0::/system.slice/foo.service/sub\n";
+        assert_eq!(parse_cgroup(svc).as_deref(), Some("foo.service"));
+        // Only slices, or the root: no unit, the caller falls back to the process group.
+        assert_eq!(parse_cgroup("0::/user.slice\n"), None);
+        assert_eq!(parse_cgroup("0::/\n"), None);
+        assert_eq!(parse_cgroup(""), None);
+        // cgroup v1 style lines work too.
+        assert_eq!(
+            parse_cgroup("12:cpu:/user.slice/session-3.scope\n").as_deref(),
+            Some("session-3.scope")
+        );
+    }
+
+    /// Shell-launched applications share the shell's process group but not its systemd scope:
+    /// the unit is the grouping key, the process group only the fallback.
+    #[test]
+    fn grouping_prefers_the_scope_over_the_process_group() {
+        let firefox = ProcInfo {
+            pgrp: Some(532_394),
+            start: Some(1),
+            scope: Some("app-gnome-firefox-533563.scope".to_owned()),
+        };
+        let terminal = ProcInfo {
+            pgrp: Some(532_394),
+            start: Some(2),
+            scope: Some("app-org.gnome.Terminal.slice-1.scope".to_owned()),
+        };
+        let shell_pgrp_only = ProcInfo {
+            pgrp: Some(532_394),
+            start: Some(3),
+            scope: None,
+        };
+        assert_ne!(
+            firefox.group_key(),
+            terminal.group_key(),
+            "same pgid, different scopes"
+        );
+        assert_ne!(firefox.group_key(), shell_pgrp_only.group_key());
+        assert_eq!(
+            shell_pgrp_only.group_key(),
+            Some(532_394),
+            "fallback: the pgid"
+        );
+        assert_eq!(ProcInfo::default().group_key(), None);
+        // A scope key never collides with a pgid-valued key.
+        assert!(firefox.group_key().is_some_and(|k| k >= 1 << 63));
     }
 
     #[test]

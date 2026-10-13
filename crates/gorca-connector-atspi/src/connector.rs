@@ -53,7 +53,7 @@ const SHELL_POLL: Duration = Duration::from_secs(5);
 /// How often registered applications are reconciled with the bus.
 const RECONCILE_EVERY: Duration = Duration::from_secs(5);
 /// Failed reconciliations in a row after which all protection is dropped (fail closed).
-const RECONCILE_FAILURES: u32 = 2;
+const RECONCILE_FAILURES: u32 = 1;
 /// Deadline of one `GetConnectionCredentials`.
 const CREDENTIALS_DEADLINE: Duration = Duration::from_millis(250);
 
@@ -219,7 +219,10 @@ async fn watch_shell(session: Connection, router: Arc<AtspiRouter>, clock: Clock
     loop {
         let process = match name_owner(&session, &clock, "org.gnome.Shell").await {
             Some(owner) => match creds.pid_of(&owner).await {
-                Some(pid) => crate::proc::read_proc_info(pid).start.map(|st| (pid, st)),
+                Some(pid) => crate::proc::read_proc_info_async(pid)
+                    .await
+                    .start
+                    .map(|st| (pid, st)),
                 None => None,
             },
             None => None,
@@ -228,9 +231,12 @@ async fn watch_shell(session: Connection, router: Arc<AtspiRouter>, clock: Clock
             tracing::debug!(?process, "the shell process changed");
             protected = process;
         }
-        // Applied on every pass, not only on change: a protection dropped by a failed
-        // reconciliation is back within one poll.
-        router.set_protected_process(process);
+        // Only a definite answer replaces the protected process. A failed lookup keeps the last
+        // validated identity (`(pid, start time)` cannot match an impostor), it never clears it:
+        // clearing would make the shell evictable exactly when nobody can check.
+        if let Some(p) = process {
+            router.set_protected_process(Some(p));
+        }
         let changed = async {
             match stream.as_mut() {
                 Some(s) => s.next().await.is_some(),
@@ -264,7 +270,8 @@ async fn live_names(conn: &Connection, clock: &Clock) -> Option<std::collections
 
 /// Periodic reconciliation of identity state with the bus. A missed `NameOwnerChanged` must not
 /// leave a route, a quota or a protection behind for a name that is gone; and when the bus cannot
-/// be asked, protection is dropped rather than trusted (applications are still read).
+/// be asked, eviction is frozen (the last validated protection stays, nobody is evicted, and
+/// applications are still read).
 async fn reconcile_loop(conn: Connection, router: Arc<AtspiRouter>, clock: Clock) {
     let mut failures = 0u32;
     loop {
@@ -272,8 +279,8 @@ async fn reconcile_loop(conn: Connection, router: Arc<AtspiRouter>, clock: Clock
         if let Some(live) = live_names(&conn, &clock).await {
             failures = 0;
             let gone = router.reconcile_with(&live);
-            // The bus answered: protection suspended by an earlier failure comes back.
-            router.restore_protection();
+            // The bus answered: protection is verified again, eviction may resume.
+            router.resume_eviction();
             if !gone.is_empty() {
                 tracing::warn!(
                     count = gone.len(),
@@ -283,8 +290,8 @@ async fn reconcile_loop(conn: Connection, router: Arc<AtspiRouter>, clock: Clock
         } else {
             failures += 1;
             if failures >= RECONCILE_FAILURES {
-                tracing::warn!("cannot reconcile with the bus; dropping all protection");
-                router.drop_protection();
+                tracing::warn!("cannot reconcile with the bus; eviction is frozen");
+                router.freeze_eviction();
             }
         }
     }
