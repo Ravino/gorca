@@ -175,8 +175,9 @@ fn identical_requests_in_flight_are_deduplicated() {
         fetch(1, BudgetClass::Prefetch),
         fetch(1, BudgetClass::Interactive),
     ]);
-    assert_eq!(r.tick(HealthView::Healthy).len(), 1);
-    assert_eq!(r.driver.stats().deduped, 2);
+    // The Interactive one is more urgent than the Prefetch flight: it is issued itself.
+    assert_eq!(r.tick(HealthView::Healthy).len(), 2);
+    assert_eq!(r.driver.stats().deduped, 1);
 }
 
 #[test]
@@ -443,6 +444,14 @@ fn ops_and_replies_are_clamped_to_the_hard_bounds() {
     // A connector that answers with more than asked is cut (the reply is untrusted).
     let nodes: Vec<_> = (0..70u64).map(node).collect();
     r.reply(&f[0], FillReply::Ok(SnapshotBatch::new(nodes)));
+    // The cut batch is applied in slices: the rest follows from the timers.
+    let cx = DriverCx {
+        now: r.now,
+        health: HealthView::Healthy,
+        mirror: &r.reader,
+        focus: None,
+    };
+    r.driver.poll_timers(&cx, &mut r.writer);
     assert_eq!(r.reader.stats().live, 65);
 }
 
@@ -630,9 +639,10 @@ fn a_node_removed_while_its_slice_waits_is_not_revived() {
     let total = APPLY_SLICE * 2;
     let nodes: Vec<_> = (0..total as u64).map(node).collect();
     r.reply(&f, FillReply::Ok(SnapshotBatch::new(nodes)));
-    // Node 200 sits in the second slice; it is removed before that slice is applied.
+    // The victim sits in the second slice; it is removed before that slice is applied.
+    let victim = APPLY_SLICE as u64 + 8;
     r.writer
-        .tombstone(key(200), r.now, crate::store::RemovalCause::Event);
+        .tombstone(key(victim), r.now, crate::store::RemovalCause::Event);
     let cx = DriverCx {
         now: r.now,
         health: HealthView::Healthy,
@@ -640,7 +650,7 @@ fn a_node_removed_while_its_slice_waits_is_not_revived() {
         focus: None,
     };
     r.driver.poll_timers(&cx, &mut r.writer);
-    assert_eq!(r.reader.get(key(200)), gorca_model::Lookup::Gone);
+    assert_eq!(r.reader.get(key(victim)), gorca_model::Lookup::Gone);
     assert_eq!(r.reader.stats().live, total as u64 - 1);
 }
 
@@ -689,4 +699,86 @@ fn gone_forgets_everything_in_flight() {
     let rep = r.reply(&f[0], FillReply::Ok(SnapshotBatch::new(vec![node(1)])));
     assert_eq!(rep.outcome, None);
     assert!(r.reader.get(key(1)).hit().is_none());
+}
+
+/// Reviewer probe F7: every accepted request is answered, a deduplicated one included.
+#[test]
+fn a_deduplicated_request_gets_the_carriers_reply() {
+    let mut r = rig(vec![
+        fetch(1, BudgetClass::Prefetch),
+        fetch(1, BudgetClass::Prefetch),
+        fetch(1, BudgetClass::Background),
+    ]);
+    let issued = r.tick(HealthView::Healthy);
+    assert_eq!(issued.len(), 1, "one request on the wire");
+    assert_eq!(r.driver.stats().deduped, 2);
+    let f = issued[0].clone();
+    r.reply(&f, FillReply::Ok(SnapshotBatch::new(vec![node(1)])));
+    assert_eq!(r.log(), ["applied:1", "applied:1", "applied:1"]);
+}
+
+#[test]
+fn deduplicated_requests_share_failures_too() {
+    let mut r = rig(vec![
+        fetch(1, BudgetClass::Prefetch),
+        fetch(1, BudgetClass::Prefetch),
+    ]);
+    let f = r.tick(HealthView::Healthy).remove(0);
+    r.reply(&f, FillReply::Err(FillError::Timeout));
+    assert_eq!(r.log(), ["timeout", "timeout"]);
+}
+
+/// An Interactive request never rides on a less urgent flight.
+#[test]
+fn an_interactive_request_is_not_deduplicated_onto_a_prefetch_flight() {
+    let mut r = rig(vec![
+        fetch(1, BudgetClass::Prefetch),
+        fetch(1, BudgetClass::Interactive),
+    ]);
+    let issued = r.tick(HealthView::Healthy);
+    assert_eq!(issued.len(), 2);
+    assert_eq!(issued[1].class, BudgetClass::Interactive);
+    assert_eq!(
+        issued[1].deadline,
+        r.now + BudgetClass::Interactive.default_timeout()
+    );
+}
+
+/// Every request gets its own sequence point (F1): a request issued after another is issued
+/// strictly later, even when nothing else wrote.
+#[test]
+fn issue_points_are_strictly_increasing() {
+    let mut r = rig(vec![
+        fetch(1, BudgetClass::Prefetch),
+        fetch(2, BudgetClass::Prefetch),
+        fetch(3, BudgetClass::Prefetch),
+    ]);
+    let issued = r.tick(HealthView::Healthy);
+    assert!(issued[0].issued_at < issued[1].issued_at);
+    assert!(issued[1].issued_at < issued[2].issued_at);
+}
+
+#[test]
+fn a_queued_request_that_expires_is_answered_with_its_aliases() {
+    let limits = FillLimits {
+        max_background: 0,
+        ..FillLimits::default()
+    };
+    let mut r = rig_with(
+        vec![
+            fetch(1, BudgetClass::Background),
+            fetch(1, BudgetClass::Background),
+        ],
+        limits,
+    );
+    r.tick(HealthView::Healthy);
+    r.now += Duration::from_secs(2);
+    let cx = DriverCx {
+        now: r.now,
+        health: HealthView::Healthy,
+        mirror: &r.reader,
+        focus: None,
+    };
+    r.driver.poll_timers(&cx, &mut r.writer);
+    assert_eq!(r.log(), ["refused:expired", "refused:expired"]);
 }

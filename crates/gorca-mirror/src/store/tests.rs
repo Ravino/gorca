@@ -361,59 +361,262 @@ fn retiring_releases_everything() {
     w.check_invariants().unwrap();
 }
 
+fn app_n(n: u32) -> AppId {
+    AppId {
+        connector: ConnectorId(0),
+        serial: n,
+    }
+}
+
+fn node_of(a: AppId, n: u64) -> Arc<NodeSnapshot> {
+    let mut s = (*node(n, "x")).clone();
+    s.key = NodeKey {
+        app: a,
+        local: LocalId(n),
+    };
+    Arc::new(s)
+}
+
+/// The all-apps cap holds at every instant: the over-cap writer's background write degrades to a
+/// miss, the largest unprotected holder is asked to shed, and the write succeeds afterwards.
 #[test]
-fn global_budget_preempts_the_largest_unprotected_app() {
-    let budget = MirrorBudget::new(node_bytes(&node(0, "x")) * 40);
-    let a1 = AppId {
-        connector: ConnectorId(0),
-        serial: 1,
-    };
-    let a2 = AppId {
-        connector: ConnectorId(0),
-        serial: 2,
-    };
+fn the_global_cap_is_exact_and_the_largest_unprotected_holder_sheds() {
+    let one = node_bytes(&node(0, "x"));
+    let budget = MirrorBudget::new(one * 40);
+    let (a1, a2) = (app_n(1), app_n(2));
     let (mut w1, r1) = mirror_for(a1, Some(Arc::clone(&budget)));
     let (mut w2, r2) = mirror_for(a2, Some(Arc::clone(&budget)));
-    let nk = |a: AppId, n: u64| {
-        let mut s = (*node(n, "x")).clone();
-        s.key = NodeKey {
-            app: a,
-            local: LocalId(n),
-        };
-        Arc::new(s)
-    };
     w1.apply(
-        batch((0..30).map(|n| nk(a1, n)).collect()),
+        batch((0..30).map(|n| node_of(a1, n)).collect()),
         ApplyOrigin::Push,
     );
-    // App 2 pushes the total over the cap; app 1 (the larger holder) is asked to shed.
-    w2.apply(
-        batch((0..20).map(|n| nk(a2, n)).collect()),
+    let out = w2.apply(
+        batch((0..20).map(|n| node_of(a2, n)).collect()),
         ApplyOrigin::Push,
     );
-    assert!(budget.total() > budget.cap());
+    assert!(budget.total() <= budget.cap(), "never over the cap");
+    assert_eq!(out.dropped_cap, 10);
+    assert_eq!(r2.stats().live, 10);
     w1.sweep(Instant::now());
+    assert!(r1.stats().live < 30, "the victim shed");
+    let out = w2.apply(
+        batch((10..20).map(|n| node_of(a2, n)).collect()),
+        ApplyOrigin::Push,
+    );
+    assert_eq!(
+        out.dropped_cap, 0,
+        "the shed freed what the dropped batch needed"
+    );
+    assert_eq!(r2.stats().live, 20);
     assert!(budget.total() <= budget.cap());
-    assert!(r1.stats().live < 30);
-    assert_eq!(r2.stats().live, 20, "the small holder keeps its nodes");
     w1.check_invariants().unwrap();
     w2.check_invariants().unwrap();
 }
 
+/// A shed request is a target, not an increment: repeated asks do not make the victim drop
+/// everything (probe: all 100 nodes were dropped for a handful of bytes).
 #[test]
-fn a_protected_app_keeps_its_floor_when_it_is_the_only_holder() {
-    let budget = MirrorBudget::new(1);
-    let (mut w, r) = mirror_for(app(), Some(budget));
-    w.set_protected(true);
-    w.apply(
-        batch((0..100).map(|n| node(n, "x")).collect()),
+fn repeated_shed_requests_do_not_accumulate() {
+    let one = node_bytes(&node(0, "x"));
+    let budget = MirrorBudget::new(one * 100);
+    let (a1, a2) = (app_n(1), app_n(2));
+    let (mut w1, r1) = mirror_for(a1, Some(Arc::clone(&budget)));
+    let (mut w2, _r2) = mirror_for(a2, Some(Arc::clone(&budget)));
+    w1.apply(
+        batch((0..100).map(|n| node_of(a1, n)).collect()),
         ApplyOrigin::Push,
     );
-    assert_eq!(
-        r.stats().live,
-        100,
-        "below MIN_PROTECTED_NODES nothing is shed"
+    let mut peak = 0;
+    for i in 0..300 {
+        w2.apply(batch(vec![node_of(a2, i)]), ApplyOrigin::Push);
+        peak = peak.max(budget.total());
+    }
+    assert!(
+        peak <= budget.cap(),
+        "peak {peak} over cap {}",
+        budget.cap()
     );
+    w1.sweep(Instant::now());
+    assert!(
+        r1.stats().live >= 90,
+        "asked for a few nodes, shed {}",
+        100 - r1.stats().live
+    );
+}
+
+/// The focused app and the Shell are never asked to shed.
+#[test]
+fn a_protected_app_is_never_asked_to_shed() {
+    let one = node_bytes(&node(0, "x"));
+    let budget = MirrorBudget::new(one * 40);
+    let (a1, a2) = (app_n(1), app_n(2));
+    let (mut w1, r1) = mirror_for(a1, Some(Arc::clone(&budget)));
+    let (mut w2, r2) = mirror_for(a2, Some(Arc::clone(&budget)));
+    w1.set_protected(true);
+    w1.apply(
+        batch((0..40).map(|n| node_of(a1, n)).collect()),
+        ApplyOrigin::Push,
+    );
+    let out = w2.apply(batch(vec![node_of(a2, 1)]), ApplyOrigin::Push);
+    assert_eq!(out.dropped_cap, 1);
+    w1.sweep(Instant::now());
+    assert_eq!(r1.stats().live, 40);
+    assert_eq!(r2.stats().live, 0);
+    // Its own reply to a request the user waits on makes room by evicting its own oldest.
+    let before = r1.stats().live;
+    let issued_at = w1.next_seq();
+    let out = w1.apply(
+        batch(vec![node_of(a1, 99)]),
+        ApplyOrigin::Reply { issued_at },
+    );
+    assert_eq!(out.applied, 1);
+    assert_eq!(r1.stats().live, before, "one in, one out");
+    assert!(budget.total() <= budget.cap());
+}
+
+/// Reads are the LRU signal: a node that is read survives the eviction of older ones.
+#[test]
+fn eviction_prefers_nodes_nobody_reads() {
+    let (mut w, r) = mirror();
+    w.set_caps(4, u64::MAX);
+    w.apply(
+        batch((0..4).map(|n| node(n, "x")).collect()),
+        ApplyOrigin::Push,
+    );
+    w.next_seq();
+    for _ in 0..3 {
+        // Node 0 is the oldest, but it is read.
+        let _ = r.view(key(0));
+        r.bump_seq();
+    }
+    w.apply(batch(vec![node(10, "y")]), ApplyOrigin::Push);
+    assert!(r.get(key(0)).hit().is_some(), "the read node stays");
+    assert_eq!(r.get(key(1)), Lookup::Miss, "the oldest unread node goes");
+}
+
+#[test]
+fn dropping_a_writer_returns_its_share_of_the_budget() {
+    let budget = MirrorBudget::new(u64::MAX);
+    {
+        let (mut w, _r) = mirror_for(app(), Some(Arc::clone(&budget)));
+        w.apply(
+            batch((0..100).map(|n| node(n, "n")).collect()),
+            ApplyOrigin::Push,
+        );
+        assert!(budget.total() > 0);
+    }
+    assert_eq!(budget.total(), 0);
+}
+
+/// LR-2 on the proof-of-life path (reviewer probe): an event that arrives while the fetch of a
+/// removed key is in flight keeps the revived node stale.
+#[test]
+fn lr2_an_invalidation_of_a_tombstoned_key_survives_revival() {
+    let (mut w, r) = mirror();
+    w.apply(batch(vec![node(1, "Old")]), ApplyOrigin::Push);
+    w.tombstone(key(1), Instant::now(), RemovalCause::Event);
+    let issued_at = w.next_seq();
+    w.invalidate(key(1), PropMask::NAME, Instant::now());
+    let out = w.apply(
+        batch(vec![node(1, "Old (pre-rename)")]),
+        ApplyOrigin::Reply { issued_at },
+    );
+    assert_eq!(out.revived, 1);
+    assert!(r.view(key(1)).hit().unwrap().stale.contains(PropMask::NAME));
+    w.check_invariants().unwrap();
+}
+
+/// Invalidations of keys the mirror does not hold cost O(1) memory however many arrive
+/// (reviewer probe: +229 MiB after 10 M events for one key).
+#[test]
+fn remembering_invalidations_of_unknown_keys_is_bounded() {
+    let (mut w, _r) = mirror();
+    let now = Instant::now();
+    for _ in 0..200_000 {
+        w.invalidate(key(7), PropMask::NAME | PropMask::VALUE, now);
+    }
+    assert_eq!(w.remembered_invalidations(), 1, "one key, one record");
+    for n in 0..(MAX_RECENT_INVALIDATIONS as u64 * 3) {
+        w.invalidate(key(1_000 + n), PropMask::NAME, now);
+    }
+    assert!(w.remembered_invalidations() <= MAX_RECENT_INVALIDATIONS);
+}
+
+/// A reply that carries fewer fields must not make the node forget its parent, children or
+/// description (reviewer probe).
+#[test]
+fn a_partial_reply_keeps_parent_children_and_description() {
+    let (mut w, r) = mirror();
+    let mut full = (*node(2, "Label")).clone();
+    full.parent = Some(key(1));
+    full.description = Some(Arc::from("desc"));
+    full.children = ChildList::Count(3);
+    full.have = PropMask::PRESENT | PropMask::PARENT | PropMask::CHILDREN;
+    w.apply(batch(vec![Arc::new(full)]), reply_at(&w));
+    let mut part = (*node(2, "Label")).clone();
+    part.have = PropMask::PRESENT.difference(PropMask::DESCRIPTION);
+    w.apply(batch(vec![Arc::new(part)]), reply_at(&w));
+    let v = r.view(key(2)).hit().unwrap();
+    assert_eq!(v.snap.parent, Some(key(1)));
+    assert_eq!(v.snap.children, ChildList::Count(3));
+    assert!(v.snap.have.contains(PropMask::PARENT | PropMask::CHILDREN));
+    // But a field an event made stale is not carried over.
+    w.invalidate(key(2), PropMask::CHILDREN, Instant::now());
+    let mut part = (*node(2, "Label")).clone();
+    part.have = PropMask::PRESENT.difference(PropMask::DESCRIPTION);
+    w.apply(batch(vec![Arc::new(part)]), reply_at(&w));
+    let v = r.view(key(2)).hit().unwrap();
+    assert!(!v.snap.have.contains(PropMask::CHILDREN));
+    assert_eq!(v.snap.parent, Some(key(1)));
+}
+
+/// Revived keys count against the node cap (reviewer probe: live 20 with a cap of 10).
+#[test]
+fn revivals_respect_the_node_cap() {
+    let (mut w, r) = mirror();
+    w.set_caps(10, u64::MAX);
+    w.apply(
+        batch((0..10).map(|n| node(n, "n")).collect()),
+        ApplyOrigin::Push,
+    );
+    for i in 100..110 {
+        w.tombstone(key(i), Instant::now(), RemovalCause::Event);
+    }
+    let issued_at = w.next_seq();
+    let back: Vec<_> = (100..110).map(|i| node(i, "back")).collect();
+    let out = w.apply(batch(back), ApplyOrigin::CacheDump { issued_at });
+    assert_eq!(out.revived, 10);
+    assert!(r.stats().live <= 10, "live {}", r.stats().live);
+    w.check_invariants().unwrap();
+}
+
+/// 5.1: a reply that says `defunct` is a removal.
+#[test]
+fn a_defunct_reply_becomes_a_tombstone() {
+    let (mut w, r) = mirror();
+    w.apply(batch(vec![node(1, "alive")]), ApplyOrigin::Push);
+    let mut dead = (*node(1, "dying")).clone();
+    dead.states = StateSet::DEFUNCT;
+    let out = w.apply(batch(vec![Arc::new(dead)]), reply_at(&w));
+    assert_eq!(out.defunct, 1);
+    assert_eq!(r.get(key(1)), Lookup::Gone);
+    let mut dead2 = (*node(2, "never seen")).clone();
+    dead2.states = StateSet::DEFUNCT;
+    w.apply(batch(vec![Arc::new(dead2)]), reply_at(&w));
+    assert_eq!(r.get(key(2)), Lookup::Gone);
+    w.check_invariants().unwrap();
+}
+
+/// Every request and every trigger gets its own sequence number, so "issued after" is strict
+/// even when the app is quiet.
+#[test]
+fn sequence_numbers_are_unique_per_request() {
+    let (mut w, r) = mirror();
+    let a = r.bump_seq();
+    let b = w.next_seq();
+    let c = r.bump_seq();
+    assert!(a < b && b < c);
+    assert_eq!(w.seq(), c);
 }
 
 #[test]

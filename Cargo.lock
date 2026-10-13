@@ -859,6 +859,7 @@ dependencies = [
  "gorca-ingress",
  "gorca-model",
  "gorca-rt",
+ "gorca-testkit",
  "scc",
  "smallvec",
 ]

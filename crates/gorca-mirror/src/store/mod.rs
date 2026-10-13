@@ -30,7 +30,7 @@ use gorca_model::{
 
 use crate::limits::{
     GLOBAL_MIRROR_BYTES, MAX_MIRROR_BYTES, MAX_MIRROR_NODES, MAX_RECENT_INVALIDATIONS,
-    MIN_PROTECTED_NODES, SWEEP_BUDGET, TOMBSTONE_SLACK, TOMBSTONE_TTL,
+    SWEEP_BUDGET, TOMBSTONE_SLACK, TOMBSTONE_TTL,
 };
 
 /// Read side. Implementations must be wait-free on a hit.
@@ -43,6 +43,10 @@ pub trait MirrorRead: Send + Sync + std::fmt::Debug {
     fn revision(&self) -> u64;
     /// The write sequence (the value a request records as `issued_at`).
     fn seq(&self) -> u64;
+    /// Take a fresh sequence number: the point at which a request is issued or a trigger (a focus
+    /// change) happens. Every request and every trigger gets its own, so "issued after" is a
+    /// strict comparison (B-1 5.3, 5.4).
+    fn bump_seq(&self) -> u64;
     /// Counters, exact (MA-1).
     fn stats(&self) -> MirrorStats;
 }
@@ -92,6 +96,10 @@ pub struct ApplyOutcome {
     pub superseded: u32,
     pub revived: u32,
     pub evicted: u32,
+    /// Turned into a tombstone because the node carried `defunct` (5.1).
+    pub defunct: u32,
+    /// Not stored: the all-apps byte cap had no room and this origin may not evict.
+    pub dropped_cap: u32,
     pub truncated: bool,
 }
 
@@ -217,23 +225,19 @@ impl AppUsage {
     pub fn live(&self) -> u64 {
         self.live.load(Ordering::Relaxed)
     }
+    /// The focused app or the Shell: never asked to shed for another app.
+    pub fn protected(&self) -> bool {
+        self.protected.load(Ordering::Relaxed)
+    }
 }
 
-/// The all-apps byte cap (`GLOBAL_MIRROR_BYTES`).
+/// The all-apps byte cap (`GLOBAL_MIRROR_BYTES`), enforced exactly: every byte a mirror holds is
+/// reserved here first, so the total never exceeds the cap, not even for a moment.
 #[derive(Debug)]
 pub struct MirrorBudget {
     cap: u64,
     total: AtomicU64,
     apps: Mutex<Vec<Weak<AppUsage>>>,
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-enum Pressure {
-    /// The caller is the largest eligible holder: it sheds itself.
-    Own,
-    /// Another app was asked to shed.
-    Preempted,
-    Nothing,
 }
 
 impl MirrorBudget {
@@ -264,44 +268,49 @@ impl MirrorBudget {
         apps.push(Arc::downgrade(usage));
     }
 
-    /// Over the cap: the largest non-protected holder sheds the excess; protected holders only
-    /// when nothing else is left, and never below their floor.
-    fn pressure(&self, who: &Arc<AppUsage>) -> Pressure {
-        let excess = self.total().saturating_sub(self.cap);
-        if excess == 0 {
-            return Pressure::Nothing;
+    /// Reserve `n` bytes if they fit under the cap.
+    fn try_reserve(&self, n: u64) -> bool {
+        let mut cur = self.total.load(Ordering::Relaxed);
+        loop {
+            let Some(next) = cur.checked_add(n).filter(|t| *t <= self.cap) else {
+                return false;
+            };
+            match self
+                .total
+                .compare_exchange_weak(cur, next, Ordering::AcqRel, Ordering::Relaxed)
+            {
+                Ok(_) => return true,
+                Err(seen) => cur = seen,
+            }
         }
+    }
+
+    fn release(&self, n: u64) {
+        let _ = self
+            .total
+            .try_update(Ordering::AcqRel, Ordering::Relaxed, |t| {
+                Some(t.saturating_sub(n))
+            });
+    }
+
+    /// `who` needs `need` bytes and the cap is full: ask the largest holder that is neither the
+    /// focused app nor the Shell (`protected`) to shed them. The request is a target, not an
+    /// increment: asking again does not add up. The victim sheds on its next apply or sweep,
+    /// oldest and least recently read nodes first.
+    fn request_shed(&self, who: &Arc<AppUsage>, need: u64) {
         let apps = self.apps.lock().unwrap_or_else(PoisonError::into_inner);
         let mut best: Option<Arc<AppUsage>> = None;
-        for pass_protected in [false, true] {
-            for w in apps.iter() {
-                let Some(u) = w.upgrade() else { continue };
-                if u.protected.load(Ordering::Relaxed) != pass_protected {
-                    continue;
-                }
-                let floor = if pass_protected {
-                    MIN_PROTECTED_NODES as u64
-                } else {
-                    0
-                };
-                if u.live() <= floor {
-                    continue;
-                }
-                if best.as_ref().is_none_or(|b| u.bytes() > b.bytes()) {
-                    best = Some(u);
-                }
+        for w in apps.iter() {
+            let Some(u) = w.upgrade() else { continue };
+            if Arc::ptr_eq(&u, who) || u.protected.load(Ordering::Relaxed) || u.live() == 0 {
+                continue;
             }
-            if best.is_some() {
-                break;
+            if best.as_ref().is_none_or(|b| u.bytes() > b.bytes()) {
+                best = Some(u);
             }
         }
-        match best {
-            Some(v) if Arc::ptr_eq(&v, who) => Pressure::Own,
-            Some(v) => {
-                v.shed.fetch_add(excess, Ordering::Relaxed);
-                Pressure::Preempted
-            }
-            None => Pressure::Nothing,
+        if let Some(v) = best {
+            v.shed.fetch_max(need, Ordering::Relaxed);
         }
     }
 }
@@ -323,12 +332,78 @@ enum Entry {
     },
 }
 
-/// One key's cell: swapped in place by the writer, loaded by any reader.
-type Cell = Arc<ArcSwap<Entry>>;
+/// One key's cell: the entry is swapped in place by the writer and loaded by any reader;
+/// `touched` is the write sequence at the latest read (the least-recently-used signal).
+#[derive(Debug)]
+struct Cell {
+    entry: ArcSwap<Entry>,
+    touched: AtomicU64,
+}
+
+type CellRef = Arc<Cell>;
+
+/// The index is split into shards that grow independently: a `HashIndex` doubles its table in
+/// one go (measured: 2.8 ms at 53 000 entries), which would stall an `apply` far beyond the 250 us
+/// budget of MA-6; with 64 shards the biggest single resize is 1/64 of that.
+const SHARDS: usize = 64;
+
+struct Index {
+    shards: Box<[scc::HashIndex<NodeKey, CellRef, KeyBuild>]>,
+}
+
+impl std::fmt::Debug for Index {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Index")
+            .field("shards", &self.shards.len())
+            .finish()
+    }
+}
+
+impl Index {
+    fn new() -> Self {
+        Self {
+            shards: (0..SHARDS)
+                .map(|_| scc::HashIndex::with_hasher(KeyBuild))
+                .collect(),
+        }
+    }
+
+    fn shard(&self, k: &NodeKey) -> &scc::HashIndex<NodeKey, CellRef, KeyBuild> {
+        let h = splitmix(KeyBuild.hash_one(k));
+        // The top bits pick the shard; the inner table uses the low ones.
+        &self.shards[(h >> 58) as usize % SHARDS]
+    }
+
+    fn peek_with<R, F: FnOnce(&NodeKey, &CellRef) -> R>(&self, k: &NodeKey, f: F) -> Option<R> {
+        self.shard(k).peek_with(k, f)
+    }
+
+    fn insert_sync(&self, k: NodeKey, v: CellRef) -> Result<(), (NodeKey, CellRef)> {
+        self.shard(&k).insert_sync(k, v)
+    }
+
+    fn remove_sync(&self, k: &NodeKey) -> bool {
+        self.shard(k).remove_sync(k)
+    }
+
+    fn iter_sync<F: FnMut(&NodeKey, &CellRef) -> bool>(&self, mut f: F) {
+        for sh in &self.shards {
+            if !sh.iter_sync(&mut f) {
+                break;
+            }
+        }
+    }
+
+    fn clear_sync(&self) {
+        for sh in &self.shards {
+            sh.clear_sync();
+        }
+    }
+}
 
 #[derive(Debug)]
 struct Shared {
-    index: scc::HashIndex<NodeKey, Cell, KeyBuild>,
+    index: Index,
     app: Option<AppId>,
     revision: AtomicU64,
     seq: AtomicU64,
@@ -373,7 +448,7 @@ impl Shared {
         if self.retired.load(Ordering::Acquire) {
             return Lookup::Gone;
         }
-        match self.index.peek_with(&k, |_, c| match &**c.load() {
+        match self.index.peek_with(&k, |_, c| match &**c.entry.load() {
             Entry::Live { snap, .. } => Lookup::Hit(Arc::clone(snap)),
             Entry::Tombstone { .. } => Lookup::Gone,
         }) {
@@ -388,12 +463,16 @@ impl Shared {
         }
         let epoch = self.stale_epoch.load(Ordering::Acquire);
         let ttl_ms = self.ttl_ms.load(Ordering::Relaxed);
-        match self.index.peek_with(&k, |_, c| match &**c.load() {
-            Entry::Live { snap, .. } => Lookup::Hit(NodeView {
-                snap: Arc::clone(snap),
-                stale: stale_of(snap, epoch),
-                aged: is_aged(snap, ttl_ms),
-            }),
+        let now_seq = self.seq.load(Ordering::Relaxed);
+        match self.index.peek_with(&k, |_, c| match &**c.entry.load() {
+            Entry::Live { snap, .. } => {
+                c.touched.store(now_seq, Ordering::Relaxed);
+                Lookup::Hit(NodeView {
+                    snap: Arc::clone(snap),
+                    stale: stale_of(snap, epoch),
+                    aged: is_aged(snap, ttl_ms),
+                })
+            }
             Entry::Tombstone { .. } => Lookup::Gone,
         }) {
             Some(l) => l,
@@ -434,6 +513,9 @@ impl MirrorRead for MirrorHandle {
     fn seq(&self) -> u64 {
         self.shared.seq.load(Ordering::Acquire)
     }
+    fn bump_seq(&self) -> u64 {
+        self.shared.seq.fetch_add(1, Ordering::AcqRel) + 1
+    }
     fn stats(&self) -> MirrorStats {
         self.shared.stats()
     }
@@ -456,10 +538,15 @@ pub struct MirrorWriter {
     /// Eviction order: insertion order with a second chance for refreshed nodes.
     fifo: VecDeque<(NodeKey, u64)>,
     recent_inval: HashMap<NodeKey, (u64, PropMask), KeyBuild>,
-    recent_order: VecDeque<(NodeKey, u64)>,
+    /// Each key of `recent_inval` once, oldest first.
+    recent_order: VecDeque<NodeKey>,
     /// Requests issued before this sequence may have missed an invalidation of an unknown key.
     inval_floor: u64,
     focus: Option<NodeKey>,
+    /// The key an `apply` is writing: never evicted to make room for itself.
+    pinned: Option<NodeKey>,
+    /// Bytes this `apply` could not reserve; asked of the other apps once, at its end.
+    unmet: u64,
     hints: Vec<NodeKey>,
     max_nodes: usize,
     max_bytes: u64,
@@ -480,7 +567,7 @@ pub fn mirror_for(app: AppId, budget: Option<Arc<MirrorBudget>>) -> (MirrorWrite
 
 fn build(app: Option<AppId>, budget: Option<Arc<MirrorBudget>>) -> (MirrorWriter, MirrorHandle) {
     let shared = Arc::new(Shared {
-        index: scc::HashIndex::with_hasher(KeyBuild),
+        index: Index::new(),
         app,
         revision: AtomicU64::new(0),
         seq: AtomicU64::new(0),
@@ -507,6 +594,8 @@ fn build(app: Option<AppId>, budget: Option<Arc<MirrorBudget>>) -> (MirrorWriter
         recent_order: VecDeque::new(),
         inval_floor: 0,
         focus: None,
+        pinned: None,
+        unmet: 0,
         hints: Vec::new(),
         max_nodes: MAX_MIRROR_NODES,
         max_bytes: MAX_MIRROR_BYTES,
@@ -516,15 +605,19 @@ fn build(app: Option<AppId>, budget: Option<Arc<MirrorBudget>>) -> (MirrorWriter
     (writer, MirrorHandle { shared })
 }
 
-/// The unpublished replacement for `old` once `new` arrives: fields only the old snapshot has
-/// (value, relations, attributes, bounds) survive a partial reply when nothing marked them
-/// stale; everything else comes from the new content.
+/// The unpublished replacement for `old` once `new` arrives: every field only the old snapshot
+/// has survives a partial reply when nothing marked it stale; the rest comes from the new
+/// content. The Reader's fetches ask for the spoken fields only, and must not make the node
+/// forget its parent (P9-3 ancestors, focus protection), children or description.
 fn merge(old: &NodeSnapshot, new: &mut NodeSnapshot, old_stale: PropMask) {
-    const EXTRA: [PropMask; 4] = [
+    const EXTRA: [PropMask; 7] = [
         PropMask::VALUE,
         PropMask::RELATIONS,
         PropMask::ATTRS,
         PropMask::BOUNDS,
+        PropMask::PARENT,
+        PropMask::CHILDREN,
+        PropMask::DESCRIPTION,
     ];
     for f in EXTRA {
         if old.have.contains(f) && !new.have.contains(f) && !old_stale.intersects(f) {
@@ -532,7 +625,10 @@ fn merge(old: &NodeSnapshot, new: &mut NodeSnapshot, old_stale: PropMask) {
                 PropMask::VALUE => new.value.clone_from(&old.value),
                 PropMask::RELATIONS => new.relations.clone_from(&old.relations),
                 PropMask::ATTRS => new.attrs.clone_from(&old.attrs),
-                _ => new.bounds = old.bounds,
+                PropMask::BOUNDS => new.bounds = old.bounds,
+                PropMask::PARENT => new.parent = old.parent,
+                PropMask::CHILDREN => new.children.clone_from(&old.children),
+                _ => new.description.clone_from(&old.description),
             }
             new.have |= f;
         }
@@ -547,6 +643,11 @@ impl MirrorWriter {
 
     fn bump_seq(&mut self) -> u64 {
         self.shared.seq.fetch_add(1, Ordering::AcqRel) + 1
+    }
+
+    /// A fresh sequence number for a request about to be issued (see [`MirrorRead::bump_seq`]).
+    pub fn next_seq(&mut self) -> u64 {
+        self.bump_seq()
     }
 
     fn bump_rev(&self) {
@@ -604,7 +705,7 @@ impl MirrorWriter {
     fn peek(&self, k: NodeKey) -> Option<Entry> {
         self.shared
             .index
-            .peek_with(&k, |_, c| Entry::clone(&c.load()))
+            .peek_with(&k, |_, c| Entry::clone(&c.entry.load()))
     }
 
     fn put(&self, k: NodeKey, e: Entry) {
@@ -612,22 +713,26 @@ impl MirrorWriter {
         let swapped = self
             .shared
             .index
-            .peek_with(&k, |_, c| c.store(Arc::clone(&e)));
+            .peek_with(&k, |_, c| c.entry.store(Arc::clone(&e)));
         if swapped.is_none() {
-            let _ = self.shared.index.insert_sync(k, Arc::new(ArcSwap::new(e)));
+            let _ = self.shared.index.insert_sync(
+                k,
+                Arc::new(Cell {
+                    entry: ArcSwap::new(e),
+                    touched: AtomicU64::new(self.seq()),
+                }),
+            );
         }
     }
 
-    fn charge(&self, n: &NodeSnapshot) {
+    /// Counters only: the all-apps budget is reserved and released separately.
+    fn counters_add(&self, n: &NodeSnapshot) {
         let s = &self.shared;
         let b = node_bytes(n);
         s.live.fetch_add(1, Ordering::Relaxed);
         s.bytes.fetch_add(b, Ordering::Relaxed);
         self.usage.live.fetch_add(1, Ordering::Relaxed);
         self.usage.bytes.fetch_add(b, Ordering::Relaxed);
-        if let Some(bu) = &self.budget {
-            bu.total.fetch_add(b, Ordering::Relaxed);
-        }
         if is_stale(n) {
             s.stale.fetch_add(1, Ordering::Relaxed);
         }
@@ -636,22 +741,47 @@ impl MirrorWriter {
         }
     }
 
-    fn refund(&self, n: &NodeSnapshot) {
+    fn counters_sub(&self, n: &NodeSnapshot) {
         let s = &self.shared;
         let b = node_bytes(n);
         s.live.fetch_sub(1, Ordering::Relaxed);
         s.bytes.fetch_sub(b, Ordering::Relaxed);
         self.usage.live.fetch_sub(1, Ordering::Relaxed);
         self.usage.bytes.fetch_sub(b, Ordering::Relaxed);
-        if let Some(bu) = &self.budget {
-            bu.total.fetch_sub(b, Ordering::Relaxed);
-        }
         if is_stale(n) {
             s.stale.fetch_sub(1, Ordering::Relaxed);
         }
         if is_partial(n) {
             s.partial.fetch_sub(1, Ordering::Relaxed);
         }
+    }
+
+    /// A node leaves the store: counters and its share of the all-apps budget.
+    fn refund(&self, n: &NodeSnapshot) {
+        self.counters_sub(n);
+        if let Some(bu) = &self.budget {
+            bu.release(node_bytes(n));
+        }
+    }
+
+    /// Reserve `delta` bytes of the all-apps cap for a write. When the cap is full, the largest
+    /// unprotected other app is asked to shed; a writer allowed to (`may_evict`: the reply to a
+    /// request the user is waiting on) makes room by evicting its own oldest and least recently
+    /// read nodes. `false` means the write must be dropped (the node degrades to a miss).
+    fn reserve(&mut self, delta: u64, may_evict: bool) -> bool {
+        let Some(b) = self.budget.clone() else {
+            return true;
+        };
+        if delta == 0 || b.try_reserve(delta) {
+            return true;
+        }
+        self.unmet += delta;
+        while may_evict && self.evict_one() {
+            if b.try_reserve(delta) {
+                return true;
+            }
+        }
+        false
     }
 
     /// Apply a reply or a push. Per node: dropped if tombstoned at a seq > `issued_at`; kept
@@ -662,17 +792,23 @@ impl MirrorWriter {
             truncated: batch.truncated,
             ..ApplyOutcome::default()
         };
-        let (issued_at, allow_revive) = match origin {
-            ApplyOrigin::Reply { issued_at } | ApplyOrigin::CacheDump { issued_at } => {
-                (issued_at, true)
-            }
-            ApplyOrigin::Push => (self.seq(), false),
+        let (issued_at, allow_revive, may_evict) = match origin {
+            ApplyOrigin::Reply { issued_at } => (issued_at, true, true),
+            ApplyOrigin::CacheDump { issued_at } => (issued_at, true, false),
+            ApplyOrigin::Push => (self.seq(), false, false),
         };
         let now = Instant::now();
         for snap in batch.nodes {
-            self.apply_one(snap, issued_at, allow_revive, now, &mut out);
+            self.apply_one(snap, issued_at, (allow_revive, may_evict), now, &mut out);
         }
         self.enforce_bounds(&mut out);
+        if self.unmet > 0 {
+            if let Some(b) = &self.budget {
+                // A floor keeps a drip of small writes from asking for one node at a time.
+                b.request_shed(&self.usage, self.unmet.max(b.cap() / 64));
+            }
+            self.unmet = 0;
+        }
         self.bump_rev();
         self.debug_check();
         out
@@ -682,13 +818,19 @@ impl MirrorWriter {
         &mut self,
         snap: Arc<NodeSnapshot>,
         issued_at: u64,
-        allow_revive: bool,
+        (allow_revive, may_evict): (bool, bool),
         now: Instant,
         out: &mut ApplyOutcome,
     ) {
         let k = snap.key;
         if !self.owns(k) {
             out.dropped_foreign += 1;
+            return;
+        }
+        if snap.states.contains(gorca_model::StateSet::DEFUNCT) {
+            // 5.1: a reply that says `defunct` is a removal, not a node.
+            self.tombstone(k, now, RemovalCause::Defunct);
+            out.defunct += 1;
             return;
         }
         let mut revived = false;
@@ -742,13 +884,30 @@ impl MirrorWriter {
             Freshness::Fresh { at: now }
         };
         let node = Arc::new(node);
-        match old {
-            Some(o) => self.refund(&o),
-            None => {
-                if !revived {
-                    self.make_room(out);
-                }
+        // Room under the node cap, revivals included.
+        if is_new {
+            self.pinned = Some(k);
+            self.make_room(out);
+        }
+        // Room under the all-apps byte cap.
+        let new_bytes = node_bytes(&node);
+        let old_bytes = old.as_ref().map_or(0, |o| node_bytes(o));
+        self.pinned = Some(k);
+        let fits = if new_bytes > old_bytes {
+            self.reserve(new_bytes - old_bytes, may_evict)
+        } else {
+            if let Some(b) = &self.budget {
+                b.release(old_bytes - new_bytes);
             }
+            true
+        };
+        self.pinned = None;
+        if !fits {
+            out.dropped_cap += 1;
+            return;
+        }
+        if let Some(o) = &old {
+            self.counters_sub(o);
         }
         if revived {
             self.shared.tombstones.fetch_sub(1, Ordering::Relaxed);
@@ -758,7 +917,7 @@ impl MirrorWriter {
         if is_new {
             self.fifo.push_back((k, issued_at));
         }
-        self.charge(&node);
+        self.counters_add(&node);
         self.put(
             k,
             Entry::Live {
@@ -781,6 +940,9 @@ impl MirrorWriter {
 
     fn protected_keys(&self) -> Vec<NodeKey> {
         let mut keys = Vec::new();
+        if let Some(p) = self.pinned {
+            keys.push(p);
+        }
         let mut cur = self.focus;
         while let Some(k) = cur {
             if keys.len() >= 65 || keys.contains(&k) {
@@ -790,7 +952,7 @@ impl MirrorWriter {
             cur = self
                 .shared
                 .index
-                .peek_with(&k, |_, c| match &**c.load() {
+                .peek_with(&k, |_, c| match &**c.entry.load() {
                     Entry::Live { snap, .. } => snap.parent,
                     Entry::Tombstone { .. } => None,
                 })
@@ -814,10 +976,16 @@ impl MirrorWriter {
             let Some((k, qseq)) = self.fifo.pop_front() else {
                 return false;
             };
-            let live_seq = self.shared.index.peek_with(&k, |_, c| match &**c.load() {
-                Entry::Live { snap, .. } => Some(snap.confirmed_seq),
-                Entry::Tombstone { .. } => None,
-            });
+            // Recency: the later of the last confirmation and the last read (LRU).
+            let live_seq = self
+                .shared
+                .index
+                .peek_with(&k, |_, c| match &**c.entry.load() {
+                    Entry::Live { snap, .. } => {
+                        Some(snap.confirmed_seq.max(c.touched.load(Ordering::Relaxed)))
+                    }
+                    Entry::Tombstone { .. } => None,
+                });
             match live_seq.flatten() {
                 Some(seq) if seq > qseq => self.fifo.push_back((k, seq)),
                 Some(_) if protected.contains(&k) => self.fifo.push_back((k, qseq)),
@@ -836,52 +1004,36 @@ impl MirrorWriter {
             }
             out.evicted += 1;
         }
-        if let Some(b) = self.budget.clone()
-            && b.total() > b.cap()
-        {
-            match b.pressure(&self.usage) {
-                Pressure::Own => {
-                    let floor = self.own_floor();
-                    while b.total() > b.cap() && self.shared.live.load(Ordering::Relaxed) > floor {
-                        if !self.evict_one() {
-                            break;
-                        }
-                        out.evicted += 1;
-                    }
-                }
-                Pressure::Preempted | Pressure::Nothing => {}
+        // Another app hit the all-apps cap and asked this one to shed (never the focused app
+        // or the Shell: they are not asked).
+        let want = self.usage.shed.swap(0, Ordering::Relaxed);
+        if want > 0 && !self.usage.protected.load(Ordering::Relaxed) {
+            let (n, freed) = self.shed_bytes(want);
+            out.evicted += n;
+            if freed < want && self.shared.live.load(Ordering::Relaxed) > 0 {
+                // More to do than one slice allows: ask again for the rest.
+                self.usage.shed.fetch_max(want - freed, Ordering::Relaxed);
             }
         }
-        let shed = self.usage.shed.swap(0, Ordering::Relaxed);
-        if shed > 0 {
-            out.evicted += self.shed_bytes(shed);
-        }
     }
 
-    fn own_floor(&self) -> u64 {
-        if self.usage.protected.load(Ordering::Relaxed) {
-            MIN_PROTECTED_NODES as u64
-        } else {
-            0
-        }
-    }
-
-    /// Evict until `target` bytes were freed (another app hit the global cap), at most
-    /// `SWEEP_BUDGET` nodes per call.
-    fn shed_bytes(&mut self, target: u64) -> u32 {
+    /// Evict until `target` bytes were freed, at most `SWEEP_BUDGET` nodes per call. Returns
+    /// the nodes evicted and the bytes freed.
+    fn shed_bytes(&mut self, target: u64) -> (u32, u64) {
         let start = self.shared.bytes.load(Ordering::Relaxed);
-        let floor = self.own_floor();
         let mut n = 0u32;
         while (n as usize) < SWEEP_BUDGET
             && start.saturating_sub(self.shared.bytes.load(Ordering::Relaxed)) < target
-            && self.shared.live.load(Ordering::Relaxed) > floor
         {
             if !self.evict_one() {
                 break;
             }
             n += 1;
         }
-        n
+        (
+            n,
+            start.saturating_sub(self.shared.bytes.load(Ordering::Relaxed)),
+        )
     }
 
     /// Mark fields of `k` untrustworthy. Returns whether a live node was marked.
@@ -904,8 +1056,9 @@ impl MirrorWriter {
                     let mut n = (*snap).clone();
                     n.fresh = n.fresh.step(FreshnessEvent::Invalidate { at, mask });
                     let n = Arc::new(n);
-                    self.refund(&snap);
-                    self.charge(&n);
+                    // Same size: only the stale counter moves.
+                    self.counters_sub(&snap);
+                    self.counters_add(&n);
                     n
                 };
                 self.put(
@@ -918,8 +1071,9 @@ impl MirrorWriter {
                 );
                 true
             }
-            Some(Entry::Tombstone { .. }) => false,
-            None => {
+            // LR-2 on the proof-of-life path: a removed key may be revived by a reply issued
+            // before this event, which must then stay stale.
+            Some(Entry::Tombstone { .. }) | None => {
                 self.remember_invalidation(k, seq, mask);
                 false
             }
@@ -929,29 +1083,28 @@ impl MirrorWriter {
         marked
     }
 
+    /// Invalidations of keys the mirror does not hold (or holds as tombstones) are remembered, so
+    /// a request that was in flight for them cannot store pre-event content as fresh (LR-2).
+    /// At most `MAX_RECENT_INVALIDATIONS` keys, each once; when full, the oldest is forgotten and
+    /// the floor rises, so everything issued before it is conservatively treated as invalidated.
     fn remember_invalidation(&mut self, k: NodeKey, seq: u64, mask: PropMask) {
+        if let Some(e) = self.recent_inval.get_mut(&k) {
+            e.0 = seq;
+            e.1 |= mask;
+            return;
+        }
         while self.recent_inval.len() >= MAX_RECENT_INVALIDATIONS {
-            let Some((old, s)) = self.recent_order.pop_front() else {
-                // Order queue lost track: fall back to the floor for everything.
+            let Some(old) = self.recent_order.pop_front() else {
                 self.inval_floor = seq;
                 self.recent_inval.clear();
                 break;
             };
-            if self
-                .recent_inval
-                .get(&old)
-                .is_some_and(|&(cur, _)| cur == s)
-            {
-                self.recent_inval.remove(&old);
+            if let Some((s, _)) = self.recent_inval.remove(&old) {
                 self.inval_floor = self.inval_floor.max(s);
             }
         }
-        let m = self
-            .recent_inval
-            .get(&k)
-            .map_or(mask, |&(_, prev)| prev | mask);
-        self.recent_inval.insert(k, (seq, m));
-        self.recent_order.push_back((k, seq));
+        self.recent_inval.insert(k, (seq, mask));
+        self.recent_order.push_back(k);
     }
 
     /// O(1): every node confirmed before now is `Stale(ALL)` (flood resync, dirty-all).
@@ -980,7 +1133,6 @@ impl MirrorWriter {
             }
         }
         self.put(k, Entry::Tombstone { seq, why });
-        self.recent_inval.remove(&k);
         self.tomb_q.push_back(Tomb { key: k, at, seq });
         self.cap_tombstones();
         self.bump_rev();
@@ -1010,7 +1162,7 @@ impl MirrorWriter {
             .index
             .peek_with(
                 &t.key,
-                |_, c| matches!(&**c.load(), Entry::Tombstone { seq, .. } if *seq == t.seq),
+                |_, c| matches!(&**c.entry.load(), Entry::Tombstone { seq, .. } if *seq == t.seq),
             )
             .unwrap_or(false);
         if current {
@@ -1081,14 +1233,14 @@ impl MirrorWriter {
         self.shared.retired.store(true, Ordering::Release);
         let mut bytes = 0u64;
         self.shared.index.iter_sync(|_, c| {
-            if let Entry::Live { snap, .. } = &**c.load() {
+            if let Entry::Live { snap, .. } = &**c.entry.load() {
                 bytes += node_bytes(snap);
             }
             true
         });
         self.shared.index.clear_sync();
         if let Some(b) = &self.budget {
-            b.total.fetch_sub(bytes, Ordering::Relaxed);
+            b.release(bytes);
         }
         let s = &self.shared;
         for c in [&s.live, &s.tombstones, &s.stale, &s.bytes, &s.partial] {
@@ -1104,12 +1256,18 @@ impl MirrorWriter {
         self.bump_rev();
     }
 
+    /// How many invalidation records of unknown keys are held (bounded by
+    /// `MAX_RECENT_INVALIDATIONS`).
+    pub fn remembered_invalidations(&self) -> usize {
+        self.recent_order.len()
+    }
+
     /// Counters equal real sizes (MA-1). O(n).
     pub fn check_invariants(&self) -> Result<(), MirrorInvariantError> {
         let (mut live, mut tomb, mut stale, mut bytes, mut partial) =
             (0u64, 0u64, 0u64, 0u64, 0u64);
         self.shared.index.iter_sync(|_, c| {
-            match &**c.load() {
+            match &**c.entry.load() {
                 Entry::Live { snap, .. } => {
                     live += 1;
                     bytes += node_bytes(snap);
@@ -1154,6 +1312,18 @@ impl MirrorWriter {
                 self.check_invariants()
             );
         }
+    }
+}
+
+impl Drop for MirrorWriter {
+    /// A writer that goes away without `retire_all` (a cancelled actor) still gives its share of
+    /// the all-apps budget back.
+    fn drop(&mut self) {
+        if let Some(b) = &self.budget {
+            b.release(self.usage.bytes());
+        }
+        self.usage.bytes.store(0, Ordering::Relaxed);
+        self.usage.live.store(0, Ordering::Relaxed);
     }
 }
 

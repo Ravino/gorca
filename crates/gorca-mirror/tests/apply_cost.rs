@@ -67,3 +67,23 @@ fn apply_cost_per_node_at_the_caps() {
     assert!(sweep.as_micros() < 2_000, "{sweep:?}");
     assert!(per_node_ns < 20_000.0, "{per_node_ns}");
 }
+
+/// Per-slice cost while a mirror grows to the node cap: where do the spikes come from?
+#[test]
+fn slice_cost_distribution_while_growing() {
+    let (mut w, _r) = mirror();
+    let mut times = Vec::new();
+    for slice in 0..512u64 {
+        let nodes: Vec<_> = (0..128).map(|i| node(slice * 128 + i)).collect();
+        let t = Instant::now();
+        w.apply(SnapshotBatch::new(nodes), ApplyOrigin::Push);
+        times.push((t.elapsed().as_micros(), slice));
+    }
+    let mut sorted = times.clone();
+    sorted.sort_unstable();
+    let top: Vec<_> = sorted.iter().rev().take(6).collect();
+    println!(
+        "slices: p50 {} us, p99 {} us, top {top:?}",
+        sorted[256].0, sorted[506].0
+    );
+}

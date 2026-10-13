@@ -7,7 +7,7 @@
 //! [`IssuedFill`]s it returns to the connector (under their deadlines) and feeds the replies
 //! back through [`FillDriver::on_reply`]. It knows no connector type.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -32,7 +32,7 @@ const QUEUE_EXPIRY: Duration = Duration::from_millis(1_000);
 /// Nodes applied to the mirror per slice (MA-6: one slice stays under 250 us on the app actor).
 /// A bigger reply (a dump) is applied slice by slice from `poll_timers`, so the actor keeps
 /// serving its Reader and its ingress in between.
-pub const APPLY_SLICE: usize = 128;
+pub const APPLY_SLICE: usize = 64;
 /// Refusal notices delivered to the policy per top-level call; a policy that reacts to a refusal
 /// with the same request cannot loop.
 const MAX_NOTICES: usize = 64;
@@ -197,7 +197,8 @@ impl Bucket {
 /// What the policy is told once a reply has been applied completely.
 #[derive(Debug)]
 struct ApplyDone {
-    id: FillReqId,
+    /// The request and every request that was deduplicated onto it.
+    ids: Vec<FillReqId>,
     op: FillOp,
     keys: Vec<NodeKey>,
     nodes: usize,
@@ -234,6 +235,15 @@ struct Flight {
     op: FillOp,
     class: BudgetClass,
     cancelled: bool,
+}
+
+/// Urgency order for deduplication: a request never rides on a less urgent flight.
+fn rank(c: BudgetClass) -> u8 {
+    match c {
+        BudgetClass::Interactive => 2,
+        BudgetClass::Prefetch => 1,
+        BudgetClass::Background | BudgetClass::Startup => 0,
+    }
 }
 
 #[derive(Debug)]
@@ -278,7 +288,12 @@ pub struct FillDriver {
     dump_complete: bool,
     next_id: u64,
     inflight: HashMap<FillReqId, Flight>,
-    active_ops: HashSet<FillOp>,
+    /// Op -> the request (in flight or queued) that carries it, and its class.
+    active_ops: HashMap<FillOp, (FillReqId, BudgetClass)>,
+    /// Requests deduplicated onto a carrier: they get the carrier's reply.
+    aliases: HashMap<FillReqId, Vec<FillReqId>>,
+    /// Queued requests that expired unsent, to be answered `Refused(Expired)`.
+    expired: Vec<(FillReqId, FillOp)>,
     n_inflight: [usize; 3],
     queue: VecDeque<Queued>,
     bucket: Bucket,
@@ -318,7 +333,9 @@ impl FillDriver {
             dump_complete: false,
             next_id: 1,
             inflight: HashMap::new(),
-            active_ops: HashSet::new(),
+            active_ops: HashMap::new(),
+            aliases: HashMap::new(),
+            expired: Vec::new(),
             n_inflight: [0; 3],
             queue: VecDeque::new(),
             bucket: Bucket {
@@ -457,6 +474,7 @@ impl FillDriver {
             self.on_input(cx, writer, FillInput::Tick);
         }
         self.expire_queue(cx.now);
+        self.flush_expired(cx, writer);
     }
 
     fn step(&mut self, cx: &DriverCx<'_>, input: FillInput<'_>) -> FillEffects {
@@ -592,12 +610,16 @@ impl FillDriver {
     fn admit(
         &mut self,
         cx: &DriverCx<'_>,
-        writer: &MirrorWriter,
+        writer: &mut MirrorWriter,
         id: FillReqId,
         op: &FillOp,
         class: BudgetClass,
     ) -> Result<(), RefuseReason> {
-        if self.active_ops.contains(op) {
+        if let Some(&(carrier, carrier_class)) = self.active_ops.get(op)
+            && rank(class) <= rank(carrier_class)
+        {
+            // The same question is already on its way: this request gets that answer too.
+            self.aliases.entry(carrier).or_default().push(id);
             self.stats.deduped += 1;
             return Ok(());
         }
@@ -641,7 +663,7 @@ impl FillDriver {
         } else if self.queue.len() >= self.limits.max_pending {
             Err(RefuseReason::QueueFull)
         } else {
-            self.active_ops.insert(op.clone());
+            self.active_ops.insert(op.clone(), (id, class));
             self.queue.push_back(Queued {
                 id,
                 op: op.clone(),
@@ -656,7 +678,7 @@ impl FillDriver {
     fn issue(
         &mut self,
         cx: &DriverCx<'_>,
-        writer: &MirrorWriter,
+        writer: &mut MirrorWriter,
         id: FillReqId,
         op: FillOp,
         class: BudgetClass,
@@ -665,12 +687,13 @@ impl FillDriver {
             self.last_dump = Some(cx.now);
         }
         self.n_inflight[slot_index(class)] += 1;
-        self.active_ops.insert(op.clone());
+        self.active_ops.insert(op.clone(), (id, class));
         self.outbox.push(IssuedFill {
             id,
             op: op.clone(),
             class,
-            issued_at: writer.seq(),
+            // Its own sequence point: "issued after the focus began" is a strict comparison.
+            issued_at: writer.next_seq(),
             deadline: cx.now + class.default_timeout(),
         });
         self.inflight.insert(
@@ -685,10 +708,33 @@ impl FillDriver {
     }
 
     fn cancel(&mut self, id: FillReqId) {
+        // An alias: just leave the carrier's reply list.
+        let mut was_alias = false;
+        for v in self.aliases.values_mut() {
+            if let Some(pos) = v.iter().position(|a| *a == id) {
+                v.remove(pos);
+                was_alias = true;
+                break;
+            }
+        }
+        if was_alias {
+            self.stats.cancelled += 1;
+            return;
+        }
         if let Some(pos) = self.queue.iter().position(|q| q.id == id)
-            && let Some(q) = self.queue.remove(pos)
+            && let Some(q) = self.queue.get_mut(pos)
         {
-            self.active_ops.remove(&q.op);
+            let rest = self.aliases.remove(&id).unwrap_or_default();
+            if let Some((&heir, others)) = rest.split_first() {
+                // Others still want the answer: the first of them becomes the carrier.
+                q.id = heir;
+                self.active_ops.insert(q.op.clone(), (heir, q.class));
+                if !others.is_empty() {
+                    self.aliases.insert(heir, others.to_vec());
+                }
+            } else if let Some(q) = self.queue.remove(pos) {
+                self.active_ops.remove(&q.op);
+            }
             self.stats.cancelled += 1;
         } else if let Some(f) = self.inflight.get_mut(&id) {
             f.cancelled = true;
@@ -704,12 +750,28 @@ impl FillDriver {
             if let Some(q) = self.queue.pop_front() {
                 self.active_ops.remove(&q.op);
                 self.stats.refused[RefuseReason::Expired.index()] += 1;
+                for a in self.aliases.remove(&q.id).unwrap_or_default() {
+                    self.expired.push((a, q.op.clone()));
+                }
+                self.expired.push((q.id, q.op));
             }
         }
     }
 
+    /// Answer the requests that expired unsent.
+    fn flush_expired(&mut self, cx: &DriverCx<'_>, writer: &mut MirrorWriter) {
+        if self.expired.is_empty() {
+            return;
+        }
+        let mut notices: VecDeque<_> = std::mem::take(&mut self.expired)
+            .into_iter()
+            .map(|(id, op)| (id, op, RefuseReason::Expired))
+            .collect();
+        self.deliver_notices(cx, writer, &mut notices);
+    }
+
     /// Move queued requests into free slots.
-    fn start_queued(&mut self, cx: &DriverCx<'_>, writer: &MirrorWriter) {
+    fn start_queued(&mut self, cx: &DriverCx<'_>, writer: &mut MirrorWriter) {
         self.expire_queue(cx.now);
         let mut i = 0;
         while i < self.queue.len() {
@@ -723,6 +785,7 @@ impl FillDriver {
                 i += 1;
             }
         }
+        self.flush_expired(cx, writer);
     }
 
     /// A reply to a request this driver issued. Applies it to the mirror with the late-reply
@@ -740,6 +803,7 @@ impl FillDriver {
             return ReplyReport::NONE;
         };
         self.active_ops.remove(&flight.op);
+        let aliases = self.aliases.remove(&id).unwrap_or_default();
         let slot = slot_index(flight.class);
         self.n_inflight[slot] = self.n_inflight[slot].saturating_sub(1);
         let (report, result) = match reply {
@@ -761,8 +825,12 @@ impl FillDriver {
                     self.dump_complete = false;
                     self.stats.dump_flag_cleared += 1;
                 }
-                let notify = (!flight.cancelled).then(|| ApplyDone {
-                    id,
+                let mut ids = aliases.clone();
+                if !flight.cancelled {
+                    ids.insert(0, id);
+                }
+                let notify = (!ids.is_empty()).then(|| ApplyDone {
+                    ids,
                     op: flight.op.clone(),
                     keys,
                     nodes,
@@ -817,26 +885,32 @@ impl FillDriver {
                 )
             }
         };
-        if !flight.cancelled && !matches!(cx.health, HealthView::Gone) {
-            let fr = match result {
-                Some(FillResultKind::Gone) => FillResult::Gone,
-                Some(FillResultKind::Unresolved) => FillResult::Unresolved,
-                Some(FillResultKind::Timeout) => FillResult::Timeout,
-                Some(FillResultKind::NotSupported) => FillResult::NotSupported,
-                Some(FillResultKind::Failed) | None => FillResult::Failed,
-                Some(FillResultKind::Refused(r)) => FillResult::Refused(r),
-            };
-            let mut notices = VecDeque::new();
-            let effects = self.step(
-                cx,
-                FillInput::Reply {
-                    id,
-                    op: &flight.op,
-                    result: fr,
-                },
-            );
-            self.apply_effects(cx, writer, effects, &mut notices);
-            self.deliver_notices(cx, writer, &mut notices);
+        let mut ids = aliases;
+        if !flight.cancelled {
+            ids.insert(0, id);
+        }
+        if !matches!(cx.health, HealthView::Gone) {
+            for rid in ids {
+                let fr = match result {
+                    Some(FillResultKind::Gone) => FillResult::Gone,
+                    Some(FillResultKind::Unresolved) => FillResult::Unresolved,
+                    Some(FillResultKind::Timeout) => FillResult::Timeout,
+                    Some(FillResultKind::NotSupported) => FillResult::NotSupported,
+                    Some(FillResultKind::Failed) | None => FillResult::Failed,
+                    Some(FillResultKind::Refused(r)) => FillResult::Refused(r),
+                };
+                let mut notices = VecDeque::new();
+                let effects = self.step(
+                    cx,
+                    FillInput::Reply {
+                        id: rid,
+                        op: &flight.op,
+                        result: fr,
+                    },
+                );
+                self.apply_effects(cx, writer, effects, &mut notices);
+                self.deliver_notices(cx, writer, &mut notices);
+            }
         }
         self.start_queued(cx, writer);
         report
@@ -920,27 +994,31 @@ impl FillDriver {
         if matches!(cx.health, HealthView::Gone) {
             return;
         }
-        let mut notices = VecDeque::new();
-        let effects = self.step(
-            cx,
-            FillInput::Reply {
-                id: done.id,
-                op: &done.op,
-                result: FillResult::Applied {
-                    keys: &done.keys,
-                    nodes: done.nodes,
-                    outcome,
+        for id in &done.ids {
+            let mut notices = VecDeque::new();
+            let effects = self.step(
+                cx,
+                FillInput::Reply {
+                    id: *id,
+                    op: &done.op,
+                    result: FillResult::Applied {
+                        keys: &done.keys,
+                        nodes: done.nodes,
+                        outcome,
+                    },
                 },
-            },
-        );
-        self.apply_effects(cx, writer, effects, &mut notices);
-        self.deliver_notices(cx, writer, &mut notices);
+            );
+            self.apply_effects(cx, writer, effects, &mut notices);
+            self.deliver_notices(cx, writer, &mut notices);
+        }
     }
 
     /// The app is gone: forget everything in flight, queued or half applied.
     pub fn on_gone(&mut self) {
         self.inflight.clear();
         self.active_ops.clear();
+        self.aliases.clear();
+        self.expired.clear();
         self.n_inflight = [0; 3];
         self.queue.clear();
         self.pending.clear();
@@ -1008,6 +1086,7 @@ impl FillDriver {
     }
 }
 
+#[derive(Copy, Clone)]
 enum FillResultKind {
     Gone,
     Unresolved,

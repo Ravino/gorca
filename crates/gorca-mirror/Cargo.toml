@@ -17,3 +17,7 @@ arc-swap = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+# The audits of the B-1 conformance kit run against the real store (MA-1..MA-6).
+gorca-testkit = { workspace = true }
