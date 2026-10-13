@@ -172,6 +172,9 @@ pub struct NodeView {
     /// Fields that are no longer trustworthy: the node's own stale mask, plus `ALL` when the
     /// node was confirmed before the app-wide stale epoch.
     pub stale: PropMask,
+    /// The last confirmation is older than the app's TTL (B-1 2.2, evaluated on read): the node
+    /// may still be presented, tagged `may_refine`, but speaking it is followed by a revalidation.
+    pub aged: bool,
 }
 
 impl NodeView {

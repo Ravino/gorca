@@ -468,6 +468,7 @@ mod tests {
             prio,
             may_refine: false,
             survives_focus_change: false,
+            refines: None,
         }
     }
 

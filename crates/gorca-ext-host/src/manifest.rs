@@ -112,6 +112,7 @@ mod tests {
             pid: None,
             connector_kind: ConnectorKind::Atspi,
             verified_shell: false,
+            dump_complete: false,
         }
     }
 
