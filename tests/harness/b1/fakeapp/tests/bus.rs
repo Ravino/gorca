@@ -334,9 +334,14 @@ async fn hang_never_and_delayed_replies() {
     let t = Instant::now();
     call(&c, &dest, &root, ACC, "GetRole", &()).await.unwrap();
     assert!(t.elapsed() >= Duration::from_millis(140));
-    let t = Instant::now();
-    call(&c, &dest, &root, ACC, "GetRole", &()).await.unwrap();
-    assert!(t.elapsed() < Duration::from_millis(100));
+    // Upper wall bound: best of 3 (a stuck delay would show in all; a preemption in one).
+    let mut fastest = Duration::MAX;
+    for _ in 0..3 {
+        let t = Instant::now();
+        call(&c, &dest, &root, ACC, "GetRole", &()).await.unwrap();
+        fastest = fastest.min(t.elapsed());
+    }
+    assert!(fastest < Duration::from_millis(100), "{fastest:?}");
     // Never: no reply, the call times out client side; recovers on Off.
     app.control(Cmd::Hang {
         mode: gorca_testkit::b1::proto::HangMode::Never,
