@@ -117,7 +117,7 @@ pub(crate) fn wire_atspi(
     );
 }
 
-/// B-1 PW-10: `GORCA_PRESENT_LOG=<path>` (resolved into `Options` by `main`) records every node
+/// B-1 PW-10: `--bench-present-log=<path>` (the only way to turn it on) records every node
 /// presentation as a JSON line. The object paths come from the connector's path table through
 /// [`PathLabels`]; the core never sees them. Passive: unset means nothing happens, and an
 /// unwritable file only costs the log.

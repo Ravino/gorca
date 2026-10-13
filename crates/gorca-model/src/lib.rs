@@ -15,6 +15,7 @@ pub mod event;
 pub mod geometry;
 pub mod ids;
 pub mod node;
+pub mod redact;
 pub mod role;
 pub mod speech;
 pub mod text;
@@ -32,6 +33,7 @@ pub use node::{
     AttrKey, AttrMap, ChildList, Freshness, FreshnessEvent, Ifaces, Lookup, NodeSnapshot, NodeView,
     PropMask, RelationKind, Relations, SnapshotBatch, StateSet, Value,
 };
+pub use redact::RedactKey;
 pub use role::Role;
 pub use speech::{Prio, Segment, SegmentKind, Utterance};
 pub use text::{TextQuery, TextUnit};
