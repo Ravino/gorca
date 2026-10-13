@@ -1,0 +1,20 @@
+
+// ===== REVIEW PROBE r4 =====
+/// P8: after two failed reconciliations (`drop_protection`), the focused application is the
+/// policy's pick again and gets evicted: the "never evicted" guarantee depends on the bus
+/// answering ListNames within the Prefetch deadline.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn review_probe_r4_focused_app_evicted_while_protection_is_suspended() {
+    let c = core(|_| Duration::ZERO);
+    let focused = Arc::new(FocusedApp::new());
+    let mut r = filled(&c, Some(Arc::clone(&focused))).await;
+    let RouteDecision::Route(route) = r.router.resolve(":1.63") else { panic!() };
+    focused.publish(route.app);
+    r.router.drop_protection(); // reconcile_loop: ListNames missed its deadline twice
+    let newcomer = ":1.200000";
+    assert!(is_retry(&r.router.resolve(newcomer)));
+    r.router.complete(r.to_register.try_recv().unwrap()).await;
+    let alive = r.router.state().apps.contains_key(":1.63");
+    eprintln!("PROBE P8 focused app still registered after suspension + newcomer: {alive}; evicted={}", r.router.stats().evicted);
+    assert!(alive, "focused app evicted while protection was suspended");
+}

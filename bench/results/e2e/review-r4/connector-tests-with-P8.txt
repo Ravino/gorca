@@ -1,0 +1,99 @@
+   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-ingress)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-doc-source-api)
+   Compiling gorca-output-api v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-output-api)
+   Compiling gorca-input-api v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-input-api)
+   Compiling gorca-speech v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-speech)
+   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-connector-api)
+   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-dbus)
+   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-testkit)
+   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-core)
+   Compiling gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-connector-atspi)
+    Finished `release` profile [optimized + debuginfo] target(s) in 25.58s
+     Running unittests src/lib.rs (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/tgt/release/deps/gorca_connector_atspi-d6ba16c52add5457)
+
+running 70 tests
+test connector::tests::missing_addresses_are_an_error_not_an_environment_lookup ... ok
+test connector::tests::run_fails_fast_when_the_bus_is_missing ... ok
+test decode::tests::clip_respects_char_boundaries ... ok
+test decode::tests::hostile_state_arrays_do_not_panic ... ok
+test decode::tests::roles_map_and_unknown_numbers_are_unknown ... ok
+test decode::tests::snapshot_clips_huge_names ... ok
+test decode::tests::snapshot_drops_empty_names_and_non_finite_values ... ok
+test decode::tests::state_numbers_match_the_atspi_abi ... ok
+test decode::tests::states_map_and_unavailable_follows_sensitive ... ok
+test doc_source::tests::caps_advertise_exact_joins_and_all_actions ... ok
+test enablement::tests::already_enabled_is_a_noop ... ok
+test enablement::tests::startup_enables_and_shutdown_restores ... ok
+test fetch::tests::dbus_errors_map_to_backend_errors ... ok
+test fetch::tests::labels_are_read_only_from_the_same_application ... ok
+test fetch::tests::password_fields_are_read_like_any_other_entry ... ok
+test paths::tests::absurd_paths_are_refused ... ok
+test paths::tests::forgetting_the_last_app_of_an_owner_frees_everything ... ok
+test paths::tests::insert_get_and_forget ... ok
+test paths::tests::many_bus_names_of_one_process_share_one_quota ... ok
+test paths::tests::one_owner_is_bounded_by_its_own_quota ... ok
+test paths::tests::the_global_cap_evicts_the_largest_owner_not_the_newcomer ... ok
+test paths::tests::unknown_credentials_get_a_small_private_bucket ... ok
+test proc::tests::a_hostile_command_name_cannot_shift_the_fields ... ok
+test proc::tests::garbage_is_unknown_not_a_panic ... ok
+test proc::tests::our_own_process_is_known ... ok
+test proc::tests::pgrp_and_start_time_are_read ... ok
+test role_map::tests::common_roles_map ... ok
+test role_map::tests::dialog_and_alert_stay_distinct ... ok
+test role_map::tests::unmapped_roles_are_unknown_not_a_panic ... ok
+test router::tests::a_burst_of_other_events_never_displaces_the_focus ... ok
+test router::tests::a_failed_registration_backs_off_and_then_succeeds ... ok
+test router::tests::a_legitimate_app_launched_after_the_attacker_filled_the_cap_wins_and_stays ... ok
+test router::tests::a_recycled_shell_pid_does_not_inherit_protection ... ok
+test router::tests::a_refusal_at_the_cap_is_never_permanent ... ok
+test router::tests::a_victim_that_becomes_focused_before_the_commit_is_spared ... ok
+test router::tests::an_app_dying_mid_registration_leaks_nothing ... ok
+test router::tests::an_evicted_application_comes_back_through_the_backoff_path ... ok
+test router::tests::an_unknown_start_time_never_matches_the_shell ... ok
+test router::tests::credentials_are_retried_before_a_name_is_filed_as_unknown ... ok
+test router::tests::dropped_protection_is_restored_by_the_next_good_reconciliation ... ok
+test router::tests::focus_during_backoff_or_the_pending_cap_is_kept_for_the_next_attempt ... ok
+test router::tests::forget_cancels_the_app_and_drops_its_paths ... ok
+test router::tests::forget_marks_departed_and_departed_names_expire ... ok
+test router::tests::hostile_parkers_cannot_drop_a_new_apps_focus ... ok
+test router::tests::ignored_and_well_known_names_are_not_applications ... ok
+test router::tests::newest_focus_survives_the_park_cap ... ok
+test router::tests::one_process_cannot_hold_unbounded_names ... ok
+test router::tests::parked_strings_are_bounded ... ok
+test router::tests::reconciliation_retires_names_the_bus_no_longer_has ... ok
+test router::tests::registration_and_departure_churn_leaks_nothing ... ok
+test router::tests::registrations_in_flight_and_parked_events_are_bounded ... ok
+test router::tests::resolve_park_race_does_not_lose_the_event ... ok
+test router::tests::review_probe_r4_focused_app_evicted_while_protection_is_suspended ... PROBE P8 focused app still registered after suspension + newcomer: false; evicted=1
+
+thread 'router::tests::review_probe_r4_focused_app_evicted_while_protection_is_suspended' (2400937) panicked at crates/gorca-connector-atspi/src/router/tests.rs:1372:5:
+focused app evicted while protection was suspended
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test router::tests::singleton_forks_never_evict_the_first_application ... ok
+test router::tests::take_all_returns_every_app_once ... ok
+test router::tests::the_application_cap_makes_the_largest_group_give_way ... ok
+test router::tests::the_first_event_registers_asynchronously_and_is_replayed_in_order ... ok
+test router::tests::the_focused_application_is_never_evicted ... ok
+test router::tests::the_ignored_set_does_not_grow_with_churn ... ok
+test router::tests::the_name_cap_holds_under_concurrency ... ok
+test router::tests::the_per_process_name_cap_refuses_with_a_backoff_not_a_verdict ... ok
+test router::tests::the_shell_as_a_newcomer_is_admitted_at_the_cap ... ok
+test router::tests::the_shell_is_never_evicted_or_refused ... ok
+test router::tests::unknown_credentials_share_one_small_quota ... ok
+test router::tests::when_revalidation_fails_protection_is_dropped_but_reading_continues ... ok
+test router::tests::with_only_singletons_the_newcomer_is_refused_and_nobody_is_evicted ... ok
+test session::tests::connecting_to_a_missing_bus_fails_fast_with_an_error ... ok
+test session::tests::registered_events_are_a_small_explicit_set ... ok
+test toolkit::tests::classification ... ok
+test toolkit::tests::text_units_follow_tu2 ... ok
+
+failures:
+
+failures:
+    router::tests::review_probe_r4_focused_app_evicted_while_protection_is_suspended
+
+test result: FAILED. 69 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.26s
+
+error: test failed, to rerun pass `-p gorca-connector-atspi --lib`

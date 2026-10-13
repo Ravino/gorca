@@ -437,3 +437,82 @@ R2-1..R2-3 are fixed, and P1–P5 now pass as in-tree tests. The new global appl
 ## Required for MERGE
 
 Fix R3-1 (a–c), R3-2 and R3-3. Keep P6 and P7 (`probes/router_r3_probes.rs.txt`) as regression tests: P6 must keep the first-registered or focused app, and P7 must hold at most 64 names.
+
+---
+
+# Round 4 (head `31797a3`, main merged)
+
+Raw output is in `bench/results/e2e/review-r4/`: `make-check.txt`, `run.log`, the result `.txt`/`.json`, `connector-tests-with-P8.txt`, `pgid-evidence.txt`, and `probes/` with `RESULTS.txt`.
+
+## Verdict: MERGE-WITH-FOLLOWUPS
+
+- All probes from earlier rounds (P1–P7) pass as in-tree tests. That includes P7, which now holds exactly 64 names under 64 concurrent registrations.
+- The scan areas listed below are closed.
+- Under the threat-model decision in `docs/decisions.md`, the guarantees hold for buggy or flooding applications.
+- One guarantee, "the focused app and Shell are never evicted", is conditional. It holds only while the a11y bus answers `ListNames` (R4-1).
+  - Breaking it needs a deliberate same-uid attack: 512 registered names *and* a stalled bus at the same time.
+  - The effect is temporary: the evicted app re-registers through backoff, and Shell as a newcomer is always admitted.
+  - So this is a follow-up to fix early, not a merge blocker.
+
+## Gates
+
+- `make check`: exit 0.
+- Bench `review-r4` at `31797a3`, load 13.3, 3 repeats. Values are median / max over repeats:
+
+| Metric | p99 median (ms) | p99 max (ms) |
+|---|---|---|
+| L1 | 2.00 | 2.03 |
+| L1s | 2.17 | 2.17 |
+| L2 | 0.88 | 0.88 |
+| L3-10k | 1.64 | 3.60 |
+| L3-50k | 2.81 | 3.07 |
+| L4 | 2.04 | 2.08 |
+| K1 | 0.89 | 0.94 |
+
+- `lost` = 0 on the max for every series. All gates PASS.
+- `git_dirty` comes from untracked review artefacts only.
+
+## The four guarantees
+
+| Guarantee | Status | Evidence |
+|---|---|---|
+| Focused app and Shell never evicted | holds while protection is valid; **conditional**, see R4-1 | `the_focused_application_is_never_evicted`, `the_shell_is_never_evicted_or_refused`, `a_victim_that_becomes_focused_before_the_commit_is_spared`, `a_recycled_shell_pid_does_not_inherit_protection`. Policy: only groups strictly larger than the newcomer's give way; with all singletons the newcomer is refused (P6 passes). |
+| Caps hold | yes | Reserve-then-commit in `complete()` (P7). App cap and park caps are decided and committed under the state lock. |
+| Nothing permanently muted | yes | Refusals use backoff (`a_refusal_at_the_cap_is_never_permanent`, `the_per_process_name_cap_refuses_with_a_backoff_not_a_verdict`). An evicted app's cached route is dropped when its ingress closes (`raw.rs` `drop_if_closed`; `an_evicted_apps_cached_route_is_dropped_and_asked_again`). Credentials are retried 3× before a name is filed as unknown. |
+| No leaks or unbounded memory | yes | Churn, park, ignored-set and reconciliation tests (`reconciliation_retires_names_the_bus_no_longer_has`). |
+
+## Scan areas, at head
+
+| Area | Status | Notes |
+|---|---|---|
+| Fail-open drift (`focused.rs`, `connector.rs`) | closed | Missing or unknown identity grants nothing: unknown start time never matches the Shell; `drop_protection` after 2 failed reconciliations; Shell protection is re-applied every 5 s and on NameOwnerChanged. |
+| TOCTOU, availability and authz (`router.rs`) | closed | Generation re-validation at commit is done while the router lock is held. Pids come from the bus, so they can't be spoofed. Refusals are temporary. Residual: a race of microseconds between the final re-check and `apps.remove` (Reader publishing during it), which is acceptable. |
+| Protection bypass (`reader.rs`) | closed | Protection is published only after a fetched snapshot shows `FOCUSED` and not `DEFUNCT`. At most 2 apps are protected, and grace needs 1 s of dwell, so a flipper earns only the current slot. |
+| Stale identity (`connector.rs`) | closed | Shell is identified by `(pid, start time)` from `/proc/<pid>/stat`, parsed from the last `)`, so a hostile comm can't shift fields (tested). It is re-resolved on change and every 5 s. |
+
+## Follow-ups
+
+### R4-1 MEDIUM: "fail closed" removes protection, which re-enables eviction of the focused app or Shell
+
+- **Where:** `reconcile_loop` calls `router.drop_protection()` after 2 failed `ListNames` calls. Each call has a 300 ms Prefetch deadline, every 5 s. That suspends focused-app protection and clears `protected_process`.
+- **Probe P8:** `filled()` cap, focused app `:1.63`, `drop_protection()`, then one newcomer. Result: **the focused app is evicted** (`evicted=1`).
+- **Assessment:** the protection fails closed, but the eviction it guards fails *open*. A bus slow enough to miss `ListNames` is exactly the flood situation where caps get hit.
+- **Mitigating factors:** the trigger needs the cap reached, which no realistic buggy app does: one pid holds at most 64 names, so at least 8 processes are needed. The harm is temporary (backoff re-registration ≤ 1 s).
+- **Fix (small):** while protection is unvalidated, **freeze eviction**. At the cap the newcomer is refused with backoff, and nobody is evicted. Keep the last validated protected set rather than clearing it. Add P8 as a regression test.
+
+### R4-2 MEDIUM: the process group is the wrong grouping key on GNOME
+
+- **Evidence** (`pgid-evidence.txt`, this host):
+  - `firefox-esr` (533563, 634714) and `Xwayland` share **PGID 532394 with `gnome-shell`**.
+  - Each app is in its own systemd scope: `app-gnome-ffesr…-533563.scope`, `app-org.gnome.Terminal.slice`.
+- **Consequence:** every Shell-launched app falls into one eviction group (`evg`) together with the Shell.
+  - At the cap, that group is the largest, so its unprotected members (the user's background apps) are evicted first.
+  - A newly launched app from the Shell is refused, because its own group is the biggest. That is the opposite of the stated intent: "an application the user just launched is a group of one".
+  - A fork attack can also escape its group with `setsid()`/`setpgid()`.
+- **Mitigating factor:** only matters at 512 apps.
+- **Fix:** group by the cgroup path from `/proc/<pid>/cgroup` (the systemd app scope or service unit). Fall back to the pgrp only when there is no scope.
+
+### R4-3 LOW
+
+- `read_proc_info` does blocking `std::fs` reads of `/proc` from async `complete()` and `watch_shell`. procfs reads are fast, but they are still synchronous I/O on a tokio worker. Use `spawn_blocking`, or accept it with a comment.
+- `FocusedApp::resume` vs `forget` race in `focused.rs`: resume swaps `suspended` first and then CASes `current`. A concurrent `forget(A)` in between leaves the departed `A` as `current`. This is harmless (AppIds are never reused, and the next publish replaces it), but `forget` should also CAS `current` after `resume`.

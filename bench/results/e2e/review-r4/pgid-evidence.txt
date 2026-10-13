@@ -1,0 +1,9 @@
+    PID    PGID     SID COMMAND
+ 532394  532394  532394 gnome-shell
+ 532808  532394  532394 Xwayland
+ 533043  533043  533043 gnome-terminal-
+ 533563  532394  532394 firefox-esr
+ 634714  532394  532394 firefox-esr
+532394 0::/user.slice/user-1000.slice/user@1000.service/session.slice/org.gnome.Shell@wayland.service
+533563 0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-gnome-ffesr\x2dozon-533563.scope
+634714 0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-gnome-ffesr\x2dproxy-634714.scope

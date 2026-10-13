@@ -1,0 +1,10 @@
+review-r4 at 31797a3 (release, connector lib tests --test-threads=1): 69 passed + probe
+P1 newest_focus_survives_the_park_cap              PASS
+P2 hostile_parkers_cannot_drop_a_new_apps_focus    PASS
+P3 resolve_park_race_does_not_lose_the_event       PASS
+P4 the_ignored_set_does_not_grow_with_churn        PASS
+P5 parked_strings_are_bounded                      PASS
+P6 singleton_forks_never_evict_the_first_application PASS
+P7 the_name_cap_holds_under_concurrency            PASS (held == 64 exactly)
+P8 focused app at cap after drop_protection()      FAIL  focused app evicted (evicted=1)
+make check: exit 0
