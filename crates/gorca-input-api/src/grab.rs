@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use crate::event::Modifiers;
+use crate::keymap::InputContext;
 
 /// A keystroke grabbed by exact keysym and modifier mask.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -18,6 +19,8 @@ pub struct GrabSet {
     pub chords: HashSet<Chord>,
     /// `InputHelp` mode: `GrabKeyboard`.
     pub grab_all: bool,
+    /// Lookup context to use while this set is committed (ADR-0005 5.2). Not sent to Mutter.
+    pub ctx: InputContext,
 }
 
 impl GrabSet {
@@ -44,7 +47,7 @@ impl GrabSet {
             .chords
             .iter()
             .flat_map(|c| expand_lock_variants(*c))
-            .map(|c| (c.keysym, c.modifiers.bits()))
+            .map(|c| (c.keysym, c.modifiers.to_wire().bits()))
             .collect();
         strokes.sort_unstable();
         strokes.dedup();

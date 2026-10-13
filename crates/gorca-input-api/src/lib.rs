@@ -15,14 +15,26 @@
 //! Allowed dependencies: `gorca-model`, `gorca-rt`, `bitflags`, `thiserror`. Never `zbus`: the
 //! Mutter client lives in `gorca-input-mutter`, the injector in `gorca-input-inject`.
 
-mod classify;
 mod event;
 mod grab;
+mod keymap;
+mod keys;
+mod lane;
+mod mutter_model;
 mod traits;
 
-pub use classify::{Keymap, classify};
-pub use event::{CmdId, KeyClass, KeyEvent, KeyIntent, Modifiers};
+pub use event::{CmdId, KeyClass, KeyEvent, KeyIntent, Modifiers, PressKind};
 pub use grab::{Chord, GrabSet, expand_lock_variants};
+pub use keymap::{
+    Bound, ChordKey, CompiledKeymap, GrabView, InputContext, KeyRef, LaneLinks, LaneSettings,
+    ModeKind, TableKind,
+};
+pub use keys::{
+    KeyResolver, StaticResolver, is_control, is_modifier_keysym, is_shift, modifier_keysym,
+    spoken_key_name, static_keycode, static_keysym, sym,
+};
+pub use lane::{HELP_IDLE, HELP_STALL, InputLane, LaneAlert, LaneOut, LaneStats, SHIFT_TAP_MAX};
+pub use mutter_model::{Ev, Replica, Timing, Verdict};
 pub use traits::{
     InjectError, InjectKey, KeyError, KeyInjector, KeySink, KeySource, KeySourceCtx, KeySourceKind,
     key_channel,
