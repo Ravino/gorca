@@ -79,7 +79,8 @@ per-event cost under a storm (L3).
 | L1 p99 (emit to SPEAK received) | <= 15 ms | CLAUDE.md product goal for gorca-side processing; the measured path additionally contains the app's send and the bus hop (L0, < 1 ms p99), so the gate is conservative |
 | L1 under storm 10k and 50k, L4, K1 | <= 15 ms | the goal must hold under the stress the product promises to sustain; same bound as idle |
 | L2 p99 (newer focus to STOP of stale speech) | <= 5 ms | cancelling must be cheaper than starting: one write on an already open socket; leaves 3x margin over the stub baseline |
-| `lost` | == 0 | focus events are lossless-class (ADR section 6.3) |
+| `lost` | == 0 (max over repeats) | a probe is lost when the reader never spoke it. L1/L1s: every unspoken probe. L3/L4: only an unspoken probe with no spoken successor, because the ingress slot keeps only the newest `Focus` (ADR-0001 R-1), so a probe overtaken by the next one is `superseded`, not lost |
+| `superseded_max_run` (L3, L4) | <= 10 in every run | bounds how stale the reader may fall under stress: 10 probes at the 8-16 ms gap is about 120 ms; `superseded` (count) is informational |
 | K2 p99 / K3 p99 | <= 5 ms / <= 15 ms | phase-2.md 2.1 ceilings (targets 2 / 5 ms) |
 | `not_consumed`, `app_lost`, `app_doubled`, `chord_leaked` (K2-K4) | == 0 in every run | a command key that reaches the app, or a typed key lost or doubled, is a correctness failure |
 | storm rate | >= 90% of target | otherwise the stress is not what its name says |

@@ -1,0 +1,562 @@
+. ./env.sh && cargo fmt --all --check
+. ./env.sh && cargo clippy --workspace --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.25s
+. ./env.sh && cargo test --workspace
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (target/debug/deps/b1_fakeapp-c28b12f5b05d3b48)
+
+running 5 tests
+test mono::tests::is_monotonic_and_ns ... ok
+test dispatch::tests::get_role_name_and_children ... ok
+test dispatch::tests::properties_get_and_getall ... ok
+test dispatch::tests::unknown_path_is_unknown_object_and_unknown_member_is_unknown_method ... ok
+test dispatch::tests::get_items_respects_the_cap_and_the_cache_path ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/b1_fakeapp-f7eaed4e63b2810b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/bus.rs (target/debug/deps/bus-927e7b44ce13a310)
+
+running 11 tests
+test closing_peers_ends_the_peer_connection_and_new_ones_work ... ok
+test expired_lease_and_destroyed_nodes_answer_unknown_object ... ok
+test peer_mode_serves_a_real_socket_and_counts_it ... ok
+test same_bus_and_none_modes_answer_per_spec ... ok
+test answers_accessible_calls_and_unknown_objects ... ok
+test get_items_blocks_the_calls_queued_behind_it ... ok
+test requests_from_all_connections_are_served_one_at_a_time ... ok
+test evented_mutations_emit_signals_silent_ones_do_not ... ok
+test listener_gate_and_realised_dump_follow_the_p9_profile ... ok
+test hang_never_and_delayed_replies ... ok
+test storm_emits_signals_at_roughly_the_requested_rate ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.95s
+
+     Running tests/cli.rs (target/debug/deps/cli-6bb04f3b1e5d9c6b)
+
+running 3 tests
+test refuses_a_bus_that_is_not_a_harness_session ... ok
+test every_shipped_model_parses_and_builds_a_sane_tree ... ok
+test control_channel_truth_log_and_restart_with_the_same_paths ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/fidelity.rs (target/debug/deps/fidelity-83d4a979d82d20e2)
+
+running 1 test
+test service_time_fidelity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.97s
+
+     Running tests/real_sut.rs (target/debug/deps/real_sut-40ac8ea7fc0966f7)
+
+running 2 tests
+test drives_apps_reads_truth_and_presentations ... ok
+test the_walk_runs_against_real_fake_apps_without_a_reader ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.50s
+
+     Running unittests src/lib.rs (target/debug/deps/ext_vte-686a3c6b4f585eda)
+
+running 1 test
+test tests::skeleton_defers_to_the_core ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench-cd5007e05819f95a)
+
+running 12 tests
+test e2e::m1::tests::gates_skip_until_m1_lands ... ok
+test e2e::m1::tests::keysym_overrides_parse_hex_and_decimal ... ok
+test e2e::m1::tests::key_reply_and_app_log_parse ... ok
+test e2e::m1::tests::m1_flag_opens_the_gate ... ok
+test e2e::m1::tests::strict_mode_makes_the_gate_red ... ok
+test e2e::m1::tests::typing_score_detects_lost_and_doubled ... ok
+test e2e::mono::tests::is_monotonic_and_ns ... ok
+test e2e::scenarios::tests::decoder_understands_stub_tags_and_natural_text ... ok
+test e2e::scenarios::tests::scenario_ids_round_trip ... ok
+test tests::fixtures_are_consistent ... ok
+test e2e::mock::tests::voicego_binary_speak_then_stop ... ok
+test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running unittests src/bin/e2e.rs (target/debug/deps/e2e-fdc72333573a197b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/stub_reader.rs (target/debug/deps/gorca_stub_reader-61e2d766f887345f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench_b1-fd71f8e937e61597)
+
+running 31 tests
+test limits::tests::ids_are_unique_and_gates_have_thresholds ... ok
+test host::tests::quiet_host_rules ... ok
+test limits::tests::spec_numbers ... ok
+test msgs::tests::a_sv_parser_reads_integers_and_skips_strings ... ok
+test msgs::tests::cross_check_tolerance_is_one_percent_of_the_larger ... ok
+test msgs::tests::msgs_formula_and_rates ... ok
+test rundir::tests::rss_growth_needs_the_full_window ... ok
+test rundir::tests::idle_reports_the_worst_app ... ok
+test rundir::tests::scripted_shortfall_and_signal_mismatch_invalidate ... ok
+test runner::tests::arm_parsing ... ok
+test runner::tests::a_missing_bold_gate_fails_instead_of_passing_silently ... ok
+test rundir::tests::walk_run_end_to_end_on_hand_made_logs ... ok
+test runner::tests::cold_path_is_compared_with_r0 ... ok
+test runner::tests::invalid_runs_are_excluded_and_reported ... ok
+test runner::tests::median_gate_ignores_one_bad_repeat_but_zero_gates_do_not ... ok
+test runner::tests::per_model_ff_ids_resolve_to_the_ff_gate ... ok
+test runner::tests::schedule_rotates_and_balances_positions ... ok
+test verdict::tests::correct_when_name_matches_current_version ... ok
+test verdict::tests::clean_revisit_and_hit_rates ... ok
+test step::tests::json_is_parseable_and_has_the_gate_field ... ok
+test verdict::tests::lost_superseded_and_spoken_focus_lines ... ok
+test verdict::tests::orphan_followups_and_bad_input_are_reported ... ok
+test verdict::tests::unconstrained_fields_match_anything_but_history_is_enforced ... ok
+test step::tests::scenarios_hit_the_caps ... ok
+test verdict::tests::stale_when_old_name_is_spoken_and_never_corrected ... ok
+test verdict::tests::refine_with_a_wrong_value_or_epoch_does_not_save_it ... ok
+test verdict::tests::followup_within_500ms_is_late_after_that_stale ... ok
+test verdict::tests::states_compare_as_sets_and_ignore_the_focus_ring ... ok
+test verdict::tests::refine_replacing_it_is_refined ... ok
+test verdict::tests::mutation_inside_the_window_makes_both_values_valid ... ok
+test step::tests::noop_is_far_below_the_gate_and_a_slow_subject_is_caught ... ok
+
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/bin/b1.rs (target/debug/deps/b1-e2e8e06fa29d974c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cli_offline.rs (target/debug/deps/cli_offline-a8d1ee85648e2b8e)
+
+running 2 tests
+test a_missing_run_directory_invalidates_the_arm ... ok
+test slow_step_arm_is_not_rankable_and_exit_code_says_so ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/msgs_realbus.rs (target/debug/deps/msgs_realbus-68e658ea01b022b7)
+
+running 3 tests
+test debug_stats_exists_but_connection_counters_are_gauges_not_totals ... ok
+test monitor_counts_calls_replies_and_per_destination_with_empty_rules ... ok
+test monitor_counts_signals_under_its_rule_only ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench_b2-5cac9c1c616f7c86)
+
+running 17 tests
+test model::tests::flooding_dirties_and_keeps_lossless ... ok
+test model::tests::focus_keeps_first_position_and_last_value ... ok
+test report::tests::json_is_escaped ... ok
+test model::tests::fold_equivalence_for_simple_sequence ... ok
+test model::tests::removed_supersedes_and_later_events_survive ... ok
+test report::tests::thresholds_decide_the_verdict ... ok
+test report::tests::zero_gates_look_at_the_worst_repeat ... ok
+test stats::tests::spread_even_and_odd ... ok
+test wire::tests::signal_round_trips ... ok
+test stats::tests::percentiles_of_1_to_1000 ... ok
+test wire::tests::two_messages_in_one_buffer ... ok
+test workload::tests::harness_and_reference_agree_on_local_ids ... ok
+test workload::tests::node_path_is_decimal ... ok
+test workload::tests::generator_is_deterministic ... ok
+test workload::tests::removed_nodes_are_never_reused ... ok
+test tap::tests::tap_decoder_agrees_with_the_expected_mapping ... ok
+test workload::tests::wire_and_expected_agree_with_the_reference_mapping ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running unittests src/bin/b2.rs (target/debug/deps/b2-a47ba1314d983522)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/bounds.rs (target/debug/deps/bounds-791d9fbbd82141d7)
+
+running 5 tests
+test a_giant_message_is_skipped_not_buffered ... ignored, reference arm (zbus) buffers whole messages; candidates must pass
+test counters_equal_structure_sizes_after_every_operation ... ok
+test oversized_payloads_and_sender_churn_stay_bounded ... ok
+test supersession_does_not_leak_tombstones ... ok
+test a_global_budget_bounds_many_apps ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 5.48s
+
+     Running tests/drain.rs (target/debug/deps/drain-10a776ae077d32fa)
+
+running 14 tests
+test harness_self_check_focus_probe_ids ... ok
+test match_rules_are_installed ... ok
+test disconnect_is_reported ... ok
+test routes_are_cached_per_sender ... ok
+test stop_is_prompt ... ok
+test malformed_bodies_are_survivable ... ok
+test big_endian_messages_are_decoded ... ok
+test non_events_are_ignored ... ok
+test unknown_senders_are_unrouted ... ok
+test a_huge_message_does_not_break_framing ... ok
+test start_up_has_a_deadline ... ok
+test every_mix_matches_the_ground_truth ... ok
+test a_stalled_consumer_does_not_stall_the_socket ... ok
+test fragmented_streams_are_reassembled ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.10s
+
+     Running tests/ingress.rs (target/debug/deps/ingress-88e7a89a75bc8ca5)
+
+running 6 tests
+test events_keep_their_app_and_node ... ok
+test flood_keeps_the_lossless_classes ... ok
+test no_lost_wakeup_with_a_concurrent_consumer ... ok
+test sequential_behaviour_equals_the_model ... ok
+test concurrent_producers_converge_to_the_truth ... ok
+test pending_is_bounded_under_distinct_floods ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.77s
+
+     Running tests/realbus.rs (target/debug/deps/realbus-c4f815fef88d032a)
+
+running 3 tests
+test dbus_daemon_end_to_end ... ok
+test dbus_broker_end_to_end ... ok
+test broker_fixture_reproduces_f3 ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.51s
+
+     Running unittests src/main.rs (target/debug/deps/mb1-4f54aebb8ebf28a3)
+
+running 4 tests
+test hist::tests::quantiles_are_close ... ok
+test hist::tests::index_is_monotone ... ok
+test tests::every_store_round_trips ... ok
+test tests::short_cell_and_removal_complete ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.96s
+
+     Running unittests src/lib.rs (target/debug/deps/gorca_braille_brlapi-9b31f7ac11d79bf9)
+
+running 1 test
+test tests::stub_reports_no_display ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/gorca_connector_api-166f1a09e8510da0)
+
+running 11 tests
+test call::tests::dropped_sender_counts_as_timeout ... ok
+test call::tests::full_queue_is_busy_and_closed_queue_is_gone ... ok
+test call::tests::silent_connector_times_out_at_the_deadline ... ok
+test call::tests::answered_request_returns_the_reply ... ok
+test port::tests::control_queue_is_bounded_and_reports_full ... ok
+test port::tests::dropped_core_half_reports_closed ... ok
+test registry::tests::announce_round_trip ... ok
+test registry::tests::registered_apps_charge_the_explicit_budget ... ok
+test port::tests::push_reaches_the_ingress_receiver ... ok
+test registry::tests::scope_registry_never_merges_or_reuses ... ok
+test registry::tests::announce_to_a_silent_core_times_out ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/gorca_connector_atspi-03d8df2985b1d513)
+
+running 101 tests
+test decode::tests::state_numbers_match_the_atspi_abi ... ok
+test decode::tests::roles_map_and_unknown_numbers_are_unknown ... ok
+test decode::tests::hostile_state_arrays_do_not_panic ... ok
+test decode::tests::snapshot_drops_empty_names_and_non_finite_values ... ok
+test decode::tests::clip_respects_char_boundaries ... ok
+test connector::tests::missing_addresses_are_an_error_not_an_environment_lookup ... ok
+test enablement::tests::already_enabled_is_a_noop ... ok
+test doc_source::tests::caps_advertise_exact_joins_and_all_actions ... ok
+test decode::tests::states_map_and_unavailable_follows_sensitive ... ok
+test enablement::tests::startup_enables_and_shutdown_restores ... ok
+test decode::tests::snapshot_clips_huge_names ... ok
+test events::paths::tests::absurd_paths_are_refused ... ok
+test events::paths::tests::forgetting_the_last_app_of_an_owner_frees_everything ... ok
+test events::paths::tests::insert_get_and_forget ... ok
+test connector::tests::run_fails_fast_when_the_bus_is_missing ... ok
+test events::paths::tests::a_cleared_bucket_of_a_gone_owner_is_dropped_and_survivors_shrink ... ok
+test events::router::tests::an_unknown_start_time_never_matches_the_shell ... ok
+test events::router::tests::a_recycled_shell_pid_does_not_inherit_protection ... ok
+test events::router::tests::credentials_are_retried_before_a_name_is_filed_as_unknown ... ok
+test events::router::tests::forget_cancels_the_app_and_drops_its_paths ... ok
+test events::router::tests::focus_during_backoff_or_the_pending_cap_is_kept_for_the_next_attempt ... ok
+test events::router::tests::forget_marks_departed_and_departed_names_expire ... ok
+test events::router::tests::frozen_eviction_thaws_at_the_next_good_reconciliation ... ok
+test events::router::tests::ignored_and_well_known_names_are_not_applications ... ok
+test events::router::tests::hostile_parkers_cannot_drop_a_new_apps_focus ... ok
+test events::router::tests::a_burst_of_other_events_never_displaces_the_focus ... ok
+test events::router::tests::only_the_protected_process_is_announced_as_the_verified_shell ... ok
+test events::router::tests::parked_strings_are_bounded ... ok
+test events::router::tests::a_failed_registration_backs_off_and_then_succeeds ... ok
+test events::router::tests::newest_focus_survives_the_park_cap ... ok
+test events::router::tests::registrations_in_flight_and_parked_events_are_bounded ... ok
+test events::router::tests::resolve_park_race_does_not_lose_the_event ... ok
+test events::paths::tests::exempt_newest_paths_never_push_the_total_past_the_cap ... ok
+test events::router::tests::reconciliation_retires_names_the_bus_no_longer_has ... ok
+test events::router::tests::take_all_returns_every_app_once ... ok
+test events::router::tests::registration_and_departure_churn_leaks_nothing ... ok
+test events::paths::tests::cap_preemption_keeps_every_owners_newest_path ... ok
+test events::paths::tests::the_global_cap_evicts_the_largest_owner_not_the_newcomer ... ok
+test events::router::tests::the_first_event_registers_asynchronously_and_is_replayed_in_order ... ok
+test events::paths::tests::unknown_credentials_get_a_small_private_bucket ... ok
+test events::router::tests::one_process_cannot_hold_unbounded_names ... ok
+test events::paths::tests::an_owners_newest_path_survives_quota_clears ... ok
+test events::router::tests::the_ignored_set_does_not_grow_with_churn ... ok
+test events::router::tests::an_app_dying_mid_registration_leaks_nothing ... ok
+test events::paths::tests::one_owner_is_bounded_by_its_own_quota ... ok
+test events::router::tests::unknown_credentials_share_one_small_quota ... ok
+test events::router::tests::when_revalidation_fails_eviction_freezes_and_reading_continues ... ok
+test events::router::tests::the_per_process_name_cap_refuses_with_a_backoff_not_a_verdict ... ok
+test events::session::tests::connecting_to_a_missing_bus_fails_fast_with_an_error ... ok
+test events::session::tests::registered_events_are_a_small_explicit_set ... ok
+test events::subscription::tests::cache_signals_add_exactly_one_interface_rule ... ok
+test events::subscription::tests::the_default_adds_nothing_to_the_base_set ... ok
+test fetch::admission_tests::background_is_capped_whatever_is_free ... ok
+test fetch::admission_tests::interactive_keeps_two_slots_nobody_else_may_take ... ok
+test fetch::items::tests::a_dump_in_hash_order_becomes_a_tree ... ok
+test fetch::items::tests::an_incomplete_child_list_stays_a_count ... ok
+test fetch::items::tests::an_oversized_reply_is_rejected_whole ... ok
+test fetch::items::tests::big_endian_replies_decode ... ok
+test fetch::items::tests::counts_text_and_paths_are_bounded ... ok
+test fetch::items::tests::duplicate_paths_keep_the_first ... ok
+test fetch::items::tests::foreign_refs_are_dropped_and_counted ... ok
+test events::router::tests::a_victim_that_becomes_focused_before_the_commit_is_spared ... ok
+test fetch::items::tests::self_parents_and_cycles_are_cut ... ok
+test fetch::items::tests::the_node_cap_truncates ... ok
+test fetch::shadow::tests::the_allowlist_admits_reads_and_nothing_that_writes ... ok
+test events::router::tests::shell_launched_apps_are_grouped_by_scope_not_by_process_group ... ok
+test events::router::tests::the_application_cap_makes_the_largest_group_give_way ... ok
+test events::router::tests::an_evicted_application_comes_back_through_the_backoff_path ... ok
+test events::router::tests::a_refusal_at_the_cap_is_never_permanent ... ok
+test fetch::items::tests::hostile_bytes_never_panic ... ok
+test events::router::tests::the_focused_application_is_never_evicted ... ok
+test events::router::tests::the_focused_app_survives_a_newcomer_while_protection_is_unverified ... ok
+test fetch::tests::dbus_errors_map_to_backend_errors ... ok
+test fetch::tests::labels_are_read_only_from_the_same_application ... ok
+test fetch::tests::password_fields_are_read_like_any_other_entry ... ok
+test proc::tests::a_hostile_command_name_cannot_shift_the_fields ... ok
+test proc::tests::garbage_is_unknown_not_a_panic ... ok
+test proc::tests::grouping_prefers_the_scope_over_the_process_group ... ok
+test proc::tests::our_own_process_is_known ... ok
+test proc::tests::pgrp_and_start_time_are_read ... ok
+test proc::tests::the_systemd_unit_comes_from_the_cgroup_path ... ok
+test role_map::tests::common_roles_map ... ok
+test role_map::tests::dialog_and_alert_stay_distinct ... ok
+test role_map::tests::unmapped_roles_are_unknown_not_a_panic ... ok
+test toolkit::tests::classification ... ok
+test toolkit::tests::text_units_follow_tu2 ... ok
+test events::router::tests::the_shell_as_a_newcomer_is_admitted_at_the_cap ... ok
+test events::router::tests::the_shell_is_admitted_over_the_cap_while_eviction_is_frozen ... ok
+test events::router::tests::the_shell_is_never_evicted_or_refused ... ok
+test events::router::tests::a_legitimate_app_launched_after_the_attacker_filled_the_cap_wins_and_stays ... ok
+test events::router::tests::with_only_singletons_the_newcomer_is_refused_and_nobody_is_evicted ... ok
+test fetch::strategy_ref_tests::a_dead_node_is_gone_and_an_unknown_key_is_unresolved ... ok
+test fetch::strategy_ref_tests::fetch_reports_what_was_asked_in_have ... ok
+test fetch::strategy_ref_tests::ancestry_climbs_to_the_root_and_truncates_at_the_depth ... ok
+test fetch::strategy_ref_tests::hostile_refs_are_dropped_and_counted ... ok
+test fetch::strategy_ref_tests::child_snapshots_returns_the_range_with_parent_links_and_records_paths ... ok
+test fetch::strategy_ref_tests::subtree_is_breadth_first_and_bounded ... ok
+test fetch::strategy_ref_tests::cache_dump_decodes_the_whole_app_and_records_paths ... ok
+test events::router::tests::the_name_cap_holds_under_concurrency ... ok
+test events::router::tests::singleton_forks_never_evict_the_first_application ... ok
+test events::paths::tests::many_bus_names_of_one_process_share_one_quota ... ok
+
+test result: ok. 101 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.02s
+
+     Running tests/harness_focus.rs (target/debug/deps/harness_focus-4fae392831286763)
+
+running 3 tests
+test tabbing_through_a_form_is_heard ... ok
+test an_app_that_quits_is_retired_and_a_new_one_is_heard ... ok
+test a_hung_app_does_not_stop_the_reader ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.91s
+
+     Running tests/path_table_rss.rs (target/debug/deps/path_table_rss-92cbc75a833d3dd7)
+
+running 1 test
+test rss_stays_near_the_byte_cap_under_owner_churn ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.03s
+
+     Running unittests src/lib.rs (target/debug/deps/gorca_core-0f3998bdc3202524)
+
+running 95 tests
+test app_actor::tests::a_fill_reply_is_applied_with_the_late_reply_rules ... ok
+test app_actor::tests::a_flood_ends_with_a_lazy_resync_and_a_healthy_app ... ok
+test app_actor::tests::a_full_background_lane_drops_and_requests_a_resync ... ok
+test app_actor::tests::a_flood_invalidates_the_dirty_nodes_and_dirty_all_is_o1 ... ok
+test app_actor::tests::a_gone_app_releases_its_mirror_at_once ... ok
+test app_actor::tests::a_spoofed_shell_never_speaks_selection ... ok
+test app_actor::tests::hung_transition_tells_the_reader_once ... ok
+test app_actor::tests::focus_goes_to_the_focus_lane_and_snapshots_fill_the_mirror ... ok
+test app_actor::tests::a_name_change_reaches_content_named_ancestors ... ok
+test app_actor::tests::every_row_of_the_invalidation_table_marks_the_right_fields ... ok
+test app_actor::tests::owner_gone_marks_the_app_gone_and_notifies_the_reader ... ok
+test app_actor::tests::only_the_focused_nodes_state_change_reaches_the_reader ... ok
+test app_actor::tests::only_a_verified_shell_is_protected_and_may_dump ... ok
+test app_actor::tests::property_noise_invalidates_the_mirror_and_wakes_nobody ... ok
+test app_actor::tests::removal_and_window_destroy_tombstone_and_dirty_the_parent ... ok
+test app_actor::tests::reader_fetch_replies_are_applied_and_gone_tombstones ... ok
+test app_actor::tests::other_apps_never_speak_selection ... ok
+test app_actor::tests::the_shell_forwards_only_the_newest_selection_of_a_batch ... ok
+test app_actor::tests::removal_tombstones_the_mirror_and_tells_the_reader ... ok
+test app_actor::tests::the_policy_sees_events_after_the_invalidation_and_demands_drive_requests ... ok
+test builtin_ext::tests::a_spoofed_shell_name_gets_no_profile ... ok
+test builtin_ext::tests::only_the_verified_shell_speaks_selection ... ok
+test doc_actor::tests::snapshots_are_published_only_when_a_batch_settles ... ok
+test focus::tests::presented_for_a_different_node_is_ignored ... ok
+test focus::tests::settle_delay_is_zero_except_for_flapping_roles ... ok
+test focus::tests::removal_orphans_and_queries_the_active_window ... ok
+test health::tests::flood_then_drain_resyncs_the_dirty_set ... ok
+test health::tests::global_shed_floods_only_unfocused_top_talkers ... ok
+test directory::tests::lookup_routes_by_app_and_unknown_apps_are_gone ... ok
+test focus::tests::orphaned_recovers_on_the_next_focus ... ok
+test health::tests::healthy_timeout_goes_slow_and_halves_prefetch ... ok
+test health::tests::hung_apps_admit_no_requests ... ok
+test focus::tests::app_gone_orphans_only_its_own_focus ... ok
+test doc_actor::tests::unknown_nodes_and_sink_overflow_request_a_resync ... ok
+test focus::tests::flapping_focus_restarts_the_settle_timer ... ok
+test focus::tests::focus_settles_then_presents_then_speaks ... ok
+test focus::tests::hung_focus_app_announces_without_changing_state ... ok
+test health::tests::hung_probes_one_at_a_time_with_exponential_backoff ... ok
+test health::tests::owner_vanished_is_terminal_from_every_state ... ok
+test health::tests::slow_recovers_after_ten_quiet_seconds ... ok
+test health::tests::a_success_breaks_the_consecutive_run ... ok
+test health::tests::three_consecutive_timeouts_make_the_app_hung ... ok
+test mode::tests::auto_mode_switching_follows_focus_unless_sticky ... ok
+test mode::tests::every_real_transition_advances_the_epoch_and_sets_the_grab_set ... ok
+test mode::tests::grab_sets_are_minimal_and_mode_specific ... ok
+test mode::tests::input_help_toggles_from_anywhere_and_blocks_other_modes ... ok
+test mode::tests::no_op_transitions_emit_nothing ... ok
+test mode::tests::review_and_pass_through_round_trips ... ok
+test present::tests::key_echo_names_action_keys_and_skips_lone_modifiers ... ok
+test present::tests::message_has_message_priority ... ok
+test present::tests::name_role_and_states_in_order ... ok
+test present::tests::navigation_keys_are_not_echoed ... ok
+test present::tests::nothing_is_echoed_under_alt_control_or_super ... ok
+test present::tests::registry_falls_back_to_the_context_default_and_honours_role_overrides ... ok
+test present::tests::selected_items_do_not_say_selected ... ok
+test present::tests::shift_locks_and_altgr_still_echo ... ok
+test present::tests::stale_nodes_are_tagged_may_refine_and_empty_names_are_skipped ... ok
+test present::tests::values_are_spoken_last ... ok
+test present::utterance::change_tests::equal_snapshots_have_no_change_and_focus_state_is_ignored ... ok
+test present::utterance::change_tests::name_and_value_changes_are_spoken ... ok
+test present::utterance::change_tests::a_flipped_state_is_spoken_both_ways ... ok
+test present::utterance::change_tests::the_log_lists_every_decoded_state_by_its_atspi_name ... ok
+test reader::tests::a_failed_fetch_falls_back_to_a_stale_cache_entry ... ok
+test reader::tests::a_mirror_hit_is_spoken_first_tagged_may_refine_and_revalidated ... ok
+test reader::tests::a_partial_node_missing_only_non_blocking_fields_is_spoken ... ok
+test reader::tests::a_revalidation_that_agrees_is_silent ... ok
+test reader::tests::a_stale_name_is_fetched_but_a_stale_state_is_spoken_from_memory ... ok
+test reader::tests::a_reply_from_an_older_epoch_is_never_spoken ... ok
+test reader::tests::a_state_change_of_another_node_is_not_the_readers_business ... ok
+test reader::tests::a_plain_key_press_is_echoed_with_the_epoch_of_the_press ... ok
+test reader::tests::an_old_stale_presentation_gets_a_followup ... ok
+test reader::tests::a_young_stale_presentation_is_refined_by_replacement ... ok
+test reader::tests::cache_hit_focus_speaks_immediately_with_the_new_epoch ... ok
+test reader::tests::a_state_change_of_the_focused_node_is_spoken ... ok
+test reader::tests::cache_miss_fetches_then_speaks_on_the_reply ... ok
+test reader::tests::drain_processes_a_burst_in_one_call ... ok
+test reader::tests::every_switcher_selection_is_spoken_and_alt_tab_is_not_echoed ... ok
+test reader::tests::flapping_roles_wait_for_the_settle_timer ... ok
+test reader::tests::content_confirmed_after_the_focus_began_needs_no_revalidation ... ok
+test reader::tests::focus_on_a_removed_key_asks_once_and_a_live_reply_revives_it ... ok
+test reader::tests::hung_focus_app_is_announced ... ok
+test reader::tests::inbox_is_biased_input_then_focus_then_replies_then_background ... ok
+test reader::tests::item_selection_leaves_focus_protection_alone ... ok
+test reader::tests::key_presses_adopt_their_epoch_and_dispatch_commands ... ok
+test reader::tests::mode_change_advances_the_epoch_and_sets_the_grab_set ... ok
+test reader::tests::only_a_validated_focus_is_published_for_protection ... ok
+test reader::tests::selection_speech_outranks_the_echo_of_the_key_that_caused_it ... ok
+test reader::tests::unknown_object_keeps_a_removed_focus_dead ... ok
+test reader::tests::unresolved_falls_back_to_the_cache_not_to_removal ... ok
+test runtime::tests::core_exposes_shared_state ... ok
+test runtime::tests::run_returns_immediately_if_already_cancelled ... ok
+test runtime::tests::run_returns_when_shutdown_is_cancelled ... ok
+test present::log::tests::a_record_is_one_json_line_with_the_documented_fields ... ok
+test reader::tests::the_presentation_log_records_hits_and_corrections ... ok
+test present::log::tests::a_full_queue_drops_and_never_blocks ... ok
+
+test result: ok. 95 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.01s
+
+     Running tests/pipeline.rs (target/debug/deps/pipeline-59693f12bc6bc335)
+
+running 6 tests
+test focus_is_spoken_with_name_role_and_states ... ok
+test a_vanished_app_is_cleaned_up ... ok
+test duplicate_focus_reports_are_one_utterance ... ok
+test a_focus_storm_speaks_only_the_last_focus ... ok
+test a_dead_reader_lane_stops_the_core_with_an_error ... ok
+test a_hung_app_never_stalls_the_reader_and_recovers ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s
+
+     Running unittests src/lib.rs (target/debug/deps/gorca_daemon-040f6f9a4608f5d2)
+
+running 10 tests
+test cli::tests::defaults_are_auto_speech_and_no_impersonation ... ok
+test cli::tests::peer_uids_are_explicit_and_repeatable ... ok
+test cli::tests::errors_are_specific ... ok
+test cli::tests::environment_fills_only_what_flags_left_open ... ok
+test cli::tests::flags_and_paths ... ok
+test cli::tests::speech_modes_parse_with_equals_and_space ... ok
+test tests::notices_are_plain_sentences ... ok
+test tests::speech_plan_follows_the_flag ... ok
+test tests::runtime_is_multi_threaded ... ok
+test tests::run_survives_missing_services_and_stops_on_cancel ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+     Running unittests src/main.rs (target/debug/deps/gorca-b3236e5a0e265002)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/e2e.rs (target/debug/deps/e2e-3d6e643307d36bc9)
+
+running 8 tests
+test key_presses_are_echoed_through_the_orca_keyboard_monitor_name ... ok
+test voicego_down_falls_back_to_ssip_and_returns_when_it_is_back ... ok
+test speech_ssip_mode_never_touches_voicego ... ok
+test a_fake_app_moving_focus_reaches_voicego_as_the_right_utterances ... ok
+test a_hung_app_leaves_the_reader_responsive ... ok
+test a_focus_storm_ends_with_only_the_last_focus_audible ... FAILED
+test alt_tab_in_the_switcher_speaks_windows_and_never_echoes_tab ... ok
+test every_selection_move_in_a_shell_style_switcher_is_spoken ... ok
+
+failures:
+
+---- a_focus_storm_ends_with_only_the_last_focus_audible stdout ----
+
+thread 'a_focus_storm_ends_with_only_the_last_focus_audible' (116853) panicked at crates/gorca-daemon/tests/e2e.rs:228:9:
+261 utterances for 300 focus events: events were not coalesced or superseded
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    a_focus_storm_ends_with_only_the_last_focus_audible
+
+test result: FAILED. 7 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.49s
+
+error: test failed, to rerun pass `-p gorca-daemon --test e2e`
+make: *** [Makefile:21: test] Error 101
+EXIT 2

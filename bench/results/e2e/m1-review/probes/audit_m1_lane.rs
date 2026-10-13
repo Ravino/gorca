@@ -36,6 +36,7 @@ fn a_plain_key_after_a_monitor_restart_is_not_a_command() {
     // connection is gone). The new session re-applies the same grab set (generation 1 again).
     let o = lane.on_key(ev(KC_INS, sym::INSERT, true), t0 + Duration::from_millis(1000));
     assert_eq!(o.intent.class, KeyClass::Swallowed);
+    links.session.fetch_add(2, std::sync::atomic::Ordering::AcqRel);
     links.view.store(Arc::new(GrabView { committed_gen: 1, committed: Arc::clone(&g), wanted_gen: None, wanted: None }));
     // A fresh Mutter has no key down: a plain T reaches the application.
     let o = lane.on_key(ev(KC_T, 0x74, true), t0 + Duration::from_millis(5000));

@@ -1,0 +1,58 @@
+   Compiling gorca-input-api v0.0.0 (<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/crates/gorca-input-api)
+   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/crates/gorca-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.10s
+     Running tests/pipeline.rs (target/debug/deps/pipeline-99fd26b91b5dbc21)
+
+running 6 tests
+test a_vanished_app_is_cleaned_up ... ok
+test focus_is_spoken_with_name_role_and_states ... ok
+test duplicate_focus_reports_are_one_utterance ... ok
+test a_focus_storm_speaks_only_the_last_focus ... ok
+test a_dead_reader_lane_stops_the_core_with_an_error ... ok
+test a_hung_app_never_stalls_the_reader_and_recovers ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s
+
+pipeline run 1=0
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running tests/pipeline.rs (target/debug/deps/pipeline-99fd26b91b5dbc21)
+
+running 6 tests
+test focus_is_spoken_with_name_role_and_states ... ok
+test a_vanished_app_is_cleaned_up ... ok
+test duplicate_focus_reports_are_one_utterance ... ok
+test a_dead_reader_lane_stops_the_core_with_an_error ... ok
+test a_hung_app_never_stalls_the_reader_and_recovers ... ok
+test a_focus_storm_speaks_only_the_last_focus ... FAILED
+
+failures:
+
+---- a_focus_storm_speaks_only_the_last_focus stdout ----
+
+thread 'a_focus_storm_speaks_only_the_last_focus' (157612) panicked at crates/gorca-core/tests/pipeline.rs:186:5:
+assertion `left == right` failed: []
+  left: None
+ right: Some("Subscribe check box checked")
+
+
+failures:
+    a_focus_storm_speaks_only_the_last_focus
+
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.51s
+
+error: test failed, to rerun pass `-p gorca-core --test pipeline`
+pipeline run 2=101
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running tests/pipeline.rs (target/debug/deps/pipeline-99fd26b91b5dbc21)
+
+running 6 tests
+test a_vanished_app_is_cleaned_up ... ok
+test focus_is_spoken_with_name_role_and_states ... ok
+test duplicate_focus_reports_are_one_utterance ... ok
+test a_focus_storm_speaks_only_the_last_focus ... ok
+test a_dead_reader_lane_stops_the_core_with_an_error ... ok
+test a_hung_app_never_stalls_the_reader_and_recovers ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.99s
+
+pipeline run 3=0

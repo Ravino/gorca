@@ -1,0 +1,6 @@
+real apply(4096): Err("apply of 4096 nodes took 5768 us (budget 250 us)")
+real apply(128) worst 1110 us at 65536 live
+real apply(4096): Err("apply of 4096 nodes took 6724 us (budget 250 us)")
+real apply(128) worst 1007 us at 65536 live
+real apply(4096): Err("apply of 4096 nodes took 6192 us (budget 250 us)")
+real apply(128) worst 1128 us at 65536 live
