@@ -141,14 +141,35 @@ fn cmd_run(args: &[String]) -> Result<bool> {
         ],
     );
     meta.push(("loadavg_start_run".into(), load_start));
+    // H-10(a): `run-all.sh` runs the strict (+-20 %) service-time fidelity test and passes the
+    // result here. A failed fidelity check makes the whole run INVALID, never a silent score.
+    let fidelity = std::env::var("B1_FIDELITY").unwrap_or_else(|_| "not-run".into());
+    let fidelity_failed = fidelity.starts_with("fail");
+    meta.push(("fidelity".into(), fidelity.clone()));
+    meta.push((
+        "run_status".into(),
+        if fidelity_failed {
+            format!("INVALID: service-time fidelity {fidelity}")
+        } else {
+            "valid".into()
+        },
+    ));
     let labels: Vec<String> = arms.iter().map(|a| a.label.clone()).collect();
-    let text = format!("{}\n{}", table(&rows), runner::summary_md(&rows, &labels));
+    let mut text = format!("{}\n{}", table(&rows), runner::summary_md(&rows, &labels));
+    if fidelity_failed {
+        text = format!(
+            "INVALID RUN: service-time fidelity check failed ({fidelity}); scores below are not authoritative\n\n{text}"
+        );
+    }
     print!("{text}");
     std::fs::create_dir_all(&out_dir)?;
     let stamp = host::stamp();
     std::fs::write(out_dir.join(format!("{stamp}.json")), json(&meta, &rows))?;
     std::fs::write(out_dir.join(format!("{stamp}.txt")), &text)?;
     eprintln!("wrote {}", out_dir.join(format!("{stamp}.json")).display());
+    if fidelity_failed {
+        bail!("INVALID RUN: service-time fidelity check failed ({fidelity})");
+    }
     Ok(!rows.iter().any(|r| matches!(r.verdict, Verdict::Fail)))
 }
 
