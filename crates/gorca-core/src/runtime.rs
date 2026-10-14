@@ -761,6 +761,19 @@ fn backend_op(op: &FillOp) -> BackendOp {
             range: range.clone(),
             want: *want,
         },
+        FillOp::Siblings {
+            parent,
+            node,
+            before,
+            after,
+            want,
+        } => BackendOp::Siblings {
+            parent: *parent,
+            node: *node,
+            before: *before,
+            after: *after,
+            want: *want,
+        },
         FillOp::Ancestry {
             node,
             max_depth,

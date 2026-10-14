@@ -852,10 +852,14 @@ fn ic17(s: &mut dyn Sut) -> CaseResult {
         },
     )?;
     s.advance(2_600);
-    // Dirty nodes are stale, not dropped.
+    // Dirty nodes are stale, not dropped. Policy-neutral (SPEC 5.7): a policy may have re-read
+    // the node after the flood (a few calls, bounded below), which leaves it fresh.
+    let refreshed = s.calls("storm")?.total_calls() > before;
     match s.probe("storm", &win) {
         Probe::Hit { stale, .. } => {
-            need(stale, || "flood did not mark the app's nodes dirty".into())?;
+            need(stale || refreshed, || {
+                "flood did not mark the app's nodes dirty".into()
+            })?;
         }
         other => {
             return Err(Fail(format!(

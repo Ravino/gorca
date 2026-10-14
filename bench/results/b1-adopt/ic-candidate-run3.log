@@ -1,0 +1,78 @@
+   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
+   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-core)
+   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-daemon)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.78s
+     Running tests/b1_ic.rs (target/debug/deps/b1_ic-db130a3ebd2fa224)
+
+running 3 tests
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+test the_policy_hears_of_a_new_app_before_it_does_anything ... ok
+test the_invalidation_suite_passes_against_the_real_daemon has been running for over 60 seconds
+test the_invalidation_suite_passes_with_the_candidate_policy has been running for over 60 seconds
+IC-1: PASS
+IC-2: PASS
+IC-3: PASS
+IC-4: PASS
+IC-5: PASS
+IC-6: PASS
+IC-7: PASS
+IC-8: PASS
+IC-9: PASS
+IC-10: SKIPPED (needs exact timing)
+IC-11: SKIPPED (needs per-direction latency control)
+IC-12: PASS
+IC-13: PASS
+IC-14: PASS
+IC-15: PASS
+IC-16: SKIPPED (needs the malformed-ref mode of the fake app)
+IC-17: FAIL flood did not mark the app's nodes dirty
+IC-18: PASS
+IC-19: PASS
+IC-20: PASS
+IC-21: PASS
+IC-22: SKIPPED (the reader never sends CacheDump to the verified Shell: (b) not applicable)
+IC-23: PASS
+IC-23b: SKIPPED (needs the where-am-I command)
+IC against the real daemon: 18 passed, 5 skipped
+
+thread 'the_invalidation_suite_passes_with_the_candidate_policy' (2968666) panicked at crates/gorca-daemon/tests/b1_ic.rs:371:5:
+[
+    "IC-17: flood did not mark the app's nodes dirty",
+]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test the_invalidation_suite_passes_with_the_candidate_policy ... FAILED
+IC-1: PASS
+IC-2: PASS
+IC-3: PASS
+IC-4: PASS
+IC-5: PASS
+IC-6: PASS
+IC-7: PASS
+IC-8: PASS
+IC-9: PASS
+IC-10: SKIPPED (needs exact timing)
+IC-11: SKIPPED (needs per-direction latency control)
+IC-12: PASS
+IC-13: PASS
+IC-14: PASS
+IC-15: PASS
+IC-16: SKIPPED (needs the malformed-ref mode of the fake app)
+IC-17: PASS
+IC-18: PASS
+IC-19: PASS
+IC-20: PASS
+IC-21: PASS
+IC-22: PASS
+IC-23: PASS
+IC-23b: SKIPPED (needs the where-am-I command)
+IC against the real daemon: 20 passed, 4 skipped
+test the_invalidation_suite_passes_against_the_real_daemon ... ok
+
+failures:
+
+failures:
+    the_invalidation_suite_passes_with_the_candidate_policy
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 197.31s
+
+error: test failed, to rerun pass `-p gorca-daemon --test b1_ic`

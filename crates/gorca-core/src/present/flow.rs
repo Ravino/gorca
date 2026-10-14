@@ -471,6 +471,18 @@ impl Reader {
         if p.node != r.node || p.epoch != r.epoch {
             return;
         }
+        // A focus served from the cache (a prefetched sibling, an earlier visit) shows
+        // the states of its fetch, not `FOCUSED`, and was not trusted at presentation
+        // (fail closed). The re-read is the proof: earn the protection now, or the
+        // text events of the focused application would never reach the Reader.
+        if self.selection_node != Some(r.node)
+            && let Ok(new) = &r.result
+            && let Some(f) = &self.focused_app
+            && new.states.contains(StateSet::FOCUSED)
+            && !new.states.contains(StateSet::DEFUNCT)
+        {
+            f.publish(r.node.app);
+        }
         // A web document's speech belongs to browse mode: the cursor line follows the focus
         // utterance and keys move it at once, so only a changed title is worth correcting (the
         // cache served the previous page). Other differences are counted, not spoken (M5).

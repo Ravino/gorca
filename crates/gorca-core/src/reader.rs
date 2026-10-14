@@ -1045,6 +1045,57 @@ mod tests {
         assert!(!published.protects(app()), "a departed app keeps nothing");
     }
 
+    /// A focus served from the cache (a prefetched sibling) shows no `FOCUSED`: no protection at
+    /// presentation, but the RV-1 re-read that proves it earns the protection afterwards (without
+    /// it the text events of the focused application never reach the Reader).
+    #[test]
+    fn the_revalidation_of_a_cached_focus_earns_the_protection() {
+        let mut f = fixture();
+        let published = Arc::new(FocusedApp::new());
+        f.reader.focused_app = Some(Arc::clone(&published));
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(1, Role::Button, "Cached")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        assert_eq!(
+            published.get(),
+            None,
+            "the cached states do not show FOCUSED"
+        );
+        let mut proof = (*snap(1, Role::Button, "Cached")).clone();
+        proof.states = StateSet::FOCUSED;
+        f.reader
+            .handle(reply(&f, 1, FetchKind::Revalidate, Arc::new(proof)), now);
+        assert_eq!(published.get(), Some(app()), "the re-read proved the focus");
+        // A re-read that does not show FOCUSED proves nothing.
+        let mut g = fixture();
+        let published = Arc::new(FocusedApp::new());
+        g.reader.focused_app = Some(Arc::clone(&published));
+        g.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(1, Role::Button, "Cached")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        focus_on(&mut g, 1, now);
+        g.reader.handle(
+            reply(
+                &g,
+                1,
+                FetchKind::Revalidate,
+                snap(1, Role::Button, "Cached"),
+            ),
+            now,
+        );
+        assert_eq!(published.get(), None);
+    }
+
     #[test]
     fn hung_focus_app_is_announced() {
         let mut f = fixture();

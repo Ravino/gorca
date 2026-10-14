@@ -898,11 +898,22 @@ impl<S: Sut + ?Sized> Exec<'_, S> {
 
 /// Play `plan` against `sut`. `settle_ms` of quiet time follows so the last replies land.
 pub fn execute<S: Sut + ?Sized>(sut: &mut S, spec: &WalkSpec, seed: u64) -> WalkRun {
-    let pl = plan(spec, seed);
+    execute_for(sut, spec, seed, None)
+}
+
+/// [`execute`] that also stops, at the end of a loop, once `max_ns` of the `sut` clock have
+/// passed since the start (a soak of fixed duration: the loop count of the spec is the upper
+/// bound, not the length). The scripted counts are those of the loops actually played.
+pub fn execute_for<S: Sut + ?Sized>(
+    sut: &mut S,
+    spec: &WalkSpec,
+    seed: u64,
+    max_ns: Option<u64>,
+) -> WalkRun {
+    let start_ns = sut.now_ns();
     let mut ex = Exec {
         run: WalkRun {
-            scripted: scripted(&pl),
-            start_ns: sut.now_ns(),
+            start_ns,
             ..WalkRun::default()
         },
         sut,
@@ -910,14 +921,23 @@ pub fn execute<S: Sut + ?Sized>(sut: &mut S, spec: &WalkSpec, seed: u64) -> Walk
         visited: Vec::new(),
         last_focus_app: String::new(),
     };
-    for t in &pl {
-        if t.gap_ms > 0 {
-            ex.sut.advance(t.gap_ms);
+    let mut played: Vec<Timed> = Vec::new();
+    for i in 0..spec.loops {
+        if max_ns.is_some_and(|m| ex.sut.now_ns().saturating_sub(start_ns) >= m) {
+            break;
         }
-        ex.step(&t.step);
-        // The first focus of a loop's fresh Settings after a restart replays the same seed, so
-        // the visited list of the previous instance is kept: dead paths are filtered at revisit.
+        for t in plan_loop(spec, seed, i) {
+            if t.gap_ms > 0 {
+                ex.sut.advance(t.gap_ms);
+            }
+            ex.step(&t.step);
+            // The first focus of a loop's fresh Settings after a restart replays the same seed,
+            // so the visited list of the previous instance is kept: dead paths are filtered at
+            // revisit.
+            played.push(t);
+        }
     }
+    ex.run.scripted = scripted(&played);
     ex.sut.advance(1_000);
     ex.run.end_ns = ex.sut.now_ns();
     ex.run
@@ -1331,6 +1351,33 @@ mod tests {
                 >= 4,
             "restarts"
         );
+    }
+
+    #[test]
+    fn a_walk_with_a_time_bound_stops_at_a_loop_end_and_scripts_only_what_it_played() {
+        let mut spec = short();
+        spec.loops = 50;
+        // One loop first, to know its length on the (virtual) clock.
+        let mut one = SimSut::with_fault(Fault::None);
+        let mut s1 = short();
+        s1.loops = 1;
+        let r1 = execute(&mut one, &s1, 5);
+        let loop_ns = r1.end_ns - r1.start_ns;
+        let mut sut = SimSut::with_fault(Fault::None);
+        let run = execute_for(&mut sut, &spec, 5, Some(loop_ns * 5 / 2));
+        let played = scripted(&plan_loop(&spec, 5, 0)).focus;
+        assert!(
+            run.scripted.focus >= 2 * played && run.scripted.focus <= 4 * played,
+            "a few loops, not 50: {} per loop, {} played",
+            played,
+            run.scripted.focus
+        );
+        assert!(run.actual.covers(&run.scripted), "{:?}", run.actual);
+        // Without a bound all loops are played.
+        let mut all = SimSut::with_fault(Fault::None);
+        spec.loops = 2;
+        let run = execute_for(&mut all, &spec, 5, None);
+        assert_eq!(run.scripted, scripted(&plan(&spec, 5)));
     }
 
     #[test]

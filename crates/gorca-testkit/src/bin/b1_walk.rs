@@ -118,8 +118,11 @@ fn run_kind<S: Sut + ?Sized>(
             let secs: u64 = env("B1_SOAK_S")
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(3600);
-            sp.loops = u32::try_from((secs / 360).max(1)).unwrap_or(10);
-            let run = walk::execute(sut, &sp, seed);
+            // A loop takes minutes (~224 s on the development host): the count is only an upper
+            // bound, the run lasts `secs` (a precomputed count made 10 loops of a 60 minute
+            // soak last 37 minutes: B-1 judgement, finding 9).
+            sp.loops = u32::try_from((secs / 30).max(1)).unwrap_or(u32::MAX);
+            let run = walk::execute_for(sut, &sp, seed, Some(secs.saturating_mul(1_000_000_000)));
             walk::write_run_dir_opts(dir, sut, &sp, &run, rewrite_present)?;
         }
         "ff" => {

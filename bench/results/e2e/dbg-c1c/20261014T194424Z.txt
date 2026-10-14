@@ -1,0 +1,39 @@
+# e2e dbg-c1c
+# utc=2026-10-14T19:44:24Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=5.33 4.31 3.29 2/2588 3559359
+# git_rev=9d44caa
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=dbg-c1c
+# reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=5.33 4.31 3.29 1/2588 3559356
+# reader_env=GORCA_M3=1 GORCA_M3_STRICT=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=C1 lost #0: wanted "Line 0001 text", key to next key 16.4 ms, heard []
+# note1=C1 lost #1: wanted "Line 0002 text", key to next key 14.6 ms, heard []
+# note2=C1 lost #2: wanted "Line 0003 text", key to next key 9.6 ms, heard []
+# note3=C1 lost #3: wanted "Line 0004 text", key to next key 15.1 ms, heard []
+# note4=C1 lost #4: wanted "Line 0005 text", key to next key 12.3 ms, heard []
+# note5=C1: app caret-event emit to SPEAK of the new line (toolkit line, one fetch)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+C1.c1_ms.n                 daemon/voicego            0            0            0  1                  info   [samples]
+C1.c1_ms.p50               daemon/voicego            0            0            0  1                  info   [ms]
+C1.c1_ms.p95               daemon/voicego            0            0            0  1                  info   [ms]
+C1.c1_ms.p99               daemon/voicego            0            0            0  1 <=           15  PASS   [ms]
+C1.c1_ms.p999              daemon/voicego            0            0            0  1                  info   [ms]
+C1.c1_ms.max               daemon/voicego            0            0            0  1                  info   [ms]
+C1.c1_fetches_per_key      daemon/voicego        0.007        0.007        0.007  1                  info   [calls]
+C1.lost                    daemon/voicego          150          150          150  1 <=            0  FAIL  gated on the max over repeats [events]

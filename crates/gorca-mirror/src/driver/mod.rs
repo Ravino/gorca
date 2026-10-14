@@ -577,6 +577,23 @@ impl FillDriver {
                     want,
                 }
             }
+            FillOp::Siblings {
+                parent,
+                node,
+                before,
+                after,
+                want,
+            } => {
+                let before = before.min(l.max_child_range);
+                let after = after.min(l.max_child_range.saturating_sub(before));
+                FillOp::Siblings {
+                    parent,
+                    node,
+                    before,
+                    after,
+                    want,
+                }
+            }
             FillOp::Ancestry {
                 node,
                 max_depth,
@@ -1071,6 +1088,9 @@ impl FillDriver {
         let cap = match op {
             FillOp::Fetch { .. } => 1,
             FillOp::ChildSnapshots { range, .. } => range.end.saturating_sub(range.start) as usize,
+            FillOp::Siblings { before, after, .. } => (*before as usize)
+                .saturating_add(*after as usize)
+                .saturating_add(1),
             FillOp::Ancestry { max_depth, .. } => usize::from(*max_depth) + 1,
             FillOp::Subtree { max_nodes, .. } | FillOp::CacheDump { max_nodes } => {
                 *max_nodes as usize

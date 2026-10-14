@@ -110,6 +110,7 @@ fn reply_for(op: &BackendOp) -> BackendReply {
         BackendOp::Children { .. } => BackendReply::Children(Vec::new()),
         BackendOp::Subtree { .. }
         | BackendOp::ChildSnapshots { .. }
+        | BackendOp::Siblings { .. }
         | BackendOp::Ancestry { .. }
         | BackendOp::CacheDump { .. } => {
             BackendReply::Subtree(gorca_model::SnapshotBatch::default())

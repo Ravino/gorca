@@ -1,0 +1,60 @@
+   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
+   Compiling gorca-speech-ssip v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-speech-ssip)
+   Compiling gorca-speech-voicego v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-speech-voicego)
+   Compiling inotify v0.11.5
+   Compiling zbus v5.19.0
+   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-testkit)
+   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-core)
+   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-dbus)
+   Compiling atspi v0.30.0
+   Compiling gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-connector-atspi)
+   Compiling gorca-input-mutter v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-input-mutter)
+   Compiling gorca-doc-source-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-doc-source-atspi)
+   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-daemon)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 14.90s
+     Running tests/b1_ic.rs (target/debug/deps/b1_ic-db130a3ebd2fa224)
+
+running 1 test
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
+test the_invalidation_suite_passes_with_the_candidate_policy has been running for over 60 seconds
+IC-1: PASS
+IC-2: PASS
+IC-3: PASS
+IC-4: PASS
+IC-5: FAIL cached panel neither marked stale nor re-read after children-changed
+IC-6: PASS
+IC-7: PASS
+IC-8: PASS
+IC-9: PASS
+IC-10: SKIPPED (needs exact timing)
+IC-11: SKIPPED (needs per-direction latency control)
+IC-12: PASS
+IC-13: PASS
+IC-14: PASS
+IC-15: PASS
+IC-16: SKIPPED (needs the malformed-ref mode of the fake app)
+IC-17: PASS
+IC-18: PASS
+IC-19: PASS
+IC-20: PASS
+IC-21: PASS
+IC-22: SKIPPED (the reader never sends CacheDump to the verified Shell: (b) not applicable)
+IC-23: PASS
+IC-23b: SKIPPED (needs the where-am-I command)
+IC against the real daemon: 18 passed, 5 skipped
+
+thread 'the_invalidation_suite_passes_with_the_candidate_policy' (2961954) panicked at crates/gorca-daemon/tests/b1_ic.rs:371:5:
+[
+    "IC-5: cached panel neither marked stale nor re-read after children-changed",
+]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test the_invalidation_suite_passes_with_the_candidate_policy ... FAILED
+
+failures:
+
+failures:
+    the_invalidation_suite_passes_with_the_candidate_policy
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 2 filtered out; finished in 191.03s
+
+error: test failed, to rerun pass `-p gorca-daemon --test b1_ic`

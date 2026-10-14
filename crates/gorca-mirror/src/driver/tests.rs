@@ -475,6 +475,60 @@ fn ops_and_replies_are_clamped_to_the_hard_bounds() {
 }
 
 #[test]
+fn a_siblings_request_is_clamped_and_its_reply_is_cut_to_the_window() {
+    let effects = vec![FillEffect::Request {
+        op: FillOp::Siblings {
+            parent: key(1),
+            node: key(2),
+            before: 5_000,
+            after: 5_000,
+            want: PropMask::PRESENT,
+        },
+        class: BudgetClass::Prefetch,
+    }];
+    let mut r = rig(effects);
+    let f = r.tick(HealthView::Healthy);
+    // At most `max_child_range` entries in all; the span before the node is taken first.
+    assert!(
+        matches!(
+            &f[0].op,
+            FillOp::Siblings {
+                before: 1024,
+                after: 0,
+                ..
+            }
+        ),
+        "{:?}",
+        f[0].op
+    );
+    // A reply longer than the (clamped) window is cut.
+    let nodes: Vec<_> = (0..1_100u64).map(node).collect();
+    r.reply(&f[0], FillReply::Ok(SnapshotBatch::new(nodes)));
+    let cx = DriverCx {
+        now: r.now,
+        health: HealthView::Healthy,
+        mirror: &r.reader,
+        focus: None,
+    };
+    for _ in 0..40 {
+        r.driver.poll_timers(&cx, &mut r.writer);
+    }
+    assert_eq!(r.reader.stats().live, 1_025);
+    // A `Gone` reply tombstones the parent whose child list was asked, not the node.
+    assert_eq!(
+        FillOp::Siblings {
+            parent: key(1),
+            node: key(2),
+            before: 1,
+            after: 1,
+            want: PropMask::PRESENT,
+        }
+        .target(),
+        Some(key(1))
+    );
+}
+
+#[test]
 fn cancel_removes_a_queued_request() {
     let limits = FillLimits {
         max_background: 0,
