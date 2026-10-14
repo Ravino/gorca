@@ -1,0 +1,45 @@
+package gorca:bench@0.1.0;
+
+/// Shapes mirror the hot-path hook candidates for per-engine web quirks (ADR-0008).
+world quirk {
+  enum delta-kind { children-added, children-removed, text-inserted, text-removed, caret-moved, attrs-changed, state-changed, reorder }
+
+  record delta {
+    kind: delta-kind,
+    node: tuple<u64, u64>,
+    parent: tuple<u64, u64>,
+    a: s32,
+    b: s32,
+    %flags: u32,
+    text: option<string>,
+  }
+
+  record node {
+    key: tuple<u64, u64>,
+    role: u8,
+    states: u64,
+    name: option<string>,
+  }
+
+  enum seg-kind { text, role, state, value }
+  record segment { text: string, kind: seg-kind }
+
+  /// Host import: lock-free mirror read (ADR-0001 §10 `get-node`).
+  import get-node: func(key: tuple<u64, u64>) -> option<node>;
+  /// Per-key hook that walks k nodes through the host (e.g. an extension nav-unit filter).
+  export walk: func(start: tuple<u64, u64>, k: u32) -> u32;
+
+  /// Baseline: empty call.
+  export noop: func();
+  /// Full rewrite: deltas in, normalised deltas out (drops removed).
+  export normalize: func(engine: u8, ds: list<delta>) -> list<delta>;
+  /// Patch form: one verdict byte per delta (0 pass, 1 drop, 2 revalidate parent, 3 offsets fixed).
+  export classify: func(engine: u8, ds: list<delta>) -> list<u8>;
+  /// Per-key hook (pass-through verdict / quick-nav filter); typical answer: none.
+  export on-key: func(key: u32, n: node) -> option<bool>;
+  /// Per-key present hook returning speech (worst realistic case).
+  export present: func(n: node) -> option<list<segment>>;
+  /// Fault injection.
+  export trap: func();
+  export spin: func();
+}

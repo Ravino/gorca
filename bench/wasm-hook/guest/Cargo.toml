@@ -1,0 +1,13 @@
+[package]
+name = "quirk-guest"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+quirk-logic = { path = "../logic" }
+wit-bindgen = "0.46"
