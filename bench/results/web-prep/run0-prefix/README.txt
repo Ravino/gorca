@@ -1,0 +1,1 @@
+Development runs made while the harness and source were still being fixed (first-build attribute loss before cache warm-up, resync that lost identity, ablation run on a page left in the route-swapped state). Kept for the record; do not use as results. Superseded by run1.

@@ -1,0 +1,274 @@
+{
+  "page": "virt-vue-recycle",
+  "browser": "chromium",
+  "scenario": "research",
+  "metric": "TBD-WEB-1 state flips, TBD-WEB-2 position attributes, TBD-WEB-3 identity under scroll",
+  "attribute_samples": [
+    {
+      "role": "list",
+      "name": "Items",
+      "attrs": {
+        "text-align": "left",
+        "class": "vue-recycle-scroller ready direction-vertical scroller",
+        "explicit-name": "true",
+        "name-from": "attribute",
+        "setsize": "0",
+        "xml-roles": "list",
+        "tag": "div",
+        "display": "block"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": "Row 0",
+      "attrs": {
+        "text-align": "left",
+        "id": "row-0",
+        "explicit-name": "true",
+        "name-from": "attribute",
+        "posinset": "1",
+        "setsize": "10000",
+        "level": "1",
+        "xml-roles": "listitem",
+        "tag": "div",
+        "display": "block"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": "Row 1",
+      "attrs": {
+        "text-align": "left",
+        "id": "row-1",
+        "explicit-name": "true",
+        "name-from": "attribute",
+        "posinset": "2",
+        "setsize": "10000",
+        "level": "1",
+        "xml-roles": "listitem",
+        "tag": "div",
+        "display": "block"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": "Row 2",
+      "attrs": {
+        "text-align": "left",
+        "id": "row-2",
+        "explicit-name": "true",
+        "name-from": "attribute",
+        "posinset": "3",
+        "setsize": "10000",
+        "level": "1",
+        "xml-roles": "listitem",
+        "tag": "div",
+        "display": "block"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "step": "scrollBy +64 px (2 rows)",
+      "page_info": "scrollBy 64",
+      "rows_before": 19,
+      "rows_after": 21,
+      "rows_retained": 19,
+      "retained_same_path": 19,
+      "retained_path_changed": 0,
+      "retained_id_stable": 19,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 64,
+      "nodes_state_flipped": 12,
+      "showing_or_visible_flipped": 12,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 12
+      },
+      "events": {
+        "children-added": 2
+      },
+      "source_updates": 1,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 70,
+      "fresh_nodes": 70,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["showing", "visible", "enabled"],
+        "after": ["visible", "enabled"]
+      }
+    },
+    {
+      "step": "scrollBy +640 px (20 rows)",
+      "page_info": "scrollBy 640",
+      "rows_before": 21,
+      "rows_after": 26,
+      "rows_retained": 6,
+      "retained_same_path": 6,
+      "retained_path_changed": 0,
+      "retained_id_stable": 6,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 15,
+      "nodes_persisting": 55,
+      "nodes_state_flipped": 5,
+      "showing_or_visible_flipped": 5,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 5
+      },
+      "events": {
+        "children-added": 20,
+        "children-removed": 15,
+        "name-changed": 15
+      },
+      "source_updates": 1,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": false,
+      "mirror_nodes": 85,
+      "fresh_nodes": 85,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["focusable", "showing", "visible", "enabled"],
+        "after": ["focusable", "visible", "enabled"]
+      }
+    },
+    {
+      "step": "scrollTo row 500",
+      "page_info": "scrollTo 500",
+      "rows_before": 26,
+      "rows_after": 52,
+      "rows_retained": 26,
+      "retained_same_path": 26,
+      "retained_path_changed": 0,
+      "retained_id_stable": 17,
+      "retained_id_lost": 9,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 85,
+      "nodes_state_flipped": 39,
+      "showing_or_visible_flipped": 39,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 39
+      },
+      "events": {
+        "children-added": 26
+      },
+      "source_updates": 1,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 163,
+      "fresh_nodes": 163,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["showing", "visible", "enabled"],
+        "after": ["visible", "enabled"]
+      }
+    },
+    {
+      "step": "scrollBy -3200 px (back 100 rows)",
+      "page_info": "scrollBy -3200",
+      "rows_before": 52,
+      "rows_after": 52,
+      "rows_retained": 26,
+      "retained_same_path": 26,
+      "retained_path_changed": 0,
+      "retained_id_stable": 26,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 26,
+      "nodes_persisting": 137,
+      "nodes_state_flipped": 0,
+      "showing_or_visible_flipped": 0,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+      },
+      "events": {
+        "children-added": 26,
+        "children-removed": 26,
+        "name-changed": 26
+      },
+      "source_updates": 1,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 163,
+      "fresh_nodes": 163,
+      "example_state_flip": null
+    },
+    {
+      "step": "scrollTo row 5000 (jump)",
+      "page_info": "scrollTo 5000",
+      "rows_before": 52,
+      "rows_after": 52,
+      "rows_retained": 26,
+      "retained_same_path": 26,
+      "retained_path_changed": 0,
+      "retained_id_stable": 26,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 26,
+      "nodes_persisting": 137,
+      "nodes_state_flipped": 0,
+      "showing_or_visible_flipped": 0,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+      },
+      "events": {
+        "children-added": 26,
+        "children-removed": 26,
+        "name-changed": 26
+      },
+      "source_updates": 1,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 163,
+      "fresh_nodes": 163,
+      "example_state_flip": null
+    },
+    {
+      "step": "scrollTo row 0 (jump back)",
+      "page_info": "scrollTo 0",
+      "rows_before": 52,
+      "rows_after": 52,
+      "rows_retained": 37,
+      "retained_same_path": 37,
+      "retained_path_changed": 0,
+      "retained_id_stable": 37,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 15,
+      "nodes_persisting": 148,
+      "nodes_state_flipped": 34,
+      "showing_or_visible_flipped": 34,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 34
+      },
+      "events": {
+        "children-added": 15,
+        "children-removed": 15,
+        "name-changed": 15
+      },
+      "source_updates": 1,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": false,
+      "mirror_nodes": 163,
+      "fresh_nodes": 163,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["visible", "enabled"],
+        "after": ["showing", "visible", "enabled"]
+      }
+    }
+  ]
+}

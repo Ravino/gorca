@@ -449,6 +449,14 @@ W = owns, w = small additive edits. Conflict rules:
 (web-a11y-engineer); B-6 harness and AGP arm skeleton; TBD-WEB-1/2/3 research. None of this touches
 `gorca-core` until M7.
 
+**Status 2026-10-14 (web-a11y-engineer, `docs/reports/2026-10-14-web-prep.md`).** Done: `AtspiDocSource` in
+`crates/gorca-doc-source-atspi` (block fetch 100k nodes 1.54 s, 10k 148 ms; progressive first block 10.7 ms / 80 ms; events to deltas;
+identity variant C; `Revalidate`; deadlines everywhere; 45 tests against a fake peer, ingestion into `gorca_doc::DocumentMirror` checked);
+B-6 harness skeleton `crates/gorca-bench-web` + `tests/web/b6` (arm (a) complete, arm (b) skeleton); TBD-WEB-1/2/3 closed in ADR-0003 §20.1.
+Open for M7: wire the source in the daemon and warm the Firefox cache domains at application attach; doc-actor ownership of the dirty set
+(report D1); mirror-side removal grace (IL-R4); fallback walk for nodes over 65,536 children; event-storm rate sweep; coverage matrix run;
+arm (b) (AGP) itself.
+
 ## 8. Questions for the user
 
 | # | Question | Options | Recommendation |

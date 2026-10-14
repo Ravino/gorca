@@ -1,0 +1,1 @@
+Superseded by run3. Made with the code before two fixes: settle waited at most 120 ms for a move in progress (Firefox delivers a 2000-row DOM move over >100 ms, so a refresh in the middle saw the rows as gone and then as new and lost their logical ids), and (run1 only) resync/progressive build. Kept for the record.

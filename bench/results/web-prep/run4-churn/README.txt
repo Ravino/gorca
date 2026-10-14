@@ -1,0 +1,1 @@
+Churn scenarios with the final identity code (IL-R6 stale ids, gap rule, storm-aware settle, resync keeps ids). Firefox: spa-list-200, spa-list-2000, large10k, with and without DOM ids. Chromium: spa-list-200 (the rewrite-in-place step has no valid ground truth in Chromium, see the report).

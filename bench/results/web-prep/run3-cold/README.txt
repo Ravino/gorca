@@ -1,0 +1,1 @@
+Cold first block (fresh connection, cache domains not active), prewarm (domains activated on another document first), default-matrix build with 10 runs, and two churn runs that export the initial build detail. Same binary family as run3; one sample per launch for the cold and prewarm numbers.
