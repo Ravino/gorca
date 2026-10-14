@@ -277,7 +277,18 @@ impl Reader {
                     // Every cache-served presentation may be refined by RV-1 (ADR-0001 8.1).
                     u.may_refine = true;
                 }
-                self.log_presentation(&u, snap, source, None);
+                // The context asserts `selected`, which the spoken text omits, so the log must
+                // not carry a cached snapshot from before the event.
+                let logged = if ctx == PresentContext::SelectedItem
+                    && !snap.states.contains(StateSet::SELECTED)
+                {
+                    let mut c = (**snap).clone();
+                    c.states |= StateSet::SELECTED;
+                    Arc::new(c)
+                } else {
+                    Arc::clone(snap)
+                };
+                self.log_presentation(&u, &logged, source, None);
                 self.presented = Some(Presented {
                     node: snap.key,
                     snap: Arc::clone(snap),

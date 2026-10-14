@@ -396,6 +396,17 @@ fn where_am_i_uses_the_mirror_and_repeats_escalate() {
     f.reader.handle(ReaderMsg::Timer, f.now);
     let fx = f.run(CoreCmd::InfoWhereAmI, 1);
     assert_eq!(spoken(&fx), ["Files, Downloads window, Save button"]);
+    assert!(
+        fx.iter().any(|e| matches!(
+            e,
+            ReaderEffect::Demand {
+                why: gorca_mirror::fill::DemandWhy::WhereAmI,
+                outcome: gorca_mirror::fill::DemandOutcome::Hit,
+                ..
+            }
+        )),
+        "{fx:?}"
+    );
     assert_eq!(spoken(&f.run(CoreCmd::InfoWhereAmI, 3)), ["S a v e"]);
     assert_eq!(spoken(&f.run(CoreCmd::InfoWindowTitle, 1)), ["Downloads"]);
     assert_eq!(
@@ -423,10 +434,17 @@ fn where_am_i_on_a_miss_fetches_once_and_answers_on_the_reply() {
     assert!(
         matches!(
             fx.as_slice(),
-            [ReaderEffect::Fetch {
-                class: gorca_rt::BudgetClass::Interactive,
-                ..
-            }]
+            [
+                ReaderEffect::Demand {
+                    why: gorca_mirror::fill::DemandWhy::WhereAmI,
+                    outcome: gorca_mirror::fill::DemandOutcome::Miss,
+                    ..
+                },
+                ReaderEffect::Fetch {
+                    class: gorca_rt::BudgetClass::Interactive,
+                    ..
+                }
+            ]
         ),
         "{fx:?}"
     );

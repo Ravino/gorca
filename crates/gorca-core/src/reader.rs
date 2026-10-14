@@ -1587,4 +1587,48 @@ mod tests {
         assert_eq!(lines[1]["refines"], lines[0]["utt_id"]);
         assert_eq!(lines[1]["role"], "check_box");
     }
+
+    /// A switcher item presented as `SelectedItem` is logged with `selected` even when the
+    /// cached snapshot predates the event (the spoken text omits it).
+    #[test]
+    fn a_selected_item_is_logged_with_selected_set() {
+        use crate::present::{NoLabels, PresentLog};
+        use std::io::Write;
+        use std::sync::Mutex;
+
+        #[derive(Clone, Default)]
+        struct Sink(Arc<Mutex<Vec<u8>>>);
+        impl Write for Sink {
+            fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(b);
+                Ok(b.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let sink = Sink::default();
+        let log = PresentLog::new(sink.clone(), Arc::new(NoLabels)).unwrap();
+        let mut f = fixture();
+        f.reader = f.reader.with_present_log(Arc::clone(&log));
+        f.writer.apply(
+            SnapshotBatch::new(vec![with_name(1, "Window 1", StateSet::empty())]),
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node: key(1) }),
+            Instant::now(),
+        );
+        f.reader = Reader::new(
+            Arc::clone(&f.epoch),
+            Arc::new(MirrorDirectory::new()),
+            ModeKeys::default(),
+        );
+        drop(log);
+        let text = String::from_utf8(sink.0.lock().unwrap().clone()).unwrap();
+        let first: serde_json::Value = serde_json::from_str(text.lines().nth(1).unwrap()).unwrap();
+        assert_eq!(first["name"], "Window 1", "{text}");
+        let states = first["states"].as_array().unwrap();
+        assert!(states.iter().any(|s| s == "selected"), "{text}");
+    }
 }
