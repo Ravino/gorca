@@ -703,6 +703,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "gorca-bench-web"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "gorca-dbus",
+ "gorca-doc-source-api",
+ "gorca-doc-source-atspi",
+ "gorca-model",
+ "gorca-rt",
+ "smallvec",
+ "tokio",
+ "zbus",
+]
+
+[[package]]
 name = "gorca-braille-brlapi"
 version = "0.0.0"
 dependencies = [
@@ -839,6 +854,25 @@ dependencies = [
  "gorca-rt",
  "smallvec",
  "thiserror",
+]
+
+[[package]]
+name = "gorca-doc-source-atspi"
+version = "0.0.0"
+dependencies = [
+ "bitflags",
+ "futures-lite",
+ "gorca-dbus",
+ "gorca-doc",
+ "gorca-doc-source-api",
+ "gorca-model",
+ "gorca-rt",
+ "serde",
+ "smallvec",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "zbus",
 ]
 
 [[package]]

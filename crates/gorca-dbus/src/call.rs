@@ -39,8 +39,34 @@ pub async fn call_method<B>(
 where
     B: serde::Serialize + DynamicType,
 {
+    call_method_to(
+        conn,
+        deadline,
+        Some(destination),
+        path,
+        interface,
+        member,
+        body,
+    )
+    .await
+}
+
+/// Like [`call_method`] but the destination may be absent, which is the case on a peer-to-peer
+/// connection (the peer has no bus name, ADR-0001 D-7).
+pub async fn call_method_to<B>(
+    conn: &zbus::Connection,
+    deadline: Deadline,
+    destination: Option<&str>,
+    path: &str,
+    interface: &str,
+    member: &str,
+    body: &B,
+) -> Result<zbus::Message, DbusError>
+where
+    B: serde::Serialize + DynamicType,
+{
     #[allow(clippy::disallowed_methods)]
-    let call = conn.call_method(Some(destination), path, Some(interface), member, body);
+    let call = conn.call_method(destination, path, Some(interface), member, body);
     with_deadline(deadline, call).await
 }
 

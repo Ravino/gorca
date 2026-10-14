@@ -4,8 +4,8 @@
 //!
 //! 1. Neutral crates must not depend, even transitively, on `atspi*`, `zbus*`, `accesskit*`,
 //!    `wayland-*`, `wasmtime*` or `reis`/libei bindings.
-//! 2. Only `gorca-dbus`, `gorca-connector-atspi`, `gorca-input-mutter`, `gorca-input-inject` and
-//!    `gorca-daemon` may depend on `zbus`. Only `gorca-connector-atspi` may depend on `atspi*`.
+//! 2. Only `gorca-dbus`, `gorca-connector-atspi`, `gorca-doc-source-atspi`, `gorca-input-mutter`,
+//!    `gorca-input-inject`, `gorca-daemon` and the B-6 harness `gorca-bench-web` may depend on `zbus`. Only `gorca-connector-atspi` may depend on `atspi*`.
 //! 3. `gorca-core` must not depend on any `gorca-connector-*`, `gorca-speech-*`, `gorca-input-*`
 //!    (except `-api`) or `gorca-ext-host`. Only `gorca-daemon` wires concrete implementations.
 //! 4. `gorca-model` and `gorca-doc` must not depend on `tokio`.
@@ -38,6 +38,11 @@ const MAY_USE_ZBUS: &[&str] = &[
     "gorca-input-mutter",
     "gorca-input-inject",
     "gorca-daemon",
+    // Web document source over P2P (ADR-0003 section 6.2). It talks raw D-Bus to the browser's
+    // own P2P socket and never links the `atspi` crate.
+    "gorca-doc-source-atspi",
+    // B-6 harness: hosts the AT-SPI arm and a bus listener, test-only.
+    "gorca-bench-web",
     // B-1 harness fake application (tests/harness/b1/fakeapp): serves the AT-SPI interfaces.
     "b1-fakeapp",
 ];
@@ -147,6 +152,7 @@ fn core_forbidden(name: &str) -> bool {
         || name.starts_with("gorca-speech-")
         || (name.starts_with("gorca-input-") && name != "gorca-input-api")
         || name == "gorca-ext-host"
+        || (name.starts_with("gorca-doc-source-") && name != "gorca-doc-source-api")
 }
 
 /// Evaluate every rule. An empty result means the graph is clean.
