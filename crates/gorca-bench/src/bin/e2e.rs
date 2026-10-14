@@ -203,6 +203,8 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "lost_after_switch"
                     | "untagged_warm"
                     | "e2_missing"
+                    | "e2f_missing"
+                    | "e2f_double"
                     | "e2_double"
                     | "e2_keyname"
                     | "e2_wrong"

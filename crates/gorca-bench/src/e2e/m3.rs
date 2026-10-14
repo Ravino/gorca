@@ -16,6 +16,7 @@
 //! | C2 | Ctrl+Right held at 30 Hz for 3 s, slow speech | `stale_not_cancelled` (gate 0), `lost` (the last position is always spoken) |
 //! | E1 | printable keys | `e1_ms` key emit to SPEAK (gate p99 3 ms), `lost` |
 //! | E2 | randomised typing session (Latin, Cyrillic, BackSpace, paste, input-method commit) | `e2_missing`, `e2_double`, `e2_keyname`, `e2_wrong` (all gate 0) |
+//! | E2f | the first typed key after the focus reached an entry, 0-300 ms after the focus speech | `e2f_missing`, `e2f_double` (gate 0) |
 //! | S2 | Shift+Right (selection delta, one fetch) | `s2_ms` (gate p99 15 ms), `lost` |
 //! | SA1 | `text.say_all` chord | `sa1_ms` key emit to first SPEAK (gate p99 15 ms) |
 //! | SA2 | say-all over 100 KB | `sa2_ahead_ratio` (gate 0.99: the next chunk reaches the server within 5 ms of the previous END), `sa2_gap_ms` |
@@ -150,6 +151,11 @@ fn setup(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor, utter_ms: u64) -> 
 /// Move the focus to `node` and wait until the reader speaks for it and has had time to fetch
 /// the text window (the focus event is only emitted when focus really moves).
 fn focus_node(s: &mut Setup, node: usize) -> Result<()> {
+    focus_node_settled(s, node, 300)
+}
+
+/// [`focus_node`] with a chosen settle time after the first focus speech (0 = type at once).
+fn focus_node_settled(s: &mut Setup, node: usize, settle_ms: u64) -> Result<()> {
     let other = if node == NAME { NOTES } else { NAME };
     let end = Instant::now() + Duration::from_secs(10);
     loop {
@@ -170,7 +176,7 @@ fn focus_node(s: &mut Setup, node: usize) -> Result<()> {
             break;
         }
     }
-    std::thread::sleep(Duration::from_millis(300));
+    std::thread::sleep(Duration::from_millis(settle_ms));
     Ok(())
 }
 
@@ -693,6 +699,10 @@ pub fn e2(
                 t_key: t,
                 expect: w.to_owned(),
             });
+            // The paste echo is built from the insert and its read-back, so it lands about one key gap
+            // after the key. A newer key inside that gap makes it stale (E-2), which is right and
+            // not a missing echo (ADR-0007 TI-3): pace like a person after a paste, as after a commit.
+            pause(&mut rng, 60, 80);
         } else {
             // An input-method commit: text arrives with no key. Spaced out like a person
             // composing: the reader speaks unexplained inserts at most every 250 ms (EV-5).
@@ -765,6 +775,68 @@ pub fn e2(
     out.x("e2_wrong", wrong as f64, "events");
     out.notes
         .push(format!("E2: {n} actions, {} speeches heard", spoken.len()));
+    Ok(())
+}
+
+/// E2f: the first key typed after the focus reached an entry is echoed, whatever the time since
+/// the focus speech (0, 10, 30, 100, 300 ms): text tracking arms only after the focus
+/// presentation, and the generic key echo covers the gap, without a double (ADR-0007 TI-3). Gates 0.
+pub fn e2f(
+    host: &HostEnv,
+    reader: &ReaderSpec,
+    flavor: Flavor,
+    size: Size,
+    seed: u64,
+    out: &mut RunOut,
+) -> Result<()> {
+    if !gate_open(host, "E2f", out)? {
+        return Ok(());
+    }
+    let mut s = setup(host, reader, flavor, 1)?;
+    load_text(&mut s, NAME, "", 0)?;
+    let settles = [0u64, 10, 30, 100, 300];
+    let trials = (n_of(size, 400) / settles.len()).max(1);
+    let mut rng = Rng::new(seed);
+    let mut missing = [0u64; 5];
+    let mut doubled = 0u64;
+    let mut notes: Vec<String> = Vec::new();
+    for _ in 0..trials {
+        for (si, settle) in settles.iter().enumerate() {
+            focus_node_settled(&mut s, NAME, *settle)?;
+            let c = char::from(b'a' + rng.below(26) as u8);
+            let mark = s.rig.mock.mark();
+            tap(&mut s.rig, &mut s.ty, letter_key(c), c as u32, 0)?;
+            app_ev(
+                &mut s.app,
+                "type",
+                &format!("\"node\":{NAME},\"text\":\"{c}\""),
+            )?;
+            std::thread::sleep(Duration::from_millis(150));
+            let heard = texts(&s.rig.mock.since(mark));
+            let times = heard.iter().filter(|(_, t)| *t == c.to_string()).count();
+            if times > 1 {
+                doubled += 1;
+            }
+            if times == 0 {
+                missing[si] += 1;
+                if notes.len() < 8 {
+                    notes.push(format!(
+                        "E2f: key {c:?} {settle} ms after the focus speech, heard {:?}",
+                        heard.iter().map(|(_, t)| t.as_str()).collect::<Vec<_>>()
+                    ));
+                }
+            }
+        }
+    }
+    out.notes.extend(notes);
+    for (si, settle) in settles.iter().enumerate() {
+        out.notes.push(format!(
+            "E2f: {} of {trials} first keys missed at {settle} ms",
+            missing[si]
+        ));
+    }
+    out.x("e2f_missing", missing.iter().sum::<u64>() as f64, "events");
+    out.x("e2f_double", doubled as f64, "events");
     Ok(())
 }
 

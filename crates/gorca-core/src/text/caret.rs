@@ -298,6 +298,8 @@ struct HeldIns {
     at: Instant,
     /// Not spoken before this: [`HOLD`] after `at`, or the end of the flood gap (EV-5).
     not_before: Instant,
+    /// The epoch of the speech that spoke it (`flushed_ins` only): a later key makes it stale.
+    spoken_epoch: Epoch,
 }
 
 impl HeldIns {
@@ -810,7 +812,7 @@ impl CaretState {
                 t.held = None;
                 if t.kind.multiline || !is_line_key(ch) {
                     // The insert may already be here, ahead of its key.
-                    let claimed = claim_held_insert(&mut t, ch, cx);
+                    let claimed = claim_held_insert(&mut t, ch, epoch, cx);
                     if t.kind.editable {
                         echo_typed(&mut t, ch, epoch, claimed, cx);
                     } else if claimed == Claim::No {
@@ -1711,6 +1713,7 @@ fn insert(
                         more,
                         at: cx.now,
                         not_before,
+                        spoken_epoch: cx.epoch_now,
                     });
                     return;
                 }
@@ -1761,7 +1764,11 @@ fn flush_held_insert(t: &mut Tracked, cx: &mut Ctx<'_>) {
     if let Some(h) = t.held_ins.take() {
         let ep = (cx.epoch_now, Prio::Text);
         if speak_inserted(t, &h.text, h.more, InsertSource::Unknown, false, ep, cx) {
-            t.flushed_ins = Some(HeldIns { at: cx.now, ..h });
+            t.flushed_ins = Some(HeldIns {
+                at: cx.now,
+                spoken_epoch: ep.0,
+                ..h
+            });
         }
     }
 }
@@ -1815,11 +1822,15 @@ enum Claim {
     Held,
     /// The insert was spoken as unexplained text a moment ago: the key stays silent.
     AlreadySpoken,
+    /// The insert was spoken as unexplained text, but before this key: the key's epoch made that
+    /// speech stale (E-2), so it is cancelled or dropped. The key echoes itself; its insert
+    /// has come, so nothing more is expected.
+    Superseded,
 }
 
 /// A typed key whose character is the (start of the) held insert claims it; one whose
 /// character was just spoken as an unexplained insert finds it already spoken.
-fn claim_held_insert(t: &mut Tracked, ch: char, cx: &mut Ctx<'_>) -> Claim {
+fn claim_held_insert(t: &mut Tracked, ch: char, key_epoch: Epoch, cx: &mut Ctx<'_>) -> Claim {
     let (claim, offset) = if let Some(h) = t.held_ins.as_mut()
         && h.text.starts_with(ch)
     {
@@ -1835,12 +1846,19 @@ fn claim_held_insert(t: &mut Tracked, ch: char, cx: &mut Ctx<'_>) -> Claim {
         && f.text.starts_with(ch)
     {
         let offset = f.offset;
+        // The insert beat its key (the buses are not ordered). Its speech belongs to an older
+        // epoch than the key's, so the key silences or drops it: the key must echo itself.
+        let claim = if f.spoken_epoch >= key_epoch {
+            Claim::AlreadySpoken
+        } else {
+            Claim::Superseded
+        };
         f.text = f.text.chars().skip(1).collect();
         f.offset += 1;
         if f.text.is_empty() {
             t.flushed_ins = None;
         }
-        (Claim::AlreadySpoken, offset)
+        (claim, offset)
     } else {
         return Claim::No;
     };

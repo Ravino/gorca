@@ -16,6 +16,11 @@ app_actor.rs}`, `crates/gorca-model/src/text.rs`, `crates/gorca-ingress/src/tabl
 ## 0. Changelog
 
 - 2026-10-14: first version, Accepted.
+- 2026-10-14: TI-3 clarified (`docs/reports/m3-e2-flake.md`): an echo made stale by a newer key before it is sent
+  (E-2, newest wins) is not "missing"; E2 counts only echoes lost in some other way.
+  A typed key that trails its insert finds that insert spoken in an older epoch than its own; that speech is
+  cancelled by the key, so the key echoes itself (`Claim::Superseded`) instead of staying silent.
+  The lane counts every stale drop, including those the state machine makes after `submit`.
 - 2026-10-14: M3 review fixes (`docs/reports/m3-review.md`, probes in `bench/results/e2e/m3-review/probes/`):
   - H1/H2 say-all: the speech lane has an explicit queued-utterance kind (`SpeechHandle::submit_say_all`).
     The first chunk is submitted normally (it replaces older speech); the following chunks queue behind it
@@ -603,6 +608,8 @@ Settings (`gorca-config`, schema version bump):
 - **TI-2** Every text fetch has a deadline and a class; none is `Startup`.
 - **TI-3** A typed character is spoken at most once per key press and at least once unless the user
   turned echo off (E2).
+  An echo that a newer key made stale before it was sent (E-2: the epoch moved between the key and
+  the send, in the lane or on a dropped fetch reply) is not "missing": the newer key's echo replaces it.
 - **TI-4** No SECRET text reaches a log, a file, the clipboard or the perception layer (PW-2…PW-4).
 - **TI-5** All state machines here (`CaretState`, `SayAll`) are enums with exhaustive `match` and pure
   `step` functions.

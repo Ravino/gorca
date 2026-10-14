@@ -1,0 +1,69 @@
+== reader /tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/f/gorca-fix built from 9d44caa, tree at 9d44caa
+== e2e m3-fin-hog-e2-fix-2: reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/f/gorca-fix backend=voicego repeats=2 load=20.08 20.43 16.67 13/2546 3117236
+-- round 1/2 E2 (load 20.08 20.43 16.67 13/2546 3117236)
+2026-10-14T13:29:09.077953Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T13:29:09.079861Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T13:29:09.080751Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T13:29:09.083643Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T13:30:08.078755Z  INFO gorca_daemon::input: input lane statistics keys=3958 ambiguous=0 band_forks=0
+2026-10-14T13:31:08.079064Z  INFO gorca_daemon::input: input lane statistics keys=7858 ambiguous=0 band_forks=0
+2026-10-14T13:32:08.078926Z  INFO gorca_daemon::input: input lane statistics keys=11874 ambiguous=0 band_forks=0
+2026-10-14T13:33:08.079037Z  INFO gorca_daemon::input: input lane statistics keys=15830 ambiguous=0 band_forks=0
+2026-10-14T13:34:08.079262Z  INFO gorca_daemon::input: input lane statistics keys=19652 ambiguous=0 band_forks=0
+2026-10-14T13:34:20.570422Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T13:34:20.570571Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 2, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 10000, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 7989, keys_seen: 9959, keys_typed: 7989, inserted_spoken: 289, insert_held_claimed: 60, inserts_coalesced: 0, delete_held_claimed: 12, erased_spoken: 1722, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-14T13:34:20.571628Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 2, focus_requests: 37, fetch_ok: 64, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 31, utterances: 10033, reader_restarts: 0 }
+2026-10-14T13:34:20.571681Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 10033, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-14T13:34:20.571714Z  INFO gorca_daemon: gorca stopped
+-- round 2/2 E2 (load 19.12 19.99 17.56 14/2746 3123348)
+2026-10-14T13:34:20.924431Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T13:34:20.926631Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T13:34:20.927255Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T13:34:20.929675Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T13:35:19.926155Z  INFO gorca_daemon::input: input lane statistics keys=3616 ambiguous=0 band_forks=0
+2026-10-14T13:36:19.926109Z  INFO gorca_daemon::input: input lane statistics keys=7358 ambiguous=0 band_forks=0
+2026-10-14T13:37:19.926008Z  INFO gorca_daemon::input: input lane statistics keys=11332 ambiguous=0 band_forks=0
+2026-10-14T13:38:19.925971Z  INFO gorca_daemon::input: input lane statistics keys=15196 ambiguous=0 band_forks=0
+2026-10-14T13:39:19.926035Z  INFO gorca_daemon::input: input lane statistics keys=19182 ambiguous=0 band_forks=0
+2026-10-14T13:39:38.769632Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T13:39:38.770281Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 2, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 10000, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 7945, keys_seen: 9951, keys_typed: 7945, inserted_spoken: 303, insert_held_claimed: 91, inserts_coalesced: 0, delete_held_claimed: 17, erased_spoken: 1752, text_flood_coalesced: 1, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-14T13:39:38.771913Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 2, focus_requests: 41, fetch_ok: 64, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 31, utterances: 10033, reader_restarts: 0 }
+2026-10-14T13:39:38.771923Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 10033, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-14T13:39:38.771948Z  INFO gorca_daemon: gorca stopped
+# e2e m3-fin-hog-e2-fix-2
+# utc=2026-10-14T13:39:39Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=22.01 21.82 19.15 15/2764 3130093
+# git_rev=9d44caa
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m3-fin-hog-e2-fix-2
+# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/f/gorca-fix
+# backend=voicego
+# repeats=2
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=22.01 21.82 19.15 19/2764 3130090
+# reader_env=GORCA_M3=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=E2 sent 7989 typed keys (1722 BackSpace, 248 paste, 41 keyless commits)
+# note1=E2: 10000 actions, 10000 speeches heard
+# note2=E2 action #5007: wanted "x", key to next key 29.9 ms, heard [+9.2ms "x", +11.6ms "x", +30.6ms "p"]
+# note3=E2 action #9739: wanted "gamma", key to next key 90.5 ms, heard [+91.5ms "pasted words"]
+# note4=E2 sent 7945 typed keys (1752 BackSpace, 254 paste, 49 keyless commits)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+E2.e2_double               daemon/voicego        0.500            0            1  2 <=            0  FAIL  gated on the max over repeats [events]
+E2.e2_keyname              daemon/voicego            0            0            0  2 <=            0  PASS  gated on the max over repeats [events]
+E2.e2_missing              daemon/voicego        0.500            0            1  2 <=            0  FAIL  gated on the max over repeats [events]
+E2.e2_wrong                daemon/voicego            0            0            0  2 <=            0  PASS  gated on the max over repeats [events]
+
+== wrote bench/results/e2e/m3-fin-hog-e2-fix-2/20261014T133939Z.{json,txt}
+== 2 gate(s) FAILED
