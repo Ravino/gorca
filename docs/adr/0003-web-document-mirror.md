@@ -17,6 +17,7 @@
 |---|---|
 | 2026-10-12 | Draft (Proposed). |
 | 2026-10-12 | **Accepted with amendment.** All §20.2 items approved. Item 4 amended: no fixed cap on mirrors (N mirrors = M tabs, iframes inside their tab's mirror); only the active tab's mirror is awake, the others are dormant and do cheap invalidation marking only; wake = cursor revalidation, dirty-set re-fetch, block-wise drift check, or rebuild-as-resync that keeps logical ids when stale; mirrors are evicted only on tab close. The "8 dormant mirrors per browser" LRU limit is removed. New §6.6, `Waking` state, DM-I5…I8, DM-M1…M3, wake budgets (§14), WM-12/13/14/15. |
+| 2026-10-14 | **M7 amendments** (architect; `docs/design/browse-mode.md`, ADR-0007): §21 AM-1…AM-13. D1 decided: the source owns the dirty set, settle and refetch planning, the doc actor applies and publishes. `DocNodeId` moves to `gorca-model` (generational). Events reach the source through the core (`DocSourceCtx.events`), joins travel in `SrcNode.local`. TX-1 runs move into `gorca-doc-source-atspi`. Flat-text break and marker rules, warm-up at attach, `silent_reorders`, `WebMode` cursor ownership. |
 | 2026-10-14 | **Web prep amendments** (web-a11y-engineer; report `docs/reports/2026-10-14-web-prep.md`, results `bench/results/web-prep/run3/`). `AtspiDocSource` is implemented in its own crate `gorca-doc-source-atspi` (§3). §6.2: AS-3 verified and specified, AS-6 to AS-10 added (progressive build, push mode, settle, block sizes, role and state tiers). §5.1: IL-1 signature check defined, IL-3b restricted to anchor gaps, IL-R5 and IL-R6 added. TBD-WEB-1, 2 and 3 closed (§20.1). No decision of §20.2 changes. |
 
 ## 1. Context
@@ -72,7 +73,7 @@ Prior art. NVDA builds its virtual buffer **inside** the browser process and ans
 | `gorca-model` | `DocNodeId` (generational), `DocDelta`, `SrcNode` (+ `tag`, `dom_id`, `level`, `live` fields), `Category` bit assignments, `Politeness`, `BurstClass` | I/O, tokio |
 | `gorca-doc-source-api` | `DocSource` (= decision W's `DocumentSource`), `SourceCaps`, `DocRequest` (+ `Revalidate`, `Matches`), `JoinPort`, source conformance traits | depend on any connector |
 | `gorca-doc` (pure data; no tokio, no I/O; `rayon`, `left-right`, `smallvec`, `xxhash-rust`, `unicode-segmentation` allowed) | modules: `arena` (nodes, typed edges, reverse relation index), `navindex` (treap, `Summary` trait, categories), `flattext` (text dimensions, line map), `tables` (grids), `dirty` (dirty set, virtual tree, re-fetch cover DP, budgeted planner), `diff` (LIS keyed child diff), `matcher` (identity ladder, GumTree-style matcher, burst classifier), `bookmark` (restore), `live` (classifier, dedupe ring, token buckets with an injected clock), `publish` (left-right wrapper, `DocRead`) | tokio, zbus, atspi |
-| `gorca-doc-source-atspi` (**amended 2026-10-14**: was planned inside the connector) | `AtspiDocSource`: per-app P2P pool (4 connections) shared by that app's doc actors, windowed pipelining, `GetTree` detection and fallback, cache-domain warming, event → `DocDelta` normalisation (§9.1), identity ladder (§5), progressive build. Talks raw D-Bus (zbus) to the browser's own socket; never links `atspi` or libatspi (the browser would answer `GetApplicationBusAddress` with an empty string) | presentation policy, text-run synthesis TX-1 and caret offset mapping (those stay with the connector) |
+| `gorca-doc-source-atspi` (**amended 2026-10-14**: was planned inside the connector) | `AtspiDocSource`: per-app P2P pool (4 connections) shared by that app's doc actors, windowed pipelining, `GetTree` detection and fallback, cache-domain warming, event → `DocDelta` normalisation (§9.1), identity ladder (§5), progressive build. Talks raw D-Bus (zbus) to the browser's own socket; never links `atspi` or libatspi (the browser would answer `GetApplicationBusAddress` with an empty string) | presentation policy; caret offset mapping (ADR-0007 TQ-1). *Amended §21 AM-5: TX-1 run synthesis now lives here.* |
 | `gorca-connector-atspi` | focus, caret, selection, actions on the AT-SPI side (SL-5); its Phase-0 `AtspiDocSource` stub is replaced when the daemon wires `gorca-doc-source-atspi` | presentation policy |
 | `gorca-doc-source-agp-firefox` (B-6 arm b; not scaffolded before) | AGP client: Unix-socket framing, columnar snapshot decode, sequenced batches, gap detection, lockstep aligner (§6.4) | zbus, atspi (it joins through `JoinPort` only) |
 | `browser/firefox-agp/` (JS, B-6 arm b) | bootstrap script, `JSWindowActor` child, `accessible-event` observer with subtree dominance | — |
@@ -88,7 +89,7 @@ Dependency rules 1–7 of ADR-0001 apply with one amendment (2026-10-14, enforce
 ```rust
 // gorca-model
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub struct DocNodeId { slot: u32, gen: u32 }        // logical node; generation bumps on slot reuse (I-1)
+pub struct DocNodeId { slot: u32, gen: u32 }        // logical node; generation bumps on slot reuse (I-1); single type, §21 AM-2
 
 // gorca-doc::arena
 pub struct DocNode {
@@ -144,7 +145,7 @@ pub struct DocNode {
 
 The two browsers expose text differently: Chromium has text leaves (`static`) as children, Firefox has none and keeps text in the parent's hypertext with one U+FFFC per embedded child (WEB §1.2, §2.2). The mirror has **one** canonical shape: **text leaves as nodes**.
 
-- **TX-1** `AtspiDocSource` for Firefox splits each hypertext container's text at U+FFFC into synthetic **run leaves** (`Role::TextRun`, `atspi: None`, keyed by `(parent, run index)`). The run table (offsets of each U+FFFC) is kept per container to map Firefox `TextChanged` and caret offsets (UTF-16 + phantom U+FEFF, ADR-0001 TU-2) to `(run leaf, scalar offset)`.
+- **TX-1** (*placement and run-table use amended, §21 AM-5*) `AtspiDocSource` for Firefox splits each hypertext container's text at U+FFFC into synthetic **run leaves** (`Role::TextRun`, `atspi: None`, keyed by `(parent, run index)`). The run table (offsets of each U+FFFC) is kept per container to map Firefox `TextChanged` and caret offsets (UTF-16 + phantom U+FEFF, ADR-0001 TU-2) to `(run leaf, scalar offset)`.
 - **TX-2** For Chromium, a container's own hypertext is not stored; its static children carry the text. Caret offsets on a container are mapped by walking its children: a static child contributes its length, any other child one U+FFFC. The U+FFFC-to-child invariant does not hold in Chromium (72 of 300 nodes, WEB §2.2), so the mapping never counts U+FFFC in the parent string.
 - **TX-3** AGP-Firefox delivers real Gecko text leaves, which match TX-1's runs one to one; this makes lockstep alignment (§6.4) direct.
 - **TX-4** Every node in preorder is an element of the treap; the flat text is the concatenation of leaf texts with block separators. Offsets are scalars (ADR-0001 TU-1).
@@ -272,6 +273,7 @@ pub struct SourceCaps {
     pub actions: ActionCaps,
     pub join_keys: JoinKeyCaps,
     pub trust: Trust,                 // Authoritative | Advisory, per field group (§6.4)
+    pub silent_reorders: bool,        // §21 AM-7: Chromium true; drives IL-R1 on read
 }
 pub enum DocRequest {                 // ADR-0001 variants, plus:
     Revalidate { parent: SrcNodeId, deadline: Instant, reply: Reply<SmallVec<[SrcNodeId; 16]>> },
@@ -292,7 +294,7 @@ SL-1…SL-5 of ADR-0001 apply. In particular SL-5: focus and caret always come f
 - **AS-5 Per-call server-time bound.** The source tracks a per-app EWMA of server time per node (`β`) and per request (`α`), measured as reply latency minus queueing, and exports them to the planner (§9.4).
 
 - **AS-6 Progressive build (viewport first, §8).** The top of the document is expanded with `GetChildren` (interior nodes and their complete child lists), then leading subtrees are fetched until at least 400 nodes are complete (roles and states included), and that block is pushed with `Reset`. The rest follows as a second block with no `Reset`. A `Children` list may name ids whose `Upsert` is still to come (an unfetched node). Measured on Firefox with the domains active: first block 10.7 ms (10k-node page) and 80 ms (100k), against budgets of 150 and 300 ms; cold, add the AS-3 activation time.
-- **AS-7 Push mode and pull mode.** The source runs the loop *events → dirty set → settle → refetch what changed → deltas* itself, and also answers the doc actor's pull requests (`Subtree`, `Text`, `Action`, `Validate`, `Revalidate`). Push mode refetches only the children of a parent that are not yet known (`GetChildren` plus one `GetTree` per new subtree) and re-reads four properties per node for name/state events. It does not run the §9.4 dynamic-programming planner or the 20 ms rounds; those belong to the doc actor and can drive the source through the pull requests. Which side owns the dirty set is an open point for M7 (see report, decisions needed).
+- **AS-7 Push mode and pull mode.** The source runs the loop *events → dirty set → settle → refetch what changed → deltas* itself, and also answers the doc actor's pull requests (`Subtree`, `Text`, `Action`, `Validate`, `Revalidate`). Push mode refetches only the children of a parent that are not yet known (`GetChildren` plus one `GetTree` per new subtree) and re-reads four properties per node for name/state events. It does not run the §9.4 dynamic-programming planner or the 20 ms rounds; those belong to the doc actor and can drive the source through the pull requests. Which side owns the dirty set: **decided, the source** (§21 AM-1).
 - **AS-8 Settle in the source.** Quiet 25 ms, cap 120 ms (1 s for a burst with ≥ 50 `ChildRemoved`, IL-R7); everything already queued is drained before planning. With the §9.3 constants (W = 40 ms) a small change reaches the mirror ~15 ms later than measured here.
 - **AS-9 Block size and jank.** A `GetTree` call occupies the browser's main thread for ~5.5 µs per node. The frontier split bounds one call by the largest frontier subtree; the largest call observed on the corpus pages is 4-6 ms for the 100k-node page, but a page with one giant leaf container is not bounded (the harness records `heaviest_get_tree_call` and its reply size).
 - **AS-10 Role and state tiers.** `GetRole` for every node (the browser serves ~150k such calls/s whatever the client does), `GetState` only for roles where it matters (buttons, links, form controls, list items, cells...; others get showing + visible + enabled). Text is a separate tier (`Text.GetText(0,-1)` per text-bearing node, ~+0.9 s at 100k). (tag, xml-roles) predicts the role of 99.86 % of nodes on the 23 recorded Firefox trees (`th` and `input` are the ambiguous ones), so roles could be inferred and verified lazily; not implemented, a possible further halving of the 100k build.
@@ -498,6 +500,8 @@ Up to 4 `GetTree`s in flight per app (WF-1: saturation beyond 4), reply decoding
 
 ## 9. Incremental update pipeline
 
+*Amended §21 AM-1: the dirty set (§9.2), settle (§9.3) and plan (§9.4) live in the source, not in the doc actor; the doc actor applies (§9.6) and publishes. The tables below remain the normative event semantics.*
+
 ```
 drain ─► app ingress (ADR-0001 §6.3, coalescing) ─► app actor ─► doc actor
    └─ focus/caret (immediate) ─► Reader                   │
@@ -603,6 +607,8 @@ Restore (GM §3.3), in order: (1) the node still exists (directly or through re-
 - **RS-4** Per-URL bookmarks are kept in RAM for the session (NVDA remembers the caret per document, WEB §3.1), so a reload or back navigation returns to the last position. Never persisted (ADR-0002 PR-4).
 
 ## 11. Browse-mode state machine (refines ADR-0001 §7.2)
+
+*Amended §21 AM-11; the full table, predicate and key handling are in `docs/design/browse-mode.md` §7.*
 
 `WebMode` is owned by the Reader, one instance for the document that has focus; it maps onto ADR-0001 `Mode`: `Browse` ↔ `Mode::Browse`, `Focus` ↔ `Mode::Focus` with a document context.
 
@@ -862,3 +868,24 @@ TBD hooks filled by B-6:
 9. **Session-only per-URL bookmarks (RS-4)**, never persisted.
 10. **B-6 arms revised (§16)**: no CDP arm; the WebExtension arm only as a cost reference; Chromium out of B-6.
 11. **WIT 0.2 additions (§15)**: pass-through verdict and live politeness hooks; extension navigation units as category bits computed at apply time.
+
+## 21. M7 amendments (2026-10-14)
+
+Source: `docs/design/browse-mode.md` (BM-design) and ADR-0007. Each item supersedes the text it names;
+sections not named are unchanged.
+
+| ID | Amends | Change |
+|---|---|---|
+| AM-1 | §2 item 6, §6.2 AS-7, §9.2–§9.4 | **D1 decided:** the source owns the event dirty set, settle (25 ms quiet, 120 ms cap, 1 s for bursts with ≥ 50 removes) and refetch planning, including dormant marking and, when needed, the §9.4 DP planner. The doc actor never plans IPC: it translates deltas into `DocOp`s, applies them in slices, publishes, keeps the removal grace (IL-R4, 1 s) and issues user-driven pull requests. The doc actor adds no debounce of its own (UP-1's W = 40 ms / W_max = 150 ms no longer apply in front of the source's settle). BM-design §1. |
+| AM-2 | §4.1, §4.9 DM-I3, ADR-0001 §9.3 | One `DocNodeId`: the generational `{slot, gen}` handle lives in `gorca-model`; `gorca-doc::web` uses it; `DocNodeId(u32)` and the scaffold `gorca-doc/src/mirror.rs` are deleted. Ids are never reused within a doc actor's life, across navigations too (`Reset` detaches and reaps in the same arena). BM-design §2. |
+| AM-3 | §3, §6.1, ADR-0001 §9.2, IR-2 | `DocSourceCtx` gains `app: AppId` and `events: Receiver<DocEvent>` (`NodeEvent` + seq + time), fed by the app actor through the doc actor; sources never subscribe to the bus themselves. `SrcNode` gains `local: Option<LocalId>` (transport key); the per-app `WebJoin` table (`LocalId → (DocId, DocNodeId)`, written after publish) replaces `JoinPort` for the AT-SPI source. `JoinPort` stays for hybrid sources. BM-design §3. |
+| AM-4 | §6.1, §6.5, §6.6, §9.3 UP-4 | The AT-SPI source emits `Settled { batch }` at the end of every pushed batch (`settled_markers = true` in push mode); publication follows it (PUB-2). `DocRequest` gains `SetActivity(Awake \| Dormant)`, `Rebuild` (rebuild-as-resync, ids kept), `Prioritize { nodes }` (UP-2 urgent marks, M7b) and `DriftCheck` (W3, M7b). |
+| AM-5 | §3 (source row), §4.3 TX-1, §15 | TX-1 run synthesis moves into `gorca-doc-source-atspi` (the only component with both the text and the children). Run ids are `RUN_TAG \| xxh3(parent, run index)`. The text tier is on for browse mode (`Text.GetText` for every role that can carry text). The run table is not needed for browse mode: focus-mode caret offsets are converted by the native text path (ADR-0007 TQ-1). |
+| AM-6 | §4.1 node, §4.5 | `NodeSpec` gains `meta: Arc<NodeMeta>` (source id, transport key, states, description, value, attributes). New flags `BLOCK`, `BREAK_BEFORE`, `FRAME`. Flat text: a newline before every block node and before a node whose previous sibling is a block; whitespace-only lines are skipped by line moves; controls and graphics with no text carry one U+FFFC object marker; soft lines at `browse.max_line_length` (100). `HIDDEN` never derives from `SHOWING` (TBD-WEB-1). BM-design §4. |
+| AM-7 | §6.1, §5.1 IL-R1, §14 | `SourceCaps.silent_reorders` (Chromium true, Firefox false). With it, IL-R1 `Revalidate` runs after every browse presentation (parent, and the list/table/grid container within 3 levels), deduplicated per parent per 250 ms, ≤ 2 in flight per document, 50 ms deadline. Without it, `Revalidate` runs at wake (W1), before actions on heuristic joins (IL-R2) and after unknown-node deltas. BM-design §13. |
+| AM-8 | §4.7, `gorca-doc-source-api` `web_attrs` | The attribute key `LIVE` is split: `LIVE` for a node's own `live` attribute (region root) and `CONTAINER_LIVE` for the inherited `container-live`; today `well_known` maps both names to one key, which would make every descendant a region root. |
+| AM-9 | §13.1 LR-3 | The separate 50 ms per-region settle is dropped: the source's settle already merges Chromium's per-update triad into one batch. LV1 gate: last mutation → speech ≤ 65 ms wall. |
+| AM-10 | §6.2 AS-3, §8.1 Attach | Warm-up runs once per browser application at attach (`AppLifecycle::Ready`), behind `DocSourceFactory::{needs_warm, warm, create}` (new trait in `gorca-doc-source-api`); the core keeps a `WarmState` machine per app and holds document builds for at most 3 s waiting for it; a build that started earlier is rebuilt once (ids kept) when the warm-up completes. BM-design §6. |
+| AM-11 | §11, ADR-0001 §7.2, modes.md §1 | `WebMode` is the Reader's browse state machine and owns the cursor (`WebCursor { node, local }`); `Mode::Browse { doc, sticky }` loses its cursor field, so cursor moves are not mode transitions. In `Loading`, an editable focus enters `Focus{Auto}` immediately. Until earcons exist, mode changes are spoken ("browse mode", "focus mode"). BM-design §7. |
+| AM-12 | §2 item 1, §8.1 | Documents are recognised by a new `Role::DocumentWeb` (mapped from AT-SPI `DOCUMENT_WEB`). A `DocumentWeb` with no `DocumentWeb` ancestor gets a doc actor; a nested one is a frame subtree (`FRAME` flag, `Cat::FRAME`). |
+| AM-13 | §6.6 (M7a only) | In the M7a slice a waking mirror always takes the `Rebuild` plan (rebuild-as-resync, ids kept), with W0 served from the snapshot; W1–W3, `PreWarm` and background prebuild land in M7b. |
