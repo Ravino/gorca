@@ -9,7 +9,8 @@ use crate::diag::{Diag, DiagMsg, did_you_mean, fnv1a};
 use crate::keymap::{ContextName, LayerEntry, ResolvedKeymap, merge_layer};
 use crate::presets::Presets;
 use crate::settings::{
-    Confirmations, InterruptPolicy, Layout, Preset, SCHEMA, SETTINGS, Settings, Verbosity, sections,
+    Caps, Confirmations, InterruptPolicy, Layout, Preset, Punct, SCHEMA, SETTINGS, Settings,
+    Verbosity, sections,
 };
 
 /// Files larger than this are ignored (ADR-0005 7.4).
@@ -320,6 +321,28 @@ fn apply_key(section: &str, key: &str, v: &Item, s: &mut Settings, diags: &mut V
         ("echo", "typed_characters") => b(&mut s.echo.typed_characters, diags),
         ("echo", "typed_words") => b(&mut s.echo.typed_words, diags),
         ("echo", "command_keys") => b(&mut s.echo.command_keys, diags),
+        ("echo", "inserted_text") => b(&mut s.echo.inserted_text, diags),
+        ("text", "say_all_moves_caret") => b(&mut s.text.say_all_moves_caret, diags),
+        ("text", "caret_edge_ms") => {
+            if let Some(n) = read_int(v, &path, 20, 1000, diags) {
+                s.text.caret_edge_ms = u32::try_from(n).unwrap_or(100);
+            }
+        }
+        ("text", "caret_late_ms") => {
+            if let Some(n) = read_int(v, &path, 100, 2000, diags) {
+                s.text.caret_late_ms = u32::try_from(n).unwrap_or(400);
+            }
+        }
+        ("speech", "punctuation") => {
+            if let Some(p) = read_enum(v, &path, Punct::parse, Punct::NAMES, diags) {
+                s.speech.punctuation = p;
+            }
+        }
+        ("speech", "caps") => {
+            if let Some(p) = read_enum(v, &path, Caps::parse, Caps::NAMES, diags) {
+                s.speech.caps = p;
+            }
+        }
         ("verbosity", "level") => {
             if let Some(p) = read_enum(v, &path, Verbosity::parse, Verbosity::NAMES, diags) {
                 s.verbosity.level = p;
@@ -742,8 +765,9 @@ mod tests {
         let text = "\
 [keyboard]\npreset=\"orca\"\nlayout=\"laptop\"\nmodifiers=[\"Insert\"]\ncaps_lock_layout_guard=false\n\
 multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_control=false\npause_speech_on_shift=false\n\
-[keymap]\nreplace_preset=true\n[speech]\nrate=10\npitch=11\nvolume=12\nrate_step=7\nvoice=\"x\"\n\
-[echo]\ntyped_characters=false\ntyped_words=true\ncommand_keys=true\n[verbosity]\nlevel=\"brief\"\nconfirmations=\"brief\"\n";
+[keymap]\nreplace_preset=true\n[speech]\nrate=10\npitch=11\nvolume=12\nrate_step=7\nvoice=\"x\"\npunctuation=\"all\"\ncaps=\"say\"\n\
+[echo]\ntyped_characters=false\ntyped_words=true\ncommand_keys=true\ninserted_text=false\n\
+[text]\nsay_all_moves_caret=false\ncaret_edge_ms=50\ncaret_late_ms=300\n[verbosity]\nlevel=\"brief\"\nconfirmations=\"brief\"\n";
         let l = load_text(text);
         assert!(l.diags.is_empty(), "{:?}", l.diags);
         let d = Settings::default();
@@ -754,7 +778,8 @@ multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_
         assert_ne!(l.settings.verbosity, d.verbosity);
         assert_eq!(l.settings.speech.rate_step, 7);
         assert_eq!(l.settings.keyboard.modifiers, ["Insert"]);
-        assert_eq!(SETTINGS.len(), 20);
+        assert_ne!(l.settings.text, d.text);
+        assert_eq!(SETTINGS.len(), 26);
     }
 
     #[test]

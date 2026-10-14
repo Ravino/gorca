@@ -9,10 +9,20 @@ use crate::ids::NodeKey;
 pub type RawMsg = Arc<[u8]>;
 
 /// Payload that is still inside the raw message bytes and is decoded only if a consumer asks.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct LazyText {
     pub msg: RawMsg,
     pub field: u8,
+}
+
+impl std::fmt::Debug for LazyText {
+    // The bytes may be a typed password: only their number is shown.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LazyText")
+            .field("bytes", &self.msg.len())
+            .field("field", &self.field)
+            .finish()
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -154,6 +164,9 @@ pub struct AppInfo {
     /// 2.2). True only for a verified gnome-shell today; computed from verified identity, never
     /// from self-reported names. A policy may use `CacheDump` only when this holds.
     pub dump_complete: bool,
+    /// The unit of this application's text offsets (TQ-1). Native text tracking (ADR-0007) is
+    /// for applications that count scalars; UTF-16 offsets wait for M3b.
+    pub text_unit: crate::TextUnit,
     /// The application's root node, when the connector knows it. A fill policy that starts at
     /// the root (an eager dump, a window prefetch) gets it with `FillInput::Appeared`.
     pub root: Option<crate::NodeKey>,

@@ -1,0 +1,14 @@
+{
+  "meta": {"utc": "2026-10-14T03:19:52Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "3.72 3.71 3.49 1/2372 1910343", "git_rev": "0bfe951", "git_dirty": "true", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "label": "m3-dev5", "reader": "daemon:<repo>/.claude/worktrees/agent-a15d2cdf7665c02f6/target/release/gorca", "backend": "voicego", "repeats": "1", "samples_per_series": "150", "l2_trials": "40", "quick": "true", "loadavg_end": "3.72 3.71 3.49 1/2372 1910340", "reader_env": "GORCA_M3=1", "gates": "L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats"},
+  "rows": [
+    {"id": "SA2.sa2_gap_ms.n", "scenario": "SA2", "bus": "daemon/voicego", "value": 499, "min": 499, "max": 499, "runs": 1, "unit": "samples", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "SA2.sa2_gap_ms.p50", "scenario": "SA2", "bus": "daemon/voicego", "value": 0.075906, "min": 0.075906, "max": 0.075906, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "SA2.sa2_gap_ms.p95", "scenario": "SA2", "bus": "daemon/voicego", "value": 0.128763, "min": 0.128763, "max": 0.128763, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "SA2.sa2_gap_ms.p99", "scenario": "SA2", "bus": "daemon/voicego", "value": 0.157001, "min": 0.157001, "max": 0.157001, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "SA2.sa2_gap_ms.p999", "scenario": "SA2", "bus": "daemon/voicego", "value": 0.193673, "min": 0.193673, "max": 0.193673, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "SA2.sa2_gap_ms.max", "scenario": "SA2", "bus": "daemon/voicego", "value": 0.193673, "min": 0.193673, "max": 0.193673, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "SA2.lost", "scenario": "SA2", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "chunks", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "SA2.sa2_ahead_ratio", "scenario": "SA2", "bus": "daemon/voicego", "value": 1, "min": 1, "max": 1, "runs": 1, "unit": "ratio", "op": ">=", "threshold": 0.99, "verdict": "PASS", "note": "next chunk at the server before the previous one ended (ADR-0007 SA2)"},
+    {"id": "SA2.sa2_chunks", "scenario": "SA2", "bus": "daemon/voicego", "value": 500, "min": 500, "max": 500, "runs": 1, "unit": "chunks", "op": "", "threshold": null, "verdict": "info", "note": ""}
+  ]
+}

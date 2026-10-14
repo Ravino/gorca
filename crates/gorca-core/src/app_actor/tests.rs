@@ -219,6 +219,7 @@ fn shell_info() -> gorca_model::AppInfo {
         connector_kind: gorca_model::ConnectorKind::Atspi,
         verified_shell: true,
         dump_complete: false,
+        text_unit: gorca_model::TextUnit::Scalar,
         root: None,
     }
 }

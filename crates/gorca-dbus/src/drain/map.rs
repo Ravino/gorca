@@ -9,8 +9,8 @@
 use std::sync::Arc;
 
 use gorca_model::{
-    AppId, CaretOrigin, DocKind, LocalId, NodeEvent, NodeKey, Politeness, PropMask, TextDelta,
-    WindowKind,
+    AppId, CaretOrigin, DocKind, LazyText, LocalId, NodeEvent, NodeKey, Politeness, PropMask,
+    TextDelta, WindowKind,
 };
 use smallvec::SmallVec;
 
@@ -149,6 +149,24 @@ fn parse_head<'a>(v: &SignalView<'a>) -> Result<Head<'a>, Malformed> {
         d2,
         any,
     })
+}
+
+/// Longest inserted or deleted text carried with a `TextChanged` event. Typing, a paste of a
+/// few words and a deleted word fit; a bulk change travels without text and the consumer
+/// re-reads it (ADR-0007 TW-2).
+pub const MAX_TEXT_PAYLOAD_BYTES: usize = 1024;
+
+/// The text of a `TextChanged` event (`any_data` is a string for GTK and atk-bridge), copied
+/// out of the message so it outlives the drain's buffer. `field` is 0: the bytes are the UTF-8
+/// text itself.
+fn text_payload(h: &Head<'_>) -> Option<LazyText> {
+    match h.any {
+        AnyData::Str(s) if !s.is_empty() && s.len() <= MAX_TEXT_PAYLOAD_BYTES => Some(LazyText {
+            msg: Arc::from(s.as_bytes()),
+            field: 0,
+        }),
+        AnyData::Str(_) | AnyData::Int | AnyData::Ref(_) | AnyData::Other => None,
+    }
 }
 
 fn non_negative(v: i32) -> u32 {
@@ -309,7 +327,7 @@ pub fn map_signal(
                     delta: TextDelta::Insert {
                         offset,
                         len,
-                        text: None,
+                        text: text_payload(&h),
                     },
                 });
             } else if h.detail.starts_with("delete") {
@@ -318,7 +336,7 @@ pub fn map_signal(
                     delta: TextDelta::Delete {
                         offset,
                         len,
-                        text: None,
+                        text: text_payload(&h),
                     },
                 });
             }
@@ -480,6 +498,34 @@ mod tests {
                     len: 0,
                     ..
                 },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn text_changed_carries_its_text() {
+        let b = body("insert", 3, 1, "s", b"\x01\0\0\0x\0");
+        let e = run("org.a11y.atspi.Event.Object", "TextChanged", "/x/1", &b);
+        match &e[0] {
+            NodeEvent::TextChanged {
+                delta:
+                    TextDelta::Insert {
+                        offset: 3,
+                        len: 1,
+                        text: Some(t),
+                    },
+                ..
+            } => assert_eq!(&*t.msg, b"x"),
+            other => panic!("{other:?}"),
+        }
+        // An int payload (some bridges) carries no text.
+        let b = body("delete", 3, 1, "i", &0i32.to_le_bytes());
+        let e = run("org.a11y.atspi.Event.Object", "TextChanged", "/x/1", &b);
+        assert!(matches!(
+            e[0],
+            NodeEvent::TextChanged {
+                delta: TextDelta::Delete { text: None, .. },
                 ..
             }
         ));

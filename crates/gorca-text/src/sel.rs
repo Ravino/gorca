@@ -33,7 +33,9 @@ impl SelDelta {
 }
 
 fn total(r: &[Range<u32>]) -> u32 {
-    r.iter().map(|r| r.end - r.start).sum()
+    // Saturating: ranges come from an application and may be hostile.
+    r.iter()
+        .fold(0u32, |a, r| a.saturating_add(r.end.saturating_sub(r.start)))
 }
 
 /// Sort, drop empty and inverted ranges, merge overlapping and touching ones.
@@ -102,6 +104,14 @@ mod tests {
         assert_eq!(d.added.as_slice(), &[10..12]);
         assert_eq!(d.removed.as_slice(), &[0..3]);
         assert_eq!((d.added_len(), d.removed_len()), (2, 3));
+    }
+
+    #[test]
+    fn hostile_totals_saturate() {
+        let d = diff(&[], &[0..u32::MAX, 5..u32::MAX]);
+        assert_eq!(d.added_len(), u32::MAX);
+        let d = diff(&[0..2], &[10..u32::MAX]);
+        assert_eq!(d.removed_len(), 2);
     }
 
     #[test]

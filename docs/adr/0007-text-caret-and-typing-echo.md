@@ -16,6 +16,66 @@ app_actor.rs}`, `crates/gorca-model/src/text.rs`, `crates/gorca-ingress/src/tabl
 ## 0. Changelog
 
 - 2026-10-14: first version, Accepted.
+- 2026-10-14: M3 review fixes (`docs/reports/m3-review.md`, probes in `bench/results/e2e/m3-review/probes/`):
+  - H1/H2 say-all: the speech lane has an explicit queued-utterance kind (`SpeechHandle::submit_say_all`).
+    The first chunk is submitted normally (it replaces older speech); the following chunks queue behind it
+    in FIFO order instead of replacing each other, so ordinary speech keeps newest-wins and the 150 ms clock
+    fallback is gone (it also works with the speech server down at start). Progress is reported per
+    tracked utterance id (replaces the `notify_progress` flag of the text above): the lane reports Started,
+    Finished or Stopped for every tracked utterance, including one that is replaced or dropped, and a report
+    settles earlier queued chunks (reports are ordered). The daemon forwards progress with a bounded
+    `send` (1 s timeout) instead of `try_send`, so it is not lost. A run also ends by a watchdog (90 s without
+    progress). A key after a finished or stale run never repositions the caret.
+  - M1 (stop with an arrow): the caret follows the reading (`SetCaret` at the start of each chunk as it
+    starts). A stopping key is then handled by the application from where the reading is, and gorca does not
+    move the caret after the key; on a natural end it moves the caret to the end of the text. Chosen over
+    placing the caret before forwarding because it has no window in which the app and gorca both write.
+    Gate: e2e SA3a.
+  - M2: selection-changed before caret-moved are paired inside the key window in either order.
+  - M3: say-all and say-selection check the mode; outside the text modes they speak the cue "not available
+    in this mode". Browse mode (M7a) plugs in at `text_mode_allows`.
+  - M4: a typed key that matched nothing only holds its slot for its own insert, not for unrelated caret moves.
+  - M5: `AppInfo.text_unit` (connector capability) -> `AppProfile.non_scalar_text` ->
+    `MirrorDirectory::text_scalar`. Apps whose offsets are not scalars are not tracked until M3b.
+  - Lows: wrong-way hold (an insert that beats its key by the wrong order); gaps in a flood no longer drop an
+    event; `Debug` of types holding password text (`LazyText`, `TextUnitAt`, `TextWindowFill`,
+    `TextSelections`, `Utterance`) is manual and redacts; line replies larger than 256 KiB are refused
+    undecoded (`MAX_TEXT_REPLY_BYTES`) and a clipped line shortens its range.
+- 2026-10-14: M3 for native apps built (`docs/plan/checklists/M3.md`). Where the code differs from the text
+  above, the code is the decision:
+  - `TextKey` is classified by `gorca_input_api::classify_text_key` and applied by the Reader to `PassToApp`
+    keys; `KeyIntent` is unchanged (no `text_key` field), so no other lane or test constructor changes.
+  - Caret, text and selection events travel on two new Reader channels instead of `FocusLaneMsg`
+    (`TextMsg`, which carries payloads, so it is not `Copy`): `text` (events of the focused app, flood-prone,
+    with a `dropped` counter that makes the Reader distrust its window) and `text_io` (fetch results and the
+    speech lane's progress, so a flood cannot starve the answers). The app actor forwards only while its app is
+    the published focused application (EV-3).
+  - `text-changed` carries its text: `gorca-dbus` `map_signal` now puts the string payload (at most 1 KiB) of
+    an insert or delete into `LazyText` (`field` 0, the bytes are the UTF-8 text). The ingress folds are
+    unchanged.
+  - `Utterance.sensitive` is not added: the Reader remembers the id of the latest secret utterance
+    (`Reader::last_spoken_is_sensitive`, for the PW-3 refusal of `speech.copy_last`), and text speech writes
+    nothing to the presentation log, so PW-2 holds by construction.
+  - `AppInfo.text_unit` and `ActionReq::SetSelection` are not added: offsets are scalars (GTK, St, the fake app).
+    Firefox focus-mode UTF-16 (TQ-1) stays with M3b. Descendant carets (contenteditable) likewise: the machine
+    tracks the focused node itself.
+  - The first say-all chunk goes alone (`say_all::FIRST_CHUNK_GATE`). The speech lane gives an utterance of a
+    newer epoch the interrupting slot, and chunks submitted in the same breath replace each other there (lane
+    test `same_epoch_utterances_submitted_together_replace_each_other_in_the_slot`); the other two follow when
+    the server reports the first started, or after 150 ms.
+  - The voicego and SSIP clients hold one utterance at the server (`max_in_flight = 1`), so SA2 is measured as
+    the gap between the server's END of a chunk and the SPEAK of the next (p99 0.16 ms), not as "submitted
+    before END at the server". The Reader's own three-chunk look-ahead is unit-tested.
+  - EV-4 (a caret event that beats its key is held 5 ms) is extended to inserts and deletes, because the
+    application's signal and the keyboard monitor's key travel on different sockets and the e2e harness showed
+    the signal winning a few times per 10,000 keys: a short unexplained insert waits 5 ms for a typed key to claim
+    it (the key's echo is then the insert's too), a delete waits 5 ms for an Erase or Cut key (otherwise it is
+    dropped, as before), and a key that arrives after its insert was already spoken stays silent (150 ms).
+    Touching unexplained inserts fold into one net insert (`gorca_text::coalesce::compose`, text read back from
+    the window); while an earlier unexplained insert was just spoken they wait for the end of the 250 ms gap and
+    are spoken once (EV-5), instead of being dropped.
+  - `info.formatting` stays planned (M3b); `speech.punctuation` and `speech.caps` exist, `caps = "pitch"`
+    speaks a capital like its lower-case letter until the speech clients can carry a pitch change.
 
 ## 1. Context
 

@@ -242,6 +242,9 @@ pub(super) async fn text(
     q: &TextQuery,
     dl: Deadline,
 ) -> Result<BackendReply, BackendError> {
+    if let Some(r) = crate::text::run(cx, q, dl).await {
+        return r;
+    }
     match q {
         TextQuery::GetText { node, range } => {
             let n = resolve(cx, *node)?;
@@ -272,7 +275,10 @@ pub(super) async fn text(
                 u32::try_from(c.max(0)).unwrap_or(0),
             ))
         }
-        TextQuery::Attributes { .. } => Err(BackendError::NotSupported),
+        TextQuery::Attributes { .. }
+        | TextQuery::AtOffset { .. }
+        | TextQuery::Selections { .. }
+        | TextQuery::Window { .. } => Err(BackendError::NotSupported),
         TextQuery::VisibleLines {
             node,
             clip,

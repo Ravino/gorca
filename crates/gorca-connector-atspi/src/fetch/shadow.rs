@@ -4,7 +4,8 @@
 //!
 //! Allowed: `Accessible` getters, `Properties.Get`/`GetAll`, `Cache.GetItems`,
 //! `Application.GetApplicationBusAddress`, the `Text` reads (`GetText`, `GetStringAtOffset`,
-//! `GetRangeExtents`, `GetCharacterExtents`, `GetOffsetAtPoint`), `Component.GetExtents`,
+//! `GetNSelections`, `GetSelection`, `GetRangeExtents`, `GetCharacterExtents`,
+//! `GetOffsetAtPoint`), `Component.GetExtents`,
 //! `Collection.GetMatches`, and the bus's own housekeeping
 //! (`AddMatch`, name and credential lookups). Everything else (`Action`, `EditableText`,
 //! `Selection`, `Component.GrabFocus`, `Registry.RegisterEvent`, `Properties.Set`, ...) is refused
@@ -22,6 +23,8 @@ pub fn allowed(interface: &str, member: &str) -> bool {
             "GetText"
                 | "GetOffsetAtPoint"
                 | "GetStringAtOffset"
+                | "GetNSelections"
+                | "GetSelection"
                 | "GetRangeExtents"
                 | "GetCharacterExtents"
         ),
@@ -62,6 +65,8 @@ mod tests {
             ("org.a11y.atspi.Application", "GetApplicationBusAddress"),
             ("org.a11y.atspi.Text", "GetText"),
             ("org.a11y.atspi.Text", "GetStringAtOffset"),
+            ("org.a11y.atspi.Text", "GetNSelections"),
+            ("org.a11y.atspi.Text", "GetSelection"),
             ("org.a11y.atspi.Text", "GetRangeExtents"),
             ("org.a11y.atspi.Text", "GetOffsetAtPoint"),
             ("org.a11y.atspi.Component", "GetExtents"),

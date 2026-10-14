@@ -162,7 +162,12 @@ fn subtree(r: BackendReply) -> Result<SnapshotBatch, BackendError> {
         | BackendReply::ActionDone
         | BackendReply::Hit(_)
         | BackendReply::Matches(_)
-        | BackendReply::Lines(_) => Err(BackendError::Protocol("unexpected reply kind".to_owned())),
+        | BackendReply::Lines(_)
+        | BackendReply::Unit(_)
+        | BackendReply::Selections(_)
+        | BackendReply::Window(_) => {
+            Err(BackendError::Protocol("unexpected reply kind".to_owned()))
+        }
     }
 }
 

@@ -233,6 +233,7 @@ impl Connector for ScriptedConnector {
                     connector_kind: ConnectorKind::Fake,
                     verified_shell: false,
                     dump_complete: false,
+                    text_unit: gorca_model::TextUnit::Scalar,
                     root: None,
                 };
                 let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);

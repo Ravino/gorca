@@ -1,6 +1,6 @@
 //! Lock-free directory of per-app mirrors for the Reader (PC-1).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;
@@ -12,6 +12,9 @@ use gorca_model::{AppId, Lookup, NodeKey, NodeSnapshot, NodeView};
 #[derive(Debug, Default)]
 pub struct MirrorDirectory {
     apps: ArcSwap<HashMap<AppId, MirrorHandle>>,
+    /// Applications whose text offsets are not scalars (the connector said so): the native
+    /// text layer leaves them alone (ADR-0007 M5 of the review).
+    non_scalar_text: ArcSwap<HashSet<AppId>>,
 }
 
 impl MirrorDirectory {
@@ -27,7 +30,28 @@ impl MirrorDirectory {
         });
     }
 
+    /// Record whether the app counts text in Unicode scalars. Unknown apps count as scalars.
+    pub fn set_text_scalar(&self, app: AppId, scalar: bool) {
+        self.non_scalar_text.rcu(|cur| {
+            let mut next = HashSet::clone(cur);
+            if scalar {
+                next.remove(&app);
+            } else {
+                next.insert(app);
+            }
+            next
+        });
+    }
+
+    /// Does the app count text in Unicode scalars (GTK, St) rather than UTF-16 units?
+    pub fn text_scalar(&self, app: AppId) -> bool {
+        !self.non_scalar_text.load().contains(&app)
+    }
+
     pub fn remove(&self, app: AppId) {
+        if !self.text_scalar(app) {
+            self.set_text_scalar(app, true);
+        }
         self.apps.rcu(|cur| {
             let mut next = HashMap::clone(cur);
             next.remove(&app);

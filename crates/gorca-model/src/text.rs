@@ -46,6 +46,108 @@ pub enum TextQuery {
         max_lines: u16,
         max_bytes: u32,
     },
+    /// One `GetStringAtOffset(granularity)` call (ADR-0007 4.2). `offset` is in the app's text
+    /// unit; answered with `BackendReply::Unit`, whose range is in scalars of the same text.
+    AtOffset {
+        node: NodeKey,
+        offset: u32,
+        unit: TextGranularity,
+    },
+    /// `GetNSelections` plus `GetSelection(i)` for `i < 8`, each with its text. Answered with
+    /// `BackendReply::Selections`.
+    Selections {
+        node: NodeKey,
+    },
+    /// The text around `around` (the caret when `None`) for the Reader's text window (ADR-0007
+    /// TW-1): `radius` scalars on each side, clamped to the text. Answered with
+    /// `BackendReply::Window`.
+    Window {
+        node: NodeKey,
+        around: Option<u32>,
+        radius: u32,
+    },
+}
+
+/// Granularity of a `GetStringAtOffset` call (the values of `AtspiTextGranularity`).
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum TextGranularity {
+    Char,
+    Word,
+    Sentence,
+    Line,
+    Paragraph,
+}
+
+impl TextGranularity {
+    /// The wire value of `AtspiTextGranularity`.
+    pub const fn wire(self) -> u32 {
+        match self {
+            TextGranularity::Char => 0,
+            TextGranularity::Word => 1,
+            TextGranularity::Sentence => 2,
+            TextGranularity::Line => 3,
+            TextGranularity::Paragraph => 4,
+        }
+    }
+}
+
+/// Reply of [`TextQuery::AtOffset`].
+#[derive(Clone, Eq, PartialEq)]
+pub struct TextUnitAt {
+    pub range: Range<u32>,
+    pub text: Arc<str>,
+}
+
+/// Reply of [`TextQuery::Window`].
+#[derive(Clone, Eq, PartialEq)]
+pub struct TextWindowFill {
+    /// Scalar offset of the first character of `text`.
+    pub base: u32,
+    pub text: Arc<str>,
+    /// Length of the whole text in scalars.
+    pub len: u32,
+    /// The caret, when the query asked for it (`around == None`) and the app answered.
+    pub caret: Option<u32>,
+}
+
+/// Longest selection whose text travels with [`TextSelections`]; longer ones are counted only.
+pub const MAX_SELECTION_TEXT: u32 = 1024;
+
+/// Reply of [`TextQuery::Selections`]: each range with its text, or an empty text when the range
+/// is longer than [`MAX_SELECTION_TEXT`] scalars.
+#[derive(Clone, Default, Eq, PartialEq)]
+pub struct TextSelections {
+    pub ranges: Vec<(Range<u32>, Arc<str>)>,
+}
+
+// Text read from an application may be a password: these show lengths only.
+impl std::fmt::Debug for TextUnitAt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TextUnitAt")
+            .field("range", &self.range)
+            .field("chars", &self.text.chars().count())
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for TextWindowFill {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TextWindowFill")
+            .field("base", &self.base)
+            .field("chars", &self.text.chars().count())
+            .field("len", &self.len)
+            .field("caret", &self.caret)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for TextSelections {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let spans: Vec<&Range<u32>> = self.ranges.iter().map(|(r, _)| r).collect();
+        f.debug_struct("TextSelections")
+            .field("ranges", &spans)
+            .finish_non_exhaustive()
+    }
 }
 
 /// One visual line of a text object.
