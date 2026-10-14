@@ -68,6 +68,17 @@ impl TaskSet {
         self.names.insert(handle.id(), name);
     }
 
+    /// Spawn a task that watches the token itself: it is **not** dropped when the token is
+    /// cancelled, so it can run its own cleanup (restore settings, close connections) before it
+    /// returns. [`Self::shutdown`] still aborts it once the grace period is over.
+    pub fn spawn_graceful<F>(&mut self, name: &'static str, fut: F)
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        let handle = self.set.spawn(fut);
+        self.names.insert(handle.id(), name);
+    }
+
     pub fn len(&self) -> usize {
         self.set.len()
     }

@@ -46,6 +46,18 @@ pub async fn pump_keys(
                 if out.epoch_advanced {
                     speech.notify_epoch();
                 }
+                if let Some(keysym) = out.stale_modifier {
+                    // Mutter 48.7 swallows every key until the modifier is tapped. No heal
+                    // without input injection exists (docs/reports/live-keys-swallowed.md).
+                    tracing::warn!(keysym, "grabbed modifier predicted stuck in Mutter; keys are swallowed");
+                    if senders
+                        .control
+                        .try_send(ControlMsg::Input(InputNotice::ModifierStuck(keysym)))
+                        .is_err()
+                    {
+                        tracing::warn!("reader control lane full; stuck-modifier hint not delivered");
+                    }
+                }
                 if senders.key.try_send(out.intent).is_err() {
                     tracing::warn!("reader key lane full; dropped a key");
                 }

@@ -533,6 +533,15 @@ impl Reader {
                     self.announce("keyboard commands unavailable", fx);
                 }
             }
+            InputNotice::ModifierStuck(keysym) => {
+                let name = match keysym {
+                    0xff63 => "Insert",
+                    0xff9e => "Keypad Insert",
+                    0xffe5 => "Caps Lock",
+                    _ => "the gorca key",
+                };
+                self.announce(&format!("{name} stuck, tap {name}"), fx);
+            }
             InputNotice::Restored => {
                 self.cmd.told_unavailable = false;
                 if self.cmd.told_lost {

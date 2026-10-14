@@ -17,8 +17,14 @@ Verified live (`busctl --user introspect org.a11y.Bus /org/a11y/bus`) and in
   `org.a11y.Status.IsEnabled` once at startup (`refs/chromium/ui/accessibility/platform/atk_util_auralinux.cc`,
   `ShouldEnableAccessibility`: env var, then `IsEnabled`, then GSettings
   `org.gnome.desktop.interface toolkit-accessibility`). Live evidence: Chrome exposed only 4 cache
-  items vs 168 for Firefox on this host. gorca must set `ScreenReaderEnabled=true` (and `IsEnabled`)
-  when it starts, as Orca/gsd do.
+  items vs 168 for Firefox on this host. gorca sets `IsEnabled` when it starts and must **not** set
+  `ScreenReaderEnabled`. Verified 2026-10-14 in a private headless shell (keyfile GSettings): `Set
+  ScreenReaderEnabled=true` writes `screen-reader-enabled=true` and `toolkit-accessibility=true`
+  (GNOME then autostarts Orca, which takes the KeyboardMonitor name); `Set IsEnabled=true` writes only
+  `toolkit-accessibility=true`. Firefox ESR connected to the a11y bus with `IsEnabled=true,
+  ScreenReaderEnabled=false` and did not with both false; GTK3/GTK4 connect either way. Qt enables on
+  either property, Firefox on `IsEnabled` only (`refs/firefox/accessible/atk/Platform.cpp`), Chromium on
+  `IsEnabled` and finds a reader by process name.
 * GNOME launches the screen reader from GSettings `org.gnome.desktop.a11y.applications screen-reader-enabled`
   (watched by `gsd-a11y-settings`); on this host Orca comes from `orca-autostart.desktop` in a
   gnome-session scope (`app-gnome-orca\x2dautostart-<pid>.scope`).

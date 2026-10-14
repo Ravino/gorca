@@ -754,6 +754,15 @@ fn input_notices_are_announced_once() {
 }
 
 #[test]
+fn a_stuck_modifier_is_named_with_the_one_tap_hint() {
+    let mut f = fixture();
+    let said = spoken(&f.control(ControlMsg::Input(InputNotice::ModifierStuck(0xff63))));
+    assert_eq!(said, ["Insert stuck, tap Insert"]);
+    let said = spoken(&f.control(ControlMsg::Input(InputNotice::ModifierStuck(0xff9e))));
+    assert_eq!(said, ["Keypad Insert stuck, tap Keypad Insert"]);
+}
+
+#[test]
 fn the_modifier_double_tap_is_described_in_learn_mode_only() {
     let mut f = fixture();
     let mut i = intent(CoreCmd::SpeechStop, 1, 1);

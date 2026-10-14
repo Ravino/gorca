@@ -43,15 +43,28 @@ Grab semantics (M1 test support; ADR-0001 section 7.3 K-1/K-2/K-6). A port of re
     (NameOwnerChanged); the modifier set is recomputed. Nothing is restored for a new owner, it
     must call SetKeyGrabs again. `grabbed_keypresses` is NOT cleared on owner loss, like Mutter
     (a held grabbed key stays consumed until its release).
-  * Not emulated: autorepeat (never ignored, no grab logic differences), xkb state tracking (the
-    test supplies `state`), duplicate-press dropping (button_count), and Mutter's NULL
-    dereference in rebuild_all_grabbed_modifiers when a second client that never called
-    SetKeyGrabs exists (only one client may own org.gnome.Orca.KeyboardMonitor anyway).
+  * Autorepeat, bug-compatible with Mutter 48.7 (docs/reports/live-keys-swallowed.md): meta-seat-impl.c
+    in 48.7 calls is_a11y_modifier_first_click for AUTOREPEAT_VALUE events too (state 2, a press), so
+    repeats of a held grabbed modifier alternate "ignorable" and "second press, processed normally".
+    A hold of 0.57 s or more with the first repeat at repeat_delay and one every 30 ms leaves the
+    modifier in `grabbed_keypresses` after its release; from then on every key is swallowed until
+    the modifier is tapped once. Upstream main guards autorepeat (`should_ignore = FALSE`);
+    `set_autorepeat_guard` switches the emulation to that fixed behaviour for comparison.
+    A repeat does not update the xkb state (state != AUTOREPEAT_VALUE guard in 48.7 too).
+  * Not emulated: xkb state tracking (the test supplies `state`), duplicate-press dropping
+    (button_count), and Mutter's NULL dereference in rebuild_all_grabbed_modifiers when a second
+    client that never called SetKeyGrabs exists (only one client may own
+    org.gnome.Orca.KeyboardMonitor anyway).
 
   {"cmd":"key", ..., "time_ms":<optional event time, default CLOCK_MONOTONIC ms>}
       reply adds notified, consumed, first_click, passed (the app received it)
   {"cmd":"app_log","clear":false} -> {"keys":[[keycode,keysym,released],...]} delivered to the app
   {"cmd":"grabs"} -> per-grabber state, all_grabbed_modifiers, grabbed_keypresses
+  {"cmd":"key", ..., "repeat":true}   one autorepeat event of a key that is down (a press, state 2)
+  {"cmd":"hold","keycode":110,"keysym":65379,"state":0,"time_ms":T,"hold_ms":900,"interval_ms":30}
+      press at T, autorepeats from T+repeat_delay every interval_ms while < T+hold_ms, release at
+      T+hold_ms; reply: events, repeats, consumed_repeats, stale (keysym left in grabbed_keypresses)
+  {"cmd":"set_autorepeat_guard","on":true}   emulate upstream main (autorepeat never ignored)
   {"cmd":"set_repeat_delay","ms":500}   (Mutter uses the GNOME keyboard repeat delay, default 500)
   {"cmd":"set_latency","max_ms":8,"seed":1}
       grab calls (SetKeyGrabs, GrabKeyboard, UngrabKeyboard) are applied after a random delay in
@@ -103,6 +116,7 @@ class Seat:
 
     def __init__(self):
         self.repeat_delay = 500
+        self.autorepeat_guard = False  # False: Mutter 48.7 (no guard); True: upstream main
         self.grabbed_modifiers = set()
         self.pressed_modifiers = set()
         self.last_keysym = 0
@@ -254,13 +268,17 @@ class Manager(dbus.service.Object):
     def should_watch(self, g, keysym, mods):
         return g.watch_all or self.should_grab(g, keysym, mods)
 
-    def key(self, keycode, keysym, unichar, state, released, time_ms=None):
+    def key(self, keycode, keysym, unichar, state, released, time_ms=None, repeat=False):
         """meta_seat_impl_notify_key_in_impl (first-click part) + meta_a11y_manager_notify_clients."""
         t = time.monotonic_ns()
         if time_ms is None:
             time_ms = (t // 1_000_000) & 0xFFFFFFFF
-        ignorable = self.seat.first_click(keysym, time_ms, not released)
-        if not ignorable:
+        if repeat and self.seat.autorepeat_guard:
+            ignorable = False  # upstream main: never ignoring autorepeat
+        else:
+            # 48.7: autorepeat (state 2) goes through the same rule, as a press.
+            ignorable = self.seat.first_click(keysym, time_ms, not released)
+        if not ignorable and not repeat:
             if released:
                 self.xkb_down.discard(keycode)
             else:
@@ -295,6 +313,22 @@ class Manager(dbus.service.Object):
             self.app_log.append([keycode, keysym, bool(released)])
         return {"t_emit_ns": t, "sent": notified, "notified": notified, "consumed": consumed,
                 "first_click": ignorable, "passed": not consumed}
+
+    def hold(self, keycode, keysym, unichar, state, time_ms, hold_ms, interval_ms=30):
+        """A key held down: press, the repeat timer (first repeat after repeat_delay, then one per
+        interval_ms), release. All events carry virtual times, like `key`."""
+        first = self.key(keycode, keysym, unichar, state, False, time_ms)
+        n = 0
+        consumed_repeats = 0
+        t = self.seat.repeat_delay
+        while t < hold_ms:
+            r = self.key(keycode, keysym, unichar, state, False, time_ms + t, repeat=True)
+            n += 1
+            consumed_repeats += bool(r["consumed"])
+            t += interval_ms
+        last = self.key(keycode, keysym, unichar, state, True, time_ms + hold_ms)
+        return {"t_emit_ns": first["t_emit_ns"], "repeats": n, "consumed_repeats": consumed_repeats,
+                "consumed": last["consumed"], "stale": keysym in self.grabbed_keypresses}
 
     def grab_state(self):
         g = next(iter(self.grabbers.values()), None)
@@ -343,7 +377,15 @@ class Stdin:
                     res = self.mgr.key(int(cmd.get("keycode", 38)), int(cmd.get("keysym", 97)),
                                        int(cmd.get("unichar", 97)), int(cmd.get("state", 0)),
                                        bool(cmd.get("released", False)),
-                                       None if tm is None else int(tm))
+                                       None if tm is None else int(tm),
+                                       bool(cmd.get("repeat", False)))
+                elif c == "hold":
+                    res = self.mgr.hold(int(cmd["keycode"]), int(cmd["keysym"]),
+                                        int(cmd.get("unichar", 0)), int(cmd.get("state", 0)),
+                                        int(cmd["time_ms"]), int(cmd["hold_ms"]),
+                                        int(cmd.get("interval_ms", 30)))
+                elif c == "set_autorepeat_guard":
+                    self.mgr.seat.autorepeat_guard = bool(cmd.get("on", True))
                 elif c == "stats":
                     res = dict(self.mgr.stats, watchers=len(self.mgr.watchers),
                                grabbers=len(self.mgr.grabbers))

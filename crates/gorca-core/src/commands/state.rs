@@ -71,6 +71,10 @@ pub enum InputNotice {
     Restored,
     /// `WatchKeyboard` was refused or timed out.
     Unavailable,
+    /// The Mutter replica predicts that this grabbed modifier (keysym) is stuck in Mutter 48.7's
+    /// `grabbed_keypresses` after a long hold, so every key is swallowed. Nothing heals it
+    /// without input injection except one tap of the modifier. Sent once per episode.
+    ModifierStuck(u32),
 }
 
 /// Everything the Reader receives that is neither a key, a focus event nor a query reply.

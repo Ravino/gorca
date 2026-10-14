@@ -69,6 +69,10 @@ pub struct LaneOut {
     pub intent: KeyIntent,
     /// The lane advanced the epoch: wake the speech lane (E-2).
     pub epoch_advanced: bool,
+    /// The replica predicts, for the first time since it last was clean, that Mutter 48.7 holds
+    /// a grabbed modifier stale and swallows every key (see [`Verdict::stale`]). Tell the user
+    /// once; it re-arms when a tap of the modifier heals the state.
+    pub stale_modifier: Option<u32>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -94,6 +98,8 @@ pub struct InputLane {
     session: u64,
     stall_since: Option<Instant>,
     stats: LaneStats,
+    /// The stale-modifier prediction was already reported and has not healed since.
+    stale_told: bool,
 }
 
 impl InputLane {
@@ -120,6 +126,7 @@ impl InputLane {
             session: 0,
             stall_since: None,
             stats: LaneStats::default(),
+            stale_told: false,
         }
     }
 
@@ -138,6 +145,7 @@ impl InputLane {
         });
         self.multi = None;
         self.shift_armed = None;
+        self.stale_told = false;
     }
 
     /// Forget what is known of the keyboard because events were lost at this exact point of the
@@ -213,6 +221,7 @@ impl InputLane {
         let time_ms =
             u32::try_from(at.saturating_duration_since(self.start).as_millis()).unwrap_or(u32::MAX);
         let (verdict, nominal) = self.verdict(&ev, kind, time_ms, &view, &settings);
+        let stale_modifier = self.note_stale(verdict);
         let ctx = view.committed.ctx;
         let is_gorca_mod = view.committed.modifiers.contains(&ev.keysym);
         let is_mod_key = is_gorca_mod || is_modifier_keysym(ev.keysym);
@@ -310,6 +319,25 @@ impl InputLane {
                 at,
             },
             epoch_advanced: advanced,
+            stale_modifier,
+        }
+    }
+
+    /// Edge detector for [`LaneOut::stale_modifier`]. Only a verdict all worlds agree on counts.
+    fn note_stale(&mut self, verdict: Option<Verdict>) -> Option<u32> {
+        match verdict {
+            Some(v) => match v.stale {
+                Some(_) if self.stale_told => None,
+                Some(m) => {
+                    self.stale_told = true;
+                    Some(m)
+                }
+                None => {
+                    self.stale_told = false;
+                    None
+                }
+            },
+            None => None,
         }
     }
 
@@ -428,10 +456,15 @@ impl InputLane {
     ) -> (KeyClass, Option<Bound>) {
         if is_gorca_mod {
             return (
-                // Autorepeat of the held modifier leaks to the application (PF-5, P-13) but is
-                // not a double tap: it must not look like one, 35 times.
+                // Mutter 48.7 runs the double-tap rule for autorepeat too: some repeats leak to
+                // the application (PF-5, P-13), the others are swallowed. Neither is a double
+                // tap, and it must not look like one, 35 times.
                 if kind == PressKind::Repeat {
-                    KeyClass::PassToApp
+                    if v.swallowed {
+                        KeyClass::Swallowed
+                    } else {
+                        KeyClass::PassToApp
+                    }
                 } else if v.passed_modifier {
                     KeyClass::ModifierPassThrough
                 } else if v.swallowed {
@@ -753,6 +786,57 @@ mod tests {
         assert_eq!(r.class(KC_INS, INS, true, 3000), KeyClass::Swallowed);
     }
 
+    /// Hold Insert from `t0` for `hold_ms` with autorepeat (first repeat after 500 ms, then
+    /// every 30 ms), release it, and return every `stale_modifier` the lane reported.
+    fn hold_insert(r: &mut Rig, t0: u64, hold_ms: u64) -> Vec<u32> {
+        let mut told = Vec::new();
+        told.extend(
+            r.key(KC_INS, INS, true, t0, Modifiers::empty())
+                .stale_modifier,
+        );
+        let mut t = 500;
+        while t < hold_ms {
+            told.extend(
+                r.key(KC_INS, INS, true, t0 + t, Modifiers::empty())
+                    .stale_modifier,
+            );
+            t += 30;
+        }
+        told.extend(
+            r.key(KC_INS, INS, false, t0 + hold_ms, Modifiers::empty())
+                .stale_modifier,
+        );
+        told
+    }
+
+    #[test]
+    fn a_long_hold_of_the_modifier_is_predicted_stuck_and_keys_are_not_echoed() {
+        let mut r = rig();
+        assert_eq!(hold_insert(&mut r, 1000, 900), [INS], "told exactly once");
+        // Mutter swallows Tab and a: never PassToApp (that would echo "tab"), never a command.
+        let o = r.key(KC_A, A, true, 3000, Modifiers::empty());
+        assert_eq!(o.intent.class, KeyClass::Swallowed);
+        assert!(o.stale_modifier.is_none(), "not told again");
+        assert_eq!(o.intent.chord.map(|c| c.mods), Some(Modifiers::empty()));
+        // T is bound as gorca+T: without the modifier down it must not run that command.
+        let o = r.key(KC_T, T, true, 3100, Modifiers::empty());
+        assert_eq!(o.intent.class, KeyClass::Swallowed);
+        r.class(KC_T, T, false, 3140);
+        r.class(KC_A, A, false, 3150);
+        // One tap heals it: keys reach the application again, and a new episode is told again.
+        r.class(KC_INS, INS, true, 5000);
+        r.class(KC_INS, INS, false, 5050);
+        assert_eq!(r.class(KC_A, A, true, 5200), KeyClass::PassToApp);
+        assert_eq!(hold_insert(&mut r, 8000, 900), [INS]);
+    }
+
+    #[test]
+    fn a_short_hold_is_not_stuck() {
+        let mut r = rig();
+        assert!(hold_insert(&mut r, 1000, 540).is_empty());
+        assert_eq!(r.class(KC_A, A, true, 3000), KeyClass::PassToApp);
+    }
+
     #[test]
     fn the_guard_band_makes_the_second_press_and_its_chord_ambiguous() {
         let mut r = rig();
@@ -866,12 +950,18 @@ mod tests {
         );
         r.links.keymap.store(Arc::new(km));
         r.class(KC_INS, INS, true, 1000);
-        // About 35 repeats of Insert in 1.5 s: never a double tap, never an interrupt.
+        // About 35 repeats of Insert in 1.5 s: never a double tap, never an interrupt. Mutter
+        // 48.7 swallows some of them and passes the others (the double-tap rule runs for
+        // autorepeat), so either class is right, a pass-through marker or a command is not.
         let e = r.epoch.current();
         for i in 0..35 {
             let o = r.key(KC_INS, INS, true, 1500 + i * 40, Modifiers::empty());
             assert_eq!(o.intent.kind, PressKind::Repeat);
-            assert_eq!(o.intent.class, KeyClass::PassToApp);
+            assert!(
+                matches!(o.intent.class, KeyClass::PassToApp | KeyClass::Swallowed),
+                "{:?}",
+                o.intent.class
+            );
             assert!(!o.epoch_advanced);
         }
         assert_eq!(r.epoch.current(), e);

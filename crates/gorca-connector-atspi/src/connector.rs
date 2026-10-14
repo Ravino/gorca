@@ -68,7 +68,8 @@ pub struct AtspiOptions {
     /// Address of the session bus (enablement, and discovery when `a11y_address` is `None`).
     /// `None`: no enablement, and `a11y_address` is required.
     pub session_address: Option<String>,
-    /// ID-5: set `IsEnabled` and `ScreenReaderEnabled` at startup and restore them at shutdown.
+    /// ID-5: set `IsEnabled` at startup and restore it at shutdown. `ScreenReaderEnabled` is
+    /// never written: it flips the GSettings key that makes GNOME autostart Orca.
     pub enable_accessibility: bool,
     /// `Registry.RegisterEvent` for [`REGISTERED_EVENTS`].
     pub register_events: bool,
@@ -739,6 +740,20 @@ async fn run(
     }
 
     tracing::info!("atspi connector stopping");
+    // First, before the slow teardown below can run into the daemon's shutdown grace: the one
+    // thing the user can see is `IsEnabled` left on after gorca is gone.
+    if let Some((s, plan)) = enablement {
+        let deadline = Deadline::after(&clock, Duration::from_secs(1));
+        match read_status(&s, deadline).await {
+            Ok(now) => {
+                let deadline = Deadline::after(&clock, Duration::from_secs(1));
+                if let Err(e) = write_status(&s, deadline, now, plan.on_shutdown(now)).await {
+                    tracing::warn!(error = %e, "could not restore org.a11y.Status");
+                }
+            }
+            Err(e) => tracing::warn!(error = %e, "could not read org.a11y.Status to restore it"),
+        }
+    }
     drain_cancel.cancel();
     if tokio::time::timeout(Duration::from_secs(4), drain_task)
         .await
@@ -750,12 +765,6 @@ async fn run(
     tasks.shutdown(Duration::from_secs(1)).await;
     for app in router.take_all() {
         let _ = registry.retire(app);
-    }
-    if let Some((s, plan)) = enablement {
-        let deadline = Deadline::after(&clock, Duration::from_secs(1));
-        if let Err(e) = write_status(&s, deadline, plan.on_startup(), plan.on_shutdown()).await {
-            tracing::warn!(error = %e, "could not restore org.a11y.Status");
-        }
     }
     Ok(())
 }

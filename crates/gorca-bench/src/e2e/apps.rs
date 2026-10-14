@@ -227,6 +227,15 @@ impl KeyReply {
     }
 }
 
+/// Outcome of [`FakeMutter::hold`].
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct Hold {
+    /// Autorepeat events the timer produced.
+    pub repeats: u32,
+    /// After the release the key is still in Mutter's `grabbed_keypresses` (the 48.7 bug).
+    pub stale: bool,
+}
+
 /// Parse `"keys":[[kc,sym,released],...]` of an `app_log` reply.
 pub fn parse_app_log(line: &str) -> Vec<(u16, u32, bool)> {
     let Some(i) = line.find("\"keys\":[") else {
@@ -305,6 +314,23 @@ impl FakeMutter {
             Duration::from_secs(5),
         )?;
         Ok(KeyReply::parse(&r))
+    }
+
+    /// Hold a key down for `hold_ms` (virtual time): the press, Mutter's autorepeat timer (first
+    /// repeat after the repeat delay, then every 30 ms) and the release. Mutter 48.7 runs the
+    /// a11y double-tap rule for the repeats, which can leave a grabbed modifier stale.
+    pub fn hold(&mut self, keycode: u16, keysym: u32, time_ms: u64, hold_ms: u64) -> Result<Hold> {
+        let r = self.proc.request(
+            "hold",
+            &format!(
+                "\"keycode\":{keycode},\"keysym\":{keysym},\"time_ms\":{time_ms},\"hold_ms\":{hold_ms}"
+            ),
+            Duration::from_secs(5),
+        )?;
+        Ok(Hold {
+            repeats: json_num(&r, "repeats").unwrap_or(0.0) as u32,
+            stale: r.contains("\"stale\":true"),
+        })
     }
 
     /// Keys that reached the app so far: `(keycode, keysym, released)`.

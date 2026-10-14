@@ -1,6 +1,6 @@
 //! Process identity helpers (ADR-0001 ID-2).
 //!
-//! `comm` must be `orca` before `ScreenReaderEnabled` is set, so that Chromium's `/proc`
+//! `comm` must be `orca` before `IsEnabled` is set, so that Chromium's `/proc`
 //! detection finds a screen reader. The daemon decides when to call this; Phase 0 never does.
 #![allow(unsafe_code)]
 

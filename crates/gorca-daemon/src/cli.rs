@@ -121,7 +121,8 @@ OPTIONS:
     --session-address=ADDRESS    session bus address (testing; default: $DBUS_SESSION_BUS_ADDRESS)
     --speech-peer-uid=UID        also trust a speech server running as UID (repeatable; default:
                                  only our own user)
-    --no-enable                  do not set org.a11y.Status IsEnabled/ScreenReaderEnabled
+    --no-enable                  do not set org.a11y.Status IsEnabled (gorca never writes
+                                 ScreenReaderEnabled: that would make GNOME autostart Orca)
     --config=PATH                settings file (default: $XDG_CONFIG_HOME/gorca/gorca.toml)
     --no-probe                   do not ask gsettings about the keyboard and clock
     --bench-present-log=PATH     benchmarks only: write the presentation log (absolute PATH, mode

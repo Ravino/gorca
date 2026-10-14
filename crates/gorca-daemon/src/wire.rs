@@ -166,7 +166,9 @@ pub(crate) fn wire_atspi(
     state: AtspiState,
     shutdown: &CancellationToken,
 ) {
-    tasks.spawn(
+    // Graceful: the connector restores `org.a11y.Status` (ID-5) after it sees the shutdown. A
+    // plain `spawn` drops the future on cancel, so that cleanup never ran.
+    tasks.spawn_graceful(
         "atspi-connector",
         supervise_connector(
             AtspiOptions {

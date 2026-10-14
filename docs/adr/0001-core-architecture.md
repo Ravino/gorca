@@ -64,7 +64,7 @@ From `docs/reports/2026-10-12-linux-platform-foundation.md` (LP) and `docs/repor
 | F-6 | `Cache.GetItems` returns 168–334 items in 4–5 ms for native apps, but **no web document nodes** (Firefox: chrome UI only; Chromium: frames only). | Bulk fill works for native apps only. Web documents need their own build path. | §5.4, §9 |
 | F-7 | AT-SPI per-call cost to browsers: p50 0.1–0.3 ms, p99 ~1–1.6 ms. Naive walk 1.25–1.6 ms/node. P2P (`GetApplicationBusAddress`) cuts p50 by 35–60 %. Firefox answers on its parent main thread. | Pipelined P2P requests. Client-side parallelism helps decoding and indexing, not the server. | §5.4, §9 |
 | F-8 | Firefox: offsets in UTF-16 units with U+FEFF after astral chars; lazy cache domains return empty data on first use. Chromium: code points; text events only for editable and live nodes; `text-caret-moved(0)` overloaded for scroll-to-anchor; detects screen readers by `/proc/*/comm == "orca"` or argv element `orca` (`refs/chromium/content/browser/accessibility/browser_accessibility_state_impl_auralinux.cc:43-56`). | Connector normalisation tables per toolkit; R1 process name. | §5.5, §9 |
-| F-9 | Apps build trees only when `org.a11y.Status.IsEnabled` is true; Chromium reads it once at start. | gorca sets `IsEnabled` and `ScreenReaderEnabled` at startup, before apps launch where possible. | §5.5 |
+| F-9 | Apps build trees only when `org.a11y.Status.IsEnabled` is true; Chromium reads it once at start. | gorca sets `IsEnabled` (never `ScreenReaderEnabled`, see ID-5) at startup, before apps launch where possible. | §5.5 |
 
 ## 2. Decision (summary)
 
@@ -387,13 +387,13 @@ impl MirrorWriter {
 ### 5.5 Platform identity and enablement (R1, F-1, F-8, F-9)
 
 - **ID-1 Bus name.** At startup gorca calls `RequestName("org.gnome.Orca.KeyboardMonitor", flags = 0)` (queued) with a deadline. Reply `PRIMARY_OWNER` → input monitor `Authorizing`. Reply `IN_QUEUE` → `Unauthorized { queued: true }`: gorca speaks once ("Another screen reader holds the keyboard; gorca will take over when it exits") and runs without its own key commands. `NameAcquired` moves it on (§7.3). Development setups may use `MUTTER_DEBUG_A11Y_MANAGER_WITHOUT_ACCESS_CONTROL=1`.
-- **ID-2 Process name.** The main thread sets `comm` to `orca` with `prctl(PR_SET_NAME)` **before** setting `ScreenReaderEnabled`. Chromium's `IsOrcaProcess` reads the thread-group leader's `comm` (`browser_accessibility_state_impl_auralinux.cc:43-56`). Other threads are named `gorca-<lane>`.
+- **ID-2 Process name.** The main thread sets `comm` to `orca` with `prctl(PR_SET_NAME)` **before** setting `IsEnabled`. Chromium's `IsOrcaProcess` reads the thread-group leader's `comm` (`browser_accessibility_state_impl_auralinux.cc:43-56`). Other threads are named `gorca-<lane>`.
 - **ID-3 Side effects of ID-2 that must be handled:**
   - Orca's `other_orcas()` runs `pgrep -u $UID -x orca` (`refs/orca/src/orca/orca_bin.py.in:208-219`). Orca will therefore refuse to start while gorca runs.
   - `orca --replace` sends **SIGKILL** to gorca (`orca_bin.py.in:342-343, 221-238`). The systemd user unit sets `RestartPreventExitStatus=SIGKILL` so gorca does not fight Orca in a restart loop.
   - `orca --setup` sends **SIGUSR1** to gorca, whose default action would terminate the process. gorca installs a SIGUSR1 handler: it opens gorca settings or is ignored.
 - **ID-4 Chromium.** The documented launcher adds `--force-renderer-accessibility` as a fallback for builds or forks that do not run `/proc` detection.
-- **ID-5 Enablement.** At startup gorca sets `org.a11y.Status.IsEnabled = true` and `ScreenReaderEnabled = true`. It does not toggle them off while running. Shutdown restores the previous values.
+- **ID-5 Enablement.** At startup gorca sets `org.a11y.Status.IsEnabled = true`. It never writes `ScreenReaderEnabled`: in at-spi2-core 2.56 that `Set` writes the GSettings key `org.gnome.desktop.a11y.applications screen-reader-enabled`, and GNOME's session autostart then launches Orca (amended 2026-10-14, `docs/reports/live-keys-swallowed.md`). Firefox, Qt and Chromium wake on `IsEnabled` alone. It does not toggle it off while running. Shutdown restores the previous `IsEnabled`, unless `ScreenReaderEnabled` became true meanwhile (a screen reader the user started). The connector task must run its own shutdown code (`TaskSet::spawn_graceful`): a plain `spawn` drops the future on cancel, which skipped the restore until 2026-10-14.
 - Upstream fixes, such as a second allow-listed name in Mutter or a generic AT detection in Chromium, are a later nice-to-have and do not block anything.
 
 ### 5.6 Toolkit normalisation and the terminal case (F-4, F-8)

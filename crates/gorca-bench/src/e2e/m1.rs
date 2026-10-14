@@ -967,6 +967,102 @@ fn score_typing(typed: &[(u16, u32)], log: &[(u16, u32, bool)]) -> (u64, u64) {
     (lost, doubled)
 }
 
+const KEY_A: K = K {
+    code: 38,
+    sym: 0x61,
+};
+/// What the reader says when it predicts Mutter 48.7's stuck modifier.
+const STUCK_HINT: &str = "Insert stuck, tap Insert";
+
+/// K4h: the Mutter 48.7 stuck-modifier bug (docs/reports/live-keys-swallowed.md). Holding a grabbed
+/// modifier that autorepeats (Insert) for 0.57 s or more leaves it in `grabbed_keypresses`; from
+/// then on Mutter swallows every key until the modifier is tapped once. `fake_mutter.py` emulates
+/// the 48.7 autorepeat logic, so the stale state is real here. The reader must know it: it speaks
+/// the hint once per episode and never echoes keys the application does not receive; a short hold
+/// must stay silent; one tap of Insert ends the episode.
+///
+/// Metrics (all gated at 0 in every run): `hold_not_stale` (the emulation did not reproduce the
+/// bug, so the scenario proved nothing), `stuck_not_swallowed` (Mutter passed a key while stale),
+/// `stuck_echoed` (the reader spoke something other than the hint while keys were swallowed),
+/// `stuck_hint_wrong` (hint count per episode is not exactly one, or a short hold produced one),
+/// `stuck_not_healed` (a key was still swallowed after the tap of Insert).
+pub fn k4h(
+    host: &HostEnv,
+    reader: &ReaderSpec,
+    flavor: Flavor,
+    size: Size,
+    _seed: u64,
+    out: &mut RunOut,
+) -> Result<()> {
+    if !gate_open(host, "K4h", out)? {
+        return Ok(());
+    }
+    let episodes = size.n.clamp(2, 5);
+    let mut rig = m1_rig(host, reader, flavor)?;
+    let mut ty = Typist::new();
+    std::thread::sleep(Duration::from_millis(500));
+    let (mut hold_not_stale, mut not_swallowed, mut echoed) = (0u64, 0u64, 0u64);
+    let (mut hint_wrong, mut not_healed) = (0u64, 0u64);
+    for round in 0..episodes {
+        let say = |rig: &Rig, mark: usize| -> Vec<String> {
+            speaks(&rig.mock.since(mark))
+                .map(|(_, t)| t.to_owned())
+                .collect()
+        };
+        // A short hold (under the 0.57 s threshold) is no episode and must be silent.
+        ty.t_ms += CHORD_GAP_MS;
+        let mark = rig.mock.mark();
+        let h = mutter(&mut rig)?.hold(INSERT.code, INSERT.sym, ty.t_ms, 450)?;
+        ty.t_ms += 450;
+        let (_, _) = tap(&mut rig, &mut ty, KEY_A)?;
+        std::thread::sleep(Duration::from_millis(150));
+        if h.stale || say(&rig, mark).iter().any(|t| t == STUCK_HINT) {
+            hint_wrong += 1;
+        }
+        // The long hold: the episode.
+        ty.t_ms += CHORD_GAP_MS;
+        let mark = rig.mock.mark();
+        let hold_ms = 900 + 100 * round as u64;
+        let h = mutter(&mut rig)?.hold(INSERT.code, INSERT.sym, ty.t_ms, hold_ms)?;
+        ty.t_ms += hold_ms;
+        if !h.stale {
+            hold_not_stale += 1;
+        }
+        std::thread::sleep(Duration::from_millis(150));
+        for k in [TAB, KEY_A, TAB] {
+            ty.t_ms += 120;
+            let (down, up) = tap(&mut rig, &mut ty, k)?;
+            if !(down && up) {
+                not_swallowed += 1;
+            }
+        }
+        std::thread::sleep(Duration::from_millis(300));
+        let said = say(&rig, mark);
+        let hints = said.iter().filter(|t| *t == STUCK_HINT).count();
+        if hints != 1 {
+            hint_wrong += 1;
+        }
+        echoed += (said.len() - hints) as u64;
+        // One tap of Insert heals Mutter; the next key must get through again.
+        ty.t_ms += CHORD_GAP_MS;
+        tap(&mut rig, &mut ty, INSERT)?;
+        ty.t_ms += 120;
+        let (down, _) = tap(&mut rig, &mut ty, KEY_A)?;
+        if down {
+            not_healed += 1;
+        }
+    }
+    out.notes.push(format!(
+        "K4h: {episodes} episodes of a 0.9 s+ Insert hold with the 48.7 autorepeat logic emulated"
+    ));
+    out.x("hold_not_stale", hold_not_stale as f64, "events");
+    out.x("stuck_not_swallowed", not_swallowed as f64, "events");
+    out.x("stuck_echoed", echoed as f64, "events");
+    out.x("stuck_hint_wrong", hint_wrong as f64, "events");
+    out.x("stuck_not_healed", not_healed as f64, "events");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
