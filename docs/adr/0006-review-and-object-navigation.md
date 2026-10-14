@@ -17,6 +17,10 @@ free number (ADR-0007). This ADR defines the seams M3 plugs into (§10).
 ## 0. Changelog
 
 - 2026-10-14: first version.
+- 2026-10-14: M4a implementation amendments, from the platform checks
+  (`docs/reports/2026-10-14-adr0006-platform-checks.md`) and the build: F-10 corrected, SF-1 narrowed,
+  KM-3 rewritten (V-1 refuted), V-2..V-5 recorded, VD-3 outranks VD-2, replies matched by request id,
+  the `Children` fetch primitive, text lines asked of text roles when interfaces are unknown (§20).
 
 ## 1. Context
 
@@ -38,7 +42,7 @@ the status bar, Shell panels. Focus tracking (Phase 1), the command layer (M1) a
 | F-7 | The mirror never holds `bounds` today: the decoder sets `bounds: None`, `PropMask::PRESENT` excludes `BOUNDS`, and B-1 §5.1 ignores `BOUNDS` events. | `crates/gorca-connector-atspi/src/decode.rs:158`, `crates/gorca-model/src/node.rs:85-99`, B-1 SPEC §5.1 |
 | F-8 | The Reader can read any app's mirror lock-free through `Directory` (`AppId → MirrorHandle`); `MirrorRead::view` never blocks or allocates on a hit; `revision()` is O(1). | `crates/gorca-core/src/directory.rs`, `crates/gorca-mirror/src/store/mod.rs:499-566` |
 | F-9 | GTK4 lazy mirrors hold realised nodes only; `ChildList` may be `Count(n)` or `Unknown` (GetItems carries the count only). | B-1 SPEC §2.2 (P-9) |
-| F-10 | Wayland gives no global coordinates to clients, and GTK4 popovers and menus are separate surfaces: their `WINDOW` coordinates are relative to their own surface, not the parent window's. | F-1, GTK4 `GtkPopover` is a `GtkNative` |
+| F-10 | **Corrected 2026-10-14 (V-2).** A GTK4 popover is parent-window-relative in `WINDOW` coordinates, not relative to its own surface, and `AdwAlertDialog` is an in-window child. Only a real second toplevel (a GTK3 menu window, a dialog window) has its own origin. | `docs/reports/2026-10-14-adr0006-platform-checks.md` |
 
 ### 1.2 Prior art and its failures
 
@@ -338,8 +342,10 @@ The model root is the **surface** that contains `nav`: the nearest ancestor (or 
 in {`Frame`, `Window`, `Dialog`, `Alert`, `FileChooser`, `Popover`/`Menu` with a popup parent,
 `ToolTip`}, or the app root for Shell.
 
-- **SF-1** Only one surface's coordinates are compared. A subtree that is itself a surface (a GTK4
-  popover, a menu, a nested dialog) is **excluded** from its parent's model (F-10) and gets its own.
+- **SF-1** Only one surface's coordinates are compared. A subtree that is itself a surface (a popover,
+  a menu, a nested dialog) is **excluded** from its parent's model and gets its own. Since F-10 was
+  corrected this is a choice of reading scope, not of coordinates: a GTK4 popover shares its parent window's
+  coordinates, and keeping it out stops two overlapping layers from interleaving on the same lines.
 - **SF-2** If `nav` is inside a menu or popover that is showing, that menu is the surface (Orca
   `flat_review.py:661-664`).
 - **SF-3** Shell (F-5) uses stage coordinates. Its surfaces are the top-level St containers the
@@ -414,7 +420,8 @@ On `Dirty`:
   Interactive deadline. On timeout, speak from the old model with `may_refine` and count
   `review_stale_spoken`.
 - **VD-3** If `ChildrenChanged` hit the surface itself or more than 25 % of the zones are dirty, the
-  refresh becomes a full rebuild (the same pipeline).
+  refresh becomes a full rebuild (the same pipeline). **VD-3 outranks VD-2** (§13, app floods): when most of
+  the surface changed the step speaks from the old model and the rebuild runs in the background.
 
 ### 6.6 Geometry without events: RR-1, and re-anchoring
 
@@ -590,9 +597,13 @@ Keymap rules this ADR relies on, all already in ADR-0005:
 - **KM-2** Keypad chords have no Num Lock variants (K-6a). With Num Lock on, the keypad types digits
   and review is reached through the gorca+ chords. This matches NVDA, and gorca says so in learn
   mode.
-- **KM-3** Chords match keycodes (K-8). `Shift+KP_Home` with Num Lock off produces keysym `KP_7`
-  at the shift level in XKB's `KEYPAD` type, so the grab compiler (K-8a) must register the keysym
-  of the **shifted level**. This is verification item V-1 (§19).
+- **KM-3** (rewritten, V-1 refuted) Chords match keycodes (K-8). Shift does **not** move a keypad key to
+  its digit keysym. With Num Lock off, `KP7` arrives as `KP_Home` and `Shift+KP7` as `KP_Home` with state
+  Shift; with Num Lock on, `KP7` arrives as `KP_7` with Mod2 and `Shift+KP7` as `KP_Home` with
+  Shift|Mod2. Mutter matches the exact keysym and the exact state, so the grab compiler (K-8a,
+  `gorca_core::chord_grabs`) registers, for every keypad review chord, the Num Lock off pair and the Num Lock
+  on pair, each also with Caps Lock set, as **exact** grabs that are not expanded again. Keypad
+  operators (`KP_Add`, `KP_Subtract`, `KP_Enter`, ...) have one keysym and are registered for Num Lock off only (K-6a).
 - **KM-4** `gorca` held together with a keypad key, where the gorca modifier is `KP_Insert` (numpad
   0): Mutter grabs every key while a grabbed modifier is held, so no extra keystroke grab is needed
   (memory: mutter-key-grab-facts; `meta-a11y-manager.c:540-553`).
@@ -742,8 +753,7 @@ interleaved repeats, and must also hold under L3-50k with Δp99 ≤ 1 ms (phase-
 
 ## 19. Verification items (owner: linux-platform-engineer unless noted)
 
-- **V-1** Grab compilation for `Shift+KP_*` with Num Lock off registers the shifted-level keysym
-  (`KP_7`, …), and Mutter delivers the grabbed press (KM-3).
+- **V-1** **Refuted, rule rewritten as KM-3** (Shift does not change keypad keysyms; see section 20 for V-2 to V-5).
 - **V-2** `GetExtents(WINDOW)` sanity on GTK3 under Wayland (is it relative to the toplevel surface,
   including CSD shadow offsets?), GTK4 (F-1), Shell (F-5) and libadwaita dialogs (are they separate
   surfaces?).
@@ -756,3 +766,43 @@ interleaved repeats, and must also hold under L3-50k with Δp99 ≤ 1 ms (phase-
 - **V-6** (test-engineer) A fake app that reports bogus extents (negative sizes, huge values,
   overlapping everything) does not break clustering or exceed the §6.8 bounds (fuzz
   `build_line_model`).
+
+## 20. Implementation notes (M4a, 2026-10-14)
+
+What the code does where the text above left a choice, so the next slice does not rediscover it.
+
+- **Where the work runs.** Review I/O (`review/build.rs`) runs in tasks owned by the Reader lane's runtime loop
+  (a `JoinSet`, at most 32, aborted with the lane), not inside the app actor. Each task talks to the app
+  through its request channel under Interactive or Prefetch deadlines, hands what it fetched to the app actor
+  as `FillMsg::ReviewApply` (the actor stays the only mirror writer, MX-4) and waits at most 50 ms for the
+  acknowledgement, so the Reader finds the nodes in the mirror when the result message arrives. The pure
+  `build_line_model` runs inline in the task (R3: 2 ms at 2 048 zones), not on a separate `cpu` pool.
+- **Matching.** `ReviewMsg` replies are matched to the pending operation by request id, not by epoch: a newer
+  key advances the epoch while an operation is pending, and the operation's result must still finish it (the
+  queued commands run behind it, and only the last speaks). The `epoch` fields of §3 are dropped.
+- **Child lists.** The connector's `ChildSnapshots` returns children only, so the parent keeps `Count(n)`. The
+  `Children` navigation fetch is a `Fetch` of the parent plus a `ChildSnapshots` of its children in flight
+  together, and the task writes the parent back with `Known(keys)` when the count matches. A node with more than
+  256 children stays `Count`, and a walk over it degrades (OB-4).
+- **Text lines on unknown interfaces.** Fetched snapshots do not carry `Ifaces`. Text-bearing roles (label,
+  static text, paragraph, heading, link, entry, document, terminal, list item, cell, alert) are asked for
+  `VisibleLines` when the interfaces are unknown; a refusal means the node has no zone of its own text. A node
+  known not to have `Text` is not asked.
+- **Zone rules added.** A control whose name equals the text of its descendants is one zone ("OK button"); a window's
+  title is not a line; a label or paragraph without `Text` still says its name; a single-line entry is one zone
+  made of its label, role and typed text. A label is dropped when a control on its line has the same name.
+- **Platform checks V-2 to V-5** (`docs/reports/2026-10-14-adr0006-platform-checks.md`): GTK3 SCREEN, WINDOW and PARENT are
+  identical and include the CSD shadow; GTK4 WINDOW is correct, offset (14,12) from the surface; a GTK4 popover is
+  parent-window-relative and `AdwAlertDialog` is an in-window child (F-10 corrected); the Shell uses stage coordinates. V-3:
+  `GetOffsetAtPoint(WINDOW)` for the first visible offset (about 1 ms), GTK4 editables answer `NotSupported` and fall
+  back to one whole-text line. V-4: scrolling emits no bounds events in GTK3, GTK4 or the Shell, so the 2 s TTL (RR-1) and the
+  per-step validity check stay. V-5: VTE `Text` exposes only the viewport (about 1.6k characters), so the generic path is cheap.
+- **Counters** are on `Reader::review_counters()`: `objnav_visit_cap`, `objnav_degraded`, `review_step_timeout`,
+  `review_stale_spoken`, `review_queue_overflow`, `review_builds`, `review_nav_gone`, `review_surface_gone`,
+  `review_move_focus_unsupported`, `review_build_failed`.
+- **Not in M4a.** The `review.*` settings keys (the defaults of §4.1 are constants; `review.simple_toggle` and
+  `review.focus_follows_toggle` change them at run time only), the RV-1 correction after a stale object
+  speech (the utterance is tagged `may_refine` and a `Demand{NavStep}` is sent), label elision through
+  `relations`, the `BoundsChanged` signal (the invalidation path accepts `BOUNDS`; the connector does not register
+  or decode the signal, V-4 says toolkits do not send it on scroll anyway), and the `Review` grab set differing
+  from the `Focus` one (both use the Focus context's chords).
