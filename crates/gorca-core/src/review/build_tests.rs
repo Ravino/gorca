@@ -492,3 +492,102 @@ async fn revalidation_compares_extents_and_text_and_updates_the_mirror() {
     let _ = TruncWhy::Deadline;
     let _ = Duration::ZERO;
 }
+
+/// F-5: an unchanged app with a text node reads as unchanged. The probe carries the node's own
+/// extents (not its line's) and the revalidation asks for lines in the build's clip.
+#[tokio::test]
+async fn f5_an_unchanged_text_node_revalidates_as_the_same() {
+    let mut s = form(1);
+    let mut label = snap(9, Role::Label, "", Some(2), &[], rect(0, 100, 200, 40));
+    label.interfaces = Ifaces::TEXT;
+    s.nodes.insert(key(9), label);
+    if let Some(ChildList::Known(k)) = s.nodes.get_mut(&key(2)).map(|n| &mut n.children) {
+        k.push(key(9));
+    }
+    s.lines.insert(
+        key(9),
+        vec![
+            TextLine {
+                range: 0..5,
+                text: Arc::from("first"),
+                rect: rect(0, 100, 120, 20),
+            },
+            TextLine {
+                range: 6..12,
+                text: Arc::from("second"),
+                rect: rect(0, 120, 140, 20),
+            },
+        ],
+    );
+    let f = fake(s);
+    let m = build_model(&f.io, spec(None, None)).await.unwrap();
+    let line = m.lines.iter().position(|l| &*l.text == "first").unwrap();
+    let probe: Vec<ProbeItem> = m
+        .line_zones(line)
+        .iter()
+        .map(|z| ProbeItem {
+            node: z.node,
+            rect: m.node_rect(z.node),
+            lines: m.texts.get(&z.node).cloned(),
+        })
+        .collect();
+    assert_eq!(
+        revalidate(&f.io, probe.clone(), m.clip).await,
+        RrVerdict::Same
+    );
+    // Changed text is still noticed.
+    f.script.lock().unwrap().lines.insert(
+        key(9),
+        vec![TextLine {
+            range: 0..3,
+            text: Arc::from("new"),
+            rect: rect(0, 100, 120, 20),
+        }],
+    );
+    assert_eq!(
+        revalidate(&f.io, probe, m.clip).await,
+        RrVerdict::Changed { text_changed: true }
+    );
+}
+
+/// F-7: a surface far deeper than ten levels is built whole, not truncated for good.
+#[tokio::test]
+async fn f7_a_deep_surface_is_built_completely() {
+    let mut s = Script::default();
+    let depth = 40u64;
+    for i in 1..=depth {
+        let kid: Vec<u64> = if i < depth { vec![i + 1] } else { vec![] };
+        let role = if i == 1 { Role::Window } else { Role::Panel };
+        let parent = (i > 1).then(|| i - 1);
+        s.nodes.insert(
+            key(i),
+            snap(i, role, "", parent, &kid, rect(0, 0, 300, 300)),
+        );
+    }
+    s.nodes.insert(
+        key(depth + 1),
+        snap(
+            depth + 1,
+            Role::Button,
+            "deep",
+            Some(depth),
+            &[],
+            rect(0, 0, 50, 20),
+        ),
+    );
+    if let Some(ChildList::Known(k)) = s.nodes.get_mut(&key(depth)).map(|n| &mut n.children) {
+        k.push(key(depth + 1));
+    }
+    let f = fake(s);
+    let m = build_model(
+        &f.io,
+        BuildSpec {
+            budget: Duration::from_secs(2),
+            ..spec(None, None)
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(m.completeness, Completeness::Complete);
+    assert_eq!(&*m.lines[0].text, "deep button");
+}

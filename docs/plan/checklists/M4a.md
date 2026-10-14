@@ -2,9 +2,10 @@
 
 Run on the real GNOME 48 desktop with `tools/gorca-toggle.sh` (Super+Alt+G); gorca must be the only
 screen reader. Specification: `docs/adr/0006-review-and-object-navigation.md` (section 15.1 acceptance 3,
-section 20 for what the code does). Keys are the NVDA desktop layout unless said otherwise. The numpad
-review keys need **Num Lock off or on**: both states are grabbed (platform check V-1), so `KP7` and
-`Shift+KP7` work either way; with Num Lock on the keypad review keys steal the digits, as NVDA's do.
+section 20 for what the code does). Keys are the NVDA desktop layout unless said otherwise. The unmodified numpad
+review keys work with **Num Lock off** only (K-6a, as in NVDA and Orca): with Num Lock on the keypad types digits
+and Home/End into the application untouched, and review is reached through the `gorca+` chords. Check this: with
+Num Lock on, `7` on the numpad types a 7 in a text field.
 `gorca` = Insert (or KP_Insert with Num Lock off) or Caps Lock.
 
 Settings are not in `gorca.toml` yet: simple review, review-follows-focus and the screen/object default are

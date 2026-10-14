@@ -9,7 +9,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gorca_connector_api::ActionReq;
-use gorca_model::{Lookup, NodeKey, NodeSnapshot, PropMask, Role, StateSet};
+use gorca_model::{Epoch, Lookup, NodeKey, NodeSnapshot, PropMask, Role, StateSet};
 use smallvec::SmallVec;
 
 use super::build::{NavFetchError, ProbeItem, RrVerdict};
@@ -20,7 +20,7 @@ use super::model::{Completeness, LineModel};
 use super::objnav::{NavMove, NavOp, StepResult, step, step_degraded};
 use super::segment::{Dir, SimpleUnits, Spell, TextUnits, Unit, char_text, slice, spell_letters};
 use super::validity::{Validity, validity};
-use super::{BuildRequest, OpState, ReviewMsg};
+use super::{BuildRequest, OpState, ReviewMsg, RrCheck};
 use crate::SpeechIntent;
 use crate::commands::CoreCmd;
 use crate::mode::{Mode, ModeMsg};
@@ -31,6 +31,9 @@ use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 const GRACE: Duration = Duration::from_millis(40);
 /// A model build gets this long before the Reader degrades (the task publishes at 120 ms).
 const BUILD_WAIT: Duration = Duration::from_millis(500);
+/// One review step, queue included, is over after this long: OB-3 and R4 allow the 120 ms Interactive
+/// deadline plus 5 ms. Whatever is still unknown then is spoken degraded, with no further IPC.
+const STEP_BUDGET: Duration = Duration::from_millis(125);
 /// Commands that may wait behind a pending operation (ADR-0006 4.3).
 const QUEUE_MAX: usize = 8;
 /// Fraction of dirty nodes that makes a refresh a full rebuild (VD-3), in percent.
@@ -133,6 +136,8 @@ pub(crate) struct Pending {
     pub rep: u8,
     pub attempts: u8,
     pub deadline: Instant,
+    /// The epoch of the key press this operation answers (R3: a newer epoch supersedes it).
+    pub epoch: Epoch,
     pub queued: SmallVec<[(RCmd, u8); QUEUE_MAX]>,
 }
 
@@ -214,7 +219,12 @@ impl Reader {
         fx: &mut ReaderEffects,
     ) {
         let Some(rc) = map_command(c) else { return };
-        self.expire_late(now, fx);
+        // A pending operation past its deadline is over: dropped without a word, the new key
+        // speaks (F-3, ADR-0001 R-1: superseded results are never spoken).
+        if matches!(&self.review.op, OpState::Pending(p) if now >= p.deadline) {
+            self.review.op = OpState::Idle;
+            self.review.counters.review_step_timeout += 1;
+        }
         if let OpState::Pending(p) = &mut self.review.op {
             if rc.cursor_relative() {
                 if p.queued.len() >= QUEUE_MAX {
@@ -227,6 +237,7 @@ impl Reader {
             // A command that does not depend on the cursor cancels the pending one.
             self.review.op = OpState::Idle;
         }
+        self.review.step_started = Some(now);
         self.exec(rc, rep, 0, Queue::new(), now, fx);
     }
 
@@ -269,6 +280,11 @@ impl Reader {
     /// Timer: a pending operation whose reply never came ends degraded (ADR-0006 4.3).
     pub(crate) fn review_timer(&mut self, now: Instant, fx: &mut ReaderEffects) {
         self.expire_late(now, fx);
+        // The runtime keeps one timer slot and clears it when it fires: whatever is still
+        // outstanding is armed again (F-3).
+        if let OpState::Pending(p) = &self.review.op {
+            fx.push(ReaderEffect::ArmTimer(p.deadline));
+        }
     }
 
     /// Focus moved while review is active: review follows it by default (ADR-0006 4.1).
@@ -322,6 +338,9 @@ impl Reader {
         now: Instant,
         fx: &mut ReaderEffects,
     ) {
+        if self.superseded(&p) {
+            return;
+        }
         let attempts = match err {
             None => p.attempts,
             Some(e) => {
@@ -333,6 +352,23 @@ impl Reader {
             }
         };
         self.exec(p.cmd, p.rep, attempts, p.queued, now, fx);
+    }
+
+    /// A result whose key press was followed by another one (any key advances the epoch) and with
+    /// nothing queued is stale: it is dropped, never spoken (R3, ADR-0001 R-1).
+    fn superseded(&mut self, p: &Pending) -> bool {
+        let stale = p.queued.is_empty() && self.epoch.current() > p.epoch;
+        if stale {
+            self.review.counters.review_superseded += 1;
+        }
+        stale
+    }
+
+    /// OB-3: the step's whole budget is spent; nothing more is fetched for it or its queue.
+    fn budget_spent(&self, now: Instant) -> bool {
+        self.review
+            .step_started
+            .is_some_and(|s| now >= s + STEP_BUDGET)
     }
 
     fn exec(
@@ -374,13 +410,21 @@ impl Reader {
         match step {
             Step::Done => Some(queued),
             Step::Suspend { what, effect, wait } => {
-                let deadline = now + wait + GRACE;
+                let mut deadline = now + wait + GRACE;
+                if !matches!(what, What::Build(_))
+                    && let Some(s) = self.review.step_started
+                {
+                    // All suspensions of one step share one budget (OB-3, F-2).
+                    let end = (s + STEP_BUDGET).max(now + Duration::from_millis(1));
+                    deadline = deadline.min(end);
+                }
                 self.review.op = OpState::Pending(Box::new(Pending {
                     what,
                     cmd: rc,
                     rep,
                     attempts: attempts.saturating_add(1),
                     deadline,
+                    epoch: self.epoch.current(),
                     queued,
                 }));
                 fx.push(effect);
@@ -560,6 +604,11 @@ impl Reader {
         now: Instant,
         fx: &mut ReaderEffects,
     ) -> Step {
+        let attempts = if self.budget_spent(now) {
+            attempts.max(self.review.limits.nav_suspensions)
+        } else {
+            attempts
+        };
         match rc {
             RCmd::Toggle => {
                 if matches!(self.mode, Mode::Review { .. }) {
@@ -928,7 +977,7 @@ impl Reader {
             });
         }
         // RR-1: geometry changes without events (scroll, resize) are caught after the fact.
-        self.maybe_revalidate(&model, out.pos.line, is_cur, now, fx);
+        self.maybe_revalidate(&model, &out.pos, is_cur, now, fx);
         Step::Done
     }
 
@@ -959,7 +1008,7 @@ impl Reader {
     fn maybe_revalidate(
         &mut self,
         model: &Arc<LineModel>,
-        line: u32,
+        pos: &FlatPos,
         is_cur: bool,
         now: Instant,
         fx: &mut ReaderEffects,
@@ -967,6 +1016,7 @@ impl Reader {
         if !is_cur {
             return;
         }
+        let line = pos.line;
         let due = self
             .review
             .validated_at
@@ -975,35 +1025,34 @@ impl Reader {
             return;
         }
         self.review.validated_at = Some(now);
-        let probe: Vec<ProbeItem> = model
-            .line_zones(line as usize)
-            .iter()
-            .take(8)
-            .map(|z| ProbeItem {
+        // One probe per node, with the extents the model recorded for the *node* (a text zone's
+        // own rectangle is its line's), compared by the task with a fresh read (F-5).
+        let mut probe: Vec<ProbeItem> = Vec::new();
+        for z in model.line_zones(line as usize) {
+            if probe.len() >= 8 || probe.iter().any(|p| p.node == z.node) {
+                continue;
+            }
+            probe.push(ProbeItem {
                 node: z.node,
-                rect: z.rect,
+                rect: model.node_rect(z.node),
                 lines: model.texts.get(&z.node).cloned(),
-            })
-            .collect();
+            });
+        }
         if probe.is_empty() {
             return;
         }
-        let clip = model
-            .zones
-            .iter()
-            .find_map(|z| z.rect)
-            .map(|_| gorca_model::Rect {
-                x: -10_000,
-                y: -10_000,
-                w: 20_000,
-                h: 20_000,
-            })
-            .unwrap_or_default();
+        // What was just spoken, to correct it if the content turns out to be different (F-4).
+        self.review.rr_check = Some(RrCheck {
+            model: model.id,
+            anchor: pos.anchor,
+            text: Arc::clone(&model.lines[line as usize].text),
+            epoch: self.epoch.current(),
+        });
         fx.push(ReaderEffect::ReviewRevalidate {
             model: model.id,
             app: model.app,
             probe,
-            clip,
+            clip: model.clip,
         });
     }
 
@@ -1020,6 +1069,7 @@ impl Reader {
         match verdict {
             RrVerdict::Same | RrVerdict::Failed => {
                 self.review.validated_at = Some(now);
+                self.review.rr_check = None;
             }
             RrVerdict::Changed { .. } => {
                 // The fresh extents are in the mirror: the next validity check finds the model
@@ -1063,7 +1113,37 @@ impl Reader {
         };
         self.install_model(&model, now, fx);
         if waiting && let Some(p) = self.take_pending(|_| true) {
+            if self.superseded(&p) {
+                return;
+            }
             self.exec(p.cmd, p.rep, p.attempts, p.queued, now, fx);
+        }
+    }
+
+    /// RR-1 / RV-1: the line just spoken was read from a model that turned out to be out of date;
+    /// when its text now differs and the user has not moved on, say the corrected line.
+    fn correct_spoken_line(&mut self, model: &Arc<LineModel>, fx: &mut ReaderEffects) {
+        let Some(chk) = self.review.rr_check.clone() else {
+            return;
+        };
+        if chk.model == model.id || self.epoch.current() != chk.epoch {
+            if self.epoch.current() != chk.epoch {
+                self.review.rr_check = None;
+            }
+            return;
+        }
+        self.review.rr_check = None;
+        if chk.anchor.node.app != model.app {
+            return;
+        }
+        let Some(p) = reanchor(model, chk.anchor).or_else(|| nearest_line(model, chk.anchor.y_mid))
+        else {
+            return;
+        };
+        let now_text = line_text(model, p.line);
+        if now_text.as_str() != &*chk.text {
+            self.review.counters.review_corrections += 1;
+            self.say(&now_text, fx);
         }
     }
 
@@ -1081,6 +1161,7 @@ impl Reader {
         }
         self.review.cur = Some(Arc::clone(model));
         self.review.checked_rev = 0;
+        self.correct_spoken_line(model, fx);
         self.review.validated_at = Some(now);
         if model.completeness == Completeness::GeometryFallback
             && !self.review.told_fallback.contains(&model.surface)

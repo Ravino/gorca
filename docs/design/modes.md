@@ -49,7 +49,7 @@ variants, K-6a). Only implemented commands are grabbed (K-1).
 
 | Mode | M1 | M4 adds | M7 adds |
 |---|---|---|---|
-| Focus | `M` | desktop layout: unmodified and Shift+ keypad review keys (§4.3), **exact** grabs: for each keypad chord the Num Lock off keysym and the Num Lock on keysym, each with and without Caps Lock (V-1: Shift does not change a keypad keysym) | — |
+| Focus | `M` | desktop layout: unmodified and Shift+ keypad review keys (§4.3), **exact** grabs: for each keypad chord the Num Lock off pair only, with and without Caps Lock (V-1: Shift does not change a keypad keysym; K-6a: with Num Lock on the keypad types digits) | — |
 | Review | `M` | same as Focus (the compiled chords of the Focus context) | — |
 | Browse | — | — | `M` + browse set (§4.4): quick-nav letters (± Shift), digits 1–9 (± Shift), `comma` (± Shift), arrows, Ctrl/Shift/Alt+arrows per §4.4, Home/End (± Ctrl, ± Shift), Prior/Next (± Shift), Return, KP_Enter, space, Ctrl+A, Ctrl+C, Ctrl+Alt+table keys; Escape only in Focus{Auto} |
 | PassThrough{OneKey} | ∅ | ∅ | ∅ |

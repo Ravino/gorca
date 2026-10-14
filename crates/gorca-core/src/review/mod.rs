@@ -26,7 +26,7 @@ use smallvec::SmallVec;
 pub use build::{BuildError, NavFetchError, ProbeItem, ReviewIo, RrVerdict};
 pub use cursor::{
     BuildId, FlatPos, ModelId, NavReqId, ReviewCursor, ReviewFrom, ReviewKind, ReviewOrigin,
-    ReviewPos,
+    ReviewPos, ZoneAnchor,
 };
 pub use model::{Completeness, LineModel, ReviewLimits};
 pub use objnav::{NavOp, NavSource};
@@ -88,6 +88,8 @@ pub struct ReviewCounters {
     pub review_surface_gone: u64,
     pub review_move_focus_unsupported: u64,
     pub review_build_failed: u64,
+    pub review_superseded: u64,
+    pub review_corrections: u64,
 }
 
 /// Reader-side state of the review arm.
@@ -110,6 +112,19 @@ pub struct ReviewState {
     /// Surfaces the user was told have no usable layout.
     pub(crate) told_fallback: SmallVec<[NodeKey; 4]>,
     pub(crate) counters: ReviewCounters,
+    /// When the key press that started the running step (and its queue) arrived.
+    pub(crate) step_started: Option<Instant>,
+    /// The line last spoken from the current model, for the RR-1 correction.
+    pub(crate) rr_check: Option<RrCheck>,
+}
+
+/// The line a revalidation may have to correct (ADR-0006 RR-1, F-4).
+#[derive(Clone, Debug)]
+pub(crate) struct RrCheck {
+    pub model: ModelId,
+    pub anchor: ZoneAnchor,
+    pub text: Arc<str>,
+    pub epoch: gorca_model::Epoch,
 }
 
 /// ADR-0006 4.3.
@@ -141,6 +156,8 @@ impl ReviewState {
             bg_build: None,
             told_fallback: SmallVec::new(),
             counters: ReviewCounters::default(),
+            step_started: None,
+            rr_check: None,
         }
     }
 

@@ -46,6 +46,16 @@ pub struct BuildInput {
     pub truncated: Option<TruncWhy>,
 }
 
+/// The rectangle text lines are asked for: the surface's own extents, or a huge one when it has none.
+pub fn clip_of(surface_bounds: Option<Rect>) -> Rect {
+    surface_bounds.and_then(sane_rect).unwrap_or(Rect {
+        x: -10_000,
+        y: -10_000,
+        w: 20_000,
+        h: 20_000,
+    })
+}
+
 /// A rectangle an application may have invented: kept only when it can be a screen area.
 pub fn sane_rect(r: Rect) -> Option<Rect> {
     let ok = |v: i64| (-COORD_MAX..=COORD_MAX).contains(&v);
@@ -524,6 +534,7 @@ pub fn build_line_model(input: &BuildInput, limits: &ReviewLimits) -> LineModel 
             by_key.get(k).map(|n| NodeCheck {
                 node: *k,
                 hash: snapshot_hash(&n.snap),
+                rect: n.snap.bounds,
             })
         })
         .collect();
@@ -546,6 +557,7 @@ pub fn build_line_model(input: &BuildInput, limits: &ReviewLimits) -> LineModel 
         built_rev: input.built_rev,
         built_at: input.built_at,
         completeness,
+        clip: clip_of(input.nodes.first().and_then(|n| n.snap.bounds)),
     }
 }
 

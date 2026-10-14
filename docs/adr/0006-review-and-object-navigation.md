@@ -601,9 +601,12 @@ Keymap rules this ADR relies on, all already in ADR-0005:
   its digit keysym. With Num Lock off, `KP7` arrives as `KP_Home` and `Shift+KP7` as `KP_Home` with state
   Shift; with Num Lock on, `KP7` arrives as `KP_7` with Mod2 and `Shift+KP7` as `KP_Home` with
   Shift|Mod2. Mutter matches the exact keysym and the exact state, so the grab compiler (K-8a,
-  `gorca_core::chord_grabs`) registers, for every keypad review chord, the Num Lock off pair and the Num Lock
-  on pair, each also with Caps Lock set, as **exact** grabs that are not expanded again. Keypad
-  operators (`KP_Add`, `KP_Subtract`, `KP_Enter`, ...) have one keysym and are registered for Num Lock off only (K-6a).
+  `gorca_core::chord_grabs`) registers, for every keypad review chord, the **Num Lock off** pair only
+  (`(KP_Home, 0)`, `(KP_Home, Shift)`), each also with Caps Lock set, as **exact** grabs that are not expanded
+  again. With Num Lock on nothing is grabbed (K-6a, KM-2): the digits and Home/End reach the application, and review
+  is reached through the gorca chords. (An earlier revision also grabbed the Num Lock on pairs; that swallowed
+  numpad typing and was withdrawn after review, F-1.) Keypad operators (`KP_Add`, `KP_Subtract`, `KP_Enter`, ...)
+  have one keysym and are registered for Num Lock off only.
 - **KM-4** `gorca` held together with a keypad key, where the gorca modifier is `KP_Insert` (numpad
   0): Mutter grabs every key while a grabbed modifier is held, so no extra keystroke grab is needed
   (memory: mutter-key-grab-facts; `meta-a11y-manager.c:540-553`).
@@ -806,3 +809,21 @@ What the code does where the text above left a choice, so the next slice does no
   `relations`, the `BoundsChanged` signal (the invalidation path accepts `BOUNDS`; the connector does not register
   or decode the signal, V-4 says toolkits do not send it on scroll anyway), and the `Review` grab set differing
   from the `Focus` one (both use the Focus context's chords).
+
+### 20.1 Review fixes (2026-10-14, `docs/reports/2026-10-14-m4a-review.md`)
+
+- **F-1** Only Num Lock off pairs are grabbed (KM-3 above). Test: `a_digit_typed_with_num_lock_on_reaches_the_application`.
+- **F-2** One step, queue included, has one budget of 125 ms from the key press (`STEP_BUDGET`); the pending deadline is
+  `min(now + wait, end of budget)`, and once the budget is spent a step is run degraded with no further fetch (OB-4).
+- **F-3** A pending operation past its deadline is dropped silently when a new review key arrives; the timer handler re-arms the
+  outstanding deadline (the runtime has one timer slot); a result whose key press was followed by another one (newer epoch,
+  nothing queued) is dropped (`review_superseded`).
+- **F-4** The line spoken at an RR-1 check is remembered; when the background rebuild that follows a `Changed` verdict shows
+  different text and the user has not pressed another key, the corrected line is spoken (`review_corrections`). Not done: a per-node
+  hash of text lines in the validity check (the mirror holds no text, so it could only hash `confirmed_seq`, which every RR-1 fetch
+  changes; text changes stay caught by the `NAME|VALUE` invalidation of `TextChanged` and by RR-1).
+- **F-5** The model records each node's own extents and the clip it asked text for; the RR-1 probe compares node extents with
+  node extents and re-reads lines in that clip.
+- **F-6** Review line, word and char moves and `object.next/prev/*_in_flow` are `repeatable`; the lane debounces.
+- **F-7** A build runs up to 64 tree levels per pass and continues in the background (up to 8 passes) while it finds new nodes.
+- **F-8** The R1 harness credits each speech to its key by text; late speeches are latency samples and are counted as `r1_late_keys`.

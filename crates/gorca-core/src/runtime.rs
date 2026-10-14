@@ -972,6 +972,8 @@ const REVIEW_TASKS_MAX: usize = 32;
 /// continuation runs in the background.
 const BUILD_FIRST: Duration = Duration::from_millis(120);
 const BUILD_MORE: Duration = Duration::from_millis(300);
+/// Background passes after the first one while a build keeps finding more.
+const BUILD_CONTINUATIONS: usize = 8;
 
 /// The app side of one review effect (ADR-0006 9): a task bounded by request deadlines whose
 /// outcome goes to the Reader as a `ReviewMsg`. An app that is gone, hung or refusing answers
@@ -980,6 +982,7 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
     use crate::review::build::{self, BuildSpec};
     use crate::review::model::TruncWhy;
     use crate::review::{BuildError, Completeness, NavFetchError, ReviewIo, ReviewMsg, RrVerdict};
+    use gorca_mirror::MirrorRead as _;
     let app = match &e {
         ReaderEffect::ReviewNav { op, .. } => op.node().app,
         ReaderEffect::ReviewBuild(b) => b.surface.app,
@@ -1056,28 +1059,36 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
                     },
                 )
                 .await;
-                let more = b.interactive
-                    && matches!(
-                        &first,
-                        Ok(m) if m.completeness == Completeness::Truncated(TruncWhy::Deadline)
-                    );
-                let carry = first.as_ref().ok().cloned();
+                // A surface that the first budget did not finish keeps being built in the
+                // background, each pass picking up where the last stopped (deep trees, F-7).
+                let mut carry = first.as_ref().ok().cloned();
+                let mut again = carry
+                    .as_ref()
+                    .is_some_and(|m| m.completeness == Completeness::Truncated(TruncWhy::Deadline));
                 send(ReviewMsg::Built {
                     build: b.build,
                     result: first,
                 });
-                if more {
+                let mut passes = 0;
+                while again && b.interactive && passes < BUILD_CONTINUATIONS {
+                    passes += 1;
+                    let before = io.mirror.stats().live;
                     let next = build::build_model(
                         &io,
                         BuildSpec {
                             surface: b.surface,
                             dirty: Some(Arc::from([])),
-                            prev: carry,
+                            prev: carry.clone(),
                             budget: BUILD_MORE,
                             class: BudgetClass::Prefetch,
                         },
                     )
                     .await;
+                    carry = next.as_ref().ok().cloned();
+                    again = carry.as_ref().is_some_and(|m| {
+                        m.completeness == Completeness::Truncated(TruncWhy::Deadline)
+                            && io.mirror.stats().live > before
+                    });
                     send(ReviewMsg::Built {
                         build: b.build,
                         result: next,

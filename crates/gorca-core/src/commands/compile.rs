@@ -219,10 +219,10 @@ pub fn compile(loaded: &Loaded, facts: &PlatformFacts, resolver: &dyn KeyResolve
 ///
 /// | Num Lock | plain `KP7` | `Shift+KP7` |
 /// |---|---|---|
-/// | off | `(KP_Home, 0)` | `(KP_Home, Shift)` |
-/// | on | `(KP_7, Mod2)` | `(KP_Home, Shift+Mod2)` |
+/// | off | `(KP_Home, 0)`, grabbed | `(KP_Home, Shift)`, grabbed |
+/// | on | `(KP_7, Mod2)`, **not** grabbed: the digit reaches the app | `(KP_Home, Shift+Mod2)`, **not** grabbed |
 ///
-/// Each variant also exists with Caps Lock set.
+/// Each grabbed variant also exists with Caps Lock set.
 pub fn chord_grabs(km: &CompiledKeymap, mode: ModeKind) -> (Vec<Chord>, Vec<Chord>) {
     let mut plain: Vec<Chord> = Vec::new();
     let mut exact: Vec<Chord> = Vec::new();
@@ -254,15 +254,15 @@ pub fn chord_grabs(km: &CompiledKeymap, mode: ModeKind) -> (Vec<Chord>, Vec<Chor
                     modifiers: mods | lock,
                 });
             }
-        } else if let Some(digit) = keypad_digit_keysym(nav) {
-            let on = if shift { nav } else { digit };
-            for (keysym, extra) in [(nav, Modifiers::empty()), (on, Modifiers::MOD2)] {
-                for lock in [Modifiers::empty(), Modifiers::LOCK] {
-                    exact.push(Chord {
-                        keysym,
-                        modifiers: mods | extra | lock,
-                    });
-                }
+        } else if keypad_digit_keysym(nav).is_some() {
+            // Num Lock off only (K-6a, KM-2): with Num Lock on the keypad types digits into the
+            // application, so `(KP_7, Mod2)` and the like are never grabbed. Shift does not change
+            // the keysym (V-1): `Shift+KP7` is `(KP_Home, Shift)`.
+            for lock in [Modifiers::empty(), Modifiers::LOCK] {
+                exact.push(Chord {
+                    keysym: nav,
+                    modifiers: mods | lock,
+                });
             }
         } else {
             // A letter with Shift types the capital.
@@ -506,23 +506,23 @@ mod tests {
     }
 
     /// V-1 (2026-10-14): Shift does not change a keypad keysym; Num Lock does. Mutter matches the
-    /// exact keysym and state, so every variant is registered with the keysym it will see.
+    /// exact keysym and state. F-1 (review): only the Num Lock off pairs are grabbed, so the digits
+    /// reach applications while Num Lock is on (K-6a, KM-2).
     #[test]
-    fn desktop_keypad_review_keys_are_grabbed_with_the_keysym_each_num_lock_state_produces() {
+    fn desktop_keypad_review_keys_are_grabbed_for_num_lock_off_only() {
         let (plain, exact) = grabs("");
-        // KP7 = review.prev_line: Num Lock off, and on (where the keypad types KP_7).
+        // KP7 = review.prev_line.
         assert!(has(&exact, KP_HOME, Modifiers::empty()));
         assert!(has(&exact, KP_HOME, Modifiers::LOCK));
-        assert!(has(&exact, KP_7, Modifiers::MOD2));
-        assert!(has(&exact, KP_7, Modifiers::MOD2 | Modifiers::LOCK));
-        // Shift+KP7 = review.top: KP_Home with Shift, and KP_Home with Shift+Mod2.
+        // Shift+KP7 = review.top: KP_Home with Shift.
         assert!(has(&exact, KP_HOME, Modifiers::SHIFT));
-        assert!(has(&exact, KP_HOME, Modifiers::SHIFT | Modifiers::MOD2));
-        // Never the digit keysym under Shift, and never a bare-Mod2 navigation keysym.
-        assert!(!has(&exact, KP_7, Modifiers::SHIFT | Modifiers::MOD2));
-        assert!(!has(&exact, KP_HOME, Modifiers::MOD2));
-        // Keys with one keysym are exact too only if they are keypad navigation keys.
-        assert!(has(&exact, KP_UP, Modifiers::empty()) && has(&exact, KP_8, Modifiers::MOD2));
+        // F-1: nothing with Num Lock on (Mod2) is grabbed, whatever the keysym.
+        assert!(
+            !exact.iter().any(|c| c.modifiers.contains(Modifiers::MOD2)),
+            "Num Lock on must type digits: {exact:?}"
+        );
+        assert!(!exact.iter().any(|c| c.keysym == KP_7 || c.keysym == KP_8));
+        assert!(has(&exact, KP_UP, Modifiers::empty()));
         // M4b commands stay ungrabbed (K-1): KP_Add is review.say_all, not implemented yet.
         assert!(!has(&plain, KP_ADD, Modifiers::empty()));
         assert!(!exact.iter().any(|c| c.keysym == KP_ADD));
@@ -530,8 +530,46 @@ mod tests {
         assert!(plain.is_empty(), "{plain:?}");
     }
 
+    /// F-1 end to end through the Mutter model: with Num Lock on, `KP7` is `(KP_7, Mod2)`, which is
+    /// not grabbed, so it is not swallowed and reaches the application; with Num Lock off it is
+    /// grabbed.
     #[test]
-    fn the_wire_form_of_a_keypad_chord_has_no_blind_variants() {
+    fn a_digit_typed_with_num_lock_on_reaches_the_application() {
+        use gorca_input_api::{Ev, Replica};
+        let (plain, exact) = grabs("");
+        let mut set = gorca_input_api::GrabSet::default();
+        set.chords.extend(plain);
+        set.exact.extend(exact);
+        let ev = |keysym, state: Modifiers| Ev {
+            keysym,
+            pressed: true,
+            repeat: false,
+            state,
+            time_ms: 1_000,
+        };
+        let mut r = Replica::default();
+        assert!(
+            !r.step(&ev(KP_7, Modifiers::MOD2), &set, false).swallowed,
+            "the digit reaches the app"
+        );
+        assert!(
+            !r.step(
+                &ev(KP_HOME, Modifiers::SHIFT | Modifiers::MOD2),
+                &set,
+                false
+            )
+            .swallowed,
+            "Home reaches the app"
+        );
+        let mut r = Replica::default();
+        assert!(
+            r.step(&ev(KP_HOME, Modifiers::empty()), &set, false)
+                .swallowed
+        );
+    }
+
+    #[test]
+    fn the_wire_form_of_a_keypad_chord_has_only_num_lock_off_pairs() {
         let (plain, exact) = grabs("");
         let mut set = gorca_input_api::GrabSet::default();
         set.chords.extend(plain);
@@ -540,18 +578,39 @@ mod tests {
         let shift = Modifiers::SHIFT.bits();
         let mod2 = Modifiers::MOD2.bits();
         assert!(strokes.contains(&(KP_HOME, 0)));
-        assert!(strokes.contains(&(KP_7, mod2)));
-        assert!(strokes.contains(&(KP_HOME, shift | mod2)));
+        assert!(strokes.contains(&(KP_HOME, shift)));
         assert!(
-            !strokes.contains(&(KP_HOME, mod2)),
-            "Mutter would never match it"
+            !strokes.iter().any(|(_, m)| m & mod2 != 0),
+            "no Num Lock on grab on the wire"
         );
         assert!(set.contains(KP_HOME, Modifiers::empty()));
-        assert!(set.contains(KP_7, Modifiers::MOD2));
         assert!(
-            !set.contains(KP_7, Modifiers::empty()),
-            "Num Lock off never types KP_7"
+            !set.contains(KP_7, Modifiers::MOD2),
+            "KP_7 with Num Lock on is the app's"
         );
+    }
+
+    /// F-6: a held review key keeps moving; the lane only runs repeats of `repeatable` commands.
+    #[test]
+    fn held_review_moves_repeat_and_one_shot_commands_do_not() {
+        let c = compiled("");
+        let b = c
+            .keymap
+            .lookup(
+                ModeKind::Focus,
+                key(false, Modifiers::empty(), "kp_prior"),
+                1,
+            )
+            .unwrap();
+        assert_eq!(b.cmd, CoreCmd::ReviewNextLine.id());
+        assert!(b.repeatable && b.active);
+        let top = c
+            .keymap
+            .lookup(ModeKind::Focus, key(false, Modifiers::SHIFT, "kp_prior"), 1)
+            .unwrap();
+        assert!(!top.repeatable, "review.bottom is one-shot");
+        assert!(!CoreCmd::ObjectCurrent.repeatable());
+        assert!(!CoreCmd::ReviewActivate.repeatable());
     }
 
     #[test]

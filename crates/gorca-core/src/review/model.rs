@@ -120,6 +120,8 @@ pub struct Line {
 pub struct NodeCheck {
     pub node: NodeKey,
     pub hash: u64,
+    /// The node's own extents as the app reported them (not a text line's), for RR-1 (F-5).
+    pub rect: Option<Rect>,
 }
 
 #[derive(Debug)]
@@ -139,6 +141,8 @@ pub struct LineModel {
     pub built_rev: u64,
     pub built_at: Instant,
     pub completeness: Completeness,
+    /// The rectangle text lines were asked for; revalidation uses the same one (F-5).
+    pub clip: Rect,
 }
 
 static NEXT_MODEL: AtomicU64 = AtomicU64::new(1);
@@ -172,6 +176,12 @@ impl LineModel {
         let line = u32::try_from(idx).ok()?;
         let zone = u16::try_from(z - l.zones.start).ok()?;
         Some((line, zone))
+    }
+
+    /// The extents recorded for `node` when the model was built.
+    pub fn node_rect(&self, node: NodeKey) -> Option<Rect> {
+        let i = self.checks.binary_search_by_key(&node, |c| c.node).ok()?;
+        self.checks.get(i)?.rect
     }
 
     pub fn is_empty(&self) -> bool {

@@ -24,7 +24,7 @@ use gorca_model::{
 use gorca_rt::{BudgetClass, Clock, Deadline, mpsc, oneshot, with_deadline};
 use tokio::task::JoinSet;
 
-use super::cluster::{BuildInput, BuildNode, build_line_model, sane_rect};
+use super::cluster::{BuildInput, BuildNode, build_line_model, clip_of};
 use super::collect::{Miss, collect};
 use super::model::{LineModel, ReviewLimits, TruncWhy};
 use super::objnav::{NAV_MASK, NavOp, NavSource};
@@ -35,8 +35,9 @@ use crate::health::HealthMsg;
 pub const CHILD_PAGE: u32 = 256;
 /// How long a task waits for the app actor to apply what it fetched.
 const APPLY_ACK: Duration = Duration::from_millis(50);
-/// Collect-and-fetch rounds of one build.
-const MAX_ROUNDS: usize = 10;
+/// Collect-and-fetch rounds of one build: one tree level per round, so this is the depth reached
+/// (the soft deadline normally ends a build first, and its continuations carry on).
+const MAX_ROUNDS: usize = 64;
 /// Ancestors fetched for a parent miss.
 const ANCESTRY_DEPTH: u8 = 16;
 
@@ -425,17 +426,7 @@ pub async fn build_model(io: &ReviewIo, spec: BuildSpec) -> Result<Arc<LineModel
     }
 
     // Text lines: reuse the previous model's for clean nodes, ask for the rest.
-    let clip = collected
-        .nodes
-        .first()
-        .and_then(|n| n.snap.bounds)
-        .and_then(sane_rect)
-        .unwrap_or(Rect {
-            x: -10_000,
-            y: -10_000,
-            w: 20_000,
-            h: 20_000,
-        });
+    let clip = clip_of(collected.nodes.first().and_then(|n| n.snap.bounds));
     let dirty: Option<&[NodeKey]> = spec.dirty.as_deref();
     let mut lines: HashMap<NodeKey, Arc<[TextLine]>> = HashMap::new();
     let mut ask: Vec<NodeKey> = Vec::new();

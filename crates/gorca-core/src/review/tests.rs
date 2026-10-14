@@ -817,6 +817,238 @@ fn unrelated_replies_are_ignored() {
     assert_eq!(f.reader.review_state().models_held(), 1);
 }
 
+// ---- review findings F-2 to F-4 ------------------------------------------------------------
+
+fn nav_req(fx: &ReaderEffects) -> Option<super::NavReqId> {
+    fx.iter().find_map(|e| match e {
+        ReaderEffect::ReviewNav { req, .. } => Some(*req),
+        _ => None,
+    })
+}
+
+fn armed(fx: &ReaderEffects) -> Option<Instant> {
+    fx.iter().find_map(|e| match e {
+        ReaderEffect::ArmTimer(t) => Some(*t),
+        _ => None,
+    })
+}
+
+/// F-2 (OB-3, R4): "a step suspends at most 3 times, all within one Interactive deadline;
+/// never more than 120 ms + 5 ms". A slow but healthy app that answers each fetch just before its
+/// deadline used to stretch one step to 477 ms.
+#[test]
+fn f2_one_object_step_never_waits_longer_than_125_ms() {
+    let mut f = fixture();
+    let mut nodes = dialog();
+    nodes.remove(4); // button 5: every fetch "succeeds" but brings nothing
+    f.load(nodes);
+    f.focus(4);
+    let t0 = f.now;
+    let fx = f.run(CoreCmd::ObjectNext);
+    let mut req = nav_req(&fx).expect("suspend 1");
+    let mut deadline = armed(&fx).expect("timer 1");
+    let spoken = loop {
+        f.now = deadline.checked_sub(Duration::from_millis(1)).unwrap();
+        let fx = f.review(ReviewMsg::NavFetched {
+            req,
+            result: Ok(()),
+        });
+        match (nav_req(&fx), armed(&fx)) {
+            (Some(r), Some(d)) => {
+                req = r;
+                deadline = d;
+            }
+            _ => break said(&fx),
+        }
+        assert!(f.now.duration_since(t0) <= Duration::from_millis(125));
+    };
+    assert!(f.now.duration_since(t0) <= Duration::from_millis(125));
+    assert_eq!(spoken, ["Cancel button"], "the degraded step still speaks");
+}
+
+#[test]
+fn f2_the_queue_shares_the_budget_of_the_step_that_started_it() {
+    let mut f = fixture();
+    let mut nodes = dialog();
+    nodes.remove(4);
+    f.load(nodes);
+    f.focus(4);
+    let fx = f.run(CoreCmd::ObjectNext);
+    let req = nav_req(&fx).expect("pending");
+    for _ in 0..3 {
+        f.run(CoreCmd::ObjectCurrent);
+    }
+    f.now += Duration::from_millis(124);
+    let fx = f.review(ReviewMsg::NavFetched {
+        req,
+        result: Ok(()),
+    });
+    // The budget is nearly spent: nothing more is fetched for the step or its queue.
+    assert!(effects(&fx, is_ipc) <= 1);
+    f.now += Duration::from_millis(10);
+    let late = f.reader.handle(ReaderMsg::Timer, f.now);
+    assert_eq!(
+        effects(&late, |e| matches!(e, ReaderEffect::ReviewNav { .. })),
+        0
+    );
+}
+
+/// F-3: a key after a pending operation's deadline used to run the stale command degraded and
+/// speak it, and then speak the new one too: two utterances for one key.
+#[test]
+fn f3_a_late_pending_operation_is_dropped_silently_when_a_new_key_arrives() {
+    let mut f = fixture();
+    let mut nodes = dialog();
+    nodes.remove(4);
+    f.load(nodes);
+    f.focus(4);
+    let fx = f.run(CoreCmd::ObjectNext);
+    assert!(nav_req(&fx).is_some());
+    f.now += Duration::from_millis(400);
+    let fx = f.run(CoreCmd::ObjectCurrent);
+    assert_eq!(said(&fx), ["Name edit"], "one key, one utterance");
+    assert_eq!(f.reader.review_counters().review_step_timeout, 1);
+}
+
+/// F-3: the runtime has one timer slot and clears it when it fires; whatever else fires it must
+/// not lose the review deadline.
+#[test]
+fn f3_the_review_deadline_is_armed_again_when_another_timer_fires_first() {
+    let mut f = fixture();
+    let mut nodes = dialog();
+    nodes.remove(4);
+    f.load(nodes);
+    f.focus(4);
+    let fx = f.run(CoreCmd::ObjectNext);
+    let deadline = armed(&fx).expect("armed");
+    f.now = deadline.checked_sub(Duration::from_millis(50)).unwrap();
+    let fx = f.reader.handle(ReaderMsg::Timer, f.now);
+    assert_eq!(
+        armed(&fx),
+        Some(deadline),
+        "still outstanding, so armed again"
+    );
+    f.now = deadline;
+    let fx = f.reader.handle(ReaderMsg::Timer, f.now);
+    assert_eq!(said(&fx), ["Cancel button"]);
+    assert_eq!(armed(&fx), None);
+}
+
+/// F-3 / R3: a result for a key press that another key has since superseded is not spoken.
+#[test]
+fn f3_a_result_for_a_superseded_epoch_is_dropped() {
+    let mut f = fixture();
+    let mut nodes = dialog();
+    let missing = nodes.remove(4);
+    f.load(nodes);
+    f.focus(4);
+    let fx = f.run(CoreCmd::ObjectNext);
+    let req = nav_req(&fx).expect("pending");
+    f.load(vec![missing]);
+    // The user pressed some other key meanwhile (every key advances the epoch).
+    f.epoch.advance();
+    let fx = f.review(ReviewMsg::NavFetched {
+        req,
+        result: Ok(()),
+    });
+    assert!(said(&fx).is_empty(), "{:?}", said(&fx));
+    assert_eq!(f.reader.review_counters().review_superseded, 1);
+}
+
+/// F-4 (RR-1): when revalidation finds the spoken line out of date, the corrected line is spoken.
+#[test]
+fn f4_a_stale_line_is_corrected_after_the_revalidation_rebuild() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(5);
+    let fx = f.run(CoreCmd::ReviewCurLine);
+    let build = built_request(&fx).expect("build");
+    f.review(ReviewMsg::Built {
+        build,
+        result: Ok(f.model(1)),
+    });
+    f.run(CoreCmd::ReviewBottom);
+    f.now += Duration::from_secs(3);
+    let fx = f.run(CoreCmd::ReviewCurLine);
+    assert_eq!(said(&fx), ["Ready"]);
+    let model = fx
+        .iter()
+        .find_map(|e| match e {
+            ReaderEffect::ReviewRevalidate { model, .. } => Some(*model),
+            _ => None,
+        })
+        .expect("RR-1 after the TTL");
+    // The app changed the text without an event; the probe found out.
+    f.load(vec![node(
+        8,
+        Role::Label,
+        "Saved",
+        Some(7),
+        &[],
+        rect(4, 275, 60, 20),
+    )]);
+    let fx = f.review(ReviewMsg::Revalidated {
+        model,
+        verdict: super::RrVerdict::Changed { text_changed: true },
+    });
+    let build = built_request(&fx).expect("a background rebuild");
+    let fx = f.review(ReviewMsg::Built {
+        build,
+        result: Ok(f.model(1)),
+    });
+    assert_eq!(said(&fx), ["Saved"], "the correction");
+    assert_eq!(f.reader.review_counters().review_corrections, 1);
+    // An unchanged revalidation says nothing.
+    let fx = f.review(ReviewMsg::Revalidated {
+        model,
+        verdict: super::RrVerdict::Same,
+    });
+    assert!(said(&fx).is_empty());
+}
+
+/// The correction is not spoken when the user has already moved on.
+#[test]
+fn f4_no_correction_after_another_key() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(5);
+    let fx = f.run(CoreCmd::ReviewCurLine);
+    let build = built_request(&fx).expect("build");
+    f.review(ReviewMsg::Built {
+        build,
+        result: Ok(f.model(1)),
+    });
+    f.run(CoreCmd::ReviewBottom);
+    f.now += Duration::from_secs(3);
+    let fx = f.run(CoreCmd::ReviewCurLine);
+    let model = fx
+        .iter()
+        .find_map(|e| match e {
+            ReaderEffect::ReviewRevalidate { model, .. } => Some(*model),
+            _ => None,
+        })
+        .expect("RR-1");
+    f.load(vec![node(
+        8,
+        Role::Label,
+        "Saved",
+        Some(7),
+        &[],
+        rect(4, 275, 60, 20),
+    )]);
+    let fx = f.review(ReviewMsg::Revalidated {
+        model,
+        verdict: super::RrVerdict::Changed { text_changed: true },
+    });
+    let build = built_request(&fx).expect("rebuild");
+    f.epoch.advance();
+    let fx = f.review(ReviewMsg::Built {
+        build,
+        result: Ok(f.model(1)),
+    });
+    assert!(said(&fx).is_empty());
+}
+
 // ---- R1 ------------------------------------------------------------------------------------
 
 /// R1 (ADR-0006 18): a flat step on a valid model is an index move. The strict 3 ms gate is the

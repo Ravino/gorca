@@ -100,11 +100,22 @@ impl CoreCmd {
         self.spec().available == Availability::Implemented
     }
 
-    /// Voice settings repeat while the key is held.
+    /// Voice settings and review moves repeat while the key is held (ADR-0006 RS-3: a held
+    /// review key keeps moving, NVDA parity; the input lane debounces the rate).
     pub fn repeatable(self) -> bool {
         matches!(
             self,
-            CoreCmd::SpeechRingInc
+            CoreCmd::ReviewPrevLine
+                | CoreCmd::ReviewNextLine
+                | CoreCmd::ReviewPrevWord
+                | CoreCmd::ReviewNextWord
+                | CoreCmd::ReviewPrevChar
+                | CoreCmd::ReviewNextChar
+                | CoreCmd::ObjectNext
+                | CoreCmd::ObjectPrev
+                | CoreCmd::ObjectNextInFlow
+                | CoreCmd::ObjectPrevInFlow
+                | CoreCmd::SpeechRingInc
                 | CoreCmd::SpeechRingDec
                 | CoreCmd::SpeechRingIncLarge
                 | CoreCmd::SpeechRingDecLarge

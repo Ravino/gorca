@@ -75,6 +75,46 @@ fn tap(rig: &mut super::runner::Rig, ty: &mut Typist, k: K) -> Result<(u64, bool
     Ok((down.t_emit_ns, down.consumed))
 }
 
+/// What key `i` of the series says: the series alternates previous-line and next-line presses
+/// between the rows "Row 0" and "Row 1".
+fn expected_text(i: usize) -> &'static str {
+    if i.is_multiple_of(2) {
+        "Row 0 button"
+    } else {
+        "Row 1 button"
+    }
+}
+
+/// Credit every speech to the key that caused it, by its text (F-8). A speech that arrives after
+/// the next key was already pressed is a **late** sample: it counts in the latency series and in
+/// `late`, never as the next key's answer. `lost` are keys whose text never arrived (before the
+/// key after next).
+fn attribute(emits: &[u64], spoken: &[(u64, String)]) -> (Vec<f64>, u64, u64) {
+    let mut used = vec![false; spoken.len()];
+    let mut lat = Vec::with_capacity(emits.len());
+    let (mut lost, mut late) = (0u64, 0u64);
+    for (i, t) in emits.iter().enumerate() {
+        let next = emits.get(i + 1).copied().unwrap_or(u64::MAX);
+        let horizon = emits.get(i + 2).copied().unwrap_or(u64::MAX);
+        let want = expected_text(i);
+        let hit = spoken
+            .iter()
+            .enumerate()
+            .find(|(j, (s, text))| !used[*j] && *s >= *t && *s < horizon && text == want);
+        match hit {
+            Some((j, (s, _))) => {
+                used[j] = true;
+                lat.push(ms(s - *t));
+                if *s >= next {
+                    late += 1;
+                }
+            }
+            None => lost += 1,
+        }
+    }
+    (lat, lost, late)
+}
+
 /// R1. Gate: p99 <= 3 ms (target 1 ms), `lost` = 0, `not_consumed` = 0.
 pub fn r1(
     host: &HostEnv,
@@ -178,16 +218,11 @@ fn series(
         out.x("storm_achieved_eps", fr.achieved_rate(), "ev/s");
     }
     let recs = rig.mock.since(mark);
-    let spoken: Vec<u64> = speaks(&recs).map(|(r, _)| r.t_ns).collect();
-    let mut lat = Vec::with_capacity(n);
-    let mut lost = 0u64;
-    for (i, t) in emits.iter().enumerate() {
-        let next = emits.get(i + 1).copied().unwrap_or(u64::MAX);
-        match spoken.iter().find(|s| **s >= *t && **s < next) {
-            Some(s) => lat.push(ms(s - *t)),
-            None => lost += 1,
-        }
-    }
+    let spoken: Vec<(u64, String)> = speaks(&recs)
+        .map(|(r, t)| (r.t_ns, t.replace(", ", " ")))
+        .collect();
+    let (lat, lost, late) = attribute(&emits, &spoken);
+    out.x("r1_late_keys", late as f64, "events");
     let calls = app
         .proc
         .request("calls", "\"reset\":false", Duration::from_secs(2))?;
@@ -436,6 +471,28 @@ mod tests {
         assert_eq!(t.matches('{').count(), t.matches('}').count());
         assert_eq!(t.matches('[').count(), t.matches(']').count());
         assert!(t.contains("\"coord\":\"window\""));
+    }
+
+    #[test]
+    fn a_late_speech_is_credited_to_its_own_key_and_reported_as_late() {
+        // The incident of review item 4: key 0's answer arrives after key 1 was pressed.
+        let emits = [0, 13_000_000, 27_000_000, 40_000_000];
+        let spoken = vec![
+            (19_500_000, "Row 0 button".to_owned()),
+            (19_600_000, "Row 1 button".to_owned()),
+            (28_000_000, "Row 0 button".to_owned()),
+            (41_000_000, "Row 1 button".to_owned()),
+        ];
+        let (lat, lost, late) = attribute(&emits, &spoken);
+        assert_eq!((lost, late), (0, 1), "{lat:?}");
+        assert!(
+            (lat[0] - 19.5).abs() < 1e-9,
+            "the worst sample is kept: {lat:?}"
+        );
+        // A speech that never comes is lost, and the next key does not inherit its neighbour's.
+        let spoken = vec![(28_000_000, "Row 0 button".to_owned())];
+        let (lat, lost, _) = attribute(&emits, &spoken);
+        assert_eq!((lat.len(), lost), (1, 3));
     }
 
     #[test]
