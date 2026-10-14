@@ -65,6 +65,7 @@ pub enum Scn {
     C2,
     E1,
     E2,
+    E2f,
     S2,
     SA1,
     SA2,
@@ -108,6 +109,7 @@ impl Scn {
             Self::C2 => "C2".into(),
             Self::E1 => "E1".into(),
             Self::E2 => "E2".into(),
+            Self::E2f => "E2f".into(),
             Self::S2 => "S2".into(),
             Self::SA1 => "SA1".into(),
             Self::SA2 => "SA2".into(),
@@ -152,6 +154,7 @@ impl Scn {
             "C2" => Self::C2,
             "E1" => Self::E1,
             "E2" => Self::E2,
+            "E2f" => Self::E2f,
             "S2" => Self::S2,
             "SA1" => Self::SA1,
             "SA2" => Self::SA2,
@@ -168,8 +171,8 @@ impl Scn {
         [
             "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K2s", "K3",
             "K4", "K4r", "R1", "R1s", "RS", "B0", "W1", "BR1", "BR2", "W2", "W2b", "W3", "FM1",
-            "FM2", "C1", "C1h", "C2", "E1", "E2", "S2", "SA1", "SA2", "SA3", "SA3a", "PW", "C1hs",
-            "E1s",
+            "FM2", "C1", "C1h", "C2", "E1", "E2", "E2f", "S2", "SA1", "SA2", "SA3", "SA3a", "PW",
+            "C1hs", "E1s",
         ]
         .iter()
         .filter_map(|s| Self::parse(s))
@@ -471,6 +474,7 @@ pub fn run(
         Scn::C2 => super::m3::c2(host, reader, flavor, size, seed, &mut out)?,
         Scn::E1 => super::m3::e1(host, reader, flavor, size, seed, &mut out)?,
         Scn::E2 => super::m3::e2(host, reader, flavor, size, seed, &mut out)?,
+        Scn::E2f => super::m3::e2f(host, reader, flavor, size, seed, &mut out)?,
         Scn::S2 => super::m3::s2(host, reader, flavor, size, seed, &mut out)?,
         Scn::SA1 => super::m3::sa1(host, reader, flavor, size, seed, &mut out)?,
         Scn::SA2 => super::m3::sa2(host, reader, flavor, size, seed, &mut out)?,

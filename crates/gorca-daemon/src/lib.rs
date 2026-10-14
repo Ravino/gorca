@@ -415,7 +415,9 @@ async fn run_inner(
         speech = ?opts.speech,
         "gorca started"
     );
+    let core_stats = core.stats();
     let result = core.run(shutdown.clone()).await;
+    tracing::info!(stats = ?core_stats.snapshot(), "core");
     if let Some(h) = &lane_handle {
         tracing::info!(stats = ?h.stats(), "speech lane");
     }

@@ -180,6 +180,18 @@ impl Rig {
 
     fn key_code(&mut self, code: u16, keysym: u32, unichar: u32, mods: Modifiers) -> ReaderEffects {
         let epoch = self.epoch.advance();
+        self.key_with_epoch(code, keysym, unichar, mods, epoch)
+    }
+
+    /// A key whose epoch the input lane already advanced to (possibly before this call).
+    fn key_with_epoch(
+        &mut self,
+        code: u16,
+        keysym: u32,
+        unichar: u32,
+        mods: Modifiers,
+        epoch: Epoch,
+    ) -> ReaderEffects {
         let now = self.now();
         self.msg(ReaderMsg::Key(KeyIntent {
             event: KeyEvent {
@@ -585,23 +597,44 @@ fn a_delete_nobody_claims_is_dropped_silently() {
 }
 
 #[test]
-fn a_key_that_trails_an_insert_already_spoken_stays_silent() {
+fn a_key_that_trails_an_insert_spoken_in_its_own_epoch_stays_silent() {
+    // The input lane advanced the epoch for the key and the insert overtook the key in the
+    // Reader: the insert was spoken in the key's epoch, so it is not cancelled by the key.
     let mut g = rig();
     g.entry("", 0);
     let _ = g.insert(0, "a");
+    let key_epoch = g.epoch.advance();
     assert_eq!(
         spoken(&g.tick(6)),
         ["a"],
         "unclaimed: spoken as inserted text"
     );
     g.advance(20);
-    assert!(
-        spoken(&g.typed('a')).is_empty(),
-        "the key's echo would be the second"
-    );
+    let fx = g.key_with_epoch(0, 'a' as u32, 'a' as u32, NONE, key_epoch);
+    assert!(spoken(&fx).is_empty(), "the key's echo would be the second");
     // The next typed character is a new one.
     g.advance(400);
     assert_eq!(spoken(&g.typed('a')), ["a"]);
+}
+
+/// Bug A/B of the M3 E2 flake: the insert was spoken before its key reached the input lane, so
+/// the key's epoch cancels that speech. The key must echo itself, not stay silent for a speech
+/// that no longer exists.
+#[test]
+fn a_key_that_trails_an_insert_spoken_in_an_older_epoch_echoes_itself() {
+    let mut g = rig();
+    g.entry("", 0);
+    let _ = g.insert(0, "a");
+    assert_eq!(spoken(&g.tick(6)), ["a"]);
+    let spoken_epoch = g.epoch.current();
+    g.advance(20);
+    let fx = g.typed('a');
+    let echoes: Vec<_> = fx.iter().filter_map(intent_of).collect();
+    assert_eq!(echoes.len(), 1, "the key echoes itself");
+    assert!(echoes[0].utterance.epoch > spoken_epoch);
+    // Nothing more is expected: the insert is already here, so it is not spoken again.
+    assert!(spoken(&g.tick(20)).is_empty());
+    assert!(spoken(&g.caret(1)).is_empty());
 }
 
 #[test]

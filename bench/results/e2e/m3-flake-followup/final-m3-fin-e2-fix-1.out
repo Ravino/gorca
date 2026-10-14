@@ -1,0 +1,50 @@
+== reader /tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/f/gorca-fix built from 9d44caa, tree at 9d44caa
+== e2e m3-fin-e2-fix-1: reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/f/gorca-fix backend=voicego repeats=1 load=4.53 5.37 7.28 2/2543 3074928
+-- round 1/1 E2 (load 4.53 5.37 7.28 2/2543 3074928)
+2026-10-14T12:17:44.898723Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T12:17:44.899395Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T12:17:44.900364Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T12:17:44.901872Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T12:18:43.900234Z  INFO gorca_daemon::input: input lane statistics keys=4066 ambiguous=0 band_forks=0
+2026-10-14T12:19:43.899645Z  INFO gorca_daemon::input: input lane statistics keys=8072 ambiguous=0 band_forks=0
+2026-10-14T12:20:43.900309Z  INFO gorca_daemon::input: input lane statistics keys=12276 ambiguous=0 band_forks=0
+2026-10-14T12:21:43.900609Z  INFO gorca_daemon::input: input lane statistics keys=16426 ambiguous=0 band_forks=0
+2026-10-14T12:22:43.899682Z  INFO gorca_daemon::input: input lane statistics keys=20392 ambiguous=0 band_forks=0
+2026-10-14T12:22:45.154590Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T12:22:45.154637Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 2, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 10000, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 7989, keys_seen: 9959, keys_typed: 7989, inserted_spoken: 289, insert_held_claimed: 1, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 1722, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-14T12:22:45.154927Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 2, focus_requests: 41, fetch_ok: 64, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 31, utterances: 10033, reader_restarts: 0 }
+2026-10-14T12:22:45.154934Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 10033, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-14T12:22:45.154945Z  INFO gorca_daemon: gorca stopped
+# e2e m3-fin-e2-fix-1
+# utc=2026-10-14T12:22:45Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=5.15 5.57 6.86 3/2558 3077511
+# git_rev=9d44caa
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m3-fin-e2-fix-1
+# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/f/gorca-fix
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=5.15 5.57 6.86 4/2558 3077508
+# reader_env=GORCA_M3=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=E2 sent 7989 typed keys (1722 BackSpace, 248 paste, 41 keyless commits)
+# note1=E2: 10000 actions, 10000 speeches heard
+
+metric                     bus                median          min          max  n op    threshold  res   note
+E2.e2_double               daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+E2.e2_keyname              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+E2.e2_missing              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+E2.e2_wrong                daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+
+== wrote bench/results/e2e/m3-fin-e2-fix-1/20261014T122245Z.{json,txt}

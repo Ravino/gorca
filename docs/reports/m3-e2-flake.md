@@ -37,3 +37,31 @@ are invalid runs without `--impersonate-orca`, kept).
 - Interleaved normal-load runs used one seed (repeats 1 = seed A); stress runs used A and B. Hogs and the instrumented build perturb load; load is in each
   result header. Instrumentation (eprintln/file log in lane.rs) lived in a scratch worktree, not committed.
 - /tmp (tmpfs 16G) hit 100% during the work (other users' data plus my scratch build); runs were not corrupted.
+
+## Follow-up (2026-10-14, on 9d44caa)
+
+Data: `bench/results/e2e/m3-flake-followup/` (README), `m3-bugA-*`, `m3-e2f-*`, `m3-fin-*`.
+
+- **Bug A (submitted, never SPEAK): real, an accounting hole plus one real silent-echo path.**
+  1. The speech state machine discards an utterance that was valid at `submit` and is stale when the lane
+     runs (`SpeechEffect::Discard`, also FIFO purge/overflow). Nothing counted it. Under 12 hogs (m3-bugA-1 repeat 2):
+     core `utterances` 10033, lane `spoken` 10031, `stale_dropped` 0, `superseded` 0: the two missing pastes were
+     discarded there (a stall between submit and the lane's pump, or the next key arriving first). Now counted
+     (`stale_dropped`, or `inbox_dropped` for a valid one); test `an_utterance_made_stale_after_submit_is_counted_not_lost_silently`.
+     By E-2 the drop itself is right (newest wins).
+  2. Real product path: a typed key that trails its insert (the buses are not ordered) found `Claim::AlreadySpoken`
+     and stayed silent, but the insert's speech belonged to an older epoch than the key, so the key's own epoch
+     cancelled it (stopped or dropped). `typed_echoed` was 4 to 8 below `keys_typed` in the loaded runs. Fixed:
+     `Claim::Superseded` (flushed insert's `spoken_epoch < key epoch`) makes the key echo itself and expect nothing
+     more. Tests `a_key_that_trails_an_insert_spoken_in_{an_older,its_own}_epoch_*` in text/tests.rs.
+     Side effect: the mock then sees the cancelled insert's SPEAK and the key's SPEAK, a harness `e2_double`
+     (1 in 4 loaded repeats); audibly it is one echo.
+  3. Not fixed, noted: an unexplained insert longer than 8 scalars (e.g. a paste whose insert beats its key) is spoken
+     at once in the older epoch and is cancelled by the key's epoch the same way; only the E2 pacing avoids it.
+- **Bug B (first key after focus): not reproduced.** New scenario E2f (key 0/10/30/100/300 ms after the focus speech,
+  80 trials each): 0 missing, 0 double at normal load (base and fix daemons, 3 repeats in m3-fin-suite) and under
+  12 hogs. An untracked key falls back to the generic key echo (`owns_key` false), so no product change was needed.
+  The one first-key miss seen earlier (m3-rv1-e2b action 0) is consistent with the stall class of bug A.
+- **E2 harness**: `pause(60, 80)` after a paste. Normal load (3-5), interleaved fix/base x5: 0/10 runs missing.
+  12 hogs (load 20-24), 4 repeats each: base daemon 2,2,1,1 missing; fixed daemon 0,0,0,1 (the one is a 90 ms stall: a
+  paste echo that arrived 90 ms late).

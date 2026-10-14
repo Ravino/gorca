@@ -54,6 +54,7 @@ cannot touch the real session. It never signals anything it did not spawn.
 | C2 | M3: Ctrl+Right held at 30 Hz for 3 s, 400 ms utterances | `stale_not_cancelled` (gate 0), `lost` = the last position was not spoken (gate 0), `c2_spoken` |
 | E1 | M3: printable keys (Latin and Cyrillic), the app answers each with insert and caret events | `e1_ms` key emit to SPEAK (gate p99 3 ms), `lost`, `e2_double` |
 | E2 | M3: 10,000 randomised actions (letters, space, BackSpace, Ctrl+V paste, a keyless input-method commit); 1,000 with `--quick` | `e2_missing`, `e2_double`, `e2_keyname` (a BackSpace/Delete spoken by name), `e2_wrong` (all gate 0) |
+| E2f | M3: the first typed key after the focus reached an entry, 0, 10, 30, 100 and 300 ms after the focus speech (up to 400 trials) | `e2f_missing`, `e2f_double` (gate 0) |
 | S2 | M3: Shift+Right, the app signals caret then selection (GTK4 order) | `s2_ms` (gate p99 15 ms), `lost` |
 | SA1 | M3: `gorca+Down` (`text.say_all`) from the top of a text view | `sa1_ms` key emit to the first chunk's SPEAK (gate p99 15 ms), `lost` |
 | SA2 | M3: say-all over 100 KB (2,500 sentences; 500 with `--quick`) | `sa2_ahead_ratio` (gate 0.99: the next chunk reaches the server within 5 ms of the previous END), `sa2_gap_ms`, `lost` |

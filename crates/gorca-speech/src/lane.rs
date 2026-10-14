@@ -80,7 +80,8 @@ pub struct SpeechStats {
     pub spoken: u64,
     /// Of those, how many replaced a running utterance.
     pub replaced: u64,
-    /// Utterances dropped because their epoch was stale (E-2), at submit or at send time.
+    /// Utterances dropped because their epoch was stale (E-2): at submit, when the lane picked them
+    /// up, or at send time.
     pub stale_dropped: u64,
     /// Replaces that showed neither `Started` nor `Ended` within the 30 ms deadline.
     pub replace_slow: u64,
@@ -600,7 +601,24 @@ impl Lane {
             SpeechEffect::Pause => self.send(SpeechCmd::Pause, None),
             SpeechEffect::Resume => self.send(SpeechCmd::Resume, None),
             SpeechEffect::Discard(id) => {
-                self.store.remove(&id);
+                // The state machine drops an utterance that was valid at submit but is stale
+                // by the time the lane runs (E-2), or one the FIFO has no room for. Count it:
+                // a silent drop made "submitted" and "spoken" disagree without a reason.
+                match self.store.remove(&id) {
+                    Some(u) if !u.is_valid(self.shared.epoch.current()) => {
+                        self.shared
+                            .stats
+                            .stale_dropped
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                    Some(_) => {
+                        self.shared
+                            .stats
+                            .inbox_dropped
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                    None => {}
+                }
                 self.shared.dropped(id);
             }
             SpeechEffect::CountReplaceSlow => {
@@ -924,6 +942,30 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(40)).await;
         assert!(ctl.cmds().is_empty());
         assert_eq!(h.stats().stale_dropped, 1);
+    }
+
+    /// Bug A of the M3 E2 flake: an utterance that is valid at `submit` and made stale by the next
+    /// key before the lane runs was dropped by the state machine without a trace, so the
+    /// utterances submitted and the ones spoken disagreed with no counter to explain it.
+    #[tokio::test]
+    async fn an_utterance_made_stale_after_submit_is_counted_not_lost_silently() {
+        let (h, ctl, epoch, _t) = start(true, ClientHealth::Ready);
+        let e = epoch.advance();
+        // current_thread runtime: the lane cannot run between these lines.
+        h.submit(utt(1, e.0, Prio::Interrupt, "echo of the first key"));
+        epoch.advance(); // the next key arrives before the lane picked the echo up
+        h.notify_epoch();
+        tokio::time::sleep(Duration::from_millis(40)).await;
+        assert!(ctl.cmds().is_empty(), "newest wins: nothing stale is sent");
+        let s = h.stats();
+        assert_eq!(s.stale_dropped, 1, "the drop is accounted for");
+        assert_eq!(s.spoken, 0);
+        // Every submitted utterance is spoken or counted.
+        let e = epoch.advance();
+        h.submit(utt(2, e.0, Prio::Interrupt, "second"));
+        assert!(eventually(WAIT, || speaks(&ctl) == [2]).await);
+        let s = h.stats();
+        assert_eq!(s.spoken + s.stale_dropped + s.superseded, 2);
     }
 
     #[tokio::test]
