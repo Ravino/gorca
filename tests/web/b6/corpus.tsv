@@ -1,0 +1,22 @@
+# B-6 corpus manifest (read by crates/gorca-bench-web, `b6 corpus`).
+# columns: name <TAB> kind <TAB> arg <TAB> title <TAB> approx AX nodes <TAB> purpose
+#   kind gen_large : generated like tests/web/pages/gen_large.py, arg = element budget N
+#   kind page      : file under tests/web/b6/pages/, arg = file name
+#   kind pages_raw : file under tests/web/pages/, arg = relative path (served as is)
+#   kind dist      : generated bundle in tests/web/b6/virt/dist/ (cd tests/web/b6/virt && npm install && node build.mjs)
+#   kind spa       : a built tests/web/spa/dist app, arg = URL path (needs `node build.mjs`; skipped if absent)
+large1k	gen_large	1000	large 1000	1000	M-9 small page, ADR-0003 WM-1
+large10k	gen_large	10000	large 10000	10200	M-9 10k-node page: < 150 ms first useful, < 2 s full
+large100k	gen_large	100000	large 100000	102000	M-9 100k-node page: Firefox < 5 s full (WF-4)
+spa-list-200	page	spa-list.html?n=200	b6 spa-list	1000	WM-4 / M-13: keyed list, 200 items (id=item-N), vanilla DOM ops
+spa-list-2000	page	spa-list.html?n=2000	b6 spa-list	10000	WM-4 / M-13: 2000 items, route swap 20k nodes
+virtual-unmount	page	virtual-list.html?mode=unmount&n=10000	b6 virtual-list	100	TBD-WEB-1/2/3: windowed list, rows created and removed on scroll, aria-posinset/setsize
+virtual-recycle	page	virtual-list.html?mode=recycle&n=10000	b6 virtual-list	100	TBD-WEB-1/2/3: windowed list with a recycled row pool (id, label, posinset rewritten in place)
+virtual-grid	page	virtual-list.html?mode=grid&n=10000	b6 virtual-list	300	TBD-WEB-1/2/3: role=grid with aria-rowindex/colindex/rowcount/colcount, rows mounted/unmounted
+virt-tanstack-index	dist	tanstack.html?keys=index	b6 virt tanstack	100	TBD-WEB-3: TanStack Virtual + React, rows keyed by index (mount/unmount)
+virt-tanstack-slot	dist	tanstack.html?keys=slot	b6 virt tanstack	100	TBD-WEB-3: TanStack Virtual + React, rows keyed by pool slot (DOM nodes reused)
+virt-vue-recycle	dist	vue-recycle.html	b6 virt vue-recycle	100	TBD-WEB-3: vue-virtual-scroller RecycleScroller (item views recycled)
+virt-cdk	dist	cdk.html	b6 virt cdk	100	TBD-WEB-3: Angular CDK cdkVirtualFor (template cache recycles views)
+warmup	page	warmup.html	b6 warmup	6	helper for the prewarm scenario (first document, tiny)
+frames-outer	pages_raw	frames/outer.html	outer	40	coverage: cross-site iframe, closed shadow, canvas fallback
+spa-react-keyed	spa	/react/list/keyed	-	300	framework corpus (optional)
