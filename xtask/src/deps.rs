@@ -8,7 +8,7 @@
 //!    `gorca-input-inject`, `gorca-daemon` and the B-6 harness `gorca-bench-web` may depend on `zbus`. Only `gorca-connector-atspi` may depend on `atspi*`.
 //! 3. `gorca-core` must not depend on any `gorca-connector-*`, `gorca-speech-*`, `gorca-input-*`
 //!    (except `-api`) or `gorca-ext-host`. Only `gorca-daemon` wires concrete implementations.
-//! 4. `gorca-model` and `gorca-doc` must not depend on `tokio`.
+//! 4. `gorca-model`, `gorca-doc` and `gorca-text` must not depend on `tokio`.
 //! 5. Extensions depend only on `gorca-ext-api`.
 //!
 //! Rules 6 and 7 (lints, release profile) are enforced by `Cargo.toml` and clippy.
@@ -26,6 +26,7 @@ const NEUTRAL: &[&str] = &[
     "gorca-connector-api",
     "gorca-doc-source-api",
     "gorca-doc",
+    "gorca-text",
     "gorca-output-api",
     "gorca-input-api",
     "gorca-core",
@@ -47,7 +48,7 @@ const MAY_USE_ZBUS: &[&str] = &[
     "b1-fakeapp",
 ];
 const MAY_USE_ATSPI: &[&str] = &["gorca-connector-atspi"];
-const TOKIO_FREE: &[&str] = &["gorca-model", "gorca-doc", "gorca-config"];
+const TOKIO_FREE: &[&str] = &["gorca-model", "gorca-doc", "gorca-text", "gorca-config"];
 /// Concrete implementations that only `gorca-daemon` wires (rule 3, second sentence).
 const CONCRETE: &[&str] = &[
     "gorca-connector-atspi",

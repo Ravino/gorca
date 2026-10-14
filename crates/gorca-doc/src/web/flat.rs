@@ -3,8 +3,8 @@
 //! concatenation of node contributions (own text, plus one `\n` for a `BREAK_AFTER` node).
 //!
 //! Lines are hard breaks only (block boundaries and newlines); soft wrapping needs extents and
-//! is a later refinement. Words never cross a line; a word includes its trailing spaces
-//! (NVDA/Orca convention) and each punctuation scalar is its own word (with its trailing spaces).
+//! is a later refinement. Words never cross a line; the word rule is `gorca_text::seg::word_range`
+//! (a word includes its trailing spaces, each punctuation scalar is its own word).
 
 use super::doc::WebDoc;
 
@@ -15,65 +15,12 @@ pub enum ReadUnit {
     Line,
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
-enum Class {
-    Space,
-    Word,
-    Punct,
-}
-
-fn class(c: char) -> Class {
-    if c.is_whitespace() {
-        Class::Space
-    } else if c.is_alphanumeric() || c == '_' {
-        Class::Word
-    } else {
-        Class::Punct
-    }
-}
-
 /// Word containing `line[idx]` as `[start, end)` (indices into `line`). `idx` is clamped to
-/// the last scalar. An empty line yields `(0, 0)`.
+/// the last scalar. An empty line yields `(0, 0)`. The rule lives in `gorca_text::seg`
+/// (ADR-0007 TL-1).
 pub fn word_range_in(line: &[char], idx: usize) -> (usize, usize) {
-    if line.is_empty() {
-        return (0, 0);
-    }
-    let idx = idx.min(line.len() - 1);
-    let run_start = |mut i: usize| {
-        let cl = class(line[i]);
-        if cl == Class::Punct {
-            return i;
-        }
-        while i > 0 && class(line[i - 1]) == cl {
-            i -= 1;
-        }
-        i
-    };
-    let run_end = |mut i: usize| {
-        let cl = class(line[i]);
-        if cl == Class::Punct {
-            return i + 1;
-        }
-        while i < line.len() && class(line[i]) == cl {
-            i += 1;
-        }
-        i
-    };
-    match class(line[idx]) {
-        Class::Space => {
-            let a = run_start(idx);
-            let b = run_end(idx);
-            if a > 0 { (run_start(a - 1), b) } else { (a, b) }
-        }
-        Class::Word | Class::Punct => {
-            let a = run_start(idx);
-            let mut b = run_end(idx);
-            while b < line.len() && class(line[b]) == Class::Space {
-                b += 1;
-            }
-            (a, b)
-        }
-    }
+    let r = gorca_text::seg::word_range(line, idx);
+    (r.start, r.end)
 }
 
 impl WebDoc {

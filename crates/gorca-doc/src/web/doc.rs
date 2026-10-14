@@ -13,40 +13,12 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use gorca_model::Role;
+use gorca_model::{DocNodeId, Role};
 
 use super::cats::{Cat, NodeFlags, NodeSpec, RANKED, RANKED_N, SubtreeSpec, cats_of, ranked_index};
 use super::error::DocError;
 
 pub(crate) const NIL: u32 = u32::MAX;
-
-/// Logical node id: arena slot plus a generation that bumps when the slot is freed (I-1).
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub struct DocNodeId {
-    slot: u32,
-    gen_: u32,
-}
-
-impl DocNodeId {
-    pub const fn slot(self) -> u32 {
-        self.slot
-    }
-
-    pub const fn generation(self) -> u32 {
-        self.gen_
-    }
-
-    pub const fn to_u64(self) -> u64 {
-        ((self.gen_ as u64) << 32) | self.slot as u64
-    }
-
-    pub const fn from_u64(v: u64) -> DocNodeId {
-        DocNodeId {
-            slot: v as u32,
-            gen_: (v >> 32) as u32,
-        }
-    }
-}
 
 #[derive(Clone, Debug)]
 pub(crate) struct Slot {
@@ -166,16 +138,13 @@ impl WebDoc {
     // ---------------------------------------------------------------- ids and arena
 
     fn id_of(&self, slot: u32) -> DocNodeId {
-        DocNodeId {
-            slot,
-            gen_: self.slots[slot as usize].gen_,
-        }
+        DocNodeId::from_parts(slot, self.slots[slot as usize].gen_)
     }
 
     /// The slot behind `id`, if the id is current.
     pub(crate) fn resolve(&self, id: DocNodeId) -> Result<u32, DocError> {
-        match self.slots.get(id.slot as usize) {
-            Some(s) if s.live && s.gen_ == id.gen_ => Ok(id.slot),
+        match self.slots.get(id.slot() as usize) {
+            Some(s) if s.live && s.gen_ == id.generation() => Ok(id.slot()),
             Some(_) | None => Err(DocError::Stale(id)),
         }
     }

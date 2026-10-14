@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use super::doc::DocNodeId;
+use gorca_model::DocNodeId;
 
 /// Why an operation was rejected. A rejected operation never mutates the document.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Error)]

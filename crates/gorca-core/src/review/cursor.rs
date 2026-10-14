@@ -1,7 +1,8 @@
 //! Review cursor types (ADR-0006 3). All `Copy`, so `Mode` stays `Copy`.
 
-use gorca_doc::DocCursor;
 use gorca_model::{DocId, NodeKey};
+
+use crate::mode::WebCursor;
 
 /// Unique per model build within a process; never reused.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -21,7 +22,7 @@ pub enum ReviewFrom {
     Focus,
     Browse {
         doc: DocId,
-        cursor: DocCursor,
+        cursor: WebCursor,
         sticky: bool,
     },
 }

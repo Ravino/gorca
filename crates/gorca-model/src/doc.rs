@@ -17,9 +17,46 @@ use crate::role::Role;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct DocId(pub u32);
 
-/// Document-local node identity, never reused within a `nav_id` (section 9.3).
+/// Document-local node identity: an arena slot plus a generation that bumps when the slot is
+/// freed (ADR-0003 DM-I3, AM-2). Never reused within one doc actor's life.
+///
+/// Only `gorca-doc` mints ids (`from_parts`); every other crate holds and compares them.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub struct DocNodeId(pub u32);
+pub struct DocNodeId {
+    slot: u32,
+    gen_: u32,
+}
+
+impl DocNodeId {
+    /// Minted only by the `gorca-doc` arena.
+    #[doc(hidden)]
+    pub const fn from_parts(slot: u32, gen_: u32) -> Self {
+        Self { slot, gen_ }
+    }
+
+    pub const fn slot(self) -> u32 {
+        self.slot
+    }
+
+    pub const fn generation(self) -> u32 {
+        self.gen_
+    }
+
+    pub const fn to_u64(self) -> u64 {
+        ((self.gen_ as u64) << 32) | self.slot as u64
+    }
+
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "low half of the packed u64"
+    )]
+    pub const fn from_u64(v: u64) -> Self {
+        Self {
+            slot: v as u32,
+            gen_: (v >> 32) as u32,
+        }
+    }
+}
 
 /// Source-native node identity (a DOM or backend node id, or an AT-SPI path handle).
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]

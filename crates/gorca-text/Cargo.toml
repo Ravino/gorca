@@ -1,0 +1,20 @@
+[package]
+name = "gorca-text"
+description = "Shared pure text layer: unit segmentation, caret-move classification, typing echo, selection diff, edit coalescing (ADR-0007)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-model = { workspace = true }
+smallvec = { workspace = true }
+unicode-segmentation = { workspace = true }
+
+[[bench]]
+name = "keystroke"
+harness = false
+
+[lints]
+workspace = true
