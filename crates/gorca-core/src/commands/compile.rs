@@ -224,10 +224,31 @@ pub fn compile(loaded: &Loaded, facts: &PlatformFacts, resolver: &dyn KeyResolve
 ///
 /// Each grabbed variant also exists with Caps Lock set.
 pub fn chord_grabs(km: &CompiledKeymap, mode: ModeKind) -> (Vec<Chord>, Vec<Chord>) {
+    grabs_where(km, mode, |_| true)
+}
+
+/// The grabs of the browse keymap (browse design 7.4): `(plain, exact)` chords for every active
+/// browse binding except Escape, which is grabbed only in auto focus mode.
+pub fn browse_grabs(km: &CompiledKeymap) -> (Vec<Chord>, Vec<Chord>) {
+    let esc = CoreCmd::BrowseEscape.id();
+    grabs_where(km, ModeKind::Browse, |b| b.cmd != esc)
+}
+
+/// The chords bound to `browse.escape`, for the auto-focus-mode grab set.
+pub fn escape_grabs(km: &CompiledKeymap) -> Vec<Chord> {
+    let esc = CoreCmd::BrowseEscape.id();
+    grabs_where(km, ModeKind::Browse, |b| b.cmd == esc).0
+}
+
+fn grabs_where(
+    km: &CompiledKeymap,
+    mode: ModeKind,
+    keep: impl Fn(&Bound) -> bool,
+) -> (Vec<Chord>, Vec<Chord>) {
     let mut plain: Vec<Chord> = Vec::new();
     let mut exact: Vec<Chord> = Vec::new();
-    for (ck, _, _) in km.active_chords(mode) {
-        if ck.mods.contains(Modifiers::GORCA) {
+    for (ck, _, bound) in km.active_chords(mode) {
+        if ck.mods.contains(Modifiers::GORCA) || !keep(&bound) {
             continue;
         }
         let mods = ck.mods.without_locks();

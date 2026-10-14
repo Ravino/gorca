@@ -168,6 +168,7 @@ fn is_surface_role(snap: &NodeSnapshot, parent_is_menubar: bool) -> bool {
         Role::Menu => snap.states.contains(StateSet::SHOWING) && !parent_is_menubar,
         Role::Application
         | Role::Document
+        | Role::DocumentWeb
         | Role::Panel
         | Role::Heading
         | Role::Paragraph
@@ -488,15 +489,7 @@ impl Reader {
             return None;
         };
         let from = match self.mode {
-            Mode::Browse {
-                doc,
-                cursor,
-                sticky,
-            } => ReviewFrom::Browse {
-                doc,
-                cursor,
-                sticky,
-            },
+            Mode::Browse { doc, sticky } => ReviewFrom::Browse { doc, sticky },
             Mode::Focus
             | Mode::Review { .. }
             | Mode::PassThrough { .. }

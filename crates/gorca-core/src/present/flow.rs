@@ -69,6 +69,7 @@ impl Reader {
         match f {
             FocusLaneMsg::FocusChanged { node } => {
                 self.selection_node = None;
+                self.web_on_focus(node, fx);
                 self.begin_focus(node, now, fx);
             }
             FocusLaneMsg::ItemSelected { node } => {
@@ -280,6 +281,19 @@ impl Reader {
                     // Every cache-served presentation may be refined by RV-1 (ADR-0001 8.1).
                     u.may_refine = true;
                 }
+                // Browse mode: the mode word rides on the focus utterance (BM-5), and the line
+                // at the cursor follows a document's own focus speech (W3).
+                if let Some(w) = self.web_take_word() {
+                    u.segments.insert(
+                        0,
+                        gorca_model::Segment {
+                            text: Arc::from(w),
+                            kind: gorca_model::SegmentKind::Text,
+                        },
+                    );
+                }
+                let tail = self.web_take_tail();
+                u.segments.extend(crate::browse::present::segments(&tail));
                 // The context asserts `selected`, which the spoken text omits, so the log must
                 // not carry a cached snapshot from before the event.
                 let logged = if ctx == PresentContext::SelectedItem

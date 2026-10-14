@@ -115,6 +115,14 @@ impl CoreCmd {
                 | CoreCmd::ObjectPrev
                 | CoreCmd::ObjectNextInFlow
                 | CoreCmd::ObjectPrevInFlow
+                | CoreCmd::BrowseCursorNextLine
+                | CoreCmd::BrowseCursorPrevLine
+                | CoreCmd::BrowseCursorNextChar
+                | CoreCmd::BrowseCursorPrevChar
+                | CoreCmd::BrowseCursorNextWord
+                | CoreCmd::BrowseCursorPrevWord
+                | CoreCmd::BrowseCursorPageUp
+                | CoreCmd::BrowseCursorPageDown
                 | CoreCmd::SpeechRingInc
                 | CoreCmd::SpeechRingDec
                 | CoreCmd::SpeechRingIncLarge
@@ -203,7 +211,21 @@ mod tests {
         assert!(impl_names.contains(&"info.status_bar"));
         assert!(!impl_names.contains(&"review.say_all"), "M4b");
         assert!(!impl_names.contains(&"review.above"), "M4b");
-        assert_eq!(impl_names.len(), 59);
+        // M7a: browse mode on static pages (cursor keys, H/1-6/K and the other quick-nav letters
+        // with a default binding in every preset, Enter, toggle, Escape in focus mode).
+        assert!(impl_names.contains(&"browse.cursor_next_line"));
+        assert!(impl_names.contains(&"browse.escape"));
+        assert!(impl_names.contains(&"quicknav.next.heading3"));
+        assert!(
+            !impl_names.contains(&"quicknav.next.heading7"),
+            "H7 to H9 are not HTML"
+        );
+        assert!(
+            !impl_names.contains(&"quicknav.next.article"),
+            "unbound by default"
+        );
+        assert!(!impl_names.contains(&"browse.find"), "M8");
+        assert_eq!(impl_names.len(), 122);
     }
 
     #[test]

@@ -27,10 +27,12 @@
 #![deny(clippy::wildcard_enum_match_arm)]
 
 mod app_actor;
+mod browse;
 mod builtin_ext;
 mod commands;
 mod directory;
 mod doc_actor;
+mod doc_registry;
 mod focus;
 mod health;
 mod mode;
@@ -40,16 +42,24 @@ mod review;
 mod runtime;
 mod text;
 
-pub use app_actor::{AppActor, AppRoute, FILL_QUEUE, FillMsg, ReaderLinks, health_view};
+pub use app_actor::{AppActor, AppRoute, FILL_QUEUE, FillMsg, ReaderLinks, WebLink, health_view};
+pub use browse::commands::WebEffect;
+pub use browse::{
+    BrowseCounters, BrowseSettings, FocusCause, ModeWord, Scope, WebEv, WebFx, WebMode,
+};
 pub use builtin_ext::AppProfile;
 pub use commands::{
     Availability, CmdSpec, CommandTable, Compiled, ConfigRequest, ContextMask, ControlMsg, CoreCmd,
     InputNotice, LoadCause, LoadedSettings, LocalTime, Milestone, PASS_TIMEOUT, PlatformFacts,
-    SaveResult, SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels, WallClock, chord_grabs,
-    command_id, compile, gorca_modifiers, lane_settings,
+    SaveResult, SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels, WallClock, browse_grabs,
+    chord_grabs, command_id, compile, escape_grabs, gorca_modifiers, lane_settings,
 };
 pub use directory::MirrorDirectory;
-pub use doc_actor::DocActor;
+pub use doc_actor::{
+    DocActorSpec, DocCounters, DocCtl, DocDirectory, DocHandle, DocNotice, WebJoin,
+    prepare as prepare_doc_actor,
+};
+pub use doc_registry::{BUILD_HOLD, HubCfg, HubMsg, HubTx, WarmState, hub_channel, run_hub};
 pub use focus::{FOCUS_FLAP_DELAY, FocusEffect, FocusMsg, FocusState, settle_delay};
 pub use health::{
     AppHealth, HUNG_PROBE_MAX, HUNG_PROBE_MIN, HealthEffect, HealthMsg, HealthStepCtx,

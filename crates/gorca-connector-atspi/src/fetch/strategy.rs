@@ -153,6 +153,7 @@ async fn value_for(
         | Role::Dialog
         | Role::Panel
         | Role::Document
+        | Role::DocumentWeb
         | Role::Heading
         | Role::Paragraph
         | Role::Link
@@ -262,7 +263,11 @@ pub(crate) async fn ancestry(
                 break;
             }
         };
-        if crate::decode::role_from_raw(raw.role) == Role::Document && level > 0 {
+        if matches!(
+            crate::decode::role_from_raw(raw.role),
+            Role::Document | Role::DocumentWeb
+        ) && level > 0
+        {
             batch.truncated = true;
             break;
         }
@@ -311,7 +316,10 @@ pub(crate) async fn subtree(
     )
     .await?;
     let mut queue: std::collections::VecDeque<Resolved> = std::collections::VecDeque::new();
-    if crate::decode::role_from_raw(first.role) != Role::Document {
+    if !matches!(
+        crate::decode::role_from_raw(first.role),
+        Role::Document | Role::DocumentWeb
+    ) {
         queue.push_back(root.clone());
     }
     batch.nodes.push((root.key, first));
@@ -345,7 +353,10 @@ pub(crate) async fn subtree(
                 Ok(mut raw) => {
                     raw.parent = Some(parent.key);
                     keys.push(child.key);
-                    let is_doc = crate::decode::role_from_raw(raw.role) == Role::Document;
+                    let is_doc = matches!(
+                        crate::decode::role_from_raw(raw.role),
+                        Role::Document | Role::DocumentWeb
+                    );
                     batch.nodes.push((child.key, raw));
                     if !is_doc {
                         queue.push_back(child);

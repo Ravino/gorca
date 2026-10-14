@@ -15,7 +15,9 @@ use std::sync::Arc;
 
 use gorca_model::{DocNodeId, Role};
 
-use super::cats::{Cat, NodeFlags, NodeSpec, RANKED, RANKED_N, SubtreeSpec, cats_of, ranked_index};
+use super::cats::{
+    Cat, NodeFlags, NodeMeta, NodeSpec, RANKED, RANKED_N, SubtreeSpec, cats_of, ranked_index,
+};
 use super::error::DocError;
 
 pub(crate) const NIL: u32 = u32::MAX;
@@ -41,6 +43,7 @@ pub(crate) struct Slot {
     sig: u64,
     name: Option<Arc<str>>,
     text: Option<Arc<str>>,
+    meta: Option<Arc<NodeMeta>>,
     own_scal: u32,
     own_nl: u32,
 }
@@ -69,6 +72,7 @@ pub struct NodeView<'a> {
     pub sig: u64,
     pub name: Option<&'a str>,
     pub text: Option<&'a str>,
+    pub meta: Option<&'a NodeMeta>,
 }
 
 #[derive(Clone, Debug)]
@@ -91,24 +95,29 @@ fn splitmix(mut x: u64) -> u64 {
     x ^ (x >> 31)
 }
 
+/// The scalars a node contributes to the flat text, in order: a line break when `BREAK_BEFORE`,
+/// its own text, a line break when `BREAK_AFTER`. A hidden node contributes nothing.
+fn own_chars(text: Option<&str>, flags: NodeFlags) -> impl Iterator<Item = char> + '_ {
+    let on = !flags.contains(NodeFlags::HIDDEN);
+    let before = on && flags.contains(NodeFlags::BREAK_BEFORE);
+    let after = on && flags.contains(NodeFlags::BREAK_AFTER);
+    let body = if on { text.unwrap_or("") } else { "" };
+    before
+        .then_some('\n')
+        .into_iter()
+        .chain(body.chars())
+        .chain(after.then_some('\n'))
+}
+
 /// Scalars and newlines of a node's contribution to the flat text.
 fn contribution(text: Option<&str>, flags: NodeFlags) -> (u32, u32) {
-    if flags.contains(NodeFlags::HIDDEN) {
-        return (0, 0);
-    }
     let mut scal = 0u32;
     let mut nl = 0u32;
-    if let Some(t) = text {
-        for ch in t.chars() {
-            scal += 1;
-            if ch == '\n' {
-                nl += 1;
-            }
-        }
-    }
-    if flags.contains(NodeFlags::BREAK_AFTER) {
+    for ch in own_chars(text, flags) {
         scal += 1;
-        nl += 1;
+        if ch == '\n' {
+            nl += 1;
+        }
     }
     (scal, nl)
 }
@@ -245,6 +254,7 @@ impl WebDoc {
             sig: spec.sig,
             name: spec.name.clone(),
             text: spec.text.clone(),
+            meta: spec.meta.clone(),
             own_scal,
             own_nl,
         };
@@ -304,6 +314,7 @@ impl WebDoc {
         sl.gen_ = sl.gen_.wrapping_add(1);
         sl.text = None;
         sl.name = None;
+        sl.meta = None;
         self.free.push(s);
     }
 
@@ -320,6 +331,7 @@ impl WebDoc {
             sig: sl.sig,
             name: sl.name.as_deref(),
             text: sl.text.as_deref(),
+            meta: sl.meta.as_deref(),
         })
     }
 
@@ -359,6 +371,22 @@ impl WebDoc {
             doc: self,
             next: self.root,
             stop: NIL,
+        }
+    }
+
+    /// Document-order iterator that starts at `id` and runs to the end of the document.
+    pub fn preorder_from(&self, id: DocNodeId) -> Preorder<'_> {
+        match self.resolve_attached(id) {
+            Ok(s) => Preorder {
+                doc: self,
+                next: s,
+                stop: NIL,
+            },
+            Err(_) => Preorder {
+                doc: self,
+                next: NIL,
+                stop: NIL,
+            },
         }
     }
 
@@ -912,6 +940,9 @@ impl WebDoc {
         if let Some(n) = &patch.name {
             sl.name.clone_from(n);
         }
+        if let Some(m) = &patch.meta {
+            sl.meta.clone_from(m);
+        }
         let cats = cats_of(sl.role, sl.level, sl.flags);
         let (scal, nl) = contribution(sl.text.as_deref(), sl.flags);
         sl.cats = cats;
@@ -1196,20 +1227,13 @@ impl WebDoc {
     /// Index (in scalars) of the k-th (1-based) newline of slot `t`'s contribution.
     fn nth_newline_in(&self, t: u32, mut k: u32) -> Option<u32> {
         let sl = &self.slots[t as usize];
-        let mut idx = 0u32;
-        if let Some(text) = sl.text.as_deref() {
-            for ch in text.chars() {
-                if ch == '\n' {
-                    k -= 1;
-                    if k == 0 {
-                        return Some(idx);
-                    }
+        for (idx, ch) in own_chars(sl.text.as_deref(), sl.flags).enumerate() {
+            if ch == '\n' {
+                k -= 1;
+                if k == 0 {
+                    return u32::try_from(idx).ok();
                 }
-                idx += 1;
             }
-        }
-        if sl.flags.contains(NodeFlags::BREAK_AFTER) && k == 1 {
-            return Some(idx);
         }
         None
     }
@@ -1224,12 +1248,10 @@ impl WebDoc {
                 };
                 let (_, nl_before) = self.prefix_text(s);
                 let sl = &self.slots[s as usize];
-                let n = sl.text.as_deref().map_or(0, |text| {
-                    text.chars()
-                        .take(local as usize)
-                        .filter(|ch| *ch == '\n')
-                        .count() as u32
-                });
+                let n = own_chars(sl.text.as_deref(), sl.flags)
+                    .take(local as usize)
+                    .filter(|ch| *ch == '\n')
+                    .count() as u32;
                 nl_before + n
             }
         }
@@ -1266,22 +1288,32 @@ impl WebDoc {
             let own = sl.own_scal;
             if own > local {
                 let take = (own - local).min(remaining);
-                let text_chars = sl.text.as_deref().map_or(0, |t| t.chars().count() as u32);
-                if let Some(text) = sl.text.as_deref() {
-                    out.extend(text.chars().skip(local as usize).take(take as usize));
-                }
-                // The BREAK_AFTER newline sits at index `text_chars`.
-                if sl.flags.contains(NodeFlags::BREAK_AFTER)
-                    && local + take > text_chars
-                    && !sl.flags.contains(NodeFlags::HIDDEN)
-                {
-                    out.push('\n');
-                }
+                out.extend(
+                    own_chars(sl.text.as_deref(), sl.flags)
+                        .skip(local as usize)
+                        .take(take as usize),
+                );
                 remaining -= take;
             }
             local = 0;
             s = self.pre_next(s);
         }
+    }
+
+    /// Flat-text interval `[start, end)` that `id`'s subtree contributes (its own text and every
+    /// descendant's). O(log n). `None` when `id` is not in the document tree.
+    pub fn subtree_text_range(&self, id: DocNodeId) -> Option<(u32, u32)> {
+        let s = self.resolve_attached(id).ok()?;
+        let last = self.last_desc(s);
+        let start = self.prefix_text(s).0;
+        let end = self.prefix_text(last).0 + self.slots[last as usize].own_scal;
+        Some((start, end))
+    }
+
+    /// Length in scalars of the node's own contribution (text plus breaks).
+    pub fn own_len(&self, id: DocNodeId) -> Option<u32> {
+        let s = self.resolve(id).ok()?;
+        Some(self.slots[s as usize].own_scal)
     }
 
     // ---------------------------------------------------------------- invariants

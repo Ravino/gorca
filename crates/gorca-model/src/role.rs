@@ -12,6 +12,8 @@ pub enum Role {
     Dialog,
     Panel,
     Document,
+    /// A top-level or nested web document (`DOCUMENT_WEB`, ADR-0003 AM-12).
+    DocumentWeb,
     Heading,
     Paragraph,
     Link,
@@ -62,6 +64,7 @@ impl Role {
             | Role::Dialog
             | Role::Panel
             | Role::Document
+            | Role::DocumentWeb
             | Role::Heading
             | Role::Paragraph
             | Role::Link
@@ -108,6 +111,7 @@ impl Role {
             Role::Dialog => "dialog",
             Role::Panel => "panel",
             Role::Document => "document",
+            Role::DocumentWeb => "document_web",
             Role::Heading => "heading",
             Role::Paragraph => "paragraph",
             Role::Link => "link",
@@ -172,6 +176,7 @@ impl Role {
             | Role::Dialog
             | Role::Panel
             | Role::Document
+            | Role::DocumentWeb
             | Role::Paragraph
             | Role::Image
             | Role::List
@@ -206,7 +211,7 @@ impl Role {
             Role::Window => "window",
             Role::Dialog => "dialog",
             Role::Panel => "panel",
-            Role::Document => "document",
+            Role::Document | Role::DocumentWeb => "document",
             Role::Heading => "heading",
             Role::Paragraph => "paragraph",
             Role::Link => "link",

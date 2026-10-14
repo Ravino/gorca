@@ -155,6 +155,16 @@ impl AtspiLabels {
     pub fn lookup(&self, key: NodeKey) -> Option<(Arc<str>, Arc<str>)> {
         Some((self.buses.get(key.app)?, self.paths.get(key)?))
     }
+
+    /// The unique bus name of an application currently served.
+    pub fn bus_of(&self, app: AppId) -> Option<Arc<str>> {
+        self.buses.get(app)
+    }
+
+    /// The object path of a node the connector has recorded.
+    pub fn path_of(&self, key: NodeKey) -> Option<Arc<str>> {
+        self.paths.get(key)
+    }
 }
 
 /// State that outlives one run of the connector (the daemon restarts it with backoff): the path
@@ -167,9 +177,20 @@ pub struct AtspiState {
     shadow_refused: Arc<std::sync::atomic::AtomicU64>,
     /// The event drain is connected and its match rules are installed.
     drain_ready: Arc<std::sync::atomic::AtomicBool>,
+    /// The a11y bus address the running connector resolved (browse mode's document sources
+    /// open their own connection to it).
+    a11y_address: Arc<std::sync::Mutex<Option<String>>>,
 }
 
 impl AtspiState {
+    /// The a11y bus address, once the connector has resolved it.
+    pub fn a11y_address(&self) -> Option<String> {
+        self.a11y_address
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
     /// Events are being received (the drain installed its match rules). Tests wait for it before
     /// starting applications, because events sent earlier are lost.
     pub fn drain_ready(&self) -> bool {
@@ -554,6 +575,10 @@ async fn run(
         ..
     } = ctx;
     let (address, session) = resolve_bus(&opts, &clock).await?;
+    *shared
+        .a11y_address
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(address.clone());
     tracing::info!("connecting to the accessibility bus");
 
     // The shell is identified through the session bus: its well-known name lives there.

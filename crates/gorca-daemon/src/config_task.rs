@@ -89,6 +89,9 @@ pub fn build(text: Option<&str>, facts: &PlatformFacts, cause: LoadCause) -> Bui
     // Chords without the gorca modifier (the desktop layout's keypad review keys) are grabbed
     // explicitly, and only once their command is implemented (K-1, K-8a).
     let (commands, exact) = gorca_core::chord_grabs(&c.keymap, gorca_input_api::ModeKind::Focus);
+    // Browse mode (M7): the browse keymap's chords, and Escape for auto focus mode (modes.md 2).
+    let (quick_nav, _) = gorca_core::browse_grabs(&c.keymap);
+    let web_escape = gorca_core::escape_grabs(&c.keymap);
     let loaded = LoadedSettings {
         cause,
         settings: l.settings.clone(),
@@ -100,6 +103,8 @@ pub fn build(text: Option<&str>, facts: &PlatformFacts, cause: LoadCause) -> Bui
             modifiers: mods,
             commands,
             exact,
+            quick_nav,
+            web_escape,
             ..ModeKeys::default()
         },
         caps_lock_dropped: c.caps_lock_dropped,

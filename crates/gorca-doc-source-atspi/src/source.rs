@@ -21,14 +21,16 @@ use std::time::{Duration, Instant};
 
 use gorca_dbus::DbusError;
 use gorca_doc_source_api::{
-    ActionCaps, DocAction, DocRequest, DocSource, DocSourceCtx, JoinKeyCaps, SourceCaps,
-    SourceError, SourceKind, web_attrs,
+    ActionCaps, Activity, DeltaSink, DocAction, DocEvent, DocRequest, DocSource, DocSourceCtx,
+    JoinKeyCaps, SourceCaps, SourceError, SourceKind, web_attrs,
 };
-use gorca_model::{DocDelta, Role, SrcNode, SrcNodeId, TextEdit, TextUnit};
+use gorca_model::{
+    DocDelta, LocalId, NodeEvent, PropMask, Role, SrcNode, SrcNodeId, TextEdit, TextUnit,
+};
 use gorca_rt::{BoxFuture, Deadline, mpsc};
 use smallvec::SmallVec;
 
-use crate::events::{AtspiEvent, Dirty, DirtySet, SettlePolicy};
+use crate::events::{AtspiEvent, Dirty, DirtySet, EventKind, SettlePolicy};
 use crate::fetch::{
     FetchError, FetchOpts, FetchTimings, FetchedDoc, PathTable, TextPolicy, fetch_document,
     fetch_first_block, fetch_forest,
@@ -36,6 +38,7 @@ use crate::fetch::{
 use crate::identity::{IdentityMap, MatchStats, SibInfo, Sig};
 use crate::p2p::AppConn;
 use crate::roles;
+use crate::runs::RunLayer;
 use crate::wire::{self, AttrInterner, PathKey};
 
 const ACCESSIBLE: &str = "org.a11y.atspi.Accessible";
@@ -62,6 +65,29 @@ pub struct SourceConfig {
     /// Viewport-first build (ADR-0003 section 8): push the top of the document, at least this many
     /// nodes, as soon as they are complete, then the rest. 0 disables it.
     pub first_nodes: usize,
+    /// Split container text into run leaves (TX-1, FT-2). Needs `fetch.text == All` to do
+    /// anything; off for the B-6 harness, which compares against raw fetches.
+    pub runs: bool,
+    /// Chromium reorders keyed lists without an event (`SourceCaps::silent_reorders`).
+    pub silent_reorders: bool,
+    /// Events that did not fit while dormant, after which a wake rebuilds from scratch anyway.
+    pub dormant_marks: usize,
+}
+
+impl SourceConfig {
+    /// The browse-mode configuration (browse design FT-1): text tier on, runs on.
+    pub fn browse(text_unit: TextUnit, chromium: bool) -> Self {
+        Self {
+            fetch: FetchOpts {
+                text: TextPolicy::All,
+                ..FetchOpts::default()
+            },
+            text_unit,
+            runs: true,
+            silent_reorders: chromium,
+            ..Self::default()
+        }
+    }
 }
 
 impl Default for SourceConfig {
@@ -76,6 +102,9 @@ impl Default for SourceConfig {
             call_timeout: Duration::from_millis(300),
             use_dom_id: true,
             first_nodes: 400,
+            runs: false,
+            silent_reorders: false,
+            dormant_marks: 100_000,
         }
     }
 }
@@ -198,6 +227,13 @@ impl AtspiDocSource {
     pub fn interner(&self) -> Arc<AttrInterner> {
         Arc::clone(&self.interner)
     }
+
+    /// Share the attribute interner of the application (keys must agree across its documents).
+    #[must_use]
+    pub fn with_interner(mut self, interner: Arc<AttrInterner>) -> Self {
+        self.interner = interner;
+        self
+    }
 }
 
 impl DocSource for AtspiDocSource {
@@ -209,7 +245,7 @@ impl DocSource for AtspiDocSource {
         SourceCaps {
             bulk_snapshot: true,
             push_deltas: true,
-            settled_markers: false,
+            settled_markers: true,
             text_unit: self.config.text_unit,
             actions: ActionCaps::FOCUS
                 | ActionCaps::CLICK
@@ -218,6 +254,7 @@ impl DocSource for AtspiDocSource {
                 | ActionCaps::SET_SELECTION,
             // The object path validated by a DOM id and a signature is the heuristic key.
             join_keys: JoinKeyCaps::EXACT | JoinKeyCaps::HEURISTIC,
+            silent_reorders: self.config.silent_reorders,
         }
     }
 
@@ -283,6 +320,87 @@ struct Live {
     /// and the doc actor attaches a new one.
     root_errors: u32,
     root_key: Option<PathKey>,
+    out: Pusher,
+    /// Transport key of every object the source has seen, by the hash the drain computes.
+    locals: HashMap<LocalId, PathKey>,
+    activity: Activity,
+}
+
+/// The one place deltas leave the source: run synthesis, then the sink, then `Settled` (AM-4).
+struct Pusher {
+    runs: Option<RunLayer>,
+    batch: u64,
+}
+
+impl Pusher {
+    fn emit(&mut self, sink: &DeltaSink, deltas: Vec<DocDelta>) {
+        let deltas = match &mut self.runs {
+            Some(r) => r.process(deltas),
+            None => deltas,
+        };
+        for d in deltas {
+            sink.push(d);
+        }
+        self.batch += 1;
+        sink.push(DocDelta::Settled { batch: self.batch });
+    }
+}
+
+/// Remember the transport keys of a fetched document for event routing.
+fn register_locals(live: &mut Live, doc: &FetchedDoc) {
+    for (n, k) in doc.block.nodes.iter().zip(&doc.keys) {
+        if let Some(l) = n.local {
+            live.locals.insert(l, *k);
+        }
+    }
+}
+
+/// Map a routed core event to the source's own event type. Focus, caret and selection are not
+/// the document source's business (SL-5).
+fn to_atspi(live: &Live, e: &DocEvent) -> Option<AtspiEvent> {
+    let key_of = |n: &gorca_model::NodeKey| live.locals.get(&n.local).copied();
+    let (path, kind) = match &e.ev {
+        NodeEvent::ChildrenChanged { node } => (
+            key_of(node)?,
+            EventKind::ChildAdded {
+                index: -1,
+                child: None,
+            },
+        ),
+        NodeEvent::NodeRemoved { node } => (key_of(node)?, EventKind::Defunct),
+        NodeEvent::PropertiesChanged { node, mask } => {
+            let kind = if mask.contains(PropMask::NAME) {
+                EventKind::NameChanged
+            } else if mask.contains(PropMask::VALUE) {
+                EventKind::ValueChanged
+            } else if mask.contains(PropMask::DESCRIPTION) {
+                EventKind::DescriptionChanged
+            } else if mask.intersects(PropMask::STATES | PropMask::ROLE | PropMask::ATTRS) {
+                EventKind::StateChanged {
+                    state: Arc::from("props"),
+                    on: true,
+                }
+            } else {
+                return None;
+            };
+            (key_of(node)?, kind)
+        }
+        NodeEvent::TextChanged { node, .. } => {
+            (key_of(node)?, EventKind::TextChanged { insert: true })
+        }
+        NodeEvent::FocusChanged { .. }
+        | NodeEvent::ActiveDescendantChanged { .. }
+        | NodeEvent::CaretMoved { .. }
+        | NodeEvent::SelectionChanged { .. }
+        | NodeEvent::Announcement { .. }
+        | NodeEvent::WindowEvent { .. }
+        | NodeEvent::DocumentEvent { .. } => return None,
+    };
+    Some(AtspiEvent {
+        path,
+        kind,
+        at: e.at,
+    })
 }
 
 /// Note one event in the dirty set; the document root going defunct detaches the source.
@@ -305,6 +423,13 @@ impl AtspiDocSource {
             batch: 0,
             root_errors: 0,
             root_key: None,
+            out: Pusher {
+                runs: (self.config.runs && self.config.fetch.text == TextPolicy::All)
+                    .then(RunLayer::new),
+                batch: 0,
+            },
+            locals: HashMap::new(),
+            activity: Activity::Awake,
         };
 
         // Build. A failed block fetch is the one hard error: nothing to mirror.
@@ -347,13 +472,12 @@ impl AtspiDocSource {
         if let Some((a, plan, consumed)) = first {
             // Push the top of the document now; fetch the rest while the mirror is already usable.
             let n_a = a.block.node_count();
-            for d in a
+            register_locals(&mut live, &a);
+            let deltas = a
                 .block
                 .clone()
-                .into_deltas(Some(self.config.nav_id), self.config.chunk)
-            {
-                ctx.sink.push(d);
-            }
+                .into_deltas(Some(self.config.nav_id), self.config.chunk);
+            live.out.emit(&ctx.sink, deltas);
             self.metrics.set_first_block(t_attach.elapsed(), n_a);
             if let Ok(rest) = fetch_forest(
                 &self.app,
@@ -364,9 +488,9 @@ impl AtspiDocSource {
             )
             .await
             {
-                for d in rest.block.clone().into_deltas(None, self.config.chunk) {
-                    ctx.sink.push(d);
-                }
+                register_locals(&mut live, &rest);
+                let deltas = rest.block.clone().into_deltas(None, self.config.chunk);
+                live.out.emit(&ctx.sink, deltas);
                 self.finish_build(&mut live, &ctx, &[&a, &rest], t_attach, false);
             } else {
                 // The top of the page is already in the mirror but the rest did not come:
@@ -386,6 +510,7 @@ impl AtspiDocSource {
         }
 
         let mut events_open = true;
+        let mut ctx_events_open = true;
         loop {
             let due = live.dirty.deadline(&self.config.settle);
             let sleep = async {
@@ -399,6 +524,24 @@ impl AtspiDocSource {
                 req = ctx.requests.recv() => {
                     let Some(req) = req else { return Ok(()) };
                     self.handle_request(&mut live, &ctx, req).await;
+                }
+                ev = ctx.events.recv(), if ctx_events_open => {
+                    // Events routed by the core (EF-1): an unknown node is not ours.
+                    let Some(ev) = ev else {
+                        ctx_events_open = false;
+                        continue;
+                    };
+                    if let Some(a) = to_atspi(&live, &ev) {
+                        note(&mut live, &a);
+                    }
+                    while let Ok(ev) = ctx.events.try_recv() {
+                        if let Some(a) = to_atspi(&live, &ev) {
+                            note(&mut live, &a);
+                        }
+                    }
+                    if live.root_errors >= ROOT_ERROR_LIMIT {
+                        return Err(SourceError::Detached);
+                    }
                 }
                 ev = self.events.recv(), if events_open => {
                     match ev {
@@ -415,7 +558,7 @@ impl AtspiDocSource {
                         None => events_open = false,
                     }
                 }
-                () = sleep => {
+                () = sleep, if live.activity == Activity::Awake => {
                     self.process_dirty(&mut live, &ctx).await;
                     if live.root_errors >= ROOT_ERROR_LIMIT {
                         return Err(SourceError::Detached);
@@ -441,15 +584,16 @@ impl AtspiDocSource {
         let mut timings = docs[0].timings.clone();
         timings.total = t_attach.elapsed();
         self.metrics.set_build(timings, nodes);
+        for d in docs {
+            register_locals(live, d);
+        }
         if push {
             for d in docs {
-                for delta in d
+                let deltas = d
                     .block
                     .clone()
-                    .into_deltas(Some(self.config.nav_id), self.config.chunk)
-                {
-                    ctx.sink.push(delta);
-                }
+                    .into_deltas(Some(self.config.nav_id), self.config.chunk);
+                live.out.emit(&ctx.sink, deltas);
             }
             self.metrics.set_first_block(t_attach.elapsed(), nodes);
         }
@@ -538,6 +682,7 @@ impl AtspiDocSource {
         read: ReadTuple,
         text: Option<Arc<str>>,
         id_fresh: bool,
+        local: Option<gorca_model::LocalId>,
     ) -> (SrcNode, SibInfo) {
         let (raw_role, state, name, attrs) = read;
         let role = roles::map_role(raw_role);
@@ -578,6 +723,7 @@ impl AtspiDocSource {
                 name,
                 text,
                 attrs: amap,
+                local,
             },
             info,
         )
@@ -670,7 +816,12 @@ impl AtspiDocSource {
                     continue;
                 };
                 rec.props_refreshed += 1;
-                let (node, info) = self.node_from_read(id, read, None, false);
+                let local = live
+                    .ident
+                    .path_of(id)
+                    .and_then(|p| live.paths.path_of(p))
+                    .map(|p| gorca_dbus::drain::local_id(&p));
+                let (node, info) = self.node_from_read(id, read, None, false, local);
                 let parent = live.ident.parent_of(id).unwrap_or(id);
                 by_parent.entry(parent).or_default().push((id, node, info));
             }
@@ -781,8 +932,8 @@ impl AtspiDocSource {
         }
 
         rec.deltas = deltas.len();
-        for d in deltas {
-            ctx.sink.push(d);
+        if !deltas.is_empty() {
+            live.out.emit(&ctx.sink, deltas);
         }
         rec.pushed_at = Instant::now();
         self.metrics.push(rec);
@@ -826,6 +977,7 @@ impl AtspiDocSource {
             rec.errors += 1;
             return;
         };
+        register_locals(live, &added);
         rec.nodes_fetched += added.block.node_count();
         let out = live.ident.apply_children(id, &new_paths, &added, force);
         rec.stats.add(&out.stats);
@@ -866,6 +1018,7 @@ impl AtspiDocSource {
             return;
         };
         rec.nodes_fetched = doc.block.node_count();
+        register_locals(live, &doc);
         let root_path = doc.keys.first().copied();
         let root_id = root_path.and_then(|p| live.ident.id_of(p));
         if let Some(root) = root_id {
@@ -940,6 +1093,52 @@ impl AtspiDocSource {
                 }
                 let _ = reply.send(Ok(out));
             }
+            DocRequest::SetActivity(a) => {
+                let was = live.activity;
+                live.activity = a;
+                // M7a: waking always rebuilds (AM-13); ids are kept, W0 was served from the
+                // snapshot while the document slept.
+                if was == Activity::Dormant && a == Activity::Awake {
+                    self.rebuild(live, ctx).await;
+                }
+            }
+            DocRequest::Rebuild => self.rebuild(live, ctx).await,
+            // M7b: urgent marks and the W3 drift check.
+            DocRequest::Prioritize { .. } | DocRequest::DriftCheck => {}
+        }
+    }
+
+    /// Rebuild as resync (AM-4): refetch the document, re-match it against the issued ids and
+    /// push the difference, then `Settled` even when nothing changed so the waiter wakes.
+    async fn rebuild(&mut self, live: &mut Live, ctx: &DocSourceCtx) {
+        let mut rec = UpdateRecord {
+            events: 0,
+            dirty_nodes: 0,
+            first_event: None,
+            last_event: None,
+            planned_at: Instant::now(),
+            pushed_at: Instant::now(),
+            parents_refreshed: 0,
+            props_refreshed: 0,
+            nodes_fetched: 0,
+            deltas: 0,
+            stats: MatchStats::default(),
+            resync: true,
+            rewrite: false,
+            rewrite_note: None,
+            errors: 0,
+        };
+        // Whatever was marked while dormant is covered by the refetch.
+        let _ = live.dirty.take();
+        let mut deltas = Vec::new();
+        self.full_resync(live, &mut deltas, &mut rec).await;
+        rec.deltas = deltas.len();
+        live.out.emit(&ctx.sink, deltas);
+        rec.pushed_at = Instant::now();
+        self.metrics.push(rec);
+        if live.root_errors >= ROOT_ERROR_LIMIT {
+            // The document object is gone: the doc actor attaches a new source.
+            live.root_errors = ROOT_ERROR_LIMIT;
         }
     }
 
@@ -979,18 +1178,23 @@ impl AtspiDocSource {
                 .fetch_added(live, &unknown)
                 .await
                 .map_err(|e| map_fetch(&e))?;
+            register_locals(live, &added);
             let out = live.ident.apply_children(parent, &new_paths, &added, &none);
+            let mut deltas = Vec::new();
             if !out.upserts.is_empty() {
-                ctx.sink.push(DocDelta::Upsert(out.upserts));
+                deltas.push(DocDelta::Upsert(out.upserts));
             }
             for (p, children) in out.children {
-                ctx.sink.push(DocDelta::Children {
+                deltas.push(DocDelta::Children {
                     parent: p,
                     children,
                 });
             }
             if !out.removed.is_empty() {
-                ctx.sink.push(DocDelta::Removed(out.removed));
+                deltas.push(DocDelta::Removed(out.removed));
+            }
+            if !deltas.is_empty() {
+                live.out.emit(&ctx.sink, deltas);
             }
         }
         Ok(live

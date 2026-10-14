@@ -215,6 +215,7 @@ fn is_plain_text_role(role: gorca_model::Role) -> bool {
         | Role::Dialog
         | Role::Panel
         | Role::Document
+        | Role::DocumentWeb
         | Role::Heading
         | Role::Link
         | Role::Image

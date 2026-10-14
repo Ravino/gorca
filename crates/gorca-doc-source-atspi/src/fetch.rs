@@ -400,6 +400,7 @@ async fn complete(
                 name: rn.name,
                 text: texts[i].take(),
                 attrs,
+                local: targets.get(i).map(|p| gorca_dbus::drain::local_id(p)),
             });
         }
         let completeness = match (opts.states, opts.text) {

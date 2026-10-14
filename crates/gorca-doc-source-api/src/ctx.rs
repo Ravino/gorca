@@ -1,7 +1,9 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use gorca_model::{DocDelta, DocId};
+use std::time::Instant;
+
+use gorca_model::{AppId, DocDelta, DocId, NodeEvent};
 use gorca_rt::{BoxFuture, CancellationToken, Clock, mpsc};
 
 use crate::caps::{SourceCaps, SourceKind};
@@ -15,12 +17,28 @@ pub trait DocSource: Send + 'static {
     fn attach(self: Box<Self>, ctx: DocSourceCtx) -> BoxFuture<'static, Result<(), SourceError>>;
 }
 
+/// One normalised event of the document's application, as the connector's drain produced it
+/// (ADR-0003 AM-3). The core routes events of a browser app to the source of the document that
+/// owns the node; a source never subscribes to the bus itself.
+#[derive(Clone, Debug)]
+pub struct DocEvent {
+    pub ev: NodeEvent,
+    /// Per-document arrival number, for gap detection.
+    pub seq: u64,
+    pub at: Instant,
+}
+
 pub struct DocSourceCtx {
     pub doc: DocId,
+    /// The application the document belongs to (transport keys are per app).
+    pub app: AppId,
     /// Non-blocking push (SL-1).
     pub sink: DeltaSink,
     /// Bounded; every request has a deadline.
     pub requests: mpsc::Receiver<DocRequest>,
+    /// The document's normalised events (bounded; a full queue drops the event and the source
+    /// resyncs, EF-2).
+    pub events: mpsc::Receiver<DocEvent>,
     /// Identity reconciliation (section 9.3).
     pub join: JoinPort,
     pub shutdown: CancellationToken,

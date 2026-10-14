@@ -163,6 +163,49 @@ pub(crate) fn wire_atspi(
     );
 }
 
+/// Browse mode (M7a): web documents are mirrored through AT-SPI sources made by the factory over
+/// the connector's bus names and paths. Off in shadow mode (read-only) and without a runtime
+/// directory (the sockets of browsers live there).
+pub(crate) fn wire_web(
+    core: gorca_core::Core,
+    opts: &Options,
+    state: &AtspiState,
+) -> gorca_core::Core {
+    if opts.shadow {
+        return core;
+    }
+    let Some(dir) = opts.runtime_dir.clone() else {
+        tracing::warn!("no runtime directory: browse mode stays off");
+        return core;
+    };
+    let resolver = Arc::new(AtspiResolver {
+        labels: state.labels(),
+        state: state.clone(),
+    });
+    let factory = gorca_doc_source_atspi::AtspiDocSourceFactory::new(resolver, dir);
+    core.with_web(Arc::new(factory))
+}
+
+/// The factory's view of the connector: bus names, object paths and the a11y bus address.
+struct AtspiResolver {
+    labels: gorca_connector_atspi::AtspiLabels,
+    state: AtspiState,
+}
+
+impl gorca_doc_source_atspi::PathResolver for AtspiResolver {
+    fn bus_of(&self, app: gorca_model::AppId) -> Option<Arc<str>> {
+        self.labels.bus_of(app)
+    }
+
+    fn path_of(&self, key: gorca_model::NodeKey) -> Option<Arc<str>> {
+        self.labels.path_of(key)
+    }
+
+    fn a11y_address(&self) -> Option<String> {
+        self.state.a11y_address()
+    }
+}
+
 /// B-1 PW-10: `--bench-present-log=<path>` (the only way to turn it on) records every node
 /// presentation as a JSON line. The object paths come from the connector's path table through
 /// [`PathLabels`]; the core never sees them. Passive: unset means nothing happens, and an

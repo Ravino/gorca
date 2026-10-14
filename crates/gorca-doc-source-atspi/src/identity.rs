@@ -1107,6 +1107,7 @@ mod tests {
             name: Some(name.into()),
             text: None,
             attrs,
+            local: None,
         }
     }
 

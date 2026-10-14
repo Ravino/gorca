@@ -97,11 +97,11 @@ pub fn map_role(r: u32) -> Role {
         PANEL | FILLER | GROUPING | SECTION | FORM | HEADER | FOOTER | ARTICLE | BLOCK_QUOTE
         | LOG => Role::Panel,
         DOCUMENT_FRAME
-        | DOCUMENT_WEB
         | DOCUMENT_TEXT
         | DOCUMENT_EMAIL
         | DOCUMENT_SPREADSHEET
         | DOCUMENT_PRESENTATION => Role::Document,
+        DOCUMENT_WEB => Role::DocumentWeb,
         HEADING => Role::Heading,
         PARAGRAPH => Role::Paragraph,
         LINK => Role::Link,
@@ -235,6 +235,7 @@ pub mod state_bit {
     pub const MANAGES_DESCENDANTS: u8 = 31;
     pub const REQUIRED: u8 = 33;
     pub const INVALID_ENTRY: u8 = 36;
+    pub const VISITED: u8 = 40;
     pub const HAS_POPUP: u8 = 42;
     pub const READ_ONLY: u8 = 43;
 }
@@ -244,7 +245,7 @@ pub fn map_states(bits: u64) -> StateSet {
     use state_bit::{
         ACTIVE, BUSY, CHECKED, COLLAPSED, DEFUNCT, EDITABLE, ENABLED, EXPANDED, FOCUSABLE, FOCUSED,
         HAS_POPUP, INVALID_ENTRY, MANAGES_DESCENDANTS, MODAL, MULTI_LINE, PRESSED, READ_ONLY,
-        REQUIRED, SELECTABLE, SELECTED, SHOWING, TRANSIENT, VISIBLE,
+        REQUIRED, SELECTABLE, SELECTED, SHOWING, TRANSIENT, VISIBLE, VISITED,
     };
     let has = |n: u8| bits & (1u64 << n) != 0;
     let mut s = StateSet::empty();
@@ -272,6 +273,7 @@ pub fn map_states(bits: u64) -> StateSet {
         (INVALID_ENTRY, StateSet::INVALID),
         (HAS_POPUP, StateSet::HAS_POPUP),
         (READ_ONLY, StateSet::READ_ONLY),
+        (VISITED, StateSet::VISITED),
     ] {
         if has(n) {
             s |= f;
@@ -286,7 +288,7 @@ mod tests {
 
     #[test]
     fn web_roles_map() {
-        assert_eq!(map_role(raw::DOCUMENT_WEB), Role::Document);
+        assert_eq!(map_role(raw::DOCUMENT_WEB), Role::DocumentWeb);
         assert_eq!(map_role(raw::HEADING), Role::Heading);
         assert_eq!(map_role(raw::LINK), Role::Link);
         assert_eq!(map_role(raw::SECTION), Role::Panel);

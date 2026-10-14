@@ -43,6 +43,9 @@ pub struct Options {
     pub a11y_address: Option<String>,
     /// Address of the session bus (testing); default is `DBUS_SESSION_BUS_ADDRESS`.
     pub session_address: Option<String>,
+    /// Where applications' peer-to-peer sockets live (`XDG_RUNTIME_DIR`): browse mode talks to
+    /// a browser over them. Without it browse mode stays off.
+    pub runtime_dir: Option<std::path::PathBuf>,
     /// Do not touch `org.a11y.Status` (ID-5).
     pub no_enable: bool,
     /// Extra uids whose speech server is trusted (`--speech-peer-uid`, repeatable). By default
@@ -77,6 +80,8 @@ pub enum ConfigCmd {
     Defaults,
 }
 
+// `Options` is parsed once at startup; boxing it would only add an allocation and a deref.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Eq, PartialEq)]
 pub enum Parsed {
     Run(Options),
@@ -192,6 +197,11 @@ impl Options {
             o.a11y_address = get("GORCA_A11Y_BUS_ADDRESS")
                 .or_else(|| get("AT_SPI_BUS_ADDRESS"))
                 .filter(|s| !s.is_empty());
+        }
+        if o.runtime_dir.is_none() {
+            o.runtime_dir = get("XDG_RUNTIME_DIR")
+                .filter(|s| s.starts_with('/'))
+                .map(std::path::PathBuf::from);
         }
         if o.session_address.is_none() {
             o.session_address = get("DBUS_SESSION_BUS_ADDRESS").filter(|s| !s.is_empty());

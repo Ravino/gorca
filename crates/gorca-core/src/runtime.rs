@@ -41,15 +41,19 @@ use gorca_rt::{
 };
 use tokio::task::JoinSet;
 
-use crate::app_actor::{AppActor, FILL_QUEUE, FillMsg, ReaderLinks};
+use crate::app_actor::{AppActor, FILL_QUEUE, FillMsg, ReaderLinks, WebLink};
+use crate::browse::commands::WebEffect;
 use crate::commands::{ConfigRequest, SpeechCtl};
 use crate::directory::MirrorDirectory;
+use crate::doc_actor::{DocCounters, DocCtl, DocDirectory, WebJoin};
+use crate::doc_registry::{HubCfg, HubMsg, HubTx, hub_channel, run_hub};
 use crate::health::{AppHealth, HealthEffect, HealthMsg};
 use crate::mode::ModeKeys;
 use crate::present::PresentLog;
 use crate::reader::{
     FetchKind, QueryReply, Reader, ReaderEffect, ReaderMsg, ReaderSenders, reader_channels,
 };
+use gorca_doc_source_api::{Activity, DocSourceFactory};
 
 /// Where utterances go. Implemented by the speech lane (`gorca-speech`), wired by the daemon.
 /// Both methods must return immediately (S-3).
@@ -238,6 +242,17 @@ struct Shared {
     mirror_budget: Arc<MirrorBudget>,
     global_rate: Arc<GlobalRate>,
     present_log: Option<Arc<PresentLog>>,
+    web: WebShared,
+}
+
+/// The document side of the core: the focus join, the directory of documents, the registry's
+/// inbox and the factory that creates sources (browse mode).
+struct WebShared {
+    join: Arc<WebJoin>,
+    docs: Arc<DocDirectory>,
+    hub: HubTx,
+    factory: Option<Arc<dyn DocSourceFactory>>,
+    counters: Arc<DocCounters>,
 }
 
 impl std::fmt::Debug for Shared {
@@ -253,6 +268,7 @@ pub struct Core {
     registrars: Vec<(ConnectorId, mpsc::Receiver<RegistrarRequest>)>,
     budget: Arc<SlotBudget>,
     config_rx: Option<mpsc::Receiver<ConfigRequest>>,
+    hub_rx: Option<mpsc::Receiver<HubMsg>>,
 }
 
 impl std::fmt::Debug for Core {
@@ -269,6 +285,7 @@ impl Core {
         let budget = SlotBudget::new(cfg.slot_budget);
         let (grabs, _) = watch::channel(GrabSet::default());
         let (config, config_rx) = mpsc::channel(CONFIG_QUEUE);
+        let (hub, hub_rx) = hub_channel();
         Self {
             cfg,
             shared: Arc::new(Shared {
@@ -290,12 +307,45 @@ impl Core {
                 mirror_budget: MirrorBudget::global(),
                 global_rate: GlobalRate::new(FILL_RATE_GLOBAL),
                 present_log: None,
+                web: WebShared {
+                    join: Arc::new(WebJoin::new()),
+                    docs: Arc::new(DocDirectory::new()),
+                    hub,
+                    factory: None,
+                    counters: Arc::new(DocCounters::default()),
+                },
             }),
             inbox,
             registrars: Vec::new(),
             budget,
             config_rx: Some(config_rx),
+            hub_rx: Some(hub_rx),
         }
+    }
+
+    /// Turn browse mode on: web documents are mirrored through sources made by `factory`
+    /// (ADR-0003 AM-10). Call before [`Core::run`].
+    #[must_use]
+    pub fn with_web(mut self, factory: Arc<dyn DocSourceFactory>) -> Self {
+        if let Some(sh) = Arc::get_mut(&mut self.shared) {
+            sh.web.factory = Some(factory);
+        }
+        self
+    }
+
+    /// The directory of live web documents (tests, the debug probe).
+    pub fn docs(&self) -> Arc<DocDirectory> {
+        Arc::clone(&self.shared.web.docs)
+    }
+
+    /// The focus join (tests, the debug probe).
+    pub fn web_join(&self) -> Arc<WebJoin> {
+        Arc::clone(&self.shared.web.join)
+    }
+
+    /// Document actor counters.
+    pub fn doc_counters(&self) -> Arc<DocCounters> {
+        Arc::clone(&self.shared.web.counters)
     }
 
     /// Route utterances to `speech`. Call before [`Core::run`].
@@ -399,6 +449,7 @@ impl Core {
             registrars,
             budget,
             config_rx: _,
+            hub_rx,
         } = self;
         let mut tasks = TaskSet::new(shutdown.child_token());
         let (fetch_tx, fetch_rx) = mpsc::channel::<FetchJob>(FETCH_QUEUE);
@@ -407,6 +458,18 @@ impl Core {
             "fetch-dispatcher",
             fetch_dispatcher(Arc::clone(&shared), fetch_rx),
         );
+        if let (Some(factory), Some(rx)) = (shared.web.factory.clone(), hub_rx) {
+            let cfg = HubCfg {
+                factory,
+                build_hold: crate::doc_registry::BUILD_HOLD,
+                retry_unit: Duration::from_secs(1),
+                join: Arc::clone(&shared.web.join),
+                docs: Arc::clone(&shared.web.docs),
+                notices: shared.senders.docs.clone(),
+                counters: Arc::clone(&shared.web.counters),
+            };
+            tasks.spawn("doc-registry", run_hub(cfg, rx, tasks.token()));
+        }
         // One registry for all connectors: C-5 holds across them.
         let table = Arc::new(Mutex::new(ScopeRegistry::new(budget)));
         for (connector, rx) in registrars {
@@ -552,6 +615,15 @@ fn spawn_app_actor(
         )
         .with_fill_channel(fill_rx)
         .with_focused(Arc::clone(&shared.focused));
+    let actor = if shared.web.factory.is_some() {
+        actor.with_web(WebLink {
+            hub: shared.web.hub.clone(),
+            join: Arc::clone(&shared.web.join),
+            docs: Arc::clone(&shared.web.docs),
+        })
+    } else {
+        actor
+    };
     let shared = Arc::clone(shared);
     actors.spawn(
         "app-actor",
@@ -866,7 +938,8 @@ async fn reader_loop(
     )
     .with_focused(Arc::clone(&shared.focused))
     .with_links(Arc::clone(&shared.links))
-    .with_settings_cell(Arc::clone(&shared.settings));
+    .with_settings_cell(Arc::clone(&shared.settings))
+    .with_web(Arc::clone(&shared.web.docs), Arc::clone(&shared.web.join));
     if let Some(log) = &shared.present_log {
         reader = reader.with_present_log(Arc::clone(log));
     }
@@ -955,11 +1028,36 @@ async fn reader_loop(
                         tracing::warn!("config request queue full; dropped a request");
                     }
                 }
+                ReaderEffect::Web(w) => exec_web(shared, w),
                 e @ (ReaderEffect::ReviewNav { .. }
                 | ReaderEffect::ReviewBuild(_)
                 | ReaderEffect::ReviewRevalidate { .. }
                 | ReaderEffect::ReviewStatusBar { .. }
                 | ReaderEffect::ReviewAct { .. }) => spawn_review(&mut review_tasks, shared, e),
+            }
+        }
+    }
+}
+
+/// Browse-mode effects of the Reader: fire and forget, never awaited (BI-1).
+fn exec_web(shared: &Shared, w: WebEffect) {
+    match w {
+        WebEffect::Ensure { focus } => {
+            let _ = shared.web.hub.try_send(HubMsg::Ensure { focus });
+        }
+        WebEffect::Activity { doc, awake } => {
+            if let Some(h) = shared.web.docs.get(doc) {
+                let a = if awake {
+                    Activity::Awake
+                } else {
+                    Activity::Dormant
+                };
+                let _ = h.ctl.try_send(DocCtl::Activity(a));
+            }
+        }
+        WebEffect::Act { doc, node, act } => {
+            if let Some(h) = shared.web.docs.get(doc) {
+                let _ = h.ctl.try_send(DocCtl::Act { node, act });
             }
         }
     }
@@ -997,7 +1095,8 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
         | ReaderEffect::ArmTimer(_)
         | ReaderEffect::SetGrabSet(_)
         | ReaderEffect::SpeechCtl(_)
-        | ReaderEffect::Config(_) => return,
+        | ReaderEffect::Config(_)
+        | ReaderEffect::Web(_) => return,
     };
     let tx = shared.senders.review.clone();
     let io = match (shared.apps.get(app), shared.mirrors.handle(app)) {
@@ -1133,7 +1232,8 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
         | ReaderEffect::ArmTimer(_)
         | ReaderEffect::SetGrabSet(_)
         | ReaderEffect::SpeechCtl(_)
-        | ReaderEffect::Config(_) => {}
+        | ReaderEffect::Config(_)
+        | ReaderEffect::Web(_) => {}
     }
 }
 

@@ -20,8 +20,11 @@ use gorca_rt::{BudgetClass, EpochCell, FocusedApp, mpsc};
 use smallvec::SmallVec;
 
 use crate::SpeechIntent;
+use crate::browse::BrowseState;
+use crate::browse::commands::WebEffect;
 use crate::commands::{CmdState, ConfigRequest, ControlMsg, SpeechCtl};
 use crate::directory::MirrorDirectory;
+use crate::doc_actor::DocNotice;
 use crate::focus::{FocusMsg, FocusState};
 use crate::mode::{Mode, ModeKeys, ModeMsg};
 use crate::present::{PresentLog, PresenterRegistry};
@@ -36,6 +39,7 @@ const REPLY_QUEUE: usize = 64;
 const BACKGROUND_QUEUE: usize = 64;
 const CONTROL_QUEUE: usize = 32;
 const REVIEW_QUEUE: usize = 64;
+const DOC_QUEUE: usize = 64;
 /// At most this many messages per [`Reader::drain`] call, so one call stays bounded.
 const MAX_BATCH: usize = 256;
 /// A second focus event for the node that just got focus, within this window, is the same
@@ -108,6 +112,8 @@ pub enum ReaderMsg {
     Control(ControlMsg),
     Review(ReviewMsg),
     Text(TextMsg),
+    /// A web document published, changed or went away (browse mode).
+    Doc(DocNotice),
     Timer,
 }
 
@@ -166,6 +172,8 @@ pub enum ReaderEffect {
         req: NavReqId,
         act: gorca_connector_api::ActionReq,
     },
+    /// Browse mode: find a document, wake or sleep it, act on one of its nodes.
+    Web(WebEffect),
 }
 
 pub type ReaderEffects = SmallVec<[ReaderEffect; 4]>;
@@ -180,6 +188,8 @@ pub struct ReaderSenders {
     pub control: mpsc::Sender<ControlMsg>,
     /// Results of review fetches, builds and actions (ADR-0006 4.3).
     pub review: mpsc::Sender<ReviewMsg>,
+    /// Document notices (browse mode).
+    pub docs: mpsc::Sender<DocNotice>,
 }
 
 #[derive(Debug)]
@@ -190,6 +200,7 @@ pub struct ReaderInbox {
     background: mpsc::Receiver<BackgroundMsg>,
     control: mpsc::Receiver<ControlMsg>,
     review: mpsc::Receiver<ReviewMsg>,
+    docs: mpsc::Receiver<DocNotice>,
 }
 
 pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
@@ -199,6 +210,7 @@ pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
     let (background_tx, background) = mpsc::channel(BACKGROUND_QUEUE);
     let (control_tx, control) = mpsc::channel(CONTROL_QUEUE);
     let (review_tx, review) = mpsc::channel(REVIEW_QUEUE);
+    let (docs_tx, docs) = mpsc::channel(DOC_QUEUE);
     (
         ReaderSenders {
             key: key_tx,
@@ -207,6 +219,7 @@ pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
             background: background_tx,
             control: control_tx,
             review: review_tx,
+            docs: docs_tx,
         },
         ReaderInbox {
             key,
@@ -215,6 +228,7 @@ pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
             background,
             control,
             review,
+            docs,
         },
     )
 }
@@ -230,6 +244,7 @@ impl ReaderInbox {
             Some(f) = self.focus.recv() => Some(ReaderMsg::Focus(f)),
             Some(r) = self.replies.recv() => Some(ReaderMsg::Reply(r)),
             Some(v) = self.review.recv() => Some(ReaderMsg::Review(v)),
+            Some(n) = self.docs.recv() => Some(ReaderMsg::Doc(n)),
             Some(b) = self.background.recv() => Some(ReaderMsg::Background(b)),
             else => None,
         }
@@ -251,6 +266,9 @@ impl ReaderInbox {
         }
         if let Ok(v) = self.review.try_recv() {
             return Some(ReaderMsg::Review(v));
+        }
+        if let Ok(n) = self.docs.try_recv() {
+            return Some(ReaderMsg::Doc(n));
         }
         if let Ok(b) = self.background.try_recv() {
             return Some(ReaderMsg::Background(b));
@@ -288,6 +306,8 @@ pub struct Reader {
     pub(crate) counters: ReaderCounters,
     /// Review cursor state, models and the pending review operation (ADR-0006).
     pub(crate) review: ReviewState,
+    /// Browse mode (ADR-0003 section 11): off until the runtime attaches the document side.
+    pub(crate) web: Option<BrowseState>,
 }
 
 /// Revalidation and correction counters (B-1 M-6).
@@ -330,6 +350,7 @@ impl Reader {
             present_log: None,
             counters: ReaderCounters::default(),
             review: ReviewState::new(),
+            web: None,
         }
     }
 
@@ -457,10 +478,12 @@ impl Reader {
             ReaderMsg::Mode(m) => self.on_mode(m, &mut fx),
             ReaderMsg::Review(m) => self.on_review(m, &mut fx),
             ReaderMsg::Text(m) => self.on_text(m, &mut fx),
+            ReaderMsg::Doc(n) => self.on_doc(n, &mut fx),
             ReaderMsg::Timer => {
                 self.apply_focus(FocusMsg::TimerElapsed { now }, &mut fx);
                 self.pass_timer(now, &mut fx);
                 self.review_timer(now, &mut fx);
+                self.web_timer(now, &mut fx);
             }
         }
         self.remember_spoken(is_key, &fx);
@@ -560,7 +583,8 @@ mod tests {
                 | ReaderEffect::ReviewBuild(_)
                 | ReaderEffect::ReviewRevalidate { .. }
                 | ReaderEffect::ReviewStatusBar { .. }
-                | ReaderEffect::ReviewAct { .. } => None,
+                | ReaderEffect::ReviewAct { .. }
+                | ReaderEffect::Web(_) => None,
             })
             .collect()
     }
@@ -1039,6 +1063,7 @@ mod tests {
                 ReaderMsg::Control(_) => "control",
                 ReaderMsg::Review(_) => "review",
                 ReaderMsg::Text(_) => "text",
+                ReaderMsg::Doc(_) => "doc",
                 ReaderMsg::Timer => "timer",
             })
             .collect();
@@ -1097,6 +1122,7 @@ mod tests {
                 ReaderEffect::ReviewRevalidate { .. } => "review-revalidate",
                 ReaderEffect::ReviewStatusBar { .. } => "review-status-bar",
                 ReaderEffect::ReviewAct { .. } => "review-act",
+                ReaderEffect::Web(_) => "web",
             })
             .collect()
     }
@@ -1117,7 +1143,8 @@ mod tests {
                 | ReaderEffect::ReviewBuild(_)
                 | ReaderEffect::ReviewRevalidate { .. }
                 | ReaderEffect::ReviewStatusBar { .. }
-                | ReaderEffect::ReviewAct { .. } => None,
+                | ReaderEffect::ReviewAct { .. }
+                | ReaderEffect::Web(_) => None,
             })
             .expect("an utterance")
     }

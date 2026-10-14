@@ -110,6 +110,19 @@ pub enum CoreCmd {
     BrowseActivate,
     BrowseContainerStart,
     BrowseContainerEnd,
+    BrowseEscape,
+    BrowseCursorNextLine,
+    BrowseCursorPrevLine,
+    BrowseCursorNextChar,
+    BrowseCursorPrevChar,
+    BrowseCursorNextWord,
+    BrowseCursorPrevWord,
+    BrowseCursorLineStart,
+    BrowseCursorLineEnd,
+    BrowseCursorTop,
+    BrowseCursorBottom,
+    BrowseCursorPageUp,
+    BrowseCursorPageDown,
     QuicknavNextHeading,
     QuicknavPrevHeading,
     QuicknavNextHeading1,
@@ -251,7 +264,6 @@ macro_rules! planned_cmds {
             | CoreCmd::ReviewCaretFollowsToggle
             | CoreCmd::ReviewAbove
             | CoreCmd::ReviewBelow
-            | CoreCmd::BrowseToggle
             | CoreCmd::BrowseSingleLetterToggle
             | CoreCmd::BrowseElementsList
             | CoreCmd::BrowseFind
@@ -259,79 +271,26 @@ macro_rules! planned_cmds {
             | CoreCmd::BrowseFindPrev
             | CoreCmd::BrowseRefresh
             | CoreCmd::BrowseLiveRegionsToggle
-            | CoreCmd::BrowseActivate
             | CoreCmd::BrowseContainerStart
             | CoreCmd::BrowseContainerEnd
-            | CoreCmd::QuicknavNextHeading
-            | CoreCmd::QuicknavPrevHeading
-            | CoreCmd::QuicknavNextHeading1
-            | CoreCmd::QuicknavPrevHeading1
-            | CoreCmd::QuicknavNextHeading2
-            | CoreCmd::QuicknavPrevHeading2
-            | CoreCmd::QuicknavNextHeading3
-            | CoreCmd::QuicknavPrevHeading3
-            | CoreCmd::QuicknavNextHeading4
-            | CoreCmd::QuicknavPrevHeading4
-            | CoreCmd::QuicknavNextHeading5
-            | CoreCmd::QuicknavPrevHeading5
-            | CoreCmd::QuicknavNextHeading6
-            | CoreCmd::QuicknavPrevHeading6
             | CoreCmd::QuicknavNextHeading7
             | CoreCmd::QuicknavPrevHeading7
             | CoreCmd::QuicknavNextHeading8
             | CoreCmd::QuicknavPrevHeading8
             | CoreCmd::QuicknavNextHeading9
             | CoreCmd::QuicknavPrevHeading9
-            | CoreCmd::QuicknavNextLink
-            | CoreCmd::QuicknavPrevLink
-            | CoreCmd::QuicknavNextVisited
-            | CoreCmd::QuicknavPrevVisited
-            | CoreCmd::QuicknavNextUnvisited
-            | CoreCmd::QuicknavPrevUnvisited
-            | CoreCmd::QuicknavNextFormField
-            | CoreCmd::QuicknavPrevFormField
-            | CoreCmd::QuicknavNextList
-            | CoreCmd::QuicknavPrevList
-            | CoreCmd::QuicknavNextListItem
-            | CoreCmd::QuicknavPrevListItem
-            | CoreCmd::QuicknavNextButton
-            | CoreCmd::QuicknavPrevButton
-            | CoreCmd::QuicknavNextEdit
-            | CoreCmd::QuicknavPrevEdit
-            | CoreCmd::QuicknavNextFrame
-            | CoreCmd::QuicknavPrevFrame
-            | CoreCmd::QuicknavNextSeparator
-            | CoreCmd::QuicknavPrevSeparator
-            | CoreCmd::QuicknavNextRadio
-            | CoreCmd::QuicknavPrevRadio
-            | CoreCmd::QuicknavNextCombobox
-            | CoreCmd::QuicknavPrevCombobox
-            | CoreCmd::QuicknavNextCheckbox
-            | CoreCmd::QuicknavPrevCheckbox
-            | CoreCmd::QuicknavNextGraphic
-            | CoreCmd::QuicknavPrevGraphic
-            | CoreCmd::QuicknavNextBlockquote
-            | CoreCmd::QuicknavPrevBlockquote
             | CoreCmd::QuicknavNextNotLinkBlock
             | CoreCmd::QuicknavPrevNotLinkBlock
-            | CoreCmd::QuicknavNextLandmark
-            | CoreCmd::QuicknavPrevLandmark
-            | CoreCmd::QuicknavNextEmbedded
-            | CoreCmd::QuicknavPrevEmbedded
             | CoreCmd::QuicknavNextAnnotation
             | CoreCmd::QuicknavPrevAnnotation
             | CoreCmd::QuicknavNextError
             | CoreCmd::QuicknavPrevError
             | CoreCmd::QuicknavNextParagraph
             | CoreCmd::QuicknavPrevParagraph
-            | CoreCmd::QuicknavNextTable
-            | CoreCmd::QuicknavPrevTable
             | CoreCmd::QuicknavNextClickable
             | CoreCmd::QuicknavPrevClickable
             | CoreCmd::QuicknavNextSlider
             | CoreCmd::QuicknavPrevSlider
-            | CoreCmd::QuicknavNextArticle
-            | CoreCmd::QuicknavPrevArticle
             | CoreCmd::QuicknavNextGrouping
             | CoreCmd::QuicknavPrevGrouping
             | CoreCmd::QuicknavNextTab
@@ -368,12 +327,16 @@ macro_rules! planned_cmds {
             | CoreCmd::TableSayColumn
             | CoreCmd::TableSayAllRow
             | CoreCmd::TableSayAllColumn
+            | CoreCmd::QuicknavNextFrame
+            | CoreCmd::QuicknavPrevFrame
+            | CoreCmd::QuicknavNextArticle
+            | CoreCmd::QuicknavPrevArticle
     };
 }
 pub(crate) use planned_cmds;
 
 /// Number of commands.
-pub const COUNT: usize = 206;
+pub const COUNT: usize = 219;
 
 impl CoreCmd {
     /// Every command, in discriminant order.
@@ -478,6 +441,19 @@ impl CoreCmd {
         CoreCmd::BrowseActivate,
         CoreCmd::BrowseContainerStart,
         CoreCmd::BrowseContainerEnd,
+        CoreCmd::BrowseEscape,
+        CoreCmd::BrowseCursorNextLine,
+        CoreCmd::BrowseCursorPrevLine,
+        CoreCmd::BrowseCursorNextChar,
+        CoreCmd::BrowseCursorPrevChar,
+        CoreCmd::BrowseCursorNextWord,
+        CoreCmd::BrowseCursorPrevWord,
+        CoreCmd::BrowseCursorLineStart,
+        CoreCmd::BrowseCursorLineEnd,
+        CoreCmd::BrowseCursorTop,
+        CoreCmd::BrowseCursorBottom,
+        CoreCmd::BrowseCursorPageUp,
+        CoreCmd::BrowseCursorPageDown,
         CoreCmd::QuicknavNextHeading,
         CoreCmd::QuicknavPrevHeading,
         CoreCmd::QuicknavNextHeading1,
@@ -1481,7 +1457,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::BrowseToggle,
         name: "browse.toggle",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1561,7 +1537,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::BrowseActivate,
         name: "browse.activate",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1589,9 +1565,139 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         help: "move to the end of the container",
     },
     CmdSpec {
+        cmd: CoreCmd::BrowseEscape,
+        name: "browse.escape",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "return from focus mode to browse mode",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseCursorNextLine,
+        name: "browse.cursor_next_line",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move the virtual cursor to the next line",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseCursorPrevLine,
+        name: "browse.cursor_prev_line",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move the virtual cursor to the previous line",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseCursorNextChar,
+        name: "browse.cursor_next_char",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move the virtual cursor to the next character",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseCursorPrevChar,
+        name: "browse.cursor_prev_char",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move the virtual cursor to the previous character",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseCursorNextWord,
+        name: "browse.cursor_next_word",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move the virtual cursor to the next word",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseCursorPrevWord,
+        name: "browse.cursor_prev_word",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move the virtual cursor to the previous word",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseCursorLineStart,
+        name: "browse.cursor_line_start",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move the virtual cursor to the start of the line",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseCursorLineEnd,
+        name: "browse.cursor_line_end",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move the virtual cursor to the end of the line",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseCursorTop,
+        name: "browse.cursor_top",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move the virtual cursor to the top of the document",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseCursorBottom,
+        name: "browse.cursor_bottom",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move the virtual cursor to the bottom of the document",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseCursorPageUp,
+        name: "browse.cursor_page_up",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move the virtual cursor up one page",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseCursorPageDown,
+        name: "browse.cursor_page_down",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move the virtual cursor down one page",
+    },
+    CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading,
         name: "quicknav.next.heading",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1601,7 +1707,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading,
         name: "quicknav.prev.heading",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1611,7 +1717,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading1,
         name: "quicknav.next.heading1",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1621,7 +1727,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading1,
         name: "quicknav.prev.heading1",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1631,7 +1737,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading2,
         name: "quicknav.next.heading2",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1641,7 +1747,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading2,
         name: "quicknav.prev.heading2",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1651,7 +1757,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading3,
         name: "quicknav.next.heading3",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1661,7 +1767,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading3,
         name: "quicknav.prev.heading3",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1671,7 +1777,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading4,
         name: "quicknav.next.heading4",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1681,7 +1787,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading4,
         name: "quicknav.prev.heading4",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1691,7 +1797,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading5,
         name: "quicknav.next.heading5",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1701,7 +1807,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading5,
         name: "quicknav.prev.heading5",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1711,7 +1817,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading6,
         name: "quicknav.next.heading6",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1721,7 +1827,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading6,
         name: "quicknav.prev.heading6",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1791,7 +1897,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextLink,
         name: "quicknav.next.link",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1801,7 +1907,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevLink,
         name: "quicknav.prev.link",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1811,7 +1917,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextVisited,
         name: "quicknav.next.visited",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1821,7 +1927,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevVisited,
         name: "quicknav.prev.visited",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1831,7 +1937,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextUnvisited,
         name: "quicknav.next.unvisited",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1841,7 +1947,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevUnvisited,
         name: "quicknav.prev.unvisited",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1851,7 +1957,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextFormField,
         name: "quicknav.next.form_field",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1861,7 +1967,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevFormField,
         name: "quicknav.prev.form_field",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1871,7 +1977,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextList,
         name: "quicknav.next.list",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1881,7 +1987,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevList,
         name: "quicknav.prev.list",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1891,7 +1997,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextListItem,
         name: "quicknav.next.list_item",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1901,7 +2007,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevListItem,
         name: "quicknav.prev.list_item",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1911,7 +2017,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextButton,
         name: "quicknav.next.button",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1921,7 +2027,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevButton,
         name: "quicknav.prev.button",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1931,7 +2037,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextEdit,
         name: "quicknav.next.edit",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1941,7 +2047,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevEdit,
         name: "quicknav.prev.edit",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1971,7 +2077,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextSeparator,
         name: "quicknav.next.separator",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1981,7 +2087,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevSeparator,
         name: "quicknav.prev.separator",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1991,7 +2097,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextRadio,
         name: "quicknav.next.radio",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2001,7 +2107,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevRadio,
         name: "quicknav.prev.radio",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2011,7 +2117,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextCombobox,
         name: "quicknav.next.combobox",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2021,7 +2127,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevCombobox,
         name: "quicknav.prev.combobox",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2031,7 +2137,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextCheckbox,
         name: "quicknav.next.checkbox",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2041,7 +2147,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevCheckbox,
         name: "quicknav.prev.checkbox",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2051,7 +2157,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextGraphic,
         name: "quicknav.next.graphic",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2061,7 +2167,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevGraphic,
         name: "quicknav.prev.graphic",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2071,7 +2177,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextBlockquote,
         name: "quicknav.next.blockquote",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2081,7 +2187,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevBlockquote,
         name: "quicknav.prev.blockquote",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2111,7 +2217,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextLandmark,
         name: "quicknav.next.landmark",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2121,7 +2227,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevLandmark,
         name: "quicknav.prev.landmark",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2131,7 +2237,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextEmbedded,
         name: "quicknav.next.embedded",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2141,7 +2247,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevEmbedded,
         name: "quicknav.prev.embedded",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2211,7 +2317,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextTable,
         name: "quicknav.next.table",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2221,7 +2327,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevTable,
         name: "quicknav.prev.table",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,

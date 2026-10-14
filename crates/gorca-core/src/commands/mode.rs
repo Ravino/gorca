@@ -12,7 +12,9 @@ impl Reader {
                 ModeEffect::AdvanceEpoch => {
                     self.epoch.advance();
                 }
-                ModeEffect::SetGrabSet(set) => fx.push(ReaderEffect::SetGrabSet(set)),
+                ModeEffect::SetGrabSet(_) => {
+                    fx.push(ReaderEffect::SetGrabSet(self.current_grabs()));
+                }
             }
         }
     }

@@ -24,6 +24,7 @@ impl DocSource for FakeDocSource {
             text_unit: TextUnit::Scalar,
             actions: ActionCaps::all(),
             join_keys: JoinKeyCaps::EXACT,
+            silent_reorders: false,
         }
     }
 
@@ -54,6 +55,10 @@ impl DocSource for FakeDocSource {
                             DocRequest::Revalidate { reply, .. } => {
                                 let _ = reply.send(Ok(smallvec::SmallVec::default()));
                             }
+                            DocRequest::SetActivity(_)
+                            | DocRequest::Rebuild
+                            | DocRequest::Prioritize { .. }
+                            | DocRequest::DriftCheck => {}
                         }
                     }
                 }
@@ -77,10 +82,16 @@ mod tests {
         let (req_tx, requests) = mpsc::channel(4);
         let (join, _jrx) = join_channel(4);
         let shutdown = CancellationToken::new();
+        let (_ev_tx, events) = mpsc::channel(4);
         let ctx = DocSourceCtx {
             doc: DocId(1),
+            app: gorca_model::AppId {
+                connector: gorca_model::ConnectorId(0),
+                serial: 0,
+            },
             sink,
             requests,
+            events,
             join,
             shutdown: shutdown.clone(),
             clock: Clock::System,

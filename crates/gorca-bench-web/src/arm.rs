@@ -188,10 +188,16 @@ impl B6Arm for AtspiTunedArm {
         let (sink, mut rx) = delta_channel(1 << 16);
         let (req_tx, req_rx) = mpsc::channel(64);
         let (join, _jrx) = join_channel(16);
+        let (_core_tx, core_events) = mpsc::channel(8);
         let ctx = DocSourceCtx {
             doc: DocId(1),
+            app: gorca_model::AppId {
+                connector: gorca_model::ConnectorId(0),
+                serial: 0,
+            },
             sink,
             requests: req_rx,
+            events: core_events,
             join,
             shutdown: shutdown.clone(),
             clock: Clock::System,

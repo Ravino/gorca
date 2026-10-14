@@ -419,6 +419,20 @@ pub fn parse_string_map(body: &[u8]) -> WireResult<Vec<(String, String)>> {
     Ok(v)
 }
 
+/// A reply that is a single variant holding an object reference `(so)` (`Properties.Get` of
+/// `Parent`): `(bus name, object path)`.
+pub fn parse_variant_ref(body: &[u8]) -> WireResult<(String, String)> {
+    let mut r = Rd::new(body);
+    let sig = r.sig()?;
+    if sig != b"(so)" {
+        return Err(WireError::Shape("variant is not an object reference"));
+    }
+    r.align(8)?;
+    let bus = r.str()?.to_owned();
+    let path = r.str()?.to_owned();
+    Ok((bus, path))
+}
+
 /// A reply that is a single variant holding `s` (`Properties.Get` of a string property).
 pub fn parse_variant_string(body: &[u8]) -> WireResult<&str> {
     let mut r = Rd::new(body);

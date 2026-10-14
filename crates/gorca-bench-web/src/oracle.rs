@@ -185,6 +185,7 @@ mod tests {
             name: Some(name.into()),
             text: None,
             attrs: smallvec![(web_attrs::DOM_ID, Arc::from(format!("d{id}").as_str()))],
+            local: None,
         }
     }
 

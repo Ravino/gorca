@@ -23,15 +23,17 @@
 
 mod caps;
 mod ctx;
+mod factory;
 mod join;
 mod request;
 mod web;
 
 pub use caps::{ActionCaps, JoinKeyCaps, SourceCaps, SourceKind};
-pub use ctx::{DeltaReceiver, DeltaSink, DocSource, DocSourceCtx, delta_channel};
+pub use ctx::{DeltaReceiver, DeltaSink, DocEvent, DocSource, DocSourceCtx, delta_channel};
+pub use factory::{DocSourceFactory, WarmOutcome, WarmReport};
 pub use gorca_model::{
     DocAction, DocDelta, DocHint, DocId, DocNodeId, SrcNode, SrcNodeId, TextEdit, TextUnit,
 };
 pub use join::{JoinEntry, JoinPort, JoinQuality, JoinReceiver, join_channel};
-pub use request::{DocRequest, Reply, SourceError};
+pub use request::{Activity, DocRequest, Reply, SourceError};
 pub use web::{Completeness, TreeBlock, is_dynamic, web_attrs};

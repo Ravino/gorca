@@ -35,6 +35,8 @@ bitflags! {
     }
 }
 
+// Independent capability flags; an enum or bitset would only rename them.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct SourceCaps {
     /// Can deliver a whole document in one or a few messages.
@@ -47,4 +49,8 @@ pub struct SourceCaps {
     pub text_unit: TextUnit,
     pub actions: ActionCaps,
     pub join_keys: JoinKeyCaps,
+    /// The browser reorders a keyed list without any event (Chromium, TBD-WEB-1, WF-7), so
+    /// `Revalidate` runs after browse presentations (ADR-0003 AM-7). Firefox re-creates moved
+    /// nodes loudly and leaves it false.
+    pub silent_reorders: bool,
 }
