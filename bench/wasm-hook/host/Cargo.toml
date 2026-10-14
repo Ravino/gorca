@@ -1,0 +1,10 @@
+[package]
+name = "quirk-host"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[dependencies]
+quirk-logic = { path = "../logic" }
+wasmtime = { version = "=49.0.3", default-features = false, features = ["component-model", "cranelift", "runtime", "pooling-allocator", "std"] }
