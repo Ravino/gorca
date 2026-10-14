@@ -46,7 +46,7 @@ const DESCENT_LIMIT: usize = 24;
 const WINDOW_CHILDREN: usize = 64;
 
 /// How many siblings of a wide node are sampled one by one.
-const WIDE_SAMPLE: usize = 8;
+const WIDE_SAMPLE: usize = 2;
 
 /// Walk from `start` towards the first (`idx == 0`), last (`idx + 1 == n`) or middle part of the
 /// page, one `GetChildren` per level, and return the paths to sample with `GetTree`: the parent
