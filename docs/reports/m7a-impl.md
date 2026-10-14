@@ -86,3 +86,11 @@ The warm-up now walks down to a small subtree (first, middle and last child, one
 | **gorca-side (gate 150 ms)** | **273** | **46 (p99 50): PASS** |
 
 The remaining warm-up time is mostly its own 26 ms sleep between the two agreeing rounds. Strict K2 to K4 and R1 were re-run after the change: all pass (`bench/results/e2e/m7a-strict2*`).
+
+## Re-review round (N1 to N8 and the harness)
+
+Fixed with regression tests: N1 timer set (`an_early_timer_keeps_the_focus_settle_deadline_armed`, `a_menu_opened_within_the_scroll_debounce_is_spoken`, loading grace), N2 focus fallback (web mirror, one retry, "unknown"), N3 warm-up deadline and bounded sample (`warm_tagged_nodes` is exported, W2b gates `untagged_warm` at 0), N4 batch caps, N5 Firefox typing echo with a non-scalar app, N6 notice queue in the registry and counted control drops (`notices_dropped`, `controls_dropped`), N7 scope of "unavailable", N8 duplicate scenarios. `bench/e2e/run.sh` now builds the daemon and the harness refuses a reader whose `gorca --version` revision differs from the tree.
+
+W3: the `m7a-rr2` run lost 8 trials in one repeat; the new loss dump showed the speech was there but from the other tab (Alt+1 had not selected tab 1), so the harness accepts either tab speaking. The one earlier loss (`m7a-merged`) had the same signature but was not dumped, so that is probable, not proven.
+
+W2b (`bench/results/e2e/m7a-rr3/`, load 9.7): gorca-side median 45.8 ms, p99 49 ms; warm-up 44 ms of which 16 ms in calls, 29 nodes sampled, all tagged. Under host load 21 (`m7a-rr`) the median was 103 to 118 ms and p99 failed once (171 ms): the warm-up calls scale with host load.
