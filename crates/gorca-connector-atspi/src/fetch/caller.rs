@@ -368,7 +368,7 @@ impl Caller {
         m.body().deserialize::<bool>().map_err(DbusError::Zbus)
     }
 
-    pub(super) async fn text_char_count(
+    pub(crate) async fn text_char_count(
         &self,
         path: &str,
         deadline: Deadline,
@@ -379,7 +379,7 @@ impl Caller {
         i32::try_from(v).map_err(|e| DbusError::Zbus(e.into()))
     }
 
-    pub(super) async fn text_caret(
+    pub(crate) async fn text_caret(
         &self,
         path: &str,
         deadline: Deadline,
@@ -390,7 +390,7 @@ impl Caller {
         i32::try_from(v).map_err(|e| DbusError::Zbus(e.into()))
     }
 
-    pub(super) async fn text_range(
+    pub(crate) async fn text_range(
         &self,
         path: &str,
         start: i32,
@@ -429,6 +429,63 @@ impl Caller {
             .await?;
         m.body()
             .deserialize::<(String, i32, i32)>()
+            .map_err(DbusError::Zbus)
+    }
+
+    /// `Text.GetStringAtOffset(offset, granularity)`: `(text, start, end)`.
+    pub(crate) async fn string_at(
+        &self,
+        path: &str,
+        offset: i32,
+        granularity: u32,
+        deadline: Deadline,
+    ) -> Result<(String, i32, i32), DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                TEXT,
+                "GetStringAtOffset",
+                &(offset, granularity),
+            )
+            .await?;
+        m.body()
+            .deserialize::<(String, i32, i32)>()
+            .map_err(DbusError::Zbus)
+    }
+
+    /// `Text.GetNSelections()`.
+    pub(crate) async fn n_selections(
+        &self,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<i32, DbusError> {
+        let m = self
+            .call(&self.bus_name, deadline, path, TEXT, "GetNSelections", &())
+            .await?;
+        m.body().deserialize::<i32>().map_err(DbusError::Zbus)
+    }
+
+    /// `Text.GetSelection(i)`: `(start, end)`.
+    pub(crate) async fn selection_range(
+        &self,
+        path: &str,
+        index: i32,
+        deadline: Deadline,
+    ) -> Result<(i32, i32), DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                TEXT,
+                "GetSelection",
+                &(index,),
+            )
+            .await?;
+        m.body()
+            .deserialize::<(i32, i32)>()
             .map_err(DbusError::Zbus)
     }
 

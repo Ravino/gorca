@@ -27,7 +27,7 @@ use crate::mode::{Mode, ModeKeys, ModeMsg};
 use crate::present::{PresentLog, PresenterRegistry};
 use crate::review::{BuildRequest, NavReqId, ProbeItem, ReviewMsg, ReviewState};
 use crate::review::{ModelId, NavOp};
-use crate::text::TextMsg;
+use crate::text::{TextMsg, TextOp, TextReqId, TextState};
 
 /// Bounds from section 6.2.
 const KEY_QUEUE: usize = 1024;
@@ -36,6 +36,9 @@ const REPLY_QUEUE: usize = 64;
 const BACKGROUND_QUEUE: usize = 64;
 const CONTROL_QUEUE: usize = 32;
 const REVIEW_QUEUE: usize = 64;
+/// Text events of the focused app (flood-prone) and the results of text fetches.
+const TEXT_QUEUE: usize = 256;
+const TEXT_IO_QUEUE: usize = 64;
 /// At most this many messages per [`Reader::drain`] call, so one call stays bounded.
 const MAX_BATCH: usize = 256;
 /// A second focus event for the node that just got focus, within this window, is the same
@@ -166,6 +169,14 @@ pub enum ReaderEffect {
         req: NavReqId,
         act: gorca_connector_api::ActionReq,
     },
+    /// A text fetch (ADR-0007 4.3): a task run under `class`'s deadline answers with
+    /// `TextMsg::Fetched`.
+    TextFetch {
+        req: TextReqId,
+        op: TextOp,
+        class: BudgetClass,
+        epoch: Epoch,
+    },
 }
 
 pub type ReaderEffects = SmallVec<[ReaderEffect; 4]>;
@@ -180,6 +191,11 @@ pub struct ReaderSenders {
     pub control: mpsc::Sender<ControlMsg>,
     /// Results of review fetches, builds and actions (ADR-0006 4.3).
     pub review: mpsc::Sender<ReviewMsg>,
+    /// Caret, text and selection events of the focused app (ADR-0007 EV-3).
+    pub text: mpsc::Sender<TextMsg>,
+    /// Results of text fetches and the speech server's progress reports. Separate from `text`
+    /// so a flood of events cannot starve the answers the Reader waits for.
+    pub text_io: mpsc::Sender<TextMsg>,
 }
 
 #[derive(Debug)]
@@ -190,6 +206,8 @@ pub struct ReaderInbox {
     background: mpsc::Receiver<BackgroundMsg>,
     control: mpsc::Receiver<ControlMsg>,
     review: mpsc::Receiver<ReviewMsg>,
+    text: mpsc::Receiver<TextMsg>,
+    text_io: mpsc::Receiver<TextMsg>,
 }
 
 pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
@@ -199,6 +217,8 @@ pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
     let (background_tx, background) = mpsc::channel(BACKGROUND_QUEUE);
     let (control_tx, control) = mpsc::channel(CONTROL_QUEUE);
     let (review_tx, review) = mpsc::channel(REVIEW_QUEUE);
+    let (text_tx, text) = mpsc::channel(TEXT_QUEUE);
+    let (text_io_tx, text_io) = mpsc::channel(TEXT_IO_QUEUE);
     (
         ReaderSenders {
             key: key_tx,
@@ -207,6 +227,8 @@ pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
             background: background_tx,
             control: control_tx,
             review: review_tx,
+            text: text_tx,
+            text_io: text_io_tx,
         },
         ReaderInbox {
             key,
@@ -215,6 +237,8 @@ pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
             background,
             control,
             review,
+            text,
+            text_io,
         },
     )
 }
@@ -229,6 +253,8 @@ impl ReaderInbox {
             Some(c) = self.control.recv() => Some(ReaderMsg::Control(c)),
             Some(f) = self.focus.recv() => Some(ReaderMsg::Focus(f)),
             Some(r) = self.replies.recv() => Some(ReaderMsg::Reply(r)),
+            Some(t) = self.text_io.recv() => Some(ReaderMsg::Text(t)),
+            Some(t) = self.text.recv() => Some(ReaderMsg::Text(t)),
             Some(v) = self.review.recv() => Some(ReaderMsg::Review(v)),
             Some(b) = self.background.recv() => Some(ReaderMsg::Background(b)),
             else => None,
@@ -248,6 +274,12 @@ impl ReaderInbox {
         }
         if let Ok(r) = self.replies.try_recv() {
             return Some(ReaderMsg::Reply(r));
+        }
+        if let Ok(t) = self.text_io.try_recv() {
+            return Some(ReaderMsg::Text(t));
+        }
+        if let Ok(t) = self.text.try_recv() {
+            return Some(ReaderMsg::Text(t));
         }
         if let Ok(v) = self.review.try_recv() {
             return Some(ReaderMsg::Review(v));
@@ -288,6 +320,8 @@ pub struct Reader {
     pub(crate) counters: ReaderCounters,
     /// Review cursor state, models and the pending review operation (ADR-0006).
     pub(crate) review: ReviewState,
+    /// The caret machine, the text window and say-all (ADR-0007).
+    pub(crate) text: TextState,
 }
 
 /// Revalidation and correction counters (B-1 M-6).
@@ -330,6 +364,7 @@ impl Reader {
             present_log: None,
             counters: ReaderCounters::default(),
             review: ReviewState::new(),
+            text: TextState::new(),
         }
     }
 
@@ -461,8 +496,10 @@ impl Reader {
                 self.apply_focus(FocusMsg::TimerElapsed { now }, &mut fx);
                 self.pass_timer(now, &mut fx);
                 self.review_timer(now, &mut fx);
+                self.text_timer(&mut fx);
             }
         }
+        self.text_after(&mut fx);
         self.remember_spoken(is_key, &fx);
         fx
     }
@@ -560,7 +597,8 @@ mod tests {
                 | ReaderEffect::ReviewBuild(_)
                 | ReaderEffect::ReviewRevalidate { .. }
                 | ReaderEffect::ReviewStatusBar { .. }
-                | ReaderEffect::ReviewAct { .. } => None,
+                | ReaderEffect::ReviewAct { .. }
+                | ReaderEffect::TextFetch { .. } => None,
             })
             .collect()
     }
@@ -1097,6 +1135,7 @@ mod tests {
                 ReaderEffect::ReviewRevalidate { .. } => "review-revalidate",
                 ReaderEffect::ReviewStatusBar { .. } => "review-status-bar",
                 ReaderEffect::ReviewAct { .. } => "review-act",
+                ReaderEffect::TextFetch { .. } => "text-fetch",
             })
             .collect()
     }
@@ -1117,7 +1156,8 @@ mod tests {
                 | ReaderEffect::ReviewBuild(_)
                 | ReaderEffect::ReviewRevalidate { .. }
                 | ReaderEffect::ReviewStatusBar { .. }
-                | ReaderEffect::ReviewAct { .. } => None,
+                | ReaderEffect::ReviewAct { .. }
+                | ReaderEffect::TextFetch { .. } => None,
             })
             .expect("an utterance")
     }

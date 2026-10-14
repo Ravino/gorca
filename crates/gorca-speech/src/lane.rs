@@ -22,7 +22,7 @@ use gorca_model::{Epoch, Prio, UttId, Utterance};
 use gorca_output_api::{
     ClientHealth, SpeechClient, SpeechCmd, SpeechEvent, SubmitError, VoiceParams, VoiceRef,
 };
-use gorca_rt::{EpochCell, Notify, TaskSet};
+use gorca_rt::{EpochCell, Notify, TaskSet, mpsc};
 
 use crate::queue::{FIFO_CAPACITY, SpeechQueue};
 use crate::state::{SpeechEffect, SpeechMsg, SpeechState, UttMeta};
@@ -38,6 +38,16 @@ pub enum SpeechControl {
     /// While muted, new utterances are dropped at `submit`. Utterances already submitted are
     /// still spoken, so "speech off" can be heard.
     Mute(bool),
+}
+
+/// What happened to an utterance, as the server reported it (ADR-0007 SA-3). Say-all uses it to
+/// place its position and to keep the look-ahead full.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum LaneProgress {
+    Started(UttId),
+    Ended(UttId),
+    /// Cancelled, replaced or failed: it will not end normally.
+    Stopped(UttId),
 }
 
 /// Controls queued at once; the oldest is dropped beyond this (they are idempotent toggles).
@@ -107,6 +117,9 @@ struct LaneShared {
     /// Epoch of the utterance last handed to the client.
     inflight_epoch: AtomicU64,
     stats: Counters,
+    /// Where `Started`/`Ended`/`Stopped` go, when someone listens. Never blocks: a full
+    /// channel drops the message (say-all then lags one chunk, SA-3).
+    progress: Mutex<Option<mpsc::Sender<LaneProgress>>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -175,6 +188,11 @@ impl SpeechHandle {
         s.wake.notify_one();
     }
 
+    /// Report the progress of every utterance to `tx`.
+    pub fn set_progress(&self, tx: mpsc::Sender<LaneProgress>) {
+        *lock(&self.shared.progress) = Some(tx);
+    }
+
     /// The `EpochCell` was advanced: wake the lane so it cancels stale speech now.
     pub fn notify_epoch(&self) {
         self.shared.wake.notify_one();
@@ -216,6 +234,7 @@ impl SpeechLane {
             epoch,
             inflight_epoch: AtomicU64::new(0),
             stats: Counters::default(),
+            progress: Mutex::new(None),
         });
         let lane = Lane::new(Arc::clone(&shared), client, cfg);
         tasks.spawn("speech-lane", lane.run());
@@ -305,7 +324,21 @@ impl Lane {
         }
     }
 
+    fn report(&self, p: LaneProgress) {
+        if let Some(tx) = lock(&self.shared.progress).as_ref() {
+            let _ = tx.try_send(p);
+        }
+    }
+
     fn on_event(&mut self, ev: &SpeechEvent) {
+        match *ev {
+            SpeechEvent::Started(id) => self.report(LaneProgress::Started(id)),
+            SpeechEvent::Ended(id) => self.report(LaneProgress::Ended(id)),
+            SpeechEvent::Stopped(id) | SpeechEvent::Error(id, _) => {
+                self.report(LaneProgress::Stopped(id));
+            }
+            SpeechEvent::Accepted(_) | SpeechEvent::Mark(..) | SpeechEvent::AudioProgress(..) => {}
+        }
         match *ev {
             SpeechEvent::Started(id) => self.feed(SpeechMsg::Started(id)),
             SpeechEvent::Ended(id) => {
@@ -613,6 +646,53 @@ mod tests {
             other => panic!("expected one Replace, got {other:?}"),
         }
         assert_eq!(h.stats().replaced, 1);
+    }
+
+    #[tokio::test]
+    async fn same_epoch_utterances_submitted_together_replace_each_other_in_the_slot() {
+        // The reason say-all sends its first chunk alone (ADR-0007 SA-2 as built): the
+        // interrupting slot keeps only the newest of a batch.
+        let (h, ctl, epoch, _t) = start(true, ClientHealth::Ready);
+        let e = epoch.advance();
+        for i in 1..=3u64 {
+            h.submit(utt(i, e.0, Prio::Text, &format!("chunk {i}")));
+        }
+        assert!(eventually(WAIT, || !ctl.cmds().is_empty()).await);
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert_eq!(speaks(&ctl), [3]);
+        // Once the lane has taken one, later ones of that epoch queue behind it.
+        h.submit(utt(4, e.0, Prio::Text, "chunk 4"));
+        h.submit(utt(5, e.0, Prio::Text, "chunk 5"));
+        ctl.send(SpeechEvent::Ended(UttId(3)));
+        assert!(eventually(WAIT, || speaks(&ctl) == [3, 4]).await);
+    }
+
+    #[tokio::test]
+    async fn started_ended_and_stopped_are_reported_to_a_listener() {
+        let (h, ctl, epoch, _t) = start(true, ClientHealth::Ready);
+        let (tx, mut rx) = gorca_rt::mpsc::channel(8);
+        h.set_progress(tx);
+        let e = epoch.advance();
+        h.submit(utt(1, e.0, Prio::Text, "one"));
+        assert!(eventually(WAIT, || !ctl.cmds().is_empty()).await);
+        ctl.send(SpeechEvent::Started(UttId(1)));
+        ctl.send(SpeechEvent::Ended(UttId(1)));
+        ctl.send(SpeechEvent::Stopped(UttId(2)));
+        let mut got = Vec::new();
+        for _ in 0..3 {
+            match tokio::time::timeout(WAIT, rx.recv()).await {
+                Ok(Some(p)) => got.push(p),
+                Ok(None) | Err(_) => break,
+            }
+        }
+        assert_eq!(
+            got,
+            [
+                LaneProgress::Started(UttId(1)),
+                LaneProgress::Ended(UttId(1)),
+                LaneProgress::Stopped(UttId(2)),
+            ]
+        );
     }
 
     #[tokio::test]

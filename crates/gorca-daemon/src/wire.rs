@@ -46,6 +46,23 @@ pub(crate) fn wire_speech(
     speech
 }
 
+/// Text (ADR-0007): the speech lane's `Started`/`Ended` reports reach the Reader as
+/// `TextMsg::Progress`, which say-all follows to keep its look-ahead full. Both channels are
+/// bounded; a full one loses a report and say-all lags one chunk (SA-3), never the Reader.
+pub(crate) fn wire_text(
+    tasks: &mut TaskSet,
+    speech: &SpeechHandle,
+    text_io: mpsc::Sender<gorca_core::TextMsg>,
+) {
+    let (tx, mut rx) = mpsc::channel::<gorca_speech::LaneProgress>(256);
+    speech.set_progress(tx);
+    tasks.spawn("text-progress", async move {
+        while let Some(p) = rx.recv().await {
+            let _ = text_io.try_send(gorca_core::TextMsg::Progress(p));
+        }
+    });
+}
+
 /// Settings (ADR-0005 7): load `gorca.toml`, publish the keymap and lane settings, tell the
 /// Reader, watch the file and serve `settings.reload` / `settings.save`. Runs without a path
 /// too (built-in defaults), so the Reader always gets its startup configuration.

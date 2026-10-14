@@ -786,6 +786,7 @@ dependencies = [
  "gorca-rt",
  "gorca-speech",
  "gorca-testkit",
+ "gorca-text",
  "serde_json",
  "smallvec",
  "thiserror",

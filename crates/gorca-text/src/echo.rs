@@ -109,6 +109,16 @@ impl ExpectRing {
         self.len += 1;
     }
 
+    /// Consume up to `n` of the oldest unexpired expectations without comparing text: an insert
+    /// arrived without its text (the application did not send it) and is taken to be the typed
+    /// keys. Returns how many were consumed.
+    pub fn forget(&mut self, n: usize, now_ms: u64) -> usize {
+        self.expire(now_ms);
+        let n = n.min(self.len);
+        self.pop_front(n);
+        n
+    }
+
     /// Drop expectations older than [`EXPECT_TTL_MS`].
     pub fn expire(&mut self, now_ms: u64) {
         while self.len > 0 && now_ms.saturating_sub(self.at(0).t_ms) > EXPECT_TTL_MS {
@@ -258,6 +268,19 @@ mod tests {
         assert_eq!(r.consume_insert("x", 1), Consume::Unmatched);
         assert_eq!(r.len(), 1);
         assert_eq!(r.consume_insert("", 1), Consume::Unmatched);
+    }
+
+    #[test]
+    fn forget_consumes_without_comparing() {
+        let mut r = ExpectRing::new();
+        for c in "abc".chars() {
+            r.push(c, 0);
+        }
+        assert_eq!(r.forget(2, 10), 2);
+        assert_eq!(r.consume_insert("c", 10), Consume::Matched { n: 1 });
+        assert_eq!(r.forget(5, 10), 0);
+        r.push('x', 0);
+        assert_eq!(r.forget(1, EXPECT_TTL_MS + 5), 0, "expired");
     }
 
     #[test]

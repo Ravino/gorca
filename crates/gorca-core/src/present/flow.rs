@@ -75,8 +75,12 @@ impl Reader {
                 self.selection_node = Some(node);
                 self.begin_focus(node, now, fx);
             }
-            FocusLaneMsg::NodeRemoved(n) => self.apply_focus(FocusMsg::NodeRemoved(n), fx),
+            FocusLaneMsg::NodeRemoved(n) => {
+                self.text_node_gone(Some(n), None);
+                self.apply_focus(FocusMsg::NodeRemoved(n), fx);
+            }
             FocusLaneMsg::AppGone(a) => {
+                self.text_node_gone(None, Some(a));
                 self.review_app_gone(a, fx);
                 if let Some(f) = &self.focused_app {
                     f.forget(a);
@@ -98,6 +102,7 @@ impl Reader {
             return;
         }
         self.last_focus = Some((node, now));
+        self.text_untrack();
         // Review follows the focus (ADR-0006 4.1) unless the user turned that off.
         self.review_focus_changed(fx);
         // The trigger gets its own sequence point: only a request issued after it can have
@@ -302,6 +307,9 @@ impl Reader {
                 });
                 fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
                 fx.push(ReaderEffect::FocusSettled { node: snap.key });
+                if self.selection_node != Some(snap.key) {
+                    self.text_track(snap, fx);
+                }
                 // Protection from eviction is earned only here: the focus passed the state
                 // machine, was presented, and the fetched node itself shows `FOCUSED`. A focus
                 // event alone, from any application, proves nothing.

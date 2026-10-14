@@ -41,7 +41,7 @@ use gorca_rt::{
 };
 use tokio::task::JoinSet;
 
-use crate::app_actor::{AppActor, FILL_QUEUE, FillMsg, ReaderLinks};
+use crate::app_actor::{AppActor, FILL_QUEUE, FillMsg, ReaderLinks, TextLink};
 use crate::commands::{ConfigRequest, SpeechCtl};
 use crate::directory::MirrorDirectory;
 use crate::health::{AppHealth, HealthEffect, HealthMsg};
@@ -238,6 +238,8 @@ struct Shared {
     mirror_budget: Arc<MirrorBudget>,
     global_rate: Arc<GlobalRate>,
     present_log: Option<Arc<PresentLog>>,
+    /// Text events the app actors could not queue for the Reader (ADR-0007 EV-5).
+    text_dropped: Arc<AtomicU64>,
 }
 
 impl std::fmt::Debug for Shared {
@@ -290,6 +292,7 @@ impl Core {
                 mirror_budget: MirrorBudget::global(),
                 global_rate: GlobalRate::new(FILL_RATE_GLOBAL),
                 present_log: None,
+                text_dropped: Arc::new(AtomicU64::new(0)),
             }),
             inbox,
             registrars: Vec::new(),
@@ -551,7 +554,11 @@ fn spawn_app_actor(
             Some(Arc::clone(&shared.global_rate)),
         )
         .with_fill_channel(fill_rx)
-        .with_focused(Arc::clone(&shared.focused));
+        .with_focused(Arc::clone(&shared.focused))
+        .with_text(TextLink {
+            tx: shared.senders.text.clone(),
+            dropped: Arc::clone(&shared.text_dropped),
+        });
     let shared = Arc::clone(shared);
     actors.spawn(
         "app-actor",
@@ -793,7 +800,12 @@ async fn do_fetch(shared: Arc<Shared>, job: FetchJob) {
         | BackendReply::ActionDone
         | BackendReply::Hit(_)
         | BackendReply::Matches(_)
-        | BackendReply::Lines(_) => Err(BackendError::Protocol("unexpected reply kind".to_owned())),
+        | BackendReply::Lines(_)
+        | BackendReply::Unit(_)
+        | BackendReply::Selections(_)
+        | BackendReply::Window(_) => {
+            Err(BackendError::Protocol("unexpected reply kind".to_owned()))
+        }
     });
     // The app actor owns the mirror: it applies the reply (late-reply rules, tombstone on Gone).
     // The Reader gets the answer first; this is off the latency path.
@@ -866,18 +878,25 @@ async fn reader_loop(
     )
     .with_focused(Arc::clone(&shared.focused))
     .with_links(Arc::clone(&shared.links))
-    .with_settings_cell(Arc::clone(&shared.settings));
+    .with_settings_cell(Arc::clone(&shared.settings))
+    .with_text_dropped(Arc::clone(&shared.text_dropped));
     if let Some(log) = &shared.present_log {
         reader = reader.with_present_log(Arc::clone(log));
     }
     let mut timer: Option<Instant> = None;
     // Review fetches, builds and actions: each in a task this loop owns (aborted with it).
     let mut review_tasks: JoinSet<()> = JoinSet::new();
+    // Text fetches, likewise: bounded, owned here, aborted with the loop (ADR-0007 TW-5).
+    let mut text_tasks: JoinSet<()> = JoinSet::new();
     loop {
         let msg = tokio::select! {
             biased;
-            () = token.cancelled() => return,
+            () = token.cancelled() => {
+                tracing::info!(text = ?reader.text_counters(), "reader text counters");
+                return;
+            }
             Some(_) = review_tasks.join_next(), if !review_tasks.is_empty() => continue,
+            Some(_) = text_tasks.join_next(), if !text_tasks.is_empty() => continue,
             m = inbox.next() => match m {
                 Some(m) => m,
                 None => return,
@@ -955,6 +974,12 @@ async fn reader_loop(
                         tracing::warn!("config request queue full; dropped a request");
                     }
                 }
+                ReaderEffect::TextFetch {
+                    req,
+                    op,
+                    class,
+                    epoch,
+                } => spawn_text(&mut text_tasks, shared, req, op, class, epoch),
                 e @ (ReaderEffect::ReviewNav { .. }
                 | ReaderEffect::ReviewBuild(_)
                 | ReaderEffect::ReviewRevalidate { .. }
@@ -997,6 +1022,7 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
         | ReaderEffect::ArmTimer(_)
         | ReaderEffect::SetGrabSet(_)
         | ReaderEffect::SpeechCtl(_)
+        | ReaderEffect::TextFetch { .. }
         | ReaderEffect::Config(_) => return,
     };
     let tx = shared.senders.review.clone();
@@ -1133,8 +1159,106 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
         | ReaderEffect::ArmTimer(_)
         | ReaderEffect::SetGrabSet(_)
         | ReaderEffect::SpeechCtl(_)
+        | ReaderEffect::TextFetch { .. }
         | ReaderEffect::Config(_) => {}
     }
+}
+
+/// Most text fetches in flight at once: a Reader that asks more than this is being driven
+/// faster than any application answers.
+const TEXT_TASKS_MAX: usize = 16;
+
+/// The app side of one text fetch (ADR-0007 TW-5): a task bounded by the request deadline of
+/// `class` whose outcome goes to the Reader as a `TextMsg::Fetched`. An app that is gone, hung
+/// or refusing answers at once, so the Reader degrades instead of waiting (I-4).
+fn spawn_text(
+    set: &mut JoinSet<()>,
+    shared: &Arc<Shared>,
+    req: crate::text::TextReqId,
+    op: crate::text::TextOp,
+    class: BudgetClass,
+    epoch: Epoch,
+) {
+    use crate::text::caret::Reply;
+    use crate::text::{TextMsg, TextOp};
+    use gorca_connector_api::ActionReq;
+    use gorca_model::TextQuery;
+    let tx = shared.senders.text_io.clone();
+    let send = move |result: Result<Reply, BackendError>| {
+        if tx
+            .try_send(TextMsg::Fetched { req, epoch, result })
+            .is_err()
+        {
+            tracing::warn!("reader text queue full; dropped a fetch result");
+        }
+    };
+    let handle = shared.apps.get(op.node().app);
+    let (Some(h), true) = (handle, set.len() < TEXT_TASKS_MAX) else {
+        send(Err(BackendError::Busy));
+        return;
+    };
+    if !h.admits.load(Ordering::Acquire) {
+        bump(&shared.stats.fetch_refused);
+        send(Err(BackendError::Busy));
+        return;
+    }
+    let clock = shared.clock.clone();
+    let next_req = Arc::clone(&shared.next_req);
+    let backend = match op {
+        TextOp::Window {
+            node,
+            around,
+            radius,
+        } => BackendOp::Text(TextQuery::Window {
+            node,
+            around,
+            radius,
+        }),
+        TextOp::AtOffset { node, offset, unit } => {
+            BackendOp::Text(TextQuery::AtOffset { node, offset, unit })
+        }
+        TextOp::Selections { node } => BackendOp::Text(TextQuery::Selections { node }),
+        TextOp::SetCaret { node, offset } => {
+            BackendOp::Action(ActionReq::SetCaret { node, offset })
+        }
+    };
+    set.spawn(async move {
+        let deadline = Deadline::for_class(&clock, class);
+        let id = ReqId(next_req.fetch_add(1, Ordering::Relaxed));
+        let r = request(&h.requests, id, class, backend, deadline).await;
+        match &r {
+            Ok(_) => {
+                let _ = h.health.try_send(HealthMsg::Success);
+            }
+            Err(BackendError::Timeout) => {
+                let _ = h.health.try_send(HealthMsg::Timeout { class });
+            }
+            Err(
+                BackendError::Gone
+                | BackendError::NotSupported
+                | BackendError::Busy
+                | BackendError::Protocol(_)
+                | BackendError::Unresolved,
+            ) => {}
+        }
+        send(r.and_then(|reply| match reply {
+            BackendReply::Window(w) => Ok(Reply::Window(w)),
+            BackendReply::Unit(u) => Ok(Reply::Unit(u)),
+            BackendReply::Selections(s) => Ok(Reply::Selections(s)),
+            BackendReply::ActionDone => Ok(Reply::Done),
+            BackendReply::Node(_)
+            | BackendReply::Children(_)
+            | BackendReply::Subtree(_)
+            | BackendReply::Text(_)
+            | BackendReply::CaretOffset(_)
+            | BackendReply::TextAttributes(_)
+            | BackendReply::Hit(_)
+            | BackendReply::Matches(_)
+            | BackendReply::Lines(_) => {
+                Err(BackendError::Protocol("unexpected reply kind".to_owned()))
+            }
+        }));
+    });
 }
 
 fn action_node(a: &gorca_connector_api::ActionReq) -> NodeKey {

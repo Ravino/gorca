@@ -189,7 +189,7 @@ mod tests {
     }
 
     #[test]
-    fn m1_and_m4a_commands_are_exactly_the_implemented_ones() {
+    fn m1_m3_and_m4a_commands_are_exactly_the_implemented_ones() {
         let impl_names: Vec<_> = SPECS
             .iter()
             .filter(|s| s.available == Availability::Implemented)
@@ -203,7 +203,11 @@ mod tests {
         assert!(impl_names.contains(&"info.status_bar"));
         assert!(!impl_names.contains(&"review.say_all"), "M4b");
         assert!(!impl_names.contains(&"review.above"), "M4b");
-        assert_eq!(impl_names.len(), 59);
+        // M3: caret and text commands, selection, say-all and the punctuation cycle.
+        assert!(impl_names.contains(&"text.say_all"));
+        assert!(impl_names.contains(&"info.selection"));
+        assert!(!impl_names.contains(&"info.formatting"), "M3b");
+        assert_eq!(impl_names.len(), 69);
     }
 
     #[test]
