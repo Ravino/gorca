@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use gorca_mirror::fill::{DemandOutcome, DemandWhy};
 use gorca_model::{
-    Epoch, Ifaces, NodeKey, NodeSnapshot, NodeView, PropMask, StateSet, UttId, Utterance,
+    Epoch, Ifaces, NodeKey, NodeSnapshot, NodeView, PropMask, Role, StateSet, UttId, Utterance,
 };
 use gorca_rt::BudgetClass;
 
@@ -62,6 +62,24 @@ pub fn focus_need(n: &NodeSnapshot) -> PropMask {
         need |= PropMask::RELATIONS;
     }
     need
+}
+
+/// The browse mode word in front of, and the line behind, a focus utterance (BM-5, W3).
+fn apply_web_extra(
+    u: &mut gorca_model::Utterance,
+    word: Option<&'static str>,
+    tail: &[crate::browse::present::Item],
+) {
+    if let Some(w) = word {
+        u.segments.insert(
+            0,
+            gorca_model::Segment {
+                text: Arc::from(w),
+                kind: gorca_model::SegmentKind::Text,
+            },
+        );
+    }
+    u.segments.extend(crate::browse::present::segments(tail));
 }
 
 impl Reader {
@@ -283,17 +301,10 @@ impl Reader {
                 }
                 // Browse mode: the mode word rides on the focus utterance (BM-5), and the line
                 // at the cursor follows a document's own focus speech (W3).
-                if let Some(w) = self.web_take_word() {
-                    u.segments.insert(
-                        0,
-                        gorca_model::Segment {
-                            text: Arc::from(w),
-                            kind: gorca_model::SegmentKind::Text,
-                        },
-                    );
-                }
+                let word = self.web_take_word();
                 let tail = self.web_take_tail();
-                u.segments.extend(crate::browse::present::segments(&tail));
+                apply_web_extra(&mut u, word, &tail);
+                self.web_extra = (word.is_some() || !tail.is_empty()).then_some((id, word, tail));
                 // The context asserts `selected`, which the spoken text omits, so the log must
                 // not carry a cached snapshot from before the event.
                 let logged = if ctx == PresentContext::SelectedItem
@@ -420,6 +431,14 @@ impl Reader {
         if p.node != r.node || p.epoch != r.epoch {
             return;
         }
+        // A web document's speech belongs to browse mode: the cursor line follows the focus
+        // utterance and keys move it at once, so a late correction would talk over the user.
+        if p.snap.role == Role::DocumentWeb
+            && matches!(&r.result, Ok(n) if !n.states.contains(StateSet::DEFUNCT))
+        {
+            self.counters.revalidations_agreed += 1;
+            return;
+        }
         match &r.result {
             Ok(new) if new.states.contains(StateSet::DEFUNCT) => {
                 self.apply_focus(FocusMsg::NodeRemoved(r.node), fx);
@@ -437,6 +456,10 @@ impl Reader {
                     // Replace: the whole node again, interrupting the earlier utterance.
                     let mut u = self.presenters.present(p.ctx, new, id, r.epoch);
                     u.refines = Some(p.utt);
+                    if let Some((_, word, tail)) = self.web_extra.as_ref().filter(|e| e.0 == p.utt)
+                    {
+                        apply_web_extra(&mut u, *word, tail);
+                    }
                     self.counters.refined += 1;
                     (u, PresentSource::Refine)
                 } else {

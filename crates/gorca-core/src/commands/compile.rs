@@ -289,6 +289,11 @@ fn grabs_where(
             // A letter with Shift types the capital.
             let keysym = if shift && (0x61..=0x7a).contains(&nav) {
                 nav - 0x20
+            } else if shift && (0x31..=0x39).contains(&nav) {
+                // Shift on the digit row types the symbol, not the digit (US layout: the
+                // static keymap this compiler knows); the lane still matches by keycode.
+                const SHIFTED: [u32; 9] = [0x21, 0x40, 0x23, 0x24, 0x25, 0x5e, 0x26, 0x2a, 0x28];
+                SHIFTED[(nav - 0x31) as usize]
             } else {
                 nav
             };
@@ -661,6 +666,32 @@ mod tests {
         assert_eq!(
             c.keymap.lookup(ModeKind::Focus, k, 2).unwrap().cmd,
             CoreCmd::InfoStatusBar.id()
+        );
+    }
+
+    #[test]
+    fn browse_grabs_cover_letters_shifted_digits_and_leave_escape_to_focus_mode() {
+        let c = compiled("[keyboard]\npreset=\"nvda\"\nlayout=\"desktop\"\n");
+        let (plain, _exact) = browse_grabs(&c.keymap);
+        let has =
+            |sym: u32, m: Modifiers| plain.iter().any(|ch| ch.keysym == sym && ch.modifiers == m);
+        assert!(has(0x68, Modifiers::empty()), "h");
+        assert!(has(0x48, Modifiers::SHIFT), "Shift+h arrives as H");
+        assert!(has(0x32, Modifiers::empty()), "2");
+        assert!(has(0x40, Modifiers::SHIFT), "Shift+2 arrives as @");
+        assert!(has(0xff54, Modifiers::empty()), "Down");
+        assert!(
+            has(0xff54, Modifiers::CONTROL) || has(0xff53, Modifiers::CONTROL),
+            "Ctrl+arrows"
+        );
+        assert!(
+            !has(0xff1b, Modifiers::empty()),
+            "Escape only in focus mode"
+        );
+        assert!(
+            escape_grabs(&c.keymap)
+                .iter()
+                .any(|ch| ch.keysym == 0xff1b && ch.modifiers.is_empty())
         );
     }
 }

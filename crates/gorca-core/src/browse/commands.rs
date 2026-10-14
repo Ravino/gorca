@@ -799,9 +799,11 @@ impl Reader {
                     fx,
                     true,
                 );
+                // Focus on the document itself already spoke its title: the first line follows.
+                let at_root = focus_node.is_some_and(|(n, _)| n == root);
                 let at_top = focus_node.is_none();
                 self.web_place(doc, focus_node.map_or(root, |(n, _)| n));
-                self.web_speak_entry(doc, at_top, fx);
+                self.web_speak_entry(doc, at_top || at_root, at_top, fx);
             }
             WebMode::Inactive => {
                 // A page load in the application the user is in: adopt the new document.
@@ -818,7 +820,7 @@ impl Reader {
                         true,
                     );
                     self.web_place(doc, root);
-                    self.web_speak_entry(doc, true, fx);
+                    self.web_speak_entry(doc, true, true, fx);
                 }
             }
             WebMode::Browse { .. } | WebMode::Focus { .. } => {}
@@ -826,7 +828,13 @@ impl Reader {
     }
 
     /// Say the mode word and, at the top of a page, its title and first line.
-    fn web_speak_entry(&mut self, doc: DocId, with_page: bool, fx: &mut ReaderEffects) {
+    fn web_speak_entry(
+        &mut self,
+        doc: DocId,
+        with_page: bool,
+        title: bool,
+        fx: &mut ReaderEffects,
+    ) {
         let Some(b) = self.web.as_ref() else { return };
         let Some(h) = b.docs.get(doc) else { return };
         let mode_browse = matches!(b.mode, WebMode::Browse { .. });
@@ -834,7 +842,7 @@ impl Reader {
         let items = if with_page && mode_browse {
             h.read.with(|d| {
                 let mut items = Vec::new();
-                if let Some(t) = title_of(d) {
+                if title && let Some(t) = title_of(d) {
                     items.push(Item::Text(t));
                 }
                 if let Mv::Landed { speak, .. } = cursor::first_line(d, max_line) {

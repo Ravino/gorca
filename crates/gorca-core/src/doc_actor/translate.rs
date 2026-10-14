@@ -34,6 +34,9 @@ use gorca_model::{
 
 /// Orphan upserts and deferred lists kept across batches (a misbehaving source cannot grow us).
 const MAX_PENDING: usize = 200_000;
+/// Deepest node the mirror keeps (a page nests a few dozen levels; 512 is far beyond any real
+/// one). Deeper content is cut and counted, never recursed into.
+pub const MAX_DEPTH: u32 = 512;
 
 /// What a batch changed, for the actor (join table, notices).
 #[derive(Debug, Default)]
@@ -54,6 +57,8 @@ pub struct TranslatorStats {
     pub rejected: u64,
     pub placeholders: u64,
     pub orphans_dropped: u64,
+    /// Nodes cut because they were deeper than [`MAX_DEPTH`].
+    pub truncated: u64,
 }
 
 #[derive(Debug, Default)]
@@ -459,6 +464,21 @@ impl Translator {
         Ok(out)
     }
 
+    /// Depth of `id` (root = 0), walking the parent links with a step budget so a corrupt chain
+    /// cannot loop; saturates just above [`MAX_DEPTH`].
+    fn depth_of(doc: &WebDoc, id: DocNodeId) -> u32 {
+        let mut d = 0;
+        let mut cur = doc.parent(id);
+        while let Some(p) = cur {
+            d += 1;
+            if d > MAX_DEPTH {
+                break;
+            }
+            cur = doc.parent(p);
+        }
+        d
+    }
+
     fn nested_doc(doc: &WebDoc, parent: DocNodeId) -> bool {
         let mut cur = Some(parent);
         let mut hops = 0;
@@ -491,7 +511,7 @@ impl Translator {
         match existing {
             None => {
                 // First document: build the root with whatever children list came with it.
-                let built = self.build_spec(&root_node, false, c, true);
+                let built = self.build_spec(&root_node, false, c, true, 0);
                 let o = w.apply(DocOp::InsertSubtree {
                     parent: None,
                     before: None,
@@ -549,46 +569,98 @@ impl Translator {
         Ok(())
     }
 
-    /// Assemble a spec for `node` and, recursively, the new children its list names.
+    /// Assemble a spec for `node` and the new children its lists name, iteratively: the source
+    /// is untrusted, so a page 100k levels deep or a list cycle must cost time, not the stack
+    /// (SL-3). `depth` is the node's depth in the document; anything deeper than [`MAX_DEPTH`]
+    /// is cut and counted. Each list is consumed when read, so a cycle ends by itself.
     fn build_spec(
         &mut self,
         node: &SrcNode,
         nested: bool,
         c: &mut Collected,
         is_root: bool,
+        depth: u32,
     ) -> Built {
-        let mut spec = spec_of(node, nested);
-        if is_root {
-            spec.flags = without_breaks(spec.flags);
+        struct Frame {
+            spec: NodeSpec,
+            kids: std::vec::IntoIter<SrcNodeId>,
+            children: Vec<SubtreeSpec>,
+            nested: bool,
+            depth: u32,
         }
-        let mut order = vec![node.id];
-        let kids_src: Vec<SrcNodeId> = c
-            .lists
-            .remove(&node.id)
-            .or_else(|| self.deferred.remove(&node.id))
-            .unwrap_or_default();
-        let child_nested = nested || node.role == Role::DocumentWeb;
-        let mut children: Vec<SubtreeSpec> = Vec::with_capacity(kids_src.len());
-        for k in kids_src {
-            let data = c
-                .take_node(k)
-                .or_else(|| self.orphans.remove(&k))
-                .unwrap_or_else(|| {
-                    self.stats.placeholders += 1;
-                    placeholder_node(k)
-                });
-            let b = self.build_spec(&data, child_nested, c, false);
-            order.extend(b.order);
-            children.push(b.spec);
+        fn open(
+            this: &mut Translator,
+            c: &mut Collected,
+            order: &mut Vec<SrcNodeId>,
+            n: &SrcNode,
+            (nested, depth, root): (bool, u32, bool),
+        ) -> Frame {
+            let mut spec = spec_of(n, nested);
+            if root {
+                spec.flags = without_breaks(spec.flags);
+            }
+            order.push(n.id);
+            let kids = c
+                .lists
+                .remove(&n.id)
+                .or_else(|| this.deferred.remove(&n.id))
+                .unwrap_or_default();
+            Frame {
+                spec,
+                kids: kids.into_iter(),
+                children: Vec::new(),
+                nested: nested || n.role == Role::DocumentWeb,
+                depth,
+            }
         }
-        let mut flags: Vec<NodeFlags> = children.iter().map(|s| s.node.flags).collect();
-        assign_breaks(&mut flags);
-        for (s, f) in children.iter_mut().zip(flags) {
-            s.node.flags = f;
-        }
-        Built {
-            spec: SubtreeSpec::with_children(spec, children),
-            order,
+        let mut order: Vec<SrcNodeId> = Vec::new();
+        let mut stack = vec![open(self, c, &mut order, node, (nested, depth, is_root))];
+        loop {
+            let Some(top) = stack.last_mut() else {
+                // Unreachable: the root frame is only popped below, which returns.
+                return Built {
+                    spec: SubtreeSpec::leaf(NodeSpec::new(Role::Unknown)),
+                    order,
+                };
+            };
+            if let Some(k) = top.kids.next() {
+                if top.depth + 1 > MAX_DEPTH {
+                    self.stats.truncated += 1;
+                    c.take_node(k);
+                    self.orphans.remove(&k);
+                    continue;
+                }
+                let (child_nested, child_depth) = (top.nested, top.depth + 1);
+                let data = c
+                    .take_node(k)
+                    .or_else(|| self.orphans.remove(&k))
+                    .unwrap_or_else(|| {
+                        self.stats.placeholders += 1;
+                        placeholder_node(k)
+                    });
+                let f = open(
+                    self,
+                    c,
+                    &mut order,
+                    &data,
+                    (child_nested, child_depth, false),
+                );
+                stack.push(f);
+                continue;
+            }
+            let Some(mut done) = stack.pop() else {
+                continue;
+            };
+            let mut flags: Vec<NodeFlags> = done.children.iter().map(|s| s.node.flags).collect();
+            assign_breaks(&mut flags);
+            for (s, f) in done.children.iter_mut().zip(flags) {
+                s.node.flags = f;
+            }
+            let spec = SubtreeSpec::with_children(done.spec, done.children);
+            match stack.last_mut() {
+                Some(parent) => parent.children.push(spec),
+                None => return Built { spec, order },
+            }
         }
     }
 
@@ -621,6 +693,7 @@ impl Translator {
         touched: &mut HashSet<DocNodeId>,
     ) -> Result<(), DocError> {
         let nested = Self::nested_doc(w.doc(), parent);
+        let child_depth = Self::depth_of(w.doc(), parent) + 1;
         let mut desired: Vec<ChildSpec> = Vec::with_capacity(list.len());
         let mut new_orders: Vec<Vec<SrcNodeId>> = Vec::new();
         let mut seen: HashSet<SrcNodeId> = HashSet::with_capacity(list.len());
@@ -633,6 +706,10 @@ impl Translator {
             match self.by_src.get(k).copied() {
                 Some(id) if w.doc().contains(id) => desired.push(ChildSpec::Existing(id)),
                 Some(_) | None => {
+                    if child_depth > MAX_DEPTH {
+                        self.stats.truncated += 1;
+                        continue;
+                    }
                     let data = c
                         .take_node(*k)
                         .or_else(|| self.orphans.remove(k))
@@ -640,7 +717,7 @@ impl Translator {
                             self.stats.placeholders += 1;
                             placeholder_node(*k)
                         });
-                    let built = self.build_spec(&data, nested, c, false);
+                    let built = self.build_spec(&data, nested, c, false, child_depth);
                     new_orders.push(built.order);
                     desired.push(ChildSpec::New(Arc::new(built.spec)));
                 }
@@ -1208,5 +1285,110 @@ mod tests {
             .map(|x| x.contains(NodeFlags::BREAK_BEFORE))
             .collect();
         assert_eq!(bb, vec![false, true, true, false, false, false]);
+    }
+
+    fn chain(n: u64) -> Vec<DocDelta> {
+        let mut nodes = vec![n_doc()];
+        let mut lists = Vec::new();
+        for i in 2..=n {
+            nodes.push(n_with(i, Role::Panel));
+            lists.push(list(i - 1, &[i]));
+        }
+        let mut d = vec![
+            DocDelta::Reset {
+                root: SrcNodeId(1),
+                nav_id: 1,
+            },
+            DocDelta::Upsert(nodes),
+        ];
+        d.extend(lists);
+        d.push(DocDelta::Settled { batch: 1 });
+        d
+    }
+
+    fn n_doc() -> SrcNode {
+        n_with(1, Role::DocumentWeb)
+    }
+
+    fn n_with(id: u64, role: Role) -> SrcNode {
+        n(id, role)
+    }
+
+    #[test]
+    fn a_hundred_thousand_deep_chain_is_cut_at_the_depth_cap_without_touching_the_stack() {
+        let (mut w, r) = channel(1);
+        let mut t = Translator::new();
+        // Built on the default test-thread stack: any recursion over the page would overflow.
+        t.apply(&mut w, chain(100_000)).unwrap();
+        w.publish();
+        r.with(|d| {
+            assert!(d.validate().is_ok());
+            assert_eq!(
+                d.len(),
+                MAX_DEPTH as usize + 1,
+                "root plus MAX_DEPTH levels"
+            );
+        });
+        assert_eq!(t.stats().truncated, 1);
+        // Dropping the writer and reader (deep specs, deep tree) is safe too.
+        drop(w);
+        drop(r);
+    }
+
+    #[test]
+    fn a_chain_grown_one_level_per_batch_stops_at_the_cap() {
+        let (mut w, r) = channel(1);
+        let mut t = Translator::new();
+        t.apply(&mut w, chain(2)).unwrap();
+        for i in 3..(u64::from(MAX_DEPTH) + 40) {
+            t.apply(
+                &mut w,
+                vec![
+                    DocDelta::Upsert(vec![n(i, Role::Panel)]),
+                    list(i - 1, &[i]),
+                    DocDelta::Settled { batch: i },
+                ],
+            )
+            .unwrap();
+        }
+        w.publish();
+        r.with(|d| {
+            assert!(d.validate().is_ok());
+            assert_eq!(d.len(), MAX_DEPTH as usize + 1);
+        });
+        assert!(t.stats().truncated > 0);
+    }
+
+    #[test]
+    fn parent_child_cycles_in_the_source_terminate() {
+        let (mut w, r) = channel(1);
+        let mut t = Translator::new();
+        // 1 -> 2 -> 3 -> 2 (a cycle) and 4 listing itself.
+        let batch = vec![
+            DocDelta::Reset {
+                root: SrcNodeId(1),
+                nav_id: 1,
+            },
+            DocDelta::Upsert(vec![
+                n(1, Role::DocumentWeb),
+                n(2, Role::Panel),
+                n(3, Role::Panel),
+                n(4, Role::Panel),
+            ]),
+            list(1, &[2, 4]),
+            list(2, &[3]),
+            list(3, &[2]),
+            list(4, &[4]),
+            DocDelta::Settled { batch: 1 },
+        ];
+        // Either applied (each list is consumed once) or rejected whole; never a hang or a panic.
+        let _ = t.apply(&mut w, batch);
+        w.publish();
+        r.with(|d| assert!(d.validate().is_ok()));
+        // A later batch that closes a cycle through the mirror is rejected by the ops.
+        let again = t.apply(&mut w, vec![list(3, &[1]), DocDelta::Settled { batch: 2 }]);
+        w.publish();
+        r.with(|d| assert!(d.validate().is_ok()));
+        let _ = again;
     }
 }

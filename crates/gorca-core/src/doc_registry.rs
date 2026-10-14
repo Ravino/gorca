@@ -216,6 +216,7 @@ impl Hub {
             return;
         };
         a.warm = WarmState::Warming { started: now };
+        tracing::debug!(?app, ?hint, "warm-up started");
         let fut = self.cfg.factory.warm(app, &a.info, hint);
         self.tasks.spawn(async move {
             let res = timed(WARM_TIMEOUT, fut).await;
@@ -239,6 +240,7 @@ impl Hub {
 
     fn ensure(&mut self, focus: NodeKey, now: Instant, silent: bool) {
         let app = focus.app;
+        tracing::debug!(?focus, silent, "ensure document");
         let Some(a) = self.apps.get_mut(&app) else {
             if !silent {
                 self.notify(DocNotice::NoDocument { focus });
@@ -281,6 +283,7 @@ impl Hub {
     }
 
     fn on_warmed(&mut self, app: AppId, res: Result<WarmOutcome, SourceError>, now: Instant) {
+        tracing::debug!(?app, ?res, "warm-up finished");
         let Some(a) = self.apps.get_mut(&app) else {
             return;
         };
@@ -346,6 +349,7 @@ impl Hub {
         if let Some(a) = self.apps.get_mut(&app) {
             a.locating.remove(&focus);
         }
+        tracing::debug!(?focus, ?res, "document located");
         match res {
             Ok(Some(root)) => {
                 if let Some(h) = self.cfg.docs.by_root(root) {

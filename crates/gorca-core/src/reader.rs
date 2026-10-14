@@ -308,6 +308,13 @@ pub struct Reader {
     pub(crate) review: ReviewState,
     /// Browse mode (ADR-0003 section 11): off until the runtime attaches the document side.
     pub(crate) web: Option<BrowseState>,
+    /// The browse mode word and line spoken with the last focus utterance, so an RV-1 refine of
+    /// that utterance repeats them instead of cutting them off.
+    pub(crate) web_extra: Option<(
+        UttId,
+        Option<&'static str>,
+        Vec<crate::browse::present::Item>,
+    )>,
 }
 
 /// Revalidation and correction counters (B-1 M-6).
@@ -351,6 +358,7 @@ impl Reader {
             counters: ReaderCounters::default(),
             review: ReviewState::new(),
             web: None,
+            web_extra: None,
         }
     }
 

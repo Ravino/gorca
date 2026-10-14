@@ -107,7 +107,22 @@ fn push_states(role: Role, st: StateSet, out: &mut Vec<Item>) {
     } else if st.contains(StateSet::COLLAPSED) {
         out.push(Item::State("collapsed"));
     }
-    if st.contains(StateSet::DISABLED) || (!st.is_empty() && !st.contains(StateSet::ENABLED)) {
+    // Firefox never sets ENABLED on static content (the document, headings), and clears it on
+    // disabled controls: the absence only means "unavailable" for things that can be disabled.
+    let control = matches!(
+        role,
+        Role::Button
+            | Role::ToggleButton
+            | Role::CheckBox
+            | Role::RadioButton
+            | Role::ComboBox
+            | Role::TextEntry
+            | Role::PasswordEntry
+            | Role::SpinButton
+    );
+    if st.contains(StateSet::DISABLED)
+        || (control && !st.is_empty() && !st.contains(StateSet::ENABLED))
+    {
         out.push(Item::State("unavailable"));
     }
     if st.contains(StateSet::READ_ONLY) && matches!(role, Role::TextEntry | Role::PasswordEntry) {

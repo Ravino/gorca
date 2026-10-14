@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use gorca_model::{
-    Epoch, Freshness, NodeSnapshot, Prio, Segment, SegmentKind, StateSet, UttId, Utterance, Value,
+    Epoch, Freshness, NodeSnapshot, Prio, Role, Segment, SegmentKind, StateSet, UttId, Utterance,
+    Value,
 };
 use smallvec::SmallVec;
 
@@ -46,6 +47,12 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
     if !role.is_empty() {
         segments.push(seg(role, SegmentKind::Role));
     }
+    // Firefox's document never reports Sensitive; it is not "unavailable".
+    let skip = if n.role == Role::DocumentWeb {
+        skip | StateSet::DISABLED
+    } else {
+        skip
+    };
     for (flag, word) in STATE_WORDS {
         if n.states.contains(*flag) && !skip.contains(*flag) {
             segments.push(seg(word, SegmentKind::State));
@@ -391,5 +398,25 @@ mod change_tests {
         let off = snap("x", StateSet::DISABLED | StateSet::SHOWING, None);
         assert_eq!(log_states(&off).as_slice(), ["showing"], "no sensitive");
         assert!(log_states(&snap("x", StateSet::empty(), None)).is_empty());
+    }
+
+    #[test]
+    fn a_web_document_without_sensitive_is_not_called_unavailable() {
+        let mut d = snap("Page", StateSet::DISABLED | StateSet::SHOWING, None);
+        d.role = Role::DocumentWeb;
+        let text = |n: &NodeSnapshot| {
+            present_focus(n, UttId(1), Epoch::default())
+                .segments
+                .iter()
+                .map(|s| s.text.to_string())
+                .collect::<Vec<_>>()
+        };
+        assert!(
+            !text(&d).iter().any(|t| t == "unavailable"),
+            "{:?}",
+            text(&d)
+        );
+        d.role = Role::CheckBox;
+        assert!(text(&d).iter().any(|t| t == "unavailable"));
     }
 }

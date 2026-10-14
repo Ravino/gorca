@@ -1,0 +1,33 @@
+# e2e m7-w2b
+# utc=2026-10-14T04:16:36Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=6.10 6.24 6.78 1/2538 2074252
+# git_rev=1cd9e24
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m7-w2b
+# reader=daemon:<repo>/.claude/worktrees/agent-a1d08cc29c61e0bae/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=6.10 6.24 6.78 1/2538 2074249
+# reader_env=GORCA_M7=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=W2b lost: heard ["panel"]; 3 focus, 8 load events on the bus
+
+metric                     bus                median          min          max  n op    threshold  res   note
+W2b.w2b_ms.n               daemon/voicego            0            0            0  1                  info   [samples]
+W2b.w2b_ms.p50             daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_ms.p95             daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_ms.p99             daemon/voicego            0            0            0  1 <=          150  PASS   [ms]
+W2b.w2b_ms.p999            daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_ms.max             daemon/voicego            0            0            0  1                  info   [ms]
+W2b.lost                   daemon/voicego            3            3            3  1 <=            0  FAIL  gated on the max over repeats [trials]

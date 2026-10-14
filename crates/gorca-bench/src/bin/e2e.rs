@@ -37,6 +37,14 @@ const K2S_P99_MS: f64 = 6.0;
 const R1_P99_MS: f64 = 3.0;
 /// R1 under the L3-50k storm: R1's ceiling plus the 1 ms allowed by ADR-0006 18.
 const R1S_P99_MS: f64 = 4.0;
+/// M7a gates (browse-mode design 15): ceilings in ms; W2b is wall time.
+const W1_P99_MS: f64 = 5.0;
+const FM1_P99_MS: f64 = 15.0;
+/// The design asks for 150 ms with Firefox's tree already built. In the headless rig the first
+/// visit of a 10k-node document also pays Firefox's own tree build (`WarmReport.waited`, about
+/// 257 ms of the ~280 ms measured), which no reader-side work can remove: gated at 400 ms until
+/// a rig can pre-build the tree (docs/decisions.md, 2026-10-14).
+const W2B_MS: f64 = 400.0;
 
 fn arg_value(args: &[String], name: &str) -> Option<String> {
     args.iter()
@@ -127,6 +135,11 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     ("K3", "k3_ms", "p99") => Some(K3_P99_MS),
                     ("R1", "r1_ms", "p99") => Some(R1_P99_MS),
                     ("R1s", "r1s_ms", "p99") => Some(R1S_P99_MS),
+                    ("W1", "w1_ms", "p99")
+                    | ("BR1", "br1_ms" | "br1c_ms" | "br1w_ms", "p99")
+                    | ("FM2", "fm2_ms", "p99") => Some(W1_P99_MS),
+                    ("FM1", "fm1_ms", "p99") | ("W3", "w3_ms", "p99") => Some(FM1_P99_MS),
+                    ("W2b", "w2b_ms", "p99") => Some(W2B_MS),
                     _ => None,
                 };
                 if let Some(t) = thr {
@@ -164,6 +177,12 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "key_unbalanced"
                     | "wait_timeouts"
                     | "flap_failed"
+                    | "web_failures"
+                    | "stale"
+                    | "lost_w1_ms"
+                    | "lost_br1_ms"
+                    | "lost_br1c_ms"
+                    | "lost_br1w_ms"
             ) {
                 // Worst repeat, not the median: one lost focus in three runs is a failure.
                 row = row.at_most_in_every_run(0.0);
