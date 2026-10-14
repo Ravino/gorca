@@ -228,10 +228,24 @@ async fn a_hung_app_never_stalls_the_reader_and_recovers() {
             .contains(&"application not responding".to_owned()),
         "the hung focused app was announced"
     );
-    assert_eq!(
-        r.stats.snapshot().fetch_timeout,
-        3,
-        "exactly the three Interactive requests timed out"
+    // The three focus fetches time out and make the app Hung (I-4). N2 retries a failed focus
+    // fetch once, and the retry of the timeout that tips the app into Hung is sent before the
+    // app actor has processed that timeout and cleared `admits` (the reply reaches the Reader
+    // first). That one request is legitimate and bounded, so the count is 3 or 4 depending on
+    // scheduling (seen ~9 runs in 40 at load 12, identical before and after the M7a merge).
+    // What must hold: at least the three timeouts, at most one in-flight retry on top, and
+    // nothing more once the in-flight request has expired: a Hung app gets no further request.
+    let timeouts = r.stats.snapshot().fetch_timeout;
+    assert!(
+        (3..=4).contains(&timeouts),
+        "the three Interactive requests timed out, plus at most one racing N2 retry: {timeouts}"
+    );
+    // Longer than the 120 ms Interactive deadline: any request still in flight has expired.
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    let settled = r.stats.snapshot().fetch_timeout;
+    assert!(
+        (timeouts..=4).contains(&settled),
+        "a Hung app receives no new request: {timeouts} -> {settled}"
     );
 
     // A Hung app receives no request but its probe: a new focus is refused at once.
