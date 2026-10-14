@@ -1,0 +1,260 @@
+{
+  "page": "virtual-unmount",
+  "browser": "firefox",
+  "scenario": "research",
+  "metric": "TBD-WEB-1 state flips, TBD-WEB-2 position attributes, TBD-WEB-3 identity under scroll",
+  "attribute_samples": [
+    {
+      "role": "list",
+      "name": "Items",
+      "attrs": {
+        "display": "block",
+        "tag": "div",
+        "id": "vp",
+        "explicit-name": "true",
+        "xml-roles": "list"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": "Row 0",
+      "attrs": {
+        "explicit-name": "true",
+        "display": "block",
+        "posinset": "1",
+        "class": "row",
+        "tag": "div",
+        "id": "row-0",
+        "setsize": "10000",
+        "xml-roles": "listitem"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": "Row 1",
+      "attrs": {
+        "explicit-name": "true",
+        "display": "block",
+        "posinset": "2",
+        "class": "row",
+        "tag": "div",
+        "id": "row-1",
+        "setsize": "10000",
+        "xml-roles": "listitem"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": "Row 2",
+      "attrs": {
+        "explicit-name": "true",
+        "display": "block",
+        "posinset": "3",
+        "class": "row",
+        "tag": "div",
+        "id": "row-2",
+        "setsize": "10000",
+        "xml-roles": "listitem"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "step": "scrollBy +64 px (2 rows)",
+      "page_info": "scrollBy 64 top=64",
+      "rows_before": 17,
+      "rows_after": 19,
+      "rows_retained": 17,
+      "retained_same_path": 17,
+      "retained_path_changed": 0,
+      "retained_id_stable": 17,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 22,
+      "nodes_state_flipped": 4,
+      "showing_or_visible_flipped": 4,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 4
+      },
+      "events": {
+        "children-added": 3,
+        "children-removed": 1,
+        "text-delete": 1,
+        "text-insert": 2
+      },
+      "source_updates": 1,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 24,
+      "fresh_nodes": 24,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["visible", "enabled"],
+        "after": ["showing", "visible", "enabled"]
+      }
+    },
+    {
+      "step": "scrollBy +640 px (20 rows)",
+      "page_info": "scrollBy 640 top=704",
+      "rows_before": 19,
+      "rows_after": 20,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 19,
+      "nodes_persisting": 5,
+      "nodes_state_flipped": 0,
+      "showing_or_visible_flipped": 0,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+      },
+      "events": {
+        "children-added": 21,
+        "children-removed": 20,
+        "text-delete": 2,
+        "text-insert": 2
+      },
+      "source_updates": 1,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 25,
+      "fresh_nodes": 25,
+      "example_state_flip": null
+    },
+    {
+      "step": "scrollTo row 500",
+      "page_info": "scrollTo 500 top=16000",
+      "rows_before": 20,
+      "rows_after": 20,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 20,
+      "nodes_persisting": 5,
+      "nodes_state_flipped": 0,
+      "showing_or_visible_flipped": 0,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+      },
+      "events": {
+        "children-added": 21,
+        "children-removed": 21,
+        "text-delete": 2,
+        "text-insert": 2
+      },
+      "source_updates": 1,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 25,
+      "fresh_nodes": 25,
+      "example_state_flip": null
+    },
+    {
+      "step": "scrollBy -3200 px (back 100 rows)",
+      "page_info": "scrollBy -3200 top=12800",
+      "rows_before": 20,
+      "rows_after": 20,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 20,
+      "nodes_persisting": 5,
+      "nodes_state_flipped": 0,
+      "showing_or_visible_flipped": 0,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+      },
+      "events": {
+        "children-added": 21,
+        "children-removed": 21,
+        "text-delete": 2,
+        "text-insert": 2
+      },
+      "source_updates": 1,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 25,
+      "fresh_nodes": 25,
+      "example_state_flip": null
+    },
+    {
+      "step": "scrollTo row 5000 (jump)",
+      "page_info": "scrollTo 5000 top=160000",
+      "rows_before": 20,
+      "rows_after": 20,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 20,
+      "nodes_persisting": 5,
+      "nodes_state_flipped": 0,
+      "showing_or_visible_flipped": 0,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+      },
+      "events": {
+        "children-added": 21,
+        "children-removed": 21,
+        "text-delete": 2,
+        "text-insert": 2
+      },
+      "source_updates": 1,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 25,
+      "fresh_nodes": 25,
+      "example_state_flip": null
+    },
+    {
+      "step": "scrollTo row 0 (jump back)",
+      "page_info": "scrollTo 0 top=0",
+      "rows_before": 20,
+      "rows_after": 17,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 17,
+      "nodes_persisting": 5,
+      "nodes_state_flipped": 0,
+      "showing_or_visible_flipped": 0,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+      },
+      "events": {
+        "children-added": 18,
+        "children-removed": 21,
+        "text-delete": 2,
+        "text-insert": 2
+      },
+      "source_updates": 1,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 22,
+      "fresh_nodes": 22,
+      "example_state_flip": null
+    }
+  ]
+}

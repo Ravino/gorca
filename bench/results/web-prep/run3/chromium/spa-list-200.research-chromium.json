@@ -1,0 +1,192 @@
+{
+  "page": "spa-list-200",
+  "browser": "chromium",
+  "scenario": "research",
+  "metric": "TBD-WEB-1 state flips, TBD-WEB-2 position attributes, TBD-WEB-3 identity under scroll",
+  "attribute_samples": [
+    {
+      "role": "list",
+      "name": null,
+      "attrs": {
+        "text-align": "left",
+        "id": "items",
+        "setsize": "200",
+        "tag": "ul",
+        "display": "block"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": null,
+      "attrs": {
+        "text-align": "left",
+        "id": "item-0",
+        "posinset": "1",
+        "setsize": "200",
+        "level": "1",
+        "tag": "li",
+        "display": "list-item"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": null,
+      "attrs": {
+        "text-align": "left",
+        "id": "item-1",
+        "posinset": "2",
+        "setsize": "200",
+        "level": "1",
+        "tag": "li",
+        "display": "list-item"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": null,
+      "attrs": {
+        "text-align": "left",
+        "id": "item-2",
+        "posinset": "3",
+        "setsize": "200",
+        "level": "1",
+        "tag": "li",
+        "display": "list-item"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "step": "reverse (keyed DOM moves)",
+      "page_info": "reverse 200",
+      "rows_before": 0,
+      "rows_after": 0,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 616,
+      "nodes_state_flipped": 144,
+      "showing_or_visible_flipped": 144,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 144
+      },
+      "events": {
+      },
+      "source_updates": 0,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": false,
+      "mirror_nodes": 616,
+      "fresh_nodes": 616,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["visible", "enabled"],
+        "after": ["showing", "visible", "enabled"]
+      }
+    },
+    {
+      "step": "shuffle",
+      "page_info": "shuffle 200",
+      "rows_before": 0,
+      "rows_after": 0,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 616,
+      "nodes_state_flipped": 120,
+      "showing_or_visible_flipped": 120,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 120
+      },
+      "events": {
+      },
+      "source_updates": 0,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": false,
+      "mirror_nodes": 616,
+      "fresh_nodes": 616,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["visible", "enabled"],
+        "after": ["showing", "visible", "enabled"]
+      }
+    },
+    {
+      "step": "window scroll 400 px",
+      "page_info": "scrollY 400",
+      "rows_before": 0,
+      "rows_after": 0,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 616,
+      "nodes_state_flipped": 93,
+      "showing_or_visible_flipped": 93,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 93
+      },
+      "events": {
+      },
+      "source_updates": 0,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": false,
+      "mirror_nodes": 616,
+      "fresh_nodes": 616,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["showing", "visible", "enabled"],
+        "after": ["visible", "enabled"]
+      }
+    },
+    {
+      "step": "window scroll back",
+      "page_info": "scrollY 0",
+      "rows_before": 0,
+      "rows_after": 0,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 616,
+      "nodes_state_flipped": 93,
+      "showing_or_visible_flipped": 93,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 93
+      },
+      "events": {
+      },
+      "source_updates": 0,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": false,
+      "mirror_nodes": 616,
+      "fresh_nodes": 616,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["visible", "enabled"],
+        "after": ["showing", "visible", "enabled"]
+      }
+    }
+  ]
+}

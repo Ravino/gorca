@@ -1,0 +1,26 @@
+[package]
+name = "gorca-bench-web"
+description = "B-6 harness: web corpus loader, page server, private-Firefox scenarios, arms (AT-SPI tuned, AGP skeleton) and metrics M-9, M-13, M-15, WM-4."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "b6"
+path = "src/bin/b6.rs"
+
+[dependencies]
+gorca-model = { workspace = true }
+gorca-rt = { workspace = true }
+gorca-dbus = { workspace = true }
+gorca-doc-source-api = { workspace = true }
+gorca-doc-source-atspi = { workspace = true }
+zbus = { workspace = true, features = ["p2p"] }
+tokio = { workspace = true, features = ["net", "io-util", "fs", "process"] }
+anyhow = { workspace = true }
+smallvec = { workspace = true }
+
+[lints]
+workspace = true

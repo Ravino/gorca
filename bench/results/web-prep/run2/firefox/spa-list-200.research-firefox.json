@@ -1,0 +1,183 @@
+{
+  "page": "spa-list-200",
+  "browser": "firefox",
+  "scenario": "research",
+  "metric": "TBD-WEB-1 state flips, TBD-WEB-2 position attributes, TBD-WEB-3 identity under scroll",
+  "attribute_samples": [
+    {
+      "role": "list",
+      "name": null,
+      "attrs": {
+        "display": "block",
+        "child-item-count": "200",
+        "tag": "ul",
+        "id": "items"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": "Item 0 Open 0",
+      "attrs": {
+        "display": "list-item",
+        "posinset": "1",
+        "tag": "li",
+        "id": "item-0",
+        "setsize": "200"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": "Item 1 Open 1",
+      "attrs": {
+        "display": "list-item",
+        "posinset": "2",
+        "tag": "li",
+        "id": "item-1",
+        "setsize": "200"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": "Item 2 Open 2",
+      "attrs": {
+        "display": "list-item",
+        "posinset": "3",
+        "tag": "li",
+        "id": "item-2",
+        "setsize": "200"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "step": "reverse (keyed DOM moves)",
+      "page_info": "reverse 200",
+      "rows_before": 0,
+      "rows_after": 0,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 11,
+      "nodes_state_flipped": 0,
+      "showing_or_visible_flipped": 0,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+      },
+      "events": {
+        "children-added": 200,
+        "children-removed": 200,
+        "text-delete": 1,
+        "text-insert": 1
+      },
+      "source_updates": 1,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 411,
+      "fresh_nodes": 411,
+      "example_state_flip": null
+    },
+    {
+      "step": "shuffle",
+      "page_info": "shuffle 200",
+      "rows_before": 0,
+      "rows_after": 0,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 11,
+      "nodes_state_flipped": 0,
+      "showing_or_visible_flipped": 0,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+      },
+      "events": {
+        "children-added": 200,
+        "children-removed": 200,
+        "text-delete": 189,
+        "text-insert": 1
+      },
+      "source_updates": 1,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 411,
+      "fresh_nodes": 411,
+      "example_state_flip": null
+    },
+    {
+      "step": "window scroll 400 px",
+      "page_info": "scrollY 400",
+      "rows_before": 0,
+      "rows_after": 0,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 411,
+      "nodes_state_flipped": 63,
+      "showing_or_visible_flipped": 63,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 63
+      },
+      "events": {
+      },
+      "source_updates": 0,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 411,
+      "fresh_nodes": 411,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["focusable", "visible", "enabled"],
+        "after": ["focusable", "showing", "visible", "enabled"]
+      }
+    },
+    {
+      "step": "window scroll back",
+      "page_info": "scrollY 0",
+      "rows_before": 0,
+      "rows_after": 0,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 411,
+      "nodes_state_flipped": 63,
+      "showing_or_visible_flipped": 63,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 63
+      },
+      "events": {
+      },
+      "source_updates": 0,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 411,
+      "fresh_nodes": 411,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["focusable", "visible", "enabled"],
+        "after": ["focusable", "showing", "visible", "enabled"]
+      }
+    }
+  ]
+}

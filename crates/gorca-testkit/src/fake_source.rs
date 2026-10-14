@@ -51,6 +51,9 @@ impl DocSource for FakeDocSource {
                             DocRequest::Validate { nodes, reply, .. } => {
                                 let _ = reply.send(Ok(vec![true; nodes.len()]));
                             }
+                            DocRequest::Revalidate { reply, .. } => {
+                                let _ = reply.send(Ok(smallvec::SmallVec::default()));
+                            }
                         }
                     }
                 }

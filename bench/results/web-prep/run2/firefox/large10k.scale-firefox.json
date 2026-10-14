@@ -1,0 +1,743 @@
+{
+  "page": "large10k",
+  "scenario": "scale",
+  "metric": "M-15 parallel decode scaling and connection scaling",
+  "subtree_replies": 846,
+  "nodes": 10229,
+  "reply_bytes": 2194161,
+  "cores": 16,
+  "decode_scaling": [
+    {
+      "threads": 1,
+      "decode_ms": {
+        "n": 10,
+        "min": 4.5410,
+        "p50": 4.8394,
+        "p95": 10.6839,
+        "p99": 10.6839,
+        "max": 10.6839,
+        "mean": 5.3745
+      },
+      "speedup_vs_1": 1
+    },
+    {
+      "threads": 2,
+      "decode_ms": {
+        "n": 10,
+        "min": 2.4252,
+        "p50": 2.4477,
+        "p95": 2.6090,
+        "p99": 2.6090,
+        "max": 2.6090,
+        "mean": 2.4652
+      },
+      "speedup_vs_1": 1.9771
+    },
+    {
+      "threads": 4,
+      "decode_ms": {
+        "n": 10,
+        "min": 1.3871,
+        "p50": 1.7838,
+        "p95": 2.5863,
+        "p99": 2.5863,
+        "max": 2.5863,
+        "mean": 1.8360
+      },
+      "speedup_vs_1": 2.7130
+    },
+    {
+      "threads": 8,
+      "decode_ms": {
+        "n": 10,
+        "min": 1.2412,
+        "p50": 1.5580,
+        "p95": 2.2724,
+        "p99": 2.2724,
+        "max": 2.2724,
+        "mean": 1.6348
+      },
+      "speedup_vs_1": 3.1062
+    },
+    {
+      "threads": 16,
+      "decode_ms": {
+        "n": 10,
+        "min": 1.8043,
+        "p50": 2.4798,
+        "p95": 2.8643,
+        "p99": 2.8643,
+        "max": 2.8643,
+        "mean": 2.3560
+      },
+      "speedup_vs_1": 1.9515
+    }
+  ],
+  "connection_scaling": [
+    {
+      "connections": 1,
+      "result": {
+        "page": "large10k",
+        "scenario": "build",
+        "metric": "M-9 / WM-1 full-tree build time",
+        "first_block": {
+          "first_nodes_target": 400,
+          "block_nodes": 444,
+          "subtrees_left": 806,
+          "ms": {
+            "n": 10,
+            "min": 15.2817,
+            "p50": 17.2674,
+            "p95": 229.1177,
+            "p99": 229.1177,
+            "max": 229.1177,
+            "mean": 38.3983
+          },
+          "errors": []
+        },
+        "variants": [
+          {
+            "variant": "conn-scaling",
+            "p2p": true,
+            "warm_ready": true,
+            "warm_ms": 223.5455,
+            "connections": 1,
+            "window": 32,
+            "nodes": 10233,
+            "runs_ok": 10,
+            "incomplete_runs": 0,
+            "rpc_calls": 15408,
+            "failed_calls": 0,
+            "get_tree_bytes": 2194265,
+            "heaviest_get_tree_reply_nodes": 46,
+            "total_ms": {
+              "n": 10,
+              "min": 462.4819,
+              "p50": 518.6155,
+              "p95": 630.0768,
+              "p99": 630.0768,
+              "max": 630.0768,
+              "mean": 512.7265
+            },
+            "stages_ms": {
+              "assemble": {
+                "n": 10,
+                "min": 0.5665,
+                "p50": 0.7305,
+                "p95": 1.3459,
+                "p99": 1.3459,
+                "max": 1.3459,
+                "mean": 0.8405
+              },
+              "frontier": {
+                "n": 10,
+                "min": 1.4600,
+                "p50": 2.1035,
+                "p95": 3.8573,
+                "p99": 3.8573,
+                "max": 3.8573,
+                "mean": 2.2001
+              },
+              "get_tree": {
+                "n": 10,
+                "min": 148.7592,
+                "p50": 185.1556,
+                "p95": 293.9890,
+                "p99": 293.9890,
+                "max": 293.9890,
+                "mean": 197.8782
+              },
+              "heaviest_get_tree_call": {
+                "n": 10,
+                "min": 0.9950,
+                "p50": 1.9080,
+                "p95": 49.4220,
+                "p99": 49.4220,
+                "max": 49.4220,
+                "mean": 8.1878
+              },
+              "roles": {
+                "n": 10,
+                "min": 188.3089,
+                "p50": 225.5730,
+                "p95": 245.4606,
+                "p99": 245.4606,
+                "max": 245.4606,
+                "mean": 215.6075
+              },
+              "states": {
+                "n": 10,
+                "min": 81.9084,
+                "p50": 96.4095,
+                "p95": 116.0721,
+                "p99": 116.0721,
+                "max": 116.0721,
+                "mean": 94.5276
+              },
+              "t_roles_ready": {
+                "n": 10,
+                "min": 370.8203,
+                "p50": 426.8323,
+                "p95": 530.7911,
+                "p99": 530.7911,
+                "max": 530.7911,
+                "mean": 416.5263
+              },
+              "t_structure_ready": {
+                "n": 10,
+                "min": 150.5589,
+                "p50": 187.5422,
+                "p95": 295.6226,
+                "p99": 295.6226,
+                "max": 295.6226,
+                "mean": 200.0783
+              },
+              "text": {
+                "n": 10,
+                "min": 0,
+                "p50": 0,
+                "p95": 0,
+                "p99": 0,
+                "max": 0,
+                "mean": 0
+              }
+            },
+            "errors": []
+          }
+        ]
+      }
+    },
+    {
+      "connections": 2,
+      "result": {
+        "page": "large10k",
+        "scenario": "build",
+        "metric": "M-9 / WM-1 full-tree build time",
+        "first_block": {
+          "first_nodes_target": 400,
+          "block_nodes": 444,
+          "subtrees_left": 806,
+          "ms": {
+            "n": 10,
+            "min": 15.6404,
+            "p50": 18.7641,
+            "p95": 27.2437,
+            "p99": 27.2437,
+            "max": 27.2437,
+            "mean": 18.8894
+          },
+          "errors": []
+        },
+        "variants": [
+          {
+            "variant": "conn-scaling",
+            "p2p": true,
+            "warm_ready": true,
+            "warm_ms": 211.2546,
+            "connections": 2,
+            "window": 32,
+            "nodes": 10233,
+            "runs_ok": 10,
+            "incomplete_runs": 0,
+            "rpc_calls": 15408,
+            "failed_calls": 0,
+            "get_tree_bytes": 2194265,
+            "heaviest_get_tree_reply_nodes": 46,
+            "total_ms": {
+              "n": 10,
+              "min": 347.2058,
+              "p50": 360.2853,
+              "p95": 404.0371,
+              "p99": 404.0371,
+              "max": 404.0371,
+              "mean": 363.8076
+            },
+            "stages_ms": {
+              "assemble": {
+                "n": 10,
+                "min": 0.5647,
+                "p50": 0.8404,
+                "p95": 1.5509,
+                "p99": 1.5509,
+                "max": 1.5509,
+                "mean": 0.8669
+              },
+              "frontier": {
+                "n": 10,
+                "min": 1.6480,
+                "p50": 1.9574,
+                "p95": 2.9327,
+                "p99": 2.9327,
+                "max": 2.9327,
+                "mean": 2.1240
+              },
+              "get_tree": {
+                "n": 10,
+                "min": 111.3110,
+                "p50": 116.7056,
+                "p95": 133.6330,
+                "p99": 133.6330,
+                "max": 133.6330,
+                "mean": 117.3275
+              },
+              "heaviest_get_tree_call": {
+                "n": 10,
+                "min": 0.5890,
+                "p50": 0.9010,
+                "p95": 11.1790,
+                "p99": 11.1790,
+                "max": 11.1790,
+                "mean": 1.9543
+              },
+              "roles": {
+                "n": 10,
+                "min": 150.8798,
+                "p50": 157.6626,
+                "p95": 198.2252,
+                "p99": 198.2252,
+                "max": 198.2252,
+                "mean": 161.3972
+              },
+              "states": {
+                "n": 10,
+                "min": 76.0882,
+                "p50": 78.7159,
+                "p95": 86.4595,
+                "p99": 86.4595,
+                "max": 86.4595,
+                "mean": 80.1308
+              },
+              "t_roles_ready": {
+                "n": 10,
+                "min": 267.3700,
+                "p50": 276.9254,
+                "p95": 317.3996,
+                "p99": 317.3996,
+                "max": 317.3996,
+                "mean": 281.7157
+              },
+              "t_structure_ready": {
+                "n": 10,
+                "min": 113.9240,
+                "p50": 118.6097,
+                "p95": 135.5948,
+                "p99": 135.5948,
+                "max": 135.5948,
+                "mean": 119.4516
+              },
+              "text": {
+                "n": 10,
+                "min": 0,
+                "p50": 0,
+                "p95": 0,
+                "p99": 0,
+                "max": 0,
+                "mean": 0
+              }
+            },
+            "errors": []
+          }
+        ]
+      }
+    },
+    {
+      "connections": 4,
+      "result": {
+        "page": "large10k",
+        "scenario": "build",
+        "metric": "M-9 / WM-1 full-tree build time",
+        "first_block": {
+          "first_nodes_target": 400,
+          "block_nodes": 444,
+          "subtrees_left": 806,
+          "ms": {
+            "n": 10,
+            "min": 15.9085,
+            "p50": 17.6049,
+            "p95": 19.2638,
+            "p99": 19.2638,
+            "max": 19.2638,
+            "mean": 17.4973
+          },
+          "errors": []
+        },
+        "variants": [
+          {
+            "variant": "conn-scaling",
+            "p2p": true,
+            "warm_ready": true,
+            "warm_ms": 215.9266,
+            "connections": 4,
+            "window": 32,
+            "nodes": 10233,
+            "runs_ok": 10,
+            "incomplete_runs": 0,
+            "rpc_calls": 15408,
+            "failed_calls": 0,
+            "get_tree_bytes": 2194265,
+            "heaviest_get_tree_reply_nodes": 46,
+            "total_ms": {
+              "n": 10,
+              "min": 321.3016,
+              "p50": 333.1692,
+              "p95": 375.1009,
+              "p99": 375.1009,
+              "max": 375.1009,
+              "mean": 338.5855
+            },
+            "stages_ms": {
+              "assemble": {
+                "n": 10,
+                "min": 0.5488,
+                "p50": 0.7545,
+                "p95": 1.2682,
+                "p99": 1.2682,
+                "max": 1.2682,
+                "mean": 0.8082
+              },
+              "frontier": {
+                "n": 10,
+                "min": 1.5205,
+                "p50": 1.9543,
+                "p95": 2.6808,
+                "p99": 2.6808,
+                "max": 2.6808,
+                "mean": 2.0152
+              },
+              "get_tree": {
+                "n": 10,
+                "min": 102.2691,
+                "p50": 106.7365,
+                "p95": 126.1024,
+                "p99": 126.1024,
+                "max": 126.1024,
+                "mean": 109.0083
+              },
+              "heaviest_get_tree_call": {
+                "n": 10,
+                "min": 0.9210,
+                "p50": 1.1870,
+                "p95": 14.0140,
+                "p99": 14.0140,
+                "max": 14.0140,
+                "mean": 2.5087
+              },
+              "roles": {
+                "n": 10,
+                "min": 138.8325,
+                "p50": 143.6833,
+                "p95": 169.0307,
+                "p99": 169.0307,
+                "max": 169.0307,
+                "mean": 148.4018
+              },
+              "states": {
+                "n": 10,
+                "min": 70.3677,
+                "p50": 74.8896,
+                "p95": 84.3511,
+                "p99": 84.3511,
+                "max": 84.3511,
+                "mean": 76.2953
+              },
+              "t_roles_ready": {
+                "n": 10,
+                "min": 246.6103,
+                "p50": 252.9704,
+                "p95": 298.3947,
+                "p99": 298.3947,
+                "max": 298.3947,
+                "mean": 260.2335
+              },
+              "t_structure_ready": {
+                "n": 10,
+                "min": 103.7896,
+                "p50": 108.7298,
+                "p95": 128.2806,
+                "p99": 128.2806,
+                "max": 128.2806,
+                "mean": 111.0235
+              },
+              "text": {
+                "n": 10,
+                "min": 0,
+                "p50": 0,
+                "p95": 0,
+                "p99": 0,
+                "max": 0,
+                "mean": 0
+              }
+            },
+            "errors": []
+          }
+        ]
+      }
+    },
+    {
+      "connections": 8,
+      "result": {
+        "page": "large10k",
+        "scenario": "build",
+        "metric": "M-9 / WM-1 full-tree build time",
+        "first_block": {
+          "first_nodes_target": 400,
+          "block_nodes": 444,
+          "subtrees_left": 806,
+          "ms": {
+            "n": 10,
+            "min": 17.3771,
+            "p50": 18.2057,
+            "p95": 23.1435,
+            "p99": 23.1435,
+            "max": 23.1435,
+            "mean": 18.7046
+          },
+          "errors": []
+        },
+        "variants": [
+          {
+            "variant": "conn-scaling",
+            "p2p": true,
+            "warm_ready": true,
+            "warm_ms": 203.8666,
+            "connections": 8,
+            "window": 32,
+            "nodes": 10233,
+            "runs_ok": 10,
+            "incomplete_runs": 0,
+            "rpc_calls": 15408,
+            "failed_calls": 0,
+            "get_tree_bytes": 2194265,
+            "heaviest_get_tree_reply_nodes": 46,
+            "total_ms": {
+              "n": 10,
+              "min": 310.9631,
+              "p50": 327.6317,
+              "p95": 340.8183,
+              "p99": 340.8183,
+              "max": 340.8183,
+              "mean": 328.2305
+            },
+            "stages_ms": {
+              "assemble": {
+                "n": 10,
+                "min": 0.5751,
+                "p50": 0.6878,
+                "p95": 1.3574,
+                "p99": 1.3574,
+                "max": 1.3574,
+                "mean": 0.7539
+              },
+              "frontier": {
+                "n": 10,
+                "min": 1.3809,
+                "p50": 1.7660,
+                "p95": 3.1901,
+                "p99": 3.1901,
+                "max": 3.1901,
+                "mean": 1.9199
+              },
+              "get_tree": {
+                "n": 10,
+                "min": 102.9700,
+                "p50": 106.7559,
+                "p95": 113.6237,
+                "p99": 113.6237,
+                "max": 113.6237,
+                "mean": 106.4158
+              },
+              "heaviest_get_tree_call": {
+                "n": 10,
+                "min": 1.7300,
+                "p50": 2.1270,
+                "p95": 2.8720,
+                "p99": 2.8720,
+                "max": 2.8720,
+                "mean": 2.1621
+              },
+              "roles": {
+                "n": 10,
+                "min": 130.3137,
+                "p50": 146.4895,
+                "p95": 160.7424,
+                "p99": 160.7424,
+                "max": 160.7424,
+                "mean": 144.5296
+              },
+              "states": {
+                "n": 10,
+                "min": 68.7829,
+                "p50": 72.4807,
+                "p95": 78.9656,
+                "p99": 78.9656,
+                "max": 78.9656,
+                "mean": 72.6211
+              },
+              "t_roles_ready": {
+                "n": 10,
+                "min": 239.8375,
+                "p50": 254.1752,
+                "p95": 266.7621,
+                "p99": 266.7621,
+                "max": 266.7621,
+                "mean": 253.6192
+              },
+              "t_structure_ready": {
+                "n": 10,
+                "min": 104.4341,
+                "p50": 108.2400,
+                "p95": 115.0046,
+                "p99": 115.0046,
+                "max": 115.0046,
+                "mean": 108.3357
+              },
+              "text": {
+                "n": 10,
+                "min": 0,
+                "p50": 0,
+                "p95": 0,
+                "p99": 0,
+                "max": 0,
+                "mean": 0
+              }
+            },
+            "errors": []
+          }
+        ]
+      }
+    },
+    {
+      "connections": 16,
+      "result": {
+        "page": "large10k",
+        "scenario": "build",
+        "metric": "M-9 / WM-1 full-tree build time",
+        "first_block": {
+          "first_nodes_target": 400,
+          "block_nodes": 444,
+          "subtrees_left": 806,
+          "ms": {
+            "n": 10,
+            "min": 17.9820,
+            "p50": 19.7891,
+            "p95": 26.4442,
+            "p99": 26.4442,
+            "max": 26.4442,
+            "mean": 20.4144
+          },
+          "errors": []
+        },
+        "variants": [
+          {
+            "variant": "conn-scaling",
+            "p2p": true,
+            "warm_ready": true,
+            "warm_ms": 216.0038,
+            "connections": 16,
+            "window": 32,
+            "nodes": 10233,
+            "runs_ok": 10,
+            "incomplete_runs": 0,
+            "rpc_calls": 15408,
+            "failed_calls": 0,
+            "get_tree_bytes": 2194265,
+            "heaviest_get_tree_reply_nodes": 46,
+            "total_ms": {
+              "n": 10,
+              "min": 308.5709,
+              "p50": 326.9735,
+              "p95": 344.0190,
+              "p99": 344.0190,
+              "max": 344.0190,
+              "mean": 326.3700
+            },
+            "stages_ms": {
+              "assemble": {
+                "n": 10,
+                "min": 0.5597,
+                "p50": 0.6710,
+                "p95": 1.2419,
+                "p99": 1.2419,
+                "max": 1.2419,
+                "mean": 0.7469
+              },
+              "frontier": {
+                "n": 10,
+                "min": 1.5961,
+                "p50": 1.8220,
+                "p95": 2.3947,
+                "p99": 2.3947,
+                "max": 2.3947,
+                "mean": 1.8499
+              },
+              "get_tree": {
+                "n": 10,
+                "min": 102.5209,
+                "p50": 103.6111,
+                "p95": 109.6634,
+                "p99": 109.6634,
+                "max": 109.6634,
+                "mean": 104.5539
+              },
+              "heaviest_get_tree_call": {
+                "n": 10,
+                "min": 3.6990,
+                "p50": 4.0030,
+                "p95": 5.0450,
+                "p99": 5.0450,
+                "max": 5.0450,
+                "mean": 4.1335
+              },
+              "roles": {
+                "n": 10,
+                "min": 131.5028,
+                "p50": 148.0924,
+                "p95": 159.5939,
+                "p99": 159.5939,
+                "max": 159.5939,
+                "mean": 145.9489
+              },
+              "states": {
+                "n": 10,
+                "min": 68.6385,
+                "p50": 71.1422,
+                "p95": 76.3797,
+                "p99": 76.3797,
+                "max": 76.3797,
+                "mean": 71.3026
+              },
+              "t_roles_ready": {
+                "n": 10,
+                "min": 237.3823,
+                "p50": 254.2681,
+                "p95": 271.6279,
+                "p99": 271.6279,
+                "max": 271.6279,
+                "mean": 253.0995
+              },
+              "t_structure_ready": {
+                "n": 10,
+                "min": 104.1516,
+                "p50": 105.2802,
+                "p95": 111.4742,
+                "p99": 111.4742,
+                "max": 111.4742,
+                "mean": 106.4038
+              },
+              "text": {
+                "n": 10,
+                "min": 0,
+                "p50": 0,
+                "p95": 0,
+                "p99": 0,
+                "max": 0,
+                "mean": 0
+              }
+            },
+            "errors": []
+          }
+        ]
+      }
+    }
+  ]
+}

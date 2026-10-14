@@ -7,7 +7,7 @@
 //!
 //! Scope: non-test sources under `crates/*/src` and `extensions/*/src`. Text after the first
 //! `#[cfg(test)]` line of a file is test code and is skipped; `tests/` directories are skipped.
-//! Exempt: `crates/gorca-daemon/src/main.rs` (the one reader), the bench crates and the testkit
+//! Exempt: `crates/gorca-daemon/src/main.rs` (the one reader), the bench crates (B-6 harness included) and the testkit
 //! (tools that deliberately inspect their environment, never linked into the daemon), and this
 //! crate.
 
@@ -33,6 +33,7 @@ const EXEMPT: &[&str] = &[
     "crates/gorca-bench/",
     "crates/gorca-bench-b1/",
     "crates/gorca-bench-b2/",
+    "crates/gorca-bench-web/",
     "crates/gorca-testkit/",
     "xtask/",
 ];

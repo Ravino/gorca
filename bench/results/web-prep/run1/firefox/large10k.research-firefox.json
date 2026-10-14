@@ -1,0 +1,256 @@
+{
+  "page": "large10k",
+  "browser": "firefox",
+  "scenario": "research",
+  "metric": "TBD-WEB-1 state flips, TBD-WEB-2 position attributes, TBD-WEB-3 identity under scroll",
+  "attribute_samples": [
+    {
+      "role": "list",
+      "name": null,
+      "attrs": {
+        "display": "block",
+        "child-item-count": "3",
+        "tag": "ul"
+      }
+    },
+    {
+      "role": "list",
+      "name": null,
+      "attrs": {
+        "display": "block",
+        "child-item-count": "3",
+        "tag": "ul"
+      }
+    },
+    {
+      "role": "list",
+      "name": null,
+      "attrs": {
+        "display": "block",
+        "child-item-count": "3",
+        "tag": "ul"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": "• alpha 0",
+      "attrs": {
+        "display": "list-item",
+        "posinset": "1",
+        "tag": "li",
+        "setsize": "3"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": "• beta 0",
+      "attrs": {
+        "display": "list-item",
+        "posinset": "2",
+        "tag": "li",
+        "setsize": "3"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": "• gamma 0",
+      "attrs": {
+        "display": "list-item",
+        "posinset": "3",
+        "tag": "li",
+        "setsize": "3"
+      }
+    },
+    {
+      "role": "table",
+      "name": "Table 199",
+      "attrs": {
+        "display": "table",
+        "child-item-count": "11",
+        "tag": "table",
+        "explicit-name": "true"
+      }
+    },
+    {
+      "role": "table",
+      "name": "Table 399",
+      "attrs": {
+        "display": "table",
+        "child-item-count": "11",
+        "tag": "table",
+        "explicit-name": "true"
+      }
+    },
+    {
+      "role": "table",
+      "name": "Table 599",
+      "attrs": {
+        "display": "table",
+        "child-item-count": "11",
+        "tag": "table",
+        "explicit-name": "true"
+      }
+    },
+    {
+      "role": "row",
+      "name": null,
+      "attrs": {
+        "display": "table-row",
+        "posinset": "1",
+        "child-item-count": "3",
+        "tag": "tr",
+        "setsize": "11"
+      }
+    },
+    {
+      "role": "row",
+      "name": null,
+      "attrs": {
+        "display": "table-row",
+        "posinset": "2",
+        "child-item-count": "3",
+        "tag": "tr",
+        "setsize": "11"
+      }
+    },
+    {
+      "role": "row",
+      "name": null,
+      "attrs": {
+        "display": "table-row",
+        "posinset": "3",
+        "child-item-count": "3",
+        "tag": "tr",
+        "setsize": "11"
+      }
+    },
+    {
+      "role": "cell",
+      "name": "199.0.a",
+      "attrs": {
+        "display": "table-cell",
+        "tag": "td",
+        "table-cell-index": "4"
+      }
+    },
+    {
+      "role": "cell",
+      "name": "199.0.b",
+      "attrs": {
+        "display": "table-cell",
+        "tag": "td",
+        "table-cell-index": "5"
+      }
+    },
+    {
+      "role": "cell",
+      "name": "199.1.a",
+      "attrs": {
+        "display": "table-cell",
+        "tag": "td",
+        "table-cell-index": "7"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "step": "window scroll 20000 px",
+      "page_info": "scrollY 20000",
+      "rows_before": 0,
+      "rows_after": 0,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 10233,
+      "nodes_state_flipped": 67,
+      "showing_or_visible_flipped": 67,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 67
+      },
+      "events": {
+      },
+      "source_updates": 0,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 10233,
+      "fresh_nodes": 10233,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["focusable", "showing", "visible", "enabled"],
+        "after": ["focusable", "visible", "enabled"]
+      }
+    },
+    {
+      "step": "window scroll 200000 px",
+      "page_info": "scrollY 200000",
+      "rows_before": 0,
+      "rows_after": 0,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 10233,
+      "nodes_state_flipped": 68,
+      "showing_or_visible_flipped": 68,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 68
+      },
+      "events": {
+      },
+      "source_updates": 0,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 10233,
+      "fresh_nodes": 10233,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["focusable", "showing", "visible", "enabled"],
+        "after": ["focusable", "visible", "enabled"]
+      }
+    },
+    {
+      "step": "window scroll back",
+      "page_info": "scrollY 0",
+      "rows_before": 0,
+      "rows_after": 0,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 10233,
+      "nodes_state_flipped": 65,
+      "showing_or_visible_flipped": 65,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 65
+      },
+      "events": {
+      },
+      "source_updates": 0,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 10233,
+      "fresh_nodes": 10233,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["showing", "visible", "enabled"],
+        "after": ["visible", "enabled"]
+      }
+    }
+  ]
+}

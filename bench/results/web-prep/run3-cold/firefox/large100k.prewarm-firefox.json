@@ -1,0 +1,13 @@
+{
+  "page": "large100k",
+  "scenario": "prewarm",
+  "metric": "cache-domain activation is per application: first block and full build on a connection warmed on another document",
+  "warm_on_first_document_ms": 27.3188,
+  "warm_ready": true,
+  "navigated_and_loaded_ack": true,
+  "first_block_ms": 186.8156,
+  "first_block_warm_ms": 0,
+  "first_block_nodes": 444,
+  "full_build_ms": 2605.4754,
+  "full_build_nodes": 102305
+}

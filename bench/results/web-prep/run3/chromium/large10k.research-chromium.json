@@ -1,0 +1,268 @@
+{
+  "page": "large10k",
+  "browser": "chromium",
+  "scenario": "research",
+  "metric": "TBD-WEB-1 state flips, TBD-WEB-2 position attributes, TBD-WEB-3 identity under scroll",
+  "attribute_samples": [
+    {
+      "role": "list",
+      "name": null,
+      "attrs": {
+        "text-align": "left",
+        "setsize": "3",
+        "tag": "ul",
+        "display": "block"
+      }
+    },
+    {
+      "role": "list",
+      "name": null,
+      "attrs": {
+        "text-align": "left",
+        "setsize": "3",
+        "tag": "ul",
+        "display": "block"
+      }
+    },
+    {
+      "role": "list",
+      "name": null,
+      "attrs": {
+        "text-align": "left",
+        "setsize": "3",
+        "tag": "ul",
+        "display": "block"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": null,
+      "attrs": {
+        "text-align": "left",
+        "posinset": "1",
+        "setsize": "3",
+        "level": "1",
+        "tag": "li",
+        "display": "list-item"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": null,
+      "attrs": {
+        "text-align": "left",
+        "posinset": "2",
+        "setsize": "3",
+        "level": "1",
+        "tag": "li",
+        "display": "list-item"
+      }
+    },
+    {
+      "role": "listitem",
+      "name": null,
+      "attrs": {
+        "text-align": "left",
+        "posinset": "3",
+        "setsize": "3",
+        "level": "1",
+        "tag": "li",
+        "display": "list-item"
+      }
+    },
+    {
+      "role": "table",
+      "name": "Table 199",
+      "attrs": {
+        "text-align": "left",
+        "explicit-name": "true",
+        "name-from": "caption",
+        "tag": "table",
+        "display": "table"
+      }
+    },
+    {
+      "role": "table",
+      "name": "Table 399",
+      "attrs": {
+        "text-align": "left",
+        "explicit-name": "true",
+        "name-from": "caption",
+        "tag": "table",
+        "display": "table"
+      }
+    },
+    {
+      "role": "table",
+      "name": "Table 599",
+      "attrs": {
+        "text-align": "left",
+        "explicit-name": "true",
+        "name-from": "caption",
+        "tag": "table",
+        "display": "table"
+      }
+    },
+    {
+      "role": "row",
+      "name": null,
+      "attrs": {
+        "text-align": "left",
+        "tag": "tr",
+        "display": "table-row"
+      }
+    },
+    {
+      "role": "row",
+      "name": null,
+      "attrs": {
+        "text-align": "left",
+        "tag": "tr",
+        "display": "table-row"
+      }
+    },
+    {
+      "role": "row",
+      "name": null,
+      "attrs": {
+        "text-align": "left",
+        "tag": "tr",
+        "display": "table-row"
+      }
+    },
+    {
+      "role": "cell",
+      "name": "199.0.a",
+      "attrs": {
+        "text-align": "left",
+        "table-cell-index": "4",
+        "name-from": "contents",
+        "tag": "td",
+        "display": "table-cell"
+      }
+    },
+    {
+      "role": "cell",
+      "name": "199.0.b",
+      "attrs": {
+        "text-align": "left",
+        "table-cell-index": "5",
+        "name-from": "contents",
+        "tag": "td",
+        "display": "table-cell"
+      }
+    },
+    {
+      "role": "cell",
+      "name": "199.1.a",
+      "attrs": {
+        "text-align": "left",
+        "table-cell-index": "7",
+        "name-from": "contents",
+        "tag": "td",
+        "display": "table-cell"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "step": "window scroll 20000 px",
+      "page_info": "scrollY 20000",
+      "rows_before": 0,
+      "rows_after": 0,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 21203,
+      "nodes_state_flipped": 131,
+      "showing_or_visible_flipped": 131,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 131
+      },
+      "events": {
+      },
+      "source_updates": 0,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 21203,
+      "fresh_nodes": 21203,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["showing", "visible", "enabled"],
+        "after": ["visible", "enabled"]
+      }
+    },
+    {
+      "step": "window scroll 200000 px",
+      "page_info": "scrollY 200000",
+      "rows_before": 0,
+      "rows_after": 0,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 21203,
+      "nodes_state_flipped": 140,
+      "showing_or_visible_flipped": 140,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 140
+      },
+      "events": {
+      },
+      "source_updates": 0,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 21203,
+      "fresh_nodes": 21203,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["visible", "enabled"],
+        "after": ["showing", "visible", "enabled"]
+      }
+    },
+    {
+      "step": "window scroll back",
+      "page_info": "scrollY 0",
+      "rows_before": 0,
+      "rows_after": 0,
+      "rows_retained": 0,
+      "retained_same_path": 0,
+      "retained_path_changed": 0,
+      "retained_id_stable": 0,
+      "retained_id_lost": 0,
+      "wrong_node": 0,
+      "positional_reassigned": 0,
+      "nodes_persisting": 21203,
+      "nodes_state_flipped": 131,
+      "showing_or_visible_flipped": 131,
+      "showing_or_visible_flips_with_event": 0,
+      "flipped_bits": {
+        "showing": 131
+      },
+      "events": {
+      },
+      "source_updates": 0,
+      "rewrite_detected": false,
+      "resync": false,
+      "consistent": true,
+      "mirror_nodes": 21203,
+      "fresh_nodes": 21203,
+      "example_state_flip": {
+        "diff": ["showing"],
+        "before": ["showing", "visible", "enabled"],
+        "after": ["visible", "enabled"]
+      }
+    }
+  ]
+}

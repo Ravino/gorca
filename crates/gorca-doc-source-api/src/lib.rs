@@ -25,6 +25,7 @@ mod caps;
 mod ctx;
 mod join;
 mod request;
+mod web;
 
 pub use caps::{ActionCaps, JoinKeyCaps, SourceCaps, SourceKind};
 pub use ctx::{DeltaReceiver, DeltaSink, DocSource, DocSourceCtx, delta_channel};
@@ -33,3 +34,4 @@ pub use gorca_model::{
 };
 pub use join::{JoinEntry, JoinPort, JoinQuality, JoinReceiver, join_channel};
 pub use request::{DocRequest, Reply, SourceError};
+pub use web::{Completeness, TreeBlock, is_dynamic, web_attrs};

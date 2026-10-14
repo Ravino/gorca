@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>b6 virtual-list</title>
+<style>
+  body { font: 14px sans-serif; margin: 8px; }
+  #vp { position: relative; height: 400px; width: 520px; overflow-y: auto; border: 1px solid #888; }
+  #spacer { position: relative; width: 100%; }
+  .row { position: absolute; left: 0; right: 0; height: 32px; line-height: 32px; box-sizing: border-box; border-bottom: 1px solid #ddd; }
+  .cell { display: inline-block; width: 120px; }
+</style>
+</head>
+<body>
+<h1>Virtual list</h1>
+<div id="vp" tabindex="0"><div id="spacer"></div></div>
+<p id="status" role="status"></p>
+<script>
+// Windowed list with three DOM disciplines (query: mode=unmount|recycle|grid, n=total items):
+//   unmount : rows entering the window are created, rows leaving are removed (react-window,
+//             TanStack Virtual under React: keyed by item index).
+//   recycle : a fixed pool of row elements is reused for other items; text, id and ARIA position
+//             are rewritten in place (vue-virtual-scroller RecycleScroller, CDK template cache,
+//             ag-grid row recycling).
+//   grid    : like unmount, but role=grid with aria-rowindex / aria-colindex (TBD-WEB-2).
+const q = new URLSearchParams(location.search);
+const MODE = q.get('mode') || 'unmount';
+const N = Number(q.get('n') || 10000);
+const H = 32, OVER = 3;
+const vp = document.getElementById('vp');
+const spacer = document.getElementById('spacer');
+spacer.style.height = (N * H) + 'px';
+if (MODE === 'grid') { vp.setAttribute('role', 'grid'); vp.setAttribute('aria-rowcount', N); vp.setAttribute('aria-colcount', 3); vp.setAttribute('aria-label', 'Data grid'); }
+else { vp.setAttribute('role', 'list'); vp.setAttribute('aria-label', 'Items'); }
+const rows = new Map();          // item index -> element (unmount / grid)
+let pool = [];                   // recycle mode: elements
+let poolItem = [];               // recycle mode: item index per pool element
+
+function fill(el, i) {
+  el.style.top = (i * H) + 'px';
+  el.id = 'row-' + i;
+  el.setAttribute('aria-label', 'Row ' + i);   // stable accessible name = ground truth for the harness
+  if (MODE === 'grid') {
+    el.setAttribute('aria-rowindex', i + 2);   // header row is 1
+    el.innerHTML = '';
+    for (let c = 0; c < 3; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell'; cell.setAttribute('role', 'gridcell'); cell.setAttribute('aria-colindex', c + 1);
+      cell.textContent = 'R' + i + 'C' + c;
+      el.append(cell);
+    }
+  } else {
+    el.setAttribute('aria-posinset', i + 1);
+    el.setAttribute('aria-setsize', N);
+    el.textContent = 'Row ' + i;
+  }
+}
+function mkRow(i) {
+  const el = document.createElement('div');
+  el.className = 'row';
+  el.setAttribute('role', MODE === 'grid' ? 'row' : 'listitem');
+  fill(el, i);
+  return el;
+}
+function range() {
+  const first = Math.max(0, Math.floor(vp.scrollTop / H) - OVER);
+  const last = Math.min(N - 1, Math.ceil((vp.scrollTop + vp.clientHeight) / H) + OVER);
+  return [first, last];
+}
+function render() {
+  const [first, last] = range();
+  if (MODE === 'recycle') {
+    // Items already shown keep their element; elements whose item left the window take the new items.
+    const shown = new Map();
+    poolItem.forEach((it, k) => { if (it !== null) shown.set(it, k); });
+    const free = [];
+    poolItem.forEach((it, k) => { if (it === null || it < first || it > last) free.push(k); });
+    for (let i = first; i <= last; i++) {
+      if (shown.has(i)) continue;
+      let k = free.shift();
+      if (k === undefined) { const el = mkRow(i); spacer.append(el); pool.push(el); poolItem.push(i); continue; }
+      poolItem[k] = i; fill(pool[k], i);
+    }
+  } else {
+    for (const [i, el] of rows) if (i < first || i > last) { el.remove(); rows.delete(i); }
+    const f = document.createDocumentFragment();
+    for (let i = first; i <= last; i++) if (!rows.has(i)) { const el = mkRow(i); rows.set(i, el); f.append(el); }
+    spacer.append(f);
+  }
+  document.getElementById('status').textContent = 'showing ' + first + '-' + last;
+}
+vp.addEventListener('scroll', () => requestAnimationFrame(render));
+render();
+window.b6ops = {
+  scrollTo(n) { vp.scrollTop = n * H; render(); return 'scrollTo ' + n + ' top=' + vp.scrollTop; },
+  scrollBy(px) { vp.scrollTop += px; render(); return 'scrollBy ' + px + ' top=' + vp.scrollTop; },
+  range() { return range().join('-'); },
+};
+</script>
+</body>
+</html>

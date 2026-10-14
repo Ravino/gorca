@@ -1,0 +1,1139 @@
+//! End-to-end tests of the source against an in-process fake AT-SPI peer (a zbus peer-to-peer
+//! server that answers `Accessible` and `Collection.GetTree` over a socketpair), so the block
+//! fetch, the event-driven updates and the identity ladder run in `make check` without a browser.
+
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::used_underscore_binding,
+    clippy::unused_async,
+    clippy::needless_range_loop,
+    clippy::implicit_clone,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
+use gorca_doc_source_api::{DocSource, DocSourceCtx, delta_channel, join_channel, web_attrs};
+use gorca_doc_source_atspi::roles::raw;
+use gorca_doc_source_atspi::source::SourceConfig;
+use gorca_doc_source_atspi::{
+    AppConn, AtspiDocSource, AtspiEvent, AttrInterner, EventKind, FetchOpts, PathKey, PathTable,
+    Split, StatePolicy, TextPolicy, fetch_document,
+};
+use gorca_model::{DocDelta, DocId, Role, SrcNodeId};
+use gorca_rt::{CancellationToken, Clock, mpsc};
+use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value};
+
+// ---------------------------------------------------------------------------------------------
+// The fake application
+
+#[derive(Clone, Debug)]
+struct FNode {
+    role: u32,
+    state: u64,
+    name: String,
+    attrs: Vec<(String, String)>,
+    children: Vec<u64>,
+    /// Answer `GetRole` only after this long (a hung page).
+    role_delay: Duration,
+}
+
+#[derive(Debug, Default)]
+struct Tree {
+    nodes: HashMap<u64, FNode>,
+    next: u64,
+}
+
+type Shared = Arc<Mutex<Tree>>;
+
+fn path_of(id: u64) -> String {
+    format!("/org/a11y/atspi/accessible/{id}")
+}
+
+fn opath(id: u64) -> OwnedObjectPath {
+    OwnedObjectPath::try_from(path_of(id)).unwrap()
+}
+
+struct Acc {
+    tree: Shared,
+    id: u64,
+}
+
+#[zbus::interface(name = "org.a11y.atspi.Accessible")]
+impl Acc {
+    async fn get_role(&self) -> u32 {
+        let (role, delay) = {
+            let t = self.tree.lock().unwrap();
+            let n = &t.nodes[&self.id];
+            (n.role, n.role_delay)
+        };
+        if !delay.is_zero() {
+            tokio::time::sleep(delay).await;
+        }
+        role
+    }
+
+    fn get_state(&self) -> Vec<u32> {
+        let s = self.tree.lock().unwrap().nodes[&self.id].state;
+        vec![(s & 0xffff_ffff) as u32, (s >> 32) as u32]
+    }
+
+    fn get_children(&self) -> Vec<(String, OwnedObjectPath)> {
+        let t = self.tree.lock().unwrap();
+        t.nodes[&self.id]
+            .children
+            .iter()
+            .map(|c| (":1.1".to_owned(), opath(*c)))
+            .collect()
+    }
+
+    fn get_attributes(&self) -> HashMap<String, String> {
+        self.tree.lock().unwrap().nodes[&self.id]
+            .attrs
+            .iter()
+            .cloned()
+            .collect()
+    }
+
+    #[zbus(property)]
+    fn name(&self) -> String {
+        self.tree.lock().unwrap().nodes[&self.id].name.clone()
+    }
+
+    #[zbus(property)]
+    fn child_count(&self) -> i32 {
+        i32::try_from(self.tree.lock().unwrap().nodes[&self.id].children.len()).unwrap()
+    }
+}
+
+struct Coll {
+    tree: Shared,
+    id: u64,
+}
+
+type Rule = (
+    Vec<i32>,
+    i32,
+    HashMap<String, String>,
+    i32,
+    Vec<i32>,
+    i32,
+    Vec<String>,
+    i32,
+    bool,
+);
+type TreeRow = ((String, OwnedObjectPath), HashMap<String, OwnedValue>);
+
+#[zbus::interface(name = "org.a11y.atspi.Collection")]
+impl Coll {
+    fn get_tree(&self, _rule: Rule, _props: Vec<String>) -> Vec<TreeRow> {
+        let t = self.tree.lock().unwrap();
+        let mut out = Vec::new();
+        let mut stack = vec![self.id];
+        while let Some(id) = stack.pop() {
+            let n = &t.nodes[&id];
+            let mut m: HashMap<String, OwnedValue> = HashMap::new();
+            m.insert(
+                "Name".into(),
+                Value::from(n.name.clone()).try_into().unwrap(),
+            );
+            m.insert(
+                "ChildCount".into(),
+                Value::from(i32::try_from(n.children.len()).unwrap())
+                    .try_into()
+                    .unwrap(),
+            );
+            let attrs: HashMap<String, String> = n.attrs.iter().cloned().collect();
+            m.insert("Attributes".into(), Value::from(attrs).try_into().unwrap());
+            out.push(((":1.1".to_owned(), opath(id)), m));
+            for c in n.children.iter().rev() {
+                stack.push(*c);
+            }
+        }
+        out
+    }
+}
+
+struct Fake {
+    tree: Shared,
+    servers: Vec<zbus::Connection>,
+}
+
+impl Fake {
+    /// `lanes` client connections, each to its own server over a socketpair, sharing one tree.
+    async fn start(lanes: usize) -> (Self, AppConn) {
+        let tree: Shared = Arc::new(Mutex::new(Tree {
+            nodes: HashMap::new(),
+            next: 1,
+        }));
+        let mut servers = Vec::new();
+        let mut clients = Vec::new();
+        for _ in 0..lanes {
+            let (a, b) = tokio::net::UnixStream::pair().unwrap();
+            let guid = zbus::Guid::generate();
+            let s = zbus::connection::Builder::unix_stream(a)
+                .server(guid)
+                .unwrap()
+                .p2p()
+                .build();
+            let c = zbus::connection::Builder::unix_stream(b).p2p().build();
+            let (s, c) = tokio::try_join!(s, c).unwrap();
+            servers.push(s);
+            clients.push(c);
+        }
+        (Self { tree, servers }, AppConn::from_p2p(clients))
+    }
+
+    async fn register(&self, id: u64) {
+        let p = path_of(id);
+        for s in &self.servers {
+            s.object_server()
+                .at(
+                    p.as_str(),
+                    Acc {
+                        tree: Arc::clone(&self.tree),
+                        id,
+                    },
+                )
+                .await
+                .unwrap();
+            s.object_server()
+                .at(
+                    p.as_str(),
+                    Coll {
+                        tree: Arc::clone(&self.tree),
+                        id,
+                    },
+                )
+                .await
+                .unwrap();
+        }
+    }
+
+    async fn unregister(&self, id: u64) {
+        let p = path_of(id);
+        for s in &self.servers {
+            let _ = s.object_server().remove::<Acc, _>(p.as_str()).await;
+            let _ = s.object_server().remove::<Coll, _>(p.as_str()).await;
+        }
+    }
+
+    /// Add a node; returns its id. The caller links it into a parent with [`Fake::link`].
+    async fn node(&self, role: u32, name: &str, tag: &str, dom_id: Option<&str>) -> u64 {
+        let id = {
+            let mut t = self.tree.lock().unwrap();
+            let id = t.next;
+            t.next += 1;
+            let mut attrs = vec![("tag".to_owned(), tag.to_owned())];
+            if let Some(d) = dom_id {
+                attrs.push(("id".to_owned(), d.to_owned()));
+            }
+            t.nodes.insert(
+                id,
+                FNode {
+                    role,
+                    state: (1 << 25) | (1 << 30) | (1 << 8),
+                    name: name.to_owned(),
+                    attrs,
+                    children: Vec::new(),
+                    role_delay: Duration::ZERO,
+                },
+            );
+            id
+        };
+        self.register(id).await;
+        id
+    }
+
+    fn link(&self, parent: u64, child: u64) {
+        self.tree
+            .lock()
+            .unwrap()
+            .nodes
+            .get_mut(&parent)
+            .unwrap()
+            .children
+            .push(child);
+    }
+
+    fn set_children(&self, parent: u64, children: Vec<u64>) {
+        self.tree
+            .lock()
+            .unwrap()
+            .nodes
+            .get_mut(&parent)
+            .unwrap()
+            .children = children;
+    }
+
+    fn rename(&self, id: u64, name: &str) {
+        self.tree
+            .lock()
+            .unwrap()
+            .nodes
+            .get_mut(&id)
+            .unwrap()
+            .name
+            .clear();
+        self.tree
+            .lock()
+            .unwrap()
+            .nodes
+            .get_mut(&id)
+            .unwrap()
+            .name
+            .push_str(name);
+    }
+
+    /// doc(1) -> ul -> n x li(name "item i", id "item-i")
+    async fn list(&self, n: usize) -> (u64, u64, Vec<u64>) {
+        let doc = self.node(raw::DOCUMENT_WEB, "doc", "body", None).await;
+        let ul = self.node(raw::LIST, "", "ul", None).await;
+        self.link(doc, ul);
+        let mut lis = Vec::new();
+        for i in 0..n {
+            let li = self
+                .node(
+                    raw::LIST_ITEM,
+                    &format!("item {i}"),
+                    "li",
+                    Some(&format!("item-{i}")),
+                )
+                .await;
+            self.link(ul, li);
+            lis.push(li);
+        }
+        (doc, ul, lis)
+    }
+}
+
+fn key(id: u64) -> PathKey {
+    PathKey::parse(&path_of(id)).unwrap()
+}
+
+fn fast_opts(split: Split) -> FetchOpts {
+    FetchOpts {
+        split,
+        window: 8,
+        call_timeout: Duration::from_millis(500),
+        budget: Duration::from_secs(5),
+        warm: false,
+        ..FetchOpts::default()
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Block fetch
+
+#[tokio::test]
+async fn block_fetch_builds_the_tree_with_roles_states_and_attributes() {
+    let (fake, conn) = Fake::start(2).await;
+    let (doc, _ul, lis) = fake.list(40).await;
+    let conn = Arc::new(conn);
+    let interner = Arc::new(AttrInterner::default());
+    let mut paths = PathTable::default();
+    let d = fetch_document(
+        &conn,
+        &interner,
+        &mut paths,
+        &path_of(doc),
+        &fast_opts(Split::Whole),
+    )
+    .await
+    .unwrap();
+    assert_eq!(d.block.node_count(), 42);
+    assert_eq!(d.block.nodes[0].role, Role::Document);
+    assert_eq!(d.block.nodes[1].role, Role::List);
+    assert_eq!(d.block.nodes[2].role, Role::ListItem);
+    assert_eq!(d.block.nodes[2].name.as_deref(), Some("item 0"));
+    let tag = d.block.nodes[2]
+        .attrs
+        .iter()
+        .find(|(k, _)| *k == web_attrs::TAG)
+        .map(|(_, v)| v.to_string());
+    assert_eq!(tag.as_deref(), Some("li"));
+    let id = d.block.nodes[2]
+        .attrs
+        .iter()
+        .find(|(k, _)| *k == web_attrs::DOM_ID)
+        .map(|(_, v)| v.to_string());
+    assert_eq!(id.as_deref(), Some("item-0"));
+    // List items are "stateful": their state was fetched; the list's was defaulted.
+    assert!(
+        d.block.nodes[2]
+            .states
+            .contains(gorca_model::StateSet::SHOWING)
+    );
+    // Children lists are complete and ordered.
+    let ul_children = &d
+        .block
+        .children
+        .iter()
+        .find(|(p, _)| p.0 == key(1 + 1).0)
+        .unwrap()
+        .1;
+    assert_eq!(ul_children.len(), 40);
+    assert_eq!(ul_children[0].0, key(lis[0]).0);
+    assert!(d.timings.get_tree > Duration::ZERO);
+    assert_eq!(d.timings.failed_calls, 0);
+}
+
+#[tokio::test]
+async fn frontier_split_equals_whole_fetch() {
+    let (fake, conn) = Fake::start(4).await;
+    // doc -> 6 sections -> 5 paragraphs each
+    let doc = fake.node(raw::DOCUMENT_WEB, "doc", "body", None).await;
+    for s in 0..6 {
+        let sec = fake
+            .node(raw::SECTION, &format!("s{s}"), "section", None)
+            .await;
+        fake.link(doc, sec);
+        for p in 0..5 {
+            let para = fake
+                .node(raw::PARAGRAPH, &format!("p{s}.{p}"), "p", None)
+                .await;
+            fake.link(sec, para);
+        }
+    }
+    let conn = Arc::new(conn);
+    let interner = Arc::new(AttrInterner::default());
+    let mut paths = PathTable::default();
+    let whole = fetch_document(
+        &conn,
+        &interner,
+        &mut paths,
+        &path_of(doc),
+        &fast_opts(Split::Whole),
+    )
+    .await
+    .unwrap();
+    let front = fetch_document(
+        &conn,
+        &interner,
+        &mut paths,
+        &path_of(doc),
+        &fast_opts(Split::Frontier {
+            min_subtrees: 4,
+            max_depth: 3,
+        }),
+    )
+    .await
+    .unwrap();
+    let sig = |d: &gorca_doc_source_atspi::FetchedDoc| -> Vec<(u64, Role, Option<String>, usize)> {
+        d.block
+            .nodes
+            .iter()
+            .map(|n| {
+                (
+                    n.id.0,
+                    n.role,
+                    n.name.as_deref().map(str::to_owned),
+                    n.attrs.len(),
+                )
+            })
+            .collect()
+    };
+    assert_eq!(sig(&whole), sig(&front));
+    assert_eq!(whole.block.children.len(), front.block.children.len());
+}
+
+#[tokio::test]
+async fn a_hung_node_cannot_stall_the_fetch_past_its_deadline() {
+    let (fake, conn) = Fake::start(2).await;
+    let (doc, _ul, lis) = fake.list(20).await;
+    // One list item never answers GetRole in time.
+    fake.tree
+        .lock()
+        .unwrap()
+        .nodes
+        .get_mut(&lis[7])
+        .unwrap()
+        .role_delay = Duration::from_secs(30);
+    let conn = Arc::new(conn);
+    let interner = Arc::new(AttrInterner::default());
+    let mut paths = PathTable::default();
+    let mut o = fast_opts(Split::Whole);
+    o.call_timeout = Duration::from_millis(150);
+    let t = Instant::now();
+    let d = fetch_document(&conn, &interner, &mut paths, &path_of(doc), &o)
+        .await
+        .unwrap();
+    assert!(
+        t.elapsed() < Duration::from_secs(2),
+        "took {:?}",
+        t.elapsed()
+    );
+    assert_eq!(d.timings.failed_calls, 1, "exactly the hung call failed");
+    // The node is still in the tree, with an unknown role.
+    assert_eq!(d.block.node_count(), 22);
+    assert_eq!(d.block.nodes[2 + 7].role, Role::Unknown);
+}
+
+#[tokio::test]
+async fn text_tier_is_optional_and_states_can_be_skipped() {
+    let (fake, conn) = Fake::start(1).await;
+    let (doc, _ul, _) = fake.list(5).await;
+    let conn = Arc::new(conn);
+    let interner = Arc::new(AttrInterner::default());
+    let mut paths = PathTable::default();
+    let mut o = fast_opts(Split::Whole);
+    o.states = StatePolicy::None;
+    o.text = TextPolicy::None;
+    let d = fetch_document(&conn, &interner, &mut paths, &path_of(doc), &o)
+        .await
+        .unwrap();
+    assert_eq!(
+        d.block.completeness,
+        gorca_doc_source_api::Completeness::Roles
+    );
+    assert_eq!(d.timings.state_calls, 0);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Live source: events -> deltas
+
+struct Harness {
+    fake: Fake,
+    ev_tx: mpsc::Sender<AtspiEvent>,
+    rx: gorca_doc_source_api::DeltaReceiver,
+    shutdown: CancellationToken,
+    task: tokio::task::JoinHandle<Result<(), gorca_doc_source_api::SourceError>>,
+    metrics: gorca_doc_source_atspi::SourceMetrics,
+    /// Kept alive: a closed request channel means "detach" to the source.
+    _req_tx: mpsc::Sender<gorca_doc_source_api::DocRequest>,
+}
+
+async fn start_source_with(
+    fake: Fake,
+    conn: AppConn,
+    doc: u64,
+    use_dom_id: bool,
+    first_nodes: usize,
+) -> Harness {
+    let (ev_tx, ev_rx) = mpsc::channel(1024);
+    let cfg = SourceConfig {
+        fetch: fast_opts(Split::Whole),
+        settle: gorca_doc_source_atspi::SettlePolicy {
+            quiet: Duration::from_millis(15),
+            max_wait: Duration::from_millis(60),
+            ..gorca_doc_source_atspi::SettlePolicy::default()
+        },
+        use_dom_id,
+        first_nodes,
+        ..SourceConfig::default()
+    };
+    let (source, metrics) = AtspiDocSource::new(Arc::new(conn), path_of(doc), cfg, ev_rx);
+    let (sink, rx) = delta_channel(1 << 14);
+    let (req_tx, req_rx) = mpsc::channel(8);
+    let (join, _j) = join_channel(8);
+    let shutdown = CancellationToken::new();
+    let ctx = DocSourceCtx {
+        doc: DocId(1),
+        sink,
+        requests: req_rx,
+        join,
+        shutdown: shutdown.clone(),
+        clock: Clock::System,
+    };
+    let task = tokio::spawn(Box::new(source).attach(ctx));
+    Harness {
+        fake,
+        ev_tx,
+        rx,
+        shutdown,
+        task,
+        metrics,
+        _req_tx: req_tx,
+    }
+}
+
+async fn start_source(fake: Fake, conn: AppConn, doc: u64, use_dom_id: bool) -> Harness {
+    // The default block size is larger than these toy pages: they arrive as one block.
+    start_source_with(fake, conn, doc, use_dom_id, 400).await
+}
+
+/// A tiny mirror: id -> (role, name, children), applying the documented delta semantics.
+#[derive(Default)]
+struct Mini {
+    nodes: HashMap<SrcNodeId, (Role, Option<String>, Vec<SrcNodeId>)>,
+    root: Option<SrcNodeId>,
+    removed: Vec<SrcNodeId>,
+}
+
+impl Mini {
+    fn apply(&mut self, d: DocDelta) {
+        match d {
+            DocDelta::Reset { root, .. } => {
+                self.nodes.clear();
+                self.root = Some(root);
+            }
+            DocDelta::Upsert(ns) => {
+                for n in ns {
+                    let e = self
+                        .nodes
+                        .entry(n.id)
+                        .or_insert((Role::Unknown, None, Vec::new()));
+                    e.0 = n.role;
+                    e.1 = n.name.as_deref().map(str::to_owned);
+                }
+            }
+            DocDelta::Children { parent, children } => {
+                let old = self
+                    .nodes
+                    .get(&parent)
+                    .map(|n| n.2.clone())
+                    .unwrap_or_default();
+                for gone in old.iter().filter(|o| !children.contains(o)) {
+                    self.drop(*gone);
+                }
+                if let Some(p) = self.nodes.get_mut(&parent) {
+                    p.2 = children.to_vec();
+                }
+            }
+            DocDelta::Removed(ids) => {
+                for i in ids {
+                    self.removed.push(i);
+                    self.drop(i);
+                }
+            }
+            DocDelta::Text { .. } | DocDelta::Settled { .. } | DocDelta::Hint(_) => {}
+        }
+    }
+
+    fn drop(&mut self, id: SrcNodeId) {
+        let mut st = vec![id];
+        while let Some(n) = st.pop() {
+            if let Some(x) = self.nodes.remove(&n) {
+                st.extend(x.2);
+            }
+        }
+    }
+
+    fn names(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut st: Vec<SrcNodeId> = self.root.into_iter().collect();
+        while let Some(id) = st.pop() {
+            let Some(n) = self.nodes.get(&id) else {
+                continue;
+            };
+            out.push(n.1.clone().unwrap_or_default());
+            st.extend(n.2.iter().rev());
+        }
+        out
+    }
+
+    fn id_of_name(&self, name: &str) -> Option<SrcNodeId> {
+        self.nodes
+            .iter()
+            .find(|(_, n)| n.1.as_deref() == Some(name))
+            .map(|(i, _)| *i)
+    }
+}
+
+async fn pump(h: &mut Harness, mini: &mut Mini, until: impl Fn(&Mini) -> bool) {
+    let end = Instant::now() + Duration::from_secs(5);
+    loop {
+        while let Ok(d) = h.rx.deltas.try_recv() {
+            mini.apply(d);
+        }
+        if until(mini) {
+            return;
+        }
+        assert!(
+            Instant::now() < end,
+            "timed out waiting for the mirror; names = {:?}",
+            mini.names()
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
+fn ev(path: u64, kind: EventKind) -> AtspiEvent {
+    AtspiEvent {
+        path: key(path),
+        kind,
+        at: Instant::now(),
+    }
+}
+
+#[tokio::test]
+async fn initial_build_then_children_changed_adds_and_removes() {
+    let (fake, conn) = Fake::start(2).await;
+    let (doc, ul, lis) = fake.list(10).await;
+    let mut h = start_source(fake, conn, doc, true).await;
+    let mut mini = Mini::default();
+    pump(&mut h, &mut mini, |m| m.names().len() == 12).await;
+    let id3 = mini.id_of_name("item 3").unwrap();
+
+    // The page appends two items and removes item 0.
+    let a = h
+        .fake
+        .node(raw::LIST_ITEM, "item 10", "li", Some("item-10"))
+        .await;
+    let b = h
+        .fake
+        .node(raw::LIST_ITEM, "item 11", "li", Some("item-11"))
+        .await;
+    let mut kids = lis[1..].to_vec();
+    kids.push(a);
+    kids.push(b);
+    h.fake.set_children(ul, kids);
+    h.ev_tx
+        .send(ev(
+            ul,
+            EventKind::ChildAdded {
+                index: 10,
+                child: Some(key(a)),
+            },
+        ))
+        .await
+        .unwrap();
+    h.ev_tx
+        .send(ev(
+            ul,
+            EventKind::ChildAdded {
+                index: 11,
+                child: Some(key(b)),
+            },
+        ))
+        .await
+        .unwrap();
+    h.ev_tx
+        .send(ev(
+            ul,
+            EventKind::ChildRemoved {
+                index: 0,
+                child: Some(key(lis[0])),
+            },
+        ))
+        .await
+        .unwrap();
+    pump(&mut h, &mut mini, |m| {
+        m.names().contains(&"item 11".to_owned()) && !m.names().contains(&"item 0".to_owned())
+    })
+    .await;
+    assert_eq!(mini.names().len(), 13);
+    assert_eq!(
+        mini.id_of_name("item 3"),
+        Some(id3),
+        "untouched siblings keep their id"
+    );
+    let ups = h.metrics.updates();
+    assert_eq!(ups.len(), 1, "one burst, one update");
+    assert_eq!(ups[0].parents_refreshed, 1);
+    assert_eq!(
+        ups[0].nodes_fetched, 2,
+        "only the two new subtrees were fetched"
+    );
+    h.shutdown.cancel();
+    h.task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn recreated_items_keep_their_logical_id_in_any_order() {
+    // Firefox moves a DOM node by destroying its accessible and creating a new one.
+    let (fake, conn) = Fake::start(2).await;
+    let (doc, ul, lis) = fake.list(6).await;
+    let mut h = start_source(fake, conn, doc, true).await;
+    let mut mini = Mini::default();
+    pump(&mut h, &mut mini, |m| m.names().len() == 8).await;
+    let before: Vec<SrcNodeId> = (0..6)
+        .map(|i| mini.id_of_name(&format!("item {i}")).unwrap())
+        .collect();
+
+    // Reverse: every item gets a new object at a new path, in reverse order.
+    let mut fresh = Vec::new();
+    for i in (0..6).rev() {
+        fresh.push(
+            h.fake
+                .node(
+                    raw::LIST_ITEM,
+                    &format!("item {i}"),
+                    "li",
+                    Some(&format!("item-{i}")),
+                )
+                .await,
+        );
+    }
+    for old in &lis {
+        h.fake.unregister(*old).await;
+    }
+    h.fake.set_children(ul, fresh.clone());
+    h.ev_tx
+        .send(ev(
+            ul,
+            EventKind::ChildRemoved {
+                index: 0,
+                child: None,
+            },
+        ))
+        .await
+        .unwrap();
+    h.ev_tx
+        .send(ev(
+            ul,
+            EventKind::ChildAdded {
+                index: -1,
+                child: None,
+            },
+        ))
+        .await
+        .unwrap();
+    pump(&mut h, &mut mini, |m| {
+        m.names().last().is_some_and(|n| n == "item 0")
+    })
+    .await;
+    for i in 0..6 {
+        assert_eq!(
+            mini.id_of_name(&format!("item {i}")),
+            Some(before[i]),
+            "item {i} must keep its logical id"
+        );
+    }
+    assert!(
+        mini.removed.is_empty(),
+        "nothing was removed, only re-bound: {:?}",
+        mini.removed
+    );
+    let rec = &h.metrics.updates()[0];
+    assert_eq!(rec.stats.by_dom_id, 6, "DOM ids carry the match");
+    h.shutdown.cancel();
+    h.task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn without_dom_ids_the_name_tag_rung_still_matches_moves() {
+    let (fake, conn) = Fake::start(2).await;
+    let (doc, ul, lis) = fake.list(6).await;
+    let mut h = start_source(fake, conn, doc, false).await;
+    let mut mini = Mini::default();
+    pump(&mut h, &mut mini, |m| m.names().len() == 8).await;
+    let before: Vec<SrcNodeId> = (0..6)
+        .map(|i| mini.id_of_name(&format!("item {i}")).unwrap())
+        .collect();
+    let mut fresh = Vec::new();
+    for i in [3usize, 1, 5, 0, 4, 2] {
+        fresh.push(
+            h.fake
+                .node(
+                    raw::LIST_ITEM,
+                    &format!("item {i}"),
+                    "li",
+                    Some(&format!("item-{i}")),
+                )
+                .await,
+        );
+    }
+    for old in &lis {
+        h.fake.unregister(*old).await;
+    }
+    h.fake.set_children(ul, fresh);
+    h.ev_tx
+        .send(ev(
+            ul,
+            EventKind::ChildAdded {
+                index: -1,
+                child: None,
+            },
+        ))
+        .await
+        .unwrap();
+    pump(&mut h, &mut mini, |m| {
+        m.names().get(2).is_some_and(|n| n == "item 3")
+    })
+    .await;
+    for i in 0..6 {
+        assert_eq!(mini.id_of_name(&format!("item {i}")), Some(before[i]));
+    }
+    let rec = &h.metrics.updates()[0];
+    assert_eq!(rec.stats.by_dom_id, 0);
+    assert_eq!(rec.stats.by_full_key, 6);
+    h.shutdown.cancel();
+    h.task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn name_edits_keep_ids_but_a_permutation_in_place_moves_them() {
+    // Chromium reuses the object at a path for other content. Edits keep the id; a swap of two
+    // siblings' content (React with index keys) makes the ids follow the content.
+    let (fake, conn) = Fake::start(2).await;
+    let (doc, _ul, lis) = fake.list(4).await;
+    let mut h = start_source(fake, conn, doc, false).await;
+    let mut mini = Mini::default();
+    pump(&mut h, &mut mini, |m| m.names().len() == 6).await;
+    let id0 = mini.id_of_name("item 0").unwrap();
+    let id1 = mini.id_of_name("item 1").unwrap();
+
+    // Edit: item 2 becomes "item 2 (edited)".
+    h.fake.rename(lis[2], "item 2 (edited)");
+    h.ev_tx
+        .send(ev(lis[2], EventKind::NameChanged))
+        .await
+        .unwrap();
+    pump(&mut h, &mut mini, |m| {
+        m.names().contains(&"item 2 (edited)".to_owned())
+    })
+    .await;
+    assert!(mini.id_of_name("item 2 (edited)").is_some());
+    assert!(!h.metrics.updates()[0].rewrite);
+
+    // Swap content of item 0 and item 1 in place.
+    h.fake.rename(lis[0], "item 1");
+    h.fake.rename(lis[1], "item 0");
+    h.ev_tx
+        .send(ev(lis[0], EventKind::NameChanged))
+        .await
+        .unwrap();
+    h.ev_tx
+        .send(ev(lis[1], EventKind::NameChanged))
+        .await
+        .unwrap();
+    pump(&mut h, &mut mini, |m| {
+        m.names().get(2).is_some_and(|n| n == "item 1")
+    })
+    .await;
+    assert_eq!(
+        mini.id_of_name("item 0"),
+        Some(id0),
+        "id follows the content"
+    );
+    assert_eq!(mini.id_of_name("item 1"), Some(id1));
+    assert!(h.metrics.updates().iter().any(|u| u.rewrite));
+    h.shutdown.cancel();
+    h.task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn event_storm_beyond_the_threshold_resyncs_the_document() {
+    let (fake, conn) = Fake::start(2).await;
+    let (doc, _ul, _lis) = fake.list(30).await;
+    let mut h = start_source(fake, conn, doc, true).await;
+    let mut mini = Mini::default();
+    pump(&mut h, &mut mini, |m| m.names().len() == 32).await;
+    let before: Vec<SrcNodeId> = (0..30)
+        .map(|i| mini.id_of_name(&format!("item {i}")).unwrap())
+        .collect();
+    // 500 distinct dirty nodes > resync_threshold (400): the source refetches everything.
+    for i in 0..500u64 {
+        h.ev_tx
+            .send(ev(10_000 + i, EventKind::NameChanged))
+            .await
+            .unwrap();
+    }
+    // Unknown paths are skipped, but the count alone triggers the overload path.
+    let end = Instant::now() + Duration::from_secs(5);
+    while h.metrics.updates().is_empty() && Instant::now() < end {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    let ups = h.metrics.updates();
+    assert!(
+        ups[0].resync,
+        "overload must degrade to a document resync: {:?}",
+        ups[0]
+    );
+    pump(&mut h, &mut mini, |m| m.names().len() == 32).await;
+    for i in 0..30 {
+        assert_eq!(
+            mini.id_of_name(&format!("item {i}")),
+            Some(before[i]),
+            "a resync keeps logical ids"
+        );
+    }
+    h.shutdown.cancel();
+    h.task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn revalidate_on_read_finds_a_silent_reorder() {
+    // Chromium reorders a keyed list without any structure event (paths stay, order changes).
+    let (fake, conn) = Fake::start(2).await;
+    let (doc, ul, lis) = fake.list(5).await;
+    let mut h = start_source(fake, conn, doc, true).await;
+    let mut mini = Mini::default();
+    pump(&mut h, &mut mini, |m| m.names().len() == 7).await;
+    let ids: Vec<SrcNodeId> = lis.iter().map(|l| SrcNodeId(key(*l).0)).collect();
+
+    let mut rev = lis.clone();
+    rev.reverse();
+    h.fake.set_children(ul, rev);
+    let (tx, rx) = gorca_rt::oneshot::channel();
+    h._req_tx
+        .send(gorca_doc_source_api::DocRequest::Revalidate {
+            parent: SrcNodeId(key(ul).0),
+            deadline: gorca_rt::Deadline(Instant::now() + Duration::from_secs(2)),
+            reply: tx,
+        })
+        .await
+        .unwrap();
+    let got = rx.await.unwrap().unwrap();
+    let want: Vec<SrcNodeId> = ids.iter().rev().copied().collect();
+    assert_eq!(got.to_vec(), want, "the reply carries the new order");
+    pump(&mut h, &mut mini, |m| {
+        m.names().get(2).is_some_and(|n| n == "item 4")
+    })
+    .await;
+    assert!(mini.removed.is_empty());
+    h.shutdown.cancel();
+    h.task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn a_defunct_document_root_detaches_the_source() {
+    // Navigation replaces the document accessible; the old root reports defunct.
+    let (fake, conn) = Fake::start(1).await;
+    let (doc, _ul, _lis) = fake.list(3).await;
+    let mut h = start_source(fake, conn, doc, true).await;
+    let mut mini = Mini::default();
+    pump(&mut h, &mut mini, |m| m.names().len() == 5).await;
+    h.ev_tx.send(ev(doc, EventKind::Defunct)).await.unwrap();
+    let r = tokio::time::timeout(Duration::from_secs(2), h.task)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(r, Err(gorca_doc_source_api::SourceError::Detached));
+}
+
+#[tokio::test]
+async fn progressive_build_delivers_the_top_of_the_page_first() {
+    let (fake, conn) = Fake::start(2).await;
+    // doc -> 6 sections -> 5 paragraphs each (37 nodes)
+    let doc = fake.node(raw::DOCUMENT_WEB, "doc", "body", None).await;
+    for s in 0..6 {
+        let sec = fake
+            .node(raw::SECTION, &format!("s{s}"), "section", None)
+            .await;
+        fake.link(doc, sec);
+        for p in 0..5 {
+            let para = fake
+                .node(raw::PARAGRAPH, &format!("p{s}.{p}"), "p", None)
+                .await;
+            fake.link(sec, para);
+        }
+    }
+    let mut h = start_source_with(fake, conn, doc, true, 8).await;
+    let mut mini = Mini::default();
+    pump(&mut h, &mut mini, |m| m.names().len() == 37).await;
+    let (first_at, first_nodes) = h.metrics.first_block().expect("first block recorded");
+    assert!(
+        first_nodes < 37,
+        "the first block must not be the whole page: {first_nodes}"
+    );
+    assert!(
+        first_nodes >= 7,
+        "root plus at least one section: {first_nodes}"
+    );
+    assert!(first_at < Duration::from_secs(2));
+    let (build, total) = h.metrics.build().expect("build recorded");
+    assert_eq!(total, 37);
+    assert!(build.total >= first_at);
+    assert_eq!(mini.names()[0], "doc");
+    assert_eq!(mini.names()[1], "s0");
+    h.shutdown.cancel();
+    h.task.await.unwrap().unwrap();
+}
+
+#[tokio::test]
+async fn deltas_ingest_into_the_real_document_mirror() {
+    // The neutral format must apply cleanly to `gorca_doc::DocumentMirror`: a progressive build
+    // (children lists that name unfetched nodes), then a children refresh with a recreated item.
+    let (fake, conn) = Fake::start(2).await;
+    let doc = fake.node(raw::DOCUMENT_WEB, "doc", "body", None).await;
+    let ul = fake.node(raw::LIST, "", "ul", None).await;
+    fake.link(doc, ul);
+    let mut lis = Vec::new();
+    for i in 0..6 {
+        let li = fake
+            .node(
+                raw::LIST_ITEM,
+                &format!("item {i}"),
+                "li",
+                Some(&format!("item-{i}")),
+            )
+            .await;
+        fake.link(ul, li);
+        lis.push(li);
+    }
+    let mut h = start_source_with(fake, conn, doc, true, 4).await;
+    let mut mirror = gorca_doc::DocumentMirror::new(DocId(1));
+    let mut applied = 0usize;
+    let end = Instant::now() + Duration::from_secs(5);
+    // `len` counts the placeholders a `Children` list creates for unfetched nodes, so wait until
+    // the last item has its data, not just its id.
+    let last = SrcNodeId(key(lis[5]).0);
+    let fetched = |m: &gorca_doc::DocumentMirror| {
+        m.doc_node(last)
+            .and_then(|id| m.node(id))
+            .is_some_and(|n| n.name.is_some())
+    };
+    while !(mirror.len() >= 8 && fetched(&mirror)) && Instant::now() < end {
+        while let Ok(d) = h.rx.deltas.try_recv() {
+            let out = mirror.apply(d);
+            assert!(
+                !matches!(out, gorca_doc::ApplyOutcome::UnknownNode(_)),
+                "{out:?}"
+            );
+            applied += 1;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(mirror.len(), 8, "doc + ul + 6 items after {applied} deltas");
+    let id3 = mirror
+        .doc_node(SrcNodeId(key(lis[3]).0))
+        .expect("item 3 is in the mirror");
+    assert_eq!(
+        mirror.node(id3).and_then(|n| n.name.as_deref()),
+        Some("item 3")
+    );
+
+    // The page re-creates item 3 (new object, same item).
+    let fresh = h
+        .fake
+        .node(raw::LIST_ITEM, "item 3", "li", Some("item-3"))
+        .await;
+    let mut kids = lis.clone();
+    kids[3] = fresh;
+    h.fake.set_children(ul, kids);
+    h.fake.unregister(lis[3]).await;
+    h.ev_tx
+        .send(ev(
+            ul,
+            EventKind::ChildRemoved {
+                index: 3,
+                child: None,
+            },
+        ))
+        .await
+        .unwrap();
+    h.ev_tx
+        .send(ev(
+            ul,
+            EventKind::ChildAdded {
+                index: -1,
+                child: None,
+            },
+        ))
+        .await
+        .unwrap();
+    let end = Instant::now() + Duration::from_secs(5);
+    while h.metrics.updates().is_empty() && Instant::now() < end {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    while let Ok(d) = h.rx.deltas.try_recv() {
+        let out = mirror.apply(d);
+        assert!(
+            !matches!(out, gorca_doc::ApplyOutcome::UnknownNode(_)),
+            "{out:?}"
+        );
+    }
+    assert_eq!(mirror.len(), 8);
+    // The mirror node of item 3 is the same DocNodeId: the item was re-bound, not replaced.
+    assert_eq!(mirror.doc_node(SrcNodeId(key(lis[3]).0)), Some(id3));
+    h.shutdown.cancel();
+    h.task.await.unwrap().unwrap();
+}

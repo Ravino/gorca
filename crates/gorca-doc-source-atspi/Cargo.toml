@@ -1,0 +1,29 @@
+[package]
+name = "gorca-doc-source-atspi"
+description = "AtspiDocSource: block fetch over pipelined P2P (Collection.GetTree), incremental updates, SPA identity variant C (ADR-0003 6.2)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-model = { workspace = true }
+gorca-rt = { workspace = true }
+gorca-dbus = { workspace = true }
+gorca-doc-source-api = { workspace = true }
+zbus = { workspace = true, features = ["p2p"] }
+tokio = { workspace = true }
+futures-lite = { workspace = true }
+smallvec = { workspace = true }
+bitflags = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+gorca-doc = { workspace = true }
+tokio = { workspace = true, features = ["test-util", "net"] }
+
+[lints]
+workspace = true

@@ -25,7 +25,7 @@ pub mod drain;
 mod lag;
 pub mod socket;
 
-pub use call::{DbusError, call_method, with_deadline};
+pub use call::{DbusError, call_method, call_method_to, with_deadline};
 pub use lag::{LagDetector, ShedEvent};
 pub use socket::{set_recv_buffer, socket_backlog};
 

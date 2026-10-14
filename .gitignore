@@ -14,3 +14,5 @@ tests/web/spa/dist/
 tests/web/spa/node_modules/
 research/**/out/*.npy
 .claude/worktrees/
+tests/web/b6/virt/node_modules/
+tests/web/b6/virt/dist/

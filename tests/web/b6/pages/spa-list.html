@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>b6 spa-list</title>
+<style>
+  body { font: 14px sans-serif; margin: 8px; }
+  li { list-style: none; }
+</style>
+</head>
+<body>
+<header><nav aria-label="primary"><a href="#home">Home</a> <a href="#list">List</a></nav></header>
+<main id="main">
+  <h1 id="page-title">Items</h1>
+  <ul id="items"></ul>
+  <div id="live" role="status" aria-live="polite"></div>
+</main>
+<footer><p>footer</p></footer>
+<script>
+// Vanilla DOM operations that produce the same AT-SPI streams as the framework apps do for the
+// same DOM mutation (tests/web/spa report): keyed moves, recreated nodes, in-place rewrites,
+// route swaps. Driven by /b6/driver.js commands {op, n, arg}.
+const N = Number(new URLSearchParams(location.search).get('n') || 200);
+let seq = N;
+const ul = document.getElementById('items');
+function mk(i, label) {
+  const li = document.createElement('li');
+  li.id = 'item-' + i;
+  const s = document.createElement('span');
+  s.textContent = label || ('Item ' + i);
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = 'Open ' + i;
+  li.append(s, ' ', b);
+  return li;
+}
+function fill() { const f = document.createDocumentFragment(); for (let i = 0; i < N; i++) f.append(mk(i)); ul.replaceChildren(f); }
+fill();
+const items = () => Array.from(ul.children);
+window.b6ops = {
+  // new keyed items at the top
+  prepend(k) { const f = document.createDocumentFragment(); for (let i = 0; i < k; i++) f.append(mk(seq++)); ul.prepend(f); return 'prepend ' + k; },
+  append(k) { for (let i = 0; i < k; i++) ul.append(mk(seq++)); return 'append ' + k; },
+  // keyed reorder: DOM nodes are moved (Firefox destroys and recreates their accessibles)
+  reverse() { const a = items().reverse(); for (const li of a) ul.append(li); return 'reverse ' + a.length; },
+  shuffle(k) { const a = items(); let s = 12345; for (let i = a.length - 1; i > 0; i--) { s = (s * 1103515245 + 12345) & 0x7fffffff; const j = s % (i + 1); [a[i], a[j]] = [a[j], a[i]]; } for (const li of a) ul.append(li); return 'shuffle ' + a.length; },
+  removeMid(k) { const a = items(); const start = Math.floor(a.length / 2) - Math.floor(k / 2); for (let i = 0; i < k; i++) a[start + i]?.remove(); return 'remove ' + k; },
+  edit(i) { const li = document.getElementById('item-' + i); if (li) li.firstElementChild.textContent = 'Item ' + i + ' (edited)'; return 'edit ' + i; },
+  // rebuild the whole list with new DOM nodes for the same logical items (React key reset)
+  recreate() { const ids = items().map(li => li.id); const f = document.createDocumentFragment(); for (const id of ids) { const i = Number(id.slice(5)); f.append(mk(i, document.getElementById(id).firstElementChild.textContent)); } ul.replaceChildren(f); return 'recreate ' + ids.length; },
+  // unkeyed re-render: the same DOM nodes are reused for different data (Chromium reuses
+  // objects; ids on the nodes stay, text moves)
+  // (React with index keys: id, label and button text all move to other DOM nodes.)
+  rewrite() {
+    const a = items();
+    const data = a.map(li => [li.id, li.firstElementChild.textContent, li.lastElementChild.textContent]).reverse();
+    a.forEach((li, k) => { li.id = data[k][0]; li.firstElementChild.textContent = data[k][1]; li.lastElementChild.textContent = data[k][2]; });
+    return 'rewrite ' + a.length;
+  },
+  rename(k) { const bs = ul.querySelectorAll('button'); for (let i = 0; i < k && i < bs.length; i++) bs[i].textContent = 'Renamed ' + i; return 'rename ' + k; },
+  // route swap: the main content is replaced by a different view with m rows
+  route(m) {
+    const main = document.getElementById('main');
+    const f = document.createDocumentFragment();
+    const h = document.createElement('h1'); h.id = 'page-title'; h.textContent = 'Products'; f.append(h);
+    const g = document.createElement('div'); g.id = 'grid';
+    for (let i = 0; i < m; i++) { const c = document.createElement('article'); c.innerHTML = '<h2>Product ' + i + '</h2><p>Description of product ' + i + '.</p><a href="#p' + i + '">Details</a>'; g.append(c); }
+    f.append(g);
+    main.replaceChildren(f);
+    history.pushState({}, '', '#products');
+    document.title = 'b6 products';
+    return 'route ' + m;
+  },
+  live(k) { const l = document.getElementById('live'); for (let i = 0; i < k; i++) setTimeout(() => { l.textContent = 'message ' + i; }, i * 5); return 'live ' + k; },
+};
+</script>
+</body>
+</html>
