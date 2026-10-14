@@ -1,0 +1,193 @@
+== host: load 7.12 8.53 9.64 2/2493 1445561 ==
+   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-af5a980a5d5abcb8b/crates/gorca-bench)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.69s
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench-b4921a7a1562f132)
+
+running 19 tests
+test e2e::m1::tests::default_chords_use_real_keycodes ... ok
+test e2e::m1::tests::a_double_that_straddles_a_chunk_boundary_is_found ... ok
+test e2e::m1::tests::gates_skip_until_m1_lands ... ok
+test e2e::m1::tests::m1_flag_opens_the_gate ... ok
+test e2e::m1::tests::key_reply_and_app_log_parse ... ok
+test e2e::m1::tests::strict_mode_makes_the_gate_red ... ok
+test e2e::m1::tests::the_process_environment_never_opens_a_gate ... ok
+test e2e::m1::tests::the_reader_gets_desktop_facts_so_it_never_asks_gsettings ... ok
+test e2e::m1::tests::typing_score_detects_lost_and_doubled ... ok
+test e2e::m1::tests::unpaired_presses_and_releases_are_counted ... ok
+test e2e::m1::tests::wrapped_keycodes_are_not_doubles_but_real_doubles_are ... ok
+test e2e::m4::tests::r1_skips_without_the_flag_and_fails_when_strict ... ok
+test e2e::m4::tests::the_tree_has_one_button_per_row_and_balanced_json ... ok
+test e2e::mono::tests::is_monotonic_and_ns ... ok
+test e2e::scenarios::tests::accounting_separates_superseded_from_lost ... ok
+test e2e::scenarios::tests::scenario_ids_round_trip ... ok
+test e2e::scenarios::tests::decoder_understands_stub_tags_and_natural_text ... ok
+test e2e::mock::tests::voicego_binary_speak_then_stop ... ok
+test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
+
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.04s
+== e2e m4a-review-r1diag: reader=daemon:<repo>/.claude/worktrees/agent-af5a980a5d5abcb8b/target/release/gorca backend=voicego repeats=8 load=7.12 8.53 9.64 1/2504 1445828
+-- round 1/8 R1 (load 7.12 8.53 9.64 1/2504 1445828)
+2026-10-14T00:35:29.341311Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T00:35:29.342016Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T00:35:29.342907Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T00:35:29.344326Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T00:35:46.471701Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T00:35:46.472022Z  INFO gorca_daemon: gorca stopped
+-- round 1/8 R1s (load 6.97 8.43 9.59 1/2652 1446216)
+2026-10-14T00:35:46.666328Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T00:35:46.667088Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T00:35:46.667924Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T00:35:46.669016Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T00:36:04.873136Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T00:36:04.873574Z  INFO gorca_daemon: gorca stopped
+-- round 2/8 R1s (load 7.72 8.50 9.59 3/2966 1447088)
+2026-10-14T00:36:05.074762Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T00:36:05.075332Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T00:36:05.075954Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T00:36:05.077678Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T00:36:23.197817Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T00:36:23.198154Z  INFO gorca_daemon: gorca stopped
+-- round 2/8 R1 (load 8.86 8.72 9.63 3/2977 1447545)
+2026-10-14T00:36:23.414908Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T00:36:23.415809Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T00:36:23.416871Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T00:36:23.418271Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T00:36:40.369851Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T00:36:40.370233Z  INFO gorca_daemon: gorca stopped
+-- round 3/8 R1 (load 9.39 8.83 9.66 3/2964 1447658)
+2026-10-14T00:36:40.542642Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T00:36:40.543327Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T00:36:40.543747Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T00:36:40.545344Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T00:36:57.492386Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T00:36:57.492744Z  INFO gorca_daemon: gorca stopped
+-- round 3/8 R1s (load 8.64 8.71 9.60 3/2940 1447825)
+2026-10-14T00:36:57.687571Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T00:36:57.688351Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T00:36:57.689045Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T00:36:57.690857Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T00:37:15.895382Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T00:37:15.895749Z  INFO gorca_daemon: gorca stopped
+-- round 4/8 R1s (load 10.14 9.05 9.70 3/2941 1447931)
+2026-10-14T00:37:16.082542Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T00:37:16.083026Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T00:37:16.083684Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T00:37:16.085277Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T00:37:34.291024Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T00:37:34.291378Z  INFO gorca_daemon: gorca stopped
+-- round 4/8 R1 (load 11.47 9.42 9.81 3/2933 1448034)
+2026-10-14T00:37:34.463379Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T00:37:34.463841Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T00:37:34.464494Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T00:37:34.466170Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T00:37:51.465999Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T00:37:51.466382Z  INFO gorca_daemon: gorca stopped
+-- round 5/8 R1 (load 10.36 9.28 9.76 2/2928 1448151)
+2026-10-14T00:37:51.653346Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T00:37:51.654121Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T00:37:51.654676Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T00:37:51.656962Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T00:38:08.521320Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T00:38:08.521564Z  INFO gorca_daemon: gorca stopped
+-- round 5/8 R1s (load 9.99 9.24 9.73 3/2932 1448277)
+2026-10-14T00:38:08.699280Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T00:38:08.699774Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T00:38:08.700545Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T00:38:08.701926Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T00:38:26.790527Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T00:38:26.790863Z  INFO gorca_daemon: gorca stopped
+-- round 6/8 R1s (load 10.25 9.32 9.75 3/2935 1448393)
+2026-10-14T00:38:26.960119Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T00:38:26.960826Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T00:38:26.961348Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T00:38:26.963404Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T00:38:45.125649Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T00:38:45.126131Z  INFO gorca_daemon: gorca stopped
+-- round 6/8 R1 (load 9.77 9.26 9.72 4/2923 1448487)
+2026-10-14T00:38:45.299932Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T00:38:45.300479Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T00:38:45.300972Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T00:38:45.303426Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T00:39:02.385075Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T00:39:02.385353Z  INFO gorca_daemon: gorca stopped
+-- round 7/8 R1 (load 8.17 8.93 9.60 2/2935 1448613)
+2026-10-14T00:39:02.572009Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T00:39:02.572624Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T00:39:02.573361Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T00:39:02.574787Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T00:39:19.575967Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T00:39:19.576313Z  INFO gorca_daemon: gorca stopped
+-- round 7/8 R1s (load 9.04 9.08 9.64 2/2937 1448717)
+2026-10-14T00:39:19.768280Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T00:39:19.769399Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T00:39:19.770449Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T00:39:19.772147Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T00:39:37.821690Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T00:39:37.822127Z  INFO gorca_daemon: gorca stopped
+-- round 8/8 R1s (load 11.31 9.60 9.80 2/2938 1448813)
+2026-10-14T00:39:37.985728Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T00:39:37.986469Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T00:39:37.987285Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T00:39:37.988366Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T00:39:56.104155Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T00:39:56.104503Z  INFO gorca_daemon: gorca stopped
+-- round 8/8 R1 (load 11.27 9.67 9.82 3/2972 1448968)
+2026-10-14T00:39:56.292765Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T00:39:56.293560Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T00:39:56.294160Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T00:39:56.296557Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T00:40:13.293242Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T00:40:13.293639Z  INFO gorca_daemon: gorca stopped
+# e2e m4a-review-r1diag
+# utc=2026-10-14T00:40:13Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=9.35 9.33 9.70 2/2973 1449065
+# git_rev=02d95d7
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m4a-review-r1diag
+# reader=daemon:<repo>/.claude/worktrees/agent-af5a980a5d5abcb8b/target/release/gorca
+# backend=voicego
+# repeats=8
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=9.35 9.33 9.70 2/2973 1449062
+# reader_env=GORCA_M4=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=r1_ms: first SPEAK between a numpad review key and the next one (1200 spoken for 1200 presses); the application calls during the series are RR-1 revalidations (every 2 s), never on the key path
+# note1=r1s_ms: first SPEAK between a numpad review key and the next one (1200 spoken for 1200 presses); the application calls during the series are RR-1 revalidations (every 2 s), never on the key path
+
+metric                     bus                median          min          max  n op    threshold  res   note
+R1.r1_ms.n                 daemon/voicego         1200         1200         1200  8                  info   [samples]
+R1.r1_ms.p50               daemon/voicego        0.187        0.183        0.196  8                  info   [ms]
+R1.r1_ms.p95               daemon/voicego        0.307        0.303        0.344  8                  info   [ms]
+R1.r1_ms.p99               daemon/voicego        0.391        0.370        0.449  8 <=            3  PASS   [ms]
+R1.r1_ms.p999              daemon/voicego        0.497        0.457        0.539  8                  info   [ms]
+R1.r1_ms.max               daemon/voicego        0.544        0.468        0.980  8                  info   [ms]
+R1.lost                    daemon/voicego            0            0            0  8 <=            0  PASS  gated on the max over repeats [events]
+R1.not_consumed            daemon/voicego            0            0            0  8 <=            0  PASS  gated on the max over repeats [events]
+R1.r1_ipc_calls            daemon/voicego           49           49           49  8                  info   [calls]
+R1.r2_cold_ms              daemon/voicego        7.354        6.591        9.090  8                  info   [ms]
+R1s.r1s_ms.n               daemon/voicego         1200         1200         1200  8                  info   [samples]
+R1s.r1s_ms.p50             daemon/voicego        0.207        0.201        0.212  8                  info   [ms]
+R1s.r1s_ms.p95             daemon/voicego        0.356        0.341        0.368  8                  info   [ms]
+R1s.r1s_ms.p99             daemon/voicego        0.436        0.409        0.479  8 <=            4  PASS   [ms]
+R1s.r1s_ms.p999            daemon/voicego        0.560        0.461        0.646  8                  info   [ms]
+R1s.r1s_ms.max             daemon/voicego        0.617        0.492        1.240  8                  info   [ms]
+R1s.lost                   daemon/voicego            0            0            0  8 <=            0  PASS  gated on the max over repeats [events]
+R1s.not_consumed           daemon/voicego            0            0            0  8 <=            0  PASS  gated on the max over repeats [events]
+R1s.r1_ipc_calls           daemon/voicego           56           56           56  8                  info   [calls]
+R1s.r2_cold_ms             daemon/voicego        7.965        5.703         10.2  8                  info   [ms]
+R1s.storm_achieved_eps     daemon/voicego        50000        49999        50000  8 >=        45000  PASS  must reach 90% of the target rate [ev/s]
+R1s.storm_target_eps       daemon/voicego        50000        50000        50000  8                  info   [ev/s]
+
+== wrote bench/results/e2e/m4a-review-r1diag/20261014T004013Z.{json,txt}

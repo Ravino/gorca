@@ -1,0 +1,15 @@
+{
+  "meta": {"utc": "2026-10-14T00:43:35Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "20.52 15.02 11.87 13/2903 1461807", "git_rev": "02d95d7", "git_dirty": "true", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "label": "m4a-review-r1load", "reader": "daemon:<repo>/.claude/worktrees/agent-af5a980a5d5abcb8b/target/release/gorca", "backend": "voicego", "repeats": "10", "samples_per_series": "1200", "l2_trials": "400", "quick": "false", "loadavg_end": "20.52 15.02 11.87 13/2903 1461804", "reader_env": "GORCA_M4=1", "gates": "L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats", "note0": "r1_ms: first SPEAK between a numpad review key and the next one (1200 spoken for 1200 presses); the application calls during the series are RR-1 revalidations (every 2 s), never on the key path"},
+  "rows": [
+    {"id": "R1.r1_ms.n", "scenario": "R1", "bus": "daemon/voicego", "value": 1200, "min": 1199, "max": 1200, "runs": 10, "unit": "samples", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "R1.r1_ms.p50", "scenario": "R1", "bus": "daemon/voicego", "value": 0.43811449999999996, "min": 0.365528, "max": 0.462507, "runs": 10, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "R1.r1_ms.p95", "scenario": "R1", "bus": "daemon/voicego", "value": 0.9980085, "min": 0.79293, "max": 1.234975, "runs": 10, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "R1.r1_ms.p99", "scenario": "R1", "bus": "daemon/voicego", "value": 2.1098689999999998, "min": 1.494023, "max": 2.306837, "runs": 10, "unit": "ms", "op": "<=", "threshold": 3, "verdict": "PASS", "note": ""},
+    {"id": "R1.r1_ms.p999", "scenario": "R1", "bus": "daemon/voicego", "value": 3.9719695, "min": 3.186174, "max": 6.31154, "runs": 10, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "R1.r1_ms.max", "scenario": "R1", "bus": "daemon/voicego", "value": 6.217501, "min": 3.234044, "max": 15.25417, "runs": 10, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "R1.lost", "scenario": "R1", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 1, "runs": 10, "unit": "events", "op": "<=", "threshold": 0, "verdict": "FAIL", "note": "gated on the max over repeats"},
+    {"id": "R1.not_consumed", "scenario": "R1", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 10, "unit": "events", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "R1.r1_ipc_calls", "scenario": "R1", "bus": "daemon/voicego", "value": 49, "min": 49, "max": 49, "runs": 10, "unit": "calls", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "R1.r2_cold_ms", "scenario": "R1", "bus": "daemon/voicego", "value": 24.3045975, "min": 12.797337, "max": 37.221761, "runs": 10, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""}
+  ]
+}
