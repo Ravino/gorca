@@ -3,7 +3,9 @@
 //! application; the run is audited independently from a `dbus-monitor` capture (MA-10).
 //!
 //! Allowed: `Accessible` getters, `Properties.Get`/`GetAll`, `Cache.GetItems`,
-//! `Application.GetApplicationBusAddress`, `Text.GetText`, and the bus's own housekeeping
+//! `Application.GetApplicationBusAddress`, the `Text` reads (`GetText`, `GetStringAtOffset`,
+//! `GetRangeExtents`, `GetCharacterExtents`, `GetOffsetAtPoint`), `Component.GetExtents`,
+//! `Collection.GetMatches`, and the bus's own housekeeping
 //! (`AddMatch`, name and credential lookups). Everything else (`Action`, `EditableText`,
 //! `Selection`, `Component.GrabFocus`, `Registry.RegisterEvent`, `Properties.Set`, ...) is refused
 //! before it reaches the wire.
@@ -15,7 +17,17 @@ pub fn allowed(interface: &str, member: &str) -> bool {
         "org.freedesktop.DBus.Properties" => matches!(member, "Get" | "GetAll"),
         "org.a11y.atspi.Cache" => member == "GetItems",
         "org.a11y.atspi.Application" => member == "GetApplicationBusAddress",
-        "org.a11y.atspi.Text" => member == "GetText",
+        "org.a11y.atspi.Text" => matches!(
+            member,
+            "GetText"
+                | "GetOffsetAtPoint"
+                | "GetStringAtOffset"
+                | "GetRangeExtents"
+                | "GetCharacterExtents"
+        ),
+        // Review reads (ADR-0006): extents and role search change nothing in the application.
+        "org.a11y.atspi.Component" => member == "GetExtents",
+        "org.a11y.atspi.Collection" => member == "GetMatches",
         "org.freedesktop.DBus" => matches!(
             member,
             "Hello"
@@ -49,6 +61,11 @@ mod tests {
             ("org.a11y.atspi.Cache", "GetItems"),
             ("org.a11y.atspi.Application", "GetApplicationBusAddress"),
             ("org.a11y.atspi.Text", "GetText"),
+            ("org.a11y.atspi.Text", "GetStringAtOffset"),
+            ("org.a11y.atspi.Text", "GetRangeExtents"),
+            ("org.a11y.atspi.Text", "GetOffsetAtPoint"),
+            ("org.a11y.atspi.Component", "GetExtents"),
+            ("org.a11y.atspi.Collection", "GetMatches"),
             ("org.freedesktop.DBus", "AddMatch"),
         ] {
             assert!(allowed(i, m), "{i}.{m} must be allowed");

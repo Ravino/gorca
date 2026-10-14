@@ -36,4 +36,4 @@ pub use node::{
 pub use redact::RedactKey;
 pub use role::Role;
 pub use speech::{Prio, Segment, SegmentKind, Utterance};
-pub use text::{TextQuery, TextUnit};
+pub use text::{TextLine, TextLines, TextQuery, TextUnit};

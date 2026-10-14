@@ -10,7 +10,9 @@ use gorca_connector_api::{
     AppPort, BackendError, BackendOp, BackendReply, BackendRequest, PortError,
 };
 use gorca_dbus::DbusError;
-use gorca_model::{AppId, AppInfo, AppLifecycle, ConnectorKind, NodeKey, Role, SnapshotBatch};
+use gorca_model::{
+    AppId, AppInfo, AppLifecycle, ConnectorKind, NodeKey, PropMask, Role, SnapshotBatch,
+};
 use gorca_rt::{CancellationToken, Clock, Deadline};
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
@@ -21,6 +23,7 @@ use crate::toolkit::Toolkit;
 
 mod caller;
 pub mod items;
+pub mod review;
 pub mod shadow;
 mod strategy;
 
@@ -408,12 +411,21 @@ async fn serve_one(cx: &CallCx, req: &BackendRequest) -> Result<BackendReply, Ba
         BackendOp::Fetch { node, want } => {
             let n = resolve(cx, *node)?;
             let raw = strategy::fetch(cx, &n, *want, dl).await?;
-            Ok(BackendReply::Node(snapshot(n.key, &raw, now)))
+            let mut snap = [snapshot(n.key, &raw, now)];
+            if want.contains(PropMask::BOUNDS) {
+                review::add_bounds(cx, &mut snap, dl).await;
+            }
+            let [snap] = snap;
+            Ok(BackendReply::Node(snap))
         }
         BackendOp::ChildSnapshots { node, range, want } => {
             let n = resolve(cx, *node)?;
             let b = strategy::child_snapshots(cx, &n, range.clone(), *want, dl).await?;
-            Ok(BackendReply::Subtree(b.into_batch(now)))
+            let mut batch = b.into_batch(now);
+            if want.contains(PropMask::BOUNDS) {
+                review::add_bounds(cx, &mut batch.nodes, dl).await;
+            }
+            Ok(BackendReply::Subtree(batch))
         }
         BackendOp::Ancestry {
             node,
@@ -422,7 +434,11 @@ async fn serve_one(cx: &CallCx, req: &BackendRequest) -> Result<BackendReply, Ba
         } => {
             let n = resolve(cx, *node)?;
             let b = strategy::ancestry(cx, &n, *max_depth, *want, dl).await?;
-            Ok(BackendReply::Subtree(b.into_batch(now)))
+            let mut batch = b.into_batch(now);
+            if want.contains(PropMask::BOUNDS) {
+                review::add_bounds(cx, &mut batch.nodes, dl).await;
+            }
+            Ok(BackendReply::Subtree(batch))
         }
         BackendOp::Subtree { root, max_nodes } => {
             let n = resolve(cx, *root)?;
@@ -439,11 +455,10 @@ async fn serve_one(cx: &CallCx, req: &BackendRequest) -> Result<BackendReply, Ba
             .await
             .map(|_| BackendReply::ActionDone)
             .map_err(|e| backend_error(&e)),
-        BackendOp::Children { .. }
-        | BackendOp::Text(_)
-        | BackendOp::Action(_)
-        | BackendOp::HitTest { .. }
-        | BackendOp::Collection(_) => Err(BackendError::NotSupported),
+        BackendOp::Text(q) => review::text(cx, q, dl).await,
+        BackendOp::Action(a) => review::action(cx, a, dl).await,
+        BackendOp::Collection(rule) => review::collection(cx, rule, dl).await,
+        BackendOp::Children { .. } | BackendOp::HitTest { .. } => Err(BackendError::NotSupported),
     }
 }
 
@@ -489,6 +504,8 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod review_tests;
 #[cfg(test)]
 mod strategy_ref_tests;
 

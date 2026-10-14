@@ -81,7 +81,7 @@ Why not a real toolkit: GTK3/GTK4 import fine headless, but need a display (Xvfb
 made to hang, storm or lie. Direct implementation gives full control over every byte.
 
 ```
-fakeapp.py --scenario {form,tree,storm,hung,terminal,malformed,switcher} [--name N] [--seed S] [options]
+fakeapp.py --scenario {form,tree,storm,hung,terminal,malformed,switcher,review} [--name N] [--seed S] [options]
 ```
 
 | Scenario | Options | What it is |
@@ -92,6 +92,7 @@ fakeapp.py --scenario {form,tree,storm,hung,terminal,malformed,switcher} [--name
 | `hung` | `--hang never` or `--hang delay:MS`, `--hang-methods GetText,Get`, `--hang-after N` | never reply / reply late; optionally only for named members, optionally after N good calls. Control channel keeps working. `Get` is the Properties member |
 | `terminal` | `--term-rows/--term-cols`, `--term-gen LINES_PER_FRAME`, `--term-fps 60`, `--[no-]term-charcount-quirk` | `TERMINAL` role node with Text. Every frame rebuilds the screen, diffs by common head/tail and emits **one `delete` + one `insert` covering everything between, then `text-caret-moved`** (VTE behaviour, F-4). `CharacterCount` is 1.5x `len(GetText)` by default |
 | `switcher` | run with `--name gnome-shell`; six push-button items | GNOME Shell's Alt+Tab popup: `select` moves `state-changed:selected` (0 on the old item, 1 on the new one) and nothing else; no focus event |
+| `review` | none; then a `build` command | ADR-0006 test trees: only the application root until the test sends `build` with a whole tree (see Control channel). Node extents, text with real line geometry (16 px lines, 8 px columns), `Collection`/`Selection` on nodes with children |
 | `malformed` | `--malformed bad_refs,neg_offsets,...` or `all` (default for this scenario) | see below; the modes work on every scenario via `--malformed` or the `malformed` command |
 
 Malformed modes (all seeded, so reproducible with `--seed`):
@@ -124,13 +125,16 @@ JSON lines on stdin; replies `{"event":"reply","id":..,"ok":true,...}` and notif
 |---|---|---|
 | `focus` | `node` (name/id/path) | state-changed `focused` 0/1 + `Focus:Focus`; the reply carries `t_emit_ns` (`CLOCK_MONOTONIC`, taken right before the focused=1 signal, which is flushed immediately) for latency probes |
 | `type`, `backspace`, `set_text`, `caret` | `node`, `text`/`offset` | text-changed insert/delete + text-caret-moved |
-| `action` | `node`, `index` | like a client `DoAction`: JSON `action` line, pressed/checked state events |
+| `action` | `node`, `index` | like a client `DoAction`: JSON `action` line (`grab_focus` and `select_child` lines are logged the same way), pressed/checked state events |
 | `emit` | `node`, `class` Object/Window/Focus, `member`, `detail`, `d1`, `d2`, `data` | any raw event |
 | `add_child`, `remove` | `parent`/`node`, `name`, `role`, `text` | tree mutation + `Cache.Add/RemoveAccessible` + children-changed |
 | `hang` | `mode` never/delay/off, `ms`, `methods`, `after` | change hang policy at runtime |
 | `storm` / `storm_stop` | `rate`, `mix`, `duration` | start / stop (returns `emitted`, `achieved_rate`, `max_lag_s`) |
 | `select` | `node` | switcher scenario: move the selection (see above) |
 | `malformed` | `modes` (list or `"all"`, `[]` = off) | toggle bad data at runtime |
+| `build` | `coord` `window` (GTK4: SCREEN gives origin 0) / `global` (Shell: coordinate type ignored) / `default`, `tree` (one node object or a list) | replace everything below the root (review trees). Tree node fields: `name`, `role` (name such as `frame`, `panel`, `label`, `entry`, `text`, `push button`, `status bar`, `check box`, `list item`, `dialog`, or a number), `extents` `[x,y,w,h]` (window-relative in `window` mode, stage coordinates in `global`), `text` (may hold `\n`), `editable` (GTK4-style: text range/character extents answer a D-Bus error), `focusable`, `states` (names), `actions` (names), `hang` (never answer any call on that node), `children`. Reply: `paths` (name -> path), `nodes`. Ids are assigned in pre-order, so the path of the n-th node is `/org/a11y/atspi/accessible/<n>` |
+| `calls` | `reset` (bool) | per-member call counts served since the last reset, keyed `Interface.Member` (for example `Component.GetExtents`), plus `total`; use it to assert that a step made no IPC |
+| `hang_node` | `node`, `on` | make one node never answer (OB-4) |
 | `term_feed`, `term_gen`, `term_stop` | `text`, `lines`, `fps` | terminal output |
 | `stats`, `paths`, `quit` | | counters (`calls hung delayed events storm_events term_frames bad_values`), name->path map |
 
