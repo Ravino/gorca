@@ -53,6 +53,10 @@ pub enum WebMode {
         focus: NodeKey,
         /// The focus is an editable control: focus mode at once, no waiting.
         editable: bool,
+        /// `editable` was read from the focus snapshot. A cold focus (no snapshot yet) might be
+        /// a field: until it is known the grabs stay off and the grace timer must not flip to
+        /// browse mode (H2: typing would be swallowed).
+        known: bool,
     },
     Browse {
         doc: DocId,
@@ -136,6 +140,8 @@ pub enum WebEv {
     FocusPending {
         focus: NodeKey,
         editable: bool,
+        /// See [`WebMode::Loading::known`].
+        known: bool,
         now: Instant,
     },
     /// Focus left web content (browser chrome, another application).
@@ -277,13 +283,31 @@ fn next(mode: WebMode, ev: WebEv, fx: &mut WebFxs) -> WebMode {
         WebEv::FocusPending {
             focus,
             editable,
+            known,
             now,
         } => {
-            // Already waiting for this very node: nothing new.
-            if let WebMode::Loading { focus: f, .. } = mode
+            // Already waiting for this very node: a better reading of it still counts.
+            if let WebMode::Loading {
+                focus: f,
+                doc,
+                since,
+                editable: e,
+                known: k,
+            } = mode
                 && f == focus
             {
-                return mode;
+                return if known && !k {
+                    WebMode::Loading {
+                        doc,
+                        since,
+                        focus: f,
+                        editable,
+                        known,
+                    }
+                } else {
+                    let _ = e;
+                    mode
+                };
             }
             fx.push(WebFx::Ensure(focus));
             WebMode::Loading {
@@ -291,6 +315,7 @@ fn next(mode: WebMode, ev: WebEv, fx: &mut WebFxs) -> WebMode {
                 since: now,
                 focus,
                 editable,
+                known,
             }
         }
         WebEv::FocusAway => WebMode::Inactive,
@@ -464,6 +489,9 @@ pub struct BrowseState {
     pub pending_word: Option<(ModeWord, Instant)>,
     /// The line at the cursor, to follow the focus utterance of a document root (W3, load).
     pub pending_tail: Option<(Vec<present::Item>, Instant)>,
+    /// Focus landed on a document root whose mirror had no line yet: the first `Changed` that
+    /// brings one speaks it, unless a key or another focus came first (M4).
+    pub entry_wait: Option<(DocId, Instant)>,
     pub settings: BrowseSettings,
     pub counters: BrowseCounters,
     /// Offset of the cursor in the flat text at the last move, to restore after an edit.
@@ -483,6 +511,7 @@ impl BrowseState {
             active: None,
             pending_word: None,
             pending_tail: None,
+            entry_wait: None,
             settings: BrowseSettings::default(),
             counters: BrowseCounters::default(),
             last_off: 0,

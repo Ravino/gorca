@@ -38,6 +38,28 @@ pub fn present_selected_item(n: &NodeSnapshot, id: UttId, epoch: Epoch) -> Utter
     present_with(n, id, epoch, StateSet::SELECTED)
 }
 
+/// Roles of static web content that are never meaningfully disabled.
+fn never_disabled(role: Role) -> bool {
+    matches!(
+        role,
+        Role::DocumentWeb
+            | Role::Document
+            | Role::Heading
+            | Role::Paragraph
+            | Role::Image
+            | Role::List
+            | Role::ListItem
+            | Role::Table
+            | Role::Row
+            | Role::Cell
+            | Role::ColumnHeader
+            | Role::RowHeader
+            | Role::Landmark
+            | Role::StaticText
+            | Role::Separator
+    )
+}
+
 fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Utterance {
     let mut segments: SmallVec<[Segment; 4]> = SmallVec::new();
     if let Some(name) = n.name.as_deref().filter(|s| !s.is_empty()) {
@@ -47,8 +69,9 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
     if !role.is_empty() {
         segments.push(seg(role, SegmentKind::Role));
     }
-    // Firefox's document never reports Sensitive; it is not "unavailable".
-    let skip = if n.role == Role::DocumentWeb {
+    // Gecko reports no Sensitive on documents, headings, sections and other static content;
+    // that is not "unavailable" (the connector maps a missing Sensitive to DISABLED).
+    let skip = if never_disabled(n.role) {
         skip | StateSet::DISABLED
     } else {
         skip
@@ -418,5 +441,26 @@ mod change_tests {
         );
         d.role = Role::CheckBox;
         assert!(text(&d).iter().any(|t| t == "unavailable"));
+    }
+
+    #[test]
+    fn static_web_roles_are_not_called_unavailable_but_controls_still_are() {
+        for role in [
+            Role::Heading,
+            Role::Landmark,
+            Role::ListItem,
+            Role::Paragraph,
+        ] {
+            let mut d = snap("x", StateSet::DISABLED | StateSet::SHOWING, None);
+            d.role = role;
+            let u = present_focus(&d, UttId(1), Epoch::default());
+            assert!(
+                !u.segments.iter().any(|s| &*s.text == "unavailable"),
+                "{role:?}"
+            );
+        }
+        let c = snap("x", StateSet::DISABLED | StateSet::SHOWING, None);
+        let u = present_focus(&c, UttId(1), Epoch::default());
+        assert!(u.segments.iter().any(|s| &*s.text == "unavailable"));
     }
 }

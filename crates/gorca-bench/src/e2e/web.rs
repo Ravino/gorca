@@ -981,6 +981,64 @@ pub fn br2(
     Ok(())
 }
 
+/// The `gorca_phase` timing lines the reader wrote to `GORCA_E2E_READER_LOG` after byte `from`:
+/// per phase, the numeric fields of its last line.
+fn phase_lines(
+    from: u64,
+) -> std::collections::HashMap<String, std::collections::HashMap<String, f64>> {
+    let mut out = std::collections::HashMap::new();
+    let Ok(path) = std::env::var("GORCA_E2E_READER_LOG") else {
+        return out;
+    };
+    let Ok(bytes) = std::fs::read(path) else {
+        return out;
+    };
+    let from = usize::try_from(from).unwrap_or(0).min(bytes.len());
+    let text = String::from_utf8_lossy(&bytes[from..]);
+    for line in text.lines().filter(|l| l.contains("gorca_phase")) {
+        let line = strip_ansi(line);
+        let mut phase = None;
+        let mut fields = std::collections::HashMap::new();
+        for tok in line.split_whitespace() {
+            if let Some((k, v)) = tok.split_once('=') {
+                if k == "phase" {
+                    phase = Some(v.trim_matches('"').to_owned());
+                } else if let Ok(x) = v.parse::<f64>() {
+                    fields.insert(k.to_owned(), x);
+                }
+            }
+        }
+        if let Some(p) = phase {
+            out.insert(p, fields);
+        }
+    }
+    out
+}
+
+fn strip_ansi(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\u{1b}' {
+            for n in chars.by_ref() {
+                if n.is_ascii_alphabetic() {
+                    break;
+                }
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+fn reader_log_len() -> u64 {
+    std::env::var("GORCA_E2E_READER_LOG")
+        .ok()
+        .and_then(|p| std::fs::metadata(p).ok())
+        .map_or(0, |m| m.len())
+}
+
 /// W2b: focus enters a loaded, never visited 10k-node document.
 pub fn w2b(
     host: &HostEnv,
@@ -994,8 +1052,12 @@ pub fn w2b(
     }
     let trials = (size.trials / 20).clamp(3, 6);
     let mut lat = Vec::new();
+    // Per-phase timings (ms), one value per trial: see `phase_lines`.
+    let mut gorca_side = Vec::new();
+    let mut phases: std::collections::BTreeMap<&str, Vec<f64>> = std::collections::BTreeMap::new();
     let mut lost = 0u64;
     for _ in 0..trials {
+        let log_from = reader_log_len();
         // A fresh reader and browser every time: the 10k document must be never visited. A
         // headless compositor activates no window by itself; the click that does it makes
         // Firefox focus the document, which is the first event the reader sees (it attaches to
@@ -1019,7 +1081,58 @@ pub fn w2b(
         match heard {
             Some(r) => {
                 let arrival = w.tap.first_after(FOCUS, &w.bus, None, t0).unwrap_or(t0);
-                lat.push(ms(r.t_ns.saturating_sub(arrival)));
+                let wall = ms(r.t_ns.saturating_sub(arrival));
+                lat.push(wall);
+                // Phases from the reader's own log. Firefox-blocked time is what Firefox
+                // needed to answer the locate walk and the document fetch; the whole warm-up
+                // protocol (its probes, sampling rounds and sleeps) is the reader's own cost.
+                let ph = phase_lines(log_from);
+                let f = |p: &str, k: &str| ph.get(p).and_then(|m| m.get(k)).copied();
+                let fetch_blocked = [
+                    "frontier_ms",
+                    "get_tree_ms",
+                    "roles_ms",
+                    "states_ms",
+                    "text_ms",
+                ]
+                .iter()
+                .filter_map(|k| f("fetch", k))
+                .sum::<f64>();
+                // The progressive build reports its first block (fetched from Firefox), the
+                // single-block build reports per-stage call times.
+                let build_blocked = f("first_block", "wall_ms").unwrap_or(fetch_blocked);
+                let firefox = f("locate", "wall_ms").unwrap_or(0.0) + build_blocked;
+                gorca_side.push((wall - firefox).max(0.0));
+                for (name, p, k) in [
+                    ("warm_wall_ms", "warm", "wall_ms"),
+                    ("warm_blocked_ms", "warm", "blocked_ms"),
+                    ("warm_slept_ms", "warm", "slept_ms"),
+                    ("warm_rounds", "warm", "rounds"),
+                    ("warm_probes", "warm", "probes"),
+                    ("warm_sampled_nodes", "warm", "sampled_nodes"),
+                    ("locate_ms", "locate", "wall_ms"),
+                    ("create_ms", "create", "wall_ms"),
+                    ("fetch_total_ms", "fetch", "total_ms"),
+                    ("fetch_get_tree_ms", "fetch", "get_tree_ms"),
+                    (
+                        "fetch_heaviest_get_tree_ms",
+                        "fetch",
+                        "heaviest_get_tree_ms",
+                    ),
+                    ("fetch_calls", "fetch", "calls"),
+                    ("fetch_nodes", "fetch", "nodes"),
+                    ("first_block_ms", "first_block", "wall_ms"),
+                    ("first_block_nodes", "first_block", "nodes"),
+                    ("translate_ms", "translate", "wall_ms"),
+                ] {
+                    if let Some(v) = f(p, k) {
+                        phases.entry(name).or_default().push(v);
+                    }
+                }
+                phases
+                    .entry("firefox_blocked_ms")
+                    .or_default()
+                    .push(firefox);
             }
             None => {
                 lost += 1;
@@ -1032,6 +1145,11 @@ pub fn w2b(
             }
         }
     }
+    out.s("w2b_gorca_ms", gorca_side);
+    for (name, v) in phases {
+        out.s(&format!("w2b_phase_{name}"), v);
+    }
+    // `w2b_ms` is the wall time (information); the gate is on `w2b_gorca_ms`.
     out.s("w2b_ms", lat);
     out.x("lost", lost as f64, "trials");
     Ok(())
@@ -1056,14 +1174,38 @@ pub fn fm(
     let field = w.find(&doc.path, "entry", "")?;
     let link = w.find(&doc.path, "link", "Back")?;
     let (mut fm1, mut fm2) = (Vec::new(), Vec::new());
-    let (mut lost, mut not_consumed) = (0u64, 0u64);
+    let (mut lost, mut not_consumed, mut lost_after_switch, mut race_lost) =
+        (0u64, 0u64, 0u64, 0u64);
+    let mut grab_ms: Vec<f64> = Vec::new();
     let trials = (size.trials / 4).clamp(8, 60);
-    for _ in 0..trials {
+    for trial in 0..trials {
         // Onto a link first (browse mode), then onto the field (focus mode).
         w.focus(&link)?;
         std::thread::sleep(Duration::from_millis(250));
         let mark = w.mark();
+        let applied0 = w
+            .rig
+            .mutter
+            .as_mut()
+            .context("no mutter")?
+            .grab_state()?
+            .applied;
         let t_call = w.focus(&field)?;
+        // How long the browse grabs stay on after the focus event reached the bus.
+        let (_, grabbed) = w
+            .rig
+            .mutter
+            .as_mut()
+            .context("no mutter")?
+            .wait_grabs(Duration::from_secs(2), |g| g.applied > applied0)?;
+        let t_grab = super::mono::now_ns();
+        if grabbed && !escape {
+            let arrival = w
+                .tap
+                .first_after(FOCUS, &w.bus, Some(&field), t_call)
+                .unwrap_or(t_call);
+            grab_ms.push(ms(t_grab.saturating_sub(arrival)));
+        }
         match w.speech(mark, Duration::from_secs(3), |t| t.contains("focus mode")) {
             Some(r) => {
                 // Gorca side: from the focus event on the bus to the speech.
@@ -1076,6 +1218,29 @@ pub fn fm(
             None => {
                 lost += 1;
                 continue;
+            }
+        }
+        if !escape {
+            // L3: a key typed after the switch to focus mode must reach the field: not grabbed,
+            // not answered with "again". A typist needs 100 ms at the very least after hearing
+            // the word: that is the gated case. A key sent at once is the race window itself
+            // (reported, not gated; its length is `fm_grab_ms`).
+            let human = trial % 2 == 0;
+            w.unsettled = false;
+            if human {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            let mark = w.mark();
+            let (_, consumed) = w.press(KEY_H, 0)?;
+            let again = w
+                .speech(mark, Duration::from_millis(150), |t| t == "again")
+                .is_some();
+            if consumed || again {
+                if human {
+                    lost_after_switch += 1;
+                } else {
+                    race_lost += 1;
+                }
             }
         }
         if escape {
@@ -1098,6 +1263,11 @@ pub fn fm(
     }
     out.x("lost", lost as f64, "trials");
     out.x("not_consumed", not_consumed as f64, "keys");
+    if !escape {
+        out.x("lost_after_switch", lost_after_switch as f64, "keys");
+        out.x("race_lost_at_once", race_lost as f64, "keys");
+        out.s("fm_grab_ms", grab_ms);
+    }
     Ok(())
 }
 

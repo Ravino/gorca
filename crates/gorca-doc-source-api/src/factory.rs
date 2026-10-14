@@ -20,6 +20,12 @@ pub struct WarmReport {
     pub ready: bool,
     pub waited: Duration,
     pub probes: u32,
+    /// Part of `waited` spent inside D-Bus calls (the application answering).
+    pub blocked: Duration,
+    /// Part of `waited` spent sleeping between sampling rounds (our own protocol).
+    pub slept: Duration,
+    pub rounds: u32,
+    pub sampled_nodes: usize,
 }
 
 /// Result of [`DocSourceFactory::warm`].

@@ -301,6 +301,7 @@ impl Reader {
                 }
                 // Browse mode: the mode word rides on the focus utterance (BM-5), and the line
                 // at the cursor follows a document's own focus speech (W3).
+                self.web_learn_focus(snap, fx);
                 let word = self.web_take_word();
                 let tail = self.web_take_tail();
                 apply_web_extra(&mut u, word, &tail);
@@ -432,11 +433,18 @@ impl Reader {
             return;
         }
         // A web document's speech belongs to browse mode: the cursor line follows the focus
-        // utterance and keys move it at once, so a late correction would talk over the user.
+        // utterance and keys move it at once, so only a changed title is worth correcting (the
+        // cache served the previous page). Other differences are counted, not spoken (M5).
         if p.snap.role == Role::DocumentWeb
-            && matches!(&r.result, Ok(n) if !n.states.contains(StateSet::DEFUNCT))
+            && let Ok(new) = &r.result
+            && !new.states.contains(StateSet::DEFUNCT)
+            && p.snap.name == new.name
         {
-            self.counters.revalidations_agreed += 1;
+            if changed(&p.snap, new, skip_states(p.ctx)).is_empty() {
+                self.counters.revalidations_agreed += 1;
+            } else {
+                self.counters.revalidations_suppressed += 1;
+            }
             return;
         }
         match &r.result {

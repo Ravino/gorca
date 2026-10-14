@@ -43,6 +43,11 @@ const NO_DOC_MEMORY: usize = 256;
 const RECENT_DOC: Duration = Duration::from_secs(30);
 const HUB_QUEUE: usize = 256;
 
+/// Milliseconds with a fraction, for the phase log.
+fn ms(d: Duration) -> f64 {
+    d.as_secs_f64() * 1000.0
+}
+
 /// Messages to the registry.
 #[derive(Debug)]
 pub enum HubMsg {
@@ -219,7 +224,22 @@ impl Hub {
         tracing::debug!(?app, ?hint, "warm-up started");
         let fut = self.cfg.factory.warm(app, &a.info, hint);
         self.tasks.spawn(async move {
+            let t = Instant::now();
             let res = timed(WARM_TIMEOUT, fut).await;
+            if let Ok(WarmOutcome::Done(r)) = &res {
+                tracing::info!(
+                    target: "gorca_phase",
+                    phase = "warm",
+                    wall_ms = ms(t.elapsed()),
+                    waited_ms = ms(r.waited),
+                    blocked_ms = ms(r.blocked),
+                    slept_ms = ms(r.slept),
+                    rounds = r.rounds,
+                    probes = r.probes,
+                    sampled_nodes = r.sampled_nodes,
+                    ready = r.ready,
+                );
+            }
             TaskDone::Warmed { app, res }
         });
     }
@@ -233,7 +253,9 @@ impl Hub {
         }
         let fut = self.cfg.factory.locate(app, &a.info, focus);
         self.tasks.spawn(async move {
+            let t = Instant::now();
             let res = timed(LOCATE_TIMEOUT, fut).await;
+            tracing::info!(target: "gorca_phase", phase = "locate", wall_ms = ms(t.elapsed()));
             TaskDone::Located { app, focus, res }
         });
     }
@@ -365,7 +387,9 @@ impl Hub {
                 a.creating.insert(root, focus);
                 let fut = self.cfg.factory.create(app, &a.info, root);
                 self.tasks.spawn(async move {
+                    let t = Instant::now();
                     let res = timed(CREATE_TIMEOUT, fut).await;
+                    tracing::info!(target: "gorca_phase", phase = "create", wall_ms = ms(t.elapsed()));
                     TaskDone::Created { app, root, res }
                 });
             }

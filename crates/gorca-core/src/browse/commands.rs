@@ -42,6 +42,10 @@ pub enum WebEffect {
 
 /// A mode word waits this long for the utterance it belongs to.
 const WORD_TTL: Duration = Duration::from_millis(600);
+/// The line that follows a document's focus utterance waits for a cold fetch this long (M4).
+const TAIL_TTL: Duration = Duration::from_secs(2);
+/// A late first line (the mirror was empty at focus time) is still spoken within this window.
+const ENTRY_WAIT: Duration = Duration::from_secs(2);
 /// Held cursor keys scroll the page once per this interval (LP-6).
 const SCROLL_DEBOUNCE: Duration = Duration::from_millis(150);
 /// Focus in a document the mirror does not know yet waits this long (browse design 7.3).
@@ -507,7 +511,7 @@ impl Reader {
             return Vec::new();
         };
         match b.pending_tail.take() {
-            Some((items, at)) if now.saturating_duration_since(at) <= WORD_TTL => items,
+            Some((items, at)) if now.saturating_duration_since(at) <= TAIL_TTL => items,
             Some(_) | None => Vec::new(),
         }
     }
@@ -632,6 +636,7 @@ impl Reader {
     /// presented, so the mode word can ride on the focus utterance (BM-5).
     pub(crate) fn web_on_focus(&mut self, node: NodeKey, fx: &mut ReaderEffects) {
         let Some(b) = self.web.as_mut() else { return };
+        b.entry_wait = None;
         let hit = b.join.get(node);
         if let Some((doc, id)) = hit
             && let Some(h) = b.docs.get(doc)
@@ -664,15 +669,19 @@ impl Reader {
         // field we have not mirrored, so this is `Loading` (grabs off) until it is resolved.
         if b.web_apps.contains(&node.app) {
             b.counters.join_misses += 1;
-            let editable = match self.dir.lookup(node) {
-                Lookup::Hit(snap) => forms::passes_through(snap.role, snap.states, Reason::Focus),
-                Lookup::Miss | Lookup::Gone => false,
+            let (editable, known) = match self.dir.lookup(node) {
+                Lookup::Hit(snap) => (
+                    forms::passes_through(snap.role, snap.states, Reason::Focus),
+                    true,
+                ),
+                Lookup::Miss | Lookup::Gone => (false, false),
             };
             let now = self.now;
             if self.web_apply(
                 WebEv::FocusPending {
                     focus: node,
                     editable,
+                    known,
                     now,
                 },
                 fx,
@@ -682,6 +691,40 @@ impl Reader {
             }
         } else {
             self.web_apply(WebEv::FocusAway, fx, false);
+        }
+    }
+
+    /// The focus snapshot arrived (a presentation reply): a `Loading` focus learns whether it is
+    /// a field. A field keeps the grabs off for good; a plain node lets the grace timer run.
+    pub(crate) fn web_learn_focus(
+        &mut self,
+        snap: &gorca_model::NodeSnapshot,
+        fx: &mut ReaderEffects,
+    ) {
+        let Some(b) = self.web.as_mut() else { return };
+        let WebMode::Loading {
+            doc,
+            since,
+            focus,
+            known: false,
+            ..
+        } = b.mode
+        else {
+            return;
+        };
+        if focus != snap.key {
+            return;
+        }
+        let editable = forms::passes_through(snap.role, snap.states, Reason::Focus);
+        b.mode = WebMode::Loading {
+            doc,
+            since,
+            focus,
+            editable,
+            known: true,
+        };
+        if editable {
+            self.web_retry_loading(fx);
         }
     }
 
@@ -717,6 +760,14 @@ impl Reader {
             }
             b.last_off = off;
             b.pending_tail = Some((items, now));
+        } else if b
+            .docs
+            .get(doc)
+            .is_some_and(|h| h.read.with(|d| d.root() == Some(id)))
+        {
+            // Nothing readable yet (the first publish holds the root only): speak the first
+            // line when the content arrives (M4).
+            b.entry_wait = Some((doc, now));
         }
     }
 
@@ -737,6 +788,7 @@ impl Reader {
                         focus: f,
                         since,
                         editable,
+                        known,
                         ..
                     } = b.mode
                     && f == focus
@@ -746,6 +798,7 @@ impl Reader {
                         since,
                         focus: f,
                         editable,
+                        known,
                     };
                 }
                 self.web_retry_loading(fx);
@@ -857,6 +910,7 @@ impl Reader {
     }
 
     fn web_changed(&mut self, doc: DocId, fx: &mut ReaderEffects) {
+        self.web_late_entry(doc, fx);
         let Some(b) = self.web.as_mut() else { return };
         match b.mode {
             WebMode::Loading { .. } => self.web_retry_loading(fx),
@@ -879,6 +933,43 @@ impl Reader {
             }
             WebMode::Focus { .. } | WebMode::Browse { .. } | WebMode::Inactive => {}
         }
+    }
+
+    /// M4: the document's root got focus before it had a line; speak the first line now, if
+    /// nothing else happened since and the wait is not stale.
+    fn web_late_entry(&mut self, doc: DocId, fx: &mut ReaderEffects) {
+        let now = self.now;
+        let Some(b) = self.web.as_mut() else { return };
+        let Some((d, at)) = b.entry_wait else { return };
+        if d != doc {
+            return;
+        }
+        if now.saturating_duration_since(at) > ENTRY_WAIT {
+            b.entry_wait = None;
+            return;
+        }
+        let WebMode::Browse { doc: cur_doc, .. } = b.mode else {
+            return;
+        };
+        if cur_doc != doc {
+            return;
+        }
+        let Some(h) = b.docs.get(doc) else { return };
+        let max_line = b.settings.max_line;
+        let placed = h.read.with(|dd| match cursor::first_line(dd, max_line) {
+            Mv::Landed { off, speak, .. } => cursor::cursor_at(dd, off)
+                .map(|c| (c, off, present::describe(dd, speak.start, speak.end))),
+            Mv::Edge(_) => None,
+        });
+        let Some((cur, off, items)) = placed else {
+            return;
+        };
+        b.entry_wait = None;
+        if let WebMode::Browse { cur: c, .. } = &mut b.mode {
+            *c = cur;
+        }
+        b.last_off = off;
+        self.web_speak(&items, fx);
     }
 
     /// Focus waited for the mirror: look the join up again.
@@ -928,12 +1019,14 @@ impl Reader {
             doc: Some(doc),
             since,
             editable: false,
+            known: true,
             ..
         } = b.mode
             && now.saturating_duration_since(since) >= LOADING_GRACE
         {
-            // The document is there, the node is not mirrored yet: browse the page from the
-            // top (7.3). A field would have been detected as editable and stays in focus mode.
+            // The document is there, the node is not mirrored yet, and the focus snapshot says it
+            // is not a field: browse the page from the top (7.3). A focus whose snapshot is
+            // still unknown stays in `Loading` with the grabs off (H2).
             let root = b.docs.get(doc).and_then(|h| h.read.with(WebDoc::root));
             if let Some(root) = root {
                 self.web_activate(doc, fx);
@@ -980,6 +1073,11 @@ impl Reader {
     fn browse_ctx(&mut self, fx: &mut ReaderEffects) -> Option<(DocId, WebCursor, u16)> {
         let b = self.web.as_mut()?;
         match b.mode {
+            WebMode::Browse { doc, .. } if b.docs.get(doc).is_none() => {
+                // The document is gone and its notice never came (M3): give the keys back.
+                self.on_doc(DocNotice::Gone { doc }, fx);
+                None
+            }
             WebMode::Browse { doc, cur, .. } => Some((doc, cur, b.settings.max_line)),
             WebMode::Loading { .. } => {
                 b.counters.still_loading += 1;
@@ -1000,6 +1098,9 @@ impl Reader {
         if self.web.is_none() {
             self.say("browse mode is not available", fx);
             return;
+        }
+        if let Some(b) = self.web.as_mut() {
+            b.entry_wait = None;
         }
         if c == CoreCmd::BrowseToggle {
             self.web_toggle(fx);

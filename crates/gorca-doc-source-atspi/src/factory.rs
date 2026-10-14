@@ -291,6 +291,10 @@ impl DocSourceFactory for AtspiDocSourceFactory {
                 ready: r.ready,
                 waited: r.waited,
                 probes: r.probes,
+                blocked: r.blocked,
+                slept: r.slept,
+                rounds: r.rounds,
+                sampled_nodes: r.sampled_nodes,
             }))
         })
     }

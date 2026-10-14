@@ -242,7 +242,9 @@ struct Actor {
     keys: std::collections::HashSet<NodeKey>,
     announced: bool,
     batch: Vec<DocDelta>,
-    pending_notice: Option<DocNotice>,
+    /// Notices the Reader's queue had no room for, oldest first. `Changed` is coalesced; the
+    /// first-useful and gone notices are kept (bounded by [`MAX_PENDING_NOTICES`]).
+    pending_notices: std::collections::VecDeque<DocNotice>,
     read: DocRead,
 }
 
@@ -263,9 +265,18 @@ impl Actor {
         self.counters
             .batches
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let t_apply = Instant::now();
         match self.tr.apply(&mut self.writer, batch) {
             Ok(out) => {
                 let published = self.writer.publish();
+                if !self.announced && published {
+                    tracing::info!(
+                        target: "gorca_phase",
+                        phase = "translate",
+                        wall_ms = t_apply.elapsed().as_secs_f64() * 1000.0,
+                        nodes = self.writer.doc().len(),
+                    );
+                }
                 if published {
                     self.counters
                         .publishes
@@ -313,25 +324,33 @@ impl Actor {
     }
 
     fn notify(&mut self, n: DocNotice) {
-        if let Some(prev) = self.pending_notice.take() {
-            // Coalesce `Changed`; never lose the first-useful or a gone notice.
-            match (&prev, &n) {
-                (DocNotice::Changed { .. }, DocNotice::Changed { .. }) => {}
-                (_, _) => {
-                    let _ = self.notices.try_send(prev);
-                }
+        // Coalesce `Changed` with a waiting `Changed`; never lose the first-useful or a gone
+        // notice (a lost `Gone` leaves browse keys grabbed on a dead document).
+        if matches!(n, DocNotice::Changed { .. })
+            && let Some(last @ DocNotice::Changed { .. }) = self.pending_notices.back_mut()
+        {
+            *last = n;
+        } else {
+            if self.pending_notices.len() >= MAX_PENDING_NOTICES {
+                // Make room by dropping the oldest `Changed`; if there is none, the oldest.
+                let at = self
+                    .pending_notices
+                    .iter()
+                    .position(|p| matches!(p, DocNotice::Changed { .. }))
+                    .unwrap_or(0);
+                self.pending_notices.remove(at);
             }
+            self.pending_notices.push_back(n);
         }
-        if self.notices.try_send(n).is_err() {
-            self.pending_notice = Some(n);
-        }
+        self.retry_notice();
     }
 
     fn retry_notice(&mut self) {
-        if let Some(n) = self.pending_notice.take()
-            && self.notices.try_send(n).is_err()
-        {
-            self.pending_notice = Some(n);
+        while let Some(n) = self.pending_notices.front().copied() {
+            if self.notices.try_send(n).is_err() {
+                break;
+            }
+            self.pending_notices.pop_front();
         }
     }
 
@@ -341,6 +360,10 @@ impl Actor {
         }
     }
 }
+
+const MAX_PENDING_NOTICES: usize = 8;
+/// How long retiring waits for room in the Reader's notice queue.
+const GONE_DELIVERY: Duration = Duration::from_secs(2);
 
 async fn run(
     spec: DocActorSpec,
@@ -389,7 +412,7 @@ async fn run(
         keys: std::collections::HashSet::new(),
         announced: false,
         batch: Vec::new(),
-        pending_notice: None,
+        pending_notices: std::collections::VecDeque::new(),
         read,
     };
 
@@ -450,7 +473,12 @@ async fn run(
     directory.remove(doc);
     src_task.abort_all();
     actions.abort_all();
-    let _ = a.notices.try_send(DocNotice::Gone { doc });
+    // `Gone` must arrive: wait for room (bounded), after the notices queued before it.
+    a.retry_notice();
+    for n in std::mem::take(&mut a.pending_notices) {
+        let _ = tokio::time::timeout(GONE_DELIVERY, a.notices.send(n)).await;
+    }
+    let _ = tokio::time::timeout(GONE_DELIVERY, a.notices.send(DocNotice::Gone { doc })).await;
 }
 
 /// Append a delta to the batch; true when it was the `Settled` marker.

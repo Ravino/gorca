@@ -32,11 +32,28 @@ use gorca_model::{
     AttrKey, DocDelta, DocNodeId, LocalId, Role, SrcNode, SrcNodeId, StateSet, TextEdit,
 };
 
-/// Orphan upserts and deferred lists kept across batches (a misbehaving source cannot grow us).
-const MAX_PENDING: usize = 200_000;
+use gorca_doc_source_api::limits::{
+    MAX_CHILDREN, MAX_DOC_NODES, MAX_NODE_TEXT_BYTES, MAX_PENDING_IDS as MAX_PENDING,
+};
+
+/// Text cut at [`MAX_NODE_TEXT_BYTES`], process wide (text clipping happens in free functions).
+static TEXT_CLIPPED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Clip a node's text to the cap; the original `Arc` is reused when nothing is cut.
+fn clip_arc(t: Option<&Arc<str>>) -> Option<Arc<str>> {
+    match t {
+        Some(a) if a.len() > MAX_NODE_TEXT_BYTES => {
+            TEXT_CLIPPED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let mut s = a.to_string();
+            gorca_doc_source_api::limits::clip_text(&mut s, MAX_NODE_TEXT_BYTES);
+            Some(Arc::from(s))
+        }
+        other => other.cloned(),
+    }
+}
 /// Deepest node the mirror keeps (a page nests a few dozen levels; 512 is far beyond any real
 /// one). Deeper content is cut and counted, never recursed into.
-pub const MAX_DEPTH: u32 = 512;
+pub const MAX_DEPTH: u32 = gorca_doc_source_api::limits::MAX_DEPTH;
 
 /// What a batch changed, for the actor (join table, notices).
 #[derive(Debug, Default)]
@@ -57,8 +74,10 @@ pub struct TranslatorStats {
     pub rejected: u64,
     pub placeholders: u64,
     pub orphans_dropped: u64,
-    /// Nodes cut because they were deeper than [`MAX_DEPTH`].
+    /// Nodes cut by the depth, fan-out, node-count or pending-list caps.
     pub truncated: u64,
+    /// Texts cut at the per-node byte cap (process wide).
+    pub text_clipped: u64,
 }
 
 #[derive(Debug, Default)]
@@ -223,7 +242,7 @@ pub fn spec_of(n: &SrcNode, nested_doc: bool) -> NodeSpec {
     let (flags, level) = derive_flags(n, nested_doc);
     let mut s = NodeSpec::new(n.role).level(level).flags(flags);
     s.name.clone_from(&n.name);
-    s.text.clone_from(&n.text);
+    s.text = clip_arc(n.text.as_ref());
     s.meta(meta_of(n))
 }
 
@@ -281,7 +300,18 @@ impl Translator {
 
     #[cfg(test)]
     pub fn stats(&self) -> TranslatorStats {
-        self.stats
+        TranslatorStats {
+            text_clipped: TEXT_CLIPPED.load(std::sync::atomic::Ordering::Relaxed),
+            ..self.stats
+        }
+    }
+
+    /// Count `n` cut nodes; the first cut of a document is logged (once, no content).
+    fn cut(&mut self, n: u64) {
+        if self.stats.truncated == 0 && n > 0 {
+            tracing::warn!("document exceeded a mirror cap; excess nodes are cut and counted");
+        }
+        self.stats.truncated = self.stats.truncated.saturating_add(n);
     }
 
     /// The mirror id of a source id.
@@ -397,11 +427,18 @@ impl Translator {
             break_parents.insert(p);
         }
         // Lists whose parent is still unknown wait for it.
-        for (p, list) in c.lists.drain() {
-            if self.deferred.len() < MAX_PENDING {
-                self.deferred.insert(p, list);
-            } else {
-                self.stats.orphans_dropped += 1;
+        if !c.lists.is_empty() {
+            let held: usize =
+                self.deferred.values().map(Vec::len).sum::<usize>() + self.orphans.len();
+            let mut room = MAX_PENDING.saturating_sub(held);
+            for (p, mut list) in c.lists.drain() {
+                list.truncate(MAX_CHILDREN);
+                if list.len() <= room {
+                    room -= list.len();
+                    self.deferred.insert(p, list);
+                } else {
+                    self.stats.orphans_dropped += 1;
+                }
             }
         }
 
@@ -600,11 +637,15 @@ impl Translator {
                 spec.flags = without_breaks(spec.flags);
             }
             order.push(n.id);
-            let kids = c
+            let mut kids = c
                 .lists
                 .remove(&n.id)
                 .or_else(|| this.deferred.remove(&n.id))
                 .unwrap_or_default();
+            if kids.len() > MAX_CHILDREN {
+                this.cut((kids.len() - MAX_CHILDREN) as u64);
+                kids.truncate(MAX_CHILDREN);
+            }
             Frame {
                 spec,
                 kids: kids.into_iter(),
@@ -624,8 +665,8 @@ impl Translator {
                 };
             };
             if let Some(k) = top.kids.next() {
-                if top.depth + 1 > MAX_DEPTH {
-                    self.stats.truncated += 1;
+                if top.depth + 1 > MAX_DEPTH || self.by_src.len() + order.len() >= MAX_DOC_NODES {
+                    self.cut(1);
                     c.take_node(k);
                     self.orphans.remove(&k);
                     continue;
@@ -696,18 +737,27 @@ impl Translator {
         let child_depth = Self::depth_of(w.doc(), parent) + 1;
         let mut desired: Vec<ChildSpec> = Vec::with_capacity(list.len());
         let mut new_orders: Vec<Vec<SrcNodeId>> = Vec::new();
-        let mut seen: HashSet<SrcNodeId> = HashSet::with_capacity(list.len());
-        for k in list {
+        let mut seen: HashSet<SrcNodeId> = HashSet::with_capacity(list.len().min(MAX_CHILDREN));
+        let mut moved: Vec<DocNodeId> = Vec::new();
+        if list.len() > MAX_CHILDREN {
+            self.cut((list.len() - MAX_CHILDREN) as u64);
+        }
+        for k in list.iter().take(MAX_CHILDREN) {
             if !seen.insert(*k) {
                 return Err(DocError::Duplicate(
                     self.by_src.get(k).copied().unwrap_or(parent),
                 ));
             }
             match self.by_src.get(k).copied() {
-                Some(id) if w.doc().contains(id) => desired.push(ChildSpec::Existing(id)),
+                Some(id) if w.doc().contains(id) => {
+                    if w.doc().parent(id) != Some(parent) {
+                        moved.push(id);
+                    }
+                    desired.push(ChildSpec::Existing(id));
+                }
                 Some(_) | None => {
-                    if child_depth > MAX_DEPTH {
-                        self.stats.truncated += 1;
+                    if child_depth > MAX_DEPTH || self.by_src.len() >= MAX_DOC_NODES {
+                        self.cut(1);
                         continue;
                     }
                     let data = c
@@ -732,6 +782,43 @@ impl Translator {
             at = end;
         }
         touched.insert(parent);
+        self.enforce_depth_of_moved(w, &moved, child_depth)?;
+        Ok(())
+    }
+
+    /// M1: a moved subtree keeps its height, so it can land deeper than [`MAX_DEPTH`]. Walk each
+    /// moved subtree (iteratively) from its new depth and remove what is too deep.
+    fn enforce_depth_of_moved(
+        &mut self,
+        w: &mut DocWriter,
+        moved: &[DocNodeId],
+        child_depth: u32,
+    ) -> Result<(), DocError> {
+        let mut too_deep: Vec<DocNodeId> = Vec::new();
+        for &top in moved {
+            let doc = w.doc();
+            let mut stack: Vec<(DocNodeId, u32)> = vec![(top, child_depth)];
+            let mut steps = 0usize;
+            while let Some((n, d)) = stack.pop() {
+                steps += 1;
+                if steps > MAX_DOC_NODES {
+                    break;
+                }
+                if d > MAX_DEPTH {
+                    too_deep.push(n);
+                    continue;
+                }
+                for k in doc.children(n) {
+                    stack.push((k, d + 1));
+                }
+            }
+        }
+        for id in too_deep {
+            if w.doc().contains(id) && w.doc().root() != Some(id) {
+                w.apply(DocOp::RemoveSubtree { id })?;
+                self.cut(1);
+            }
+        }
         Ok(())
     }
 
@@ -817,7 +904,7 @@ impl Translator {
         touched: &mut HashSet<DocNodeId>,
     ) -> Result<(), DocError> {
         let new: Arc<str> = match edit {
-            TextEdit::Replace(t) => Arc::clone(t),
+            TextEdit::Replace(t) => clip_arc(Some(t)).unwrap_or_else(|| Arc::clone(t)),
             TextEdit::Splice { range, text } => {
                 let cur: Vec<char> = w
                     .doc()
@@ -832,7 +919,10 @@ impl Translator {
                 out.extend(&cur[..s]);
                 out.push_str(text);
                 out.extend(&cur[e..]);
-                Arc::from(out)
+                {
+                    let whole: Arc<str> = Arc::from(out);
+                    clip_arc(Some(&whole)).unwrap_or(whole)
+                }
             }
         };
         w.apply(DocOp::SetText {
@@ -1390,5 +1480,140 @@ mod tests {
         w.publish();
         r.with(|d| assert!(d.validate().is_ok()));
         let _ = again;
+    }
+
+    // ---- M1/M2: the caps hold for moves, fan-out, pending lists and text ----------------
+
+    fn max_depth(d: &WebDoc) -> u32 {
+        d.preorder()
+            .map(|id| {
+                let mut k = 0;
+                let mut c = d.parent(id);
+                while let Some(p) = c {
+                    k += 1;
+                    c = d.parent(p);
+                }
+                k
+            })
+            .max()
+            .unwrap_or(0)
+    }
+
+    #[test]
+    fn moving_a_subtree_under_a_deep_node_cannot_pass_the_depth_cap() {
+        let (mut w, r) = channel(1);
+        let mut t = Translator::new();
+        let len = u64::from(MAX_DEPTH) - 1;
+        let mut nodes = vec![n(1, Role::DocumentWeb)];
+        let mut lists = Vec::new();
+        for base in [10u64, 100_000] {
+            for i in 0..len {
+                nodes.push(n(base + i, Role::Panel));
+                if i > 0 {
+                    lists.push(list(base + i - 1, &[base + i]));
+                }
+            }
+        }
+        let mut b = vec![
+            DocDelta::Reset {
+                root: SrcNodeId(1),
+                nav_id: 1,
+            },
+            DocDelta::Upsert(nodes),
+            list(1, &[10, 100_000]),
+        ];
+        b.extend(lists);
+        b.push(DocDelta::Settled { batch: 1 });
+        t.apply(&mut w, b).unwrap();
+        w.publish();
+        let cut_before = t.stats().truncated;
+        t.apply(
+            &mut w,
+            vec![
+                list(1, &[10]),
+                list(10 + len - 1, &[100_000]),
+                DocDelta::Settled { batch: 2 },
+            ],
+        )
+        .unwrap();
+        w.publish();
+        assert!(
+            r.with(max_depth) <= MAX_DEPTH,
+            "depth {}",
+            r.with(max_depth)
+        );
+        assert!(t.stats().truncated > cut_before, "the cut is counted");
+    }
+
+    #[test]
+    fn a_fan_out_beyond_the_child_cap_is_cut_and_counted() {
+        let (mut w, r) = channel(1);
+        let mut t = Translator::new();
+        let k = (MAX_CHILDREN + 25) as u64;
+        let mut nodes = vec![n(1, Role::DocumentWeb)];
+        nodes.extend((2..2 + k).map(|i| n(i, Role::Panel)));
+        let kids: Vec<u64> = (2..2 + k).collect();
+        t.apply(
+            &mut w,
+            vec![
+                DocDelta::Reset {
+                    root: SrcNodeId(1),
+                    nav_id: 1,
+                },
+                DocDelta::Upsert(nodes),
+                list(1, &kids),
+                DocDelta::Settled { batch: 1 },
+            ],
+        )
+        .unwrap();
+        w.publish();
+        assert_eq!(r.with(WebDoc::len), MAX_CHILDREN + 1);
+        assert_eq!(t.stats().truncated, 25);
+    }
+
+    #[test]
+    fn parked_child_lists_are_bounded_by_total_ids() {
+        let (mut w, _r) = channel(1);
+        let mut t = Translator::new();
+        t.apply(&mut w, chain(2)).unwrap();
+        let huge: Vec<u64> = (1_000_000..1_000_000 + 1_000_000).collect();
+        for b in 0..6 {
+            t.apply(
+                &mut w,
+                vec![
+                    list(9_000_000 + b, &huge),
+                    DocDelta::Settled { batch: 2 + b },
+                ],
+            )
+            .unwrap();
+        }
+        let ids: usize = t.deferred.values().map(Vec::len).sum();
+        assert!(ids + t.orphans.len() <= MAX_PENDING, "{ids} ids parked");
+        assert!(t.stats().orphans_dropped > 0);
+    }
+
+    #[test]
+    fn node_text_is_clipped_to_the_byte_cap() {
+        let (mut w, r) = channel(1);
+        let mut t = Translator::new();
+        let mut x = n(2, Role::StaticText);
+        x.text = Some(Arc::from("é".repeat(MAX_NODE_TEXT_BYTES)));
+        t.apply(
+            &mut w,
+            vec![
+                DocDelta::Reset {
+                    root: SrcNodeId(1),
+                    nav_id: 1,
+                },
+                DocDelta::Upsert(vec![n(1, Role::DocumentWeb), x]),
+                list(1, &[2]),
+                DocDelta::Settled { batch: 1 },
+            ],
+        )
+        .unwrap();
+        w.publish();
+        let len = r.with(|d| d.text_len() as usize);
+        assert!(len <= MAX_NODE_TEXT_BYTES, "{len} scalars");
+        assert!(t.stats().text_clipped >= 1);
     }
 }

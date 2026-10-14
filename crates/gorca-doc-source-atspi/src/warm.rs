@@ -30,6 +30,18 @@ pub struct WarmReport {
     pub probes: u32,
     pub waited: Duration,
     pub sampled_nodes: usize,
+    /// Time inside D-Bus calls, and in our own sleeps between rounds (both inside `waited`).
+    pub blocked: Duration,
+    pub slept: Duration,
+    pub rounds: u32,
+}
+
+/// Await `f`, adding its wall time to `acc`.
+async fn timed<T>(acc: &mut Duration, f: impl std::future::Future<Output = T>) -> T {
+    let t = Instant::now();
+    let r = f.await;
+    *acc += t.elapsed();
+    r
 }
 
 fn dl(ms: u64) -> Deadline {
@@ -51,41 +63,57 @@ pub async fn warm_domains(
     }
     // One throwaway query per domain; results are ignored (the first answer may be empty).
     let lane = conn.next_lane();
-    let _ = conn
-        .call(lane, dl(800), doc, ACC, "GetAttributes", &())
-        .await;
-    let _ = conn
-        .call(
+    let _ = timed(
+        &mut rep.blocked,
+        conn.call(lane, dl(800), doc, ACC, "GetAttributes", &()),
+    )
+    .await;
+    let _ = timed(
+        &mut rep.blocked,
+        conn.call(
             lane,
             dl(800),
             doc,
             "org.a11y.atspi.Text",
             "GetText",
             &(0i32, 1i32),
-        )
-        .await;
-    let _ = conn
-        .call(
+        ),
+    )
+    .await;
+    let _ = timed(
+        &mut rep.blocked,
+        conn.call(
             lane,
             dl(800),
             doc,
             "org.a11y.atspi.Component",
             "GetExtents",
             &(0u32,),
-        )
-        .await;
-    let _ = conn
-        .call(lane, dl(800), doc, ACC, "GetRelationSet", &())
-        .await;
-    let _ = conn
-        .call(lane, dl(800), doc, "org.a11y.atspi.Table", "GetNRows", &())
-        .await;
+        ),
+    )
+    .await;
+    let _ = timed(
+        &mut rep.blocked,
+        conn.call(lane, dl(800), doc, ACC, "GetRelationSet", &()),
+    )
+    .await;
+    let _ = timed(
+        &mut rep.blocked,
+        conn.call(lane, dl(800), doc, "org.a11y.atspi.Table", "GetNRows", &()),
+    )
+    .await;
     rep.probes += 5;
 
     let end = t0 + budget;
     let mut last: Option<(usize, usize)> = None;
     loop {
-        let kids = match conn.call(lane, dl(800), doc, ACC, "GetChildren", &()).await {
+        rep.rounds += 1;
+        let kids = match timed(
+            &mut rep.blocked,
+            conn.call(lane, dl(800), doc, ACC, "GetChildren", &()),
+        )
+        .await
+        {
             Ok(m) => wire::parse_children(m.body().data().bytes()).unwrap_or_default(),
             Err(_) => Vec::new(),
         };
@@ -99,7 +127,12 @@ pub async fn warm_domains(
             n => vec![0, n / 2, n - 1],
         };
         for i in picks {
-            let Ok(m) = get_tree_raw(conn, lane, &kids[i].1, dl(2000)).await else {
+            let Ok(m) = timed(
+                &mut rep.blocked,
+                get_tree_raw(conn, lane, &kids[i].1, dl(2000)),
+            )
+            .await
+            else {
                 continue;
             };
             rep.probes += 1;
@@ -123,7 +156,11 @@ pub async fn warm_domains(
         if Instant::now() >= end {
             break;
         }
-        tokio::time::sleep(Duration::from_millis(25)).await;
+        timed(
+            &mut rep.slept,
+            tokio::time::sleep(Duration::from_millis(25)),
+        )
+        .await;
     }
     rep.waited = t0.elapsed();
     if rep.ready {

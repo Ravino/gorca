@@ -255,6 +255,7 @@ fn loading_waits_for_the_document_and_resolves_to_browse_or_focus() {
     let pending = WebEv::FocusPending {
         focus: nk(9),
         editable: false,
+        known: true,
         now,
     };
     let (m, fx) = step(WebMode::Inactive, pending);
@@ -301,6 +302,7 @@ fn an_editable_loading_focus_is_already_focus_mode_and_says_so_once() {
         WebEv::FocusPending {
             focus: nk(9),
             editable: true,
+            known: true,
             now,
         },
     );
@@ -941,4 +943,218 @@ fn the_first_focus_on_a_document_starts_at_its_first_line() {
     );
     let fx = r.key(CoreCmd::BrowseCursorNextLine);
     assert_eq!(spoken(&fx), ["Read link the docs now."]);
+}
+
+// ---- reviewer probes turned into regression tests (M7a review: H2, M3, M4) ---------------
+
+/// H2: a focused field the mirror does not know yet must never become browse mode.
+#[test]
+fn a_cold_unknown_focus_stays_loading_with_the_grabs_off() {
+    let mut r = rig();
+    r.focus(3000); // not in the desktop mirror, not in the join
+    assert!(matches!(r.mode(), WebMode::Loading { known: false, .. }));
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::InDocument {
+            focus: nk(3000),
+            doc: DocId(1),
+        }),
+        r.now,
+    );
+    r.mirror.apply(
+        SnapshotBatch {
+            nodes: vec![snap(
+                3000,
+                Role::TextEntry,
+                "Search",
+                StateSet::EDITABLE | StateSet::FOCUSABLE,
+            )],
+            ..Default::default()
+        },
+        ApplyOrigin::Push,
+    );
+    r.now += Duration::from_millis(1100);
+    r.reader.handle(ReaderMsg::Timer, r.now);
+    assert!(
+        matches!(r.mode(), WebMode::Loading { .. }),
+        "still waiting, got {:?}",
+        r.mode()
+    );
+    assert!(
+        !matches!(r.reader.mode(), Mode::Browse { .. }),
+        "browse grabs must stay off while the focus may be a field"
+    );
+}
+
+#[test]
+fn a_better_reading_of_the_pending_focus_is_kept() {
+    let now = Instant::now();
+    let pending = |editable, known| WebEv::FocusPending {
+        focus: nk(9),
+        editable,
+        known,
+        now,
+    };
+    let (m, _) = step(WebMode::Inactive, pending(false, false));
+    let (m, _) = step(m, pending(true, true));
+    assert!(matches!(
+        m,
+        WebMode::Loading {
+            editable: true,
+            known: true,
+            ..
+        }
+    ));
+    // A later, vaguer reading does not erase it.
+    let (m, _) = step(m, pending(false, false));
+    assert!(matches!(
+        m,
+        WebMode::Loading {
+            editable: true,
+            known: true,
+            ..
+        }
+    ));
+}
+
+fn page2_root_only() -> Vec<DocDelta> {
+    let mut body = block(src(1, Role::DocumentWeb, Some(5001)));
+    body.name = Some(Arc::from("Second"));
+    vec![
+        DocDelta::Reset {
+            root: SrcNodeId(1),
+            nav_id: 1,
+        },
+        DocDelta::Upsert(vec![body]),
+        DocDelta::Settled { batch: 1 },
+    ]
+}
+
+fn page2_rest() -> Vec<DocDelta> {
+    vec![
+        DocDelta::Upsert(vec![
+            block(src(2, Role::Paragraph, Some(5002))),
+            run(3, "First line of the second page"),
+        ]),
+        kids(1, &[2]),
+        kids(2, &[3]),
+        DocDelta::Settled { batch: 2 },
+    ]
+}
+
+/// Enter on a link: the new document's first publish holds the root only; the first line is
+/// spoken when the content arrives (M4).
+fn navigate_to_a_page_that_builds_progressively(
+    r: &mut Rig,
+) -> (Vec<String>, Translator, DocWriter) {
+    r.focus(1006);
+    r.key(CoreCmd::BrowseCursorNextLine);
+    let (mut w2, read2) = channel(9);
+    let mut t2 = Translator::new();
+    let out = t2.apply(&mut w2, page2_root_only()).unwrap();
+    w2.publish();
+    for (l, id) in out.join_add {
+        r.join.set(
+            NodeKey {
+                app: app(),
+                local: l,
+            },
+            (DocId(2), id),
+        );
+    }
+    let (ctl_tx, _ctl2) = mpsc::channel(16);
+    let (ev_tx, _ev2) = mpsc::channel(16);
+    r.docs.insert(DocHandle {
+        doc: DocId(2),
+        app: app(),
+        root: nk(5001),
+        read: read2,
+        ctl: ctl_tx,
+        events: ev_tx,
+    });
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::FirstUseful {
+            doc: DocId(2),
+            app: app(),
+        }),
+        r.now,
+    );
+    r.mirror.apply(
+        SnapshotBatch {
+            nodes: vec![snap(5001, Role::DocumentWeb, "Second", StateSet::FOCUSABLE)],
+            ..Default::default()
+        },
+        ApplyOrigin::Push,
+    );
+    let fx_focus = r.focus(5001);
+    (spoken(&fx_focus), t2, w2)
+}
+
+fn deliver_page2_rest(r: &mut Rig, t2: &mut Translator, w2: &mut DocWriter) -> Vec<String> {
+    let out = t2.apply(w2, page2_rest()).unwrap();
+    w2.publish();
+    for (l, id) in out.join_add {
+        r.join.set(
+            NodeKey {
+                app: app(),
+                local: l,
+            },
+            (DocId(2), id),
+        );
+    }
+    let fx = r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed {
+            doc: DocId(2),
+            rev: 2,
+        }),
+        r.now,
+    );
+    spoken(&fx)
+}
+
+#[test]
+fn the_first_line_of_a_page_that_builds_after_focus_is_spoken_when_it_arrives() {
+    let mut r = rig();
+    let (at_focus, mut t2, mut w2) = navigate_to_a_page_that_builds_progressively(&mut r);
+    assert!(!at_focus.iter().any(|s| s.contains("First line")));
+    r.now += Duration::from_millis(300);
+    let late = deliver_page2_rest(&mut r, &mut t2, &mut w2);
+    assert!(
+        late.iter().any(|s| s.contains("First line")),
+        "the first line was not spoken: {late:?}"
+    );
+}
+
+#[test]
+fn a_late_first_line_is_dropped_after_a_key_or_a_stale_wait() {
+    // A key was pressed first: the user is already reading.
+    let mut r = rig();
+    let (_, mut t2, mut w2) = navigate_to_a_page_that_builds_progressively(&mut r);
+    r.key(CoreCmd::BrowseCursorNextLine);
+    let late = deliver_page2_rest(&mut r, &mut t2, &mut w2);
+    assert!(!late.iter().any(|s| s.contains("First line")), "{late:?}");
+    // Content that arrives long after the focus is not announced out of the blue.
+    let mut r = rig();
+    let (_, mut t2, mut w2) = navigate_to_a_page_that_builds_progressively(&mut r);
+    r.now += Duration::from_secs(3);
+    let late = deliver_page2_rest(&mut r, &mut t2, &mut w2);
+    assert!(!late.iter().any(|s| s.contains("First line")), "{late:?}");
+}
+
+/// M3: the document vanished and its Gone notice never arrived: the next browse key gives the
+/// keys back instead of swallowing them.
+#[test]
+fn browse_keys_on_a_vanished_document_hand_the_keyboard_back() {
+    let mut r = rig();
+    r.focus(1006);
+    r.docs.remove(DocId(1));
+    r.key(CoreCmd::QuicknavNextHeading);
+    assert!(
+        !matches!(r.reader.mode(), Mode::Browse { .. }),
+        "browse grabs must be released, mode {:?}",
+        r.reader.mode()
+    );
+    assert!(matches!(
+        r.mode(),
+        WebMode::Inactive | WebMode::Loading { .. }
+    ));
 }

@@ -479,6 +479,12 @@ impl AtspiDocSource {
                 .into_deltas(Some(self.config.nav_id), self.config.chunk);
             live.out.emit(&ctx.sink, deltas);
             self.metrics.set_first_block(t_attach.elapsed(), n_a);
+            tracing::info!(
+                target: "gorca_phase",
+                phase = "first_block",
+                wall_ms = t_attach.elapsed().as_secs_f64() * 1000.0,
+                nodes = n_a,
+            );
             if let Ok(rest) = fetch_forest(
                 &self.app,
                 &self.interner,
@@ -583,6 +589,23 @@ impl AtspiDocSource {
         let nodes: usize = docs.iter().map(|d| d.block.node_count()).sum();
         let mut timings = docs[0].timings.clone();
         timings.total = t_attach.elapsed();
+        let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+        tracing::info!(
+            target: "gorca_phase",
+            phase = "fetch",
+            total_ms = ms(timings.total),
+            warm_ms = ms(timings.warm),
+            frontier_ms = ms(timings.frontier),
+            get_tree_ms = ms(timings.get_tree),
+            roles_ms = ms(timings.roles),
+            states_ms = ms(timings.states),
+            text_ms = ms(timings.text),
+            assemble_ms = ms(timings.assemble),
+            heaviest_get_tree_ms = ms(timings.heaviest_get_tree),
+            calls = timings.calls,
+            tree_bytes = timings.tree_bytes,
+            nodes,
+        );
         self.metrics.set_build(timings, nodes);
         for d in docs {
             register_locals(live, d);

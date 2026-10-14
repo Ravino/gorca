@@ -326,6 +326,8 @@ pub struct ReaderCounters {
     pub revalidations: u64,
     /// RV-1 replies that agreed with what was presented.
     pub revalidations_agreed: u64,
+    /// Web document corrections that were not spoken (browse mode owns that speech).
+    pub revalidations_suppressed: u64,
     /// Corrections that replaced the earlier utterance.
     pub refined: u64,
     /// Corrections spoken as a follow-up.
