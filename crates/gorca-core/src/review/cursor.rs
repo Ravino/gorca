@@ -2,8 +2,6 @@
 
 use gorca_model::{DocId, NodeKey};
 
-use crate::mode::WebCursor;
-
 /// Unique per model build within a process; never reused.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct ModelId(pub u64);
@@ -20,11 +18,7 @@ pub struct NavReqId(pub u64);
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ReviewFrom {
     Focus,
-    Browse {
-        doc: DocId,
-        cursor: WebCursor,
-        sticky: bool,
-    },
+    Browse { doc: DocId, sticky: bool },
 }
 
 /// The node the user was on when review started, and where review returns to.

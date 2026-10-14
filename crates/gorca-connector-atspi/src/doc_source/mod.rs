@@ -36,6 +36,7 @@ impl DocSource for AtspiDocSource {
                 | ActionCaps::SET_SELECTION,
             // The AT-SPI object reference is the join key itself.
             join_keys: JoinKeyCaps::EXACT,
+            silent_reorders: false,
         }
     }
 

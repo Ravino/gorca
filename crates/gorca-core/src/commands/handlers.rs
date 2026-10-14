@@ -258,6 +258,69 @@ impl Reader {
             | CoreCmd::ReviewSimpleToggle
             | CoreCmd::ReviewFocusFollowsToggle
             | CoreCmd::InfoStatusBar => self.review_command(c, rep, now, fx),
+            CoreCmd::BrowseToggle
+            | CoreCmd::BrowseActivate
+            | CoreCmd::BrowseEscape
+            | CoreCmd::BrowseCursorNextLine
+            | CoreCmd::BrowseCursorPrevLine
+            | CoreCmd::BrowseCursorNextChar
+            | CoreCmd::BrowseCursorPrevChar
+            | CoreCmd::BrowseCursorNextWord
+            | CoreCmd::BrowseCursorPrevWord
+            | CoreCmd::BrowseCursorLineStart
+            | CoreCmd::BrowseCursorLineEnd
+            | CoreCmd::BrowseCursorTop
+            | CoreCmd::BrowseCursorBottom
+            | CoreCmd::BrowseCursorPageUp
+            | CoreCmd::BrowseCursorPageDown
+            | CoreCmd::QuicknavNextHeading
+            | CoreCmd::QuicknavPrevHeading
+            | CoreCmd::QuicknavNextHeading1
+            | CoreCmd::QuicknavNextHeading2
+            | CoreCmd::QuicknavNextHeading3
+            | CoreCmd::QuicknavNextHeading4
+            | CoreCmd::QuicknavNextHeading5
+            | CoreCmd::QuicknavNextHeading6
+            | CoreCmd::QuicknavPrevHeading1
+            | CoreCmd::QuicknavPrevHeading2
+            | CoreCmd::QuicknavPrevHeading3
+            | CoreCmd::QuicknavPrevHeading4
+            | CoreCmd::QuicknavPrevHeading5
+            | CoreCmd::QuicknavPrevHeading6
+            | CoreCmd::QuicknavNextLink
+            | CoreCmd::QuicknavNextVisited
+            | CoreCmd::QuicknavNextUnvisited
+            | CoreCmd::QuicknavNextFormField
+            | CoreCmd::QuicknavNextList
+            | CoreCmd::QuicknavNextListItem
+            | CoreCmd::QuicknavNextButton
+            | CoreCmd::QuicknavNextEdit
+            | CoreCmd::QuicknavNextSeparator
+            | CoreCmd::QuicknavNextRadio
+            | CoreCmd::QuicknavNextCombobox
+            | CoreCmd::QuicknavNextCheckbox
+            | CoreCmd::QuicknavNextGraphic
+            | CoreCmd::QuicknavNextBlockquote
+            | CoreCmd::QuicknavNextLandmark
+            | CoreCmd::QuicknavNextEmbedded
+            | CoreCmd::QuicknavNextTable
+            | CoreCmd::QuicknavPrevLink
+            | CoreCmd::QuicknavPrevVisited
+            | CoreCmd::QuicknavPrevUnvisited
+            | CoreCmd::QuicknavPrevFormField
+            | CoreCmd::QuicknavPrevList
+            | CoreCmd::QuicknavPrevListItem
+            | CoreCmd::QuicknavPrevButton
+            | CoreCmd::QuicknavPrevEdit
+            | CoreCmd::QuicknavPrevSeparator
+            | CoreCmd::QuicknavPrevRadio
+            | CoreCmd::QuicknavPrevCombobox
+            | CoreCmd::QuicknavPrevCheckbox
+            | CoreCmd::QuicknavPrevGraphic
+            | CoreCmd::QuicknavPrevBlockquote
+            | CoreCmd::QuicknavPrevLandmark
+            | CoreCmd::QuicknavPrevEmbedded
+            | CoreCmd::QuicknavPrevTable => self.browse_command(c, rep, now, fx),
             planned_cmds!() => {
                 // Declared but not implemented: the keymap never routes these (inert), so this
                 // is only reachable through a stale table. Say so instead of staying silent.
@@ -496,13 +559,14 @@ impl Reader {
         let keys_changed = self.keys.modifiers != l.mode_keys.modifiers
             || self.keys.commands != l.mode_keys.commands
             || self.keys.exact != l.mode_keys.exact
-            || self.keys.quick_nav != l.mode_keys.quick_nav;
+            || self.keys.quick_nav != l.mode_keys.quick_nav
+            || self.keys.web_escape != l.mode_keys.web_escape;
         self.cmd.republish();
         // The grab set follows the keymap (HR-1): re-sent only when the keys changed, and
         // always once at startup, which is when the source learns what to grab.
         self.keys = l.mode_keys.clone();
         if keys_changed || l.cause == LoadCause::Startup {
-            fx.push(ReaderEffect::SetGrabSet(self.mode.grab_set(&self.keys)));
+            fx.push(ReaderEffect::SetGrabSet(self.current_grabs()));
         }
         self.send_levels(fx);
         let new_problems = l.problems_hash != self.cmd.problems_hash;

@@ -1,0 +1,12 @@
+{
+  "meta": {"utc": "2026-10-14T04:35:54Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "5.43 5.62 5.91 3/2535 2096554", "git_rev": "1cd9e24", "git_dirty": "true", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "label": "m7-w2b", "reader": "daemon:<repo>/.claude/worktrees/agent-a1d08cc29c61e0bae/target/release/gorca", "backend": "voicego", "repeats": "1", "samples_per_series": "150", "l2_trials": "40", "quick": "true", "loadavg_end": "5.43 5.62 5.91 2/2535 2096551", "reader_env": "GORCA_M7=1 RUST_LOG=gorca_core::doc_registry=debug,gorca_core::browse=debug", "gates": "L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats"},
+  "rows": [
+    {"id": "W2b.w2b_ms.n", "scenario": "W2b", "bus": "daemon/voicego", "value": 3, "min": 3, "max": 3, "runs": 1, "unit": "samples", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "W2b.w2b_ms.p50", "scenario": "W2b", "bus": "daemon/voicego", "value": 277.146871, "min": 277.146871, "max": 277.146871, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "W2b.w2b_ms.p95", "scenario": "W2b", "bus": "daemon/voicego", "value": 306.112841, "min": 306.112841, "max": 306.112841, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "W2b.w2b_ms.p99", "scenario": "W2b", "bus": "daemon/voicego", "value": 306.112841, "min": 306.112841, "max": 306.112841, "runs": 1, "unit": "ms", "op": "<=", "threshold": 150, "verdict": "FAIL", "note": ""},
+    {"id": "W2b.w2b_ms.p999", "scenario": "W2b", "bus": "daemon/voicego", "value": 306.112841, "min": 306.112841, "max": 306.112841, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "W2b.w2b_ms.max", "scenario": "W2b", "bus": "daemon/voicego", "value": 306.112841, "min": 306.112841, "max": 306.112841, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "W2b.lost", "scenario": "W2b", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "trials", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"}
+  ]
+}

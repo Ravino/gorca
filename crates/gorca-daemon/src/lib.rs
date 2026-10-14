@@ -404,6 +404,7 @@ async fn run_inner(
     };
     let atspi_state = AtspiState::default();
     let core = wire::wire_present_log(core, &opts, &atspi_state);
+    let core = wire::wire_web(core, &opts, &atspi_state);
     if let Some(f) = on_ready {
         f(DaemonProbe::new(core.mirrors(), atspi_state.clone()));
     }

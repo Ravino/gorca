@@ -20,6 +20,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
+use gorca_doc_source_api::limits::{MAX_CHILDREN, MAX_DEPTH, MAX_DOC_NODES};
 use gorca_doc_source_api::web_attrs;
 use gorca_model::{SrcNode, SrcNodeId};
 use smallvec::SmallVec;
@@ -54,6 +55,8 @@ pub struct MatchStats {
     pub by_role_tag: u32,
     pub new_ids: u32,
     pub dropped: u32,
+    /// Fetched nodes cut by the depth, fan-out or node caps, or listed twice (a cycle).
+    pub truncated: u32,
 }
 
 impl MatchStats {
@@ -64,6 +67,7 @@ impl MatchStats {
         self.by_role_tag += o.by_role_tag;
         self.new_ids += o.new_ids;
         self.dropped += o.dropped;
+        self.truncated = self.truncated.saturating_add(o.truncated);
     }
 
     /// Share of matches that came from the heuristic rungs.
@@ -238,6 +242,19 @@ fn lcs_pairs(a: &[usize], b: &[usize], eq: impl Fn(usize, usize) -> bool) -> Vec
         }
     }
     out
+}
+
+/// One level of the iterative rebind walk.
+struct RebindFrame {
+    old_id: SrcNodeId,
+    new_root: usize,
+    old_children: Vec<SrcNodeId>,
+    kids_new: Vec<usize>,
+    pairing: Vec<Option<usize>>,
+    next: usize,
+    used_old: HashSet<usize>,
+    list: SmallVec<[SrcNodeId; 8]>,
+    depth: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -433,6 +450,13 @@ impl IdentityMap {
         }
     }
 
+    /// [`Self::depth_of`] clamped to `u32`, for the depth cap.
+    fn depth_u32(&self, id: SrcNodeId) -> u32 {
+        u32::try_from(self.depth_of(id))
+            .unwrap_or(MAX_DEPTH)
+            .min(MAX_DEPTH)
+    }
+
     /// Depth of a node (root = 0); used to process dirty parents top-down.
     pub fn depth_of(&self, id: SrcNodeId) -> usize {
         let mut d = 0;
@@ -455,7 +479,8 @@ impl IdentityMap {
         if fetched.block.nodes.is_empty() || !self.nodes.contains_key(&id) {
             return out;
         }
-        self.rebind_subtree(id, 0, fetched, &child_idx, &mut out);
+        let depth = self.depth_u32(id);
+        self.rebind_subtree(id, 0, fetched, &child_idx, &mut out, depth);
         out
     }
 
@@ -575,7 +600,8 @@ impl IdentityMap {
             }
         }
         for (old_id, new_root) in continued_old {
-            self.rebind_subtree(old_id, new_root, added, &child_idx, &mut out);
+            let depth = self.depth_u32(parent) + 1;
+            self.rebind_subtree(old_id, new_root, added, &child_idx, &mut out, depth);
         }
 
         // Build the new child list.
@@ -587,7 +613,17 @@ impl IdentityMap {
                     out.stats.by_path += 1;
                 }
             } else if let Some(&ri) = root_of_path.get(p) {
-                let id = self.insert_fresh_subtree(ri, parent, added, &child_idx, &mut out);
+                let depth = self.depth_u32(parent) + 1;
+                let mut visited = HashSet::new();
+                let id = self.insert_fresh_subtree(
+                    ri,
+                    parent,
+                    added,
+                    &child_idx,
+                    &mut out,
+                    depth,
+                    &mut visited,
+                );
                 new_list.push(id);
             }
         }
@@ -693,6 +729,10 @@ impl IdentityMap {
     }
 
     /// New subtree `new_root` continues the logical node `old_id` (whose own subtree is dead).
+    ///
+    /// Iterative (SL-3: the fetched tree is untrusted and can be deeper than any stack): an
+    /// explicit frame stack, a cap at [`MAX_DEPTH`] below `depth`, and a visited set so a path
+    /// the forest lists twice cannot loop.
     fn rebind_subtree(
         &mut self,
         old_id: SrcNodeId,
@@ -700,7 +740,52 @@ impl IdentityMap {
         added: &FetchedDoc,
         child_idx: &HashMap<usize, Vec<usize>>,
         out: &mut Outcome,
+        depth: u32,
     ) {
+        let mut visited: HashSet<usize> = HashSet::new();
+        visited.insert(new_root);
+        let first = self.rebind_open(old_id, new_root, added, child_idx, out, depth, &mut visited);
+        let mut stack = vec![first];
+        while let Some(top) = stack.last_mut() {
+            if top.next >= top.kids_new.len() {
+                if let Some(done) = stack.pop() {
+                    self.rebind_close(done, added, out);
+                }
+                continue;
+            }
+            let j = top.next;
+            top.next += 1;
+            let k = top.kids_new[j];
+            if let Some(i) = top.pairing[j] {
+                top.used_old.insert(i);
+                let child = top.old_children[i];
+                top.list.push(child);
+                let d = top.depth + 1;
+                let f = self.rebind_open(child, k, added, child_idx, out, d, &mut visited);
+                stack.push(f);
+            } else {
+                let (parent, d) = (top.old_id, top.depth + 1);
+                let id =
+                    self.insert_fresh_subtree(k, parent, added, child_idx, out, d, &mut visited);
+                if let Some(top) = stack.last_mut() {
+                    top.list.push(id);
+                }
+            }
+        }
+    }
+
+    /// The matching half of a rebind: pair the children of `old_id` with those of `new_root`.
+    #[allow(clippy::too_many_arguments)]
+    fn rebind_open(
+        &mut self,
+        old_id: SrcNodeId,
+        new_root: usize,
+        added: &FetchedDoc,
+        child_idx: &HashMap<usize, Vec<usize>>,
+        out: &mut Outcome,
+        depth: u32,
+        visited: &mut HashSet<usize>,
+    ) -> RebindFrame {
         let old_children: Vec<SrcNodeId> = self
             .nodes
             .get(&old_id)
@@ -713,10 +798,8 @@ impl IdentityMap {
             let p = rec.path;
             self.by_path.remove(&p);
         }
-        let n = &added.block.nodes[new_root];
-        let info = sig_of(n, added.raw_roles[new_root], self.use_dom_id());
-        let path = added.keys[new_root];
-        let kids_new: Vec<usize> = child_idx.get(&new_root).cloned().unwrap_or_default();
+        let mut kids_new: Vec<usize> = child_idx.get(&new_root).cloned().unwrap_or_default();
+        self.clip_children(&mut kids_new, depth, visited, out);
 
         // Match the children: old ones are all dead (their parent's object is gone).
         let old_infos: Vec<SibInfo> = old_children
@@ -835,18 +918,32 @@ impl IdentityMap {
             }
         }
 
-        let mut used_old = HashSet::new();
-        let mut list: SmallVec<[SrcNodeId; 8]> = SmallVec::new();
-        for (j, &k) in kids_new.iter().enumerate() {
-            if let Some(i) = pairing[j] {
-                used_old.insert(i);
-                self.rebind_subtree(old_children[i], k, added, child_idx, out);
-                list.push(old_children[i]);
-            } else {
-                let id = self.insert_fresh_subtree(k, old_id, added, child_idx, out);
-                list.push(id);
-            }
+        RebindFrame {
+            old_id,
+            new_root,
+            old_children,
+            kids_new,
+            pairing,
+            next: 0,
+            used_old: HashSet::new(),
+            list: SmallVec::new(),
+            depth,
         }
+    }
+
+    /// The finishing half of a rebind, once every child is handled.
+    fn rebind_close(&mut self, f: RebindFrame, added: &FetchedDoc, out: &mut Outcome) {
+        let RebindFrame {
+            old_id,
+            new_root,
+            old_children,
+            used_old,
+            list,
+            ..
+        } = f;
+        let n = &added.block.nodes[new_root];
+        let info = sig_of(n, added.raw_roles[new_root], self.use_dom_id());
+        let path = added.keys[new_root];
         for (i, c) in old_children.iter().enumerate() {
             if !used_old.contains(&i) {
                 out.removed.push(*c);
@@ -873,7 +970,35 @@ impl IdentityMap {
         }
     }
 
-    /// Insert a brand new subtree with fresh ids; returns the id of its root.
+    /// Cut a fetched child list to the caps: nothing below [`MAX_DEPTH`], at most
+    /// [`MAX_CHILDREN`], no index seen before in this walk (a cycle or a duplicate), and no
+    /// growth past [`MAX_DOC_NODES`]. Every cut is counted in `out.stats.truncated`.
+    fn clip_children(
+        &self,
+        kids: &mut Vec<usize>,
+        depth: u32,
+        visited: &mut HashSet<usize>,
+        out: &mut Outcome,
+    ) {
+        let before = kids.len();
+        if depth >= MAX_DEPTH || self.nodes.len() >= MAX_DOC_NODES {
+            kids.clear();
+        } else {
+            kids.retain(|k| visited.insert(*k));
+            kids.truncate(MAX_CHILDREN);
+        }
+        let cut = before - kids.len();
+        if cut > 0 {
+            out.stats.truncated = out
+                .stats
+                .truncated
+                .saturating_add(u32::try_from(cut).unwrap_or(u32::MAX));
+        }
+    }
+
+    /// Insert a brand new subtree with fresh ids; returns the id of its root. Iterative and
+    /// capped like [`Self::rebind_subtree`].
+    #[allow(clippy::too_many_arguments)]
     fn insert_fresh_subtree(
         &mut self,
         root: usize,
@@ -881,45 +1006,81 @@ impl IdentityMap {
         added: &FetchedDoc,
         child_idx: &HashMap<usize, Vec<usize>>,
         out: &mut Outcome,
+        depth: u32,
+        visited: &mut HashSet<usize>,
     ) -> SrcNodeId {
-        let path = added.keys[root];
-        let id = self.fresh_id(path);
-        let mut node = added.block.nodes[root].clone();
-        node.id = id;
-        let kids: Vec<usize> = child_idx.get(&root).cloned().unwrap_or_default();
-        let mut list: SmallVec<[SrcNodeId; 8]> = SmallVec::new();
-        // Insert the record first so children can find their parent and ids stay unique.
-        self.nodes.insert(
-            id,
-            NodeRec {
-                path,
-                info: sig_of(
-                    &added.block.nodes[root],
-                    added.raw_roles[root],
-                    self.use_dom_id(),
-                ),
-                parent: Some(parent),
-                children: Vec::new(),
-            },
-        );
-        self.by_path.insert(path, id);
-        out.rebound.push((path, id));
-        out.stats.new_ids += 1;
-        for k in kids {
-            list.push(self.insert_fresh_subtree(k, id, added, child_idx, out));
+        struct Fresh {
+            id: SrcNodeId,
+            node: SrcNode,
+            kids: Vec<usize>,
+            next: usize,
+            list: SmallVec<[SrcNodeId; 8]>,
+            depth: u32,
         }
-        if let Some(rec) = self.nodes.get_mut(&id) {
-            rec.children = list.to_vec();
+        let open = |this: &mut Self,
+                    k: usize,
+                    parent: SrcNodeId,
+                    depth: u32,
+                    visited: &mut HashSet<usize>,
+                    out: &mut Outcome|
+         -> Fresh {
+            let path = added.keys[k];
+            let id = this.fresh_id(path);
+            let mut node = added.block.nodes[k].clone();
+            node.id = id;
+            let mut kids: Vec<usize> = child_idx.get(&k).cloned().unwrap_or_default();
+            this.clip_children(&mut kids, depth, visited, out);
+            // Insert the record first so children can find their parent and ids stay unique.
+            this.nodes.insert(
+                id,
+                NodeRec {
+                    path,
+                    info: sig_of(&added.block.nodes[k], added.raw_roles[k], this.use_dom_id()),
+                    parent: Some(parent),
+                    children: Vec::new(),
+                },
+            );
+            this.by_path.insert(path, id);
+            out.rebound.push((path, id));
+            out.stats.new_ids += 1;
+            Fresh {
+                id,
+                node,
+                kids,
+                next: 0,
+                list: SmallVec::new(),
+                depth,
+            }
+        };
+        visited.insert(root);
+        let first = open(self, root, parent, depth, visited, out);
+        let first_id = first.id;
+        let mut stack = vec![first];
+        while let Some(top) = stack.last_mut() {
+            if top.next < top.kids.len() {
+                let k = top.kids[top.next];
+                top.next += 1;
+                let (pid, d) = (top.id, top.depth + 1);
+                let f = open(self, k, pid, d, visited, out);
+                stack.push(f);
+                continue;
+            }
+            let Some(done) = stack.pop() else { break };
+            if let Some(rec) = self.nodes.get_mut(&done.id) {
+                rec.children = done.list.to_vec();
+            }
+            out.upserts.push(done.node);
+            if !done.list.is_empty() {
+                out.children.push((done.id, done.list));
+            }
+            if let Some(up) = stack.last_mut() {
+                up.list.push(done.id);
+            }
         }
-        out.upserts.push(node);
-        if !list.is_empty() {
-            out.children.push((id, list));
-        }
-        id
+        first_id
     }
 }
 
-/// `node index -> child node indices` of a fetched forest.
 fn child_index(doc: &FetchedDoc) -> HashMap<usize, Vec<usize>> {
     let pos: HashMap<SrcNodeId, usize> = doc
         .block
@@ -1107,6 +1268,7 @@ mod tests {
             name: Some(name.into()),
             text: None,
             attrs,
+            local: None,
         }
     }
 
@@ -1429,5 +1591,101 @@ mod tests {
         assert_eq!(list.as_slice(), &[SrcNodeId(4), SrcNodeId(3)]);
         assert_eq!(m.id_of(PathKey(3)), Some(SrcNodeId(4)));
         assert_eq!(m.id_of(PathKey(4)), Some(SrcNodeId(3)));
+    }
+
+    // ---- SL-3: untrusted trees (reviewer probes, regression) ---------------------------
+
+    fn chain_forest(root_path: u64, n: u64, cycle: bool) -> FetchedDoc {
+        let len = usize::try_from(n).unwrap_or(0);
+        let nodes: Vec<SrcNode> = (0..n).map(|i| node(root_path + i, "x", "div")).collect();
+        let mut children: Vec<(SrcNodeId, SmallVec<[SrcNodeId; 8]>)> = (0..n - 1)
+            .map(|i| {
+                (
+                    SrcNodeId(root_path + i),
+                    [SrcNodeId(root_path + i + 1)].into_iter().collect(),
+                )
+            })
+            .collect();
+        if cycle {
+            children.push((
+                SrcNodeId(root_path + n - 1),
+                [SrcNodeId(root_path)].into_iter().collect(),
+            ));
+        }
+        FetchedDoc {
+            block: TreeBlock {
+                root: SrcNodeId(root_path),
+                completeness: Completeness::States,
+                nodes,
+                children,
+            },
+            keys: (0..n).map(|i| PathKey(root_path + i)).collect(),
+            raw_roles: vec![32; len],
+            child_counts: vec![1; len],
+            roots: vec![0],
+            timings: FetchTimings::default(),
+            incomplete: false,
+        }
+    }
+
+    fn add_under_list(m: &mut IdentityMap, added: &FetchedDoc) -> Outcome {
+        m.apply_children(
+            SrcNodeId(2),
+            &[PathKey(3), PathKey(4), PathKey(1_000)],
+            added,
+            &HashSet::new(),
+        )
+    }
+
+    #[test]
+    fn a_hundred_thousand_deep_fresh_subtree_is_cut_without_recursion() {
+        let mut m = IdentityMap::default();
+        m.load(&base());
+        let o = add_under_list(&mut m, &chain_forest(1_000, 100_000, false));
+        // list is at depth 1: the new chain may reach MAX_DEPTH
+        assert_eq!(o.stats.new_ids, MAX_DEPTH - 1);
+        assert!(o.stats.truncated > 0);
+    }
+
+    #[test]
+    fn a_path_listed_twice_does_not_loop() {
+        let mut m = IdentityMap::default();
+        m.load(&base());
+        let o = add_under_list(&mut m, &chain_forest(1_000, 3, true));
+        assert_eq!(o.stats.new_ids, 3);
+        assert_eq!(o.stats.truncated, 1, "the back edge is cut and counted");
+    }
+
+    #[test]
+    fn a_deep_rebind_is_iterative_and_capped_too() {
+        let mut m = IdentityMap::default();
+        m.load(&chain_forest(1, 50_000, false));
+        let again = chain_forest(1, 50_000, false);
+        let o = m.resync_subtree(SrcNodeId(1), &again);
+        assert!(o.stats.truncated > 0);
+        let mut cyc = IdentityMap::default();
+        cyc.load(&base());
+        let o = cyc.resync_subtree(SrcNodeId(1), &chain_forest(1, 4, true));
+        assert!(o.stats.truncated >= 1);
+    }
+
+    #[test]
+    fn the_node_budget_stops_growth() {
+        // A fan-out beyond the child cap is cut at the cap.
+        let mut m = IdentityMap::default();
+        m.load(&base());
+        let n = MAX_CHILDREN as u64 + 10;
+        let mut f = chain_forest(1_000, 1, false);
+        let kids: SmallVec<[SrcNodeId; 8]> = (1..=n).map(|i| SrcNodeId(1_000 + i)).collect();
+        for i in 1..=n {
+            f.block.nodes.push(node(1_000 + i, "k", "li"));
+            f.keys.push(PathKey(1_000 + i));
+            f.raw_roles.push(32);
+            f.child_counts.push(0);
+        }
+        f.block.children = vec![(SrcNodeId(1_000), kids)];
+        let o = add_under_list(&mut m, &f);
+        assert_eq!(o.stats.new_ids as usize, MAX_CHILDREN + 1);
+        assert_eq!(o.stats.truncated, 10);
     }
 }

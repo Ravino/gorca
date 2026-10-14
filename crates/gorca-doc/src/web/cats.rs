@@ -4,7 +4,7 @@
 use std::ops::BitOr;
 use std::sync::Arc;
 
-use gorca_model::Role;
+use gorca_model::{AttrMap, LocalId, Role, SrcNodeId, StateSet, Value};
 
 /// Set of navigation categories (bit mask). A node's own `Cat` is a pure function of
 /// `(role, level, flags)`; queries pass the union they are interested in.
@@ -151,6 +151,14 @@ impl NodeFlags {
     /// A hard line break follows this node's own text (block boundary).
     pub const BREAK_AFTER: NodeFlags = NodeFlags(1 << 9);
     pub const LISTBOX: NodeFlags = NodeFlags(1 << 10);
+    /// Block-level box: contributes a line break before its own text (FT-4).
+    pub const BLOCK: NodeFlags = NodeFlags(1 << 11);
+    /// A line break precedes this node's own text: the node is `BLOCK`, or its previous visible
+    /// sibling is (FT-4). Set by the translator, recomputed for a parent's children whenever its
+    /// child list changes.
+    pub const BREAK_BEFORE: NodeFlags = NodeFlags(1 << 12);
+    /// A frame or a nested document (`Cat::FRAME`, quick nav M).
+    pub const FRAME: NodeFlags = NodeFlags(1 << 13);
 
     pub const fn contains(self, other: NodeFlags) -> bool {
         self.0 & other.0 == other.0
@@ -212,6 +220,7 @@ pub fn cats_of(role: Role, level: u8, flags: NodeFlags) -> Cat {
         | Role::Window
         | Role::Panel
         | Role::Document
+        | Role::DocumentWeb
         | Role::Row
         | Role::Cell
         | Role::ColumnHeader
@@ -248,7 +257,23 @@ pub fn cats_of(role: Role, level: u8, flags: NodeFlags) -> Cat {
     if flags.contains(NodeFlags::LISTBOX) {
         c = c | Cat::LISTBOX;
     }
+    if flags.contains(NodeFlags::FRAME) {
+        c = c | Cat::FRAME;
+    }
     c
+}
+
+/// What the mirror keeps about a node besides what the treap needs (ADR-0003 AM-6, browse-mode
+/// design TR-6): the source identity, the transport key for the focus join, states, description,
+/// value and the attribute map. Categories stay a pure function of `(role, level, flags)`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct NodeMeta {
+    pub src: Option<SrcNodeId>,
+    pub local: Option<LocalId>,
+    pub states: StateSet,
+    pub description: Option<Arc<str>>,
+    pub value: Option<Value>,
+    pub attrs: AttrMap,
 }
 
 /// Everything a source supplies for one node.
@@ -263,6 +288,7 @@ pub struct NodeSpec {
     pub name: Option<Arc<str>>,
     /// Own text (scalar-indexed). Contributes to the flat text in preorder.
     pub text: Option<Arc<str>>,
+    pub meta: Option<Arc<NodeMeta>>,
 }
 
 impl NodeSpec {
@@ -274,7 +300,14 @@ impl NodeSpec {
             sig: 0,
             name: None,
             text: None,
+            meta: None,
         }
+    }
+
+    #[must_use]
+    pub fn meta(mut self, meta: Arc<NodeMeta>) -> Self {
+        self.meta = Some(meta);
+        self
     }
 
     #[must_use]
@@ -347,6 +380,7 @@ pub struct PropsPatch {
     pub flags: Option<NodeFlags>,
     pub sig: Option<u64>,
     pub name: Option<Option<Arc<str>>>,
+    pub meta: Option<Option<Arc<NodeMeta>>>,
 }
 
 #[cfg(test)]

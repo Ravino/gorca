@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use smallvec::SmallVec;
 
+use crate::ids::LocalId;
 use crate::node::{AttrMap, StateSet};
 use crate::role::Role;
 
@@ -70,6 +71,10 @@ pub struct SrcNode {
     pub name: Option<Arc<str>>,
     pub text: Option<Arc<str>>,
     pub attrs: AttrMap,
+    /// Transport key of the same object, as the connector's drain computes it (`None` for
+    /// synthetic text runs). It lets the doc actor build the focus join without a second
+    /// channel (ADR-0003 AM-3, EF-3).
+    pub local: Option<LocalId>,
 }
 
 /// Offsets are in the source's declared `TextUnit`; the mirror converts at apply time (IR-6).

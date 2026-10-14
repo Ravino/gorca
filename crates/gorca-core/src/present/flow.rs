@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use gorca_mirror::fill::{DemandOutcome, DemandWhy};
 use gorca_model::{
-    Epoch, Ifaces, NodeKey, NodeSnapshot, NodeView, PropMask, StateSet, UttId, Utterance,
+    Epoch, Ifaces, NodeKey, NodeSnapshot, NodeView, PropMask, Role, StateSet, UttId, Utterance,
 };
 use gorca_rt::BudgetClass;
 
@@ -64,11 +64,31 @@ pub fn focus_need(n: &NodeSnapshot) -> PropMask {
     need
 }
 
+/// The browse mode word in front of, and the line behind, a focus utterance (BM-5, W3).
+fn apply_web_extra(
+    u: &mut gorca_model::Utterance,
+    word: Option<&'static str>,
+    tail: &[crate::browse::present::Item],
+) {
+    if let Some(w) = word {
+        u.segments.insert(
+            0,
+            gorca_model::Segment {
+                text: Arc::from(w),
+                kind: gorca_model::SegmentKind::Text,
+            },
+        );
+    }
+    u.segments.extend(crate::browse::present::segments(tail));
+}
+
 impl Reader {
     pub(crate) fn on_focus(&mut self, f: FocusLaneMsg, now: Instant, fx: &mut ReaderEffects) {
         match f {
             FocusLaneMsg::FocusChanged { node } => {
                 self.selection_node = None;
+                self.focus_retried = None;
+                self.web_on_focus(node, fx);
                 self.begin_focus(node, now, fx);
             }
             FocusLaneMsg::ItemSelected { node } => {
@@ -147,6 +167,21 @@ impl Reader {
                 let u = message("application not responding", id, self.epoch.current());
                 fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
             }
+        }
+    }
+
+    /// N7: Gecko reports no Sensitive on static content, which the connector maps to DISABLED.
+    /// In a web application the "unavailable" of a static role is dropped; native applications
+    /// (a GTK row or cell that really is insensitive) keep it.
+    fn drop_web_unavailable(&self, u: &mut Utterance, snap: &NodeSnapshot) {
+        let web = self
+            .web
+            .as_ref()
+            .is_some_and(|b| b.web_apps.contains(&snap.key.app));
+        if web && super::utterance::never_disabled(snap.role) {
+            u.segments.retain(|s| {
+                !(s.kind == gorca_model::SegmentKind::State && &*s.text == "unavailable")
+            });
         }
     }
 
@@ -281,10 +316,18 @@ impl Reader {
                     PresentContext::Focus
                 };
                 let mut u = self.presenters.present(ctx, snap, id, epoch);
+                self.drop_web_unavailable(&mut u, snap);
                 if from_cache {
                     // Every cache-served presentation may be refined by RV-1 (ADR-0001 8.1).
                     u.may_refine = true;
                 }
+                // Browse mode: the mode word rides on the focus utterance (BM-5), and the line
+                // at the cursor follows a document's own focus speech (W3).
+                self.web_learn_focus(snap, fx);
+                let word = self.web_take_word();
+                let tail = self.web_take_tail();
+                apply_web_extra(&mut u, word, &tail);
+                self.web_extra = (word.is_some() || !tail.is_empty()).then_some((id, word, tail));
                 // The context asserts `selected`, which the spoken text omits, so the log must
                 // not carry a cached snapshot from before the event.
                 let logged = if ctx == PresentContext::SelectedItem
@@ -401,6 +444,20 @@ impl Reader {
                         PresentSource::Stale
                     };
                     self.present_cached(&v, src, false, r.epoch, fx);
+                } else if self.web_focus_fallback(r.node, fx) {
+                    // N2: a web node is spoken from the document mirror (name and role).
+                } else if self.focus_retried != Some(r.node) {
+                    // One more try with a fresh deadline.
+                    self.focus_retried = Some(r.node);
+                    fx.push(Self::fetch_effect(
+                        r.node,
+                        FOCUS_FIELDS,
+                        r.epoch,
+                        FetchKind::Focus,
+                    ));
+                } else {
+                    // Never stay silent on focus: say that nothing is known.
+                    self.say("unknown", fx);
                 }
             }
         }
@@ -412,6 +469,21 @@ impl Reader {
             return;
         };
         if p.node != r.node || p.epoch != r.epoch {
+            return;
+        }
+        // A web document's speech belongs to browse mode: the cursor line follows the focus
+        // utterance and keys move it at once, so only a changed title is worth correcting (the
+        // cache served the previous page). Other differences are counted, not spoken (M5).
+        if p.snap.role == Role::DocumentWeb
+            && let Ok(new) = &r.result
+            && !new.states.contains(StateSet::DEFUNCT)
+            && p.snap.name == new.name
+        {
+            if changed(&p.snap, new, skip_states(p.ctx)).is_empty() {
+                self.counters.revalidations_agreed += 1;
+            } else {
+                self.counters.revalidations_suppressed += 1;
+            }
             return;
         }
         match &r.result {
@@ -430,7 +502,12 @@ impl Reader {
                 let (mut u, source) = if refine {
                     // Replace: the whole node again, interrupting the earlier utterance.
                     let mut u = self.presenters.present(p.ctx, new, id, r.epoch);
+                    self.drop_web_unavailable(&mut u, new);
                     u.refines = Some(p.utt);
+                    if let Some((_, word, tail)) = self.web_extra.as_ref().filter(|e| e.0 == p.utt)
+                    {
+                        apply_web_extra(&mut u, *word, tail);
+                    }
                     self.counters.refined += 1;
                     (u, PresentSource::Refine)
                 } else {

@@ -16,5 +16,5 @@ label=${1:?usage: run.sh <label> [--quick] [e2e options]}
 shift
 echo "== host: load $(cat /proc/loadavg) =="
 cargo test -p gorca-bench --lib e2e --offline
-cargo build --release -p gorca-bench --bins --offline
+cargo build --release -p gorca-bench --bins -p gorca-daemon --offline
 exec tests/harness/run-isolated.sh target/release/e2e run --label "$label" "$@"

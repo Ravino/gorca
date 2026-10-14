@@ -20,8 +20,11 @@ use gorca_rt::{BudgetClass, EpochCell, FocusedApp, mpsc};
 use smallvec::SmallVec;
 
 use crate::SpeechIntent;
+use crate::browse::BrowseState;
+use crate::browse::commands::WebEffect;
 use crate::commands::{CmdState, ConfigRequest, ControlMsg, SpeechCtl};
 use crate::directory::MirrorDirectory;
+use crate::doc_actor::DocNotice;
 use crate::focus::{FocusMsg, FocusState};
 use crate::mode::{Mode, ModeKeys, ModeMsg};
 use crate::present::{PresentLog, PresenterRegistry};
@@ -36,6 +39,7 @@ const REPLY_QUEUE: usize = 64;
 const BACKGROUND_QUEUE: usize = 64;
 const CONTROL_QUEUE: usize = 32;
 const REVIEW_QUEUE: usize = 64;
+const DOC_QUEUE: usize = 64;
 /// Text events of the focused app (flood-prone) and the results of text fetches.
 const TEXT_QUEUE: usize = 256;
 const TEXT_IO_QUEUE: usize = 64;
@@ -111,6 +115,8 @@ pub enum ReaderMsg {
     Control(ControlMsg),
     Review(ReviewMsg),
     Text(TextMsg),
+    /// A web document published, changed or went away (browse mode).
+    Doc(DocNotice),
     Timer,
 }
 
@@ -169,6 +175,8 @@ pub enum ReaderEffect {
         req: NavReqId,
         act: gorca_connector_api::ActionReq,
     },
+    /// Browse mode: find a document, wake or sleep it, act on one of its nodes.
+    Web(WebEffect),
     /// A chunk of a say-all reading (ADR-0007 SA-2): `first` interrupts like any utterance, the
     /// others are queued behind it and report their progress.
     SayAllChunk {
@@ -197,6 +205,8 @@ pub struct ReaderSenders {
     pub control: mpsc::Sender<ControlMsg>,
     /// Results of review fetches, builds and actions (ADR-0006 4.3).
     pub review: mpsc::Sender<ReviewMsg>,
+    /// Document notices (browse mode).
+    pub docs: mpsc::Sender<DocNotice>,
     /// Caret, text and selection events of the focused app (ADR-0007 EV-3).
     pub text: mpsc::Sender<TextMsg>,
     /// Results of text fetches and the speech server's progress reports. Separate from `text`
@@ -212,6 +222,7 @@ pub struct ReaderInbox {
     background: mpsc::Receiver<BackgroundMsg>,
     control: mpsc::Receiver<ControlMsg>,
     review: mpsc::Receiver<ReviewMsg>,
+    docs: mpsc::Receiver<DocNotice>,
     text: mpsc::Receiver<TextMsg>,
     text_io: mpsc::Receiver<TextMsg>,
 }
@@ -223,6 +234,7 @@ pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
     let (background_tx, background) = mpsc::channel(BACKGROUND_QUEUE);
     let (control_tx, control) = mpsc::channel(CONTROL_QUEUE);
     let (review_tx, review) = mpsc::channel(REVIEW_QUEUE);
+    let (docs_tx, docs) = mpsc::channel(DOC_QUEUE);
     let (text_tx, text) = mpsc::channel(TEXT_QUEUE);
     let (text_io_tx, text_io) = mpsc::channel(TEXT_IO_QUEUE);
     (
@@ -233,6 +245,7 @@ pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
             background: background_tx,
             control: control_tx,
             review: review_tx,
+            docs: docs_tx,
             text: text_tx,
             text_io: text_io_tx,
         },
@@ -243,6 +256,7 @@ pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
             background,
             control,
             review,
+            docs,
             text,
             text_io,
         },
@@ -262,6 +276,7 @@ impl ReaderInbox {
             Some(t) = self.text_io.recv() => Some(ReaderMsg::Text(t)),
             Some(t) = self.text.recv() => Some(ReaderMsg::Text(t)),
             Some(v) = self.review.recv() => Some(ReaderMsg::Review(v)),
+            Some(n) = self.docs.recv() => Some(ReaderMsg::Doc(n)),
             Some(b) = self.background.recv() => Some(ReaderMsg::Background(b)),
             else => None,
         }
@@ -289,6 +304,9 @@ impl ReaderInbox {
         }
         if let Ok(v) = self.review.try_recv() {
             return Some(ReaderMsg::Review(v));
+        }
+        if let Ok(n) = self.docs.try_recv() {
+            return Some(ReaderMsg::Doc(n));
         }
         if let Ok(b) = self.background.try_recv() {
             return Some(ReaderMsg::Background(b));
@@ -326,6 +344,17 @@ pub struct Reader {
     pub(crate) counters: ReaderCounters,
     /// Review cursor state, models and the pending review operation (ADR-0006).
     pub(crate) review: ReviewState,
+    /// Browse mode (ADR-0003 section 11): off until the runtime attaches the document side.
+    pub(crate) web: Option<BrowseState>,
+    /// The focus whose fetch failed and was tried once more (N2).
+    pub(crate) focus_retried: Option<NodeKey>,
+    /// The browse mode word and line spoken with the last focus utterance, so an RV-1 refine of
+    /// that utterance repeats them instead of cutting them off.
+    pub(crate) web_extra: Option<(
+        UttId,
+        Option<&'static str>,
+        Vec<crate::browse::present::Item>,
+    )>,
     /// The caret machine, the text window and say-all (ADR-0007).
     pub(crate) text: TextState,
 }
@@ -339,6 +368,8 @@ pub struct ReaderCounters {
     pub revalidations: u64,
     /// RV-1 replies that agreed with what was presented.
     pub revalidations_agreed: u64,
+    /// Web document corrections that were not spoken (browse mode owns that speech).
+    pub revalidations_suppressed: u64,
     /// Corrections that replaced the earlier utterance.
     pub refined: u64,
     /// Corrections spoken as a follow-up.
@@ -370,6 +401,9 @@ impl Reader {
             present_log: None,
             counters: ReaderCounters::default(),
             review: ReviewState::new(),
+            web: None,
+            focus_retried: None,
+            web_extra: None,
             text: TextState::new(),
         }
     }
@@ -498,10 +532,19 @@ impl Reader {
             ReaderMsg::Mode(m) => self.on_mode(m, &mut fx),
             ReaderMsg::Review(m) => self.on_review(m, &mut fx),
             ReaderMsg::Text(m) => self.on_text(m, &mut fx),
+            ReaderMsg::Doc(n) => self.on_doc(n, &mut fx),
             ReaderMsg::Timer => {
+                // N1: the timer may fire for another subsystem's deadline. What is not due yet
+                // is armed again, so no pending deadline is ever lost.
+                if let FocusState::Settling { until, .. } = self.focus
+                    && now < until
+                {
+                    fx.push(ReaderEffect::ArmTimer(until));
+                }
                 self.apply_focus(FocusMsg::TimerElapsed { now }, &mut fx);
                 self.pass_timer(now, &mut fx);
                 self.review_timer(now, &mut fx);
+                self.web_timer(now, &mut fx);
                 self.text_timer(&mut fx);
             }
         }
@@ -604,6 +647,7 @@ mod tests {
                 | ReaderEffect::ReviewRevalidate { .. }
                 | ReaderEffect::ReviewStatusBar { .. }
                 | ReaderEffect::ReviewAct { .. }
+                | ReaderEffect::Web(_)
                 | ReaderEffect::TextFetch { .. }
                 | ReaderEffect::SayAllChunk { .. } => None,
             })
@@ -1084,6 +1128,7 @@ mod tests {
                 ReaderMsg::Control(_) => "control",
                 ReaderMsg::Review(_) => "review",
                 ReaderMsg::Text(_) => "text",
+                ReaderMsg::Doc(_) => "doc",
                 ReaderMsg::Timer => "timer",
             })
             .collect();
@@ -1142,6 +1187,7 @@ mod tests {
                 ReaderEffect::ReviewRevalidate { .. } => "review-revalidate",
                 ReaderEffect::ReviewStatusBar { .. } => "review-status-bar",
                 ReaderEffect::ReviewAct { .. } => "review-act",
+                ReaderEffect::Web(_) => "web",
                 ReaderEffect::TextFetch { .. } => "text-fetch",
                 ReaderEffect::SayAllChunk { .. } => "say-all-chunk",
             })
@@ -1165,6 +1211,7 @@ mod tests {
                 | ReaderEffect::ReviewRevalidate { .. }
                 | ReaderEffect::ReviewStatusBar { .. }
                 | ReaderEffect::ReviewAct { .. }
+                | ReaderEffect::Web(_)
                 | ReaderEffect::TextFetch { .. }
                 | ReaderEffect::SayAllChunk { .. } => None,
             })

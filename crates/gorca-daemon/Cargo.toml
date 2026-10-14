@@ -19,6 +19,7 @@ gorca-config = { workspace = true }
 gorca-model = { workspace = true }
 gorca-connector-api = { workspace = true }
 gorca-connector-atspi = { workspace = true }
+gorca-doc-source-atspi = { workspace = true }
 gorca-output-api = { workspace = true }
 gorca-input-api = { workspace = true }
 gorca-input-mutter = { workspace = true }

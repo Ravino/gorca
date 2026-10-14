@@ -39,6 +39,8 @@ bitflags! {
         const SELECTABLE = 1 << 21;
         const TRANSIENT  = 1 << 22;
         const MANAGES_DESCENDANTS = 1 << 23;
+        /// A link whose target was visited (AT-SPI `Visited`).
+        const VISITED    = 1 << 24;
     }
 }
 

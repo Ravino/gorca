@@ -209,7 +209,7 @@ fn trackable(snap: &NodeSnapshot) -> Option<Kind> {
     let editable = snap.states.contains(StateSet::EDITABLE);
     let text_role = match snap.role {
         Role::TextEntry | Role::PasswordEntry => true,
-        Role::Document | Role::Paragraph | Role::Unknown => editable,
+        Role::Document | Role::DocumentWeb | Role::Paragraph | Role::Unknown => editable,
         Role::Application
         | Role::Window
         | Role::Dialog

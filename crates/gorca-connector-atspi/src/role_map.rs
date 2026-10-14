@@ -12,11 +12,11 @@ pub fn map_role(raw: Raw) -> Role {
         Raw::Alert => Role::Alert,
         Raw::Panel | Raw::Filler | Raw::Grouping | Raw::Section => Role::Panel,
         Raw::DocumentFrame
-        | Raw::DocumentWeb
         | Raw::DocumentText
         | Raw::DocumentEmail
         | Raw::DocumentSpreadsheet
         | Raw::DocumentPresentation => Role::Document,
+        Raw::DocumentWeb => Role::DocumentWeb,
         Raw::Heading => Role::Heading,
         Raw::Paragraph => Role::Paragraph,
         Raw::Link => Role::Link,
@@ -65,7 +65,7 @@ mod tests {
     fn common_roles_map() {
         assert_eq!(map_role(Raw::Button), Role::Button);
         assert_eq!(map_role(Raw::Frame), Role::Window);
-        assert_eq!(map_role(Raw::DocumentWeb), Role::Document);
+        assert_eq!(map_role(Raw::DocumentWeb), Role::DocumentWeb);
         assert_eq!(map_role(Raw::Terminal), Role::Terminal);
         assert_eq!(map_role(Raw::PasswordText), Role::PasswordEntry);
     }

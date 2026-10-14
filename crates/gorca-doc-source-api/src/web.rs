@@ -45,7 +45,7 @@ pub mod web_attrs {
     pub const XML_ROLES: AttrKey = AttrKey(4);
     /// Heading or tree level (`level`).
     pub const LEVEL: AttrKey = AttrKey(5);
-    /// `container-live` (`polite`, `assertive`, `off`).
+    /// The node's own `live` attribute (`polite`, `assertive`, `off`): a region root (AM-8).
     pub const LIVE: AttrKey = AttrKey(6);
     /// `container-atomic`.
     pub const ATOMIC: AttrKey = AttrKey(7);
@@ -64,6 +64,12 @@ pub mod web_attrs {
     pub const COLCOUNT: AttrKey = AttrKey(15);
     /// Raw toolkit role number when the normalised role is `Role::Unknown` (C-4).
     pub const RAW_ROLE: AttrKey = AttrKey(16);
+    /// Inherited `container-live`: does not make a node a region root (AM-8).
+    pub const CONTAINER_LIVE: AttrKey = AttrKey(17);
+    /// CSS `display` of the element (`block`, `inline`, `list-item`, ...), Firefox and Chromium.
+    pub const DISPLAY: AttrKey = AttrKey(18);
+    /// `layout-guess` (`true` on a table Firefox believes is for layout).
+    pub const LAYOUT_GUESS: AttrKey = AttrKey(19);
     /// First key a source may allocate dynamically.
     pub const FIRST_DYNAMIC: u16 = 256;
 
@@ -75,7 +81,10 @@ pub mod web_attrs {
             CLASS => "class",
             XML_ROLES => "xml-roles",
             LEVEL => "level",
-            LIVE => "container-live",
+            LIVE => "live",
+            CONTAINER_LIVE => "container-live",
+            DISPLAY => "display",
+            LAYOUT_GUESS => "layout-guess",
             ATOMIC => "container-atomic",
             RELEVANT => "container-relevant",
             BUSY => "container-busy",
@@ -98,7 +107,10 @@ pub mod web_attrs {
             "class" => CLASS,
             "xml-roles" => XML_ROLES,
             "level" => LEVEL,
-            "container-live" | "live" => LIVE,
+            "live" => LIVE,
+            "container-live" => CONTAINER_LIVE,
+            "display" => DISPLAY,
+            "layout-guess" => LAYOUT_GUESS,
             "container-atomic" | "atomic" => ATOMIC,
             "container-relevant" | "relevant" => RELEVANT,
             "container-busy" | "busy" => BUSY,
@@ -184,6 +196,7 @@ mod tests {
             name: None,
             text: None,
             attrs: SmallVec::default(),
+            local: None,
         }
     }
 

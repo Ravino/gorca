@@ -106,6 +106,7 @@ struct Chord {
 }
 
 /// Virtual clock plus keycode allocator of one scenario.
+#[derive(Debug)]
 pub(super) struct Typist {
     pub(super) t_ms: u64,
     next_keycode: u16,
@@ -158,7 +159,7 @@ fn tap(rig: &mut Rig, ty: &mut Typist, k: K) -> Result<(bool, bool)> {
 
 /// Desktop facts for the reader, so it never asks `gsettings` in the harness: GNOME's default
 /// repeat delay, no XKB options, a 24-hour clock.
-fn m1_env(host: &HostEnv) -> HostEnv {
+pub(super) fn m1_env(host: &HostEnv) -> HostEnv {
     let mut h = host.clone();
     for (k, v) in [
         ("GORCA_REPEAT_DELAY_MS", "500"),

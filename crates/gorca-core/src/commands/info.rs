@@ -68,7 +68,12 @@ fn is_container(role: Role) -> bool {
     is_collection(role)
         || matches!(
             role,
-            Role::Panel | Role::Document | Role::Landmark | Role::Popover | Role::StatusBar
+            Role::Panel
+                | Role::Document
+                | Role::DocumentWeb
+                | Role::Landmark
+                | Role::Popover
+                | Role::StatusBar
         )
 }
 

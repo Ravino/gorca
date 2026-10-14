@@ -37,8 +37,11 @@ use crate::health::{AppHealth, HealthEffect, HealthMsg, HealthStepCtx};
 use crate::reader::{BackgroundMsg, FocusLaneMsg};
 use crate::text::TextMsg;
 
+mod doc_route;
 #[cfg(test)]
 mod tests;
+
+pub use doc_route::WebLink;
 
 /// Cap on control messages handled per pump, so one app cannot monopolise a worker.
 const MAX_CONTROL_PER_PUMP: usize = 64;
@@ -188,6 +191,8 @@ pub struct AppActor {
     shell: bool,
     /// The focused application, published by the Reader: it is protected like the Shell.
     focused: Option<Arc<gorca_rt::FocusedApp>>,
+    /// Routes a web application's events to its documents (browse mode).
+    web: Option<doc_route::DocRouter>,
     /// Text events go to the Reader through this, when the runtime wired it (ADR-0007 EV-3).
     text: Option<TextLink>,
     /// Where the app's text capability is published for the Reader.
@@ -229,6 +234,7 @@ impl AppActor {
             focus: None,
             shell: false,
             focused: None,
+            web: None,
             text: None,
             directory: None,
         }
@@ -265,6 +271,13 @@ impl AppActor {
         if l.tx.try_send(msg).is_err() {
             l.dropped.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
+    }
+
+    /// Route this application's events to its documents and its lifecycle to the registry.
+    #[must_use]
+    pub fn with_web(mut self, link: WebLink) -> Self {
+        self.web = Some(doc_route::DocRouter::new(self.app, link));
+        self
     }
 
     /// The focused-application cell: while this app holds the user's focus its mirror is not
@@ -469,6 +482,9 @@ impl AppActor {
 
         let drained = self.ingress.drain();
         route.events = drained.events.len();
+        if let Some(r) = &mut self.web {
+            r.route(&drained.events, now);
+        }
         // 5.1, step 1: the invalidation table, applied before the Reader sees the batch.
         self.invalidate_for(&drained.events, drained.dirty.as_ref(), now);
         if let Some(dirty) = drained.dirty {
@@ -654,6 +670,9 @@ impl AppActor {
                     self.driver.apply_push(&mut self.writer, batch);
                 }
                 Ok(AppControl::Lifecycle(AppLifecycle::Gone)) => {
+                    if let Some(r) = &self.web {
+                        r.lifecycle(&AppLifecycle::Gone);
+                    }
                     self.on_health(HealthMsg::OwnerVanished, now);
                     self.send_focus(FocusLaneMsg::AppGone(self.app));
                     // 5.1: the whole mirror and its tombstones are released.
@@ -662,6 +681,9 @@ impl AppActor {
                     route.gone = true;
                 }
                 Ok(AppControl::Lifecycle(AppLifecycle::Appeared(info))) => {
+                    if let Some(r) = &self.web {
+                        r.lifecycle(&AppLifecycle::Appeared(info.clone()));
+                    }
                     self.profile = AppProfile::for_app(&info);
                     if let Some(d) = &self.directory {
                         d.set_text_scalar(self.app, !self.profile.non_scalar_text);
@@ -690,6 +712,9 @@ impl AppActor {
                     }
                 }
                 Ok(AppControl::Lifecycle(AppLifecycle::Ready)) => {
+                    if let Some(r) = &self.web {
+                        r.lifecycle(&AppLifecycle::Ready);
+                    }
                     let health = health_view(&self.health);
                     let cx = DriverCx {
                         now,

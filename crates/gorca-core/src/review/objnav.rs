@@ -62,6 +62,7 @@ pub fn class(snap: &NodeSnapshot) -> PresClass {
         | Role::Window
         | Role::Dialog
         | Role::Document
+        | Role::DocumentWeb
         | Role::Heading
         | Role::Link
         | Role::Image

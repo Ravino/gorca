@@ -49,6 +49,7 @@ pub fn wants_lines(s: &NodeSnapshot) -> bool {
         | Role::TextEntry
         | Role::PasswordEntry
         | Role::Document
+        | Role::DocumentWeb
         | Role::Terminal
         | Role::ListItem
         | Role::Cell

@@ -1,0 +1,35 @@
+# e2e m7-all
+# utc=2026-10-14T04:07:15Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=8.00 7.52 7.16 7/2529 2054977
+# git_rev=1cd9e24
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m7-all
+# reader=daemon:<repo>/.claude/worktrees/agent-a1d08cc29c61e0bae/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=8.00 7.52 7.16 2/2529 2054974
+# reader_env=GORCA_M7=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=W3 lost: heard ["M7 Second, document", "browse mode"]; 7 focus events on the bus, last ["2 /org/a11y/atspi/accessible/90", "1 /org/a11y/atspi/accessible/83", "1 /org/a11y/atspi/accessible/83", "1 /org/a11y/atspi/accessible/89", "1 /org/a11y/atspi/accessible/89", "1 /org/a11y/atspi/accessible/110", "1 /org/a11y/atspi/accessible/90", "1 /org/a11y/atspi/accessible/90"] (A is /org/a11y/atspi/accessible/83, B is /org/a11y/atspi/accessible/90)
+# note1=W3 lost: heard ["M7 Second, document, heading level 1, Second page"]; 11 focus events on the bus, last ["1 /org/a11y/atspi/accessible/89", "1 /org/a11y/atspi/accessible/110", "1 /org/a11y/atspi/accessible/90", "1 /org/a11y/atspi/accessible/90", "1 /org/a11y/atspi/accessible/89", "1 /org/a11y/atspi/accessible/89", "1 /org/a11y/atspi/accessible/90", "1 /org/a11y/atspi/accessible/90"] (A is /org/a11y/atspi/accessible/83, B is /org/a11y/atspi/accessible/90)
+# note2=W3 lost: heard ["M7 Second, document, This page is the link target of the article."]; 15 focus events on the bus, last ["1 /org/a11y/atspi/accessible/89", "1 /org/a11y/atspi/accessible/89", "1 /org/a11y/atspi/accessible/90", "1 /org/a11y/atspi/accessible/90", "1 /org/a11y/atspi/accessible/89", "1 /org/a11y/atspi/accessible/89", "1 /org/a11y/atspi/accessible/90", "1 /org/a11y/atspi/accessible/90"] (A is /org/a11y/atspi/accessible/83, B is /org/a11y/atspi/accessible/90)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+W3.w3_ms.n                 daemon/voicego            0            0            0  1                  info   [samples]
+W3.w3_ms.p50               daemon/voicego            0            0            0  1                  info   [ms]
+W3.w3_ms.p95               daemon/voicego            0            0            0  1                  info   [ms]
+W3.w3_ms.p99               daemon/voicego            0            0            0  1 <=           15  PASS   [ms]
+W3.w3_ms.p999              daemon/voicego            0            0            0  1                  info   [ms]
+W3.w3_ms.max               daemon/voicego            0            0            0  1                  info   [ms]
+W3.lost                    daemon/voicego            3            3            3  1 <=            0  FAIL  gated on the max over repeats [trials]

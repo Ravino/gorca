@@ -12,15 +12,18 @@
 
 pub mod bus;
 pub mod events;
+pub mod factory;
 pub mod fetch;
 pub mod identity;
 pub mod p2p;
 pub mod roles;
+pub mod runs;
 pub mod source;
 pub mod warm;
 pub mod wire;
 
 pub use events::{AtspiEvent, EventKind, SettlePolicy};
+pub use factory::{AtspiDocSourceFactory, PathResolver};
 pub use fetch::{
     FetchError, FetchOpts, FetchTimings, FetchedDoc, PathTable, Split, StatePolicy, TextPolicy,
     fetch_document, fetch_forest,

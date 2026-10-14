@@ -434,10 +434,20 @@ impl Reader {
         };
         args.extend(extra_args.iter().cloned());
         let mut cmd = Command::new(&program);
+        // GORCA_E2E_READER_LOG: append the reader's stderr to this file (the web scenarios read
+        // the `gorca_phase` timing lines from it) instead of passing it through.
+        let log_stdio = match std::env::var("GORCA_E2E_READER_LOG") {
+            Ok(path) if !path.is_empty() => std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .map_or_else(|_| Stdio::inherit(), Stdio::from),
+            Ok(_) | Err(_) => Stdio::inherit(),
+        };
         cmd.args(&args)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
-            .stderr(stderr.map_or_else(Stdio::inherit, Stdio::from));
+            .stderr(stderr.map_or(log_stdio, Stdio::from));
         for (k, v) in env {
             cmd.env(k, v);
         }

@@ -39,6 +39,8 @@ struct FNode {
     name: String,
     attrs: Vec<(String, String)>,
     children: Vec<u64>,
+    /// The hypertext (`Text.GetText`).
+    text: String,
     /// Answer `GetRole` only after this long (a hung page).
     role_delay: Duration,
 }
@@ -106,8 +108,38 @@ impl Acc {
     }
 
     #[zbus(property)]
+    fn parent(&self) -> (String, OwnedObjectPath) {
+        let t = self.tree.lock().unwrap();
+        for (pid, n) in &t.nodes {
+            if n.children.contains(&self.id) {
+                return (":1.1".to_owned(), opath(*pid));
+            }
+        }
+        (
+            ":1.1".to_owned(),
+            OwnedObjectPath::try_from("/org/a11y/atspi/null").unwrap(),
+        )
+    }
+
+    #[zbus(property)]
     fn child_count(&self) -> i32 {
         i32::try_from(self.tree.lock().unwrap().nodes[&self.id].children.len()).unwrap()
+    }
+}
+
+struct Txt {
+    tree: Shared,
+    id: u64,
+}
+
+#[zbus::interface(name = "org.a11y.atspi.Text")]
+impl Txt {
+    fn get_text(&self, start: i32, end: i32) -> String {
+        let t = self.tree.lock().unwrap();
+        let chars: Vec<char> = t.nodes[&self.id].text.chars().collect();
+        let s = usize::try_from(start).unwrap_or(0).min(chars.len());
+        let e = usize::try_from(end).unwrap_or(chars.len()).min(chars.len());
+        chars[s..e.max(s)].iter().collect()
     }
 }
 
@@ -212,6 +244,16 @@ impl Fake {
                 )
                 .await
                 .unwrap();
+            s.object_server()
+                .at(
+                    p.as_str(),
+                    Txt {
+                        tree: Arc::clone(&self.tree),
+                        id,
+                    },
+                )
+                .await
+                .unwrap();
         }
     }
 
@@ -241,6 +283,7 @@ impl Fake {
                     name: name.to_owned(),
                     attrs,
                     children: Vec::new(),
+                    text: String::new(),
                     role_delay: Duration::ZERO,
                 },
             );
@@ -269,6 +312,11 @@ impl Fake {
             .get_mut(&parent)
             .unwrap()
             .children = children;
+    }
+
+    fn set_text(&self, id: u64, text: &str) {
+        let mut t = self.tree.lock().unwrap();
+        text.clone_into(&mut t.nodes.get_mut(&id).unwrap().text);
     }
 
     fn rename(&self, id: u64, name: &str) {
@@ -347,7 +395,7 @@ async fn block_fetch_builds_the_tree_with_roles_states_and_attributes() {
     .await
     .unwrap();
     assert_eq!(d.block.node_count(), 42);
-    assert_eq!(d.block.nodes[0].role, Role::Document);
+    assert_eq!(d.block.nodes[0].role, Role::DocumentWeb);
     assert_eq!(d.block.nodes[1].role, Role::List);
     assert_eq!(d.block.nodes[2].role, Role::ListItem);
     assert_eq!(d.block.nodes[2].name.as_deref(), Some("item 0"));
@@ -532,10 +580,16 @@ async fn start_source_with(
     let (req_tx, req_rx) = mpsc::channel(8);
     let (join, _j) = join_channel(8);
     let shutdown = CancellationToken::new();
+    let (_core_tx, core_events) = mpsc::channel(8);
     let ctx = DocSourceCtx {
         doc: DocId(1),
+        app: gorca_model::AppId {
+            connector: gorca_model::ConnectorId(0),
+            serial: 0,
+        },
         sink,
         requests: req_rx,
+        events: core_events,
         join,
         shutdown: shutdown.clone(),
         clock: Clock::System,
@@ -1035,4 +1089,263 @@ async fn progressive_build_delivers_the_top_of_the_page_first() {
     assert_eq!(mini.names()[1], "s0");
     h.shutdown.cancel();
     h.task.await.unwrap().unwrap();
+}
+
+// ---------------------------------------------------------------------------------------------
+// Browse configuration: text tier, run leaves, Settled markers, routed events, activity
+
+use gorca_doc_source_api::{Activity, DocEvent, DocRequest};
+use gorca_model::{NodeEvent, NodeKey};
+
+struct Browse {
+    fake: Fake,
+    rx: gorca_doc_source_api::DeltaReceiver,
+    events: mpsc::Sender<DocEvent>,
+    requests: mpsc::Sender<DocRequest>,
+    shutdown: CancellationToken,
+    task: tokio::task::JoinHandle<Result<(), gorca_doc_source_api::SourceError>>,
+}
+
+fn app_id() -> gorca_model::AppId {
+    gorca_model::AppId {
+        connector: gorca_model::ConnectorId(0),
+        serial: 7,
+    }
+}
+
+fn node_key(id: u64) -> NodeKey {
+    NodeKey {
+        app: app_id(),
+        local: gorca_dbus::drain::local_id(&path_of(id)),
+    }
+}
+
+async fn start_browse(fake: Fake, conn: AppConn, doc: u64) -> Browse {
+    let (_unused_tx, ev_rx) = mpsc::channel(8);
+    let mut cfg = SourceConfig::browse(gorca_model::TextUnit::Utf16Bom, false);
+    cfg.fetch = FetchOpts {
+        text: TextPolicy::All,
+        ..fast_opts(Split::Whole)
+    };
+    cfg.settle = gorca_doc_source_atspi::SettlePolicy {
+        quiet: Duration::from_millis(15),
+        max_wait: Duration::from_millis(60),
+        ..gorca_doc_source_atspi::SettlePolicy::default()
+    };
+    let (source, _metrics) = AtspiDocSource::new(Arc::new(conn), path_of(doc), cfg, ev_rx);
+    let (sink, rx) = delta_channel(1 << 14);
+    let (req_tx, req_rx) = mpsc::channel(8);
+    let (join, _j) = join_channel(8);
+    let (events, core_events) = mpsc::channel(64);
+    let shutdown = CancellationToken::new();
+    let ctx = DocSourceCtx {
+        doc: DocId(1),
+        app: app_id(),
+        sink,
+        requests: req_rx,
+        events: core_events,
+        join,
+        shutdown: shutdown.clone(),
+        clock: Clock::System,
+    };
+    let task = tokio::spawn(Box::new(source).attach(ctx));
+    Browse {
+        fake,
+        rx,
+        events,
+        requests: req_tx,
+        shutdown,
+        task,
+    }
+}
+
+/// Drain deltas until a `Settled` arrives; returns everything before it.
+async fn until_settled(b: &mut Browse) -> Vec<DocDelta> {
+    let end = Instant::now() + Duration::from_secs(5);
+    let mut out = Vec::new();
+    loop {
+        match tokio::time::timeout(Duration::from_millis(50), b.rx.deltas.recv()).await {
+            Ok(Some(DocDelta::Settled { .. })) => return out,
+            Ok(Some(d)) => out.push(d),
+            Ok(None) => panic!("sink closed"),
+            Err(_) => assert!(Instant::now() < end, "no Settled; got {} deltas", out.len()),
+        }
+    }
+}
+
+fn upserts_of(ds: &[DocDelta]) -> Vec<gorca_model::SrcNode> {
+    ds.iter()
+        .filter_map(|d| match d {
+            DocDelta::Upsert(v) => Some(v.clone()),
+            _ => None,
+        })
+        .flatten()
+        .collect()
+}
+
+fn text_changed(id: u64, seq: u64) -> DocEvent {
+    DocEvent {
+        ev: NodeEvent::TextChanged {
+            node: node_key(id),
+            delta: gorca_model::TextDelta::Replaced { text: None },
+        },
+        seq,
+        at: Instant::now(),
+    }
+}
+
+#[tokio::test]
+async fn browse_build_splits_hypertext_into_runs_and_ends_with_settled() {
+    let (fake, conn) = Fake::start(2).await;
+    let doc = fake.node(raw::DOCUMENT_WEB, "page", "body", None).await;
+    let p = fake.node(raw::PARAGRAPH, "", "p", None).await;
+    let link = fake.node(raw::LINK, "Home", "a", None).await;
+    fake.link(doc, p);
+    fake.link(p, link);
+    fake.set_text(p, "Hello \u{FFFC} world");
+    fake.set_text(link, "Home");
+    let mut b = start_browse(fake, conn, doc).await;
+    let batch = until_settled(&mut b).await;
+    let ups = upserts_of(&batch);
+    let runs: Vec<_> = ups
+        .iter()
+        .filter(|n| gorca_doc_source_atspi::runs::is_run(n.id))
+        .collect();
+    let texts: Vec<_> = runs.iter().filter_map(|n| n.text.as_deref()).collect();
+    assert!(texts.contains(&"Hello "), "{texts:?}");
+    assert!(texts.contains(&" world"), "{texts:?}");
+    assert!(texts.contains(&"Home"), "{texts:?}");
+    assert!(runs.iter().all(|n| n.local.is_none()));
+    let real = ups.iter().find(|n| n.role == Role::Paragraph).unwrap();
+    assert_eq!(real.local, Some(node_key(p).local));
+    assert!(real.text.is_none(), "container text is out of the node");
+    let list = batch
+        .iter()
+        .find_map(|d| match d {
+            DocDelta::Children { parent, children } if parent.0 == key(p).0 => {
+                Some(children.to_vec())
+            }
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(list.len(), 3);
+    assert!(gorca_doc_source_atspi::runs::is_run(list[0]));
+    assert_eq!(list[1].0, key(link).0);
+    assert!(gorca_doc_source_atspi::runs::is_run(list[2]));
+    assert!(matches!(batch.first(), Some(DocDelta::Reset { .. })));
+    b.shutdown.cancel();
+    let _ = b.task.await;
+}
+
+#[tokio::test]
+async fn routed_core_events_refresh_the_document_and_settle() {
+    let (fake, conn) = Fake::start(2).await;
+    let doc = fake.node(raw::DOCUMENT_WEB, "page", "body", None).await;
+    let p = fake.node(raw::PARAGRAPH, "", "p", None).await;
+    fake.link(doc, p);
+    fake.set_text(p, "one");
+    let mut b = start_browse(fake, conn, doc).await;
+    let _ = until_settled(&mut b).await;
+
+    // The page edits the paragraph's text.
+    b.fake.set_text(p, "two");
+    b.events.send(text_changed(p, 1)).await.unwrap();
+    let batch = until_settled(&mut b).await;
+    let ups = upserts_of(&batch);
+    assert!(
+        ups.iter().any(|n| n.text.as_deref() == Some("two")),
+        "the edited run is re-sent in place"
+    );
+
+    // An event for a node the document never saw is ignored: nothing arrives.
+    b.events
+        .send(DocEvent {
+            ev: NodeEvent::ChildrenChanged {
+                node: node_key(9999),
+            },
+            seq: 2,
+            at: Instant::now(),
+        })
+        .await
+        .unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), b.rx.deltas.recv())
+            .await
+            .is_err()
+    );
+    b.shutdown.cancel();
+    let _ = b.task.await;
+}
+
+#[tokio::test]
+async fn a_dormant_source_marks_only_and_a_wake_rebuilds_with_ids_kept() {
+    let (fake, conn) = Fake::start(2).await;
+    let doc = fake.node(raw::DOCUMENT_WEB, "page", "body", None).await;
+    let p = fake.node(raw::PARAGRAPH, "", "p", None).await;
+    fake.link(doc, p);
+    fake.set_text(p, "one");
+    let mut b = start_browse(fake, conn, doc).await;
+    let first = until_settled(&mut b).await;
+    let run_before = upserts_of(&first)
+        .into_iter()
+        .find(|n| gorca_doc_source_atspi::runs::is_run(n.id))
+        .map(|n| n.id)
+        .unwrap();
+
+    b.requests
+        .send(DocRequest::SetActivity(Activity::Dormant))
+        .await
+        .unwrap();
+    b.fake.set_text(p, "two");
+    b.events.send(text_changed(p, 1)).await.unwrap();
+    assert!(
+        tokio::time::timeout(Duration::from_millis(250), b.rx.deltas.recv())
+            .await
+            .is_err(),
+        "a dormant document does no IPC and pushes nothing"
+    );
+    b.requests
+        .send(DocRequest::SetActivity(Activity::Awake))
+        .await
+        .unwrap();
+    let batch = until_settled(&mut b).await;
+    let ups = upserts_of(&batch);
+    let run_after = ups
+        .iter()
+        .find(|n| n.text.as_deref() == Some("two"))
+        .map(|n| n.id);
+    assert_eq!(run_after, Some(run_before), "the run keeps its id");
+
+    // An explicit rebuild settles even when nothing changed.
+    b.requests.send(DocRequest::Rebuild).await.unwrap();
+    let _ = until_settled(&mut b).await;
+    b.shutdown.cancel();
+    let _ = b.task.await;
+}
+
+#[tokio::test]
+async fn the_parent_walk_finds_the_topmost_document_and_a_search_finds_any() {
+    use gorca_doc_source_atspi::factory::{any_document, top_document};
+    let (fake, conn) = Fake::start(1).await;
+    // page(doc) -> section -> iframe(doc) -> p ; and a chrome-like sibling without a document
+    let app = fake.node(raw::APPLICATION, "app", "app", None).await;
+    let page = fake.node(raw::DOCUMENT_WEB, "page", "body", None).await;
+    let sec = fake.node(raw::SECTION, "", "section", None).await;
+    let inner = fake.node(raw::DOCUMENT_WEB, "inner", "body", None).await;
+    let p = fake.node(raw::PARAGRAPH, "", "p", None).await;
+    let chrome = fake.node(raw::PUSH_BUTTON, "tab", "button", None).await;
+    fake.link(app, page);
+    fake.link(app, chrome);
+    fake.link(page, sec);
+    fake.link(sec, inner);
+    fake.link(inner, p);
+    assert_eq!(
+        top_document(&conn, &path_of(p)).await,
+        Some(path_of(page)),
+        "a nested document belongs to the top-level one"
+    );
+    assert_eq!(top_document(&conn, &path_of(chrome)).await, None);
+    // The search starts at the well-known root path, which the fake does not serve: build a
+    // fake whose node 0 is not special, so only check that a miss is a clean `None`.
+    assert_eq!(any_document(&conn).await, None);
 }

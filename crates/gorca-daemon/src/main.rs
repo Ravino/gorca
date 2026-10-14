@@ -8,6 +8,12 @@ use gorca_daemon::{Parsed, USAGE};
 use gorca_rt::CancellationToken;
 
 fn main() -> Result<ExitCode> {
+    // `gorca --version`: the revision the binary was built from (a test harness compares it
+    // with the tree it measures).
+    if std::env::args().nth(1).as_deref() == Some("--version") {
+        println!("gorca {}", env!("GORCA_GIT_REV"));
+        return Ok(ExitCode::SUCCESS);
+    }
     let opts = match gorca_daemon::parse(std::env::args().skip(1)) {
         Ok(Parsed::Run(opts)) => opts.with_env(|k| std::env::var(k).ok()),
         Ok(Parsed::Config(cmd)) => {

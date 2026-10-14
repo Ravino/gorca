@@ -51,6 +51,15 @@ pub enum Scn {
     R1,
     R1s,
     RS,
+    B0,
+    W1,
+    Br1,
+    Br2,
+    W2,
+    W2b,
+    W3,
+    Fm1,
+    Fm2,
     C1,
     C1h,
     C2,
@@ -85,6 +94,15 @@ impl Scn {
             Self::R1 => "R1".into(),
             Self::R1s => "R1s".into(),
             Self::RS => "RS".into(),
+            Self::B0 => "B0".into(),
+            Self::W1 => "W1".into(),
+            Self::Br1 => "BR1".into(),
+            Self::Br2 => "BR2".into(),
+            Self::W2 => "W2".into(),
+            Self::W2b => "W2b".into(),
+            Self::W3 => "W3".into(),
+            Self::Fm1 => "FM1".into(),
+            Self::Fm2 => "FM2".into(),
             Self::C1 => "C1".into(),
             Self::C1h => "C1h".into(),
             Self::C2 => "C2".into(),
@@ -120,6 +138,15 @@ impl Scn {
             "R1" => Self::R1,
             "R1s" => Self::R1s,
             "RS" => Self::RS,
+            "B0" => Self::B0,
+            "W1" => Self::W1,
+            "BR1" => Self::Br1,
+            "BR2" => Self::Br2,
+            "W2" => Self::W2,
+            "W2b" => Self::W2b,
+            "W3" => Self::W3,
+            "FM1" => Self::Fm1,
+            "FM2" => Self::Fm2,
             "C1" => Self::C1,
             "C1h" => Self::C1h,
             "C2" => Self::C2,
@@ -140,8 +167,9 @@ impl Scn {
     pub fn all() -> Vec<Self> {
         [
             "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K2s", "K3",
-            "K4", "K4r", "R1", "R1s", "RS", "C1", "C1h", "C2", "E1", "E2", "S2", "SA1", "SA2",
-            "SA3", "SA3a", "PW", "C1hs", "E1s",
+            "K4", "K4r", "R1", "R1s", "RS", "B0", "W1", "BR1", "BR2", "W2", "W2b", "W3", "FM1",
+            "FM2", "C1", "C1h", "C2", "E1", "E2", "S2", "SA1", "SA2", "SA3", "SA3a", "PW", "C1hs",
+            "E1s",
         ]
         .iter()
         .filter_map(|s| Self::parse(s))
@@ -429,6 +457,15 @@ pub fn run(
         Scn::R1 => super::m4::r1(host, reader, flavor, size, seed, &mut out)?,
         Scn::R1s => super::m4::r1s(host, reader, flavor, size, seed, &mut out)?,
         Scn::RS => super::m4::rs(host, reader, flavor, size, seed, &mut out)?,
+        Scn::B0 => super::web::b0(host, reader, flavor, &mut out)?,
+        Scn::W1 => super::web::w1(host, reader, flavor, size, &mut out)?,
+        Scn::Br1 => super::web::br1(host, reader, flavor, size, &mut out)?,
+        Scn::Br2 => super::web::br2(host, reader, flavor, &mut out)?,
+        Scn::W2 => super::web::w2(host, reader, flavor, &mut out)?,
+        Scn::W2b => super::web::w2b(host, reader, flavor, size, &mut out)?,
+        Scn::W3 => super::web::w3(host, reader, flavor, size, &mut out)?,
+        Scn::Fm1 => super::web::fm(host, reader, flavor, size, &mut out, false)?,
+        Scn::Fm2 => super::web::fm(host, reader, flavor, size, &mut out, true)?,
         Scn::C1 => super::m3::c1(host, reader, flavor, size, seed, &mut out)?,
         Scn::C1h => super::m3::c1h(host, reader, flavor, size, seed, &mut out)?,
         Scn::C2 => super::m3::c2(host, reader, flavor, size, seed, &mut out)?,
@@ -844,5 +881,19 @@ mod tests {
         for s in Scn::all() {
             assert_eq!(Scn::parse(&s.id()), Some(s));
         }
+    }
+}
+
+#[cfg(test)]
+mod all_tests {
+    use super::*;
+
+    #[test]
+    fn all_has_no_duplicates() {
+        let ids: Vec<String> = Scn::all().iter().map(Scn::id).collect();
+        let mut sorted = ids.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), ids.len(), "duplicate scenarios in {ids:?}");
     }
 }

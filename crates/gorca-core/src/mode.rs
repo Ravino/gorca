@@ -34,7 +34,6 @@ pub enum Mode {
     /// Virtual cursor over the document mirror.
     Browse {
         doc: DocId,
-        cursor: WebCursor,
         sticky: bool,
     },
     /// Flat/object review; terminal review (ADR-0006).
@@ -58,7 +57,6 @@ pub enum BaseMode {
     Focus,
     Browse {
         doc: DocId,
-        cursor: WebCursor,
         sticky: bool,
     },
     Review {
@@ -71,15 +69,7 @@ impl BaseMode {
     fn into_mode(self) -> Mode {
         match self {
             BaseMode::Focus => Mode::Focus,
-            BaseMode::Browse {
-                doc,
-                cursor,
-                sticky,
-            } => Mode::Browse {
-                doc,
-                cursor,
-                sticky,
-            },
+            BaseMode::Browse { doc, sticky } => Mode::Browse { doc, sticky },
             BaseMode::Review { origin, cursor } => Mode::Review { origin, cursor },
         }
     }
@@ -106,6 +96,8 @@ pub struct ModeKeys {
     pub quick_nav: Vec<Chord>,
     /// The chord(s) that leave pass-through.
     pub pass_through_exit: Vec<Chord>,
+    /// The chord(s) bound to `browse.escape`: grabbed only in auto focus mode (modes.md 2).
+    pub web_escape: Vec<Chord>,
 }
 
 impl Mode {
@@ -113,15 +105,7 @@ impl Mode {
     pub fn base(self) -> Option<BaseMode> {
         match self {
             Mode::Focus => Some(BaseMode::Focus),
-            Mode::Browse {
-                doc,
-                cursor,
-                sticky,
-            } => Some(BaseMode::Browse {
-                doc,
-                cursor,
-                sticky,
-            }),
+            Mode::Browse { doc, sticky } => Some(BaseMode::Browse { doc, sticky }),
             Mode::Review { origin, cursor } => Some(BaseMode::Review { origin, cursor }),
             Mode::PassThrough { .. } | Mode::InputHelp { .. } => None,
         }
@@ -132,15 +116,7 @@ impl Mode {
         match self {
             Mode::PassThrough { resume, .. } | Mode::InputHelp { resume } => resume,
             Mode::Focus => BaseMode::Focus,
-            Mode::Browse {
-                doc,
-                cursor,
-                sticky,
-            } => BaseMode::Browse {
-                doc,
-                cursor,
-                sticky,
-            },
+            Mode::Browse { doc, sticky } => BaseMode::Browse { doc, sticky },
             Mode::Review { origin, cursor } => BaseMode::Review { origin, cursor },
         }
     }
@@ -199,7 +175,6 @@ impl Mode {
 pub enum ModeMsg {
     EnterBrowse {
         doc: DocId,
-        cursor: WebCursor,
     },
     ExitBrowse,
     EnterReview {
@@ -216,7 +191,6 @@ pub enum ModeMsg {
     /// Focus entered a document (auto browse unless the user disabled it).
     FocusEnteredDocument {
         doc: DocId,
-        cursor: WebCursor,
     },
     /// Focus entered an editable control inside a document (auto focus mode, unless sticky).
     FocusEnteredEditable,
@@ -246,12 +220,10 @@ impl Mode {
 
     fn next(self, msg: ModeMsg) -> Mode {
         match msg {
-            ModeMsg::EnterBrowse { doc, cursor } => match self {
-                Mode::Focus | Mode::Browse { .. } | Mode::Review { .. } => Mode::Browse {
-                    doc,
-                    cursor,
-                    sticky: false,
-                },
+            ModeMsg::EnterBrowse { doc } => match self {
+                Mode::Focus | Mode::Browse { .. } | Mode::Review { .. } => {
+                    Mode::Browse { doc, sticky: false }
+                }
                 Mode::PassThrough { .. } | Mode::InputHelp { .. } => self,
             },
             ModeMsg::ExitBrowse => match self {
@@ -270,15 +242,7 @@ impl Mode {
             ModeMsg::ExitReview => match self {
                 Mode::Review { origin, .. } => match origin.from {
                     ReviewFrom::Focus => Mode::Focus,
-                    ReviewFrom::Browse {
-                        doc,
-                        cursor,
-                        sticky,
-                    } => Mode::Browse {
-                        doc,
-                        cursor,
-                        sticky,
-                    },
+                    ReviewFrom::Browse { doc, sticky } => Mode::Browse { doc, sticky },
                 },
                 Mode::Focus
                 | Mode::Browse { .. }
@@ -318,12 +282,8 @@ impl Mode {
                 | Mode::Review { .. }
                 | Mode::PassThrough { .. } => self,
             },
-            ModeMsg::FocusEnteredDocument { doc, cursor } => match self {
-                Mode::Focus => Mode::Browse {
-                    doc,
-                    cursor,
-                    sticky: false,
-                },
+            ModeMsg::FocusEnteredDocument { doc } => match self {
+                Mode::Focus => Mode::Browse { doc, sticky: false },
                 Mode::Browse { .. }
                 | Mode::Review { .. }
                 | Mode::PassThrough { .. }
@@ -352,7 +312,7 @@ impl Mode {
 mod tests {
     use super::*;
     use gorca_input_api::Modifiers;
-    use gorca_model::{AppId, ConnectorId, DocNodeId, LocalId, NodeKey};
+    use gorca_model::{AppId, ConnectorId, LocalId, NodeKey};
 
     const KP_INSERT: u32 = 0xff9e;
 
@@ -372,13 +332,7 @@ mod tests {
                 keysym: 0x70,
                 modifiers: Modifiers::MOD1,
             }],
-        }
-    }
-
-    fn cursor() -> WebCursor {
-        WebCursor {
-            node: DocNodeId::from_parts(1, 0),
-            local: 0,
+            web_escape: Vec::new(),
         }
     }
 
@@ -395,7 +349,6 @@ mod tests {
     fn browse() -> Mode {
         Mode::Browse {
             doc: DocId(1),
-            cursor: cursor(),
             sticky: false,
         }
     }
@@ -441,13 +394,7 @@ mod tests {
     #[test]
     fn every_real_transition_advances_the_epoch_and_sets_the_grab_set() {
         let k = keys();
-        let (m, e) = Mode::Focus.step(
-            ModeMsg::EnterBrowse {
-                doc: DocId(1),
-                cursor: cursor(),
-            },
-            &k,
-        );
+        let (m, e) = Mode::Focus.step(ModeMsg::EnterBrowse { doc: DocId(1) }, &k);
         assert_eq!(m, browse());
         assert_eq!(e[0], ModeEffect::AdvanceEpoch);
         assert_eq!(e[1], ModeEffect::SetGrabSet(browse().grab_set(&k)));
@@ -464,19 +411,12 @@ mod tests {
     #[test]
     fn auto_mode_switching_follows_focus_unless_sticky() {
         let k = keys();
-        let (m, _) = Mode::Focus.step(
-            ModeMsg::FocusEnteredDocument {
-                doc: DocId(1),
-                cursor: cursor(),
-            },
-            &k,
-        );
+        let (m, _) = Mode::Focus.step(ModeMsg::FocusEnteredDocument { doc: DocId(1) }, &k);
         assert_eq!(m, browse());
         let (m, _) = m.step(ModeMsg::FocusEnteredEditable, &k);
         assert_eq!(m, Mode::Focus);
         let sticky = Mode::Browse {
             doc: DocId(1),
-            cursor: cursor(),
             sticky: true,
         };
         assert_eq!(sticky.step(ModeMsg::FocusEnteredEditable, &k).0, sticky);
@@ -501,17 +441,7 @@ mod tests {
                     resume: m.resume_base()
                 }
             );
-            assert_eq!(
-                h.step(
-                    ModeMsg::EnterBrowse {
-                        doc: DocId(1),
-                        cursor: cursor()
-                    },
-                    &k
-                )
-                .0,
-                h
-            );
+            assert_eq!(h.step(ModeMsg::EnterBrowse { doc: DocId(1) }, &k).0, h);
             // Toggling off returns to the mode learn mode was entered from (never to Focus
             // by accident once Browse exists).
             assert_eq!(
@@ -567,7 +497,6 @@ mod tests {
             node: node(),
             from: ReviewFrom::Browse {
                 doc: DocId(1),
-                cursor: cursor(),
                 sticky: true,
             },
         };
@@ -575,7 +504,6 @@ mod tests {
         assert_eq!(e.len(), 2, "mode change: epoch and grab set");
         let sticky = Mode::Browse {
             doc: DocId(1),
-            cursor: cursor(),
             sticky: true,
         };
         assert_eq!(r.step(ModeMsg::ExitReview, &k).0, sticky);

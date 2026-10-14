@@ -14,7 +14,7 @@ stopping NVDA"…; Orca `refs/orca/src/orca/*_command_definitions.py` (extracted
 ```rust
 enum Mode {
     Focus,
-    Browse      { doc: DocId, cursor: DocCursor, sticky: bool },   // ADR-0003 WebMode::Browse
+    Browse      { doc: DocId, sticky: bool },                       // the cursor lives in WebMode (browse-mode design 7.1)
     Review      { origin: NodeKey, cursor: ReviewCursor },
     PassThrough { scope: PassScope, resume: BaseMode },             // OneKey | UntilToggle
     InputHelp   { resume: BaseMode },
@@ -195,7 +195,9 @@ M4 (K-1). Laptop review uses gorca+letter/arrow chords.
 Laptop note: gorca+Up, gorca+Down, gorca+Shift+Up and gorca+Shift+S mean different things in the two
 layouts (NVDA does the same). The layout is chosen once (`keyboard.layout`).
 
-### 4.4 Browse mode (M7/M8, reserved; identical in both layouts)
+### 4.4 Browse mode (M7/M8; identical in both layouts)
+
+Status (M7a, Firefox static pages): implemented are H, 1-6 (Shift reverses), K, U, V, F, E, B, X, R, C, L, I, G, S, Q, D, T, O, the arrows, Ctrl+Left/Right, Home/End (with Ctrl), Prior/Next, Return/KP_Enter/space and `browse.escape`. Escape is grabbed only in auto focus mode: the grab set is published with the Browse lookup context so the lane finds it in the browse table. Planned: M (frame; the Orca preset has no key), N, A, W, P, comma, paragraph and sentence moves, tables, elements list, find (M7b/M8).
 
 These keys are grabbed only in `Browse` (and the letters only while single-letter navigation is on).
 Shift reverses direction. They replace the provisional letters in ADR-0003 §12.

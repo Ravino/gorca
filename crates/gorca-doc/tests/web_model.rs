@@ -42,7 +42,11 @@ impl MNode {
         if self.flags.contains(NodeFlags::HIDDEN) {
             return Vec::new();
         }
-        let mut v: Vec<char> = self.text.as_deref().unwrap_or("").chars().collect();
+        let mut v: Vec<char> = Vec::new();
+        if self.flags.contains(NodeFlags::BREAK_BEFORE) {
+            v.push('\n');
+        }
+        v.extend(self.text.as_deref().unwrap_or("").chars());
         if self.flags.contains(NodeFlags::BREAK_AFTER) {
             v.push('\n');
         }
@@ -86,6 +90,7 @@ fn rand_node(rng: &mut Rng) -> NodeSpec {
         NodeFlags::ARTICLE,
         NodeFlags::LIVE,
         NodeFlags::BREAK_AFTER,
+        NodeFlags::BREAK_BEFORE,
     ] {
         if rng.below(6) == 0 {
             flags = flags | f;
@@ -335,6 +340,7 @@ impl Harness {
                         flags: Some(spec.flags),
                         sig: Some(spec.sig),
                         name: None,
+                        meta: None,
                     };
                     self.exec(
                         &DocOp::SetProps {

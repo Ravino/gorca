@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use gorca_model::{
-    Epoch, Freshness, NodeSnapshot, Prio, Segment, SegmentKind, StateSet, UttId, Utterance, Value,
+    Epoch, Freshness, NodeSnapshot, Prio, Role, Segment, SegmentKind, StateSet, UttId, Utterance,
+    Value,
 };
 use smallvec::SmallVec;
 
@@ -37,6 +38,28 @@ pub fn present_selected_item(n: &NodeSnapshot, id: UttId, epoch: Epoch) -> Utter
     present_with(n, id, epoch, StateSet::SELECTED)
 }
 
+/// Roles of static web content that are never meaningfully disabled.
+pub(crate) fn never_disabled(role: Role) -> bool {
+    matches!(
+        role,
+        Role::DocumentWeb
+            | Role::Document
+            | Role::Heading
+            | Role::Paragraph
+            | Role::Image
+            | Role::List
+            | Role::ListItem
+            | Role::Table
+            | Role::Row
+            | Role::Cell
+            | Role::ColumnHeader
+            | Role::RowHeader
+            | Role::Landmark
+            | Role::StaticText
+            | Role::Separator
+    )
+}
+
 fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Utterance {
     let mut segments: SmallVec<[Segment; 4]> = SmallVec::new();
     if let Some(name) = n.name.as_deref().filter(|s| !s.is_empty()) {
@@ -46,6 +69,14 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
     if !role.is_empty() {
         segments.push(seg(role, SegmentKind::Role));
     }
+    // Gecko reports no Sensitive on its document; that is not "unavailable" (the connector maps
+    // a missing Sensitive to DISABLED). Other static web roles are handled by the Reader, which
+    // knows which applications are web applications (N7).
+    let skip = if n.role == Role::DocumentWeb {
+        skip | StateSet::DISABLED
+    } else {
+        skip
+    };
     for (flag, word) in STATE_WORDS {
         if n.states.contains(*flag) && !skip.contains(*flag) {
             segments.push(seg(word, SegmentKind::State));
@@ -215,6 +246,7 @@ fn is_plain_text_role(role: gorca_model::Role) -> bool {
         | Role::Dialog
         | Role::Panel
         | Role::Document
+        | Role::DocumentWeb
         | Role::Heading
         | Role::Link
         | Role::Image
@@ -390,5 +422,39 @@ mod change_tests {
         let off = snap("x", StateSet::DISABLED | StateSet::SHOWING, None);
         assert_eq!(log_states(&off).as_slice(), ["showing"], "no sensitive");
         assert!(log_states(&snap("x", StateSet::empty(), None)).is_empty());
+    }
+
+    #[test]
+    fn a_web_document_without_sensitive_is_not_called_unavailable() {
+        let mut d = snap("Page", StateSet::DISABLED | StateSet::SHOWING, None);
+        d.role = Role::DocumentWeb;
+        let text = |n: &NodeSnapshot| {
+            present_focus(n, UttId(1), Epoch::default())
+                .segments
+                .iter()
+                .map(|s| s.text.to_string())
+                .collect::<Vec<_>>()
+        };
+        assert!(
+            !text(&d).iter().any(|t| t == "unavailable"),
+            "{:?}",
+            text(&d)
+        );
+        d.role = Role::CheckBox;
+        assert!(text(&d).iter().any(|t| t == "unavailable"));
+    }
+
+    #[test]
+    fn a_web_document_is_not_called_unavailable_but_a_native_row_still_is() {
+        let mut d = snap("x", StateSet::DISABLED | StateSet::SHOWING, None);
+        d.role = Role::DocumentWeb;
+        let u = present_focus(&d, UttId(1), Epoch::default());
+        assert!(!u.segments.iter().any(|s| &*s.text == "unavailable"));
+        d.role = Role::ListItem;
+        let u = present_focus(&d, UttId(1), Epoch::default());
+        assert!(
+            u.segments.iter().any(|s| &*s.text == "unavailable"),
+            "native rows keep it"
+        );
     }
 }

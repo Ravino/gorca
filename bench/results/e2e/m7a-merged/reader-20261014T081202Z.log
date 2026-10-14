@@ -1,0 +1,247 @@
+2026-10-14T08:12:07.253734Z  INFO gorca_phase: phase="warm" wall_ms=27.735021 waited_ms=27.005133 blocked_ms=1.408618 slept_ms=25.554812 rounds=2 probes=13 sampled_nodes=3 ready=true
+2026-10-14T08:12:07.254403Z  INFO gorca_phase: phase="locate" wall_ms=0.548347
+2026-10-14T08:12:07.254469Z  INFO gorca_phase: phase="create" wall_ms=0.004439
+2026-10-14T08:12:07.257065Z  INFO gorca_phase: phase="fetch" total_ms=2.526304 warm_ms=0.0 frontier_ms=0.101617 get_tree_ms=0.396849 roles_ms=0.446998 states_ms=1.03934 text_ms=0.429865 assemble_ms=0.0070539999999999995 heaviest_get_tree_ms=0.161 calls=55 tree_bytes=3529 nodes=18
+2026-10-14T08:12:07.257205Z  INFO gorca_phase: phase="translate" wall_ms=0.059701000000000004 nodes=36
+2026-10-14T08:12:08.269318Z  INFO gorca_phase: phase="locate" wall_ms=0.902564
+2026-10-14T08:12:08.269381Z  INFO gorca_phase: phase="create" wall_ms=0.0035329999999999997
+2026-10-14T08:12:08.270708Z  INFO gorca_phase: phase="fetch" total_ms=1.283537 warm_ms=0.0 frontier_ms=0.220305 get_tree_ms=0.150553 roles_ms=0.358426 states_ms=0.18290299999999998 text_ms=0.295859 assemble_ms=0.0010160000000000002 heaviest_get_tree_ms=0.129 calls=22 tree_bytes=784 nodes=5
+2026-10-14T08:12:08.270772Z  INFO gorca_phase: phase="translate" wall_ms=0.023261 nodes=9
+2026-10-14T08:12:13.598740Z  INFO gorca_phase: phase="warm" wall_ms=30.459581999999997 waited_ms=29.657671 blocked_ms=3.1002709999999998 slept_ms=26.350952 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:12:13.599047Z  INFO gorca_phase: phase="locate" wall_ms=0.23588099999999998
+2026-10-14T08:12:13.599063Z  INFO gorca_phase: phase="create" wall_ms=0.001963
+2026-10-14T08:12:13.615872Z  INFO gorca_phase: phase="first_block" wall_ms=16.785856 nodes=444
+2026-10-14T08:12:13.617565Z  INFO gorca_phase: phase="translate" wall_ms=1.2522410000000002 nodes=1687
+2026-10-14T08:12:13.901027Z  INFO gorca_phase: phase="fetch" total_ms=301.936561 warm_ms=0.0 frontier_ms=0.776671 get_tree_ms=4.762224 roles_ms=4.211891 states_ms=1.936538 text_ms=4.125430000000001 assemble_ms=0.06381200000000001 heaviest_get_tree_ms=0.544 calls=1088 tree_bytes=93434 nodes=10233
+2026-10-14T08:13:16.166097Z  INFO gorca_phase: phase="warm" wall_ms=39.975584000000005 waited_ms=39.349830000000004 blocked_ms=12.808982 slept_ms=26.274651 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:13:16.166605Z  INFO gorca_phase: phase="locate" wall_ms=0.400309
+2026-10-14T08:13:16.166664Z  INFO gorca_phase: phase="create" wall_ms=0.0051660000000000005
+2026-10-14T08:13:16.186853Z  INFO gorca_phase: phase="first_block" wall_ms=20.153418 nodes=444
+2026-10-14T08:13:16.188632Z  INFO gorca_phase: phase="translate" wall_ms=1.347877 nodes=1687
+2026-10-14T08:13:16.479862Z  INFO gorca_phase: phase="fetch" total_ms=313.160677 warm_ms=0.0 frontier_ms=0.91733 get_tree_ms=6.8688530000000005 roles_ms=4.55076 states_ms=2.4295940000000003 text_ms=4.6182289999999995 assemble_ms=0.051949 heaviest_get_tree_ms=0.791 calls=1088 tree_bytes=93434 nodes=10233
+2026-10-14T08:16:09.468691Z  INFO gorca_phase: phase="warm" wall_ms=38.488698 waited_ms=37.556103 blocked_ms=10.375898 slept_ms=26.966813 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:16:09.469144Z  INFO gorca_phase: phase="locate" wall_ms=0.355779
+2026-10-14T08:16:09.469170Z  INFO gorca_phase: phase="create" wall_ms=0.002953
+2026-10-14T08:16:09.488674Z  INFO gorca_phase: phase="first_block" wall_ms=19.463929 nodes=444
+2026-10-14T08:16:09.492206Z  INFO gorca_phase: phase="translate" wall_ms=2.706914 nodes=1687
+2026-10-14T08:16:09.769105Z  INFO gorca_phase: phase="fetch" total_ms=299.89118399999995 warm_ms=0.0 frontier_ms=0.946592 get_tree_ms=7.035654 roles_ms=4.162466 states_ms=2.0301329999999997 text_ms=4.580209 assemble_ms=0.026146 heaviest_get_tree_ms=0.787 calls=1088 tree_bytes=93434 nodes=10233
+2026-10-14T08:16:18.692431Z  INFO gorca_phase: phase="warm" wall_ms=29.211582 waited_ms=28.104013000000002 blocked_ms=1.9792379999999998 slept_ms=26.087501999999997 rounds=2 probes=13 sampled_nodes=5 ready=true
+2026-10-14T08:16:18.692801Z  INFO gorca_phase: phase="locate" wall_ms=0.28575
+2026-10-14T08:16:18.692843Z  INFO gorca_phase: phase="create" wall_ms=0.003636
+2026-10-14T08:16:18.693859Z  INFO gorca_phase: phase="fetch" total_ms=0.9525650000000001 warm_ms=0.0 frontier_ms=0.12471600000000001 get_tree_ms=0.070313 roles_ms=0.24583 states_ms=0.142661 text_ms=0.24797799999999998 assemble_ms=0.002971 heaviest_get_tree_ms=0.056 calls=21 tree_bytes=400 nodes=4
+2026-10-14T08:16:18.693934Z  INFO gorca_phase: phase="translate" wall_ms=0.027149 nodes=6
+2026-10-14T08:16:19.561319Z  INFO gorca_phase: phase="locate" wall_ms=0.856626
+2026-10-14T08:16:19.561380Z  INFO gorca_phase: phase="create" wall_ms=0.008065
+2026-10-14T08:16:29.148558Z  INFO gorca_phase: phase="warm" wall_ms=47.599667 waited_ms=46.978469000000004 blocked_ms=20.523406 slept_ms=26.191291 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:16:29.148995Z  INFO gorca_phase: phase="locate" wall_ms=0.380032
+2026-10-14T08:16:29.149013Z  INFO gorca_phase: phase="create" wall_ms=0.0020099999999999996
+2026-10-14T08:16:29.170430Z  INFO gorca_phase: phase="first_block" wall_ms=21.383710999999998 nodes=444
+2026-10-14T08:16:29.171935Z  INFO gorca_phase: phase="translate" wall_ms=1.135578 nodes=1687
+2026-10-14T08:16:38.750111Z  INFO gorca_phase: phase="warm" wall_ms=54.397749000000005 waited_ms=53.802348 blocked_ms=27.287606999999998 slept_ms=26.235539 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:16:38.750406Z  INFO gorca_phase: phase="locate" wall_ms=0.23657999999999998
+2026-10-14T08:16:38.750422Z  INFO gorca_phase: phase="create" wall_ms=0.001761
+2026-10-14T08:16:38.767500Z  INFO gorca_phase: phase="first_block" wall_ms=17.049208 nodes=444
+2026-10-14T08:16:38.771723Z  INFO gorca_phase: phase="translate" wall_ms=3.1845049999999997 nodes=1687
+2026-10-14T08:16:48.050539Z  INFO gorca_phase: phase="warm" wall_ms=45.525707 waited_ms=45.018318 blocked_ms=18.486403 slept_ms=26.200416 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:16:48.051114Z  INFO gorca_phase: phase="locate" wall_ms=0.43787
+2026-10-14T08:16:48.051141Z  INFO gorca_phase: phase="create" wall_ms=0.002882
+2026-10-14T08:16:48.073985Z  INFO gorca_phase: phase="first_block" wall_ms=22.799611000000002 nodes=444
+2026-10-14T08:16:48.075729Z  INFO gorca_phase: phase="translate" wall_ms=1.340416 nodes=1687
+2026-10-14T08:16:57.583190Z  INFO gorca_phase: phase="warm" wall_ms=43.981116 waited_ms=43.349813 blocked_ms=17.005161 slept_ms=26.117055 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:16:57.583603Z  INFO gorca_phase: phase="locate" wall_ms=0.333544
+2026-10-14T08:16:57.583631Z  INFO gorca_phase: phase="create" wall_ms=0.003472
+2026-10-14T08:16:57.608665Z  INFO gorca_phase: phase="first_block" wall_ms=24.987206 nodes=444
+2026-10-14T08:16:57.610724Z  INFO gorca_phase: phase="translate" wall_ms=1.557515 nodes=1687
+2026-10-14T08:17:06.936592Z  INFO gorca_phase: phase="warm" wall_ms=90.766497 waited_ms=88.275444 blocked_ms=61.834086000000006 slept_ms=26.135005999999997 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:17:06.937402Z  INFO gorca_phase: phase="locate" wall_ms=0.738023
+2026-10-14T08:17:06.937450Z  INFO gorca_phase: phase="create" wall_ms=0.0048980000000000004
+2026-10-14T08:17:06.981872Z  INFO gorca_phase: phase="first_block" wall_ms=44.371397 nodes=444
+2026-10-14T08:17:06.988644Z  INFO gorca_phase: phase="translate" wall_ms=2.206436 nodes=1687
+2026-10-14T08:17:16.941421Z  INFO gorca_phase: phase="warm" wall_ms=81.786466 waited_ms=80.99798399999999 blocked_ms=54.450228 slept_ms=26.207983000000002 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:17:16.942198Z  INFO gorca_phase: phase="locate" wall_ms=0.695579
+2026-10-14T08:17:16.942229Z  INFO gorca_phase: phase="create" wall_ms=0.004389
+2026-10-14T08:17:16.971435Z  INFO gorca_phase: phase="first_block" wall_ms=29.166188 nodes=444
+2026-10-14T08:17:16.973360Z  INFO gorca_phase: phase="translate" wall_ms=1.3309929999999999 nodes=1687
+2026-10-14T08:17:21.719307Z  INFO gorca_phase: phase="warm" wall_ms=28.586206 waited_ms=27.846406 blocked_ms=1.085251 slept_ms=26.723727999999998 rounds=2 probes=13 sampled_nodes=3 ready=true
+2026-10-14T08:17:21.719695Z  INFO gorca_phase: phase="locate" wall_ms=0.279787
+2026-10-14T08:17:21.719738Z  INFO gorca_phase: phase="create" wall_ms=0.007733
+2026-10-14T08:17:21.722371Z  INFO gorca_phase: phase="fetch" total_ms=2.587844 warm_ms=0.0 frontier_ms=0.099422 get_tree_ms=0.764033 roles_ms=0.568086 states_ms=0.295987 text_ms=0.5540900000000001 assemble_ms=0.009847000000000002 heaviest_get_tree_ms=0.279 calls=55 tree_bytes=3529 nodes=18
+2026-10-14T08:17:21.722593Z  INFO gorca_phase: phase="translate" wall_ms=0.08004399999999999 nodes=36
+2026-10-14T08:17:22.327727Z  INFO gorca_phase: phase="locate" wall_ms=0.372073
+2026-10-14T08:17:23.763740Z  INFO gorca_phase: phase="locate" wall_ms=0.762032
+2026-10-14T08:17:23.763792Z  INFO gorca_phase: phase="create" wall_ms=0.0025830000000000002
+2026-10-14T08:17:23.765023Z  INFO gorca_phase: phase="fetch" total_ms=1.1986519999999998 warm_ms=0.0 frontier_ms=0.269521 get_tree_ms=0.151003 roles_ms=0.277252 states_ms=0.172005 text_ms=0.217512 assemble_ms=0.001843 heaviest_get_tree_ms=0.129 calls=22 tree_bytes=784 nodes=5
+2026-10-14T08:17:23.765109Z  INFO gorca_phase: phase="translate" wall_ms=0.03947 nodes=9
+2026-10-14T08:17:42.384831Z  INFO gorca_phase: phase="warm" wall_ms=27.890185000000002 waited_ms=27.230889 blocked_ms=1.784482 slept_ms=25.396416000000002 rounds=2 probes=13 sampled_nodes=5 ready=true
+2026-10-14T08:17:42.385243Z  INFO gorca_phase: phase="locate" wall_ms=0.345779
+2026-10-14T08:17:42.385265Z  INFO gorca_phase: phase="create" wall_ms=0.002799
+2026-10-14T08:17:42.387229Z  INFO gorca_phase: phase="fetch" total_ms=1.913513 warm_ms=0.0 frontier_ms=0.31066 get_tree_ms=0.329953 roles_ms=0.303378 states_ms=0.158955 text_ms=0.426371 assemble_ms=0.005425 heaviest_get_tree_ms=0.16 calls=70 tree_bytes=1998 nodes=16
+2026-10-14T08:17:42.387335Z  INFO gorca_phase: phase="translate" wall_ms=0.044501 nodes=24
+2026-10-14T08:18:10.491840Z  INFO gorca_phase: phase="warm" wall_ms=28.220406999999998 waited_ms=27.430584 blocked_ms=1.684069 slept_ms=25.705083 rounds=2 probes=13 sampled_nodes=5 ready=true
+2026-10-14T08:18:10.492126Z  INFO gorca_phase: phase="locate" wall_ms=0.23271699999999998
+2026-10-14T08:18:10.492141Z  INFO gorca_phase: phase="create" wall_ms=0.00305
+2026-10-14T08:18:10.494513Z  INFO gorca_phase: phase="fetch" total_ms=2.326954 warm_ms=0.0 frontier_ms=0.344345 get_tree_ms=0.237503 roles_ms=0.368324 states_ms=0.453507 text_ms=0.396139 assemble_ms=0.005162 heaviest_get_tree_ms=0.097 calls=70 tree_bytes=1998 nodes=16
+2026-10-14T08:18:10.494685Z  INFO gorca_phase: phase="translate" wall_ms=0.066856 nodes=24
+2026-10-14T08:18:53.983590Z  INFO gorca_phase: phase="warm" wall_ms=31.361966 waited_ms=30.230701 blocked_ms=3.5399540000000003 slept_ms=26.44607 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:18:53.984004Z  INFO gorca_phase: phase="locate" wall_ms=0.35489000000000004
+2026-10-14T08:18:53.984018Z  INFO gorca_phase: phase="create" wall_ms=0.001851
+2026-10-14T08:18:54.000043Z  INFO gorca_phase: phase="first_block" wall_ms=15.994762 nodes=444
+2026-10-14T08:18:54.001704Z  INFO gorca_phase: phase="translate" wall_ms=1.267259 nodes=1687
+2026-10-14T08:18:54.277957Z  INFO gorca_phase: phase="fetch" total_ms=293.907374 warm_ms=0.0 frontier_ms=0.9645279999999999 get_tree_ms=4.778008 roles_ms=3.417672 states_ms=1.7116799999999999 text_ms=4.101197 assemble_ms=0.075917 heaviest_get_tree_ms=0.5199999999999999 calls=1088 tree_bytes=93434 nodes=10233
+2026-10-14T08:19:57.031601Z  INFO gorca_phase: phase="warm" wall_ms=32.840585999999995 waited_ms=32.130538 blocked_ms=6.187401 slept_ms=25.655569999999997 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:19:57.032249Z  INFO gorca_phase: phase="locate" wall_ms=0.584318
+2026-10-14T08:19:57.032295Z  INFO gorca_phase: phase="create" wall_ms=0.00405
+2026-10-14T08:19:57.057898Z  INFO gorca_phase: phase="first_block" wall_ms=25.572551999999998 nodes=444
+2026-10-14T08:19:57.059626Z  INFO gorca_phase: phase="translate" wall_ms=1.312277 nodes=1687
+2026-10-14T08:19:57.345509Z  INFO gorca_phase: phase="fetch" total_ms=313.178625 warm_ms=0.0 frontier_ms=0.8046070000000001 get_tree_ms=4.976266 roles_ms=13.391848 states_ms=1.603379 text_ms=4.044433 assemble_ms=0.084199 heaviest_get_tree_ms=0.648 calls=1088 tree_bytes=93434 nodes=10233
+2026-10-14T08:22:50.390091Z  INFO gorca_phase: phase="warm" wall_ms=30.055927 waited_ms=29.337444 blocked_ms=3.917781 slept_ms=25.214053 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:22:50.390652Z  INFO gorca_phase: phase="locate" wall_ms=0.500366
+2026-10-14T08:22:50.390670Z  INFO gorca_phase: phase="create" wall_ms=0.0019219999999999999
+2026-10-14T08:22:50.427780Z  INFO gorca_phase: phase="first_block" wall_ms=37.082608 nodes=444
+2026-10-14T08:22:50.429217Z  INFO gorca_phase: phase="translate" wall_ms=1.056848 nodes=1687
+2026-10-14T08:22:50.708340Z  INFO gorca_phase: phase="fetch" total_ms=317.638395 warm_ms=0.0 frontier_ms=3.324614 get_tree_ms=7.370586 roles_ms=4.291836 states_ms=16.482291999999998 text_ms=4.724095999999999 assemble_ms=0.055857 heaviest_get_tree_ms=0.9700000000000001 calls=1088 tree_bytes=93434 nodes=10233
+2026-10-14T08:22:59.603655Z  INFO gorca_phase: phase="warm" wall_ms=28.356576 waited_ms=27.555204 blocked_ms=1.433639 slept_ms=26.067415 rounds=2 probes=13 sampled_nodes=5 ready=true
+2026-10-14T08:22:59.603939Z  INFO gorca_phase: phase="locate" wall_ms=0.235974
+2026-10-14T08:22:59.603954Z  INFO gorca_phase: phase="create" wall_ms=0.002169
+2026-10-14T08:22:59.605268Z  INFO gorca_phase: phase="fetch" total_ms=1.277971 warm_ms=0.0 frontier_ms=0.230431 get_tree_ms=0.153191 roles_ms=0.24496099999999998 states_ms=0.211588 text_ms=0.27859500000000004 assemble_ms=0.001489 heaviest_get_tree_ms=0.12300000000000001 calls=21 tree_bytes=400 nodes=4
+2026-10-14T08:22:59.605321Z  INFO gorca_phase: phase="translate" wall_ms=0.020045 nodes=6
+2026-10-14T08:23:00.489527Z  INFO gorca_phase: phase="locate" wall_ms=0.50299
+2026-10-14T08:23:00.489581Z  INFO gorca_phase: phase="create" wall_ms=0.002362
+2026-10-14T08:23:09.727497Z  INFO gorca_phase: phase="warm" wall_ms=39.05738 waited_ms=38.331177000000004 blocked_ms=11.830663 slept_ms=26.249821 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:23:09.727824Z  INFO gorca_phase: phase="locate" wall_ms=0.24712900000000002
+2026-10-14T08:23:09.727840Z  INFO gorca_phase: phase="create" wall_ms=0.001796
+2026-10-14T08:23:09.743919Z  INFO gorca_phase: phase="first_block" wall_ms=16.043899 nodes=444
+2026-10-14T08:23:09.745428Z  INFO gorca_phase: phase="translate" wall_ms=1.1208019999999999 nodes=1687
+2026-10-14T08:23:19.298295Z  INFO gorca_phase: phase="warm" wall_ms=43.444537999999994 waited_ms=42.816248 blocked_ms=16.428607000000003 slept_ms=26.117236 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:23:19.298600Z  INFO gorca_phase: phase="locate" wall_ms=0.24836299999999997
+2026-10-14T08:23:19.298615Z  INFO gorca_phase: phase="create" wall_ms=0.001879
+2026-10-14T08:23:19.314581Z  INFO gorca_phase: phase="first_block" wall_ms=15.927341000000002 nodes=444
+2026-10-14T08:23:19.316016Z  INFO gorca_phase: phase="translate" wall_ms=1.085463 nodes=1687
+2026-10-14T08:23:28.846668Z  INFO gorca_phase: phase="warm" wall_ms=65.251985 waited_ms=64.563968 blocked_ms=38.184543 slept_ms=26.090445 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:23:28.847045Z  INFO gorca_phase: phase="locate" wall_ms=0.30674100000000004
+2026-10-14T08:23:28.847075Z  INFO gorca_phase: phase="create" wall_ms=0.0030740000000000003
+2026-10-14T08:23:28.867803Z  INFO gorca_phase: phase="first_block" wall_ms=20.693388 nodes=444
+2026-10-14T08:23:28.869203Z  INFO gorca_phase: phase="translate" wall_ms=1.013782 nodes=1687
+2026-10-14T08:23:38.075383Z  INFO gorca_phase: phase="warm" wall_ms=40.011298000000004 waited_ms=39.095119 blocked_ms=12.706572 slept_ms=26.149928 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:23:38.075746Z  INFO gorca_phase: phase="locate" wall_ms=0.289359
+2026-10-14T08:23:38.075765Z  INFO gorca_phase: phase="create" wall_ms=0.0028729999999999997
+2026-10-14T08:23:38.094099Z  INFO gorca_phase: phase="first_block" wall_ms=18.289618 nodes=444
+2026-10-14T08:23:38.095497Z  INFO gorca_phase: phase="translate" wall_ms=1.0590860000000002 nodes=1687
+2026-10-14T08:23:47.623247Z  INFO gorca_phase: phase="warm" wall_ms=42.006797999999996 waited_ms=41.295578 blocked_ms=14.868542999999999 slept_ms=26.182587 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:23:47.634537Z  INFO gorca_phase: phase="locate" wall_ms=11.218488
+2026-10-14T08:23:47.634580Z  INFO gorca_phase: phase="create" wall_ms=0.003141
+2026-10-14T08:23:47.652487Z  INFO gorca_phase: phase="first_block" wall_ms=17.877767 nodes=444
+2026-10-14T08:23:47.653969Z  INFO gorca_phase: phase="translate" wall_ms=1.092411 nodes=1687
+2026-10-14T08:23:57.178068Z  INFO gorca_phase: phase="warm" wall_ms=43.104267 waited_ms=42.101929000000005 blocked_ms=16.779985 slept_ms=25.138842 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:23:57.178438Z  INFO gorca_phase: phase="locate" wall_ms=0.30803800000000003
+2026-10-14T08:23:57.178457Z  INFO gorca_phase: phase="create" wall_ms=0.003127
+2026-10-14T08:23:57.197370Z  INFO gorca_phase: phase="first_block" wall_ms=18.88152 nodes=444
+2026-10-14T08:23:57.199067Z  INFO gorca_phase: phase="translate" wall_ms=1.294566 nodes=1687
+2026-10-14T08:24:01.924826Z  INFO gorca_phase: phase="warm" wall_ms=28.307209999999998 waited_ms=27.23169 blocked_ms=1.837362 slept_ms=25.333964 rounds=2 probes=13 sampled_nodes=3 ready=true
+2026-10-14T08:24:01.925269Z  INFO gorca_phase: phase="locate" wall_ms=0.386382
+2026-10-14T08:24:01.925288Z  INFO gorca_phase: phase="create" wall_ms=0.002918
+2026-10-14T08:24:01.926933Z  INFO gorca_phase: phase="fetch" total_ms=1.5895480000000002 warm_ms=0.0 frontier_ms=0.063942 get_tree_ms=0.524821 roles_ms=0.306853 states_ms=0.18901 text_ms=0.378181 assemble_ms=0.01497 heaviest_get_tree_ms=0.229 calls=55 tree_bytes=3529 nodes=18
+2026-10-14T08:24:01.927207Z  INFO gorca_phase: phase="translate" wall_ms=0.115376 nodes=36
+2026-10-14T08:24:02.517927Z  INFO gorca_phase: phase="locate" wall_ms=0.6775070000000001
+2026-10-14T08:24:03.959945Z  INFO gorca_phase: phase="locate" wall_ms=1.054354
+2026-10-14T08:24:03.960015Z  INFO gorca_phase: phase="create" wall_ms=0.0041659999999999996
+2026-10-14T08:24:03.961456Z  INFO gorca_phase: phase="fetch" total_ms=1.406244 warm_ms=0.0 frontier_ms=0.570972 get_tree_ms=0.160429 roles_ms=0.19928 states_ms=0.12734199999999998 text_ms=0.205735 assemble_ms=0.0026709999999999998 heaviest_get_tree_ms=0.12999999999999998 calls=22 tree_bytes=784 nodes=5
+2026-10-14T08:24:03.961530Z  INFO gorca_phase: phase="translate" wall_ms=0.034065 nodes=9
+2026-10-14T08:24:19.579407Z  INFO gorca_phase: phase="warm" wall_ms=28.269924 waited_ms=27.548550000000002 blocked_ms=1.52466 slept_ms=25.991173 rounds=2 probes=13 sampled_nodes=5 ready=true
+2026-10-14T08:24:19.579667Z  INFO gorca_phase: phase="locate" wall_ms=0.211447
+2026-10-14T08:24:19.579683Z  INFO gorca_phase: phase="create" wall_ms=0.003271
+2026-10-14T08:24:19.581503Z  INFO gorca_phase: phase="fetch" total_ms=1.7875370000000002 warm_ms=0.0 frontier_ms=0.290112 get_tree_ms=0.182302 roles_ms=0.354279 states_ms=0.244808 text_ms=0.328799 assemble_ms=0.003348 heaviest_get_tree_ms=0.07100000000000001 calls=70 tree_bytes=1998 nodes=16
+2026-10-14T08:24:19.581606Z  INFO gorca_phase: phase="translate" wall_ms=0.043039 nodes=24
+2026-10-14T08:24:47.640734Z  INFO gorca_phase: phase="warm" wall_ms=29.576247 waited_ms=28.775973999999998 blocked_ms=2.5055099999999997 slept_ms=26.204574 rounds=2 probes=13 sampled_nodes=5 ready=true
+2026-10-14T08:24:47.641734Z  INFO gorca_phase: phase="locate" wall_ms=0.888626
+2026-10-14T08:24:47.641756Z  INFO gorca_phase: phase="create" wall_ms=0.0033079999999999997
+2026-10-14T08:24:47.645146Z  INFO gorca_phase: phase="fetch" total_ms=3.348487 warm_ms=0.0 frontier_ms=0.39204 get_tree_ms=0.361881 roles_ms=0.7421040000000001 states_ms=0.386075 text_ms=0.8454349999999999 assemble_ms=0.015162 heaviest_get_tree_ms=0.155 calls=70 tree_bytes=1998 nodes=16
+2026-10-14T08:24:47.645250Z  INFO gorca_phase: phase="translate" wall_ms=0.039030999999999996 nodes=24
+2026-10-14T08:25:30.616684Z  INFO gorca_phase: phase="warm" wall_ms=28.700960000000002 waited_ms=28.044649 blocked_ms=1.19358 slept_ms=26.811135999999998 rounds=2 probes=13 sampled_nodes=3 ready=true
+2026-10-14T08:25:30.617271Z  INFO gorca_phase: phase="locate" wall_ms=0.5360550000000001
+2026-10-14T08:25:30.617285Z  INFO gorca_phase: phase="create" wall_ms=0.0017159999999999999
+2026-10-14T08:25:30.619109Z  INFO gorca_phase: phase="fetch" total_ms=1.78765 warm_ms=0.0 frontier_ms=0.114159 get_tree_ms=0.473678 roles_ms=0.317196 states_ms=0.346667 text_ms=0.367042 assemble_ms=0.006304 heaviest_get_tree_ms=0.184 calls=55 tree_bytes=3529 nodes=18
+2026-10-14T08:25:30.619216Z  INFO gorca_phase: phase="translate" wall_ms=0.053698 nodes=36
+2026-10-14T08:25:31.677074Z  INFO gorca_phase: phase="locate" wall_ms=48.041825
+2026-10-14T08:25:37.204718Z  INFO gorca_phase: phase="warm" wall_ms=34.396781000000004 waited_ms=33.644708 blocked_ms=7.207155 slept_ms=26.211455 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:25:37.205039Z  INFO gorca_phase: phase="locate" wall_ms=0.258968
+2026-10-14T08:25:37.205056Z  INFO gorca_phase: phase="create" wall_ms=0.002464
+2026-10-14T08:25:37.222431Z  INFO gorca_phase: phase="first_block" wall_ms=17.346966 nodes=444
+2026-10-14T08:25:37.223984Z  INFO gorca_phase: phase="translate" wall_ms=1.191627 nodes=1687
+2026-10-14T08:25:37.506377Z  INFO gorca_phase: phase="fetch" total_ms=301.287976 warm_ms=0.0 frontier_ms=0.744009 get_tree_ms=6.738002 roles_ms=3.9914440000000004 states_ms=1.618854 text_ms=3.5384420000000003 assemble_ms=0.057997 heaviest_get_tree_ms=0.8180000000000001 calls=1088 tree_bytes=93434 nodes=10233
+2026-10-14T08:28:30.617418Z  INFO gorca_phase: phase="warm" wall_ms=39.752335 waited_ms=39.029399999999995 blocked_ms=12.247534 slept_ms=26.531698 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:28:30.618027Z  INFO gorca_phase: phase="locate" wall_ms=0.549359
+2026-10-14T08:28:30.618044Z  INFO gorca_phase: phase="create" wall_ms=0.001886
+2026-10-14T08:28:30.637946Z  INFO gorca_phase: phase="first_block" wall_ms=19.876203 nodes=444
+2026-10-14T08:28:30.639341Z  INFO gorca_phase: phase="translate" wall_ms=1.049661 nodes=1687
+2026-10-14T08:28:30.928721Z  INFO gorca_phase: phase="fetch" total_ms=310.643618 warm_ms=0.0 frontier_ms=1.453708 get_tree_ms=6.875139 roles_ms=4.663833 states_ms=1.986556 text_ms=3.406164 assemble_ms=0.058157 heaviest_get_tree_ms=0.862 calls=1088 tree_bytes=93434 nodes=10233
+2026-10-14T08:28:40.553007Z  INFO gorca_phase: phase="warm" wall_ms=28.410951 waited_ms=27.599163 blocked_ms=1.636867 slept_ms=25.916779000000002 rounds=2 probes=13 sampled_nodes=5 ready=true
+2026-10-14T08:28:40.553651Z  INFO gorca_phase: phase="locate" wall_ms=0.535727
+2026-10-14T08:28:40.553692Z  INFO gorca_phase: phase="create" wall_ms=0.005011
+2026-10-14T08:28:40.555578Z  INFO gorca_phase: phase="fetch" total_ms=1.806937 warm_ms=0.0 frontier_ms=0.27983100000000005 get_tree_ms=0.14951299999999998 roles_ms=0.559348 states_ms=0.284626 text_ms=0.319337 assemble_ms=0.003125 heaviest_get_tree_ms=0.129 calls=21 tree_bytes=400 nodes=4
+2026-10-14T08:28:40.555699Z  INFO gorca_phase: phase="translate" wall_ms=0.034574 nodes=6
+2026-10-14T08:28:41.459736Z  INFO gorca_phase: phase="locate" wall_ms=0.847963
+2026-10-14T08:28:41.459783Z  INFO gorca_phase: phase="create" wall_ms=0.002452
+2026-10-14T08:28:50.822271Z  INFO gorca_phase: phase="warm" wall_ms=48.753642 waited_ms=48.093193 blocked_ms=22.691776 slept_ms=25.181793000000003 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:28:50.822634Z  INFO gorca_phase: phase="locate" wall_ms=0.291332
+2026-10-14T08:28:50.822656Z  INFO gorca_phase: phase="create" wall_ms=0.002885
+2026-10-14T08:28:50.843835Z  INFO gorca_phase: phase="first_block" wall_ms=21.125062 nodes=444
+2026-10-14T08:28:50.845283Z  INFO gorca_phase: phase="translate" wall_ms=1.112082 nodes=1687
+2026-10-14T08:29:00.345158Z  INFO gorca_phase: phase="warm" wall_ms=44.246975 waited_ms=43.620389 blocked_ms=17.256197 slept_ms=26.070128 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:29:00.345559Z  INFO gorca_phase: phase="locate" wall_ms=0.32009
+2026-10-14T08:29:00.345612Z  INFO gorca_phase: phase="create" wall_ms=0.004149
+2026-10-14T08:29:00.367798Z  INFO gorca_phase: phase="first_block" wall_ms=22.145373 nodes=444
+2026-10-14T08:29:00.369301Z  INFO gorca_phase: phase="translate" wall_ms=1.092914 nodes=1687
+2026-10-14T08:29:09.891206Z  INFO gorca_phase: phase="warm" wall_ms=53.575268 waited_ms=52.887137 blocked_ms=26.517875999999998 slept_ms=26.14773 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:29:09.892920Z  INFO gorca_phase: phase="locate" wall_ms=0.259581
+2026-10-14T08:29:09.892939Z  INFO gorca_phase: phase="create" wall_ms=0.0025689999999999997
+2026-10-14T08:29:09.911980Z  INFO gorca_phase: phase="first_block" wall_ms=19.002629 nodes=444
+2026-10-14T08:29:09.913568Z  INFO gorca_phase: phase="translate" wall_ms=1.1986970000000001 nodes=1687
+2026-10-14T08:29:19.269927Z  INFO gorca_phase: phase="warm" wall_ms=42.238679000000005 waited_ms=41.376073999999996 blocked_ms=15.030131 slept_ms=26.159447999999998 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:29:19.270286Z  INFO gorca_phase: phase="locate" wall_ms=0.297604
+2026-10-14T08:29:19.270313Z  INFO gorca_phase: phase="create" wall_ms=0.003093
+2026-10-14T08:29:19.300750Z  INFO gorca_phase: phase="first_block" wall_ms=30.403368 nodes=444
+2026-10-14T08:29:19.302677Z  INFO gorca_phase: phase="translate" wall_ms=1.493152 nodes=1687
+2026-10-14T08:29:28.766944Z  INFO gorca_phase: phase="warm" wall_ms=43.641118 waited_ms=42.712384 blocked_ms=17.24053 slept_ms=25.14227 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:29:28.767303Z  INFO gorca_phase: phase="locate" wall_ms=0.284166
+2026-10-14T08:29:28.767328Z  INFO gorca_phase: phase="create" wall_ms=0.003003
+2026-10-14T08:29:28.788824Z  INFO gorca_phase: phase="first_block" wall_ms=21.443768 nodes=444
+2026-10-14T08:29:28.790217Z  INFO gorca_phase: phase="translate" wall_ms=1.044759 nodes=1687
+2026-10-14T08:29:38.501584Z  INFO gorca_phase: phase="warm" wall_ms=45.721332000000004 waited_ms=45.135827000000006 blocked_ms=18.679114 slept_ms=26.191694000000002 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:29:38.501938Z  INFO gorca_phase: phase="locate" wall_ms=0.282684
+2026-10-14T08:29:38.501959Z  INFO gorca_phase: phase="create" wall_ms=0.0027949999999999997
+2026-10-14T08:29:38.523903Z  INFO gorca_phase: phase="first_block" wall_ms=21.895107 nodes=444
+2026-10-14T08:29:38.525491Z  INFO gorca_phase: phase="translate" wall_ms=1.225886 nodes=1687
+2026-10-14T08:29:43.386418Z  INFO gorca_phase: phase="warm" wall_ms=34.447996 waited_ms=33.766186 blocked_ms=6.843262999999999 slept_ms=26.891664 rounds=2 probes=13 sampled_nodes=3 ready=true
+2026-10-14T08:29:43.386778Z  INFO gorca_phase: phase="locate" wall_ms=0.293316
+2026-10-14T08:29:43.386801Z  INFO gorca_phase: phase="create" wall_ms=0.006692
+2026-10-14T08:29:43.389403Z  INFO gorca_phase: phase="fetch" total_ms=2.5655460000000003 warm_ms=0.0 frontier_ms=0.078353 get_tree_ms=0.656973 roles_ms=0.5322439999999999 states_ms=0.520392 text_ms=0.50277 assemble_ms=0.010824 heaviest_get_tree_ms=0.254 calls=55 tree_bytes=3529 nodes=18
+2026-10-14T08:29:43.389552Z  INFO gorca_phase: phase="translate" wall_ms=0.07465999999999999 nodes=36
+2026-10-14T08:29:43.996498Z  INFO gorca_phase: phase="locate" wall_ms=0.527232
+2026-10-14T08:29:45.552087Z  INFO gorca_phase: phase="locate" wall_ms=0.9040699999999999
+2026-10-14T08:29:45.552153Z  INFO gorca_phase: phase="create" wall_ms=0.004644
+2026-10-14T08:29:45.554021Z  INFO gorca_phase: phase="fetch" total_ms=1.551184 warm_ms=0.0 frontier_ms=0.5198499999999999 get_tree_ms=0.33993100000000004 roles_ms=0.203919 states_ms=0.129914 text_ms=0.15825999999999998 assemble_ms=0.002224 heaviest_get_tree_ms=0.285 calls=22 tree_bytes=784 nodes=5
+2026-10-14T08:29:45.554113Z  INFO gorca_phase: phase="translate" wall_ms=0.035416 nodes=9
+2026-10-14T08:30:01.076166Z  INFO gorca_phase: phase="warm" wall_ms=28.28526 waited_ms=27.585657 blocked_ms=1.8180290000000001 slept_ms=25.717388 rounds=2 probes=13 sampled_nodes=5 ready=true
+2026-10-14T08:30:01.076914Z  INFO gorca_phase: phase="locate" wall_ms=0.627212
+2026-10-14T08:30:01.076985Z  INFO gorca_phase: phase="create" wall_ms=0.004765999999999999
+2026-10-14T08:30:01.079352Z  INFO gorca_phase: phase="fetch" total_ms=2.3207 warm_ms=0.0 frontier_ms=0.251909 get_tree_ms=0.258143 roles_ms=0.426378 states_ms=0.495923 text_ms=0.5036269999999999 assemble_ms=0.00679 heaviest_get_tree_ms=0.114 calls=70 tree_bytes=1998 nodes=16
+2026-10-14T08:30:01.079537Z  INFO gorca_phase: phase="translate" wall_ms=0.07046 nodes=24
+2026-10-14T08:30:29.129094Z  INFO gorca_phase: phase="warm" wall_ms=29.48773 waited_ms=28.752819 blocked_ms=2.5721469999999997 slept_ms=26.136654 rounds=2 probes=13 sampled_nodes=5 ready=true
+2026-10-14T08:30:29.130053Z  INFO gorca_phase: phase="locate" wall_ms=0.864911
+2026-10-14T08:30:29.130097Z  INFO gorca_phase: phase="create" wall_ms=0.004981
+2026-10-14T08:30:29.134030Z  INFO gorca_phase: phase="fetch" total_ms=3.8751290000000003 warm_ms=0.0 frontier_ms=0.603191 get_tree_ms=0.6427769999999999 roles_ms=0.630702 states_ms=0.306637 text_ms=0.693225 assemble_ms=0.002556 heaviest_get_tree_ms=0.348 calls=70 tree_bytes=1998 nodes=16
+2026-10-14T08:30:29.134126Z  INFO gorca_phase: phase="translate" wall_ms=0.037378 nodes=24
+2026-10-14T08:31:12.071803Z  INFO gorca_phase: phase="warm" wall_ms=28.427839 waited_ms=27.650984 blocked_ms=1.4521110000000002 slept_ms=26.158219 rounds=2 probes=13 sampled_nodes=3 ready=true
+2026-10-14T08:31:12.077885Z  INFO gorca_phase: phase="locate" wall_ms=0.853591
+2026-10-14T08:31:12.077980Z  INFO gorca_phase: phase="create" wall_ms=0.016129
+2026-10-14T08:31:12.079835Z  INFO gorca_phase: phase="fetch" total_ms=1.796827 warm_ms=0.0 frontier_ms=0.086716 get_tree_ms=0.47229 roles_ms=0.366605 states_ms=0.31605 text_ms=0.301987 assemble_ms=0.0048400000000000006 heaviest_get_tree_ms=0.17200000000000001 calls=55 tree_bytes=3529 nodes=18
+2026-10-14T08:31:12.079936Z  INFO gorca_phase: phase="translate" wall_ms=0.048444 nodes=36
+2026-10-14T08:31:13.055186Z  INFO gorca_phase: phase="locate" wall_ms=2.46247
+2026-10-14T08:31:13.055228Z  INFO gorca_phase: phase="create" wall_ms=0.002313
+2026-10-14T08:31:18.353509Z  INFO gorca_phase: phase="warm" wall_ms=30.698757 waited_ms=30.06833 blocked_ms=3.43859 slept_ms=26.378979 rounds=2 probes=13 sampled_nodes=17 ready=true
+2026-10-14T08:31:18.353860Z  INFO gorca_phase: phase="locate" wall_ms=0.301186
+2026-10-14T08:31:18.353874Z  INFO gorca_phase: phase="create" wall_ms=0.002107
+2026-10-14T08:31:18.395188Z  INFO gorca_phase: phase="first_block" wall_ms=41.285518 nodes=444
+2026-10-14T08:31:18.396567Z  INFO gorca_phase: phase="translate" wall_ms=1.0317569999999998 nodes=1687
+2026-10-14T08:31:18.681828Z  INFO gorca_phase: phase="fetch" total_ms=327.92091 warm_ms=0.0 frontier_ms=2.753809 get_tree_ms=11.794148000000002 roles_ms=19.132057 states_ms=2.1475090000000003 text_ms=4.593679 assemble_ms=0.055404 heaviest_get_tree_ms=2.3040000000000003 calls=1088 tree_bytes=93434 nodes=10233
