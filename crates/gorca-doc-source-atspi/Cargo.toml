@@ -22,7 +22,6 @@ tracing = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
-gorca-doc = { workspace = true }
 tokio = { workspace = true, features = ["test-util", "net"] }
 
 [lints]

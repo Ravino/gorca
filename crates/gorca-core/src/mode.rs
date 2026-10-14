@@ -9,11 +9,17 @@
 //! mode they return to ([`BaseMode`], ADR-0005 5.1). TBD: the extension veto hook.
 
 use gorca_input_api::{Chord, GrabSet, InputContext, ModeKind};
-use gorca_model::DocId;
-
-use gorca_doc::DocCursor;
+use gorca_model::{DocId, DocNodeId};
 
 pub use crate::review::{ReviewCursor, ReviewFrom, ReviewOrigin};
+
+/// Virtual-cursor position in a web document: a node and a scalar offset inside the node's own
+/// text (browse-mode design 7.1). Replaces the scaffold `DocCursor`.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct WebCursor {
+    pub node: DocNodeId,
+    pub local: u32,
+}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum PassScope {
@@ -28,7 +34,7 @@ pub enum Mode {
     /// Virtual cursor over the document mirror.
     Browse {
         doc: DocId,
-        cursor: DocCursor,
+        cursor: WebCursor,
         sticky: bool,
     },
     /// Flat/object review; terminal review (ADR-0006).
@@ -52,7 +58,7 @@ pub enum BaseMode {
     Focus,
     Browse {
         doc: DocId,
-        cursor: DocCursor,
+        cursor: WebCursor,
         sticky: bool,
     },
     Review {
@@ -193,7 +199,7 @@ impl Mode {
 pub enum ModeMsg {
     EnterBrowse {
         doc: DocId,
-        cursor: DocCursor,
+        cursor: WebCursor,
     },
     ExitBrowse,
     EnterReview {
@@ -210,7 +216,7 @@ pub enum ModeMsg {
     /// Focus entered a document (auto browse unless the user disabled it).
     FocusEnteredDocument {
         doc: DocId,
-        cursor: DocCursor,
+        cursor: WebCursor,
     },
     /// Focus entered an editable control inside a document (auto focus mode, unless sticky).
     FocusEnteredEditable,
@@ -369,10 +375,10 @@ mod tests {
         }
     }
 
-    fn cursor() -> DocCursor {
-        DocCursor {
-            node: DocNodeId(1),
-            offset: 0,
+    fn cursor() -> WebCursor {
+        WebCursor {
+            node: DocNodeId::from_parts(1, 0),
+            local: 0,
         }
     }
 

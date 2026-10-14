@@ -26,8 +26,9 @@ pub mod publish;
 pub mod synth;
 
 pub use cats::{Cat, NodeFlags, NodeSpec, PropsPatch, RANKED, SubtreeSpec, cats_of};
-pub use doc::{Children, DocNodeId, NodeView, Preorder, WebDoc};
+pub use doc::{Children, NodeView, Preorder, WebDoc};
 pub use error::DocError;
 pub use flat::{ReadUnit, word_range_in};
+pub use gorca_model::DocNodeId;
 pub use ops::{ChildSpec, DocOp, OpOutput, align_by_key};
 pub use publish::{DocRead, DocWriter, PublishStats, channel, channel_from};

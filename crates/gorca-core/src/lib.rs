@@ -55,7 +55,7 @@ pub use health::{
     AppHealth, HUNG_PROBE_MAX, HUNG_PROBE_MIN, HealthEffect, HealthMsg, HealthStepCtx,
     SLOW_RECOVERY, SLOW_WINDOW,
 };
-pub use mode::{BaseMode, Mode, ModeEffect, ModeKeys, ModeMsg, PassScope};
+pub use mode::{BaseMode, Mode, ModeEffect, ModeKeys, ModeMsg, PassScope, WebCursor};
 pub use present::log_states as snapshot_state_names;
 pub use present::value_text;
 pub use present::{

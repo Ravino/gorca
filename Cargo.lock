@@ -777,7 +777,6 @@ dependencies = [
  "chrono",
  "gorca-config",
  "gorca-connector-api",
- "gorca-doc",
  "gorca-doc-source-api",
  "gorca-ingress",
  "gorca-input-api",
@@ -846,6 +845,7 @@ version = "0.0.0"
 dependencies = [
  "arc-swap",
  "gorca-model",
+ "gorca-text",
  "smallvec",
  "thiserror",
 ]
@@ -868,7 +868,6 @@ dependencies = [
  "bitflags",
  "futures-lite",
  "gorca-dbus",
- "gorca-doc",
  "gorca-doc-source-api",
  "gorca-model",
  "gorca-rt",
@@ -1046,6 +1045,15 @@ dependencies = [
  "smallvec",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "gorca-text"
+version = "0.0.0"
+dependencies = [
+ "gorca-model",
+ "smallvec",
+ "unicode-segmentation",
 ]
 
 [[package]]

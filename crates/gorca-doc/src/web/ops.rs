@@ -6,8 +6,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use super::cats::{PropsPatch, SubtreeSpec};
-use super::doc::{DocNodeId, NIL, WebDoc};
+use super::doc::{NIL, WebDoc};
 use super::error::DocError;
+use gorca_model::DocNodeId;
 
 /// One desired child in a [`DocOp::SyncChildren`] list.
 #[derive(Clone, Debug)]
