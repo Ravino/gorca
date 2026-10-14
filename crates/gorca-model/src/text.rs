@@ -92,14 +92,14 @@ impl TextGranularity {
 }
 
 /// Reply of [`TextQuery::AtOffset`].
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct TextUnitAt {
     pub range: Range<u32>,
     pub text: Arc<str>,
 }
 
 /// Reply of [`TextQuery::Window`].
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct TextWindowFill {
     /// Scalar offset of the first character of `text`.
     pub base: u32,
@@ -115,9 +115,39 @@ pub const MAX_SELECTION_TEXT: u32 = 1024;
 
 /// Reply of [`TextQuery::Selections`]: each range with its text, or an empty text when the range
 /// is longer than [`MAX_SELECTION_TEXT`] scalars.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Default, Eq, PartialEq)]
 pub struct TextSelections {
     pub ranges: Vec<(Range<u32>, Arc<str>)>,
+}
+
+// Text read from an application may be a password: these show lengths only.
+impl std::fmt::Debug for TextUnitAt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TextUnitAt")
+            .field("range", &self.range)
+            .field("chars", &self.text.chars().count())
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for TextWindowFill {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TextWindowFill")
+            .field("base", &self.base)
+            .field("chars", &self.text.chars().count())
+            .field("len", &self.len)
+            .field("caret", &self.caret)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for TextSelections {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let spans: Vec<&Range<u32>> = self.ranges.iter().map(|(r, _)| r).collect();
+        f.debug_struct("TextSelections")
+            .field("ranges", &spans)
+            .finish_non_exhaustive()
+    }
 }
 
 /// One visual line of a text object.

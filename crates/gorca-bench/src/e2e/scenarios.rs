@@ -60,6 +60,7 @@ pub enum Scn {
     SA1,
     SA2,
     SA3,
+    SA3a,
     PW,
     C1hs,
     E1s,
@@ -93,6 +94,7 @@ impl Scn {
             Self::SA1 => "SA1".into(),
             Self::SA2 => "SA2".into(),
             Self::SA3 => "SA3".into(),
+            Self::SA3a => "SA3a".into(),
             Self::PW => "PW".into(),
             Self::C1hs => "C1hs".into(),
             Self::E1s => "E1s".into(),
@@ -127,6 +129,7 @@ impl Scn {
             "SA1" => Self::SA1,
             "SA2" => Self::SA2,
             "SA3" => Self::SA3,
+            "SA3a" => Self::SA3a,
             "PW" => Self::PW,
             "C1hs" => Self::C1hs,
             "E1s" => Self::E1s,
@@ -138,7 +141,7 @@ impl Scn {
         [
             "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K2s", "K3",
             "K4", "K4r", "R1", "R1s", "RS", "C1", "C1h", "C2", "E1", "E2", "S2", "SA1", "SA2",
-            "SA3", "PW", "C1hs", "E1s",
+            "SA3", "SA3a", "PW", "C1hs", "E1s",
         ]
         .iter()
         .filter_map(|s| Self::parse(s))
@@ -435,6 +438,7 @@ pub fn run(
         Scn::SA1 => super::m3::sa1(host, reader, flavor, size, seed, &mut out)?,
         Scn::SA2 => super::m3::sa2(host, reader, flavor, size, seed, &mut out)?,
         Scn::SA3 => super::m3::sa3(host, reader, flavor, size, seed, &mut out)?,
+        Scn::SA3a => super::m3::sa3a(host, reader, flavor, size, seed, &mut out)?,
         Scn::PW => super::m3::pw(host, reader, flavor, size, seed, &mut out)?,
         Scn::C1hs => super::m3::c1hs(host, reader, flavor, size, seed, &mut out)?,
         Scn::E1s => super::m3::e1s(host, reader, flavor, size, seed, &mut out)?,

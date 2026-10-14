@@ -109,6 +109,11 @@ impl ExpectRing {
         self.len += 1;
     }
 
+    /// Milliseconds since the newest expectation was pushed, if any.
+    pub fn newest_age_ms(&self, now_ms: u64) -> Option<u64> {
+        (self.len > 0).then(|| now_ms.saturating_sub(self.at(self.len - 1).t_ms))
+    }
+
     /// Consume up to `n` of the oldest unexpired expectations without comparing text: an insert
     /// arrived without its text (the application did not send it) and is taken to be the typed
     /// keys. Returns how many were consumed.
@@ -268,6 +273,15 @@ mod tests {
         assert_eq!(r.consume_insert("x", 1), Consume::Unmatched);
         assert_eq!(r.len(), 1);
         assert_eq!(r.consume_insert("", 1), Consume::Unmatched);
+    }
+
+    #[test]
+    fn the_newest_expectation_has_an_age() {
+        let mut r = ExpectRing::new();
+        assert_eq!(r.newest_age_ms(10), None);
+        r.push('a', 100);
+        r.push('b', 140);
+        assert_eq!(r.newest_age_ms(150), Some(10));
     }
 
     #[test]

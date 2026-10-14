@@ -5,6 +5,8 @@
 #![allow(clippy::wildcard_enum_match_arm)]
 
 use std::sync::Arc;
+
+use crate::SpeechIntent;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
@@ -78,18 +80,24 @@ fn rig() -> Rig {
     }
 }
 
+fn intent_of(e: &ReaderEffect) -> Option<&SpeechIntent> {
+    match e {
+        ReaderEffect::Speak(s) => Some(s),
+        ReaderEffect::SayAllChunk { intent, .. } => Some(intent),
+        _ => None,
+    }
+}
+
 fn spoken(fx: &ReaderEffects) -> Vec<String> {
     fx.iter()
-        .filter_map(|e| match e {
-            ReaderEffect::Speak(s) => Some(
-                s.utterance
-                    .segments
-                    .iter()
-                    .map(|g| g.text.to_string())
-                    .collect::<Vec<_>>()
-                    .join(" "),
-            ),
-            _ => None,
+        .filter_map(intent_of)
+        .map(|s| {
+            s.utterance
+                .segments
+                .iter()
+                .map(|g| g.text.to_string())
+                .collect::<Vec<_>>()
+                .join(" ")
         })
         .collect()
 }
@@ -1108,156 +1116,181 @@ fn say_all_start(g: &mut Rig, text: &str) -> (ReaderEffects, Vec<(TextReqId, Tex
 
 fn utt_ids(fx: &ReaderEffects) -> Vec<gorca_model::UttId> {
     fx.iter()
+        .filter_map(intent_of)
+        .map(|s| s.utterance.id)
+        .collect()
+}
+
+fn firsts(fx: &ReaderEffects) -> Vec<bool> {
+    fx.iter()
         .filter_map(|e| match e {
-            ReaderEffect::Speak(s) => Some(s.utterance.id),
+            ReaderEffect::SayAllChunk { first, .. } => Some(*first),
+            _ => None,
+        })
+        .collect()
+}
+
+fn progress(g: &mut Rig, p: gorca_speech::LaneProgress) -> ReaderEffects {
+    g.msg(ReaderMsg::Text(TextMsg::Progress(p)))
+}
+
+fn window(text: &str) -> Reply {
+    Reply::Window(TextWindowFill {
+        base: 0,
+        text: Arc::from(text),
+        len: u32::try_from(text.chars().count()).unwrap_or(0),
+        caret: None,
+    })
+}
+
+fn set_carets(fx: &ReaderEffects) -> Vec<u32> {
+    fetches(fx)
+        .into_iter()
+        .filter_map(|(_, op)| match op {
+            TextOp::SetCaret { offset, .. } => Some(offset),
             _ => None,
         })
         .collect()
 }
 
 #[test]
-fn the_gate_opens_by_the_clock_when_the_server_reports_nothing() {
-    let mut g = rig();
-    let (_, f) = say_all_start(&mut g, "One. Two. Three. Four.");
-    let fx = g.reply(
-        f[0].0,
-        Reply::Window(TextWindowFill {
-            base: 0,
-            text: Arc::from("One. Two. Three. Four."),
-            len: 22,
-            caret: None,
-        }),
-    );
-    assert_eq!(spoken(&fx), ["One."]);
-    assert!(
-        fx.iter().any(|e| matches!(e, ReaderEffect::ArmTimer(_))),
-        "a timer waits for the gate"
-    );
-    let fx = g.tick(200);
-    assert_eq!(spoken(&fx), ["Two.", "Three."]);
-}
-
-#[test]
-fn say_all_fetches_then_queues_three_chunks_and_refills_on_progress() {
+fn say_all_submits_three_chunks_at_once_and_only_the_first_interrupts() {
+    use gorca_speech::LaneProgress as P;
     let mut g = rig();
     let text = "One. Two. Three. Four. Five.";
     let (fx, f) = say_all_start(&mut g, text);
     assert!(spoken(&fx).is_empty());
     assert_eq!(f.len(), 1, "SA1: one fetch for the first chunk");
-    let fx = g.reply(
-        f[0].0,
-        Reply::Window(TextWindowFill {
-            base: 0,
-            text: Arc::from(text),
-            len: 28,
-            caret: None,
-        }),
-    );
+    let fx = g.reply(f[0].0, window(text));
     assert_eq!(
         spoken(&fx),
-        ["One."],
-        "the first chunk goes alone: the lane's slot takes one"
+        ["One.", "Two.", "Three."],
+        "look-ahead of three"
     );
-    let mut ids = utt_ids(&fx);
-    let fx = g.msg(ReaderMsg::Text(TextMsg::Progress(
-        gorca_speech::LaneProgress::Started(ids[0]),
-    )));
-    assert_eq!(spoken(&fx), ["Two.", "Three."], "look-ahead of three");
-    ids.extend(utt_ids(&fx));
-    let fx = g.msg(ReaderMsg::Text(TextMsg::Progress(
-        gorca_speech::LaneProgress::Ended(ids[0]),
-    )));
+    assert_eq!(firsts(&fx), [true, false, false]);
+    let ids = utt_ids(&fx);
+    let fx = progress(&mut g, P::Started(ids[0]));
+    assert!(
+        spoken(&fx).is_empty() && set_carets(&fx).is_empty(),
+        "the caret is already there"
+    );
+    let fx = progress(&mut g, P::Ended(ids[0]));
     assert_eq!(
         spoken(&fx),
         ["Four."],
         "SA2: the next chunk is queued before the previous ends"
     );
+    assert_eq!(firsts(&fx), [false]);
+    let fx = progress(&mut g, P::Started(ids[1]));
+    assert_eq!(set_carets(&fx), [5], "the caret follows the reading");
 }
 
 #[test]
-fn a_key_press_stops_say_all_and_puts_the_caret_where_it_stopped() {
+fn a_key_press_stops_say_all_and_the_caret_is_already_where_it_stopped() {
+    use gorca_speech::LaneProgress as P;
     let mut g = rig();
     let text = "One. Two. Three.";
     let (_, f) = say_all_start(&mut g, text);
-    let fx = g.reply(
-        f[0].0,
-        Reply::Window(TextWindowFill {
-            base: 0,
-            text: Arc::from(text),
-            len: 16,
-            caret: None,
-        }),
-    );
-    let mut ids = utt_ids(&fx);
-    let fx = g.msg(ReaderMsg::Text(TextMsg::Progress(
-        gorca_speech::LaneProgress::Started(ids[0]),
-    )));
-    ids.extend(utt_ids(&fx));
-    let _ = g.msg(ReaderMsg::Text(TextMsg::Progress(
-        gorca_speech::LaneProgress::Ended(ids[0]),
-    )));
-    let _ = g.msg(ReaderMsg::Text(TextMsg::Progress(
-        gorca_speech::LaneProgress::Started(ids[1]),
-    )));
-    // Any key advances the epoch; the next message ends the reading (SA3).
+    let fx = g.reply(f[0].0, window(text));
+    let ids = utt_ids(&fx);
+    let _ = progress(&mut g, P::Started(ids[0]));
+    let _ = progress(&mut g, P::Ended(ids[0]));
+    let fx = progress(&mut g, P::Started(ids[1]));
+    assert_eq!(set_carets(&fx), [5]);
+    // The caret event of gorca's own move is not the user's.
+    assert!(spoken(&g.caret(5)).is_empty());
+    // Any key advances the epoch; the next message ends the reading (SA3) and moves nothing.
     let fx = g.key(0xff1b, 0, NONE);
-    let f = fetches(&fx);
-    assert_eq!(f.len(), 1, "{fx:?}");
-    assert_eq!(
-        f[0].1,
-        TextOp::SetCaret {
-            node: node(),
-            offset: 5
-        },
-        "the start of the chunk being spoken"
-    );
-    // The caret event this causes is gorca's own, not the user's.
-    let fx = g.caret(5);
-    assert!(spoken(&fx).is_empty());
+    assert!(set_carets(&fx).is_empty(), "{fx:?}");
     assert!(
-        g.tick(10)
-            .iter()
-            .all(|e| !matches!(e, ReaderEffect::Speak(_)))
+        !g.r.text.say_all.stopped_by(Epoch(0)),
+        "the reading is over"
+    );
+    // A movement key then acts from the reading position: the app's caret event is spoken.
+    let _ = g.key(DOWN, 0, NONE);
+    assert!(set_carets(&g.tick(300)).is_empty());
+}
+
+#[test]
+fn say_all_ends_at_the_end_of_the_text_and_leaves_the_caret_there() {
+    use gorca_speech::LaneProgress as P;
+    let mut g = rig();
+    let text = "Only one.";
+    let (_, f) = say_all_start(&mut g, text);
+    let fx = g.reply(f[0].0, window(text));
+    assert_eq!(spoken(&fx), ["Only one."]);
+    let id = utt_ids(&fx)[0];
+    let _ = progress(&mut g, P::Started(id));
+    let fx = progress(&mut g, P::Ended(id));
+    assert!(spoken(&fx).is_empty(), "nothing is said at the end (NVDA)");
+    assert_eq!(set_carets(&fx), [9]);
+}
+
+/// Probe P2 of the M3 review: a lost `Ended` must neither keep the reading open past the end
+/// of the text nor let a later key move the caret.
+#[test]
+fn a_lost_progress_report_cannot_keep_say_all_open() {
+    use gorca_speech::LaneProgress as P;
+    let mut g = rig();
+    let text = "One. Two.";
+    let (_, f) = say_all_start(&mut g, text);
+    let fx = g.reply(f[0].0, window(text));
+    let ids = utt_ids(&fx);
+    // Started(1), Ended(1) and Started(2) are all lost; Ended(2) arrives.
+    let fx = progress(&mut g, P::Ended(ids[1]));
+    assert_eq!(set_carets(&fx), [9], "the reading finished naturally");
+    g.advance(60_000);
+    let fx = g.key(DOWN, 0, NONE);
+    assert!(
+        set_carets(&fx).is_empty(),
+        "P2: a key long after the end moves no caret"
     );
 }
 
 #[test]
-fn say_all_ends_quietly_at_the_end_of_the_text() {
+fn a_silent_speech_lane_ends_say_all_without_touching_the_caret() {
+    use gorca_speech::LaneProgress as P;
     let mut g = rig();
-    let text = "Only one.";
+    let text = "One. Two. Three.";
     let (_, f) = say_all_start(&mut g, text);
-    let fx = g.reply(
-        f[0].0,
-        Reply::Window(TextWindowFill {
-            base: 0,
-            text: Arc::from(text),
-            len: 9,
-            caret: None,
-        }),
+    let fx = g.reply(f[0].0, window(text));
+    let ids = utt_ids(&fx);
+    let _ = progress(&mut g, P::Started(ids[0]));
+    assert!(g.r.text.say_all.stopped_by(Epoch(99)));
+    // Nothing more is heard from the lane.
+    let fx = g.tick(89_000);
+    assert!(set_carets(&fx).is_empty());
+    assert!(
+        g.r.text.say_all.stopped_by(Epoch(99)),
+        "still running just before the watchdog"
     );
-    assert_eq!(spoken(&fx), ["Only one."]);
-    let id = fx
-        .iter()
-        .find_map(|e| match e {
-            ReaderEffect::Speak(s) => Some(s.utterance.id),
-            _ => None,
-        })
-        .unwrap_or(gorca_model::UttId(0));
-    let _ = g.msg(ReaderMsg::Text(TextMsg::Progress(
-        gorca_speech::LaneProgress::Started(id),
-    )));
-    let fx = g.msg(ReaderMsg::Text(TextMsg::Progress(
-        gorca_speech::LaneProgress::Ended(id),
-    )));
-    assert!(spoken(&fx).is_empty(), "nothing is said at the end (NVDA)");
-    let f = fetches(&fx);
-    assert_eq!(
-        f.first().map(|x| &x.1),
-        Some(&TextOp::SetCaret {
-            node: node(),
-            offset: 9
-        })
+    let fx = g.tick(2_000);
+    assert!(
+        set_carets(&fx).is_empty(),
+        "the watchdog never moves the caret"
     );
+    assert!(
+        !g.r.text.say_all.stopped_by(Epoch(99)),
+        "and it ends the reading"
+    );
+    assert_eq!(g.r.text_counters().say_all_watchdog, 1);
+}
+
+#[test]
+fn say_all_and_say_selection_refuse_outside_focus_mode() {
+    let mut g = rig();
+    g.entry("hello", 0);
+    g.r.mode = crate::mode::Mode::InputHelp {
+        resume: crate::mode::BaseMode::Focus,
+    };
+    let e = g.epoch.advance();
+    let mut fx = ReaderEffects::new();
+    g.r.say_all_start(e, &mut fx);
+    assert_eq!(spoken(&fx), ["not available in this mode"]);
+    assert!(fetches(&fx).is_empty() && !g.r.text.say_all.stopped_by(Epoch(0)));
+    let mut fx = ReaderEffects::new();
+    g.r.text_say_selection(e, &mut fx);
+    assert_eq!(spoken(&fx), ["not available in this mode"]);
 }
 
 #[test]
@@ -1333,6 +1366,182 @@ fn a_huge_line_is_cut_before_it_is_spoken() {
         "{}",
         said[0].chars().count()
     );
+}
+
+/// Probe P1 of the M3 review: `selection-changed` before `text-caret-moved` for a Shift+Right.
+#[test]
+fn a_selection_event_ahead_of_its_caret_event_still_speaks_the_selection() {
+    let mut g = rig();
+    g.entry("hello", 0);
+    let _ = g.key(RIGHT, 0, Modifiers::SHIFT);
+    let f1 = fetches(&g.selection_event());
+    assert_eq!(f1.len(), 1, "selection fetch issued");
+    let fx_c = g.caret(1);
+    assert!(fetches(&fx_c).is_empty(), "the fetch in flight is kept");
+    let fx = g.reply(
+        f1[0].0,
+        Reply::Selections(TextSelections {
+            ranges: vec![(0..1, Arc::from("h"))],
+        }),
+    );
+    let mut all = spoken(&fx_c);
+    all.extend(spoken(&fx));
+    all.extend(spoken(&g.tick(10)));
+    assert_eq!(all, ["h selected"]);
+    assert_eq!(g.r.text.caret.tracked().and_then(|t| t.caret), Some(1));
+}
+
+/// Probe P3: a typed key whose insert never comes must not swallow a later move.
+#[test]
+fn an_unmatched_typed_key_does_not_absorb_a_later_unrelated_caret_move() {
+    let mut g = rig();
+    g.entry("hello world", 0);
+    let _ = g.typed('x');
+    g.advance(300);
+    let mut all = spoken(&g.caret(1));
+    all.extend(spoken(&g.tick(10)));
+    assert!(
+        !all.is_empty(),
+        "an uncorrelated caret move is spoken: {all:?}"
+    );
+}
+
+#[test]
+fn text_that_matches_no_typed_key_forgets_the_expectations() {
+    // IME: preedit keys, then a commit that is none of them.
+    let mut g = rig();
+    g.entry("", 0);
+    for c in "nihao".chars() {
+        let _ = g.typed(c);
+    }
+    let _ = g.insert(0, "你好");
+    assert!(
+        g.r.text
+            .caret
+            .tracked()
+            .is_some_and(|t| t.expect_len() == 0)
+    );
+}
+
+/// Probe P4: Left's caret event beats the Left key while Right's slot (a boundary) is open.
+#[test]
+fn a_caret_that_beats_its_key_while_the_previous_slot_is_open_is_the_new_keys() {
+    let mut g = rig();
+    g.entry("ab cd", 5);
+    let _ = g.key(RIGHT, 0, NONE); // at the end: no caret event will come
+    g.advance(20);
+    let mut all = spoken(&g.caret(4)); // Left's caret beats the Left key
+    all.extend(spoken(&g.key(LEFT, 0, NONE)));
+    for _ in 0..50 {
+        all.extend(spoken(&g.tick(10)));
+    }
+    assert_eq!(all, ["d"], "one utterance, for the Left key");
+}
+
+#[test]
+fn a_held_caret_in_an_open_slot_that_no_key_claims_is_spoken_as_unexplained() {
+    let mut g = rig();
+    g.entry("ab cd", 5);
+    let _ = g.key(RIGHT, 0, NONE);
+    g.advance(20);
+    assert!(spoken(&g.caret(4)).is_empty());
+    assert_eq!(spoken(&g.tick(6)), ["d"]);
+}
+
+#[test]
+fn a_second_unexplained_insert_in_the_flood_gap_does_not_drop_the_first() {
+    let mut g = rig();
+    g.entry("", 0);
+    assert_eq!(
+        spoken(&g.insert(0, "from an input method")),
+        ["from an input method"]
+    );
+    let _ = g.insert(20, "one");
+    let _ = g.insert(100, "two");
+    assert!(spoken(&g.tick(6)).is_empty(), "both wait for the gap");
+    let said = spoken(&g.tick(300));
+    assert_eq!(said, ["one and 3 more"], "kept, with the rest counted");
+}
+
+#[test]
+fn password_text_is_not_in_the_debug_output_of_anything_that_holds_it() {
+    let mut g = rig();
+    g.track(Role::PasswordEntry, StateSet::EDITABLE, "", 0);
+    let secret = "hunter2x";
+    let msgs = [
+        TextMsg::Edit {
+            node: node(),
+            delta: gorca_model::TextDelta::Insert {
+                offset: 0,
+                len: 8,
+                text: Some(gorca_model::LazyText {
+                    msg: Arc::from(secret.as_bytes()),
+                    field: 0,
+                }),
+            },
+        },
+        TextMsg::Fetched {
+            req: TextReqId(1),
+            epoch: Epoch(1),
+            result: Ok(Reply::Window(TextWindowFill {
+                base: 0,
+                text: Arc::from(secret),
+                len: 8,
+                caret: None,
+            })),
+        },
+        TextMsg::Fetched {
+            req: TextReqId(2),
+            epoch: Epoch(1),
+            result: Ok(Reply::Unit(TextUnitAt {
+                range: 0..8,
+                text: Arc::from(secret),
+            })),
+        },
+        TextMsg::Fetched {
+            req: TextReqId(3),
+            epoch: Epoch(1),
+            result: Ok(Reply::Selections(TextSelections {
+                ranges: vec![(0..8, Arc::from(secret))],
+            })),
+        },
+    ];
+    for m in &msgs {
+        assert!(!format!("{m:?}").contains(secret), "{m:?}");
+    }
+    let edit = super::caret::Edit::Insert {
+        offset: 0,
+        len: 8,
+        text: Some(secret.to_owned()),
+    };
+    assert!(!format!("{edit:?}").contains(secret));
+    // Held text, the utterance and everything the machine holds.
+    let _ = g.insert(0, secret);
+    let _ = g.typed('z');
+    let held = format!("{:?}", g.r.text.caret);
+    assert!(!held.contains(secret) && !held.contains('z'), "{held}");
+    let fx = g.tick(10);
+    for e in &fx {
+        assert!(!format!("{e:?}").contains(secret), "{e:?}");
+    }
+}
+
+#[test]
+fn an_app_with_non_scalar_text_offsets_is_not_tracked_and_keeps_the_generic_echo() {
+    let mut g = rig();
+    // The connector reported UTF-16 offsets for this application (a capability, not a name).
+    g.r.dir.set_text_scalar(node().app, false);
+    let mut fx = ReaderEffects::new();
+    g.r.now = g.now();
+    g.r.text_track(&snap(Role::TextEntry, StateSet::EDITABLE), &mut fx);
+    assert!(g.r.text.caret.is_off(), "not tracked until M3b");
+    assert!(fetches(&fx).is_empty());
+    assert_eq!(spoken(&g.typed('a')), ["a"], "the generic key echo");
+    assert!(spoken(&g.caret(3)).is_empty());
+    // Scalar apps are tracked as before, and the flag follows the app's announcement.
+    g.r.dir.set_text_scalar(node().app, true);
+    g.r.text_track(&snap(Role::TextEntry, StateSet::EDITABLE), &mut fx);
+    assert!(!g.r.text.caret.is_off());
 }
 
 #[test]

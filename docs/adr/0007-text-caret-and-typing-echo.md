@@ -16,6 +16,31 @@ app_actor.rs}`, `crates/gorca-model/src/text.rs`, `crates/gorca-ingress/src/tabl
 ## 0. Changelog
 
 - 2026-10-14: first version, Accepted.
+- 2026-10-14: M3 review fixes (`docs/reports/m3-review.md`, probes in `bench/results/e2e/m3-review/probes/`):
+  - H1/H2 say-all: the speech lane has an explicit queued-utterance kind (`SpeechHandle::submit_say_all`).
+    The first chunk is submitted normally (it replaces older speech); the following chunks queue behind it
+    in FIFO order instead of replacing each other, so ordinary speech keeps newest-wins and the 150 ms clock
+    fallback is gone (it also works with the speech server down at start). Progress is reported per
+    tracked utterance id (replaces the `notify_progress` flag of the text above): the lane reports Started,
+    Finished or Stopped for every tracked utterance, including one that is replaced or dropped, and a report
+    settles earlier queued chunks (reports are ordered). The daemon forwards progress with a bounded
+    `send` (1 s timeout) instead of `try_send`, so it is not lost. A run also ends by a watchdog (90 s without
+    progress). A key after a finished or stale run never repositions the caret.
+  - M1 (stop with an arrow): the caret follows the reading (`SetCaret` at the start of each chunk as it
+    starts). A stopping key is then handled by the application from where the reading is, and gorca does not
+    move the caret after the key; on a natural end it moves the caret to the end of the text. Chosen over
+    placing the caret before forwarding because it has no window in which the app and gorca both write.
+    Gate: e2e SA3a.
+  - M2: selection-changed before caret-moved are paired inside the key window in either order.
+  - M3: say-all and say-selection check the mode; outside the text modes they speak the cue "not available
+    in this mode". Browse mode (M7a) plugs in at `text_mode_allows`.
+  - M4: a typed key that matched nothing only holds its slot for its own insert, not for unrelated caret moves.
+  - M5: `AppInfo.text_unit` (connector capability) -> `AppProfile.non_scalar_text` ->
+    `MirrorDirectory::text_scalar`. Apps whose offsets are not scalars are not tracked until M3b.
+  - Lows: wrong-way hold (an insert that beats its key by the wrong order); gaps in a flood no longer drop an
+    event; `Debug` of types holding password text (`LazyText`, `TextUnitAt`, `TextWindowFill`,
+    `TextSelections`, `Utterance`) is manual and redacts; line replies larger than 256 KiB are refused
+    undecoded (`MAX_TEXT_REPLY_BYTES`) and a clipped line shortens its range.
 - 2026-10-14: M3 for native apps built (`docs/plan/checklists/M3.md`). Where the code differs from the text
   above, the code is the decision:
   - `TextKey` is classified by `gorca_input_api::classify_text_key` and applied by the Reader to `PassToApp`

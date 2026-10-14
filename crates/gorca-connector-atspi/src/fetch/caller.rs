@@ -319,6 +319,9 @@ const COLLECTION: &str = "org.a11y.atspi.Collection";
 /// `ATSPI_COORD_TYPE_WINDOW`: the only coordinate type gorca ever requests (SF-4). `SCREEN` (0)
 /// is meaningless on Wayland and GTK4 answers it with the origin.
 const COORD_WINDOW: u32 = 1;
+/// A `GetText` or `GetStringAtOffset` reply body larger than this is refused undecoded: the
+/// window is at most 16 Ki scalars (64 KiB) and a spoken unit is clipped far below that.
+const MAX_TEXT_REPLY_BYTES: usize = 256 * 1024;
 /// `ATSPI_TEXT_GRANULARITY_LINE`.
 const GRANULARITY_LINE: u32 = 3;
 
@@ -390,6 +393,18 @@ impl Caller {
         i32::try_from(v).map_err(|e| DbusError::Zbus(e.into()))
     }
 
+    /// The reply of a text call is refused before it is decoded when its body is larger than
+    /// any text the Reader would use (a hostile or minified multi-megabyte line): decoding it
+    /// would copy it only to throw most of it away.
+    fn text_reply_fits(m: &zbus::Message) -> Result<(), DbusError> {
+        if m.body().data().len() > MAX_TEXT_REPLY_BYTES {
+            return Err(DbusError::Zbus(zbus::Error::Failure(
+                "text reply too large".to_owned(),
+            )));
+        }
+        Ok(())
+    }
+
     pub(crate) async fn text_range(
         &self,
         path: &str,
@@ -407,6 +422,7 @@ impl Caller {
                 &(start, end),
             )
             .await?;
+        Self::text_reply_fits(&m)?;
         m.body().deserialize::<String>().map_err(DbusError::Zbus)
     }
 
@@ -450,6 +466,7 @@ impl Caller {
                 &(offset, granularity),
             )
             .await?;
+        Self::text_reply_fits(&m)?;
         m.body()
             .deserialize::<(String, i32, i32)>()
             .map_err(DbusError::Zbus)

@@ -43,7 +43,6 @@ const E1_P99_MS: f64 = 3.0;
 const S2_P99_MS: f64 = 15.0;
 const SA1_P99_MS: f64 = 15.0;
 const SA3_STOP_P99_MS: f64 = 2.0;
-const SA3_CARET_P99_MS: f64 = 50.0;
 /// R1 under the L3-50k storm: R1's ceiling plus the 1 ms allowed by ADR-0006 18.
 const R1S_P99_MS: f64 = 4.0;
 
@@ -144,7 +143,6 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     ("S2", "s2_ms", "p99") => Some(S2_P99_MS),
                     ("SA1", "sa1_ms", "p99") => Some(SA1_P99_MS),
                     ("SA3", "sa3_stop_ms", "p99") => Some(SA3_STOP_P99_MS),
-                    ("SA3", "sa3_caret_ms", "p99") => Some(SA3_CARET_P99_MS),
                     _ => None,
                 };
                 if let Some(t) = thr {
@@ -189,6 +187,8 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "pw_plaintext_in_logs"
                     | "pw_echo_missing"
                     | "sa3_caret_wrong"
+                    | "sa3a_wrong"
+                    | "sa3a_caret_moved_back"
                     | "sa3_not_silenced"
                     | "c1h_ipc_calls"
             ) {

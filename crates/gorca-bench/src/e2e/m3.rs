@@ -968,7 +968,7 @@ pub fn sa3(
     focus_node(&mut s, NOTES)?;
     let trials = if size.n >= 1000 { 40 } else { 10 };
     let mut rng = Rng::new(seed);
-    let (mut stop, mut caret_ms) = (Vec::new(), Vec::new());
+    let mut stop = Vec::new();
     let (mut wrong, mut not_silenced) = (0u64, 0u64);
     for _ in 0..trials {
         app_ev(
@@ -1005,39 +1005,115 @@ pub fn sa3(
             Some(r) => stop.push(ms(r.t_ns.saturating_sub(t))),
             None => not_silenced += 1,
         }
-        // The caret is placed by a SetCaretOffset the app timestamps.
-        let end = Instant::now() + Duration::from_millis(500);
-        loop {
-            let r = s.app.proc.request(
-                "get_caret",
-                &format!("\"node\":{NOTES}"),
-                Duration::from_secs(5),
-            )?;
-            let sets = json_num(&r, "sets").unwrap_or(0.0);
-            if sets > before {
-                let at = json_num(&r, "t_set_ns").unwrap_or(0.0) as u64;
-                let caret = json_num(&r, "caret").unwrap_or(-1.0);
-                caret_ms.push(ms(at.saturating_sub(t)));
-                if caret < 0.0
-                    || !(caret as usize).is_multiple_of(LINE_LEN)
-                    || (caret as usize) == 0
-                {
-                    wrong += 1;
-                }
-                break;
-            }
-            if Instant::now() > end {
-                wrong += 1;
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(2));
-        }
+        // The caret was put at the start of the chunk being spoken as that chunk started, so
+        // nothing is left to move: gorca must not touch it once the key has arrived.
         std::thread::sleep(Duration::from_millis(150));
+        let r = s.app.proc.request(
+            "get_caret",
+            &format!("\"node\":{NOTES}"),
+            Duration::from_secs(5),
+        )?;
+        let caret = json_num(&r, "caret").unwrap_or(-1.0);
+        let sets = json_num(&r, "sets").unwrap_or(0.0);
+        if sets > before
+            || caret < 0.0
+            || !(caret as usize).is_multiple_of(LINE_LEN)
+            || (caret as usize) == 0
+        {
+            wrong += 1;
+        }
     }
     out.s("sa3_stop_ms", stop);
-    out.s("sa3_caret_ms", caret_ms);
     out.x("sa3_caret_wrong", wrong as f64, "events");
     out.x("sa3_not_silenced", not_silenced as f64, "events");
+    Ok(())
+}
+
+/// SA3a: stopping say-all with an arrow key. The caret follows the reading, so the application
+/// handles the key from where the reading is: the line the user hears is the one after the
+/// chunk being spoken, and gorca never moves the caret back afterwards (review M1).
+pub fn sa3a(
+    host: &HostEnv,
+    reader: &ReaderSpec,
+    flavor: Flavor,
+    size: Size,
+    seed: u64,
+    out: &mut RunOut,
+) -> Result<()> {
+    if !gate_open(host, "SA3a", out)? {
+        return Ok(());
+    }
+    // Long chunks (1.5 s each): the caret does not move between our read and the key.
+    let mut s = setup(host, reader, flavor, 1500)?;
+    focus_node(&mut s, NOTES)?;
+    let trials = if size.n >= 1000 { 20 } else { 6 };
+    let mut rng = Rng::new(seed);
+    let (mut lat, mut wrong, mut moved_back) = (Vec::new(), 0u64, 0u64);
+    let get = |s: &mut Setup| -> Result<(usize, f64)> {
+        let r = s.app.proc.request(
+            "get_caret",
+            &format!("\"node\":{NOTES}"),
+            Duration::from_secs(5),
+        )?;
+        Ok((
+            json_num(&r, "caret").unwrap_or(-1.0).max(0.0) as usize,
+            json_num(&r, "sets").unwrap_or(0.0),
+        ))
+    };
+    for _ in 0..trials {
+        app_ev(
+            &mut s.app,
+            "caret",
+            &format!("\"node\":{NOTES},\"offset\":0"),
+        )?;
+        std::thread::sleep(Duration::from_millis(80));
+        let mark = s.rig.mock.mark();
+        say_all_chord(&mut s)?;
+        if s.rig
+            .mock
+            .wait_for(mark, Duration::from_secs(2), |r| {
+                matches!(r.kind, Kind::Speak { .. })
+            })
+            .is_none()
+        {
+            wrong += 1;
+            continue;
+        }
+        // Into the second or third chunk, away from its edges.
+        std::thread::sleep(Duration::from_millis(2200 + rng.below(400)));
+        let (reading_at, sets) = get(&mut s)?;
+        let mark2 = s.rig.mock.mark();
+        let t_key = tap(&mut s.rig, &mut s.ty, DOWN, 0, 0)?;
+        // The application handles Down from where the caret is now.
+        let (app_caret, _) = get(&mut s)?;
+        let target = app_caret + LINE_LEN;
+        let t_ev = app_ev(
+            &mut s.app,
+            "caret",
+            &format!("\"node\":{NOTES},\"offset\":{target}"),
+        )?;
+        let want = format!("Line {:04} text", target / LINE_LEN);
+        match s.rig.mock.wait_for(
+            mark2,
+            Duration::from_millis(500),
+            |r| matches!(&r.kind, Kind::Speak { text, .. } if *text == want),
+        ) {
+            Some(r) => lat.push(ms(r.t_ns.saturating_sub(t_ev.max(t_key)))),
+            None => wrong += 1,
+        }
+        if app_caret != reading_at {
+            // The caret was not where the reading was.
+            wrong += 1;
+        }
+        std::thread::sleep(Duration::from_millis(400));
+        let (end_caret, end_sets) = get(&mut s)?;
+        if end_caret != target || end_sets > sets {
+            moved_back += 1;
+        }
+    }
+    out.s("sa3a_ms", lat);
+    out.x("sa3a_wrong", wrong as f64, "events");
+    out.x("sa3a_caret_moved_back", moved_back as f64, "events");
     Ok(())
 }
 

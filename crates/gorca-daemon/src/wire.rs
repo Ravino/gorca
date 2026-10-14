@@ -46,9 +46,9 @@ pub(crate) fn wire_speech(
     speech
 }
 
-/// Text (ADR-0007): the speech lane's `Started`/`Ended` reports reach the Reader as
-/// `TextMsg::Progress`, which say-all follows to keep its look-ahead full. Both channels are
-/// bounded; a full one loses a report and say-all lags one chunk (SA-3), never the Reader.
+/// Text (ADR-0007): the speech lane's `Started`/`Ended`/`Stopped` reports of say-all chunks reach
+/// the Reader as `TextMsg::Progress`, which say-all follows to keep its look-ahead full. Both
+/// channels are bounded; the forwarder waits for room instead of dropping.
 pub(crate) fn wire_text(
     tasks: &mut TaskSet,
     speech: &SpeechHandle,
@@ -57,8 +57,12 @@ pub(crate) fn wire_text(
     let (tx, mut rx) = mpsc::channel::<gorca_speech::LaneProgress>(256);
     speech.set_progress(tx);
     tasks.spawn("text-progress", async move {
+        // A report is awaited, not dropped, when the Reader's queue is momentarily full: say-all
+        // keeps its book from them. The wait is bounded; the reading's watchdog covers the rest.
         while let Some(p) = rx.recv().await {
-            let _ = text_io.try_send(gorca_core::TextMsg::Progress(p));
+            let msg = gorca_core::TextMsg::Progress(p);
+            let _ =
+                tokio::time::timeout(std::time::Duration::from_secs(1), text_io.send(msg)).await;
         }
     });
 }

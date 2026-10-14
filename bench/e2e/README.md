@@ -57,7 +57,8 @@ cannot touch the real session. It never signals anything it did not spawn.
 | S2 | M3: Shift+Right, the app signals caret then selection (GTK4 order) | `s2_ms` (gate p99 15 ms), `lost` |
 | SA1 | M3: `gorca+Down` (`text.say_all`) from the top of a text view | `sa1_ms` key emit to the first chunk's SPEAK (gate p99 15 ms), `lost` |
 | SA2 | M3: say-all over 100 KB (2,500 sentences; 500 with `--quick`) | `sa2_ahead_ratio` (gate 0.99: the next chunk reaches the server within 5 ms of the previous END), `sa2_gap_ms`, `lost` |
-| SA3 | M3: Escape during say-all | `sa3_stop_ms` key emit to the speech cancel (gate p99 2 ms), `sa3_caret_ms` key emit to the caret being placed (gate p99 50 ms), `sa3_caret_wrong`, `sa3_not_silenced` |
+| SA3 | M3: Escape during say-all | `sa3_stop_ms` key emit to the speech cancel (gate p99 2 ms), `sa3_caret_wrong` (the caret already sits at a chunk start and gorca must not touch it after the key), `sa3_not_silenced` |
+| SA3a | M3: arrow key during say-all | `sa3a_ms` key to the speech of the line after the reading position (app handles the key), `sa3a_wrong`, `sa3a_caret_moved_back` (gorca never moves the caret back) |
 | PW | M3: typing, moving and selecting in a password entry with `--bench-present-log` and `RUST_LOG=trace` | `pw_plaintext_in_logs` (gate 0: the secret and two 8-character pieces of it, in the log and in the reader's stderr), `pw_echo_missing` (gate 0), `pw_log_lines` (>= 1, so the grep means something) |
 
 The M3 scenarios (`crates/gorca-bench/src/e2e/m3.rs`) run with `--reader-env GORCA_M3=1` (`GORCA_M3_STRICT=1` fails instead of

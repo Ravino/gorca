@@ -140,9 +140,16 @@ async fn at_offset(
             "GetStringAtOffset returned an inverted range".to_owned(),
         ));
     }
+    // A clipped text no longer spans its range: shorten the range to what is kept.
+    let kept = clip(&text, MAX_TEXT_BYTES);
+    let end = if kept.len() < text.len() {
+        nonneg(start).saturating_add(u32::try_from(kept.chars().count()).unwrap_or(u32::MAX))
+    } else {
+        nonneg(end)
+    };
     Ok(BackendReply::Unit(TextUnitAt {
-        range: nonneg(start)..nonneg(end),
-        text: Arc::from(clip(&text, MAX_TEXT_BYTES)),
+        range: nonneg(start)..end,
+        text: Arc::from(kept),
     }))
 }
 

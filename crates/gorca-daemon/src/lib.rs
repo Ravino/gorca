@@ -143,6 +143,10 @@ impl SpeechOut for LaneOut {
         self.0.submit(utterance);
     }
 
+    fn submit_say_all(&self, utterance: Utterance, first: bool) {
+        self.0.submit_say_all(utterance, first);
+    }
+
     fn notify_epoch(&self) {
         self.0.notify_epoch();
     }

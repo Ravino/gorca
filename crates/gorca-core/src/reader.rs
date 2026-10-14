@@ -169,6 +169,12 @@ pub enum ReaderEffect {
         req: NavReqId,
         act: gorca_connector_api::ActionReq,
     },
+    /// A chunk of a say-all reading (ADR-0007 SA-2): `first` interrupts like any utterance, the
+    /// others are queued behind it and report their progress.
+    SayAllChunk {
+        intent: Box<SpeechIntent>,
+        first: bool,
+    },
     /// A text fetch (ADR-0007 4.3): a task run under `class`'s deadline answers with
     /// `TextMsg::Fetched`.
     TextFetch {
@@ -598,7 +604,8 @@ mod tests {
                 | ReaderEffect::ReviewRevalidate { .. }
                 | ReaderEffect::ReviewStatusBar { .. }
                 | ReaderEffect::ReviewAct { .. }
-                | ReaderEffect::TextFetch { .. } => None,
+                | ReaderEffect::TextFetch { .. }
+                | ReaderEffect::SayAllChunk { .. } => None,
             })
             .collect()
     }
@@ -1136,6 +1143,7 @@ mod tests {
                 ReaderEffect::ReviewStatusBar { .. } => "review-status-bar",
                 ReaderEffect::ReviewAct { .. } => "review-act",
                 ReaderEffect::TextFetch { .. } => "text-fetch",
+                ReaderEffect::SayAllChunk { .. } => "say-all-chunk",
             })
             .collect()
     }
@@ -1157,7 +1165,8 @@ mod tests {
                 | ReaderEffect::ReviewRevalidate { .. }
                 | ReaderEffect::ReviewStatusBar { .. }
                 | ReaderEffect::ReviewAct { .. }
-                | ReaderEffect::TextFetch { .. } => None,
+                | ReaderEffect::TextFetch { .. }
+                | ReaderEffect::SayAllChunk { .. } => None,
             })
             .expect("an utterance")
     }

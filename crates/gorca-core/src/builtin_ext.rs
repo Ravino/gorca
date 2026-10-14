@@ -3,7 +3,7 @@
 //! name anywhere else; it asks [`AppProfile::for_app`], which matches on [`AppInfo`] the same
 //! way an extension manifest would.
 
-use gorca_model::AppInfo;
+use gorca_model::{AppInfo, TextUnit};
 
 /// Per-application behaviour switches chosen from [`AppInfo`] when the app appears.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -18,6 +18,11 @@ pub struct AppProfile {
     /// tab strips) must not turn on this switch: the focus event already speaks and the
     /// selection is background noise.
     pub speak_selection: bool,
+    /// The application's text offsets are not Unicode scalars (Gecko counts UTF-16 units).
+    /// The native text layer (ADR-0007) counts scalars, so it does not track such an
+    /// application's text until M3b converts offsets (TQ-1). Taken from the connector's
+    /// capability report, never from a name.
+    pub non_scalar_text: bool,
 }
 
 impl AppProfile {
@@ -25,6 +30,7 @@ impl AppProfile {
         Self {
             // Only the connector-verified Shell: a self-reported name grants nothing.
             speak_selection: info.verified_shell,
+            non_scalar_text: info.text_unit != TextUnit::Scalar,
         }
     }
 }
@@ -43,6 +49,7 @@ mod tests {
             connector_kind: ConnectorKind::Atspi,
             verified_shell,
             dump_complete: false,
+            text_unit: gorca_model::TextUnit::Scalar,
             root: None,
         }
     }
@@ -52,6 +59,15 @@ mod tests {
         assert!(AppProfile::for_app(&info("gnome-shell", true)).speak_selection);
         assert!(!AppProfile::for_app(&info("nautilus", false)).speak_selection);
         assert!(!AppProfile::default().speak_selection);
+    }
+
+    #[test]
+    fn only_a_non_scalar_text_unit_turns_native_text_off() {
+        let mut i = info("anything", false);
+        assert!(!AppProfile::for_app(&i).non_scalar_text);
+        i.text_unit = TextUnit::Utf16Bom;
+        assert!(AppProfile::for_app(&i).non_scalar_text);
+        assert!(!AppProfile::default().non_scalar_text);
     }
 
     #[test]

@@ -13,7 +13,7 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use gorca_input_api::{ClipOp, KeyUnit, TextKey};
+use gorca_input_api::{ClipOp, KeyUnit, TextDir, TextKey};
 use gorca_model::{
     Epoch, NodeKey, Prio, TextGranularity, TextSelections, TextUnitAt, TextWindowFill,
 };
@@ -35,6 +35,7 @@ use super::{TextCounters, TextOp, TextReqId};
 pub const WINDOW_RADIUS: u32 = 2048;
 /// A caret event this close behind an insert or delete at the same offset is its echo (CR-4).
 const ABSORB: Duration = Duration::from_millis(50);
+const ABSORB_MS: u64 = 50;
 /// A caret event this long before its key (lanes are separate threads) is still correlated
 /// (EV-4).
 pub const HOLD: Duration = Duration::from_millis(5);
@@ -153,8 +154,8 @@ pub enum Out {
     },
 }
 
-/// A caret move, an edit or a selection report for the tracked object.
-#[derive(Clone, Debug)]
+/// An edit of the tracked object. Its text may be a typed password: `Debug` shows lengths.
+#[derive(Clone)]
 pub enum Edit {
     Insert {
         offset: u32,
@@ -263,10 +264,31 @@ struct Held {
     at: Instant,
 }
 
+impl std::fmt::Debug for Edit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let n = |t: &Option<String>| t.as_ref().map(|s| s.chars().count());
+        match self {
+            Edit::Insert { offset, len, text } => f
+                .debug_struct("Insert")
+                .field("offset", offset)
+                .field("len", len)
+                .field("chars", &n(text))
+                .finish(),
+            Edit::Delete { offset, len, text } => f
+                .debug_struct("Delete")
+                .field("offset", offset)
+                .field("len", len)
+                .field("chars", &n(text))
+                .finish(),
+            Edit::Replaced => f.write_str("Replaced"),
+        }
+    }
+}
+
 /// An insert nobody explains yet: a key a few milliseconds behind it may (the application's
 /// signal can beat the keyboard monitor's, as a caret can, EV-4). Spoken as inserted text when
 /// [`HOLD`] passes without a key claiming it.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct HeldIns {
     offset: u32,
     text: String,
@@ -287,10 +309,28 @@ impl HeldIns {
 
 /// A delete nobody explains yet: an Erase key a few milliseconds behind it may. Dropped silently
 /// when [`HOLD`] passes (a delete without a key is not spoken, TE-5).
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct HeldDel {
     text: String,
     at: Instant,
+}
+
+// Lengths only: held text may be a password (PW-2).
+impl std::fmt::Debug for HeldIns {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HeldIns")
+            .field("offset", &self.offset)
+            .field("len", &self.len())
+            .finish_non_exhaustive()
+    }
+}
+
+impl std::fmt::Debug for HeldDel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HeldDel")
+            .field("chars", &self.text.chars().count())
+            .finish_non_exhaustive()
+    }
 }
 
 /// How long a key may trail the insert it explains and still not be spoken twice.
@@ -380,14 +420,38 @@ impl Tracked {
         }
     }
 
+    /// Typed characters still waiting for their insert.
+    #[cfg(test)]
+    pub fn expect_len(&self) -> usize {
+        self.expect.len()
+    }
+
     /// Overwrite what a secret field held (PW-4).
     fn scrub(&mut self) {
         self.win.zero();
         self.win.invalidate();
         self.expect.clear();
         self.words.reset();
-        self.word_fallback = None;
         self.sel.clear();
+        // Held and spoken-but-remembered text: overwrite, then drop (PW-4).
+        for h in [self.held_ins.take(), self.flushed_ins.take()]
+            .into_iter()
+            .flatten()
+        {
+            let mut t = h.text.into_bytes();
+            t.fill(0);
+            std::hint::black_box(&t);
+        }
+        if let Some(h) = self.held_del.take() {
+            let mut t = h.text.into_bytes();
+            t.fill(0);
+            std::hint::black_box(&t);
+        }
+        if let Some(w) = self.word_fallback.take() {
+            let mut t = w.into_bytes();
+            t.fill(0);
+            std::hint::black_box(&t);
+        }
     }
 
     fn spoken(
@@ -638,7 +702,9 @@ impl CaretState {
         let own = match self {
             CaretState::Off => None,
             CaretState::Idle { t } => t.held.map(|h| h.at + HOLD),
-            CaretState::Awaiting { edge_at, .. } => Some(*edge_at),
+            CaretState::Awaiting { t, edge_at, .. } => {
+                Some(t.held.map_or(*edge_at, |h| (*edge_at).min(h.at + HOLD)))
+            }
             CaretState::Fetching { deadline, .. } => Some(*deadline),
         };
         let ins = self.tracked().and_then(|t| {
@@ -804,6 +870,24 @@ impl CaretState {
     fn on_caret(self, off: u32, cx: &mut Ctx<'_>) -> CaretState {
         match self {
             CaretState::Off => CaretState::Off,
+            // A selection fetch in flight keeps running: the selection event beat the caret
+            // event (order differs between toolkits); the caret only moves the position.
+            CaretState::Fetching {
+                mut t,
+                req,
+                want: want @ Want::Selection { .. },
+                epoch,
+                deadline,
+            } => {
+                t.caret = Some(off);
+                CaretState::Fetching {
+                    t,
+                    req,
+                    want,
+                    epoch,
+                    deadline,
+                }
+            }
             CaretState::Fetching { t, .. } => CaretState::Idle { t }.on_caret(off, cx),
             CaretState::Idle { mut t } => {
                 if t.is_own_move(off, cx.now) || t.absorbs(off, cx.now) {
@@ -812,8 +896,12 @@ impl CaretState {
                     return CaretState::Idle { t };
                 }
                 // A caret event ahead of its insert (typing): the typed keys explain it.
+                // Only while the newest typed key is fresh: a key whose insert never came (a
+                // preedit, a refused character) must not swallow a later, unrelated move.
                 if let Some(old) = t.caret
-                    && !t.expect.is_empty()
+                    && t.expect
+                        .newest_age_ms(cx.now_ms)
+                        .is_some_and(|age| age <= ABSORB_MS)
                     && off > old
                     && (off - old) as usize <= t.expect.len()
                 {
@@ -852,9 +940,26 @@ impl CaretState {
             } => match key {
                 TextKey::Move {
                     unit,
+                    dir,
                     select: false,
-                    ..
                 } => {
+                    // A caret that went the other way is not this key's (the previous key hit
+                    // a boundary and this event is the next key's, which beat it): hold it for
+                    // the key that may follow, like an unexplained caret in Idle.
+                    let wrong_way = t.caret.is_some_and(|c| match dir {
+                        TextDir::Next => off < c,
+                        TextDir::Prev => off > c,
+                    });
+                    if wrong_way {
+                        t.held = Some(Held { off, at: cx.now });
+                        return CaretState::Awaiting {
+                            t,
+                            key,
+                            epoch,
+                            edge_at,
+                            late_until,
+                        };
+                    }
                     cx.stats.caret_correlated += 1;
                     let say = say_of(unit);
                     let reason = Reason::CaretMove {
@@ -1158,6 +1263,16 @@ impl CaretState {
         if let Some(t) = self.tracked_mut() {
             flush_due(t, cx);
         }
+        // A caret held inside an open slot that no key claimed is an unexplained move.
+        self = match self {
+            CaretState::Awaiting { t, .. } if t.held.is_some_and(|h| cx.now >= h.at + HOLD) => {
+                CaretState::Idle { t }
+            }
+            other @ (CaretState::Off
+            | CaretState::Idle { .. }
+            | CaretState::Awaiting { .. }
+            | CaretState::Fetching { .. }) => other,
+        };
         match self {
             CaretState::Off => CaretState::Off,
             CaretState::Idle { mut t } => {
@@ -1555,7 +1670,12 @@ fn insert(
         return;
     };
     t.win.splice(offset, 0, &s);
-    match on_insert(&mut t.expect, &s, cx.now_ms, source, cx.cfg.inserted_text) {
+    let action = on_insert(&mut t.expect, &s, cx.now_ms, source, cx.cfg.inserted_text);
+    if !matches!(action, Some(InsertAction::Echoed { .. })) {
+        // Text that is none of the typed keys' means they will not come: forget them.
+        t.expect.clear();
+    }
+    match action {
         Some(InsertAction::Echoed { .. }) => {
             if cx.cfg.typed_words {
                 speak_word(t, offset, &s, cx);
@@ -1571,6 +1691,12 @@ fn insert(
                 let flooding = t
                     .last_insert_say
                     .is_some_and(|at| cx.now.saturating_duration_since(at) < INSERT_GAP);
+                if flooding && let Some(h) = t.held_ins.as_mut() {
+                    // Not touching, but the gap is on: the held one stays and counts the rest.
+                    h.more = h.more.saturating_add(n as usize);
+                    cx.stats.inserts_coalesced += 1;
+                    return;
+                }
                 if n as usize <= HELD_INSERT_MAX || flooding {
                     // A short insert waits a moment for its key (see [`HeldIns`]); one that
                     // comes while an earlier insert was just spoken waits for the gap (EV-5).

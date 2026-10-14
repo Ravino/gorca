@@ -122,6 +122,7 @@ pub struct TextCounters {
     pub sel_fetch_failed: u64,
     pub say_all_chunks: u64,
     pub say_all_starved: u64,
+    pub say_all_watchdog: u64,
     pub events_dropped: u64,
 }
 
@@ -388,6 +389,12 @@ impl Reader {
         if !self.text_active() {
             return;
         }
+        // Text counted in UTF-16 units (a capability the connector reports, not a name) is not
+        // ours until M3b converts offsets: tracking it would speak the wrong characters.
+        if !self.dir.text_scalar(snap.key.app) {
+            self.text_untrack();
+            return;
+        }
         match trackable(snap) {
             Some(kind) => self.text_step(
                 In::Track {
@@ -537,10 +544,20 @@ impl Reader {
         if !self.text.caret.is_off() {
             self.text_step(In::Timer, fx);
         }
-        // The first say-all chunk has had its moment alone: the look-ahead may follow.
-        let gate_open = matches!(&self.text.say_all, SayAll::Running(r) if r.gate_open(self.now));
-        if gate_open {
-            self.say_all_pump(fx);
+        // A reading the speech lane has said nothing about for too long is over (the backstop
+        // for a lost progress report); it never moves the caret by itself afterwards.
+        let expired = matches!(&self.text.say_all, SayAll::Running(r) if r.expired(self.now));
+        if expired {
+            self.text.stats.say_all_watchdog += 1;
+            self.say_all_finish(false, fx);
+        } else {
+            self.arm_say_all_watchdog(fx);
+        }
+    }
+
+    fn arm_say_all_watchdog(&self, fx: &mut ReaderEffects) {
+        if let SayAll::Running(run) = &self.text.say_all {
+            fx.push(ReaderEffect::ArmTimer(run.deadline()));
         }
     }
 
@@ -562,7 +579,22 @@ impl Reader {
         self.text_step(In::Say { say, spell, epoch }, fx);
     }
 
+    /// May the native text layer answer a command now? In Review (and Learn) mode another
+    /// layer owns reading, and in Browse mode the document does: refuse with a short cue
+    /// instead of reading the entry that merely still holds the focus. This is the hook M7a
+    /// uses: its browse commands route to the document before they reach the commands below.
+    fn text_mode_allows(&mut self, fx: &mut ReaderEffects) -> bool {
+        if self.text_active() {
+            return true;
+        }
+        self.say("not available in this mode", fx);
+        false
+    }
+
     pub(crate) fn text_say_selection(&mut self, epoch: Epoch, fx: &mut ReaderEffects) {
+        if !self.text_mode_allows(fx) {
+            return;
+        }
         let Some(t) = self.text.caret.tracked() else {
             self.say("not in a text field", fx);
             return;
@@ -599,12 +631,15 @@ impl Reader {
     // ---- say-all -------------------------------------------------------------------------
 
     pub(crate) fn say_all_start(&mut self, epoch: Epoch, fx: &mut ReaderEffects) {
+        if !self.text_mode_allows(fx) {
+            return;
+        }
         let Some(t) = self.text.caret.tracked() else {
             self.say("not in a text field", fx);
             return;
         };
         let from = t.caret.unwrap_or(0);
-        let run = Run::new(t.node, epoch, from, t.kind.secret);
+        let run = Run::new(t.node, epoch, from, t.kind.secret, self.now);
         self.text.say_all = SayAll::Running(run);
         self.say_all_pump(fx);
     }
@@ -630,7 +665,12 @@ impl Reader {
                         epoch: run.epoch,
                     });
                 }
-                Act::Submit { utt: id, text, .. } => {
+                Act::Submit {
+                    utt: id,
+                    text,
+                    first,
+                    ..
+                } => {
                     let SayAll::Running(run) = &self.text.say_all else {
                         continue;
                     };
@@ -643,30 +683,28 @@ impl Reader {
                         self.text.sensitive_utt = Some(id);
                     }
                     self.text.stats.say_all_chunks += 1;
-                    fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+                    fx.push(ReaderEffect::SayAllChunk {
+                        intent: Box::new(SpeechIntent { utterance: u }),
+                        first,
+                    });
                 }
             }
         }
     }
 
     fn say_all_pump(&mut self, fx: &mut ReaderEffects) {
-        let now = self.now;
         let acts = {
             let SayAll::Running(run) = &mut self.text.say_all else {
                 return;
             };
             let next = &mut self.next_utt;
-            run.pump(now, || {
+            run.pump(|| {
                 *next += 1;
                 UttId(*next)
             })
         };
         self.say_all_apply(acts, fx);
-        if let SayAll::Running(run) = &self.text.say_all
-            && let Some(d) = run.gate_deadline()
-        {
-            fx.push(ReaderEffect::ArmTimer(d));
-        }
+        self.arm_say_all_watchdog(fx);
         let done = matches!(&self.text.say_all, SayAll::Running(r) if r.is_done());
         if done {
             self.say_all_finish(true, fx);
@@ -690,34 +728,56 @@ impl Reader {
     }
 
     fn say_all_progress(&mut self, p: LaneProgress, fx: &mut ReaderEffects) {
-        let popped = match &mut self.text.say_all {
-            SayAll::Running(run) => run.progress(p),
+        let now = self.now;
+        let out = match &mut self.text.say_all {
+            SayAll::Running(run) => run.progress(p, now),
             SayAll::Idle => return,
         };
-        if popped {
+        // The caret follows the chunk being spoken, so a key that stops the reading acts from
+        // where the reading is, and gorca's own move is long done when the key reaches the
+        // application (no race with it, M1 of the review).
+        if let Some(at) = out.place {
+            self.say_all_place(at, fx);
+        }
+        if out.pump {
             self.say_all_pump(fx);
         } else if matches!(&self.text.say_all, SayAll::Running(r) if r.is_done()) {
             self.say_all_finish(true, fx);
         }
+        self.arm_say_all_watchdog(fx);
     }
 
-    /// End the reading and, when the setting says so, leave the caret where it stopped.
+    /// Put the caret at `offset`; the caret event this causes is gorca's own.
+    fn say_all_place(&mut self, offset: u32, fx: &mut ReaderEffects) {
+        if !self.cmd.effective.text.say_all_moves_caret {
+            return;
+        }
+        let SayAll::Running(run) = &self.text.say_all else {
+            return;
+        };
+        let (node, epoch) = (run.node, self.epoch.current());
+        self.text.next_req += 1;
+        let req = TextReqId(self.text.next_req);
+        self.text.caret.note_own_move(offset, self.now);
+        fx.push(ReaderEffect::TextFetch {
+            req,
+            op: TextOp::SetCaret { node, offset },
+            class: BudgetClass::Prefetch,
+            epoch,
+        });
+    }
+
+    /// End the reading. A reading that ran to the end of the text leaves the caret there (when
+    /// the setting says so); one that was stopped or went silent never moves it: the caret is
+    /// already at the chunk that was being spoken.
     fn say_all_finish(&mut self, natural: bool, fx: &mut ReaderEffects) {
         let SayAll::Running(run) = std::mem::take(&mut self.text.say_all) else {
             return;
         };
-        if !self.cmd.effective.text.say_all_moves_caret {
+        if !natural || !self.cmd.effective.text.say_all_moves_caret {
             return;
         }
-        let target = if natural {
-            run.end_caret()
-        } else {
-            run.stop_caret()
-        };
-        if run.started.is_none() && !natural {
-            // Nothing was spoken: the caret never moved.
-            return;
-        }
+        let target = run.end_caret();
         self.text.next_req += 1;
         let req = TextReqId(self.text.next_req);
         self.text.caret.note_own_move(target, self.now);

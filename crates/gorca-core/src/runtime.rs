@@ -56,6 +56,11 @@ use crate::reader::{
 pub trait SpeechOut: Send + Sync + 'static {
     /// An epoch-tagged utterance. Never blocks.
     fn submit(&self, utterance: Utterance);
+    /// A chunk of a say-all reading: `first` interrupts like any utterance, the others queue
+    /// behind it, and the progress of each is reported. Defaults to a plain submit.
+    fn submit_say_all(&self, utterance: Utterance, _first: bool) {
+        self.submit(utterance);
+    }
     /// The `EpochCell` advanced: wake the speech lane so it cancels stale speech (E-2).
     fn notify_epoch(&self);
     /// Speech control, ordered with utterances (ADR-0005 6.2). Never blocks.
@@ -555,6 +560,7 @@ fn spawn_app_actor(
         )
         .with_fill_channel(fill_rx)
         .with_focused(Arc::clone(&shared.focused))
+        .with_directory(Arc::clone(&shared.mirrors))
         .with_text(TextLink {
             tx: shared.senders.text.clone(),
             dropped: Arc::clone(&shared.text_dropped),
@@ -974,6 +980,10 @@ async fn reader_loop(
                         tracing::warn!("config request queue full; dropped a request");
                     }
                 }
+                ReaderEffect::SayAllChunk { intent, first } => {
+                    bump(&shared.stats.utterances);
+                    shared.speech.submit_say_all(intent.utterance, first);
+                }
                 ReaderEffect::TextFetch {
                     req,
                     op,
@@ -1023,6 +1033,7 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
         | ReaderEffect::SetGrabSet(_)
         | ReaderEffect::SpeechCtl(_)
         | ReaderEffect::TextFetch { .. }
+        | ReaderEffect::SayAllChunk { .. }
         | ReaderEffect::Config(_) => return,
     };
     let tx = shared.senders.review.clone();
@@ -1160,6 +1171,7 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
         | ReaderEffect::SetGrabSet(_)
         | ReaderEffect::SpeechCtl(_)
         | ReaderEffect::TextFetch { .. }
+        | ReaderEffect::SayAllChunk { .. }
         | ReaderEffect::Config(_) => {}
     }
 }
