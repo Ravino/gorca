@@ -34,9 +34,9 @@ use super::scenarios::{RunOut, Size, base_opts, ms, pause, speaks, start_storm};
 
 /// A physical key: XKB keycode (evdev + 8) and the keysym it produces.
 #[derive(Copy, Clone, Debug)]
-struct K {
-    code: u16,
-    sym: u32,
+pub(super) struct K {
+    pub(super) code: u16,
+    pub(super) sym: u32,
 }
 
 const INSERT: K = K {
@@ -81,7 +81,7 @@ fn setting(host: &HostEnv, key: &str) -> Option<String> {
         .map(|(_, v)| v.clone())
 }
 
-fn flag(host: &HostEnv, key: &str) -> bool {
+pub(super) fn flag(host: &HostEnv, key: &str) -> bool {
     setting(host, key).is_some_and(|v| v == "1")
 }
 
@@ -106,13 +106,13 @@ struct Chord {
 }
 
 /// Virtual clock plus keycode allocator of one scenario.
-struct Typist {
-    t_ms: u64,
+pub(super) struct Typist {
+    pub(super) t_ms: u64,
     next_keycode: u16,
 }
 
 impl Typist {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             t_ms: 1_000_000,
             next_keycode: 200,
@@ -172,7 +172,7 @@ fn m1_env(host: &HostEnv) -> HostEnv {
     h
 }
 
-fn m1_rig(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor) -> Result<Rig> {
+pub(super) fn m1_rig(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor) -> Result<Rig> {
     let mut o = base_opts(reader, flavor);
     o.keys = true;
     let rig = Rig::start(&m1_env(host), &o)?;

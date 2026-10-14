@@ -1,0 +1,27 @@
+# e2e m4a-rs
+# utc=2026-10-14T00:07:26Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=powersave x16
+# loadavg_start=10.03 12.17 10.91 4/2389 1315296
+# git_rev=e8cb1a9
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m4a-rs
+# reader=daemon:<repo>/.claude/worktrees/agent-af5a980a5d5abcb8b/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=10.03 12.17 10.91 4/2389 1315293
+# reader_env=GORCA_M4=1 RUST_LOG=gorca_core=debug
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=RS transcript: next line: "Bottom, more content not shown" |   MISMATCH, wanted one of ["Apply button Cancel button"] | next line: "Bottom, more content not shown" |   MISMATCH, wanted one of ["first line"] | next line: "Bottom, more content not shown" |   MISMATCH, wanted one of ["second line"] | next line: "Bottom, more content not shown" |   MISMATCH, wanted one of ["Ready"] | next line at the end: "Bottom, more content not shown" | previous line: "Top" |   MISMATCH, wanted one of ["second line"] | object.current: "Name, edit, Alice" |   MISMATCH, wanted one of ["label"] | object.prev: "not responding" |   MISMATCH, wanted one of ["Cancel button"] | object.parent: "Settings, window" |   MISMATCH, wanted one of ["Settings window"] | info.status_bar: "status bar" |   MISMATCH, wanted one of ["Ready"]
+
+metric                     bus                median          min          max  n op    threshold  res   note
+RS.rs_failures             daemon/voicego            9            9            9  1 <=            0  FAIL  gated on the max over repeats [events]

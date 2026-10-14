@@ -1,0 +1,36 @@
+# e2e m4a-r1
+# utc=2026-10-14T00:02:49Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=powersave x16
+# loadavg_start=20.64 15.90 11.22 10/2396 1286385
+# git_rev=e8cb1a9
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m4a-r1
+# reader=daemon:<repo>/.claude/worktrees/agent-af5a980a5d5abcb8b/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=20.64 15.90 11.22 9/2396 1286382
+# reader_env=GORCA_M4=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=r1_ms: first SPEAK between a numpad review key and the next one (150 spoken for 150 presses); the application calls during the series are RR-1 revalidations (every 2 s), never on the key path
+
+metric                     bus                median          min          max  n op    threshold  res   note
+R1.r1_ms.n                 daemon/voicego          150          150          150  1                  info   [samples]
+R1.r1_ms.p50               daemon/voicego        0.488        0.488        0.488  1                  info   [ms]
+R1.r1_ms.p95               daemon/voicego        0.731        0.731        0.731  1                  info   [ms]
+R1.r1_ms.p99               daemon/voicego        0.807        0.807        0.807  1 <=            3  PASS   [ms]
+R1.r1_ms.p999              daemon/voicego        0.950        0.950        0.950  1                  info   [ms]
+R1.r1_ms.max               daemon/voicego        0.950        0.950        0.950  1                  info   [ms]
+R1.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+R1.not_consumed            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+R1.r1_ipc_calls            daemon/voicego            7            7            7  1                  info   [calls]
+R1.r2_cold_ms              daemon/voicego         99.8         99.8         99.8  1                  info   [ms]

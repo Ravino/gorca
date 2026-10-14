@@ -44,6 +44,14 @@ cannot touch the real session. It never signals anything it did not spawn.
 | K3 | M1: the same chord while an L3-50k storm runs | `k3_ms`, `lost`, `not_consumed`, storm rate |
 | K4 | M1: randomized mode / grab-set toggles (10k; 500 with `--quick`) interleaved with plain typing | `app_lost`, `app_doubled`, `chord_leaked` |
 
+| R1 | M4a: after a cold build, alternating numpad next-line / previous-line presses on a fake GTK4 window of 24 buttons (`fakeapp.py --scenario review`) | `r1_ms` key-down emit to SPEAK (gate p99 3 ms), `lost`, `not_consumed`, `r1_ipc_calls`, `r2_cold_ms` (informational) |
+| R1s | R1 while an L3-50k storm runs | `r1s_ms` (gate p99 4 ms: R1's plus the 1 ms of ADR-0006 18), `lost`, `not_consumed`, storm rate |
+| RS | M4a correctness through the real connector: lines in visual order, label elided, wrapped label as two lines, object navigation, status bar | `rs_failures` (gate 0); the transcript is in the note |
+
+R1, R1s and RS (`crates/gorca-bench/src/e2e/m4.rs`) run with `--reader-env GORCA_M4=1` (`GORCA_M4_STRICT=1` fails
+instead of skipping). They press the desktop layout's unmodified numpad review keys through `fake_mutter.py`, so they also
+prove the exact keypad grabs.
+
 K2-K4 (`crates/gorca-bench/src/e2e/m1.rs`) are skeletons for the M1 command layer and are
 **skipped** until it lands (`K<n>.skipped = 1`). `--reader-env GORCA_M1=1` runs them and enforces
 the gates; `--reader-env GORCA_M1_STRICT=1` makes them fail instead of skip (proves the gate is
