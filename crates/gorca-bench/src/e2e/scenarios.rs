@@ -51,6 +51,18 @@ pub enum Scn {
     R1,
     R1s,
     RS,
+    C1,
+    C1h,
+    C2,
+    E1,
+    E2,
+    S2,
+    SA1,
+    SA2,
+    SA3,
+    PW,
+    C1hs,
+    E1s,
 }
 
 impl Scn {
@@ -72,6 +84,18 @@ impl Scn {
             Self::R1 => "R1".into(),
             Self::R1s => "R1s".into(),
             Self::RS => "RS".into(),
+            Self::C1 => "C1".into(),
+            Self::C1h => "C1h".into(),
+            Self::C2 => "C2".into(),
+            Self::E1 => "E1".into(),
+            Self::E2 => "E2".into(),
+            Self::S2 => "S2".into(),
+            Self::SA1 => "SA1".into(),
+            Self::SA2 => "SA2".into(),
+            Self::SA3 => "SA3".into(),
+            Self::PW => "PW".into(),
+            Self::C1hs => "C1hs".into(),
+            Self::E1s => "E1s".into(),
         }
     }
 
@@ -94,6 +118,18 @@ impl Scn {
             "R1" => Self::R1,
             "R1s" => Self::R1s,
             "RS" => Self::RS,
+            "C1" => Self::C1,
+            "C1h" => Self::C1h,
+            "C2" => Self::C2,
+            "E1" => Self::E1,
+            "E2" => Self::E2,
+            "S2" => Self::S2,
+            "SA1" => Self::SA1,
+            "SA2" => Self::SA2,
+            "SA3" => Self::SA3,
+            "PW" => Self::PW,
+            "C1hs" => Self::C1hs,
+            "E1s" => Self::E1s,
             _ => return None,
         })
     }
@@ -101,7 +137,8 @@ impl Scn {
     pub fn all() -> Vec<Self> {
         [
             "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K2s", "K3",
-            "K4", "K4r", "R1", "R1s", "RS",
+            "K4", "K4r", "R1", "R1s", "RS", "C1", "C1h", "C2", "E1", "E2", "S2", "SA1", "SA2",
+            "SA3", "PW", "C1hs", "E1s",
         ]
         .iter()
         .filter_map(|s| Self::parse(s))
@@ -199,6 +236,8 @@ pub(super) fn base_opts(reader: &ReaderSpec, flavor: Flavor) -> RigOpts {
         calls: false,
         keys: false,
         apps: vec![("app".to_owned(), 3000)],
+        extra_reader_args: Vec::new(),
+        reader_stderr: None,
         hung_apps: Vec::new(),
     }
 }
@@ -387,6 +426,18 @@ pub fn run(
         Scn::R1 => super::m4::r1(host, reader, flavor, size, seed, &mut out)?,
         Scn::R1s => super::m4::r1s(host, reader, flavor, size, seed, &mut out)?,
         Scn::RS => super::m4::rs(host, reader, flavor, size, seed, &mut out)?,
+        Scn::C1 => super::m3::c1(host, reader, flavor, size, seed, &mut out)?,
+        Scn::C1h => super::m3::c1h(host, reader, flavor, size, seed, &mut out)?,
+        Scn::C2 => super::m3::c2(host, reader, flavor, size, seed, &mut out)?,
+        Scn::E1 => super::m3::e1(host, reader, flavor, size, seed, &mut out)?,
+        Scn::E2 => super::m3::e2(host, reader, flavor, size, seed, &mut out)?,
+        Scn::S2 => super::m3::s2(host, reader, flavor, size, seed, &mut out)?,
+        Scn::SA1 => super::m3::sa1(host, reader, flavor, size, seed, &mut out)?,
+        Scn::SA2 => super::m3::sa2(host, reader, flavor, size, seed, &mut out)?,
+        Scn::SA3 => super::m3::sa3(host, reader, flavor, size, seed, &mut out)?,
+        Scn::PW => super::m3::pw(host, reader, flavor, size, seed, &mut out)?,
+        Scn::C1hs => super::m3::c1hs(host, reader, flavor, size, seed, &mut out)?,
+        Scn::E1s => super::m3::e1s(host, reader, flavor, size, seed, &mut out)?,
     }
     Ok(out)
 }

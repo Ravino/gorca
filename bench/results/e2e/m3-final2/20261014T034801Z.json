@@ -1,0 +1,28 @@
+{
+  "meta": {"utc": "2026-10-14T03:48:01Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "8.85 7.07 6.59 2/2912 2011066", "git_rev": "0bfe951", "git_dirty": "true", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "label": "m3-final2", "reader": "daemon:<repo>/.claude/worktrees/agent-a15d2cdf7665c02f6/target/release/gorca", "backend": "voicego", "repeats": "3", "samples_per_series": "1200", "l2_trials": "400", "quick": "false", "loadavg_end": "8.85 7.07 6.59 2/2912 2011063", "reader_env": "GORCA_M3=1", "gates": "L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats"},
+  "rows": [
+    {"id": "E1.e1_ms.n", "scenario": "E1", "bus": "daemon/voicego", "value": 1200, "min": 1200, "max": 1200, "runs": 3, "unit": "samples", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "E1.e1_ms.p50", "scenario": "E1", "bus": "daemon/voicego", "value": 0.178329, "min": 0.177648, "max": 0.185031, "runs": 3, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "E1.e1_ms.p95", "scenario": "E1", "bus": "daemon/voicego", "value": 0.275943, "min": 0.263748, "max": 0.326931, "runs": 3, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "E1.e1_ms.p99", "scenario": "E1", "bus": "daemon/voicego", "value": 0.330321, "min": 0.311346, "max": 0.389724, "runs": 3, "unit": "ms", "op": "<=", "threshold": 3, "verdict": "PASS", "note": ""},
+    {"id": "E1.e1_ms.p999", "scenario": "E1", "bus": "daemon/voicego", "value": 0.443282, "min": 0.408985, "max": 0.484749, "runs": 3, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "E1.e1_ms.max", "scenario": "E1", "bus": "daemon/voicego", "value": 0.459253, "min": 0.419482, "max": 0.579156, "runs": 3, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "E1.e2_double", "scenario": "E1", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 3, "unit": "events", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "E1.lost", "scenario": "E1", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 3, "unit": "events", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "E1s.e1s_ms.n", "scenario": "E1s", "bus": "daemon/voicego", "value": 1200, "min": 1200, "max": 1200, "runs": 3, "unit": "samples", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "E1s.e1s_ms.p50", "scenario": "E1s", "bus": "daemon/voicego", "value": 0.181006, "min": 0.180508, "max": 0.19042, "runs": 3, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "E1s.e1s_ms.p95", "scenario": "E1s", "bus": "daemon/voicego", "value": 0.308059, "min": 0.292139, "max": 0.314217, "runs": 3, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "E1s.e1s_ms.p99", "scenario": "E1s", "bus": "daemon/voicego", "value": 0.381295, "min": 0.364434, "max": 0.427258, "runs": 3, "unit": "ms", "op": "<=", "threshold": 4, "verdict": "PASS", "note": ""},
+    {"id": "E1s.e1s_ms.p999", "scenario": "E1s", "bus": "daemon/voicego", "value": 0.590137, "min": 0.496239, "max": 0.786371, "runs": 3, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "E1s.e1s_ms.max", "scenario": "E1s", "bus": "daemon/voicego", "value": 0.969154, "min": 0.615631, "max": 1.406719, "runs": 3, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "E1s.e2_double", "scenario": "E1s", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 3, "unit": "events", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "E1s.lost", "scenario": "E1s", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 3, "unit": "events", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "S2.s2_ms.n", "scenario": "S2", "bus": "daemon/voicego", "value": 1200, "min": 1200, "max": 1200, "runs": 3, "unit": "samples", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "S2.s2_ms.p50", "scenario": "S2", "bus": "daemon/voicego", "value": 0.545068, "min": 0.466009, "max": 0.590959, "runs": 3, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "S2.s2_ms.p95", "scenario": "S2", "bus": "daemon/voicego", "value": 0.95576, "min": 0.853228, "max": 0.995269, "runs": 3, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "S2.s2_ms.p99", "scenario": "S2", "bus": "daemon/voicego", "value": 1.167335, "min": 1.017049, "max": 1.215493, "runs": 3, "unit": "ms", "op": "<=", "threshold": 15, "verdict": "PASS", "note": ""},
+    {"id": "S2.s2_ms.p999", "scenario": "S2", "bus": "daemon/voicego", "value": 1.287095, "min": 1.244742, "max": 1.711203, "runs": 3, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "S2.s2_ms.max", "scenario": "S2", "bus": "daemon/voicego", "value": 1.440337, "min": 1.291473, "max": 2.393225, "runs": 3, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "S2.lost", "scenario": "S2", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 3, "unit": "events", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"}
+  ]
+}

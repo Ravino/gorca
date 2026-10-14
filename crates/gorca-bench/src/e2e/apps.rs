@@ -284,10 +284,23 @@ impl FakeMutter {
         released: bool,
         time_ms: u64,
     ) -> Result<KeyReply> {
+        self.key_full(keycode, keysym, 0, state, released, time_ms)
+    }
+
+    /// [`Self::key_ex`] with the Unicode scalar the key produces (typing).
+    pub fn key_full(
+        &mut self,
+        keycode: u16,
+        keysym: u32,
+        unichar: u32,
+        state: u32,
+        released: bool,
+        time_ms: u64,
+    ) -> Result<KeyReply> {
         let r = self.proc.request(
             "key",
             &format!(
-                "\"keycode\":{keycode},\"keysym\":{keysym},\"unichar\":0,\"state\":{state},\"released\":{released},\"time_ms\":{time_ms}"
+                "\"keycode\":{keycode},\"keysym\":{keysym},\"unichar\":{unichar},\"state\":{state},\"released\":{released},\"time_ms\":{time_ms}"
             ),
             Duration::from_secs(5),
         )?;
@@ -400,7 +413,18 @@ impl Reader {
     /// Spawn with the harness environment. `env` entries are added to the inherited env (which
     /// is already the private session environment under `run-isolated.sh`).
     pub fn spawn(spec: &ReaderSpec, env: &[(String, String)]) -> Result<Self> {
-        let (program, args): (PathBuf, Vec<String>) = match spec {
+        Self::spawn_with(spec, env, &[], None)
+    }
+
+    /// [`Self::spawn`] with extra arguments for a daemon reader and, optionally, a file that
+    /// receives its standard error (the password gate greps it).
+    pub fn spawn_with(
+        spec: &ReaderSpec,
+        env: &[(String, String)],
+        extra_args: &[String],
+        stderr: Option<std::fs::File>,
+    ) -> Result<Self> {
+        let (program, mut args): (PathBuf, Vec<String>) = match spec {
             ReaderSpec::Stub => {
                 let me = std::env::current_exe()?;
                 let dir = me.parent().context("no exe dir")?;
@@ -408,11 +432,12 @@ impl Reader {
             }
             ReaderSpec::Daemon { path, args } => (path.clone(), args.clone()),
         };
+        args.extend(extra_args.iter().cloned());
         let mut cmd = Command::new(&program);
         cmd.args(&args)
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
-            .stderr(Stdio::inherit());
+            .stderr(stderr.map_or_else(Stdio::inherit, Stdio::from));
         for (k, v) in env {
             cmd.env(k, v);
         }
