@@ -1,6 +1,6 @@
 # ADR-0008: Where web support lives — core engine, connector quirk tables, extensions for policy
 
-Status: **Proposed** (2026-10-15). Owner: architect. Milestones: M5 (extension host, B-4), M8 (Firefox
+Status: **Accepted** (2026-10-15). Owner: architect. Milestones: M5 (extension host, B-4), M8 (Firefox
 NVDA parity), M9 (Chromium). Amends ADR-0001 §10 and `docs/plan/phase-2.md` §M5, §4 (B-4) on acceptance.
 
 Inputs: `CLAUDE.md`; ADR-0001 §5.6, §10, §11; ADR-0003 §6, §14, §15, §21; `docs/design/browse-mode.md`;
