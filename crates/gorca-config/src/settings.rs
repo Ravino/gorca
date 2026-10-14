@@ -152,6 +152,81 @@ impl Confirmations {
     }
 }
 
+/// How much punctuation is spoken (ADR-0007 VB-1).
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub enum Punct {
+    None,
+    #[default]
+    Some,
+    Most,
+    All,
+}
+
+impl Punct {
+    pub const NAMES: &'static str = "\"none\", \"some\", \"most\" or \"all\"";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "none" => Some(Punct::None),
+            "some" => Some(Punct::Some),
+            "most" => Some(Punct::Most),
+            "all" => Some(Punct::All),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Punct::None => "none",
+            Punct::Some => "some",
+            Punct::Most => "most",
+            Punct::All => "all",
+        }
+    }
+
+    #[must_use]
+    pub fn next(self) -> Self {
+        match self {
+            Punct::None => Punct::Some,
+            Punct::Some => Punct::Most,
+            Punct::Most => Punct::All,
+            Punct::All => Punct::None,
+        }
+    }
+}
+
+/// How a capital letter is announced (ADR-0007 VB-1).
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub enum Caps {
+    /// A higher pitch (a server that cannot do that says "cap").
+    #[default]
+    Pitch,
+    /// The word "cap" before the letter.
+    Say,
+    Off,
+}
+
+impl Caps {
+    pub const NAMES: &'static str = "\"pitch\", \"say\" or \"off\"";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "pitch" => Some(Caps::Pitch),
+            "say" => Some(Caps::Say),
+            "off" => Some(Caps::Off),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Caps::Pitch => "pitch",
+            Caps::Say => "say",
+            Caps::Off => "off",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 // Two independent boolean switches that are separate settings in the file; a state enum
 // would not be clearer.
@@ -197,6 +272,8 @@ pub struct SpeechSettings {
     pub volume: u8,
     pub rate_step: u8,
     pub voice: String,
+    pub punctuation: Punct,
+    pub caps: Caps,
 }
 
 impl Default for SpeechSettings {
@@ -207,15 +284,21 @@ impl Default for SpeechSettings {
             volume: 100,
             rate_step: 5,
             voice: String::new(),
+            punctuation: Punct::Some,
+            caps: Caps::Pitch,
         }
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+// Four independent switches that are separate settings in the file.
+#[allow(clippy::struct_excessive_bools)]
 pub struct EchoSettings {
     pub typed_characters: bool,
     pub typed_words: bool,
     pub command_keys: bool,
+    /// Text inserted without a key press (paste, input method, script) is spoken (ADR-0007 TE-3).
+    pub inserted_text: bool,
 }
 
 impl Default for EchoSettings {
@@ -224,6 +307,30 @@ impl Default for EchoSettings {
             typed_characters: true,
             typed_words: false,
             command_keys: false,
+            inserted_text: true,
+        }
+    }
+}
+
+/// Caret and text presentation (ADR-0007 section 12).
+#[derive(Clone, Debug, Eq, PartialEq)]
+// One switch and two durations; a state enum would not be clearer.
+#[allow(clippy::struct_excessive_bools)]
+pub struct TextSettings {
+    /// Say-all leaves the caret where it stopped (a `SetCaret` when it ends).
+    pub say_all_moves_caret: bool,
+    /// A movement key with no caret event after this long did not move the caret (CR-3).
+    pub caret_edge_ms: u32,
+    /// A caret event up to this long after its key still belongs to it (CR-3b).
+    pub caret_late_ms: u32,
+}
+
+impl Default for TextSettings {
+    fn default() -> Self {
+        Self {
+            say_all_moves_caret: true,
+            caret_edge_ms: 100,
+            caret_late_ms: 400,
         }
     }
 }
@@ -241,6 +348,7 @@ pub struct Settings {
     pub keyboard: KeyboardSettings,
     pub speech: SpeechSettings,
     pub echo: EchoSettings,
+    pub text: TextSettings,
     pub verbosity: VerbositySettings,
 }
 
@@ -254,6 +362,7 @@ pub struct Overlay {
     pub typed_words: Option<bool>,
     pub command_keys: Option<bool>,
     pub verbosity: Option<Verbosity>,
+    pub punctuation: Option<Punct>,
 }
 
 impl Overlay {
@@ -285,6 +394,9 @@ impl Overlay {
         }
         if let Some(v) = self.verbosity {
             s.verbosity.level = v;
+        }
+        if let Some(v) = self.punctuation {
+            s.speech.punctuation = v;
         }
         s
     }
@@ -319,6 +431,11 @@ impl Overlay {
             &mut self.verbosity,
             &old.verbosity.level,
             &new.verbosity.level,
+        );
+        keep(
+            &mut self.punctuation,
+            &old.speech.punctuation,
+            &new.speech.punctuation,
         );
     }
 }
@@ -457,9 +574,38 @@ pub static SETTINGS: &[SettingDef] = &[
         "5",
     ),
     row("speech", "voice", SettingType::Str, "\"\""),
+    row(
+        "speech",
+        "punctuation",
+        SettingType::Enum("\"none\", \"some\", \"most\" or \"all\""),
+        "\"some\"",
+    ),
+    row(
+        "speech",
+        "caps",
+        SettingType::Enum("\"pitch\", \"say\" or \"off\""),
+        "\"pitch\"",
+    ),
     row("echo", "typed_characters", SettingType::Bool, "true"),
     row("echo", "typed_words", SettingType::Bool, "false"),
     row("echo", "command_keys", SettingType::Bool, "false"),
+    row("echo", "inserted_text", SettingType::Bool, "true"),
+    row("text", "say_all_moves_caret", SettingType::Bool, "true"),
+    row(
+        "text",
+        "caret_edge_ms",
+        SettingType::Int { min: 20, max: 1000 },
+        "100",
+    ),
+    row(
+        "text",
+        "caret_late_ms",
+        SettingType::Int {
+            min: 100,
+            max: 2000,
+        },
+        "400",
+    ),
     row(
         "verbosity",
         "level",
@@ -543,7 +689,10 @@ mod tests {
     #[test]
     fn defaults_table_lists_every_section_once() {
         let s: Vec<_> = sections().collect();
-        assert_eq!(s, ["keyboard", "keymap", "speech", "echo", "verbosity"]);
+        assert_eq!(
+            s,
+            ["keyboard", "keymap", "speech", "echo", "text", "verbosity"]
+        );
         let text = defaults_toml();
         assert!(text.starts_with("schema = 1\n"));
         assert!(text.contains("[speech]\nrate = 50\n"));

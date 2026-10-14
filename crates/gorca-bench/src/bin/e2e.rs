@@ -35,6 +35,14 @@ const K3_P99_MS: f64 = 15.0;
 const K2S_P99_MS: f64 = 6.0;
 /// M4a gate R1 (ADR-0006 18): a review step on a valid model, p99 3 ms (target 1 ms).
 const R1_P99_MS: f64 = 3.0;
+/// M3 gates (ADR-0007 16), ceilings: caret echo with one fetch, with a window hit, typing echo,
+/// selection delta, say-all start, silence after a key press, cursor placement after it.
+const C1_P99_MS: f64 = 15.0;
+const C1H_P99_MS: f64 = 3.0;
+const E1_P99_MS: f64 = 3.0;
+const S2_P99_MS: f64 = 15.0;
+const SA1_P99_MS: f64 = 15.0;
+const SA3_STOP_P99_MS: f64 = 2.0;
 /// R1 under the L3-50k storm: R1's ceiling plus the 1 ms allowed by ADR-0006 18.
 const R1S_P99_MS: f64 = 4.0;
 /// M7a gates (browse-mode design 15): ceilings in ms; W2b is wall time.
@@ -141,6 +149,14 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                         Some(FM1_P99_MS)
                     }
                     ("W2b", "w2b_gorca_ms", "p99") => Some(W2B_MS),
+                    ("C1", "c1_ms", "p99") => Some(C1_P99_MS),
+                    ("C1h", "c1h_ms", "p99") => Some(C1H_P99_MS),
+                    ("E1", "e1_ms", "p99") => Some(E1_P99_MS),
+                    ("C1hs", "c1hs_ms", "p99") => Some(C1H_P99_MS + 1.0),
+                    ("E1s", "e1s_ms", "p99") => Some(E1_P99_MS + 1.0),
+                    ("S2", "s2_ms", "p99") => Some(S2_P99_MS),
+                    ("SA1", "sa1_ms", "p99") => Some(SA1_P99_MS),
+                    ("SA3", "sa3_stop_ms", "p99") => Some(SA3_STOP_P99_MS),
                     _ => None,
                 };
                 if let Some(t) = thr {
@@ -185,6 +201,17 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "lost_br1c_ms"
                     | "lost_br1w_ms"
                     | "lost_after_switch"
+                    | "e2_missing"
+                    | "e2_double"
+                    | "e2_keyname"
+                    | "e2_wrong"
+                    | "pw_plaintext_in_logs"
+                    | "pw_echo_missing"
+                    | "sa3_caret_wrong"
+                    | "sa3a_wrong"
+                    | "sa3a_caret_moved_back"
+                    | "sa3_not_silenced"
+                    | "c1h_ipc_calls"
             ) {
                 // Worst repeat, not the median: one lost focus in three runs is a failure.
                 row = row.at_most_in_every_run(0.0);
@@ -195,6 +222,16 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                 row = row
                     .at_most_in_every_run(5.0)
                     .note("Ambiguous chords repeated per 10k switches");
+            }
+            if metric == "sa2_ahead_ratio" {
+                row = row
+                    .at_least(0.99)
+                    .note("next chunk at the server before the previous one ended (ADR-0007 SA2)");
+            }
+            if metric == "pw_log_lines" {
+                row = row
+                    .at_least(1.0)
+                    .note("the presentation log was written, so an empty grep means something");
             }
             if metric == "superseded_max_run" {
                 row = row

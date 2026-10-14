@@ -64,6 +64,10 @@ pub struct RigOpts {
     pub keys: bool,
     /// Healthy apps (role -> node count).
     pub apps: Vec<(String, usize)>,
+    /// Extra arguments for a daemon reader (for example `--bench-present-log=PATH`).
+    pub extra_reader_args: Vec<String>,
+    /// Capture the reader's standard error in this file instead of inheriting it.
+    pub reader_stderr: Option<PathBuf>,
     /// Hung apps by role: `tree` with `--hang never` (all D-Bus calls unanswered).
     pub hung_apps: Vec<(String, usize)>,
 }
@@ -122,7 +126,11 @@ impl Rig {
             ),
         ];
         envs.extend(env.reader_env.iter().cloned());
-        let mut reader = Reader::spawn(&o.reader, &envs)?;
+        let stderr = match &o.reader_stderr {
+            Some(p) => Some(std::fs::File::create(p)?),
+            None => None,
+        };
+        let mut reader = Reader::spawn_with(&o.reader, &envs, &o.extra_reader_args, stderr)?;
         // The reader is up when it has connected to the speech server.
         let end = std::time::Instant::now() + Duration::from_secs(20);
         while mock.connections() == 0 {

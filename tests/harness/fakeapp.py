@@ -79,7 +79,7 @@ def path_of(nid):
 
 class Node:
     __slots__ = ("id", "parent", "children", "role", "name", "desc", "states", "text", "caret",
-                 "actions", "editable", "extents", "no_text_extents", "hang")
+                 "actions", "editable", "extents", "no_text_extents", "hang", "sel")
 
     def __init__(self, nid, parent, role, name, text=None, editable=False, actions=(), states=(),
                  extents=None, no_text_extents=False):
@@ -97,6 +97,7 @@ class Node:
         self.extents = tuple(extents) if extents else None   # (x, y, w, h), see App.coord
         self.no_text_extents = no_text_extents                # GTK4 editables: F-3
         self.hang = False                                     # never answer any call (OB-4)
+        self.sel = []                                         # selected ranges [(start, end)], M3
 
 
 class ApiError(Exception):
@@ -154,6 +155,9 @@ class App:
         self.coord = "default"       # Component.GetExtents flavour: default | window | global
         self.review = False          # a review tree was built: Collection/Selection exist
         self.member_calls = {}       # "Interface.Member" -> calls served since the last reset
+        self.first_emit_ns = 0       # CLOCK_MONOTONIC ns of the first signal of a text command (M3)
+        self.t_caret_set_ns = 0      # when Text.SetCaretOffset last moved a caret (say-all stop)
+        self.caret_sets = 0
 
     # ---- tree construction -------------------------------------------------------------------
     def add(self, parent, role, name, **kw):
@@ -239,6 +243,8 @@ class App:
 
     # ---- event emission ----------------------------------------------------------------------
     def emit(self, path, iface, member, detail, d1, d2, data, props=None):
+        if self.first_emit_ns == 0:
+            self.first_emit_ns = time.monotonic_ns()
         self.seq += 1
         p = dbus.Dictionary({"seq": dbus.UInt64(self.seq, variant_level=1)}, signature="sv")
         if props:
@@ -557,6 +563,8 @@ def _(app, n, off):
     if not 0 <= off <= len(n.text):
         return (False,)
     n.caret = off
+    app.t_caret_set_ns = time.monotonic_ns()
+    app.caret_sets += 1
     app.ev_caret(n)
     return (True,)
 
@@ -579,12 +587,14 @@ for _m in ("GetTextAtOffset", "GetStringAtOffset", "GetTextBeforeOffset", "GetTe
 
 @impl(IF_TEXT, "GetNSelections", "", "i")
 def _(app, n):
-    return (0,)
+    return (len(n.sel),)
 
 
 @impl(IF_TEXT, "GetSelection", "i", "ii")
 def _(app, n, i):
-    return (0, 0)
+    if not 0 <= i < len(n.sel):
+        raise ApiError("org.freedesktop.DBus.Error.InvalidArgs", "no such selection")
+    return n.sel[i]
 
 
 @impl(IF_TEXT, "GetAttributes", "i", "a{ss}ii")
@@ -1087,6 +1097,26 @@ def build_tree(app):
     app.nodes[1].states.add(S_ACTIVE)
 
 
+LONG_LINE = "".join(chr(ord("a") + i % 26) for i in range(1500))
+
+
+def build_text(app):
+    """The M3 text form (ADR-0007 test support). Node ids: 1 frame, 2 `name` (single-line entry),
+    3 `notes` (multi-line text view), 4 `secret` (password entry), 5 `long` (single-line entry
+    of 1500 letters). Every entry is focusable and editable; the control channel drives the
+    caret, typing, selections and text edits the way a toolkit would (`caret`, `type`,
+    `backspace`, `insert_text`, `select_all`, `load_text`, `get_caret`)."""
+    app.add(None, R_APP, app.args.name)
+    frame = app.add(0, R_FRAME, "Text Form", states=(S_ACTIVE,))
+    single = (S_FOCUSABLE, S_EDITABLE, S_SINGLE_LINE)
+    multi = (S_FOCUSABLE, S_EDITABLE, S_MULTI_LINE)
+    app.add(frame.id, R_ENTRY, "name", text="hello world", editable=True, states=single)
+    app.add(frame.id, R_ENTRY, "notes", text="".join("Line %04d text\n" % i for i in range(1500)),
+            editable=True, states=multi)
+    app.add(frame.id, 40, "secret", text="", editable=True, states=single)
+    app.add(frame.id, R_ENTRY, "long", text=LONG_LINE, editable=True, states=single)
+
+
 def build_review(app):
     """Root only; the test sends a `build` command with a whole tree (ADR-0006 test trees)."""
     app.add(None, R_APP, app.args.name)
@@ -1177,20 +1207,68 @@ def handle(app, cmd):
         return {"t_emit_ns": app.t_focus_ns}
     elif c == "type":
         n = app.node(cmd["node"])
+        app.first_emit_ns = 0
         for ch in cmd["text"]:
             app.text_insert(n, n.caret, ch)
+        app.conn.flush()
+        return {"t_emit_ns": app.first_emit_ns}
     elif c == "backspace":
         n = app.node(cmd["node"])
+        app.first_emit_ns = 0
         app.text_delete(n, n.caret - 1, n.caret)
+        app.conn.flush()
+        return {"t_emit_ns": app.first_emit_ns}
+    elif c == "delete_fwd":
+        n = app.node(cmd["node"])
+        app.first_emit_ns = 0
+        pos = n.caret
+        if app.text_delete(n, pos, pos + 1):
+            n.caret = pos
+        app.conn.flush()
+        return {"t_emit_ns": app.first_emit_ns}
+    elif c == "insert_text":
+        # A paste or an input-method commit: one insert of the whole text at the caret.
+        n = app.node(cmd["node"])
+        app.first_emit_ns = 0
+        app.text_insert(n, n.caret if cmd.get("at") is None else int(cmd["at"]), cmd["text"])
+        app.conn.flush()
+        return {"t_emit_ns": app.first_emit_ns}
+    elif c == "select_all":
+        n = app.node(cmd["node"])
+        app.first_emit_ns = 0
+        n.sel = [(0, len(n.text))]
+        n.caret = len(n.text)
+        app.ev_caret(n)
+        app.emit(path_of(n.id), EV_OBJ, "TextSelectionChanged", "", 0, 0, dbus.Int32(0))
+        app.conn.flush()
+        return {"t_emit_ns": app.first_emit_ns}
+    elif c == "load_text":
+        n = app.node(cmd["node"])
+        n.text = cmd["text"]
+        n.caret = int(cmd.get("caret", 0))
+        n.sel = []
+    elif c == "get_caret":
+        n = app.node(cmd["node"])
+        return {"caret": n.caret, "t_set_ns": app.t_caret_set_ns, "sets": app.caret_sets,
+                "len": len(n.text or "")}
     elif c == "set_text":
         n = app.node(cmd["node"])
         if n.text:
             app.text_delete(n, 0, -1)
         app.text_insert(n, 0, cmd["text"])
     elif c == "caret":
+        # `sel`: [[start, end], ...] also changes the selection, signalled after the caret like
+        # GTK4 does (ADR-0007 T-F2).
         n = app.node(cmd["node"])
+        app.first_emit_ns = 0
         n.caret = int(cmd["offset"])
+        if "sel" in cmd:
+            n.sel = [(int(a), int(b)) for a, b in cmd["sel"]]
         app.ev_caret(n)
+        if "sel" in cmd:
+            app.emit(path_of(n.id), EV_OBJ, "TextSelectionChanged", "", 0, 0, dbus.Int32(0))
+        app.conn.flush()
+        return {"t_emit_ns": app.first_emit_ns}
     elif c == "action":
         app.do_action(app.node(cmd["node"]), int(cmd.get("index", 0)))
     elif c == "emit":
@@ -1301,7 +1379,8 @@ def a11y_address():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scenario", default="form",
-                    choices=["form", "tree", "storm", "hung", "terminal", "malformed", "switcher", "review"])
+                    choices=["form", "tree", "storm", "hung", "terminal", "malformed", "switcher", "review",
+                             "text"])
     ap.add_argument("--name", default="fakeapp")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--nodes", type=int, default=1000, help="tree: node count (up to 100k+)")
@@ -1347,6 +1426,8 @@ def main():
         build_switcher(app)
     elif sc == "review":
         build_review(app)
+    elif sc == "text":
+        build_text(app)
     else:
         build_tree(app)
     if args.malformed:

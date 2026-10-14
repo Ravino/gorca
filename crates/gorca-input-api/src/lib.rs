@@ -21,6 +21,7 @@ mod keymap;
 mod keys;
 mod lane;
 mod mutter_model;
+mod text_key;
 mod traits;
 
 pub use event::{CmdId, KeyClass, KeyEvent, KeyIntent, Modifiers, PressKind};
@@ -35,6 +36,7 @@ pub use keys::{
 };
 pub use lane::{HELP_IDLE, HELP_STALL, InputLane, LaneAlert, LaneOut, LaneStats, SHIFT_TAP_MAX};
 pub use mutter_model::{Ev, Replica, Timing, Verdict};
+pub use text_key::{ClipOp, KeyUnit, TextDir, TextKey, classify as classify_text_key};
 pub use traits::{
     InjectError, InjectKey, KeyError, KeyInjector, KeyItem, KeySink, KeySource, KeySourceCtx,
     KeySourceKind, key_channel,

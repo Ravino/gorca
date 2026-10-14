@@ -60,6 +60,19 @@ pub enum Scn {
     W3,
     Fm1,
     Fm2,
+    C1,
+    C1h,
+    C2,
+    E1,
+    E2,
+    S2,
+    SA1,
+    SA2,
+    SA3,
+    SA3a,
+    PW,
+    C1hs,
+    E1s,
 }
 
 impl Scn {
@@ -90,6 +103,19 @@ impl Scn {
             Self::W3 => "W3".into(),
             Self::Fm1 => "FM1".into(),
             Self::Fm2 => "FM2".into(),
+            Self::C1 => "C1".into(),
+            Self::C1h => "C1h".into(),
+            Self::C2 => "C2".into(),
+            Self::E1 => "E1".into(),
+            Self::E2 => "E2".into(),
+            Self::S2 => "S2".into(),
+            Self::SA1 => "SA1".into(),
+            Self::SA2 => "SA2".into(),
+            Self::SA3 => "SA3".into(),
+            Self::SA3a => "SA3a".into(),
+            Self::PW => "PW".into(),
+            Self::C1hs => "C1hs".into(),
+            Self::E1s => "E1s".into(),
         }
     }
 
@@ -121,6 +147,19 @@ impl Scn {
             "W3" => Self::W3,
             "FM1" => Self::Fm1,
             "FM2" => Self::Fm2,
+            "C1" => Self::C1,
+            "C1h" => Self::C1h,
+            "C2" => Self::C2,
+            "E1" => Self::E1,
+            "E2" => Self::E2,
+            "S2" => Self::S2,
+            "SA1" => Self::SA1,
+            "SA2" => Self::SA2,
+            "SA3" => Self::SA3,
+            "SA3a" => Self::SA3a,
+            "PW" => Self::PW,
+            "C1hs" => Self::C1hs,
+            "E1s" => Self::E1s,
             _ => return None,
         })
     }
@@ -129,7 +168,8 @@ impl Scn {
         [
             "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K2s", "K3",
             "K4", "K4r", "R1", "R1s", "RS", "B0", "W1", "BR1", "BR2", "W2", "W2b", "W3", "FM1",
-            "FM2",
+            "FM2", "K4", "K4r", "R1", "R1s", "RS", "C1", "C1h", "C2", "E1", "E2", "S2", "SA1",
+            "SA2", "SA3", "SA3a", "PW", "C1hs", "E1s",
         ]
         .iter()
         .filter_map(|s| Self::parse(s))
@@ -227,6 +267,8 @@ pub(super) fn base_opts(reader: &ReaderSpec, flavor: Flavor) -> RigOpts {
         calls: false,
         keys: false,
         apps: vec![("app".to_owned(), 3000)],
+        extra_reader_args: Vec::new(),
+        reader_stderr: None,
         hung_apps: Vec::new(),
     }
 }
@@ -424,6 +466,19 @@ pub fn run(
         Scn::W3 => super::web::w3(host, reader, flavor, size, &mut out)?,
         Scn::Fm1 => super::web::fm(host, reader, flavor, size, &mut out, false)?,
         Scn::Fm2 => super::web::fm(host, reader, flavor, size, &mut out, true)?,
+        Scn::C1 => super::m3::c1(host, reader, flavor, size, seed, &mut out)?,
+        Scn::C1h => super::m3::c1h(host, reader, flavor, size, seed, &mut out)?,
+        Scn::C2 => super::m3::c2(host, reader, flavor, size, seed, &mut out)?,
+        Scn::E1 => super::m3::e1(host, reader, flavor, size, seed, &mut out)?,
+        Scn::E2 => super::m3::e2(host, reader, flavor, size, seed, &mut out)?,
+        Scn::S2 => super::m3::s2(host, reader, flavor, size, seed, &mut out)?,
+        Scn::SA1 => super::m3::sa1(host, reader, flavor, size, seed, &mut out)?,
+        Scn::SA2 => super::m3::sa2(host, reader, flavor, size, seed, &mut out)?,
+        Scn::SA3 => super::m3::sa3(host, reader, flavor, size, seed, &mut out)?,
+        Scn::SA3a => super::m3::sa3a(host, reader, flavor, size, seed, &mut out)?,
+        Scn::PW => super::m3::pw(host, reader, flavor, size, seed, &mut out)?,
+        Scn::C1hs => super::m3::c1hs(host, reader, flavor, size, seed, &mut out)?,
+        Scn::E1s => super::m3::e1s(host, reader, flavor, size, seed, &mut out)?,
     }
     Ok(out)
 }

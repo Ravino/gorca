@@ -235,9 +235,6 @@ pub enum CoreCmd {
 macro_rules! planned_cmds {
     () => {
         CoreCmd::SpeechCopyLast
-            | CoreCmd::SpeechPunctuationCycle
-            | CoreCmd::InfoCurrentLine
-            | CoreCmd::InfoSelection
             | CoreCmd::InfoFormatting
             | CoreCmd::InfoReadWindow
             | CoreCmd::InfoBattery
@@ -247,13 +244,6 @@ macro_rules! planned_cmds {
             | CoreCmd::InfoDetails
             | CoreCmd::InputSleepToggle
             | CoreCmd::GorcaQuit
-            | CoreCmd::TextSayAll
-            | CoreCmd::TextSayChar
-            | CoreCmd::TextSayWord
-            | CoreCmd::TextSayLine
-            | CoreCmd::TextSpellChar
-            | CoreCmd::TextSpellWord
-            | CoreCmd::TextSpellLine
             | CoreCmd::ReviewPrevPage
             | CoreCmd::ReviewNextPage
             | CoreCmd::ReviewSayAll
@@ -737,7 +727,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::SpeechPunctuationCycle,
         name: "speech.punctuation_cycle",
-        available: Availability::Planned(Milestone::M3),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -777,7 +767,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::InfoCurrentLine,
         name: "info.current_line",
-        available: Availability::Planned(Milestone::M3),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 3,
         interrupts: true,
@@ -787,7 +777,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::InfoSelection,
         name: "info.selection",
-        available: Availability::Planned(Milestone::M3),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1007,7 +997,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TextSayAll,
         name: "text.say_all",
-        available: Availability::Planned(Milestone::M3),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1017,7 +1007,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TextSayChar,
         name: "text.say_char",
-        available: Availability::Planned(Milestone::M3),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1027,7 +1017,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TextSayWord,
         name: "text.say_word",
-        available: Availability::Planned(Milestone::M3),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1037,7 +1027,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TextSayLine,
         name: "text.say_line",
-        available: Availability::Planned(Milestone::M3),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1047,7 +1037,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TextSpellChar,
         name: "text.spell_char",
-        available: Availability::Planned(Milestone::M3),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1057,7 +1047,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TextSpellWord,
         name: "text.spell_word",
-        available: Availability::Planned(Milestone::M3),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1067,7 +1057,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TextSpellLine,
         name: "text.spell_line",
-        available: Availability::Planned(Milestone::M3),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,

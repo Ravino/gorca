@@ -1158,3 +1158,55 @@ fn browse_keys_on_a_vanished_document_hand_the_keyboard_back() {
         WebMode::Inactive | WebMode::Loading { .. }
     ));
 }
+
+// ---- integration with the M3 text layer ---------------------------------------------------
+
+/// Say-all and say-selection belong to the native text layer; in browse mode the document owns
+/// reading, so they refuse with a short cue and start nothing.
+#[test]
+fn say_all_and_say_selection_refuse_cleanly_in_browse_mode() {
+    let mut r = rig();
+    r.focus(1006);
+    assert!(matches!(r.reader.mode(), Mode::Browse { .. }));
+    for cmd in [CoreCmd::TextSayAll, CoreCmd::InfoSelection] {
+        let fx = r.key(cmd);
+        assert_eq!(spoken(&fx), ["not available in this mode"], "{cmd:?}");
+        assert!(
+            !fx.iter().any(|e| matches!(
+                e,
+                ReaderEffect::SayAllChunk { .. } | ReaderEffect::TextFetch { .. }
+            )),
+            "{cmd:?} started text work"
+        );
+    }
+}
+
+/// A Firefox field (text offsets in UTF-16, so the native caret layer stays out) in focus mode:
+/// a typed letter is echoed once, by the generic key echo.
+#[test]
+fn typing_in_a_web_field_in_focus_mode_is_echoed_once() {
+    let mut r = rig();
+    r.focus(1014);
+    assert!(matches!(r.mode(), WebMode::Focus { .. }));
+    r.now += Duration::from_millis(50);
+    let ev = KeyEvent {
+        keycode: 38,
+        keysym: 0x61,
+        unichar: 'a' as u32,
+        modifiers: Modifiers::empty(),
+        pressed: true,
+    };
+    let fx = r.reader.handle(
+        ReaderMsg::Key(KeyIntent {
+            event: ev,
+            class: KeyClass::PassToApp,
+            kind: PressKind::Press,
+            repeat: 1,
+            chord: None,
+            at: r.now,
+            epoch: Epoch(r.epoch.current().0 + 1),
+        }),
+        r.now,
+    );
+    assert_eq!(spoken(&fx), ["a"]);
+}

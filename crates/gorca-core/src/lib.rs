@@ -42,7 +42,9 @@ mod review;
 mod runtime;
 mod text;
 
-pub use app_actor::{AppActor, AppRoute, FILL_QUEUE, FillMsg, ReaderLinks, WebLink, health_view};
+pub use app_actor::{
+    AppActor, AppRoute, FILL_QUEUE, FillMsg, ReaderLinks, TextLink, WebLink, health_view,
+};
 pub use browse::commands::WebEffect;
 pub use browse::{
     BrowseCounters, BrowseSettings, FocusCause, ModeWord, Scope, WebEv, WebFx, WebMode,
@@ -86,4 +88,4 @@ pub use review::{
 pub use runtime::{
     Core, CoreConfig, CoreError, CoreStats, CoreStatsSnapshot, NullSpeech, SpeechOut,
 };
-pub use text::TextMsg;
+pub use text::{TextCounters, TextMsg, TextOp, TextReqId};

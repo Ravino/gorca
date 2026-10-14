@@ -35,6 +35,7 @@ use smallvec::SmallVec;
 use crate::builtin_ext::AppProfile;
 use crate::health::{AppHealth, HealthEffect, HealthMsg, HealthStepCtx};
 use crate::reader::{BackgroundMsg, FocusLaneMsg};
+use crate::text::TextMsg;
 
 mod doc_route;
 #[cfg(test)]
@@ -88,6 +89,14 @@ pub enum FillMsg {
         result: Result<SnapshotBatch, BackendError>,
         ack: Option<gorca_rt::oneshot::Sender<()>>,
     },
+}
+
+/// Where an app actor sends the caret, text and selection events of the focused app (ADR-0007
+/// EV-3). `dropped` counts events the full queue refused: the Reader then distrusts its window.
+#[derive(Clone, Debug)]
+pub struct TextLink {
+    pub tx: mpsc::Sender<TextMsg>,
+    pub dropped: Arc<std::sync::atomic::AtomicU64>,
 }
 
 /// The Reader-facing half the actor holds.
@@ -145,7 +154,10 @@ fn fill_reply(r: Result<BackendReply, BackendError>) -> FillReply {
             | BackendReply::ActionDone
             | BackendReply::Hit(_)
             | BackendReply::Matches(_)
-            | BackendReply::Lines(_),
+            | BackendReply::Lines(_)
+            | BackendReply::Unit(_)
+            | BackendReply::Selections(_)
+            | BackendReply::Window(_),
         ) => FillReply::Err(FillError::Protocol),
         Err(e) => FillReply::Err(fill_error(&e)),
     }
@@ -181,6 +193,10 @@ pub struct AppActor {
     focused: Option<Arc<gorca_rt::FocusedApp>>,
     /// Routes a web application's events to its documents (browse mode).
     web: Option<doc_route::DocRouter>,
+    /// Text events go to the Reader through this, when the runtime wired it (ADR-0007 EV-3).
+    text: Option<TextLink>,
+    /// Where the app's text capability is published for the Reader.
+    directory: Option<Arc<crate::directory::MirrorDirectory>>,
 }
 
 impl AppActor {
@@ -219,6 +235,41 @@ impl AppActor {
             shell: false,
             focused: None,
             web: None,
+            text: None,
+            directory: None,
+        }
+    }
+
+    /// Publish what the app can do with text (its offset unit) to the Reader's directory when it
+    /// announces itself.
+    #[must_use]
+    pub fn with_directory(mut self, dir: Arc<crate::directory::MirrorDirectory>) -> Self {
+        self.directory = Some(dir);
+        self
+    }
+
+    /// Forward the caret, text and selection events of this app to the Reader while it holds
+    /// the focus.
+    #[must_use]
+    pub fn with_text(mut self, link: TextLink) -> Self {
+        self.text = Some(link);
+        self
+    }
+
+    /// Does the Reader want text events from this app? Only the application that holds the
+    /// user's focus (or, when nobody published one, one that has a focus of its own).
+    fn wants_text_events(&self) -> bool {
+        match &self.focused {
+            Some(f) => f.protects(self.app),
+            None => self.focus.is_some(),
+        }
+    }
+
+    /// Queue a text event for the Reader; a full queue drops it and says so.
+    fn send_text(&mut self, msg: TextMsg) {
+        let Some(l) = &self.text else { return };
+        if l.tx.try_send(msg).is_err() {
+            l.dropped.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
@@ -634,6 +685,9 @@ impl AppActor {
                         r.lifecycle(&AppLifecycle::Appeared(info.clone()));
                     }
                     self.profile = AppProfile::for_app(&info);
+                    if let Some(d) = &self.directory {
+                        d.set_text_scalar(self.app, !self.profile.non_scalar_text);
+                    }
                     self.driver.set_class(AppClass::from_info(&info));
                     self.driver.set_dump_complete(info.dump_complete);
                     self.shell = info.verified_shell;
@@ -806,12 +860,31 @@ impl AppActor {
                     }
                 }
             }
+            // Caret, text and selection events matter to the Reader only for the focused app.
+            NodeEvent::CaretMoved { node, offset, .. } => {
+                if self.text.is_some() && self.wants_text_events() {
+                    self.send_text(TextMsg::Caret {
+                        node: *node,
+                        offset: *offset,
+                    });
+                }
+            }
+            NodeEvent::TextChanged { node, delta } => {
+                if self.text.is_some() && self.wants_text_events() {
+                    self.send_text(TextMsg::Edit {
+                        node: *node,
+                        delta: delta.clone(),
+                    });
+                }
+            }
+            NodeEvent::SelectionChanged { node } => {
+                if self.text.is_some() && self.wants_text_events() {
+                    self.send_text(TextMsg::Selection { node: *node });
+                }
+            }
             // Events that only dirty the mirror, which `invalidate_for` already did.
             NodeEvent::ActiveDescendantChanged { .. }
             | NodeEvent::ChildrenChanged { .. }
-            | NodeEvent::TextChanged { .. }
-            | NodeEvent::CaretMoved { .. }
-            | NodeEvent::SelectionChanged { .. }
             | NodeEvent::WindowEvent { .. }
             | NodeEvent::DocumentEvent { .. } => {}
         }

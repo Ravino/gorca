@@ -48,6 +48,26 @@ cannot touch the real session. It never signals anything it did not spawn.
 | R1s | R1 while an L3-50k storm runs | `r1s_ms` (gate p99 4 ms: R1's plus the 1 ms of ADR-0006 18), `lost`, `not_consumed`, storm rate |
 | RS | M4a correctness through the real connector: lines in visual order, label elided, wrapped label as two lines, object navigation, status bar | `rs_failures` (gate 0); the transcript is in the note |
 
+| C1 | M3: Down in a multi-line text view of the fake app (`fakeapp.py --scenario text`), one toolkit-line fetch per key | `c1_ms` app caret-event emit to SPEAK (gate p99 15 ms), `c1_fetches_per_key`, `lost` |
+| C1h | M3: Right in a 1500-letter entry, the text window answers | `c1h_ms` (gate p99 3 ms), `c1h_ipc_calls` (gate 0), `lost` |
+| C1hs, E1s | C1h and E1 while an L3-50k storm runs on another application | `c1hs_ms` (gate 4 ms), `e1s_ms` (gate 4 ms), `lost` |
+| C2 | M3: Ctrl+Right held at 30 Hz for 3 s, 400 ms utterances | `stale_not_cancelled` (gate 0), `lost` = the last position was not spoken (gate 0), `c2_spoken` |
+| E1 | M3: printable keys (Latin and Cyrillic), the app answers each with insert and caret events | `e1_ms` key emit to SPEAK (gate p99 3 ms), `lost`, `e2_double` |
+| E2 | M3: 10,000 randomised actions (letters, space, BackSpace, Ctrl+V paste, a keyless input-method commit); 1,000 with `--quick` | `e2_missing`, `e2_double`, `e2_keyname` (a BackSpace/Delete spoken by name), `e2_wrong` (all gate 0) |
+| S2 | M3: Shift+Right, the app signals caret then selection (GTK4 order) | `s2_ms` (gate p99 15 ms), `lost` |
+| SA1 | M3: `gorca+Down` (`text.say_all`) from the top of a text view | `sa1_ms` key emit to the first chunk's SPEAK (gate p99 15 ms), `lost` |
+| SA2 | M3: say-all over 100 KB (2,500 sentences; 500 with `--quick`) | `sa2_ahead_ratio` (gate 0.99: the next chunk reaches the server within 5 ms of the previous END), `sa2_gap_ms`, `lost` |
+| SA3 | M3: Escape during say-all | `sa3_stop_ms` key emit to the speech cancel (gate p99 2 ms), `sa3_caret_wrong` (the caret already sits at a chunk start and gorca must not touch it after the key), `sa3_not_silenced` |
+| SA3a | M3: arrow key during say-all | `sa3a_ms` key to the speech of the line after the reading position (app handles the key), `sa3a_wrong`, `sa3a_caret_moved_back` (gorca never moves the caret back) |
+| PW | M3: typing, moving and selecting in a password entry with `--bench-present-log` and `RUST_LOG=trace` | `pw_plaintext_in_logs` (gate 0: the secret and two 8-character pieces of it, in the log and in the reader's stderr), `pw_echo_missing` (gate 0), `pw_log_lines` (>= 1, so the grep means something) |
+
+The M3 scenarios (`crates/gorca-bench/src/e2e/m3.rs`) run with `--reader-env GORCA_M3=1` (`GORCA_M3_STRICT=1` fails instead of
+skipping). They press real keys through `fake_mutter.py` and let the fake app play the toolkit: after a key the harness tells
+the app to move the caret, insert or delete (`caret`, `type`, `backspace`, `insert_text`, `select_all`, `load_text`,
+`get_caret` control commands), and it emits `text-caret-moved`, `text-changed` (with the text, as GTK does) and
+`text-selection-changed`, and answers `GetText`, `GetStringAtOffset`, `GetNSelections` and `GetSelection`. Latencies are
+CLOCK_MONOTONIC differences from the signal's emit (caret scenarios) or the key's emit (typing).
+
 R1, R1s and RS (`crates/gorca-bench/src/e2e/m4.rs`) run with `--reader-env GORCA_M4=1` (`GORCA_M4_STRICT=1` fails
 instead of skipping). They press the desktop layout's unmodified numpad review keys through `fake_mutter.py`, so they also
 prove the exact keypad grabs.

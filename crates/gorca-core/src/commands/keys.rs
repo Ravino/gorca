@@ -44,7 +44,11 @@ impl Reader {
             }
             KeyClass::PassToApp => {
                 self.pass_key_seen(&intent, fx);
-                if intent.event.pressed
+                // The text layer speaks typed characters and erasures of an editable object
+                // itself (ADR-0007 TE-1, TE-5): the generic echo would double them.
+                let text_owns = self.text_key(&intent, fx);
+                if !text_owns
+                    && intent.event.pressed
                     && self.cmd.effective.echo.typed_characters
                     && let Some(text) = key_echo_text(
                         intent.event.unichar,

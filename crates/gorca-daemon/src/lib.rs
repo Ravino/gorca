@@ -143,6 +143,10 @@ impl SpeechOut for LaneOut {
         self.0.submit(utterance);
     }
 
+    fn submit_say_all(&self, utterance: Utterance, first: bool) {
+        self.0.submit_say_all(utterance, first);
+    }
+
     fn notify_epoch(&self) {
         self.0.notify_epoch();
     }
@@ -360,6 +364,7 @@ async fn run_inner(
     let epoch = core.epoch();
     let focused = core.focused_app();
 
+    let mut lane_handle: Option<SpeechHandle> = None;
     let core = if opts.shadow {
         // B-1 PW-11: beside the user's real screen reader gorca only reads. Speech goes to the
         // core's null sink, and nothing grabs keys or takes the Orca identity.
@@ -368,8 +373,10 @@ async fn run_inner(
     } else {
         let speech = wire::wire_speech(&mut tasks, &opts, &epoch);
         let speech_for_keys = speech.clone();
+        lane_handle = Some(speech.clone());
         let mut core = core.with_speech(Arc::new(LaneOut(speech)));
         let senders = core.reader_senders();
+        wire::wire_text(&mut tasks, &speech_for_keys, senders.text_io.clone());
         let links = core.lane_links();
         // Settings first: the keymap must be in place before the first key is classified.
         if let Some(requests) = core.take_config_requests() {
@@ -409,6 +416,9 @@ async fn run_inner(
         "gorca started"
     );
     let result = core.run(shutdown.clone()).await;
+    if let Some(h) = &lane_handle {
+        tracing::info!(stats = ?h.stats(), "speech lane");
+    }
     shutdown.cancel();
     let reports = tasks.shutdown(SHUTDOWN_GRACE).await;
     for r in &reports {

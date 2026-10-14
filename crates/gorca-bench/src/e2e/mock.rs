@@ -66,6 +66,8 @@ pub enum Kind {
         /// There was an active or queued message to cancel.
         had_speech: bool,
     },
+    /// An utterance ran to its end and the server sent its END event (the time is the send).
+    End,
 }
 
 #[derive(Clone, Debug)]
@@ -328,6 +330,11 @@ impl Conn<'_> {
             }
             let id = front.id;
             self.queue.pop_front();
+            self.sh.push(Rec {
+                t_ns: now_ns(),
+                conn: self.id,
+                kind: Kind::End,
+            });
             self.event(702, id, "END")?;
             self.activate_front();
         }

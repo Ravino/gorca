@@ -441,6 +441,8 @@ impl Web {
             calls: false,
             keys: true,
             apps: Vec::new(),
+            extra_reader_args: Vec::new(),
+            reader_stderr: None,
             hung_apps: Vec::new(),
         };
         let rig = Rig::start(&env, &opts)?;
@@ -655,7 +657,7 @@ fn speaks_since(w: &Web, mark: usize) -> Vec<(u64, String)> {
         .into_iter()
         .filter_map(|r| match r.kind {
             Kind::Speak { text, .. } => Some((r.t_ns, text)),
-            Kind::Connected | Kind::Cancel { .. } => None,
+            Kind::Connected | Kind::Cancel { .. } | Kind::End => None,
         })
         .collect()
 }

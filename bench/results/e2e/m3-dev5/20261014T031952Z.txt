@@ -1,0 +1,34 @@
+# e2e m3-dev5
+# utc=2026-10-14T03:19:52Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=3.72 3.71 3.49 1/2372 1910343
+# git_rev=0bfe951
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m3-dev5
+# reader=daemon:<repo>/.claude/worktrees/agent-a15d2cdf7665c02f6/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=3.72 3.71 3.49 1/2372 1910340
+# reader_env=GORCA_M3=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+
+metric                     bus                median          min          max  n op    threshold  res   note
+SA2.sa2_gap_ms.n           daemon/voicego          499          499          499  1                  info   [samples]
+SA2.sa2_gap_ms.p50         daemon/voicego        0.076        0.076        0.076  1                  info   [ms]
+SA2.sa2_gap_ms.p95         daemon/voicego        0.129        0.129        0.129  1                  info   [ms]
+SA2.sa2_gap_ms.p99         daemon/voicego        0.157        0.157        0.157  1                  info   [ms]
+SA2.sa2_gap_ms.p999        daemon/voicego        0.194        0.194        0.194  1                  info   [ms]
+SA2.sa2_gap_ms.max         daemon/voicego        0.194        0.194        0.194  1                  info   [ms]
+SA2.lost                   daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [chunks]
+SA2.sa2_ahead_ratio        daemon/voicego            1            1            1  1 >=        0.990  PASS  next chunk at the server before the previous one ended (ADR-0007 SA2) [ratio]
+SA2.sa2_chunks             daemon/voicego          500          500          500  1                  info   [chunks]

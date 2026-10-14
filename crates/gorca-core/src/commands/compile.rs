@@ -385,8 +385,20 @@ mod tests {
                 }
                 // Commands the source screen reader has no chord for (modes.md 4.3, 5): NVDA has
                 // no review toggle, Orca has no mode switch, focus move or flow moves.
+                // M3: both source readers read the character, word and line under the caret
+                // with the review keys, so the `text.say_*` and `text.spell_*` commands have no
+                // chord of their own; Orca has no punctuation cycle or current-line chord either.
+                if cmd.name().starts_with("text.say_c")
+                    || cmd.name().starts_with("text.say_w")
+                    || cmd.name().starts_with("text.say_l")
+                    || cmd.name().starts_with("text.spell_")
+                {
+                    continue;
+                }
                 let by_design: &[&str] = if text.contains("orca") {
                     &[
+                        "info.current_line",
+                        "speech.punctuation_cycle",
                         "review.simple_toggle",
                         "review.mode_next",
                         "review.mode_prev",

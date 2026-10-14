@@ -369,6 +369,7 @@ mod tests {
             connector_kind: ConnectorKind::Atspi,
             verified_shell: false,
             dump_complete: false,
+            text_unit: gorca_model::TextUnit::Scalar,
             root: None,
         }
     }

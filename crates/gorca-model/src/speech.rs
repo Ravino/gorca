@@ -31,7 +31,7 @@ pub struct Segment {
 }
 
 /// Output of the presenter, input of the verbalizer and the Braille actor.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Utterance {
     pub id: UttId,
     pub segments: SmallVec<[Segment; 4]>,
@@ -46,6 +46,24 @@ pub struct Utterance {
     /// A correction of an earlier utterance (B-1 RV-1): the cache-served presentation `id` was
     /// wrong in a presented field. A refine replaces it; a follow-up only adds the change.
     pub refines: Option<UttId>,
+}
+
+impl std::fmt::Debug for Utterance {
+    // The text may come from a password field (nothing marks it): only its length is shown.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let chars: usize = self.segments.iter().map(|s| s.text.chars().count()).sum();
+        f.debug_struct("Utterance")
+            .field("id", &self.id)
+            .field("segments", &self.segments.len())
+            .field("chars", &chars)
+            .field("epoch", &self.epoch)
+            .field("prio", &self.prio)
+            .field("may_refine", &self.may_refine)
+            .field("survives_focus_change", &self.survives_focus_change)
+            .field("refines", &self.refines)
+            .field("has_lang", &self.lang.is_some())
+            .finish()
+    }
 }
 
 impl Utterance {

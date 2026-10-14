@@ -1,0 +1,9 @@
+{
+  "meta": {"utc": "2026-10-14T04:11:06Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "7.50 7.78 7.39 1/2542 2063987", "git_rev": "0bfe951", "git_dirty": "true", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "label": "m3-e2b", "reader": "daemon:<repo>/.claude/worktrees/agent-a15d2cdf7665c02f6/target/release/gorca", "backend": "voicego", "repeats": "1", "samples_per_series": "1200", "l2_trials": "400", "quick": "false", "loadavg_end": "7.50 7.78 7.39 2/2542 2063984", "reader_env": "GORCA_M3=1", "gates": "L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats", "note0": "E2 action #5986: wanted \"ы\", heard [+11.0ms \"r\"]", "note1": "E2 action #6620: wanted \"ъ\", heard [+9.0ms \"t\"]", "note2": "E2: 10000 actions, 9998 speeches heard"},
+  "rows": [
+    {"id": "E2.e2_double", "scenario": "E2", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "events", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "E2.e2_keyname", "scenario": "E2", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "events", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "E2.e2_missing", "scenario": "E2", "bus": "daemon/voicego", "value": 2, "min": 2, "max": 2, "runs": 1, "unit": "events", "op": "<=", "threshold": 0, "verdict": "FAIL", "note": "gated on the max over repeats"},
+    {"id": "E2.e2_wrong", "scenario": "E2", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "events", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"}
+  ]
+}

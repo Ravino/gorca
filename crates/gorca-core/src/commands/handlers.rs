@@ -24,6 +24,9 @@ use crate::focus::FocusState;
 use crate::mode::{Mode, ModeMsg, PassScope};
 use crate::present::message;
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
+use crate::text::caret::Spell;
+use crate::text::{line_spell_for, spell_for};
+use gorca_text::caret::Say;
 
 /// How long pass-next-key waits for the key (ADR-0005 5.3).
 pub const PASS_TIMEOUT: Duration = Duration::from_secs(10);
@@ -178,6 +181,30 @@ impl Reader {
                     fx.push(ReaderEffect::ArmTimer(now + PASS_TIMEOUT));
                     self.confirm("pass next key", "pass", fx);
                 }
+            }
+            CoreCmd::TextSayAll => self.say_all_start(intent.epoch, fx),
+            CoreCmd::InfoSelection => self.text_say_selection(intent.epoch, fx),
+            CoreCmd::TextSayChar => self.text_say_unit(Say::Char, Spell::No, intent.epoch, fx),
+            CoreCmd::TextSayWord => self.text_say_unit(Say::Word, Spell::No, intent.epoch, fx),
+            CoreCmd::TextSayLine => self.text_say_unit(Say::Line, Spell::No, intent.epoch, fx),
+            CoreCmd::TextSpellChar => {
+                self.text_say_unit(Say::Char, spell_for(rep), intent.epoch, fx);
+            }
+            CoreCmd::TextSpellWord => {
+                self.text_say_unit(Say::Word, spell_for(rep), intent.epoch, fx);
+            }
+            CoreCmd::TextSpellLine => {
+                self.text_say_unit(Say::Line, spell_for(rep), intent.epoch, fx);
+            }
+            CoreCmd::InfoCurrentLine => {
+                self.text_say_unit(Say::Line, line_spell_for(rep), intent.epoch, fx);
+            }
+            CoreCmd::SpeechPunctuationCycle => {
+                let v = self.cmd.effective.speech.punctuation.next();
+                self.cmd.overlay.punctuation = Some(v);
+                self.cmd.republish();
+                let name = v.name();
+                self.confirm(&format!("punctuation {name}"), name, fx);
             }
             CoreCmd::SettingsReload => fx.push(ReaderEffect::Config(ConfigRequest::Reload)),
             CoreCmd::SettingsSave => {
