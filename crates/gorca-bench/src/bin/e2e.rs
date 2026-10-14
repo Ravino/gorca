@@ -201,6 +201,7 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "lost_br1c_ms"
                     | "lost_br1w_ms"
                     | "lost_after_switch"
+                    | "untagged_warm"
                     | "e2_missing"
                     | "e2_double"
                     | "e2_keyname"
@@ -271,6 +272,42 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
     out
 }
 
+/// Refuse to measure a reader binary built from another revision than the tree under test (a
+/// stale `target/release/gorca` gave a whole run of nonsense once). `gorca --version` prints the
+/// revision stamped at build time.
+fn check_reader_rev(reader: &ReaderSpec, allow: bool) -> Result<()> {
+    let ReaderSpec::Daemon { path, .. } = reader else {
+        return Ok(());
+    };
+    let out = std::process::Command::new(path)
+        .arg("--version")
+        .output()
+        .with_context(|| format!("running {} --version", path.display()))?;
+    let built = String::from_utf8_lossy(&out.stdout)
+        .split_whitespace()
+        .nth(1)
+        .unwrap_or("unknown")
+        .to_owned();
+    let tree = std::process::Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_owned())
+        .unwrap_or_default();
+    eprintln!(
+        "== reader {} built from {built}, tree at {tree}",
+        path.display()
+    );
+    if built != tree && !allow {
+        bail!(
+            "the reader binary was built from {built} but the tree is at {tree}: rebuild it \
+             (cargo build --release -p gorca-daemon) or pass --allow-stale-reader"
+        );
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) != Some("run") {
@@ -287,6 +324,7 @@ fn main() -> Result<()> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(if quick { 1 } else { 3 });
     let reader = parse_reader(&arg_value(&args, "--reader").unwrap_or_else(|| "stub".to_owned()))?;
+    check_reader_rev(&reader, args.iter().any(|a| a == "--allow-stale-reader"))?;
     let flavor = arg_value(&args, "--backend")
         .map(|s| Flavor::parse(&s).context("--backend must be voicego or ssip"))
         .transpose()?

@@ -962,7 +962,8 @@ async fn reader_loop(
     if let Some(log) = &shared.present_log {
         reader = reader.with_present_log(Arc::clone(log));
     }
-    let mut timer: Option<Instant> = None;
+    // N1: every armed deadline stays armed until it fires (a set, not one slot).
+    let mut timers: std::collections::BTreeSet<Instant> = std::collections::BTreeSet::new();
     // Review fetches, builds and actions: each in a task this loop owns (aborted with it).
     let mut review_tasks: JoinSet<()> = JoinSet::new();
     // Text fetches, likewise: bounded, owned here, aborted with the loop (ADR-0007 TW-5).
@@ -980,8 +981,11 @@ async fn reader_loop(
                 Some(m) => m,
                 None => return,
             },
-            () = sleep_until(timer), if timer.is_some() => {
-                timer = None;
+            () = sleep_until(timers.first().copied()), if !timers.is_empty() => {
+                let now = Instant::now();
+                while timers.first().is_some_and(|t| *t <= now) {
+                    timers.pop_first();
+                }
                 ReaderMsg::Timer
             }
         };
@@ -1039,8 +1043,12 @@ async fn reader_loop(
                         let _ = h.fill.try_send(FillMsg::FocusSettled { node });
                     }
                 }
-                // One timer slot serves focus settling and pass-next-key: the earliest wins.
-                ReaderEffect::ArmTimer(at) => timer = Some(timer.map_or(at, |t| t.min(at))),
+                ReaderEffect::ArmTimer(at) => {
+                    // Deadlines within a millisecond share one wake; the set is bounded.
+                    if timers.len() < MAX_TIMERS {
+                        timers.insert(at);
+                    }
+                }
                 ReaderEffect::QueryActiveWindowFocus => {
                     tracing::debug!("active-window focus query is not implemented in this slice");
                 }
@@ -1087,12 +1095,16 @@ fn exec_web(shared: &Shared, w: WebEffect) {
                 } else {
                     Activity::Dormant
                 };
-                let _ = h.ctl.try_send(DocCtl::Activity(a));
+                if h.ctl.try_send(DocCtl::Activity(a)).is_err() {
+                    bump(&shared.web.counters.controls_dropped);
+                }
             }
         }
         WebEffect::Act { doc, node, act } => {
-            if let Some(h) = shared.web.docs.get(doc) {
-                let _ = h.ctl.try_send(DocCtl::Act { node, act });
+            if let Some(h) = shared.web.docs.get(doc)
+                && h.ctl.try_send(DocCtl::Act { node, act }).is_err()
+            {
+                bump(&shared.web.counters.controls_dropped);
             }
         }
     }
@@ -1384,6 +1396,9 @@ fn action_node(a: &gorca_connector_api::ActionReq) -> NodeKey {
         | ActionReq::SetValue { node, .. } => *node,
     }
 }
+
+/// Most deadlines the Reader loop keeps armed at once.
+const MAX_TIMERS: usize = 256;
 
 async fn sleep_until(at: Option<Instant>) {
     if let Some(at) = at {

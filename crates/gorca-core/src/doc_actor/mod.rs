@@ -190,6 +190,10 @@ pub struct DocCounters {
     pub rejected: std::sync::atomic::AtomicU64,
     pub overflow: std::sync::atomic::AtomicU64,
     pub publishes: std::sync::atomic::AtomicU64,
+    /// Registry notices dropped because the Reader's queue stayed full (N6).
+    pub notices_dropped: std::sync::atomic::AtomicU64,
+    /// Wake/sleep and action controls dropped by a full control queue (N6).
+    pub controls_dropped: std::sync::atomic::AtomicU64,
 }
 
 /// Inputs of one document actor.

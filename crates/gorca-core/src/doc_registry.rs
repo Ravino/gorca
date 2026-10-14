@@ -27,6 +27,8 @@ use crate::doc_actor::{
     DocActorSpec, DocCounters, DocCtl, DocDirectory, DocNotice, WebJoin, prepare,
 };
 
+/// Most notices the registry keeps while the Reader's queue is full.
+const MAX_PENDING_NOTICES: usize = 64;
 /// How long a document build waits for the cache warm-up (BD-5).
 pub const BUILD_HOLD: Duration = Duration::from_secs(3);
 const WARM_TIMEOUT: Duration = Duration::from_secs(5);
@@ -200,6 +202,9 @@ struct Hub {
     tokens: HashMap<DocId, (AppId, CancellationToken)>,
     next_doc: u32,
     shutdown: CancellationToken,
+    /// Notices the Reader's queue had no room for (N6): retried every 50 ms, never dropped
+    /// except past [`MAX_PENDING_NOTICES`] (counted).
+    pending: std::collections::VecDeque<DocNotice>,
 }
 
 async fn timed<T>(
@@ -212,8 +217,25 @@ async fn timed<T>(
 }
 
 impl Hub {
-    fn notify(&self, n: DocNotice) {
-        let _ = self.cfg.notices.try_send(n);
+    fn notify(&mut self, n: DocNotice) {
+        if self.pending.len() >= MAX_PENDING_NOTICES {
+            self.pending.pop_front();
+            self.cfg
+                .counters
+                .notices_dropped
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+        self.pending.push_back(n);
+        self.flush_notices();
+    }
+
+    fn flush_notices(&mut self) {
+        while let Some(n) = self.pending.front().copied() {
+            if self.cfg.notices.try_send(n).is_err() {
+                break;
+            }
+            self.pending.pop_front();
+        }
     }
 
     fn start_warm(&mut self, app: AppId, hint: Option<NodeKey>, now: Instant) {
@@ -237,6 +259,7 @@ impl Hub {
                     rounds = r.rounds,
                     probes = r.probes,
                     sampled_nodes = r.sampled_nodes,
+                    tagged_nodes = r.tagged_nodes,
                     ready = r.ready,
                 );
             }
@@ -528,6 +551,7 @@ impl Hub {
 
     /// Timers: warm-up retries and builds that waited long enough.
     fn on_timers(&mut self, now: Instant) {
+        self.flush_notices();
         let apps: Vec<AppId> = self.apps.keys().copied().collect();
         for app in apps {
             let Some(a) = self.apps.get_mut(&app) else {
@@ -569,6 +593,9 @@ impl Hub {
                 take(*d);
             }
         }
+        if !self.pending.is_empty() {
+            take(Instant::now() + Duration::from_millis(50));
+        }
         best
     }
 }
@@ -582,6 +609,7 @@ pub async fn run_hub(cfg: HubCfg, mut rx: mpsc::Receiver<HubMsg>, shutdown: Canc
         tokens: HashMap::new(),
         next_doc: 1,
         shutdown: shutdown.clone(),
+        pending: std::collections::VecDeque::new(),
     };
     loop {
         let wake = hub.next_wake();

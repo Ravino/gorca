@@ -39,7 +39,7 @@ pub fn present_selected_item(n: &NodeSnapshot, id: UttId, epoch: Epoch) -> Utter
 }
 
 /// Roles of static web content that are never meaningfully disabled.
-fn never_disabled(role: Role) -> bool {
+pub(crate) fn never_disabled(role: Role) -> bool {
     matches!(
         role,
         Role::DocumentWeb
@@ -69,9 +69,10 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
     if !role.is_empty() {
         segments.push(seg(role, SegmentKind::Role));
     }
-    // Gecko reports no Sensitive on documents, headings, sections and other static content;
-    // that is not "unavailable" (the connector maps a missing Sensitive to DISABLED).
-    let skip = if never_disabled(n.role) {
+    // Gecko reports no Sensitive on its document; that is not "unavailable" (the connector maps
+    // a missing Sensitive to DISABLED). Other static web roles are handled by the Reader, which
+    // knows which applications are web applications (N7).
+    let skip = if n.role == Role::DocumentWeb {
         skip | StateSet::DISABLED
     } else {
         skip
@@ -444,23 +445,16 @@ mod change_tests {
     }
 
     #[test]
-    fn static_web_roles_are_not_called_unavailable_but_controls_still_are() {
-        for role in [
-            Role::Heading,
-            Role::Landmark,
-            Role::ListItem,
-            Role::Paragraph,
-        ] {
-            let mut d = snap("x", StateSet::DISABLED | StateSet::SHOWING, None);
-            d.role = role;
-            let u = present_focus(&d, UttId(1), Epoch::default());
-            assert!(
-                !u.segments.iter().any(|s| &*s.text == "unavailable"),
-                "{role:?}"
-            );
-        }
-        let c = snap("x", StateSet::DISABLED | StateSet::SHOWING, None);
-        let u = present_focus(&c, UttId(1), Epoch::default());
-        assert!(u.segments.iter().any(|s| &*s.text == "unavailable"));
+    fn a_web_document_is_not_called_unavailable_but_a_native_row_still_is() {
+        let mut d = snap("x", StateSet::DISABLED | StateSet::SHOWING, None);
+        d.role = Role::DocumentWeb;
+        let u = present_focus(&d, UttId(1), Epoch::default());
+        assert!(!u.segments.iter().any(|s| &*s.text == "unavailable"));
+        d.role = Role::ListItem;
+        let u = present_focus(&d, UttId(1), Epoch::default());
+        assert!(
+            u.segments.iter().any(|s| &*s.text == "unavailable"),
+            "native rows keep it"
+        );
     }
 }

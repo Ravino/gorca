@@ -87,6 +87,7 @@ impl Reader {
         match f {
             FocusLaneMsg::FocusChanged { node } => {
                 self.selection_node = None;
+                self.focus_retried = None;
                 self.web_on_focus(node, fx);
                 self.begin_focus(node, now, fx);
             }
@@ -166,6 +167,21 @@ impl Reader {
                 let u = message("application not responding", id, self.epoch.current());
                 fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
             }
+        }
+    }
+
+    /// N7: Gecko reports no Sensitive on static content, which the connector maps to DISABLED.
+    /// In a web application the "unavailable" of a static role is dropped; native applications
+    /// (a GTK row or cell that really is insensitive) keep it.
+    fn drop_web_unavailable(&self, u: &mut Utterance, snap: &NodeSnapshot) {
+        let web = self
+            .web
+            .as_ref()
+            .is_some_and(|b| b.web_apps.contains(&snap.key.app));
+        if web && super::utterance::never_disabled(snap.role) {
+            u.segments.retain(|s| {
+                !(s.kind == gorca_model::SegmentKind::State && &*s.text == "unavailable")
+            });
         }
     }
 
@@ -300,6 +316,7 @@ impl Reader {
                     PresentContext::Focus
                 };
                 let mut u = self.presenters.present(ctx, snap, id, epoch);
+                self.drop_web_unavailable(&mut u, snap);
                 if from_cache {
                     // Every cache-served presentation may be refined by RV-1 (ADR-0001 8.1).
                     u.may_refine = true;
@@ -427,6 +444,20 @@ impl Reader {
                         PresentSource::Stale
                     };
                     self.present_cached(&v, src, false, r.epoch, fx);
+                } else if self.web_focus_fallback(r.node, fx) {
+                    // N2: a web node is spoken from the document mirror (name and role).
+                } else if self.focus_retried != Some(r.node) {
+                    // One more try with a fresh deadline.
+                    self.focus_retried = Some(r.node);
+                    fx.push(Self::fetch_effect(
+                        r.node,
+                        FOCUS_FIELDS,
+                        r.epoch,
+                        FetchKind::Focus,
+                    ));
+                } else {
+                    // Never stay silent on focus: say that nothing is known.
+                    self.say("unknown", fx);
                 }
             }
         }
@@ -471,6 +502,7 @@ impl Reader {
                 let (mut u, source) = if refine {
                     // Replace: the whole node again, interrupting the earlier utterance.
                     let mut u = self.presenters.present(p.ctx, new, id, r.epoch);
+                    self.drop_web_unavailable(&mut u, new);
                     u.refines = Some(p.utt);
                     if let Some((_, word, tail)) = self.web_extra.as_ref().filter(|e| e.0 == p.utt)
                     {

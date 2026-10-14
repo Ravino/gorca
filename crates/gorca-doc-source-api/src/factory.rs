@@ -26,6 +26,8 @@ pub struct WarmReport {
     pub slept: Duration,
     pub rounds: u32,
     pub sampled_nodes: usize,
+    /// Sampled nodes that carried a `tag` attribute (attribute completeness after the warm-up).
+    pub tagged_nodes: usize,
 }
 
 /// Result of [`DocSourceFactory::warm`].

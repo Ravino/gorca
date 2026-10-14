@@ -461,6 +461,9 @@ impl Translator {
 
         // 4. Props and text of nodes that already existed.
         let upserts = std::mem::take(&mut c.upserts);
+        // One budget for both pending pools (N4): parked ids plus parked orphans.
+        let mut held: usize =
+            self.deferred.values().map(Vec::len).sum::<usize>() + self.orphans.len();
         for n in upserts {
             if n.id.0 == u64::MAX {
                 continue; // consumed by a subtree build
@@ -470,8 +473,9 @@ impl Translator {
                     Self::update_known(w, id, &n, &mut out, &mut touched, &mut break_parents)?;
                 }
                 None => {
-                    if self.orphans.len() < MAX_PENDING {
+                    if held < MAX_PENDING {
                         self.orphans.insert(n.id, n);
+                        held += 1;
                     } else {
                         self.stats.orphans_dropped += 1;
                     }
@@ -548,7 +552,7 @@ impl Translator {
         match existing {
             None => {
                 // First document: build the root with whatever children list came with it.
-                let built = self.build_spec(&root_node, false, c, true, 0);
+                let built = self.build_spec(&root_node, false, c, true, 0, 0);
                 let o = w.apply(DocOp::InsertSubtree {
                     parent: None,
                     before: None,
@@ -617,6 +621,7 @@ impl Translator {
         c: &mut Collected,
         is_root: bool,
         depth: u32,
+        already: usize,
     ) -> Built {
         struct Frame {
             spec: NodeSpec,
@@ -665,7 +670,9 @@ impl Translator {
                 };
             };
             if let Some(k) = top.kids.next() {
-                if top.depth + 1 > MAX_DEPTH || self.by_src.len() + order.len() >= MAX_DOC_NODES {
+                if top.depth + 1 > MAX_DEPTH
+                    || self.by_src.len() + already + order.len() >= MAX_DOC_NODES
+                {
                     self.cut(1);
                     c.take_node(k);
                     self.orphans.remove(&k);
@@ -756,7 +763,8 @@ impl Translator {
                     desired.push(ChildSpec::Existing(id));
                 }
                 Some(_) | None => {
-                    if child_depth > MAX_DEPTH || self.by_src.len() >= MAX_DOC_NODES {
+                    let built_now: usize = new_orders.iter().map(Vec::len).sum();
+                    if child_depth > MAX_DEPTH || self.by_src.len() + built_now >= MAX_DOC_NODES {
                         self.cut(1);
                         continue;
                     }
@@ -767,7 +775,7 @@ impl Translator {
                             self.stats.placeholders += 1;
                             placeholder_node(*k)
                         });
-                    let built = self.build_spec(&data, nested, c, false, child_depth);
+                    let built = self.build_spec(&data, nested, c, false, child_depth, built_now);
                     new_orders.push(built.order);
                     desired.push(ChildSpec::New(Arc::new(built.spec)));
                 }
@@ -1615,5 +1623,64 @@ mod tests {
         let len = r.with(|d| d.text_len() as usize);
         assert!(len <= MAX_NODE_TEXT_BYTES, "{len} scalars");
         assert!(t.stats().text_clipped >= 1);
+    }
+
+    // ---- re-review N4: the caps hold inside one batch --------------------------------------
+
+    #[test]
+    fn one_list_of_new_subtrees_cannot_pass_the_node_cap() {
+        let (mut w, r) = channel(1);
+        let mut t = Translator::new();
+        t.apply(&mut w, chain(2)).unwrap();
+        w.publish();
+        let kids_n = 60_000u64;
+        let per = 9u64;
+        let mut nodes = Vec::new();
+        let mut b = Vec::new();
+        let mut kids = Vec::new();
+        for i in 0..kids_n {
+            let c = 10_000_000 + i * 100;
+            kids.push(c);
+            nodes.push(n(c, Role::Panel));
+            let g: Vec<u64> = (1..=per).map(|j| c + j).collect();
+            for &x in &g {
+                nodes.push(n(x, Role::Panel));
+            }
+            b.push(list(c, &g));
+        }
+        let mut batch = vec![DocDelta::Upsert(nodes), list(2, &kids)];
+        batch.extend(b);
+        batch.push(DocDelta::Settled { batch: 2 });
+        t.apply(&mut w, batch).unwrap();
+        w.publish();
+        let len = r.with(WebDoc::len);
+        assert!(len <= MAX_DOC_NODES, "cap passed: {len}");
+        assert!(t.stats().truncated > 0);
+    }
+
+    #[test]
+    fn parked_lists_and_orphans_share_one_pending_budget() {
+        let (mut w, _r) = channel(1);
+        let mut t = Translator::new();
+        t.apply(&mut w, chain(2)).unwrap();
+        let orphans: Vec<SrcNode> = (0..MAX_PENDING as u64)
+            .map(|i| n(50_000_000 + i, Role::Panel))
+            .collect();
+        let l1: Vec<u64> = (0..MAX_CHILDREN as u64).map(|i| 1_000_000 + i).collect();
+        let l2: Vec<u64> = (0..MAX_CHILDREN as u64).map(|i| 2_000_000 + i).collect();
+        for b in 0..3u64 {
+            let mut batch = vec![list(9_000_000, &l1), list(9_000_001, &l2)];
+            if b == 0 {
+                batch.insert(0, DocDelta::Upsert(orphans.clone()));
+            }
+            batch.push(DocDelta::Settled { batch: 2 + b });
+            t.apply(&mut w, batch).unwrap();
+        }
+        let ids: usize = t.deferred.values().map(Vec::len).sum();
+        assert!(
+            ids + t.orphans.len() <= MAX_PENDING,
+            "{ids} + {}",
+            t.orphans.len()
+        );
     }
 }

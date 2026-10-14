@@ -34,6 +34,9 @@ pub struct WarmReport {
     pub blocked: Duration,
     pub slept: Duration,
     pub rounds: u32,
+    /// Nodes of the last sample that carried a `tag` attribute: how much of the sample the
+    /// attribute domain had reached when the warm-up ended (completeness).
+    pub tagged_nodes: usize,
 }
 
 /// Deepest descent of the sampling window.
@@ -42,32 +45,43 @@ const DESCENT_LIMIT: usize = 24;
 /// thousands of items is not sampled whole).
 const WINDOW_CHILDREN: usize = 64;
 
+/// How many siblings of a wide node are sampled one by one.
+const WIDE_SAMPLE: usize = 8;
+
 /// Walk from `start` towards the first (`idx == 0`), last (`idx + 1 == n`) or middle part of the
-/// page, one `GetChildren` per level, and return the path of the deepest node whose children are
-/// leaves (or the last node reached). The result is the root of a small `GetTree` sample.
+/// page, one `GetChildren` per level, and return the paths to sample with `GetTree`: the parent
+/// of a leaf (a small subtree), or, below a node with more than [`WINDOW_CHILDREN`] children, a
+/// few of its children one by one (a flat list is never read whole). Calls are counted in
+/// `calls` and stop at `end`.
 async fn descend(
     conn: &Arc<AppConn>,
     lane: usize,
     start: &str,
-    idx: usize,
-    n: usize,
-    blocked: &mut Duration,
-) -> String {
+    pos: (usize, usize),
+    end: Instant,
+    acc: (&mut Duration, &mut u32),
+) -> Vec<String> {
+    let (idx, n) = pos;
+    let (blocked, calls) = acc;
     let mut cur = start.to_owned();
     let mut parent = start.to_owned();
     for _ in 0..DESCENT_LIMIT {
+        if Instant::now() >= end {
+            return vec![parent];
+        }
+        *calls += 1;
         let kids = match timed(
             blocked,
-            conn.call(lane, dl(800), &cur, ACC, "GetChildren", &()),
+            conn.call(lane, dl_to(800, end), &cur, ACC, "GetChildren", &()),
         )
         .await
         {
             Ok(m) => wire::parse_children(m.body().data().bytes()).unwrap_or_default(),
-            Err(_) => return parent,
+            Err(_) => return vec![parent],
         };
         if kids.is_empty() {
             // `cur` is a leaf: its parent is the small sample root.
-            return parent;
+            return vec![parent];
         }
         let pick = if idx == 0 {
             0
@@ -76,13 +90,17 @@ async fn descend(
         } else {
             kids.len() / 2
         };
-        // A node with many children is the sample root itself: a flat list is not read whole.
         if kids.len() > WINDOW_CHILDREN {
-            return kids[pick].1.clone();
+            let from = pick.min(kids.len().saturating_sub(WIDE_SAMPLE));
+            return kids[from..]
+                .iter()
+                .take(WIDE_SAMPLE)
+                .map(|k| k.1.clone())
+                .collect();
         }
         parent = std::mem::replace(&mut cur, kids[pick].1.clone());
     }
-    parent
+    vec![parent]
 }
 
 /// Await `f`, adding its wall time to `acc`.
@@ -95,6 +113,11 @@ async fn timed<T>(acc: &mut Duration, f: impl std::future::Future<Output = T>) -
 
 fn dl(ms: u64) -> Deadline {
     Deadline(Instant::now() + Duration::from_millis(ms))
+}
+
+/// A call deadline that never outlives the warm-up's own: `ms` from now, at most `end`.
+fn dl_to(ms: u64, end: Instant) -> Deadline {
+    Deadline((Instant::now() + Duration::from_millis(ms)).min(end))
 }
 
 /// Warm the cache domains for the app behind `conn`, using the document at `doc`.
@@ -159,7 +182,7 @@ pub async fn warm_domains(
         rep.rounds += 1;
         let kids = match timed(
             &mut rep.blocked,
-            conn.call(lane, dl(800), doc, ACC, "GetChildren", &()),
+            conn.call(lane, dl_to(800, end), doc, ACC, "GetChildren", &()),
         )
         .await
         {
@@ -173,32 +196,49 @@ pub async fn warm_domains(
         let picks: Vec<usize> = match kids.len() {
             0 => Vec::new(),
             1 => vec![0],
+            2 => vec![0, 1],
             n => vec![0, n / 2, n - 1],
         };
         for i in picks {
+            if Instant::now() >= end {
+                break;
+            }
             // A bounded window: walk down to the parent of a leaf along the first, middle or
             // last child (cheap `GetChildren` calls) and read only that small subtree. Reading
             // the top-level subtree whole fetched the entire page twice (W2b, 237 ms on 10k
             // nodes); the rest of the page arrives with the real build.
-            let target = descend(conn, lane, &kids[i].1, i, kids.len(), &mut rep.blocked).await;
-            let Ok(m) = timed(
-                &mut rep.blocked,
-                get_tree_raw(conn, lane, &target, dl(2000)),
+            let mut calls = 0u32;
+            let targets = descend(
+                conn,
+                lane,
+                &kids[i].1,
+                (i, kids.len()),
+                end,
+                (&mut rep.blocked, &mut calls),
             )
-            .await
-            else {
-                continue;
-            };
-            rep.probes += 1;
-            if let Ok(t) = wire::parse_get_tree(m.body().data().bytes(), interner) {
-                sampled += t.nodes.len();
-                tagged += t
-                    .nodes
-                    .iter()
-                    .filter(|n| n.attrs.iter().any(|(k, _)| *k == web_attrs::TAG))
-                    .count();
+            .await;
+            rep.probes += calls;
+            for target in targets {
+                let Ok(m) = timed(
+                    &mut rep.blocked,
+                    get_tree_raw(conn, lane, &target, dl_to(2000, end)),
+                )
+                .await
+                else {
+                    continue;
+                };
+                rep.probes += 1;
+                if let Ok(t) = wire::parse_get_tree(m.body().data().bytes(), interner) {
+                    sampled += t.nodes.len();
+                    tagged += t
+                        .nodes
+                        .iter()
+                        .filter(|n| n.attrs.iter().any(|(k, _)| *k == web_attrs::TAG))
+                        .count();
+                }
             }
         }
+        rep.tagged_nodes = tagged;
         rep.sampled_nodes = sampled;
         // Ready when elements carry tags and the count stopped growing between two probes
         // (Chromium text nodes never have a tag, so "all tagged" would never hold there).

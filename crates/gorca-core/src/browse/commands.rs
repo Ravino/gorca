@@ -694,6 +694,26 @@ impl Reader {
         }
     }
 
+    /// N2: the focus fetch failed and nothing is cached: speak a web node from the document
+    /// mirror (its name and role are there). False when the node is not in a mirrored document.
+    pub(crate) fn web_focus_fallback(&mut self, node: NodeKey, fx: &mut ReaderEffects) -> bool {
+        let Some(b) = self.web.as_ref() else {
+            return false;
+        };
+        let Some((doc, id)) = b.join.get(node) else {
+            return false;
+        };
+        let Some(h) = b.docs.get(doc) else {
+            return false;
+        };
+        let items = h.read.with(|d| present::describe_node(d, id));
+        if items.is_empty() {
+            return false;
+        }
+        self.web_speak(&items, fx);
+        true
+    }
+
     /// The focus snapshot arrived (a presentation reply): a `Loading` focus learns whether it is
     /// a field. A field keeps the grabs off for good; a plain node lets the grace timer run.
     pub(crate) fn web_learn_focus(
@@ -1014,6 +1034,18 @@ impl Reader {
             } else {
                 fx.push(ReaderEffect::ArmTimer(due));
             }
+        }
+        if let WebMode::Loading {
+            doc: Some(_),
+            since,
+            editable: false,
+            known: true,
+            ..
+        } = b.mode
+            && now.saturating_duration_since(since) < LOADING_GRACE
+        {
+            // Not due yet (the timer was armed for something else): keep the grace armed.
+            fx.push(ReaderEffect::ArmTimer(since + LOADING_GRACE));
         }
         if let WebMode::Loading {
             doc: Some(doc),

@@ -1181,13 +1181,9 @@ fn say_all_and_say_selection_refuse_cleanly_in_browse_mode() {
     }
 }
 
-/// A Firefox field (text offsets in UTF-16, so the native caret layer stays out) in focus mode:
-/// a typed letter is echoed once, by the generic key echo.
-#[test]
-fn typing_in_a_web_field_in_focus_mode_is_echoed_once() {
-    let mut r = rig();
-    r.focus(1014);
-    assert!(matches!(r.mode(), WebMode::Focus { .. }));
+// ---- re-review: timers (N1) and the Firefox typing path (N5) -------------------------------
+
+fn type_a(r: &mut Rig) -> ReaderEffects {
     r.now += Duration::from_millis(50);
     let ev = KeyEvent {
         keycode: 38,
@@ -1196,7 +1192,7 @@ fn typing_in_a_web_field_in_focus_mode_is_echoed_once() {
         modifiers: Modifiers::empty(),
         pressed: true,
     };
-    let fx = r.reader.handle(
+    r.reader.handle(
         ReaderMsg::Key(KeyIntent {
             event: ev,
             class: KeyClass::PassToApp,
@@ -1207,6 +1203,169 @@ fn typing_in_a_web_field_in_focus_mode_is_echoed_once() {
             epoch: Epoch(r.epoch.current().0 + 1),
         }),
         r.now,
+    )
+}
+
+fn arms(fx: &ReaderEffects) -> Vec<Instant> {
+    fx.iter()
+        .filter_map(|e| {
+            if let ReaderEffect::ArmTimer(t) = e {
+                Some(*t)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// N5: the real Firefox path. The app counts UTF-16 units, so the native caret layer stays out
+/// and the generic key echo speaks the letter once.
+#[test]
+fn a_firefox_field_is_echoed_once_by_the_generic_echo_not_the_caret_layer() {
+    let mut r = rig();
+    r.reader.dir.set_text_scalar(app(), false);
+    r.focus(1014);
+    assert!(
+        r.reader.text.caret.tracked().is_none(),
+        "caret layer is off"
     );
+    let fx = type_a(&mut r);
     assert_eq!(spoken(&fx), ["a"]);
+}
+
+/// N1: a timer that fires for another subsystem before a settling focus is due must arm the
+/// focus deadline again.
+#[test]
+fn an_early_timer_keeps_the_focus_settle_deadline_armed() {
+    let mut r = rig();
+    r.mirror.apply(
+        SnapshotBatch {
+            nodes: vec![snap(4000, Role::MenuItem, "Open", StateSet::FOCUSABLE)],
+            ..Default::default()
+        },
+        ApplyOrigin::Push,
+    );
+    r.focus(1006);
+    let fx = r.focus(4000);
+    let due = arms(&fx);
+    assert!(spoken(&fx).is_empty() && !due.is_empty());
+    let early = r.now + Duration::from_millis(5);
+    let fx = r.reader.handle(ReaderMsg::Timer, early);
+    assert!(spoken(&fx).is_empty());
+    let rearm = arms(&fx);
+    let settle = *due.iter().min().unwrap_or(&r.now);
+    assert!(
+        rearm.contains(&settle),
+        "the settle deadline {due:?} was not armed again: {rearm:?}"
+    );
+    let fx = r.reader.handle(ReaderMsg::Timer, settle);
+    assert!(
+        spoken(&fx).iter().any(|s| s.contains("Open menu item")),
+        "{:?}",
+        spoken(&fx)
+    );
+}
+
+/// N1, end to end in the Reader: Down arms the scroll debounce (150 ms); a menu opens inside
+/// that window; the debounce timer fires first; the menu item is still spoken.
+#[test]
+fn a_menu_opened_within_the_scroll_debounce_is_spoken() {
+    let mut r = rig();
+    r.mirror.apply(
+        SnapshotBatch {
+            nodes: vec![snap(4000, Role::MenuItem, "Open", StateSet::FOCUSABLE)],
+            ..Default::default()
+        },
+        ApplyOrigin::Push,
+    );
+    r.focus(1006);
+    let fx = r.key(CoreCmd::BrowseCursorNextLine);
+    let scroll = arms(&fx);
+    assert!(!scroll.is_empty(), "Down arms the scroll debounce");
+    let fx = r.focus(4000);
+    let settle = arms(&fx);
+    assert!(!settle.is_empty());
+    // The runtime wakes the Reader for the earlier deadline first.
+    let first = *scroll.iter().chain(settle.iter()).min().unwrap_or(&r.now);
+    let fx = r.reader.handle(ReaderMsg::Timer, first);
+    let mut said = spoken(&fx);
+    for t in arms(&fx) {
+        said.extend(spoken(&r.reader.handle(ReaderMsg::Timer, t)));
+    }
+    assert!(
+        said.iter().any(|s| s.contains("Open")),
+        "the menu item was never spoken: {said:?}"
+    );
+}
+
+/// N1: the same for the browse `Loading` grace.
+#[test]
+fn an_early_timer_keeps_the_loading_grace_armed() {
+    let mut r = rig();
+    // In the mirror (so its snapshot is known and not a field) but not in the document join.
+    r.mirror.apply(
+        SnapshotBatch {
+            nodes: vec![snap(3001, Role::Link, "late", StateSet::FOCUSABLE)],
+            ..Default::default()
+        },
+        ApplyOrigin::Push,
+    );
+    r.focus(3001);
+    assert!(matches!(r.mode(), WebMode::Loading { known: true, .. }));
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::InDocument {
+            focus: nk(3001),
+            doc: DocId(1),
+        }),
+        r.now,
+    );
+    let early = r.now + Duration::from_millis(100);
+    let fx = r.reader.handle(ReaderMsg::Timer, early);
+    assert!(!arms(&fx).is_empty(), "the grace deadline was dropped");
+}
+
+// ---- re-review N2: a focus whose fetch fails is never silent -------------------------------
+
+fn fetch_epoch(fx: &ReaderEffects) -> Option<Epoch> {
+    fx.iter().find_map(|e| {
+        if let ReaderEffect::Fetch { epoch, .. } = e {
+            Some(*epoch)
+        } else {
+            None
+        }
+    })
+}
+
+fn failed_reply(node: NodeKey, epoch: Epoch) -> ReaderMsg {
+    ReaderMsg::Reply(crate::QueryReply {
+        node,
+        epoch,
+        kind: crate::FetchKind::Focus,
+        result: Err(gorca_connector_api::BackendError::Timeout),
+    })
+}
+
+#[test]
+fn a_web_focus_whose_fetch_times_out_is_spoken_from_the_document_mirror() {
+    let mut r = rig();
+    // 1009 is in the document join but not in the B-1 mirror: the focus needs a fetch.
+    let fx = r.focus(1009);
+    let epoch = fetch_epoch(&fx).expect("a focus fetch");
+    let fx = r.reader.handle(failed_reply(nk(1009), epoch), r.now);
+    let said = spoken(&fx);
+    assert!(!said.is_empty(), "the focus stayed silent");
+    assert!(said.iter().any(|s| s.contains("heading")), "{said:?}");
+}
+
+#[test]
+fn a_native_focus_whose_fetch_fails_is_retried_once_and_then_says_unknown() {
+    let mut r = rig();
+    // 7777 is nowhere: not in the mirror and not in a document.
+    let fx = r.focus(7777);
+    let epoch = fetch_epoch(&fx).expect("a focus fetch");
+    let fx = r.reader.handle(failed_reply(nk(7777), epoch), r.now);
+    assert!(fetch_epoch(&fx).is_some(), "one more try");
+    assert!(spoken(&fx).is_empty());
+    let fx = r.reader.handle(failed_reply(nk(7777), epoch), r.now);
+    assert_eq!(spoken(&fx), ["unknown"]);
 }

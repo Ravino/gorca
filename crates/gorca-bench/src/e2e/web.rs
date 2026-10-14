@@ -392,6 +392,8 @@ struct Web {
     /// A focus or mode change may still be changing the grab set: wait before the next key.
     unsettled: bool,
     bus: String,
+    /// The reader's presentation log of this run (`--bench-present-log`), kept for a loss dump.
+    present_log: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -435,13 +437,23 @@ impl Web {
         title: &str,
     ) -> Result<(Self, DocRef)> {
         let env = m1_env(host);
+        // The presentation log of the run: copied next to the results when a trial is lost.
+        static RUNS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let run_no = RUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let present_log = std::env::var("GORCA_HARNESS_DIR")
+            .ok()
+            .map(|d| PathBuf::from(d).join(format!("present-{run_no}.log")));
+        let extra_reader_args = present_log
+            .iter()
+            .map(|p| format!("--bench-present-log={}", p.display()))
+            .collect();
         let opts = RigOpts {
             flavor,
             reader: reader.clone(),
             calls: false,
             keys: true,
             apps: Vec::new(),
-            extra_reader_args: Vec::new(),
+            extra_reader_args,
             reader_stderr: None,
             hung_apps: Vec::new(),
         };
@@ -461,6 +473,7 @@ impl Web {
             rig,
             ty: Typist::new(),
             unsettled: false,
+            present_log,
             bus: String::new(),
         };
         let r = w.ax.request(
@@ -516,6 +529,34 @@ impl Web {
     }
 
     /// Press and release a key; returns `(emit time of the press, consumed)`.
+    /// A trial was lost: keep what names the route. The presentation log (snapshot based, so a
+    /// password field is redacted), the speech transcript and the last bus events go to the
+    /// results directory; the reader's own counters (`stale_dropped`, `inbox_dropped`, `fetch_*`)
+    /// are in the reader log that lands there too.
+    fn dump_loss(&self, what: &str) {
+        let Some(dir) = std::env::var("GORCA_E2E_READER_LOG")
+            .ok()
+            .and_then(|p| PathBuf::from(p).parent().map(PathBuf::from))
+        else {
+            return;
+        };
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        if let Some(src) = &self.present_log {
+            let _ = std::fs::copy(src, dir.join(format!("lost-{what}-{stamp}-present.log")));
+        }
+        use std::fmt::Write as _;
+        let mut text = String::new();
+        for (t, line) in speaks_since(self, 0) {
+            let _ = writeln!(text, "{t} said {line:?}");
+        }
+        for e in self.tap.tail(40) {
+            let _ = writeln!(text, "bus {e}");
+        }
+        let _ = std::fs::write(dir.join(format!("lost-{what}-{stamp}-state.txt")), text);
+    }
+
     /// Wait until Mutter has stopped receiving grab changes (the count is steady for 120 ms).
     /// A key that races a grab change is Ambiguous by design ("again"), which is not what the
     /// latency scenarios measure.
@@ -1058,6 +1099,7 @@ pub fn w2b(
     let mut gorca_side = Vec::new();
     let mut phases: std::collections::BTreeMap<&str, Vec<f64>> = std::collections::BTreeMap::new();
     let mut lost = 0u64;
+    let mut untagged_warm = 0u64;
     for _ in 0..trials {
         let log_from = reader_log_len();
         // A fresh reader and browser every time: the 10k document must be never visited. A
@@ -1112,6 +1154,7 @@ pub fn w2b(
                     ("warm_rounds", "warm", "rounds"),
                     ("warm_probes", "warm", "probes"),
                     ("warm_sampled_nodes", "warm", "sampled_nodes"),
+                    ("warm_tagged_nodes", "warm", "tagged_nodes"),
                     ("locate_ms", "locate", "wall_ms"),
                     ("create_ms", "create", "wall_ms"),
                     ("fetch_total_ms", "fetch", "total_ms"),
@@ -1135,9 +1178,14 @@ pub fn w2b(
                     .entry("firefox_blocked_ms")
                     .or_default()
                     .push(firefox);
+                // Attribute completeness: the warm-up's sample must have carried tags.
+                if f("warm", "tagged_nodes").unwrap_or(0.0) < 1.0 {
+                    untagged_warm += 1;
+                }
             }
             None => {
                 lost += 1;
+                w.dump_loss("w2b");
                 let heard: Vec<String> = speaks_since(&w, mark).into_iter().map(|s| s.1).collect();
                 out.notes.push(format!(
                     "W2b lost: heard {heard:?}; {} focus, {} load events on the bus",
@@ -1147,6 +1195,7 @@ pub fn w2b(
             }
         }
     }
+    out.x("untagged_warm", untagged_warm as f64, "trials");
     out.s("w2b_gorca_ms", gorca_side);
     for (name, v) in phases {
         out.s(&format!("w2b_phase_{name}"), v);
@@ -1219,6 +1268,7 @@ pub fn fm(
             }
             None => {
                 lost += 1;
+                w.dump_loss("fm1");
                 continue;
             }
         }
@@ -1254,7 +1304,10 @@ pub fn fm(
             }
             match w.speech(mark, Duration::from_secs(3), |t| t.contains("browse mode")) {
                 Some(r) => fm2.push(ms(r.t_ns.saturating_sub(t))),
-                None => lost += 1,
+                None => {
+                    lost += 1;
+                    w.dump_loss("fm2");
+                }
             }
         }
     }
@@ -1325,6 +1378,7 @@ pub fn w3(
             }
             None => {
                 lost += 1;
+                w.dump_loss("w3");
                 let heard: Vec<String> = speaks_since(&w, mark).into_iter().map(|s| s.1).collect();
                 out.notes.push(format!(
                     "W3 lost: heard {heard:?}; {} focus events on the bus, last {:?} (A is {}, B is {})",

@@ -346,6 +346,8 @@ pub struct Reader {
     pub(crate) review: ReviewState,
     /// Browse mode (ADR-0003 section 11): off until the runtime attaches the document side.
     pub(crate) web: Option<BrowseState>,
+    /// The focus whose fetch failed and was tried once more (N2).
+    pub(crate) focus_retried: Option<NodeKey>,
     /// The browse mode word and line spoken with the last focus utterance, so an RV-1 refine of
     /// that utterance repeats them instead of cutting them off.
     pub(crate) web_extra: Option<(
@@ -400,6 +402,7 @@ impl Reader {
             counters: ReaderCounters::default(),
             review: ReviewState::new(),
             web: None,
+            focus_retried: None,
             web_extra: None,
             text: TextState::new(),
         }
@@ -531,6 +534,13 @@ impl Reader {
             ReaderMsg::Text(m) => self.on_text(m, &mut fx),
             ReaderMsg::Doc(n) => self.on_doc(n, &mut fx),
             ReaderMsg::Timer => {
+                // N1: the timer may fire for another subsystem's deadline. What is not due yet
+                // is armed again, so no pending deadline is ever lost.
+                if let FocusState::Settling { until, .. } = self.focus
+                    && now < until
+                {
+                    fx.push(ReaderEffect::ArmTimer(until));
+                }
                 self.apply_focus(FocusMsg::TimerElapsed { now }, &mut fx);
                 self.pass_timer(now, &mut fx);
                 self.review_timer(now, &mut fx);

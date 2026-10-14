@@ -168,8 +168,8 @@ impl Scn {
         [
             "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K2s", "K3",
             "K4", "K4r", "R1", "R1s", "RS", "B0", "W1", "BR1", "BR2", "W2", "W2b", "W3", "FM1",
-            "FM2", "K4", "K4r", "R1", "R1s", "RS", "C1", "C1h", "C2", "E1", "E2", "S2", "SA1",
-            "SA2", "SA3", "SA3a", "PW", "C1hs", "E1s",
+            "FM2", "C1", "C1h", "C2", "E1", "E2", "S2", "SA1", "SA2", "SA3", "SA3a", "PW", "C1hs",
+            "E1s",
         ]
         .iter()
         .filter_map(|s| Self::parse(s))
@@ -881,5 +881,19 @@ mod tests {
         for s in Scn::all() {
             assert_eq!(Scn::parse(&s.id()), Some(s));
         }
+    }
+}
+
+#[cfg(test)]
+mod all_tests {
+    use super::*;
+
+    #[test]
+    fn all_has_no_duplicates() {
+        let ids: Vec<String> = Scn::all().iter().map(Scn::id).collect();
+        let mut sorted = ids.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), ids.len(), "duplicate scenarios in {ids:?}");
     }
 }

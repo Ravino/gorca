@@ -295,6 +295,7 @@ impl DocSourceFactory for AtspiDocSourceFactory {
                 slept: r.slept,
                 rounds: r.rounds,
                 sampled_nodes: r.sampled_nodes,
+                tagged_nodes: r.tagged_nodes,
             }))
         })
     }
