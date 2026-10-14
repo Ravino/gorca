@@ -100,11 +100,22 @@ impl CoreCmd {
         self.spec().available == Availability::Implemented
     }
 
-    /// Voice settings repeat while the key is held.
+    /// Voice settings and review moves repeat while the key is held (ADR-0006 RS-3: a held
+    /// review key keeps moving, NVDA parity; the input lane debounces the rate).
     pub fn repeatable(self) -> bool {
         matches!(
             self,
-            CoreCmd::SpeechRingInc
+            CoreCmd::ReviewPrevLine
+                | CoreCmd::ReviewNextLine
+                | CoreCmd::ReviewPrevWord
+                | CoreCmd::ReviewNextWord
+                | CoreCmd::ReviewPrevChar
+                | CoreCmd::ReviewNextChar
+                | CoreCmd::ObjectNext
+                | CoreCmd::ObjectPrev
+                | CoreCmd::ObjectNextInFlow
+                | CoreCmd::ObjectPrevInFlow
+                | CoreCmd::SpeechRingInc
                 | CoreCmd::SpeechRingDec
                 | CoreCmd::SpeechRingIncLarge
                 | CoreCmd::SpeechRingDecLarge
@@ -178,7 +189,7 @@ mod tests {
     }
 
     #[test]
-    fn m1_commands_are_exactly_the_implemented_ones() {
+    fn m1_and_m4a_commands_are_exactly_the_implemented_ones() {
         let impl_names: Vec<_> = SPECS
             .iter()
             .filter(|s| s.available == Availability::Implemented)
@@ -186,8 +197,13 @@ mod tests {
             .collect();
         assert!(impl_names.contains(&"info.where_am_i"));
         assert!(impl_names.contains(&"settings.save"));
-        assert!(!impl_names.contains(&"review.cur_line"));
-        assert_eq!(impl_names.len(), 30);
+        // M4a: object navigation, line/word/char/top/bottom review, focus and activation.
+        assert!(impl_names.contains(&"review.cur_line"));
+        assert!(impl_names.contains(&"object.next_in_flow"));
+        assert!(impl_names.contains(&"info.status_bar"));
+        assert!(!impl_names.contains(&"review.say_all"), "M4b");
+        assert!(!impl_names.contains(&"review.above"), "M4b");
+        assert_eq!(impl_names.len(), 59);
     }
 
     #[test]

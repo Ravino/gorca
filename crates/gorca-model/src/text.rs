@@ -7,7 +7,9 @@
 //!   TBD: the sparse index is not implemented yet; the helpers below are linear.
 
 use std::ops::Range;
+use std::sync::Arc;
 
+use crate::geometry::Rect;
 use crate::ids::NodeKey;
 
 /// Offset unit used by a source or toolkit.
@@ -24,9 +26,44 @@ pub enum TextUnit {
 /// Core text queries. Text is not part of the node snapshot.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TextQuery {
-    GetText { node: NodeKey, range: Range<u32> },
-    CaretOffset { node: NodeKey },
-    Attributes { node: NodeKey, range: Range<u32> },
+    GetText {
+        node: NodeKey,
+        range: Range<u32>,
+    },
+    CaretOffset {
+        node: NodeKey,
+    },
+    Attributes {
+        node: NodeKey,
+        range: Range<u32>,
+    },
+    /// Lines of `node` that intersect `clip` (coordinates relative to the node's surface, ADR-0006
+    /// 3), top to bottom. Answered with `BackendReply::Lines`. The connector truncates at
+    /// `max_lines` lines or `max_bytes` bytes of text and says so in [`TextLines::truncated`].
+    VisibleLines {
+        node: NodeKey,
+        clip: Rect,
+        max_lines: u16,
+        max_bytes: u32,
+    },
+}
+
+/// One visual line of a text object.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TextLine {
+    /// Scalar offsets (TU-1) of the line in the node's text.
+    pub range: Range<u32>,
+    pub text: Arc<str>,
+    /// Extents relative to the surface; `None` when the toolkit could not give them.
+    pub rect: Option<Rect>,
+}
+
+/// Reply of [`TextQuery::VisibleLines`].
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TextLines {
+    pub lines: Vec<TextLine>,
+    /// The connector stopped at a bound.
+    pub truncated: bool,
 }
 
 /// Byte offset of the `scalar`-th scalar value, or `None` when out of range.

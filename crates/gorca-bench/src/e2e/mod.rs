@@ -34,6 +34,7 @@
 pub mod apps;
 pub mod host;
 pub mod m1;
+pub mod m4;
 pub mod mock;
 pub mod mono;
 pub mod runner;

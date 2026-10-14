@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use gorca_model::{
     AttrMap, NodeKey, NodeSnapshot, Point, PropMask, ReqId, Role, SnapshotBatch, StateSet,
-    TextQuery, Value,
+    TextLines, TextQuery, Value,
 };
 use gorca_rt::{BudgetClass, Deadline, oneshot};
 
@@ -102,6 +102,8 @@ pub enum BackendReply {
     ActionDone,
     Hit(Option<NodeKey>),
     Matches(Vec<NodeKey>),
+    /// Answer to `TextQuery::VisibleLines`.
+    Lines(TextLines),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]

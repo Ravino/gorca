@@ -310,3 +310,293 @@ impl Caller {
         Some((toolkit.ok()?, name.ok()?))
     }
 }
+
+// ---- review calls (ADR-0006 15.1): extents, text lines, actions, collection ------------------
+const COMPONENT: &str = "org.a11y.atspi.Component";
+const ACTION: &str = "org.a11y.atspi.Action";
+const SELECTION: &str = "org.a11y.atspi.Selection";
+const COLLECTION: &str = "org.a11y.atspi.Collection";
+/// `ATSPI_COORD_TYPE_WINDOW`: the only coordinate type gorca ever requests (SF-4). `SCREEN` (0)
+/// is meaningless on Wayland and GTK4 answers it with the origin.
+const COORD_WINDOW: u32 = 1;
+/// `ATSPI_TEXT_GRANULARITY_LINE`.
+const GRANULARITY_LINE: u32 = 3;
+
+/// One `Collection.GetMatches` rule on the wire: `(aiia{ss}iaiiasib)`.
+pub(super) type WireRule = (
+    Vec<i32>,
+    i32,
+    std::collections::HashMap<String, String>,
+    i32,
+    Vec<i32>,
+    i32,
+    Vec<String>,
+    i32,
+    bool,
+);
+
+impl Caller {
+    /// `Component.GetExtents(WINDOW)`.
+    pub(super) async fn extents_window(
+        &self,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<(i32, i32, i32, i32), DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                COMPONENT,
+                "GetExtents",
+                &(COORD_WINDOW,),
+            )
+            .await?;
+        m.body()
+            .deserialize::<(i32, i32, i32, i32)>()
+            .map_err(DbusError::Zbus)
+    }
+
+    pub(super) async fn grab_focus(
+        &self,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<bool, DbusError> {
+        let m = self
+            .call(&self.bus_name, deadline, path, COMPONENT, "GrabFocus", &())
+            .await?;
+        m.body().deserialize::<bool>().map_err(DbusError::Zbus)
+    }
+
+    pub(super) async fn text_char_count(
+        &self,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<i32, DbusError> {
+        let v = self
+            .prop(&self.bus_name, path, TEXT, "CharacterCount", deadline)
+            .await?;
+        i32::try_from(v).map_err(|e| DbusError::Zbus(e.into()))
+    }
+
+    pub(super) async fn text_caret(
+        &self,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<i32, DbusError> {
+        let v = self
+            .prop(&self.bus_name, path, TEXT, "CaretOffset", deadline)
+            .await?;
+        i32::try_from(v).map_err(|e| DbusError::Zbus(e.into()))
+    }
+
+    pub(super) async fn text_range(
+        &self,
+        path: &str,
+        start: i32,
+        end: i32,
+        deadline: Deadline,
+    ) -> Result<String, DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                TEXT,
+                "GetText",
+                &(start, end),
+            )
+            .await?;
+        m.body().deserialize::<String>().map_err(DbusError::Zbus)
+    }
+
+    /// `Text.GetStringAtOffset(offset, LINE)`: `(text, start, end)`.
+    pub(super) async fn line_at(
+        &self,
+        path: &str,
+        offset: i32,
+        deadline: Deadline,
+    ) -> Result<(String, i32, i32), DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                TEXT,
+                "GetStringAtOffset",
+                &(offset, GRANULARITY_LINE),
+            )
+            .await?;
+        m.body()
+            .deserialize::<(String, i32, i32)>()
+            .map_err(DbusError::Zbus)
+    }
+
+    /// `Text.GetRangeExtents(start, end, WINDOW)`.
+    pub(super) async fn range_extents(
+        &self,
+        path: &str,
+        start: i32,
+        end: i32,
+        deadline: Deadline,
+    ) -> Result<(i32, i32, i32, i32), DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                TEXT,
+                "GetRangeExtents",
+                &(start, end, COORD_WINDOW),
+            )
+            .await?;
+        m.body()
+            .deserialize::<(i32, i32, i32, i32)>()
+            .map_err(DbusError::Zbus)
+    }
+
+    /// `Text.GetOffsetAtPoint(x, y, WINDOW)`.
+    pub(super) async fn offset_at_point(
+        &self,
+        path: &str,
+        x: i32,
+        y: i32,
+        deadline: Deadline,
+    ) -> Result<i32, DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                TEXT,
+                "GetOffsetAtPoint",
+                &(x, y, COORD_WINDOW),
+            )
+            .await?;
+        m.body().deserialize::<i32>().map_err(DbusError::Zbus)
+    }
+
+    pub(super) async fn set_caret(
+        &self,
+        path: &str,
+        offset: i32,
+        deadline: Deadline,
+    ) -> Result<bool, DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                TEXT,
+                "SetCaretOffset",
+                &(offset,),
+            )
+            .await?;
+        m.body().deserialize::<bool>().map_err(DbusError::Zbus)
+    }
+
+    pub(super) async fn n_actions(&self, path: &str, deadline: Deadline) -> Result<i32, DbusError> {
+        let v = self
+            .prop(&self.bus_name, path, ACTION, "NActions", deadline)
+            .await?;
+        i32::try_from(v).map_err(|e| DbusError::Zbus(e.into()))
+    }
+
+    pub(super) async fn do_action(
+        &self,
+        path: &str,
+        index: i32,
+        deadline: Deadline,
+    ) -> Result<bool, DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                ACTION,
+                "DoAction",
+                &(index,),
+            )
+            .await?;
+        m.body().deserialize::<bool>().map_err(DbusError::Zbus)
+    }
+
+    pub(super) async fn index_in_parent(
+        &self,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<i32, DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                ACCESSIBLE,
+                "GetIndexInParent",
+                &(),
+            )
+            .await?;
+        m.body().deserialize::<i32>().map_err(DbusError::Zbus)
+    }
+
+    pub(super) async fn select_child(
+        &self,
+        parent_path: &str,
+        index: i32,
+        deadline: Deadline,
+    ) -> Result<bool, DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                parent_path,
+                SELECTION,
+                "SelectChild",
+                &(index,),
+            )
+            .await?;
+        m.body().deserialize::<bool>().map_err(DbusError::Zbus)
+    }
+
+    /// `Collection.GetMatches(rule, SORT_ORDER_CANONICAL, count, traverse = true)`.
+    pub(super) async fn get_matches(
+        &self,
+        path: &str,
+        rule: WireRule,
+        count: i32,
+        deadline: Deadline,
+    ) -> Result<Vec<(String, String)>, DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                COLLECTION,
+                "GetMatches",
+                &(rule, 0u32, count, true),
+            )
+            .await?;
+        if m.body().data().len() > items::MAX_DUMP_BYTES {
+            return Err(DbusError::Zbus(zbus::Error::Failure(
+                "GetMatches reply too large".to_owned(),
+            )));
+        }
+        let kids = m
+            .body()
+            .deserialize::<Vec<(String, OwnedObjectPath)>>()
+            .map_err(DbusError::Zbus)?;
+        Ok(kids
+            .into_iter()
+            .map(|(b, p)| (b, p.as_str().to_owned()))
+            .collect())
+    }
+
+    /// The `Parent` of an object as `(bus, path)`.
+    pub(super) async fn parent_ref(
+        &self,
+        path: &str,
+        deadline: Deadline,
+    ) -> Result<Option<(String, String)>, DbusError> {
+        self.parent_of(path, deadline).await
+    }
+}

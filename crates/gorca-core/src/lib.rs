@@ -45,8 +45,8 @@ pub use builtin_ext::AppProfile;
 pub use commands::{
     Availability, CmdSpec, CommandTable, Compiled, ConfigRequest, ContextMask, ControlMsg, CoreCmd,
     InputNotice, LoadCause, LoadedSettings, LocalTime, Milestone, PASS_TIMEOUT, PlatformFacts,
-    SaveResult, SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels, WallClock, command_id,
-    compile, gorca_modifiers, lane_settings,
+    SaveResult, SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels, WallClock, chord_grabs,
+    command_id, compile, gorca_modifiers, lane_settings,
 };
 pub use directory::MirrorDirectory;
 pub use doc_actor::DocActor;
@@ -55,7 +55,7 @@ pub use health::{
     AppHealth, HUNG_PROBE_MAX, HUNG_PROBE_MIN, HealthEffect, HealthMsg, HealthStepCtx,
     SLOW_RECOVERY, SLOW_WINDOW,
 };
-pub use mode::{BaseMode, Mode, ModeEffect, ModeKeys, ModeMsg, PassScope, ReviewCursor};
+pub use mode::{BaseMode, Mode, ModeEffect, ModeKeys, ModeMsg, PassScope};
 pub use present::log_states as snapshot_state_names;
 pub use present::value_text;
 pub use present::{
@@ -68,7 +68,11 @@ pub use reader::{
     BackgroundMsg, DUPLICATE_FOCUS_WINDOW, FetchKind, FocusLaneMsg, QueryReply, Reader,
     ReaderCounters, ReaderEffect, ReaderInbox, ReaderMsg, ReaderSenders, reader_channels,
 };
-pub use review::ReviewMsg;
+pub use review::{
+    BuildError, BuildRequest, Completeness, FlatPos, LineModel, ModelId, NavFetchError, NavOp,
+    ProbeItem, ReviewCounters, ReviewCursor, ReviewFrom, ReviewIo, ReviewKind, ReviewLimits,
+    ReviewMsg, ReviewOrigin, ReviewPos, ReviewState, RrVerdict,
+};
 pub use runtime::{
     Core, CoreConfig, CoreError, CoreStats, CoreStatsSnapshot, NullSpeech, SpeechOut,
 };

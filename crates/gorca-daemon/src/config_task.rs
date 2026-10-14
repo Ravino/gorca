@@ -86,6 +86,9 @@ pub fn build(text: Option<&str>, facts: &PlatformFacts, cause: LoadCause) -> Bui
         ));
     }
     let (mods, _) = gorca_core::gorca_modifiers(&l.settings, facts);
+    // Chords without the gorca modifier (the desktop layout's keypad review keys) are grabbed
+    // explicitly, and only once their command is implemented (K-1, K-8a).
+    let (commands, exact) = gorca_core::chord_grabs(&c.keymap, gorca_input_api::ModeKind::Focus);
     let loaded = LoadedSettings {
         cause,
         settings: l.settings.clone(),
@@ -95,6 +98,8 @@ pub fn build(text: Option<&str>, facts: &PlatformFacts, cause: LoadCause) -> Bui
         newer_schema: l.newer_schema,
         mode_keys: ModeKeys {
             modifiers: mods,
+            commands,
+            exact,
             ..ModeKeys::default()
         },
         caps_lock_dropped: c.caps_lock_dropped,

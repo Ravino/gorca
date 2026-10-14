@@ -9,16 +9,11 @@
 //! mode they return to ([`BaseMode`], ADR-0005 5.1). TBD: the extension veto hook.
 
 use gorca_input_api::{Chord, GrabSet, InputContext, ModeKind};
-use gorca_model::{DocId, NodeKey};
+use gorca_model::DocId;
 
 use gorca_doc::DocCursor;
 
-/// Review cursor over flat text, objects or a terminal screen. TBD: flat/object/terminal kinds.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct ReviewCursor {
-    pub node: NodeKey,
-    pub offset: u32,
-}
+pub use crate::review::{ReviewCursor, ReviewFrom, ReviewOrigin};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum PassScope {
@@ -36,9 +31,9 @@ pub enum Mode {
         cursor: DocCursor,
         sticky: bool,
     },
-    /// Flat/object review; terminal review.
+    /// Flat/object review; terminal review (ADR-0006).
     Review {
-        origin: NodeKey,
+        origin: ReviewOrigin,
         cursor: ReviewCursor,
     },
     PassThrough {
@@ -61,7 +56,7 @@ pub enum BaseMode {
         sticky: bool,
     },
     Review {
-        origin: NodeKey,
+        origin: ReviewOrigin,
         cursor: ReviewCursor,
     },
 }
@@ -97,8 +92,10 @@ impl BaseMode {
 pub struct ModeKeys {
     /// gorca's modifier keysym(s), for example Insert or Caps Lock.
     pub modifiers: Vec<u32>,
-    /// Explicit command chords.
+    /// Explicit command chords, expanded over the lock states on the wire.
     pub commands: Vec<Chord>,
+    /// Keypad command chords, exact (Num Lock changes their keysym, K-6a, K-8a).
+    pub exact: Vec<Chord>,
     /// Quick-navigation keys, grabbed only in Browse mode.
     pub quick_nav: Vec<Chord>,
     /// The chord(s) that leave pass-through.
@@ -169,11 +166,13 @@ impl Mode {
             Mode::Focus | Mode::Review { .. } => {
                 set.modifiers.extend(keys.modifiers.iter().copied());
                 set.chords.extend(keys.commands.iter().copied());
+                set.exact.extend(keys.exact.iter().copied());
             }
             Mode::Browse { .. } => {
                 set.modifiers.extend(keys.modifiers.iter().copied());
                 set.chords.extend(keys.commands.iter().copied());
                 set.chords.extend(keys.quick_nav.iter().copied());
+                set.exact.extend(keys.exact.iter().copied());
             }
             // Pass-next-key: nothing is grabbed, not even the modifiers, so the next key or
             // chord reaches the application natively (ADR-0005 5.3).
@@ -198,7 +197,7 @@ pub enum ModeMsg {
     },
     ExitBrowse,
     EnterReview {
-        origin: NodeKey,
+        origin: ReviewOrigin,
         cursor: ReviewCursor,
     },
     ExitReview,
@@ -263,7 +262,18 @@ impl Mode {
                 Mode::PassThrough { .. } | Mode::InputHelp { .. } => self,
             },
             ModeMsg::ExitReview => match self {
-                Mode::Review { .. } => Mode::Focus,
+                Mode::Review { origin, .. } => match origin.from {
+                    ReviewFrom::Focus => Mode::Focus,
+                    ReviewFrom::Browse {
+                        doc,
+                        cursor,
+                        sticky,
+                    } => Mode::Browse {
+                        doc,
+                        cursor,
+                        sticky,
+                    },
+                },
                 Mode::Focus
                 | Mode::Browse { .. }
                 | Mode::PassThrough { .. }
@@ -336,7 +346,7 @@ impl Mode {
 mod tests {
     use super::*;
     use gorca_input_api::Modifiers;
-    use gorca_model::{AppId, ConnectorId, DocNodeId, LocalId};
+    use gorca_model::{AppId, ConnectorId, DocNodeId, LocalId, NodeKey};
 
     const KP_INSERT: u32 = 0xff9e;
 
@@ -347,6 +357,7 @@ mod tests {
                 keysym: 0x68,
                 modifiers: Modifiers::CONTROL,
             }],
+            exact: Vec::new(),
             quick_nav: vec![Chord {
                 keysym: 0x68,
                 modifiers: Modifiers::empty(),
@@ -523,17 +534,12 @@ mod tests {
     #[test]
     fn review_and_pass_through_round_trips() {
         let k = keys();
-        let rc = ReviewCursor {
+        let rc = ReviewCursor::at(node(), crate::review::ReviewKind::Screen);
+        let origin = ReviewOrigin {
             node: node(),
-            offset: 0,
+            from: ReviewFrom::Focus,
         };
-        let (r, _) = Mode::Focus.step(
-            ModeMsg::EnterReview {
-                origin: node(),
-                cursor: rc,
-            },
-            &k,
-        );
+        let (r, _) = Mode::Focus.step(ModeMsg::EnterReview { origin, cursor: rc }, &k);
         assert!(matches!(r, Mode::Review { .. }));
         assert_eq!(r.step(ModeMsg::ExitReview, &k).0, Mode::Focus);
         let (p, _) = r.step(ModeMsg::StartPassThrough(PassScope::OneKey), &k);
@@ -541,12 +547,35 @@ mod tests {
             p,
             Mode::PassThrough {
                 scope: PassScope::OneKey,
-                resume: BaseMode::Review {
-                    origin: node(),
-                    cursor: rc
-                }
+                resume: BaseMode::Review { origin, cursor: rc }
             }
         );
         assert_eq!(p.step(ModeMsg::EndPassThrough, &k).0, r);
+    }
+
+    #[test]
+    fn leaving_review_returns_to_where_it_started() {
+        let k = keys();
+        let rc = ReviewCursor::at(node(), crate::review::ReviewKind::Object);
+        let origin = ReviewOrigin {
+            node: node(),
+            from: ReviewFrom::Browse {
+                doc: DocId(1),
+                cursor: cursor(),
+                sticky: true,
+            },
+        };
+        let (r, e) = browse().step(ModeMsg::EnterReview { origin, cursor: rc }, &k);
+        assert_eq!(e.len(), 2, "mode change: epoch and grab set");
+        let sticky = Mode::Browse {
+            doc: DocId(1),
+            cursor: cursor(),
+            sticky: true,
+        };
+        assert_eq!(r.step(ModeMsg::ExitReview, &k).0, sticky);
+        // Replacing the cursor in place is not a mode change (the Reader does it directly).
+        let (same, e) = r.step(ModeMsg::EnterReview { origin, cursor: rc }, &k);
+        assert_eq!(same, r);
+        assert!(e.is_empty());
     }
 }

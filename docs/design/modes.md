@@ -49,8 +49,8 @@ variants, K-6a). Only implemented commands are grabbed (K-1).
 
 | Mode | M1 | M4 adds | M7 adds |
 |---|---|---|---|
-| Focus | `M` | desktop layout: unmodified and Shift+ keypad review keys (§4.3) | — |
-| Review | `M` | same as Focus | — |
+| Focus | `M` | desktop layout: unmodified and Shift+ keypad review keys (§4.3), **exact** grabs: for each keypad chord the Num Lock off pair only, with and without Caps Lock (V-1: Shift does not change a keypad keysym; K-6a: with Num Lock on the keypad types digits) | — |
+| Review | `M` | same as Focus (the compiled chords of the Focus context) | — |
 | Browse | — | — | `M` + browse set (§4.4): quick-nav letters (± Shift), digits 1–9 (± Shift), `comma` (± Shift), arrows, Ctrl/Shift/Alt+arrows per §4.4, Home/End (± Ctrl, ± Shift), Prior/Next (± Shift), Return, KP_Enter, space, Ctrl+A, Ctrl+C, Ctrl+Alt+table keys; Escape only in Focus{Auto} |
 | PassThrough{OneKey} | ∅ | ∅ | ∅ |
 | PassThrough{UntilToggle} | — | — | `M` (M6) |
@@ -74,6 +74,7 @@ new ones are marked *new*.
 | Focus, Browse | `EnterReview{origin,cursor}` (review/object command, `review.toggle`) | Review | origin = focus node or browse cursor |
 | Review | `ExitReview` (`review.to_focus`, `review.toggle`) | Focus, or Browse if the review started in Browse | *new*: Review carries `from: ReviewFrom` (`Focus` or `Browse{..}`, never Review) |
 | Review | `FocusChanged` with `review.focus_follows = true` *new* | Focus | NVDA "focus moves navigator object" default on |
+| Review | `ReviewSurfaceGone` *new* (the navigator's app is gone) | Focus | no extra speech; focus speech follows (`AppGone`) |
 | Focus, Browse, Review | `StartPassThrough(OneKey)` | PassThrough{OneKey, resume: r} | grab set ∅ |
 | PassThrough{OneKey} | `PassKeyConsumed` *new* (input lane: first non-modifier press) | `resume` | |
 | PassThrough{OneKey} | `PassTimeout` *new* (10 s) | `resume` | spoken "pass next key cancelled" |
@@ -147,7 +148,13 @@ new ones are marked *new*.
 | mouse (KP_Divide, KP_Multiply, gorca+KP_Divide/KP_Multiply, laptop gorca+[ ] and Shift variants) | kept free | kept free | — (no pointer synthesis on Wayland in Phase 2) |
 | magnifier, screen curtain, OCR, remote, sound split | kept free | kept free | — |
 
-### 4.3 Review and object navigation (M4, reserved)
+### 4.3 Review and object navigation (M4a implemented, M4b reserved)
+
+M4a implements every row except: `review.prev_page`, `review.next_page`, `review.say_all`,
+`review.start_of_selection`, `review.end_of_selection`, `review.copy_mark`, `review.copy`,
+`review.caret_follows_toggle` and `info.read_window` (M4b, after M3), and the Orca-only `review.above` and
+`review.below` (declared, inert). Third presses of `review.cur_*` spell like the second (phonetic and code point
+need M3's verbalizer). `review.simple_toggle` is new and unbound in every preset.
 
 Desktop review keys are **unmodified keypad keys with Num Lock off**; they join the Focus grab set only in
 M4 (K-1). Laptop review uses gorca+letter/arrow chords.
@@ -272,7 +279,7 @@ are Orca commands with no gorca equivalent yet.
 | `review.end_of_line` | Orca+KP_End | Orca+Ctrl+M | M4 |
 | `review.say_all` | KP_Add ×2 | Orca+semicolon ×2 | M4 (explicit `×2`) |
 | `object.current` | Orca+KP_Begin | Orca+Ctrl+K | M4 |
-| review above / below | Orca+KP_Left / Orca+KP_Right | Orca+Ctrl+J / Orca+Ctrl+L | *not mapped* (flat-review geometry, ADR-0006) |
+| review above / below | Orca+KP_Left / Orca+KP_Right | Orca+Ctrl+J / Orca+Ctrl+L | M4b: `review.above` / `review.below` (declared, inert until then) |
 | `object.parent` / `first_child` / `next` / `prev` | Orca+Ctrl+Up / Down / Right / Left | same | M4 |
 | `review.activate` | Orca+Ctrl+Return | Orca+Ctrl+Return | M4 |
 | flat review find / next / previous | KP_Delete / Orca+KP_Delete / Orca+Shift+KP_Delete | Orca+[ / Orca+] / Orca+Ctrl+] | *not mapped* |

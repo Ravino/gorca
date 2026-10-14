@@ -89,6 +89,9 @@ pub enum CoreCmd {
     ReviewToggle,
     ReviewCaretFollowsToggle,
     ReviewFocusFollowsToggle,
+    ReviewSimpleToggle,
+    ReviewAbove,
+    ReviewBelow,
     ObjectCurrent,
     ObjectParent,
     ObjectFirstChild,
@@ -223,7 +226,6 @@ macro_rules! planned_cmds {
             | CoreCmd::InfoCurrentLine
             | CoreCmd::InfoSelection
             | CoreCmd::InfoFormatting
-            | CoreCmd::InfoStatusBar
             | CoreCmd::InfoReadWindow
             | CoreCmd::InfoBattery
             | CoreCmd::InfoFocusShortcut
@@ -239,41 +241,16 @@ macro_rules! planned_cmds {
             | CoreCmd::TextSpellChar
             | CoreCmd::TextSpellWord
             | CoreCmd::TextSpellLine
-            | CoreCmd::ReviewPrevLine
-            | CoreCmd::ReviewCurLine
-            | CoreCmd::ReviewNextLine
-            | CoreCmd::ReviewPrevWord
-            | CoreCmd::ReviewCurWord
-            | CoreCmd::ReviewNextWord
-            | CoreCmd::ReviewPrevChar
-            | CoreCmd::ReviewCurChar
-            | CoreCmd::ReviewNextChar
-            | CoreCmd::ReviewTop
-            | CoreCmd::ReviewBottom
-            | CoreCmd::ReviewStartOfLine
-            | CoreCmd::ReviewEndOfLine
             | CoreCmd::ReviewPrevPage
             | CoreCmd::ReviewNextPage
             | CoreCmd::ReviewSayAll
-            | CoreCmd::ReviewModeNext
-            | CoreCmd::ReviewModePrev
-            | CoreCmd::ReviewToFocus
-            | CoreCmd::ReviewMoveFocus
-            | CoreCmd::ReviewActivate
             | CoreCmd::ReviewStartOfSelection
             | CoreCmd::ReviewEndOfSelection
             | CoreCmd::ReviewCopyMark
             | CoreCmd::ReviewCopy
-            | CoreCmd::ReviewToggle
             | CoreCmd::ReviewCaretFollowsToggle
-            | CoreCmd::ReviewFocusFollowsToggle
-            | CoreCmd::ObjectCurrent
-            | CoreCmd::ObjectParent
-            | CoreCmd::ObjectFirstChild
-            | CoreCmd::ObjectNext
-            | CoreCmd::ObjectPrev
-            | CoreCmd::ObjectNextInFlow
-            | CoreCmd::ObjectPrevInFlow
+            | CoreCmd::ReviewAbove
+            | CoreCmd::ReviewBelow
             | CoreCmd::BrowseToggle
             | CoreCmd::BrowseSingleLetterToggle
             | CoreCmd::BrowseElementsList
@@ -396,7 +373,7 @@ macro_rules! planned_cmds {
 pub(crate) use planned_cmds;
 
 /// Number of commands.
-pub const COUNT: usize = 203;
+pub const COUNT: usize = 206;
 
 impl CoreCmd {
     /// Every command, in discriminant order.
@@ -480,6 +457,9 @@ impl CoreCmd {
         CoreCmd::ReviewToggle,
         CoreCmd::ReviewCaretFollowsToggle,
         CoreCmd::ReviewFocusFollowsToggle,
+        CoreCmd::ReviewSimpleToggle,
+        CoreCmd::ReviewAbove,
+        CoreCmd::ReviewBelow,
         CoreCmd::ObjectCurrent,
         CoreCmd::ObjectParent,
         CoreCmd::ObjectFirstChild,
@@ -851,7 +831,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::InfoStatusBar,
         name: "info.status_bar",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 2,
         interrupts: true,
@@ -1121,7 +1101,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewPrevLine,
         name: "review.prev_line",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1131,9 +1111,9 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewCurLine,
         name: "review.cur_line",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
-        max_press: 1,
+        max_press: 3,
         interrupts: true,
         input_help_bypass: false,
         help: "report the review line",
@@ -1141,7 +1121,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewNextLine,
         name: "review.next_line",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1151,7 +1131,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewPrevWord,
         name: "review.prev_word",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1161,9 +1141,9 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewCurWord,
         name: "review.cur_word",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
-        max_press: 1,
+        max_press: 3,
         interrupts: true,
         input_help_bypass: false,
         help: "report the review word",
@@ -1171,7 +1151,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewNextWord,
         name: "review.next_word",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1181,7 +1161,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewPrevChar,
         name: "review.prev_char",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1191,9 +1171,9 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewCurChar,
         name: "review.cur_char",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
-        max_press: 1,
+        max_press: 3,
         interrupts: true,
         input_help_bypass: false,
         help: "report the review character",
@@ -1201,7 +1181,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewNextChar,
         name: "review.next_char",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1211,7 +1191,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewTop,
         name: "review.top",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1221,7 +1201,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewBottom,
         name: "review.bottom",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1231,7 +1211,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewStartOfLine,
         name: "review.start_of_line",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1241,7 +1221,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewEndOfLine,
         name: "review.end_of_line",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1281,7 +1261,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewModeNext,
         name: "review.mode_next",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1291,7 +1271,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewModePrev,
         name: "review.mode_prev",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1301,7 +1281,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewToFocus,
         name: "review.to_focus",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1311,7 +1291,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewMoveFocus,
         name: "review.move_focus",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1321,7 +1301,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewActivate,
         name: "review.activate",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1371,7 +1351,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewToggle,
         name: "review.toggle",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1391,7 +1371,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ReviewFocusFollowsToggle,
         name: "review.focus_follows_toggle",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1399,11 +1379,41 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         help: "toggle the review cursor following the focus",
     },
     CmdSpec {
-        cmd: CoreCmd::ObjectCurrent,
-        name: "object.current",
+        cmd: CoreCmd::ReviewSimpleToggle,
+        name: "review.simple_toggle",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "toggle simple review, which skips layout-only objects",
+    },
+    CmdSpec {
+        cmd: CoreCmd::ReviewAbove,
+        name: "review.above",
         available: Availability::Planned(Milestone::M4),
         contexts: ContextMask::ANY,
         max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move the review cursor to the zone above",
+    },
+    CmdSpec {
+        cmd: CoreCmd::ReviewBelow,
+        name: "review.below",
+        available: Availability::Planned(Milestone::M4),
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move the review cursor to the zone below",
+    },
+    CmdSpec {
+        cmd: CoreCmd::ObjectCurrent,
+        name: "object.current",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 2,
         interrupts: true,
         input_help_bypass: false,
         help: "report the current object",
@@ -1411,7 +1421,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ObjectParent,
         name: "object.parent",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1421,7 +1431,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ObjectFirstChild,
         name: "object.first_child",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1431,7 +1441,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ObjectNext,
         name: "object.next",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1441,7 +1451,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ObjectPrev,
         name: "object.prev",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1451,7 +1461,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ObjectNextInFlow,
         name: "object.next_in_flow",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1461,7 +1471,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::ObjectPrevInFlow,
         name: "object.prev_in_flow",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,

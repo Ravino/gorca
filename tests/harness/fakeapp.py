@@ -13,7 +13,7 @@ Run it ONLY inside run-isolated.sh, with the system interpreter (needs python3-d
 Control channel: JSON lines on stdin (one command per line, optional "id" echoed back);
 JSON lines on stdout ("event": ready | reply | action | ...). EOF on stdin terminates the app.
 
-Scenarios: form, tree, storm, hung, terminal, malformed, switcher (see README.md and `--help`).
+Scenarios: form, tree, storm, hung, terminal, malformed, switcher, review (see README.md and `--help`).
 """
 import argparse
 import json
@@ -39,12 +39,20 @@ I = "org.a11y.atspi."
 IF_ACC, IF_COMP, IF_TEXT, IF_EDIT, IF_ACT, IF_APP, IF_CACHE = (
     I + "Accessible", I + "Component", I + "Text", I + "EditableText", I + "Action",
     I + "Application", I + "Cache")
+IF_COLL, IF_SEL = I + "Collection", I + "Selection"
 IF_PROPS = "org.freedesktop.DBus.Properties"
 EV_OBJ, EV_WIN, EV_FOCUS = I + "Event.Object", I + "Event.Window", I + "Event.Focus"
 
 # Role numbers: Atspi.Role (verified against pyatspi in the smoke test).
 R_APP, R_FRAME, R_PANEL, R_LABEL, R_BUTTON, R_ENTRY, R_TERMINAL, R_TEXT, R_CHECK, R_LIST_ITEM = (
     75, 23, 39, 29, 43, 79, 60, 61, 7, 32)
+# Review trees (ADR-0006): roles by name, Atspi.Role numbers.
+ROLE_BY_NAME = {"application": R_APP, "frame": R_FRAME, "window": 69, "dialog": 16, "alert": 2,
+                "panel": R_PANEL, "filler": 20, "label": R_LABEL, "push button": R_BUTTON,
+                "button": R_BUTTON, "entry": R_ENTRY, "text": R_TEXT, "check box": R_CHECK,
+                "list": 31, "list item": R_LIST_ITEM, "status bar": 54, "menu": 33,
+                "menu item": 35, "static": 116, "paragraph": 73, "heading": 83, "section": 85,
+                "terminal": R_TERMINAL}
 ROLE_NAMES = {R_APP: "application", R_FRAME: "frame", R_PANEL: "panel", R_LABEL: "label",
               R_BUTTON: "push button", R_ENTRY: "entry", R_TERMINAL: "terminal", R_TEXT: "text",
               R_CHECK: "check box", R_LIST_ITEM: "list item"}
@@ -54,8 +62,9 @@ S_PRESSED, S_SENSITIVE, S_SHOWING, S_SINGLE_LINE, S_VISIBLE = 20, 24, 25, 26, 30
 STATE_NAMES = {"active": S_ACTIVE, "checked": S_CHECKED, "editable": S_EDITABLE, "enabled": S_ENABLED,
                "focusable": S_FOCUSABLE, "focused": S_FOCUSED, "pressed": S_PRESSED,
                "sensitive": S_SENSITIVE, "showing": S_SHOWING, "visible": S_VISIBLE,
-               "busy": 3, "defunct": 6, "expanded": 10, "selected": 23}
+               "busy": 3, "defunct": 6, "expanded": 10, "selected": 23, "selectable": 22, "modal": 16}
 BASE_STATES = (S_ENABLED, S_SENSITIVE, S_SHOWING, S_VISIBLE)
+COORD_MODES = ("default", "window", "global")
 MALFORMED_MODES = ("bad_refs", "neg_offsets", "bad_payload", "count_mismatch", "bad_role_state", "huge")
 
 
@@ -70,9 +79,10 @@ def path_of(nid):
 
 class Node:
     __slots__ = ("id", "parent", "children", "role", "name", "desc", "states", "text", "caret",
-                 "actions", "editable")
+                 "actions", "editable", "extents", "no_text_extents", "hang")
 
-    def __init__(self, nid, parent, role, name, text=None, editable=False, actions=(), states=()):
+    def __init__(self, nid, parent, role, name, text=None, editable=False, actions=(), states=(),
+                 extents=None, no_text_extents=False):
         self.id = nid
         self.parent = parent
         self.children = []
@@ -84,6 +94,9 @@ class Node:
         self.caret = 0
         self.actions = list(actions)
         self.editable = editable
+        self.extents = tuple(extents) if extents else None   # (x, y, w, h), see App.coord
+        self.no_text_extents = no_text_extents                # GTK4 editables: F-3
+        self.hang = False                                     # never answer any call (OB-4)
 
 
 class ApiError(Exception):
@@ -138,6 +151,9 @@ class App:
         self.term_node = None
         self.term_timer = None
         self.cache_signals = True
+        self.coord = "default"       # Component.GetExtents flavour: default | window | global
+        self.review = False          # a review tree was built: Collection/Selection exist
+        self.member_calls = {}       # "Interface.Member" -> calls served since the last reset
 
     # ---- tree construction -------------------------------------------------------------------
     def add(self, parent, role, name, **kw):
@@ -184,6 +200,8 @@ class App:
             r.append(IF_EDIT)
         if n.actions:
             r.append(IF_ACT)
+        if self.review and n.children:
+            r.extend((IF_COLL, IF_SEL))
         return r
 
     def ref(self, n):
@@ -470,17 +488,28 @@ def _(app, n, x, y, t):
 
 
 def _extents(n):
+    if n.extents:
+        return n.extents
     return (n.id % 100 * 10, n.id // 100 % 100 * 10, 80, 20)
+
+
+def _coord_extents(app, n, t):
+    """GetExtents by coordinate flavour (ADR-0006 F-1, F-5): `window` is GTK4 (SCREEN has no
+    origin), `global` is St (ignores the coordinate type), `default` the pre-review behaviour."""
+    e = _extents(n)
+    if app.coord == "window" and t == 0:
+        return (0, 0, e[2], e[3])
+    return e
 
 
 @impl(IF_COMP, "GetExtents", "u", "(iiii)")
 def _(app, n, t):
-    return (dbus.Struct(tuple(map(dbus.Int32, _extents(n))), signature="iiii"),)
+    return (dbus.Struct(tuple(map(dbus.Int32, _coord_extents(app, n, t))), signature="iiii"),)
 
 
 @impl(IF_COMP, "GetPosition", "u", "ii")
 def _(app, n, t):
-    e = _extents(n)
+    e = _coord_extents(app, n, t)
     return (e[0], e[1])
 
 
@@ -501,6 +530,7 @@ def _(app, n):
 
 @impl(IF_COMP, "GrabFocus", "", "b")
 def _(app, n):
+    out({"event": "grab_focus", "node": n.name, "path": path_of(n.id)})
     if S_FOCUSABLE in n.states:
         app.set_focus(n)
         return (True,)
@@ -572,19 +602,115 @@ def _(app, n):
     return (dbus.Dictionary({}, signature="ss"),)
 
 
+def _line_starts(n):
+    """Offsets where each line of the text starts (a trailing newline ends the last line)."""
+    starts, pos = [0], 0
+    for part in n.text.split("\n")[:-1]:
+        pos += len(part) + 1
+        starts.append(pos)
+    return starts
+
+
+def _pos_of(n, off):
+    """(line index, column) of an offset."""
+    starts = _line_starts(n)
+    off = max(0, min(off, len(n.text)))
+    li = max(i for i, s0 in enumerate(starts) if s0 <= off)
+    return li, off - starts[li]
+
+
+def _no_ext(n):
+    if n.no_text_extents:
+        raise ApiError("org.freedesktop.DBus.Error.NotSupported", "extents on an editable")
+
+
 @impl(IF_TEXT, "GetCharacterExtents", "iu", "iiii")
 def _(app, n, off, t):
+    _no_ext(n)
+    if n.extents:
+        li, col = _pos_of(n, off)
+        return (n.extents[0] + col * 8, n.extents[1] + li * 16, 8, 16)
     return (off * 8, 0, 8, 16)
 
 
 @impl(IF_TEXT, "GetRangeExtents", "iiu", "iiii")
 def _(app, n, a, b, t):
+    _no_ext(n)
+    if n.extents:
+        # Window-relative (or stage) rectangle of a range that lies on one line: first line of
+        # the range decides y; the width counts characters up to the end of that line.
+        la, ca = _pos_of(n, a)
+        lb, cb = _pos_of(n, b)
+        end_col = cb if lb == la else len(n.text.split("\n")[la])
+        return (n.extents[0] + ca * 8, n.extents[1] + la * 16, max(1, end_col - ca) * 8, 16)
     return (a * 8, 0, max(0, b - a) * 8, 16)
 
 
 @impl(IF_TEXT, "GetOffsetAtPoint", "iiu", "i")
 def _(app, n, x, y, t):
+    if n.extents:
+        lines = n.text.split("\n")
+        starts = _line_starts(n)
+        li = max(0, min(len(lines) - 1, (y - n.extents[1]) // 16))
+        col = max(0, min(len(lines[li]), (x - n.extents[0]) // 8))
+        return (starts[li] + col,)
     return (max(0, min(len(n.text), x // 8)),)
+
+
+def _within(app, root, n):
+    while n is not None:
+        if n is root:
+            return True
+        n = app.nodes[n.parent] if n.parent is not None else None
+    return False
+
+
+@impl(IF_COLL, "GetMatches", "(aiia{ss}iaiiasib)uib", "a(so)")
+def _(app, n, rule, sortby, count, traverse):
+    states, smt, _attrs, _amt, roles, rmt, _ifaces, _imt, invert = rule
+    want = (int(states[0]) & 0xFFFFFFFF) | ((int(states[1]) & 0xFFFFFFFF) << 32 if len(states) > 1 else 0)
+    role_set = {int(r) for r in roles if int(r) != 0}
+    hits = []
+    for x in app.nodes:
+        if x is None or x is n or not _within(app, n, x):
+            continue
+        if not traverse and x.parent != n.id:
+            continue
+        bits = 0
+        for s0 in x.states:
+            bits |= 1 << s0
+        if smt == 1:
+            ok_s = (bits & want) == want
+        elif smt == 2:
+            ok_s = bool(bits & want)
+        elif smt == 3:
+            ok_s = not (bits & want)
+        else:
+            ok_s = True
+        if rmt == 2:
+            ok_r = x.role in role_set
+        elif rmt == 1:
+            ok_r = bool(role_set) and role_set == {x.role}
+        elif rmt == 3:
+            ok_r = x.role not in role_set
+        else:
+            ok_r = True
+        if (ok_s and ok_r) != bool(invert):
+            hits.append(app.ref(x))
+        if count > 0 and len(hits) >= count:
+            break
+    return (dbus.Array(hits, signature="(so)"),)
+
+
+@impl(IF_SEL, "SelectChild", "i", "b")
+def _(app, n, i):
+    if not 0 <= i < len(n.children):
+        return (False,)
+    c = app.nodes[n.children[i]]
+    out({"event": "select_child", "parent": n.name, "node": c.name, "index": i})
+    c.states.add(STATE_NAMES["selected"])
+    app.ev_state(c, STATE_NAMES["selected"], True)
+    return (True,)
 
 
 @impl(IF_EDIT, "SetTextContents", "s", "b")
@@ -737,6 +863,8 @@ def build_service_class(app):
 
     def _app_call(self, iface, member, path, args, r, e):
         app.stats["calls"] += 1
+        key = "%s.%s" % (iface.rsplit(".", 1)[1], member)
+        app.member_calls[key] = app.member_calls.get(key, 0) + 1
         try:
             node = None
             if iface != IF_CACHE:
@@ -745,6 +873,9 @@ def build_service_class(app):
                     raise ApiError("org.freedesktop.DBus.Error.UnknownObject", "no object at " + path)
                 if iface != IF_PROPS and iface not in app.ifaces(node):
                     raise ApiError("org.freedesktop.DBus.Error.UnknownMethod", iface + " not on " + path)
+            if node is not None and node.hang:
+                app.stats["hung"] += 1
+                return
             result = TABLE[(iface, member)][2](app, node, *args)
         except ApiError as ex:
             e(dbus.exceptions.DBusException(str(ex), name=ex.dbus_name))
@@ -956,6 +1087,62 @@ def build_tree(app):
     app.nodes[1].states.add(S_ACTIVE)
 
 
+def build_review(app):
+    """Root only; the test sends a `build` command with a whole tree (ADR-0006 test trees)."""
+    app.add(None, R_APP, app.args.name)
+    app.review = True
+
+
+def _role_of(v):
+    if isinstance(v, int):
+        return v
+    if v not in ROLE_BY_NAME:
+        raise ValueError("unknown role name %r (known: %s)" % (v, sorted(ROLE_BY_NAME)))
+    return ROLE_BY_NAME[v]
+
+
+def _build_below(app, parent, spec):
+    states = [STATE_NAMES[x] if isinstance(x, str) else int(x) for x in spec.get("states", ())]
+    if spec.get("focusable"):
+        states.append(S_FOCUSABLE)
+    editable = bool(spec.get("editable"))
+    if editable:
+        states.append(S_EDITABLE)
+    text = spec.get("text")
+    n = app.add(parent.id, _role_of(spec.get("role", "panel")), spec.get("name", ""), text=text,
+                editable=editable, actions=tuple(spec.get("actions", ())), states=states,
+                extents=spec.get("extents"),
+                no_text_extents=bool(spec.get("no_text_extents", editable and app.coord == "window")))
+    if spec.get("hang"):
+        n.hang = True
+    for child in spec.get("children", ()):
+        _build_below(app, n, child)
+    return n
+
+
+def build_tree_cmd(app, cmd):
+    """`{"cmd":"build","coord":"window|global|default","tree":{...}}`: replace everything below
+    the application root. A tree node is `{"name","role","extents":[x,y,w,h],"text","editable",
+    "focusable","states":[names],"actions":[names],"hang","no_text_extents","children":[...]}`;
+    `role` is a name from ROLE_BY_NAME or a number. The reply lists `paths` of named nodes."""
+    coord = cmd.get("coord", "window")
+    if coord not in COORD_MODES:
+        raise ValueError("coord must be one of %s" % (COORD_MODES,))
+    app.coord = coord
+    app.review = True
+    root = app.nodes[0]
+    keep_name = root.name
+    del app.nodes[1:]
+    root.children = []
+    app.by_name = {keep_name: 0} if keep_name else {}
+    app.focus_id = None
+    top = cmd["tree"]
+    tops = top if isinstance(top, list) else [top]
+    for spec in tops:
+        _build_below(app, root, spec)
+    return {"paths": {k: path_of(v) for k, v in app.by_name.items()}, "nodes": len(app.nodes)}
+
+
 def build_terminal(app):
     a = app.args
     app.add(None, R_APP, a.name)
@@ -1052,6 +1239,15 @@ def handle(app, cmd):
         term_start(app, float(cmd.get("fps", 60)), int(cmd.get("lines", 1)))
     elif c == "term_stop":
         term_start(app, 0, 0)
+    elif c == "build":
+        return build_tree_cmd(app, cmd)
+    elif c == "calls":
+        res = {"calls": dict(app.member_calls), "total": sum(app.member_calls.values())}
+        if cmd.get("reset"):
+            app.member_calls.clear()
+        return res
+    elif c == "hang_node":
+        app.node(cmd["node"]).hang = bool(cmd.get("on", True))
     elif c == "stats":
         return dict(app.stats, nodes=sum(1 for x in app.nodes if x is not None), seq=app.seq)
     elif c == "paths":
@@ -1105,7 +1301,7 @@ def a11y_address():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scenario", default="form",
-                    choices=["form", "tree", "storm", "hung", "terminal", "malformed", "switcher"])
+                    choices=["form", "tree", "storm", "hung", "terminal", "malformed", "switcher", "review"])
     ap.add_argument("--name", default="fakeapp")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--nodes", type=int, default=1000, help="tree: node count (up to 100k+)")
@@ -1149,6 +1345,8 @@ def main():
         build_terminal(app)
     elif sc == "switcher":
         build_switcher(app)
+    elif sc == "review":
+        build_review(app)
     else:
         build_tree(app)
     if args.malformed:

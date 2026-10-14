@@ -151,7 +151,12 @@ fn spoken(fx: &ReaderEffects) -> Vec<String> {
             | ReaderEffect::ArmTimer(_)
             | ReaderEffect::SetGrabSet(_)
             | ReaderEffect::SpeechCtl(_)
-            | ReaderEffect::Config(_) => None,
+            | ReaderEffect::Config(_)
+            | ReaderEffect::ReviewNav { .. }
+            | ReaderEffect::ReviewBuild(_)
+            | ReaderEffect::ReviewRevalidate { .. }
+            | ReaderEffect::ReviewStatusBar { .. }
+            | ReaderEffect::ReviewAct { .. } => None,
         })
         .collect()
 }
@@ -167,7 +172,12 @@ fn ctls(fx: &ReaderEffects) -> Vec<SpeechCtl> {
             | ReaderEffect::QueryActiveWindowFocus
             | ReaderEffect::ArmTimer(_)
             | ReaderEffect::SetGrabSet(_)
-            | ReaderEffect::Config(_) => None,
+            | ReaderEffect::Config(_)
+            | ReaderEffect::ReviewNav { .. }
+            | ReaderEffect::ReviewBuild(_)
+            | ReaderEffect::ReviewRevalidate { .. }
+            | ReaderEffect::ReviewStatusBar { .. }
+            | ReaderEffect::ReviewAct { .. } => None,
         })
         .collect()
 }
@@ -524,11 +534,11 @@ fn learn_mode_toggles_the_grab_set_and_describes_keys() {
         spoken(&fx),
         ["gorca T: report the window title; twice to spell it"]
     );
-    i.class = KeyClass::Described(Some(CoreCmd::ReviewCurLine.id()));
+    i.class = KeyClass::Described(Some(CoreCmd::ReviewSayAll.id()));
     let fx = f.reader.handle(ReaderMsg::Key(i), f.now);
     assert_eq!(
         spoken(&fx),
-        ["gorca T: report the review line, not available yet"]
+        ["gorca T: read from the review cursor, not available yet"]
     );
     i.class = KeyClass::Described(None);
     assert_eq!(

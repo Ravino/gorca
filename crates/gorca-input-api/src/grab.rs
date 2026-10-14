@@ -17,6 +17,10 @@ pub struct GrabSet {
     pub modifiers: HashSet<u32>,
     /// Explicit chords, stored **without** lock-bit variants.
     pub chords: HashSet<Chord>,
+    /// Chords registered exactly as listed, with their lock bits and no expansion. Keypad
+    /// chords live here: Mutter matches the exact keysym and state, and the keysym of a keypad
+    /// key depends on Num Lock (ADR-0005 K-8a, K-6a; platform check V-1).
+    pub exact: HashSet<Chord>,
     /// `InputHelp` mode: `GrabKeyboard`.
     pub grab_all: bool,
     /// Lookup context to use while this set is committed (ADR-0005 5.2). Not sent to Mutter.
@@ -25,7 +29,10 @@ pub struct GrabSet {
 
 impl GrabSet {
     pub fn is_empty(&self) -> bool {
-        !self.grab_all && self.modifiers.is_empty() && self.chords.is_empty()
+        !self.grab_all
+            && self.modifiers.is_empty()
+            && self.chords.is_empty()
+            && self.exact.is_empty()
     }
 
     /// O(1) membership test on the input lane. Lock bits are ignored (K-6).
@@ -36,6 +43,7 @@ impl GrabSet {
                 keysym,
                 modifiers: modifiers.without_locks(),
             })
+            || self.exact.contains(&Chord { keysym, modifiers })
     }
 
     /// Arguments of `SetKeyGrabs(au, a(uu))`, sorted for determinism, with every chord expanded
@@ -47,6 +55,7 @@ impl GrabSet {
             .chords
             .iter()
             .flat_map(|c| expand_lock_variants(*c))
+            .chain(self.exact.iter().copied())
             .map(|c| (c.keysym, c.modifiers.to_wire().bits()))
             .collect();
         strokes.sort_unstable();

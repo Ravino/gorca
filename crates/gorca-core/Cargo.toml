@@ -21,6 +21,7 @@ gorca-speech = { workspace = true }
 gorca-config = { workspace = true }
 chrono = { workspace = true }
 smallvec = { workspace = true }
+unicode-segmentation = { workspace = true }
 thiserror = { workspace = true }
 arc-swap = { workspace = true }
 tokio = { workspace = true }

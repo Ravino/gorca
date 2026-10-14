@@ -33,6 +33,10 @@ const K2_P99_MS: f64 = 5.0;
 const K3_P99_MS: f64 = 15.0;
 /// K2 under the L3-50k storm: K2's ceiling plus the 1 ms allowed by ADR-0005 10.1.
 const K2S_P99_MS: f64 = 6.0;
+/// M4a gate R1 (ADR-0006 18): a review step on a valid model, p99 3 ms (target 1 ms).
+const R1_P99_MS: f64 = 3.0;
+/// R1 under the L3-50k storm: R1's ceiling plus the 1 ms allowed by ADR-0006 18.
+const R1S_P99_MS: f64 = 4.0;
 
 fn arg_value(args: &[String], name: &str) -> Option<String> {
     args.iter()
@@ -121,6 +125,8 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     ("K2", "k2_ms", "p99") => Some(K2_P99_MS),
                     ("K2s", "k2s_ms", "p99") => Some(K2S_P99_MS),
                     ("K3", "k3_ms", "p99") => Some(K3_P99_MS),
+                    ("R1", "r1_ms", "p99") => Some(R1_P99_MS),
+                    ("R1s", "r1s_ms", "p99") => Some(R1S_P99_MS),
                     _ => None,
                 };
                 if let Some(t) = thr {
@@ -150,6 +156,7 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "app_doubled"
                     | "chord_leaked"
                     | "forged_accepted"
+                    | "rs_failures"
                     | "restore_failed"
                     | "grab_state_wrong"
                     | "held_keys"
