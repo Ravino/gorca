@@ -68,3 +68,21 @@ Recommended fix (not done, outside this round): make the warm-up sample a bounde
 ## Not verified
 
 W-V1..W-V5 and M-13 e2e were not run; the live checklist was not walked in a real Firefox session. Strict K2 to K4 and R1 were run before this round and not repeated after it (no input-lane code changed).
+
+## W2b after the warm-up fix (`bench/results/e2e/m7a-w2b-fix/`, 3 repeats, median)
+
+The warm-up now walks down to a small subtree (first, middle and last child, one `GetChildren` per level, flat lists cut at 64 children) and reads only that. The rest of the page arrives with the real build, which already starts with a first block. Earlier results are kept.
+
+| Phase | before (ms) | after (ms) |
+|---|---|---|
+| warm-up wall | 269 | 44 |
+| of which in D-Bus calls | 237 | 17 |
+| of which sleeps between rounds | 26 | 26 |
+| nodes sampled | 10 232 | 17 |
+| locate | 0.4 | 0.3 |
+| first block fetch | 12 (444 nodes) | 21 |
+| translate and publish | 1.1 | 1.2 |
+| wall, focus event to first line | 285 | 66 |
+| **gorca-side (gate 150 ms)** | **273** | **46 (p99 50): PASS** |
+
+The remaining warm-up time is mostly its own 26 ms sleep between the two agreeing rounds. Strict K2 to K4 and R1 were re-run after the change: all pass (`bench/results/e2e/m7a-strict2*`).

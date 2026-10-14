@@ -36,6 +36,55 @@ pub struct WarmReport {
     pub rounds: u32,
 }
 
+/// Deepest descent of the sampling window.
+const DESCENT_LIMIT: usize = 24;
+/// A subtree read by the window is cut off at this many children when descending (a flat list of
+/// thousands of items is not sampled whole).
+const WINDOW_CHILDREN: usize = 64;
+
+/// Walk from `start` towards the first (`idx == 0`), last (`idx + 1 == n`) or middle part of the
+/// page, one `GetChildren` per level, and return the path of the deepest node whose children are
+/// leaves (or the last node reached). The result is the root of a small `GetTree` sample.
+async fn descend(
+    conn: &Arc<AppConn>,
+    lane: usize,
+    start: &str,
+    idx: usize,
+    n: usize,
+    blocked: &mut Duration,
+) -> String {
+    let mut cur = start.to_owned();
+    let mut parent = start.to_owned();
+    for _ in 0..DESCENT_LIMIT {
+        let kids = match timed(
+            blocked,
+            conn.call(lane, dl(800), &cur, ACC, "GetChildren", &()),
+        )
+        .await
+        {
+            Ok(m) => wire::parse_children(m.body().data().bytes()).unwrap_or_default(),
+            Err(_) => return parent,
+        };
+        if kids.is_empty() {
+            // `cur` is a leaf: its parent is the small sample root.
+            return parent;
+        }
+        let pick = if idx == 0 {
+            0
+        } else if idx + 1 == n {
+            kids.len() - 1
+        } else {
+            kids.len() / 2
+        };
+        // A node with many children is the sample root itself: a flat list is not read whole.
+        if kids.len() > WINDOW_CHILDREN {
+            return kids[pick].1.clone();
+        }
+        parent = std::mem::replace(&mut cur, kids[pick].1.clone());
+    }
+    parent
+}
+
 /// Await `f`, adding its wall time to `acc`.
 async fn timed<T>(acc: &mut Duration, f: impl std::future::Future<Output = T>) -> T {
     let t = Instant::now();
@@ -127,9 +176,14 @@ pub async fn warm_domains(
             n => vec![0, n / 2, n - 1],
         };
         for i in picks {
+            // A bounded window: walk down to the parent of a leaf along the first, middle or
+            // last child (cheap `GetChildren` calls) and read only that small subtree. Reading
+            // the top-level subtree whole fetched the entire page twice (W2b, 237 ms on 10k
+            // nodes); the rest of the page arrives with the real build.
+            let target = descend(conn, lane, &kids[i].1, i, kids.len(), &mut rep.blocked).await;
             let Ok(m) = timed(
                 &mut rep.blocked,
-                get_tree_raw(conn, lane, &kids[i].1, dl(2000)),
+                get_tree_raw(conn, lane, &target, dl(2000)),
             )
             .await
             else {

@@ -1,0 +1,110 @@
+# e2e m7a-w2b-fix
+# utc=2026-10-14T06:47:31Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=6.87 8.56 8.24 1/2637 2462870
+# git_rev=d92d18c
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m7a-w2b-fix
+# reader=daemon:<repo>/.claude/worktrees/agent-a1d08cc29c61e0bae/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=6.87 8.56 8.24 1/2637 2462867
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+
+metric                     bus                median          min          max  n op    threshold  res   note
+W2b.w2b_gorca_ms.n         daemon/voicego            6            6            6  3                  info   [samples]
+W2b.w2b_gorca_ms.p50       daemon/voicego         46.0         42.1         46.0  3                  info   [ms]
+W2b.w2b_gorca_ms.p95       daemon/voicego         50.0         46.7         54.1  3                  info   [ms]
+W2b.w2b_gorca_ms.p99       daemon/voicego         50.0         46.7         54.1  3 <=          150  PASS   [ms]
+W2b.w2b_gorca_ms.p999      daemon/voicego         50.0         46.7         54.1  3                  info   [ms]
+W2b.w2b_gorca_ms.max       daemon/voicego         50.0         46.7         54.1  3                  info   [ms]
+W2b.w2b_ms.n               daemon/voicego            6            6            6  3                  info   [samples]
+W2b.w2b_ms.p50             daemon/voicego         65.8         65.0         67.8  3                  info   [ms]
+W2b.w2b_ms.p95             daemon/voicego         75.5         74.7         80.0  3                  info   [ms]
+W2b.w2b_ms.p99             daemon/voicego         75.5         74.7         80.0  3                  info   [ms]
+W2b.w2b_ms.p999            daemon/voicego         75.5         74.7         80.0  3                  info   [ms]
+W2b.w2b_ms.max             daemon/voicego         75.5         74.7         80.0  3                  info   [ms]
+W2b.w2b_phase_create_ms.n  daemon/voicego            6            6            6  3                  info   [samples]
+W2b.w2b_phase_create_ms.p50 daemon/voicego        0.003        0.003        0.003  3                  info   [ms]
+W2b.w2b_phase_create_ms.p95 daemon/voicego        0.003        0.003        0.007  3                  info   [ms]
+W2b.w2b_phase_create_ms.p99 daemon/voicego        0.003        0.003        0.007  3                  info   [ms]
+W2b.w2b_phase_create_ms.p999 daemon/voicego        0.003        0.003        0.007  3                  info   [ms]
+W2b.w2b_phase_create_ms.max daemon/voicego        0.003        0.003        0.007  3                  info   [ms]
+W2b.w2b_phase_firefox_blocked_ms.n daemon/voicego            6            6            6  3                  info   [samples]
+W2b.w2b_phase_firefox_blocked_ms.p50 daemon/voicego         21.6         19.8         22.2  3                  info   [ms]
+W2b.w2b_phase_firefox_blocked_ms.p95 daemon/voicego         33.8         30.2         35.0  3                  info   [ms]
+W2b.w2b_phase_firefox_blocked_ms.p99 daemon/voicego         33.8         30.2         35.0  3                  info   [ms]
+W2b.w2b_phase_firefox_blocked_ms.p999 daemon/voicego         33.8         30.2         35.0  3                  info   [ms]
+W2b.w2b_phase_firefox_blocked_ms.max daemon/voicego         33.8         30.2         35.0  3                  info   [ms]
+W2b.w2b_phase_first_block_ms.n daemon/voicego            6            6            6  3                  info   [samples]
+W2b.w2b_phase_first_block_ms.p50 daemon/voicego         21.3         19.5         21.9  3                  info   [ms]
+W2b.w2b_phase_first_block_ms.p95 daemon/voicego         33.5         29.9         34.8  3                  info   [ms]
+W2b.w2b_phase_first_block_ms.p99 daemon/voicego         33.5         29.9         34.8  3                  info   [ms]
+W2b.w2b_phase_first_block_ms.p999 daemon/voicego         33.5         29.9         34.8  3                  info   [ms]
+W2b.w2b_phase_first_block_ms.max daemon/voicego         33.5         29.9         34.8  3                  info   [ms]
+W2b.w2b_phase_first_block_nodes.n daemon/voicego            6            6            6  3                  info   [samples]
+W2b.w2b_phase_first_block_nodes.p50 daemon/voicego          444          444          444  3                  info   [ms]
+W2b.w2b_phase_first_block_nodes.p95 daemon/voicego          444          444          444  3                  info   [ms]
+W2b.w2b_phase_first_block_nodes.p99 daemon/voicego          444          444          444  3                  info   [ms]
+W2b.w2b_phase_first_block_nodes.p999 daemon/voicego          444          444          444  3                  info   [ms]
+W2b.w2b_phase_first_block_nodes.max daemon/voicego          444          444          444  3                  info   [ms]
+W2b.w2b_phase_locate_ms.n  daemon/voicego            6            6            6  3                  info   [samples]
+W2b.w2b_phase_locate_ms.p50 daemon/voicego        0.291        0.285        0.366  3                  info   [ms]
+W2b.w2b_phase_locate_ms.p95 daemon/voicego        0.401        0.315        0.441  3                  info   [ms]
+W2b.w2b_phase_locate_ms.p99 daemon/voicego        0.401        0.315        0.441  3                  info   [ms]
+W2b.w2b_phase_locate_ms.p999 daemon/voicego        0.401        0.315        0.441  3                  info   [ms]
+W2b.w2b_phase_locate_ms.max daemon/voicego        0.401        0.315        0.441  3                  info   [ms]
+W2b.w2b_phase_translate_ms.n daemon/voicego            6            6            6  3                  info   [samples]
+W2b.w2b_phase_translate_ms.p50 daemon/voicego        1.226        1.186        1.238  3                  info   [ms]
+W2b.w2b_phase_translate_ms.p95 daemon/voicego        1.320        1.300        4.332  3                  info   [ms]
+W2b.w2b_phase_translate_ms.p99 daemon/voicego        1.320        1.300        4.332  3                  info   [ms]
+W2b.w2b_phase_translate_ms.p999 daemon/voicego        1.320        1.300        4.332  3                  info   [ms]
+W2b.w2b_phase_translate_ms.max daemon/voicego        1.320        1.300        4.332  3                  info   [ms]
+W2b.w2b_phase_warm_blocked_ms.n daemon/voicego            6            6            6  3                  info   [samples]
+W2b.w2b_phase_warm_blocked_ms.p50 daemon/voicego         16.7         12.6         17.1  3                  info   [ms]
+W2b.w2b_phase_warm_blocked_ms.p95 daemon/voicego         20.5         17.7         20.8  3                  info   [ms]
+W2b.w2b_phase_warm_blocked_ms.p99 daemon/voicego         20.5         17.7         20.8  3                  info   [ms]
+W2b.w2b_phase_warm_blocked_ms.p999 daemon/voicego         20.5         17.7         20.8  3                  info   [ms]
+W2b.w2b_phase_warm_blocked_ms.max daemon/voicego         20.5         17.7         20.8  3                  info   [ms]
+W2b.w2b_phase_warm_probes.n daemon/voicego            6            6            6  3                  info   [samples]
+W2b.w2b_phase_warm_probes.p50 daemon/voicego           13           13           13  3                  info   [ms]
+W2b.w2b_phase_warm_probes.p95 daemon/voicego           13           13           13  3                  info   [ms]
+W2b.w2b_phase_warm_probes.p99 daemon/voicego           13           13           13  3                  info   [ms]
+W2b.w2b_phase_warm_probes.p999 daemon/voicego           13           13           13  3                  info   [ms]
+W2b.w2b_phase_warm_probes.max daemon/voicego           13           13           13  3                  info   [ms]
+W2b.w2b_phase_warm_rounds.n daemon/voicego            6            6            6  3                  info   [samples]
+W2b.w2b_phase_warm_rounds.p50 daemon/voicego            2            2            2  3                  info   [ms]
+W2b.w2b_phase_warm_rounds.p95 daemon/voicego            2            2            2  3                  info   [ms]
+W2b.w2b_phase_warm_rounds.p99 daemon/voicego            2            2            2  3                  info   [ms]
+W2b.w2b_phase_warm_rounds.p999 daemon/voicego            2            2            2  3                  info   [ms]
+W2b.w2b_phase_warm_rounds.max daemon/voicego            2            2            2  3                  info   [ms]
+W2b.w2b_phase_warm_sampled_nodes.n daemon/voicego            6            6            6  3                  info   [samples]
+W2b.w2b_phase_warm_sampled_nodes.p50 daemon/voicego           17           17           17  3                  info   [ms]
+W2b.w2b_phase_warm_sampled_nodes.p95 daemon/voicego           17           17           17  3                  info   [ms]
+W2b.w2b_phase_warm_sampled_nodes.p99 daemon/voicego           17           17           17  3                  info   [ms]
+W2b.w2b_phase_warm_sampled_nodes.p999 daemon/voicego           17           17           17  3                  info   [ms]
+W2b.w2b_phase_warm_sampled_nodes.max daemon/voicego           17           17           17  3                  info   [ms]
+W2b.w2b_phase_warm_slept_ms.n daemon/voicego            6            6            6  3                  info   [samples]
+W2b.w2b_phase_warm_slept_ms.p50 daemon/voicego         26.2         26.1         26.2  3                  info   [ms]
+W2b.w2b_phase_warm_slept_ms.p95 daemon/voicego         26.2         26.2         26.2  3                  info   [ms]
+W2b.w2b_phase_warm_slept_ms.p99 daemon/voicego         26.2         26.2         26.2  3                  info   [ms]
+W2b.w2b_phase_warm_slept_ms.p999 daemon/voicego         26.2         26.2         26.2  3                  info   [ms]
+W2b.w2b_phase_warm_slept_ms.max daemon/voicego         26.2         26.2         26.2  3                  info   [ms]
+W2b.w2b_phase_warm_wall_ms.n daemon/voicego            6            6            6  3                  info   [samples]
+W2b.w2b_phase_warm_wall_ms.p50 daemon/voicego         44.0         40.2         44.1  3                  info   [ms]
+W2b.w2b_phase_warm_wall_ms.p95 daemon/voicego         47.9         44.6         47.9  3                  info   [ms]
+W2b.w2b_phase_warm_wall_ms.p99 daemon/voicego         47.9         44.6         47.9  3                  info   [ms]
+W2b.w2b_phase_warm_wall_ms.p999 daemon/voicego         47.9         44.6         47.9  3                  info   [ms]
+W2b.w2b_phase_warm_wall_ms.max daemon/voicego         47.9         44.6         47.9  3                  info   [ms]
+W2b.lost                   daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [trials]
