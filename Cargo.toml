@@ -63,6 +63,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 # Data structures.
 serde = { version = "1", default-features = false }
 smallvec = "1"
+unicode-segmentation = "1"
 bitflags = "2"
 arc-swap = "1"
 scc = "3"

@@ -45,13 +45,14 @@ const MAX_CONTROL_PER_PUMP: usize = 64;
 const MAX_FILL_MSGS_PER_PUMP: usize = 128;
 /// Queue of Reader-to-actor fill messages.
 pub const FILL_QUEUE: usize = 256;
-/// The fields a property event can invalidate (`BOUNDS` is ignored in M2).
+/// The fields a property event can invalidate. `BOUNDS` joined for review (ADR-0006 17, IC-24).
 const EVENTED: PropMask = PropMask::NAME
     .union(PropMask::DESCRIPTION)
     .union(PropMask::VALUE)
     .union(PropMask::ROLE)
     .union(PropMask::STATES)
-    .union(PropMask::ATTRS);
+    .union(PropMask::ATTRS)
+    .union(PropMask::BOUNDS);
 /// Known ancestors whose name may derive from content that a NAME change invalidates (P9-3).
 const NAME_ANCESTOR_LEVELS: usize = 8;
 /// On-read TTL of the Shell; every other app uses [`gorca_mirror::DEFAULT_TTL`] (B-1 2.2).
@@ -74,6 +75,15 @@ pub enum FillMsg {
         node: NodeKey,
         issued_at: u64,
         result: Result<Arc<NodeSnapshot>, BackendError>,
+    },
+    /// Review fetched nodes (object navigation, model builds, revalidation): apply them to the
+    /// mirror through the shared driver (ADR-0006 OB-5), then acknowledge, so the Reader never
+    /// reads the mirror before the nodes it was told about are in it.
+    ReviewApply {
+        node: NodeKey,
+        issued_at: u64,
+        result: Result<SnapshotBatch, BackendError>,
+        ack: Option<gorca_rt::oneshot::Sender<()>>,
     },
 }
 
@@ -131,7 +141,8 @@ fn fill_reply(r: Result<BackendReply, BackendError>) -> FillReply {
             | BackendReply::TextAttributes(_)
             | BackendReply::ActionDone
             | BackendReply::Hit(_)
-            | BackendReply::Matches(_),
+            | BackendReply::Matches(_)
+            | BackendReply::Lines(_),
         ) => FillReply::Err(FillError::Protocol),
         Err(e) => FillReply::Err(fill_error(&e)),
     }
@@ -537,6 +548,28 @@ impl AppActor {
                 };
                 self.driver
                     .on_input(&cx, &mut self.writer, FillInput::FocusSettled { node });
+            }
+            FillMsg::ReviewApply {
+                node,
+                issued_at,
+                result,
+                ack,
+            } => {
+                let cx = DriverCx {
+                    now,
+                    health,
+                    mirror: &self.read,
+                    focus: self.focus,
+                };
+                let reply = match result {
+                    Ok(b) => FillReply::Ok(b),
+                    Err(e) => FillReply::Err(fill_error(&e)),
+                };
+                self.driver
+                    .on_external_reply(&cx, &mut self.writer, node, issued_at, reply);
+                if let Some(a) = ack {
+                    let _ = a.send(());
+                }
             }
             FillMsg::ReaderFetch {
                 node,

@@ -197,6 +197,86 @@ pub(crate) fn present_change(
     }
 }
 
+/// Roles whose own name is the content: the role word adds nothing in a line of text.
+fn is_plain_text_role(role: gorca_model::Role) -> bool {
+    use gorca_model::Role;
+    match role {
+        Role::Unknown
+        | Role::Label
+        | Role::StaticText
+        | Role::Paragraph
+        | Role::ListItem
+        | Role::Cell
+        | Role::Row
+        | Role::ColumnHeader
+        | Role::RowHeader => true,
+        Role::Application
+        | Role::Window
+        | Role::Dialog
+        | Role::Panel
+        | Role::Document
+        | Role::Heading
+        | Role::Link
+        | Role::Image
+        | Role::List
+        | Role::Table
+        | Role::Button
+        | Role::ToggleButton
+        | Role::CheckBox
+        | Role::RadioButton
+        | Role::ComboBox
+        | Role::TextEntry
+        | Role::PasswordEntry
+        | Role::SpinButton
+        | Role::Slider
+        | Role::ProgressBar
+        | Role::Menu
+        | Role::MenuBar
+        | Role::MenuItem
+        | Role::Popover
+        | Role::Tab
+        | Role::TabList
+        | Role::Tree
+        | Role::TreeItem
+        | Role::Toolbar
+        | Role::StatusBar
+        | Role::Separator
+        | Role::Terminal
+        | Role::Landmark
+        | Role::Alert => false,
+    }
+}
+
+/// What a flat-review zone says for a whole object (ADR-0006 6.3 rule 2): the name (or the
+/// value), then a role word for controls and the same state words as focus speech. "Wi-Fi toggle
+/// button checked", "Apply button", "Volume slider 40". Empty when the node has nothing to say.
+pub fn flat_zone_text(n: &NodeSnapshot) -> String {
+    let mut out = String::new();
+    let mut push = |s: &str| {
+        if !s.is_empty() {
+            if !out.is_empty() {
+                out.push(' ');
+            }
+            out.push_str(s);
+        }
+    };
+    if let Some(name) = n.name.as_deref().filter(|s| !s.is_empty()) {
+        push(name);
+    }
+    if !is_plain_text_role(n.role) {
+        push(n.role.spoken());
+    }
+    for (flag, word) in STATE_WORDS {
+        if n.states.contains(*flag) {
+            push(word);
+        }
+    }
+    if let Some(v) = value_text(n.value.as_ref()) {
+        push(&v);
+    }
+    out
+}
+
 #[cfg(test)]
 mod change_tests {
     use super::*;

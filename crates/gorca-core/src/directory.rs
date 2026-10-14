@@ -51,6 +51,11 @@ impl MirrorDirectory {
         }
     }
 
+    /// The app's mirror read handle (one directory lookup, then lock-free reads).
+    pub fn handle(&self, app: AppId) -> Option<MirrorHandle> {
+        self.apps.load().get(&app).cloned()
+    }
+
     /// The app's mirror write sequence (what a request issued now records as `issued_at`); 0 for
     /// an unknown app.
     pub fn seq(&self, app: AppId) -> u64 {
@@ -74,6 +79,12 @@ impl MirrorDirectory {
 
     pub fn is_empty(&self) -> bool {
         self.apps.load().is_empty()
+    }
+}
+
+impl crate::review::NavSource for MirrorDirectory {
+    fn view(&self, k: NodeKey) -> Lookup<NodeView> {
+        MirrorDirectory::view(self, k)
     }
 }
 

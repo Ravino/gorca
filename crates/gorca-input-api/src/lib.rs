@@ -30,8 +30,8 @@ pub use keymap::{
     ModeKind, TableKind,
 };
 pub use keys::{
-    KeyResolver, StaticResolver, is_control, is_modifier_keysym, is_shift, modifier_keysym,
-    spoken_key_name, static_keycode, static_keysym, sym,
+    KeyResolver, StaticResolver, is_control, is_modifier_keysym, is_shift, keypad_digit_keysym,
+    keysym_of_code, modifier_keysym, spoken_key_name, static_keycode, static_keysym, sym,
 };
 pub use lane::{HELP_IDLE, HELP_STALL, InputLane, LaneAlert, LaneOut, LaneStats, SHIFT_TAP_MAX};
 pub use mutter_model::{Ev, Replica, Timing, Verdict};

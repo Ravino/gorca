@@ -1,0 +1,878 @@
+//! Reader-level tests of the review arm, driven through `Reader::handle` like the keys are.
+#![allow(
+    clippy::wildcard_enum_match_arm,
+    clippy::unnecessary_wraps,
+    clippy::unwrap_used,
+    clippy::single_match_else,
+    clippy::redundant_closure
+)]
+
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use gorca_input_api::{KeyClass, KeyEvent, KeyIntent, Modifiers, PressKind};
+use gorca_mirror::{ApplyOrigin, MirrorRead, MirrorWriter, mirror};
+use gorca_model::{
+    AppId, AttrMap, ChildList, ConnectorId, Epoch, Freshness, Ifaces, LocalId, NodeKey,
+    NodeSnapshot, PropMask, Rect, Relations, Role, SnapshotBatch, StateSet,
+};
+use gorca_rt::EpochCell;
+
+use super::build::{HandleSrc, NavFetchError};
+use super::cluster::{BuildInput, build_line_model};
+use super::collect::collect;
+use super::{BuildId, LineModel, ReviewMsg, ReviewOrigin};
+use crate::commands::CoreCmd;
+use crate::directory::MirrorDirectory;
+use crate::mode::{Mode, ModeKeys};
+use crate::reader::{Reader, ReaderEffect, ReaderEffects, ReaderMsg};
+
+fn app() -> AppId {
+    AppId {
+        connector: ConnectorId(1),
+        serial: 1,
+    }
+}
+
+fn key(n: u64) -> NodeKey {
+    NodeKey {
+        app: app(),
+        local: LocalId(n),
+    }
+}
+
+fn node(
+    n: u64,
+    role: Role,
+    name: &str,
+    parent: Option<u64>,
+    kids: &[u64],
+    r: Option<Rect>,
+) -> Arc<NodeSnapshot> {
+    let mut have = PropMask::PRESENT | PropMask::CHILDREN | PropMask::PARENT;
+    if r.is_some() {
+        have |= PropMask::BOUNDS;
+    }
+    Arc::new(NodeSnapshot {
+        key: key(n),
+        role,
+        states: if matches!(role, Role::Button | Role::TextEntry) {
+            StateSet::SHOWING | StateSet::VISIBLE | StateSet::FOCUSABLE
+        } else {
+            StateSet::SHOWING | StateSet::VISIBLE
+        },
+        name: (!name.is_empty()).then(|| Arc::from(name)),
+        description: None,
+        value: None,
+        parent: parent.map(key),
+        children: ChildList::Known(kids.iter().map(|k| key(*k)).collect()),
+        interfaces: Ifaces::empty(),
+        attrs: AttrMap::default(),
+        relations: Relations::default(),
+        bounds: r,
+        have,
+        confirmed_seq: 0,
+        fresh: Freshness::Fresh { at: Instant::now() },
+    })
+}
+
+fn rect(x: i32, y: i32, w: u32, h: u32) -> Option<Rect> {
+    Some(Rect { x, y, w, h })
+}
+
+/// A GTK4-like dialog: window 1 > panel 2 > [label 3, entry 4, button 5, button 6], and a status
+/// bar 7 > label 8 in the window.
+fn dialog() -> Vec<Arc<NodeSnapshot>> {
+    vec![
+        node(
+            1,
+            Role::Window,
+            "Settings",
+            None,
+            &[2, 7],
+            rect(0, 0, 400, 300),
+        ),
+        node(
+            2,
+            Role::Panel,
+            "",
+            Some(1),
+            &[3, 4, 5, 6],
+            rect(0, 0, 400, 200),
+        ),
+        node(3, Role::Label, "Name", Some(2), &[], rect(10, 10, 60, 20)),
+        node(
+            4,
+            Role::TextEntry,
+            "Name",
+            Some(2),
+            &[],
+            rect(80, 10, 200, 20),
+        ),
+        node(5, Role::Button, "Apply", Some(2), &[], rect(10, 50, 80, 24)),
+        node(
+            6,
+            Role::Button,
+            "Cancel",
+            Some(2),
+            &[],
+            rect(100, 51, 80, 24),
+        ),
+        node(7, Role::StatusBar, "", Some(1), &[8], rect(0, 270, 400, 30)),
+        node(8, Role::Label, "Ready", Some(7), &[], rect(4, 275, 60, 20)),
+    ]
+}
+
+struct Fx {
+    reader: Reader,
+    writer: MirrorWriter,
+    epoch: Arc<EpochCell>,
+    now: Instant,
+}
+
+fn fixture() -> Fx {
+    let epoch = Arc::new(EpochCell::new());
+    let dir = Arc::new(MirrorDirectory::new());
+    let (writer, handle) = mirror();
+    dir.insert(app(), &handle);
+    let reader = Reader::new(Arc::clone(&epoch), dir, ModeKeys::default());
+    Fx {
+        reader,
+        writer,
+        epoch,
+        now: Instant::now(),
+    }
+}
+
+fn press(cmd: CoreCmd, repeat: u8, epoch: u64) -> KeyIntent {
+    KeyIntent {
+        event: KeyEvent {
+            keycode: 79,
+            keysym: 0xff95,
+            unichar: 0,
+            modifiers: Modifiers::empty(),
+            pressed: true,
+        },
+        kind: PressKind::Press,
+        class: KeyClass::Command(cmd.id()),
+        repeat,
+        chord: None,
+        epoch: Epoch(epoch),
+        at: Instant::now(),
+    }
+}
+
+impl Fx {
+    fn load(&mut self, nodes: Vec<Arc<NodeSnapshot>>) {
+        self.writer.apply(
+            SnapshotBatch {
+                nodes,
+                ..Default::default()
+            },
+            ApplyOrigin::Push,
+        );
+    }
+
+    fn focus(&mut self, n: u64) {
+        self.reader.handle(
+            ReaderMsg::Focus(crate::FocusLaneMsg::FocusChanged { node: key(n) }),
+            self.now,
+        );
+        // Let the settle timer elapse so the focus is presented.
+        self.now += Duration::from_millis(60);
+        self.reader.handle(ReaderMsg::Timer, self.now);
+    }
+
+    fn run(&mut self, cmd: CoreCmd) -> ReaderEffects {
+        self.run_n(cmd, 1)
+    }
+
+    fn run_n(&mut self, cmd: CoreCmd, repeat: u8) -> ReaderEffects {
+        let e = self.epoch.advance();
+        self.reader
+            .handle(ReaderMsg::Key(press(cmd, repeat, e.0)), self.now)
+    }
+
+    fn review(&mut self, m: ReviewMsg) -> ReaderEffects {
+        self.reader.handle(ReaderMsg::Review(m), self.now)
+    }
+
+    /// The model a build of `surface` would give from what the mirror holds now.
+    fn model(&self, surface: u64) -> Arc<LineModel> {
+        let h = self.writer.reader();
+        let c = collect(&HandleSrc(&h), key(surface), super::ReviewLimits::default());
+        assert!(c.misses.is_empty(), "{:?}", c.misses);
+        Arc::new(build_line_model(
+            &BuildInput {
+                app: app(),
+                surface: key(surface),
+                nodes: c.nodes,
+                built_rev: h.revision(),
+                built_at: Instant::now(),
+                truncated: c.truncated,
+            },
+            &super::ReviewLimits::default(),
+        ))
+    }
+}
+
+fn said(fx: &ReaderEffects) -> Vec<String> {
+    fx.iter()
+        .filter_map(|e| match e {
+            ReaderEffect::Speak(s) => Some(
+                s.utterance
+                    .segments
+                    .iter()
+                    .map(|g| &*g.text)
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            ),
+            _ => None,
+        })
+        .collect()
+}
+
+fn effects(fx: &ReaderEffects, f: impl Fn(&ReaderEffect) -> bool) -> usize {
+    fx.iter().filter(|e| f(e)).count()
+}
+
+fn is_ipc(e: &ReaderEffect) -> bool {
+    matches!(
+        e,
+        ReaderEffect::Fetch { .. }
+            | ReaderEffect::ReviewNav { .. }
+            | ReaderEffect::ReviewBuild(_)
+            | ReaderEffect::ReviewRevalidate { .. }
+            | ReaderEffect::ReviewStatusBar { .. }
+            | ReaderEffect::ReviewAct { .. }
+    )
+}
+
+fn built_request(fx: &ReaderEffects) -> Option<BuildId> {
+    fx.iter().find_map(|e| match e {
+        ReaderEffect::ReviewBuild(b) => Some(b.build),
+        _ => None,
+    })
+}
+
+// ---- object navigation ---------------------------------------------------------------------
+
+#[test]
+fn object_moves_over_the_mirror_skip_layout_and_speak_like_focus() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(4);
+    let fx = f.run(CoreCmd::ObjectNext);
+    assert_eq!(said(&fx), ["Apply button"]);
+    assert_eq!(effects(&fx, is_ipc), 0, "a mirror hit needs no IPC (RI-1)");
+    assert!(matches!(f.reader.mode(), Mode::Review { .. }));
+    // The panel is layout: the parent of a button in it is the window.
+    let fx = f.run(CoreCmd::ObjectParent);
+    assert_eq!(said(&fx), ["Settings window"]);
+    let fx = f.run(CoreCmd::ObjectParent);
+    assert_eq!(said(&fx), ["No containing object"]);
+    // First child descends through the layout panel and its label to the entry.
+    let fx = f.run(CoreCmd::ObjectFirstChild);
+    assert_eq!(said(&fx), ["Name edit"]);
+    let fx = f.run(CoreCmd::ObjectPrev);
+    assert_eq!(said(&fx), ["No previous"]);
+    // The flow visits every content object once: entry, Apply, Cancel, the status bar.
+    let mut seen = Vec::new();
+    for _ in 0..6 {
+        let fx = f.run(CoreCmd::ObjectNextInFlow);
+        seen.extend(said(&fx));
+    }
+    assert_eq!(
+        seen,
+        [
+            "Apply button",
+            "Cancel button",
+            "status bar",
+            "No next",
+            "No next",
+            "No next"
+        ]
+        .map(String::from)
+        .to_vec()
+    );
+    let fx = f.run(CoreCmd::ObjectCurrent);
+    assert_eq!(said(&fx), ["status bar"]);
+    let fx = f.run_n(CoreCmd::ObjectCurrent, 2);
+    assert_eq!(said(&fx), ["status bar, no name"]);
+    assert_eq!(f.reader.review_counters().objnav_degraded, 0);
+}
+
+#[test]
+fn raw_review_shows_every_node_when_simple_review_is_off() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(4);
+    f.run(CoreCmd::ReviewSimpleToggle);
+    let fx = f.run(CoreCmd::ObjectParent);
+    assert_eq!(said(&fx), ["panel"]);
+    let fx = f.run(CoreCmd::ObjectFirstChild);
+    assert_eq!(said(&fx), ["Name label"]);
+}
+
+#[test]
+fn a_miss_suspends_once_and_resumes_on_the_fetch_reply() {
+    let mut f = fixture();
+    let mut nodes = dialog();
+    let missing = nodes.remove(4); // button 5
+    f.load(nodes);
+    f.focus(4);
+    let fx = f.run(CoreCmd::ObjectNext);
+    assert!(said(&fx).is_empty(), "no speech before the data is there");
+    let req = fx
+        .iter()
+        .find_map(|e| match e {
+            ReaderEffect::ReviewNav { req, op } => {
+                assert_eq!(op.node(), key(5));
+                Some(*req)
+            }
+            _ => None,
+        })
+        .expect("one fetch");
+    f.load(vec![missing]);
+    let fx = f.review(ReviewMsg::NavFetched {
+        req,
+        result: Ok(()),
+    });
+    assert_eq!(said(&fx), ["Apply button"]);
+}
+
+#[test]
+fn commands_pressed_while_pending_queue_and_only_the_last_speaks() {
+    let mut f = fixture();
+    let mut nodes = dialog();
+    let missing = nodes.remove(4);
+    f.load(nodes);
+    f.focus(4);
+    let fx = f.run(CoreCmd::ObjectNext);
+    let req = fx
+        .iter()
+        .find_map(|e| match e {
+            ReaderEffect::ReviewNav { req, .. } => Some(*req),
+            _ => None,
+        })
+        .expect("pending");
+    assert!(said(&f.run(CoreCmd::ObjectNext)).is_empty());
+    assert!(said(&f.run(CoreCmd::ObjectNext)).is_empty());
+    f.load(vec![missing]);
+    let fx = f.review(ReviewMsg::NavFetched {
+        req,
+        result: Ok(()),
+    });
+    // Next (Apply), next (Cancel), next (status bar): one utterance, the last.
+    assert_eq!(said(&fx), ["status bar"]);
+}
+
+#[test]
+fn a_fetch_that_never_answers_ends_in_a_degraded_step() {
+    let mut f = fixture();
+    let mut nodes = dialog();
+    nodes.remove(4);
+    f.load(nodes);
+    f.focus(4);
+    let fx = f.run(CoreCmd::ObjectNext);
+    assert_eq!(
+        effects(&fx, |e| matches!(e, ReaderEffect::ReviewNav { .. })),
+        1
+    );
+    f.now += Duration::from_millis(400);
+    let fx = f.reader.handle(ReaderMsg::Timer, f.now);
+    // The degraded step is a raw move over what the mirror has: the missing node is skipped.
+    assert_eq!(said(&fx), ["Cancel button"]);
+    assert_eq!(f.reader.review_counters().review_step_timeout, 1);
+    assert_eq!(f.reader.review_counters().objnav_degraded, 1);
+    // The next command is not blocked by the dead one.
+    let fx = f.run(CoreCmd::ObjectCurrent);
+    assert_eq!(said(&fx), ["Cancel button"]);
+}
+
+#[test]
+fn a_failed_fetch_degrades_at_once() {
+    let mut f = fixture();
+    let mut nodes = dialog();
+    nodes.remove(4);
+    f.load(nodes);
+    f.focus(4);
+    let fx = f.run(CoreCmd::ObjectNext);
+    let req = fx
+        .iter()
+        .find_map(|e| match e {
+            ReaderEffect::ReviewNav { req, .. } => Some(*req),
+            _ => None,
+        })
+        .expect("pending");
+    let fx = f.review(ReviewMsg::NavFetched {
+        req,
+        result: Err(NavFetchError::Timeout),
+    });
+    assert_eq!(said(&fx), ["Cancel button"]);
+    assert_eq!(f.reader.review_counters().objnav_degraded, 1);
+}
+
+// ---- flat review ---------------------------------------------------------------------------
+
+#[test]
+fn flat_review_builds_once_and_then_steps_without_any_ipc() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(4);
+    let fx = f.run(CoreCmd::ReviewNextLine);
+    let build = built_request(&fx).expect("a cold model is built");
+    assert!(said(&fx).is_empty());
+    let model = f.model(1);
+    let fx = f.review(ReviewMsg::Built {
+        build,
+        result: Ok(Arc::clone(&model)),
+    });
+    // The cursor anchored at the entry's line (line 0, "Name Name edit" minus the elided label),
+    // and the pending next-line ran from there.
+    let lines: Vec<String> = model.lines.iter().map(|l| l.text.to_string()).collect();
+    assert_eq!(
+        lines,
+        ["Name edit", "Apply button Cancel button", "Ready"]
+            .map(String::from)
+            .to_vec(),
+        "visual order, the label elided because the entry carries its name"
+    );
+    assert_eq!(said(&fx), ["Apply button Cancel button"]);
+    // From here on every step is mirror-only.
+    for cmd in [
+        CoreCmd::ReviewNextLine,
+        CoreCmd::ReviewPrevLine,
+        CoreCmd::ReviewNextWord,
+        CoreCmd::ReviewPrevWord,
+        CoreCmd::ReviewNextChar,
+        CoreCmd::ReviewPrevChar,
+        CoreCmd::ReviewTop,
+        CoreCmd::ReviewBottom,
+        CoreCmd::ReviewCurLine,
+    ] {
+        let fx = f.run(cmd);
+        assert_eq!(effects(&fx, is_ipc), 0, "{cmd:?}");
+        assert_eq!(said(&fx).len(), 1, "{cmd:?}");
+    }
+    let fx = f.run(CoreCmd::ReviewBottom);
+    assert_eq!(said(&fx), ["Ready"]);
+    let fx = f.run(CoreCmd::ReviewNextLine);
+    assert_eq!(said(&fx), ["Bottom"]);
+    let fx = f.run(CoreCmd::ReviewTop);
+    assert_eq!(said(&fx), ["Name edit"]);
+    let fx = f.run(CoreCmd::ReviewPrevLine);
+    assert_eq!(said(&fx), ["Top"]);
+    // RC-2: reading moves the navigator, so object.current says what was just read.
+    f.run(CoreCmd::ReviewNextLine);
+    let fx = f.run(CoreCmd::ObjectCurrent);
+    assert_eq!(said(&fx), ["Apply button"]);
+}
+
+#[test]
+fn spelling_on_the_second_press() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(5);
+    let fx = f.run(CoreCmd::ReviewCurLine);
+    let build = built_request(&fx).expect("build");
+    let fx = f.review(ReviewMsg::Built {
+        build,
+        result: Ok(f.model(1)),
+    });
+    assert_eq!(said(&fx), ["Apply button Cancel button"]);
+    let fx = f.run(CoreCmd::ReviewCurWord);
+    assert_eq!(said(&fx), ["Apply"]);
+    let fx = f.run_n(CoreCmd::ReviewCurWord, 2);
+    assert_eq!(said(&fx), ["A p p l y"]);
+    let fx = f.run(CoreCmd::ReviewCurChar);
+    assert_eq!(said(&fx), ["A"]);
+}
+
+#[test]
+fn a_changed_zone_on_the_target_line_waits_for_a_refresh_others_do_not() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(5);
+    let fx = f.run(CoreCmd::ReviewCurLine);
+    let build = built_request(&fx).expect("build");
+    f.review(ReviewMsg::Built {
+        build,
+        result: Ok(f.model(1)),
+    });
+    // The status bar's label changes: the target of ReviewBottom is dirty (VD-2).
+    f.load(vec![node(
+        8,
+        Role::Label,
+        "Saved",
+        Some(7),
+        &[],
+        rect(4, 275, 60, 20),
+    )]);
+    let fx = f.run(CoreCmd::ReviewBottom);
+    assert!(said(&fx).is_empty());
+    let b2 = built_request(&fx).expect("refresh requested");
+    let fresh = f.model(1);
+    let fx = f.review(ReviewMsg::Built {
+        build: b2,
+        result: Ok(fresh),
+    });
+    assert_eq!(said(&fx), ["Saved"]);
+    // A change away from the target line: speak at once, refresh in the background (VD-1).
+    f.load(vec![node(
+        4,
+        Role::TextEntry,
+        "Title",
+        Some(2),
+        &[],
+        rect(80, 10, 200, 20),
+    )]);
+    let fx = f.run(CoreCmd::ReviewPrevLine);
+    assert_eq!(said(&fx), ["Apply button Cancel button"]);
+    let bg = fx.iter().find_map(|e| match e {
+        ReaderEffect::ReviewBuild(b) => Some(b.interactive),
+        _ => None,
+    });
+    assert_eq!(bg, Some(false), "a background refresh, not a wait");
+}
+
+#[test]
+fn a_cold_build_that_fails_says_so_and_leaves_review_usable() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(4);
+    let fx = f.run(CoreCmd::ReviewNextLine);
+    let build = built_request(&fx).expect("build");
+    let fx = f.review(ReviewMsg::Built {
+        build,
+        result: Err(super::BuildError::Hung),
+    });
+    assert_eq!(said(&fx), ["not responding"]);
+    let fx = f.run(CoreCmd::ObjectNext);
+    assert_eq!(said(&fx), ["Apply button"]);
+}
+
+#[test]
+fn a_flood_makes_everything_stale_and_review_speaks_from_the_old_model() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(5);
+    let fx = f.run(CoreCmd::ReviewCurLine);
+    let build = built_request(&fx).expect("build");
+    f.review(ReviewMsg::Built {
+        build,
+        result: Ok(f.model(1)),
+    });
+    // The app flooded: its whole mirror is stale (VD-3).
+    f.writer.invalidate_all(Instant::now());
+    f.now += Duration::from_secs(3);
+    let fx = f.run(CoreCmd::ReviewBottom);
+    assert_eq!(
+        said(&fx),
+        ["Ready"],
+        "spoken from the old model, no waiting"
+    );
+    let refresh = fx.iter().find_map(|e| match e {
+        ReaderEffect::ReviewBuild(b) => Some((b.interactive, b.dirty.is_none())),
+        _ => None,
+    });
+    assert_eq!(
+        refresh,
+        Some((false, true)),
+        "a full rebuild in the background"
+    );
+    assert_eq!(f.reader.review_counters().review_stale_spoken, 1);
+}
+
+// ---- modes, focus, actions, status bar ------------------------------------------------------
+
+#[test]
+fn review_follows_focus_unless_told_not_to() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(4);
+    f.run(CoreCmd::ObjectNext);
+    assert!(matches!(f.reader.mode(), Mode::Review { .. }));
+    f.now += Duration::from_millis(200);
+    f.focus(5);
+    assert_eq!(f.reader.mode(), Mode::Focus);
+
+    f.run(CoreCmd::ReviewFocusFollowsToggle);
+    f.run(CoreCmd::ObjectNext);
+    assert!(matches!(f.reader.mode(), Mode::Review { .. }));
+    f.now += Duration::from_millis(200);
+    f.focus(4);
+    assert!(
+        matches!(f.reader.mode(), Mode::Review { .. }),
+        "focus is tracked but review stays"
+    );
+}
+
+#[test]
+fn to_focus_leaves_review_and_speaks_the_focused_object() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(4);
+    f.run(CoreCmd::ObjectNext);
+    let fx = f.run(CoreCmd::ReviewToFocus);
+    assert_eq!(f.reader.mode(), Mode::Focus);
+    assert_eq!(said(&fx), ["Name edit"]);
+}
+
+#[test]
+fn move_focus_falls_back_to_selection_and_then_refuses_politely() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(4);
+    f.run(CoreCmd::ObjectNext);
+    let fx = f.run(CoreCmd::ReviewMoveFocus);
+    let req = fx
+        .iter()
+        .find_map(|e| match e {
+            ReaderEffect::ReviewAct { req, act } => {
+                assert!(matches!(act, gorca_connector_api::ActionReq::Focus { .. }));
+                Some(*req)
+            }
+            _ => None,
+        })
+        .expect("a focus action");
+    let fx = f.review(ReviewMsg::ActionDone {
+        req,
+        result: Err(NavFetchError::Failed),
+    });
+    let req2 = fx
+        .iter()
+        .find_map(|e| match e {
+            ReaderEffect::ReviewAct { req, act } => {
+                assert!(matches!(act, gorca_connector_api::ActionReq::Select { .. }));
+                Some(*req)
+            }
+            _ => None,
+        })
+        .expect("the selection fallback");
+    let fx = f.review(ReviewMsg::ActionDone {
+        req: req2,
+        result: Err(NavFetchError::Failed),
+    });
+    assert_eq!(said(&fx), ["cannot move focus here"]);
+    assert_eq!(f.reader.review_counters().review_move_focus_unsupported, 1);
+}
+
+#[test]
+fn activate_acts_on_the_navigator() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(4);
+    f.run(CoreCmd::ObjectNext);
+    let fx = f.run(CoreCmd::ReviewActivate);
+    let req = fx
+        .iter()
+        .find_map(|e| match e {
+            ReaderEffect::ReviewAct { req, act } => {
+                assert_eq!(
+                    *act,
+                    gorca_connector_api::ActionReq::DoDefault { node: key(5) }
+                );
+                Some(*req)
+            }
+            _ => None,
+        })
+        .expect("an action");
+    let fx = f.review(ReviewMsg::ActionDone {
+        req,
+        result: Ok(()),
+    });
+    assert!(said(&fx).is_empty(), "success is confirmed by an event");
+}
+
+#[test]
+fn the_status_bar_is_found_in_the_mirror_and_never_enters_review() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(4);
+    let fx = f.run(CoreCmd::InfoStatusBar);
+    assert_eq!(said(&fx), ["Ready"]);
+    assert_eq!(effects(&fx, is_ipc), 0);
+    assert_eq!(f.reader.mode(), Mode::Focus);
+    let fx = f.run_n(CoreCmd::InfoStatusBar, 2);
+    assert_eq!(said(&fx), ["R e a d y"]);
+}
+
+#[test]
+fn a_status_bar_missing_from_the_mirror_is_asked_for_once() {
+    let mut f = fixture();
+    let mut nodes = dialog();
+    nodes.truncate(6); // no status bar nodes
+    nodes[0] = node(
+        1,
+        Role::Window,
+        "Settings",
+        None,
+        &[2],
+        rect(0, 0, 400, 300),
+    );
+    f.load(nodes);
+    f.focus(4);
+    let fx = f.run(CoreCmd::InfoStatusBar);
+    let req = fx
+        .iter()
+        .find_map(|e| match e {
+            ReaderEffect::ReviewStatusBar { req, root } => {
+                assert_eq!(*root, key(1));
+                Some(*req)
+            }
+            _ => None,
+        })
+        .expect("a Collection call");
+    let fx = f.review(ReviewMsg::StatusBarFound {
+        req,
+        result: Ok(None),
+    });
+    assert_eq!(said(&fx), ["no status bar found"]);
+}
+
+#[test]
+fn review_toggle_enters_and_leaves() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(4);
+    let fx = f.run(CoreCmd::ReviewToggle);
+    assert_eq!(said(&fx), ["review on"]);
+    assert!(matches!(f.reader.mode(), Mode::Review { .. }));
+    let fx = f.run(CoreCmd::ReviewToggle);
+    assert_eq!(said(&fx), ["review off"]);
+    assert_eq!(f.reader.mode(), Mode::Focus);
+}
+
+#[test]
+fn mode_switch_toggles_between_object_and_screen() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(5);
+    let fx = f.run(CoreCmd::ReviewModeNext);
+    // Entering at the default (screen) kind, the switch goes to object review.
+    assert_eq!(said(&fx), ["Apply button"]);
+    let fx = f.run(CoreCmd::ReviewCurWord);
+    assert_eq!(
+        said(&fx),
+        ["Apply"],
+        "object review reads the object's text"
+    );
+    let fx = f.run(CoreCmd::ReviewNextWord);
+    assert_eq!(said(&fx), ["button"]);
+    let fx = f.run(CoreCmd::ReviewNextWord);
+    assert_eq!(said(&fx), ["Bottom"]);
+}
+
+#[test]
+fn the_origin_in_browse_is_remembered() {
+    let _ = ReviewOrigin {
+        node: key(1),
+        from: super::ReviewFrom::Focus,
+    };
+}
+
+#[test]
+fn a_removed_navigator_continues_from_the_origin() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(4);
+    f.run(CoreCmd::ObjectNext); // nav = button 5
+    f.writer
+        .tombstone(key(5), Instant::now(), gorca_mirror::RemovalCause::Event);
+    let fx = f.run(CoreCmd::ObjectCurrent);
+    // The stand-in is the origin (the focused entry).
+    assert_eq!(said(&fx), ["Name edit"]);
+    assert_eq!(f.reader.review_counters().review_nav_gone, 1);
+}
+
+#[test]
+fn the_app_going_away_leaves_review() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(4);
+    f.run(CoreCmd::ObjectNext);
+    f.reader
+        .handle(ReaderMsg::Focus(crate::FocusLaneMsg::AppGone(app())), f.now);
+    assert_eq!(f.reader.mode(), Mode::Focus);
+    assert_eq!(f.reader.review_counters().review_surface_gone, 1);
+    assert_eq!(f.reader.review_state().models_held(), 0);
+}
+
+#[test]
+fn unrelated_replies_are_ignored() {
+    let mut f = fixture();
+    f.load(dialog());
+    f.focus(4);
+    let fx = f.review(ReviewMsg::NavFetched {
+        req: super::NavReqId(99),
+        result: Ok(()),
+    });
+    assert!(fx.is_empty());
+    let fx = f.review(ReviewMsg::Built {
+        build: BuildId(77),
+        result: Ok(f.model(1)),
+    });
+    assert!(said(&fx).is_empty(), "a background model installs silently");
+    assert_eq!(f.reader.review_state().models_held(), 1);
+}
+
+// ---- R1 ------------------------------------------------------------------------------------
+
+/// R1 (ADR-0006 18): a flat step on a valid model is an index move. The strict 3 ms gate is the
+/// release-build bound; a debug build only has to be sane. The end-to-end gate is bench/e2e R1.
+#[test]
+fn r1_a_step_on_a_big_valid_model_is_fast_and_pure() {
+    let mut f = fixture();
+    let n = 600u64;
+    let mut nodes = vec![node(
+        1,
+        Role::Window,
+        "Big",
+        None,
+        &(2..2 + n).collect::<Vec<_>>(),
+        rect(0, 0, 1000, 20_000),
+    )];
+    for i in 0..n {
+        let y = i32::try_from(i).unwrap_or(0) * 24;
+        nodes.push(node(
+            2 + i,
+            Role::Button,
+            &format!("Button number {i}"),
+            Some(1),
+            &[],
+            rect(10, y, 200, 20),
+        ));
+    }
+    f.load(nodes);
+    f.focus(2);
+    let fx = f.run(CoreCmd::ReviewCurLine);
+    let build = built_request(&fx).expect("build");
+    f.review(ReviewMsg::Built {
+        build,
+        result: Ok(f.model(1)),
+    });
+    let mut worst = Duration::ZERO;
+    let mut samples = Vec::new();
+    for i in 0..2_000 {
+        let cmd = if i % 2 == 0 {
+            CoreCmd::ReviewNextLine
+        } else {
+            CoreCmd::ReviewPrevLine
+        };
+        let t = Instant::now();
+        let fx = f.run(cmd);
+        let d = t.elapsed();
+        assert_eq!(effects(&fx, is_ipc), 0);
+        samples.push(d);
+        worst = worst.max(d);
+    }
+    samples.sort();
+    let p99 = samples[samples.len() * 99 / 100];
+    let bound = if cfg!(debug_assertions) {
+        Duration::from_millis(30)
+    } else {
+        Duration::from_millis(3)
+    };
+    assert!(p99 <= bound, "p99 {p99:?} (worst {worst:?}) over {bound:?}");
+}

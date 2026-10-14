@@ -350,7 +350,11 @@ fn every_row_of_the_invalidation_table_marks_the_right_fields() {
     });
     ev(NodeEvent::SelectionChanged { node: key(7) });
     r.actor.pump(Instant::now());
-    assert_eq!(stale(&r, 1), PropMask::STATES, "BOUNDS is ignored in M2");
+    assert_eq!(
+        stale(&r, 1),
+        PropMask::STATES | PropMask::BOUNDS,
+        "IC-24: a bounds event invalidates BOUNDS (ADR-0006 17)"
+    );
     assert_eq!(stale(&r, 2), PropMask::CHILDREN);
     assert_eq!(stale(&r, 3), PropMask::NAME | PropMask::VALUE);
     assert_eq!(stale(&r, 4), PropMask::STATES);

@@ -205,6 +205,42 @@ pub fn static_keysym(name: &str) -> Option<u32> {
         .map(|n| 0xffbd + n)
 }
 
+/// The keysym the physical key `code` types on an unshifted US layout with Num Lock off.
+pub fn keysym_of_code(code: u16) -> Option<u32> {
+    let letters = ROW_Q.chars().chain(ROW_A.chars()).chain(ROW_Z.chars());
+    let digits = "1234567890".chars();
+    let named = NAMED.iter().map(|(n, _, _)| *n);
+    let names: Vec<String> = letters
+        .chain(digits)
+        .map(String::from)
+        .chain(named.map(str::to_owned))
+        .chain((1..=10).chain(13..=24).map(|n| format!("f{n}")))
+        .collect();
+    names
+        .iter()
+        .find(|n| static_keycode(n) == Some(code))
+        .and_then(|n| static_keysym(n))
+}
+
+/// The digit keysym a keypad navigation keysym types with Num Lock on (`KP_Home` -> `KP_7`).
+/// `None` for keys whose keysym does not depend on Num Lock.
+pub fn keypad_digit_keysym(nav: u32) -> Option<u32> {
+    match nav {
+        0xff9e => Some(0xffb0),
+        0xff9c => Some(0xffb1),
+        0xff99 => Some(0xffb2),
+        0xff9b => Some(0xffb3),
+        0xff96 => Some(0xffb4),
+        0xff9d => Some(0xffb5),
+        0xff98 => Some(0xffb6),
+        0xff95 => Some(0xffb7),
+        0xff97 => Some(0xffb8),
+        0xff9a => Some(0xffb9),
+        0xff9f => Some(0xffae),
+        _ => None,
+    }
+}
+
 /// Spoken name of a key, for learn mode: `T`, `F12`, `Page Up`.
 pub fn spoken_key_name(keysym: u32, unichar: u32) -> String {
     let named = match keysym {

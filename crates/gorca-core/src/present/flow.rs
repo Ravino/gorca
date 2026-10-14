@@ -77,6 +77,7 @@ impl Reader {
             }
             FocusLaneMsg::NodeRemoved(n) => self.apply_focus(FocusMsg::NodeRemoved(n), fx),
             FocusLaneMsg::AppGone(a) => {
+                self.review_app_gone(a, fx);
                 if let Some(f) = &self.focused_app {
                     f.forget(a);
                 }
@@ -97,6 +98,8 @@ impl Reader {
             return;
         }
         self.last_focus = Some((node, now));
+        // Review follows the focus (ADR-0006 4.1) unless the user turned that off.
+        self.review_focus_changed(fx);
         // The trigger gets its own sequence point: only a request issued after it can have
         // confirmed the mirror's content for this focus (RV-1, 5.3).
         self.focus_seq = self.dir.bump_seq(node.app);

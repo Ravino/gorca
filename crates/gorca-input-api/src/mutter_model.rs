@@ -129,6 +129,9 @@ impl Replica {
         grabs.chords.contains(&crate::grab::Chord {
             keysym,
             modifiers: state.without_locks().to_wire(),
+        }) || grabs.exact.contains(&crate::grab::Chord {
+            keysym,
+            modifiers: state.to_wire(),
         })
     }
 

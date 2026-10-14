@@ -14,7 +14,9 @@ mod spec;
 mod state;
 mod table;
 
-pub use compile::{Compiled, PlatformFacts, command_id, compile, gorca_modifiers, lane_settings};
+pub use compile::{
+    Compiled, PlatformFacts, chord_grabs, command_id, compile, gorca_modifiers, lane_settings,
+};
 pub use handlers::PASS_TIMEOUT;
 pub use spec::{Availability, CmdSpec, CommandTable, ContextMask, Milestone};
 pub(crate) use state::CmdState;

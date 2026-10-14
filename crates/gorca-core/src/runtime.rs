@@ -224,7 +224,7 @@ struct Shared {
     speech: Arc<dyn SpeechOut>,
     stats: Arc<CoreStats>,
     clock: Clock,
-    next_req: AtomicU64,
+    next_req: Arc<AtomicU64>,
     /// Lane cells shared with the input pump (keymap, settings, grab view, Reader ack).
     links: Arc<LaneLinks>,
     /// Effective settings, written by the Reader.
@@ -280,7 +280,7 @@ impl Core {
                 speech: Arc::new(NullSpeech),
                 stats: Arc::new(CoreStats::default()),
                 clock: Clock::System,
-                next_req: AtomicU64::new(1),
+                next_req: Arc::new(AtomicU64::new(1)),
                 links: LaneLinks::new(),
                 settings: Arc::new(ArcSwap::from_pointee(Settings::default())),
                 grabs: Arc::new(grabs),
@@ -792,9 +792,8 @@ async fn do_fetch(shared: Arc<Shared>, job: FetchJob) {
         | BackendReply::TextAttributes(_)
         | BackendReply::ActionDone
         | BackendReply::Hit(_)
-        | BackendReply::Matches(_) => {
-            Err(BackendError::Protocol("unexpected reply kind".to_owned()))
-        }
+        | BackendReply::Matches(_)
+        | BackendReply::Lines(_) => Err(BackendError::Protocol("unexpected reply kind".to_owned())),
     });
     // The app actor owns the mirror: it applies the reply (late-reply rules, tombstone on Gone).
     // The Reader gets the answer first; this is off the latency path.
@@ -872,10 +871,13 @@ async fn reader_loop(
         reader = reader.with_present_log(Arc::clone(log));
     }
     let mut timer: Option<Instant> = None;
+    // Review fetches, builds and actions: each in a task this loop owns (aborted with it).
+    let mut review_tasks: JoinSet<()> = JoinSet::new();
     loop {
         let msg = tokio::select! {
             biased;
             () = token.cancelled() => return,
+            Some(_) = review_tasks.join_next(), if !review_tasks.is_empty() => continue,
             m = inbox.next() => match m {
                 Some(m) => m,
                 None => return,
@@ -953,8 +955,186 @@ async fn reader_loop(
                         tracing::warn!("config request queue full; dropped a request");
                     }
                 }
+                e @ (ReaderEffect::ReviewNav { .. }
+                | ReaderEffect::ReviewBuild(_)
+                | ReaderEffect::ReviewRevalidate { .. }
+                | ReaderEffect::ReviewStatusBar { .. }
+                | ReaderEffect::ReviewAct { .. }) => spawn_review(&mut review_tasks, shared, e),
             }
         }
+    }
+}
+
+/// Most review tasks in flight at once (a held review key queues behind the Reader's own
+/// pending-operation rule long before this).
+const REVIEW_TASKS_MAX: usize = 32;
+/// Soft deadlines of a model build (ADR-0006 6.8): the key press waits for the first, the
+/// continuation runs in the background.
+const BUILD_FIRST: Duration = Duration::from_millis(120);
+const BUILD_MORE: Duration = Duration::from_millis(300);
+
+/// The app side of one review effect (ADR-0006 9): a task bounded by request deadlines whose
+/// outcome goes to the Reader as a `ReviewMsg`. An app that is gone, hung or refusing answers
+/// at once so the Reader degrades instead of waiting (I-4).
+fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
+    use crate::review::build::{self, BuildSpec};
+    use crate::review::model::TruncWhy;
+    use crate::review::{BuildError, Completeness, NavFetchError, ReviewIo, ReviewMsg, RrVerdict};
+    let app = match &e {
+        ReaderEffect::ReviewNav { op, .. } => op.node().app,
+        ReaderEffect::ReviewBuild(b) => b.surface.app,
+        ReaderEffect::ReviewRevalidate { app, .. } => *app,
+        ReaderEffect::ReviewStatusBar { root, .. } => root.app,
+        ReaderEffect::ReviewAct { act, .. } => action_node(act).app,
+        ReaderEffect::Speak(_)
+        | ReaderEffect::Fetch { .. }
+        | ReaderEffect::Demand { .. }
+        | ReaderEffect::FocusSettled { .. }
+        | ReaderEffect::QueryActiveWindowFocus
+        | ReaderEffect::ArmTimer(_)
+        | ReaderEffect::SetGrabSet(_)
+        | ReaderEffect::SpeechCtl(_)
+        | ReaderEffect::Config(_) => return,
+    };
+    let tx = shared.senders.review.clone();
+    let io = match (shared.apps.get(app), shared.mirrors.handle(app)) {
+        (Some(h), Some(mirror))
+            if h.admits.load(Ordering::Acquire) && set.len() < REVIEW_TASKS_MAX =>
+        {
+            Some(ReviewIo {
+                requests: h.requests,
+                fill: h.fill,
+                health: Some(h.health),
+                mirror,
+                clock: shared.clock.clone(),
+                next_req: Arc::clone(&shared.next_req),
+                limits: crate::review::ReviewLimits::default(),
+            })
+        }
+        _ => None,
+    };
+    let send = move |m: ReviewMsg| {
+        if tx.try_send(m).is_err() {
+            tracing::warn!("reader review queue full; dropped a review result");
+        }
+    };
+    match e {
+        ReaderEffect::ReviewNav { req, op } => {
+            set.spawn(async move {
+                let result = match io {
+                    Some(io) => build::nav_fetch(&io, op).await,
+                    None => Err(NavFetchError::Refused),
+                };
+                send(ReviewMsg::NavFetched { req, result });
+            });
+        }
+        ReaderEffect::ReviewBuild(b) => {
+            set.spawn(async move {
+                let Some(io) = io else {
+                    send(ReviewMsg::Built {
+                        build: b.build,
+                        result: Err(BuildError::Refused),
+                    });
+                    return;
+                };
+                let first = build::build_model(
+                    &io,
+                    BuildSpec {
+                        surface: b.surface,
+                        dirty: b.dirty.clone(),
+                        prev: b.prev.clone(),
+                        budget: if b.interactive {
+                            BUILD_FIRST
+                        } else {
+                            BUILD_MORE
+                        },
+                        class: if b.interactive {
+                            BudgetClass::Interactive
+                        } else {
+                            BudgetClass::Prefetch
+                        },
+                    },
+                )
+                .await;
+                let more = b.interactive
+                    && matches!(
+                        &first,
+                        Ok(m) if m.completeness == Completeness::Truncated(TruncWhy::Deadline)
+                    );
+                let carry = first.as_ref().ok().cloned();
+                send(ReviewMsg::Built {
+                    build: b.build,
+                    result: first,
+                });
+                if more {
+                    let next = build::build_model(
+                        &io,
+                        BuildSpec {
+                            surface: b.surface,
+                            dirty: Some(Arc::from([])),
+                            prev: carry,
+                            budget: BUILD_MORE,
+                            class: BudgetClass::Prefetch,
+                        },
+                    )
+                    .await;
+                    send(ReviewMsg::Built {
+                        build: b.build,
+                        result: next,
+                    });
+                }
+            });
+        }
+        ReaderEffect::ReviewRevalidate {
+            model, probe, clip, ..
+        } => {
+            set.spawn(async move {
+                let verdict = match io {
+                    Some(io) => build::revalidate(&io, probe, clip).await,
+                    None => RrVerdict::Failed,
+                };
+                send(ReviewMsg::Revalidated { model, verdict });
+            });
+        }
+        ReaderEffect::ReviewStatusBar { req, root } => {
+            set.spawn(async move {
+                let result = match io {
+                    Some(io) => build::find_status_bar(&io, root).await,
+                    None => Err(NavFetchError::Refused),
+                };
+                send(ReviewMsg::StatusBarFound { req, result });
+            });
+        }
+        ReaderEffect::ReviewAct { req, act } => {
+            set.spawn(async move {
+                let result = match io {
+                    Some(io) => build::act(&io, act).await,
+                    None => Err(NavFetchError::Refused),
+                };
+                send(ReviewMsg::ActionDone { req, result });
+            });
+        }
+        ReaderEffect::Speak(_)
+        | ReaderEffect::Fetch { .. }
+        | ReaderEffect::Demand { .. }
+        | ReaderEffect::FocusSettled { .. }
+        | ReaderEffect::QueryActiveWindowFocus
+        | ReaderEffect::ArmTimer(_)
+        | ReaderEffect::SetGrabSet(_)
+        | ReaderEffect::SpeechCtl(_)
+        | ReaderEffect::Config(_) => {}
+    }
+}
+
+fn action_node(a: &gorca_connector_api::ActionReq) -> NodeKey {
+    use gorca_connector_api::ActionReq;
+    match a {
+        ActionReq::DoDefault { node }
+        | ActionReq::Focus { node }
+        | ActionReq::SetCaret { node, .. }
+        | ActionReq::Select { node }
+        | ActionReq::ScrollTo { node }
+        | ActionReq::SetValue { node, .. } => *node,
     }
 }
 

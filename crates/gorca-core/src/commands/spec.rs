@@ -178,7 +178,7 @@ mod tests {
     }
 
     #[test]
-    fn m1_commands_are_exactly_the_implemented_ones() {
+    fn m1_and_m4a_commands_are_exactly_the_implemented_ones() {
         let impl_names: Vec<_> = SPECS
             .iter()
             .filter(|s| s.available == Availability::Implemented)
@@ -186,8 +186,13 @@ mod tests {
             .collect();
         assert!(impl_names.contains(&"info.where_am_i"));
         assert!(impl_names.contains(&"settings.save"));
-        assert!(!impl_names.contains(&"review.cur_line"));
-        assert_eq!(impl_names.len(), 30);
+        // M4a: object navigation, line/word/char/top/bottom review, focus and activation.
+        assert!(impl_names.contains(&"review.cur_line"));
+        assert!(impl_names.contains(&"object.next_in_flow"));
+        assert!(impl_names.contains(&"info.status_bar"));
+        assert!(!impl_names.contains(&"review.say_all"), "M4b");
+        assert!(!impl_names.contains(&"review.above"), "M4b");
+        assert_eq!(impl_names.len(), 59);
     }
 
     #[test]

@@ -201,6 +201,35 @@ impl Reader {
                     self.say(&text, fx);
                 }
             }
+            CoreCmd::ObjectCurrent
+            | CoreCmd::ObjectParent
+            | CoreCmd::ObjectFirstChild
+            | CoreCmd::ObjectNext
+            | CoreCmd::ObjectPrev
+            | CoreCmd::ObjectNextInFlow
+            | CoreCmd::ObjectPrevInFlow
+            | CoreCmd::ReviewPrevLine
+            | CoreCmd::ReviewCurLine
+            | CoreCmd::ReviewNextLine
+            | CoreCmd::ReviewPrevWord
+            | CoreCmd::ReviewCurWord
+            | CoreCmd::ReviewNextWord
+            | CoreCmd::ReviewPrevChar
+            | CoreCmd::ReviewCurChar
+            | CoreCmd::ReviewNextChar
+            | CoreCmd::ReviewTop
+            | CoreCmd::ReviewBottom
+            | CoreCmd::ReviewStartOfLine
+            | CoreCmd::ReviewEndOfLine
+            | CoreCmd::ReviewModeNext
+            | CoreCmd::ReviewModePrev
+            | CoreCmd::ReviewToFocus
+            | CoreCmd::ReviewMoveFocus
+            | CoreCmd::ReviewActivate
+            | CoreCmd::ReviewToggle
+            | CoreCmd::ReviewSimpleToggle
+            | CoreCmd::ReviewFocusFollowsToggle
+            | CoreCmd::InfoStatusBar => self.review_command(c, rep, now, fx),
             planned_cmds!() => {
                 // Declared but not implemented: the keymap never routes these (inert), so this
                 // is only reachable through a stale table. Say so instead of staying silent.
@@ -257,7 +286,7 @@ impl Reader {
     }
 
     /// The node the user is on: the focused one, or the one about to be.
-    fn current_node(&self) -> Option<NodeKey> {
+    pub(crate) fn current_node(&self) -> Option<NodeKey> {
         match self.focus {
             FocusState::Focused { node, .. } => Some(node),
             FocusState::Settling { candidate, .. } => Some(candidate),
@@ -424,6 +453,7 @@ impl Reader {
         self.cmd.clock_24h = l.clock_24h;
         let keys_changed = self.keys.modifiers != l.mode_keys.modifiers
             || self.keys.commands != l.mode_keys.commands
+            || self.keys.exact != l.mode_keys.exact
             || self.keys.quick_nav != l.mode_keys.quick_nav;
         self.cmd.republish();
         // The grab set follows the keymap (HR-1): re-sent only when the keys changed, and

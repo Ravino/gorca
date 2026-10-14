@@ -25,7 +25,8 @@ use crate::directory::MirrorDirectory;
 use crate::focus::{FocusMsg, FocusState};
 use crate::mode::{Mode, ModeKeys, ModeMsg};
 use crate::present::{PresentLog, PresenterRegistry};
-use crate::review::ReviewMsg;
+use crate::review::{BuildRequest, NavReqId, ProbeItem, ReviewMsg, ReviewState};
+use crate::review::{ModelId, NavOp};
 use crate::text::TextMsg;
 
 /// Bounds from section 6.2.
@@ -34,6 +35,7 @@ const FOCUS_QUEUE: usize = 256;
 const REPLY_QUEUE: usize = 64;
 const BACKGROUND_QUEUE: usize = 64;
 const CONTROL_QUEUE: usize = 32;
+const REVIEW_QUEUE: usize = 64;
 /// At most this many messages per [`Reader::drain`] call, so one call stays bounded.
 const MAX_BATCH: usize = 256;
 /// A second focus event for the node that just got focus, within this window, is the same
@@ -140,6 +142,30 @@ pub enum ReaderEffect {
     SpeechCtl(SpeechCtl),
     /// A request for the daemon's config task.
     Config(ConfigRequest),
+    /// Object navigation needs a node, a child list or ancestors in the mirror (ADR-0006 5.3).
+    ReviewNav {
+        req: NavReqId,
+        op: NavOp,
+    },
+    /// Build or refresh the line model of a surface (ADR-0006 6.1).
+    ReviewBuild(BuildRequest),
+    /// RR-1: re-read the extents and text of the nodes of the line just spoken.
+    ReviewRevalidate {
+        model: ModelId,
+        app: AppId,
+        probe: Vec<ProbeItem>,
+        clip: gorca_model::Rect,
+    },
+    /// Find the status bar below `root` with one `Collection` call (ADR-0006 8).
+    ReviewStatusBar {
+        req: NavReqId,
+        root: NodeKey,
+    },
+    /// `review.activate` and `review.move_focus`.
+    ReviewAct {
+        req: NavReqId,
+        act: gorca_connector_api::ActionReq,
+    },
 }
 
 pub type ReaderEffects = SmallVec<[ReaderEffect; 4]>;
@@ -152,6 +178,8 @@ pub struct ReaderSenders {
     pub replies: mpsc::Sender<QueryReply>,
     pub background: mpsc::Sender<BackgroundMsg>,
     pub control: mpsc::Sender<ControlMsg>,
+    /// Results of review fetches, builds and actions (ADR-0006 4.3).
+    pub review: mpsc::Sender<ReviewMsg>,
 }
 
 #[derive(Debug)]
@@ -161,6 +189,7 @@ pub struct ReaderInbox {
     replies: mpsc::Receiver<QueryReply>,
     background: mpsc::Receiver<BackgroundMsg>,
     control: mpsc::Receiver<ControlMsg>,
+    review: mpsc::Receiver<ReviewMsg>,
 }
 
 pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
@@ -169,6 +198,7 @@ pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
     let (replies_tx, replies) = mpsc::channel(REPLY_QUEUE);
     let (background_tx, background) = mpsc::channel(BACKGROUND_QUEUE);
     let (control_tx, control) = mpsc::channel(CONTROL_QUEUE);
+    let (review_tx, review) = mpsc::channel(REVIEW_QUEUE);
     (
         ReaderSenders {
             key: key_tx,
@@ -176,6 +206,7 @@ pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
             replies: replies_tx,
             background: background_tx,
             control: control_tx,
+            review: review_tx,
         },
         ReaderInbox {
             key,
@@ -183,6 +214,7 @@ pub fn reader_channels() -> (ReaderSenders, ReaderInbox) {
             replies,
             background,
             control,
+            review,
         },
     )
 }
@@ -197,6 +229,7 @@ impl ReaderInbox {
             Some(c) = self.control.recv() => Some(ReaderMsg::Control(c)),
             Some(f) = self.focus.recv() => Some(ReaderMsg::Focus(f)),
             Some(r) = self.replies.recv() => Some(ReaderMsg::Reply(r)),
+            Some(v) = self.review.recv() => Some(ReaderMsg::Review(v)),
             Some(b) = self.background.recv() => Some(ReaderMsg::Background(b)),
             else => None,
         }
@@ -215,6 +248,9 @@ impl ReaderInbox {
         }
         if let Ok(r) = self.replies.try_recv() {
             return Some(ReaderMsg::Reply(r));
+        }
+        if let Ok(v) = self.review.try_recv() {
+            return Some(ReaderMsg::Review(v));
         }
         if let Ok(b) = self.background.try_recv() {
             return Some(ReaderMsg::Background(b));
@@ -250,6 +286,8 @@ pub struct Reader {
     pub(crate) now: Instant,
     pub(crate) present_log: Option<Arc<PresentLog>>,
     pub(crate) counters: ReaderCounters,
+    /// Review cursor state, models and the pending review operation (ADR-0006).
+    pub(crate) review: ReviewState,
 }
 
 /// Revalidation and correction counters (B-1 M-6).
@@ -291,6 +329,7 @@ impl Reader {
             now: Instant::now(),
             present_log: None,
             counters: ReaderCounters::default(),
+            review: ReviewState::new(),
         }
     }
 
@@ -421,6 +460,7 @@ impl Reader {
             ReaderMsg::Timer => {
                 self.apply_focus(FocusMsg::TimerElapsed { now }, &mut fx);
                 self.pass_timer(now, &mut fx);
+                self.review_timer(now, &mut fx);
             }
         }
         self.remember_spoken(is_key, &fx);
@@ -515,7 +555,12 @@ mod tests {
                 | ReaderEffect::ArmTimer(_)
                 | ReaderEffect::SetGrabSet(_)
                 | ReaderEffect::SpeechCtl(_)
-                | ReaderEffect::Config(_) => None,
+                | ReaderEffect::Config(_)
+                | ReaderEffect::ReviewNav { .. }
+                | ReaderEffect::ReviewBuild(_)
+                | ReaderEffect::ReviewRevalidate { .. }
+                | ReaderEffect::ReviewStatusBar { .. }
+                | ReaderEffect::ReviewAct { .. } => None,
             })
             .collect()
     }
@@ -1047,6 +1092,11 @@ mod tests {
                 ReaderEffect::SetGrabSet(_) => "grab",
                 ReaderEffect::SpeechCtl(_) => "ctl",
                 ReaderEffect::Config(_) => "config",
+                ReaderEffect::ReviewNav { .. } => "review-nav",
+                ReaderEffect::ReviewBuild(_) => "review-build",
+                ReaderEffect::ReviewRevalidate { .. } => "review-revalidate",
+                ReaderEffect::ReviewStatusBar { .. } => "review-status-bar",
+                ReaderEffect::ReviewAct { .. } => "review-act",
             })
             .collect()
     }
@@ -1062,7 +1112,12 @@ mod tests {
                 | ReaderEffect::ArmTimer(_)
                 | ReaderEffect::SetGrabSet(_)
                 | ReaderEffect::SpeechCtl(_)
-                | ReaderEffect::Config(_) => None,
+                | ReaderEffect::Config(_)
+                | ReaderEffect::ReviewNav { .. }
+                | ReaderEffect::ReviewBuild(_)
+                | ReaderEffect::ReviewRevalidate { .. }
+                | ReaderEffect::ReviewStatusBar { .. }
+                | ReaderEffect::ReviewAct { .. } => None,
             })
             .expect("an utterance")
     }
