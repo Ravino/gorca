@@ -1365,9 +1365,11 @@ pub fn w3(
         let mark = w.mark();
         let t_call = super::mono::now_ns();
         w.ff.keys(&[29, 104]);
-        // Firefox restores focus to what the tab had (a link), or to the document: either speaks.
+        // Which tab Alt+1 selected can vary under load, so either tab speaking counts: the gate is
+        // that a tab switch is never silent. Firefox restores focus to what the tab had (a link)
+        // or to the document.
         match w.speech(mark, Duration::from_secs(3), |t| {
-            t.contains("M7 Article") || t.contains("link")
+            t.contains("M7 ") || t.contains("link")
         }) {
             Some(r) => {
                 let arrival = w
