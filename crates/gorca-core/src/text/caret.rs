@@ -42,6 +42,9 @@ pub const HOLD: Duration = Duration::from_millis(5);
 /// After tracking starts, the first caret event of a descendant of a rich editable is the
 /// browser placing the caret at the focus (CE-1), not a move.
 const PLACING: Duration = Duration::from_millis(600);
+/// The most units an application may report an insert after the caret while it really went in
+/// at the caret (Gecko, in an input, after scripted or committed text; see `insert`).
+const MISPLACED_MAX: u32 = 2;
 /// Caret moves made by gorca itself are remembered this long (say-all, review).
 const OWN_MOVE: Duration = Duration::from_millis(300);
 /// How long a presentation fetch may take before the machine gives up on it.
@@ -1790,7 +1793,21 @@ fn insert(
         let _ = t.expect.forget(len as usize, cx.now_ms);
         return;
     };
+    // Text goes in at the caret (typing, an input method's commit). When the application
+    // reports another offset (Gecko now and then reports one or two too many in an input, with
+    // a caret event that moves by exactly the insert), the window can no longer be trusted:
+    // drop it (it is refilled when a unit needs it) and accept the caret event where the
+    // caret really went, so the insert's own caret move is not spoken a second time.
+    let misplaced =
+        caret_before.is_some_and(|c| offset > c && offset - c <= MISPLACED_MAX) && !paste;
+    if misplaced && let (Some(c), Some(a)) = (caret_before, t.absorb.as_mut()) {
+        a.alt = Some(c.saturating_add(len));
+    }
     t.win.splice(offset, 0, &s);
+    if misplaced {
+        t.win.invalidate();
+        cx.stats.window_dirty += 1;
+    }
     note_hosts(t, &s);
     if is_structure(&s) {
         // A block was added to a rich editable: the window knows, there is nothing to say.
@@ -1803,19 +1820,6 @@ fn insert(
     }
     match action {
         Some(InsertAction::Echoed { .. }) => {
-            // A typed character goes in at the caret. When the application reports another
-            // offset (Gecko sometimes reports one too many for a letter typed in the middle of
-            // a text), its window can no longer be trusted: drop it (it is refilled when a unit
-            // needs it) and accept the caret event where the caret really is.
-            if let Some(c) = caret_before
-                && c != offset
-            {
-                t.win.invalidate();
-                cx.stats.window_dirty += 1;
-                if let Some(a) = t.absorb.as_mut() {
-                    a.alt = Some(c.saturating_add(len));
-                }
-            }
             if cx.cfg.typed_words {
                 speak_word(t, offset, &s, cx);
             }
@@ -2039,9 +2043,26 @@ fn delete(
 ) -> bool {
     let deleted = text.or_else(|| t.win.read(offset..offset.saturating_add(len)));
     t.win.splice(offset, len, "");
+    // BackSpace moves the caret back by what it erased, Delete leaves it: when the application
+    // reports the delete at another offset (see [`insert`]), the caret event is still its echo.
+    let alt = match (t.caret, slot) {
+        (Some(c), Some((TextKey::Erase { dir, .. }, ..))) => {
+            let after = if dir == TextDir::Prev {
+                c.saturating_sub(len)
+            } else {
+                c
+            };
+            if after != offset {
+                t.win.invalidate();
+                cx.stats.window_dirty += 1;
+            }
+            Some(after)
+        }
+        _ => None,
+    };
     t.absorb = Some(Absorb {
         at: offset,
-        alt: None,
+        alt,
         until: cx.now + ABSORB,
     });
     if deleted.as_deref().is_some_and(is_structure) {

@@ -141,7 +141,10 @@ def find(bus, root, role, name, timeout_ms):
     want = ROLES.get(role, role if isinstance(role, int) else -2)
     end = time.monotonic() + timeout_ms / 1000.0
     while time.monotonic() < end:
-        hit = bfs(bus, root, lambda r, n, p: (want < 0 or r == want) and (not name or name in n), 60000)
+        # An exact name first ("Typing" must not find "Typing region:"), then a part of one.
+        hit = bfs(bus, root, lambda r, n, p: (want < 0 or r == want) and (not name or n == name), 60000)
+        if not hit and name:
+            hit = bfs(bus, root, lambda r, n, p: (want < 0 or r == want) and name in n, 60000)
         if hit:
             return {"ok": True, "path": hit[0], "name": hit[1], "role": role}
         time.sleep(0.2)

@@ -163,6 +163,7 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     ("FC1h", "fc1h_ms", "p99") => Some(C1H_P99_MS),
                     ("FC1", "fc1_ms", "p99") | ("FS2", "fs2_ms", "p99") => Some(C1_P99_MS),
                     ("FE1", "fe1_ms", "p99") => Some(E1_P99_MS),
+                    ("FCE2", "fce2_ms", "p99") => Some(E1_P99_MS),
                     ("FSA1", "fsa1_ms", "p99") => Some(SA1_P99_MS),
                     ("FSA3", "fsa3_stop_ms", "p99") => Some(SA3_STOP_P99_MS),
                     // M7b: browse say-all, first chunk after the key (browse design 15, SAB).
@@ -231,6 +232,8 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "sa3_not_silenced"
                     | "c1h_ipc_calls"
                     | "fc_double"
+                    | "fc_extra"
+                    | "fc_swallowed"
                     | "ft_failures"
                     | "bsa_failures"
                     | "bar_failures"

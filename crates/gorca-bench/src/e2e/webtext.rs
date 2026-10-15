@@ -8,9 +8,10 @@
 //!
 //! | id | stimulus | metrics |
 //! |---|---|---|
-//! | FC1h | Right and Left through `a😀b😀😀c` (window hits) | `fc1h_ms` Firefox caret event arrival to SPEAK (gate p99 3 ms), `lost`, `fc_double` |
+//! | FC1h | Right and Left through `a😀b😀😀c` (window hits); what each key must say follows from the page's own caret events | `fc1h_ms` Firefox caret event arrival to SPEAK (gate p99 3 ms), `lost`, `fc_double`, `fc_extra`, `fc_swallowed` (all gate 0), `page_dropped` (information) |
 //! | FC1 | Down through 300 distinct lines of a text area (one `GetStringAtOffset` per key) | `fc1_ms` (gate p99 15 ms), `lost`, `fc_double` |
 //! | FE1 | printable keys typed into an input | `fe1_ms` key emit to SPEAK (gate p99 3 ms), `lost`, `fc_double` |
+//! | FCE2 | printable keys typed into an empty contenteditable region | `fce2_ms` key emit to SPEAK (gate p99 3 ms), `lost`, `fc_double`, `fc_extra` |
 //! | FE2 | randomised session: letters, space, BackSpace, input-method commits of an emoji and a Cyrillic letter, arrows | `e2_missing`, `e2_double`, `e2_keyname`, `e2_wrong`, `ft_failures` (all gate 0) |
 //! | FS2 | Shift+Right and Shift+Left over a word | `fs2_ms` caret event arrival to SPEAK (gate p99 15 ms), `lost` |
 //! | FSA1 | gorca+Down in a text area | `fsa1_ms` key emit to the first chunk's SPEAK (gate p99 15 ms), `lost` |
@@ -41,8 +42,8 @@ use super::web::{CARET, DocRef, Web, file_url, gate_open, pages_dir, speaks_sinc
 
 /// The scenario ids of this module, in the order of a full run.
 pub const IDS: &[&str] = &[
-    "FC1h", "FC1", "FE1", "FE2", "FS2", "FSA1", "FSA3", "FCE1", "FT1", "FP1", "BSA1", "BAR1",
-    "BL1", "FR1",
+    "FC1h", "FC1", "FE1", "FCE2", "FE2", "FS2", "FSA1", "FSA3", "FCE1", "FT1", "FP1", "BSA1",
+    "BAR1", "BL1", "FR1",
 ];
 
 /// The reader does not read pages by itself (the M7a keys-by-line scenarios), or does (the
@@ -65,7 +66,8 @@ pub fn run(
     match id {
         "FC1h" => fc1h(host, reader, flavor, size, out),
         "FC1" => fc1(host, reader, flavor, size, out),
-        "FE1" => fe1(host, reader, flavor, size, seed, out),
+        "FE1" => fe1(host, reader, flavor, size, seed, out, false),
+        "FCE2" => fe1(host, reader, flavor, size, seed, out, true),
         "FE2" => fe2(host, reader, flavor, size, seed, out),
         "FS2" => fs2(host, reader, flavor, size, out),
         "FSA1" => fsa(host, reader, flavor, size, seed, out, false),
@@ -326,8 +328,9 @@ impl Ft {
     }
 }
 
-/// Score `probes` against what was said; latencies are from the Firefox caret event
-/// (`from_event`) or from the key. Failed trials leave their evidence in `out.notes`.
+/// Score `probes` against what was said ([`score_aligned`]); latencies are from the Firefox
+/// caret event (`from_event`) or from the key. Records the gated `fc_extra` (speech no key
+/// accounts for). Failed trials leave their evidence in `out.notes`.
 fn finish(
     f: &mut Ft,
     id: &str,
@@ -339,7 +342,18 @@ fn finish(
         p.t_ev = f.caret_event_after(p.t_key);
     }
     let spoken = speaks_since(&f.w, 0);
-    let (lat, lost, doubled) = score_ordered(f, probes, &spoken, from_event);
+    let sc = score_aligned(f, probes, &spoken, from_event);
+    out.x("fc_extra", sc.extra as f64, "speeches");
+    for &j in sc.stray.iter().take(5) {
+        let (t, s) = &spoken[j];
+        let near = probes.iter().rposition(|p| p.t_key <= *t);
+        out.notes.push(format!(
+            "{id} stray speech {s:?} at {:+.1} ms after key #{}",
+            near.map_or(0.0, |k| (*t as f64 - probes[k].t_key as f64) / 1e6),
+            near.map_or(-1, |k| k as i64),
+        ));
+    }
+    let (lat, lost, doubled) = (sc.lat, sc.lost, sc.doubled);
     if lost > 0 {
         out.notes.extend(lost_notes(id, probes, &spoken));
         // Which objects sent the events: the evidence a wrong route needs.
@@ -369,55 +383,189 @@ fn finish(
 /// never comes is what the gate is about).
 const LATE_NS: u64 = 1_500_000_000;
 
-/// Score by order, not by a window around the key: probe `i` is heard when the first speech
-/// after the previous probe's speech (and not before its key) has its text, within
-/// [`LATE_NS`] of its key. A second speech with the same text right behind it, before the next
-/// probe's key or within 300 ms, is a double. Latency is from the last Firefox caret event
-/// before the speech (`from_event`) or from the key.
-fn score_ordered(
-    f: &Ft,
-    probes: &[Probe],
-    spoken: &[(u64, String)],
-    from_event: bool,
-) -> (Vec<f64>, u64, u64) {
-    let (mut lat, mut lost, mut doubled) = (Vec::new(), 0u64, 0u64);
-    let mut from = 0usize;
-    for (i, p) in probes.iter().enumerate() {
-        let next_key = probes.get(i + 1).map_or(u64::MAX, |n| n.t_key);
-        let hit = spoken
-            .iter()
-            .enumerate()
-            .skip(from)
-            .find(|(_, (t, s))| *t >= p.t_key && *t <= p.t_key + LATE_NS && *s == p.expect);
-        match hit {
-            Some((j, (t, _))) => {
-                let t0 = if from_event {
-                    f.w.tap
-                        .last_between(CARET, &f.w.bus, p.t_key, *t)
-                        .unwrap_or(p.t_key)
-                } else {
-                    p.t_key
-                };
-                lat.push(ms(t.saturating_sub(t0)));
-                from = j + 1;
-                if spoken.get(j + 1).is_some_and(|(t2, s2)| {
-                    *s2 == p.expect && (*t2 < next_key || t2 - t < 300_000_000)
-                }) {
-                    doubled += 1;
-                    from = j + 2;
-                }
+/// The result of scoring a series of keys against what was said.
+#[derive(Debug, Default, PartialEq)]
+struct Score {
+    lat: Vec<f64>,
+    /// Scored keys with no speech of their text, in order, within [`LATE_NS`].
+    lost: u64,
+    /// Speeches that repeat the text of the speech matched just before them.
+    doubled: u64,
+    /// Every other speech no key accounts for (a wrong text, a stray word).
+    extra: u64,
+    /// Indices of the unmatched speeches that count (doubled or extra), for the notes.
+    stray: Vec<usize>,
+}
+
+/// Score in order, strictly (the speech of a loaded Firefox may come after the next key, so a
+/// window around each key would blame gorca for Gecko's lag). Every speech from the first key
+/// on is aligned with the keys by a longest common subsequence: speech `j` may stand for key
+/// `i` when its text is the key's, it came after the key and within [`LATE_NS`] of it, and the
+/// order is kept. Nothing is skipped silently: a key without its speech is `lost`; a speech
+/// left over is `doubled` when it repeats the matched speech before it, else `extra`. A probe
+/// with an empty `expect` is a key that is not scored: whatever is said after it and before
+/// the next key is neither matched nor counted. Latency is from the last Firefox caret event
+/// between the key and its speech (`from_event`) or from the key.
+fn score_aligned(f: &Ft, probes: &[Probe], spoken: &[(u64, String)], from_event: bool) -> Score {
+    let lat_of = |i: usize, t: u64| {
+        let t0 = if from_event {
+            f.w.tap
+                .last_between(CARET, &f.w.bus, probes[i].t_key, t)
+                .unwrap_or(probes[i].t_key)
+        } else {
+            probes[i].t_key
+        };
+        ms(t.saturating_sub(t0))
+    };
+    align(probes, spoken, lat_of)
+}
+
+/// The alignment of [`score_aligned`], apart from the bus (testable).
+fn align(probes: &[Probe], spoken: &[(u64, String)], lat_of: impl Fn(usize, u64) -> f64) -> Score {
+    let Some(first) = probes.first() else {
+        return Score::default();
+    };
+    // Every speech from the first key on.
+    let sp: Vec<(usize, &(u64, String))> = spoken
+        .iter()
+        .enumerate()
+        .filter(|(_, (t, _))| *t >= first.t_key)
+        .collect();
+    let (n, m) = (probes.len(), sp.len());
+    let ok = |i: usize, j: usize| {
+        let p = &probes[i];
+        let (t, s) = sp[j].1;
+        !p.expect.is_empty() && *t >= p.t_key && *t <= p.t_key + LATE_NS && *s == p.expect
+    };
+    // dp[i][j]: most matches of probes[i..] with sp[j..].
+    let w = m + 1;
+    let mut dp = vec![0u32; (n + 1) * w];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            let mut best = dp[(i + 1) * w + j].max(dp[i * w + j + 1]);
+            if ok(i, j) {
+                best = best.max(1 + dp[(i + 1) * w + j + 1]);
             }
-            None => lost += 1,
+            dp[i * w + j] = best;
         }
     }
-    (lat, lost, doubled)
+    let mut matched_sp = vec![None::<usize>; m];
+    let mut probe_hit = vec![false; n];
+    let (mut i, mut j) = (0usize, 0usize);
+    while i < n && j < m {
+        if ok(i, j) && dp[i * w + j] == 1 + dp[(i + 1) * w + j + 1] {
+            matched_sp[j] = Some(i);
+            probe_hit[i] = true;
+            i += 1;
+            j += 1;
+        } else if dp[i * w + j] == dp[(i + 1) * w + j] {
+            i += 1;
+        } else {
+            j += 1;
+        }
+    }
+    let mut sc = Score::default();
+    for (i, p) in probes.iter().enumerate() {
+        if p.expect.is_empty() {
+            continue;
+        }
+        if !probe_hit[i] {
+            sc.lost += 1;
+        }
+    }
+    for (j, hit) in matched_sp.iter().enumerate() {
+        if let Some(i) = hit {
+            sc.lat.push(lat_of(*i, sp[j].1.0));
+        }
+    }
+    // The speeches no key accounts for.
+    let mut last_text: Option<&str> = None;
+    for (j, hit) in matched_sp.iter().enumerate() {
+        let (t, s) = sp[j].1;
+        if hit.is_some() {
+            last_text = Some(s.as_str());
+            continue;
+        }
+        // Said after an unscored key (and before the next key): not ours to judge.
+        let owner = probes.iter().rposition(|p| p.t_key <= *t);
+        if owner.is_some_and(|k| probes[k].expect.is_empty()) {
+            continue;
+        }
+        if last_text == Some(s.as_str()) {
+            sc.doubled += 1;
+        } else {
+            sc.extra += 1;
+        }
+        sc.stray.push(sp[j].0);
+    }
+    sc
+}
+
+#[cfg(test)]
+mod align_tests {
+    use super::*;
+
+    fn p(t: u64, e: &str) -> Probe {
+        Probe {
+            t_key: t * 1_000_000,
+            t_ev: 0,
+            expect: e.to_owned(),
+        }
+    }
+    fn s(t: u64, e: &str) -> (u64, String) {
+        (t * 1_000_000, e.to_owned())
+    }
+    fn run(probes: &[Probe], spoken: &[(u64, String)]) -> (usize, u64, u64, u64) {
+        let sc = align(probes, spoken, |_, _| 0.0);
+        (sc.lat.len(), sc.lost, sc.doubled, sc.extra)
+    }
+
+    #[test]
+    fn late_speech_in_order_is_heard() {
+        let pr = [p(0, "a"), p(140, "b"), p(280, "a")];
+        let sp = [s(150, "a"), s(290, "b"), s(430, "a")];
+        assert_eq!(run(&pr, &sp), (3, 0, 0, 0));
+    }
+
+    #[test]
+    fn a_missing_speech_is_lost_not_borrowed_from_a_later_key() {
+        // Key 0 wants "a" and gets nothing; key 2's "a" must not stand for it.
+        let pr = [p(0, "a"), p(140, "b"), p(280, "a")];
+        let sp = [s(150, "b"), s(290, "a")];
+        assert_eq!(run(&pr, &sp), (2, 1, 0, 0));
+    }
+
+    #[test]
+    fn a_repeat_is_doubled_and_a_wrong_text_is_extra() {
+        let pr = [p(0, "a"), p(140, "b")];
+        let sp = [s(5, "a"), s(10, "a"), s(145, "c"), s(150, "b")];
+        assert_eq!(run(&pr, &sp), (2, 0, 1, 1));
+    }
+
+    #[test]
+    fn a_wrong_text_instead_of_the_right_one_is_lost_and_extra() {
+        let pr = [p(0, "a")];
+        let sp = [s(5, "x")];
+        assert_eq!(run(&pr, &sp), (0, 1, 0, 1));
+    }
+
+    #[test]
+    fn too_late_is_lost() {
+        let pr = [p(0, "a")];
+        let sp = [s(1600, "a")];
+        assert_eq!(run(&pr, &sp), (0, 1, 0, 1));
+    }
+
+    #[test]
+    fn speech_after_an_unscored_key_is_ignored() {
+        let pr = [p(0, "a"), p(140, ""), p(400, "b")];
+        let sp = [s(5, "a"), s(150, "whatever"), s(405, "b")];
+        assert_eq!(run(&pr, &sp), (2, 0, 0, 0));
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
 // Caret echo
-
-/// `a😀b😀😀c`: the characters and the caret offsets Gecko reports in UTF-16 units.
-const EMOJI_LINE: [&str; 6] = ["\u{1F600}", "b", "\u{1F600}", "\u{1F600}", "c", "blank"];
 
 /// FC1h: Right and Left over a mixed Latin and emoji line; the window answers (no IPC).
 fn fc1h(
@@ -428,42 +576,74 @@ fn fc1h(
     out: &mut RunOut,
 ) -> Result<()> {
     let mut f = Ft::open(host, reader, flavor, "fields.html", "M3b Fields", CFG_QUIET)?;
-    f.enter("Emoji line")?;
+    let path = f.enter("Emoji line")?;
     // Home: the caret is at 0 (the field is focused with it there).
     let mut probes: Vec<Probe> = Vec::new();
+    let mut swallowed = 0u64;
     let cycles = (size.n / 12).clamp(4, 40);
-    let mut gap = 0;
     for _ in 0..cycles {
-        // Right over six positions: 😀 b 😀 😀 c and the end of the text.
-        for e in EMOJI_LINE {
-            let (t, _) = f.key(RIGHT, 0, 0)?;
+        // Right over six positions (😀 b 😀 😀 c and the end), then back (c 😀 😀 b 😀 a).
+        for key in [RIGHT; 6].into_iter().chain([LEFT; 6]) {
+            let (t, consumed) = f.key(key, 0, 0)?;
+            if consumed {
+                swallowed += 1;
+            }
             probes.push(Probe {
                 t_key: t,
                 t_ev: 0,
-                expect: e.to_owned(),
+                expect: String::new(),
             });
             sleep(140);
-            gap += 1;
-        }
-        // And back: c 😀 😀 b 😀 a.
-        for e in ["c", "\u{1F600}", "\u{1F600}", "b", "\u{1F600}", "a"] {
-            let (t, _) = f.key(LEFT, 0, 0)?;
-            probes.push(Probe {
-                t_key: t,
-                t_ev: 0,
-                expect: e.to_owned(),
-            });
-            sleep(140);
-            gap += 1;
         }
     }
-    let _ = gap;
     sleep(400);
+    // What each key must say follows from where the page put the caret (its own caret
+    // events, in UTF-16 units), not from a model: a loaded Firefox now and then drops a key
+    // of the virtual keyboard, and every later expectation of a model would be off by one.
+    // A key that moved nothing is not scored (the reader then names the character at the
+    // edge) and is counted in `page_dropped`.
+    let first = probes.first().map_or(0, |p| p.t_key);
+    let carets = f.w.tap.events_since(CARET, &f.w.bus, &path, first);
+    let mut dropped = 0u64;
+    let keys: Vec<u64> = probes.iter().map(|p| p.t_key).collect();
+    for (i, p) in probes.iter_mut().enumerate() {
+        let next = keys.get(i + 1).copied().unwrap_or(u64::MAX);
+        match carets
+            .iter()
+            .rev()
+            .find(|(t, _)| *t >= p.t_key && *t < next)
+        {
+            Some((_, at)) => p.expect = emoji_line_at(*at),
+            None => dropped += 1,
+        }
+    }
+    if dropped > 0 {
+        out.notes.push(format!(
+            "FC1h: {dropped} of {} keys moved no caret in the page (not scored)",
+            probes.len()
+        ));
+    }
     let (lat, lost, doubled) = finish(&mut f, "FC1h", &mut probes, true, out);
     out.s("fc1h_ms", lat);
     out.x("lost", lost as f64, "keys");
     out.x("fc_double", doubled as f64, "keys");
+    out.x("fc_swallowed", swallowed as f64, "keys");
+    out.x("page_dropped", dropped as f64, "keys");
     Ok(())
+}
+
+/// What is said for the caret at UTF-16 offset `at` of `a😀b😀😀c` (a phantom U+FEFF follows
+/// each emoji in Gecko's string, so 2, 5 and 7 are never a caret position).
+fn emoji_line_at(at: i32) -> String {
+    match at {
+        0 => "a",
+        1 | 4 | 6 => "\u{1F600}",
+        3 => "b",
+        8 => "c",
+        9 => "blank",
+        _ => "<caret inside a surrogate pair>",
+    }
+    .to_owned()
 }
 
 /// FC1: Down through 300 distinct lines of a text area; every key needs the toolkit's line.
@@ -501,7 +681,8 @@ fn fc1(
 // ---------------------------------------------------------------------------------------------
 // Typing echo
 
-/// FE1: letters typed into an empty input: each is spoken once, from the key.
+/// FE1: letters typed into an empty input: each is spoken once, from the key. FCE2 (`rich`):
+/// the same into an empty contenteditable region (its paragraph gets the text events).
 fn fe1(
     host: &HostEnv,
     reader: &ReaderSpec,
@@ -509,9 +690,11 @@ fn fe1(
     size: Size,
     seed: u64,
     out: &mut RunOut,
+    rich: bool,
 ) -> Result<()> {
+    let id = if rich { "FCE2" } else { "FE1" };
     let mut f = Ft::open(host, reader, flavor, "fields.html", "M3b Fields", CFG_QUIET)?;
-    f.enter("Typing")?;
+    f.enter(if rich { "Typing region:" } else { "Typing" })?;
     let mut rng = Rng::new(seed);
     let n = size.n.clamp(60, 600);
     let mut probes: Vec<Probe> = Vec::new();
@@ -526,8 +709,8 @@ fn fe1(
         sleep(110);
     }
     sleep(500);
-    let (lat, lost, doubled) = finish(&mut f, "FE1", &mut probes, false, out);
-    out.s("fe1_ms", lat);
+    let (lat, lost, doubled) = finish(&mut f, id, &mut probes, false, out);
+    out.s(if rich { "fce2_ms" } else { "fe1_ms" }, lat);
     out.x("lost", lost as f64, "keys");
     out.x("fc_double", doubled as f64, "keys");
     Ok(())
@@ -792,7 +975,12 @@ fn fs2(
     let mut failures = 0u64;
     for _ in 0..cycles {
         // To the start (Home speaks "a" or nothing at 0; not scored).
-        f.key(HOME, 0, 0)?;
+        let (t, _) = f.key(HOME, 0, 0)?;
+        probes.push(Probe {
+            t_key: t,
+            t_ev: 0,
+            expect: String::new(),
+        });
         sleep(250);
         for c in alphabet.iter().take(20) {
             let (t, _) = f.key(RIGHT, 0, SHIFT)?;
@@ -807,13 +995,15 @@ fn fs2(
             let (t, _) = f.key(LEFT, 0, SHIFT)?;
             // Releasing the last one collapses the selection onto the caret: the toolkit says
             // what it says there; only the changes before it are scored.
-            if i < 19 {
-                probes.push(Probe {
-                    t_key: t,
-                    t_ev: 0,
-                    expect: format!("{c} unselected"),
-                });
-            }
+            probes.push(Probe {
+                t_key: t,
+                t_ev: 0,
+                expect: if i < 19 {
+                    format!("{c} unselected")
+                } else {
+                    String::new()
+                },
+            });
             sleep(200);
         }
         sleep(200);

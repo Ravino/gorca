@@ -1,0 +1,14 @@
+{
+  "meta": {"utc": "2026-10-15T08:24:31Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "9.61 10.65 9.71 3/2915 834733", "git_rev": "09ff3ef", "git_dirty": "true", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "label": "m3b-cont-d", "reader": "daemon:<repo>/.claude/worktrees/agent-a702d0a17a733562c/target/release/gorca", "backend": "voicego", "repeats": "1", "samples_per_series": "1200", "l2_trials": "400", "quick": "false", "loadavg_end": "9.61 10.65 9.71 1/2915 834730", "reader_env": "GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info RUST_LOG=warn,gorca_phase=info,gorca_text=debug", "gates": "L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats"},
+  "rows": [
+    {"id": "FCE2.fce2_ms.n", "scenario": "FCE2", "bus": "daemon/voicego", "value": 600, "min": 600, "max": 600, "runs": 1, "unit": "samples", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FCE2.fce2_ms.p50", "scenario": "FCE2", "bus": "daemon/voicego", "value": 0.365483, "min": 0.365483, "max": 0.365483, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FCE2.fce2_ms.p95", "scenario": "FCE2", "bus": "daemon/voicego", "value": 0.489997, "min": 0.489997, "max": 0.489997, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FCE2.fce2_ms.p99", "scenario": "FCE2", "bus": "daemon/voicego", "value": 0.549528, "min": 0.549528, "max": 0.549528, "runs": 1, "unit": "ms", "op": "<=", "threshold": 3, "verdict": "PASS", "note": ""},
+    {"id": "FCE2.fce2_ms.p999", "scenario": "FCE2", "bus": "daemon/voicego", "value": 0.616985, "min": 0.616985, "max": 0.616985, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FCE2.fce2_ms.max", "scenario": "FCE2", "bus": "daemon/voicego", "value": 0.626807, "min": 0.626807, "max": 0.626807, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "FCE2.fc_double", "scenario": "FCE2", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "keys", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "FCE2.fc_extra", "scenario": "FCE2", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "speeches", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "FCE2.lost", "scenario": "FCE2", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "keys", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"}
+  ]
+}

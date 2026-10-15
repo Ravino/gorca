@@ -232,6 +232,8 @@ struct Seen {
     sender: String,
     path: String,
     t_ns: u64,
+    /// The first integer of the event (a caret event's offset).
+    d1: i32,
 }
 
 pub(super) const FOCUS: u8 = 1;
@@ -321,6 +323,7 @@ impl EventTap {
                                                 sender: s.to_owned(),
                                                 path: p.to_owned(),
                                                 t_ns: t,
+                                                d1: event_head(m.body).map_or(-1, |(_, d)| d),
                                             },
                                         );
                                     }
@@ -352,6 +355,24 @@ impl EventTap {
             thread: Some(thread),
             seen,
         })
+    }
+
+    /// `(arrival, first integer)` of every event of `kind` from `sender` at `path` since `t0`,
+    /// oldest first (a caret event's integer is its offset).
+    pub(super) fn events_since(
+        &self,
+        kind: u8,
+        sender: &str,
+        path: &str,
+        t0: u64,
+    ) -> Vec<(u64, i32)> {
+        self.seen
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .filter(|e| e.kind == kind && e.sender == sender && e.path == path && e.t_ns >= t0)
+            .map(|e| (e.t_ns, e.d1))
+            .collect()
     }
 
     /// The last `n` events as "kind path" strings, oldest first.

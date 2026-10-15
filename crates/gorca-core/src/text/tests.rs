@@ -2082,3 +2082,31 @@ fn a_typed_letter_reported_one_offset_too_far_is_not_spoken_twice() {
     assert!(spoken(&fx).is_empty(), "once: {fx:?}");
     assert_eq!(g.r.text_counters().window_dirty, 1);
 }
+
+#[test]
+fn a_commit_reported_one_past_the_caret_is_spoken_once() {
+    // Gecko in an input, after scripted text: the insert says 4, the caret was at 3 and moves
+    // by the insert's length to 4. The caret move is the insert's own, not a second speech.
+    let mut g = gecko_rig();
+    g.entry("abcdef", 3);
+    let fx = g.insert_raw(4, 1, "\u{436}");
+    let mut said = spoken(&fx);
+    let fx = g.caret(4);
+    said.extend(spoken(&fx));
+    said.extend(spoken(&g.tick(400)));
+    assert_eq!(said, ["\u{436}"]);
+}
+
+#[test]
+fn a_backspace_reported_at_the_caret_is_spoken_once() {
+    // BackSpace at 5: Gecko reports the delete at 5 (not 4), the caret then goes to 4.
+    let mut g = gecko_rig();
+    g.entry("abc\u{436}de", 5);
+    let _ = g.key(BACKSPACE, 0, NONE);
+    let fx = g.delete(5, Some("e"), 1);
+    let mut said = spoken(&fx);
+    let fx = g.caret(4);
+    said.extend(spoken(&fx));
+    said.extend(spoken(&g.tick(400)));
+    assert_eq!(said, ["e"]);
+}

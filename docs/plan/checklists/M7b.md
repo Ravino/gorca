@@ -92,16 +92,23 @@ paragraph and sentence moves, pre-warming of background tabs (all M8 or later).
 
 | Gate | Limit |
 |---|---|
-| FC1h Right/Left over emoji and Cyrillic, Firefox caret event to speech | p99 3 ms, 0 lost, 0 doubled |
+| FC1h Right/Left over emoji, Firefox caret event to speech; expected text from the page's own caret events | p99 3 ms, 0 lost, 0 doubled, 0 extra, 0 swallowed |
 | FC1 Down through 300 distinct lines | p99 15 ms, 0 lost |
-| FE1 typed letters, key to speech | p99 3 ms, 0 lost, 0 doubled |
+| FE1 typed letters in an input, key to speech | p99 3 ms, 0 lost, 0 doubled, 0 extra |
+| FCE2 typed letters in a contenteditable, key to speech | p99 3 ms, 0 lost, 0 doubled, 0 extra |
 | FE2 randomised typing session (letters, space, BackSpace, emoji and Cyrillic commits, arrows) | 0 missing, 0 doubled, 0 key names, 0 wrong |
-| FS2 Shift+arrows | p99 15 ms, 0 lost |
+| FS2 Shift+arrows | p99 15 ms, 0 lost, 0 extra |
 | FSA1 / FSA3 say-all in a field, stop, caret placement | first chunk p99 15 ms; stop p99 2 ms; caret at a chunk start |
-| FCE1 contenteditable caret, typing, BackSpace | 0 lost, 0 doubled |
+| FCE1 contenteditable caret, typing, BackSpace | 0 lost, 0 doubled, 0 extra |
 | FT1 browse/focus switches with a field | 0 failures |
 | FP1 Escape with a popup open | 0 failures |
 | BSA1 browse say-all, cursor follows, key stops | first chunk p99 5 ms, 0 failures |
 | BAR1 page reads itself after load, key stops | 0 failures |
 | BL1 Russian layout and Shift+digit | 0 failures |
 | FR1 frame and article quick navigation | 0 failures |
+
+How keys are scored (FC1h, FC1, FE1, FCE2, FS2, FCE1): every speech from the first key on is aligned with the keys in
+order (longest common subsequence; a speech may stand for a key only if it has the key's text and comes after the key,
+within 1.5 s). A key with no such speech is `lost`; a leftover speech is `fc_double` when it repeats the one before it,
+else `fc_extra`. Nothing is skipped silently. Firefox under load now and then delivers a key's caret event after the
+next key, which a window "until the next key" would have blamed on gorca.
