@@ -520,6 +520,10 @@ fn rig() -> Rig {
     };
     let mut reader =
         Reader::new(Arc::clone(&epoch), dir, keys).with_web(Arc::clone(&docs), Arc::clone(&join));
+    // The M7a scenarios read line by line; page auto-read has its own tests below.
+    Arc::make_mut(&mut reader.cmd.effective)
+        .browse
+        .say_all_on_load = false;
     let now = Instant::now();
     reader.handle(ReaderMsg::Doc(DocNotice::WebApp { app: app() }), now);
     Rig {
@@ -1161,24 +1165,256 @@ fn browse_keys_on_a_vanished_document_hand_the_keyboard_back() {
 
 // ---- integration with the M3 text layer ---------------------------------------------------
 
-/// Say-all and say-selection belong to the native text layer; in browse mode the document owns
-/// reading, so they refuse with a short cue and start nothing.
+/// Say-selection belongs to the native text layer; in browse mode the document owns reading,
+/// so it refuses with a short cue and starts no text work.
 #[test]
-fn say_all_and_say_selection_refuse_cleanly_in_browse_mode() {
+fn say_selection_refuses_cleanly_in_browse_mode() {
     let mut r = rig();
     r.focus(1006);
     assert!(matches!(r.reader.mode(), Mode::Browse { .. }));
-    for cmd in [CoreCmd::TextSayAll, CoreCmd::InfoSelection] {
-        let fx = r.key(cmd);
-        assert_eq!(spoken(&fx), ["not available in this mode"], "{cmd:?}");
-        assert!(
-            !fx.iter().any(|e| matches!(
-                e,
-                ReaderEffect::SayAllChunk { .. } | ReaderEffect::TextFetch { .. }
-            )),
-            "{cmd:?} started text work"
-        );
+    let fx = r.key(CoreCmd::InfoSelection);
+    assert_eq!(spoken(&fx), ["not available in this mode"]);
+    assert!(
+        !fx.iter().any(|e| matches!(
+            e,
+            ReaderEffect::SayAllChunk { .. } | ReaderEffect::TextFetch { .. }
+        )),
+        "started text work"
+    );
+}
+
+// ---- M7b: say-all and page auto-read ------------------------------------------------------
+
+fn chunks(fx: &ReaderEffects) -> Vec<(String, bool)> {
+    fx.iter()
+        .filter_map(|e| {
+            if let ReaderEffect::SayAllChunk { intent, first } = e {
+                Some((
+                    intent
+                        .utterance
+                        .segments
+                        .iter()
+                        .map(|g| &*g.text)
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                    *first,
+                ))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn chunk_ids(fx: &ReaderEffects) -> Vec<gorca_model::UttId> {
+    fx.iter()
+        .filter_map(|e| {
+            if let ReaderEffect::SayAllChunk { intent, .. } = e {
+                Some(intent.utterance.id)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn progress(r: &mut Rig, p: gorca_speech::LaneProgress) -> ReaderEffects {
+    r.reader
+        .handle(ReaderMsg::Text(crate::text::TextMsg::Progress(p)), r.now)
+}
+
+/// The cursor's flat offset.
+fn cursor_off(r: &Rig) -> u32 {
+    let WebMode::Browse { doc, cur, .. } = r.mode() else {
+        panic!("not browsing: {:?}", r.mode());
+    };
+    r.docs
+        .get(doc)
+        .unwrap()
+        .read
+        .with(|d| cursor::offset_of(d, cur).unwrap())
+}
+
+#[test]
+fn say_all_in_browse_mode_reads_the_page_in_chunks_as_the_line_presenter_speaks_it() {
+    let mut r = rig();
+    r.focus(1006); // the link: browse mode, cursor in "Read the docs now."
+    let fx = r.key(CoreCmd::TextSayAll);
+    let c = chunks(&fx);
+    assert!(!c.is_empty(), "{fx:?}");
+    assert!(c[0].1, "the first chunk interrupts");
+    assert!(
+        c[0].0.contains("link") && c[0].0.contains("the docs"),
+        "objects are spoken by role and name: {c:?}"
+    );
+    assert!(
+        c.iter()
+            .any(|(t, _)| t.contains("heading level 2") && t.contains("Details")),
+        "headings are announced: {c:?}"
+    );
+    assert!(
+        !fx.iter()
+            .any(|e| matches!(e, ReaderEffect::TextFetch { .. }))
+    );
+    assert!(
+        matches!(
+            r.reader.text.say_all,
+            crate::text::say_all::SayAll::Running(_)
+        ),
+        "running"
+    );
+}
+
+#[test]
+fn the_virtual_cursor_follows_the_chunk_the_server_starts() {
+    let mut r = rig();
+    r.focus(1006);
+    let fx = r.key(CoreCmd::TextSayAll);
+    let ids = chunk_ids(&fx);
+    assert!(ids.len() >= 2, "{fx:?}");
+    let start = cursor_off(&r);
+    let _ = progress(&mut r, gorca_speech::LaneProgress::Started(ids[0]));
+    let _ = progress(&mut r, gorca_speech::LaneProgress::Ended(ids[0]));
+    let fx = progress(&mut r, gorca_speech::LaneProgress::Started(ids[1]));
+    let after = cursor_off(&r);
+    assert!(
+        after > start,
+        "the cursor moved on with the reading: {start} -> {after}"
+    );
+    // Scrolling is asked for after the pause, not on every chunk.
+    assert!(effects_web(&fx).is_empty());
+    // A key stops the reading where it is: the next move starts at the chunk being read.
+    let _ = r.key(CoreCmd::BrowseCursorNextLine);
+    assert!(matches!(
+        r.reader.text.say_all,
+        crate::text::say_all::SayAll::Idle
+    ));
+    assert!(cursor_off(&r) >= after);
+}
+
+#[test]
+fn a_reading_that_reaches_the_end_stops_quietly() {
+    let mut r = rig();
+    r.focus(1006);
+    let fx = r.key(CoreCmd::TextSayAll);
+    let mut all = chunk_ids(&fx);
+    // Keep the server fed until the reading has nothing left to submit.
+    let mut done = 0;
+    while done < all.len() && done < 50 {
+        let id = all[done];
+        let _ = progress(&mut r, gorca_speech::LaneProgress::Started(id));
+        let fx = progress(&mut r, gorca_speech::LaneProgress::Ended(id));
+        all.extend(chunk_ids(&fx));
+        done += 1;
     }
+    assert!(matches!(
+        r.reader.text.say_all,
+        crate::text::say_all::SayAll::Idle
+    ));
+    assert!(done >= 3, "the page has several chunks");
+}
+
+fn first_publish(r: &mut Rig) -> ReaderEffects {
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::FirstUseful {
+            doc: DocId(1),
+            app: app(),
+        }),
+        r.now,
+    )
+}
+
+fn auto_read_on(r: &mut Rig) {
+    Arc::make_mut(&mut r.reader.cmd.effective)
+        .browse
+        .say_all_on_load = true;
+}
+
+fn into_chrome(r: &mut Rig) {
+    r.focus(2000);
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::NoDocument { focus: nk(2000) }),
+        r.now,
+    );
+}
+
+#[test]
+fn a_loaded_page_speaks_its_title_and_then_reads_itself() {
+    let mut r = rig();
+    auto_read_on(&mut r);
+    into_chrome(&mut r);
+    let _ = r
+        .reader
+        .handle(ReaderMsg::Doc(DocNotice::Loaded { node: nk(1001) }), r.now);
+    let fx = first_publish(&mut r);
+    assert_eq!(spoken(&fx), ["browse mode Test page"], "title only");
+    let c = chunks(&fx);
+    assert!(!c.is_empty(), "the page starts reading: {fx:?}");
+    assert!(!c[0].1, "queued behind the title, it does not cut it off");
+    assert!(
+        c[0].0.contains("heading level 1") && c[0].0.contains("Welcome"),
+        "{c:?}"
+    );
+}
+
+#[test]
+fn a_page_that_loads_after_its_first_publish_starts_reading_at_load_complete() {
+    let mut r = rig();
+    auto_read_on(&mut r);
+    into_chrome(&mut r);
+    let fx = first_publish(&mut r);
+    assert_eq!(spoken(&fx), ["browse mode Test page"]);
+    assert!(chunks(&fx).is_empty(), "not loaded yet");
+    let fx = r
+        .reader
+        .handle(ReaderMsg::Doc(DocNotice::Loaded { node: nk(1001) }), r.now);
+    assert!(!chunks(&fx).is_empty(), "load-complete starts it: {fx:?}");
+}
+
+#[test]
+fn a_page_whose_load_complete_never_comes_reads_itself_after_a_moment() {
+    let mut r = rig();
+    auto_read_on(&mut r);
+    into_chrome(&mut r);
+    let fx = first_publish(&mut r);
+    assert!(
+        arms(&fx).len() == 1,
+        "the wait is bounded by a timer: {fx:?}"
+    );
+    r.now += Duration::from_millis(2000);
+    let fx = r.reader.handle(ReaderMsg::Timer, r.now);
+    assert!(!chunks(&fx).is_empty(), "{fx:?}");
+}
+
+#[test]
+fn a_key_before_load_complete_cancels_the_auto_read() {
+    let mut r = rig();
+    auto_read_on(&mut r);
+    into_chrome(&mut r);
+    let _ = first_publish(&mut r);
+    let _ = r.key(CoreCmd::BrowseCursorNextLine);
+    let fx = r
+        .reader
+        .handle(ReaderMsg::Doc(DocNotice::Loaded { node: nk(1001) }), r.now);
+    assert!(chunks(&fx).is_empty(), "the user already took over: {fx:?}");
+    r.now += Duration::from_millis(3000);
+    let fx = r.reader.handle(ReaderMsg::Timer, r.now);
+    assert!(chunks(&fx).is_empty(), "{fx:?}");
+}
+
+#[test]
+fn auto_read_can_be_switched_off_and_then_the_first_line_is_spoken_as_before() {
+    let mut r = rig();
+    into_chrome(&mut r);
+    let _ = r
+        .reader
+        .handle(ReaderMsg::Doc(DocNotice::Loaded { node: nk(1001) }), r.now);
+    let fx = first_publish(&mut r);
+    assert_eq!(
+        spoken(&fx),
+        ["browse mode Test page heading level 1 Welcome"]
+    );
+    assert!(chunks(&fx).is_empty());
 }
 
 // ---- re-review: timers (N1) and the Firefox typing path (N5) -------------------------------
@@ -1218,16 +1454,18 @@ fn arms(fx: &ReaderEffects) -> Vec<Instant> {
         .collect()
 }
 
-/// N5: the real Firefox path. The app counts UTF-16 units, so the native caret layer stays out
-/// and the generic key echo speaks the letter once.
+/// N5: the real Firefox path. The app counts UTF-16 units; the caret layer follows them as
+/// they are (M3b), owns the typed key and speaks the letter once.
 #[test]
-fn a_firefox_field_is_echoed_once_by_the_generic_echo_not_the_caret_layer() {
+fn a_firefox_field_is_echoed_once_by_the_caret_layer() {
     let mut r = rig();
-    r.reader.dir.set_text_scalar(app(), false);
+    r.reader
+        .dir
+        .set_text_unit(app(), gorca_model::TextUnit::Utf16Bom);
     r.focus(1014);
     assert!(
-        r.reader.text.caret.tracked().is_none(),
-        "caret layer is off"
+        r.reader.text.caret.tracked().is_some(),
+        "the caret layer tracks the field"
     );
     let fx = type_a(&mut r);
     assert_eq!(spoken(&fx), ["a"]);
@@ -1368,4 +1606,119 @@ fn a_native_focus_whose_fetch_fails_is_retried_once_and_then_says_unknown() {
     assert!(spoken(&fx).is_empty());
     let fx = r.reader.handle(failed_reply(nk(7777), epoch), r.now);
     assert_eq!(spoken(&fx), ["unknown"]);
+}
+
+// ---- M7b: Escape passes through an open popup ------------------------------------------------
+
+fn last_grab(fx: &ReaderEffects) -> Option<gorca_input_api::GrabSet> {
+    fx.iter().rev().find_map(|e| {
+        if let ReaderEffect::SetGrabSet(g) = e {
+            Some(g.clone())
+        } else {
+            None
+        }
+    })
+}
+
+/// The field changes its `expanded` state in the page and the mirror says so.
+fn set_expanded(r: &mut Rig, on: bool) -> ReaderEffects {
+    let mut edit = src(14, Role::TextEntry, Some(1014));
+    edit.states |= StateSet::FOCUSABLE | StateSet::EDITABLE;
+    if on {
+        edit.states |= StateSet::EXPANDED;
+    }
+    r.tr.apply(&mut r.writer, vec![DocDelta::Upsert(vec![edit])])
+        .unwrap();
+    r.writer.publish();
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed {
+            doc: DocId(1),
+            rev: 9,
+        }),
+        r.now,
+    )
+}
+
+#[test]
+fn escape_belongs_to_the_page_while_the_field_has_a_popup_open() {
+    let mut r = rig();
+    let fx = r.focus(1014);
+    assert!(last_grab(&fx).is_some_and(|g| g.contains(0xff1b, Modifiers::empty())));
+    // The drop-down opens: Escape is released so the page can close it.
+    let fx = set_expanded(&mut r, true);
+    let g = last_grab(&fx).expect("the grab set is republished");
+    assert!(
+        !g.contains(0xff1b, Modifiers::empty()),
+        "Escape is the page's now"
+    );
+    assert!(
+        matches!(r.mode(), WebMode::Focus { .. }),
+        "still focus mode"
+    );
+    // It closes: the next Escape returns to browse mode.
+    let fx = set_expanded(&mut r, false);
+    let g = last_grab(&fx).expect("the grab set is republished");
+    assert!(g.contains(0xff1b, Modifiers::empty()));
+    let fx = r.key(CoreCmd::BrowseEscape);
+    assert!(matches!(r.mode(), WebMode::Browse { .. }));
+    assert!(spoken(&fx)[0].starts_with("browse mode"));
+}
+
+#[test]
+fn a_field_that_is_open_when_it_gets_the_focus_does_not_grab_escape() {
+    let mut r = rig();
+    // The field is expanded before the focus arrives.
+    let _ = set_expanded(&mut r, true);
+    let fx = r.focus(1014);
+    assert!(matches!(r.mode(), WebMode::Focus { .. }));
+    let g = last_grab(&fx).expect("a grab set for the transition");
+    assert!(!g.contains(0xff1b, Modifiers::empty()));
+}
+
+// ---- M7b: frame and article quick navigation ---------------------------------------------------
+
+#[test]
+fn quick_navigation_finds_articles_and_frames_and_names_them() {
+    let mut r = rig();
+    r.focus(1002);
+    let mut article = block(src(20, Role::Paragraph, None));
+    article.attrs.push((web_attrs::TAG, Arc::from("article")));
+    let mut frame = block(src(30, Role::DocumentWeb, None));
+    frame.name = Some(Arc::from("Ad frame"));
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            DocDelta::Upsert(vec![
+                article,
+                run(21, "An article text"),
+                frame,
+                run(31, "Inside the frame"),
+            ]),
+            kids(1, &[2, 4, 9, 11, 13, 20, 30]),
+            kids(20, &[21]),
+            kids(30, &[31]),
+            DocDelta::Settled { batch: 2 },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed {
+            doc: DocId(1),
+            rev: 2,
+        }),
+        r.now,
+    );
+    let fx = r.key(CoreCmd::QuicknavNextArticle);
+    assert_eq!(spoken(&fx), ["article An article text"]);
+    let fx = r.key(CoreCmd::QuicknavNextArticle);
+    assert_eq!(spoken(&fx), ["no next article"]);
+    let fx = r.key(CoreCmd::QuicknavNextFrame);
+    assert_eq!(spoken(&fx), ["frame Ad frame Inside the frame"]);
+    let fx = r.key(CoreCmd::QuicknavNextFrame);
+    assert_eq!(spoken(&fx), ["no next frame"]);
+    let fx = r.key(CoreCmd::QuicknavPrevArticle);
+    assert_eq!(spoken(&fx), ["article An article text"]);
+    let fx = r.key(CoreCmd::QuicknavPrevFrame);
+    assert_eq!(spoken(&fx), ["no previous frame"]);
 }

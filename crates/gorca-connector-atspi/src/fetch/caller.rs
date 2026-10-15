@@ -519,6 +519,29 @@ impl Caller {
             .map_err(DbusError::Zbus)
     }
 
+    /// `Text.GetAttributeRun(offset, include_defaults = true)`: the attributes of the run that
+    /// holds `offset` with the defaults filled in, and the run `(start, end)`.
+    pub(crate) async fn attribute_run(
+        &self,
+        path: &str,
+        offset: i32,
+        deadline: Deadline,
+    ) -> Result<(std::collections::HashMap<String, String>, i32, i32), DbusError> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                TEXT,
+                "GetAttributeRun",
+                &(offset, true),
+            )
+            .await?;
+        m.body()
+            .deserialize::<(std::collections::HashMap<String, String>, i32, i32)>()
+            .map_err(DbusError::Zbus)
+    }
+
     /// `Text.GetRangeExtents(start, end, WINDOW)`.
     pub(super) async fn range_extents(
         &self,

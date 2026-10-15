@@ -54,7 +54,8 @@ pub use commands::{
     Availability, CmdSpec, CommandTable, Compiled, ConfigRequest, ContextMask, ControlMsg, CoreCmd,
     InputNotice, LoadCause, LoadedSettings, LocalTime, Milestone, PASS_TIMEOUT, PlatformFacts,
     SaveResult, SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels, WallClock, browse_grabs,
-    chord_grabs, command_id, compile, escape_grabs, gorca_modifiers, lane_settings,
+    chord_grabs, command_id, compile, escape_grabs, gorca_modifiers, grab_collisions,
+    lane_settings,
 };
 pub use directory::MirrorDirectory;
 pub use doc_actor::{

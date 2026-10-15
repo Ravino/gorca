@@ -16,6 +16,8 @@ use gorca_model::{
 };
 use gorca_rt::Deadline;
 
+mod format;
+
 use crate::decode::clip;
 use crate::fetch::{CallCx, Resolved, backend_error};
 
@@ -49,6 +51,7 @@ pub(crate) async fn run(
             Some(at_offset(cx, *node, *offset, *unit, dl).await)
         }
         TextQuery::Selections { node } => Some(selections(cx, *node, dl).await),
+        TextQuery::Format { node, offset } => Some(format::run(cx, *node, *offset, dl).await),
         TextQuery::Window {
             node,
             around,

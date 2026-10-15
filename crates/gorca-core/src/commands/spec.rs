@@ -220,16 +220,14 @@ mod tests {
             !impl_names.contains(&"quicknav.next.heading7"),
             "H7 to H9 are not HTML"
         );
-        assert!(
-            !impl_names.contains(&"quicknav.next.article"),
-            "unbound by default"
-        );
+        assert!(impl_names.contains(&"quicknav.next.frame"), "M7b");
+        assert!(impl_names.contains(&"quicknav.prev.article"), "M7b");
         assert!(!impl_names.contains(&"browse.find"), "M8");
         // M3: caret and text commands, selection, say-all and the punctuation cycle.
         assert!(impl_names.contains(&"text.say_all"));
         assert!(impl_names.contains(&"info.selection"));
-        assert!(!impl_names.contains(&"info.formatting"), "M3b");
-        assert_eq!(impl_names.len(), 132);
+        assert!(impl_names.contains(&"info.formatting"));
+        assert_eq!(impl_names.len(), 137);
     }
 
     #[test]

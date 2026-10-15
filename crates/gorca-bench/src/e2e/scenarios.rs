@@ -79,6 +79,8 @@ pub enum Scn {
     /// B-5: K1 while an L3-50k storm runs on another application.
     K1Storm,
     E1s,
+    /// M3b and M7b scenarios against a private Firefox (`webtext.rs`).
+    Wt(&'static str),
 }
 
 impl Scn {
@@ -126,6 +128,7 @@ impl Scn {
             Self::L2Storm => "L2-50k".into(),
             Self::K1Storm => "K1-50k".into(),
             Self::E1s => "E1s".into(),
+            Self::Wt(id) => (*id).into(),
         }
     }
 
@@ -174,7 +177,12 @@ impl Scn {
             "L2-50k" => Self::L2Storm,
             "K1-50k" => Self::K1Storm,
             "E1s" => Self::E1s,
-            _ => return None,
+            other => {
+                return super::webtext::IDS
+                    .iter()
+                    .find(|i| **i == other)
+                    .map(|i| Self::Wt(i));
+            }
         })
     }
 
@@ -186,6 +194,7 @@ impl Scn {
             "PW", "C1hs", "E1s",
         ]
         .iter()
+        .chain(super::webtext::IDS)
         .filter_map(|s| Self::parse(s))
         .collect()
     }
@@ -513,6 +522,7 @@ pub fn run(
         Scn::PW => super::m3::pw(host, reader, flavor, size, seed, &mut out)?,
         Scn::C1hs => super::m3::c1hs(host, reader, flavor, size, seed, &mut out)?,
         Scn::E1s => super::m3::e1s(host, reader, flavor, size, seed, &mut out)?,
+        Scn::Wt(id) => super::webtext::run(id, host, reader, flavor, size, seed, &mut out)?,
     }
     Ok(out)
 }

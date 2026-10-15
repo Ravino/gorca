@@ -47,7 +47,7 @@ const TAIL_TTL: Duration = Duration::from_secs(2);
 /// A late first line (the mirror was empty at focus time) is still spoken within this window.
 const ENTRY_WAIT: Duration = Duration::from_secs(2);
 /// Held cursor keys scroll the page once per this interval (LP-6).
-const SCROLL_DEBOUNCE: Duration = Duration::from_millis(150);
+pub(super) const SCROLL_DEBOUNCE: Duration = Duration::from_millis(150);
 /// Focus in a document the mirror does not know yet waits this long (browse design 7.3).
 const LOADING_GRACE: Duration = Duration::from_secs(1);
 
@@ -357,6 +357,20 @@ const QUICKNAV: &[(CoreCmd, Dir, Cat, &str)] = &[
     ),
     (CoreCmd::QuicknavNextTable, Dir::Next, Cat::TABLE, "table"),
     (CoreCmd::QuicknavPrevTable, Dir::Prev, Cat::TABLE, "table"),
+    (CoreCmd::QuicknavNextFrame, Dir::Next, Cat::FRAME, "frame"),
+    (CoreCmd::QuicknavPrevFrame, Dir::Prev, Cat::FRAME, "frame"),
+    (
+        CoreCmd::QuicknavNextArticle,
+        Dir::Next,
+        Cat::ARTICLE,
+        "article",
+    ),
+    (
+        CoreCmd::QuicknavPrevArticle,
+        Dir::Prev,
+        Cat::ARTICLE,
+        "article",
+    ),
 ];
 
 fn quicknav(c: CoreCmd) -> Option<(Dir, Cat, &'static str)> {
@@ -477,7 +491,10 @@ impl Reader {
     pub(crate) fn current_grabs(&self) -> GrabSet {
         let mut set = self.mode.grab_set(&self.keys);
         if matches!(self.mode, Mode::Focus)
-            && self.web.as_ref().is_some_and(|w| w.mode.escape_grabbed())
+            && self
+                .web
+                .as_ref()
+                .is_some_and(|w| w.mode.escape_grabbed() && !w.popup_open)
             && !self.keys.web_escape.is_empty()
         {
             // Escape lives in the browse keymap table; the lane looks it up there.
@@ -632,6 +649,33 @@ impl Reader {
 
     // ---- focus ----------------------------------------------------------------------------
 
+    /// Keep `popup_open` true to the field in focus mode, and the grab set with it: Escape is
+    /// ours only while the field has no popup of its own to close.
+    pub(super) fn web_refresh_popup(&mut self, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_mut() else { return };
+        let open = match b.mode {
+            WebMode::Focus {
+                doc,
+                node,
+                cause: super::FocusCause::Auto,
+                ..
+            } => b.docs.get(doc).is_some_and(|h| {
+                h.read
+                    .with(|d| states_of(d, node).contains(StateSet::EXPANDED))
+            }),
+            WebMode::Focus { .. }
+            | WebMode::Browse { .. }
+            | WebMode::Loading { .. }
+            | WebMode::Inactive => false,
+        };
+        if open != b.popup_open {
+            b.popup_open = open;
+            if matches!(self.mode, Mode::Focus) && !self.keys.web_escape.is_empty() {
+                fx.push(ReaderEffect::SetGrabSet(self.current_grabs()));
+            }
+        }
+    }
+
     /// The focus joined to a mirrored node, or left web content. Called before the focus is
     /// presented, so the mode word can ride on the focus utterance (BM-5).
     pub(crate) fn web_on_focus(&mut self, node: NodeKey, fx: &mut ReaderEffects) {
@@ -663,6 +707,7 @@ impl Reader {
                 self.web_place(doc, id);
                 self.web_root_entry(doc, id);
             }
+            self.web_refresh_popup(fx);
             return;
         }
         // IR-3: the join missed. Browse keys must never be grabbed while focus may be in a
@@ -801,6 +846,7 @@ impl Reader {
                 }
             }
             DocNotice::FirstUseful { doc, app } => self.web_first_useful(doc, app, fx),
+            DocNotice::Loaded { node } => self.web_loaded(node, fx),
             DocNotice::Changed { doc, .. } => self.web_changed(doc, fx),
             DocNotice::InDocument { focus, doc } => {
                 if let Some(b) = self.web.as_mut()
@@ -876,7 +922,10 @@ impl Reader {
                 let at_root = focus_node.is_some_and(|(n, _)| n == root);
                 let at_top = focus_node.is_none();
                 self.web_place(doc, focus_node.map_or(root, |(n, _)| n));
-                self.web_speak_entry(doc, at_top || at_root, at_top, fx);
+                let spoke = self.web_speak_entry(doc, at_top || at_root, at_top, fx);
+                if at_top || at_root {
+                    self.web_auto_read(doc, app, spoke, fx);
+                }
             }
             WebMode::Inactive => {
                 // A page load in the application the user is in: adopt the new document.
@@ -893,7 +942,8 @@ impl Reader {
                         true,
                     );
                     self.web_place(doc, root);
-                    self.web_speak_entry(doc, true, true, fx);
+                    let spoke = self.web_speak_entry(doc, true, true, fx);
+                    self.web_auto_read(doc, app, spoke, fx);
                 }
             }
             WebMode::Browse { .. } | WebMode::Focus { .. } => {}
@@ -901,15 +951,22 @@ impl Reader {
     }
 
     /// Say the mode word and, at the top of a page, its title and first line.
+    /// With page auto-read on, the first line is left to the reading that follows. Returns
+    /// whether anything was spoken (the reading then queues behind it).
     fn web_speak_entry(
         &mut self,
         doc: DocId,
         with_page: bool,
         title: bool,
         fx: &mut ReaderEffects,
-    ) {
-        let Some(b) = self.web.as_ref() else { return };
-        let Some(h) = b.docs.get(doc) else { return };
+    ) -> bool {
+        let reads = self.cmd.effective.browse.say_all_on_load;
+        let Some(b) = self.web.as_ref() else {
+            return false;
+        };
+        let Some(h) = b.docs.get(doc) else {
+            return false;
+        };
         let mode_browse = matches!(b.mode, WebMode::Browse { .. });
         let max_line = b.settings.max_line;
         let items = if with_page && mode_browse {
@@ -918,7 +975,7 @@ impl Reader {
                 if title && let Some(t) = title_of(d) {
                     items.push(Item::Text(t));
                 }
-                if let Mv::Landed { speak, .. } = cursor::first_line(d, max_line) {
+                if !reads && let Mv::Landed { speak, .. } = cursor::first_line(d, max_line) {
                     items.extend(present::describe(d, speak.start, speak.end));
                 }
                 items
@@ -926,10 +983,21 @@ impl Reader {
         } else {
             Vec::new()
         };
+        let spoke = !items.is_empty() || self.web_has_word();
         self.web_speak(&items, fx);
+        spoke
+    }
+
+    /// Is a mode word waiting for the next utterance?
+    fn web_has_word(&self) -> bool {
+        self.web.as_ref().is_some_and(|b| {
+            b.pending_word
+                .is_some_and(|(_, at)| self.now.saturating_duration_since(at) <= WORD_TTL)
+        })
     }
 
     fn web_changed(&mut self, doc: DocId, fx: &mut ReaderEffects) {
+        self.web_refresh_popup(fx);
         self.web_late_entry(doc, fx);
         let Some(b) = self.web.as_mut() else { return };
         match b.mode {
@@ -989,6 +1057,18 @@ impl Reader {
             *c = cur;
         }
         b.last_off = off;
+        if self.cmd.effective.browse.say_all_on_load {
+            // The page reads itself from this line (the title was spoken with the focus).
+            let app = self
+                .web
+                .as_ref()
+                .and_then(|b| b.docs.get(doc))
+                .map(|h| h.app);
+            if let Some(app) = app {
+                self.web_auto_read(doc, app, true, fx);
+                return;
+            }
+        }
         self.web_speak(&items, fx);
     }
 
@@ -1022,6 +1102,7 @@ impl Reader {
 
     /// Timers: a document that is slow to mirror, and the debounced scroll (LP-6).
     pub(crate) fn web_timer(&mut self, now: Instant, fx: &mut ReaderEffects) {
+        self.web_auto_read_timer(fx);
         let Some(b) = self.web.as_mut() else { return };
         if let Some((due, doc, node)) = b.scroll_due {
             if due <= now {
@@ -1102,7 +1183,7 @@ impl Reader {
     // ---- commands -------------------------------------------------------------------------
 
     /// The browse context of a key: the document and the cursor, or a spoken reason why not.
-    fn browse_ctx(&mut self, fx: &mut ReaderEffects) -> Option<(DocId, WebCursor, u16)> {
+    pub(super) fn browse_ctx(&mut self, fx: &mut ReaderEffects) -> Option<(DocId, WebCursor, u16)> {
         let b = self.web.as_mut()?;
         match b.mode {
             WebMode::Browse { doc, .. } if b.docs.get(doc).is_none() => {
@@ -1228,7 +1309,7 @@ impl Reader {
         }
     }
 
-    fn web_set_cursor(&mut self, doc: DocId, cur: WebCursor, off: u32, now: Instant) {
+    pub(super) fn web_set_cursor(&mut self, doc: DocId, cur: WebCursor, off: u32, now: Instant) {
         let Some(b) = self.web.as_mut() else { return };
         if let WebMode::Browse { cur: c, .. } = &mut b.mode {
             *c = cur;

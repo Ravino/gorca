@@ -52,7 +52,14 @@ pub fn say_for_key(key: KeyUnit) -> Say {
 /// CR-4: the unit spoken for a caret move no key explains (script, mouse, input method).
 /// A one-scalar step on the same line speaks the character, anything else speaks the line.
 pub fn say_for_uncorrelated(old: u32, new: u32, same_line: bool) -> Say {
-    if old.abs_diff(new) == 1 && same_line {
+    say_for_uncorrelated_by(old.abs_diff(new), same_line)
+}
+
+/// [`say_for_uncorrelated`] for a distance the caller measured in text scalars: a window that
+/// keeps Gecko's phantom U+FEFF after each astral scalar counts an emoji as one step although
+/// its offsets differ by two.
+pub fn say_for_uncorrelated_by(distance: u32, same_line: bool) -> Say {
+    if distance == 1 && same_line {
         Say::Char
     } else {
         Say::Line

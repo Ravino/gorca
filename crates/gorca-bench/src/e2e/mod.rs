@@ -42,6 +42,7 @@ pub mod runner;
 pub mod scenarios;
 pub mod stub;
 pub mod web;
+pub mod webtext;
 
 /// Environment variables that configure a reader (stub or daemon). The daemon is expected to
 /// honour the same ones.

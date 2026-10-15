@@ -159,6 +159,7 @@ fn fill_reply(r: Result<BackendReply, BackendError>) -> FillReply {
             | BackendReply::Lines(_)
             | BackendReply::Unit(_)
             | BackendReply::Selections(_)
+            | BackendReply::Format(_)
             | BackendReply::Window(_),
         ) => FillReply::Err(FillError::Protocol),
         Err(e) => FillReply::Err(fill_error(&e)),
@@ -711,7 +712,7 @@ impl AppActor {
                     }
                     self.profile = AppProfile::for_app(&info);
                     if let Some(d) = &self.directory {
-                        d.set_text_scalar(self.app, !self.profile.non_scalar_text);
+                        d.set_text_unit(self.app, self.profile.text_unit);
                     }
                     self.driver.set_class(AppClass::from_info(&info));
                     self.driver.set_dump_complete(info.dump_complete);

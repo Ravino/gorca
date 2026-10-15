@@ -7,6 +7,7 @@ It talks only to GORCA_M7_CBUS (the private compositor bus), never to the user's
 """
 import os
 import sys
+import time
 
 import gi
 
@@ -60,6 +61,9 @@ def on_stdin(fd, cond):
                 codes = [int(w) for w in words[1:]]
                 for c in codes:
                     call(sess, NAME + ".Session", "NotifyKeyboardKeycode", (c, True), "(ub)")
+                # A key goes down for a moment, like a finger: a press and a release in the same
+                # instant made Firefox lose an occasional letter (M3b FE2).
+                time.sleep(0.012)
                 for c in reversed(codes):
                     call(sess, NAME + ".Session", "NotifyKeyboardKeycode", (c, False), "(ub)")
             except (ValueError, GLib.Error) as e:

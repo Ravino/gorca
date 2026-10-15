@@ -38,6 +38,7 @@ gorca-speech-voicego = { path = "crates/gorca-speech-voicego" }
 gorca-input-api = { path = "crates/gorca-input-api" }
 gorca-input-mutter = { path = "crates/gorca-input-mutter" }
 gorca-input-inject = { path = "crates/gorca-input-inject" }
+gorca-input-xkb = { path = "crates/gorca-input-xkb" }
 gorca-dbus = { path = "crates/gorca-dbus" }
 gorca-connector-atspi = { path = "crates/gorca-connector-atspi" }
 gorca-core = { path = "crates/gorca-core" }

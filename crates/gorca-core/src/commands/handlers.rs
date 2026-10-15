@@ -184,6 +184,7 @@ impl Reader {
             }
             CoreCmd::TextSayAll => self.say_all_start(intent.epoch, fx),
             CoreCmd::InfoSelection => self.text_say_selection(intent.epoch, fx),
+            CoreCmd::InfoFormatting => self.text_say_formatting(intent.epoch, fx),
             CoreCmd::TextSayChar => self.text_say_unit(Say::Char, Spell::No, intent.epoch, fx),
             CoreCmd::TextSayWord => self.text_say_unit(Say::Word, Spell::No, intent.epoch, fx),
             CoreCmd::TextSayLine => self.text_say_unit(Say::Line, Spell::No, intent.epoch, fx),
@@ -320,7 +321,11 @@ impl Reader {
             | CoreCmd::QuicknavPrevBlockquote
             | CoreCmd::QuicknavPrevLandmark
             | CoreCmd::QuicknavPrevEmbedded
-            | CoreCmd::QuicknavPrevTable => self.browse_command(c, rep, now, fx),
+            | CoreCmd::QuicknavPrevTable
+            | CoreCmd::QuicknavNextFrame
+            | CoreCmd::QuicknavPrevFrame
+            | CoreCmd::QuicknavNextArticle
+            | CoreCmd::QuicknavPrevArticle => self.browse_command(c, rep, now, fx),
             planned_cmds!() => {
                 // Declared but not implemented: the keymap never routes these (inert), so this
                 // is only reachable through a stale table. Say so instead of staying silent.
@@ -556,7 +561,7 @@ impl Reader {
     fn on_loaded(&mut self, l: &Arc<LoadedSettings>, fx: &mut ReaderEffects) {
         let old = std::mem::replace(&mut self.cmd.file, l.settings.clone());
         match l.cause {
-            LoadCause::Startup => {}
+            LoadCause::Startup | LoadCause::Layouts => {}
             LoadCause::FileChanged => self.cmd.overlay.drop_changed(&old, &l.settings),
             LoadCause::Explicit | LoadCause::Saved => {
                 self.cmd.overlay = gorca_config::Overlay::default();
@@ -600,6 +605,7 @@ impl Reader {
                 }
             }
             LoadCause::Saved => self.announce("settings saved", fx),
+            LoadCause::Layouts => {}
         }
         if l.caps_lock_dropped && !self.cmd.told_caps {
             self.cmd.told_caps = true;

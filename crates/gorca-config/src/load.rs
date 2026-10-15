@@ -333,6 +333,7 @@ fn apply_key(section: &str, key: &str, v: &Item, s: &mut Settings, diags: &mut V
                 s.text.caret_late_ms = u32::try_from(n).unwrap_or(400);
             }
         }
+        ("browse", "say_all_on_load") => b(&mut s.browse.say_all_on_load, diags),
         ("speech", "punctuation") => {
             if let Some(p) = read_enum(v, &path, Punct::parse, Punct::NAMES, diags) {
                 s.speech.punctuation = p;
@@ -767,7 +768,7 @@ mod tests {
 multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_control=false\npause_speech_on_shift=false\n\
 [keymap]\nreplace_preset=true\n[speech]\nrate=10\npitch=11\nvolume=12\nrate_step=7\nvoice=\"x\"\npunctuation=\"all\"\ncaps=\"say\"\n\
 [echo]\ntyped_characters=false\ntyped_words=true\ncommand_keys=true\ninserted_text=false\n\
-[text]\nsay_all_moves_caret=false\ncaret_edge_ms=50\ncaret_late_ms=300\n[verbosity]\nlevel=\"brief\"\nconfirmations=\"brief\"\n";
+[text]\nsay_all_moves_caret=false\ncaret_edge_ms=50\ncaret_late_ms=300\n[browse]\nsay_all_on_load=false\n[verbosity]\nlevel=\"brief\"\nconfirmations=\"brief\"\n";
         let l = load_text(text);
         assert!(l.diags.is_empty(), "{:?}", l.diags);
         let d = Settings::default();
@@ -779,7 +780,8 @@ multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_
         assert_eq!(l.settings.speech.rate_step, 7);
         assert_eq!(l.settings.keyboard.modifiers, ["Insert"]);
         assert_ne!(l.settings.text, d.text);
-        assert_eq!(SETTINGS.len(), 26);
+        assert_ne!(l.settings.browse, d.browse);
+        assert_eq!(SETTINGS.len(), 27);
     }
 
     #[test]

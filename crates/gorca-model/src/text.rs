@@ -13,14 +13,31 @@ use crate::geometry::Rect;
 use crate::ids::NodeKey;
 
 /// Offset unit used by a source or toolkit.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
 pub enum TextUnit {
     /// UTF-16 code units with a phantom U+FEFF after each astral character (Firefox).
     Utf16Bom,
     /// Unicode scalar values (Chromium; the core's own unit).
+    #[default]
     Scalar,
     /// UTF-8 byte offsets (VTE attribute runs).
     Utf8,
+}
+
+impl TextUnit {
+    /// Can the Reader's text window follow this app in the app's own offsets?
+    ///
+    /// Scalars: yes. Gecko's UTF-16 offsets: yes, because the string it hands out already holds
+    /// a phantom U+FEFF after every astral scalar, so each offset is the index of a character
+    /// of that very string; the window keeps the string as it is and the unit rules keep a
+    /// phantom with its scalar (ADR-0007 changelog, M3b; no conversion, no run cache). Byte
+    /// offsets (VTE): no, they need the terminal's own layer (M6).
+    pub const fn window_follows(self) -> bool {
+        match self {
+            TextUnit::Scalar | TextUnit::Utf16Bom => true,
+            TextUnit::Utf8 => false,
+        }
+    }
 }
 
 /// Core text queries. Text is not part of the node snapshot.
@@ -58,6 +75,12 @@ pub enum TextQuery {
     Selections {
         node: NodeKey,
     },
+    /// The character formatting at `offset` (`info.formatting`, ADR-0007 M3b). Answered with
+    /// `BackendReply::Format`.
+    Format {
+        node: NodeKey,
+        offset: u32,
+    },
     /// The text around `around` (the caret when `None`) for the Reader's text window (ADR-0007
     /// TW-1): `radius` scalars on each side, clamped to the text. Answered with
     /// `BackendReply::Window`.
@@ -89,6 +112,39 @@ impl TextGranularity {
             TextGranularity::Paragraph => 4,
         }
     }
+}
+
+/// Where a run sits relative to the baseline.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub enum ScriptPosition {
+    #[default]
+    Baseline,
+    Superscript,
+    Subscript,
+}
+
+/// Reply of [`TextQuery::Format`]: the formatting of the run that holds the offset, in the
+/// terms every toolkit's attribute names are mapped to by the connector (the names differ:
+/// GTK `style` and Gecko `font-style`, GTK `underline` and Gecko `text-underline-style`).
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+// Four independent switches of a run's emphasis, as a toolkit reports them.
+#[allow(clippy::struct_excessive_bools)]
+pub struct TextFormat {
+    /// The run, in the app's own offsets.
+    pub range: Range<u32>,
+    pub family: Option<Arc<str>>,
+    /// Points, as the toolkit wrote them.
+    pub size: Option<Arc<str>>,
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: bool,
+    pub strike: bool,
+    pub fg: Option<[u8; 3]>,
+    pub bg: Option<[u8; 3]>,
+    pub lang: Option<Arc<str>>,
+    pub position: ScriptPosition,
+    /// `left`, `right`, `center`, `fill`.
+    pub align: Option<Arc<str>>,
 }
 
 /// Reply of [`TextQuery::AtOffset`].

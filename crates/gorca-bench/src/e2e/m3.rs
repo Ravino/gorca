@@ -246,10 +246,10 @@ fn app_calls(app: &mut FakeApp, reset: bool) -> Result<(u64, u64)> {
 }
 
 /// One expected speech: the key that caused it, the signal that completes it, the text.
-struct Probe {
-    t_key: u64,
-    t_ev: u64,
-    expect: String,
+pub(super) struct Probe {
+    pub(super) t_key: u64,
+    pub(super) t_ev: u64,
+    pub(super) expect: String,
 }
 
 fn texts(recs: &[Rec]) -> Vec<(u64, String)> {
@@ -258,7 +258,11 @@ fn texts(recs: &[Rec]) -> Vec<(u64, String)> {
 
 /// Credit each probe with the SPEAK in `[t_key_i, t_key_{i+1})` that has the expected text.
 /// Returns (latencies from `from_event` or the key, lost, doubled).
-fn score(probes: &[Probe], spoken: &[(u64, String)], from_event: bool) -> (Vec<f64>, u64, u64) {
+pub(super) fn score(
+    probes: &[Probe],
+    spoken: &[(u64, String)],
+    from_event: bool,
+) -> (Vec<f64>, u64, u64) {
     let (mut lat, mut lost, mut doubled) = (Vec::new(), 0u64, 0u64);
     for (i, p) in probes.iter().enumerate() {
         let end = probes.get(i + 1).map_or(u64::MAX, |n| n.t_key);
@@ -282,7 +286,7 @@ fn score(probes: &[Probe], spoken: &[(u64, String)], from_event: bool) -> (Vec<f
 
 /// What was heard around the first few probes that were not spoken as expected: the evidence a
 /// failed gate needs (the expected text, and every SPEAK from the key to the key after next).
-fn lost_notes(id: &str, probes: &[Probe], spoken: &[(u64, String)]) -> Vec<String> {
+pub(super) fn lost_notes(id: &str, probes: &[Probe], spoken: &[(u64, String)]) -> Vec<String> {
     let mut notes = Vec::new();
     for (i, p) in probes.iter().enumerate() {
         let end = probes.get(i + 1).map_or(u64::MAX, |n| n.t_key);

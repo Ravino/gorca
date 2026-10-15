@@ -52,6 +52,8 @@ const FM1_P99_MS: f64 = 15.0;
 /// needed to answer the locate walk and the fetch). The wall time stays in `w2b_ms` as
 /// information. Blocked on the rig until the per-phase timing shows where the time goes.
 const W2B_MS: f64 = 150.0;
+/// M7b browse say-all: key to the first chunk, gorca-side (browse design 15, SAB).
+const BSA_P99_MS: f64 = 5.0;
 
 fn arg_value(args: &[String], name: &str) -> Option<String> {
     args.iter()
@@ -157,6 +159,14 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     ("S2", "s2_ms", "p99") => Some(S2_P99_MS),
                     ("SA1", "sa1_ms", "p99") => Some(SA1_P99_MS),
                     ("SA3", "sa3_stop_ms", "p99") => Some(SA3_STOP_P99_MS),
+                    // M3b: the same gates against the real Firefox (webtext.rs).
+                    ("FC1h", "fc1h_ms", "p99") => Some(C1H_P99_MS),
+                    ("FC1", "fc1_ms", "p99") | ("FS2", "fs2_ms", "p99") => Some(C1_P99_MS),
+                    ("FE1", "fe1_ms", "p99") => Some(E1_P99_MS),
+                    ("FSA1", "fsa1_ms", "p99") => Some(SA1_P99_MS),
+                    ("FSA3", "fsa3_stop_ms", "p99") => Some(SA3_STOP_P99_MS),
+                    // M7b: browse say-all, first chunk after the key (browse design 15, SAB).
+                    ("BSA1", "bsa1_ms", "p99") => Some(BSA_P99_MS),
                     _ => None,
                 };
                 if let Some(t) = thr {
@@ -220,6 +230,12 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "sa3a_caret_moved_back"
                     | "sa3_not_silenced"
                     | "c1h_ipc_calls"
+                    | "fc_double"
+                    | "ft_failures"
+                    | "bsa_failures"
+                    | "bar_failures"
+                    | "bl_failures"
+                    | "fr_failures"
             ) {
                 // Worst repeat, not the median: one lost focus in three runs is a failure.
                 row = row.at_most_in_every_run(0.0);

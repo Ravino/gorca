@@ -7,6 +7,8 @@
 use std::time::Duration;
 
 use gorca_core::PlatformFacts;
+use gorca_input_api::KeysymTable;
+use gorca_input_xkb::{LayoutSpec, build_table};
 use tokio::process::Command;
 
 /// Per-query deadline.
@@ -19,6 +21,9 @@ pub struct PlatformOverrides {
     pub repeat_delay_ms: Option<u32>,
     pub xkb_options: Option<String>,
     pub clock_24h: Option<bool>,
+    /// Input sources instead of `org.gnome.desktop.input-sources sources`: comma separated XKB
+    /// layouts, `us,ru` or `us,us+dvorak` (`GORCA_LAYOUTS`).
+    pub layouts: Option<String>,
 }
 
 impl PlatformOverrides {
@@ -57,12 +62,15 @@ async fn gsettings(schema: &str, key: &str) -> Option<String> {
 /// Probe what the overrides do not already answer.
 pub async fn probe(overrides: &PlatformOverrides) -> PlatformFacts {
     let mut facts = PlatformFacts::default();
+    let mut sources = None;
     if !overrides.is_complete() {
-        let (delay, opts, clock) = tokio::join!(
+        let (delay, opts, clock, src) = tokio::join!(
             gsettings("org.gnome.desktop.peripherals.keyboard", "delay"),
             gsettings("org.gnome.desktop.input-sources", "xkb-options"),
             gsettings("org.gnome.desktop.interface", "clock-format"),
+            gsettings("org.gnome.desktop.input-sources", "sources"),
         );
+        sources = src.as_deref().map(parse_sources);
         if let Some(v) = delay.as_deref().and_then(parse_uint) {
             facts.repeat_delay_ms = v;
         }
@@ -73,7 +81,69 @@ pub async fn probe(overrides: &PlatformOverrides) -> PlatformFacts {
             facts.clock_24h = parse_clock_24h(v);
         }
     }
-    overrides.apply(facts)
+    let mut facts = overrides.apply(facts);
+    let ids = match &overrides.layouts {
+        Some(l) => parse_layout_list(l),
+        None => sources.unwrap_or_default(),
+    };
+    facts.keysyms = keysyms(ids, facts.xkb_options.clone()).await;
+    facts
+}
+
+/// The union keysym table of `ids` (XKB layout names) plus `us`, built off the async threads
+/// under a deadline; the US-only table when it takes too long or libxkbcommon is missing.
+pub async fn keysyms(mut ids: Vec<String>, options: String) -> KeysymTable {
+    if !ids.iter().any(|i| i == "us") {
+        ids.insert(0, "us".to_owned());
+    }
+    if ids.len() == 1 {
+        // US only: the table's own fallback is exactly that.
+        return KeysymTable::us();
+    }
+    let build = tokio::task::spawn_blocking(move || {
+        let specs: Vec<LayoutSpec> = ids.iter().filter_map(|i| LayoutSpec::parse(i)).collect();
+        build_table(&specs, &options)
+    });
+    match tokio::time::timeout(KEYMAP_DEADLINE, build).await {
+        Ok(Ok(t)) => t,
+        Ok(Err(_)) | Err(_) => KeysymTable::us(),
+    }
+}
+
+/// Deadline for building the table (a keymap compile per layout).
+pub const KEYMAP_DEADLINE: Duration = Duration::from_secs(3);
+
+/// `[('xkb', 'us'), ('xkb', 'ru'), ('ibus', 'mozc-jp')]` into `["us", "ru"]`. IBus engines type
+/// through the baseline `us` layout, which is always part of the table, so they add nothing.
+pub fn parse_sources(s: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = s;
+    while let Some(open) = rest.find('(') {
+        let Some(close) = rest[open..].find(')') else {
+            break;
+        };
+        let inner = &rest[open + 1..open + close];
+        rest = &rest[open + close + 1..];
+        let mut parts = inner
+            .split(',')
+            .map(|p| p.trim().trim_matches('\'').trim_matches('"'));
+        if let (Some("xkb"), Some(id)) = (parts.next(), parts.next())
+            && !id.is_empty()
+            && !out.iter().any(|o: &String| o == id)
+        {
+            out.push(id.to_owned());
+        }
+    }
+    out
+}
+
+/// `us,ru` into `["us", "ru"]`.
+pub fn parse_layout_list(s: &str) -> Vec<String> {
+    s.split(',')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .map(str::to_owned)
+        .collect()
 }
 
 /// `uint32 500` or `500`.
@@ -120,12 +190,40 @@ mod tests {
         assert!(!parse_clock_24h("'12h'"));
     }
 
+    #[test]
+    fn input_sources_parse() {
+        assert_eq!(
+            parse_sources("[('xkb', 'us'), ('xkb', 'ru'), ('ibus', 'mozc-jp')]"),
+            vec!["us", "ru"]
+        );
+        assert_eq!(parse_sources("[('xkb', 'us+dvorak')]"), vec!["us+dvorak"]);
+        assert!(parse_sources("@a(ss) []").is_empty());
+        assert_eq!(parse_layout_list(" us, ru ,"), vec!["us", "ru"]);
+    }
+
+    #[tokio::test]
+    async fn layout_overrides_build_the_union_table() {
+        let o = PlatformOverrides {
+            repeat_delay_ms: Some(300),
+            xkb_options: Some(String::new()),
+            clock_24h: Some(true),
+            layouts: Some("us,ru".into()),
+        };
+        let f = probe(&o).await;
+        // Physical H: `h` always; `Cyrillic_er` when libxkbcommon is present.
+        assert!(f.keysyms.syms(43, false).contains(&0x68));
+        if gorca_input_xkb::available() {
+            assert!(f.keysyms.syms(43, false).contains(&0x6d2));
+        }
+    }
+
     #[tokio::test]
     async fn complete_overrides_never_start_a_process() {
         let o = PlatformOverrides {
             repeat_delay_ms: Some(300),
             xkb_options: Some("grp:caps_toggle".into()),
             clock_24h: Some(false),
+            layouts: None,
         };
         let f = probe(&o).await;
         assert_eq!(f.repeat_delay_ms, 300);

@@ -335,6 +335,22 @@ impl Default for TextSettings {
     }
 }
 
+/// Browse mode (docs/design/browse-mode.md, Q-W2).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BrowseSettings {
+    /// Read a page from its top as soon as it has loaded (NVDA `autoSayAllOnPageLoad`, on by
+    /// default).
+    pub say_all_on_load: bool,
+}
+
+impl Default for BrowseSettings {
+    fn default() -> Self {
+        Self {
+            say_all_on_load: true,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct VerbositySettings {
     pub level: Verbosity,
@@ -349,6 +365,7 @@ pub struct Settings {
     pub speech: SpeechSettings,
     pub echo: EchoSettings,
     pub text: TextSettings,
+    pub browse: BrowseSettings,
     pub verbosity: VerbositySettings,
 }
 
@@ -606,6 +623,7 @@ pub static SETTINGS: &[SettingDef] = &[
         },
         "400",
     ),
+    row("browse", "say_all_on_load", SettingType::Bool, "true"),
     row(
         "verbosity",
         "level",
@@ -691,7 +709,15 @@ mod tests {
         let s: Vec<_> = sections().collect();
         assert_eq!(
             s,
-            ["keyboard", "keymap", "speech", "echo", "text", "verbosity"]
+            [
+                "keyboard",
+                "keymap",
+                "speech",
+                "echo",
+                "text",
+                "browse",
+                "verbosity"
+            ]
         );
         let text = defaults_toml();
         assert!(text.starts_with("schema = 1\n"));

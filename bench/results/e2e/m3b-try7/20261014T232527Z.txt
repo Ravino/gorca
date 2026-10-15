@@ -1,0 +1,46 @@
+# e2e m3b-try7
+# utc=2026-10-14T23:25:27Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=12.90 11.85 10.62 2/2962 81043
+# git_rev=932d611
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m3b-try7
+# reader=daemon:<repo>/.claude/worktrees/agent-a702d0a17a733562c/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=12.90 11.85 10.62 2/2962 81040
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=FE2 #93 Letter('i'): the page caret is 1, the model 2; recent: Right at caret 0 of 46 | Space at caret 1 of 46 | Back at caret 2 of 47 | Letter('i') at caret 1 of 46
+# note1=FE2 #96 Right: wanted "i", said ["s"]
+# note2=FE2 first actions: Letter('w') at caret 0 of 0 | Left at caret 1 of 1 | Cyr at caret 0 of 1 | Space at caret 1 of 2 | Letter('q') at caret 2 of 3 | Letter('c') at caret 3 of 4 | Letter('m') at caret 4 of 5 | Back at caret 5 of 6 | Letter('z') at caret 4 of 5 | Letter('w') at caret 5 of 6 | Left at caret 6 of 7 | Letter('g') at caret 5 of 7 | Space at caret 6 of 8 | Letter('q') at caret 7 of 9
+# note3=FE2 the page holds " wzжn jqeme swddjsxqm😀c ж yuwyqxdiuws  ж qczg w pw жfжжrp😀aohn m znwlkt dqжod a ж", the model " wzжn jqeme swddjsxqm😀c ж yuwyqxdiuwis  ж qczg w pw жfжжrp😀aohn m znwlkt dqжod a ж"
+# note4=BL1 FAIL ru Shift+2: the key was not grabbed (it reached the page)
+# note5=BL1 FAIL ru 2: the key was not grabbed (it reached the page)
+# note6=BL1 FAIL ru K: the key was not grabbed (it reached the page)
+# note7=BL1 FAIL us Shift+2: the key was not grabbed (it reached the page)
+# note8=BL1 FAIL us H: the key was not grabbed (it reached the page)
+# note9=BL1 FAIL ru Shift+H: the key was not grabbed (it reached the page)
+# note10=FR1 FAIL Shift+W: not grabbed
+# note11=FR1 FAIL Shift+M: not grabbed
+
+metric                     bus                median          min          max  n op    threshold  res   note
+FE2.e2_double              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_keyname             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_missing             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_wrong               daemon/voicego            1            1            1  1 <=            0  FAIL  gated on the max over repeats [actions]
+FE2.ft_failures            daemon/voicego            1            1            1  1 <=            0  FAIL  gated on the max over repeats [checks]
+BAR1.bar_failures          daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checks]
+BAR1.bar_start_ms          daemon/voicego        426.2        426.2        426.2  1                  info   [ms]
+BL1.bl_failures            daemon/voicego            6            6            6  1 <=            0  FAIL  gated on the max over repeats [checks]
+FR1.fr_failures            daemon/voicego            2            2            2  1 <=            0  FAIL  gated on the max over repeats [checks]

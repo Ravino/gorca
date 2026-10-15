@@ -197,7 +197,7 @@ layouts (NVDA does the same). The layout is chosen once (`keyboard.layout`).
 
 ### 4.4 Browse mode (M7/M8; identical in both layouts)
 
-Status (M7a, Firefox static pages): implemented are H, 1-6 (Shift reverses), K, U, V, F, E, B, X, R, C, L, I, G, S, Q, D, T, O, the arrows, Ctrl+Left/Right, Home/End (with Ctrl), Prior/Next, Return/KP_Enter/space and `browse.escape`. Escape is grabbed only in auto focus mode: the grab set is published with the Browse lookup context so the lane finds it in the browse table. Planned: M (frame; the Orca preset has no key), N, A, W, P, comma, paragraph and sentence moves, tables, elements list, find (M7b/M8).
+Status (M7a, Firefox static pages): implemented are H, 1-6 (Shift reverses), K, U, V, F, E, B, X, R, C, L, I, G, S, Q, D, T, O, the arrows, Ctrl+Left/Right, Home/End (with Ctrl), Prior/Next, Return/KP_Enter/space and `browse.escape`. Escape is grabbed only in auto focus mode: the grab set is published with the Browse lookup context so the lane finds it in the browse table. Planned: N, A, W, P, comma, paragraph and sentence moves, tables, elements list, find (M8). M7b adds: M (frame, NVDA preset only) and the `quicknav.next/prev.article` commands (unbound by default), Insert+Down (say-all from the virtual cursor), Escape released while the focused field has a popup open, and layout-independent quick navigation (grabs are the union of the keysyms of all configured layouts, ADR-0005 K-8b, so H, Shift+H and Shift+1..6 work on the Russian layout).
 
 These keys are grabbed only in `Browse` (and the letters only while single-letter navigation is on).
 Shift reverses direction. They replace the provisional letters in ADR-0003 §12.

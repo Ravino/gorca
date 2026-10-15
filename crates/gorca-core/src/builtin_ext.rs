@@ -18,11 +18,10 @@ pub struct AppProfile {
     /// tab strips) must not turn on this switch: the focus event already speaks and the
     /// selection is background noise.
     pub speak_selection: bool,
-    /// The application's text offsets are not Unicode scalars (Gecko counts UTF-16 units).
-    /// The native text layer (ADR-0007) counts scalars, so it does not track such an
-    /// application's text until M3b converts offsets (TQ-1). Taken from the connector's
-    /// capability report, never from a name.
-    pub non_scalar_text: bool,
+    /// The unit the application counts text offsets in, from the connector's capability
+    /// report, never from a name. The native text layer follows scalars and Gecko's UTF-16
+    /// units (`TextUnit::window_follows`) and leaves byte offsets to their own layer.
+    pub text_unit: TextUnit,
 }
 
 impl AppProfile {
@@ -30,7 +29,7 @@ impl AppProfile {
         Self {
             // Only the connector-verified Shell: a self-reported name grants nothing.
             speak_selection: info.verified_shell,
-            non_scalar_text: info.text_unit != TextUnit::Scalar,
+            text_unit: info.text_unit,
         }
     }
 }
@@ -62,12 +61,14 @@ mod tests {
     }
 
     #[test]
-    fn only_a_non_scalar_text_unit_turns_native_text_off() {
+    fn only_a_unit_the_window_cannot_follow_turns_native_text_off() {
         let mut i = info("anything", false);
-        assert!(!AppProfile::for_app(&i).non_scalar_text);
+        assert!(AppProfile::for_app(&i).text_unit.window_follows());
         i.text_unit = TextUnit::Utf16Bom;
-        assert!(AppProfile::for_app(&i).non_scalar_text);
-        assert!(!AppProfile::default().non_scalar_text);
+        assert!(AppProfile::for_app(&i).text_unit.window_follows());
+        i.text_unit = TextUnit::Utf8;
+        assert!(!AppProfile::for_app(&i).text_unit.window_follows());
+        assert!(AppProfile::default().text_unit.window_follows());
     }
 
     #[test]

@@ -528,6 +528,9 @@ impl Hub {
             }
             HubMsg::Ensure { focus } => self.ensure(focus, now, false),
             HubMsg::Loaded { node } => {
+                if self.apps.get(&node.app).is_some_and(|a| a.web) {
+                    self.notify(DocNotice::Loaded { node });
+                }
                 let adopt = self.apps.get(&node.app).is_some_and(|a| {
                     a.web
                         && a.last_doc_end

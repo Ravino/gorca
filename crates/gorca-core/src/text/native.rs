@@ -195,6 +195,18 @@ impl TextWindow {
         Some(self.chars.get(a..b)?.iter().collect())
     }
 
+    /// Text scalars (phantom U+FEFF left out) between two offsets, when the window holds them.
+    pub fn visible_between(&self, a: u32, b: u32) -> Option<u32> {
+        let r = a.min(b)..a.max(b);
+        if !self.covers(&r) {
+            return None;
+        }
+        let (s, e) = ((r.start - self.base) as usize, (r.end - self.base) as usize);
+        self.chars
+            .get(s..e)
+            .map(|c| to_u32(gorca_text::seg::visible_len(c)))
+    }
+
     /// Remember a toolkit line.
     pub fn add_line(&mut self, range: Range<u32>, text: Arc<str>) {
         if range.is_empty() && text.is_empty() {

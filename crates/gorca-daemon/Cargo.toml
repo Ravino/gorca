@@ -24,6 +24,7 @@ gorca-doc-source-atspi = { workspace = true }
 gorca-output-api = { workspace = true }
 gorca-input-api = { workspace = true }
 gorca-input-mutter = { workspace = true }
+gorca-input-xkb = { workspace = true }
 gorca-speech = { workspace = true }
 gorca-speech-voicego = { workspace = true }
 gorca-speech-ssip = { workspace = true }

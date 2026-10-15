@@ -276,6 +276,7 @@ pub(super) async fn text(
             ))
         }
         TextQuery::Attributes { .. }
+        | TextQuery::Format { .. }
         | TextQuery::AtOffset { .. }
         | TextQuery::Selections { .. }
         | TextQuery::Window { .. } => Err(BackendError::NotSupported),

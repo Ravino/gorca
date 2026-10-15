@@ -437,6 +437,16 @@ presenter's segments (objects by role and name), zero IPC; `Started` progress mo
 any key stops and leaves the cursor at the start of the chunk being spoken. Say-all on page load follows
 `browse.say_all_on_load` (NVDA `autoSayAllOnPageLoad = true`, `configSpec.py:223`; Q-W2).
 
+**Status (M7b, 2026-10-15):** built in `gorca-core/src/browse/sayall.rs` over `text::say_all::Run` with `Target::Doc`.
+`Act::Fetch` is answered at once from `WebDoc::text_in` (8 K scalars from the next offset), a chunk is spoken by
+`present::describe` (role and name items), `Started` moves the cursor (`web_follow`, scroll debounced as LP-6), the end
+of the page leaves the cursor on the last chunk. Auto-read: the registry now sends `DocNotice::Loaded { node }` for every
+`load-complete` of a web app; `web_auto_read` (after the entry speech of a first publish) reads at once when a load-complete
+was seen in the last 4 s, else waits for it (up to 15 s, but starts anyway after 1.5 s); a key, a focus change or a
+tab switch since the entry speech cancels the wait. The entry speech is the mode word and the title only; the first line
+is the reading's. A page that was already open when gorca attached, a tab switch and Alt+Tab never read. The reading
+queues behind the title (`queue_first`). Gates BSA1, BAR1.
+
 ## 10. Forms mode auto-switch, in detail
 
 | Situation | Result |
@@ -447,7 +457,7 @@ any key stops and leaves the cursor at the start of the chunk being spoken. Say-
 | Page script focuses an edit on load (`autofocus`) | Loading → Focus{Auto} at once (§7.3) |
 | Enter or Space on an edit in browse | Focus{Auto} + `Action::Focus` |
 | Escape in Focus{Auto} | Browse, cursor on the edit, "browse mode" + the line |
-| Escape with an expanded combo box | passed to the page (closes the popup); a second Escape returns to Browse |
+| Escape with an expanded combo box | passed to the page (closes the popup); a second Escape returns to Browse (M7b: `BrowseState.popup_open`, from the mirror's `expanded` state of the focused node on focus and on every `Changed`; gate FP1) |
 | `role=application` focus | Focus{Application}; Escape passes through; only gorca+Space leaves |
 | Focus moves out of the edit by script to a non-editable | Browse at the new focus |
 | Typing in focus mode | ADR-0007 typing echo and caret echo on the focused editable (Firefox UTF-16, CR-5) |

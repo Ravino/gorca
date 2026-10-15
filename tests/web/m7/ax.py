@@ -43,7 +43,7 @@ REG_ROOT = "/org/a11y/atspi/accessible/root"
 # AtspiRole numbers (stable ABI)
 ROLES = {
     "link": 88, "entry": 79, "page tab": 37, "document web": 95, "heading": 83,
-    "push button": 43, "application": 75, "frame": 23, "section": 85,
+    "push button": 43, "combo box": 11, "application": 75, "frame": 23, "section": 85,
 }
 DOC_WEB = 95
 
@@ -163,6 +163,25 @@ def handle(req):
         t = time.monotonic_ns()
         r = call(req["bus"], req["path"], ACTION, "DoAction", (int(req.get("index", 0)),), "(i)")
         return {"ok": bool(r and r[0]), "t_emit_ns": t}
+    if cmd == "text":
+        # The whole Text of a node, hex of its UTF-8 (JSON escapes of astral characters are not
+        # worth decoding in the harness).
+        n = prop(req["bus"], req["path"], "org.a11y.atspi.Text", "CharacterCount")
+        t = call(req["bus"], req["path"], "org.a11y.atspi.Text", "GetText", (0, n), "(ii)")[0]
+        return {"ok": True, "hex": t.encode("utf-8").hex(), "n": n}
+    if cmd == "describe":
+        try:
+            rn = call(req["bus"], req["path"], ACC, "GetRoleName")[0]
+        except GLib.Error:
+            rn = "?"
+        return {"ok": True, "role": rn, "name": name_of(req["bus"], req["path"])}
+    if cmd == "caret":
+        return {"ok": True, "caret": prop(req["bus"], req["path"], "org.a11y.atspi.Text", "CaretOffset")}
+    if cmd == "has_state":
+        # AtspiStateType number (default 10, EXPANDED) in the node's state set
+        bits = call(req["bus"], req["path"], ACC, "GetState")[0]
+        st = int(req.get("state", 10))
+        return {"ok": True, "has": (bits[st // 32] >> (st % 32)) & 1}
     if cmd == "tabs":
         root = "/org/a11y/atspi/accessible/root"
         tabs = []

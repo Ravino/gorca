@@ -8,7 +8,7 @@
 //! epoch newer than the reading's and ends it ([`SayAll::stopped_by`]). Nothing here holds the
 //! Reader: the text arrives in windows fetched by tasks, and the machine only reacts.
 
-use gorca_model::{Epoch, NodeKey, UttId};
+use gorca_model::{DocId, Epoch, NodeKey, UttId};
 use gorca_speech::LaneProgress;
 use gorca_text::chunk::next_chunk;
 use gorca_text::space::{CharsSpace, Lookup};
@@ -38,7 +38,17 @@ pub struct Chunk {
     pub range: Range<u32>,
 }
 
+/// What a reading reads: a native text object (fetched in windows) or a browse-mode document
+/// (its flat text is the Reader's own, ADR-0007 section 13, browse design section 9).
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Target {
+    Native(NodeKey),
+    Doc(DocId),
+}
+
 #[derive(Debug, Default)]
+// One reading lives in the Reader at a time; boxing it would only add an allocation per reading.
+#[allow(clippy::large_enum_variant)]
 pub enum SayAll {
     #[default]
     Idle,
@@ -48,7 +58,7 @@ pub enum SayAll {
 // Latches of one reading (secret, filled, exhausted, started); an enum would only rename them.
 #[allow(clippy::struct_excessive_bools)]
 pub struct Run {
-    pub node: NodeKey,
+    pub target: Target,
     /// The epoch of the reading: a newer one ends it.
     pub epoch: Epoch,
     /// Where the reading started.
@@ -78,13 +88,16 @@ pub struct Run {
     /// The offset a window was last asked for: asking again for the same one means the
     /// application cannot give more.
     fetched_for: Option<u32>,
+    /// The first chunk queues behind what is being spoken instead of interrupting it (a page
+    /// that reads itself after its title).
+    pub queue_first: bool,
 }
 
 impl std::fmt::Debug for Run {
     // Lengths only: the text of a password field must not reach a log (PW-2).
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Run")
-            .field("node", &self.node)
+            .field("target", &self.target)
             .field("epoch", &self.epoch)
             .field("from", &self.from)
             .field("base", &self.base)
@@ -142,8 +155,23 @@ impl Run {
         secret: bool,
         now: std::time::Instant,
     ) -> Self {
+        Self::targeting(Target::Native(node), epoch, from, secret, now)
+    }
+
+    /// A reading of a browse-mode document from flat offset `from`.
+    pub fn over_doc(doc: DocId, epoch: Epoch, from: u32, now: std::time::Instant) -> Self {
+        Self::targeting(Target::Doc(doc), epoch, from, false, now)
+    }
+
+    fn targeting(
+        target: Target,
+        epoch: Epoch,
+        from: u32,
+        secret: bool,
+        now: std::time::Instant,
+    ) -> Self {
         Self {
-            node,
+            target,
             epoch,
             from,
             base: from,
@@ -160,6 +188,7 @@ impl Run {
             last_progress: now,
             placed: Some(from),
             fetched_for: None,
+            queue_first: false,
         }
     }
 
@@ -232,7 +261,7 @@ impl Run {
             if chunk.chars().all(char::is_whitespace) {
                 continue;
             }
-            let first = self.submitted == 0;
+            let first = self.submitted == 0 && !self.queue_first;
             self.submitted += 1;
             let utt = new_utt();
             self.queued.push(Chunk {

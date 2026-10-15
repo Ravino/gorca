@@ -287,3 +287,18 @@ would measure the same code twice. Recommendation:
 - Q-E3: memory per WASM instance across ~30 apps × 4 extensions with the pooling allocator (not measured).
 - Q-E4: whether `ConvertOffsets` for Gecko needs the run cache (TX-1) or the event payload suffices for
   every event kind; web-a11y-engineer to confirm on the corpus.
+  **Answered 2026-10-15 (M3b): neither is needed, because nothing is converted.** Gecko's ATK text is the
+  UTF-16 string with a phantom U+FEFF after each astral scalar (`DOMtoATK.h`), so every offset it sends
+  (caret events, text-changed offsets and lengths, `GetStringAtOffset` ranges, selections, `GetCharacterCount`)
+  is the index of a character of that string, verified on the private Firefox with `a😀b😀😀c` and Cyrillic
+  (`tests/web/m3b/probe_fields.py`; gate FC1h: 144 keys, 0 lost). The Reader's window keeps that string and the
+  unit rules keep a phantom with its scalar. Only the insert text of `text-changed` lacks phantoms (its length
+  has them): the Reader puts them back from the length. Measured alternatives (`crates/gorca-text/tests/qe4.rs`,
+  host load 13, governor performance): converting a caret offset with the text at hand costs 0.4 µs at 1k
+  scalars, 5.8 µs at 16k, 37 µs at 100k and 379 µs at 1M, and needs the text in front of the caret, i.e. an IPC
+  read proportional to the caret's position; a run cache would be a sorted list of phantom offsets (lookup
+  5 to 10 ns, build 12 µs to 0.5 ms, an edit shifts every later entry) that must follow every edit. The chosen
+  path costs 6 ns per character unit without emoji and about 0.2 µs with emoji in the window. The browse
+  mirror's text runs are rebuilt whole from `GetText` on each change (never spliced by offset), so they need no
+  conversion either. A Newton source has no phantoms, so its profile row is empty. The connector's quirk table
+  keeps `Gecko => Utf16Bom` (`TextUnit::window_follows`), plus the attribute-name table of `info.formatting`.

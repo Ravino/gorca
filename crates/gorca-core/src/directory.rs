@@ -5,16 +5,17 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use gorca_mirror::{MirrorHandle, MirrorRead};
-use gorca_model::{AppId, Lookup, NodeKey, NodeSnapshot, NodeView};
+use gorca_model::{AppId, Lookup, NodeKey, NodeSnapshot, NodeView, TextUnit};
 
 /// Maps an `AppId` to its mirror read handle. Readers load the current map without a lock;
 /// the supervisor replaces it (copy-on-write) when an app appears or goes away, which is rare.
 #[derive(Debug, Default)]
 pub struct MirrorDirectory {
     apps: ArcSwap<HashMap<AppId, MirrorHandle>>,
-    /// Applications whose text offsets are not scalars (the connector said so): the native
-    /// text layer leaves them alone (ADR-0007 M5 of the review).
-    non_scalar_text: ArcSwap<HashSet<AppId>>,
+    /// Applications whose text offsets the native text window cannot follow (UTF-8 byte
+    /// offsets, as the connector reported): the native text layer leaves them alone.
+    /// Gecko's UTF-16 offsets are followed as they are (`TextUnit::window_follows`).
+    unfollowed_text: ArcSwap<HashSet<AppId>>,
 }
 
 impl MirrorDirectory {
@@ -30,11 +31,12 @@ impl MirrorDirectory {
         });
     }
 
-    /// Record whether the app counts text in Unicode scalars. Unknown apps count as scalars.
-    pub fn set_text_scalar(&self, app: AppId, scalar: bool) {
-        self.non_scalar_text.rcu(|cur| {
+    /// Record the unit the app counts text in. Unknown apps count as scalars.
+    pub fn set_text_unit(&self, app: AppId, unit: TextUnit) {
+        let follows = unit.window_follows();
+        self.unfollowed_text.rcu(|cur| {
             let mut next = HashSet::clone(cur);
-            if scalar {
+            if follows {
                 next.remove(&app);
             } else {
                 next.insert(app);
@@ -43,14 +45,15 @@ impl MirrorDirectory {
         });
     }
 
-    /// Does the app count text in Unicode scalars (GTK, St) rather than UTF-16 units?
-    pub fn text_scalar(&self, app: AppId) -> bool {
-        !self.non_scalar_text.load().contains(&app)
+    /// May the native text layer track this app's text fields? True for scalars (GTK, St) and
+    /// for Gecko's UTF-16 offsets; false for byte offsets.
+    pub fn text_window_follows(&self, app: AppId) -> bool {
+        !self.unfollowed_text.load().contains(&app)
     }
 
     pub fn remove(&self, app: AppId) {
-        if !self.text_scalar(app) {
-            self.set_text_scalar(app, true);
+        if !self.text_window_follows(app) {
+            self.set_text_unit(app, TextUnit::Scalar);
         }
         self.apps.rcu(|cur| {
             let mut next = HashMap::clone(cur);

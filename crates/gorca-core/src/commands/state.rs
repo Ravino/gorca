@@ -22,6 +22,9 @@ pub enum LoadCause {
     Explicit,
     /// Our own `settings.save` was written; the overlay is now part of the file.
     Saved,
+    /// The desktop's keyboard layouts changed (K-8b): the same settings, new grab keysyms. Silent
+    /// and the runtime overlay is kept.
+    Layouts,
 }
 
 /// A validated configuration, ready for the Reader. Built by the daemon's config task.

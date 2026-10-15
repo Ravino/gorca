@@ -222,6 +222,83 @@ pub fn keysym_of_code(code: u16) -> Option<u32> {
         .and_then(|n| static_keysym(n))
 }
 
+/// The keysyms a US keyboard types with Shift on the digit row `1..9`.
+const US_SHIFTED_DIGITS: [u32; 9] = [0x21, 0x40, 0x23, 0x24, 0x25, 0x5e, 0x26, 0x2a, 0x28];
+
+/// What the keys of the configured input sources type (K-8b). Mutter matches a grab against the
+/// keysym the *active* layout produced, so a quick-navigation key grabbed as `h` never fires on
+/// the Russian layout, where the same physical key types `Cyrillic_er`. gorca grabs the union of
+/// the keysyms of every configured layout instead of tracking the active one.
+///
+/// Plain data: built by the platform layer (`gorca-input-xkb`), carried in `PlatformFacts`. A key
+/// the table has no row for falls back to the US layout, so an empty table is exactly the
+/// behaviour before layouts were considered.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct KeysymTable {
+    /// `(xkb keycode, shift)` to every keysym that key types in some configured layout.
+    by_code: std::collections::BTreeMap<(u16, bool), Vec<u32>>,
+}
+
+impl KeysymTable {
+    /// The US-only table (no rows).
+    pub fn us() -> Self {
+        Self::default()
+    }
+
+    /// Record that `code` types `sym` at the given shift level in some layout.
+    pub fn insert(&mut self, code: u16, shift: bool, sym: u32) {
+        if sym == 0 {
+            return;
+        }
+        let row = self.by_code.entry((code, shift)).or_default();
+        if !row.contains(&sym) {
+            row.push(sym);
+            row.sort_unstable();
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.by_code.is_empty()
+    }
+
+    /// The US keysym of `code` at the given level (the baseline of every table).
+    pub fn us_sym(code: u16, shift: bool) -> Option<u32> {
+        let base = keysym_of_code(code)?;
+        if !shift {
+            return Some(base);
+        }
+        Some(match base {
+            0x61..=0x7a => base - 0x20,
+            0x31..=0x39 => US_SHIFTED_DIGITS[(base - 0x31) as usize],
+            other => other,
+        })
+    }
+
+    /// Every keysym `code` types at `shift`, the US one included, sorted, without duplicates.
+    pub fn syms(&self, code: u16, shift: bool) -> Vec<u32> {
+        let mut v: Vec<u32> = self
+            .by_code
+            .get(&(code, shift))
+            .cloned()
+            .unwrap_or_default();
+        if let Some(us) = Self::us_sym(code, shift)
+            && !v.contains(&us)
+        {
+            v.push(us);
+            v.sort_unstable();
+        }
+        v
+    }
+
+    /// Does some key other than `code` type `sym` at `shift`? Returns that key's code.
+    pub fn typed_elsewhere(&self, code: u16, shift: bool, sym: u32) -> Option<u16> {
+        self.by_code
+            .iter()
+            .find(|((c, sh), v)| *sh == shift && *c != code && v.contains(&sym))
+            .map(|((c, _), _)| *c)
+    }
+}
+
 /// The digit keysym a keypad navigation keysym types with Num Lock on (`KP_Home` -> `KP_7`).
 /// `None` for keys whose keysym does not depend on Num Lock.
 pub fn keypad_digit_keysym(nav: u32) -> Option<u32> {
@@ -364,5 +441,29 @@ mod tests {
         assert_eq!(spoken_key_name(0xffc9, 0), "f 12");
         assert_eq!(spoken_key_name(0xff55, 0), "page up");
         assert_eq!(spoken_key_name(0xff97, 0), "keypad 8");
+    }
+}
+
+#[cfg(test)]
+mod keysym_table_tests {
+    use super::*;
+
+    #[test]
+    fn an_empty_table_is_the_us_layout() {
+        let t = KeysymTable::us();
+        assert_eq!(t.syms(43, false), vec![0x68]);
+        assert_eq!(t.syms(43, true), vec![0x48]);
+        assert_eq!(t.syms(10, true), vec![0x21]);
+        assert_eq!(t.syms(15, true), vec![0x5e]);
+    }
+
+    #[test]
+    fn rows_are_unioned_with_the_us_keysym() {
+        let mut t = KeysymTable::us();
+        t.insert(43, false, 0x6d2);
+        t.insert(43, false, 0x6d2);
+        assert_eq!(t.syms(43, false), vec![0x68, 0x6d2]);
+        assert_eq!(t.typed_elsewhere(44, false, 0x6d2), Some(43));
+        assert_eq!(t.typed_elsewhere(43, false, 0x6d2), None);
     }
 }

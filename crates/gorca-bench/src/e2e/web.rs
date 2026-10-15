@@ -37,50 +37,50 @@ use super::mono::now_ns;
 use super::runner::{HostEnv, Rig, RigOpts};
 use super::scenarios::{RunOut, Size, ms};
 
-const DOWN: K = K {
+pub(super) const DOWN: K = K {
     code: 116,
     sym: 0xff54,
 };
-const UP: K = K {
+pub(super) const UP: K = K {
     code: 111,
     sym: 0xff52,
 };
-const LEFT: K = K {
+pub(super) const LEFT: K = K {
     code: 113,
     sym: 0xff51,
 };
-const RIGHT: K = K {
+pub(super) const RIGHT: K = K {
     code: 114,
     sym: 0xff53,
 };
-const ENTER: K = K {
+pub(super) const ENTER: K = K {
     code: 36,
     sym: 0xff0d,
 };
-const ESC: K = K {
+pub(super) const ESC: K = K {
     code: 9,
     sym: 0xff1b,
 };
-const KEY_H: K = K {
+pub(super) const KEY_H: K = K {
     code: 43,
     sym: 0x68,
 };
-const KEY_H_CAP: K = K {
+pub(super) const KEY_H_CAP: K = K {
     code: 43,
     sym: 0x48,
 };
-const KEY_K: K = K {
+pub(super) const KEY_K: K = K {
     code: 45,
     sym: 0x6b,
 };
-const KEY_2: K = K {
+pub(super) const KEY_2: K = K {
     code: 11,
     sym: 0x32,
 };
-const CTRL: u32 = 0x04;
-const SHIFT: u32 = 0x01;
+pub(super) const CTRL: u32 = 0x04;
+pub(super) const SHIFT: u32 = 0x01;
 
-fn gate_open(host: &HostEnv, id: &str, out: &mut RunOut) -> Result<bool> {
+pub(super) fn gate_open(host: &HostEnv, id: &str, out: &mut RunOut) -> Result<bool> {
     let ready = flag(host, "GORCA_M7") && std::env::var_os("GORCA_M7_WAYLAND").is_some();
     if ready {
         return Ok(true);
@@ -122,7 +122,7 @@ user_pref("security.sandbox.content.level", 4);
 
 /// A Firefox of ours: own profile, own process group, signalled only through that group.
 #[derive(Debug)]
-struct Firefox {
+pub(super) struct Firefox {
     child: Child,
     pgid: i32,
     /// `tests/web/m7/rd.py`: a RemoteDesktop session on the private compositor. A headless
@@ -131,7 +131,7 @@ struct Firefox {
 }
 
 impl Firefox {
-    fn launch(host: &HostEnv, tag: &str, urls: &[String]) -> Result<Self> {
+    pub(super) fn launch(host: &HostEnv, tag: &str, urls: &[String]) -> Result<Self> {
         let wayland = std::env::var("GORCA_M7_WAYLAND").context("GORCA_M7_WAYLAND not set")?;
         let bin = std::env::var("GORCA_M7_FIREFOX").unwrap_or_else(|_| "firefox".to_owned());
         let root = std::env::var("GORCA_HARNESS_DIR").context("GORCA_HARNESS_DIR not set")?;
@@ -183,7 +183,7 @@ impl Firefox {
 
     /// Press evdev key codes in the private Firefox window (the compositor's virtual keyboard;
     /// this bypasses the emulated Mutter, so the reader does not see them as key events).
-    fn keys(&mut self, codes: &[u32]) {
+    pub(super) fn keys(&mut self, codes: &[u32]) {
         use std::io::Write;
         let list: Vec<String> = codes.iter().map(u32::to_string).collect();
         if let Some(stdin) = self.rd.as_mut().and_then(|c| c.stdin.as_mut()) {
@@ -193,7 +193,7 @@ impl Firefox {
     }
 
     /// Click inside the private Firefox window so the compositor activates it.
-    fn click(&mut self) {
+    pub(super) fn click(&mut self) {
         use std::io::Write;
         if let Some(stdin) = self.rd.as_mut().and_then(|c| c.stdin.as_mut()) {
             let _ = stdin.write_all(b"click\n");
@@ -234,11 +234,14 @@ struct Seen {
     t_ns: u64,
 }
 
-const FOCUS: u8 = 1;
-const LOAD: u8 = 2;
+pub(super) const FOCUS: u8 = 1;
+pub(super) const LOAD: u8 = 2;
+pub(super) const CARET: u8 = 3;
+pub(super) const TEXT: u8 = 4;
+pub(super) const SEL: u8 = 5;
 
 #[derive(Debug)]
-struct EventTap {
+pub(super) struct EventTap {
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
     seen: Arc<Mutex<Vec<Seen>>>,
@@ -254,12 +257,15 @@ fn event_head(body: &[u8]) -> Option<(&str, i32)> {
 }
 
 impl EventTap {
-    fn start(a11y_addr: &str) -> Result<Self> {
+    pub(super) fn start(a11y_addr: &str) -> Result<Self> {
         let mut c = BusConn::connect(a11y_addr, Duration::from_secs(5))?;
         for rule in [
             "type='signal',interface='org.a11y.atspi.Event.Focus'",
             "type='signal',interface='org.a11y.atspi.Event.Object',member='StateChanged'",
             "type='signal',interface='org.a11y.atspi.Event.Document'",
+            "type='signal',interface='org.a11y.atspi.Event.Object',member='TextCaretMoved'",
+            "type='signal',interface='org.a11y.atspi.Event.Object',member='TextChanged'",
+            "type='signal',interface='org.a11y.atspi.Event.Object',member='TextSelectionChanged'",
         ] {
             c.add_match(rule, Duration::from_secs(5))?;
         }
@@ -296,6 +302,16 @@ impl EventTap {
                                         (Some("org.a11y.atspi.Event.Document"), "LoadComplete") => {
                                             LOAD
                                         }
+                                        (Some("org.a11y.atspi.Event.Object"), "TextCaretMoved") => {
+                                            CARET
+                                        }
+                                        (Some("org.a11y.atspi.Event.Object"), "TextChanged") => {
+                                            TEXT
+                                        }
+                                        (
+                                            Some("org.a11y.atspi.Event.Object"),
+                                            "TextSelectionChanged",
+                                        ) => SEL,
                                         _ => 0,
                                     };
                                     if kind != 0 {
@@ -339,7 +355,7 @@ impl EventTap {
     }
 
     /// The last `n` events as "kind path" strings, oldest first.
-    fn tail(&self, n: usize) -> Vec<String> {
+    pub(super) fn tail(&self, n: usize) -> Vec<String> {
         let seen = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
         let skip = seen.len().saturating_sub(n);
         seen.iter()
@@ -348,7 +364,7 @@ impl EventTap {
             .collect()
     }
 
-    fn count(&self, kind: u8) -> usize {
+    pub(super) fn count(&self, kind: u8) -> usize {
         self.seen
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -357,8 +373,31 @@ impl EventTap {
             .count()
     }
 
+    /// The last event of `kind` from `sender` that arrived in `[t_min, t_max]`.
+    pub(super) fn last_between(
+        &self,
+        kind: u8,
+        sender: &str,
+        t_min: u64,
+        t_max: u64,
+    ) -> Option<u64> {
+        self.seen
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .iter()
+            .filter(|e| e.kind == kind && e.sender == sender && e.t_ns >= t_min && e.t_ns <= t_max)
+            .map(|e| e.t_ns)
+            .max()
+    }
+
     /// First event of `kind` from `sender` (for `path` when given) that arrived at or after `t0`.
-    fn first_after(&self, kind: u8, sender: &str, path: Option<&str>, t0: u64) -> Option<u64> {
+    pub(super) fn first_after(
+        &self,
+        kind: u8,
+        sender: &str,
+        path: Option<&str>,
+        t0: u64,
+    ) -> Option<u64> {
         self.seen
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -382,27 +421,27 @@ impl Drop for EventTap {
 // One run: reader, mutter, mock, Firefox, the AT-SPI driver
 
 #[derive(Debug)]
-struct Web {
+pub(super) struct Web {
     // Drop order: the browser first, the reader last.
-    ff: Firefox,
-    ax: JsonProc,
-    tap: EventTap,
-    rig: Rig,
-    ty: Typist,
+    pub(super) ff: Firefox,
+    pub(super) ax: JsonProc,
+    pub(super) tap: EventTap,
+    pub(super) rig: Rig,
+    pub(super) ty: Typist,
     /// A focus or mode change may still be changing the grab set: wait before the next key.
-    unsettled: bool,
-    bus: String,
+    pub(super) unsettled: bool,
+    pub(super) bus: String,
     /// The reader's presentation log of this run (`--bench-present-log`), kept for a loss dump.
-    present_log: Option<PathBuf>,
+    pub(super) present_log: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug)]
-struct DocRef {
-    path: String,
-    name: String,
+pub(super) struct DocRef {
+    pub(super) path: String,
+    pub(super) name: String,
 }
 
-fn pages_dir(host: &HostEnv) -> PathBuf {
+pub(super) fn pages_dir(host: &HostEnv) -> PathBuf {
     host.harness_dir.join("../web/m7/pages")
 }
 
@@ -423,18 +462,39 @@ fn generate_large(host: &HostEnv, dir: &Path, nodes: usize) -> Result<PathBuf> {
     Ok(out)
 }
 
-fn file_url(p: &Path) -> Result<String> {
+pub(super) fn file_url(p: &Path) -> Result<String> {
     Ok(format!("file://{}", std::fs::canonicalize(p)?.display()))
 }
 
 impl Web {
-    /// Start everything and wait for the first document titled `title`.
-    fn start(
+    /// Start everything and wait for the first document titled `title`. The M7a scenarios key
+    /// by line, so the page does not read itself (`[browse] say_all_on_load = false`); the
+    /// auto-read scenarios use [`Web::start_cfg`] with the shipped default.
+    pub(super) fn start(
         host: &HostEnv,
         reader: &super::apps::ReaderSpec,
         flavor: Flavor,
         urls: &[String],
         title: &str,
+    ) -> Result<(Self, DocRef)> {
+        Self::start_cfg(
+            host,
+            reader,
+            flavor,
+            urls,
+            title,
+            "schema = 1\n[browse]\nsay_all_on_load = false\n",
+        )
+    }
+
+    /// [`Web::start`] with the reader's settings file given.
+    pub(super) fn start_cfg(
+        host: &HostEnv,
+        reader: &super::apps::ReaderSpec,
+        flavor: Flavor,
+        urls: &[String],
+        title: &str,
+        settings: &str,
     ) -> Result<(Self, DocRef)> {
         let env = m1_env(host);
         // The presentation log of the run: copied next to the results when a trial is lost.
@@ -443,10 +503,15 @@ impl Web {
         let present_log = std::env::var("GORCA_HARNESS_DIR")
             .ok()
             .map(|d| PathBuf::from(d).join(format!("present-{run_no}.log")));
-        let extra_reader_args = present_log
+        let mut extra_reader_args: Vec<String> = present_log
             .iter()
             .map(|p| format!("--bench-present-log={}", p.display()))
             .collect();
+        let tmp =
+            PathBuf::from(std::env::var("GORCA_HARNESS_DIR").context("GORCA_HARNESS_DIR not set")?);
+        let cfg_path = tmp.join(format!("gorca-web-{run_no}.toml"));
+        std::fs::write(&cfg_path, settings)?;
+        extra_reader_args.push(format!("--config={}", cfg_path.display()));
         let opts = RigOpts {
             flavor,
             reader: reader.clone(),
@@ -491,12 +556,12 @@ impl Web {
         Ok((w, doc))
     }
 
-    fn mark(&self) -> usize {
+    pub(super) fn mark(&self) -> usize {
         self.rig.mock.mark()
     }
 
     /// Focus `path`; returns the emit time of the call.
-    fn focus(&mut self, path: &str) -> Result<u64> {
+    pub(super) fn focus(&mut self, path: &str) -> Result<u64> {
         self.unsettled = true;
         let r = self.ax.request(
             "focus",
@@ -506,7 +571,7 @@ impl Web {
         Ok(json_num(&r, "t_emit_ns").unwrap_or(0.0) as u64)
     }
 
-    fn action(&mut self, path: &str) -> Result<u64> {
+    pub(super) fn action(&mut self, path: &str) -> Result<u64> {
         let r = self.ax.request(
             "action",
             &format!("\"bus\":\"{}\",\"path\":\"{path}\",\"index\":0", self.bus),
@@ -516,7 +581,7 @@ impl Web {
     }
 
     /// A descendant of `root` by role and name fragment.
-    fn find(&mut self, root: &str, role: &str, name: &str) -> Result<String> {
+    pub(super) fn find(&mut self, root: &str, role: &str, name: &str) -> Result<String> {
         let r = self.ax.request(
             "find",
             &format!(
@@ -533,7 +598,7 @@ impl Web {
     /// password field is redacted), the speech transcript and the last bus events go to the
     /// results directory; the reader's own counters (`stale_dropped`, `inbox_dropped`, `fetch_*`)
     /// are in the reader log that lands there too.
-    fn dump_loss(&self, what: &str) {
+    pub(super) fn dump_loss(&self, what: &str) {
         let Some(dir) = std::env::var("GORCA_E2E_READER_LOG")
             .ok()
             .and_then(|p| PathBuf::from(p).parent().map(PathBuf::from))
@@ -560,7 +625,7 @@ impl Web {
     /// Wait until Mutter has stopped receiving grab changes (the count is steady for 120 ms).
     /// A key that races a grab change is Ambiguous by design ("again"), which is not what the
     /// latency scenarios measure.
-    fn settle_grabs(&mut self) -> Result<()> {
+    pub(super) fn settle_grabs(&mut self) -> Result<()> {
         let m = self.rig.mutter.as_mut().context("no mutter")?;
         let end = Instant::now() + Duration::from_secs(2);
         let mut last = m.grab_state()?.applied;
@@ -579,7 +644,7 @@ impl Web {
         Ok(())
     }
 
-    fn press(&mut self, k: K, state: u32) -> Result<(u64, bool)> {
+    pub(super) fn press(&mut self, k: K, state: u32) -> Result<(u64, bool)> {
         if self.unsettled {
             self.settle_grabs()?;
         }
@@ -595,7 +660,12 @@ impl Web {
     }
 
     /// The first speech after `mark` whose text satisfies `pred`.
-    fn speech(&self, mark: usize, wait: Duration, pred: impl Fn(&str) -> bool) -> Option<Rec> {
+    pub(super) fn speech(
+        &self,
+        mark: usize,
+        wait: Duration,
+        pred: impl Fn(&str) -> bool,
+    ) -> Option<Rec> {
         self.rig.mock.wait_for(
             mark,
             wait,
@@ -603,7 +673,7 @@ impl Web {
         )
     }
 
-    fn press_and_hear(
+    pub(super) fn press_and_hear(
         &mut self,
         k: K,
         state: u32,
@@ -629,7 +699,7 @@ impl Web {
     }
 
     /// Focus nodes until the reader demonstrably speaks (events before its registration are lost).
-    fn prime(&mut self, doc: &DocRef) -> Result<()> {
+    pub(super) fn prime(&mut self, doc: &DocRef) -> Result<()> {
         let link = self.find(&doc.path, "link", "").ok();
         let end = Instant::now() + Duration::from_secs(30);
         let mut flip = false;
@@ -662,7 +732,7 @@ impl Web {
     }
 }
 
-fn latencies(
+pub(super) fn latencies(
     emits: &[u64],
     spoken: &[(u64, String)],
     want: impl Fn(usize, &str) -> bool,
@@ -691,7 +761,7 @@ fn latencies(
     (lat, lost, late)
 }
 
-fn speaks_since(w: &Web, mark: usize) -> Vec<(u64, String)> {
+pub(super) fn speaks_since(w: &Web, mark: usize) -> Vec<(u64, String)> {
     w.rig
         .mock
         .since(mark)
@@ -706,11 +776,11 @@ fn speaks_since(w: &Web, mark: usize) -> Vec<(u64, String)> {
 // ---------------------------------------------------------------------------------------------
 // Scenarios
 
-fn article(host: &HostEnv) -> Result<String> {
+pub(super) fn article(host: &HostEnv) -> Result<String> {
     file_url(&pages_dir(host).join("article.html"))
 }
 
-fn check(
+pub(super) fn check(
     out: &mut RunOut,
     fails: &mut Vec<String>,
     what: &str,
@@ -885,7 +955,7 @@ fn key_series(
     Ok(())
 }
 
-fn large(host: &HostEnv) -> Result<(String, String)> {
+pub(super) fn large(host: &HostEnv) -> Result<(String, String)> {
     let dir =
         PathBuf::from(std::env::var("GORCA_HARNESS_DIR").context("harness dir")?).join("pages");
     std::fs::create_dir_all(&dir)?;

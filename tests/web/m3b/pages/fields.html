@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M3b Fields</title>
+<style>
+body{font:16px sans-serif}
+#ce,#ce2{border:1px solid #888;min-height:3em;width:30em}
+textarea{width:30em;height:6em}
+</style>
+</head>
+<body>
+<h1>Fields</h1>
+<p><label for="in1">Single line</label> <input id="in1" type="text" value="Привет, мир"></p>
+<p><label for="in2">Emoji line</label> <input id="in2" type="text" value="a😀b😀😀c"></p>
+<p><label for="ta">Multi line</label><br>
+<textarea id="ta">first line
+вторая строка 😀 end
+third</textarea></p>
+<p><label for="pw">Password</label> <input id="pw" type="password" value="секрет😀"></p>
+<p id="cel">Editable region:</p>
+<div id="ce" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="cel"><p>One 😀 two</p><p>Три четыре</p></div>
+<p><label for="typing">Typing</label> <input id="typing" type="text"></p>
+<p><label for="session">Session</label> <input id="session" type="text"></p>
+<p><label for="sel">Select</label> <input id="sel" type="text" value="abcdefghijklmnopqrstuvwxyz"></p>
+<p><label for="lines">Lines</label><br><textarea id="lines"></textarea></p>
+<p><label for="say">Say all text</label><br><textarea id="say"></textarea></p>
+<p id="cel2">Typing region:</p>
+<div id="ce2" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="cel2"><p></p></div>
+<p><label for="combo">Combo</label> <input id="combo" type="text" role="combobox" aria-expanded="false" aria-haspopup="listbox"></p>
+<p><button id="b1">After</button></p>
+<script>
+// F9 / F10 / F11 stand in for an input method commit: they insert text at the caret.
+document.addEventListener('keydown', function (e) {
+  var t = {F9: '😀', F10: 'ж', F11: 'ab'}[e.key];
+  if (!t) return;
+  e.preventDefault();
+  var a = document.activeElement;
+  if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA')) {
+    a.setRangeText(t, a.selectionStart, a.selectionEnd, 'end');
+  } else {
+    document.execCommand('insertText', false, t);
+  }
+});
+var L = '';
+for (var i = 0; i < 300; i++) L += 'Line ' + String(i).padStart(4, '0') + ' вторая строка 😀 end\n';
+document.getElementById('lines').value = L;
+var S = '';
+for (var j = 0; j < 200; j++) S += 'Sentence number ' + String(j).padStart(4, '0') + ' is here. ';
+document.getElementById('say').value = S;
+// A combo box that opens with Alt+Down and closes with Escape, as a page's own widget does.
+var combo = document.getElementById('combo');
+combo.addEventListener('keydown', function (e) {
+  if (e.key === 'ArrowDown' && e.altKey) {
+    combo.setAttribute('aria-expanded', 'true');
+    e.preventDefault();
+  } else if (e.key === 'Escape' && combo.getAttribute('aria-expanded') === 'true') {
+    combo.setAttribute('aria-expanded', 'false');
+    e.preventDefault();
+    e.stopPropagation();
+  }
+});
+</script>
+</body>
+</html>

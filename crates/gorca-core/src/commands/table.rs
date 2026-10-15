@@ -235,7 +235,6 @@ pub enum CoreCmd {
 macro_rules! planned_cmds {
     () => {
         CoreCmd::SpeechCopyLast
-            | CoreCmd::InfoFormatting
             | CoreCmd::InfoReadWindow
             | CoreCmd::InfoBattery
             | CoreCmd::InfoFocusShortcut
@@ -317,10 +316,6 @@ macro_rules! planned_cmds {
             | CoreCmd::TableSayColumn
             | CoreCmd::TableSayAllRow
             | CoreCmd::TableSayAllColumn
-            | CoreCmd::QuicknavNextFrame
-            | CoreCmd::QuicknavPrevFrame
-            | CoreCmd::QuicknavNextArticle
-            | CoreCmd::QuicknavPrevArticle
     };
 }
 pub(crate) use planned_cmds;
@@ -787,7 +782,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::InfoFormatting,
         name: "info.formatting",
-        available: Availability::Planned(Milestone::M3),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -2047,7 +2042,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextFrame,
         name: "quicknav.next.frame",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2057,7 +2052,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevFrame,
         name: "quicknav.prev.frame",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2367,7 +2362,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextArticle,
         name: "quicknav.next.article",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2377,7 +2372,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevArticle,
         name: "quicknav.prev.article",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
