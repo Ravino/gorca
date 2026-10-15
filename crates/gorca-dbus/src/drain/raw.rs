@@ -45,7 +45,10 @@ pub fn spawn_drain(cfg: DrainConfig, router: Arc<dyn Router>) -> Result<DrainHan
         let (shared, socket) = (Arc::clone(&shared), Arc::clone(&socket));
         std::thread::Builder::new()
             .name("gorca-drain-0".to_owned())
-            .spawn(move || run(&cfg, &router, &shared, &socket, &ready_tx))?
+            .spawn(move || {
+                gorca_rt::lane_started(gorca_rt::Lane::Drain(0));
+                run(&cfg, &router, &shared, &socket, &ready_tx);
+            })?
     };
     let wake: Box<dyn Fn() + Send + Sync> = {
         let socket = Arc::clone(&socket);

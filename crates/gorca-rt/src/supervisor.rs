@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::time::{Duration, Instant};
 
+use tokio::runtime::Handle;
 use tokio::task::{Id, JoinError, JoinSet};
 use tokio_util::sync::CancellationToken;
 
@@ -37,6 +38,8 @@ pub struct TaskSet {
     set: JoinSet<()>,
     names: HashMap<Id, &'static str>,
     cancel: CancellationToken,
+    /// Runtime that new tasks go to (see [`Self::placed_on`]); `None` is the ambient runtime.
+    target: Option<Handle>,
 }
 
 impl TaskSet {
@@ -45,6 +48,29 @@ impl TaskSet {
             set: JoinSet::new(),
             names: HashMap::new(),
             cancel,
+            target: None,
+        }
+    }
+
+    /// Run `f` with every task it spawns on this set placed on `target` (a hot lane's runtime,
+    /// bake-off B-5); `None` leaves them on the ambient runtime. Supervision is unchanged: the
+    /// set still owns, names, cancels and joins the tasks.
+    pub fn placed_on<R>(&mut self, target: Option<&Handle>, f: impl FnOnce(&mut Self) -> R) -> R {
+        let previous = std::mem::replace(&mut self.target, target.cloned());
+        // Code that builds timers or sockets while wiring needs the target's context.
+        let _enter = target.map(Handle::enter);
+        let r = f(self);
+        self.target = previous;
+        r
+    }
+
+    fn spawn_raw<F>(&mut self, fut: F) -> Id
+    where
+        F: Future<Output = ()> + Send + 'static,
+    {
+        match &self.target {
+            Some(h) => self.set.spawn_on(fut, h).id(),
+            None => self.set.spawn(fut).id(),
         }
     }
 
@@ -58,14 +84,14 @@ impl TaskSet {
         F: Future<Output = ()> + Send + 'static,
     {
         let token = self.cancel.clone();
-        let handle = self.set.spawn(async move {
+        let id = self.spawn_raw(async move {
             tokio::select! {
                 biased;
                 () = token.cancelled() => {}
                 () = fut => {}
             }
         });
-        self.names.insert(handle.id(), name);
+        self.names.insert(id, name);
     }
 
     /// Spawn a task that watches the token itself: it is **not** dropped when the token is
@@ -75,8 +101,8 @@ impl TaskSet {
     where
         F: Future<Output = ()> + Send + 'static,
     {
-        let handle = self.set.spawn(fut);
-        self.names.insert(handle.id(), name);
+        let id = self.spawn_raw(fut);
+        self.names.insert(id, name);
     }
 
     pub fn len(&self) -> usize {

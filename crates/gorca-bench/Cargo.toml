@@ -29,6 +29,10 @@ path = "src/bin/e2e.rs"
 name = "gorca-stub-reader"
 path = "src/bin/stub_reader.rs"
 
+[[bin]]
+name = "gorca-hog"
+path = "src/bin/hog.rs"
+
 [[bench]]
 name = "ingress_mirror"
 harness = false

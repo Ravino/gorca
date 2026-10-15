@@ -38,8 +38,18 @@ fn main() -> Result<ExitCode> {
         }
     };
     gorca_daemon::init_tracing()?;
-    let runtime = gorca_daemon::build_runtime()?;
+    // The environment is read here only: `GORCA_RTKIT_BUS_ADDRESS` points the rtkit client at a
+    // bus (the harness replaces DBUS_SYSTEM_BUS_ADDRESS with nothing), else the system bus.
+    let rtkit_bus = ["GORCA_RTKIT_BUS_ADDRESS", "DBUS_SYSTEM_BUS_ADDRESS"]
+        .iter()
+        .find_map(|k| std::env::var(k).ok().filter(|s| !s.is_empty()));
+    let runtime = gorca_daemon::build_runtime_for(
+        opts.topology,
+        opts.topology_report.as_deref(),
+        rtkit_bus.as_deref(),
+    )?;
     let result = runtime.block_on(gorca_daemon::run(opts, CancellationToken::new()));
+    gorca_daemon::finish_topology();
     // Do not wait forever for a stuck blocking task: the process must exit.
     runtime.shutdown_timeout(Duration::from_secs(2));
     result.map(|()| ExitCode::SUCCESS)

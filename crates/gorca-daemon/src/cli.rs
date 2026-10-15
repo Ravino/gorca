@@ -68,6 +68,12 @@ pub struct Options {
     pub shadow: bool,
     /// `--bench-fill-policy=r0|candidate`: benchmarks only (B-1 harness); default R0.
     pub fill_policy: FillChoice,
+    /// `--topology=...` / `GORCA_TOPOLOGY`: where the lanes run (bake-off B-5). Default: one
+    /// multi-threaded runtime, the behaviour before the switch existed.
+    pub topology: crate::topology::Arm,
+    /// `--topology-report=PATH` / `GORCA_TOPOLOGY_REPORT`: JSON of what was granted to which
+    /// lane (`%p` in the path becomes the pid). Passive; benchmarks read it.
+    pub topology_report: Option<String>,
 }
 
 /// `gorca config ...`: tools around the settings file (ADR-0005 7.4, CV-3).
@@ -129,6 +135,13 @@ OPTIONS:
                                  0600, created anew; secret text is redacted)
     --bench-fill-policy=r0|candidate
                                  benchmarks only: the fill policy of every app (default: r0)
+    --topology=single|lanes|lanes-rt
+                                 where the lanes run (bake-off B-5; default: single = one
+                                 multi-threaded runtime). lanes: input and speech on their own
+                                 threads, workers and a bulk pool apart. lanes-rt: lanes plus
+                                 real-time scheduling through rtkit and pinning to the fast cores, with a
+                                 fallback to the plain lanes when rtkit refuses
+    --topology-report=PATH       write what each lane was granted as JSON (`%p` = pid)
     -h, --help                   print this help
 ";
 
@@ -146,6 +159,7 @@ impl Options {
     /// - `GORCA_CONFIG`, `XDG_CONFIG_HOME`, `HOME`: the settings file.
     /// - `GORCA_REPEAT_DELAY_MS`, `GORCA_XKB_OPTIONS`, `GORCA_CLOCK_24H`: desktop facts that
     ///   replace the `gsettings` probe (the e2e harness and tests use them).
+    /// - `GORCA_TOPOLOGY`, `GORCA_TOPOLOGY_REPORT`: same as `--topology`, `--topology-report`.
     /// - `GORCA_SHADOW=1`: shadow mode (PW-11).
     #[must_use]
     pub fn with_env(self, get: impl Fn(&str) -> Option<String>) -> Self {
@@ -167,6 +181,14 @@ impl Options {
                     o.voicego_socket.get_or_insert(path);
                 }
             }
+        }
+        if o.topology == crate::topology::Arm::default()
+            && let Some(arm) = get("GORCA_TOPOLOGY").and_then(|v| crate::topology::Arm::parse(&v))
+        {
+            o.topology = arm;
+        }
+        if o.topology_report.is_none() {
+            o.topology_report = get("GORCA_TOPOLOGY_REPORT").filter(|s| !s.is_empty());
         }
         if get("GORCA_IMPERSONATE_ORCA").is_some_and(|v| v == "1") {
             o.impersonate_orca = true;
@@ -355,6 +377,15 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError
                     }
                 };
             }
+            "--topology" => {
+                let v = value("--topology")?;
+                opts.topology = crate::topology::Arm::parse(&v).ok_or(CliError::BadValue {
+                    flag: "--topology",
+                    value: v,
+                    expected: crate::topology::Arm::EXPECTED,
+                })?;
+            }
+            "--topology-report" => opts.topology_report = Some(value("--topology-report")?),
             "--a11y-address" => opts.a11y_address = Some(value("--a11y-address")?),
             "--session-address" => opts.session_address = Some(value("--session-address")?),
             _ => return Err(CliError::Unknown(arg)),

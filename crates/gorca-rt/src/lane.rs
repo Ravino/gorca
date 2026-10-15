@@ -3,6 +3,7 @@
 use std::any::Any;
 use std::io;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::{Arc, PoisonError, RwLock};
 use std::thread::JoinHandle;
 
 /// The dedicated threads of section 3.2. `workers` and `cpu` are pools, not lanes.
@@ -16,12 +17,36 @@ pub enum Lane {
     Watchdog,
 }
 
+type StartHook = Arc<dyn Fn(Lane) + Send + Sync>;
+
+static START_HOOK: RwLock<Option<StartHook>> = RwLock::new(None);
+
+/// Install (or clear) the process-wide hook that runs on every hot-lane thread as its first act,
+/// before the lane body: the runtime topology (bake-off B-5) places the thread there (affinity,
+/// scheduling class). Threads that are not spawned through [`spawn_lane`] call [`lane_started`]
+/// themselves.
+pub fn set_start_hook(hook: Option<StartHook>) {
+    *START_HOOK.write().unwrap_or_else(PoisonError::into_inner) = hook;
+}
+
+/// Run the start hook for the calling thread, which is `lane`'s thread.
+pub fn lane_started(lane: Lane) {
+    let hook = START_HOOK
+        .read()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone();
+    if let Some(h) = hook {
+        h(lane);
+    }
+}
+
 /// Scheduling priority of a lane.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum LanePriority {
     Normal,
     /// Low `SCHED_FIFO` through rtkit (`org.freedesktop.RealtimeKit1`).
-    /// TBD: not applied yet. Lands with bake-off B-5 arm (c); without rtkit it is a no-op.
+    /// Applied by the daemon's runtime topology (bake-off B-5 arm c) through the start hook;
+    /// without rtkit it is a no-op.
     FifoLow,
 }
 
@@ -83,9 +108,14 @@ where
 {
     let join = std::thread::Builder::new()
         .name(lane.thread_name())
-        .spawn(move || match catch_unwind(AssertUnwindSafe(body)) {
-            Ok(()) => LaneExit::Clean,
-            Err(p) => LaneExit::Panicked(panic_message(p.as_ref())),
+        .spawn(move || {
+            match catch_unwind(AssertUnwindSafe(|| {
+                lane_started(lane);
+                body();
+            })) {
+                Ok(()) => LaneExit::Clean,
+                Err(p) => LaneExit::Panicked(panic_message(p.as_ref())),
+            }
         })?;
     Ok(LaneHandle { lane, join })
 }

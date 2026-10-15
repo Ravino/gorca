@@ -1,0 +1,122 @@
+== reader <repo>/.claude/worktrees/agent-a12a85c2ca79d781a/target/release/gorca built from 932d611, tree at 932d611
+== e2e b5-lanes-rt-sat-r2: reader=daemon:<repo>/.claude/worktrees/agent-a12a85c2ca79d781a/target/release/gorca backend=voicego repeats=1 load=25.04 20.35 15.54 30/3181 210279
+-- round 1/1 L1 (load 25.04 20.35 15.54 31/3181 210279)
+2026-10-14T23:46:03.104675Z  INFO gorca_daemon::topology: lane placed lane=gorca-input tid=210435 granted=rr:15 via="rtkit" pinned=Some(1) error=None
+2026-10-14T23:46:03.108442Z  INFO gorca_daemon::topology: lane placed lane=gorca-speech-io tid=210437 granted=rr:12 via="rtkit" pinned=Some(3) error=None
+2026-10-14T23:46:03.109386Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="lanes-rt"
+2026-10-14T23:46:03.112104Z  INFO gorca_daemon::topology: lane placed lane=gorca-reader tid=210441 granted=rr:13 via="rtkit" pinned=Some(2) error=None
+2026-10-14T23:46:03.117070Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T23:46:03.117379Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=100ms
+2026-10-14T23:46:03.122605Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T23:46:03.129521Z  INFO gorca_daemon::topology: lane placed lane=gorca-drain-0 tid=210447 granted=rr:12 via="rtkit" pinned=Some(4) error=None
+2026-10-14T23:46:03.220468Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=200ms
+2026-10-14T23:46:03.425684Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=400ms
+2026-10-14T23:46:03.828213Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=800ms
+2026-10-14T23:46:04.631287Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:05.632399Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:06.635847Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:07.640175Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:08.004822Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T23:46:08.004897Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-14T23:46:08.004917Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-14T23:46:08.009768Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 199, fetch_ok: 361, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 180, utterances: 181, reader_restarts: 0 }
+2026-10-14T23:46:08.009889Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 181, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-14T23:46:08.010248Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 L2 (load 25.44 20.51 15.61 23/3238 210931)
+2026-10-14T23:46:08.368865Z  INFO gorca_daemon::topology: lane placed lane=gorca-input tid=211000 granted=rr:15 via="rtkit" pinned=Some(1) error=None
+2026-10-14T23:46:08.382709Z  INFO gorca_daemon::topology: lane placed lane=gorca-speech-io tid=211002 granted=rr:12 via="rtkit" pinned=Some(3) error=None
+2026-10-14T23:46:08.383728Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="lanes-rt"
+2026-10-14T23:46:08.385661Z  INFO gorca_daemon::topology: lane placed lane=gorca-reader tid=211005 granted=rr:13 via="rtkit" pinned=Some(2) error=None
+2026-10-14T23:46:08.390838Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=100ms
+2026-10-14T23:46:08.390970Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T23:46:08.398724Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T23:46:08.402489Z  INFO gorca_daemon::topology: lane placed lane=gorca-drain-0 tid=211015 granted=rr:12 via="rtkit" pinned=Some(4) error=None
+2026-10-14T23:46:08.492933Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=200ms
+2026-10-14T23:46:08.695038Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=400ms
+2026-10-14T23:46:09.097109Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=800ms
+2026-10-14T23:46:09.900485Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:10.902890Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:11.905159Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:12.911964Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:13.101354Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T23:46:13.101435Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-14T23:46:13.101453Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-14T23:46:13.104150Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 123, fetch_ok: 221, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 110, utterances: 111, reader_restarts: 0 }
+2026-10-14T23:46:13.104193Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 111, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-14T23:46:13.121276Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 K1 (load 26.85 20.89 15.76 29/3255 212031)
+2026-10-14T23:46:13.778170Z  INFO gorca_daemon::topology: lane placed lane=gorca-input tid=212120 granted=rr:15 via="rtkit" pinned=Some(1) error=None
+2026-10-14T23:46:13.787107Z  INFO gorca_daemon::topology: lane placed lane=gorca-speech-io tid=212126 granted=rr:12 via="rtkit" pinned=Some(3) error=None
+2026-10-14T23:46:13.789045Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="lanes-rt"
+2026-10-14T23:46:13.795200Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T23:46:13.796268Z  INFO gorca_daemon::topology: lane placed lane=gorca-reader tid=212129 granted=rr:13 via="rtkit" pinned=Some(2) error=None
+2026-10-14T23:46:13.797201Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T23:46:13.809220Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T23:46:13.815453Z  INFO gorca_daemon::topology: lane placed lane=gorca-drain-0 tid=212136 granted=rr:12 via="rtkit" pinned=Some(4) error=None
+2026-10-14T23:46:17.522578Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T23:46:17.522659Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-14T23:46:17.522675Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-14T23:46:17.523501Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 34, fetch_ok: 61, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 30, utterances: 181, reader_restarts: 0 }
+2026-10-14T23:46:17.523529Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 181, replaced: 3, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-14T23:46:17.525343Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 L3-50k (load 27.74 21.17 15.88 19/3243 212382)
+2026-10-14T23:46:17.901480Z  INFO gorca_daemon::topology: lane placed lane=gorca-input tid=212434 granted=rr:15 via="rtkit" pinned=Some(1) error=None
+2026-10-14T23:46:17.908723Z  INFO gorca_daemon::topology: lane placed lane=gorca-speech-io tid=212436 granted=rr:12 via="rtkit" pinned=Some(3) error=None
+2026-10-14T23:46:17.909996Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="lanes-rt"
+2026-10-14T23:46:17.910961Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=100ms
+2026-10-14T23:46:17.913422Z  INFO gorca_daemon::topology: lane placed lane=gorca-reader tid=212439 granted=rr:13 via="rtkit" pinned=Some(2) error=None
+2026-10-14T23:46:17.916012Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T23:46:17.929015Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T23:46:17.936604Z  INFO gorca_daemon::topology: lane placed lane=gorca-drain-0 tid=212446 granted=rr:12 via="rtkit" pinned=Some(4) error=None
+2026-10-14T23:46:18.014649Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=200ms
+2026-10-14T23:46:18.216570Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=400ms
+2026-10-14T23:46:18.618603Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=800ms
+2026-10-14T23:46:19.420722Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:20.422821Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:21.428524Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:22.430932Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:22.588904Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T23:46:22.589024Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-14T23:46:22.589166Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-14T23:46:22.593063Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 2, focus_requests: 241, fetch_ok: 358, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 179, utterances: 179, reader_restarts: 0 }
+2026-10-14T23:46:22.593100Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 178, replaced: 0, stale_dropped: 1, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-14T23:46:22.594740Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 L2-50k (load 28.32 21.40 15.98 23/3234 212953)
+2026-10-14T23:46:23.010366Z  INFO gorca_daemon::topology: lane placed lane=gorca-input tid=213224 granted=rr:15 via="rtkit" pinned=Some(1) error=None
+2026-10-14T23:46:23.016744Z  INFO gorca_daemon::topology: lane placed lane=gorca-speech-io tid=213226 granted=rr:12 via="rtkit" pinned=Some(3) error=None
+2026-10-14T23:46:23.017696Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="lanes-rt"
+2026-10-14T23:46:23.018765Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=100ms
+2026-10-14T23:46:23.021014Z  INFO gorca_daemon::topology: lane placed lane=gorca-reader tid=213229 granted=rr:13 via="rtkit" pinned=Some(2) error=None
+2026-10-14T23:46:23.023490Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T23:46:23.036011Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T23:46:23.041988Z  INFO gorca_daemon::topology: lane placed lane=gorca-drain-0 tid=213242 granted=rr:12 via="rtkit" pinned=Some(4) error=None
+2026-10-14T23:46:23.123744Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=200ms
+2026-10-14T23:46:23.325358Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=400ms
+2026-10-14T23:46:23.727789Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=800ms
+2026-10-14T23:46:24.532071Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:25.546197Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:26.548329Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:27.550407Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:28.555549Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-14T23:46:28.910949Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T23:46:28.911140Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-14T23:46:28.911326Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 2, focus_requests: 153, fetch_ok: 221, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 110, utterances: 111, reader_restarts: 0 }
+2026-10-14T23:46:28.911353Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 111, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-14T23:46:28.911177Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-14T23:46:28.914301Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 K1-50k (load 28.90 21.76 16.16 18/3241 214016)
+2026-10-14T23:46:29.585327Z  INFO gorca_daemon::topology: lane placed lane=gorca-input tid=214134 granted=rr:15 via="rtkit" pinned=Some(1) error=None
+2026-10-14T23:46:29.590122Z  INFO gorca_daemon::topology: lane placed lane=gorca-speech-io tid=214136 granted=rr:12 via="rtkit" pinned=Some(3) error=None
+2026-10-14T23:46:29.591292Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="lanes-rt"
+2026-10-14T23:46:29.594187Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T23:46:29.597259Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T23:46:29.599836Z  INFO gorca_daemon::topology: lane placed lane=gorca-reader tid=214142 granted=rr:13 via="rtkit" pinned=Some(2) error=None
+2026-10-14T23:46:29.600623Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T23:46:29.607197Z  INFO gorca_daemon::topology: lane placed lane=gorca-drain-0 tid=214147 granted=rr:12 via="rtkit" pinned=Some(4) error=None
+2026-10-14T23:46:33.993344Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T23:46:33.993417Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-14T23:46:33.993445Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-14T23:46:33.994273Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 2, focus_requests: 34, fetch_ok: 61, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 30, utterances: 181, reader_restarts: 0 }
+2026-10-14T23:46:33.994294Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 181, replaced: 1, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-14T23:46:33.998535Z  INFO gorca_daemon: gorca stopped
+== wrote bench/results/b5/pilot-1/raw/sat/lanes-rt/r2/20261014T234634Z.{json,txt}

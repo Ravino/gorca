@@ -1,0 +1,5 @@
+round=2 cond=idle arm=lanes exit=0
+load_before=30.71 19.65 14.69 5/3010 185332
+load_with_hog=30.71 19.65 14.69 6/3010 185333
+load_after=29.67 20.34 15.07 3/3321 198392
+governor=performance 

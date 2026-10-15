@@ -1,0 +1,5 @@
+round=3 cond=sat arm=lanes-rt exit=0
+load_before=16.36 20.05 16.30 5/3191 234149
+load_with_hog=16.36 20.05 16.30 21/2988 234476
+load_after=21.49 20.95 16.74 8/3239 239098
+governor=performance 

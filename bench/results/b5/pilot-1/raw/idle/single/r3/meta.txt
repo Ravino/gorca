@@ -1,0 +1,5 @@
+round=3 cond=idle arm=single exit=0
+load_before=20.63 21.32 16.45 3/3160 225493
+load_with_hog=20.63 21.32 16.45 4/3160 225494
+load_after=18.86 20.85 16.42 1/3167 229722
+governor=performance 
