@@ -9,8 +9,11 @@
 
 use crate::caret::Say;
 
-/// Expectations live this long; older ones mean the app ignored the key (TE-2).
-pub const EXPECT_TTL_MS: u64 = 1000;
+/// Expectations live this long; older ones mean the app ignored the key (TE-2). A busy page
+/// (Firefox on a loaded host, seen at 1.3 s) delivers the inserts of everything typed meanwhile
+/// as one coalesced text: the keys were echoed, so that text must still match them. A stale
+/// entry no longer blocks later inserts (`consume_insert` skips entries whose insert never came).
+pub const EXPECT_TTL_MS: u64 = 3000;
 /// Ring capacity (TE-2).
 pub const RING: usize = 16;
 /// Inserted text spoken in full up to this many scalars, then "and N more" (TE-3).
@@ -304,6 +307,19 @@ mod tests {
     }
 
     #[test]
+    fn a_stalled_page_delivers_a_long_coalesced_insert_that_still_matches() {
+        // 13 keys over 1.4 s, one insert 1.5 s after the first key.
+        let mut r = ExpectRing::new();
+        for (i, c) in "xdopaprozkfnf".chars().enumerate() {
+            r.push(c, i as u64 * 110);
+        }
+        assert_eq!(
+            r.consume_insert("xdopaprozkfnf", 1500),
+            Consume::Matched { n: 13 }
+        );
+    }
+
+    #[test]
     fn the_newest_expectation_has_an_age() {
         let mut r = ExpectRing::new();
         assert_eq!(r.newest_age_ms(10), None);
@@ -326,14 +342,14 @@ mod tests {
     }
 
     #[test]
-    fn expectations_expire_after_a_second() {
+    fn expectations_expire_after_the_ttl() {
         let mut r = ExpectRing::new();
         r.push('a', 0);
         assert_eq!(r.consume_insert("a", EXPECT_TTL_MS + 1), Consume::Unmatched);
         assert!(r.is_empty());
         r.push('b', 0);
-        r.push('c', 900);
-        r.expire(1100);
+        r.push('c', EXPECT_TTL_MS - 100);
+        r.expire(EXPECT_TTL_MS + 100);
         assert_eq!(r.len(), 1, "only the old one is dropped");
     }
 
