@@ -174,7 +174,7 @@ fn siblings_finds_the_index_in_the_child_list_and_windows_around_it() {
         let Some(r) = rig(WIDE).await else { return };
         let root = resolved(&r.cx, 0);
         let node = resolved(&r.cx, 12); // child index 11 of the root
-        let b = siblings(&r.cx, &root, &node, 2, 3, PropMask::PRESENT, dl())
+        let b = siblings(&r.cx, &root, &node, (2, 3), false, PropMask::PRESENT, dl())
             .await
             .unwrap();
         let want: Vec<String> = (10..=15).map(|i| format!("node-{i}")).collect();
@@ -183,17 +183,17 @@ fn siblings_finds_the_index_in_the_child_list_and_windows_around_it() {
         assert!(b.nodes.iter().all(|(_, n)| n.parent == Some(root.key)));
         // Clipped at the list start and end.
         let first = resolved(&r.cx, 1);
-        let b = siblings(&r.cx, &root, &first, 5, 1, PropMask::PRESENT, dl())
+        let b = siblings(&r.cx, &root, &first, (5, 1), false, PropMask::PRESENT, dl())
             .await
             .unwrap();
         assert_eq!(names(&b), vec!["node-1".to_owned(), "node-2".to_owned()]);
         let last = resolved(&r.cx, 30);
-        let b = siblings(&r.cx, &root, &last, 1, 9, PropMask::PRESENT, dl())
+        let b = siblings(&r.cx, &root, &last, (1, 9), false, PropMask::PRESENT, dl())
             .await
             .unwrap();
         assert_eq!(names(&b), vec!["node-29".to_owned(), "node-30".to_owned()]);
         // Only the anchor: before and after both zero.
-        let b = siblings(&r.cx, &root, &node, 0, 0, PropMask::PRESENT, dl())
+        let b = siblings(&r.cx, &root, &node, (0, 0), false, PropMask::PRESENT, dl())
             .await
             .unwrap();
         assert_eq!(names(&b), vec!["node-12".to_owned()]);
@@ -207,16 +207,128 @@ fn siblings_of_a_node_that_is_not_a_child_of_the_parent_is_empty_not_an_error() 
         let root = resolved(&r.cx, 0);
         // Node 40 is a grandchild: not in the root's child list.
         let stranger = resolved(&r.cx, 40);
-        let b = siblings(&r.cx, &root, &stranger, 2, 2, PropMask::PRESENT, dl())
-            .await
-            .unwrap();
+        let b = siblings(
+            &r.cx,
+            &root,
+            &stranger,
+            (2, 2),
+            false,
+            PropMask::PRESENT,
+            dl(),
+        )
+        .await
+        .unwrap();
         assert!(b.nodes.is_empty());
         // A parent that does not exist is the app's `UnknownObject`.
         let ghost = resolved(&r.cx, 9999);
-        let e = siblings(&r.cx, &ghost, &stranger, 1, 1, PropMask::PRESENT, dl()).await;
+        let e = siblings(
+            &r.cx,
+            &ghost,
+            &stranger,
+            (1, 1),
+            false,
+            PropMask::PRESENT,
+            dl(),
+        )
+        .await;
         assert!(
             matches!(e, Err(BackendError::Gone | BackendError::Protocol(_))),
             "{e:?}"
+        );
+    });
+}
+
+const HUGE: &[&str] = &[
+    "--scenario",
+    "tree",
+    "--nodes",
+    "20001",
+    "--fanout",
+    "20000",
+];
+
+/// B-1 review F-2: the indexed path (`GetIndexInParent` + `GetChildAtIndex`) returns the same
+/// window as the listing, and on a 20 000-row parent it is the only one that does not read the
+/// whole list; a listing above the byte cap is refused before it is decoded.
+#[test]
+fn siblings_by_index_matches_the_listing_and_a_huge_listing_is_refused_undecoded() {
+    run(async {
+        let Some(r) = rig(WIDE).await else { return };
+        let root = resolved(&r.cx, 0);
+        let node = resolved(&r.cx, 12);
+        let by_list = siblings(&r.cx, &root, &node, (1, 4), false, PropMask::PRESENT, dl())
+            .await
+            .unwrap();
+        let by_index = siblings(&r.cx, &root, &node, (1, 4), true, PropMask::PRESENT, dl())
+            .await
+            .unwrap();
+        assert_eq!(names(&by_list), names(&by_index));
+        assert!(
+            by_index
+                .nodes
+                .iter()
+                .all(|(_, n)| n.parent == Some(root.key))
+        );
+        // Clipped at the ends and at the indexed bound (8 entries), a stranger is empty.
+        let first = resolved(&r.cx, 1);
+        let b = siblings(&r.cx, &root, &first, (5, 1), true, PropMask::PRESENT, dl())
+            .await
+            .unwrap();
+        assert_eq!(names(&b), vec!["node-1".to_owned(), "node-2".to_owned()]);
+        let b = siblings(&r.cx, &root, &node, (40, 40), true, PropMask::PRESENT, dl())
+            .await
+            .unwrap();
+        assert!(b.nodes.len() <= 8, "{}", b.nodes.len());
+        let stranger = resolved(&r.cx, 40);
+        let b = siblings(
+            &r.cx,
+            &root,
+            &stranger,
+            (2, 2),
+            true,
+            PropMask::PRESENT,
+            dl(),
+        )
+        .await
+        .unwrap();
+        assert!(b.nodes.is_empty());
+    });
+}
+
+#[test]
+fn a_huge_parent_costs_the_same_by_index_and_is_refused_when_listed() {
+    run(async {
+        let Some(r) = rig(HUGE).await else { return };
+        let root = resolved(&r.cx, 0);
+        let node = resolved(&r.cx, 10_001);
+        let t = std::time::Instant::now();
+        let by_index = siblings(&r.cx, &root, &node, (1, 6), true, PropMask::PRESENT, dl())
+            .await
+            .unwrap();
+        let indexed_ms = t.elapsed().as_secs_f64() * 1e3;
+        assert_eq!(by_index.nodes.len(), 8);
+        assert_eq!(
+            names(&by_index).first().map(String::as_str),
+            Some("node-10000")
+        );
+        let t = std::time::Instant::now();
+        let listed = siblings(&r.cx, &root, &node, (1, 6), false, PropMask::PRESENT, dl()).await;
+        let listed_ms = t.elapsed().as_secs_f64() * 1e3;
+        assert!(
+            matches!(listed, Err(BackendError::Protocol(_))),
+            "a 20 000-ref listing is refused: {listed:?}"
+        );
+        // The unbounded listing, for comparison (what the first port paid on every step).
+        let t = std::time::Instant::now();
+        let all =
+            r.cx.caller
+                .children_of(&root.path, dl())
+                .await
+                .map(|v| v.len());
+        let unbounded_ms = t.elapsed().as_secs_f64() * 1e3;
+        eprintln!(
+            "HUGE-LIST window of 8: by index {indexed_ms:.2} ms; listing refused after {listed_ms:.2} ms; \
+             unbounded GetChildren decode {unbounded_ms:.2} ms ({all:?} refs)"
         );
     });
 }

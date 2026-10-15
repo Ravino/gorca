@@ -29,6 +29,7 @@ initial_tabs = 30
 sidebar_arrows = 20
 panels = 5
 panel_tabs = 30
+reverse_tabs = 29    # Shift+Tab back over the panel after the forward walk (look-ahead direction, review F-3)
 switches = 3
 slider_steps = 5
 silent_rename_pct = 10

@@ -376,37 +376,84 @@ pub(crate) async fn child_snapshots(
     Ok(batch)
 }
 
+/// A parent's child list longer than this (bytes of the `GetChildren` reply, about 4 000 refs) is
+/// not read whole to find a window of it.
+const SIBLING_LIST_MAX_BYTES: usize = 512 * 1024;
+
 /// The siblings of `node` (children of `parent`): the `before` entries ahead of it, the node
 /// itself and the `after` entries behind it, each fetched with `want` and the walk's parent link.
-/// The node's index comes out of the one `GetChildren` reply that lists the parent's children, so
-/// finding it costs no probing. A node that is not in the list (it moved or went away) or sits
-/// beyond the `GetChildren` clip yields an empty batch, not an error.
+///
+/// Normally the node's index comes out of the one `GetChildren` reply that lists the parent's
+/// children, so finding it costs no probing; a reply above [`SIBLING_LIST_MAX_BYTES`] is refused
+/// before it is decoded (`Protocol`). With `indexed` (the caller knows the list is long) nothing
+/// is listed: `GetIndexInParent` of the node, then `GetChildAtIndex` for the window (at most
+/// [`INDEXED_RANGE`] entries), so a 300 000-row list costs the same as a short one. A node that
+/// is not in the list (it moved or went away) or sits beyond the `GetChildren` clip yields an
+/// empty batch, not an error.
 pub(crate) async fn siblings(
     cx: &CallCx,
     parent: &Resolved,
     node: &Resolved,
-    before: u32,
-    after: u32,
+    window: (u32, u32),
+    indexed: bool,
     want: PropMask,
     dl: Deadline,
 ) -> Result<RawBatch, BackendError> {
-    let refs = cx
+    let (before, after) = window;
+    let mut batch = RawBatch::default();
+    let refs: Vec<(String, String)>;
+    let at: usize;
+    if indexed {
+        let idx = cx
+            .caller
+            .index_in_parent(&node.path, dl)
+            .await
+            .map_err(|e| backend_error(&e))?;
+        let Ok(idx) = u32::try_from(idx) else {
+            return Ok(batch);
+        };
+        let start = idx.saturating_sub(before);
+        let end = idx
+            .saturating_add(after)
+            .saturating_add(1)
+            .min(start.saturating_add(INDEXED_RANGE));
+        refs = child_refs(cx, parent, start, end, dl).await?;
+        at = (idx - start) as usize;
+        // The node must be where the app says it is.
+        if refs.get(at).is_none_or(|(_, p)| p.as_str() != &*node.path) {
+            return Ok(batch);
+        }
+        batch.truncated = false;
+        return finish_siblings(cx, parent, &refs, 0..refs.len(), want, dl, batch).await;
+    }
+    let all = cx
         .caller
-        .children_of(&parent.path, dl)
+        .children_of_capped(&parent.path, dl, SIBLING_LIST_MAX_BYTES)
         .await
         .map_err(|e| backend_error(&e))?;
-    let mut batch = RawBatch::default();
-    let Some(at) = refs.iter().position(|(_, p)| p.as_str() == &*node.path) else {
+    let Some(pos) = all.iter().position(|(_, p)| p.as_str() == &*node.path) else {
         return Ok(batch);
     };
-    let start = at.saturating_sub(before as usize);
-    let end = at
+    let start = pos.saturating_sub(before as usize);
+    let end = pos
         .saturating_add(after as usize)
         .saturating_add(1)
-        .min(refs.len());
-    batch.truncated = end >= MAX_SUBTREE_NODES as usize && refs.len() >= MAX_SUBTREE_NODES as usize;
-    let mut kids = Vec::with_capacity(end - start);
-    for (bus, p) in refs.get(start..end).unwrap_or(&[]) {
+        .min(all.len());
+    batch.truncated = end >= MAX_SUBTREE_NODES as usize && all.len() >= MAX_SUBTREE_NODES as usize;
+    finish_siblings(cx, parent, &all, start..end, want, dl, batch).await
+}
+
+async fn finish_siblings(
+    cx: &CallCx,
+    parent: &Resolved,
+    refs: &[(String, String)],
+    range: Range<usize>,
+    want: PropMask,
+    dl: Deadline,
+    mut batch: RawBatch,
+) -> Result<RawBatch, BackendError> {
+    let mut kids = Vec::with_capacity(range.len());
+    for (bus, p) in refs.get(range).unwrap_or(&[]) {
         match cx.resolve_ref(bus, p) {
             Some(child) => kids.push(child),
             None => cx.counters.foreign_refs(),

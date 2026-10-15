@@ -88,6 +88,7 @@ impl Reader {
             FocusLaneMsg::FocusChanged { node } => {
                 self.selection_node = None;
                 self.focus_retried = None;
+                self.revalidate_retried = None;
                 self.web_on_focus(node, fx);
                 self.begin_focus(node, now, fx);
             }
@@ -364,6 +365,11 @@ impl Reader {
                         && !snap.states.contains(StateSet::DEFUNCT)
                     {
                         f.publish(snap.key.app);
+                    } else if from_cache && f.protects(snap.key.app) {
+                        // Served from the cache inside the application that already owns the
+                        // protection: the re-read that follows decides (a prefetched sibling
+                        // never shows `FOCUSED`, and demoting for one round trip drops the
+                        // app's text events).
                     } else {
                         // The Reader's focus is here now and could not be validated: protection
                         // must not stay with whoever held it before (fail closed).
@@ -443,7 +449,8 @@ impl Reader {
                     } else {
                         PresentSource::Stale
                     };
-                    self.present_cached(&v, src, false, r.epoch, fx);
+                    // The cache is all there is, so the re-read is what can still confirm it.
+                    self.present_cached(&v, src, true, r.epoch, fx);
                 } else if self.web_focus_fallback(r.node, fx) {
                     // N2: a web node is spoken from the document mirror (name and role).
                 } else if self.focus_retried != Some(r.node) {
@@ -478,10 +485,14 @@ impl Reader {
         if self.selection_node != Some(r.node)
             && let Ok(new) = &r.result
             && let Some(f) = &self.focused_app
-            && new.states.contains(StateSet::FOCUSED)
-            && !new.states.contains(StateSet::DEFUNCT)
         {
-            f.publish(r.node.app);
+            if new.states.contains(StateSet::FOCUSED) && !new.states.contains(StateSet::DEFUNCT) {
+                f.publish(r.node.app);
+            } else if f.protects(r.node.app) {
+                // The re-read answered: the node is not focused. What a cache-served
+                // presentation left standing is withdrawn (fail closed).
+                f.demote();
+            }
         }
         // A web document's speech belongs to browse mode: the cursor line follows the focus
         // utterance and keys move it at once, so only a changed title is worth correcting (the
@@ -545,13 +556,25 @@ impl Reader {
             Err(gorca_connector_api::BackendError::Gone) => {
                 self.apply_focus(FocusMsg::NodeRemoved(r.node), fx);
             }
+            // The re-read failed: it is the only thing that can confirm a cache-served focus
+            // (protection, text events), so it is asked once more with a fresh deadline.
             Err(
                 gorca_connector_api::BackendError::Timeout
                 | gorca_connector_api::BackendError::NotSupported
                 | gorca_connector_api::BackendError::Busy
                 | gorca_connector_api::BackendError::Protocol(_)
                 | gorca_connector_api::BackendError::Unresolved,
-            ) => {}
+            ) => {
+                if self.revalidate_retried != Some(r.node) {
+                    self.revalidate_retried = Some(r.node);
+                    fx.push(Self::fetch_effect(
+                        r.node,
+                        FOCUS_FIELDS,
+                        r.epoch,
+                        FetchKind::Revalidate,
+                    ));
+                }
+            }
         }
     }
 

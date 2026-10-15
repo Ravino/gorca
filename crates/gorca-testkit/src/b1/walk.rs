@@ -41,6 +41,9 @@ pub struct WalkSpec {
     pub sidebar_arrows: u32,
     pub panels: u32,
     pub panel_tabs: u32,
+    /// Controls walked backwards (Shift+Tab / Up) after the forward walk of a panel and its
+    /// silent renames: the look-ahead direction of the fill policy (B-1 review F-3).
+    pub reverse_tabs: u32,
     pub switches: u32,
     pub slider_steps: u32,
     pub silent_rename_pct: u64,
@@ -80,6 +83,7 @@ impl Default for WalkSpec {
             sidebar_arrows: 20,
             panels: 5,
             panel_tabs: 30,
+            reverse_tabs: 29,
             switches: 3,
             slider_steps: 5,
             silent_rename_pct: 10,
@@ -161,6 +165,7 @@ impl WalkSpec {
         set!(sidebar_arrows, "settings", "sidebar_arrows");
         set!(panels, "settings", "panels");
         set!(panel_tabs, "settings", "panel_tabs");
+        set!(reverse_tabs, "settings", "reverse_tabs");
         set!(switches, "settings", "switches");
         set!(slider_steps, "settings", "slider_steps");
         set!(silent_rename_pct, "settings", "silent_rename_pct");
@@ -458,6 +463,11 @@ pub fn plan_loop(spec: &WalkSpec, seed: u64, idx: u32) -> Vec<Timed> {
                     Tag::Silent,
                 );
             }
+        }
+        // And back: Shift+Tab over the controls just walked, the renamed ones now ahead of the
+        // focus in the direction of travel.
+        for i in (0..spec.reverse_tabs.min(spec.panel_tabs.saturating_sub(1))).rev() {
+            p.focus("settings", format!("controls[{i}]"));
         }
     }
     for k in 0..spec.where_am_i {
@@ -1303,6 +1313,32 @@ mod tests {
         assert!((10..=60).contains(&pauses), "{pauses} pauses");
         // The held arrow is a 30 Hz burst of 3 s.
         assert!(p.iter().filter(|t| t.gap_ms == 33).count() >= 90);
+    }
+
+    /// B-1 review F-3: the walk goes back over each panel (Shift+Tab), so the look-ahead of a
+    /// fill policy is exercised in both directions.
+    #[test]
+    fn each_panel_is_walked_forwards_and_then_backwards() {
+        let s = spec();
+        let focus: Vec<u32> = plan_loop(&s, 1, 0)
+            .iter()
+            .filter_map(|t| match &t.step {
+                Step::Focus { app, node } if app == "settings" => node
+                    .strip_prefix("controls[")
+                    .and_then(|r| r.strip_suffix(']'))
+                    .and_then(|n| n.parse().ok()),
+                _ => None,
+            })
+            .collect();
+        let descents = focus.windows(2).filter(|w| w[1] + 1 == w[0]).count();
+        let ascents = focus.windows(2).filter(|w| w[1] == w[0] + 1).count();
+        assert!(descents >= 5 * 27, "{descents} backward steps");
+        assert!(ascents >= 5 * 27, "{ascents} forward steps");
+        let none = WalkSpec {
+            reverse_tabs: 0,
+            ..WalkSpec::default()
+        };
+        assert!(plan_loop(&none, 1, 0).len() < plan_loop(&s, 1, 0).len());
     }
 
     #[test]

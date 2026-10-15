@@ -582,6 +582,7 @@ impl FillDriver {
                 node,
                 before,
                 after,
+                indexed,
                 want,
             } => {
                 let before = before.min(l.max_child_range);
@@ -591,6 +592,7 @@ impl FillDriver {
                     node,
                     before,
                     after,
+                    indexed,
                     want,
                 }
             }

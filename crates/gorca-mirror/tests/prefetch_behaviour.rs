@@ -42,11 +42,15 @@ struct MNode {
 /// app root (0) -> window (1) -> panel (2) -> `rows` buttons, plus a side panel (3) with 5 buttons.
 struct Model {
     nodes: Vec<MNode>,
+    refuse_listing_above: Option<usize>,
 }
 
 impl Model {
     fn new(rows: usize) -> Self {
-        let mut m = Model { nodes: Vec::new() };
+        let mut m = Model {
+            nodes: Vec::new(),
+            refuse_listing_above: None,
+        };
         m.add(None, Role::Application);
         m.add(Some(0), Role::Window);
         m.add(Some(1), Role::Panel);
@@ -112,6 +116,18 @@ impl Model {
 
     fn serve(&self, op: &FillOp) -> FillReply {
         let idx = |k: NodeKey| usize::try_from(k.local.0).unwrap();
+        // A parent whose list is too long is refused when listed (the connector's byte cap).
+        if let FillOp::Siblings {
+            parent,
+            indexed: false,
+            ..
+        } = op
+            && self
+                .refuse_listing_above
+                .is_some_and(|m| self.nodes[idx(*parent)].children.len() > m)
+        {
+            return FillReply::Err(FillError::Protocol);
+        }
         let batch = match op {
             FillOp::Fetch { node, want } => {
                 vec![self.snap(idx(*node), *want, want.contains(PropMask::PARENT), false)]
@@ -131,6 +147,7 @@ impl Model {
                 before,
                 after,
                 want,
+                ..
             } => {
                 let kids = &self.nodes[idx(*parent)].children;
                 match kids.iter().position(|c| *c == idx(*node)) {
@@ -202,12 +219,21 @@ impl Rig {
     }
 
     fn with(rows: usize, dump_complete: bool, cfg: PrefetchConfig) -> Rig {
+        Rig::with_limits(rows, dump_complete, cfg, FillLimits::default())
+    }
+
+    fn with_limits(
+        rows: usize,
+        dump_complete: bool,
+        cfg: PrefetchConfig,
+        limits: FillLimits,
+    ) -> Rig {
         let (writer, reader) = mirror_for(app(), None);
         let mut driver = FillDriver::new(
             app(),
             AppClass::Unknown,
             Box::new(FocusPrefetch::new(cfg)),
-            FillLimits::default(),
+            limits,
             None,
         );
         driver.set_dump_complete(dump_complete);
@@ -784,4 +810,230 @@ fn a_dirty_parent_whose_focus_is_gone_is_re_read_once_and_its_run_dropped() {
     assert_eq!(fetches(&r), 1, "the parent is re-read: {:?}", r.log);
     r.advance(1_000);
     assert_eq!(fetches(&r), 1, "once");
+}
+
+// ---- B-1 review regression tests (F-2 .. F-6) -------------------------------------------------
+
+/// F-3 (reviewer probe R-1): walking backwards the rows the user reaches next are re-read.
+#[test]
+fn a_backward_walk_gets_a_look_ahead_behind_the_focus() {
+    let mut r = Rig::new(40, false);
+    // Walk down a few rows, then turn around: the direction follows the last step.
+    for i in 18..=22 {
+        r.advance(30);
+        r.focus_on(row(i));
+    }
+    for i in [21, 20] {
+        r.advance(30);
+        r.focus_on(row(i));
+    }
+    r.advance(600);
+    r.writer.invalidate(key(row(17)), PropMask::NAME, r.now);
+    r.writer.invalidate(key(row(23)), PropMask::NAME, r.now);
+    r.advance(30);
+    r.focus_on(row(19)); // one step further back
+    assert!(
+        hit(&r, row(17)),
+        "behind (the direction of travel) is re-read"
+    );
+    assert!(
+        !hit(&r, row(23)),
+        "ahead of the way back is not worth a request"
+    );
+}
+
+/// F-3: a long backward walk keeps the run growing in front of the focus (no run edge reached).
+#[test]
+fn a_long_backward_walk_is_served_from_the_mirror() {
+    let mut r = Rig::new(300, false);
+    r.focus_on(row(299));
+    let mut misses = 0;
+    for i in (0..299).rev() {
+        r.advance(50);
+        r.writer
+            .invalidate(key(row(i + 1)), PropMask::STATES, r.now);
+        if !hit(&r, row(i)) {
+            misses += 1;
+        }
+        r.focus_on(row(i));
+    }
+    assert!(misses <= 4, "{misses} misses walking up 300 rows");
+}
+
+/// F-4 (reviewer probe R-2): a `ChildrenChanged` that arrives while a window is in flight
+/// makes the run that reply installs dirty, so it is read again.
+#[test]
+fn a_children_changed_while_a_window_is_in_flight_is_not_forgotten() {
+    let mut r = Rig::new(60, false);
+    r.focus_on(row(10));
+    // A far focus in the same parent (the node already known with its parent link): a new
+    // window is asked for and its reply is held.
+    let far = r.model.snap(row(45), LIGHT, true, false);
+    let seq = r.writer.next_seq();
+    r.writer.apply(
+        SnapshotBatch::new(vec![far]),
+        ApplyOrigin::Reply { issued_at: seq },
+    );
+    r.hold = true;
+    r.advance(100);
+    r.focus_on(row(45));
+    let held = std::mem::take(&mut r.held);
+    assert!(
+        held.iter().any(|f| matches!(f.op, FillOp::Siblings { .. })),
+        "{held:?}"
+    );
+    // The reply is computed now (before the change) ...
+    let replies: Vec<_> = held.iter().map(|f| r.model.serve(&f.op)).collect();
+    let newrow = r.model.add(Some(PANEL), Role::Button);
+    let kids = &mut r.model.nodes[PANEL].children;
+    kids.pop();
+    let at = kids.iter().position(|c| *c == row(46)).unwrap();
+    kids.insert(at, newrow);
+    r.hold = false;
+    r.input(FillInput::Events(&[NodeEvent::ChildrenChanged {
+        node: key(PANEL),
+    }]));
+    // ... and lands after it.
+    for (f, rep) in held.into_iter().zip(replies) {
+        let cx = DriverCx {
+            now: r.now,
+            health: r.health,
+            mirror: &r.reader,
+            focus: r.focus,
+        };
+        r.driver
+            .on_reply(&cx, &mut r.writer, f.id, f.issued_at, rep);
+    }
+    r.settle();
+    let base = r.windows(PANEL).len();
+    for _ in 0..10 {
+        r.advance(200);
+    }
+    assert!(
+        r.windows(PANEL).len() > base,
+        "the run built from the old reply is refetched: {:?}",
+        r.all_siblings(PANEL)
+    );
+    assert!(hit(&r, newrow), "and the inserted row is mirrored");
+}
+
+/// F-2: a parent with a long child list is read by index, never listed.
+#[test]
+fn a_long_list_is_read_by_index_a_short_one_is_listed() {
+    let indexed = |r: &Rig| -> Vec<bool> {
+        r.log
+            .iter()
+            .filter_map(|(o, _)| match o {
+                FillOp::Siblings { indexed, .. } => Some(*indexed),
+                _ => None,
+            })
+            .collect()
+    };
+    // The mirror learns the parent's count from the ancestry: indexed from the first window.
+    let mut r = Rig::new(400, false);
+    r.focus_on(row(200));
+    let first = indexed(&r);
+    assert!(!first.is_empty() && first.iter().all(|i| *i), "{first:?}");
+    assert!(hit(&r, row(204)), "the indexed window filled the mirror");
+    let mut r = Rig::new(40, false);
+    r.focus_on(row(20));
+    assert!(indexed(&r).iter().all(|i| !*i));
+}
+
+/// F-2: a listing that was refused on a parent whose count the mirror does not know turns the
+/// next requests for that parent into indexed ones.
+#[test]
+fn a_refused_listing_is_not_asked_twice() {
+    let mut r = Rig::new(400, false);
+    r.model.refuse_listing_above = Some(256);
+    // The window of a node whose parent is known, but the parent itself is not mirrored.
+    let snap = r.model.snap(row(10), LIGHT, true, false);
+    let seq = r.writer.next_seq();
+    r.writer.apply(
+        SnapshotBatch::new(vec![snap]),
+        ApplyOrigin::Reply { issued_at: seq },
+    );
+    r.focus = Some(key(row(10)));
+    r.writer.set_focus(Some(key(row(10))));
+    r.input(FillInput::FocusSettled { node: key(row(10)) });
+    r.advance(4_000); // past the backoff after the refusal
+    r.focus_on(row(11));
+    r.advance(4_000);
+    r.focus_on(row(12));
+    let kinds: Vec<bool> = r
+        .log
+        .iter()
+        .filter_map(|(o, _)| match o {
+            FillOp::Siblings {
+                indexed, before, ..
+            } if *before > 0 => Some(*indexed),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        kinds.contains(&true),
+        "by index after the refusal: {kinds:?}"
+    );
+    assert!(hit(&r, row(14)), "the indexed window filled the mirror");
+}
+
+/// F-2: an app that floods gets no prefetch at all (only Interactive requests).
+#[test]
+fn a_flooding_app_gets_no_prefetch() {
+    let mut r = Rig::new(40, false);
+    r.health = HealthView::Flooded;
+    r.focus_on(row(10));
+    r.advance(1_000);
+    r.input(FillInput::Events(&[NodeEvent::ChildrenChanged {
+        node: key(PANEL),
+    }]));
+    r.advance(1_000);
+    assert!(
+        r.log.iter().all(|(_, c)| *c == BudgetClass::Interactive),
+        "{:?}",
+        r.log
+    );
+}
+
+/// F-5: the accounted bytes cover the per-key timestamps.
+#[test]
+fn memory_accounting_includes_the_timestamps() {
+    let mut r = Rig::new(300, false);
+    r.focus_on(row(0));
+    for i in 1..120 {
+        r.advance(50);
+        r.focus_on(row(i));
+    }
+    let bytes = r.driver.policy_memory_bytes();
+    // A full run is 96 keys (NodeKey) and 96 stamps (Instant), beside the fixed part.
+    let per_key = std::mem::size_of::<NodeKey>() + std::mem::size_of::<Instant>();
+    assert!(bytes >= 96 * per_key, "{bytes} bytes for a full run");
+}
+
+/// F-6: the policy builds its requests inside the driver's bounds, so what it remembers of a
+/// request is what comes back: with a small configured range a long walk still grows its runs.
+#[test]
+fn a_small_configured_range_does_not_confuse_the_request_bookkeeping() {
+    let limits = FillLimits {
+        max_child_range: 4,
+        ..FillLimits::default()
+    };
+    let mut r = Rig::with_limits(120, false, PrefetchConfig::default(), limits);
+    r.focus_on(row(0));
+    let mut misses = 0;
+    for i in 1..120 {
+        r.advance(50);
+        if !hit(&r, row(i)) {
+            misses += 1;
+        }
+        r.focus_on(row(i));
+    }
+    assert!(misses <= 6, "{misses} misses with a range of 4");
+    assert!(
+        r.log.iter().all(|(o, _)| match o {
+            FillOp::Siblings { before, after, .. } => before + after <= 4,
+            _ => true,
+        }),
+        "no request above the configured range"
+    );
 }

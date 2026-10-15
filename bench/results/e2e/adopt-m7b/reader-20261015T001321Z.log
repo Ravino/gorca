@@ -1,0 +1,115 @@
+2026-10-15T00:13:22.898028Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=100ms
+2026-10-15T00:13:22.999648Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=200ms
+2026-10-15T00:13:23.201214Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=400ms
+2026-10-15T00:13:23.602844Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=800ms
+2026-10-15T00:13:24.404646Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:25.406698Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:26.409010Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:27.458114Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=100ms
+2026-10-15T00:13:27.559560Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=200ms
+2026-10-15T00:13:27.761430Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=400ms
+2026-10-15T00:13:28.162805Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=800ms
+2026-10-15T00:13:28.965590Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:29.967403Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:30.969257Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:31.927539Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=100ms
+2026-10-15T00:13:32.029261Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=200ms
+2026-10-15T00:13:32.230801Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=400ms
+2026-10-15T00:13:32.632649Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=800ms
+2026-10-15T00:13:33.433816Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:34.435740Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:35.438703Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:36.269831Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=100ms
+2026-10-15T00:13:36.371587Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=200ms
+2026-10-15T00:13:36.572622Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=400ms
+2026-10-15T00:13:36.973562Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=800ms
+2026-10-15T00:13:37.775189Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:38.776491Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:40.195815Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:40.609492Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=100ms
+2026-10-15T00:13:40.711159Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=200ms
+2026-10-15T00:13:40.912797Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=400ms
+2026-10-15T00:13:41.313904Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=800ms
+2026-10-15T00:13:42.116069Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:43.118323Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:44.120188Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:45.016147Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=100ms
+2026-10-15T00:13:45.117183Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=200ms
+2026-10-15T00:13:45.318069Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=400ms
+2026-10-15T00:13:45.720223Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=800ms
+2026-10-15T00:13:46.522019Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:47.523093Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:48.524659Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:48.826037Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=100ms
+2026-10-15T00:13:48.928007Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=200ms
+2026-10-15T00:13:49.129902Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=400ms
+2026-10-15T00:13:49.532166Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=800ms
+2026-10-15T00:13:50.333781Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:51.336320Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:13:52.337665Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=1s
+2026-10-15T00:14:00.381467Z  INFO gorca_phase: phase="warm" wall_ms=30.24475 waited_ms=28.870167 blocked_ms=2.414144 slept_ms=26.373946 rounds=2 probes=19 sampled_nodes=3 tagged_nodes=3 ready=true
+2026-10-15T00:14:00.381839Z  INFO gorca_phase: phase="locate" wall_ms=0.299938
+2026-10-15T00:14:00.381854Z  INFO gorca_phase: phase="create" wall_ms=0.001918
+2026-10-15T00:14:00.389512Z  INFO gorca_phase: phase="fetch" total_ms=7.608664 warm_ms=0.0 frontier_ms=0.099036 get_tree_ms=0.954589 roles_ms=0.380056 states_ms=0.198777 text_ms=0.27617800000000003 assemble_ms=0.009662 heaviest_get_tree_ms=0.379 calls=55 tree_bytes=3529 nodes=18
+2026-10-15T00:14:00.389671Z  INFO gorca_phase: phase="translate" wall_ms=0.06574100000000001 nodes=36
+2026-10-15T00:14:01.445087Z  INFO gorca_phase: phase="locate" wall_ms=52.675578
+2026-10-15T00:14:06.851340Z  INFO gorca_phase: phase="warm" wall_ms=39.205604 waited_ms=37.856619 blocked_ms=11.99358 slept_ms=25.578099 rounds=2 probes=27 sampled_nodes=29 tagged_nodes=29 ready=true
+2026-10-15T00:14:06.852314Z  INFO gorca_phase: phase="locate" wall_ms=0.872181
+2026-10-15T00:14:06.852364Z  INFO gorca_phase: phase="create" wall_ms=0.005656
+2026-10-15T00:14:06.871393Z  INFO gorca_phase: phase="first_block" wall_ms=18.992196999999997 nodes=444
+2026-10-15T00:14:06.873053Z  INFO gorca_phase: phase="translate" wall_ms=1.235667 nodes=1687
+2026-10-15T00:14:07.159835Z  INFO gorca_phase: phase="fetch" total_ms=307.426967 warm_ms=0.0 frontier_ms=0.964378 get_tree_ms=6.920299 roles_ms=3.324915 states_ms=1.92184 text_ms=4.570429 assemble_ms=0.054877 heaviest_get_tree_ms=0.873 calls=1088 tree_bytes=93434 nodes=10233
+2026-10-15T00:14:21.856534Z  INFO gorca_phase: phase="warm" wall_ms=30.771533 waited_ms=29.914725 blocked_ms=3.771841 slept_ms=25.921364 rounds=2 probes=27 sampled_nodes=29 tagged_nodes=29 ready=true
+2026-10-15T00:14:21.858942Z  INFO gorca_phase: phase="locate" wall_ms=0.864544
+2026-10-15T00:14:21.858960Z  INFO gorca_phase: phase="create" wall_ms=0.0020310000000000003
+2026-10-15T00:14:21.884489Z  INFO gorca_phase: phase="first_block" wall_ms=25.494730999999998 nodes=444
+2026-10-15T00:14:21.885914Z  INFO gorca_phase: phase="translate" wall_ms=1.056223 nodes=1687
+2026-10-15T00:14:22.150687Z  INFO gorca_phase: phase="fetch" total_ms=291.690296 warm_ms=0.0 frontier_ms=0.871437 get_tree_ms=4.7115849999999995 roles_ms=3.3309070000000003 states_ms=1.278038 text_ms=14.495289999999999 assemble_ms=0.072059 heaviest_get_tree_ms=0.599 calls=1088 tree_bytes=93434 nodes=10233
+2026-10-15T00:14:52.627452Z  INFO gorca_phase: phase="warm" wall_ms=40.045981000000005 waited_ms=38.855824999999996 blocked_ms=13.297168 slept_ms=25.312835 rounds=2 probes=27 sampled_nodes=29 tagged_nodes=29 ready=true
+2026-10-15T00:14:52.628097Z  INFO gorca_phase: phase="locate" wall_ms=0.565059
+2026-10-15T00:14:52.628145Z  INFO gorca_phase: phase="create" wall_ms=0.003627
+2026-10-15T00:14:52.642773Z  INFO gorca_phase: phase="first_block" wall_ms=14.578704 nodes=444
+2026-10-15T00:14:52.644154Z  INFO gorca_phase: phase="translate" wall_ms=1.068943 nodes=1687
+2026-10-15T00:14:52.949526Z  INFO gorca_phase: phase="fetch" total_ms=321.321537 warm_ms=0.0 frontier_ms=0.851381 get_tree_ms=4.692295 roles_ms=3.060537 states_ms=1.581809 text_ms=3.612573 assemble_ms=0.064848 heaviest_get_tree_ms=0.544 calls=1088 tree_bytes=93434 nodes=10233
+2026-10-15T00:15:02.014912Z  INFO gorca_phase: phase="warm" wall_ms=28.850144 waited_ms=27.861721999999997 blocked_ms=1.8827150000000001 slept_ms=25.939062999999997 rounds=2 probes=17 sampled_nodes=3 tagged_nodes=3 ready=true
+2026-10-15T00:15:02.015629Z  INFO gorca_phase: phase="locate" wall_ms=0.6454479999999999
+2026-10-15T00:15:02.015647Z  INFO gorca_phase: phase="create" wall_ms=0.001826
+2026-10-15T00:15:02.017417Z  INFO gorca_phase: phase="fetch" total_ms=1.7257520000000002 warm_ms=0.0 frontier_ms=0.404522 get_tree_ms=0.17630900000000002 roles_ms=0.364169 states_ms=0.165942 text_ms=0.277071 assemble_ms=0.001114 heaviest_get_tree_ms=0.156 calls=21 tree_bytes=400 nodes=4
+2026-10-15T00:15:02.017459Z  INFO gorca_phase: phase="translate" wall_ms=0.021189 nodes=6
+2026-10-15T00:15:02.848551Z  INFO gorca_phase: phase="locate" wall_ms=1.890931
+2026-10-15T00:15:02.848613Z  INFO gorca_phase: phase="create" wall_ms=0.0035659999999999997
+2026-10-15T00:15:12.422855Z  INFO gorca_phase: phase="warm" wall_ms=48.713159999999995 waited_ms=46.844556000000004 blocked_ms=20.345351 slept_ms=26.233843 rounds=2 probes=27 sampled_nodes=29 tagged_nodes=29 ready=true
+2026-10-15T00:15:12.423581Z  INFO gorca_phase: phase="locate" wall_ms=0.651577
+2026-10-15T00:15:12.423633Z  INFO gorca_phase: phase="create" wall_ms=0.003831
+2026-10-15T00:15:12.447260Z  INFO gorca_phase: phase="first_block" wall_ms=23.573328 nodes=444
+2026-10-15T00:15:12.451853Z  INFO gorca_phase: phase="translate" wall_ms=3.203699 nodes=1687
+2026-10-15T00:15:22.008094Z  INFO gorca_phase: phase="warm" wall_ms=67.188621 waited_ms=64.932131 blocked_ms=38.477818 slept_ms=26.191883999999998 rounds=2 probes=27 sampled_nodes=29 tagged_nodes=29 ready=true
+2026-10-15T00:15:22.008382Z  INFO gorca_phase: phase="locate" wall_ms=0.23295100000000002
+2026-10-15T00:15:22.008397Z  INFO gorca_phase: phase="create" wall_ms=0.0018
+2026-10-15T00:15:22.024121Z  INFO gorca_phase: phase="first_block" wall_ms=15.693793000000001 nodes=444
+2026-10-15T00:15:22.025843Z  INFO gorca_phase: phase="translate" wall_ms=1.2658120000000002 nodes=1687
+2026-10-15T00:15:31.567079Z  INFO gorca_phase: phase="warm" wall_ms=45.307471 waited_ms=42.627486 blocked_ms=16.171022999999998 slept_ms=26.177332 rounds=2 probes=27 sampled_nodes=29 tagged_nodes=29 ready=true
+2026-10-15T00:15:31.567436Z  INFO gorca_phase: phase="locate" wall_ms=0.294438
+2026-10-15T00:15:31.567454Z  INFO gorca_phase: phase="create" wall_ms=0.00294
+2026-10-15T00:15:31.588478Z  INFO gorca_phase: phase="first_block" wall_ms=20.987813000000003 nodes=444
+2026-10-15T00:15:31.590387Z  INFO gorca_phase: phase="translate" wall_ms=1.288519 nodes=1687
+2026-10-15T00:15:36.377361Z  INFO gorca_phase: phase="warm" wall_ms=29.855479 waited_ms=29.033061 blocked_ms=2.908861 slept_ms=26.096956000000002 rounds=2 probes=19 sampled_nodes=3 tagged_nodes=3 ready=true
+2026-10-15T00:15:36.377716Z  INFO gorca_phase: phase="locate" wall_ms=0.271808
+2026-10-15T00:15:36.377734Z  INFO gorca_phase: phase="create" wall_ms=0.0026620000000000003
+2026-10-15T00:15:36.379710Z  INFO gorca_phase: phase="fetch" total_ms=1.930313 warm_ms=0.0 frontier_ms=0.040982000000000005 get_tree_ms=0.550891 roles_ms=0.345979 states_ms=0.326412 text_ms=0.497774 assemble_ms=0.012601 heaviest_get_tree_ms=0.28200000000000003 calls=55 tree_bytes=3529 nodes=18
+2026-10-15T00:15:36.379958Z  INFO gorca_phase: phase="translate" wall_ms=0.093139 nodes=36
+2026-10-15T00:15:36.970270Z  INFO gorca_phase: phase="locate" wall_ms=0.692527
+2026-10-15T00:15:38.402261Z  INFO gorca_phase: phase="locate" wall_ms=0.803152
+2026-10-15T00:15:38.402308Z  INFO gorca_phase: phase="create" wall_ms=0.002769
+2026-10-15T00:15:38.403475Z  INFO gorca_phase: phase="fetch" total_ms=1.091241 warm_ms=0.0 frontier_ms=0.357731 get_tree_ms=0.1513 roles_ms=0.259415 states_ms=0.112827 text_ms=0.109252 assemble_ms=0.000987 heaviest_get_tree_ms=0.128 calls=22 tree_bytes=784 nodes=5
+2026-10-15T00:15:38.403530Z  INFO gorca_phase: phase="translate" wall_ms=0.022855 nodes=9
+2026-10-15T00:15:46.242208Z  INFO gorca_phase: phase="warm" wall_ms=57.219592 waited_ms=56.400205 blocked_ms=30.377509 slept_ms=25.979551999999998 rounds=2 probes=27 sampled_nodes=5 tagged_nodes=5 ready=true
+2026-10-15T00:15:46.242573Z  INFO gorca_phase: phase="locate" wall_ms=0.266052
+2026-10-15T00:15:46.242612Z  INFO gorca_phase: phase="create" wall_ms=0.006629
+2026-10-15T00:15:46.245328Z  INFO gorca_phase: phase="fetch" total_ms=2.5939579999999998 warm_ms=0.0 frontier_ms=0.478666 get_tree_ms=0.387509 roles_ms=0.38827300000000003 states_ms=0.424341 text_ms=0.471363 assemble_ms=0.007075 heaviest_get_tree_ms=0.188 calls=70 tree_bytes=1998 nodes=16
+2026-10-15T00:15:46.245448Z  INFO gorca_phase: phase="translate" wall_ms=0.051631 nodes=24
+2026-10-15T00:15:55.396537Z  INFO gorca_phase: phase="warm" wall_ms=30.422479 waited_ms=29.318948000000002 blocked_ms=3.0841179999999997 slept_ms=26.163528 rounds=2 probes=27 sampled_nodes=5 tagged_nodes=5 ready=true
+2026-10-15T00:15:55.397551Z  INFO gorca_phase: phase="locate" wall_ms=0.90956
+2026-10-15T00:15:55.397617Z  INFO gorca_phase: phase="create" wall_ms=0.006328
+2026-10-15T00:15:55.402801Z  INFO gorca_phase: phase="fetch" total_ms=5.121271999999999 warm_ms=0.0 frontier_ms=1.086781 get_tree_ms=0.765732 roles_ms=0.597294 states_ms=0.276599 text_ms=0.770525 assemble_ms=0.008427 heaviest_get_tree_ms=0.359 calls=70 tree_bytes=1998 nodes=16
+2026-10-15T00:15:55.402925Z  INFO gorca_phase: phase="translate" wall_ms=0.04159 nodes=24

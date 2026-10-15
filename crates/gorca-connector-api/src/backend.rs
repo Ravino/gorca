@@ -49,6 +49,10 @@ pub enum BackendOp {
         node: NodeKey,
         before: u32,
         after: u32,
+        /// The parent's child list is long: do not list it, read the window by index
+        /// (`GetIndexInParent` + `GetChildAtIndex`). Without it a reply too large to be a
+        /// window's worth of list is refused (`Protocol`).
+        indexed: bool,
         want: PropMask,
     },
     /// `node`, its parent, its parent's parent ... up to `max_depth` (at most 64) or the app

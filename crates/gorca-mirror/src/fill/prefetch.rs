@@ -30,7 +30,7 @@ use std::mem::size_of;
 use std::time::{Duration, Instant};
 
 use gorca_ingress::DirtySet;
-use gorca_model::{Ifaces, NodeEvent, NodeKey, NodeSnapshot, PropMask, Role};
+use gorca_model::{ChildList, Ifaces, NodeEvent, NodeKey, NodeSnapshot, PropMask, Role};
 use gorca_rt::BudgetClass;
 use smallvec::SmallVec;
 
@@ -45,11 +45,14 @@ const BEFORE: u32 = 1;
 const AFTER: u32 = 6;
 /// Siblings one run extension adds.
 const EXTEND: u32 = 6;
-/// This close to the end of a run the run grows ...
-const EDGE_AHEAD: usize = 3;
-/// ... and this close to its start (a fresh window holds `BEFORE` entries before the focus, so a
-/// fresh run is not an edge case).
-const EDGE_BEHIND: usize = 1;
+/// This close to the end of a run, in the direction the focus travels, the run grows ...
+const EDGE_TRAVEL: usize = 3;
+/// ... and this close to the other end (a fresh window holds `BEFORE` entries before the focus,
+/// so a fresh run is not an edge case).
+const EDGE_OTHER: usize = 1;
+/// A parent with more children than this is read by index (`GetIndexInParent` +
+/// `GetChildAtIndex`), never listed whole (B-1 review F-2).
+const INDEXED_ABOVE: usize = 256;
 /// What a sibling ahead of the focus must carry fresh: the fields a silent change corrupts.
 /// `STATES` (and `VALUE`) are left out on purpose: every focus move invalidates the states of the
 /// node it leaves, and a refetch per focus step is the 100-calls-per-focus cost of the bake-off
@@ -186,6 +189,15 @@ pub struct FocusPrefetch {
     recent_win: SmallVec<[(NodeKey, Instant); RING_CAP]>,
     /// A dirty run of the focus is refetched at this time.
     refetch_due: Option<Instant>,
+    /// Parents whose child list is too long to list (a listing was refused, or the mirror knows
+    /// the count): their windows are read by index.
+    big: SmallVec<[NodeKey; RING_CAP]>,
+    /// Parents that reported a change while a window for them was in flight: the run that reply
+    /// installs predates the change and starts dirty.
+    inflight_dirty: SmallVec<[NodeKey; DIRTY_CAP]>,
+    /// Where the last focus sat in its run, and which way it travels (look-ahead direction).
+    prev_pos: Option<(NodeKey, usize)>,
+    back: bool,
     /// Parents whose run went dirty since the last refetch (at most `DIRTY_CAP`; the rest stay
     /// dirty and are refreshed when the focus returns).
     dirty_parents: SmallVec<[NodeKey; DIRTY_CAP]>,
@@ -212,6 +224,14 @@ fn need_of(n: &NodeSnapshot) -> PropMask {
         need |= PropMask::RELATIONS;
     }
     need
+}
+
+fn child_count(n: &NodeSnapshot) -> Option<usize> {
+    match &n.children {
+        ChildList::Known(l) => Some(l.len()),
+        ChildList::Count(c) => usize::try_from(*c).ok(),
+        ChildList::Unknown => None,
+    }
 }
 
 fn is_window(r: Role) -> bool {
@@ -243,6 +263,10 @@ impl FocusPrefetch {
             recent_anc: SmallVec::new(),
             recent_win: SmallVec::new(),
             refetch_due: None,
+            big: SmallVec::new(),
+            inflight_dirty: SmallVec::new(),
+            prev_pos: None,
+            back: false,
             dirty_parents: SmallVec::new(),
             rename: None,
             last_rename: None,
@@ -259,8 +283,10 @@ impl FocusPrefetch {
     fn can(&self, cx: &FillCtx<'_>, class: BudgetClass) -> bool {
         let health = match cx.health {
             HealthView::Hung | HealthView::Gone => false,
-            HealthView::Slow => matches!(class, BudgetClass::Interactive),
-            HealthView::Flooded => !matches!(class, BudgetClass::Background | BudgetClass::Startup),
+            // Slow: only Interactive. Flooded: the same, since an app that floods us with events
+            // gets no prefetch: every window is a read of its main loop that the flood already
+            // keeps busy (B-1 review F-2).
+            HealthView::Slow | HealthView::Flooded => matches!(class, BudgetClass::Interactive),
             HealthView::Healthy => true,
         };
         health
@@ -328,6 +354,12 @@ impl FocusPrefetch {
     /// focus run is refetched; the run of any other parent (or one whose focus is gone) is
     /// dropped and the parent re-read once, so its child count is not left stale.
     fn note_dirty(&mut self, now: Instant, parent: NodeKey) {
+        if self.window_in_flight(parent)
+            && !self.inflight_dirty.contains(&parent)
+            && self.inflight_dirty.len() < DIRTY_CAP
+        {
+            self.inflight_dirty.push(parent);
+        }
         let Some(run) = self.runs.get_mut(&parent) else {
             return;
         };
@@ -337,6 +369,12 @@ impl FocusPrefetch {
         if !self.dirty_parents.contains(&parent) && self.dirty_parents.len() < DIRTY_CAP {
             self.dirty_parents.push(parent);
         }
+    }
+
+    fn window_in_flight(&self, parent: NodeKey) -> bool {
+        self.out
+            .iter()
+            .any(|o| matches!(&o.op, FillOp::Siblings { parent: p, .. } if *p == parent))
     }
 
     fn focus_parent(&self) -> Option<NodeKey> {
@@ -497,6 +535,41 @@ impl FocusPrefetch {
         true
     }
 
+    /// A `Siblings` request, already inside the driver's bounds (so what the policy remembers
+    /// of it is exactly what comes back), read by index when the parent's list is long.
+    fn siblings_op(
+        &self,
+        cx: &FillCtx<'_>,
+        parent: NodeKey,
+        node: NodeKey,
+        before: u32,
+        after: u32,
+    ) -> FillOp {
+        let cap = cx.limits.max_child_range;
+        let before = before.min(cap);
+        let after = after.min(cap.saturating_sub(before));
+        let long = self.big.contains(&parent)
+            || cx
+                .mirror
+                .view(parent)
+                .hit()
+                .and_then(|v| child_count(&v.snap))
+                .is_some_and(|c| c > INDEXED_ABOVE);
+        FillOp::Siblings {
+            parent,
+            node,
+            before,
+            after,
+            indexed: long,
+            want: LIGHT,
+        }
+    }
+
+    /// The growth of a run, as clamped into the driver's bounds.
+    fn extend_by(cx: &FillCtx<'_>) -> u32 {
+        EXTEND.min(cx.limits.max_child_range)
+    }
+
     /// Make sure the mirror holds fresh siblings around `node`: grow the run near its open edge,
     /// refetch it when stale, start one when there is none.
     fn ensure_window(
@@ -520,9 +593,21 @@ impl FocusPrefetch {
         let age = cx.now.saturating_duration_since(run.at);
         let dirty = run.dirty;
         let stale = (dirty && age >= MIN_REFETCH) || (force && age > ACTIVATE_AGE);
+        // Which way is the focus travelling in this run? Look ahead of it that way.
+        let back = match self.prev_pos {
+            Some((p, i)) if p == parent && idx != i => idx < i,
+            _ => self.back,
+        };
+        self.back = back;
+        self.prev_pos = Some((parent, idx));
         // The stretch of siblings ahead of the focus that is old or stale: one request.
+        let span = if back {
+            idx.saturating_sub(LOOK)..idx
+        } else {
+            idx + 1..(idx + LOOK + 1).min(len)
+        };
         let mut ahead: Option<(usize, usize)> = None;
-        for j in idx + 1..=(idx + LOOK).min(len.saturating_sub(1)) {
+        for j in span {
             let (Some(k), Some(at)) = (run.keys.get(j), run.stamps.get(j)) else {
                 break;
             };
@@ -533,7 +618,7 @@ impl FocusPrefetch {
                     .hit()
                     .is_some_and(|v| v.satisfies(NEAR_NEED));
             if old {
-                ahead = Some(ahead.map_or((j, j), |(f, _)| (f, j)));
+                ahead = Some(ahead.map_or((j, j), |(f, l)| (f.min(j), l.max(j))));
             }
         }
         let ahead = ahead.and_then(|(f, l)| Some((*run.keys.get(f)?, u32::try_from(l - f).ok()?)));
@@ -549,26 +634,21 @@ impl FocusPrefetch {
             self.refetch_due = Some(self.refetch_due.map_or(due, |d| d.min(due)));
         }
         if let Some((anchor, after)) = ahead {
-            self.ask(
-                cx,
-                out,
-                FillOp::Siblings {
-                    parent,
-                    node: anchor,
-                    before: 0,
-                    after,
-                    want: LIGHT,
-                },
-                BudgetClass::Prefetch,
-            );
+            let op = self.siblings_op(cx, parent, anchor, 0, after);
+            self.ask(cx, out, op, BudgetClass::Prefetch);
         }
-        if idx < EDGE_BEHIND
+        let (edge_back, edge_fwd) = if back {
+            (EDGE_TRAVEL, EDGE_OTHER)
+        } else {
+            (EDGE_OTHER, EDGE_TRAVEL)
+        };
+        if idx < edge_back
             && !at_start
             && let Some(first) = first
         {
             self.ask_extend(cx, parent, first, true, out);
         }
-        if len - idx <= EDGE_AHEAD
+        if len - idx <= edge_fwd
             && !at_end
             && let Some(last) = last
         {
@@ -589,18 +669,8 @@ impl FocusPrefetch {
         if !bypass && recently(&self.recent_win, node, cx.now, ASK_GAP) {
             return;
         }
-        if self.ask(
-            cx,
-            out,
-            FillOp::Siblings {
-                parent,
-                node,
-                before: BEFORE,
-                after: AFTER,
-                want: LIGHT,
-            },
-            BudgetClass::Prefetch,
-        ) {
+        let op = self.siblings_op(cx, parent, node, BEFORE, AFTER);
+        if self.ask(cx, out, op, BudgetClass::Prefetch) {
             remember(&mut self.recent_win, node, cx.now);
         }
     }
@@ -614,19 +684,10 @@ impl FocusPrefetch {
         backwards: bool,
         out: &mut FillEffects,
     ) {
-        let (before, after) = if backwards { (EXTEND, 0) } else { (0, EXTEND) };
-        self.ask(
-            cx,
-            out,
-            FillOp::Siblings {
-                parent,
-                node: anchor,
-                before,
-                after,
-                want: LIGHT,
-            },
-            BudgetClass::Prefetch,
-        );
+        let by = Self::extend_by(cx);
+        let (before, after) = if backwards { (by, 0) } else { (0, by) };
+        let op = self.siblings_op(cx, parent, anchor, before, after);
+        self.ask(cx, out, op, BudgetClass::Prefetch);
     }
 
     fn drop_run(&mut self, parent: NodeKey) {
@@ -658,6 +719,19 @@ impl FocusPrefetch {
             self.drop_run(v);
         }
         self.used += 1;
+        let was_dirty = self
+            .inflight_dirty
+            .iter()
+            .position(|p| *p == parent)
+            .map(|i| self.inflight_dirty.remove(i))
+            .is_some();
+        if was_dirty {
+            let due = now + DEBOUNCE;
+            self.refetch_due = Some(self.refetch_due.map_or(due, |d| d.min(due)));
+            if !self.dirty_parents.contains(&parent) && self.dirty_parents.len() < DIRTY_CAP {
+                self.dirty_parents.push(parent);
+            }
+        }
         let keys: Vec<NodeKey> = keys.iter().copied().take(RUN_CAP).collect();
         for k in &keys {
             self.member.insert(*k, parent);
@@ -668,7 +742,7 @@ impl FocusPrefetch {
                 stamps: vec![now; keys.len()],
                 keys,
                 at: now,
-                dirty: false,
+                dirty: was_dirty,
                 used: self.used,
                 at_start: flags.0,
                 at_end: flags.1,
@@ -683,6 +757,7 @@ impl FocusPrefetch {
         anchor: NodeKey,
         keys: &[NodeKey],
         backwards: bool,
+        asked: u32,
         now: Instant,
     ) {
         let anchored = self.runs.get(&parent).is_some_and(|run| {
@@ -710,11 +785,11 @@ impl FocusPrefetch {
             let mut st = vec![now; added.len()];
             st.append(&mut run.stamps);
             run.stamps = st;
-            run.at_start = fresh < EXTEND as usize;
+            run.at_start = fresh < asked as usize;
         } else {
             run.keys.extend_from_slice(added);
             run.stamps.extend(std::iter::repeat_n(now, added.len()));
-            run.at_end = fresh < EXTEND as usize;
+            run.at_end = fresh < asked as usize;
         }
         let mut gone: Vec<NodeKey> = Vec::new();
         while run.keys.len() > RUN_CAP {
@@ -761,6 +836,19 @@ impl FocusPrefetch {
         out: &mut FillEffects,
     ) {
         self.out.retain(|o| &o.op != op);
+        if let FillOp::Siblings {
+            parent, indexed, ..
+        } = op
+        {
+            // A listing that was refused (or failed) on a parent not read by index: from now
+            // on this parent is read by index.
+            if matches!(result, FillResult::Failed) && !*indexed && !self.big.contains(parent) {
+                if self.big.len() >= RING_CAP {
+                    self.big.remove(0);
+                }
+                self.big.push(*parent);
+            }
+        }
         let is_dump = matches!(op, FillOp::CacheDump { .. });
         match result {
             FillResult::Applied { keys, .. } => self.on_applied(cx, op, keys, out),
@@ -782,6 +870,12 @@ impl FocusPrefetch {
                 }
             }
             FillResult::Cancelled => {}
+        }
+        // The run installed (if any) took the change that arrived in flight; none left to take.
+        if let FillOp::Siblings { parent, .. } = op
+            && !self.window_in_flight(*parent)
+        {
+            self.inflight_dirty.retain(|p| p != parent);
         }
     }
 
@@ -835,9 +929,9 @@ impl FocusPrefetch {
                         );
                         self.install_run(*parent, keys, flags, cx.now);
                     }
-                    (true, false) => self.grow_run(*parent, *node, keys, true, cx.now),
-                    (false, true) if *after == EXTEND => {
-                        self.grow_run(*parent, *node, keys, false, cx.now);
+                    (true, false) => self.grow_run(*parent, *node, keys, true, *before, cx.now),
+                    (false, true) if *after == Self::extend_by(cx) => {
+                        self.grow_run(*parent, *node, keys, false, *after, cx.now);
                     }
                     (false, true | false) => self.refresh_run(*parent, keys, cx.now),
                 }
@@ -986,7 +1080,10 @@ impl FillPolicy for FocusPrefetch {
         let keys: usize = self
             .runs
             .values()
-            .map(|r| r.keys.capacity() * size_of::<NodeKey>())
+            .map(|r| {
+                r.keys.capacity() * size_of::<NodeKey>()
+                    + r.stamps.capacity() * size_of::<Instant>()
+            })
             .sum();
         let table = |cap: usize, entry: usize| cap * (entry + 1);
         size_of::<Self>()

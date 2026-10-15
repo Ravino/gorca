@@ -114,6 +114,8 @@ pub struct AppRoute {
     pub forwarded_to_background: usize,
     /// Background events dropped because the lane was full (`resync_needed` is set).
     pub dropped_background: usize,
+    /// Text events of a focused-looking app that the Reader did not want (focus not protected).
+    pub text_unprotected: usize,
     /// Nodes to resync lazily after a flood.
     pub resync: Option<DirtySet>,
     pub gone: bool,
@@ -195,6 +197,7 @@ pub struct AppActor {
     web: Option<doc_route::DocRouter>,
     /// Text events go to the Reader through this, when the runtime wired it (ADR-0007 EV-3).
     text: Option<TextLink>,
+    text_unprotected: u64,
     /// Where the app's text capability is published for the Reader.
     directory: Option<Arc<crate::directory::MirrorDirectory>>,
 }
@@ -236,6 +239,7 @@ impl AppActor {
             focused: None,
             web: None,
             text: None,
+            text_unprotected: 0,
             directory: None,
         }
     }
@@ -263,6 +267,27 @@ impl AppActor {
             Some(f) => f.protects(self.app),
             None => self.focus.is_some(),
         }
+    }
+
+    /// Forward a text event to the Reader when this app holds the user's focus. An app that has a
+    /// focus of its own but is not (yet) protected loses the event: that is counted, so a focus
+    /// that never earned its protection shows in the numbers instead of as silence.
+    fn route_text(&mut self, msg: TextMsg, route: &mut AppRoute) {
+        if self.text.is_none() {
+            return;
+        }
+        if self.wants_text_events() {
+            self.send_text(msg);
+        } else if self.focus.is_some() {
+            route.text_unprotected += 1;
+            self.text_unprotected = self.text_unprotected.saturating_add(1);
+        }
+    }
+
+    /// Text events of this app with a focus that were not forwarded because the Reader had not
+    /// (yet) published the app as the focus owner.
+    pub fn text_events_unprotected(&self) -> u64 {
+        self.text_unprotected
     }
 
     /// Queue a text event for the Reader; a full queue drops it and says so.
@@ -862,25 +887,25 @@ impl AppActor {
             }
             // Caret, text and selection events matter to the Reader only for the focused app.
             NodeEvent::CaretMoved { node, offset, .. } => {
-                if self.text.is_some() && self.wants_text_events() {
-                    self.send_text(TextMsg::Caret {
+                self.route_text(
+                    TextMsg::Caret {
                         node: *node,
                         offset: *offset,
-                    });
-                }
+                    },
+                    route,
+                );
             }
             NodeEvent::TextChanged { node, delta } => {
-                if self.text.is_some() && self.wants_text_events() {
-                    self.send_text(TextMsg::Edit {
+                self.route_text(
+                    TextMsg::Edit {
                         node: *node,
                         delta: delta.clone(),
-                    });
-                }
+                    },
+                    route,
+                );
             }
             NodeEvent::SelectionChanged { node } => {
-                if self.text.is_some() && self.wants_text_events() {
-                    self.send_text(TextMsg::Selection { node: *node });
-                }
+                self.route_text(TextMsg::Selection { node: *node }, route);
             }
             // Events that only dirty the mirror, which `invalidate_for` already did.
             NodeEvent::ActiveDescendantChanged { .. }

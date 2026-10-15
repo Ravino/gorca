@@ -766,12 +766,14 @@ fn backend_op(op: &FillOp) -> BackendOp {
             node,
             before,
             after,
+            indexed,
             want,
         } => BackendOp::Siblings {
             parent: *parent,
             node: *node,
             before: *before,
             after: *after,
+            indexed: *indexed,
             want: *want,
         },
         FillOp::Ancestry {

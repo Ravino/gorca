@@ -185,6 +185,9 @@ pub enum FillOp {
         node: NodeKey,
         before: u32,
         after: u32,
+        /// The parent's list is long (the policy saw its child count): read the window by index
+        /// instead of listing every child.
+        indexed: bool,
         want: PropMask,
     },
     Ancestry {

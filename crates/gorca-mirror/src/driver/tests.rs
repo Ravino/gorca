@@ -482,6 +482,7 @@ fn a_siblings_request_is_clamped_and_its_reply_is_cut_to_the_window() {
             node: key(2),
             before: 5_000,
             after: 5_000,
+            indexed: false,
             want: PropMask::PRESENT,
         },
         class: BudgetClass::Prefetch,
@@ -521,6 +522,7 @@ fn a_siblings_request_is_clamped_and_its_reply_is_cut_to_the_window() {
             node: key(2),
             before: 1,
             after: 1,
+            indexed: false,
             want: PropMask::PRESENT,
         }
         .target(),
