@@ -131,22 +131,35 @@ impl ExpectRing {
         }
     }
 
-    /// Match an insert's text against the oldest unconsumed expectations (TE-2). Fast typing
+    /// Match an insert's text against the unconsumed expectations (TE-2). Fast typing
     /// coalesced into one insert matches several expectations at once.
+    ///
+    /// The insert normally starts at the oldest expectation. When it does not, but starts at a
+    /// later one, the older keys never produced an insert (the application refused or dropped
+    /// them: a full field, a lost key): they are stale, are dropped with the match, and the
+    /// insert is still the typed keys', not text from elsewhere. Without this the stale front
+    /// entry makes every later insert "unexplained" and each following key is spoken twice,
+    /// once from the key and once from its insert, until the entry expires.
     pub fn consume_insert(&mut self, text: &str, now_ms: u64) -> Consume {
         self.expire(now_ms);
         if text.is_empty() {
             return Consume::Unmatched;
         }
-        let mut n = 0usize;
-        for c in text.chars() {
-            if n >= self.len || self.at(n).ch != c {
-                return Consume::Unmatched;
+        let n = text.chars().count();
+        for skip in 0..self.len {
+            if skip + n > self.len {
+                break;
             }
-            n += 1;
+            if text
+                .chars()
+                .enumerate()
+                .all(|(i, c)| self.at(skip + i).ch == c)
+            {
+                self.pop_front(skip + n);
+                return Consume::Matched { n };
+            }
         }
-        self.pop_front(n);
-        Consume::Matched { n }
+        Consume::Unmatched
     }
 }
 
@@ -273,6 +286,21 @@ mod tests {
         assert_eq!(r.consume_insert("x", 1), Consume::Unmatched);
         assert_eq!(r.len(), 1);
         assert_eq!(r.consume_insert("", 1), Consume::Unmatched);
+    }
+
+    #[test]
+    fn keys_whose_insert_never_came_do_not_block_the_next_insert() {
+        // 'd' was typed but the field refused it; 'z' then went in.
+        let mut r = ExpectRing::new();
+        r.push('d', 0);
+        r.push('z', 10);
+        assert_eq!(r.consume_insert("z", 20), Consume::Matched { n: 1 });
+        assert!(r.is_empty(), "the stale entry went with the match");
+        // Text that is none of the typed keys still consumes nothing.
+        r.push('d', 30);
+        r.push('z', 40);
+        assert_eq!(r.consume_insert("q", 50), Consume::Unmatched);
+        assert_eq!(r.len(), 2);
     }
 
     #[test]

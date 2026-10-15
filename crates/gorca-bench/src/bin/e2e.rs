@@ -224,6 +224,7 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "e2_double"
                     | "e2_keyname"
                     | "e2_wrong"
+                    | "e2_swallowed"
                     | "pw_plaintext_in_logs"
                     | "pw_echo_missing"
                     | "sa3_caret_wrong"
@@ -243,6 +244,13 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
             ) {
                 // Worst repeat, not the median: one lost focus in three runs is a failure.
                 row = row.at_most_in_every_run(0.0);
+            }
+            if metric == "e2_resync" {
+                // Actions the page did not apply as modelled (Firefox dropping a key under
+                // load); not scored, and a stream of them would hide real misses.
+                row = row
+                    .at_most_in_every_run(3.0)
+                    .note("FE2 actions the page did not apply (not scored)");
             }
             if metric == "page_dropped" {
                 // Keys Firefox dropped before the page (FC1h): a handful is the loaded host, a

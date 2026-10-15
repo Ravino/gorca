@@ -11,8 +11,8 @@
 //! | FC1h | Right and Left through `a😀b😀😀c` (window hits); what each key must say follows from the page's own caret events | `fc1h_ms` Firefox caret event arrival to SPEAK (gate p99 3 ms), `lost`, `fc_double`, `fc_extra`, `fc_late`, `fc_swallowed` (all gate 0), `page_dropped` (gate at most 2 per repeat) |
 //! | FC1 | Down through 300 distinct lines of a text area (one `GetStringAtOffset` per key) | `fc1_ms` (gate p99 15 ms), `lost`, `fc_double` |
 //! | FE1 | printable keys typed into an input | `fe1_ms` key emit to SPEAK (gate p99 3 ms), `lost`, `fc_double` |
-//! | FCE2 | printable keys typed into an empty contenteditable region | `fce2_ms` key emit to SPEAK (gate p99 3 ms), `lost`, `fc_double`, `fc_extra` |
-//! | FE2 | randomised session: letters, space, BackSpace, input-method commits of an emoji and a Cyrillic letter, arrows | `e2_missing`, `e2_double`, `e2_keyname`, `e2_wrong`, `ft_failures` (all gate 0) |
+//! | FCE2 | printable keys typed into an empty contenteditable region | `fce2_ms` key emit to SPEAK (gate p99 3 ms), `lost`, `fc_double`, `fc_extra`, `fc_late` |
+//! | FE2 | randomised session: letters, space, BackSpace, input-method commits of an emoji and a Cyrillic letter, arrows | `e2_missing`, `e2_double`, `e2_keyname`, `e2_wrong`, `e2_swallowed`, `ft_failures` (all gate 0), `e2_resync` (actions the page did not apply, not scored; gate at most 3 per repeat) |
 //! | FS2 | Shift+Right and Shift+Left over a word | `fs2_ms` caret event arrival to SPEAK (gate p99 15 ms), `lost` |
 //! | FSA1 | gorca+Down in a text area | `fsa1_ms` key emit to the first chunk's SPEAK (gate p99 15 ms), `lost` |
 //! | FSA3 | any key during say-all | `fsa3_stop_ms` key emit to the cancel (gate p99 2 ms), `sa3_caret_wrong` (the caret must sit at the start of the chunk being read), `sa3_not_silenced` |
@@ -849,6 +849,12 @@ fn fe2(
     let (mut missing, mut double, mut keyname, mut wrong) = (0u64, 0u64, 0u64, 0u64);
     let mut history: Vec<String> = Vec::new();
     let mut drift_notes = 0u32;
+    // Actions the page did not apply as the model says (a loaded Firefox now and then drops a
+    // key of the virtual keyboard): the model is set to what the page holds, the action is
+    // not scored, and the count is gated (`e2_resync`), so a stream of them cannot hide.
+    let mut resync = 0u64;
+    // Plain typing keys gorca itself took (they must always reach the page).
+    let mut swallowed = 0u64;
     for i in 0..n {
         let act = match rng.below(100) {
             0..=44 => Act::Letter(char::from(b'a' + u8::try_from(rng.below(26)).unwrap_or(0))),
@@ -916,17 +922,23 @@ fn fe2(
             }
         };
         let mark = f.w.mark();
-        let t_key = match act {
-            Act::Letter(c) => f.key(char_key(c), c as u32, 0)?.0,
-            Act::Space => f.key(SPACE, 0x20, 0)?.0,
-            Act::Back => f.key(BACKSPACE, 0, 0)?.0,
-            Act::Emoji => f.key(F9, 0, 0)?.0,
-            Act::Cyr => f.key(F10, 0, 0)?.0,
-            Act::Left => f.key(LEFT, 0, 0)?.0,
-            Act::Right => f.key(RIGHT, 0, 0)?.0,
-            Act::Home => f.key(HOME, 0, 0)?.0,
-            Act::End => f.key(END, 0, 0)?.0,
+        let (t_key, consumed) = match act {
+            Act::Letter(c) => f.key(char_key(c), c as u32, 0)?,
+            Act::Space => f.key(SPACE, 0x20, 0)?,
+            Act::Back => f.key(BACKSPACE, 0, 0)?,
+            Act::Emoji => f.key(F9, 0, 0)?,
+            Act::Cyr => f.key(F10, 0, 0)?,
+            Act::Left => f.key(LEFT, 0, 0)?,
+            Act::Right => f.key(RIGHT, 0, 0)?,
+            Act::Home => f.key(HOME, 0, 0)?,
+            Act::End => f.key(END, 0, 0)?,
         };
+        if consumed {
+            swallowed += 1;
+            out.notes.push(format!(
+                "FE2 #{i} {act:?}: gorca took the key (not passed to the page)"
+            ));
+        }
         // Wait for the speech, then a little longer to catch a second one.
         let end = Instant::now() + Duration::from_millis(if expect.is_some() { 900 } else { 450 });
         while Instant::now() < end {
@@ -944,6 +956,43 @@ fn fe2(
             .map(|(_, s)| s)
             .filter(|s| !matches!(s.as_str(), "f 9" | "f 10"))
             .collect();
+        // The page's own caret against the model's: the first divergence names the action.
+        let raw = text[..caret.min(text.len())]
+            .iter()
+            .map(|c| c.len_utf16())
+            .sum::<usize>();
+        let mut page = f.ax_num("caret", &path, "caret").unwrap_or(-1.0);
+        // A loaded Firefox applies the key a moment later.
+        for _ in 0..4 {
+            if page as i64 == raw as i64 {
+                break;
+            }
+            sleep(60);
+            page = f.ax_num("caret", &path, "caret").unwrap_or(-1.0);
+        }
+        if page as i64 != raw as i64 {
+            resync += 1;
+            if drift_notes < 6 {
+                drift_notes += 1;
+                out.notes.push(format!(
+                    "FE2 #{i} {act:?}: the page caret is {page}, the model {raw} (not scored, model reset to the page); recent: {recent}"
+                ));
+            }
+            if let Ok(pt) = field_text(&mut f, &path) {
+                text = pt.chars().collect();
+                let mut units = 0usize;
+                caret = text.len();
+                for (k, c) in text.iter().enumerate() {
+                    if units as i64 >= page as i64 {
+                        caret = k;
+                        break;
+                    }
+                    units += c.len_utf16();
+                }
+            }
+            sleep(40);
+            continue;
+        }
         if heard.iter().any(|s| {
             matches!(
                 s.as_str(),
@@ -978,28 +1027,6 @@ fn fe2(
                 }
             }
         }
-        // The page's own caret against the model's: the first divergence names the action.
-        if drift_notes < 3 {
-            let raw = text[..caret.min(text.len())]
-                .iter()
-                .map(|c| if u32::from(*c) > 0xFFFF { 2 } else { 1 })
-                .sum::<usize>();
-            let mut page = f.ax_num("caret", &path, "caret").unwrap_or(-1.0);
-            // A loaded Firefox applies the key a moment later.
-            for _ in 0..4 {
-                if page as i64 == raw as i64 {
-                    break;
-                }
-                sleep(60);
-                page = f.ax_num("caret", &path, "caret").unwrap_or(-1.0);
-            }
-            if page as i64 != raw as i64 {
-                drift_notes += 1;
-                out.notes.push(format!(
-                    "FE2 #{i} {act:?}: the page caret is {page}, the model {raw}; recent: {recent}"
-                ));
-            }
-        }
         // Commits closer than the insert gap (EV-5) are spoken as one: by design, so keep them
         // apart in time.
         sleep(if matches!(act, Act::Emoji | Act::Cyr) {
@@ -1031,6 +1058,8 @@ fn fe2(
     out.x("e2_keyname", keyname as f64, "actions");
     out.x("e2_wrong", wrong as f64, "actions");
     out.x("ft_failures", failures as f64, "checks");
+    out.x("e2_resync", resync as f64, "actions");
+    out.x("e2_swallowed", swallowed as f64, "keys");
     Ok(())
 }
 

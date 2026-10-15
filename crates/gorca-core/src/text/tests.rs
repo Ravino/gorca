@@ -2149,3 +2149,20 @@ fn scripted_insert_after_caret_does_not_swallow_a_real_move_without_the_quirk() 
     s.extend(spoken(&fx2));
     assert!(!s.is_empty(), "uncorrelated move to 3 was swallowed");
 }
+
+/// Review F-3 (captured in FE2 with debug logs): a key whose insert never comes (the page
+/// dropped or refused it) leaves a stale expectation; the next key's insert must still be the
+/// typed key's, not "unexplained text" spoken a second time ~5 ms after the key's own echo.
+#[test]
+fn a_typed_key_the_page_dropped_does_not_double_the_next_one() {
+    let mut g = rig();
+    g.entry("abc", 3);
+    g.advance(1000);
+    let mut said = spoken(&g.typed('d')); // dropped by the page: no insert, no caret move
+    g.advance(180);
+    said.extend(spoken(&g.typed('z')));
+    said.extend(spoken(&g.insert(3, "z")));
+    said.extend(spoken(&g.caret(4)));
+    said.extend(spoken(&g.tick(30)));
+    assert_eq!(said, ["d", "z"], "z once");
+}
