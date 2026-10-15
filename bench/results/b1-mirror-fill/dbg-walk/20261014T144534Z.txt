@@ -1,0 +1,22 @@
+metric                     bus                median          min          max  n op    threshold  res   note
+B1-CPU.focus_us            p                    7895         7895         7895  1                  info   [us]
+B1-HIT.all                 p                   0.852        0.852        0.852  1                  info   [ratio]
+B1-HIT.ancestry            p                       1            1            1  1                  info   [ratio]
+B1-HIT.revisit             p                       1            1            1  1 >=        0.950  PASS   [ratio]
+B1-L1c.p99                 p                   3.584        3.584        3.584  1 <=           15  PASS   [ms]
+B1-L1h.p99                 p                   0.593        0.593        0.593  1 <=            2  PASS   [ms]
+B1-L3.lost                 p                       0            0            0  1 <=            0  PASS  gated on the max over repeats [count]
+B1-L4.announce             p                     NaN          NaN          NaN  1                  FAIL  no value produced by any valid run [ms]
+B1-L4.p99                  p                   2.879        2.879        2.879  1 <=           15  PASS   [ms]
+B1-LOST@walk               p                       0            0            0  1 <=            0  PASS  gated on the max over repeats [count]
+B1-M6                      p                   0.019        0.019        0.019  1                  info   [ratio]
+B1-M6.audible              p                       0            0            0  1 <=        0.010  PASS   [ratio]
+B1-MSG.l3                  p                   0.014        0.014        0.014  1 <=          500  PASS   [calls/s]
+B1-MSG.walk                p                   130.0        130.0        130.0  1                  info   [msgs/s]
+B1-RUNS.invalid            p                       0            0            0  1 <=            0  PASS  gated on the max over repeats [runs]
+B1-S1.p99                  p                   3.002        3.002        3.002  1 <=            5  PASS   [ms]
+B1-STALE@walk              p                       0            0            0  1 <=            0  PASS  gated on the max over repeats [count]
+
+| arm | rankable | failing gates |
+|---|---|---|
+| p | no | B1-L4.announce |

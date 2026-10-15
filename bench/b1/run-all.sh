@@ -37,7 +37,8 @@ fi
 echo "== fidelity: $B1_FIDELITY =="
 cargo build --release -p gorca-bench-b1 --bins --offline
 # The walk driver and the fake app (H-3, H-2), next to each other in target/release.
-cargo build --release -p gorca-testkit --bin b1-walk -p b1-fakeapp --offline
+cargo build --release -p gorca-testkit --bin b1-walk --offline
+cargo build --release -p b1-fakeapp --offline
 export B1_WALK_DRIVER="${B1_WALK_DRIVER:-$PWD/target/release/b1-walk}"
 plan=()
 has_plan=0; has_rundirs=0

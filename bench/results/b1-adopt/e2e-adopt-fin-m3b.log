@@ -1,0 +1,257 @@
+== host: load 12.02 10.90 10.15 5/2893 876763 ==
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench-b4921a7a1562f132)
+
+running 21 tests
+test e2e::m1::tests::a_double_that_straddles_a_chunk_boundary_is_found ... ok
+test e2e::m1::tests::default_chords_use_real_keycodes ... ok
+test e2e::m1::tests::key_reply_and_app_log_parse ... ok
+test e2e::m1::tests::gates_skip_until_m1_lands ... ok
+test e2e::m1::tests::m1_flag_opens_the_gate ... ok
+test e2e::m1::tests::strict_mode_makes_the_gate_red ... ok
+test e2e::m1::tests::the_process_environment_never_opens_a_gate ... ok
+test e2e::m1::tests::the_reader_gets_desktop_facts_so_it_never_asks_gsettings ... ok
+test e2e::m1::tests::typing_score_detects_lost_and_doubled ... ok
+test e2e::m1::tests::unpaired_presses_and_releases_are_counted ... ok
+test e2e::m1::tests::wrapped_keycodes_are_not_doubles_but_real_doubles_are ... ok
+test e2e::m4::tests::a_late_speech_is_credited_to_its_own_key_and_reported_as_late ... ok
+test e2e::m4::tests::r1_skips_without_the_flag_and_fails_when_strict ... ok
+test e2e::m4::tests::the_tree_has_one_button_per_row_and_balanced_json ... ok
+test e2e::mono::tests::is_monotonic_and_ns ... ok
+test e2e::scenarios::all_tests::all_has_no_duplicates ... ok
+test e2e::scenarios::tests::accounting_separates_superseded_from_lost ... ok
+test e2e::scenarios::tests::decoder_understands_stub_tags_and_natural_text ... ok
+test e2e::scenarios::tests::scenario_ids_round_trip ... ok
+test e2e::mock::tests::voicego_binary_speak_then_stop ... ok
+test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
+
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.09s
+== reader <repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca built from 7f7e0fc, tree at 7f7e0fc
+== e2e adopt-fin-m3b: reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca backend=voicego repeats=1 load=12.50 11.01 10.19 3/3014 876997
+-- round 1/1 C1 (load 12.50 11.01 10.19 4/3014 876997)
+2026-10-15T08:45:04.875320Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-15T08:45:04.875832Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T08:45:04.876557Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T08:45:04.878153Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T08:45:21.803052Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T08:45:21.803146Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 1202, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 1200, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 1200, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T08:45:21.803471Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 1233, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T08:45:21.803509Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 C1h (load 11.84 10.93 10.18 3/3226 877999)
+2026-10-15T08:45:22.019511Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-15T08:45:22.020041Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T08:45:22.021095Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T08:45:22.022224Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T08:45:38.911123Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T08:45:38.911198Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 2, fetch_failed: 0, fetch_timeout: 0, window_hits: 1200, window_dirty: 0, caret_correlated: 1200, caret_held_correlated: 1, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 1200, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T08:45:38.911437Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 1233, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T08:45:38.911483Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 C1hs (load 12.37 11.09 10.24 2/3223 878460)
+2026-10-15T08:45:39.131744Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-15T08:45:39.132234Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T08:45:39.132759Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T08:45:39.134418Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T08:45:56.951536Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T08:45:56.951612Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 2, fetch_failed: 0, fetch_timeout: 0, window_hits: 1200, window_dirty: 0, caret_correlated: 1200, caret_held_correlated: 7, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 1200, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T08:45:56.951837Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 1233, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T08:45:56.951864Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 E1 (load 11.97 11.07 10.25 5/3228 878962)
+2026-10-15T08:45:57.169165Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-15T08:45:57.169671Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T08:45:57.170760Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T08:45:57.172059Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T08:46:13.922567Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T08:46:13.922639Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 2, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 1200, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 1200, keys_seen: 1200, keys_typed: 1200, inserted_spoken: 0, insert_held_claimed: 1, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T08:46:13.922887Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 1233, replaced: 2, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T08:46:13.922918Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 E1s (load 11.04 10.90 10.21 2/3195 879560)
+2026-10-15T08:46:14.139229Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-15T08:46:14.139899Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T08:46:14.140252Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T08:46:14.143178Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T08:46:32.103694Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T08:46:32.103953Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 2, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 1200, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 1200, keys_seen: 1200, keys_typed: 1200, inserted_spoken: 0, insert_held_claimed: 4, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T08:46:32.104482Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 1233, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T08:46:32.104550Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 E2 (load 12.57 11.26 10.35 3/3200 880315)
+2026-10-15T08:46:32.317406Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-15T08:46:32.318074Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T08:46:32.318438Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T08:46:32.319945Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T08:47:31.318108Z  INFO gorca_daemon::input: input lane statistics keys=4184 ambiguous=0 band_forks=0
+2026-10-15T08:48:31.317999Z  INFO gorca_daemon::input: input lane statistics keys=8586 ambiguous=0 band_forks=0
+2026-10-15T08:49:31.318343Z  INFO gorca_daemon::input: input lane statistics keys=12574 ambiguous=0 band_forks=0
+2026-10-15T08:50:31.318052Z  INFO gorca_daemon::input: input lane statistics keys=16842 ambiguous=0 band_forks=0
+2026-10-15T08:51:24.528261Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T08:51:24.528540Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 2, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 10000, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 8079, keys_seen: 9947, keys_typed: 8079, inserted_spoken: 288, insert_held_claimed: 4, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 1633, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T08:51:24.529783Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 10033, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T08:51:24.529809Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 PW (load 9.28 10.19 10.14 3/3170 887815)
+-- round 1/1 S2 (load 9.74 10.27 10.17 1/3168 887916)
+2026-10-15T08:51:28.053876Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-15T08:51:28.054493Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T08:51:28.055193Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T08:51:28.056712Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T08:51:51.833484Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T08:51:51.833605Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 1202, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 1200, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 1200, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 1200, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T08:51:51.833986Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 1233, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T08:51:51.834031Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 SA1 (load 11.71 10.69 10.31 2/3163 888452)
+2026-10-15T08:51:52.068392Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-15T08:51:52.068968Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T08:51:52.069718Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T08:51:52.071056Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T08:52:31.521040Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T08:52:31.521147Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 2, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 600, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T08:52:31.521494Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 433, replaced: 1, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T08:52:31.521527Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 SA2 (load 11.07 10.60 10.29 2/3149 889626)
+2026-10-15T08:52:31.739158Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-15T08:52:31.739792Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T08:52:31.740444Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T08:52:31.741943Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T08:53:11.273427Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T08:53:11.273546Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 2, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 2500, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 2500, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T08:53:11.274372Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 2533, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T08:53:11.274402Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 SA3 (load 11.05 10.66 10.33 1/3151 890437)
+2026-10-15T08:53:11.538714Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-15T08:53:11.539533Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T08:53:11.540531Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T08:53:11.542127Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T08:54:10.539533Z  INFO gorca_daemon::input: input lane statistics keys=222 ambiguous=0 band_forks=0
+2026-10-15T08:54:15.830428Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T08:54:15.830502Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 3, fetch_failed: 0, fetch_timeout: 0, window_hits: 33, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 109, caret_late: 0, caret_edge: 0, caret_uncorrelated: 34, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 229, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T08:54:15.830968Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 256, replaced: 35, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T08:54:15.831036Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 SA3a (load 8.63 9.97 10.11 2/3169 891957)
+2026-10-15T08:54:16.043280Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-15T08:54:16.043773Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T08:54:16.044155Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T08:54:16.045700Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T08:55:15.044998Z  INFO gorca_daemon::input: input lane statistics keys=120 ambiguous=0 band_forks=0
+2026-10-15T08:55:15.826067Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T08:55:15.826180Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 4, fetch_failed: 0, fetch_timeout: 0, window_hits: 37, window_dirty: 0, caret_correlated: 20, caret_held_correlated: 0, caret_absorbed: 20, caret_late: 0, caret_edge: 0, caret_uncorrelated: 19, typed_echoed: 0, keys_seen: 20, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 80, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T08:55:15.826538Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 112, replaced: 20, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T08:55:15.826591Z  INFO gorca_daemon: gorca stopped
+# e2e adopt-fin-m3b
+# utc=2026-10-15T08:55:15Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=8.24 9.63 9.98 1/3146 892577
+# git_rev=7f7e0fc
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=adopt-fin-m3b
+# reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=8.24 9.63 9.98 1/3146 892574
+# reader_env=GORCA_M3=1 GORCA_M3_STRICT=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=C1: app caret-event emit to SPEAK of the new line (toolkit line, one fetch)
+# note1=C1h: app caret-event emit to SPEAK of the character, from the window
+# note2=E2 sent 8079 typed keys (1633 BackSpace, 235 paste, 53 keyless commits)
+# note3=E2: 10000 actions, 10000 speeches heard
+
+metric                     bus                median          min          max  n op    threshold  res   note
+C1.c1_ms.n                 daemon/voicego         1200         1200         1200  1                  info   [samples]
+C1.c1_ms.p50               daemon/voicego        0.452        0.452        0.452  1                  info   [ms]
+C1.c1_ms.p95               daemon/voicego        0.717        0.717        0.717  1                  info   [ms]
+C1.c1_ms.p99               daemon/voicego        0.850        0.850        0.850  1 <=           15  PASS   [ms]
+C1.c1_ms.p999              daemon/voicego        1.118        1.118        1.118  1                  info   [ms]
+C1.c1_ms.max               daemon/voicego        1.332        1.332        1.332  1                  info   [ms]
+C1.c1_fetches_per_key      daemon/voicego            1            1            1  1                  info   [calls]
+C1.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+C1h.c1h_ms.n               daemon/voicego         1200         1200         1200  1                  info   [samples]
+C1h.c1h_ms.p50             daemon/voicego        0.177        0.177        0.177  1                  info   [ms]
+C1h.c1h_ms.p95             daemon/voicego        0.299        0.299        0.299  1                  info   [ms]
+C1h.c1h_ms.p99             daemon/voicego        0.368        0.368        0.368  1 <=            3  PASS   [ms]
+C1h.c1h_ms.p999            daemon/voicego        0.694        0.694        0.694  1                  info   [ms]
+C1h.c1h_ms.max             daemon/voicego        0.785        0.785        0.785  1                  info   [ms]
+C1h.c1h_ipc_calls          daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [calls]
+C1h.lost                   daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+C1hs.c1hs_ms.n             daemon/voicego         1200         1200         1200  1                  info   [samples]
+C1hs.c1hs_ms.p50           daemon/voicego        0.160        0.160        0.160  1                  info   [ms]
+C1hs.c1hs_ms.p95           daemon/voicego        0.274        0.274        0.274  1                  info   [ms]
+C1hs.c1hs_ms.p99           daemon/voicego        0.409        0.409        0.409  1 <=            4  PASS   [ms]
+C1hs.c1hs_ms.p999          daemon/voicego        1.570        1.570        1.570  1                  info   [ms]
+C1hs.c1hs_ms.max           daemon/voicego        1.796        1.796        1.796  1                  info   [ms]
+C1hs.c1h_ipc_calls         daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [calls]
+C1hs.lost                  daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+E1.e1_ms.n                 daemon/voicego         1200         1200         1200  1                  info   [samples]
+E1.e1_ms.p50               daemon/voicego        0.210        0.210        0.210  1                  info   [ms]
+E1.e1_ms.p95               daemon/voicego        0.344        0.344        0.344  1                  info   [ms]
+E1.e1_ms.p99               daemon/voicego        0.418        0.418        0.418  1 <=            3  PASS   [ms]
+E1.e1_ms.p999              daemon/voicego        0.576        0.576        0.576  1                  info   [ms]
+E1.e1_ms.max               daemon/voicego        0.621        0.621        0.621  1                  info   [ms]
+E1.e2_double               daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+E1.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+E1s.e1s_ms.n               daemon/voicego         1200         1200         1200  1                  info   [samples]
+E1s.e1s_ms.p50             daemon/voicego        0.219        0.219        0.219  1                  info   [ms]
+E1s.e1s_ms.p95             daemon/voicego        0.362        0.362        0.362  1                  info   [ms]
+E1s.e1s_ms.p99             daemon/voicego        0.479        0.479        0.479  1 <=            4  PASS   [ms]
+E1s.e1s_ms.p999            daemon/voicego        0.772        0.772        0.772  1                  info   [ms]
+E1s.e1s_ms.max             daemon/voicego        0.901        0.901        0.901  1                  info   [ms]
+E1s.e2_double              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+E1s.lost                   daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+E2.e2_double               daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+E2.e2_keyname              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+E2.e2_missing              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+E2.e2_wrong                daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+PW.pw_echo_missing         daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+PW.pw_log_lines            daemon/voicego           34           34           34  1 >=            1  PASS  the presentation log was written, so an empty grep means something [lines]
+PW.pw_plaintext_in_logs    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [occurrences]
+PW.pw_stderr_bytes         daemon/voicego       463960       463960       463960  1                  info   [bytes]
+S2.s2_ms.n                 daemon/voicego         1200         1200         1200  1                  info   [samples]
+S2.s2_ms.p50               daemon/voicego        0.609        0.609        0.609  1                  info   [ms]
+S2.s2_ms.p95               daemon/voicego        1.025        1.025        1.025  1                  info   [ms]
+S2.s2_ms.p99               daemon/voicego        1.293        1.293        1.293  1 <=           15  PASS   [ms]
+S2.s2_ms.p999              daemon/voicego        1.690        1.690        1.690  1                  info   [ms]
+S2.s2_ms.max               daemon/voicego        2.025        2.025        2.025  1                  info   [ms]
+S2.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+SA1.sa1_ms.n               daemon/voicego          200          200          200  1                  info   [samples]
+SA1.sa1_ms.p50             daemon/voicego        0.842        0.842        0.842  1                  info   [ms]
+SA1.sa1_ms.p95             daemon/voicego        1.284        1.284        1.284  1                  info   [ms]
+SA1.sa1_ms.p99             daemon/voicego        1.413        1.413        1.413  1 <=           15  PASS   [ms]
+SA1.sa1_ms.p999            daemon/voicego        1.475        1.475        1.475  1                  info   [ms]
+SA1.sa1_ms.max             daemon/voicego        1.475        1.475        1.475  1                  info   [ms]
+SA1.lost                   daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+SA2.sa2_gap_ms.n           daemon/voicego         2499         2499         2499  1                  info   [samples]
+SA2.sa2_gap_ms.p50         daemon/voicego        0.104        0.104        0.104  1                  info   [ms]
+SA2.sa2_gap_ms.p95         daemon/voicego        0.171        0.171        0.171  1                  info   [ms]
+SA2.sa2_gap_ms.p99         daemon/voicego        0.205        0.205        0.205  1                  info   [ms]
+SA2.sa2_gap_ms.p999        daemon/voicego        0.333        0.333        0.333  1                  info   [ms]
+SA2.sa2_gap_ms.max         daemon/voicego        1.880        1.880        1.880  1                  info   [ms]
+SA2.lost                   daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [chunks]
+SA2.sa2_ahead_ratio        daemon/voicego            1            1            1  1 >=        0.990  PASS  next chunk at the server before the previous one ended (ADR-0007 SA2) [ratio]
+SA2.sa2_chunks             daemon/voicego         2500         2500         2500  1                  info   [chunks]
+SA3.sa3_stop_ms.n          daemon/voicego           40           40           40  1                  info   [samples]
+SA3.sa3_stop_ms.p50        daemon/voicego        0.291        0.291        0.291  1                  info   [ms]
+SA3.sa3_stop_ms.p95        daemon/voicego        0.374        0.374        0.374  1                  info   [ms]
+SA3.sa3_stop_ms.p99        daemon/voicego        0.452        0.452        0.452  1 <=            2  PASS   [ms]
+SA3.sa3_stop_ms.p999       daemon/voicego        0.452        0.452        0.452  1                  info   [ms]
+SA3.sa3_stop_ms.max        daemon/voicego        0.452        0.452        0.452  1                  info   [ms]
+SA3.sa3_caret_wrong        daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+SA3.sa3_not_silenced       daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+SA3a.sa3a_ms.n             daemon/voicego           20           20           20  1                  info   [samples]
+SA3a.sa3a_ms.p50           daemon/voicego        0.231        0.231        0.231  1                  info   [ms]
+SA3a.sa3a_ms.p95           daemon/voicego        0.418        0.418        0.418  1                  info   [ms]
+SA3a.sa3a_ms.p99           daemon/voicego        0.545        0.545        0.545  1                  info   [ms]
+SA3a.sa3a_ms.p999          daemon/voicego        0.545        0.545        0.545  1                  info   [ms]
+SA3a.sa3a_ms.max           daemon/voicego        0.545        0.545        0.545  1                  info   [ms]
+SA3a.sa3a_caret_moved_back daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+SA3a.sa3a_wrong            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+
+== wrote bench/results/e2e/adopt-fin-m3b/20261015T085515Z.{json,txt}
+rc=0

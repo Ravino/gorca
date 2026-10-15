@@ -1,0 +1,93 @@
+== fidelity: pass load 7.11 5.18 5.69 11/2689 2150334 ==
+[1/6] r0 walk #0 (load 7.11 5.18 5.69 8/2689 2150336)
+2026-10-15T15:48:47.770439Z  INFO gorca_daemon: gorca started workers=8 speech=Voicego topology="single"
+2026-10-15T15:48:47.771028Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T15:48:47.771451Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T15:48:47.772630Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T15:51:46.771552Z  INFO gorca_daemon::input: input lane statistics keys=4 ambiguous=0 band_forks=0
+2026-10-15T15:52:46.770963Z  INFO gorca_daemon::input: input lane statistics keys=20 ambiguous=0 band_forks=0
+2026-10-15T15:56:46.771411Z  INFO gorca_daemon::input: input lane statistics keys=40 ambiguous=0 band_forks=0
+2026-10-15T16:01:46.770915Z  INFO gorca_daemon::input: input lane statistics keys=60 ambiguous=0 band_forks=0
+[2/6] new walk #0 (load 5.44 5.71 5.82 1/3063 2166099)
+2026-10-15T16:03:31.186458Z  INFO gorca_daemon: gorca started workers=8 speech=Voicego topology="single"
+2026-10-15T16:03:31.186654Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T16:03:31.186742Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T16:03:31.188146Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T16:06:30.186469Z  INFO gorca_daemon::input: input lane statistics keys=4 ambiguous=0 band_forks=0
+2026-10-15T16:07:30.186101Z  INFO gorca_daemon::input: input lane statistics keys=20 ambiguous=0 band_forks=0
+2026-10-15T16:11:30.186267Z  INFO gorca_daemon::input: input lane statistics keys=40 ambiguous=0 band_forks=0
+2026-10-15T16:16:30.186729Z  INFO gorca_daemon::input: input lane statistics keys=60 ambiguous=0 band_forks=0
+[3/6] new walk #1 (load 6.56 6.60 6.31 1/2686 2234727)
+2026-10-15T16:18:14.576575Z  INFO gorca_daemon: gorca started workers=8 speech=Voicego topology="single"
+2026-10-15T16:18:14.576712Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T16:18:14.577145Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T16:18:14.578257Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T16:22:13.577493Z  INFO gorca_daemon::input: input lane statistics keys=20 ambiguous=0 band_forks=1
+2026-10-15T16:27:13.577703Z  INFO gorca_daemon::input: input lane statistics keys=40 ambiguous=0 band_forks=2
+2026-10-15T16:31:13.577784Z  INFO gorca_daemon::input: input lane statistics keys=60 ambiguous=0 band_forks=3
+[4/6] r0 walk #1 (load 7.23 6.08 5.96 1/3089 2260388)
+2026-10-15T16:32:53.263402Z  INFO gorca_daemon: gorca started workers=8 speech=Voicego topology="single"
+2026-10-15T16:32:53.264558Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T16:32:53.265806Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T16:32:53.267044Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T16:36:52.263645Z  INFO gorca_daemon::input: input lane statistics keys=20 ambiguous=0 band_forks=1
+2026-10-15T16:41:52.264138Z  INFO gorca_daemon::input: input lane statistics keys=40 ambiguous=0 band_forks=2
+2026-10-15T16:45:52.263908Z  INFO gorca_daemon::input: input lane statistics keys=60 ambiguous=0 band_forks=3
+[5/6] r0 walk #2 (load 4.59 4.71 5.26 2/2813 2272414)
+2026-10-15T16:47:31.674746Z  INFO gorca_daemon: gorca started workers=8 speech=Voicego topology="single"
+2026-10-15T16:47:31.674952Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T16:47:31.675359Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T16:47:31.676723Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T16:50:30.675357Z  INFO gorca_daemon::input: input lane statistics keys=20 ambiguous=0 band_forks=0
+2026-10-15T16:55:30.674953Z  INFO gorca_daemon::input: input lane statistics keys=40 ambiguous=0 band_forks=1
+2026-10-15T17:00:30.675051Z  INFO gorca_daemon::input: input lane statistics keys=60 ambiguous=0 band_forks=1
+[6/6] new walk #2 (load 5.70 6.01 5.82 2/3065 2286156)
+2026-10-15T17:02:00.108462Z  INFO gorca_daemon: gorca started workers=8 speech=Voicego topology="single"
+2026-10-15T17:02:00.108637Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T17:02:00.108870Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T17:02:00.110141Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T17:04:59.109341Z  INFO gorca_daemon::input: input lane statistics keys=20 ambiguous=0 band_forks=0
+2026-10-15T17:09:59.114373Z  INFO gorca_daemon::input: input lane statistics keys=40 ambiguous=0 band_forks=1
+2026-10-15T17:14:59.108824Z  INFO gorca_daemon::input: input lane statistics keys=60 ambiguous=0 band_forks=1
+metric                     bus                median          min          max  n op    threshold  res   note
+B1-CPU.focus_us            new                  6495         6475         6576  3                  info   [us]
+B1-HIT.all                 new                 0.883        0.883        0.885  3                  info   [ratio]
+B1-HIT.ancestry            new                     1            1            1  3                  info   [ratio]
+B1-HIT.revisit             new                     1            1            1  3 >=        0.950  PASS   [ratio]
+B1-L1c.p99                 new                 3.756        3.553        3.855  3 <=           15  PASS   [ms]
+B1-L1h.p99                 new                 1.392        0.399        2.202  3 <=            2  PASS   [ms]
+B1-L3.lost                 new                     0            0            0  3 <=            0  PASS  gated on the max over repeats [count]
+B1-L4.announce             new                   NaN          NaN          NaN  1                  FAIL  no value produced by any valid run [ms]
+B1-L4.p99                  new                 2.479        2.378        2.740  3 <=           15  PASS   [ms]
+B1-LOST@walk               new                     0            0            0  3 <=            0  PASS  gated on the max over repeats [count]
+B1-M6                      new                 0.025        0.025        0.030  3                  info   [ratio]
+B1-M6.audible              new                     0            0            0  3 <=        0.010  PASS   [ratio]
+B1-MSG.l3                  new                 0.010        0.010        0.010  3 <=          500  PASS   [calls/s]
+B1-MSG.walk                new                 113.7        113.6        115.2  3                  info   [msgs/s]
+B1-RUNS.invalid            new                     0            0            0  1 <=            0  PASS  gated on the max over repeats [runs]
+B1-S1.p99                  new                 2.978        2.657        8.650  3 <=            5  PASS   [ms]
+B1-STALE@walk              new                     0            0            0  3 <=            0  PASS  gated on the max over repeats [count]
+B1-CPU.focus_us            r0                   6118         6001         6272  3                  info   [us]
+B1-HIT.all                 r0                  0.550        0.550        0.554  3                  info   [ratio]
+B1-HIT.ancestry            r0                      1            1            1  3                  info   [ratio]
+B1-HIT.revisit             r0                  0.998        0.997        0.998  3 >=        0.950  PASS   [ratio]
+B1-L1c.p99                 r0                  3.476        3.396        3.969  3 <=           15  PASS   [ms]
+B1-L1h.p99                 r0                  0.378        0.374        0.389  3 <=            2  PASS   [ms]
+B1-L3.lost                 r0                      0            0            0  3 <=            0  PASS  gated on the max over repeats [count]
+B1-L4.announce             r0                    NaN          NaN          NaN  1                  FAIL  no value produced by any valid run [ms]
+B1-L4.p99                  r0                  3.164        3.090        3.230  3 <=           15  PASS   [ms]
+B1-LOST@walk               r0                      0            0            0  3 <=            0  PASS  gated on the max over repeats [count]
+B1-M6                      r0                  0.232        0.231        0.234  3                  info   [ratio]
+B1-M6.audible              r0                      0            0            0  3 <=        0.010  PASS   [ratio]
+B1-MSG.l3                  r0                  0.010        0.010        0.010  3 <=          500  PASS   [calls/s]
+B1-MSG.walk                r0                   31.4         31.3         31.8  3                  info   [msgs/s]
+B1-RUNS.invalid            r0                      0            0            0  1 <=            0  PASS  gated on the max over repeats [runs]
+B1-S1.p99                  r0                  3.321        3.207        3.373  3 <=            5  PASS   [ms]
+B1-STALE@walk              r0                      0            0            0  3 <=            0  PASS  gated on the max over repeats [count]
+
+| arm | rankable | failing gates |
+|---|---|---|
+| r0 | no | B1-L4.announce |
+| new | no | B1-L4.announce |
+wrote bench/results/b1-mirror-fill/rr-fix-l1c3/20261015T171628Z.json
+exit 0

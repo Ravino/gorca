@@ -740,3 +740,43 @@ fn the_focused_app_is_protected_from_global_shedding_until_the_focus_leaves() {
     actor.pump(Instant::now());
     assert!(!actor.mirror_protected());
 }
+
+#[test]
+fn text_events_of_a_focused_but_unprotected_app_are_counted_not_silently_lost() {
+    let ch = app_channel(app(), IngressConfig::default());
+    let (writer, _read) = mirror();
+    let (tx, _inbox) = reader_channels();
+    let links = ReaderLinks {
+        focus: tx.focus,
+        background: tx.background,
+    };
+    let (ttx, mut trx) = tokio::sync::mpsc::channel(8);
+    let focused = Arc::new(gorca_rt::FocusedApp::new());
+    let mut actor = AppActor::new(app(), writer, ch.ingress, ch.control, links)
+        .with_text(TextLink {
+            tx: ttx,
+            dropped: Arc::default(),
+        })
+        .with_focused(Arc::clone(&focused));
+    let port = ch.port;
+    let caret = |n, offset| NodeEvent::CaretMoved {
+        node: key(n),
+        offset,
+        origin: gorca_model::CaretOrigin::Unknown,
+    };
+    // The app has a focus of its own, but nobody published it as the owner yet.
+    port.push(NodeEvent::FocusChanged { node: key(1) });
+    port.push(caret(1, 1));
+    port.push(NodeEvent::SelectionChanged { node: key(1) });
+    let route = actor.pump(Instant::now());
+    assert_eq!(route.text_unprotected, 2);
+    assert_eq!(actor.text_events_unprotected(), 2);
+    assert!(trx.try_recv().is_err(), "nothing was forwarded");
+    // Once the Reader earned the protection the events flow and nothing more is counted.
+    focused.publish(app());
+    port.push(caret(1, 5));
+    let route = actor.pump(Instant::now());
+    assert_eq!(route.text_unprotected, 0);
+    assert_eq!(actor.text_events_unprotected(), 2);
+    assert!(trx.try_recv().is_ok());
+}

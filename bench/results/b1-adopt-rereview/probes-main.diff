@@ -1,0 +1,50 @@
+diff --git a/crates/gorca-core/tests/pipeline.rs b/crates/gorca-core/tests/pipeline.rs
+index aae8456..3aeea31 100644
+--- a/crates/gorca-core/tests/pipeline.rs
++++ b/crates/gorca-core/tests/pipeline.rs
+@@ -228,6 +228,7 @@ async fn a_hung_app_never_stalls_the_reader_and_recovers() {
+             .contains(&"application not responding".to_owned()),
+         "the hung focused app was announced"
+     );
++    println!("HUNGCOUNT {}", r.stats.snapshot().fetch_timeout);
+     // The three focus fetches time out and make the app Hung (I-4). N2 retries a failed focus
+     // fetch once, and the retry of the timeout that tips the app into Hung is sent before the
+     // app actor has processed that timeout and cleared `admits` (the reply reaches the Reader
+@@ -354,3 +355,37 @@ async fn a_dead_reader_lane_stops_the_core_with_an_error() {
+     );
+     let _ = connector.await;
+ }
++
++// ---- reviewer probe (b1-adopt re-review) ----
++
++/// RR-1: an app that is slow (every answer 150 ms, past the 120 ms Interactive deadline) but
++/// alive. Two focus moves onto cached nodes. Before the branch: one RV-1 timeout per move, two
++/// consecutive timeouts, the app is Slow. With the RV-1 retry: two timeouts per move, so the
++/// third consecutive timeout lands on the second keypress and the app is declared Hung
++/// ("application not responding", RestrictToCache).
++#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
++async fn probe_rr1_two_cached_focus_moves_on_a_slow_app_declare_it_hung() {
++    let r = rig(vec![form("slow")]).await;
++    // Warm the mirror: both nodes fetched while the app answers.
++    r.handle.focus("slow", 2);
++    r.wait_spoken(1).await;
++    tokio::time::sleep(Duration::from_millis(300)).await;
++    r.handle.focus("slow", 1);
++    r.wait_spoken(2).await;
++    tokio::time::sleep(Duration::from_millis(300)).await;
++    let t0 = r.stats.snapshot().fetch_timeout;
++    r.handle
++        .set_behavior("slow", Behavior::Delay(Duration::from_millis(150)));
++    for node in [2, 1] {
++        r.handle.focus("slow", node);
++        tokio::time::sleep(Duration::from_millis(450)).await;
++    }
++    let timeouts = r.stats.snapshot().fetch_timeout - t0;
++    let texts = r.speech.texts();
++    println!("RR-1 timeouts={timeouts} spoken={texts:?}");
++    assert!(
++        !texts.contains(&"application not responding".to_owned()),
++        "two focus moves on a slow app declared it hung: timeouts={timeouts} {texts:?}"
++    );
++    r.stop().await;
++}

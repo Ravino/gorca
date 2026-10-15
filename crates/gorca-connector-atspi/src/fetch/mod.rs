@@ -428,6 +428,19 @@ async fn serve_one(cx: &CallCx, req: &BackendRequest) -> Result<BackendReply, Ba
             }
             Ok(BackendReply::Subtree(batch))
         }
+        BackendOp::Siblings {
+            parent,
+            node,
+            before,
+            after,
+            indexed,
+            want,
+        } => {
+            let p = resolve(cx, *parent)?;
+            let n = resolve(cx, *node)?;
+            let b = strategy::siblings(cx, &p, &n, (*before, *after), *indexed, *want, dl).await?;
+            Ok(BackendReply::Subtree(b.into_batch(now)))
+        }
         BackendOp::Ancestry {
             node,
             max_depth,

@@ -1,0 +1,114 @@
+== host: load 4.73 4.22 3.27 2/2570 3559494 ==
+   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
+   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.74s
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench-b4921a7a1562f132)
+
+running 21 tests
+test e2e::m1::tests::default_chords_use_real_keycodes ... ok
+test e2e::m1::tests::a_double_that_straddles_a_chunk_boundary_is_found ... ok
+test e2e::m1::tests::gates_skip_until_m1_lands ... ok
+test e2e::m1::tests::m1_flag_opens_the_gate ... ok
+test e2e::m1::tests::key_reply_and_app_log_parse ... ok
+test e2e::m1::tests::strict_mode_makes_the_gate_red ... ok
+test e2e::m1::tests::the_process_environment_never_opens_a_gate ... ok
+test e2e::m1::tests::the_reader_gets_desktop_facts_so_it_never_asks_gsettings ... ok
+test e2e::m1::tests::unpaired_presses_and_releases_are_counted ... ok
+test e2e::m1::tests::typing_score_detects_lost_and_doubled ... ok
+test e2e::m1::tests::wrapped_keycodes_are_not_doubles_but_real_doubles_are ... ok
+test e2e::m4::tests::a_late_speech_is_credited_to_its_own_key_and_reported_as_late ... ok
+test e2e::m4::tests::r1_skips_without_the_flag_and_fails_when_strict ... ok
+test e2e::m4::tests::the_tree_has_one_button_per_row_and_balanced_json ... ok
+test e2e::mono::tests::is_monotonic_and_ns ... ok
+test e2e::scenarios::all_tests::all_has_no_duplicates ... ok
+test e2e::scenarios::tests::accounting_separates_superseded_from_lost ... ok
+test e2e::scenarios::tests::scenario_ids_round_trip ... ok
+test e2e::scenarios::tests::decoder_understands_stub_tags_and_natural_text ... ok
+test e2e::mock::tests::voicego_binary_speak_then_stop ... ok
+test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
+
+   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
+   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench)
+   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-core)
+   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-daemon)
+    Finished `release` profile [optimized + debuginfo] target(s) in 18.62s
+== reader <repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca built from 9d44caa, tree at 9d44caa
+== e2e dbg-c1d: reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca backend=voicego repeats=1 load=4.85 4.29 3.31 2/2584 3560443
+-- round 1/1 C1 (load 4.85 4.29 3.31 2/2584 3560443)
+2026-10-14T19:44:55.105621Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T19:44:55.106814Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T19:44:55.107521Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T19:44:55.109019Z  INFO gorca_connector_atspi::connector: atspi connector running
+DBG ask Ancestry { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169213291806728967) }, max_depth: 24, want: PropMask(NAME | VALUE | ROLE | STATES | CHILDREN) }
+DBG ask Ancestry { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886346261762908592) }, max_depth: 24, want: PropMask(NAME | VALUE | ROLE | STATES | CHILDREN) }
+DBG reply Ancestry { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169213291806728967) }, max_depth: 24, want: PropMask(NAME | VALUE | ROLE | STATES | CHILDREN) } -> Applied { keys: [NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169213291806728967) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(15472234444673567571) }], nodes: 2, outcome: ApplyOutcome { applied: 1, kept_stale: 0, dropped_tombstoned: 0, dropped_foreign: 0, superseded: 1, revived: 0, evicted: 0, defunct: 0, dropped_cap: 0, truncated: false } }
+DBG reply Ancestry { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886346261762908592) }, max_depth: 24, want: PropMask(NAME | VALUE | ROLE | STATES | CHILDREN) } -> Applied { keys: [NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886346261762908592) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169211092783472545) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(15472234444673567571) }], nodes: 3, outcome: ApplyOutcome { applied: 3, kept_stale: 0, dropped_tombstoned: 0, dropped_foreign: 0, superseded: 0, revived: 0, evicted: 0, defunct: 0, dropped_cap: 0, truncated: false } }
+DBG ask Siblings { parent: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169211092783472545) }, node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886346261762908592) }, before: 1, after: 6, want: PropMask(NAME | VALUE | ROLE | STATES) }
+DBG reply Siblings { parent: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169211092783472545) }, node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886346261762908592) }, before: 1, after: 6, want: PropMask(NAME | VALUE | ROLE | STATES) } -> Applied { keys: [NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886346261762908592) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886349560297793225) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886348460786165014) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886351759321049647) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886350659809421436) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886353958344306069) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886352858832677858) }], nodes: 7, outcome: ApplyOutcome { applied: 7, kept_stale: 0, dropped_tombstoned: 0, dropped_foreign: 0, superseded: 0, revived: 0, evicted: 0, defunct: 0, dropped_cap: 0, truncated: false } }
+DBG ask Siblings { parent: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169211092783472545) }, node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886352858832677858) }, before: 0, after: 6, want: PropMask(NAME | VALUE | ROLE | STATES) }
+DBG reply Siblings { parent: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169211092783472545) }, node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886352858832677858) }, before: 0, after: 6, want: PropMask(NAME | VALUE | ROLE | STATES) } -> Applied { keys: [NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886352858832677858) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886356157367562491) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886355057855934280) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885390786158182458) }], nodes: 4, outcome: ApplyOutcome { applied: 4, kept_stale: 0, dropped_tombstoned: 0, dropped_foreign: 0, superseded: 0, revived: 0, evicted: 0, defunct: 0, dropped_cap: 0, truncated: false } }
+DBG ask Ancestry { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885391885669810669) }, max_depth: 24, want: PropMask(NAME | VALUE | ROLE | STATES | CHILDREN) }
+DBG reply Ancestry { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885391885669810669) }, max_depth: 24, want: PropMask(NAME | VALUE | ROLE | STATES | CHILDREN) } -> Applied { keys: [NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885391885669810669) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169209993271844334) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(15472234444673567571) }], nodes: 3, outcome: ApplyOutcome { applied: 3, kept_stale: 0, dropped_tombstoned: 0, dropped_foreign: 0, superseded: 0, revived: 0, evicted: 0, defunct: 0, dropped_cap: 0, truncated: false } }
+DBG ask Siblings { parent: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169209993271844334) }, node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885391885669810669) }, before: 1, after: 6, want: PropMask(NAME | VALUE | ROLE | STATES) }
+DBG reply Siblings { parent: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169209993271844334) }, node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885391885669810669) }, before: 1, after: 6, want: PropMask(NAME | VALUE | ROLE | STATES) } -> Applied { keys: [NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885391885669810669) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885388587134926036) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885389686646554247) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885386388111669614) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885387487623297825) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885384189088413192) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885385288600041403) }], nodes: 7, outcome: ApplyOutcome { applied: 7, kept_stale: 0, dropped_tombstoned: 0, dropped_foreign: 0, superseded: 0, revived: 0, evicted: 0, defunct: 0, dropped_cap: 0, truncated: false } }
+DBG ask Siblings { parent: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169209993271844334) }, node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885385288600041403) }, before: 0, after: 6, want: PropMask(NAME | VALUE | ROLE | STATES) }
+DBG reply Siblings { parent: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169209993271844334) }, node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885385288600041403) }, before: 0, after: 6, want: PropMask(NAME | VALUE | ROLE | STATES) } -> Applied { keys: [NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885385288600041403) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885381990065156770) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885383089576784981) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884399026669725361) }], nodes: 4, outcome: ApplyOutcome { applied: 4, kept_stale: 0, dropped_tombstoned: 0, dropped_foreign: 0, superseded: 0, revived: 0, evicted: 0, defunct: 0, dropped_cap: 0, truncated: false } }
+DBG ask Ancestry { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884397927158097150) }, max_depth: 24, want: PropMask(NAME | VALUE | ROLE | STATES | CHILDREN) }
+DBG reply Ancestry { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884397927158097150) }, max_depth: 24, want: PropMask(NAME | VALUE | ROLE | STATES | CHILDREN) } -> Applied { keys: [NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884397927158097150) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169208893760216123) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(15472234444673567571) }], nodes: 3, outcome: ApplyOutcome { applied: 3, kept_stale: 0, dropped_tombstoned: 0, dropped_foreign: 0, superseded: 0, revived: 0, evicted: 0, defunct: 0, dropped_cap: 0, truncated: false } }
+DBG ask Siblings { parent: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169208893760216123) }, node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884397927158097150) }, before: 1, after: 6, want: PropMask(NAME | VALUE | ROLE | STATES) }
+DBG reply Siblings { parent: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169208893760216123) }, node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884397927158097150) }, before: 1, after: 6, want: PropMask(NAME | VALUE | ROLE | STATES) } -> Applied { keys: [NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884397927158097150) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884396827646468939) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884395728134840728) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884403424716238205) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884402325204609994) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884401225692981783) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884400126181353572) }], nodes: 7, outcome: ApplyOutcome { applied: 7, kept_stale: 0, dropped_tombstoned: 0, dropped_foreign: 0, superseded: 0, revived: 0, evicted: 0, defunct: 0, dropped_cap: 0, truncated: false } }
+DBG ask Siblings { parent: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169208893760216123) }, node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884400126181353572) }, before: 0, after: 6, want: PropMask(NAME | VALUE | ROLE | STATES) }
+DBG reply Siblings { parent: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169208893760216123) }, node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884400126181353572) }, before: 0, after: 6, want: PropMask(NAME | VALUE | ROLE | STATES) } -> Applied { keys: [NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884400126181353572) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884390230576699673) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884389131065071462) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883548004669679272) }], nodes: 4, outcome: ApplyOutcome { applied: 4, kept_stale: 0, dropped_tombstoned: 0, dropped_foreign: 0, superseded: 0, revived: 0, evicted: 0, defunct: 0, dropped_cap: 0, truncated: false } }
+DBG ask Ancestry { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169213291806728967) }, max_depth: 24, want: PropMask(NAME | VALUE | ROLE | STATES | CHILDREN) }
+DBG reply Ancestry { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169213291806728967) }, max_depth: 24, want: PropMask(NAME | VALUE | ROLE | STATES | CHILDREN) } -> Applied { keys: [NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169213291806728967) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169214391318357178) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(15472234444673567571) }], nodes: 3, outcome: ApplyOutcome { applied: 3, kept_stale: 0, dropped_tombstoned: 0, dropped_foreign: 0, superseded: 0, revived: 0, evicted: 0, defunct: 0, dropped_cap: 0, truncated: false } }
+DBG ask Siblings { parent: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169214391318357178) }, node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169213291806728967) }, before: 1, after: 6, want: PropMask(NAME | VALUE | ROLE | STATES) }
+DBG reply Siblings { parent: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169214391318357178) }, node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169213291806728967) }, before: 1, after: 6, want: PropMask(NAME | VALUE | ROLE | STATES) } -> Applied { keys: [NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169213291806728967) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169212192295100756) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169211092783472545) }, NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169209993271844334) }], nodes: 4, outcome: ApplyOutcome { applied: 4, kept_stale: 0, dropped_tombstoned: 0, dropped_foreign: 0, superseded: 0, revived: 0, evicted: 0, defunct: 0, dropped_cap: 0, truncated: false } }
+2026-10-14T19:44:58.801806Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T19:44:58.801891Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 3, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 1, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 150, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-14T19:44:58.802135Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 34, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-14T19:44:58.802170Z  INFO gorca_daemon: gorca stopped
+# e2e dbg-c1d
+# utc=2026-10-14T19:44:58Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=4.78 4.28 3.31 1/2577 3560488
+# git_rev=9d44caa
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=dbg-c1d
+# reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=4.78 4.28 3.31 1/2577 3560485
+# reader_env=GORCA_M3=1 GORCA_M3_STRICT=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=C1 lost #0: wanted "Line 0001 text", key to next key 16.4 ms, heard []
+# note1=C1 lost #1: wanted "Line 0002 text", key to next key 14.7 ms, heard []
+# note2=C1 lost #2: wanted "Line 0003 text", key to next key 9.6 ms, heard []
+# note3=C1 lost #3: wanted "Line 0004 text", key to next key 15.1 ms, heard []
+# note4=C1 lost #4: wanted "Line 0005 text", key to next key 12.3 ms, heard []
+# note5=C1: app caret-event emit to SPEAK of the new line (toolkit line, one fetch)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+C1.c1_ms.n                 daemon/voicego            0            0            0  1                  info   [samples]
+C1.c1_ms.p50               daemon/voicego            0            0            0  1                  info   [ms]
+C1.c1_ms.p95               daemon/voicego            0            0            0  1                  info   [ms]
+C1.c1_ms.p99               daemon/voicego            0            0            0  1 <=           15  PASS   [ms]
+C1.c1_ms.p999              daemon/voicego            0            0            0  1                  info   [ms]
+C1.c1_ms.max               daemon/voicego            0            0            0  1                  info   [ms]
+C1.c1_fetches_per_key      daemon/voicego        0.007        0.007        0.007  1                  info   [calls]
+C1.lost                    daemon/voicego          150          150          150  1 <=            0  FAIL  gated on the max over repeats [events]
+
+== wrote bench/results/e2e/dbg-c1d/20261014T194458Z.{json,txt}
+== 1 gate(s) FAILED
+rc=1

@@ -348,6 +348,8 @@ pub struct Reader {
     pub(crate) web: Option<BrowseState>,
     /// The focus whose fetch failed and was tried once more (N2).
     pub(crate) focus_retried: Option<NodeKey>,
+    /// The focus whose failed RV-1 re-read was already retried once (a fresh deadline).
+    pub(crate) revalidate_retried: Option<NodeKey>,
     /// The browse mode word and line spoken with the last focus utterance, so an RV-1 refine of
     /// that utterance repeats them instead of cutting them off.
     pub(crate) web_extra: Option<(
@@ -403,6 +405,7 @@ impl Reader {
             review: ReviewState::new(),
             web: None,
             focus_retried: None,
+            revalidate_retried: None,
             web_extra: None,
             text: TextState::new(),
         }
@@ -1026,7 +1029,7 @@ mod tests {
         assert_eq!(published.get(), Some(app()));
 
         // The focus moves to a node that shows no FOCUSED state: protection is not kept by the
-        // application that held it; and an application that is gone loses it outright.
+        // application that held it once the re-read confirms it; and an application that is gone loses it outright.
         let later = now + std::time::Duration::from_secs(2);
         f.writer.apply(
             SnapshotBatch {
@@ -1039,10 +1042,361 @@ mod tests {
             ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: key(3) }),
             later,
         );
+        assert_eq!(
+            published.get(),
+            Some(app()),
+            "kept for the round trip of the re-read (review F-1)"
+        );
+        f.reader.handle(
+            ReaderMsg::Reply(QueryReply {
+                node: key(3),
+                epoch: f.epoch.current(),
+                kind: FetchKind::Revalidate,
+                result: Ok(snap(3, Role::Button, "Unvalidated")),
+            }),
+            later,
+        );
         assert_eq!(published.get(), None, "current protection dropped");
         f.reader
             .handle(ReaderMsg::Focus(FocusLaneMsg::AppGone(app())), later);
         assert!(!published.protects(app()), "a departed app keeps nothing");
+    }
+
+    /// A focus served from the cache (a prefetched sibling) shows no `FOCUSED`: no protection at
+    /// presentation, but the RV-1 re-read that proves it earns the protection afterwards (without
+    /// it the text events of the focused application never reach the Reader).
+    #[test]
+    fn the_revalidation_of_a_cached_focus_earns_the_protection() {
+        let mut f = fixture();
+        let published = Arc::new(FocusedApp::new());
+        f.reader.focused_app = Some(Arc::clone(&published));
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(1, Role::Button, "Cached")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        assert_eq!(
+            published.get(),
+            None,
+            "the cached states do not show FOCUSED"
+        );
+        let mut proof = (*snap(1, Role::Button, "Cached")).clone();
+        proof.states = StateSet::FOCUSED;
+        f.reader
+            .handle(reply(&f, 1, FetchKind::Revalidate, Arc::new(proof)), now);
+        assert_eq!(published.get(), Some(app()), "the re-read proved the focus");
+        // A re-read that does not show FOCUSED proves nothing.
+        let mut g = fixture();
+        let published = Arc::new(FocusedApp::new());
+        g.reader.focused_app = Some(Arc::clone(&published));
+        g.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(1, Role::Button, "Cached")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        focus_on(&mut g, 1, now);
+        g.reader.handle(
+            reply(
+                &g,
+                1,
+                FetchKind::Revalidate,
+                snap(1, Role::Button, "Cached"),
+            ),
+            now,
+        );
+        assert_eq!(published.get(), None);
+    }
+
+    fn err_reply(f: &Fixture, n: u64, kind: FetchKind, e: BackendError) -> ReaderMsg {
+        ReaderMsg::Reply(QueryReply {
+            node: key(n),
+            epoch: f.epoch.current(),
+            kind,
+            result: Err(e),
+        })
+    }
+
+    fn focused_snap(n: u64, name: &str) -> Arc<NodeSnapshot> {
+        let mut s = (*snap(n, Role::Button, name)).clone();
+        s.states = StateSet::FOCUSED;
+        Arc::new(s)
+    }
+
+    /// Review F-1 (1) and RR-1: a focus miss whose fetch fails after a prefetch filled the node is
+    /// spoken from the cache. A Busy/Protocol failure asks the re-read that earns the protection;
+    /// a Timeout asks nothing more (the app is slow: a second request on the same deadline would
+    /// double the timeouts charged to it), and a later FOCUSED state re-read earns it (RR-2).
+    #[test]
+    fn a_focus_fetch_failure_over_a_prefetched_node_asks_the_rv1_except_after_a_timeout() {
+        for (e, asks) in [
+            (BackendError::Busy, true),
+            (BackendError::Protocol("x".into()), true),
+            (BackendError::Timeout, false),
+        ] {
+            let mut f = fixture();
+            let published = Arc::new(FocusedApp::new());
+            f.reader.focused_app = Some(Arc::clone(&published));
+            let now = Instant::now();
+            focus_on(&mut f, 1, now);
+            f.writer.apply(
+                SnapshotBatch {
+                    nodes: vec![snap(1, Role::Button, "Prefetched")],
+                    ..Default::default()
+                },
+                gorca_mirror::ApplyOrigin::Push,
+            );
+            let fx = f
+                .reader
+                .handle(err_reply(&f, 1, FetchKind::Focus, e.clone()), now);
+            assert_eq!(
+                effects_of(&fx).contains(&"fetch-rv1"),
+                asks,
+                "{e:?}: {:?}",
+                effects_of(&fx)
+            );
+            assert_eq!(published.get(), None, "nothing proven yet");
+            if asks {
+                f.reader.handle(
+                    reply(&f, 1, FetchKind::Revalidate, focused_snap(1, "Prefetched")),
+                    now,
+                );
+                assert_eq!(published.get(), Some(app()), "the re-read earned it");
+            }
+        }
+    }
+
+    /// Review F-1 (4): a window that a prefetch issued after the focus began is "confirmed after
+    /// the trigger", but it carries no `FOCUSED`: the fallback must still ask the re-read, or the
+    /// app never earns its protection until the next focus.
+    #[test]
+    fn a_window_confirmed_after_the_focus_still_asks_the_rv1_when_protection_is_unearned() {
+        let mut f = fixture();
+        let published = Arc::new(FocusedApp::new());
+        f.reader.focused_app = Some(Arc::clone(&published));
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        let issued_at = f.reader.focus_seq + 1;
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(1, Role::Button, "Window")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Reply { issued_at },
+        );
+        let fx = f
+            .reader
+            .handle(err_reply(&f, 1, FetchKind::Focus, BackendError::Busy), now);
+        assert!(
+            effects_of(&fx).contains(&"fetch-rv1"),
+            "{:?}",
+            effects_of(&fx)
+        );
+        f.reader.handle(
+            reply(&f, 1, FetchKind::Revalidate, focused_snap(1, "Window")),
+            now,
+        );
+        assert_eq!(published.get(), Some(app()), "the re-read earned it");
+    }
+
+    /// Review F-1 (3): a cached move inside the app that owns the protection keeps it (its text
+    /// events are not dropped for a round trip); the re-read that shows the node unfocused
+    /// withdraws it.
+    #[test]
+    fn a_cached_move_inside_the_protected_app_keeps_the_protection_until_the_reread_decides() {
+        let mut f = fixture();
+        let published = Arc::new(FocusedApp::new());
+        f.reader.focused_app = Some(Arc::clone(&published));
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        f.reader
+            .handle(reply(&f, 1, FetchKind::Focus, focused_snap(1, "Cold")), now);
+        assert_eq!(published.get(), Some(app()), "cold fetch earns");
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(2, Role::Button, "Sibling")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let later = now + std::time::Duration::from_millis(500);
+        let fx = focus_on(&mut f, 2, later);
+        assert!(effects_of(&fx).contains(&"fetch-rv1"));
+        assert_eq!(
+            published.get(),
+            Some(app()),
+            "kept while the re-read is out"
+        );
+        // The re-read says the node is not focused: withdrawn.
+        f.reader.handle(
+            reply(
+                &f,
+                2,
+                FetchKind::Revalidate,
+                snap(2, Role::Button, "Sibling"),
+            ),
+            later,
+        );
+        assert_eq!(published.get(), None);
+        // The same move, and the re-read shows FOCUSED: kept.
+        let mut g = fixture();
+        let published = Arc::new(FocusedApp::new());
+        g.reader.focused_app = Some(Arc::clone(&published));
+        focus_on(&mut g, 1, now);
+        g.reader
+            .handle(reply(&g, 1, FetchKind::Focus, focused_snap(1, "Cold")), now);
+        g.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(2, Role::Button, "Sibling")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        focus_on(&mut g, 2, later);
+        g.reader.handle(
+            reply(&g, 2, FetchKind::Revalidate, focused_snap(2, "Sibling")),
+            later,
+        );
+        assert_eq!(published.get(), Some(app()));
+    }
+
+    /// Review F-1 (2) and RR-1: a re-read that fails with Busy or Protocol is retried once with
+    /// a fresh deadline while the protection is unearned, then left alone. A Timeout is never
+    /// retried (the retry would double the timeouts charged to a slow app).
+    #[test]
+    fn a_failed_rv1_is_retried_once_except_after_a_timeout() {
+        for (e, retries) in [
+            (BackendError::Timeout, false),
+            (BackendError::Busy, true),
+            (BackendError::Protocol("x".into()), true),
+        ] {
+            let mut f = fixture();
+            let published = Arc::new(FocusedApp::new());
+            f.reader.focused_app = Some(Arc::clone(&published));
+            f.writer.apply(
+                SnapshotBatch {
+                    nodes: vec![snap(1, Role::Button, "Cached")],
+                    ..Default::default()
+                },
+                gorca_mirror::ApplyOrigin::Push,
+            );
+            let now = Instant::now();
+            let fx = focus_on(&mut f, 1, now);
+            assert!(effects_of(&fx).contains(&"fetch-rv1"));
+            let fx = f
+                .reader
+                .handle(err_reply(&f, 1, FetchKind::Revalidate, e.clone()), now);
+            if retries {
+                assert_eq!(effects_of(&fx), ["fetch-rv1"], "retried once after {e:?}");
+                let fx = f
+                    .reader
+                    .handle(err_reply(&f, 1, FetchKind::Revalidate, e.clone()), now);
+                assert!(effects_of(&fx).is_empty(), "and not a second time");
+            } else {
+                assert!(effects_of(&fx).is_empty(), "no retry after {e:?}");
+            }
+            f.reader.handle(
+                reply(&f, 1, FetchKind::Revalidate, focused_snap(1, "Cached")),
+                now,
+            );
+            assert_eq!(published.get(), Some(app()), "a late proof still earns it");
+        }
+    }
+
+    /// RR-1: a protected app gains nothing from the retry, whatever the failure.
+    #[test]
+    fn a_failed_rv1_is_not_retried_while_the_app_holds_the_protection() {
+        let mut f = fixture();
+        let published = Arc::new(FocusedApp::new());
+        f.reader.focused_app = Some(Arc::clone(&published));
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(1, Role::Button, "Cached")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        published.publish(app());
+        let fx = f.reader.handle(
+            err_reply(&f, 1, FetchKind::Revalidate, BackendError::Busy),
+            now,
+        );
+        assert!(effects_of(&fx).is_empty(), "{:?}", effects_of(&fx));
+    }
+
+    /// RR-2: after the RV-1 (and its retry) failed, a later state re-read that shows the node
+    /// FOCUSED earns the protection.
+    #[test]
+    fn a_focused_state_reply_earns_protection_after_a_failed_rv1() {
+        let mut f = fixture();
+        let published = Arc::new(FocusedApp::new());
+        f.reader.focused_app = Some(Arc::clone(&published));
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(1, Role::Button, "Cached")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        f.reader.handle(
+            err_reply(&f, 1, FetchKind::Revalidate, BackendError::Timeout),
+            now,
+        );
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::StateChanged {
+                node: key(1),
+                mask: PropMask::STATES,
+            }),
+            now,
+        );
+        f.reader.handle(
+            reply(&f, 1, FetchKind::StateChange, focused_snap(1, "Cached")),
+            now,
+        );
+        assert_eq!(published.get(), Some(app()), "earned by the state re-read");
+    }
+
+    /// RR-2: a state re-read that does not show FOCUSED earns nothing.
+    #[test]
+    fn an_unfocused_state_reply_earns_nothing() {
+        let mut f = fixture();
+        let published = Arc::new(FocusedApp::new());
+        f.reader.focused_app = Some(Arc::clone(&published));
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(1, Role::Button, "Cached")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Push,
+        );
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::StateChanged {
+                node: key(1),
+                mask: PropMask::STATES,
+            }),
+            now,
+        );
+        f.reader.handle(
+            reply(
+                &f,
+                1,
+                FetchKind::StateChange,
+                snap(1, Role::Button, "Cached"),
+            ),
+            now,
+        );
+        assert_eq!(published.get(), None);
     }
 
     #[test]

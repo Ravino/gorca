@@ -33,7 +33,7 @@ case "$B1_RUN_KIND" in
   walk|ff|idle|big|soak)
     : "${B1_WALK_DRIVER:?set B1_WALK_DRIVER to the H-3 walk driver binary (run-all.sh does)}"
     cd "$here"
-    export GORCA_PASSTHROUGH="B1_ARM B1_DAEMON B1_RUN_KIND B1_REPEAT B1_RUN_DIR B1_SEED"
+    export GORCA_PASSTHROUGH="B1_ARM B1_DAEMON B1_RUN_KIND B1_REPEAT B1_RUN_DIR B1_SEED B1_SOAK_S"
     exec tests/harness/run-isolated.sh "$B1_WALK_DRIVER"
     ;;
   *)

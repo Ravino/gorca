@@ -22,11 +22,13 @@ use crate::store::{ApplyOutcome, MirrorRead};
 
 mod candidate;
 mod null;
+mod prefetch;
 #[doc(hidden)]
 pub mod scripted;
 
 pub use candidate::Candidate;
 pub use null::NullPolicy;
+pub use prefetch::{FocusPrefetch, PrefetchConfig};
 
 /// Coarse toolkit family, for budget tuning only.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -175,6 +177,19 @@ pub enum FillOp {
         range: Range<u32>,
         want: PropMask,
     },
+    /// `node` and `before`/`after` of its siblings under `parent`; the connector finds the node's
+    /// index in the one child-list reply it needs anyway. Empty reply when `node` is no longer
+    /// a child of `parent`.
+    Siblings {
+        parent: NodeKey,
+        node: NodeKey,
+        before: u32,
+        after: u32,
+        /// The parent's list is long (the policy saw its child count): read the window by index
+        /// instead of listing every child.
+        indexed: bool,
+        want: PropMask,
+    },
     Ancestry {
         node: NodeKey,
         max_depth: u8,
@@ -197,6 +212,8 @@ impl FillOp {
             | FillOp::ChildSnapshots { node, .. }
             | FillOp::Ancestry { node, .. } => Some(*node),
             FillOp::Subtree { root, .. } => Some(*root),
+            // The child list is the parent's; the node may merely have moved.
+            FillOp::Siblings { parent, .. } => Some(*parent),
             FillOp::CacheDump { .. } => None,
         }
     }

@@ -565,8 +565,9 @@ impl FillDriver {
         }
     }
 
-    /// Clamp an op to the hard bounds of the section 7 table.
-    fn sanitize(&self, op: FillOp) -> FillOp {
+    /// Clamp an op to the hard bounds of the section 7 table. Public so that a policy test can
+    /// prove its ops are fixed points (review F-6: the policy remembers the op it emitted).
+    pub fn sanitize(&self, op: FillOp) -> FillOp {
         let l = &self.limits;
         match op {
             FillOp::ChildSnapshots { node, range, want } => {
@@ -574,6 +575,25 @@ impl FillDriver {
                 FillOp::ChildSnapshots {
                     node,
                     range: range.start..end.max(range.start),
+                    want,
+                }
+            }
+            FillOp::Siblings {
+                parent,
+                node,
+                before,
+                after,
+                indexed,
+                want,
+            } => {
+                let before = before.min(l.max_child_range);
+                let after = after.min(l.max_child_range.saturating_sub(before));
+                FillOp::Siblings {
+                    parent,
+                    node,
+                    before,
+                    after,
+                    indexed,
                     want,
                 }
             }
@@ -1071,6 +1091,9 @@ impl FillDriver {
         let cap = match op {
             FillOp::Fetch { .. } => 1,
             FillOp::ChildSnapshots { range, .. } => range.end.saturating_sub(range.start) as usize,
+            FillOp::Siblings { before, after, .. } => (*before as usize)
+                .saturating_add(*after as usize)
+                .saturating_add(1),
             FillOp::Ancestry { max_depth, .. } => usize::from(*max_depth) + 1,
             FillOp::Subtree { max_nodes, .. } | FillOp::CacheDump { max_nodes } => {
                 *max_nodes as usize

@@ -17,14 +17,16 @@ pub enum SpeechMode {
     Ssip,
 }
 
-/// Which fill policy the apps run (`--bench-fill-policy`, B-1). The product always runs R0.
+/// Which fill policy the apps run. The product runs [`FillChoice::Prefetch`] (B-1 decision,
+/// 2026-10-14); `--bench-fill-policy=r0` is the bake-off baseline.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub enum FillChoice {
-    /// R0: nothing is prefetched; the cache serves revisits.
-    #[default]
+    /// R0: nothing is prefetched; the cache serves revisits. The B-1 baseline.
     R0,
-    /// `gorca_mirror::fill::Candidate`, the policy of the bake-off arm this binary was built from.
-    Candidate,
+    /// `gorca_mirror::fill::FocusPrefetch`: focus-window prefetch (the adopted arm C).
+    /// `--bench-fill-policy=candidate` is the bake-off name for it.
+    #[default]
+    Prefetch,
 }
 
 /// The flags are independent switches mirrored from the command line, not a state machine.
@@ -66,7 +68,7 @@ pub struct Options {
     /// monitor, no Orca identity, no `org.a11y.Status` writes, no event registration, speech
     /// to a null sink, and only the read calls of the connector's allowlist.
     pub shadow: bool,
-    /// `--bench-fill-policy=r0|candidate`: benchmarks only (B-1 harness); default R0.
+    /// `--bench-fill-policy=r0|prefetch|candidate`: default is the adopted focus-window prefetch.
     pub fill_policy: FillChoice,
     /// `--topology=...` / `GORCA_TOPOLOGY`: where the lanes run (bake-off B-5). Default: one
     /// multi-threaded runtime, the behaviour before the switch existed.
@@ -74,6 +76,10 @@ pub struct Options {
     /// `--topology-report=PATH` / `GORCA_TOPOLOGY_REPORT`: JSON of what was granted to which
     /// lane (`%p` in the path becomes the pid). Passive; benchmarks read it.
     pub topology_report: Option<String>,
+    /// `--shell-cache-dump`: let the prefetch policy dump a verified-complete app (gnome-shell)
+    /// with one `Cache.GetItems` after the first focus. Off by default until the Shell main-loop
+    /// stall of a dump is measured (B-1 judgement, finding 2).
+    pub shell_dump: bool,
 }
 
 /// `gorca config ...`: tools around the settings file (ADR-0005 7.4, CV-3).
@@ -133,8 +139,6 @@ OPTIONS:
     --no-probe                   do not ask gsettings about the keyboard and clock
     --bench-present-log=PATH     benchmarks only: write the presentation log (absolute PATH, mode
                                  0600, created anew; secret text is redacted)
-    --bench-fill-policy=r0|candidate
-                                 benchmarks only: the fill policy of every app (default: r0)
     --topology=single|lanes|lanes-rt
                                  where the lanes run (bake-off B-5; default: single = one
                                  multi-threaded runtime). lanes: input and speech on their own
@@ -142,6 +146,11 @@ OPTIONS:
                                  real-time scheduling through rtkit and pinning to the fast cores, with a
                                  fallback to the plain lanes when rtkit refuses
     --topology-report=PATH       write what each lane was granted as JSON (`%p` = pid)
+    --bench-fill-policy=r0|prefetch|candidate
+                                 the fill policy of every app (default: prefetch; r0 = no
+                                 prefetch, the B-1 baseline; candidate = prefetch)
+    --shell-cache-dump           let the prefetch policy dump gnome-shell with one Cache.GetItems
+                                 (off: the dump stalls the Shell main loop, not yet measured)
     -h, --help                   print this help
 ";
 
@@ -367,12 +376,12 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError
                 let v = value("--bench-fill-policy")?;
                 opts.fill_policy = match v.as_str() {
                     "r0" => FillChoice::R0,
-                    "candidate" => FillChoice::Candidate,
+                    "prefetch" | "candidate" => FillChoice::Prefetch,
                     _ => {
                         return Err(CliError::BadValue {
                             flag: "--bench-fill-policy",
                             value: v,
-                            expected: "r0 or candidate",
+                            expected: "r0, prefetch or candidate",
                         });
                     }
                 };
@@ -386,6 +395,7 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError
                 })?;
             }
             "--topology-report" => opts.topology_report = Some(value("--topology-report")?),
+            "--shell-cache-dump" => opts.shell_dump = true,
             "--a11y-address" => opts.a11y_address = Some(value("--a11y-address")?),
             "--session-address" => opts.session_address = Some(value("--session-address")?),
             _ => return Err(CliError::Unknown(arg)),
@@ -446,19 +456,25 @@ mod tests {
     }
 
     #[test]
-    fn the_fill_policy_is_r0_unless_the_bench_flag_asks_otherwise() {
-        assert_eq!(opts(&[]).fill_policy, FillChoice::R0);
+    fn the_fill_policy_is_the_prefetch_unless_the_flag_asks_for_r0() {
+        assert_eq!(opts(&[]).fill_policy, FillChoice::Prefetch);
+        assert!(!opts(&[]).shell_dump);
+        assert!(opts(&["--shell-cache-dump"]).shell_dump);
         assert_eq!(
             opts(&["--bench-fill-policy=candidate"]).fill_policy,
-            FillChoice::Candidate
+            FillChoice::Prefetch
+        );
+        assert_eq!(
+            opts(&["--bench-fill-policy=prefetch"]).fill_policy,
+            FillChoice::Prefetch
         );
         assert_eq!(
             opts(&["--bench-fill-policy", "r0"]).fill_policy,
             FillChoice::R0
         );
-        // The environment never switches it on.
-        let env = |k: &str| (k == "GORCA_FILL_POLICY").then(|| "candidate".to_owned());
-        assert_eq!(opts(&[]).with_env(env).fill_policy, FillChoice::R0);
+        // The environment never changes it.
+        let env = |k: &str| (k == "GORCA_FILL_POLICY").then(|| "r0".to_owned());
+        assert_eq!(opts(&[]).with_env(env).fill_policy, FillChoice::Prefetch);
         assert!(matches!(
             p(&["--bench-fill-policy=zzz"]),
             Err(CliError::BadValue { .. })

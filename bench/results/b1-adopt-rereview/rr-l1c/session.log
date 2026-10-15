@@ -1,0 +1,224 @@
+== session rr-l1c start 2026-10-15T12:15:36Z load 15.50 13.67 11.50 8/3240 1429351
+== host: load 15.50 13.67 11.50 3/3250 1429366 governor performance  ==
+   Compiling tokio v1.53.2
+   Compiling tokio-util v0.7.20
+   Compiling zbus v5.19.0
+   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-ingress)
+   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-mirror)
+   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-bench-b2)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-bench-b1)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.60s
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench_b1-fabe3af03abd0289)
+
+running 34 tests
+test host::tests::quiet_host_rules ... ok
+test limits::tests::spec_numbers ... ok
+test limits::tests::ids_are_unique_and_gates_have_thresholds ... ok
+test msgs::tests::cross_check_tolerance_is_one_percent_of_the_larger ... ok
+test msgs::tests::msgs_formula_and_rates ... ok
+test msgs::tests::a_sv_parser_reads_integers_and_skips_strings ... ok
+test rundir::tests::rss_growth_needs_the_full_window ... ok
+test rundir::tests::idle_reports_the_worst_app ... ok
+test rundir::tests::scripted_shortfall_and_signal_mismatch_invalidate ... ok
+test runner::tests::a_missing_bold_gate_fails_instead_of_passing_silently ... ok
+test runner::tests::arm_parsing ... ok
+test runner::tests::invalid_runs_are_excluded_and_reported ... ok
+test runner::tests::cold_path_is_compared_with_r0 ... ok
+test runner::tests::schedule_rotates_and_balances_positions ... ok
+test rundir::tests::walk_run_end_to_end_on_hand_made_logs ... ok
+test runner::tests::per_model_ff_ids_resolve_to_the_ff_gate ... ok
+test runner::tests::median_gate_ignores_one_bad_repeat_but_zero_gates_do_not ... ok
+test verdict::tests::a_secret_field_is_judged_through_the_keyed_tag_of_the_log_header ... ok
+test verdict::tests::correct_when_name_matches_current_version ... ok
+test verdict::tests::a_refine_before_the_audio_can_start_is_a_correction_but_not_an_audible_one ... ok
+test verdict::tests::clean_revisit_and_hit_rates ... ok
+test step::tests::json_is_parseable_and_has_the_gate_field ... ok
+test verdict::tests::an_s1_line_is_a_state_change_with_its_own_latency_and_never_answers_a_focus ... ok
+test verdict::tests::followup_within_500ms_is_late_after_that_stale ... ok
+test verdict::tests::mutation_inside_the_window_makes_both_values_valid ... ok
+test verdict::tests::orphan_followups_and_bad_input_are_reported ... ok
+test verdict::tests::lost_superseded_and_spoken_focus_lines ... ok
+test verdict::tests::refine_replacing_it_is_refined ... ok
+test verdict::tests::refine_with_a_wrong_value_or_epoch_does_not_save_it ... ok
+test verdict::tests::stale_when_old_name_is_spoken_and_never_corrected ... ok
+test step::tests::scenarios_hit_the_caps ... ok
+test verdict::tests::unconstrained_fields_match_anything_but_history_is_enforced ... ok
+test verdict::tests::states_compare_as_sets_and_ignore_the_focus_ring ... ok
+test step::tests::noop_is_far_below_the_gate_and_a_slow_subject_is_caught ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/bin/b1.rs (target/debug/deps/b1-e636e088a89765da)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cli_offline.rs (target/debug/deps/cli_offline-709155b1d226a40a)
+
+running 2 tests
+test slow_step_arm_is_not_rankable_and_exit_code_says_so ... ok
+test a_missing_run_directory_invalidates_the_arm ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/msgs_realbus.rs (target/debug/deps/msgs_realbus-39a99faa068cbc1c)
+
+running 3 tests
+test debug_stats_exists_but_connection_counters_are_gauges_not_totals ... ok
+test monitor_counts_signals_under_its_rule_only ... ok
+test monitor_counts_calls_replies_and_per_destination_with_empty_rules ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+   Doc-tests gorca_bench_b1
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+== fidelity: pass ==
+   Compiling syn v2.0.119
+   Compiling rustix v1.1.5
+   Compiling fastrand v2.5.0
+   Compiling uuid v1.28.0
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.154
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling futures-lite v2.6.1
+   Compiling enumflags2_derive v0.7.12
+   Compiling tracing-attributes v0.1.31
+   Compiling enumflags2 v0.7.12
+   Compiling zvariant v5.15.0
+   Compiling tracing v0.1.44
+   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-ingress)
+   Compiling zbus_names v4.3.4
+   Compiling zbus_macros v5.19.0
+   Compiling zbus v5.19.0
+   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-bench-b2)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-bench-b1)
+    Finished `release` profile [optimized + debuginfo] target(s) in 14.36s
+   Compiling syn v3.0.8
+   Compiling syn v2.0.119
+   Compiling bitflags v2.13.2
+   Compiling serde v1.0.229
+   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-model)
+   Compiling tokio-macros v2.7.2
+   Compiling thiserror-impl v2.0.21
+   Compiling serde_derive v1.0.229
+   Compiling tokio v1.53.2
+   Compiling tracing-attributes v0.1.31
+   Compiling thiserror v2.0.21
+   Compiling tracing v0.1.44
+   Compiling tokio-util v0.7.20
+   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-ingress)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-doc-source-api)
+   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-connector-api)
+   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-testkit)
+    Finished `release` profile [optimized + debuginfo] target(s) in 16.49s
+   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-rt)
+   Compiling zbus v5.19.0
+   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-ingress)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-doc-source-api)
+   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-connector-api)
+   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-testkit)
+   Compiling b1-fakeapp v0.0.0 (<repo>/.claude/worktrees/b1-rereview/tests/harness/b1/fakeapp)
+    Finished `release` profile [optimized + debuginfo] target(s) in 20.82s
+[1/6] r0 walk #0 (load 16.10 13.99 11.74 2/3534 1436542)
+2026-10-15T12:16:39.349939Z  INFO gorca_daemon: gorca started workers=8 speech=Voicego topology="single"
+2026-10-15T12:16:39.350239Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T12:16:39.350574Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T12:16:39.351642Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T12:19:38.351039Z  INFO gorca_daemon::input: input lane statistics keys=4 ambiguous=0 band_forks=0
+2026-10-15T12:20:38.350820Z  INFO gorca_daemon::input: input lane statistics keys=20 ambiguous=0 band_forks=0
+2026-10-15T12:24:38.350659Z  INFO gorca_daemon::input: input lane statistics keys=40 ambiguous=0 band_forks=0
+2026-10-15T12:29:38.350646Z  INFO gorca_daemon::input: input lane statistics keys=60 ambiguous=0 band_forks=0
+[2/6] p walk #0 (load 16.61 13.01 12.24 8/3183 1531693)
+2026-10-15T12:31:22.951612Z  INFO gorca_daemon: gorca started workers=8 speech=Voicego
+2026-10-15T12:31:22.951953Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T12:31:22.952341Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T12:31:22.953666Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T12:34:21.952570Z  INFO gorca_daemon::input: input lane statistics keys=4 ambiguous=0 band_forks=0
+2026-10-15T12:35:21.951573Z  INFO gorca_daemon::input: input lane statistics keys=20 ambiguous=0 band_forks=0
+2026-10-15T12:39:21.952159Z  INFO gorca_daemon::input: input lane statistics keys=40 ambiguous=0 band_forks=0
+2026-10-15T12:44:21.952062Z  INFO gorca_daemon::input: input lane statistics keys=60 ambiguous=0 band_forks=0
+[3/6] p walk #1 (load 9.87 9.93 10.98 1/3597 1610567)
+2026-10-15T12:46:06.459260Z  INFO gorca_daemon: gorca started workers=8 speech=Voicego
+2026-10-15T12:46:06.459558Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T12:46:06.459894Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T12:46:06.461203Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T12:50:05.461109Z  INFO gorca_daemon::input: input lane statistics keys=20 ambiguous=0 band_forks=1
+2026-10-15T12:55:05.460009Z  INFO gorca_daemon::input: input lane statistics keys=40 ambiguous=0 band_forks=2
+2026-10-15T12:59:05.460811Z  INFO gorca_daemon::input: input lane statistics keys=60 ambiguous=0 band_forks=3
+[4/6] r0 walk #1 (load 11.05 11.06 10.88 1/3561 1637267)
+2026-10-15T13:00:44.939306Z  INFO gorca_daemon: gorca started workers=8 speech=Voicego topology="single"
+2026-10-15T13:00:44.939633Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T13:00:44.939984Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T13:00:44.941191Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T13:04:43.940306Z  INFO gorca_daemon::input: input lane statistics keys=20 ambiguous=0 band_forks=1
+2026-10-15T13:09:43.948576Z  INFO gorca_daemon::input: input lane statistics keys=40 ambiguous=0 band_forks=2
+2026-10-15T13:13:43.939829Z  INFO gorca_daemon::input: input lane statistics keys=60 ambiguous=0 band_forks=3
+[5/6] r0 walk #2 (load 8.01 8.39 9.46 1/3138 1681172)
+2026-10-15T13:15:23.430722Z  INFO gorca_daemon: gorca started workers=8 speech=Voicego topology="single"
+2026-10-15T13:15:23.431069Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T13:15:23.431516Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T13:15:23.432545Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T13:18:22.437499Z  INFO gorca_daemon::input: input lane statistics keys=20 ambiguous=0 band_forks=0
+2026-10-15T13:23:22.431128Z  INFO gorca_daemon::input: input lane statistics keys=40 ambiguous=0 band_forks=1
+2026-10-15T13:28:22.431613Z  INFO gorca_daemon::input: input lane statistics keys=60 ambiguous=0 band_forks=1
+[6/6] p walk #2 (load 9.86 11.20 11.60 7/3353 1740094)
+2026-10-15T13:29:51.905110Z  INFO gorca_daemon: gorca started workers=8 speech=Voicego
+2026-10-15T13:29:51.905421Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T13:29:51.905650Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T13:29:51.906888Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T13:32:50.906178Z  INFO gorca_daemon::input: input lane statistics keys=20 ambiguous=0 band_forks=0
+2026-10-15T13:37:50.906291Z  INFO gorca_daemon::input: input lane statistics keys=40 ambiguous=0 band_forks=1
+2026-10-15T13:42:50.906239Z  INFO gorca_daemon::input: input lane statistics keys=60 ambiguous=0 band_forks=1
+metric                     bus                median          min          max  n op    threshold  res   note
+B1-CPU.focus_us            p                    6884         6782         6979  3                  info   [us]
+B1-HIT.all                 p                   0.883        0.883        0.885  3                  info   [ratio]
+B1-HIT.ancestry            p                       1            1            1  3                  info   [ratio]
+B1-HIT.revisit             p                       1            1            1  3 >=        0.950  PASS   [ratio]
+B1-L1c.p99                 p                   3.982        3.518        4.901  3 <=           15  PASS   [ms]
+B1-L1h.p99                 p                   0.429        0.426        0.477  3 <=            2  PASS   [ms]
+B1-L3.lost                 p                       0            0            0  3 <=            0  PASS  gated on the max over repeats [count]
+B1-L4.announce             p                     NaN          NaN          NaN  1                  FAIL  no value produced by any valid run [ms]
+B1-L4.p99                  p                   2.631        2.484        2.775  3 <=           15  PASS   [ms]
+B1-LOST@walk               p                       0            0            0  3 <=            0  PASS  gated on the max over repeats [count]
+B1-M6                      p                   0.027        0.026        0.030  3                  info   [ratio]
+B1-M6.audible              p                       0            0            0  3 <=        0.010  PASS   [ratio]
+B1-MSG.l3                  p                   0.010        0.010        0.010  3 <=          500  PASS   [calls/s]
+B1-MSG.walk                p                   114.3        114.1        115.7  3                  info   [msgs/s]
+B1-RUNS.invalid            p                       0            0            0  1 <=            0  PASS  gated on the max over repeats [runs]
+B1-S1.p99                  p                   3.092        2.324        3.242  3 <=            5  PASS   [ms]
+B1-STALE@walk              p                       0            0            0  3 <=            0  PASS  gated on the max over repeats [count]
+B1-CPU.focus_us            r0                   6187         4122         6342  3                  info   [us]
+B1-HIT.all                 r0                  0.550        0.550        0.554  3                  info   [ratio]
+B1-HIT.ancestry            r0                      1            1            1  3                  info   [ratio]
+B1-HIT.revisit             r0                  0.998        0.997        0.998  3 >=        0.950  PASS   [ratio]
+B1-L1c.p99                 r0                  3.425        3.362         11.4  3 <=           15  PASS   [ms]
+B1-L1h.p99                 r0                  0.429        0.407        2.538  3 <=            2  PASS   [ms]
+B1-L3.lost                 r0                      0            0            0  3 <=            0  PASS  gated on the max over repeats [count]
+B1-L4.announce             r0                    NaN          NaN          NaN  1                  FAIL  no value produced by any valid run [ms]
+B1-L4.p99                  r0                  3.101        3.033        3.122  3 <=           15  PASS   [ms]
+B1-LOST@walk               r0                      0            0            0  3 <=            0  PASS  gated on the max over repeats [count]
+B1-M6                      r0                  0.232        0.231        0.234  3                  info   [ratio]
+B1-M6.audible              r0                      0            0            0  3 <=        0.010  PASS   [ratio]
+B1-MSG.l3                  r0                  0.010        0.010        0.010  3 <=          500  PASS   [calls/s]
+B1-MSG.walk                r0                   31.4         31.3         31.8  3                  info   [msgs/s]
+B1-RUNS.invalid            r0                      0            0            0  1 <=            0  PASS  gated on the max over repeats [runs]
+B1-S1.p99                  r0                  3.423        3.098        5.820  3 <=            5  PASS   [ms]
+B1-STALE@walk              r0                      0            0            0  3 <=            0  PASS  gated on the max over repeats [count]
+
+| arm | rankable | failing gates |
+|---|---|---|
+| r0 | no | B1-L4.announce |
+| p | no | B1-L4.announce |
+wrote <repo>/.claude/worktrees/b1-rereview/bench/results/b1-adopt-rereview/rr-l1c/rr-l1c/20261015T134420Z.json
+== end 2026-10-15T13:44:20Z rc=0 load 8.77 8.80 9.93 1/3543 1777995

@@ -1,0 +1,238 @@
+== host: load 2.06 3.62 3.01 1/2545 3557122 ==
+   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
+warning: constant `BEFORE` is never used
+  --> crates/gorca-mirror/src/fill/prefetch.rs:43:7
+   |
+43 | const BEFORE: u32 = 1;
+   |       ^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `AFTER` is never used
+  --> crates/gorca-mirror/src/fill/prefetch.rs:45:7
+   |
+45 | const AFTER: u32 = 6;
+   |       ^^^^^
+
+warning: constant `EDGE_AHEAD` is never used
+  --> crates/gorca-mirror/src/fill/prefetch.rs:49:7
+   |
+49 | const EDGE_AHEAD: usize = 3;
+   |       ^^^^^^^^^^
+
+warning: constant `EDGE_BEHIND` is never used
+  --> crates/gorca-mirror/src/fill/prefetch.rs:52:7
+   |
+52 | const EDGE_BEHIND: usize = 1;
+   |       ^^^^^^^^^^^
+
+warning: constant `NEAR_NEED` is never used
+  --> crates/gorca-mirror/src/fill/prefetch.rs:57:7
+   |
+57 | const NEAR_NEED: PropMask = PropMask::NAME.union(PropMask::ROLE);
+   |       ^^^^^^^^^
+
+warning: constant `LOOK` is never used
+  --> crates/gorca-mirror/src/fill/prefetch.rs:60:7
+   |
+60 | const LOOK: usize = 3;
+   |       ^^^^
+
+warning: constant `LOOK_AGE` is never used
+  --> crates/gorca-mirror/src/fill/prefetch.rs:63:7
+   |
+63 | const LOOK_AGE: Duration = Duration::from_millis(500);
+   |       ^^^^^^^^
+
+warning: constant `ACTIVATE_AGE` is never used
+  --> crates/gorca-mirror/src/fill/prefetch.rs:82:7
+   |
+82 | const ACTIVATE_AGE: Duration = Duration::from_secs(2);
+   |       ^^^^^^^^^^^^
+
+warning: field `recent_win` is never read
+   --> crates/gorca-mirror/src/fill/prefetch.rs:186:5
+    |
+174 | pub struct FocusPrefetch {
+    |            ------------- field in this struct
+...
+186 |     recent_win: SmallVec<[(NodeKey, Instant); RING_CAP]>,
+    |     ^^^^^^^^^^
+    |
+    = note: `FocusPrefetch` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: methods `ensure_window`, `ask_window`, and `ask_extend` are never used
+   --> crates/gorca-mirror/src/fill/prefetch.rs:502:8
+    |
+233 | impl FocusPrefetch {
+    | ------------------ methods in this implementation
+...
+502 |     fn ensure_window(
+    |        ^^^^^^^^^^^^^
+...
+581 |     fn ask_window(
+    |        ^^^^^^^^^^
+...
+609 |     fn ask_extend(
+    |        ^^^^^^^^^^
+
+warning: `gorca-mirror` (lib) generated 10 warnings
+   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.69s
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench-b4921a7a1562f132)
+
+running 21 tests
+test e2e::m1::tests::a_double_that_straddles_a_chunk_boundary_is_found ... ok
+test e2e::m1::tests::default_chords_use_real_keycodes ... ok
+test e2e::m1::tests::gates_skip_until_m1_lands ... ok
+test e2e::m1::tests::strict_mode_makes_the_gate_red ... ok
+test e2e::m1::tests::the_process_environment_never_opens_a_gate ... ok
+test e2e::m1::tests::key_reply_and_app_log_parse ... ok
+test e2e::m1::tests::the_reader_gets_desktop_facts_so_it_never_asks_gsettings ... ok
+test e2e::m1::tests::m1_flag_opens_the_gate ... ok
+test e2e::m1::tests::typing_score_detects_lost_and_doubled ... ok
+test e2e::m1::tests::unpaired_presses_and_releases_are_counted ... ok
+test e2e::m1::tests::wrapped_keycodes_are_not_doubles_but_real_doubles_are ... ok
+test e2e::m4::tests::a_late_speech_is_credited_to_its_own_key_and_reported_as_late ... ok
+test e2e::m4::tests::r1_skips_without_the_flag_and_fails_when_strict ... ok
+test e2e::m4::tests::the_tree_has_one_button_per_row_and_balanced_json ... ok
+test e2e::mono::tests::is_monotonic_and_ns ... ok
+test e2e::scenarios::all_tests::all_has_no_duplicates ... ok
+test e2e::scenarios::tests::accounting_separates_superseded_from_lost ... ok
+test e2e::scenarios::tests::decoder_understands_stub_tags_and_natural_text ... ok
+test e2e::scenarios::tests::scenario_ids_round_trip ... ok
+test e2e::mock::tests::voicego_binary_speak_then_stop ... ok
+test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
+
+   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
+warning: constant `BEFORE` is never used
+  --> crates/gorca-mirror/src/fill/prefetch.rs:43:7
+   |
+43 | const BEFORE: u32 = 1;
+   |       ^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: constant `AFTER` is never used
+  --> crates/gorca-mirror/src/fill/prefetch.rs:45:7
+   |
+45 | const AFTER: u32 = 6;
+   |       ^^^^^
+
+warning: constant `EDGE_AHEAD` is never used
+  --> crates/gorca-mirror/src/fill/prefetch.rs:49:7
+   |
+49 | const EDGE_AHEAD: usize = 3;
+   |       ^^^^^^^^^^
+
+warning: constant `EDGE_BEHIND` is never used
+  --> crates/gorca-mirror/src/fill/prefetch.rs:52:7
+   |
+52 | const EDGE_BEHIND: usize = 1;
+   |       ^^^^^^^^^^^
+
+warning: constant `NEAR_NEED` is never used
+  --> crates/gorca-mirror/src/fill/prefetch.rs:57:7
+   |
+57 | const NEAR_NEED: PropMask = PropMask::NAME.union(PropMask::ROLE);
+   |       ^^^^^^^^^
+
+warning: constant `LOOK` is never used
+  --> crates/gorca-mirror/src/fill/prefetch.rs:60:7
+   |
+60 | const LOOK: usize = 3;
+   |       ^^^^
+
+warning: constant `LOOK_AGE` is never used
+  --> crates/gorca-mirror/src/fill/prefetch.rs:63:7
+   |
+63 | const LOOK_AGE: Duration = Duration::from_millis(500);
+   |       ^^^^^^^^
+
+warning: constant `ACTIVATE_AGE` is never used
+  --> crates/gorca-mirror/src/fill/prefetch.rs:82:7
+   |
+82 | const ACTIVATE_AGE: Duration = Duration::from_secs(2);
+   |       ^^^^^^^^^^^^
+
+warning: field `recent_win` is never read
+   --> crates/gorca-mirror/src/fill/prefetch.rs:186:5
+    |
+174 | pub struct FocusPrefetch {
+    |            ------------- field in this struct
+...
+186 |     recent_win: SmallVec<[(NodeKey, Instant); RING_CAP]>,
+    |     ^^^^^^^^^^
+    |
+    = note: `FocusPrefetch` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: methods `ensure_window`, `ask_window`, and `ask_extend` are never used
+   --> crates/gorca-mirror/src/fill/prefetch.rs:502:8
+    |
+233 | impl FocusPrefetch {
+    | ------------------ methods in this implementation
+...
+502 |     fn ensure_window(
+    |        ^^^^^^^^^^^^^
+...
+581 |     fn ask_window(
+    |        ^^^^^^^^^^
+...
+609 |     fn ask_extend(
+    |        ^^^^^^^^^^
+
+   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench)
+   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-core)
+warning: `gorca-mirror` (lib) generated 10 warnings
+   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-daemon)
+    Finished `release` profile [optimized + debuginfo] target(s) in 18.86s
+== reader <repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca built from 9d44caa, tree at 9d44caa
+== e2e dbg-c1b: reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca backend=voicego repeats=1 load=4.52 4.07 3.17 2/2573 3558082
+-- round 1/1 C1 (load 4.52 4.07 3.17 2/2573 3558082)
+2026-10-14T19:43:43.367977Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
+2026-10-14T19:43:43.368505Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-14T19:43:43.369205Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-14T19:43:43.370846Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-14T19:43:47.077254Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-14T19:43:47.077334Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 152, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 150, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 150, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-14T19:43:47.077705Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 183, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-14T19:43:47.077806Z  INFO gorca_daemon: gorca stopped
+# e2e dbg-c1b
+# utc=2026-10-14T19:43:47Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=4.31 4.03 3.16 1/2579 3558147
+# git_rev=9d44caa
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=dbg-c1b
+# reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=4.31 4.03 3.16 1/2579 3558144
+# reader_env=GORCA_M3=1 GORCA_M3_STRICT=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=C1: app caret-event emit to SPEAK of the new line (toolkit line, one fetch)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+C1.c1_ms.n                 daemon/voicego          150          150          150  1                  info   [samples]
+C1.c1_ms.p50               daemon/voicego        0.329        0.329        0.329  1                  info   [ms]
+C1.c1_ms.p95               daemon/voicego        0.527        0.527        0.527  1                  info   [ms]
+C1.c1_ms.p99               daemon/voicego        0.601        0.601        0.601  1 <=           15  PASS   [ms]
+C1.c1_ms.p999              daemon/voicego        0.702        0.702        0.702  1                  info   [ms]
+C1.c1_ms.max               daemon/voicego        0.702        0.702        0.702  1                  info   [ms]
+C1.c1_fetches_per_key      daemon/voicego            1            1            1  1                  info   [calls]
+C1.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+
+== wrote bench/results/e2e/dbg-c1b/20261014T194347Z.{json,txt}
+rc=0

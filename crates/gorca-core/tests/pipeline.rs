@@ -354,3 +354,33 @@ async fn a_dead_reader_lane_stops_the_core_with_an_error() {
     );
     let _ = connector.await;
 }
+
+/// Review RR-1: an app that is slow (every answer 150 ms, past the 120 ms Interactive deadline)
+/// but alive. Two focus moves onto cached nodes cost one timeout each, as before the adoption;
+/// a re-read retry (or an RV-1 after a focus timeout) would double that and declare the app Hung.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn two_cached_focus_moves_on_a_slow_app_do_not_declare_it_hung() {
+    let r = rig(vec![form("slow")]).await;
+    // Warm the mirror: both nodes fetched while the app answers.
+    r.handle.focus("slow", 2);
+    r.wait_spoken(1).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    r.handle.focus("slow", 1);
+    r.wait_spoken(2).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let t0 = r.stats.snapshot().fetch_timeout;
+    r.handle
+        .set_behavior("slow", Behavior::Delay(Duration::from_millis(150)));
+    for node in [2, 1] {
+        r.handle.focus("slow", node);
+        tokio::time::sleep(Duration::from_millis(450)).await;
+    }
+    let timeouts = r.stats.snapshot().fetch_timeout - t0;
+    let texts = r.speech.texts();
+    assert!(
+        !texts.contains(&"application not responding".to_owned()),
+        "two focus moves on a slow app declared it hung: timeouts={timeouts} {texts:?}"
+    );
+    assert_eq!(timeouts, 2, "one timeout per move, as on main: {texts:?}");
+    r.stop().await;
+}

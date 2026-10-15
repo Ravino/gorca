@@ -41,6 +41,9 @@ pub struct WalkSpec {
     pub sidebar_arrows: u32,
     pub panels: u32,
     pub panel_tabs: u32,
+    /// Controls walked backwards (Shift+Tab / Up) after the forward walk of a panel and its
+    /// silent renames: the look-ahead direction of the fill policy (B-1 review F-3).
+    pub reverse_tabs: u32,
     pub switches: u32,
     pub slider_steps: u32,
     pub silent_rename_pct: u64,
@@ -80,6 +83,7 @@ impl Default for WalkSpec {
             sidebar_arrows: 20,
             panels: 5,
             panel_tabs: 30,
+            reverse_tabs: 29,
             switches: 3,
             slider_steps: 5,
             silent_rename_pct: 10,
@@ -161,6 +165,7 @@ impl WalkSpec {
         set!(sidebar_arrows, "settings", "sidebar_arrows");
         set!(panels, "settings", "panels");
         set!(panel_tabs, "settings", "panel_tabs");
+        set!(reverse_tabs, "settings", "reverse_tabs");
         set!(switches, "settings", "switches");
         set!(slider_steps, "settings", "slider_steps");
         set!(silent_rename_pct, "settings", "silent_rename_pct");
@@ -458,6 +463,11 @@ pub fn plan_loop(spec: &WalkSpec, seed: u64, idx: u32) -> Vec<Timed> {
                     Tag::Silent,
                 );
             }
+        }
+        // And back: Shift+Tab over the controls just walked, the renamed ones now ahead of the
+        // focus in the direction of travel.
+        for i in (0..spec.reverse_tabs.min(spec.panel_tabs.saturating_sub(1))).rev() {
+            p.focus("settings", format!("controls[{i}]"));
         }
     }
     for k in 0..spec.where_am_i {
@@ -898,11 +908,22 @@ impl<S: Sut + ?Sized> Exec<'_, S> {
 
 /// Play `plan` against `sut`. `settle_ms` of quiet time follows so the last replies land.
 pub fn execute<S: Sut + ?Sized>(sut: &mut S, spec: &WalkSpec, seed: u64) -> WalkRun {
-    let pl = plan(spec, seed);
+    execute_for(sut, spec, seed, None)
+}
+
+/// [`execute`] that also stops, at the end of a loop, once `max_ns` of the `sut` clock have
+/// passed since the start (a soak of fixed duration: the loop count of the spec is the upper
+/// bound, not the length). The scripted counts are those of the loops actually played.
+pub fn execute_for<S: Sut + ?Sized>(
+    sut: &mut S,
+    spec: &WalkSpec,
+    seed: u64,
+    max_ns: Option<u64>,
+) -> WalkRun {
+    let start_ns = sut.now_ns();
     let mut ex = Exec {
         run: WalkRun {
-            scripted: scripted(&pl),
-            start_ns: sut.now_ns(),
+            start_ns,
             ..WalkRun::default()
         },
         sut,
@@ -910,14 +931,23 @@ pub fn execute<S: Sut + ?Sized>(sut: &mut S, spec: &WalkSpec, seed: u64) -> Walk
         visited: Vec::new(),
         last_focus_app: String::new(),
     };
-    for t in &pl {
-        if t.gap_ms > 0 {
-            ex.sut.advance(t.gap_ms);
+    let mut played: Vec<Timed> = Vec::new();
+    for i in 0..spec.loops {
+        if max_ns.is_some_and(|m| ex.sut.now_ns().saturating_sub(start_ns) >= m) {
+            break;
         }
-        ex.step(&t.step);
-        // The first focus of a loop's fresh Settings after a restart replays the same seed, so
-        // the visited list of the previous instance is kept: dead paths are filtered at revisit.
+        for t in plan_loop(spec, seed, i) {
+            if t.gap_ms > 0 {
+                ex.sut.advance(t.gap_ms);
+            }
+            ex.step(&t.step);
+            // The first focus of a loop's fresh Settings after a restart replays the same seed,
+            // so the visited list of the previous instance is kept: dead paths are filtered at
+            // revisit.
+            played.push(t);
+        }
     }
+    ex.run.scripted = scripted(&played);
     ex.sut.advance(1_000);
     ex.run.end_ns = ex.sut.now_ns();
     ex.run
@@ -1285,6 +1315,32 @@ mod tests {
         assert!(p.iter().filter(|t| t.gap_ms == 33).count() >= 90);
     }
 
+    /// B-1 review F-3: the walk goes back over each panel (Shift+Tab), so the look-ahead of a
+    /// fill policy is exercised in both directions.
+    #[test]
+    fn each_panel_is_walked_forwards_and_then_backwards() {
+        let s = spec();
+        let focus: Vec<u32> = plan_loop(&s, 1, 0)
+            .iter()
+            .filter_map(|t| match &t.step {
+                Step::Focus { app, node } if app == "settings" => node
+                    .strip_prefix("controls[")
+                    .and_then(|r| r.strip_suffix(']'))
+                    .and_then(|n| n.parse().ok()),
+                _ => None,
+            })
+            .collect();
+        let descents = focus.windows(2).filter(|w| w[1] + 1 == w[0]).count();
+        let ascents = focus.windows(2).filter(|w| w[1] == w[0] + 1).count();
+        assert!(descents >= 5 * 27, "{descents} backward steps");
+        assert!(ascents >= 5 * 27, "{ascents} forward steps");
+        let none = WalkSpec {
+            reverse_tabs: 0,
+            ..WalkSpec::default()
+        };
+        assert!(plan_loop(&none, 1, 0).len() < plan_loop(&s, 1, 0).len());
+    }
+
     #[test]
     fn scripted_counts_follow_the_spec() {
         let s = spec();
@@ -1331,6 +1387,33 @@ mod tests {
                 >= 4,
             "restarts"
         );
+    }
+
+    #[test]
+    fn a_walk_with_a_time_bound_stops_at_a_loop_end_and_scripts_only_what_it_played() {
+        let mut spec = short();
+        spec.loops = 50;
+        // One loop first, to know its length on the (virtual) clock.
+        let mut one = SimSut::with_fault(Fault::None);
+        let mut s1 = short();
+        s1.loops = 1;
+        let r1 = execute(&mut one, &s1, 5);
+        let loop_ns = r1.end_ns - r1.start_ns;
+        let mut sut = SimSut::with_fault(Fault::None);
+        let run = execute_for(&mut sut, &spec, 5, Some(loop_ns * 5 / 2));
+        let played = scripted(&plan_loop(&spec, 5, 0)).focus;
+        assert!(
+            run.scripted.focus >= 2 * played && run.scripted.focus <= 4 * played,
+            "a few loops, not 50: {} per loop, {} played",
+            played,
+            run.scripted.focus
+        );
+        assert!(run.actual.covers(&run.scripted), "{:?}", run.actual);
+        // Without a bound all loops are played.
+        let mut all = SimSut::with_fault(Fault::None);
+        spec.loops = 2;
+        let run = execute_for(&mut all, &spec, 5, None);
+        assert_eq!(run.scripted, scripted(&plan(&spec, 5)));
     }
 
     #[test]

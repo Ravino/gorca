@@ -263,6 +263,19 @@ impl Caller {
         path: &str,
         deadline: Deadline,
     ) -> Result<Vec<(String, String)>, DbusError> {
+        self.children_of_capped(path, deadline, items::MAX_DUMP_BYTES)
+            .await
+    }
+
+    /// [`Self::children_of`] for a reply of at most `max_bytes`: a longer one is refused before
+    /// it is decoded (a prefetch must not allocate for a 300 000-row list it only wants a
+    /// window of; the caller reads such a parent by index instead).
+    pub(super) async fn children_of_capped(
+        &self,
+        path: &str,
+        deadline: Deadline,
+        max_bytes: usize,
+    ) -> Result<Vec<(String, String)>, DbusError> {
         let m = self
             .call(
                 &self.bus_name,
@@ -273,7 +286,7 @@ impl Caller {
                 &(),
             )
             .await?;
-        if m.body().data().len() > items::MAX_DUMP_BYTES {
+        if m.body().data().len() > max_bytes {
             return Err(DbusError::Zbus(zbus::Error::Failure(
                 "GetChildren reply too large".to_owned(),
             )));

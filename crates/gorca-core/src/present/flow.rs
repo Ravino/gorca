@@ -88,6 +88,7 @@ impl Reader {
             FocusLaneMsg::FocusChanged { node } => {
                 self.selection_node = None;
                 self.focus_retried = None;
+                self.revalidate_retried = None;
                 self.web_on_focus(node, fx);
                 self.begin_focus(node, now, fx);
             }
@@ -281,7 +282,14 @@ impl Reader {
         // Only a request issued strictly after the focus began can have confirmed the content.
         let confirmed_after_trigger =
             v.snap.confirmed_seq > self.focus_seq && v.stale.is_empty() && !v.aged;
-        if revalidate && !confirmed_after_trigger {
+        // A fresh snapshot that did not earn the protection (a prefetched window carries no
+        // `FOCUSED` state) is still re-read: only the re-read can earn it (review F-1, path 4).
+        let unearned = self.selection_node != Some(v.snap.key)
+            && self
+                .focused_app
+                .as_ref()
+                .is_some_and(|f| !f.protects(v.snap.key.app));
+        if revalidate && (!confirmed_after_trigger || unearned) {
             self.counters.revalidations += 1;
             fx.push(Self::fetch_effect(
                 v.snap.key,
@@ -364,6 +372,11 @@ impl Reader {
                         && !snap.states.contains(StateSet::DEFUNCT)
                     {
                         f.publish(snap.key.app);
+                    } else if from_cache && f.protects(snap.key.app) {
+                        // Served from the cache inside the application that already owns the
+                        // protection: the re-read that follows decides (a prefetched sibling
+                        // never shows `FOCUSED`, and demoting for one round trip drops the
+                        // app's text events).
                     } else {
                         // The Reader's focus is here now and could not be validated: protection
                         // must not stay with whoever held it before (fail closed).
@@ -443,7 +456,13 @@ impl Reader {
                     } else {
                         PresentSource::Stale
                     };
-                    self.present_cached(&v, src, false, r.epoch, fx);
+                    // The cache is all there is, so the re-read is what can still confirm it.
+                    // After a Timeout the app is slow: a second request on the same deadline
+                    // would double the timeouts charged to it (review RR-1), so none is asked;
+                    // a later FOCUSED state re-read earns the protection (RR-2).
+                    let ask_rv1 =
+                        !matches!(r.result, Err(gorca_connector_api::BackendError::Timeout));
+                    self.present_cached(&v, src, ask_rv1, r.epoch, fx);
                 } else if self.web_focus_fallback(r.node, fx) {
                     // N2: a web node is spoken from the document mirror (name and role).
                 } else if self.focus_retried != Some(r.node) {
@@ -470,6 +489,22 @@ impl Reader {
         };
         if p.node != r.node || p.epoch != r.epoch {
             return;
+        }
+        // A focus served from the cache (a prefetched sibling, an earlier visit) shows
+        // the states of its fetch, not `FOCUSED`, and was not trusted at presentation
+        // (fail closed). The re-read is the proof: earn the protection now, or the
+        // text events of the focused application would never reach the Reader.
+        if self.selection_node != Some(r.node)
+            && let Ok(new) = &r.result
+            && let Some(f) = &self.focused_app
+        {
+            if new.states.contains(StateSet::FOCUSED) && !new.states.contains(StateSet::DEFUNCT) {
+                f.publish(r.node.app);
+            } else if f.protects(r.node.app) {
+                // The re-read answered: the node is not focused. What a cache-served
+                // presentation left standing is withdrawn (fail closed).
+                f.demote();
+            }
         }
         // A web document's speech belongs to browse mode: the cursor line follows the focus
         // utterance and keys move it at once, so only a changed title is worth correcting (the
@@ -533,13 +568,33 @@ impl Reader {
             Err(gorca_connector_api::BackendError::Gone) => {
                 self.apply_focus(FocusMsg::NodeRemoved(r.node), fx);
             }
+            // A timed-out re-read is not repeated: the app is slow, and a retry would double the
+            // timeouts charged to it (review RR-1). A later FOCUSED state re-read earns the
+            // protection (RR-2).
+            Err(gorca_connector_api::BackendError::Timeout) => {}
+            // Any other failure of the re-read: it is the only thing that can confirm a
+            // cache-served focus (protection, text events), so it is asked once more, and only
+            // while the protection is still unearned.
             Err(
-                gorca_connector_api::BackendError::Timeout
-                | gorca_connector_api::BackendError::NotSupported
+                gorca_connector_api::BackendError::NotSupported
                 | gorca_connector_api::BackendError::Busy
                 | gorca_connector_api::BackendError::Protocol(_)
                 | gorca_connector_api::BackendError::Unresolved,
-            ) => {}
+            ) => {
+                let unearned = self
+                    .focused_app
+                    .as_ref()
+                    .is_some_and(|f| !f.protects(r.node.app));
+                if unearned && self.revalidate_retried != Some(r.node) {
+                    self.revalidate_retried = Some(r.node);
+                    fx.push(Self::fetch_effect(
+                        r.node,
+                        FOCUS_FIELDS,
+                        r.epoch,
+                        FetchKind::Revalidate,
+                    ));
+                }
+            }
         }
     }
 
@@ -581,6 +636,14 @@ impl Reader {
             }
             Err(_) => return,
         };
+        // A re-read that shows the node FOCUSED is the proof a failed RV-1 never delivered
+        // (review RR-2): earn the protection now.
+        if self.selection_node != Some(r.node)
+            && new.states.contains(StateSet::FOCUSED)
+            && let Some(f) = &self.focused_app
+        {
+            f.publish(r.node.app);
+        }
         let ch = changed(&p.snap, new, skip_states(p.ctx));
         if ch.is_empty() {
             return;

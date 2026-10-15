@@ -350,8 +350,12 @@ async fn run_inner(
     // A caller-supplied factory (tests of the shared fill code) wins over the flag.
     let policy = policy.or_else(|| match opts.fill_policy {
         cli::FillChoice::R0 => None,
-        cli::FillChoice::Candidate => {
-            let f: PolicyFactory = Arc::new(|| Box::<gorca_mirror::fill::Candidate>::default());
+        cli::FillChoice::Prefetch => {
+            let cfg = gorca_mirror::fill::PrefetchConfig {
+                shell_dump: opts.shell_dump,
+            };
+            let f: PolicyFactory =
+                Arc::new(move || Box::new(gorca_mirror::fill::FocusPrefetch::new(cfg)));
             Some(f)
         }
     });

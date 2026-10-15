@@ -8,8 +8,9 @@
 
 use std::collections::HashSet;
 use std::ops::Range;
+use std::sync::Arc;
 
-use gorca_model::{PropMask, Role, StateSet};
+use gorca_model::{NodeKey, PropMask, Role, StateSet};
 use gorca_rt::Deadline;
 use smallvec::SmallVec;
 
@@ -32,6 +33,22 @@ pub(crate) async fn fetch(
     want: PropMask,
     dl: Deadline,
 ) -> Result<RawNode, BackendError> {
+    fetch_node(cx, node, want, None, dl)
+        .await
+        .map(|(raw, _)| raw)
+}
+
+/// [`fetch`] that also hands back the raw `Parent` reference when `want` asked for it, so a
+/// caller that climbs (`ancestry`) needs no second call for the same property. A foreign parent
+/// is left out of `raw.parent` and counted. With `known_parent` (a children walk: the caller
+/// listed the node under it) no `Parent` call is made and the link is taken as given.
+async fn fetch_node(
+    cx: &CallCx,
+    node: &Resolved,
+    want: PropMask,
+    known_parent: Option<NodeKey>,
+    dl: Deadline,
+) -> Result<(RawNode, Option<(String, String)>), BackendError> {
     let c = &cx.caller;
     let path: &str = &node.path;
     let name_fut = async {
@@ -51,7 +68,7 @@ pub(crate) async fn fetch(
         }
     };
     let parent_fut = async {
-        if want.contains(PropMask::PARENT) {
+        if want.contains(PropMask::PARENT) && known_parent.is_none() {
             c.parent_of(path, dl).await.map(Some)
         } else {
             Ok(None)
@@ -92,8 +109,13 @@ pub(crate) async fn fetch(
         raw.description = Some(clip(&d, MAX_TEXT_BYTES).to_owned());
         have |= PropMask::DESCRIPTION;
     }
-    if let Ok(Some(parent)) = parent {
-        raw.parent = parent.and_then(|(bus, p)| cx.key_of_ref(&bus, &p));
+    let mut parent_ref = None;
+    if let Some(p) = known_parent {
+        raw.parent = Some(p);
+        have |= PropMask::PARENT;
+    } else if let Ok(Some(parent)) = parent {
+        raw.parent = parent.as_ref().and_then(|(bus, p)| cx.key_of_ref(bus, p));
+        parent_ref = parent;
         have |= PropMask::PARENT;
     }
     if let Ok(Some(n)) = count {
@@ -114,7 +136,7 @@ pub(crate) async fn fetch(
         }
     }
     raw.have = have;
-    Ok(raw)
+    Ok((raw, parent_ref))
 }
 
 async fn value_for(
@@ -189,6 +211,137 @@ async fn value_for(
     }
 }
 
+/// Children fetched at the same time inside one op. Each fetch pipelines up to six calls on the
+/// app's connection and the app serves them one at a time, so a small bound keeps the Interactive
+/// share of the app's serial loop short.
+const CHILD_CONCURRENCY: usize = 3;
+/// A child range up to this size is read with one `GetChildAtIndex` per child, all in flight at
+/// once; a larger one with a single `GetChildren`.
+const INDEXED_RANGE: u32 = 8;
+
+/// Run `f` over `items` with at most `conc` in flight, results in input order. A task that
+/// panicked or was cancelled yields `None`. The tasks belong to this future: dropping it (a
+/// deadline, a cancelled op) aborts them.
+async fn map_concurrent<T, R, F, Fut>(items: Vec<T>, conc: usize, f: F) -> Vec<Option<R>>
+where
+    T: Send + 'static,
+    R: Send + 'static,
+    F: Fn(T) -> Fut,
+    Fut: std::future::Future<Output = R> + Send + 'static,
+{
+    let mut out: Vec<Option<R>> = Vec::with_capacity(items.len());
+    out.resize_with(items.len(), || None);
+    let mut set = tokio::task::JoinSet::new();
+    let mut iter = items.into_iter().enumerate();
+    loop {
+        while set.len() < conc.max(1) {
+            let Some((i, item)) = iter.next() else { break };
+            let fut = f(item);
+            set.spawn(async move { (i, fut.await) });
+        }
+        let Some(done) = set.join_next().await else {
+            break;
+        };
+        if let Ok((i, r)) = done
+            && let Some(slot) = out.get_mut(i)
+        {
+            *slot = Some(r);
+        }
+    }
+    out
+}
+
+/// The refs of the children of `node` in `start..end`, in order. Fewer when the list is shorter.
+async fn child_refs(
+    cx: &CallCx,
+    node: &Resolved,
+    start: u32,
+    end: u32,
+    dl: Deadline,
+) -> Result<Vec<(String, String)>, BackendError> {
+    if end.saturating_sub(start) > INDEXED_RANGE {
+        let all = cx
+            .caller
+            .children_of(&node.path, dl)
+            .await
+            .map_err(|e| backend_error(&e))?;
+        // `GetChildren` is clipped at the subtree cap: a range beyond the clip is read by index.
+        if (start as usize) < all.len() || all.len() < MAX_SUBTREE_NODES as usize {
+            return Ok(all
+                .into_iter()
+                .skip(start as usize)
+                .take((end - start) as usize)
+                .collect());
+        }
+    }
+    let results = {
+        let c = cx.caller.clone();
+        let path = Arc::clone(&node.path);
+        map_concurrent(
+            (start..end).collect(),
+            INDEXED_RANGE as usize,
+            move |i: u32| {
+                let c = c.clone();
+                let path = Arc::clone(&path);
+                async move { c.child_at(&path, i, dl).await }
+            },
+        )
+        .await
+    };
+    let mut refs = Vec::new();
+    for (n, r) in results.into_iter().enumerate() {
+        match r {
+            Some(Ok(Some(r))) => refs.push(r),
+            // Past the last child: the range was larger than the list.
+            Some(Err(e)) if n == 0 => return Err(backend_error(&e)),
+            Some(Ok(None) | Err(_)) | None => break,
+        }
+    }
+    Ok(refs)
+}
+
+/// Fetch `refs` (children of `parent`) with `want`, a few at a time; the parent link is the
+/// walk's own (no `Parent` call per child). Returns the nodes in order and whether any was lost
+/// to a failure.
+async fn fetch_children(
+    cx: &CallCx,
+    parent: &Resolved,
+    refs: Vec<Resolved>,
+    want: PropMask,
+    dl: Deadline,
+) -> (Vec<(Resolved, RawNode)>, bool, Option<BackendError>) {
+    let results = {
+        let cx2 = cx.clone();
+        let parent_key = parent.key;
+        let shared: Vec<Resolved> = refs.clone();
+        map_concurrent(shared, CHILD_CONCURRENCY, move |child: Resolved| {
+            let cx = cx2.clone();
+            async move {
+                fetch_node(&cx, &child, want, Some(parent_key), dl)
+                    .await
+                    .map(|(raw, _)| raw)
+            }
+        })
+        .await
+    };
+    let mut nodes = Vec::with_capacity(refs.len());
+    let mut lost = false;
+    let mut first_err = None;
+    for (child, r) in refs.into_iter().zip(results) {
+        match r {
+            Some(Ok(raw)) => nodes.push((child, raw)),
+            // Gone in the meantime: not an error of the op.
+            Some(Err(BackendError::Gone | BackendError::Unresolved)) => {}
+            Some(Err(e)) => {
+                lost = true;
+                first_err.get_or_insert(e);
+            }
+            None => lost = true,
+        }
+    }
+    (nodes, lost, first_err)
+}
+
 /// The children of `node` in `range`, each fetched with `want` plus its parent link.
 pub(crate) async fn child_snapshots(
     cx: &CallCx,
@@ -202,43 +355,124 @@ pub(crate) async fn child_snapshots(
         truncated: end < range.end,
         ..RawBatch::default()
     };
-    for i in range.start..end {
-        if dl.expired(std::time::Instant::now()) {
-            batch.truncated = true;
-            break;
-        }
-        let r = match cx.caller.child_at(&node.path, i, dl).await {
-            Ok(Some((bus, p))) => cx.resolve_ref(&bus, &p),
-            // Past the last child: the range was larger than the list.
-            Ok(None) => break,
-            Err(e) if batch.nodes.is_empty() => return Err(backend_error(&e)),
-            Err(_) => {
-                batch.truncated = true;
-                break;
-            }
-        };
-        let Some(child) = r else {
-            cx.counters.foreign_refs();
-            continue;
-        };
-        match fetch(cx, &child, want | PropMask::PARENT, dl).await {
-            Ok(mut raw) => {
-                raw.parent = Some(node.key);
-                batch.nodes.push((child.key, raw));
-            }
-            Err(BackendError::Gone | BackendError::Unresolved) => {}
-            Err(e) if batch.nodes.is_empty() => return Err(e),
-            Err(_) => {
-                batch.truncated = true;
-                break;
-            }
+    if range.start >= end {
+        return Ok(batch);
+    }
+    let mut kids = Vec::new();
+    for (bus, p) in child_refs(cx, node, range.start, end, dl).await? {
+        match cx.resolve_ref(&bus, &p) {
+            Some(child) => kids.push(child),
+            None => cx.counters.foreign_refs(),
         }
     }
+    let (nodes, lost, err) = fetch_children(cx, node, kids, want, dl).await;
+    if nodes.is_empty()
+        && let Some(e) = err
+    {
+        return Err(e);
+    }
+    batch.truncated |= lost;
+    batch.nodes = nodes.into_iter().map(|(c, raw)| (c.key, raw)).collect();
+    Ok(batch)
+}
+
+/// A parent's child list longer than this (bytes of the `GetChildren` reply, about 4 000 refs) is
+/// not read whole to find a window of it.
+const SIBLING_LIST_MAX_BYTES: usize = 512 * 1024;
+
+/// The siblings of `node` (children of `parent`): the `before` entries ahead of it, the node
+/// itself and the `after` entries behind it, each fetched with `want` and the walk's parent link.
+///
+/// Normally the node's index comes out of the one `GetChildren` reply that lists the parent's
+/// children, so finding it costs no probing; a reply above [`SIBLING_LIST_MAX_BYTES`] is refused
+/// before it is decoded (`Protocol`). With `indexed` (the caller knows the list is long) nothing
+/// is listed: `GetIndexInParent` of the node, then `GetChildAtIndex` for the window (at most
+/// [`INDEXED_RANGE`] entries), so a 300 000-row list costs the same as a short one. A node that
+/// is not in the list (it moved or went away) or sits beyond the `GetChildren` clip yields an
+/// empty batch, not an error.
+pub(crate) async fn siblings(
+    cx: &CallCx,
+    parent: &Resolved,
+    node: &Resolved,
+    window: (u32, u32),
+    indexed: bool,
+    want: PropMask,
+    dl: Deadline,
+) -> Result<RawBatch, BackendError> {
+    let (before, after) = window;
+    let mut batch = RawBatch::default();
+    let refs: Vec<(String, String)>;
+    let at: usize;
+    if indexed {
+        let idx = cx
+            .caller
+            .index_in_parent(&node.path, dl)
+            .await
+            .map_err(|e| backend_error(&e))?;
+        let Ok(idx) = u32::try_from(idx) else {
+            return Ok(batch);
+        };
+        let start = idx.saturating_sub(before);
+        let end = idx
+            .saturating_add(after)
+            .saturating_add(1)
+            .min(start.saturating_add(INDEXED_RANGE));
+        refs = child_refs(cx, parent, start, end, dl).await?;
+        at = (idx - start) as usize;
+        // The node must be where the app says it is.
+        if refs.get(at).is_none_or(|(_, p)| p.as_str() != &*node.path) {
+            return Ok(batch);
+        }
+        batch.truncated = false;
+        return finish_siblings(cx, parent, &refs, 0..refs.len(), want, dl, batch).await;
+    }
+    let all = cx
+        .caller
+        .children_of_capped(&parent.path, dl, SIBLING_LIST_MAX_BYTES)
+        .await
+        .map_err(|e| backend_error(&e))?;
+    let Some(pos) = all.iter().position(|(_, p)| p.as_str() == &*node.path) else {
+        return Ok(batch);
+    };
+    let start = pos.saturating_sub(before as usize);
+    let end = pos
+        .saturating_add(after as usize)
+        .saturating_add(1)
+        .min(all.len());
+    batch.truncated = end >= MAX_SUBTREE_NODES as usize && all.len() >= MAX_SUBTREE_NODES as usize;
+    finish_siblings(cx, parent, &all, start..end, want, dl, batch).await
+}
+
+async fn finish_siblings(
+    cx: &CallCx,
+    parent: &Resolved,
+    refs: &[(String, String)],
+    range: Range<usize>,
+    want: PropMask,
+    dl: Deadline,
+    mut batch: RawBatch,
+) -> Result<RawBatch, BackendError> {
+    let mut kids = Vec::with_capacity(range.len());
+    for (bus, p) in refs.get(range).unwrap_or(&[]) {
+        match cx.resolve_ref(bus, p) {
+            Some(child) => kids.push(child),
+            None => cx.counters.foreign_refs(),
+        }
+    }
+    let (nodes, lost, err) = fetch_children(cx, parent, kids, want, dl).await;
+    if nodes.is_empty()
+        && let Some(e) = err
+    {
+        return Err(e);
+    }
+    batch.truncated |= lost;
+    batch.nodes = nodes.into_iter().map(|(c, raw)| (c.key, raw)).collect();
     Ok(batch)
 }
 
 /// `node`, its parent, ... up to `max_depth` or the app root. Stops (truncated) at a cycle, a
-/// foreign reference or a `Document` role; the document node itself is not included.
+/// foreign reference or a `Document` role; the document node itself is not included. The parent
+/// reference comes from the fetch of each level: one round of calls per level, none extra.
 pub(crate) async fn ancestry(
     cx: &CallCx,
     node: &Resolved,
@@ -248,14 +482,15 @@ pub(crate) async fn ancestry(
 ) -> Result<RawBatch, BackendError> {
     let depth = max_depth.min(MAX_ANCESTRY_DEPTH);
     let mut batch = RawBatch::default();
-    let mut seen: HashSet<std::sync::Arc<str>> = HashSet::new();
+    let mut seen: HashSet<Arc<str>> = HashSet::new();
     let mut cur = node.clone();
     for level in 0..=usize::from(depth) {
-        if !seen.insert(std::sync::Arc::clone(&cur.path)) {
+        if !seen.insert(Arc::clone(&cur.path)) {
             batch.truncated = true;
             break;
         }
-        let raw = match fetch(cx, &cur, want | PropMask::PARENT, dl).await {
+        let (raw, parent_ref) = match fetch_node(cx, &cur, want | PropMask::PARENT, None, dl).await
+        {
             Ok(r) => r,
             Err(e) if batch.nodes.is_empty() => return Err(e),
             Err(_) => {
@@ -263,24 +498,19 @@ pub(crate) async fn ancestry(
                 break;
             }
         };
-        if matches!(
-            crate::decode::role_from_raw(raw.role),
-            Role::Document | Role::DocumentWeb
-        ) && level > 0
-        {
+        let role = crate::decode::role_from_raw(raw.role);
+        if matches!(role, Role::Document | Role::DocumentWeb) && level > 0 {
             batch.truncated = true;
             break;
         }
         // The application root is the top: its own parent is the desktop, on another bus name,
         // which is the normal end of the chain and not a foreign reference.
-        let at_root = crate::decode::role_from_raw(raw.role) == Role::Application;
-        let parent_path = if at_root {
+        let parent_path = if role == Role::Application {
             None
         } else {
-            cx.caller.parent_of(&cur.path, dl).await.unwrap_or_default()
+            parent_ref
         };
-        let key = cur.key;
-        batch.nodes.push((key, raw));
+        batch.nodes.push((cur.key, raw));
         let Some((bus, p)) = parent_path else { break };
         if p == NULL_PATH || p.is_empty() {
             break;
@@ -299,22 +529,20 @@ pub(crate) async fn ancestry(
     Ok(batch)
 }
 
-/// Breadth-first walk below `root`, at most `max_nodes` nodes, never into a `Document`.
+/// Breadth-first walk below `root`, at most `max_nodes` nodes, never into a `Document`. The
+/// children of one node are fetched a few at a time.
 pub(crate) async fn subtree(
     cx: &CallCx,
     root: &Resolved,
     max_nodes: u32,
     dl: Deadline,
 ) -> Result<RawBatch, BackendError> {
+    const WANT: PropMask = PropMask::PRESENT
+        .union(PropMask::CHILDREN)
+        .union(PropMask::PARENT);
     let cap = max_nodes.min(MAX_SUBTREE_NODES) as usize;
     let mut batch = RawBatch::default();
-    let first = fetch(
-        cx,
-        root,
-        PropMask::PRESENT | PropMask::CHILDREN | PropMask::PARENT,
-        dl,
-    )
-    .await?;
+    let first = fetch(cx, root, WANT, dl).await?;
     let mut queue: std::collections::VecDeque<Resolved> = std::collections::VecDeque::new();
     if !matches!(
         crate::decode::role_from_raw(first.role),
@@ -323,6 +551,9 @@ pub(crate) async fn subtree(
         queue.push_back(root.clone());
     }
     batch.nodes.push((root.key, first));
+    // An object listed twice (a hostile or buggy app: self reference, cycle) is walked once.
+    let mut seen: HashSet<Arc<str>> = HashSet::new();
+    seen.insert(Arc::clone(&root.path));
     while let Some(parent) = queue.pop_front() {
         if batch.nodes.len() >= cap || dl.expired(std::time::Instant::now()) {
             batch.truncated = true;
@@ -332,37 +563,33 @@ pub(crate) async fn subtree(
             batch.truncated = true;
             continue;
         };
-        let mut keys: SmallVec<[gorca_model::NodeKey; 8]> = SmallVec::new();
+        let mut refs: Vec<Resolved> = Vec::new();
         for (bus, p) in kids {
-            if batch.nodes.len() >= cap {
+            if batch.nodes.len() + refs.len() >= cap {
                 batch.truncated = true;
                 break;
             }
-            let Some(child) = cx.resolve_ref(&bus, &p) else {
-                cx.counters.foreign_refs();
-                continue;
-            };
-            match fetch(
-                cx,
-                &child,
-                PropMask::PRESENT | PropMask::CHILDREN | PropMask::PARENT,
-                dl,
-            )
-            .await
-            {
-                Ok(mut raw) => {
-                    raw.parent = Some(parent.key);
-                    keys.push(child.key);
-                    let is_doc = matches!(
-                        crate::decode::role_from_raw(raw.role),
-                        Role::Document | Role::DocumentWeb
-                    );
-                    batch.nodes.push((child.key, raw));
-                    if !is_doc {
-                        queue.push_back(child);
+            match cx.resolve_ref(&bus, &p) {
+                Some(child) => {
+                    if seen.insert(Arc::clone(&child.path)) {
+                        refs.push(child);
                     }
                 }
-                Err(_) => batch.truncated = true,
+                None => cx.counters.foreign_refs(),
+            }
+        }
+        let (nodes, lost, _) = fetch_children(cx, &parent, refs, WANT, dl).await;
+        batch.truncated |= lost;
+        let mut keys: SmallVec<[gorca_model::NodeKey; 8]> = SmallVec::new();
+        for (child, raw) in nodes {
+            keys.push(child.key);
+            let is_doc = matches!(
+                crate::decode::role_from_raw(raw.role),
+                Role::Document | Role::DocumentWeb
+            );
+            batch.nodes.push((child.key, raw));
+            if !is_doc {
+                queue.push_back(child);
             }
         }
         if let Some((_, raw)) = batch.nodes.iter_mut().find(|(k, _)| *k == parent.key) {
@@ -420,3 +647,6 @@ pub(crate) async fn cache_dump(
         truncated: decoded.truncated,
     })
 }
+
+#[cfg(test)]
+mod tests;

@@ -48,21 +48,20 @@ exactly the signals gorca receives (cross-check vs `DrainStats.messages`, 1 %); 
 set it counts everything (idle calls/s, calls to the `storm` app). `msgs = 2 * calls + signals`.
 `b1 bus-probe` prints what the bus offers.
 
-## The `Candidate` hook (arms edit only their own files)
+## The `Candidate` hook after the decision
 
-`gorca_mirror::fill::Candidate` (SPEC 10) is a stand-in on `main` that behaves like R0. An arm
-**replaces `crates/gorca-mirror/src/fill/candidate.rs`** (and `candidate/**`, `fetch/strategy.rs`)
-and edits no wiring. The contract is three facts: `Candidate: FillPolicy + Default + Send +
-'static`. Everything else is harness-owned and already wired:
+B-1 is decided (2026-10-14, `docs/reports/b1-adopt.md`): `gorca_mirror::fill::Candidate` is now an
+alias of the adopted product policy `FocusPrefetch`, and **the daemon runs it by default**.
+R0 is `gorca --bench-fill-policy=r0` (a `NullPolicy`); `--bench-fill-policy=candidate` and
+`prefetch` both select the product policy. `b1-walk` passes `r0` for the arm labelled `r0` and
+`candidate` for every other arm (`B1_FILL_POLICY` overrides). The Shell `Cache.GetItems` dump is
+off unless `--shell-cache-dump` is given.
 
-* the daemon: `gorca --bench-fill-policy=candidate` (default `r0`; the product always runs R0);
-  `b1-walk` passes it for every arm except the one labelled `r0` (`B1_FILL_POLICY` overrides).
-  One binary therefore serves R0 and the arm, and a stand-in build must reproduce R0;
-* the step bench: `benches/step.rs` links the tree's `Candidate` through one generic adapter and
-  `driver.sh` runs it in the arm's tree (`GORCA_STEP_SUBJECT=candidate` is the default; `noop` is
-  the floor, `spin:400` the sensitivity check that must FAIL). Arms merge the harness commit;
-* the IC suite: `cargo test -p gorca-daemon --test b1_ic candidate` runs IC-1..IC-23 against
-  `Candidate`.
+To re-measure against the baseline, build `main` before the change in its own tree, give that
+binary to the arm labelled `r0` and the new tree's binary to another arm (`run-all.sh ... --arm
+r0:<main>/target/release/gorca --arm p:<tree>/target/release/gorca`). The step bench links the
+tree's `Candidate` (derived from the daemon path), the IC suite is
+`cargo test -p gorca-daemon --test b1_ic`.
 
 ## Step bench (H-7)
 

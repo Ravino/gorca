@@ -229,6 +229,7 @@ fn answer(s: &Script, op: &BackendOp) -> Option<Result<BackendReply, BackendErro
         BackendOp::Probe => Some(Ok(BackendReply::ActionDone)),
         BackendOp::Children { .. }
         | BackendOp::Subtree { .. }
+        | BackendOp::Siblings { .. }
         | BackendOp::CacheDump { .. }
         | BackendOp::Text(_)
         | BackendOp::HitTest { .. } => Some(Err(BackendError::NotSupported)),
