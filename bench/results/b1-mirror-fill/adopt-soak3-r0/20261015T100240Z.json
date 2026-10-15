@@ -1,0 +1,8 @@
+{
+  "meta": {"utc": "2026-10-15T10:02:40Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "4", "cpus_allowed": "6-9", "governor": "performance x16", "deep_idle_states": "none enabled", "loadavg_start": "9.51 11.62 10.55 2/2717 1092904", "quiet_host": "no: load average 9.51 >= 1", "harness_git_rev": "7f7e0fc", "harness_git_dirty": "false", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "dbus_daemon": "D-Bus Message Bus Daemon 1.16.2", "build": "release", "arm_rev.r0": "9d44caa", "label": "adopt-soak3-r0", "plan": "soak=1", "loadavg_end": "9.51 11.62 10.55 2/2717 1092901", "schedule": "round-robin over arms, rotated by one each round", "loadavg_start_run": "8.94 9.75 10.02 2/3165 893015", "fidelity": "pass", "run_status": "valid"},
+  "rows": [
+    {"id": "B1-RSS.soak", "scenario": "soak", "bus": "r0", "value": -2.03515625, "min": -2.03515625, "max": -2.03515625, "runs": 1, "unit": "MiB", "op": "<=", "threshold": 8, "verdict": "PASS", "note": ""},
+    {"id": "B1-RUNS.invalid", "scenario": "soak", "bus": "r0", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "runs", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "B1-STALE@soak", "scenario": "soak", "bus": "r0", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "count", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"}
+  ]
+}

@@ -1,0 +1,107 @@
+== soak p start 2026-10-15T08:55:17Z load 8.24 9.63 9.98 1/3139 892665 cpus 2-5 B1_SOAK_S=3900
+== host: load 8.24 9.63 9.98 1/3140 892670 governor performance  ==
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.16s
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench_b1-fabe3af03abd0289)
+
+running 34 tests
+test host::tests::quiet_host_rules ... ok
+test limits::tests::ids_are_unique_and_gates_have_thresholds ... ok
+test limits::tests::spec_numbers ... ok
+test msgs::tests::a_sv_parser_reads_integers_and_skips_strings ... ok
+test msgs::tests::cross_check_tolerance_is_one_percent_of_the_larger ... ok
+test msgs::tests::msgs_formula_and_rates ... ok
+test rundir::tests::rss_growth_needs_the_full_window ... ok
+test rundir::tests::idle_reports_the_worst_app ... ok
+test rundir::tests::scripted_shortfall_and_signal_mismatch_invalidate ... ok
+test runner::tests::a_missing_bold_gate_fails_instead_of_passing_silently ... ok
+test rundir::tests::walk_run_end_to_end_on_hand_made_logs ... ok
+test runner::tests::arm_parsing ... ok
+test runner::tests::cold_path_is_compared_with_r0 ... ok
+test runner::tests::invalid_runs_are_excluded_and_reported ... ok
+test runner::tests::median_gate_ignores_one_bad_repeat_but_zero_gates_do_not ... ok
+test runner::tests::schedule_rotates_and_balances_positions ... ok
+test runner::tests::per_model_ff_ids_resolve_to_the_ff_gate ... ok
+test verdict::tests::a_refine_before_the_audio_can_start_is_a_correction_but_not_an_audible_one ... ok
+test step::tests::json_is_parseable_and_has_the_gate_field ... ok
+test verdict::tests::a_secret_field_is_judged_through_the_keyed_tag_of_the_log_header ... ok
+test verdict::tests::an_s1_line_is_a_state_change_with_its_own_latency_and_never_answers_a_focus ... ok
+test step::tests::scenarios_hit_the_caps ... ok
+test verdict::tests::clean_revisit_and_hit_rates ... ok
+test verdict::tests::correct_when_name_matches_current_version ... ok
+test verdict::tests::lost_superseded_and_spoken_focus_lines ... ok
+test verdict::tests::followup_within_500ms_is_late_after_that_stale ... ok
+test verdict::tests::mutation_inside_the_window_makes_both_values_valid ... ok
+test verdict::tests::orphan_followups_and_bad_input_are_reported ... ok
+test verdict::tests::refine_replacing_it_is_refined ... ok
+test verdict::tests::refine_with_a_wrong_value_or_epoch_does_not_save_it ... ok
+test verdict::tests::stale_when_old_name_is_spoken_and_never_corrected ... ok
+test verdict::tests::states_compare_as_sets_and_ignore_the_focus_ring ... ok
+test verdict::tests::unconstrained_fields_match_anything_but_history_is_enforced ... ok
+test step::tests::noop_is_far_below_the_gate_and_a_slow_subject_is_caught ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/bin/b1.rs (target/debug/deps/b1-e636e088a89765da)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cli_offline.rs (target/debug/deps/cli_offline-709155b1d226a40a)
+
+running 2 tests
+test a_missing_run_directory_invalidates_the_arm ... ok
+test slow_step_arm_is_not_rankable_and_exit_code_says_so ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/msgs_realbus.rs (target/debug/deps/msgs_realbus-39a99faa068cbc1c)
+
+running 3 tests
+test monitor_counts_calls_replies_and_per_destination_with_empty_rules ... ok
+test debug_stats_exists_but_connection_counters_are_gauges_not_totals ... ok
+test monitor_counts_signals_under_its_rule_only ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+   Doc-tests gorca_bench_b1
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+== fidelity: pass ==
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.05s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.03s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.04s
+[1/1] p soak #0 (load 8.94 9.75 10.02 5/3150 892923)
+2026-10-15T08:55:20.656204Z  INFO gorca_daemon: gorca started workers=4 speech=Voicego
+2026-10-15T08:55:20.656594Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T08:55:20.656876Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T08:55:20.657846Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T08:58:19.656763Z  INFO gorca_daemon::input: input lane statistics keys=4 ambiguous=0 band_forks=0
+2026-10-15T08:59:19.656636Z  INFO gorca_daemon::input: input lane statistics keys=20 ambiguous=0 band_forks=0
+2026-10-15T09:03:19.656993Z  INFO gorca_daemon::input: input lane statistics keys=40 ambiguous=0 band_forks=0
+2026-10-15T09:08:19.657451Z  INFO gorca_daemon::input: input lane statistics keys=60 ambiguous=0 band_forks=0
+2026-10-15T09:13:19.656730Z  INFO gorca_daemon::input: input lane statistics keys=80 ambiguous=0 band_forks=0
+2026-10-15T09:18:19.657398Z  INFO gorca_daemon::input: input lane statistics keys=100 ambiguous=0 band_forks=1
+2026-10-15T09:23:19.656907Z  INFO gorca_daemon::input: input lane statistics keys=120 ambiguous=0 band_forks=1
+2026-10-15T09:27:19.657383Z  INFO gorca_daemon::input: input lane statistics keys=140 ambiguous=0 band_forks=1
+2026-10-15T09:32:19.664637Z  INFO gorca_daemon::input: input lane statistics keys=160 ambiguous=0 band_forks=1
+2026-10-15T09:37:19.657276Z  INFO gorca_daemon::input: input lane statistics keys=180 ambiguous=0 band_forks=2
+2026-10-15T09:42:19.656657Z  INFO gorca_daemon::input: input lane statistics keys=200 ambiguous=0 band_forks=2
+2026-10-15T09:46:19.657286Z  INFO gorca_daemon::input: input lane statistics keys=208 ambiguous=0 band_forks=3
+2026-10-15T09:47:19.657427Z  INFO gorca_daemon::input: input lane statistics keys=220 ambiguous=0 band_forks=4
+2026-10-15T09:51:19.656683Z  INFO gorca_daemon::input: input lane statistics keys=240 ambiguous=0 band_forks=4
+2026-10-15T09:56:19.656859Z  INFO gorca_daemon::input: input lane statistics keys=260 ambiguous=0 band_forks=4
+2026-10-15T10:01:19.656973Z  INFO gorca_daemon::input: input lane statistics keys=280 ambiguous=0 band_forks=4
+metric                     bus                median          min          max  n op    threshold  res   note
+B1-RSS.soak                p                  -0.367       -0.367       -0.367  1 <=            8  PASS   [MiB]
+B1-RUNS.invalid            p                       0            0            0  1 <=            0  PASS  gated on the max over repeats [runs]
+B1-STALE@soak              p                       0            0            0  1 <=            0  PASS  gated on the max over repeats [count]
+
+| arm | rankable | failing gates |
+|---|---|---|
+| p | yes | - |
+wrote bench/results/b1-mirror-fill/adopt-soak3-p/20261015T100239Z.json
+== soak p end 2026-10-15T10:02:39Z load 9.51 11.62 10.55 1/2731 1092879 rc=0

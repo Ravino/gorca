@@ -1,0 +1,8 @@
+metric                     bus                median          min          max  n op    threshold  res   note
+B1-RSS.soak                p                  -0.367       -0.367       -0.367  1 <=            8  PASS   [MiB]
+B1-RUNS.invalid            p                       0            0            0  1 <=            0  PASS  gated on the max over repeats [runs]
+B1-STALE@soak              p                       0            0            0  1 <=            0  PASS  gated on the max over repeats [count]
+
+| arm | rankable | failing gates |
+|---|---|---|
+| p | yes | - |
