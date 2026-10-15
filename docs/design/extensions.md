@@ -50,14 +50,27 @@ keymap     compile()  -> ExtCommands names + default chords merged (never over t
 | `command` | 20 ms CPU | fuel |
 | wall-clock backstop | 10 x the CPU limit | epoch deadline (5 ms tick, one ticker thread, started on first use) |
 | memory | 32 MiB per instance | pooling allocator `max_memory_size` + `ResourceLimiter` |
-| answer size | 64 segments, 4096 characters each | host clamps (`convert.rs`) |
-| `speak` calls per hook call | 8 | host |
+| memory shape | one linear memory, 4 tables of at most 10,000 elements, 8 core instances per component | pooling allocator + `ResourceLimiter` |
+| answer size | 32 segments, 2048 characters each, 8192 in all | host clamps (`convert.rs`), stops pulling at the cap |
+| host calls per hook call | `speak` 8, `log` 8, `set_setting` 16, `get_node` 256 | `InstShared` counters |
+| speech rate | 10 messages per second (burst 10) per (extension, application), whatever the path (`speak`, rewrite verdict, command answer); over budget a rewrite becomes `Suppress` | token bucket |
 | settings | 128 keys, 64 B keys, 4 KiB values per extension | `SettingsKv` |
+| manifest | 64 KiB, 64 commands, 32 globs per list, 64-character chords, 64 extensions per host | parser and builder |
 
 Why fuel first: the limits are *CPU* limits. An epoch deadline is wall time: on a loaded workstation a
 healthy hook that is merely descheduled for 2 ms would be interrupted and counted as a fault. An early
 epoch-only storm run at load 25 showed this (per-call medians collapsed to ~35 ns, a disabled slot
 answering "no opinion"); with fuel the same storm has 0 faults.
+
+Strikes are counted at two levels, and every kind of failure counts:
+
+- per (extension, application) slot: any fault (trap, panic, interrupt, memory, native overrun) is a
+  reset; the third in 60 s disables the slot. An instance that cannot be rebuilt disables it at once.
+  Re-announcing an application keeps its slot, so re-attaching cannot reset the count.
+- per extension: an instance that cannot be built at attach (pool exhausted, start function traps) and
+  every disabled slot is a strike; the third in 60 s disables the extension for every new
+  application, with one spoken notice. A stream of applications therefore cannot make the host rebuild
+  a hostile extension forever.
 
 A **fault** is a trap, a panic, an out-of-fuel or epoch interrupt, a memory-cap hit, or (native) a call
 over its limit. Every fault drops the instance and builds a fresh one from the `InstancePre` (WASM:
@@ -111,6 +124,18 @@ interrupts = true
 
 The loader (`ExtHost::load_dir`) reads `<dir>/<name>/ext.toml`. A bad manifest, a missing or corrupt
 component, a duplicate name: reported in `LoadReport`, logged, skipped; never fatal.
+
+Default chords are subject to hard rules, enforced in `ExtCommands::bind` and `compile`:
+
+- they must use the gorca modifier: an extension never grabs a plain key (typing, passwords) or an
+  application shortcut;
+- precedence is **user > core preset > extension**: a chord the preset or the user mentions in *any*
+  context (a tombstone included) is never taken, because a context table is consulted before
+  `global` and would shadow it; the skipped default is logged (`warn`). Between extensions the first
+  loaded wins;
+- the chord only dispatches to an application the extension matched: the Reader sends the command to
+  the focused application's `AppExt`, and an application with no matching extension ignores it.
+  Names are `ext.*`, so they cannot collide with core commands.
 
 User rebinding works by name in `gorca.toml` (`[keymap.focus] "gorca+f10" = "ext.ext_vte.say_prompt"`),
 with the usual did-you-mean diagnostics; a user's entry, a tombstone included, beats the extension's

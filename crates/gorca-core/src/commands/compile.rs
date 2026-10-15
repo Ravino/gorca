@@ -175,14 +175,16 @@ pub fn compile_with(
     ext: Option<&ExtCommands>,
 ) -> Compiled {
     let table = CommandTable::get();
-    let mut mentioned: std::collections::HashSet<(ContextName, ChordSpec)> =
-        std::collections::HashSet::new();
+    // Chords the preset or the user mention in *any* context: a context table is consulted before
+    // `global`, so an extension chord in `focus` would shadow a core `global` binding of the
+    // same chord. Precedence is user > core preset > extension.
+    let mut mentioned: std::collections::HashSet<ChordSpec> = std::collections::HashSet::new();
     let (mods, caps_lock_dropped) = gorca_modifiers(&loaded.settings, facts);
     let mut km = CompiledKeymap::new(mods);
     let mut diags = Vec::new();
     for (ctx, chords) in &loaded.keymap.contexts {
         for (spec, binding) in chords {
-            mentioned.insert((*ctx, spec.clone()));
+            mentioned.insert(spec.clone());
             let path = format!("keymap.{}.\"{spec}\"", ctx.name());
             let Some(key) = chord_key(spec, resolver) else {
                 diags.push(Diag::error(
@@ -238,7 +240,14 @@ pub fn compile_with(
     // mentioned, tombstones included.
     if let Some(ext) = ext {
         for (ctx, chord, id, spec) in ext.default_bindings() {
-            if mentioned.contains(&(ctx, chord.clone())) {
+            if !mentioned.insert(chord.clone()) {
+                // Taken by the preset, the user (a tombstone counts) or an earlier extension.
+                tracing::warn!(
+                    ext = %spec.ext,
+                    command = %spec.name,
+                    %chord,
+                    "extension default chord not bound: the chord is already in use"
+                );
                 continue;
             }
             let Some(key) = chord_key(chord, resolver) else {
@@ -463,8 +472,8 @@ mod tests {
         }
         r.bind(ContextName::Focus, "gorca+shift+f9", "ext.t.hello")
             .unwrap();
-        // A default that collides with a core preset chord must lose to the preset.
-        r.bind(ContextName::Focus, "gorca+s", "ext.t.other")
+        // A default that collides with a chord the user binds elsewhere must lose.
+        r.bind(ContextName::Focus, "gorca+f11", "ext.t.other")
             .unwrap();
         r
     }
@@ -496,6 +505,46 @@ mod tests {
             c.keymap
                 .lookup(ModeKind::Focus, key(true, Modifiers::SHIFT, "f9"), 1)
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn an_extension_default_never_shadows_a_binding_of_another_context() {
+        let ext = ext_registry();
+        // The user binds gorca+f11 in `global`; the extension default is in `focus`, which is
+        // consulted first, so it would shadow the user's binding. It must not be installed.
+        let c = compiled_ext("[keymap.global]\n\"gorca+f11\" = \"speech.stop\"\n", &ext);
+        let b = c
+            .keymap
+            .lookup(ModeKind::Focus, key(true, Modifiers::empty(), "f11"), 1)
+            .expect("the user's binding stays");
+        assert_eq!(b.cmd, CoreCmd::SpeechStop.id());
+    }
+
+    #[test]
+    fn two_extensions_claiming_one_chord_first_wins() {
+        use super::super::spec::ContextMask;
+        let mut r = ExtCommands::new();
+        for (name, ext) in [("ext.a.go", "a"), ("ext.b.go", "b")] {
+            r.register(ExtCmdSpec {
+                name: name.to_owned(),
+                ext: ext.to_owned(),
+                local: 1,
+                help: "h".to_owned(),
+                contexts: ContextMask::of(&[ContextName::Focus]),
+                max_press: 1,
+                interrupts: true,
+            })
+            .unwrap();
+            r.bind(ContextName::Focus, "gorca+f8", name).unwrap();
+        }
+        let c = compiled_ext("", &r);
+        let first = r.by_name("ext.a.go").unwrap().0;
+        assert_eq!(
+            c.keymap
+                .lookup(ModeKind::Focus, key(true, Modifiers::empty(), "f8"), 1)
+                .map(|b| b.cmd),
+            Some(first)
         );
     }
 

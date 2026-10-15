@@ -340,3 +340,156 @@ fn a_broken_extension_directory_is_reported_and_never_fatal() {
     assert_eq!(b.reports().iter().filter(|r| r.result.is_err()).count(), 3);
     let _ = std::fs::remove_dir_all(root);
 }
+
+// ---- hostile extension fixtures (security review: caps cannot be bypassed) ----
+
+#[test]
+fn a_flood_of_host_calls_is_bounded_per_call_and_per_second() {
+    for b in BACKENDS {
+        let (h, sink, _) = host(b);
+        let ae = attach(&h, 1, "x");
+        let t = Instant::now();
+        assert_eq!(ae.on_event(&announce("spam")), ExtVerdict::Pass, "{b:?}");
+        let took = t.elapsed();
+        assert!(took < Duration::from_millis(50), "{b:?}: {took:?}");
+        // 500 speak calls in one hook call: at most 8 get through.
+        let said = sink.all();
+        assert!(said.len() <= 8, "{b:?}: {} messages", said.len());
+        // 500 set_setting calls: at most 16 stored.
+        let stored = (0..500)
+            .filter(|i| h.settings().get("ext-test", &format!("k{i}")).is_some())
+            .count();
+        assert!(stored <= 16, "{b:?}: {stored} keys");
+        assert_eq!(
+            h.stats().faults,
+            0,
+            "{b:?}: a flood within fuel is not a fault"
+        );
+        // Hammering the hook does not lift the per-second speech budget.
+        for _ in 0..20 {
+            ae.on_event(&announce("spam"));
+        }
+        let total = sink.all().len();
+        assert!(total <= 12, "{b:?}: {total} messages in a burst");
+    }
+}
+
+#[test]
+fn a_rewrite_on_every_event_cannot_flood_speech() {
+    for b in BACKENDS {
+        let (h, _sink, _) = host(b);
+        let ae = attach(&h, 1, "x");
+        let mut spoken = 0;
+        for _ in 0..200 {
+            match ae.on_event(&announce("rewrite:chatter")) {
+                ExtVerdict::Rewrite(_) => spoken += 1,
+                ExtVerdict::Suppress => {}
+                v => panic!("{b:?}: {v:?}"),
+            }
+        }
+        assert!(
+            (1..=12).contains(&spoken),
+            "{b:?}: {spoken} rewrites spoken"
+        );
+    }
+}
+
+#[test]
+fn re_announcing_an_application_does_not_reset_its_strikes() {
+    for b in BACKENDS {
+        let (h, _sink, _) = host(b);
+        let ae = attach(&h, 1, "x");
+        for _ in 0..3 {
+            ae.on_event(&announce("crash"));
+        }
+        assert_eq!(h.stats().disabled, 1, "{b:?}");
+        // The connector announces the app again (identity verified late): same slot, same state.
+        let again = attach(&h, 1, "x");
+        assert_eq!(
+            again.on_event(&announce("suppress")),
+            ExtVerdict::Pass,
+            "{b:?}"
+        );
+        assert_eq!(h.stats().faults, 3, "{b:?}: no new instance, no new faults");
+    }
+}
+
+#[test]
+fn instances_that_cannot_be_built_count_and_end_in_a_global_disable() {
+    let (h, sink, _) = host(Backend::Wasm);
+    // The pool holds POOL_INSTANCES component instances; every attach past that fails to
+    // instantiate. Three such failures disable the extension for every new application.
+    let mut kept = Vec::new();
+    for i in 0..(gorca_ext_host::POOL_INSTANCES + 20) {
+        if let Some(a) = h.attach(app(10_000 + i), &info("x")) {
+            kept.push(a);
+        }
+    }
+    let s = h.stats();
+    assert_eq!(kept.len(), gorca_ext_host::POOL_INSTANCES as usize);
+    assert_eq!(
+        s.instantiate_failures, 3,
+        "the fourth attach is not even tried"
+    );
+    assert!(s.attach_skipped >= 16, "{s:?}");
+    let said = sink.all();
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert_eq!(said[0].0, "Extension ext test disabled");
+    // Instances already running keep working.
+    assert_eq!(
+        kept[0].on_event(&announce("suppress")),
+        ExtVerdict::Suppress
+    );
+}
+
+#[test]
+fn more_than_the_extension_cap_is_refused() {
+    let mut b = gorca_ext_host::ExtHost::builder(Arc::new(gorca_core::MirrorDirectory::new()));
+    for i in 0..gorca_ext_host::MAX_EXTENSIONS {
+        let mut m = common::manifest(Backend::Native);
+        m.name = format!("ext-{i}");
+        m.keymap.clear();
+        b.add_native(m, common::native_factory()).unwrap();
+    }
+    let mut m = common::manifest(Backend::Native);
+    m.name = "one-too-many".into();
+    assert!(b.add_native(m, common::native_factory()).is_err());
+}
+
+#[test]
+fn a_default_chord_without_the_gorca_modifier_is_dropped_with_a_problem() {
+    let mut m = common::manifest(Backend::Native);
+    m.keymap[0].chord = Some("a".to_owned());
+    let mut b = gorca_ext_host::ExtHost::builder(Arc::new(gorca_core::MirrorDirectory::new()));
+    b.add_native(m, common::native_factory()).unwrap();
+    let h = b.build();
+    let (reg, problems) = h.commands();
+    assert!(
+        reg.by_name("ext.ext_test.hello").is_some(),
+        "the command stays"
+    );
+    assert_eq!(
+        reg.default_bindings().count(),
+        0,
+        "a plain key is never grabbed"
+    );
+    assert!(
+        problems.iter().any(|p| p.contains("gorca modifier")),
+        "{problems:?}"
+    );
+}
+
+#[test]
+fn memory_loops_and_oom_are_faults_at_every_reset() {
+    // The caps are per instance and rebuilt with it: a reset cannot be used to escape them.
+    let (h, _sink, _) = host(Backend::Wasm);
+    let ae = attach(&h, 1, "x");
+    for trigger in ["oom", "spin"] {
+        assert_eq!(ae.on_event(&announce(trigger)), ExtVerdict::Pass);
+    }
+    assert_eq!(h.stats().faults, 2);
+    // The third strike disables; the instance is never rebuilt past that.
+    ae.on_event(&announce("oom"));
+    assert_eq!(h.stats().disabled, 1);
+    assert_eq!(ae.on_event(&announce("suppress")), ExtVerdict::Pass);
+}

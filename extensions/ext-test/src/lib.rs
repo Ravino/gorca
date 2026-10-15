@@ -8,6 +8,7 @@
 //! | `Announcement("crash")`, node named `gorca-ext-crash`, command 2 | panic (a trap in the component build) |
 //! | `Announcement("spin")`, node named `gorca-ext-spin`, command 3 | infinite loop (epoch interruption in the component build) |
 //! | `Announcement("oom")`, command 6 | allocate 256 MiB (over the 32 MiB cap) |
+//! | `Announcement("spam")`, command 7 | floods the host functions: 1000 `log`, 200 `speak`, 200 `set_setting`, 500 `get_node` |
 //! | `Announcement("suppress")` | `Suppress` verdict |
 //! | `Announcement("std")` | uses `HashMap`, `Instant` and `SystemTime`; `Rewrite("std ok")` |
 //! | `Announcement("rewrite:<text>")` | `Rewrite` verdict speaking `<text>` |
@@ -43,6 +44,20 @@ fn crash() -> ! {
     panic!("ext-test: deliberate crash");
 }
 
+/// A hostile flood of host calls, to check the host's per-call budgets.
+fn spam() {
+    for i in 0..1000u32 {
+        host::log(2, "log flood");
+        if i < 200 {
+            host::speak(vec![Segment::text("spam")], Prio::Message);
+            host::set_setting(&format!("k{i}"), "v");
+        }
+        if i < 500 {
+            let _ = host::get_node((1, u64::from(i)));
+        }
+    }
+}
+
 fn oom() {
     let mut v: Vec<u8> = Vec::new();
     // Touch the pages so the allocation is real and the memory cap is hit.
@@ -61,6 +76,10 @@ impl Hooks for TestExtension {
             "spin" => spin(),
             "oom" => {
                 oom();
+                EventVerdict::Pass
+            }
+            "spam" => {
+                spam();
                 EventVerdict::Pass
             }
             "suppress" => EventVerdict::Suppress,
@@ -115,6 +134,10 @@ impl Hooks for TestExtension {
             }
             6 => {
                 oom();
+                CommandResult::Handled
+            }
+            7 => {
+                spam();
                 CommandResult::Handled
             }
             _ => CommandResult::NotHandled,

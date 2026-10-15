@@ -259,7 +259,9 @@ fn garbage_answers_are_clamped() {
     };
     match ae.on_event(&ev) {
         ExtVerdict::Rewrite(s) => {
-            assert_eq!(s.len(), MAX_SEGMENTS);
+            assert!(s.len() <= MAX_SEGMENTS);
+            let total: usize = s.iter().map(|x| x.text.chars().count()).sum();
+            assert!(total <= gorca_ext_host::MAX_ANSWER_CHARS, "{total}");
             assert!(
                 s.iter()
                     .all(|x| x.text.chars().count() <= MAX_SEGMENT_CHARS)

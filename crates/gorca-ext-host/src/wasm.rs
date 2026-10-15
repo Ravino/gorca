@@ -61,7 +61,7 @@ const BACKSTOP_FACTOR: u128 = 10;
 /// there is) is cut near 1 ms, typical hook code (1 to 3 operations per ns) near 2 to 6 ms.
 pub const FUEL_PER_MS: u64 = 3_000_000;
 /// Concurrent instances the pooling allocator reserves room for (extensions times applications).
-pub const POOL_INSTANCES: u32 = 256;
+pub const POOL_INSTANCES: u32 = 512;
 
 /// Epoch ticks of the wall-clock backstop for `kind`.
 fn ticks(kind: HookKind) -> u64 {
@@ -104,6 +104,10 @@ impl ExtEngine {
         p.total_memories(POOL_INSTANCES * 2);
         p.total_tables(POOL_INSTANCES * 2);
         p.max_memory_size(api::LIMIT_MEMORY_BYTES);
+        // One linear memory per component: the 32 MiB cap is per instance, not per memory.
+        p.max_memories_per_component(1);
+        p.max_tables_per_component(4);
+        p.max_core_instances_per_component(8);
         c.allocation_strategy(InstanceAllocationStrategy::Pooling(p));
         Ok(Arc::new(Self {
             engine: Engine::new(&c)?,
@@ -235,7 +239,7 @@ impl ResourceLimiter for Limiter {
         8
     }
     fn memories(&self) -> usize {
-        4
+        1
     }
 }
 

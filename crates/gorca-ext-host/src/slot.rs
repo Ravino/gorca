@@ -32,15 +32,63 @@ impl std::fmt::Debug for Factory {
     }
 }
 
-/// A loaded extension: manifest and instance factory.
+/// A loaded extension: manifest, instance factory and the extension-wide health.
+///
+/// Per-slot health (`InstanceGuard`) stops one application's faults. This guard is the second
+/// line: three *strikes* within 60 s, where a strike is an instance that could not be built or a
+/// slot that was disabled, disable the extension for every new application, so a hostile
+/// extension or a hostile stream of applications cannot make the host rebuild it forever.
 #[derive(Debug)]
 pub struct LoadedExt {
     pub manifest: Manifest,
     pub factory: Factory,
+    guard: Mutex<InstanceGuard>,
+    disabled: AtomicBool,
 }
 
 impl LoadedExt {
-    fn create(&self, shared: &Arc<InstShared>) -> Result<Box<dyn HookInstance>, String> {
+    pub fn new(manifest: Manifest, factory: Factory) -> Self {
+        Self {
+            manifest,
+            factory,
+            guard: Mutex::new(InstanceGuard::new()),
+            disabled: AtomicBool::new(false),
+        }
+    }
+
+    /// Disabled as a whole: no new application gets an instance.
+    pub fn is_disabled(&self) -> bool {
+        self.disabled.load(Ordering::Acquire)
+    }
+
+    /// Record a strike (see the type documentation). Returns true when this one disabled the
+    /// extension; the user is told once.
+    pub fn strike(&self, sink: &OnceLock<Arc<dyn ExtSink>>) -> bool {
+        let mut g = self.guard.lock().unwrap_or_else(PoisonError::into_inner);
+        if g.on_reset(Instant::now()) != InstanceHealth::Disabled {
+            return false;
+        }
+        drop(g);
+        if self.disabled.swap(true, Ordering::AcqRel) {
+            return false;
+        }
+        tracing::error!(
+            ext = %self.manifest.name,
+            "extension disabled for every application after repeated failures"
+        );
+        if let Some(s) = sink.get() {
+            s.speak(
+                format!(
+                    "Extension {} disabled",
+                    self.manifest.name.replace(['-', '_'], " ")
+                ),
+                false,
+            );
+        }
+        true
+    }
+
+    pub fn create(&self, shared: &Arc<InstShared>) -> Result<Box<dyn HookInstance>, String> {
         match &self.factory {
             Factory::Wasm(m) => m
                 .instantiate(Arc::clone(shared))
@@ -86,7 +134,14 @@ impl Slot {
         stats: Arc<ExtStats>,
         sink: Arc<OnceLock<Arc<dyn ExtSink>>>,
     ) -> Result<Self, String> {
-        let inst = ext.create(&shared)?;
+        let inst = match ext.create(&shared) {
+            Ok(i) => i,
+            Err(e) => {
+                stats.instantiate_failures.fetch_add(1, Ordering::Relaxed);
+                ext.strike(&sink);
+                return Err(e);
+            }
+        };
         Ok(Self {
             ext,
             shared,
@@ -99,6 +154,11 @@ impl Slot {
             stats,
             sink,
         })
+    }
+
+    /// Speech budget of this slot (see `InstShared::allow_speech`).
+    pub fn allow_speech(&self) -> bool {
+        self.shared.allow_speech()
     }
 
     pub fn name(&self) -> &str {
@@ -178,7 +238,12 @@ impl Slot {
                 self.stats.max_reset_ns.fetch_max(ns, Ordering::Relaxed);
             }
             Err(e) => {
+                // An instance that cannot be rebuilt ends the slot at once (stricter than three
+                // strikes) and counts against the extension as a whole.
                 tracing::error!(ext = self.name(), "cannot rebuild the instance: {e}");
+                self.stats
+                    .instantiate_failures
+                    .fetch_add(1, Ordering::Relaxed);
                 self.disable();
             }
         }
@@ -189,6 +254,7 @@ impl Slot {
             return;
         }
         self.stats.disabled.fetch_add(1, Ordering::Relaxed);
+        self.ext.strike(&self.sink);
         tracing::error!(
             ext = self.name(),
             app = &*self.app_label,

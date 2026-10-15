@@ -93,6 +93,10 @@ pub struct ExtStats {
     pub max_reset_ns: AtomicU64,
     /// Commands dropped because the worker queue was full.
     pub commands_dropped: AtomicU64,
+    /// Attaches refused because the extension is disabled as a whole.
+    pub attach_skipped: AtomicU64,
+    /// Instances that could not be built (attach or reset).
+    pub instantiate_failures: AtomicU64,
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -105,6 +109,8 @@ pub struct ExtStatsSnapshot {
     pub busy_skips: u64,
     pub max_reset_ns: u64,
     pub commands_dropped: u64,
+    pub attach_skipped: u64,
+    pub instantiate_failures: u64,
 }
 
 impl ExtStats {
@@ -119,13 +125,23 @@ impl ExtStats {
             busy_skips: g(&self.busy_skips),
             max_reset_ns: g(&self.max_reset_ns),
             commands_dropped: g(&self.commands_dropped),
+            attach_skipped: g(&self.attach_skipped),
+            instantiate_failures: g(&self.instantiate_failures),
         }
     }
 }
 
-/// Most `speak` calls honoured per hook call, and most characters per call.
+/// Per hook call budgets of the host functions: a loop of host calls is bounded by fuel, but each
+/// call costs the host more than a guest instruction, so each is capped on its own.
 const MAX_SPEAKS_PER_CALL: u32 = 8;
+const MAX_LOGS_PER_CALL: u32 = 8;
+const MAX_SETS_PER_CALL: u32 = 16;
+const MAX_NODE_READS_PER_CALL: u32 = 256;
 const MAX_LOG_CHARS: usize = 512;
+/// Spoken messages an (extension, application) may emit per second, burst included. A hook that
+/// speaks on every event (a storm) would otherwise queue speech without bound.
+const SPEECH_BURST: f64 = 10.0;
+const SPEECH_PER_SEC: f64 = 10.0;
 
 /// Everything a host function needs: shared by the store (or the native thread-local host) of one
 /// (extension, application).
@@ -137,6 +153,10 @@ pub struct InstShared {
     pub sink: Arc<OnceLock<Arc<dyn ExtSink>>>,
     pub kv: Arc<SettingsKv>,
     speaks: std::sync::atomic::AtomicU32,
+    logs: std::sync::atomic::AtomicU32,
+    sets: std::sync::atomic::AtomicU32,
+    reads: std::sync::atomic::AtomicU32,
+    bucket: std::sync::Mutex<(f64, std::time::Instant)>,
 }
 
 impl fmt::Debug for InstShared {
@@ -165,16 +185,45 @@ impl InstShared {
             sink,
             kv,
             speaks: std::sync::atomic::AtomicU32::new(0),
+            logs: std::sync::atomic::AtomicU32::new(0),
+            sets: std::sync::atomic::AtomicU32::new(0),
+            reads: std::sync::atomic::AtomicU32::new(0),
+            bucket: std::sync::Mutex::new((SPEECH_BURST, std::time::Instant::now())),
         }
     }
 
-    /// Called before each hook call: the `speak` budget starts over.
+    /// Called before each hook call: the per-call budgets start over.
     pub fn begin_call(&self) {
         self.speaks.store(0, Ordering::Relaxed);
+        self.logs.store(0, Ordering::Relaxed);
+        self.sets.store(0, Ordering::Relaxed);
+        self.reads.store(0, Ordering::Relaxed);
+    }
+
+    /// Token bucket for everything this extension makes the screen reader say, whatever the
+    /// path (`speak`, a rewrite verdict, a command answer). False: drop it.
+    pub fn allow_speech(&self) -> bool {
+        let mut b = self
+            .bucket
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let now = std::time::Instant::now();
+        let dt = now.saturating_duration_since(b.1).as_secs_f64();
+        b.0 = (b.0 + dt * SPEECH_PER_SEC).min(SPEECH_BURST);
+        b.1 = now;
+        if b.0 >= 1.0 {
+            b.0 -= 1.0;
+            true
+        } else {
+            false
+        }
     }
 
     /// Mirror only, never blocks. Another application's nodes are invisible.
     pub fn get_node(&self, key: api::NodeKey) -> Option<api::Node> {
+        if self.reads.fetch_add(1, Ordering::Relaxed) >= MAX_NODE_READS_PER_CALL {
+            return None;
+        }
         let k = key_from_ext(key)?;
         if k.app != self.app {
             return None;
@@ -206,9 +255,10 @@ impl InstShared {
         if self.speaks.fetch_add(1, Ordering::Relaxed) >= MAX_SPEAKS_PER_CALL {
             return;
         }
-        let segs = crate::convert::segments_from_ext(segments.to_vec());
+        // Never copy a hostile list whole: the iterator stops at the caps.
+        let segs = crate::convert::segments_from_iter(segments.iter().take(64).cloned());
         let text = gorca_core::segments_text(&segs);
-        if text.is_empty() {
+        if text.is_empty() || !self.allow_speech() {
             return;
         }
         if let Some(sink) = self.sink.get() {
@@ -224,12 +274,17 @@ impl InstShared {
     }
 
     pub fn set_setting(&self, k: &str, v: &str) {
-        if self.caps.contains(Capabilities::SETTINGS) {
+        if self.caps.contains(Capabilities::SETTINGS)
+            && self.sets.fetch_add(1, Ordering::Relaxed) < MAX_SETS_PER_CALL
+        {
             self.kv.set(&self.ext, k, v);
         }
     }
 
     pub fn log(&self, level: u8, msg: &str) {
+        if self.logs.fetch_add(1, Ordering::Relaxed) >= MAX_LOGS_PER_CALL {
+            return;
+        }
         let msg: String = msg.chars().take(MAX_LOG_CHARS).collect();
         let ext = &*self.ext;
         match level {

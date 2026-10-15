@@ -10,9 +10,11 @@ use gorca_model::{
 };
 
 /// Most segments one verdict, presentation or command answer may carry.
-pub const MAX_SEGMENTS: usize = 64;
+pub const MAX_SEGMENTS: usize = 32;
 /// Most characters one segment may carry.
-pub const MAX_SEGMENT_CHARS: usize = 4096;
+pub const MAX_SEGMENT_CHARS: usize = 2048;
+/// Most characters of one answer, summed over its segments (about three screens of text).
+pub const MAX_ANSWER_CHARS: usize = 8192;
 /// Most characters of a name or description copied into an extension.
 pub const MAX_NODE_TEXT_CHARS: usize = 4096;
 
@@ -149,19 +151,34 @@ pub fn event_to_ext(ev: &NodeEvent) -> Option<api::Event> {
 /// Extension segments as core segments, clamped (count and length) and stripped of segments
 /// that are empty after clamping.
 pub fn segments_from_ext(segs: Vec<api::Segment>) -> Vec<Segment> {
-    segs.into_iter()
-        .take(MAX_SEGMENTS)
-        .filter(|s| !s.text.is_empty())
-        .map(|s| Segment {
-            text: clip(&s.text, MAX_SEGMENT_CHARS).into(),
+    segments_from_iter(segs)
+}
+
+/// Like [`segments_from_ext`] over any iterator: stops pulling at the caps, so a hostile list
+/// is never copied whole.
+pub fn segments_from_iter(segs: impl IntoIterator<Item = api::Segment>) -> Vec<Segment> {
+    let mut budget = MAX_ANSWER_CHARS;
+    let mut out = Vec::new();
+    for s in segs.into_iter().take(MAX_SEGMENTS) {
+        if budget == 0 {
+            break;
+        }
+        if s.text.is_empty() {
+            continue;
+        }
+        let text = clip(&s.text, MAX_SEGMENT_CHARS.min(budget));
+        budget = budget.saturating_sub(text.chars().count());
+        out.push(Segment {
+            text: text.into(),
             kind: match s.kind {
                 api::SegmentKind::Text => SegmentKind::Text,
                 api::SegmentKind::Role => SegmentKind::Role,
                 api::SegmentKind::State => SegmentKind::State,
                 api::SegmentKind::Value => SegmentKind::Value,
             },
-        })
-        .collect()
+        });
+    }
+    out
 }
 
 #[cfg(test)]
@@ -214,11 +231,13 @@ mod tests {
             .map(|_| api::Segment::text("x".repeat(10_000)))
             .collect();
         let out = segments_from_ext(many);
-        assert_eq!(out.len(), MAX_SEGMENTS);
+        assert!(out.len() <= MAX_SEGMENTS);
         assert!(
             out.iter()
-                .all(|s| s.text.chars().count() == MAX_SEGMENT_CHARS)
+                .all(|s| s.text.chars().count() <= MAX_SEGMENT_CHARS)
         );
+        let total: usize = out.iter().map(|s| s.text.chars().count()).sum();
+        assert_eq!(total, MAX_ANSWER_CHARS, "the answer is capped as a whole");
         assert!(segments_from_ext(vec![api::Segment::text("")]).is_empty());
     }
 }

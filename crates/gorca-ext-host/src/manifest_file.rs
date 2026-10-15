@@ -230,6 +230,9 @@ fn keymap_entry(t: &Table) -> Result<KeymapEntry, ManifestError> {
         contexts.push(ContextName::Focus);
     }
     let chord = t.get("chord").and_then(Item::as_str).map(str::to_owned);
+    if chord.as_ref().is_some_and(|c| c.len() > 64) {
+        return Err(bad("keymap.chord", "too long"));
+    }
     let max_press = match t.get("max_press").and_then(Item::as_integer) {
         None => 1,
         Some(n @ 1..=3) => u8::try_from(n).unwrap_or(1),
@@ -328,6 +331,31 @@ chord = "gorca+shift+f9"
             Manifest::parse("name = \"s\"\nmodule = \"s.wasm\"\n[matcher]\nverified_shell = 1\n")
                 .is_err()
         );
+    }
+
+    #[test]
+    fn hostile_sizes_are_refused() {
+        let entries = (0..=MAX_KEYMAP)
+            .map(|i| format!("[[keymap]]\ncommand=\"c{i}\"\nid={i}\n"))
+            .collect::<Vec<_>>()
+            .concat();
+        let many = format!("name=\"x\"\nmodule=\"x\"\nhooks=[\"command\"]\n{entries}");
+        assert!(Manifest::parse(&many).is_err(), "too many commands");
+        let long_chord = format!(
+            "name=\"x\"\nmodule=\"x\"\nhooks=[\"command\"]\n[[keymap]]\ncommand=\"c\"\nid=1\nchord=\"{}\"\n",
+            "gorca+".repeat(50)
+        );
+        assert!(Manifest::parse(&long_chord).is_err(), "chord too long");
+        let help = format!(
+            "name=\"x\"\nmodule=\"x\"\nhooks=[\"command\"]\n[[keymap]]\ncommand=\"c\"\nid=1\nhelp=\"{}\"\n",
+            "h".repeat(MAX_HELP + 1)
+        );
+        assert!(Manifest::parse(&help).is_err(), "help too long");
+        let globs = format!(
+            "name=\"x\"\nmodule=\"x\"\n[matcher]\napp_name=[{}]\n",
+            vec!["\"a\""; MAX_GLOBS + 1].join(",")
+        );
+        assert!(Manifest::parse(&globs).is_err(), "too many globs");
     }
 
     #[test]

@@ -26,6 +26,8 @@ use crate::wasm::{ExtEngine, WasmModule};
 
 /// Largest component the loader reads.
 const MAX_MODULE_BYTES: u64 = 32 * 1024 * 1024;
+/// Most extensions one host loads.
+pub const MAX_EXTENSIONS: usize = 64;
 /// Commands queued for the worker before the next one is dropped.
 const COMMAND_QUEUE: usize = 64;
 /// How often the worker looks for settings to write.
@@ -95,7 +97,10 @@ impl ExtHostBuilder {
         if self.exts.iter().any(|e| e.manifest.name == manifest.name) {
             return Err(format!("extension `{}` is already loaded", manifest.name));
         }
-        self.exts.push(Arc::new(LoadedExt { manifest, factory }));
+        if self.exts.len() >= MAX_EXTENSIONS {
+            return Err(format!("more than {MAX_EXTENSIONS} extensions"));
+        }
+        self.exts.push(Arc::new(LoadedExt::new(manifest, factory)));
         Ok(())
     }
 
@@ -218,6 +223,7 @@ fn spawn_worker(
                         if let Some(api::CommandResult::Speak(segs)) = r {
                             let text = gorca_core::segments_text(&segments_from_ext(segs));
                             if !text.is_empty()
+                                && slot.allow_speech()
                                 && let Some(s) = sink.get()
                             {
                                 s.speak(text, true);
@@ -358,12 +364,27 @@ impl Drop for ExtHost {
 impl ExtSource for ExtHost {
     fn attach(&self, app: AppId, info: &AppInfo) -> Option<Arc<dyn AppExt>> {
         let matching = order_matching(&self.manifests, info, None);
+        let previous = self.read_apps().get(&app).cloned();
         let mut slots = Vec::new();
         for m in matching {
             let Some(idx) = self.manifests.iter().position(|x| std::ptr::eq(x, m)) else {
                 continue;
             };
             let ext = Arc::clone(&self.exts[idx]);
+            // A re-announced application keeps its slot, and with it its strikes: re-attaching
+            // must not be a way to reset the fault accounting.
+            if let Some(old) = &previous
+                && let Some(s) = old.slots.iter().find(|s| s.name() == m.name)
+            {
+                slots.push(Arc::clone(s));
+                continue;
+            }
+            if ext.is_disabled() {
+                self.stats
+                    .attach_skipped
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                continue;
+            }
             let shared = Arc::new(InstShared::new(
                 Arc::from(m.name.as_str()),
                 app,
@@ -464,7 +485,14 @@ impl AppExt for AppExts {
             }
             let v = match slot.call(HookKind::OnEvent, true, |i| i.on_event(&e)) {
                 Some(api::EventVerdict::Suppress) => ExtVerdict::Suppress,
-                Some(api::EventVerdict::Rewrite(s)) => ExtVerdict::Rewrite(segments_from_ext(s)),
+                Some(api::EventVerdict::Rewrite(s)) => {
+                    // Over its speech budget the rewrite still consumes the event, silently.
+                    if slot.allow_speech() {
+                        ExtVerdict::Rewrite(segments_from_ext(s))
+                    } else {
+                        ExtVerdict::Suppress
+                    }
+                }
                 Some(api::EventVerdict::ReEvaluate) => ExtVerdict::ReEvaluate,
                 Some(api::EventVerdict::Pass) | None => ExtVerdict::Pass,
             };

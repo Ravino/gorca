@@ -45,12 +45,13 @@ mod wasi_pure;
 mod wasm;
 
 pub use convert::{
-    MAX_NODE_TEXT_CHARS, MAX_SEGMENT_CHARS, MAX_SEGMENTS, app_from_ext, app_to_ext, event_to_ext,
-    key_from_ext, key_to_ext, node_to_ext, role_to_ext, segments_from_ext,
+    MAX_ANSWER_CHARS, MAX_NODE_TEXT_CHARS, MAX_SEGMENT_CHARS, MAX_SEGMENTS, app_from_ext,
+    app_to_ext, event_to_ext, key_from_ext, key_to_ext, node_to_ext, role_to_ext,
+    segments_from_ext,
 };
 pub use glob::glob_match;
 pub use health::{InstanceGuard, InstanceHealth};
-pub use host::{AppExts, ExtHost, ExtHostBuilder, LoadReport};
+pub use host::{AppExts, ExtHost, ExtHostBuilder, LoadReport, MAX_EXTENSIONS};
 pub use instance::{ExtStats, ExtStatsSnapshot, Fault, HookInstance, HookKind, InstShared};
 pub use kv::{MAX_KEY_BYTES, MAX_KEYS, MAX_VALUE_BYTES, SettingsKv};
 pub use manifest::{

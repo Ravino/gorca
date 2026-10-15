@@ -161,6 +161,10 @@ pub enum ExtCmdError {
     BadChord { chord: String, reason: &'static str },
     #[error("command `{0}` cannot be bound in that context")]
     WrongContext(String),
+    #[error(
+        "default chord `{0}` must use the gorca modifier (an extension never grabs a plain key)"
+    )]
+    NeedsGorcaModifier(String),
 }
 
 /// Extension commands merged into the command registry (ADR-0005 3.1, ADR-0001 section 10).
@@ -214,6 +218,11 @@ impl ExtCommands {
             chord: chord.to_owned(),
             reason,
         })?;
+        // An extension's default chord is a gorca chord, so it never grabs a key the user types
+        // with (passwords included) and never collides with an application shortcut.
+        if !parsed.gorca {
+            return Err(ExtCmdError::NeedsGorcaModifier(chord.to_owned()));
+        }
         let spec = *self
             .by_name
             .get(command)
@@ -341,6 +350,16 @@ mod tests {
             r.bind(ContextName::Focus, "", "ext.a.b"),
             Err(ExtCmdError::BadChord { .. })
         ));
+        // Hostile defaults: plain keys and bare modifiers-less chords are refused.
+        for plain in ["a", "ctrl+a", "f9", "shift+tab", "alt+f4"] {
+            assert!(
+                matches!(
+                    r.bind(ContextName::Focus, plain, "ext.a.b"),
+                    Err(ExtCmdError::NeedsGorcaModifier(_))
+                ),
+                "{plain}"
+            );
+        }
         assert_eq!(r.default_bindings().count(), 1);
     }
 
