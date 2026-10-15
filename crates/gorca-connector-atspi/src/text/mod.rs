@@ -23,6 +23,9 @@ use crate::fetch::{CallCx, Resolved, backend_error};
 
 /// A reply that is app text is cut here (a hostile app must not make us copy megabytes).
 pub const MAX_TEXT_BYTES: usize = 64 * 1024;
+/// The most bytes of a terminal screen kept (a `GetText(0, -1)` reply is refused above 256 KiB
+/// anyway; the extension bounds a screen at the same size).
+pub const MAX_SCREEN_BYTES: usize = 256 * 1024;
 /// Most selection ranges one query reads (`GetSelection(i)`, `i < 8`).
 pub const MAX_SELECTIONS: i32 = 8;
 /// The most scalars a window query returns, whatever the radius asked for.
@@ -84,7 +87,8 @@ async fn screen(cx: &CallCx, node: NodeKey, dl: Deadline) -> Result<BackendReply
         .await
         .map_err(|e| backend_error(&e))?;
     let caret = cx.caller.text_caret(&n.path, dl).await.ok().map(nonneg);
-    let text: Arc<str> = Arc::from(clip_tail(&t, MAX_TEXT_BYTES));
+    let (kept, caret) = clip_screen(&t, caret, MAX_SCREEN_BYTES);
+    let text: Arc<str> = Arc::from(kept);
     let len = u32::try_from(text.chars().count()).unwrap_or(u32::MAX);
     Ok(BackendReply::Window(TextWindowFill {
         base: 0,
@@ -94,16 +98,31 @@ async fn screen(cx: &CallCx, node: NodeKey, dl: Deadline) -> Result<BackendReply
     }))
 }
 
-/// The last `max` bytes of `s`, cut at a char boundary.
-fn clip_tail(s: &str, max: usize) -> &str {
+/// Keep the last rows of a screen that is longer than `max` bytes and move the caret with them.
+///
+/// The text starts at a row boundary (a partial first row would be read as a whole row), the
+/// caret is a scalar offset into the kept text (`None` when it fell into the dropped head), and
+/// nothing is cut when the screen fits. Offsets are scalars, never bytes (VTE's `Text`
+/// interface counts characters). `GetText` and `GetCaretOffset` are two calls, so the caret can
+/// belong to a slightly newer frame; the settle (T-1) makes that harmless.
+fn clip_screen(s: &str, caret: Option<u32>, max: usize) -> (&str, Option<u32>) {
     if s.len() <= max {
-        return s;
+        return (s, caret);
     }
     let mut start = s.len() - max;
     while !s.is_char_boundary(start) {
         start += 1;
     }
-    &s[start..]
+    // Round up to the next row start, unless the cut already fell on one.
+    if s.get(..start).is_some_and(|head| !head.ends_with('\n'))
+        && let Some(nl) = s.get(start..).and_then(|t| t.find('\n'))
+    {
+        start += nl + 1;
+    }
+    let dropped = s.get(..start).map_or(0, |h| h.chars().count());
+    let dropped = u32::try_from(dropped).unwrap_or(u32::MAX);
+    let kept = s.get(start..).unwrap_or("");
+    (kept, caret.and_then(|c| c.checked_sub(dropped)))
 }
 
 /// `GetText` around `around` (or the caret) in one pass: the character count, the caret when
@@ -246,12 +265,69 @@ mod tests {
         assert_eq!(nonneg(7), 7);
     }
 
+    /// The caret row of `text` (rows split on `\n`) and the scalar column.
+    fn row_col(text: &str, caret: u32) -> (usize, usize) {
+        let head: String = text.chars().take(caret as usize).collect();
+        let row = head.matches('\n').count();
+        (
+            row,
+            head.rsplit('\n').next().map_or(0, |l| l.chars().count()),
+        )
+    }
+
+    fn screen(rows: usize, cols: usize, fill: char) -> String {
+        let mut s = String::new();
+        for r in 0..rows {
+            let tag = format!("row {r:02} ");
+            s.push_str(&tag);
+            s.extend(std::iter::repeat_n(fill, cols - tag.chars().count()));
+            s.push('\n');
+        }
+        s
+    }
+
     #[test]
-    fn a_long_screen_keeps_its_end() {
-        assert_eq!(clip_tail("abcdef", 3), "def");
-        assert_eq!(clip_tail("abc", 10), "abc");
-        // Never inside a scalar.
-        assert_eq!(clip_tail("a\u{e9}\u{e9}", 3), "\u{e9}");
+    fn a_screen_that_fits_is_untouched() {
+        let s = screen(60, 200, '.');
+        assert!(s.len() < MAX_SCREEN_BYTES);
+        assert_eq!(
+            clip_screen(&s, Some(7), MAX_SCREEN_BYTES),
+            (s.as_str(), Some(7))
+        );
+    }
+
+    #[test]
+    fn a_clipped_screen_starts_on_a_row_and_the_caret_moves_with_it() {
+        // Reviewer probe (m6-review finding 1): 40x100, caret on row 10, cut at 2 KiB.
+        let s = screen(40, 100, '.');
+        let caret = u32::try_from(25 * 101 + 4).unwrap_or(0);
+        let (kept, c) = clip_screen(&s, Some(caret), 2048);
+        assert!(kept.len() <= 2048 && kept.starts_with("row "));
+        let c = c.unwrap_or(u32::MAX);
+        let (row, col) = row_col(kept, c);
+        let line = kept.lines().nth(row).unwrap_or("");
+        assert!(line.starts_with("row 25 "), "{line}");
+        assert_eq!(col, 4);
+        // A caret in the dropped head has no place in the kept text.
+        assert_eq!(clip_screen(&s, Some(10), 2048).1, None);
+        assert_eq!(clip_screen(&s, None, 2048).1, None);
+    }
+
+    #[test]
+    fn offsets_count_scalars_not_bytes_for_multibyte_rows() {
+        // Cyrillic is two bytes per scalar: a byte count would drop the caret far too early.
+        let s = screen(60, 100, '\u{44f}');
+        let caret = u32::try_from(40 * 101 + 9).unwrap_or(0);
+        let (kept, c) = clip_screen(&s, Some(caret), 4096);
+        assert!(kept.len() <= 4096);
+        let (row, col) = row_col(kept, c.unwrap_or(u32::MAX));
+        assert!(kept.lines().nth(row).unwrap_or("").starts_with("row 40 "));
+        assert_eq!(col, 9);
+        // Never inside a scalar, even for a cut that lands mid-character.
+        for max in 1500..1510 {
+            let (k, _) = clip_screen(&s, None, max);
+            assert!(k.is_empty() || k.starts_with("row "));
+        }
     }
 
     #[test]

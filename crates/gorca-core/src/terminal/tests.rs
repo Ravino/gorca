@@ -525,3 +525,24 @@ fn nothing_is_spoken_while_review_owns_reading_but_the_screen_is_kept_current() 
     let fx = g.answer(reads[0], "$ ls\nout\n$ ", 11);
     assert!(spoken(&fx).is_empty(), "{fx:?}");
 }
+
+#[test]
+fn echo_typed_characters_off_silences_the_typed_character_but_not_the_rest() {
+    // Regression for m6-review finding 2: the setting and its toggle command reach the terminal.
+    let mut g = rig();
+    g.focus("me@box:~$ ", 10);
+    g.r.cmd.overlay.typed_characters = Some(false);
+    g.r.cmd.republish();
+    let fx = g.typed('x');
+    assert!(spoken(&fx).is_empty(), "{:?}", spoken(&fx));
+    // The shell's own echo of that key is explained by it and stays silent too.
+    g.at += 5;
+    let fx = g.insert(10, "x");
+    assert!(spoken(&fx).is_empty(), "{:?}", spoken(&fx));
+    // Back on: the next character is spoken again.
+    g.r.cmd.overlay.typed_characters = Some(true);
+    g.r.cmd.republish();
+    g.at += 100;
+    let fx = g.typed('y');
+    assert_eq!(spoken(&fx), ["y"]);
+}

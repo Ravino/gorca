@@ -1098,3 +1098,89 @@ fn two_motion_keys_whose_caret_events_were_folded_into_one_say_the_last_answer()
     assert_eq!(texts(&a), vec!["blank".to_owned()]);
     assert!(r.s.motions.is_empty());
 }
+
+// ---- large screens and multibyte content (m6-review finding 1) --------------------------------
+
+/// A full-window screen as VTE serves it: every row plus "\n", empty rows included. Row `r`
+/// starts with `tag(r)` and is padded with `fill` to `cols` scalars; row `prompt_row` is `prompt`.
+fn big_screen(rows: usize, cols: usize, fill: char, prompt_row: usize, prompt: &str) -> String {
+    let mut s = String::new();
+    for r in 0..rows {
+        let line = if r == prompt_row {
+            prompt.to_owned()
+        } else {
+            let tag = format!("row {r:02} ");
+            let pad = cols.saturating_sub(tag.chars().count());
+            format!("{tag}{}", fill.to_string().repeat(pad))
+        };
+        s.push_str(&line);
+        s.push('\n');
+    }
+    s
+}
+
+/// Scalar offset of (`row`, `col`) in a screen of equal-width rows.
+fn offset_of(screen: &str, row: usize, col: usize) -> u32 {
+    let before: usize = screen
+        .split('\n')
+        .take(row)
+        .map(|l| l.chars().count() + 1)
+        .sum();
+    (before + col) as u32
+}
+
+#[test]
+fn focus_on_a_200x60_screen_reads_the_caret_row() {
+    let prompt = "me@box:~$ ls -la";
+    let screen = big_screen(60, 200, '.', 30, prompt);
+    assert!(screen.len() > 11_000);
+    let caret = offset_of(&screen, 30, prompt.chars().count());
+    let mut r = Rig::new();
+    let a = r.focus(&screen, caret);
+    assert_eq!(texts(&a), vec![prompt.to_owned()]);
+}
+
+#[test]
+fn cyrillic_rows_count_scalars_not_bytes() {
+    let prompt =
+        "\u{43f}\u{43e}\u{43b}\u{44c}\u{437}@\u{445}\u{43e}\u{441}\u{442}:~$ \u{43b}\u{441}";
+    let screen = big_screen(50, 120, '\u{44f}', 42, prompt);
+    assert!(screen.len() > 10_000);
+    let col = prompt.chars().count();
+    let caret = offset_of(&screen, 42, col);
+    let mut r = Rig::new();
+    let a = r.focus(&screen, caret);
+    assert_eq!(texts(&a), vec![prompt.to_owned()]);
+    // Left reads the character before the caret, Right the one the caret lands on again.
+    r.key(TermKey::CharLeft);
+    let a = r.feed(TermInput::Caret(caret - 1));
+    assert_eq!(texts(&a), vec!["\u{441}".to_owned()]);
+    r.key(TermKey::CharLeft);
+    let a = r.feed(TermInput::Caret(caret - 2));
+    assert_eq!(texts(&a), vec!["\u{43b}".to_owned()]);
+    r.key(TermKey::CharRight);
+    let a = r.feed(TermInput::Caret(caret - 1));
+    assert_eq!(texts(&a), vec!["\u{441}".to_owned()]);
+}
+
+#[test]
+fn a_password_prompt_deep_in_a_big_cyrillic_screen_is_secret() {
+    let prompt = "[sudo] \u{43f}\u{430}\u{440}\u{43e}\u{43b}\u{44c} \u{434}\u{43b}\u{44f} user: ";
+    let screen = big_screen(60, 200, '\u{44f}', 55, prompt);
+    let caret = offset_of(&screen, 55, prompt.chars().count());
+    let mut r = Rig::new();
+    r.focus(&screen, caret);
+    let a = r.key(TermKey::Typed('q'));
+    assert!(
+        a.iter().any(|x| matches!(
+            x,
+            TermAction::Say {
+                sensitive: true,
+                ..
+            }
+        )),
+        "{a:?}"
+    );
+    assert!(r.s.secret);
+    assert!(r.s.pending.is_empty(), "a secret is not kept");
+}

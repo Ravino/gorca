@@ -280,6 +280,8 @@ impl Reader {
         }
         if let Some(t) = &mut self.text.term.tracked {
             t.key_epoch = intent.epoch;
+            // TODO(m6-review finding 3, docs/reports/m6-review.md): delete this publish once the
+            // B-1 F-1 fix lets the revalidated cached focus path earn protection.
             // A key pressed while this terminal is the focus object is the proof of focus that
             // the presentation may have lacked: a toolkit can announce the focus node before its
             // state says FOCUSED (the snapshot was served from a cache older than the focus), and
@@ -401,6 +403,7 @@ impl Reader {
     /// One input through the extension; its actions become effects. True when it claimed a key.
     fn term_step(&mut self, input: TermInput, fx: &mut ReaderEffects) -> bool {
         let now = self.term_ms();
+        let is_typed = matches!(input, TermInput::Key(TermKey::Typed(_)));
         if tracing::enabled!(tracing::Level::DEBUG) {
             // What came in, without any text: kinds and offsets only.
             tracing::debug!(now, input = %input_kind(&input), "terminal input");
@@ -414,6 +417,10 @@ impl Reader {
         }
         let mut claimed = false;
         let speak = self.text_active();
+        // `echo.typed_characters` (and its toggle) governs the character a key types here as it
+        // does everywhere else; the key is still claimed so the generic echo stays silent. The
+        // extension's reply to a typed key is that one spoken character, nothing else.
+        let silent_typed = is_typed && !self.cmd.effective.echo.typed_characters;
         if !acts.is_empty() {
             // `TermAction`'s Debug shows lengths, never text.
             tracing::debug!(actions = ?acts, speak, "terminal actions");
@@ -427,7 +434,7 @@ impl Reader {
                     urgency,
                     sensitive,
                 } => {
-                    if speak {
+                    if speak && !(silent_typed && unit == Unit::Char && urgency == Urgency::Key) {
                         let u = self.term_utterance(&text, unit, urgency, sensitive);
                         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
                     }

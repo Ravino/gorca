@@ -204,16 +204,17 @@ fn feed(app: &mut FakeApp, text: &str) -> Result<u64> {
 }
 
 /// Put the prompt on the screen and focus the terminal until the reader speaks for it.
-fn focus_term(t: &mut T, screen: &str) -> Result<()> {
+fn focus_term(t: &mut T, screen: &str) -> Result<Vec<String>> {
     feed(&mut t.app, screen)?;
     let end = Instant::now() + Duration::from_secs(10);
+    let mut mark;
     loop {
         if Instant::now() > end {
             bail!("the reader did not speak for the focus of the terminal within 10 s");
         }
         t.app.focus(OTHER)?;
         std::thread::sleep(Duration::from_millis(40));
-        let mark = t.rig.mock.mark();
+        mark = t.rig.mock.mark();
         t.app.focus(TERM)?;
         if t.rig
             .mock
@@ -227,7 +228,10 @@ fn focus_term(t: &mut T, screen: &str) -> Result<()> {
     }
     // The baseline read and the cursor line follow the focus speech.
     std::thread::sleep(Duration::from_millis(500));
-    Ok(())
+    Ok(texts(&t.rig.mock.since(mark))
+        .into_iter()
+        .map(|(_, s)| s)
+        .collect())
 }
 
 fn mutter(rig: &mut Rig) -> Result<&mut FakeMutter> {
@@ -1288,7 +1292,9 @@ pub fn vp(
     );
     std::thread::sleep(Duration::from_millis(400));
     // The password is typed; the terminal shows nothing.
-    let secret = "Zq7-tr0ub4dor&3";
+    let secret = "Jq7Xk0Wz4Vy3";
+    let read = |p: &std::path::Path| std::fs::read_to_string(p).unwrap_or_default();
+    let (present_from, stderr_from) = (read(&log).len(), read(&err).len());
     let mark = t.rig.mock.mark();
     let mut probes = Vec::new();
     for c in secret.chars() {
@@ -1313,20 +1319,80 @@ pub fn vp(
     out.x("vp_echo_missing", missing as f64, "events");
     out.x("vp_echo_double", double as f64, "events");
     std::thread::sleep(Duration::from_millis(500));
-    let read = |p: &std::path::Path| std::fs::read_to_string(p).unwrap_or_default();
     let (present, stderr) = (read(&log), read(&err));
     let mut hits = 0u64;
-    for hay in [&present, &stderr] {
-        hits += hay.matches(secret).count() as u64;
-        hits += hay.matches(&secret[..8]).count() as u64;
-        hits += hay.matches(&secret[7..]).count() as u64;
+    for (hay, from) in [(&present, present_from), (&stderr, stderr_from)] {
+        hits += secret_leaks(hay, hay.get(from..).unwrap_or(""), secret);
     }
     out.x("vp_plaintext_in_logs", hits as f64, "occurrences");
     out.x("vp_log_lines", present.lines().count() as f64, "lines");
     out.x("vp_stderr_bytes", stderr.len() as f64, "bytes");
     let r = finish(&mut t, out);
-    let _ = std::fs::remove_dir_all(&dir);
+    if hits == 0 {
+        let _ = std::fs::remove_dir_all(&dir);
+    } else {
+        // A failure keeps its evidence.
+        out.notes
+            .push(format!("VP: logs with the leak kept in {}", dir.display()));
+    }
     r
+}
+
+/// Occurrences of a typed secret in a log: the whole secret, its two halves, and (m6-review
+/// finding 7) every secret character that shows up as a value of its own: quoted (`'q'`, `"q"`,
+/// `Typed('q')`) or after a key-like field name (`key=q`, `char: q`, `text=q`). `phase` is the
+/// part of the log written while the secret was typed; the per-character check looks only at it.
+/// Use secrets made of rare characters so ordinary log words cannot match.
+fn secret_leaks(whole: &str, phase: &str, secret: &str) -> u64 {
+    let n = secret.chars().count();
+    let half = |a: usize, b: usize| secret.chars().skip(a).take(b - a).collect::<String>();
+    let mut hits = 0u64;
+    for needle in [secret.to_owned(), half(0, n / 2 + 1), half(n / 2, n)] {
+        hits += whole.matches(needle.as_str()).count() as u64;
+    }
+    let mut seen: Vec<char> = Vec::new();
+    for c in secret.chars() {
+        if seen.contains(&c) {
+            continue;
+        }
+        seen.push(c);
+        for line in phase.lines() {
+            if char_field(line, c) {
+                hits += 1;
+            }
+        }
+    }
+    hits
+}
+
+/// Does `line` carry `c` as a value of its own?
+fn char_field(line: &str, c: char) -> bool {
+    for q in ['\'', '"'] {
+        let quoted = format!("{q}{c}{q}");
+        if line.contains(&quoted) {
+            return true;
+        }
+    }
+    for field in [
+        "key", "char", "chars", "ch", "text", "typed", "keyval", "unichar", "echo",
+    ] {
+        for sep in ["=", ": ", ":"] {
+            let pat = format!("{field}{sep}{c}");
+            let mut from = 0;
+            while let Some(i) = line.get(from..).and_then(|l| l.find(&pat)) {
+                let end = from + i + pat.len();
+                let before = line.get(..from + i).and_then(|b| b.chars().next_back());
+                let after = line.get(end..).and_then(|a| a.chars().next());
+                if !before.is_some_and(char::is_alphanumeric)
+                    && !after.is_some_and(char::is_alphanumeric)
+                {
+                    return true;
+                }
+                from = end;
+            }
+        }
+    }
+    false
 }
 
 // ---- VR: review ------------------------------------------------------------------------------
@@ -1543,10 +1609,88 @@ pub fn vf(
             "edit in the middle: wanted x, y once each, heard {said:?}"
         ));
     }
+    finish(&mut t, out)?;
+    drop(t);
+    // A maximised window: 60 rows of 200 columns, ASCII and Cyrillic (two bytes per scalar).
+    let (big_fails, big_notes) = vf_big(host, reader, flavor, out)?;
+    fails += big_fails;
+    notes.extend(big_notes);
     out.x("vf_failures", fails as f64, "steps");
     out.notes.extend(notes);
-    out.notes.push("VF: a pager page, a cursor row moved by Down, an htop-style repaint, an edit on a full screen".into());
-    finish(&mut t, out)
+    out.notes.push("VF: a pager page, a cursor row moved by Down, an htop-style repaint, an edit on a full screen, a 60x200 screen in ASCII and Cyrillic (caret mid-screen, Left)".into());
+    Ok(())
+}
+
+/// m6-review finding 1: the caret and the rows of a screen larger than a few KiB. The terminal
+/// shows 60 rows of 200 scalars with the cursor on row 20; focus must read that row, and Left
+/// must read the character before the cursor in it. Returns the failed steps.
+fn vf_big(
+    host: &HostEnv,
+    reader: &ReaderSpec,
+    flavor: Flavor,
+    out: &mut RunOut,
+) -> Result<(u64, Vec<String>)> {
+    let mut fails = 0u64;
+    let mut notes = Vec::new();
+    // (rows, columns, word of the row tag, fill, 0-based cursor column, character Left must read).
+    // The third screen is 72 KB of UTF-8, more than the 64 KiB the connector used to keep.
+    let cyr = "\u{441}\u{442}\u{440}\u{43e}\u{43a}\u{430}";
+    for (rows, cols, word, fill, col, left) in [
+        (60usize, 200usize, "row", 'x', 5usize, "2"),
+        (60, 200, cyr, '\u{44f}', 8, "2"),
+        (120, 300, cyr, '\u{44f}', 8, "2"),
+    ] {
+        let mut t = setup(
+            host,
+            reader,
+            flavor,
+            1,
+            &[
+                "--term-rows",
+                &rows.to_string(),
+                "--term-cols",
+                &cols.to_string(),
+            ],
+        )?;
+        let mut s = String::from("\x1b[2J\x1b[H");
+        for r in 0..rows {
+            let tag = format!("{word} {r:02} ");
+            let pad = cols - tag.chars().count();
+            let _ = write!(s, "{tag}{}", fill.to_string().repeat(pad));
+            if r + 1 < rows {
+                s.push_str("\r\n");
+            }
+        }
+        let _ = write!(s, "\x1b[21;{}H", col + 1);
+        out.x("vf_big_screen_bytes", s.len() as f64, "bytes");
+        let said = focus_term(&mut t, &s)?;
+        let want = format!("{word} 20 ");
+        let others = (0..rows)
+            .filter(|r| *r != 20)
+            .any(|r| said.iter().any(|x| x.contains(&format!("{word} {r:02} "))));
+        if !said.iter().any(|x| x.contains(&want)) || others {
+            fails += 1;
+            notes.push(format!(
+                "big screen focus ({word}): wanted only the cursor row 20, heard {:?}",
+                said.iter()
+                    .map(|x| x.chars().take(24).collect::<String>())
+                    .collect::<Vec<_>>()
+            ));
+        }
+        let got = said_during(&mut t, 400, |t| {
+            tap(t, LEFT, 0, 0)?;
+            feed(&mut t.app, "\x1b[D")?;
+            Ok(())
+        })?;
+        if got != [left] {
+            fails += 1;
+            notes.push(format!(
+                "big screen Left ({word}): wanted {left:?}, heard {got:?}"
+            ));
+        }
+        finish(&mut t, out)?;
+    }
+    Ok((fails, notes))
 }
 
 // ---- VV: a real gnome-terminal ----------------------------------------------------------------
@@ -2161,7 +2305,11 @@ fn vv_password(
         f64::from(u8::from(!prompt_ok)),
         "events",
     );
-    let secret = "zq7tr0ub4dor3";
+    let secret = "jq7xk0wz4vy3";
+    let from: Vec<usize> = logs
+        .iter()
+        .map(|p| std::fs::read_to_string(p).map_or(0, |h| h.len()))
+        .collect();
     let mark = v.rig.mock.mark();
     let mut probes = Vec::new();
     for ch in secret.chars() {
@@ -2189,12 +2337,10 @@ fn vv_password(
     std::thread::sleep(Duration::from_millis(500));
     let mut hits = 0u64;
     let mut empty = 0u64;
-    for p in logs {
+    for (p, from) in logs.iter().zip(from) {
         let hay = std::fs::read_to_string(p).unwrap_or_default();
         empty += u64::from(hay.is_empty());
-        for needle in [secret, &secret[..7], &secret[6..]] {
-            hits += hay.matches(needle).count() as u64;
-        }
+        hits += secret_leaks(&hay, hay.get(from..).unwrap_or(""), secret);
     }
     out.x("vv_password_plaintext_in_logs", hits as f64, "occurrences");
     // A log that was never written would make the plaintext check vacuous.
@@ -2277,6 +2423,30 @@ mod tests {
             what: "type",
             contains: false,
         }
+    }
+
+    #[test]
+    fn a_per_character_leak_is_found_and_ordinary_log_lines_are_not() {
+        let secret = "Jq7Xk0Wz4Vy3";
+        let clean = "2026-10-15T10:00:00Z INFO key event key=65 sym=0x71 handled\n\
+                     DEBUG terminal actions Say { chars: 1, unit: Char }\n\
+                     TRACE zbus::connection sent call q-string-with-J-inside\n";
+        assert_eq!(secret_leaks(clean, clean, secret), 0);
+        // Whole, half and per-character forms.
+        assert!(secret_leaks("typed Jq7Xk0Wz4Vy3", "", secret) > 0);
+        assert!(secret_leaks("x Jq7Xk0W y", "", secret) > 0);
+        for leak in [
+            "DEBUG key event Typed('q')\n",
+            "TRACE text=X\n",
+            "TRACE echo: W done\n",
+            "TRACE {\"char\":\"k\"}\n",
+        ] {
+            assert!(secret_leaks("", leak, secret) > 0, "{leak}");
+        }
+        // The same line before the password phase does not count.
+        assert_eq!(secret_leaks("", "", secret), 0);
+        // A character that is part of a longer word is not a value of its own.
+        assert!(!char_field("TRACE text=Xylophone", 'X'));
     }
 
     #[test]
