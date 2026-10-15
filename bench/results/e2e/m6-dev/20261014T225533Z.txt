@@ -1,0 +1,44 @@
+# e2e m6-dev
+# utc=2026-10-14T22:55:33Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=9.73 10.24 9.17 2/2545 4097276
+# git_rev=932d611
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m6-dev
+# reader=daemon:<repo>/.claude/worktrees/agent-ab80bab70d6090a95/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=9.73 10.24 9.17 5/2545 4097273
+# reader_env=GORCA_M6=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=VT: 953 keys (typed 833, BackSpace 28, Left 42, Right 42, Enter 8); every one spoken exactly once, nothing else
+
+metric                     bus                median          min          max  n op    threshold  res   note
+VT.vt_ms.n                 daemon/voicego          945          945          945  1                  info   [samples]
+VT.vt_ms.p50               daemon/voicego        0.259        0.259        0.259  1                  info   [ms]
+VT.vt_ms.p95               daemon/voicego         10.5         10.5         10.5  1                  info   [ms]
+VT.vt_ms.p99               daemon/voicego         10.8         10.8         10.8  1 <=            3  FAIL   [ms]
+VT.vt_ms.p999              daemon/voicego         11.7         11.7         11.7  1                  info   [ms]
+VT.vt_ms.max               daemon/voicego         12.2         12.2         12.2  1                  info   [ms]
+VT.vt_output_ms.n          daemon/voicego            8            8            8  1                  info   [samples]
+VT.vt_output_ms.p50        daemon/voicego         41.8         41.8         41.8  1                  info   [ms]
+VT.vt_output_ms.p95        daemon/voicego         42.5         42.5         42.5  1                  info   [ms]
+VT.vt_output_ms.p99        daemon/voicego         42.5         42.5         42.5  1                  info   [ms]
+VT.vt_output_ms.p999       daemon/voicego         42.5         42.5         42.5  1                  info   [ms]
+VT.vt_output_ms.max        daemon/voicego         42.5         42.5         42.5  1                  info   [ms]
+VT.term_frames             daemon/voicego          930          930          930  1                  info   [frames]
+VT.vt_double               daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+VT.vt_extra                daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+VT.vt_keys                 daemon/voicego          953          953          953  1                  info   [keys]
+VT.vt_missing              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+VT.vte_assert              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [calls]

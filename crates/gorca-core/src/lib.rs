@@ -40,6 +40,7 @@ mod present;
 mod reader;
 mod review;
 mod runtime;
+mod terminal;
 mod text;
 
 pub use app_actor::{
@@ -89,4 +90,5 @@ pub use review::{
 pub use runtime::{
     Core, CoreConfig, CoreError, CoreStats, CoreStatsSnapshot, NullSpeech, SpeechOut,
 };
+pub use terminal::{TermReads, classify_term_key};
 pub use text::{TextCounters, TextMsg, TextOp, TextReqId};

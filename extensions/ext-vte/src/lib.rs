@@ -1,25 +1,72 @@
-//! `ext-vte`: terminal (VTE) policy extension skeleton.
+//! `ext-vte`: terminal (VTE) policy extension.
 //!
-//! Responsibility (ADR-0001 sections 5.6, 10 and 11): supplies the T-2 policy for the terminal
-//! presenter: prompt detection, what counts as "new output", and review integration. The line-hash
-//! screen diff itself runs in the app actor on `cpu`, not here.
+//! Responsibility (ADR-0001 sections 5.6, 10 and 11, ADR-0008 tier W3): supplies the T-2 policy
+//! for the terminal presenter: prompt detection, what counts as "new output" against a repaint,
+//! typed-character suppression, cursor-line reading after a history recall, password prompts.
 //!
 //! > "T-2 Diff the screen ourselves ... `ext-vte` supplies policy."
 //!
-//! Matches terminals by toolkit/app name through its manifest (declared by the host once the
-//! manifest format exists). Phase 0: it passes every event and presents nothing, so the core
-//! falls back to its default presentation.
+//! The policy is the pure state machine [`Session`], driven through the extension-shaped
+//! interface `gorca_ext_api::terminal::TerminalHooks`: plain data in (keys, edits, screens, time),
+//! plain actions out (speak, fetch the screen, arm a timer). The host owns the IPC, the clock and
+//! the speech, so the same crate runs linked into the core today and as a `wasm32-wasip2`
+//! component once the extension host (M5) dispatches the `terminal` interface.
 //!
-//! Allowed dependencies: **only** `gorca-ext-api` (section 11, rule 5). It is compiled for
-//! `wasm32-wasip2` as a component once the toolchain pipeline exists (the target is installed).
+//! Allowed dependencies: `gorca-ext-api` only among workspace crates (section 11, rule 5).
 
+mod prompt;
+mod screen;
+mod session;
+
+use gorca_ext_api::terminal::{
+    Ms, TermAction, TermConfig, TermCounters, TermInput, TermSnapshot, TerminalHooks,
+};
 use gorca_ext_api::{
     CommandResult, Event, EventVerdict, Hooks, NavUnit, Node, PresentCtx, Segment,
 };
 
-/// Terminal policy. Stateless for now; will hold the previous-screen line hashes' metadata.
-#[derive(Debug, Default)]
-pub struct VteExtension;
+pub use prompt::Prompt;
+pub use screen::{Diff, DiffBuf, Screen, diff, diff_with};
+pub use session::{Session, unit_at};
+
+/// The terminal extension: the generic hooks defer to the core, the terminal interface is the
+/// [`Session`].
+#[derive(Debug)]
+pub struct VteExtension {
+    session: Session,
+}
+
+impl VteExtension {
+    pub fn new(cfg: &TermConfig) -> Self {
+        Self {
+            session: Session::new(cfg),
+        }
+    }
+}
+
+impl Default for VteExtension {
+    fn default() -> Self {
+        Self::new(&TermConfig::default())
+    }
+}
+
+impl TerminalHooks for VteExtension {
+    fn configure(&mut self, cfg: &TermConfig) {
+        self.session.configure(cfg);
+    }
+
+    fn step(&mut self, now: Ms, input: TermInput, out: &mut Vec<TermAction>) {
+        self.session.step(now, input, out);
+    }
+
+    fn counters(&self) -> TermCounters {
+        self.session.counters()
+    }
+
+    fn snapshot(&self) -> Option<TermSnapshot> {
+        self.session.snapshot()
+    }
+}
 
 impl Hooks for VteExtension {
     fn on_event(&mut self, _ev: &Event) -> EventVerdict {
@@ -48,8 +95,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn skeleton_defers_to_the_core() {
-        let mut e = VteExtension;
+    fn the_generic_hooks_defer_to_the_core() {
+        let mut e = VteExtension::default();
         assert_eq!(
             e.on_event(&Event::Announcement("x".into())),
             EventVerdict::Pass

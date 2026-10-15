@@ -37,6 +37,7 @@ pub mod host;
 pub mod m1;
 pub mod m3;
 pub mod m4;
+pub mod m6;
 pub mod mock;
 pub mod mono;
 pub mod runner;

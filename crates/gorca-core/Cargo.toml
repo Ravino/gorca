@@ -16,6 +16,8 @@ gorca-connector-api = { workspace = true }
 gorca-doc-source-api = { workspace = true }
 gorca-doc = { workspace = true }
 gorca-text = { workspace = true }
+gorca-ext-api = { workspace = true }
+ext-vte = { workspace = true }
 scc = { workspace = true }
 gorca-output-api = { workspace = true }
 gorca-input-api = { workspace = true }

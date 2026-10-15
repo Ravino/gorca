@@ -81,6 +81,16 @@ pub enum Scn {
     E1s,
     /// M3b and M7b scenarios against a private Firefox (`webtext.rs`).
     Wt(&'static str),
+    V1,
+    Vt,
+    Vh,
+    V2,
+    V3,
+    Vp,
+    Vr,
+    Vf,
+    Vb,
+    Vv,
 }
 
 impl Scn {
@@ -129,6 +139,16 @@ impl Scn {
             Self::K1Storm => "K1-50k".into(),
             Self::E1s => "E1s".into(),
             Self::Wt(id) => (*id).into(),
+            Self::V1 => "V1".into(),
+            Self::Vt => "VT".into(),
+            Self::Vh => "VH".into(),
+            Self::V2 => "V2".into(),
+            Self::V3 => "V3".into(),
+            Self::Vp => "VP".into(),
+            Self::Vr => "VR".into(),
+            Self::Vf => "VF".into(),
+            Self::Vb => "VB".into(),
+            Self::Vv => "VV".into(),
         }
     }
 
@@ -177,6 +197,16 @@ impl Scn {
             "L2-50k" => Self::L2Storm,
             "K1-50k" => Self::K1Storm,
             "E1s" => Self::E1s,
+            "V1" => Self::V1,
+            "VT" => Self::Vt,
+            "VH" => Self::Vh,
+            "V2" => Self::V2,
+            "V3" => Self::V3,
+            "VP" => Self::Vp,
+            "VR" => Self::Vr,
+            "VF" => Self::Vf,
+            "VB" => Self::Vb,
+            "VV" => Self::Vv,
             other => {
                 return super::webtext::IDS
                     .iter()
@@ -191,7 +221,7 @@ impl Scn {
             "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K2s", "K3",
             "K4", "K4r", "K4h", "R1", "R1s", "RS", "B0", "W1", "BR1", "BR2", "W2", "W2b", "W3",
             "FM1", "FM2", "C1", "C1h", "C2", "E1", "E2", "E2f", "S2", "SA1", "SA2", "SA3", "SA3a",
-            "PW", "C1hs", "E1s",
+            "PW", "C1hs", "E1s", "V1", "VT", "VH", "V2", "V3", "VP", "VR", "VF", "VB", "VV",
         ]
         .iter()
         .chain(super::webtext::IDS)
@@ -523,6 +553,16 @@ pub fn run(
         Scn::C1hs => super::m3::c1hs(host, reader, flavor, size, seed, &mut out)?,
         Scn::E1s => super::m3::e1s(host, reader, flavor, size, seed, &mut out)?,
         Scn::Wt(id) => super::webtext::run(id, host, reader, flavor, size, seed, &mut out)?,
+        Scn::V1 => super::m6::v1(host, reader, flavor, size, seed, &mut out)?,
+        Scn::Vt => super::m6::vt(host, reader, flavor, size, seed, &mut out)?,
+        Scn::Vh => super::m6::vh(host, reader, flavor, size, seed, &mut out)?,
+        Scn::V2 => super::m6::v2(host, reader, flavor, size, seed, &mut out)?,
+        Scn::V3 => super::m6::v3(host, reader, flavor, size, seed, &mut out)?,
+        Scn::Vp => super::m6::vp(host, reader, flavor, size, seed, &mut out)?,
+        Scn::Vr => super::m6::vr(host, reader, flavor, size, seed, &mut out)?,
+        Scn::Vf => super::m6::vf(host, reader, flavor, size, seed, &mut out)?,
+        Scn::Vb => super::m6::vb(host, reader, flavor, size, seed, &mut out)?,
+        Scn::Vv => super::m6::vv(host, reader, flavor, size, seed, &mut out)?,
     }
     Ok(out)
 }

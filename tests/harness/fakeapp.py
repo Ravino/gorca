@@ -551,6 +551,9 @@ def _(app, n):
 @impl(IF_TEXT, "GetText", "ii", "s")
 def _(app, n, start, end):
     t = n.text
+    if app.term_node is n and (start < 0 or end < -1):
+        # VTE: g_assert((start_offset >= 0) && (end_offset >= -1)) aborts the whole terminal server.
+        app.stats["vte_assert"] = app.stats.get("vte_assert", 0) + 1
     if end < 0:
         end = len(t)
     if app.bad("huge"):
@@ -912,14 +915,61 @@ def build_service_class(app):
 
 # ---- terminal ------------------------------------------------------------------------------------
 class Term:
-    def __init__(self, rows, cols):
+    def __init__(self, rows, cols, trim=False):
         self.rows, self.cols = rows, cols
         self.lines = [""] * rows
         self.r = self.c = 0
+        self.trim = trim        # VTE-like text: rows right-trimmed, trailing empty rows dropped
+        self.esc = None         # pending escape sequence (M6)
+
+    def _csi(self, params, final):
+        n = [int(x) if x.isdigit() else 0 for x in params.split(";")] if params else []
+        a = n[0] if n else 0
+        if final == "K":
+            if a in (0, 2):
+                self.lines[self.r] = self.lines[self.r][:self.c] if a == 0 else ""
+            elif a == 1:
+                self.lines[self.r] = " " * self.c + self.lines[self.r][self.c:]
+        elif final == "J":
+            if a == 2 or a == 3:
+                self.lines = [""] * self.rows
+            elif a == 0:
+                self.lines[self.r] = self.lines[self.r][:self.c]
+                for i in range(self.r + 1, self.rows):
+                    self.lines[i] = ""
+        elif final == "H" or final == "f":
+            self.r = min(max((n[0] if n else 1) - 1, 0), self.rows - 1)
+            self.c = min(max((n[1] if len(n) > 1 else 1) - 1, 0), self.cols - 1)
+        elif final == "A":
+            self.r = max(0, self.r - max(a, 1))
+        elif final == "B":
+            self.r = min(self.rows - 1, self.r + max(a, 1))
+        elif final == "C":
+            self.c = min(self.cols - 1, self.c + max(a, 1))
+        elif final == "D":
+            self.c = max(0, self.c - max(a, 1))
+        elif final == "G":
+            self.c = min(max(a - 1, 0), self.cols - 1)
 
     def feed(self, s):
         for ch in s:
-            if ch == "\n":
+            if self.esc is not None:
+                self.esc += ch
+                if len(self.esc) == 1:
+                    if ch != "[":
+                        self.esc = None
+                elif ch.isalpha() or ch in "@`~":
+                    self._csi(self.esc[1:-1], ch)
+                    self.esc = None
+                elif len(self.esc) > 24:
+                    self.esc = None
+                continue
+            if ch == "\x1b":
+                self.esc = ""
+                continue
+            if ch == "\b":
+                self.c = max(0, self.c - 1)
+            elif ch == "\n":
                 self.r += 1
                 self.c = 0
             elif ch == "\r":
@@ -940,10 +990,23 @@ class Term:
         self.lines = self.lines[1:] + [""]
         self.r = self.rows - 1
 
+    def _trimmed(self):
+        rows = [l.rstrip() for l in self.lines]
+        while rows and not rows[-1] and len(rows) > self.r + 1:
+            rows.pop()
+        return rows
+
     def snapshot(self):
+        if self.trim:
+            return "\n".join(self._trimmed())
         return "".join(l + "\n" for l in self.lines)
 
     def caret(self):
+        if self.trim:
+            rows = self._trimmed()
+            before = sum(len(rows[i]) + 1 if i < len(rows) else 1 for i in range(self.r))
+            row = rows[self.r] if self.r < len(rows) else ""
+            return before + min(self.c, len(row))
         return sum(len(l) + 1 for l in self.lines[:self.r]) + self.c
 
 
@@ -955,6 +1018,12 @@ def term_frame(app):
     new = t.snapshot()
     old = n.text
     if new == old:
+        # Only the cursor moved (readline Left / Right): VTE signals the caret alone.
+        c = t.caret()
+        if c != n.caret:
+            n.caret = c
+            app.ev_caret(n)
+            app.stats["term_frames"] += 1
         return True
     head = 0
     m = min(len(old), len(new))
@@ -977,7 +1046,7 @@ def term_frame(app):
     return True
 
 
-def term_start(app, fps, lines_per_frame):
+def term_start(app, fps, lines_per_frame, kind="seq"):
     if app.term_timer:
         GLib.source_remove(app.term_timer)
         app.term_timer = None
@@ -988,8 +1057,13 @@ def term_start(app, fps, lines_per_frame):
         def gen():
             for _ in range(lines_per_frame):
                 counter[0] += 1
-                body = "".join(app.rng.choice("abcdefghij klmnopqrst") for _ in range(app.term.cols - 12))
-                app.term.feed("%08d %s\n" % (counter[0], body))
+                if kind == "yes":
+                    app.term.feed("y\n")
+                elif kind == "build":
+                    app.term.feed("[%3d%%] Building CXX object src/mod%05d.o\n" % (counter[0] % 100, counter[0]))
+                else:
+                    body = "".join(app.rng.choice("abcdefghij klmnopqrst") for _ in range(app.term.cols - 12))
+                    app.term.feed("%08d %s\n" % (counter[0], body))
         app.term_source = gen
     if fps > 0:
         app.term_timer = GLib.timeout_add(max(1, int(1000 / fps)), lambda: term_frame(app))
@@ -1177,9 +1251,11 @@ def build_terminal(app):
     a = app.args
     app.add(None, R_APP, a.name)
     frame = app.add(0, R_FRAME, "Terminal", states=(S_ACTIVE,))
-    app.term = Term(a.term_rows, a.term_cols)
+    app.term = Term(a.term_rows, a.term_cols, trim=a.term_trim)
     app.term_node = app.add(frame.id, R_TERMINAL, "term", text=app.term.snapshot(),
                             states=(S_FOCUSABLE, S_MULTI_LINE))
+    # A second focusable node, so a test can move the focus away from the terminal and back.
+    app.add(frame.id, R_ENTRY, "other", text="", editable=True, states=(S_FOCUSABLE,))
 
 
 # ---- control channel -----------------------------------------------------------------------------
@@ -1310,13 +1386,20 @@ def handle(app, cmd):
         if bad:
             raise ValueError("unknown malformed mode(s): %s" % sorted(bad))
     elif c == "term_feed":
+        # The text is what a program writes to the pty (escape sequences included). One VTE frame
+        # follows unless `defer`; the reply carries the emit time of its first signal.
+        app.first_emit_ns = 0
         app.term.feed(cmd["text"])
         if not cmd.get("defer"):
             term_frame(app)
+        app.conn.flush()
+        return {"t_emit_ns": app.first_emit_ns, "caret": app.term_node.caret}
     elif c == "term_gen":
-        term_start(app, float(cmd.get("fps", 60)), int(cmd.get("lines", 1)))
+        term_start(app, float(cmd.get("fps", 60)), int(cmd.get("lines", 1)), cmd.get("kind", "seq"))
     elif c == "term_stop":
         term_start(app, 0, 0)
+        app.conn.flush()
+        return {"frames": app.stats["term_frames"]}
     elif c == "build":
         return build_tree_cmd(app, cmd)
     elif c == "calls":
@@ -1397,6 +1480,8 @@ def main():
     ap.add_argument("--term-cols", type=int, default=80)
     ap.add_argument("--term-fps", type=float, default=60)
     ap.add_argument("--term-gen", type=int, default=0, help="auto-generate N lines per frame")
+    ap.add_argument("--term-trim", action="store_true",
+                    help="VTE-like text: rows right-trimmed, trailing empty rows dropped (M6)")
     ap.add_argument("--term-charcount-quirk", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--no-register", action="store_true", help="do not call Registry Socket.Embed")
     ap.add_argument("--own-shell-name", action="store_true",

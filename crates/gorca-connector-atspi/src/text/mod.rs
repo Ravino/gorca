@@ -57,6 +57,7 @@ pub(crate) async fn run(
             around,
             radius,
         } => Some(window(cx, *node, *around, *radius, dl).await),
+        TextQuery::Screen { node } => Some(screen(cx, *node, dl).await),
         TextQuery::GetText { .. }
         | TextQuery::CaretOffset { .. }
         | TextQuery::Attributes { .. }
@@ -70,6 +71,39 @@ async fn char_count(cx: &CallCx, n: &Resolved, dl: Deadline) -> Result<u32, Back
         .await
         .map(nonneg)
         .map_err(|e| backend_error(&e))
+}
+
+/// A terminal's visible screen: `GetText(0, -1)` and the caret. The end offset `-1` means "to the
+/// end" for every implementation and never trips VTE's `g_assert(start_offset >= 0)` (T-3);
+/// `CharacterCount` is not asked because a VTE reports a different number than the text it serves.
+async fn screen(cx: &CallCx, node: NodeKey, dl: Deadline) -> Result<BackendReply, BackendError> {
+    let n = resolve(cx, node)?;
+    let t = cx
+        .caller
+        .text_range(&n.path, 0, -1, dl)
+        .await
+        .map_err(|e| backend_error(&e))?;
+    let caret = cx.caller.text_caret(&n.path, dl).await.ok().map(nonneg);
+    let text: Arc<str> = Arc::from(clip_tail(&t, MAX_TEXT_BYTES));
+    let len = u32::try_from(text.chars().count()).unwrap_or(u32::MAX);
+    Ok(BackendReply::Window(TextWindowFill {
+        base: 0,
+        text,
+        len,
+        caret,
+    }))
+}
+
+/// The last `max` bytes of `s`, cut at a char boundary.
+fn clip_tail(s: &str, max: usize) -> &str {
+    if s.len() <= max {
+        return s;
+    }
+    let mut start = s.len() - max;
+    while !s.is_char_boundary(start) {
+        start += 1;
+    }
+    &s[start..]
 }
 
 /// `GetText` around `around` (or the caret) in one pass: the character count, the caret when
@@ -210,6 +244,14 @@ mod tests {
         assert_eq!(nonneg(-1), 0);
         assert_eq!(nonneg(i32::MIN), 0);
         assert_eq!(nonneg(7), 7);
+    }
+
+    #[test]
+    fn a_long_screen_keeps_its_end() {
+        assert_eq!(clip_tail("abcdef", 3), "def");
+        assert_eq!(clip_tail("abc", 10), "abc");
+        // Never inside a scalar.
+        assert_eq!(clip_tail("a\u{e9}\u{e9}", 3), "\u{e9}");
     }
 
     #[test]

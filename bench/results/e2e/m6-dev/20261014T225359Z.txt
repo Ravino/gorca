@@ -1,0 +1,44 @@
+# e2e m6-dev
+# utc=2026-10-14T22:53:59Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=12.28 10.58 9.15 2/3039 4094030
+# git_rev=932d611
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m6-dev
+# reader=daemon:<repo>/.claude/worktrees/agent-ab80bab70d6090a95/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=12.28 10.58 9.15 1/3039 4094027
+# reader_env=GORCA_M6=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=probe #204 (enter; before: backspace "6", type "y") wanted "o1" (contained), heard [-34.3ms "y", +6.5ms "y", +41.6ms "o1\nme at box: tilde dollar", +1032.4ms "b", +1065.3ms "0", +1097.5ms "6", +1134.5ms "t"]
+# note1=probe #368 (enter; before: type "w", type "p") wanted "o3" (contained), heard [-33.1ms "p", +8.3ms "p", +41.6ms "o3\nme at box: tilde dollar", +1039.2ms "k", +1074.0ms "s", +1108.1ms "w", +1147.0ms "3"]
+# note2=probe #471 (enter; before: type "7", type "8") wanted "o4" (contained), heard [-39.0ms "8", +2.4ms "8", +41.9ms "o4\nme at box: tilde dollar", +1039.4ms "y", +1072.8ms "b", +1111.9ms "9", +1149.8ms "x"]
+# note3=probe #604 (enter; before: type "a", type "6") wanted "o5" (contained), heard [-36.8ms "6", +4.4ms "6", +41.0ms "o5\nme at box: tilde dollar", +1036.3ms "t", +1086.9ms "t", +1118.3ms "blank", +1145.0ms "r"]
+# note4=probe #729 (enter; before: type "u", type "s") wanted "o6" (contained), heard [-31.3ms "s", +10.5ms "s", +41.9ms "o6\nme at box: tilde dollar", +1034.4ms "6", +1072.7ms "a", +1112.3ms "z", +1151.7ms "space"]
+# note5=probe #838 (enter; before: type "t", type "o") wanted "o7" (contained), heard [-32.3ms "o", +8.5ms "o", +42.1ms "o7\nme at box: tilde dollar", +1034.0ms "6", +1080.0ms "6", +1115.7ms "blank", +1144.5ms "l"]
+# note6=VT: 953 keys (typed 833, BackSpace 28, Left 42, Right 42, Enter 8); every one spoken exactly once, nothing else
+
+metric                     bus                median          min          max  n op    threshold  res   note
+VT.vt_ms.n                 daemon/voicego          953          953          953  1                  info   [samples]
+VT.vt_ms.p50               daemon/voicego        0.305        0.305        0.305  1                  info   [ms]
+VT.vt_ms.p95               daemon/voicego         10.6         10.6         10.6  1                  info   [ms]
+VT.vt_ms.p99               daemon/voicego         11.7         11.7         11.7  1 <=            3  FAIL   [ms]
+VT.vt_ms.p999              daemon/voicego         42.1         42.1         42.1  1                  info   [ms]
+VT.vt_ms.max               daemon/voicego         42.2         42.2         42.2  1                  info   [ms]
+VT.term_frames             daemon/voicego          930          930          930  1                  info   [frames]
+VT.vt_double               daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+VT.vt_extra                daemon/voicego            7            7            7  1 <=            0  FAIL  gated on the max over repeats [events]
+VT.vt_keys                 daemon/voicego          953          953          953  1                  info   [keys]
+VT.vt_missing              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+VT.vte_assert              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [calls]

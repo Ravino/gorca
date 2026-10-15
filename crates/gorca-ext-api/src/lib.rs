@@ -15,6 +15,7 @@
 //! This crate has **no** gorca dependencies on purpose: a WASM extension links only this.
 
 pub mod api;
+pub mod terminal;
 
 pub use api::*;
 
@@ -63,6 +64,19 @@ mod tests {
         let exports: Vec<_> = world.exports.values().filter_map(iface_names).collect();
         assert!(imports.contains(&"host".to_owned()), "{imports:?}");
         assert_eq!(exports, vec!["hooks".to_owned()]);
+    }
+
+    #[test]
+    fn the_terminal_interface_is_declared_with_step() {
+        let mut resolve = Resolve::new();
+        resolve.push_str("gorca-ext.wit", WIT_SOURCE).unwrap();
+        let (_, iface) = resolve
+            .interfaces
+            .iter()
+            .find(|(_, i)| i.name.as_deref() == Some("terminal"))
+            .unwrap();
+        assert!(iface.functions.contains_key("step"));
+        assert!(iface.functions.contains_key("configure"));
     }
 
     #[test]

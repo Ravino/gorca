@@ -291,6 +291,13 @@ impl AppActor {
         self.text_unprotected
     }
 
+    /// Text events were lost on the way (a flood collapsed them): say so, like a full queue does.
+    fn note_text_lost(&self) {
+        if let Some(l) = &self.text {
+            l.dropped.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+
     /// Queue a text event for the Reader; a full queue drops it and says so.
     fn send_text(&mut self, msg: TextMsg) {
         let Some(l) = &self.text else { return };
@@ -516,6 +523,11 @@ impl AppActor {
         if let Some(dirty) = drained.dirty {
             // Flooded: the ingress kept only the essentials and marked the rest dirty. We have
             // drained the backlog, so the app recovers with a lazy resync (R-3).
+            if self.text.is_some() && self.wants_text_events() {
+                // The text events of the flood are gone: the Reader must not trust its window or
+                // its screen (a terminal reads it again).
+                self.note_text_lost();
+            }
             let ctx = HealthStepCtx { now };
             let (h, _) = std::mem::replace(&mut self.health, AppHealth::Gone)
                 .step(HealthMsg::IngressOverWatermark { dirty }, &ctx);

@@ -40,15 +40,19 @@ impl Toolkit {
     /// TU-2: the offset unit this toolkit's AT-SPI text interface uses.
     ///
     /// Firefox: UTF-16 units with a phantom U+FEFF after each astral character
-    /// (`refs/firefox/accessible/atk/DOMtoATK.h`). Chromium: code points. VTE attribute runs:
-    /// UTF-8 bytes. The rest are treated as scalar values.
+    /// (`refs/firefox/accessible/atk/DOMtoATK.h`). Chromium: code points. VTE: the `Text`
+    /// offsets (caret, `GetText`, `text-changed`) are characters of the screen snapshot; only
+    /// its attribute runs are UTF-8 bytes (`docs/platform/vte-terminal-accessibility.md`), and
+    /// gorca never reads attributes, so the table says scalar. The rest are scalar values too.
     pub fn text_unit(self) -> TextUnit {
         match self {
             Toolkit::Firefox => TextUnit::Utf16Bom,
-            Toolkit::Vte => TextUnit::Utf8,
-            Toolkit::Chromium | Toolkit::Gtk3 | Toolkit::Gtk4 | Toolkit::Qt | Toolkit::Other => {
-                TextUnit::Scalar
-            }
+            Toolkit::Chromium
+            | Toolkit::Vte
+            | Toolkit::Gtk3
+            | Toolkit::Gtk4
+            | Toolkit::Qt
+            | Toolkit::Other => TextUnit::Scalar,
         }
     }
 }
@@ -96,7 +100,8 @@ mod tests {
     fn text_units_follow_tu2() {
         assert_eq!(Toolkit::Firefox.text_unit(), TextUnit::Utf16Bom);
         assert_eq!(Toolkit::Chromium.text_unit(), TextUnit::Scalar);
-        assert_eq!(Toolkit::Vte.text_unit(), TextUnit::Utf8);
+        // The text offsets of a VTE are characters; only its attribute runs are bytes.
+        assert_eq!(Toolkit::Vte.text_unit(), TextUnit::Scalar);
         assert_eq!(Toolkit::Gtk4.text_unit(), TextUnit::Scalar);
     }
 

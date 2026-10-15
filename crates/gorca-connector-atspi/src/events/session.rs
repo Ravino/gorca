@@ -22,11 +22,23 @@ const REGISTRY_IFACE: &str = "org.a11y.atspi.Registry";
 /// `StateChanged`, `ChildrenChanged` and the name/role/description property changes are always
 /// on in atk-bridge and GTK4, so they are not listed. Wide registrations such as `Object:*`
 /// would turn every application into an event firehose.
+///
+/// The three text classes are what the text layer (M3) and the terminal arm (M6) live on: an
+/// application emits `text-changed`, `text-caret-moved` and `text-selection-changed` only while
+/// some listener has registered them (`atk-adaptor/event.c` `signal_is_needed`), so without them
+/// a screen reader started alone never hears a caret move or a typed character in a real
+/// GTK3, GTK4 or VTE application (found by the real gnome-terminal run, `tests/term`). The
+/// registration cannot be limited to one application (`app_bus_name` never reaches the bridge:
+/// `refs/at-spi2-core/registryd/registry.c:1028`), so the ingress coalescer and the `Flooded`
+/// state are what keep a flooding background application in check (ADR-0001 T-1, T-4).
 pub const REGISTERED_EVENTS: &[&str] = &[
     "Focus:",
     "Object:StateChanged:Focused",
     "Object:ActiveDescendantChanged:",
     "Object:Announcement:",
+    "Object:TextChanged:",
+    "Object:TextCaretMoved:",
+    "Object:TextSelectionChanged:",
     "Window:Activate:",
     "Window:Deactivate:",
     "Window:Create:",
@@ -209,6 +221,13 @@ mod tests {
         assert!(REGISTERED_EVENTS.len() < 16);
         assert!(REGISTERED_EVENTS.iter().all(|e| !e.contains('*')));
         assert!(REGISTERED_EVENTS.contains(&"Object:StateChanged:Focused"));
+        for text in [
+            "Object:TextChanged:",
+            "Object:TextCaretMoved:",
+            "Object:TextSelectionChanged:",
+        ] {
+            assert!(REGISTERED_EVENTS.contains(&text), "{text}");
+        }
     }
 
     #[tokio::test]

@@ -351,6 +351,35 @@ impl Default for BrowseSettings {
     }
 }
 
+/// Terminal presentation (milestone M6, `ext-vte`).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TerminalSettings {
+    /// Quiet time after the last change before the screen is read (ADR-0001 T-1).
+    pub settle_ms: u32,
+    /// More new lines than this in one reading are a burst: only the last few are spoken.
+    pub burst_lines: u32,
+    /// Prompt ends: the first of these found in a line ends the prompt.
+    pub prompt_markers: Vec<String>,
+    /// Regular expression whose match ends the prompt; empty = use the markers only.
+    pub prompt_regex: String,
+    /// Regular expression for password prompts; empty = the built-in list.
+    pub secret_regex: String,
+}
+
+impl Default for TerminalSettings {
+    fn default() -> Self {
+        Self {
+            settle_ms: 30,
+            burst_lines: 40,
+            prompt_markers: ["$ ", "# ", "% ", "> ", "\u{276f} ", "\u{bb} "]
+                .map(str::to_owned)
+                .to_vec(),
+            prompt_regex: String::new(),
+            secret_regex: String::new(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct VerbositySettings {
     pub level: Verbosity,
@@ -366,6 +395,7 @@ pub struct Settings {
     pub echo: EchoSettings,
     pub text: TextSettings,
     pub browse: BrowseSettings,
+    pub terminal: TerminalSettings,
     pub verbosity: VerbositySettings,
 }
 
@@ -625,6 +655,26 @@ pub static SETTINGS: &[SettingDef] = &[
     ),
     row("browse", "say_all_on_load", SettingType::Bool, "true"),
     row(
+        "terminal",
+        "settle_ms",
+        SettingType::Int { min: 10, max: 200 },
+        "30",
+    ),
+    row(
+        "terminal",
+        "burst_lines",
+        SettingType::Int { min: 4, max: 400 },
+        "40",
+    ),
+    row(
+        "terminal",
+        "prompt_markers",
+        SettingType::StrList,
+        "[\"$ \", \"# \", \"% \", \"> \", \"\u{276f} \", \"\u{bb} \"]",
+    ),
+    row("terminal", "prompt_regex", SettingType::Str, "\"\""),
+    row("terminal", "secret_regex", SettingType::Str, "\"\""),
+    row(
         "verbosity",
         "level",
         SettingType::Enum("\"brief\", \"normal\" or \"verbose\""),
@@ -716,6 +766,7 @@ mod tests {
                 "echo",
                 "text",
                 "browse",
+                "terminal",
                 "verbosity"
             ]
         );
