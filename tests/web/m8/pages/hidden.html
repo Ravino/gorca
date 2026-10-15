@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 Hidden and presentational</title>
+<style>
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.offscreen{position:absolute;left:-9999px}
+</style></head>
+<body>
+<h1>Hidden content rules</h1>
+<p>START marker.</p>
+<p aria-hidden="true">ARIA-HIDDEN-TEXT should never be read.</p>
+<p style="display:none">DISPLAY-NONE-TEXT should never be read.</p>
+<p style="visibility:hidden">VISIBILITY-HIDDEN-TEXT should never be read.</p>
+<p hidden>HIDDEN-ATTR-TEXT should never be read.</p>
+<div inert>INERT-TEXT is still in the tree but not focusable.</div>
+<p>Visible after hidden.</p>
+<p class="sr-only">SCREEN-READER-ONLY text must be read.</p>
+<p class="offscreen">OFFSCREEN-TEXT is positioned off screen and must be read.</p>
+<p style="opacity:0">OPACITY-ZERO-TEXT is visually hidden but exposed.</p>
+<div aria-hidden="true"><a href="#x" id="hidden-link">HIDDEN-LINK inside aria-hidden</a><button type="button">HIDDEN-BUTTON</button></div>
+<ul role="presentation"><li>Presentational list item one</li><li>Presentational list item two</li></ul>
+<ul role="none"><li>None-role list item</li></ul>
+<h2 role="presentation">Presentational heading text</h2>
+<img alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"><img alt="DECOR-IMG-SHOULD-NOT-BE-SKIPPED" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
+<span aria-label="Label overrides text">LABEL-OVERRIDE-VISIBLE</span>
+<button aria-hidden="true" type="button">ARIA-HIDDEN-BUTTON</button>
+<p>Paragraph with <span aria-hidden="true">HIDDEN-INLINE</span>inline hidden span.</p>
+<button type="button" id="toggle" onclick="document.getElementById('late').hidden=!document.getElementById('late').hidden">Toggle late paragraph</button>
+<p id="late" hidden>LATE-PARAGRAPH revealed by the button.</p>
+<p>END marker.</p>
+</body>
+</html>

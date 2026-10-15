@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 Live regions</title></head>
+<body>
+<h1>Live region policy</h1>
+<!--
+  Buttons drive the scenarios (the harness does an AT-SPI do_action on them), so every mutation
+  happens a known time after a measured stimulus. Nothing mutates on its own except #clock when
+  the page URL has #auto.
+-->
+<p>
+  <button id="b-polite" type="button">Run polite</button>
+  <button id="b-assertive" type="button">Run assertive</button>
+  <button id="b-alert" type="button">Run alert</button>
+  <button id="b-status" type="button">Run status</button>
+  <button id="b-log" type="button">Run log</button>
+  <button id="b-atomic" type="button">Run atomic</button>
+  <button id="b-flood" type="button">Run flood polite</button>
+  <button id="b-flood-a" type="button">Run flood assertive</button>
+  <button id="b-busy" type="button">Run busy</button>
+  <button id="b-off" type="button">Run off</button>
+  <button id="b-remove" type="button">Run remove</button>
+  <button id="b-same" type="button">Run same</button>
+  <button id="b-new" type="button">Run new region</button>
+  <button id="b-hidden" type="button">Run hidden</button>
+</p>
+<div id="polite" aria-live="polite" aria-label="Polite region"></div>
+<div id="assertive" aria-live="assertive"></div>
+<div id="alertbox"></div>
+<div id="status" role="status">Status idle</div>
+<div id="log" role="log" aria-label="Event log"></div>
+<div id="atomic" aria-live="polite" aria-atomic="true">Ticker: <span id="tick">0</span> points</div>
+<div id="flood" aria-live="polite" aria-label="Flood region"></div>
+<div id="flood-a" aria-live="assertive" aria-label="Flood assertive region"></div>
+<div id="busy" aria-live="polite" aria-busy="false" aria-label="Busy region"></div>
+<div id="off" aria-live="off">Silent text</div>
+<div id="removals" aria-live="polite" aria-relevant="all" aria-label="Removals region"><span id="rem-a">Removable text A</span></div>
+<div id="same" aria-live="polite" aria-label="Same text region"></div>
+<div id="slot"></div>
+<div id="hidden-live" aria-live="polite" style="display:none">Hidden region text</div>
+<div id="clock" role="timer" aria-live="off">00:00</div>
+<script>
+const $ = (id) => document.getElementById(id);
+let n = 0;
+$("b-polite").onclick = () => { $("polite").textContent = "Polite message " + (++n); };
+$("b-assertive").onclick = () => { $("assertive").textContent = "Assertive message " + (++n); };
+$("b-alert").onclick = () => {
+  const a = document.createElement("div"); a.setAttribute("role", "alert"); a.textContent = "Alert: disk almost full";
+  $("alertbox").replaceChildren(a);
+};
+$("b-status").onclick = () => { $("status").textContent = "Saved at step " + (++n); };
+$("b-log").onclick = () => { const p = document.createElement("p"); p.textContent = "Log entry " + (++n); $("log").append(p); };
+let t = 0;
+$("b-atomic").onclick = () => { $("tick").textContent = String(++t); };
+$("b-flood").onclick = () => { for (let i = 0; i < 200; i++) setTimeout(() => { $("flood").textContent = "Flood update " + i; }, i * 5); };
+$("b-flood-a").onclick = () => { for (let i = 0; i < 200; i++) setTimeout(() => { $("flood-a").textContent = "Assertive flood " + i; }, i * 5); };
+$("b-busy").onclick = () => {
+  $("busy").setAttribute("aria-busy", "true");
+  $("busy").textContent = "Busy part one";
+  setTimeout(() => { $("busy").textContent = "Busy final text"; $("busy").setAttribute("aria-busy", "false"); }, 600);
+};
+$("b-off").onclick = () => { $("off").textContent = "Silent update " + (++n); };
+$("b-remove").onclick = () => { const e = $("rem-a"); if (e) e.remove(); };
+$("b-same").onclick = () => { $("same").textContent = ""; setTimeout(() => { $("same").textContent = "Same text again"; }, 20); };
+$("b-new").onclick = () => {
+  const d = document.createElement("div"); d.setAttribute("aria-live", "polite"); d.textContent = "Text present when the region appears";
+  $("slot").replaceChildren(d);
+  setTimeout(() => { d.textContent = "Text added after the region exists"; }, 300);
+};
+$("b-hidden").onclick = () => { $("hidden-live").textContent = "Hidden region changed"; };
+if (location.hash === "#auto") setInterval(() => { $("clock").textContent = "00:" + String(++n % 60).padStart(2, "0"); }, 1000);
+</script>
+</body>
+</html>

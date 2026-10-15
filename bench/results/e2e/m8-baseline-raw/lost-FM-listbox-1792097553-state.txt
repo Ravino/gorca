@@ -1,0 +1,50 @@
+714071009319330 said "M8 Forms, document"
+714071054342424 said "browse mode, heading level 1, Forms and focus modes"
+714071296202884 said "Last link, link"
+714071600474859 said "First link, link"
+714072408335376 said "focus mode, Full name, edit"
+714072661959232 said "browse mode, Full name, edit, Ada"
+714072916944978 said "focus mode"
+714073038309771 said "browse mode, Full name, edit, Ada"
+714073188168318 said "focus mode, Secret, password edit"
+714073913313358 said "Notes, edit"
+714074650548634 said "Read only, edit"
+714075468481409 said "Required, edit, required, invalid entry"
+714075715086090 said "Invalid, edit, invalid entry"
+714076016696663 said "browse mode, Gift wrap, check box"
+714076745279735 said "Save profile, button"
+714077499656964 said "Post, radio button"
+714078232845328 said "focus mode, Size, combo box"
+bus 2 /org/a11y/atspi/accessible/67
+bus 2 /org/a11y/atspi/accessible/73
+bus 2 /org/a11y/atspi/accessible/74
+bus 2 /org/a11y/atspi/accessible/79
+bus 2 /org/a11y/atspi/accessible/80
+bus 2 /org/a11y/atspi/accessible/81
+bus 2 /org/a11y/atspi/accessible/82
+bus 1 /org/a11y/atspi/accessible/73
+bus 1 /org/a11y/atspi/accessible/73
+bus 1 /org/a11y/atspi/accessible/97
+bus 1 /org/a11y/atspi/accessible/97
+bus 1 /org/a11y/atspi/accessible/98
+bus 1 /org/a11y/atspi/accessible/98
+bus 1 /org/a11y/atspi/accessible/112
+bus 1 /org/a11y/atspi/accessible/112
+bus 1 /org/a11y/atspi/accessible/115
+bus 1 /org/a11y/atspi/accessible/115
+bus 1 /org/a11y/atspi/accessible/118
+bus 1 /org/a11y/atspi/accessible/118
+bus 1 /org/a11y/atspi/accessible/121
+bus 1 /org/a11y/atspi/accessible/121
+bus 1 /org/a11y/atspi/accessible/127
+bus 1 /org/a11y/atspi/accessible/127
+bus 1 /org/a11y/atspi/accessible/131
+bus 1 /org/a11y/atspi/accessible/131
+bus 1 /org/a11y/atspi/accessible/139
+bus 1 /org/a11y/atspi/accessible/139
+bus 1 /org/a11y/atspi/accessible/163
+bus 1 /org/a11y/atspi/accessible/163
+bus 1 /org/a11y/atspi/accessible/135
+bus 1 /org/a11y/atspi/accessible/135
+bus 1 /org/a11y/atspi/accessible/143
+bus 1 /org/a11y/atspi/accessible/143

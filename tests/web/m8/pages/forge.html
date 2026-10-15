@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 Forge repository</title></head>
+<body>
+<a href="#repo-content">Skip to content</a>
+<header role="banner">
+  <a href="/" aria-label="Homepage">Forge</a>
+  <button type="button" aria-label="Open global navigation menu" aria-expanded="false">Menu</button>
+  <form role="search" aria-label="Site" onsubmit="return false"><label for="gs" class="sr">Search or jump to</label><input id="gs" type="text" placeholder="Search or jump to..."></form>
+  <nav aria-label="Global"><a href="#pulls">Pull requests</a> <a href="#issues">Issues</a> <a href="#market">Marketplace</a></nav>
+  <button type="button" aria-label="Notifications">&#128276;</button>
+  <details class="menu"><summary aria-label="Create new">+</summary><div role="menu"><a role="menuitem" href="#nr">New repository</a><a role="menuitem" href="#ni">New issue</a></div></details>
+</header>
+<main id="repo-content">
+  <div class="repohead">
+    <h1><a href="#owner">gorca-dev</a> / <strong><a href="#repo">gorca</a></strong> <span class="label">Public</span></h1>
+    <ul aria-label="Repository actions">
+      <li><button type="button" aria-pressed="false">Watch 12</button></li>
+      <li><button type="button" aria-pressed="false">Star 3.4k</button></li>
+      <li><details><summary>Fork 210</summary><div><p>Fork this repository</p></div></details></li>
+    </ul>
+  </div>
+  <nav aria-label="Repository" class="tabs">
+    <ul><li><a href="#code" aria-current="page">Code</a></li><li><a href="#issues">Issues 42</a></li><li><a href="#pulls">Pull requests 7</a></li><li><a href="#actions">Actions</a></li><li><a href="#wiki">Wiki</a></li><li><a href="#security">Security</a></li></ul>
+  </nav>
+  <div class="branchbar">
+    <button type="button" aria-haspopup="true" aria-expanded="false">Branch: main</button>
+    <a href="#branches">12 branches</a> <a href="#tags">3 tags</a>
+    <button type="button">Code</button>
+  </div>
+  <h2 class="sr">Files</h2>
+  <table aria-labelledby="folders-h"><caption id="folders-h" class="sr">Folders and files</caption>
+    <thead><tr><th scope="col">Name</th><th scope="col">Last commit message</th><th scope="col">Last commit date</th></tr></thead>
+    <tbody>
+      <tr><td><a href="#crates">crates</a></td><td><a href="#c1">feat: add browse mode</a></td><td><time datetime="2026-10-14">yesterday</time></td></tr>
+      <tr><td><a href="#docs">docs</a></td><td><a href="#c2">docs: record decisions</a></td><td><time datetime="2026-10-13">2 days ago</time></td></tr>
+      <tr><td><a href="#tests">tests</a></td><td><a href="#c3">test: add the m8 corpus</a></td><td><time datetime="2026-10-12">3 days ago</time></td></tr>
+      <tr><td><a href="#cargo">Cargo.toml</a></td><td><a href="#c4">chore: bump deps</a></td><td><time datetime="2026-10-10">5 days ago</time></td></tr>
+      <tr><td><a href="#readme">README.md</a></td><td><a href="#c5">docs: update readme</a></td><td><time datetime="2026-10-01">2 weeks ago</time></td></tr>
+    </tbody></table>
+  <article class="markdown-body">
+    <h2>gorca</h2>
+    <p>A screen reader for Linux that stays responsive when the desktop does not.</p>
+    <h3>Features</h3>
+    <ul><li>Fast browse mode</li><li>Event-storm tolerant</li><li>Plugin ready</li></ul>
+    <h3>Installation</h3>
+    <pre><code>cargo build --release
+./target/release/gorca</code></pre>
+    <p>See the <a href="#docs">documentation</a> for details.</p>
+  </article>
+  <section aria-labelledby="issues-h">
+    <h2 id="issues-h">Open issues</h2>
+    <ul class="issues">
+      <li><a href="#i1">Quick nav skips hidden headings</a> <span class="label">bug</span> <span class="label">web</span> <span>#101 opened 2 days ago by ada</span></li>
+      <li><a href="#i2">Add table navigation</a> <span class="label">enhancement</span> <span>#102 opened 3 days ago by grace</span></li>
+      <li><a href="#i3">Live region flood</a> <span class="label">bug</span> <span>#103 opened 5 days ago by alan</span></li>
+    </ul>
+    <nav aria-label="Pagination"><a href="#p1" aria-label="Previous page">Previous</a> <a href="#p1" aria-current="page" aria-label="Page 1">1</a> <a href="#p2" aria-label="Page 2">2</a> <a href="#next" aria-label="Next page">Next</a></nav>
+  </section>
+  <section aria-labelledby="diff-h">
+    <h2 id="diff-h">Diff</h2>
+    <table class="diff" aria-label="Diff of src/lib.rs"><caption class="sr">Diff of src/lib.rs</caption>
+      <tbody>
+       <tr><td>10</td><td>10</td><td>fn main() {</td></tr>
+       <tr style="background:#fdd"><td>11</td><td></td><td>-    old_call();</td></tr>
+       <tr style="background:#dfd"><td></td><td>11</td><td>+    new_call();</td></tr>
+       <tr><td>12</td><td>12</td><td>}</td></tr>
+      </tbody></table>
+  </section>
+  <div class="toast" role="status" aria-live="polite" id="toast"></div>
+  <button type="button" id="stars" onclick="this.setAttribute('aria-pressed','true'); this.textContent='Starred'; document.getElementById('toast').textContent='You starred this repository';">Star this repository</button>
+</main>
+<footer><nav aria-label="Footer"><a href="#terms">Terms</a> <a href="#privacy">Privacy</a> <a href="#security">Security</a> <a href="#status">Status</a></nav></footer>
+</body>
+</html>

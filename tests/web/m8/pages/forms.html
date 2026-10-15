@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 Forms</title></head>
+<body>
+<h1>Forms and focus modes</h1>
+<p><a href="#after" id="first-link">First link</a></p>
+<form onsubmit="return false" aria-label="Profile form">
+  <fieldset><legend>Account</legend>
+    <p><label for="f-name">Full name</label> <input id="f-name" type="text" value="Ada"></p>
+    <p><label for="f-pw">Secret</label> <input id="f-pw" type="password" value="hunter2"></p>
+    <p><label for="f-note">Notes</label> <textarea id="f-note" rows="3">Line one
+Line two</textarea></p>
+    <p><label for="f-ro">Read only</label> <input id="f-ro" type="text" readonly value="fixed"></p>
+    <p><label for="f-dis">Disabled</label> <input id="f-dis" type="text" disabled value="off"></p>
+    <p><label for="f-req">Required</label> <input id="f-req" type="text" required aria-describedby="f-req-help"> <span id="f-req-help">Help text for required</span></p>
+    <p><label for="f-err">Invalid</label> <input id="f-err" type="text" aria-invalid="true" aria-errormessage="f-err-msg" value="bad"> <span id="f-err-msg">Error text here</span></p>
+  </fieldset>
+  <fieldset><legend>Delivery</legend>
+    <label><input type="radio" name="d" value="a"> Post</label>
+    <label><input type="radio" name="d" value="b" checked> Courier</label>
+    <label><input type="checkbox" id="f-cb"> Gift wrap</label>
+    <label><input type="checkbox" id="f-mixed"> Mixed box</label>
+  </fieldset>
+  <p><label for="f-sel">Size</label> <select id="f-sel"><option>Small</option><option selected>Medium</option><option>Large</option></select></p>
+  <p><label for="f-multi">Toppings</label> <select id="f-multi" multiple size="3" aria-label="Toppings choices"><option>Ham</option><option selected>Cheese</option><option>Olive</option></select></p>
+  <p><label for="f-range">Level</label> <input id="f-range" type="range" min="0" max="10" value="4"></p>
+  <p><label for="f-num">Quantity</label> <input id="f-num" type="number" min="0" max="9" value="2"></p>
+  <p><button type="submit" id="f-submit">Save profile</button> <button type="button" aria-expanded="false" aria-haspopup="menu" id="f-menubtn">Options menu</button></p>
+</form>
+<!-- ARIA widgets that must auto-switch to focus mode -->
+<div role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-controls="lb1" aria-label="Fruit combobox" tabindex="0" id="cb1">Apple</div>
+<ul role="listbox" id="lb1" aria-label="Fruit listbox" tabindex="0" hidden>
+  <li role="option" aria-selected="true">Apple</li><li role="option">Pear</li></ul>
+<div role="slider" aria-valuemin="0" aria-valuemax="10" aria-valuenow="5" aria-label="Aria slider" tabindex="0">5</div>
+<div role="spinbutton" aria-valuemin="0" aria-valuemax="9" aria-valuenow="1" aria-label="Aria spin" tabindex="0">1</div>
+<div role="tree" aria-label="File tree" tabindex="0"><div role="treeitem" aria-expanded="true" tabindex="-1">Docs<div role="group"><div role="treeitem" tabindex="-1">Letter</div></div></div></div>
+<div role="application" aria-label="Whiteboard app" tabindex="0" id="app1">Whiteboard application surface</div>
+<div role="textbox" contenteditable="true" aria-label="Rich editor" id="rich">Editable <b>rich</b> text</div>
+<div role="checkbox" aria-checked="false" tabindex="0" aria-label="Aria checkbox">Aria checkbox</div>
+<div role="switch" aria-checked="true" tabindex="0" aria-label="Aria switch">Aria switch</div>
+<div role="button" tabindex="0" aria-pressed="true">Aria toggle button</div>
+<div role="menubar" aria-label="App menu"><div role="menuitem" tabindex="0" aria-haspopup="true">File menu</div></div>
+<p id="after">Paragraph after the forms.</p>
+<a href="#first-link">Last link</a>
+</body>
+</html>

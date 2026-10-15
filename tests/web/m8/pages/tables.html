@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 Tables</title>
+<style>td,th{border:1px solid #888;padding:2px 6px}</style></head>
+<body>
+<h1>Table navigation</h1>
+<!-- T1: plain data table, column headers (thead) and row headers (th scope=row) -->
+<table id="sales"><caption>Quarterly sales</caption>
+  <thead><tr><th scope="col">Region</th><th scope="col">Q1</th><th scope="col">Q2</th><th scope="col">Q3</th></tr></thead>
+  <tbody>
+    <tr><th scope="row">North</th><td>10</td><td>20</td><td>30</td></tr>
+    <tr><th scope="row">South</th><td>11</td><td>21</td><td>31</td></tr>
+    <tr><th scope="row">East</th><td>12</td><td>22</td><td>32</td></tr>
+  </tbody>
+</table>
+<p>Between tables.</p>
+<!-- T2: spans: colspan and rowspan, two header rows -->
+<table id="spans"><caption>Span table</caption>
+  <thead>
+    <tr><th rowspan="2" scope="col">Item</th><th colspan="2" scope="colgroup">Price</th></tr>
+    <tr><th scope="col">Net</th><th scope="col">Gross</th></tr>
+  </thead>
+  <tbody>
+    <tr><th scope="row">Pen</th><td>1.00</td><td>1.20</td></tr>
+    <tr><th scope="row">Ink</th><td colspan="2">on request</td></tr>
+    <tr><td rowspan="2">Paper</td><td>5.00</td><td>6.00</td></tr>
+    <tr><td>5.50</td><td>6.60</td></tr>
+  </tbody>
+</table>
+<p>Between tables two and three.</p>
+<!-- T3: layout table (presentational): must not be announced as a table -->
+<table role="presentation" id="layout"><tr><td>Layout cell left</td><td>Layout cell right</td></tr></table>
+<p>Between layout and grid.</p>
+<!-- T4: ARIA grid with row and column headers -->
+<div role="grid" aria-label="Seat grid" aria-rowcount="3" aria-colcount="3">
+  <div role="row"><span role="columnheader">Seat</span><span role="columnheader">Left</span><span role="columnheader">Right</span></div>
+  <div role="row"><span role="rowheader">Row A</span><span role="gridcell" tabindex="0">free</span><span role="gridcell" tabindex="-1">taken</span></div>
+  <div role="row"><span role="rowheader">Row B</span><span role="gridcell" tabindex="-1">taken</span><span role="gridcell" tabindex="-1">free</span></div>
+</div>
+<p>Between grid and sparse.</p>
+<!-- T5: empty cells and a single-cell table -->
+<table id="sparse"><caption>Sparse table</caption>
+  <tr><th>A</th><th>B</th></tr>
+  <tr><td></td><td>b1</td></tr>
+  <tr><td>a2</td><td></td></tr>
+</table>
+<table id="single"><caption>One cell</caption><tr><td>only cell</td></tr></table>
+<h2>After tables</h2>
+<p>Last paragraph.</p>
+</body>
+</html>

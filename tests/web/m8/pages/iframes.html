@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 Iframes</title></head>
+<body>
+<h1>Outer page heading</h1>
+<p>Outer paragraph before the frames.</p>
+<!-- 1: four nested levels of same-directory frames (file:// origins are all distinct) -->
+<iframe title="Nested level one" src="frames/level1.html" width="520" height="460"></iframe>
+<p>Outer paragraph between frames.</p>
+<!-- 2: a frame with a form: Tab must enter it and trigger focus mode there -->
+<iframe title="Form frame" src="frames/form.html" width="400" height="120"></iframe>
+<!-- 3: srcdoc and sandbox -->
+<iframe title="Srcdoc frame" srcdoc="&lt;h2&gt;Srcdoc heading&lt;/h2&gt;&lt;p&gt;Srcdoc text.&lt;/p&gt;" width="300" height="100"></iframe>
+<iframe title="Sandboxed frame" sandbox srcdoc="&lt;p&gt;Sandboxed text.&lt;/p&gt;" width="300" height="60"></iframe>
+<!-- 4: no title, empty, and a frame that fails to load -->
+<iframe srcdoc="&lt;p&gt;Untitled frame text.&lt;/p&gt;" width="300" height="60"></iframe>
+<iframe title="Empty frame" srcdoc="" width="300" height="40"></iframe>
+<iframe title="Missing frame" src="frames/does-not-exist.html" width="300" height="60"></iframe>
+<!-- 5: a frame whose content changes after load -->
+<iframe title="Late frame" id="late" srcdoc="&lt;p&gt;Before reload&lt;/p&gt;" width="300" height="60"></iframe>
+<button type="button" onclick="document.getElementById('late').srcdoc='<p>After reload text.</p>'">Reload late frame</button>
+<p>Outer paragraph after the frames.</p>
+</body>
+</html>

@@ -1,0 +1,45 @@
+# e2e-m8 m8-baseline-perf2
+# utc=2026-10-15T22:10:10Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=12.40 13.34 13.33 1/3214 2534791
+# git_rev=ce548af
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m8-baseline-perf2
+# reader=daemon:<repo>/.claude/worktrees/agent-ace36bf376a4668ef/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# quick=false
+# loadavg_before=14.84 13.24 13.15 22/3361 2512441
+# loadavg_end=12.40 13.34 13.33 2/3214 2534788
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-PF1.w1_100k_ms.n        daemon/voicego         1200         1200         1200  3                  info   [samples]
+M8-PF1.w1_100k_ms.p50      daemon/voicego        0.336        0.324        0.356  3                  info   [ms]
+M8-PF1.w1_100k_ms.p95      daemon/voicego        0.482        0.467        0.495  3                  info   [ms]
+M8-PF1.w1_100k_ms.p99      daemon/voicego        0.563        0.524        0.615  3 <=            5  PASS   [ms]
+M8-PF1.w1_100k_ms.max      daemon/voicego         19.5        3.838         21.9  3                  info   [ms]
+M8-PF1.late_w1_100k_ms     daemon/voicego            0            0            0  3                  info   [keys]
+M8-PF1.lost_w1_100k_ms     daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+M8-PF1.not_consumed        daemon/voicego            0            0            0  3                  info   [keys]
+M8-PF1.w1_100k_settle_s    daemon/voicego        1.569        1.567        1.570  3                  info   [s]
+M8-FM.mode_ms.n            daemon/voicego            6            6            6  3                  info   [samples]
+M8-FM.mode_ms.p50          daemon/voicego        0.437        0.418        0.448  3                  info   [ms]
+M8-FM.mode_ms.p95          daemon/voicego        1.845        1.560        2.022  3                  info   [ms]
+M8-FM.mode_ms.p99          daemon/voicego        1.845        1.560        2.022  3 <=           15  PASS   [ms]
+M8-FM.mode_ms.max          daemon/voicego        1.845        1.560        2.022  3                  info   [ms]
+M8-FM.fail                 daemon/voicego            0            0            0  3 <=            0  PASS  steps that fail and are not marked expected-fail [steps]
+M8-FM.gap                  daemon/voicego            5            5            5  3                  info  core ok, NVDA extras missing [steps]
+M8-FM.p0_not_pass          daemon/voicego            0            0            0  3                  info   [steps]
+M8-FM.pass                 daemon/voicego           32           32           32  3                  info   [steps]
+M8-FM.steps                daemon/voicego           42           42           42  3                  info   [steps]
+M8-FM.xfail                daemon/voicego            5            5            5  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-FM.xpass                daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]

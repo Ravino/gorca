@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 SPA updates</title></head>
+<body>
+<!--
+  A tiny SPA with the dynamic behaviours M8 must survive: client-side route swap (pushState, title
+  change, focus moved to the new h1), in-place list re-render (same text, new nodes), infinite scroll
+  (append on a button, standing in for the scroll sentinel), a virtualised list with aria-setsize
+  and aria-posinset, a loading skeleton with aria-busy, and a toast. Buttons are driven over AT-SPI.
+-->
+<nav aria-label="App routes">
+  <a href="/home" id="r-home" data-route="home">Home route</a>
+  <a href="/list" id="r-list" data-route="list">List route</a>
+  <a href="/about" id="r-about" data-route="about">About route</a>
+</nav>
+<main id="view" tabindex="-1" aria-busy="false"></main>
+<div id="toast" role="status" aria-live="polite"></div>
+<script>
+const view = document.getElementById("view");
+let items = Array.from({ length: 20 }, (_, i) => "Row " + (i + 1));
+let more = 0;
+const routes = {
+  home: () => `<h1>Home view</h1><p>Welcome home paragraph.</p><button type="button" id="rerender">Re-render list</button>
+     <ul id="re">${items.slice(0, 5).map((t) => `<li>${t}</li>`).join("")}</ul>`,
+  list: () => `<h1>List view</h1><ul id="inf">${items.map((t) => `<li><a href="#${t}">${t}</a></li>`).join("")}</ul>
+     <button type="button" id="more">Load more rows</button>
+     <div id="virt" role="list" aria-label="Virtual list" style="height:100px;overflow:auto"></div>`,
+  about: () => `<h1>About view</h1><p>About paragraph with <a href="#x">a link</a>.</p>`,
+};
+function render(name, push) {
+  view.setAttribute("aria-busy", "true");
+  view.innerHTML = `<p>Loading ${name}</p>`;
+  setTimeout(() => {
+    view.innerHTML = routes[name]();
+    view.setAttribute("aria-busy", "false");
+    document.title = "M8 SPA " + name;
+    if (push) history.pushState({ name }, "", "#/" + name);
+    view.querySelector("h1").setAttribute("tabindex", "-1");
+    view.querySelector("h1").focus();
+    wire();
+  }, 80);
+}
+function wire() {
+  const rr = document.getElementById("rerender");
+  if (rr) rr.onclick = () => { // same text, brand-new nodes
+    const ul = document.getElementById("re");
+    ul.replaceWith(Object.assign(document.createElement("ul"), { id: "re", innerHTML: items.slice(0, 5).map((t) => `<li>${t}</li>`).join("") }));
+    document.getElementById("toast").textContent = "List refreshed";
+  };
+  const m = document.getElementById("more");
+  if (m) m.onclick = () => {
+    const ul = document.getElementById("inf");
+    for (let i = 0; i < 10; i++) { const li = document.createElement("li"); li.innerHTML = `<a href="#more${more}">Extra ${++more}</a>`; ul.append(li); }
+  };
+  const v = document.getElementById("virt");
+  if (v) { // 10,000 logical rows, 8 in the DOM, posinset/setsize exposed
+    const win = (s) => v.replaceChildren(...Array.from({ length: 8 }, (_, k) => Object.assign(document.createElement("div"), {
+      textContent: "Virtual row " + (s + k + 1), role: "listitem", ariaPosInSet: String(s + k + 1), ariaSetSize: "10000" })));
+    win(0); v.onscroll = () => win(Math.floor(v.scrollTop / 20));
+  }
+}
+for (const a of document.querySelectorAll("nav a")) a.onclick = (e) => { e.preventDefault(); render(a.dataset.route, true); };
+addEventListener("popstate", (e) => render((e.state && e.state.name) || "home", false));
+render("home", false);
+</script>
+</body>
+</html>
