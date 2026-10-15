@@ -608,6 +608,7 @@ impl AtspiRouter {
             verified_shell: false,
             dump_complete: false,
             text_unit: gorca_model::TextUnit::Scalar,
+            text_insert_slack: 0,
             root: None,
         };
         let deadline = Deadline::after(&self.clock, ANNOUNCE_WAIT);

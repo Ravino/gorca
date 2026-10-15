@@ -220,6 +220,7 @@ fn shell_info() -> gorca_model::AppInfo {
         verified_shell: true,
         dump_complete: false,
         text_unit: gorca_model::TextUnit::Scalar,
+        text_insert_slack: 0,
         root: None,
     }
 }

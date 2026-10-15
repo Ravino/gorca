@@ -211,6 +211,10 @@ struct State {
     /// Hash of the text of the last load (of the empty string for a missing file).
     last_hash: u64,
     last_good: Option<Arc<LoadedSettings>>,
+    /// The layouts the active keysym table was built for (the layout poll compares against it).
+    layout_ids: Vec<String>,
+    /// Set while a keymap build of the layout poll runs on its blocking thread.
+    layout_busy: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl ConfigTask {
@@ -243,6 +247,46 @@ impl ConfigTask {
             f
         } else {
             probe(&self.source.overrides).await
+        }
+    }
+
+    /// The layouts in effect: the override when given, else the input sources `gsettings`
+    /// reports (`None`: unreadable).
+    async fn layout_ids(&self) -> Option<Vec<String>> {
+        match &self.source.overrides.layouts {
+            Some(l) => Some(crate::platform::parse_layout_list(l)),
+            None => crate::platform::poll_sources().await,
+        }
+    }
+
+    /// One tick of the layout poll: read only the `sources` key, and rebuild the table only
+    /// when the layouts differ. A failed read or build keeps the table in force and says so.
+    async fn poll_layouts(&self, st: &mut State) {
+        let Some(ids) = self.layout_ids().await else {
+            tracing::debug!("input sources unreadable: keeping the keysym table");
+            return;
+        };
+        if ids == st.layout_ids {
+            return;
+        }
+        match crate::platform::try_keysyms(
+            ids.clone(),
+            st.facts.xkb_options.clone(),
+            &st.layout_busy,
+        )
+        .await
+        {
+            Ok(table) => {
+                st.layout_ids = ids;
+                if table != st.facts.keysyms {
+                    tracing::info!("the keyboard layouts changed: grabs rebuilt");
+                    st.facts.keysyms = table;
+                    self.reload(st, LoadCause::Layouts).await;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = ?e, "the keysym table for the new layouts was not built in time: keeping the previous table, will retry");
+            }
         }
     }
 
@@ -387,6 +431,8 @@ impl ConfigTask {
             facts: self.facts().await,
             last_hash: 0,
             last_good: None,
+            layout_ids: self.layout_ids().await.unwrap_or_default(),
+            layout_busy: Arc::default(),
         };
         self.reload(&mut st, LoadCause::Startup).await;
 
@@ -428,12 +474,7 @@ impl ConfigTask {
                     }
                 }
                 _ = layouts.tick(), if !self.source.no_probe => {
-                    let fresh = self.facts().await;
-                    if fresh.keysyms != st.facts.keysyms {
-                        tracing::info!("the keyboard layouts changed: grabs rebuilt");
-                        st.facts.keysyms = fresh.keysyms;
-                        self.reload(&mut st, LoadCause::Layouts).await;
-                    }
+                    self.poll_layouts(&mut st).await;
                 }
                 _ = retry.tick(), if events.is_none() && self.source.path.is_some() => {
                     // The directory did not exist (or the watch broke): look again.

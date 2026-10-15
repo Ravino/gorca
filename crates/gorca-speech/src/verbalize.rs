@@ -129,6 +129,14 @@ fn char_name(c: char) -> Option<&'static str> {
     })
 }
 
+/// A unit that holds nothing but embedded-object marks (an inline image or link inside a
+/// paragraph): it is said as "object", never as "blank".
+fn only_objects(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars().all(|c| matches!(c, '\u{FFFC}' | '\u{FEFF}'))
+        && s.contains('\u{FFFC}')
+}
+
 /// Text read from an application, without the phantom U+FEFF Gecko puts after each astral
 /// scalar (and the zero-width no-break space nobody means to say) and without the object
 /// replacement mark U+FFFC that stands for an embedded child: neither is ever spoken.
@@ -171,6 +179,9 @@ impl Verbalizer {
     /// What to say for the unit `s` read from a text (ADR-0007 section 3.2). Empty input is
     /// "blank".
     pub fn unit(&self, s: &str, how: How, o: &VerbalizeOpts) -> String {
+        if only_objects(s) {
+            return "object".to_owned();
+        }
         let s = without_phantoms(s);
         let s = s.as_ref();
         match how {
@@ -226,6 +237,9 @@ impl Verbalizer {
     /// letters when `phonetic` is set. Every character is named, so spelling a word that holds
     /// a space or a symbol says so.
     pub fn spell(&self, s: &str, phonetic: bool, o: &VerbalizeOpts) -> String {
+        if only_objects(s) {
+            return "object".to_owned();
+        }
         let s = without_phantoms(s);
         let s = s.trim_end_matches(['\n', '\r']);
         if s.is_empty() {
@@ -353,6 +367,10 @@ mod tests {
         );
         assert_eq!(v.unit("\u{FEFF}", How::Char, &o), "blank");
         assert_eq!(v.spell("a\u{1F600}\u{FEFF}", false, &o), "a, \u{1F600}");
+        // An embedded object alone is an object; inside running text it is silent.
+        assert_eq!(v.unit("\u{FFFC}", How::Char, &o), "object");
+        assert_eq!(v.spell("\u{FFFC}", false, &o), "object");
+        assert_eq!(v.unit("a\u{FFFC}b", How::Word, &o), "ab");
     }
 
     #[test]

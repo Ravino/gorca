@@ -233,6 +233,7 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "c1h_ipc_calls"
                     | "fc_double"
                     | "fc_extra"
+                    | "fc_late"
                     | "fc_swallowed"
                     | "ft_failures"
                     | "bsa_failures"
@@ -242,6 +243,13 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
             ) {
                 // Worst repeat, not the median: one lost focus in three runs is a failure.
                 row = row.at_most_in_every_run(0.0);
+            }
+            if metric == "page_dropped" {
+                // Keys Firefox dropped before the page (FC1h): a handful is the loaded host, a
+                // stream of them would hide what the reader did with them.
+                row = row
+                    .at_most_in_every_run(2.0)
+                    .note("Keys the page dropped (not scored, speech after them judged)");
             }
             if sid == "K4" && metric == "chord_resent_per_10k" {
                 // A chord that raced a pending grab change is pressed again by the harness; more

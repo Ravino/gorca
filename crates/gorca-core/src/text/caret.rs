@@ -42,9 +42,6 @@ pub const HOLD: Duration = Duration::from_millis(5);
 /// After tracking starts, the first caret event of a descendant of a rich editable is the
 /// browser placing the caret at the focus (CE-1), not a move.
 const PLACING: Duration = Duration::from_millis(600);
-/// The most units an application may report an insert after the caret while it really went in
-/// at the caret (Gecko, in an input, after scripted or committed text; see `insert`).
-const MISPLACED_MAX: u32 = 2;
 /// Caret moves made by gorca itself are remembered this long (say-all, review).
 const OWN_MOVE: Duration = Duration::from_millis(300);
 /// How long a presentation fetch may take before the machine gives up on it.
@@ -234,6 +231,8 @@ pub struct Ctx<'a> {
     /// The Reader's current epoch.
     pub epoch_now: Epoch,
     pub cfg: Cfg,
+    /// The app's insert-offset slack, from its connector's quirk table (0: none; see `insert`).
+    pub insert_slack: u32,
     pub next_req: &'a mut u64,
     pub stats: &'a mut TextCounters,
     pub out: &'a mut Vec<Out>,
@@ -1798,8 +1797,12 @@ fn insert(
     // a caret event that moves by exactly the insert), the window can no longer be trusted:
     // drop it (it is refilled when a unit needs it) and accept the caret event where the
     // caret really went, so the insert's own caret move is not spoken a second time.
-    let misplaced =
-        caret_before.is_some_and(|c| offset > c && offset - c <= MISPLACED_MAX) && !paste;
+    let misplaced = cx.insert_slack > 0
+        && caret_before.is_some_and(|c| offset > c && offset - c <= cx.insert_slack)
+        && !paste;
+    if misplaced {
+        tracing::debug!(target: "gorca_text", quirk = "gecko-insert-offset", offset, caret = ?caret_before, "insert offset slack applied");
+    }
     if misplaced && let (Some(c), Some(a)) = (caret_before, t.absorb.as_mut()) {
         a.alt = Some(c.saturating_add(len));
     }
@@ -2056,7 +2059,7 @@ fn delete(
                 t.win.invalidate();
                 cx.stats.window_dirty += 1;
             }
-            Some(after)
+            (cx.insert_slack > 0).then_some(after)
         }
         _ => None,
     };

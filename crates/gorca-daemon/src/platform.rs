@@ -8,7 +8,9 @@ use std::time::Duration;
 
 use gorca_core::PlatformFacts;
 use gorca_input_api::KeysymTable;
-use gorca_input_xkb::{LayoutSpec, build_table};
+use gorca_input_xkb::{LayoutSpec, build_table_cancellable};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::process::Command;
 
 /// Per-query deadline.
@@ -92,22 +94,79 @@ pub async fn probe(overrides: &PlatformOverrides) -> PlatformFacts {
 
 /// The union keysym table of `ids` (XKB layout names) plus `us`, built off the async threads
 /// under a deadline; the US-only table when it takes too long or libxkbcommon is missing.
-pub async fn keysyms(mut ids: Vec<String>, options: String) -> KeysymTable {
+pub async fn keysyms(ids: Vec<String>, options: String) -> KeysymTable {
+    match try_keysyms(ids, options, &Arc::new(AtomicBool::new(false))).await {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::warn!(error = ?e, "the keysym table was not built: grabs use the US-only table");
+            KeysymTable::us()
+        }
+    }
+}
+
+/// Why [`try_keysyms`] gave no table.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum KeysymError {
+    /// An earlier build is still running on its blocking thread (it cannot be interrupted).
+    Busy,
+    Deadline,
+    Task,
+}
+
+/// Held by the blocking thread of a build: one build at a time per `busy` flag, so a compile
+/// that hangs holds one blocking thread, never a new one per poll.
+struct BusyGuard(Arc<AtomicBool>);
+impl Drop for BusyGuard {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::Release);
+    }
+}
+
+/// The union table of `ids` plus `us`, or why none could be built. The caller decides what a
+/// failure means (the poll keeps its previous table; startup falls back to US-only, logged).
+pub async fn try_keysyms(
+    mut ids: Vec<String>,
+    options: String,
+    busy: &Arc<AtomicBool>,
+) -> Result<KeysymTable, KeysymError> {
     if !ids.iter().any(|i| i == "us") {
         ids.insert(0, "us".to_owned());
     }
     if ids.len() == 1 {
         // US only: the table's own fallback is exactly that.
-        return KeysymTable::us();
+        return Ok(KeysymTable::us());
     }
+    if busy
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return Err(KeysymError::Busy);
+    }
+    let cancel = Arc::new(AtomicBool::new(false));
+    let flag = Arc::clone(&cancel);
+    let guard = BusyGuard(Arc::clone(busy));
     let build = tokio::task::spawn_blocking(move || {
+        let _guard = guard;
         let specs: Vec<LayoutSpec> = ids.iter().filter_map(|i| LayoutSpec::parse(i)).collect();
-        build_table(&specs, &options)
+        build_table_cancellable(&specs, &options, &flag)
     });
     match tokio::time::timeout(KEYMAP_DEADLINE, build).await {
-        Ok(Ok(t)) => t,
-        Ok(Err(_)) | Err(_) => KeysymTable::us(),
+        Ok(Ok(t)) => Ok(t),
+        Ok(Err(_)) => Err(KeysymError::Task),
+        Err(_) => {
+            cancel.store(true, Ordering::Relaxed);
+            Err(KeysymError::Deadline)
+        }
     }
+}
+
+/// The XKB layouts of the input sources now (`gsettings` `sources` only), or `None` when
+/// they could not be read.
+pub async fn poll_sources() -> Option<Vec<String>> {
+    gsettings("org.gnome.desktop.input-sources", "sources")
+        .await
+        .as_deref()
+        .map(parse_sources)
 }
 
 /// Deadline for building the table (a keymap compile per layout).
@@ -175,6 +234,27 @@ pub fn parse_clock_24h(s: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_build_in_flight_is_not_started_twice() {
+        let busy = Arc::new(AtomicBool::new(true));
+        let r = try_keysyms(vec!["us".into(), "ru".into()], String::new(), &busy).await;
+        assert_eq!(r.err(), Some(KeysymError::Busy));
+        // A free flag builds, and is released again when the thread is done.
+        busy.store(false, Ordering::Release);
+        assert!(
+            try_keysyms(vec!["us".into(), "ru".into()], String::new(), &busy)
+                .await
+                .is_ok()
+        );
+        for _ in 0..100 {
+            if !busy.load(Ordering::Acquire) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(!busy.load(Ordering::Acquire));
+    }
 
     #[test]
     fn gsettings_values_parse() {

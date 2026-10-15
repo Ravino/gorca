@@ -1730,6 +1730,7 @@ fn gecko_rig() -> Rig {
     let g = rig();
     g.r.dir
         .set_text_unit(node().app, gorca_model::TextUnit::Utf16Bom);
+    g.r.dir.set_text_insert_slack(node().app, 2);
     g
 }
 
@@ -2109,4 +2110,42 @@ fn a_backspace_reported_at_the_caret_is_spoken_once() {
     said.extend(spoken(&fx));
     said.extend(spoken(&g.tick(400)));
     assert_eq!(said, ["e"]);
+}
+
+/// Review F-1: a script updates an unrelated text object of the same page (a clock) while the
+/// user is in a contenteditable: the machine stays on the paragraph and says nothing.
+#[test]
+fn unrelated_text_change_does_not_steal_the_rich_editable() {
+    let mut g = gecko_rig();
+    let p = leaf(96);
+    g.rich(p, "One two");
+    g.advance(1000);
+    let clock = leaf(500); // not in the mirror: Lookup::Miss
+    let fx = g.insert_on(clock, 0, 5, "12:01");
+    let fx2 = g.tick(50);
+    let tracked = g.r.text.caret.tracked().map(|t| t.node);
+    assert_eq!(
+        (spoken(&fx), spoken(&fx2), tracked),
+        (Vec::<String>::new(), Vec::<String>::new(), Some(p)),
+        "clock insert retargeted or spoken"
+    );
+}
+
+/// Review F-4 (ADR-0008): a scripted insert one unit after the caret in a toolkit without the
+/// Gecko quirk (a GTK entry), then a mouse click puts the caret right there within 50 ms: the
+/// click's move is still spoken, because only an app whose connector declared the insert-offset
+/// slack gets its following caret move folded into the edit.
+#[test]
+fn scripted_insert_after_caret_does_not_swallow_a_real_move_without_the_quirk() {
+    let mut g = rig();
+    g.entry("hello", 2);
+    g.advance(1000);
+    let _ = g.insert(3, "X");
+    let _ = g.tick(5);
+    g.advance(10);
+    let fx = g.caret(3);
+    let fx2 = g.tick(20);
+    let mut s = spoken(&fx);
+    s.extend(spoken(&fx2));
+    assert!(!s.is_empty(), "uncorrelated move to 3 was swallowed");
 }

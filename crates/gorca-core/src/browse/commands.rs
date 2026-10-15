@@ -924,7 +924,7 @@ impl Reader {
                 self.web_place(doc, focus_node.map_or(root, |(n, _)| n));
                 let spoke = self.web_speak_entry(doc, at_top || at_root, at_top, fx);
                 if at_top || at_root {
-                    self.web_auto_read(doc, app, spoke, fx);
+                    self.web_auto_read(doc, spoke, fx);
                 }
             }
             WebMode::Inactive => {
@@ -943,7 +943,7 @@ impl Reader {
                     );
                     self.web_place(doc, root);
                     let spoke = self.web_speak_entry(doc, true, true, fx);
-                    self.web_auto_read(doc, app, spoke, fx);
+                    self.web_auto_read(doc, spoke, fx);
                 }
             }
             WebMode::Browse { .. } | WebMode::Focus { .. } => {}
@@ -1059,13 +1059,9 @@ impl Reader {
         b.last_off = off;
         if self.cmd.effective.browse.say_all_on_load {
             // The page reads itself from this line (the title was spoken with the focus).
-            let app = self
-                .web
-                .as_ref()
-                .and_then(|b| b.docs.get(doc))
-                .map(|h| h.app);
-            if let Some(app) = app {
-                self.web_auto_read(doc, app, true, fx);
+            let known = self.web.as_ref().is_some_and(|b| b.docs.get(doc).is_some());
+            if known {
+                self.web_auto_read(doc, true, fx);
                 return;
             }
         }

@@ -137,14 +137,16 @@ def find_doc(title, timeout_ms):
     return {"ok": False, "error": "document not found"}
 
 
-def find(bus, root, role, name, timeout_ms):
+def find(bus, root, role, name, timeout_ms, partial=False):
     want = ROLES.get(role, role if isinstance(role, int) else -2)
     end = time.monotonic() + timeout_ms / 1000.0
     while time.monotonic() < end:
-        # An exact name first ("Typing" must not find "Typing region:"), then a part of one.
-        hit = bfs(bus, root, lambda r, n, p: (want < 0 or r == want) and (not name or n == name), 60000)
-        if not hit and name:
-            hit = bfs(bus, root, lambda r, n, p: (want < 0 or r == want) and name in n, 60000)
+        # The exact name ("Typing" must not find "Typing region:"). A part of a name only when
+        # the caller asks for it (`partial`), never as a silent fallback.
+        if partial:
+            hit = bfs(bus, root, lambda r, n, p: (want < 0 or r == want) and (not name or name in n), 60000)
+        else:
+            hit = bfs(bus, root, lambda r, n, p: (want < 0 or r == want) and (not name or n == name), 60000)
         if hit:
             return {"ok": True, "path": hit[0], "name": hit[1], "role": role}
         time.sleep(0.2)
@@ -157,7 +159,7 @@ def handle(req):
         return find_doc(req.get("title", ""), int(req.get("timeout_ms", 20000)))
     if cmd == "find":
         return find(req["bus"], req["root"], req.get("role", ""), req.get("name", ""),
-                    int(req.get("timeout_ms", 5000)))
+                    int(req.get("timeout_ms", 5000)), bool(req.get("partial", False)))
     if cmd == "focus":
         t = time.monotonic_ns()
         r = call(req["bus"], req["path"], COMP, "GrabFocus")

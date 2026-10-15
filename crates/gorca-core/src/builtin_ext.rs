@@ -22,6 +22,8 @@ pub struct AppProfile {
     /// report, never from a name. The native text layer follows scalars and Gecko's UTF-16
     /// units (`TextUnit::window_follows`) and leaves byte offsets to their own layer.
     pub text_unit: TextUnit,
+    /// Quirk data from the connector: see `AppInfo::text_insert_slack`.
+    pub text_insert_slack: u32,
 }
 
 impl AppProfile {
@@ -30,6 +32,7 @@ impl AppProfile {
             // Only the connector-verified Shell: a self-reported name grants nothing.
             speak_selection: info.verified_shell,
             text_unit: info.text_unit,
+            text_insert_slack: info.text_insert_slack,
         }
     }
 }
@@ -49,6 +52,7 @@ mod tests {
             verified_shell,
             dump_complete: false,
             text_unit: gorca_model::TextUnit::Scalar,
+            text_insert_slack: 0,
             root: None,
         }
     }

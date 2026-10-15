@@ -1722,3 +1722,21 @@ fn quick_navigation_finds_articles_and_frames_and_names_them() {
     let fx = r.key(CoreCmd::QuicknavPrevFrame);
     assert_eq!(spoken(&fx), ["no previous frame"]);
 }
+
+#[test]
+fn the_load_complete_of_another_document_does_not_start_the_read() {
+    // Review F-8: an iframe (or another tab) of the same browser finished loading a moment
+    // ago; the page that is still loading must wait for its own load-complete.
+    let mut r = rig();
+    auto_read_on(&mut r);
+    into_chrome(&mut r);
+    let _ = r
+        .reader
+        .handle(ReaderMsg::Doc(DocNotice::Loaded { node: nk(7777) }), r.now);
+    let fx = first_publish(&mut r);
+    assert_eq!(spoken(&fx), ["browse mode Test page"]);
+    assert!(
+        chunks(&fx).is_empty(),
+        "another document's load-complete read this page: {fx:?}"
+    );
+}

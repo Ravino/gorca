@@ -146,6 +146,16 @@ pub fn available() -> bool {
 /// skipped; without the library the result is the US-only table. `us` is always part of the
 /// result (the table falls back to it).
 pub fn build_table(layouts: &[LayoutSpec], options: &str) -> KeysymTable {
+    build_table_cancellable(layouts, options, &std::sync::atomic::AtomicBool::new(false))
+}
+
+/// [`build_table`] that stops before the next layout once `cancel` is set (a caller whose
+/// deadline passed). A keymap compile already running cannot be interrupted.
+pub fn build_table_cancellable(
+    layouts: &[LayoutSpec],
+    options: &str,
+    cancel: &std::sync::atomic::AtomicBool,
+) -> KeysymTable {
     let mut table = KeysymTable::us();
     let Some(lib) = Lib::open() else {
         tracing::warn!("libxkbcommon is not available: quick-navigation grabs are US-only");
@@ -160,6 +170,9 @@ pub fn build_table(layouts: &[LayoutSpec], options: &str) -> KeysymTable {
         return table;
     }
     for spec in layouts {
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            break;
+        }
         let (Ok(layout), Ok(variant)) = (
             CString::new(spec.layout.as_str()),
             CString::new(spec.variant.as_str()),

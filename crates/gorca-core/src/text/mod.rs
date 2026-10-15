@@ -300,6 +300,14 @@ fn with_phantoms(text: String, len: u32) -> String {
     out
 }
 
+/// Result of [`Reader::text_ancestry`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Ancestry {
+    Inside,
+    Outside,
+    Unknown,
+}
+
 impl Reader {
     /// Share the counter the app actors bump when they could not queue a text event for us.
     #[must_use]
@@ -341,6 +349,11 @@ impl Reader {
         let now_ms = u64::try_from(now.saturating_duration_since(self.text.origin).as_millis())
             .unwrap_or(u64::MAX);
         let cfg = self.text_cfg();
+        let insert_slack = self
+            .text
+            .caret
+            .tracked()
+            .map_or(0, |t| self.dir.text_insert_slack(t.root.app));
         let epoch_now = self.epoch.current();
         let mut out = std::mem::take(&mut self.text.out);
         out.clear();
@@ -351,6 +364,7 @@ impl Reader {
                 now_ms,
                 epoch_now,
                 cfg,
+                insert_slack,
                 next_req: &mut self.text.next_req,
                 stats: &mut self.text.stats,
                 out: &mut out,
@@ -589,31 +603,39 @@ impl Reader {
         if node.app != t.root.app || !t.kind.editable || !t.hosts {
             return false;
         }
-        if node != t.root && self.text_outside(t.root, node) {
-            return false;
+        if node != t.root {
+            match (self.text_ancestry(t.root, node), at.is_some()) {
+                // Outside the editable, or (Unknown) a text change or selection of a node
+                // the mirror does not know: some other part of the page (a clock, a chat log)
+                // that must not steal the editable. Only a caret event may redirect tracking
+                // on an unknown node: Gecko sends caret-moved for the focused editable's
+                // descendants only.
+                (Ancestry::Outside, _) | (Ancestry::Unknown, false) => return false,
+                (Ancestry::Unknown, true) | (Ancestry::Inside, _) => {}
+            }
         }
         self.text.stats.retargets += 1;
         self.text_step(In::Retarget { node, at }, fx);
         true
     }
 
-    /// Is `node` known, from the mirror, to hang outside `root`? An ancestry the mirror does not
-    /// hold (a paragraph just created) counts as inside: the machine only gets here for a
-    /// focused rich editable, and a wrong guess costs one window fetch.
-    fn text_outside(&self, root: NodeKey, node: NodeKey) -> bool {
+    /// Where does `node` hang relative to `root`, as far as the mirror knows? `Unknown` is an
+    /// ancestry the mirror does not hold (a paragraph just created, or a node of another part of
+    /// the page that was never mirrored).
+    fn text_ancestry(&self, root: NodeKey, node: NodeKey) -> Ancestry {
         let mut cur = node;
         for _ in 0..MAX_ANCESTRY {
             let snap = match self.dir.lookup(cur) {
                 gorca_model::Lookup::Hit(s) => s,
-                gorca_model::Lookup::Miss | gorca_model::Lookup::Gone => return false,
+                gorca_model::Lookup::Miss | gorca_model::Lookup::Gone => return Ancestry::Unknown,
             };
             match snap.parent {
-                Some(p) if p == root => return false,
+                Some(p) if p == root => return Ancestry::Inside,
                 Some(p) => cur = p,
-                None => return true,
+                None => return Ancestry::Outside,
             }
         }
-        true
+        Ancestry::Outside
     }
 
     fn on_text_fetched(

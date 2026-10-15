@@ -16,6 +16,8 @@ pub struct MirrorDirectory {
     /// offsets, as the connector reported): the native text layer leaves them alone.
     /// Gecko's UTF-16 offsets are followed as they are (`TextUnit::window_follows`).
     unfollowed_text: ArcSwap<HashSet<AppId>>,
+    /// Per-app insert-offset slack (connector quirk data); apps without the quirk are absent.
+    insert_slack: ArcSwap<HashMap<AppId, u32>>,
 }
 
 impl MirrorDirectory {
@@ -45,6 +47,24 @@ impl MirrorDirectory {
         });
     }
 
+    /// Record the app's insert-offset slack (connector quirk `gecko-insert-offset`).
+    pub fn set_text_insert_slack(&self, app: AppId, slack: u32) {
+        self.insert_slack.rcu(|cur| {
+            let mut next = HashMap::clone(cur);
+            if slack == 0 {
+                next.remove(&app);
+            } else {
+                next.insert(app, slack);
+            }
+            next
+        });
+    }
+
+    /// The app's insert-offset slack: 0 unless its connector declared the quirk.
+    pub fn text_insert_slack(&self, app: AppId) -> u32 {
+        self.insert_slack.load().get(&app).copied().unwrap_or(0)
+    }
+
     /// May the native text layer track this app's text fields? True for scalars (GTK, St) and
     /// for Gecko's UTF-16 offsets; false for byte offsets.
     pub fn text_window_follows(&self, app: AppId) -> bool {
@@ -55,6 +75,7 @@ impl MirrorDirectory {
         if !self.text_window_follows(app) {
             self.set_text_unit(app, TextUnit::Scalar);
         }
+        self.set_text_insert_slack(app, 0);
         self.apps.rcu(|cur| {
             let mut next = HashMap::clone(cur);
             next.remove(&app);

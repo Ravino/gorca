@@ -713,6 +713,7 @@ impl AppActor {
                     self.profile = AppProfile::for_app(&info);
                     if let Some(d) = &self.directory {
                         d.set_text_unit(self.app, self.profile.text_unit);
+                        d.set_text_insert_slack(self.app, self.profile.text_insert_slack);
                     }
                     self.driver.set_class(AppClass::from_info(&info));
                     self.driver.set_dump_complete(info.dump_complete);

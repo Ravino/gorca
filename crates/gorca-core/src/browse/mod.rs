@@ -499,8 +499,9 @@ pub struct BrowseState {
     pub last_off: u32,
     /// Latest scroll request: sent after a pause so held keys do not flood the page (LP-6).
     pub scroll_due: Option<(Instant, DocId, DocNodeId)>,
-    /// When the browser last reported `load-complete`, by application (page auto-read).
-    pub loaded: HashMap<AppId, Instant>,
+    /// When the browser last reported `load-complete`, by document root (page auto-read): the
+    /// load of another tab or of an iframe of the same browser is not this page's.
+    pub loaded: HashMap<gorca_model::NodeKey, Instant>,
     /// A freshly published document that reads itself once its page has loaded.
     pub auto_read: Option<sayall::AutoRead>,
     /// The field in focus mode has a popup open (a drop-down, an auto-complete list): Escape

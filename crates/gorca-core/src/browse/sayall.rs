@@ -130,13 +130,7 @@ impl Reader {
     /// A document was published for the first time and its entry speech (`spoke`) was made.
     /// Read it from its first line now when the page has finished loading, else wait for the
     /// browser's `load-complete`.
-    pub(crate) fn web_auto_read(
-        &mut self,
-        doc: DocId,
-        app: gorca_model::AppId,
-        spoke: bool,
-        fx: &mut ReaderEffects,
-    ) {
+    pub(crate) fn web_auto_read(&mut self, doc: DocId, spoke: bool, fx: &mut ReaderEffects) {
         if !self.cmd.effective.browse.say_all_on_load {
             return;
         }
@@ -147,8 +141,9 @@ impl Reader {
             return;
         }
         let loaded = b
-            .loaded
-            .get(&app)
+            .docs
+            .get(doc)
+            .and_then(|h| b.loaded.get(&h.root))
             .is_some_and(|t| now.saturating_duration_since(*t) < LOADED_FRESH);
         if loaded {
             self.web_auto_read_now(doc, spoke, fx);
@@ -199,7 +194,9 @@ impl Reader {
         let now = self.now;
         let epoch = self.epoch.current();
         let Some(b) = self.web.as_mut() else { return };
-        b.loaded.insert(node.app, now);
+        b.loaded
+            .retain(|_, t| now.saturating_duration_since(*t) < LOADED_FRESH);
+        b.loaded.insert(node, now);
         let Some(wait) = b.auto_read else { return };
         // Only the document that is waiting, only if nothing happened since its entry speech.
         let same_doc = b.join.get(node).is_some_and(|(d, _)| d == wait.doc);

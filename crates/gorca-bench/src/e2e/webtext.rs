@@ -8,7 +8,7 @@
 //!
 //! | id | stimulus | metrics |
 //! |---|---|---|
-//! | FC1h | Right and Left through `a😀b😀😀c` (window hits); what each key must say follows from the page's own caret events | `fc1h_ms` Firefox caret event arrival to SPEAK (gate p99 3 ms), `lost`, `fc_double`, `fc_extra`, `fc_swallowed` (all gate 0), `page_dropped` (information) |
+//! | FC1h | Right and Left through `a😀b😀😀c` (window hits); what each key must say follows from the page's own caret events | `fc1h_ms` Firefox caret event arrival to SPEAK (gate p99 3 ms), `lost`, `fc_double`, `fc_extra`, `fc_late`, `fc_swallowed` (all gate 0), `page_dropped` (gate at most 2 per repeat) |
 //! | FC1 | Down through 300 distinct lines of a text area (one `GetStringAtOffset` per key) | `fc1_ms` (gate p99 15 ms), `lost`, `fc_double` |
 //! | FE1 | printable keys typed into an input | `fe1_ms` key emit to SPEAK (gate p99 3 ms), `lost`, `fc_double` |
 //! | FCE2 | printable keys typed into an empty contenteditable region | `fce2_ms` key emit to SPEAK (gate p99 3 ms), `lost`, `fc_double`, `fc_extra` |
@@ -338,12 +338,27 @@ fn finish(
     from_event: bool,
     out: &mut RunOut,
 ) -> (Vec<f64>, u64, u64) {
+    finish_with(f, id, probes, from_event, &[], out)
+}
+
+/// [`finish`] with, for each unscored key, the texts that may be said after it (the character
+/// at the edge); anything else said after an unscored key counts as `fc_extra`. `allowed` is
+/// indexed like `probes` (shorter: no allowance). Also records the gated `fc_late`.
+fn finish_with(
+    f: &mut Ft,
+    id: &str,
+    probes: &mut [Probe],
+    from_event: bool,
+    allowed: &[Vec<String>],
+    out: &mut RunOut,
+) -> (Vec<f64>, u64, u64) {
     for p in probes.iter_mut() {
         p.t_ev = f.caret_event_after(p.t_key);
     }
     let spoken = speaks_since(&f.w, 0);
-    let sc = score_aligned(f, probes, &spoken, from_event);
+    let sc = score_aligned(probes, &spoken, from_event, allowed);
     out.x("fc_extra", sc.extra as f64, "speeches");
+    out.x("fc_late", sc.late as f64, "speeches");
     for &j in sc.stray.iter().take(5) {
         let (t, s) = &spoken[j];
         let near = probes.iter().rposition(|p| p.t_key <= *t);
@@ -383,6 +398,10 @@ fn finish(
 /// never comes is what the gate is about).
 const LATE_NS: u64 = 1_500_000_000;
 
+/// A matched speech this much later than its own key's page caret event (`from_event`) or its
+/// own key is not that key's echo: gorca-side echo is well under 1 ms. Gated at 0.
+const LATE_GATE_MS: f64 = 50.0;
+
 /// The result of scoring a series of keys against what was said.
 #[derive(Debug, Default, PartialEq)]
 struct Score {
@@ -393,6 +412,9 @@ struct Score {
     doubled: u64,
     /// Every other speech no key accounts for (a wrong text, a stray word).
     extra: u64,
+    /// Matched speeches later than [`LATE_GATE_MS`] after their own key's event (or the key):
+    /// a speech borrowed by a silent key, or a real latency failure. Gated at 0.
+    late: u64,
     /// Indices of the unmatched speeches that count (doubled or extra), for the notes.
     stray: Vec<usize>,
 }
@@ -406,22 +428,32 @@ struct Score {
 /// with an empty `expect` is a key that is not scored: whatever is said after it and before
 /// the next key is neither matched nor counted. Latency is from the last Firefox caret event
 /// between the key and its speech (`from_event`) or from the key.
-fn score_aligned(f: &Ft, probes: &[Probe], spoken: &[(u64, String)], from_event: bool) -> Score {
+fn score_aligned(
+    probes: &[Probe],
+    spoken: &[(u64, String)],
+    from_event: bool,
+    allowed: &[Vec<String>],
+) -> Score {
+    // From the matched key's OWN page event: a silent key whose speech is borrowed by the next
+    // equal key would otherwise get that key's (later) event and look instantaneous.
     let lat_of = |i: usize, t: u64| {
         let t0 = if from_event {
-            f.w.tap
-                .last_between(CARET, &f.w.bus, probes[i].t_key, t)
-                .unwrap_or(probes[i].t_key)
+            probes[i].t_ev.max(probes[i].t_key)
         } else {
             probes[i].t_key
         };
         ms(t.saturating_sub(t0))
     };
-    align(probes, spoken, lat_of)
+    align(probes, spoken, allowed, lat_of)
 }
 
 /// The alignment of [`score_aligned`], apart from the bus (testable).
-fn align(probes: &[Probe], spoken: &[(u64, String)], lat_of: impl Fn(usize, u64) -> f64) -> Score {
+fn align(
+    probes: &[Probe],
+    spoken: &[(u64, String)],
+    allowed: &[Vec<String>],
+    lat_of: impl Fn(usize, u64) -> f64,
+) -> Score {
     let Some(first) = probes.first() else {
         return Score::default();
     };
@@ -475,7 +507,11 @@ fn align(probes: &[Probe], spoken: &[(u64, String)], lat_of: impl Fn(usize, u64)
     }
     for (j, hit) in matched_sp.iter().enumerate() {
         if let Some(i) = hit {
-            sc.lat.push(lat_of(*i, sp[j].1.0));
+            let l = lat_of(*i, sp[j].1.0);
+            if l > LATE_GATE_MS {
+                sc.late += 1;
+            }
+            sc.lat.push(l);
         }
     }
     // The speeches no key accounts for.
@@ -488,7 +524,10 @@ fn align(probes: &[Probe], spoken: &[(u64, String)], lat_of: impl Fn(usize, u64)
         }
         // Said after an unscored key (and before the next key): not ours to judge.
         let owner = probes.iter().rposition(|p| p.t_key <= *t);
-        if owner.is_some_and(|k| probes[k].expect.is_empty()) {
+        if let Some(k) = owner
+            && probes[k].expect.is_empty()
+            && allowed.get(k).is_none_or(|a| a.is_empty() || a.contains(s))
+        {
             continue;
         }
         if last_text == Some(s.as_str()) {
@@ -516,7 +555,7 @@ mod align_tests {
         (t * 1_000_000, e.to_owned())
     }
     fn run(probes: &[Probe], spoken: &[(u64, String)]) -> (usize, u64, u64, u64) {
-        let sc = align(probes, spoken, |_, _| 0.0);
+        let sc = align(probes, spoken, &[], |_, _| 0.0);
         (sc.lat.len(), sc.lost, sc.doubled, sc.extra)
     }
 
@@ -554,6 +593,41 @@ mod align_tests {
         let pr = [p(0, "a")];
         let sp = [s(1600, "a")];
         assert_eq!(run(&pr, &sp), (0, 1, 0, 1));
+    }
+
+    /// Review F-2: a silent key, then the next key (same text) spoken twice. With latency from
+    /// each match's OWN key event the borrowed first copy is 140 ms late and gated.
+    #[test]
+    fn a_silent_key_then_a_doubled_next_key_is_late_not_clean() {
+        let pr = [p(0, "x"), p(140, "x")];
+        let sp = [s(141, "x"), s(142, "x")];
+        // Page caret events: key 0's at 0.2 ms, key 1's at 140.2 ms.
+        let ev = [200_000u64, 140_200_000];
+        let own = |i: usize, t: u64| ms(t.saturating_sub(ev[i]));
+        let sc = align(&pr, &sp, &[], own);
+        assert_eq!((sc.lost, sc.late), (0, 1), "{sc:?}");
+        // The old measure (last page event between the key and the speech) saw only key 1's
+        // event for both copies and scored this clean: the blind spot.
+        let old = |i: usize, t: u64| {
+            let t0 = ev
+                .iter()
+                .copied()
+                .filter(|e| *e >= pr[i].t_key && *e <= t)
+                .max()
+                .unwrap_or(pr[i].t_key);
+            ms(t.saturating_sub(t0))
+        };
+        assert_eq!(align(&pr, &sp, &[], old).late, 0);
+    }
+
+    #[test]
+    fn speech_after_a_dropped_key_is_nothing_or_the_edge_character() {
+        let pr = [p(0, "a"), p(140, ""), p(400, "b")];
+        let allowed = [vec![], vec!["a".to_owned()], vec![]];
+        let ok = [s(5, "a"), s(150, "a"), s(405, "b")];
+        assert_eq!(align(&pr, &ok, &allowed, |_, _| 0.0).extra, 0);
+        let bad = [s(5, "a"), s(150, "zzz"), s(405, "b")];
+        assert_eq!(align(&pr, &bad, &allowed, |_, _| 0.0).extra, 1);
     }
 
     #[test]
@@ -606,6 +680,11 @@ fn fc1h(
     let carets = f.w.tap.events_since(CARET, &f.w.bus, &path, first);
     let mut dropped = 0u64;
     let keys: Vec<u64> = probes.iter().map(|p| p.t_key).collect();
+    // After a key the page dropped the reader may say nothing, or name the character at the
+    // edge the caret still stands at (or, when the page's event is only late, the one of an
+    // event that arrives before the key after next); any other speech is `fc_extra`.
+    let mut allowed: Vec<Vec<String>> = vec![Vec::new(); probes.len()];
+    let mut prev_at = 0i32;
     for (i, p) in probes.iter_mut().enumerate() {
         let next = keys.get(i + 1).copied().unwrap_or(u64::MAX);
         match carets
@@ -613,8 +692,22 @@ fn fc1h(
             .rev()
             .find(|(t, _)| *t >= p.t_key && *t < next)
         {
-            Some((_, at)) => p.expect = emoji_line_at(*at),
-            None => dropped += 1,
+            Some((_, at)) => {
+                p.expect = emoji_line_at(*at);
+                prev_at = *at;
+            }
+            None => {
+                dropped += 1;
+                let until = keys.get(i + 2).copied().unwrap_or(u64::MAX);
+                let mut a = vec![emoji_line_at(prev_at)];
+                a.extend(
+                    carets
+                        .iter()
+                        .filter(|(t, _)| *t >= p.t_key && *t < until)
+                        .map(|(_, at)| emoji_line_at(*at)),
+                );
+                allowed[i] = a;
+            }
         }
     }
     if dropped > 0 {
@@ -623,7 +716,7 @@ fn fc1h(
             probes.len()
         ));
     }
-    let (lat, lost, doubled) = finish(&mut f, "FC1h", &mut probes, true, out);
+    let (lat, lost, doubled) = finish_with(&mut f, "FC1h", &mut probes, true, &allowed, out);
     out.s("fc1h_ms", lat);
     out.x("lost", lost as f64, "keys");
     out.x("fc_double", doubled as f64, "keys");
@@ -1117,7 +1210,7 @@ fn fsa(
 /// BackSpace are spoken from the paragraph's own events.
 fn fce1(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor, out: &mut RunOut) -> Result<()> {
     let mut f = Ft::open(host, reader, flavor, "fields.html", "M3b Fields", CFG_QUIET)?;
-    f.enter("Editable region")?;
+    f.enter("Editable region:")?;
     let mut probes: Vec<Probe> = Vec::new();
     let mut failures = 0u64;
     // "One 😀 two" then "Три четыре": Right across the first paragraph and into the second.

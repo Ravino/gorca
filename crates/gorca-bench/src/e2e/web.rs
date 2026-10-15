@@ -394,23 +394,6 @@ impl EventTap {
             .count()
     }
 
-    /// The last event of `kind` from `sender` that arrived in `[t_min, t_max]`.
-    pub(super) fn last_between(
-        &self,
-        kind: u8,
-        sender: &str,
-        t_min: u64,
-        t_max: u64,
-    ) -> Option<u64> {
-        self.seen
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .iter()
-            .filter(|e| e.kind == kind && e.sender == sender && e.t_ns >= t_min && e.t_ns <= t_max)
-            .map(|e| e.t_ns)
-            .max()
-    }
-
     /// First event of `kind` from `sender` (for `path` when given) that arrived at or after `t0`.
     pub(super) fn first_after(
         &self,
@@ -601,12 +584,22 @@ impl Web {
         Ok(json_num(&r, "t_emit_ns").unwrap_or(0.0) as u64)
     }
 
-    /// A descendant of `root` by role and name fragment.
+    /// A descendant of `root` by role and exact name (empty: any name).
     pub(super) fn find(&mut self, root: &str, role: &str, name: &str) -> Result<String> {
+        self.find_with(root, role, name, false)
+    }
+
+    /// Like `find` but `name` may be a part of the name (opt-in, for links whose text the
+    /// page does not fix).
+    pub(super) fn find_partial(&mut self, root: &str, role: &str, name: &str) -> Result<String> {
+        self.find_with(root, role, name, true)
+    }
+
+    fn find_with(&mut self, root: &str, role: &str, name: &str, partial: bool) -> Result<String> {
         let r = self.ax.request(
             "find",
             &format!(
-                "\"bus\":\"{}\",\"root\":\"{root}\",\"role\":\"{role}\",\"name\":\"{name}\",\"timeout_ms\":8000",
+                "\"bus\":\"{}\",\"root\":\"{root}\",\"role\":\"{role}\",\"name\":\"{name}\",\"partial\":{partial},\"timeout_ms\":8000",
                 self.bus
             ),
             Duration::from_secs(12),
@@ -898,7 +891,7 @@ pub fn b0(
     let r = w.press_and_hear(ESC, 0, |t| t.contains("browse mode"));
     check(out, &mut fails, "Escape", r, &["browse mode"]);
     // Back on a link by focus: still browse mode, no word.
-    let link = w.find(&doc.path, "link", "second page")?;
+    let link = w.find_partial(&doc.path, "link", "second page")?;
     let mark = w.mark();
     w.focus(&link)?;
     let h = w.speech(mark, Duration::from_secs(3), |t| t.contains("link"));
