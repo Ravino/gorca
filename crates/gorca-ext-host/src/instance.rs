@@ -97,6 +97,8 @@ pub struct ExtStats {
     pub attach_skipped: AtomicU64,
     /// Instances that could not be built (attach or reset).
     pub instantiate_failures: AtomicU64,
+    /// Replacement instances built by the workers after a fault.
+    pub rebuilds: AtomicU64,
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -111,6 +113,7 @@ pub struct ExtStatsSnapshot {
     pub commands_dropped: u64,
     pub attach_skipped: u64,
     pub instantiate_failures: u64,
+    pub rebuilds: u64,
 }
 
 impl ExtStats {
@@ -127,6 +130,7 @@ impl ExtStats {
             commands_dropped: g(&self.commands_dropped),
             attach_skipped: g(&self.attach_skipped),
             instantiate_failures: g(&self.instantiate_failures),
+            rebuilds: g(&self.rebuilds),
         }
     }
 }

@@ -163,3 +163,17 @@ pub fn snap(app: AppId, local: u64, role: Role, name: Option<&str>) -> NodeSnaps
         },
     }
 }
+
+/// Wait until no slot is waiting for its replacement instance (the workers rebuild after a
+/// fault; the callers meanwhile get "no opinion"). Returns the time it took.
+pub fn settle(h: &ExtHost) -> Duration {
+    let t = Instant::now();
+    while !h.settled() {
+        assert!(
+            t.elapsed() < Duration::from_secs(5),
+            "rebuild did not finish"
+        );
+        std::thread::yield_now();
+    }
+    t.elapsed()
+}

@@ -210,6 +210,10 @@ fn run_build(label: &str, wasm: Option<&[u8]>, n: usize) {
         ae2.on_event(&pass);
         let t = Instant::now();
         ae2.on_event(&crash);
+        // The replacement instance is built by a worker; wait for it, then the next call.
+        while !h.settled() {
+            std::hint::spin_loop();
+        }
         ae2.on_event(&pass);
         v.push(u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX));
         h.detach(app(a));
@@ -225,6 +229,9 @@ fn run_build(label: &str, wasm: Option<&[u8]>, n: usize) {
             ae2.on_event(&pass);
             let t = Instant::now();
             ae2.on_event(&spin);
+            while !h.settled() {
+                std::hint::spin_loop();
+            }
             ae2.on_event(&pass);
             v.push(u64::try_from(t.elapsed().as_nanos()).unwrap_or(u64::MAX));
             h.detach(app(a));

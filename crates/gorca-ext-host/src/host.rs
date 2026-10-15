@@ -21,7 +21,7 @@ use crate::kv::SettingsKv;
 use crate::manifest::{ExtBackend, HookSet, Manifest, order_matching};
 use crate::manifest_file::MAX_MANIFEST_BYTES;
 use crate::native::NativeFactory;
-use crate::slot::{Factory, LoadedExt, Slot};
+use crate::slot::{Factory, Job, LoadedExt, Slot};
 use crate::wasm::{ExtEngine, WasmModule};
 
 /// Largest component the loader reads.
@@ -29,7 +29,10 @@ const MAX_MODULE_BYTES: u64 = 32 * 1024 * 1024;
 /// Most extensions one host loads.
 pub const MAX_EXTENSIONS: usize = 64;
 /// Commands queued for the worker before the next one is dropped.
-const COMMAND_QUEUE: usize = 64;
+const COMMAND_QUEUE: usize = 256;
+/// Worker threads: a command that runs to its limit, or a rebuild, never queues everyone else
+/// behind a single thread.
+const WORKERS: usize = 2;
 /// How often the worker looks for settings to write.
 const KV_POLL: Duration = Duration::from_secs(1);
 
@@ -39,11 +42,6 @@ pub struct LoadReport {
     pub path: PathBuf,
     pub name: Option<String>,
     pub result: Result<(), String>,
-}
-
-enum Job {
-    Command { slot: Arc<Slot>, local: u32 },
-    Stop,
 }
 
 /// Builds an [`ExtHost`].
@@ -179,12 +177,17 @@ impl ExtHostBuilder {
         let sink: Arc<OnceLock<Arc<dyn ExtSink>>> = Arc::new(OnceLock::new());
         let stats = Arc::new(ExtStats::default());
         let stopping = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let worker = spawn_worker(
-            rx,
-            Arc::clone(&self.kv),
-            Arc::clone(&sink),
-            Arc::clone(&stopping),
-        );
+        let rx = Arc::new(Mutex::new(rx));
+        let workers = (0..WORKERS)
+            .map(|_| {
+                spawn_worker(
+                    Arc::clone(&rx),
+                    Arc::clone(&self.kv),
+                    Arc::clone(&sink),
+                    Arc::clone(&stopping),
+                )
+            })
+            .collect();
         let manifests = self.exts.iter().map(|e| e.manifest.clone()).collect();
         ExtHost {
             exts: self.exts,
@@ -195,7 +198,7 @@ impl ExtHostBuilder {
             stats,
             apps: RwLock::new(HashMap::new()),
             tx,
-            worker: Mutex::new(Some(worker)),
+            workers: Mutex::new(workers),
             stopping,
             _engine: self.engine,
             reports: self.reports,
@@ -205,7 +208,7 @@ impl ExtHostBuilder {
 }
 
 fn spawn_worker(
-    rx: Receiver<Job>,
+    rx: Arc<Mutex<Receiver<Job>>>,
     kv: Arc<SettingsKv>,
     sink: Arc<OnceLock<Arc<dyn ExtSink>>>,
     stopping: Arc<std::sync::atomic::AtomicBool>,
@@ -217,9 +220,15 @@ fn spawn_worker(
         .name("gorca-ext-worker".to_owned())
         .spawn(move || {
             while !stopping.load(std::sync::atomic::Ordering::Relaxed) {
-                match rx.recv_timeout(KV_POLL) {
+                let next = rx
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .recv_timeout(KV_POLL);
+                match next {
+                    Ok(Job::Rebuild { slot, old }) => slot.rebuild(old),
                     Ok(Job::Command { slot, local }) => {
                         let r = slot.call(HookKind::Command, true, |i| i.command(local));
+                        slot.end_command();
                         if let Some(api::CommandResult::Speak(segs)) = r {
                             let text = gorca_core::segments_text(&segments_from_ext(segs));
                             if !text.is_empty()
@@ -257,7 +266,7 @@ pub struct ExtHost {
     stats: Arc<ExtStats>,
     apps: RwLock<HashMap<AppId, Arc<AppExts>>>,
     tx: SyncSender<Job>,
-    worker: Mutex<Option<JoinHandle<()>>>,
+    workers: Mutex<Vec<JoinHandle<()>>>,
     stopping: Arc<std::sync::atomic::AtomicBool>,
     _engine: Option<Arc<ExtEngine>>,
     reports: Vec<LoadReport>,
@@ -291,6 +300,13 @@ impl ExtHost {
 
     pub fn reports(&self) -> &[LoadReport] {
         &self.reports
+    }
+
+    /// No slot is waiting for a replacement instance (tests and the debug probe).
+    pub fn settled(&self) -> bool {
+        self.read_apps()
+            .values()
+            .all(|a| a.slots.iter().all(|s| !s.is_rebuilding()))
     }
 
     pub fn extension_names(&self) -> impl Iterator<Item = &str> {
@@ -347,15 +363,14 @@ impl Drop for ExtHost {
     fn drop(&mut self) {
         // The apps hold clones of the sender, so the queue cannot close by itself: ask the worker
         // to stop. It flushes the settings on the way out.
-        let _ = self.tx.try_send(Job::Stop);
         self.stopping
             .store(true, std::sync::atomic::Ordering::Relaxed);
-        let handle = self
-            .worker
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .take();
-        if let Some(h) = handle {
+        for _ in 0..WORKERS {
+            let _ = self.tx.try_send(Job::Stop);
+        }
+        let handles =
+            std::mem::take(&mut *self.workers.lock().unwrap_or_else(PoisonError::into_inner));
+        for h in handles {
             let _ = h.join();
         }
     }
@@ -400,8 +415,9 @@ impl ExtSource for ExtHost {
                 label,
                 Arc::clone(&self.stats),
                 Arc::clone(&self.sink),
+                self.tx.clone(),
             ) {
-                Ok(s) => slots.push(Arc::new(s)),
+                Ok(s) => slots.push(s),
                 Err(e) => tracing::warn!(ext = %m.name, "not attached: {e}"),
             }
         }
@@ -483,7 +499,7 @@ impl AppExt for AppExts {
             if !slot.manifest().hooks.contains(HookSet::ON_EVENT) {
                 continue;
             }
-            let v = match slot.call(HookKind::OnEvent, true, |i| i.on_event(&e)) {
+            let v = match slot.call(HookKind::OnEvent, false, |i| i.on_event(&e)) {
                 Some(api::EventVerdict::Suppress) => ExtVerdict::Suppress,
                 Some(api::EventVerdict::Rewrite(s)) => {
                     // Over its speech budget the rewrite still consumes the event, silently.
@@ -539,12 +555,19 @@ impl AppExt for AppExts {
         else {
             return;
         };
+        if !slot.begin_command() {
+            self.stats
+                .commands_dropped
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            return;
+        }
         match self.tx.try_send(Job::Command {
             slot: Arc::clone(slot),
             local,
         }) {
             Ok(()) => {}
             Err(TrySendError::Full(_) | TrySendError::Disconnected(_)) => {
+                slot.end_command();
                 self.stats
                     .commands_dropped
                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed);

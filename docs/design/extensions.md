@@ -37,10 +37,16 @@ keymap     compile()  -> ExtCommands names + default chords merged (never over t
 - `FocusChanged` and `NodeRemoved` are always routed whatever the verdict (the core keeps its focus
   bookkeeping); a `Rewrite` there still speaks. `ReEvaluate` routes the event and sets
   `resync_needed`.
-- A hook never blocks the Reader: `present` uses `try_lock`; `command` runs on the host worker
-  thread (`gorca-ext-worker`), never on the Reader or a tokio worker.
-- `on_event` blocks the *app actor* of that one application if the slot is busy with a command
-  (at most 20 ms). That is the app's own actor, which is the documented blast radius.
+- A hook never blocks the Reader or an app actor: `present` and `on_event` only `try_lock` the
+  slot (a slot busy with a command answers "no opinion"); `command` runs on the host's two worker
+  threads (`gorca-ext-worker`), never on the Reader or a tokio worker.
+- Nothing slow happens on a caller's thread. A faulted instance is moved into a job; **the worker
+  drops it and builds the replacement** (about 0.2 to 3 ms), and until it is ready the slot answers
+  "no opinion". Only attach builds on the app actor (once per application).
+- Per slot at most four commands are queued or running; further presses are dropped. The queue is
+  bounded (256). The one inline cost left is the faulting call itself: a looping `present` runs in
+  the Reader for at most its fuel limit (measured 0.3 ms for a bare loop, ~1 to 4 ms typical) and
+  three strikes end it.
 
 ## 3. Limits and faults
 

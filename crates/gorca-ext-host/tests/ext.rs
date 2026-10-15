@@ -14,7 +14,7 @@ mod common;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use common::{BACKENDS, Backend, app, host, info, snap};
+use common::{BACKENDS, Backend, app, host, info, settle, snap};
 use gorca_core::{AppExt, ExtSource, ExtVerdict, PresentContext, PresenterRegistry, segments_text};
 use gorca_model::{Epoch, NodeEvent, Politeness, Role, UttId};
 
@@ -107,6 +107,13 @@ fn a_crash_is_contained_and_the_instance_is_reset_under_50_ms() {
         assert_eq!(ae.on_event(&announce("hi")), ExtVerdict::Pass);
         let t = Instant::now();
         let v = ae.on_event(&announce("crash"));
+        // The replacement is built by a worker; until it is ready the slot has no opinion.
+        let during = ae.on_event(&announce("suppress"));
+        assert!(
+            matches!(during, ExtVerdict::Pass | ExtVerdict::Suppress),
+            "{b:?}"
+        );
+        settle(&h);
         let healthy = ae.on_event(&announce("suppress"));
         let took = t.elapsed();
         assert_eq!(v, ExtVerdict::Pass, "a faulted hook has no opinion ({b:?})");
@@ -134,8 +141,14 @@ fn a_loop_is_interrupted_at_the_limit_and_reset_under_50_ms() {
     for _ in 0..2 {
         let t = Instant::now();
         let v = ae.on_event(&announce("spin"));
-        let took = t.elapsed();
+        let call = t.elapsed();
         assert_eq!(v, ExtVerdict::Pass);
+        settle(&h);
+        let took = t.elapsed();
+        assert!(
+            call < Duration::from_millis(50),
+            "the caller waited {call:?}"
+        );
         assert!(took < Duration::from_millis(50), "{took:?}");
         assert!(
             took >= Duration::from_micros(100),
@@ -151,6 +164,7 @@ fn a_command_that_loops_is_cut_at_20_ms_and_the_worker_survives() {
     let (h, sink, _) = host(Backend::Wasm);
     let ae = attach(&h, 1, "x");
     ae.command("ext-test", 3);
+    settle(&h);
     ae.command("ext-test", 1);
     let got = sink.wait(1, Duration::from_secs(2));
     assert_eq!(got[0].0, "ext hello");
@@ -162,6 +176,7 @@ fn memory_over_the_cap_is_a_fault_not_a_crash_of_the_host() {
     let (h, _sink, _) = host(Backend::Wasm);
     let ae = attach(&h, 1, "x");
     assert_eq!(ae.on_event(&announce("oom")), ExtVerdict::Pass);
+    settle(&h);
     assert_eq!(h.stats().faults, 1);
     assert_eq!(ae.on_event(&announce("suppress")), ExtVerdict::Suppress);
 }
@@ -173,6 +188,7 @@ fn three_resets_in_a_minute_disable_with_one_announcement() {
         let ae = attach(&h, 1, "gnome-terminal");
         for _ in 0..3 {
             assert_eq!(ae.on_event(&announce("crash")), ExtVerdict::Pass);
+            settle(&h);
         }
         let s = h.stats();
         assert_eq!((s.faults, s.disabled), (3, 1), "{b:?}");
@@ -203,6 +219,7 @@ fn a_faulty_app_does_not_affect_another_apps_instance() {
         let c = attach(&h, 2, "c");
         for _ in 0..3 {
             a.on_event(&announce("crash"));
+            settle(&h);
         }
         assert_eq!(a.on_event(&announce("suppress")), ExtVerdict::Pass, "{b:?}");
         assert_eq!(
@@ -228,6 +245,7 @@ fn the_core_still_presents_when_the_extension_faults() {
             let t = Instant::now();
             let u = reg.present(PresentContext::Focus, &n, UttId(1), Epoch(1));
             let took = t.elapsed();
+            settle(&h);
             let said = u
                 .segments
                 .iter()
@@ -401,6 +419,7 @@ fn re_announcing_an_application_does_not_reset_its_strikes() {
         let ae = attach(&h, 1, "x");
         for _ in 0..3 {
             ae.on_event(&announce("crash"));
+            settle(&h);
         }
         assert_eq!(h.stats().disabled, 1, "{b:?}");
         // The connector announces the app again (identity verified late): same slot, same state.
@@ -486,10 +505,12 @@ fn memory_loops_and_oom_are_faults_at_every_reset() {
     let ae = attach(&h, 1, "x");
     for trigger in ["oom", "spin"] {
         assert_eq!(ae.on_event(&announce(trigger)), ExtVerdict::Pass);
+        settle(&h);
     }
     assert_eq!(h.stats().faults, 2);
     // The third strike disables; the instance is never rebuilt past that.
     ae.on_event(&announce("oom"));
+    settle(&h);
     assert_eq!(h.stats().disabled, 1);
     assert_eq!(ae.on_event(&announce("suppress")), ExtVerdict::Pass);
 }
