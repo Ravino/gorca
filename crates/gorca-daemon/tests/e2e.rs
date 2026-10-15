@@ -15,7 +15,7 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use gorca_daemon::{Options, SpeechMode, run_with};
+use gorca_daemon::{Arm, Options, SpeechMode, run_with};
 use gorca_rt::CancellationToken;
 use gorca_testkit::MockSpeechServer;
 use gorca_testkit::harness::{FakeApp, Session};
@@ -47,8 +47,19 @@ impl Daemon {
         voicego: &std::path::Path,
         ssip: &std::path::Path,
     ) -> Self {
+        Self::start_in(session, speech, voicego, ssip, Arm::default())
+    }
+
+    fn start_in(
+        session: &Session,
+        speech: SpeechMode,
+        voicego: &std::path::Path,
+        ssip: &std::path::Path,
+        topology: Arm,
+    ) -> Self {
         let opts = Options {
             speech,
+            topology,
             ..Options::isolated(
                 session.a11y_address(),
                 session.session_address(),
@@ -123,6 +134,37 @@ async fn prime(app: &mut FakeApp, server: &MockSpeechServer, node: &str) {
         }
         assert!(Instant::now() < deadline, "the daemon never became ready");
     }
+}
+
+/// B-5: with the speech lane on its own thread and runtime, focus still reaches the speech
+/// server, and the daemon still stops cleanly (the lane threads are joined).
+#[test]
+fn the_lanes_topology_speaks_and_stops_cleanly() {
+    let Some(session) = session() else { return };
+    run(async {
+        let voicego = MockSpeechServer::start_voicego(&sock_dir(&session, "v"))
+            .await
+            .unwrap();
+        let ssip_path = sock_dir(&session, "s").join("none.sock");
+        let mut app = FakeApp::start(&session, &["--scenario", "form"]).unwrap();
+        let d = Daemon::start_in(
+            &session,
+            SpeechMode::Voicego,
+            voicego.socket_path(),
+            &ssip_path,
+            Arm::Lanes,
+        );
+        prime(&mut app, &voicego, "Submit").await;
+        app.focus("Subscribe").unwrap();
+        assert!(
+            wait_text(&voicego, "Subscribe, check box", Duration::from_secs(5))
+                .await
+                .is_some(),
+            "got {:?}",
+            voicego.spoken()
+        );
+        d.stop().await;
+    });
 }
 
 #[test]

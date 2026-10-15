@@ -30,9 +30,12 @@ mod config_task;
 mod input;
 mod platform;
 mod probe;
+mod rtkit;
+mod topology;
 mod wire;
 
 pub use probe::{DaemonProbe, ProbeRead};
+pub use topology::{Arm, LaneRuntimes, build_runtime_for, bulk_pool, finish as finish_topology};
 
 use std::io::IsTerminal;
 use std::sync::Arc;
@@ -80,15 +83,10 @@ pub fn init_tracing() -> Result<()> {
         .map_err(|e| anyhow::anyhow!("installing tracing subscriber: {e}"))
 }
 
-/// The multi-threaded runtime for the `workers` lane: one thread per available core.
+/// The multi-threaded runtime for the `workers` lane: one thread per available core (topology
+/// arm (a), the default; see [`build_runtime_for`] for the other arms).
 pub fn build_runtime() -> Result<tokio::runtime::Runtime> {
-    let threads = std::thread::available_parallelism().map_or(1, usize::from);
-    tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(threads)
-        .thread_name("gorca-worker")
-        .enable_all()
-        .build()
-        .context("building the tokio runtime")
+    build_runtime_for(Arm::Single, None, None)
 }
 
 /// Installed signal streams. Installing is synchronous (it must run inside the runtime), so
@@ -364,6 +362,9 @@ async fn run_inner(
     let epoch = core.epoch();
     let focused = core.focused_app();
 
+    // B-5: in the lane arms the key input and the speech lane get their own thread and runtime;
+    // in arm (a) the handles are `None` and `placed_on` leaves the tasks where they are.
+    let mut lanes = LaneRuntimes::start(opts.topology)?;
     let mut lane_handle: Option<SpeechHandle> = None;
     let core = if opts.shadow {
         // B-1 PW-11: beside the user's real screen reader gorca only reads. Speech goes to the
@@ -371,7 +372,7 @@ async fn run_inner(
         tracing::info!("shadow mode: read-only, no speech, no keyboard, no event registration");
         core
     } else {
-        let speech = wire::wire_speech(&mut tasks, &opts, &epoch);
+        let speech = tasks.placed_on(lanes.speech(), |t| wire::wire_speech(t, &opts, &epoch));
         let speech_for_keys = speech.clone();
         lane_handle = Some(speech.clone());
         let mut core = core.with_speech(Arc::new(LaneOut(speech)));
@@ -389,17 +390,20 @@ async fn run_inner(
                 requests,
             );
         }
-        wire::wire_input(
-            &mut tasks,
-            &opts,
-            &shutdown,
-            &epoch,
-            speech_for_keys,
-            senders,
-            links,
-            core.grab_requests(),
-            core.grab_sender(),
-        );
+        let (grabs, grab_control) = (core.grab_requests(), core.grab_sender());
+        tasks.placed_on(lanes.input(), |t| {
+            wire::wire_input(
+                t,
+                &opts,
+                &shutdown,
+                &epoch,
+                speech_for_keys,
+                senders,
+                links,
+                grabs,
+                grab_control,
+            );
+        });
         core
     };
     let atspi_state = AtspiState::default();
@@ -413,6 +417,7 @@ async fn run_inner(
     tracing::info!(
         workers = std::thread::available_parallelism().map_or(1, usize::from),
         speech = ?opts.speech,
+        topology = opts.topology.name(),
         "gorca started"
     );
     let core_stats = core.stats();
@@ -426,6 +431,12 @@ async fn run_inner(
     for r in &reports {
         tracing::debug!(task = r.name, exit = ?r.exit, "task finished");
     }
+    // The lane threads outlive their tasks; end them now (joining blocks, so off the workers).
+    let _ = tokio::time::timeout(
+        SHUTDOWN_GRACE,
+        tokio::task::spawn_blocking(move || lanes.stop()),
+    )
+    .await;
     tracing::info!("gorca stopped");
     result.map_err(anyhow::Error::from)
 }

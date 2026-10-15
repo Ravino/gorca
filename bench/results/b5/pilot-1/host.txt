@@ -1,0 +1,20 @@
+label=pilot-1
+utc=2026-10-14T23:40:46Z
+git_rev=932d611 dirty=13
+kernel=7.1.8+deb13-rt-amd64
+cpus=16
+governor=performance 
+loadavg_start=16.52 13.85 12.32 7/3231 178218
+rounds=3 arms=single,lanes,lanes-rt conds=idle,sat only=L1,L2,K1,L3-50k,L2-50k,K1-50k quick=--quick
+rtkit MaxRealtimePriority: i 20 
+rtkit MinNiceLevel: i -15 
+rtkit RTTimeUSecMax: x 200000 
+RLIMIT_RTPRIO=0 RLIMIT_RTTIME=unlimited
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=1
+  idle C3_ACPI latency=1048us disabled=1
+  load: 16.52 13.85 12.32 6/3233 178247
+loadavg_end=27.77 22.82 17.69 3/3106 248713

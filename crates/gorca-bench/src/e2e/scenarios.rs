@@ -74,6 +74,10 @@ pub enum Scn {
     SA3a,
     PW,
     C1hs,
+    /// B-5: L2 while an L3-50k storm runs on another application.
+    L2Storm,
+    /// B-5: K1 while an L3-50k storm runs on another application.
+    K1Storm,
     E1s,
 }
 
@@ -119,6 +123,8 @@ impl Scn {
             Self::SA3a => "SA3a".into(),
             Self::PW => "PW".into(),
             Self::C1hs => "C1hs".into(),
+            Self::L2Storm => "L2-50k".into(),
+            Self::K1Storm => "K1-50k".into(),
             Self::E1s => "E1s".into(),
         }
     }
@@ -165,6 +171,8 @@ impl Scn {
             "SA3a" => Self::SA3a,
             "PW" => Self::PW,
             "C1hs" => Self::C1hs,
+            "L2-50k" => Self::L2Storm,
+            "K1-50k" => Self::K1Storm,
             "E1s" => Self::E1s,
             _ => return None,
         })
@@ -455,6 +463,24 @@ pub fn run(
                 .configure(Duration::from_millis(1), Duration::from_millis(3));
             k1(&mut rig, &mut out, size, seed)?;
         }
+        Scn::L2Storm => {
+            let mut rig = Rig::start(host, &base_opts(reader, flavor))?;
+            let secs = size.trials as f64 * 0.4 + 10.0;
+            with_storm(&mut rig, &mut out, 50_000.0, secs, |rig, out| {
+                l2(rig, out, size, seed)
+            })?;
+        }
+        Scn::K1Storm => {
+            let mut o = base_opts(reader, flavor);
+            o.keys = true;
+            let mut rig = Rig::start(host, &o)?;
+            rig.mock
+                .configure(Duration::from_millis(1), Duration::from_millis(3));
+            let secs = size.n as f64 * 0.02 + 10.0;
+            with_storm(&mut rig, &mut out, 50_000.0, secs, |rig, out| {
+                k1(rig, out, size, seed)
+            })?;
+        }
         Scn::K2 => super::m1::k2(host, reader, flavor, size, seed, &mut out)?,
         Scn::K2s => super::m1::k2s(host, reader, flavor, size, seed, &mut out)?,
         Scn::K3 => super::m1::k3(host, reader, flavor, size, seed, &mut out)?,
@@ -621,6 +647,29 @@ pub(super) fn start_storm(a11y: &str, rate: f64, secs: f64) -> Result<Storm> {
             run_feeder(&plan, None, &mut sink, Duration::from_secs_f64(secs), &st)
         })?;
     Ok(Storm { stop, thread })
+}
+
+/// B-5: run `f` while a storm of `rate` signals/s floods another application, so that L2 and K1
+/// can be measured under the same stress as L3. The storm rate is reported like L3's.
+fn with_storm(
+    rig: &mut Rig,
+    out: &mut RunOut,
+    rate: f64,
+    secs: f64,
+    f: impl FnOnce(&mut Rig, &mut RunOut) -> Result<()>,
+) -> Result<()> {
+    let storm = start_storm(&rig.env.a11y_addr, rate, secs)?;
+    std::thread::sleep(Duration::from_millis(1000)); // let the flood reach steady state
+    let result = f(rig, out);
+    storm.stop.store(true, Ordering::Release);
+    let fr = storm
+        .thread
+        .join()
+        .map_err(|_| anyhow::anyhow!("storm thread panicked"))?;
+    out.x("storm_target_eps", rate, "ev/s");
+    out.x("storm_achieved_eps", fr.achieved_rate(), "ev/s");
+    out.x("storm_max_lag_ms", ms(fr.max_lag_ns), "ms");
+    result
 }
 
 fn l3(rig: &mut Rig, out: &mut RunOut, size: Size, seed: u64, rate: f64) -> Result<()> {

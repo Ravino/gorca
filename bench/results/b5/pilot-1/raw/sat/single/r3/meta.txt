@@ -1,0 +1,5 @@
+round=3 cond=sat arm=single exit=0
+load_before=21.49 20.95 16.74 7/3238 239104
+load_with_hog=21.49 20.95 16.74 20/3252 239312
+load_after=24.66 21.79 17.18 5/3133 243726
+governor=performance 

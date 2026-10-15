@@ -10,7 +10,7 @@
 //!
 //! Allowed dependencies: `gorca-model`, `tokio`, `tokio-util`, `futures-core`, `thiserror`,
 //! `tracing`, `libc`. No `zbus`, `atspi*` or other transport types. `unsafe` is allowed only in
-//! [`process`] (prctl), each block with a `// SAFETY:` comment (section 11, rule 6).
+//! [`process`] (prctl) and [`sched`] (policy, affinity, rlimit, `SIGXCPU`), each block with a `// SAFETY:` comment (section 11, rule 6).
 #![deny(clippy::wildcard_enum_match_arm)]
 
 pub mod clock;
@@ -20,6 +20,7 @@ pub mod focused;
 pub mod guard;
 pub mod lane;
 pub mod process;
+pub mod sched;
 pub mod supervisor;
 pub mod watchdog;
 
@@ -28,7 +29,9 @@ pub use deadline::{BudgetClass, Deadline, DeadlineExceeded, with_deadline};
 pub use epoch::EpochCell;
 pub use focused::FocusedApp;
 pub use futures_core::future::BoxFuture;
-pub use lane::{Lane, LaneExit, LaneHandle, LanePriority, spawn_lane};
+pub use lane::{
+    Lane, LaneExit, LaneHandle, LanePriority, lane_started, set_start_hook, spawn_lane,
+};
 pub use process::monotonic_ns;
 pub use supervisor::{
     RestartDecision, RestartPolicy, RestartTracker, TaskExit, TaskReport, TaskSet,

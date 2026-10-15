@@ -135,8 +135,8 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                 let mut row = Row::info(&id, &sid, label, unit, &vals);
                 let thr = match (sid.as_str(), metric.as_str(), p) {
                     ("L1" | "L1s" | "L3-10k" | "L3-50k" | "L4", "l1_ms", "p99") => Some(L1_P99_MS),
-                    ("K1", "k1_ms", "p99") => Some(L1_P99_MS),
-                    ("L2", "l2_ms", "p99") => Some(L2_P99_MS),
+                    ("K1" | "K1-50k", "k1_ms", "p99") => Some(L1_P99_MS),
+                    ("L2" | "L2-50k", "l2_ms", "p99") => Some(L2_P99_MS),
                     ("K2", "k2_ms", "p99") => Some(K2_P99_MS),
                     ("K2s", "k2s_ms", "p99") => Some(K2S_P99_MS),
                     ("K3", "k3_ms", "p99") => Some(K3_P99_MS),

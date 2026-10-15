@@ -15,6 +15,7 @@ path = "src/main.rs"
 gorca-core = { workspace = true }
 gorca-mirror = { workspace = true }
 gorca-rt = { workspace = true }
+gorca-dbus = { workspace = true }
 gorca-config = { workspace = true }
 gorca-model = { workspace = true }
 gorca-connector-api = { workspace = true }
@@ -27,6 +28,9 @@ gorca-speech = { workspace = true }
 gorca-speech-voicego = { workspace = true }
 gorca-speech-ssip = { workspace = true }
 thiserror = { workspace = true }
+zbus = { workspace = true }
+serde = { workspace = true }
+rayon = { workspace = true }
 smallvec = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true, features = ["process"] }
