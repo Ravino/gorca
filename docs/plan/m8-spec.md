@@ -74,7 +74,7 @@ Source: `BrowseModeTreeInterceptor.addQuickNav` registrations, `browseMode.py:91
 | QN.q.* | Q | next block quote | "block quote ‹text›" | **partial**: text only, no "block quote" | P0 |
 | QN.s.* | S | next separator | "separator" | **partial**: finds it, speaks nothing | P1 |
 | QN.d.* | D | next landmark; unnamed `section`/`form` are not landmarks | "‹name› ‹role› landmark" (e.g. "Primary navigation navigation landmark") | **partial**: unnamed ones are skipped, named forms count; the hit is read as the content at its start, with neither name nor role word | P0 |
-| QN.m.* | M | next frame | "‹title› frame" | missing (`quicknav.next.frame` Planned) | P1 |
+| QN.m.* | M | next frame | "‹title› frame" | done on `f80d1f5` | P1 |
 | QN.o.* | O | next embedded object: object, application, dialog | "embedded object" / "application ‹name›" / "dialog ‹name›" | **missing in practice**: "no next embedded object" on a page with `role=application` and `<object>` (baseline) | P1 |
 | QN.n.1 | N | skip past a block of links to the next text | the text line; none: "no more text after a block of links" | missing | P1 |
 | QN.a.1 | A | next annotation: comment, insertion, deletion, details | "‹text› ‹annotation role›" | missing | P2 |
@@ -237,9 +237,9 @@ Source: NVDA `sayAll.py` `CURSOR.CARET` for browse mode; any key stops; after a 
 
 | ID | Behaviour | Expected | Today | Pri |
 |---|---|---|---|---|
-| RD.sa.start | gorca+Down reads from the cursor to the end | continuous, paragraph by paragraph, list items, headings with their level | missing for browse (`text.say_all` works on focus-mode text) | P0 |
-| RD.sa.inline | links, tables, form fields inline | as in line reading | missing | P1 |
-| RD.sa.stop | any key | silence within 2 ms (L2), cursor at the chunk being spoken | missing | P0 |
+| RD.sa.start | gorca+Down reads from the cursor to the end | continuous, paragraph by paragraph, list items, headings with their level | **done on `f80d1f5`** (M7b) | P0 |
+| RD.sa.inline | links, tables, form fields inline | as in line reading | done on `f80d1f5` | P1 |
+| RD.sa.stop | any key | silence within 2 ms (L2), cursor at the chunk being spoken | done on `f80d1f5` (status; the 2 ms is SA3) | P0 |
 | - | quick nav during say-all | stops say-all, moves, speaks the target; NVDA resumes say-all for some commands (`resumeSayAllMode`, e.g. `moveToStartOfContainer`); default: stop | missing | P1 |
 | - | say-all on page load (`autoSayAllOnPageLoad = true`, setting) | starts after "browse mode ‹title›" when the setting is on | missing; default to be set (NVDA: on) | P1 |
 | - | speed: utterances run ahead of the audio (SA2) | next chunk at the server before the previous ends | exists for text (SA2) | P1 |
@@ -312,7 +312,7 @@ Source: ADR-0003 10 (burst classification, route swap, position restore), phase-
 
 ### 3.16 Baseline on `main` (summary; details in `docs/reports/m8-baseline.md`)
 
-318 scripted steps, run 2026-10-15 against `ce548af` on a busy host: 174 PASS, 55 GAP, 89 XFAIL, 0 unmarked failures. By priority: P0 105 of 176 pass, P1 62 of 127, P2 7 of 15. The 18 root causes, in the order they cost M8 the most steps:
+318 scripted steps, run 2026-10-15 against `ce548af` and again against `f80d1f5` (M3b+M7b merged) on a busy host. On `f80d1f5`: 181 PASS, 55 GAP, 82 XFAIL, 0 unmarked failures. By priority: P0 108 of 176 pass, P1 66 of 127, P2 7 of 15. The merge fixed browse say-all and the M key; the rest of the list below is unchanged. The 18 root causes, in the order they cost M8 the most steps:
 quick nav and focus-follow do not speak the control's accessible name; container hits (list, quote, table, landmark, dialog) lack role word, name and count; table navigation past `T` does not exist and cells are one line each; live regions and browse say-all are not spoken; selection and copy are absent; a jump to a container leaves the cursor on it; anchors without focus re-announce the document; modal scope; pass-through gaps (application, grid cell, list box option, D-1); state words; position restore; nested-landmark Shift+D; silent separators; `O` finds nothing; repeated role prefix; Tab not from the cursor (D-2).
 Latency: key to speech p99 0.3 to 0.7 ms in the quiet scenarios, 0.56 ms for H / Shift+H at 100k nodes (3 repeats, load 13), mode switch 1.9 ms warm and 29 to 121 ms for the first focus into an edit of a fresh page.
 
@@ -380,7 +380,7 @@ In `crates/gorca-bench/src/e2e/m8_steps.rs`, add `s("AREA.topic.n", P0|P1|P2, "w
 
 | Acceptance line | Where |
 |---|---|
-| parity checklist, at least 60 scripted cases from `browseMode.py` | the 176 P0 steps of the 318 (`e2e-m8 list`). At M8 sign-off every P0 step is PASS: no GAP, no XFAIL, no line left in `m8_baseline.rs` for a P0 step. The baseline on `main` is 105 PASS, 40 GAP, 31 XFAIL (`docs/reports/m8-baseline.md`) |
+| parity checklist, at least 60 scripted cases from `browseMode.py` | the 176 P0 steps of the 318 (`e2e-m8 list`). At M8 sign-off every P0 step is PASS: no GAP, no XFAIL, no line left in `m8_baseline.rs` for a P0 step. The baseline on `f80d1f5` is 108 PASS, 40 GAP, 28 XFAIL (`docs/reports/m8-baseline.md`) |
 | W1 at most 5 ms at 100k nodes | M8-PF1 |
 | live-region last mutation to speech at most 65 ms | `live_ms` of M8-LV (with the rig allowance) |
 | cursor restore at least 85 % on re-rendered corpus pages | M8-SPA `SP.restore` plus the B-6 re-render corpus; this harness checks the single case, the ratio needs the matcher's own counters |

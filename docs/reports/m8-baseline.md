@@ -3,6 +3,23 @@
 2026-10-15, web-a11y-engineer. Spec: `docs/plan/m8-spec.md`. Harness: `crates/gorca-bench/src/e2e/m8*.rs`,
 `crates/gorca-bench/src/bin/e2e_m8.rs`, `tests/web/m8/`. Step-by-step data: `bench/results/e2e/m8-baseline-final2/*-steps.md`.
 
+## 0. Update: the same scenarios against main with M3b+M7b merged (`f80d1f5`)
+
+The first baseline (sections 1 to 8) was taken on `ce548af`, before the Firefox M3b/M7b branch landed. Main now includes it; the branch was rebased onto `f80d1f5` and the whole table re-run (`m8-main-quick`, 20 scenarios, 1 repeat; `m8-main-perf`, 3 repeats of M8-PF1, M8-FM, M8-RD; load 11 to 17, still not quiet).
+
+| | `ce548af` | `f80d1f5` |
+|---|---|---|
+| steps | 318 | 318 |
+| PASS / GAP / XFAIL / unmarked FAIL | 174 / 55 / 89 / 0 | **181 / 55 / 82 / 0** (after removing 7 stale marks) |
+| P0 PASS (of 176) | 105 | **108** (GAP 40, XFAIL 28) |
+| P1 PASS (of 127) | 62 | **66** |
+
+What the merge fixed (7 steps went XPASS and their marks were removed): **browse say-all** (RD.sa.start, RD.sa.start2, RD.sa.inline, RD.sa.stop: continuous reading, stops on any key) and **M, next frame** (QN.m.1, QN.m.2, IF.m.1). Everything else in section 4 is unchanged: names of labelled controls, role words and counts for containers, tables past T, live regions, selection, modal scope, container-jump placement, anchors without focus, position restore, the missing keys N A W P comma and the single-letter toggle, elements list and find.
+Latency on `f80d1f5`: H / Shift+H at 100k nodes p99 **0.53 ms** (0.53 to 3.3 over 3 repeats, 1200 samples each, lost 0, steady state after 1.57 s); mode switch warm p99 2.1 ms; reading keys (M8-RD) p99 0.43 ms. Say-all start was not timed (`RD.sa.start` is a status step; SA1 and SA3 are in the standard e2e).
+One harness incident: `tests/web/m7/ax.py` now matches node names exactly (main changed it), so the first run on `f80d1f5` could not find buttons by a name fragment (4 false failures: AF.script, AF.script.again, FG.toggle, APP.menu.item). `find_role` now sends `partial: true`. Kept as `m8-main2-quick`, `m8-main2-recheck`, `m8-main2-af*`.
+
+Sections 1 to 8 below describe the `ce548af` run and are kept as the history of how the baseline was built.
+
 ## 1. Conditions (read before trusting a latency)
 
 | Item | Value |

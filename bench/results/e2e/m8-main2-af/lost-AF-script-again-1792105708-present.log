@@ -1,0 +1,4 @@
+{"redaction_key":"8b1b9a7b4592e2525b137e117a09e849"}
+{"t_ns":722232859533508,"utt_id":1,"epoch":1,"app_bus":":1.9","path":"/org/a11y/atspi/accessible/67","key":"1:1:43c8e0093de9a864","source":"miss_reply","role":"document_web","states":["focused","showing","visible"],"name":"M8 Autofocus","value":null,"may_refine":false,"refines":null}
+{"t_ns":722233141111333,"utt_id":3,"epoch":2,"app_bus":":1.9","path":"/org/a11y/atspi/accessible/87","key":"1:1:43c250093de44806","source":"miss_reply","role":"link","states":["enabled","focusable","focused","sensitive","showing","visible"],"name":"Scripted target link","value":null,"may_refine":false,"refines":null}
+{"t_ns":722233462241142,"utt_id":4,"epoch":4,"app_bus":":1.9","path":"/org/a11y/atspi/accessible/90","key":"1:1:43becd093de13396","source":"miss_reply","role":"text_entry","states":["enabled","focusable","focused","sensitive","showing","visible"],"name":"Search","value":null,"may_refine":false,"refines":null}

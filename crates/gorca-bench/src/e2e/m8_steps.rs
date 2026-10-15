@@ -127,7 +127,6 @@ const NO_ANN: &str = "quicknav.next.annotation (A) is Planned(M7): not implement
 const NO_ERR: &str = "quicknav.next.error (W) is Planned(M7): not implemented on main";
 const NO_PARA: &str = "quicknav.next.paragraph (P) is Planned(M7): not implemented on main";
 const NO_LIVE: &str = "live regions (ADR-0003 13) are M7b: not on main";
-const NO_SAYALL: &str = "say-all in browse (browse-mode.md 9) is M7b: not on main";
 const NO_SEL: &str = "browse-mode selection (Shift+arrows, Ctrl+A) is Planned: not on main";
 const NO_CARET_ANCHOR: &str = "a same-page anchor with no focus moves the DOM caret, not focus: CaretMoved is ignored in Browse (ADR-0003 11); NVDA follows it through scrollingStart";
 const NO_MODAL: &str = "modal scope (ADR-0003 11 Modal) is M7b: not on main";
@@ -216,8 +215,8 @@ fn qn() -> Vec<Step> {
         s("QN.d.3", P0, "D: complementary", n('d'), &["Inside aside"]).extra(&["Side note landmark"], NO_LANDMARK_NAME),
         s("QN.d.4", P1, "D: no more landmarks", n('d'), &["no next landmark"]),
         top("QN.top16"),
-        s("QN.m.1", P1, "M: next frame", n('m'), &["frame", "Embedded frame one"]).xf(NO_FRAME_NAV),
-        s("QN.m.2", P1, "M again", n('m'), &["frame", "Embedded frame two"]).xf(NO_FRAME_NAV),
+        s("QN.m.1", P1, "M: next frame", n('m'), &["frame", "Embedded frame one"]),
+        s("QN.m.2", P1, "M again", n('m'), &["frame", "Embedded frame two"]),
         top("QN.top17"),
         s("QN.o.1", P1, "O: next embedded object (application)", n('o'), &["Calculator widget"]),
         s("QN.o.2", P1, "O again (object element)", n('o'), &["Plain object"]),
@@ -440,7 +439,7 @@ fn iframes() -> Vec<Step> {
         s("IF.focus", P0, "Focus on the field in the frame: focus mode", Act::Focus(role::ENTRY, "Frame field"), &["focus mode", "Frame field"]),
         s("IF.esc", P1, "Escape in the frame: browse mode", key0(ESC), &["browse mode"]),
         top("IF.top4"),
-        s("IF.m.1", P1, "M: next frame, named by its title", n('m'), &["frame", "Nested level one"]).xf(NO_FRAME_NAV),
+        s("IF.m.1", P1, "M: next frame, named by its title", n('m'), &["frame", "Nested level one"]),
         s("IF.m.2", P1, "M again", n('m'), &["Nested level two"]).xf(NO_FRAME_NAV),
         s("IF.end", P1, "Ctrl+End: the last line of the outer page after all frames", ctrl(END), &["Outer paragraph after the frames"]),
         s("IF.late", P2, "A frame reloads its content: no speech", Act::Do(role::PUSH_BUTTON, "Reload late frame"), &[]).not(&["After reload text"]).win(900),
@@ -558,13 +557,13 @@ fn rd() -> Vec<Step> {
         // say-all
         top("RD.top4"),
         Step::setup("RD.sa.slow", "speech takes 120 ms per utterance from here", Act::Speak(120)),
-        s("RD.sa.start", P0, "gorca+Down: say-all reads on through paragraphs, list and heading", gorca(DOWN), &["Alpha bravo", "Kilo lima", "Uniform victor", "List item one", "Second part"]).xf(NO_SAYALL).win(9000),
+        s("RD.sa.start", P0, "gorca+Down: say-all reads on through paragraphs, list and heading", gorca(DOWN), &["Alpha bravo", "Kilo lima", "Uniform victor", "List item one", "Second part"]).win(9000),
         top("RD.top5"),
         pos("RD.sa.h", n('h')),
-        s("RD.sa.inline", P1, "Say-all reads links and tables inline", gorca(DOWN), &["link inside the sentence", "Say-all table", "Final paragraph"]).xf(NO_SAYALL).win(9000),
+        s("RD.sa.inline", P1, "Say-all reads links and tables inline", gorca(DOWN), &["link inside the sentence", "Say-all table", "Final paragraph"]).win(9000),
         top("RD.top6"),
-        s("RD.sa.start2", P0, "Say-all again", gorca(DOWN), &["Alpha bravo"]).xf(NO_SAYALL).win(900),
-        s("RD.sa.stop", P0, "Any key stops it at once: the next line only, nothing from later paragraphs", key0(DOWN), &["Kilo lima"]).not(&["Final paragraph", "Uniform victor"]).xf(NO_SAYALL).win(1500),
+        s("RD.sa.start2", P0, "Say-all again", gorca(DOWN), &["Alpha bravo"]).win(900),
+        s("RD.sa.stop", P0, "Any key stops it at once: the next line only, nothing from later paragraphs", key0(DOWN), &["Kilo lima"]).not(&["Final paragraph", "Uniform victor"]).win(1500),
         Step::setup("RD.sa.fast", "speech back to instant", Act::Speak(1)),
     ]
 }

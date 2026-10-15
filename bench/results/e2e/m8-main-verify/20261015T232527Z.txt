@@ -1,0 +1,55 @@
+# e2e-m8 m8-main-verify
+# utc=2026-10-15T23:25:27Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=12.44 11.97 12.63 3/3073 2822261
+# git_rev=43e58d7
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m8-main-verify
+# reader=daemon:<repo>/.claude/worktrees/agent-ace36bf376a4668ef/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# quick=true
+# loadavg_before=12.16 12.02 12.73 4/3062 2819734
+# loadavg_end=12.44 11.97 12.63 5/3074 2822258
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-QN.key_ms.n             daemon/voicego            9            9            9  1                  info   [samples]
+M8-QN.key_ms.p50           daemon/voicego        0.337        0.337        0.337  1                  info   [ms]
+M8-QN.key_ms.p95           daemon/voicego        0.380        0.380        0.380  1                  info   [ms]
+M8-QN.key_ms.p99           daemon/voicego        0.380        0.380        0.380  1 <=            5  PASS   [ms]
+M8-QN.key_ms.max           daemon/voicego        0.380        0.380        0.380  1                  info   [ms]
+M8-QN.fail                 daemon/voicego            0            0            0  1 <=            0  PASS  steps that fail and are not marked expected-fail [steps]
+M8-QN.gap                  daemon/voicego           21           21           21  1                  info  core ok, NVDA extras missing [steps]
+M8-QN.p0_not_pass          daemon/voicego            0            0            0  1                  info   [steps]
+M8-QN.pass                 daemon/voicego           33           33           33  1                  info   [steps]
+M8-QN.steps                daemon/voicego           68           68           68  1                  info   [steps]
+M8-QN.xfail                daemon/voicego           14           14           14  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-QN.xpass                daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]
+M8-IF.fail                 daemon/voicego            0            0            0  1 <=            0  PASS  steps that fail and are not marked expected-fail [steps]
+M8-IF.gap                  daemon/voicego            1            1            1  1                  info  core ok, NVDA extras missing [steps]
+M8-IF.p0_not_pass          daemon/voicego            0            0            0  1                  info   [steps]
+M8-IF.pass                 daemon/voicego           11           11           11  1                  info   [steps]
+M8-IF.steps                daemon/voicego           13           13           13  1                  info   [steps]
+M8-IF.xfail                daemon/voicego            1            1            1  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-IF.xpass                daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]
+M8-RD.key_ms.n             daemon/voicego            5            5            5  1                  info   [samples]
+M8-RD.key_ms.p50           daemon/voicego        0.312        0.312        0.312  1                  info   [ms]
+M8-RD.key_ms.p95           daemon/voicego        0.414        0.414        0.414  1                  info   [ms]
+M8-RD.key_ms.p99           daemon/voicego        0.414        0.414        0.414  1 <=            5  PASS   [ms]
+M8-RD.key_ms.max           daemon/voicego        0.414        0.414        0.414  1                  info   [ms]
+M8-RD.fail                 daemon/voicego            0            0            0  1 <=            0  PASS  steps that fail and are not marked expected-fail [steps]
+M8-RD.gap                  daemon/voicego            0            0            0  1                  info  core ok, NVDA extras missing [steps]
+M8-RD.p0_not_pass          daemon/voicego            2            2            2  1                  info   [steps]
+M8-RD.pass                 daemon/voicego           15           15           15  1                  info   [steps]
+M8-RD.steps                daemon/voicego           26           26           26  1                  info   [steps]
+M8-RD.xfail                daemon/voicego           11           11           11  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-RD.xpass                daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]

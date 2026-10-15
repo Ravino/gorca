@@ -416,7 +416,7 @@ fn find_role(w: &mut Web, root: &str, role: i32, name: &str) -> Result<String> {
     let r = w.ax.request(
         "find",
         &format!(
-            "\"bus\":\"{}\",\"root\":\"{root}\",\"role\":{role},\"name\":\"{name}\",\"timeout_ms\":6000",
+            "\"bus\":\"{}\",\"root\":\"{root}\",\"role\":{role},\"name\":\"{name}\",\"partial\":true,\"timeout_ms\":6000",
             w.bus
         ),
         Duration::from_secs(10),

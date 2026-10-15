@@ -1,0 +1,62 @@
+721670373807677 said "M8 Web app dialogs, document"
+721670489640114 said "browse mode, heading level 1, Mail app"
+721670666215959 said "Inbox (3), link"
+721670960223876 said "M8 Web app dialogs, document, heading level 1, Mail app"
+721671432809424 said "heading level 1, Mail app"
+721671733427725 said "button, Compose"
+721671897867792 said "To, edit"
+721672143707108 said "browse mode, To, edit, blank"
+721672396734619 said "heading level 2, New message"
+721672535187175 said "Compose, button"
+721674479599255 said "Cancel, button"
+721674730525388 said "browse mode, heading level 2, Empty trash?"
+721674861710233 said "heading level 2, Inbox"
+721675566054335 said "link, Trash"
+721676276883036 said "Empty trash, button"
+721676407503917 said "M8 Web app dialogs, document, heading level 1, Mail app"
+721676878942701 said "heading level 1, Mail app"
+721677185710881 said "focus mode, Social, tab"
+721677322740950 said "selected"
+721678030510981 said "browse mode, Delete, button"
+721679543320707 said "More actions, button"
+721679544199733 said "More actions, menu"
+bus 1 /org/a11y/atspi/accessible/63
+bus 3 /org/a11y/atspi/accessible/90
+bus 1 /org/a11y/atspi/accessible/102
+bus 1 /org/a11y/atspi/accessible/102
+bus 1 /org/a11y/atspi/accessible/63
+bus 1 /org/a11y/atspi/accessible/63
+bus 4 /org/a11y/atspi/accessible/63
+bus 4 /org/a11y/atspi/accessible/81
+bus 1 /org/a11y/atspi/accessible/115
+bus 1 /org/a11y/atspi/accessible/115
+bus 3 /org/a11y/atspi/accessible/115
+bus 4 /org/a11y/atspi/accessible/81
+bus 4 /org/a11y/atspi/accessible/63
+bus 4 /org/a11y/atspi/accessible/80
+bus 1 /org/a11y/atspi/accessible/124
+bus 1 /org/a11y/atspi/accessible/124
+bus 3 /org/a11y/atspi/accessible/81
+bus 4 /org/a11y/atspi/accessible/81
+bus 1 /org/a11y/atspi/accessible/155
+bus 1 /org/a11y/atspi/accessible/155
+bus 4 /org/a11y/atspi/accessible/81
+bus 4 /org/a11y/atspi/accessible/80
+bus 4 /org/a11y/atspi/accessible/80
+bus 1 /org/a11y/atspi/accessible/128
+bus 1 /org/a11y/atspi/accessible/128
+bus 3 /org/a11y/atspi/accessible/81
+bus 1 /org/a11y/atspi/accessible/63
+bus 1 /org/a11y/atspi/accessible/63
+bus 1 /org/a11y/atspi/accessible/142
+bus 1 /org/a11y/atspi/accessible/142
+bus 4 /org/a11y/atspi/accessible/139
+bus 4 /org/a11y/atspi/accessible/139
+bus 4 /org/a11y/atspi/accessible/80
+bus 4 /org/a11y/atspi/accessible/80
+bus 1 /org/a11y/atspi/accessible/127
+bus 1 /org/a11y/atspi/accessible/127
+bus 4 /org/a11y/atspi/accessible/126
+bus 1 /org/a11y/atspi/accessible/129
+bus 1 /org/a11y/atspi/accessible/129
+bus 1 /org/a11y/atspi/accessible/164
