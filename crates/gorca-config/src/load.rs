@@ -841,7 +841,7 @@ multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_
         assert_eq!(l.settings.keyboard.modifiers, ["Insert"]);
         assert_ne!(l.settings.text, d.text);
         assert_ne!(l.settings.browse, d.browse);
-                assert_eq!(l.settings.terminal.settle_ms, 40);
+        assert_eq!(l.settings.terminal.settle_ms, 40);
         assert_eq!(l.settings.terminal.burst_lines, 20);
         assert_eq!(l.settings.terminal.prompt_markers, ["> "]);
         assert_eq!(l.settings.terminal.prompt_regex, "^x");

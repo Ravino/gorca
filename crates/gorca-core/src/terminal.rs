@@ -342,7 +342,8 @@ impl Reader {
                     caret: w.caret,
                 }
             }
-            Ok(Reply::Unit(_) | Reply::Selections(_) | Reply::Format(_) | Reply::Done) | Err(()) => {
+            Ok(Reply::Unit(_) | Reply::Selections(_) | Reply::Format(_) | Reply::Done)
+            | Err(()) => {
                 self.text.term.reads.failed += 1;
                 TermInput::ScreenFailed
             }
