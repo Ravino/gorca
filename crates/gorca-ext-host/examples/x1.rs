@@ -57,6 +57,7 @@ fn info() -> AppInfo {
         verified_shell: false,
         dump_complete: false,
         text_unit: gorca_model::TextUnit::Scalar,
+        text_insert_slack: 0,
         root: None,
     }
 }
@@ -320,9 +321,11 @@ fn run_build(label: &str, wasm: Option<&[u8]>, n: usize) {
         // A healthy extension must never fault under load: the CPU limit is fuel, not wall time.
         let s = h.stats();
         eprintln!(
-            "{label} storm {threads}t: faults {} disabled {}",
+            "{label} storm {threads}t: faults {} disabled {} busy_skips {} busy_suppressed {}",
             s.faults - before.faults,
-            s.disabled - before.disabled
+            s.disabled - before.disabled,
+            s.busy_skips - before.busy_skips,
+            s.busy_suppressed - before.busy_suppressed
         );
     }
 }

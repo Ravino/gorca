@@ -45,6 +45,8 @@ mod bindings {
     wasmtime::component::bindgen!({
         world: "extension",
         path: "../gorca-ext-api/wit",
+        // A host function that has exhausted its call's work budget traps the guest.
+        imports: { default: trappable },
     });
 }
 
@@ -53,9 +55,24 @@ use bindings::gorca::ext::{host as wh, types as wt};
 use bindings::{Extension, ExtensionPre};
 
 /// Epoch tick of the wall-clock backstop.
-pub const TICK: Duration = Duration::from_millis(5);
-/// The backstop is this many times the CPU limit.
+pub const TICK: Duration = Duration::from_millis(1);
+/// The backstop is this many times the CPU limit. `present` runs inline on the Reader, so its
+/// backstop is tight (6 ms against the 2 ms limit; with fuel and the host-work budget below the
+/// backstop only catches what neither can see, such as a descheduled thread or a slow page
+/// fault). The other hooks run on workers or the app actor and keep a wide margin so a loaded
+/// host does not turn a preempted healthy hook into a fault.
 const BACKSTOP_FACTOR: u128 = 10;
+const BACKSTOP_FACTOR_PRESENT: u128 = 3;
+/// Most bytes (and bytes' worth of list elements) the host lifts out of guest memory in one
+/// call into the host or one hook result. wasmtime refuses the lift before copying when a string
+/// or list would exceed it ("hostcall fuel"), so a hostile length costs the host nothing.
+pub const HOSTCALL_LIFT_BYTES: usize = 64 << 10;
+/// Host-side work, in units of roughly one nanosecond (one byte copied or validated), a hook may
+/// cause per millisecond of its CPU limit. Guest fuel does not see the host's time, so every host
+/// function charges this meter and traps the guest when it runs out.
+const HOST_UNITS_PER_MS: u64 = 1_000_000;
+/// Fixed cost charged for every host call, on top of the bytes it moves.
+const HOST_CALL_UNITS: u64 = 300;
 /// Fuel per millisecond of CPU limit (see the module documentation). Calibrated on the 5.4 GHz
 /// P-cores of the dev host: a bare counting loop (about 6 operations per ns, the fastest code
 /// there is) is cut near 1 ms, typical hook code (1 to 3 operations per ns) near 2 to 6 ms.
@@ -66,7 +83,12 @@ pub const POOL_INSTANCES: u32 = 512;
 /// Epoch ticks of the wall-clock backstop for `kind`.
 fn ticks(kind: HookKind) -> u64 {
     let t = TICK.as_micros().max(1);
-    u64::try_from((kind.limit().as_micros() * BACKSTOP_FACTOR).div_ceil(t)).unwrap_or(u64::MAX)
+    let factor = if kind == HookKind::Present {
+        BACKSTOP_FACTOR_PRESENT
+    } else {
+        BACKSTOP_FACTOR
+    };
+    u64::try_from((kind.limit().as_micros() * factor).div_ceil(t)).unwrap_or(u64::MAX)
 }
 
 /// Fuel for one call of `kind`.
@@ -74,6 +96,13 @@ fn fuel(kind: HookKind) -> u64 {
     u64::try_from(kind.limit().as_millis())
         .unwrap_or(u64::MAX)
         .saturating_mul(FUEL_PER_MS)
+}
+
+/// Host work budget of one call of `kind`.
+fn host_units(kind: HookKind) -> u64 {
+    u64::try_from(kind.limit().as_millis())
+        .unwrap_or(u64::MAX)
+        .saturating_mul(HOST_UNITS_PER_MS)
 }
 
 /// The wasmtime engine and its epoch ticker.
@@ -188,10 +217,15 @@ impl WasmModule {
             &self.engine.engine,
             StoreData {
                 shared,
-                limiter: Limiter::default(),
+                limiter: Limiter {
+                    denied: false,
+                    allowance: api::LIMIT_MEMORY_BYTES,
+                },
+                work: HostWork::new(host_units(HookKind::Command)),
             },
         );
         store.limiter(|d| &mut d.limiter);
+        store.set_hostcall_fuel(HOSTCALL_LIFT_BYTES);
         // Instantiation runs the start function: bound it like a command.
         store.set_epoch_deadline(ticks(HookKind::Command));
         store.set_fuel(fuel(HookKind::Command))?;
@@ -205,6 +239,19 @@ impl WasmModule {
 #[derive(Debug, Default)]
 struct Limiter {
     denied: bool,
+    /// Bytes of growth this call may still ask for (see [`growth_allowance`]).
+    allowance: usize,
+}
+
+/// Fresh linear memory a hook call may claim. Fuel does not see the page faults of touching new
+/// memory (16 MiB costs the calling thread about 5 ms), so a hook that is supposed to take
+/// microseconds may grow by 1 MiB per call; commands and instantiation may use the whole cap.
+fn growth_allowance(kind: HookKind) -> usize {
+    if kind == HookKind::Command {
+        api::LIMIT_MEMORY_BYTES
+    } else {
+        1 << 20
+    }
 }
 
 const MAX_TABLE_ELEMENTS: usize = 10_000;
@@ -212,14 +259,16 @@ const MAX_TABLE_ELEMENTS: usize = 10_000;
 impl ResourceLimiter for Limiter {
     fn memory_growing(
         &mut self,
-        _current: usize,
+        current: usize,
         desired: usize,
         _maximum: Option<usize>,
     ) -> wasmtime::Result<bool> {
-        if desired > api::LIMIT_MEMORY_BYTES {
+        let delta = desired.saturating_sub(current);
+        if desired > api::LIMIT_MEMORY_BYTES || delta > self.allowance {
             self.denied = true;
             return Ok(false);
         }
+        self.allowance -= delta;
         Ok(true)
     }
 
@@ -246,6 +295,38 @@ impl ResourceLimiter for Limiter {
 pub struct StoreData {
     shared: Arc<InstShared>,
     limiter: Limiter,
+    work: HostWork,
+}
+
+/// The host-side work meter of the running call (see [`HOST_UNITS_PER_MS`]).
+#[derive(Debug)]
+struct HostWork {
+    used: u64,
+    limit: u64,
+    exhausted: bool,
+}
+
+impl HostWork {
+    fn new(limit: u64) -> Self {
+        Self {
+            used: 0,
+            limit,
+            exhausted: false,
+        }
+    }
+
+    /// Charge one host call that moves `bytes`; an error traps the guest.
+    fn charge(&mut self, bytes: usize) -> wasmtime::Result<()> {
+        self.used = self
+            .used
+            .saturating_add(HOST_CALL_UNITS)
+            .saturating_add(u64::try_from(bytes).unwrap_or(u64::MAX));
+        if self.used > self.limit {
+            self.exhausted = true;
+            wasmtime::bail!("host work budget exhausted");
+        }
+        Ok(())
+    }
 }
 
 pub struct WasmInstance {
@@ -265,6 +346,9 @@ fn classify(store: &Store<StoreData>, e: &wasmtime::Error) -> Fault {
     if store.data().limiter.denied {
         return Fault::Memory;
     }
+    if store.data().work.exhausted {
+        return Fault::Timeout;
+    }
     match e.downcast_ref::<Trap>() {
         Some(Trap::OutOfFuel | Trap::Interrupt) => Fault::Timeout,
         Some(t) => Fault::Trap(t.to_string()),
@@ -279,6 +363,8 @@ impl WasmInstance {
         f: impl FnOnce(&wk::Guest, &mut Store<StoreData>) -> wasmtime::Result<R>,
     ) -> Result<R, Fault> {
         self.store.data().shared.begin_call();
+        self.store.data_mut().work = HostWork::new(host_units(kind));
+        self.store.data_mut().limiter.allowance = growth_allowance(kind);
         self.store.set_epoch_deadline(ticks(kind));
         // A store that cannot be refuelled is broken: report it as a fault, never panic.
         if let Err(e) = self.store.set_fuel(fuel(kind)) {
@@ -398,8 +484,10 @@ impl HookInstance for WasmInstance {
 impl wt::Host for StoreData {}
 
 impl wh::Host for StoreData {
-    fn get_node(&mut self, key: wt::NodeKey) -> Option<wt::Node> {
-        self.shared.get_node(key).map(|n| node_to_wit(&n))
+    fn get_node(&mut self, key: wt::NodeKey) -> wasmtime::Result<Option<wt::Node>> {
+        let n = self.shared.get_node(key);
+        self.work.charge(n.as_ref().map_or(0, node_bytes))?;
+        Ok(n.map(|n| node_to_wit(&n)))
     }
 
     fn fetch(
@@ -407,8 +495,9 @@ impl wh::Host for StoreData {
         _key: wt::NodeKey,
         _mask: u32,
         _b: wt::Budget,
-    ) -> Result<wt::Node, wt::QueryError> {
-        Err(query_error_to_wit(self.shared.fetch_error()))
+    ) -> wasmtime::Result<Result<wt::Node, wt::QueryError>> {
+        self.work.charge(0)?;
+        Ok(Err(query_error_to_wit(self.shared.fetch_error())))
     }
 
     fn text(
@@ -417,11 +506,15 @@ impl wh::Host for StoreData {
         _start: u32,
         _end: u32,
         _b: wt::Budget,
-    ) -> Result<String, wt::QueryError> {
-        Err(query_error_to_wit(self.shared.fetch_error()))
+    ) -> wasmtime::Result<Result<String, wt::QueryError>> {
+        self.work.charge(0)?;
+        Ok(Err(query_error_to_wit(self.shared.fetch_error())))
     }
 
-    fn speak(&mut self, segments: Vec<wt::Segment>, prio: wt::Prio) {
+    fn speak(&mut self, segments: Vec<wt::Segment>, prio: wt::Prio) -> wasmtime::Result<()> {
+        // The lift is already done (and bounded by the hostcall fuel): charge what it cost.
+        self.work
+            .charge(segments.iter().map(|s| s.text.len() + 16).sum())?;
         let segs: Vec<api::Segment> = segments.into_iter().map(segment_to_api).collect();
         let prio = match prio {
             wt::Prio::Interrupt => api::Prio::Interrupt,
@@ -431,19 +524,29 @@ impl wh::Host for StoreData {
             wt::Prio::Notification => api::Prio::Notification,
         };
         self.shared.speak(&segs, prio);
+        Ok(())
     }
 
-    fn get_setting(&mut self, k: String) -> Option<String> {
-        self.shared.get_setting(&k)
+    fn get_setting(&mut self, k: String) -> wasmtime::Result<Option<String>> {
+        self.work.charge(k.len())?;
+        Ok(self.shared.get_setting(&k))
     }
 
-    fn set_setting(&mut self, k: String, v: String) {
+    fn set_setting(&mut self, k: String, v: String) -> wasmtime::Result<()> {
+        self.work.charge(k.len() + v.len())?;
         self.shared.set_setting(&k, &v);
+        Ok(())
     }
 
-    fn log(&mut self, level: u8, msg: String) {
+    fn log(&mut self, level: u8, msg: String) -> wasmtime::Result<()> {
+        self.work.charge(msg.len())?;
         self.shared.log(level, &msg);
+        Ok(())
     }
+}
+
+fn node_bytes(n: &api::Node) -> usize {
+    n.name.as_ref().map_or(0, String::len) + n.description.as_ref().map_or(0, String::len) + 32
 }
 
 fn query_error_to_wit(e: api::QueryError) -> wt::QueryError {

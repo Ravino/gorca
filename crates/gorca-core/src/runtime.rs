@@ -373,12 +373,19 @@ impl Core {
     /// [`Core::run`].
     #[must_use]
     pub fn with_ext(mut self, src: Arc<dyn crate::ExtSource>) -> Self {
-        if let Some(sh) = Arc::get_mut(&mut self.shared) {
-            src.set_sink(Arc::new(crate::ext::BackgroundSink::new(
-                sh.senders.background.clone(),
-            )));
-            sh.ext = Some(src);
-        }
+        let Some(sh) = Arc::get_mut(&mut self.shared) else {
+            // A silent no-op would load extensions that never run.
+            tracing::error!("Core::with_ext called after the shared state was cloned: ignored");
+            debug_assert!(
+                false,
+                "Core::with_ext must run before anything clones the shared state"
+            );
+            return self;
+        };
+        src.set_sink(Arc::new(crate::ext::BackgroundSink::new(
+            sh.senders.background.clone(),
+        )));
+        sh.ext = Some(src);
         self
     }
 

@@ -161,6 +161,23 @@ fn ext_bound(id: CmdId, s: &ExtCmdSpec) -> Bound {
     }
 }
 
+/// The chords taken so far, by resolved identity.
+#[derive(Default)]
+struct Mentioned {
+    resolved: std::collections::HashSet<(ChordKey, u8)>,
+    unresolved: std::collections::HashSet<ChordSpec>,
+}
+
+impl Mentioned {
+    /// False when an equivalent chord was already present.
+    fn insert(&mut self, spec: &ChordSpec, resolver: &dyn KeyResolver) -> bool {
+        match chord_key(spec, resolver) {
+            Some(k) => self.resolved.insert((k, spec.presses)),
+            None => self.unresolved.insert(spec.clone()),
+        }
+    }
+}
+
 /// Compile a loaded configuration for the input lane, with the extension commands installed for
 /// the process (`ExtCommands::install`).
 pub fn compile(loaded: &Loaded, facts: &PlatformFacts, resolver: &dyn KeyResolver) -> Compiled {
@@ -178,13 +195,18 @@ pub fn compile_with(
     // Chords the preset or the user mention in *any* context: a context table is consulted before
     // `global`, so an extension chord in `focus` would shadow a core `global` binding of the
     // same chord. Precedence is user > core preset > extension.
-    let mut mentioned: std::collections::HashSet<ChordSpec> = std::collections::HashSet::new();
+    //
+    // Chords are compared by what the resolver makes of them (key, modifiers, press count), not
+    // by the key name as written: `enter`/`return`, `page_up`/`prior`, `kp_1`/`kp_end` are one
+    // key. A chord whose key name does not resolve cannot bind anything, so it is compared by
+    // spelling only to keep the diagnostics deterministic.
+    let mut mentioned = Mentioned::default();
     let (mods, caps_lock_dropped) = gorca_modifiers(&loaded.settings, facts);
     let mut km = CompiledKeymap::new(mods);
     let mut diags = Vec::new();
     for (ctx, chords) in &loaded.keymap.contexts {
         for (spec, binding) in chords {
-            mentioned.insert(spec.clone());
+            mentioned.insert(spec, resolver);
             let path = format!("keymap.{}.\"{spec}\"", ctx.name());
             let Some(key) = chord_key(spec, resolver) else {
                 diags.push(Diag::error(
@@ -240,7 +262,7 @@ pub fn compile_with(
     // mentioned, tombstones included.
     if let Some(ext) = ext {
         for (ctx, chord, id, spec) in ext.default_bindings() {
-            if !mentioned.insert(chord.clone()) {
+            if !mentioned.insert(chord, resolver) {
                 // Taken by the preset, the user (a tombstone counts) or an earlier extension.
                 tracing::warn!(
                     ext = %spec.ext,
@@ -1011,5 +1033,82 @@ mod tests {
                 .any(|ch| ch.keysym == 0x6d2 && ch.modifiers.is_empty())
         );
         assert!(grab_collisions(&c.keymap, ModeKind::Browse, &t).is_empty());
+    }
+
+    /// Regression for review finding H-1: an extension default chord spelled with a key alias of a
+    /// preset chord must not replace the core binding (reviewer's probe, 0 replacements expected).
+    #[test]
+    fn extension_alias_chords_never_shadow_core_chords() {
+        use super::super::spec::ContextMask;
+        let aliases: &[(&str, &str)] = &[
+            ("return", "enter"),
+            ("prior", "page_up"),
+            ("next", "page_down"),
+            ("escape", "esc"),
+            ("kp_end", "kp_1"),
+            ("kp_home", "kp_7"),
+            ("kp_prior", "kp_9"),
+            ("kp_next", "kp_3"),
+            ("kp_insert", "kp_0"),
+            ("kp_down", "kp_2"),
+            ("kp_up", "kp_8"),
+            ("kp_left", "kp_4"),
+            ("kp_right", "kp_6"),
+            ("kp_begin", "kp_5"),
+            ("kp_delete", "kp_decimal"),
+            ("equal", "plus"),
+        ];
+        let mut shadowed = Vec::new();
+        for text in [
+            "",
+            "[keyboard]\npreset=\"orca\"\n",
+            "[keyboard]\nlayout=\"laptop\"\n",
+        ] {
+            let l = load(Some(text), &Presets::builtin());
+            for (ctx, spec, cmd) in l.keymap.bound() {
+                if !spec.gorca {
+                    continue;
+                }
+                let Some(alias) = aliases
+                    .iter()
+                    .find(|(k, _)| *k == spec.key)
+                    .map(|(_, a)| *a)
+                else {
+                    continue;
+                };
+                let mut hostile = spec.clone();
+                hostile.key = alias.to_owned();
+                let mut r = ExtCommands::new();
+                r.register(ExtCmdSpec {
+                    name: "ext.evil.grab".to_owned(),
+                    ext: "evil".to_owned(),
+                    local: 1,
+                    help: "h".to_owned(),
+                    contexts: ContextMask::ANY,
+                    max_press: 3,
+                    interrupts: true,
+                })
+                .unwrap();
+                r.bind(ctx, &hostile.to_string(), "ext.evil.grab").unwrap();
+                let evil = r.by_name("ext.evil.grab").unwrap().0;
+                let c = compile_with(&l, &PlatformFacts::default(), &StaticResolver, Some(&r));
+                let k = chord_key(spec, &StaticResolver).unwrap();
+                for mode in [ModeKind::Focus, ModeKind::Browse, ModeKind::Review] {
+                    if c.keymap.lookup(mode, k, spec.presses).map(|b| b.cmd) == Some(evil) {
+                        shadowed.push(format!(
+                            "{ctx:?} {spec} ({cmd}) <- ext `{hostile}` in {mode:?}"
+                        ));
+                    }
+                }
+            }
+        }
+        shadowed.sort();
+        shadowed.dedup();
+        assert!(
+            shadowed.is_empty(),
+            "extension alias chords replaced {} core bindings:\n{}",
+            shadowed.len(),
+            shadowed.join("\n")
+        );
     }
 }

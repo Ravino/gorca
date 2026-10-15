@@ -21,7 +21,7 @@ use crate::kv::SettingsKv;
 use crate::manifest::{ExtBackend, HookSet, Manifest, order_matching};
 use crate::manifest_file::MAX_MANIFEST_BYTES;
 use crate::native::NativeFactory;
-use crate::slot::{Factory, Job, LoadedExt, Slot};
+use crate::slot::{Decision, Factory, Job, LoadedExt, Outcome, Slot};
 use crate::wasm::{ExtEngine, WasmModule};
 
 /// Largest component the loader reads.
@@ -309,6 +309,14 @@ impl ExtHost {
             .all(|a| a.slots.iter().all(|s| !s.is_rebuilding()))
     }
 
+    /// The slots of one application (tests and the debug probe).
+    pub fn slots_of(&self, app: AppId) -> Vec<Arc<Slot>> {
+        self.read_apps()
+            .get(&app)
+            .map(|a| a.slots.clone())
+            .unwrap_or_default()
+    }
+
     pub fn extension_names(&self) -> impl Iterator<Item = &str> {
         self.manifests.iter().map(|m| m.name.as_str())
     }
@@ -361,6 +369,16 @@ impl ExtHost {
 
 impl Drop for ExtHost {
     fn drop(&mut self) {
+        let st = self.stats.snapshot();
+        if st.busy_skips > 0 || st.faults > 0 || st.commands_dropped > 0 {
+            tracing::info!(
+                busy_skips = st.busy_skips,
+                busy_suppressed = st.busy_suppressed,
+                faults = st.faults,
+                commands_dropped = st.commands_dropped,
+                "extension host stopped"
+            );
+        }
         // The apps hold clones of the sender, so the queue cannot close by itself: ask the worker
         // to stop. It flushes the settings on the way out.
         self.stopping
@@ -489,6 +507,21 @@ fn present_reason(ctx: PresentContext) -> api::PresentReason {
     }
 }
 
+/// Index of the event's kind, for the slot's per-kind last decision.
+fn event_kind(e: &api::Event) -> usize {
+    match e {
+        api::Event::FocusChanged(_) => 0,
+        api::Event::PropertiesChanged(..) => 1,
+        api::Event::ChildrenChanged(_) => 2,
+        api::Event::TextChanged(_) => 3,
+        api::Event::CaretMoved(..) => 4,
+        api::Event::SelectionChanged(_) => 5,
+        api::Event::Announcement(_) => 6,
+        api::Event::WindowActivated(_) => 7,
+        api::Event::NodeRemoved(_) => 8,
+    }
+}
+
 impl AppExt for AppExts {
     fn on_event(&self, ev: &NodeEvent) -> ExtVerdict {
         let Some(e) = event_to_ext(ev) else {
@@ -499,9 +532,14 @@ impl AppExt for AppExts {
             if !slot.manifest().hooks.contains(HookSet::ON_EVENT) {
                 continue;
             }
-            let v = match slot.call(HookKind::OnEvent, false, |i| i.on_event(&e)) {
-                Some(api::EventVerdict::Suppress) => ExtVerdict::Suppress,
-                Some(api::EventVerdict::Rewrite(s)) => {
+            let kind = event_kind(&e);
+            let v = match slot.call_outcome(HookKind::OnEvent, false, |i| i.on_event(&e)) {
+                Outcome::Done(api::EventVerdict::Suppress) => {
+                    slot.record_decision(kind, Decision::Consume);
+                    ExtVerdict::Suppress
+                }
+                Outcome::Done(api::EventVerdict::Rewrite(s)) => {
+                    slot.record_decision(kind, Decision::Consume);
                     // Over its speech budget the rewrite still consumes the event, silently.
                     if slot.allow_speech() {
                         ExtVerdict::Rewrite(segments_from_ext(s))
@@ -509,8 +547,23 @@ impl AppExt for AppExts {
                         ExtVerdict::Suppress
                     }
                 }
-                Some(api::EventVerdict::ReEvaluate) => ExtVerdict::ReEvaluate,
-                Some(api::EventVerdict::Pass) | None => ExtVerdict::Pass,
+                Outcome::Done(api::EventVerdict::ReEvaluate) => ExtVerdict::ReEvaluate,
+                Outcome::Done(api::EventVerdict::Pass) => {
+                    slot.record_decision(kind, Decision::Pass);
+                    ExtVerdict::Pass
+                }
+                Outcome::Busy => {
+                    // See `Decision`: repeat the last decision for this kind of event.
+                    if slot.last_decision(kind) == Decision::Consume {
+                        self.stats
+                            .busy_suppressed
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        ExtVerdict::Suppress
+                    } else {
+                        ExtVerdict::Pass
+                    }
+                }
+                Outcome::Unavailable => ExtVerdict::Pass,
             };
             verdict = verdict.then(v);
             if verdict != ExtVerdict::Pass {

@@ -5,7 +5,7 @@
 //! notice (ADR-0001 section 10, ADR-0008 section 3.3). A slot never lets a fault out: callers see
 //! `None`, which is the same as "this extension has no opinion".
 
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::SyncSender;
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError, TryLockError, Weak};
 use std::time::Instant;
@@ -78,13 +78,10 @@ impl LoadedExt {
             "extension disabled for every application after repeated failures"
         );
         if let Some(s) = sink.get() {
-            s.speak(
-                format!(
-                    "Extension {} disabled",
-                    self.manifest.name.replace(['-', '_'], " ")
-                ),
-                false,
-            );
+            s.notice(format!(
+                "Extension {} disabled",
+                self.manifest.name.replace(['-', '_'], " ")
+            ));
         }
         true
     }
@@ -113,6 +110,53 @@ pub(crate) enum Job {
         old: Option<Box<dyn HookInstance>>,
     },
     Stop,
+}
+
+/// Event kinds the slot remembers a decision for (see `host::event_kind`).
+pub(crate) const EVENT_KINDS: usize = 9;
+/// The busy warning is written at most this often per slot.
+const BUSY_LOG_EVERY_MS: u64 = 10_000;
+
+/// Milliseconds since the first call in the process (never 0).
+fn busy_clock_ms() -> u64 {
+    static T0: OnceLock<Instant> = OnceLock::new();
+    let t0 = T0.get_or_init(Instant::now);
+    u64::try_from(t0.elapsed().as_millis())
+        .unwrap_or(u64::MAX)
+        .saturating_add(1)
+}
+
+/// What a non-blocking call found.
+pub(crate) enum Outcome<R> {
+    Done(R),
+    /// The slot's lock was held (a command or a rebuild is running).
+    Busy,
+    /// Disabled, being rebuilt, or the call faulted.
+    Unavailable,
+}
+
+/// What the extension last did with an event of one kind.
+///
+/// While a slot is busy its hook cannot run, and falling back to the core's own speech would
+/// say what the extension has been replacing (double speech next to the extension's own
+/// output). So a busy slot repeats its last decision for that kind of event: it stays silent
+/// where the extension had suppressed or rewritten (the rewrite text is not reproducible), and
+/// passes where the extension passed.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u8)]
+pub(crate) enum Decision {
+    Pass = 0,
+    Consume = 1,
+}
+
+impl Decision {
+    fn from_u8(v: u8) -> Self {
+        if v == Decision::Consume as u8 {
+            Decision::Consume
+        } else {
+            Decision::Pass
+        }
+    }
 }
 
 /// Commands one slot may have queued or running; more are dropped (a command is a user key press,
@@ -144,6 +188,10 @@ pub struct Slot {
     disabled: AtomicBool,
     rebuilding: AtomicBool,
     pending_commands: AtomicU32,
+    /// Last decision per event kind (a verdict class), used when the slot is busy.
+    decisions: [AtomicU8; EVENT_KINDS],
+    /// When the busy log line was last written, in ms of [`busy_clock_ms`] (0: never).
+    busy_logged_ms: AtomicU64,
     me: Weak<Slot>,
     jobs: SyncSender<Job>,
     stats: Arc<ExtStats>,
@@ -192,6 +240,8 @@ impl Slot {
             disabled: AtomicBool::new(false),
             rebuilding: AtomicBool::new(false),
             pending_commands: AtomicU32::new(0),
+            decisions: std::array::from_fn(|_| AtomicU8::new(Decision::Pass as u8)),
+            busy_logged_ms: AtomicU64::new(0),
             me: me.clone(),
             jobs,
             stats,
@@ -213,7 +263,7 @@ impl Slot {
     }
 
     pub fn health(&self) -> InstanceHealth {
-        if self.disabled.load(Ordering::Acquire) {
+        if self.disabled.load(Ordering::Acquire) || self.ext.is_disabled() {
             InstanceHealth::Disabled
         } else {
             InstanceHealth::Active
@@ -248,6 +298,12 @@ impl Slot {
         self.pending_commands.fetch_sub(1, Ordering::AcqRel);
     }
 
+    /// Hold the slot's lock, as a running command does (tests).
+    #[doc(hidden)]
+    pub fn hold_for_test(&self) -> MutexGuard<'_, impl Sized> {
+        self.inner.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
     fn lock(&self, blocking: bool) -> Option<MutexGuard<'_, SlotInner>> {
         if blocking {
             return Some(self.inner.lock().unwrap_or_else(PoisonError::into_inner));
@@ -256,9 +312,43 @@ impl Slot {
             Ok(g) => Some(g),
             Err(TryLockError::Poisoned(p)) => Some(p.into_inner()),
             Err(TryLockError::WouldBlock) => {
-                self.stats.busy_skips.fetch_add(1, Ordering::Relaxed);
+                self.note_busy();
                 None
             }
+        }
+    }
+
+    /// A non-blocking call found the slot busy (a command or a rebuild holds it). Counted, and
+    /// logged at most once per [`BUSY_LOG_EVERY`] per slot so a storm cannot flood the log.
+    fn note_busy(&self) {
+        let total = self.stats.busy_skips.fetch_add(1, Ordering::Relaxed) + 1;
+        let now = busy_clock_ms();
+        let last = self.busy_logged_ms.load(Ordering::Relaxed);
+        if (last == 0 || now.saturating_sub(last) >= BUSY_LOG_EVERY_MS)
+            && self
+                .busy_logged_ms
+                .compare_exchange(last, now.max(1), Ordering::AcqRel, Ordering::Relaxed)
+                .is_ok()
+        {
+            tracing::warn!(
+                ext = self.name(),
+                app = &*self.app_label,
+                busy_skips_total = total,
+                "extension slot busy: hook calls skipped while a command or rebuild holds it"
+            );
+        }
+    }
+
+    /// The last decision the extension made for events of `kind` (see [`Decision`]).
+    pub(crate) fn last_decision(&self, kind: usize) -> Decision {
+        self.decisions.get(kind).map_or(Decision::Pass, |d| {
+            Decision::from_u8(d.load(Ordering::Relaxed))
+        })
+    }
+
+    pub(crate) fn record_decision(&self, kind: usize, d: Decision) {
+        if let Some(a) = self.decisions.get(kind) {
+            a.store(d as u8, Ordering::Relaxed);
         }
     }
 
@@ -270,16 +360,33 @@ impl Slot {
         blocking: bool,
         f: impl FnOnce(&mut dyn HookInstance) -> Result<R, Fault>,
     ) -> Option<R> {
-        if self.disabled.load(Ordering::Acquire) {
-            return None;
+        match self.call_outcome(kind, blocking, f) {
+            Outcome::Done(v) => Some(v),
+            Outcome::Busy | Outcome::Unavailable => None,
         }
-        let mut inner = self.lock(blocking)?;
+    }
+
+    /// [`call`](Self::call), telling a busy slot from one that has no answer to give.
+    pub(crate) fn call_outcome<R>(
+        &self,
+        kind: HookKind,
+        blocking: bool,
+        f: impl FnOnce(&mut dyn HookInstance) -> Result<R, Fault>,
+    ) -> Outcome<R> {
+        // An extension disabled as a whole stops in every application it is attached to, at once:
+        // slots that were already attached do not get a fresh allowance of faults.
+        if self.disabled.load(Ordering::Acquire) || self.ext.is_disabled() {
+            return Outcome::Unavailable;
+        }
+        let Some(mut inner) = self.lock(blocking) else {
+            return Outcome::Busy;
+        };
         if inner.inst.is_none() {
             if blocking {
                 // A worker thread: building here is allowed (and is what the pending rebuild
                 // job would do next).
                 if !self.ensure_instance(&mut inner) {
-                    return None;
+                    return Outcome::Unavailable;
                 }
             } else {
                 drop(inner);
@@ -287,16 +394,18 @@ impl Slot {
                 if !self.rebuilding.load(Ordering::Acquire) {
                     self.schedule_rebuild(None, Instant::now());
                 }
-                return None;
+                return Outcome::Unavailable;
             }
         }
-        let inst = inner.inst.as_mut()?;
+        let Some(inst) = inner.inst.as_mut() else {
+            return Outcome::Unavailable;
+        };
         self.stats.hook_calls.fetch_add(1, Ordering::Relaxed);
         match f(inst.as_mut()) {
-            Ok(v) => Some(v),
+            Ok(v) => Outcome::Done(v),
             Err(fault) => {
                 self.on_fault(&mut inner, &fault, kind);
-                None
+                Outcome::Unavailable
             }
         }
     }
@@ -404,14 +513,11 @@ impl Slot {
         );
         // The user is told once.
         if let Some(sink) = self.sink.get() {
-            sink.speak(
-                format!(
-                    "Extension {} disabled for {}",
-                    self.name().replace(['-', '_'], " "),
-                    self.app_label
-                ),
-                false,
-            );
+            sink.notice(format!(
+                "Extension {} disabled for {}",
+                self.name().replace(['-', '_'], " "),
+                self.app_label
+            ));
         }
     }
 }

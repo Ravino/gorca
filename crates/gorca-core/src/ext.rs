@@ -75,6 +75,13 @@ pub trait AppExt: Send + Sync + fmt::Debug {
 pub trait ExtSink: Send + Sync + fmt::Debug {
     /// `interrupt` is true for answers to a user command, false for notices.
     fn speak(&self, text: String, interrupt: bool);
+    /// A notice the user must hear exactly once (an extension was disabled). Unlike [`speak`],
+    /// an implementation must not drop it when its lane is momentarily full.
+    ///
+    /// [`speak`]: ExtSink::speak
+    fn notice(&self, text: String) {
+        self.speak(text, false);
+    }
 }
 
 /// The host's view for the core: which extensions apply to which application.
@@ -101,7 +108,42 @@ impl BackgroundSink {
     }
 }
 
+/// Retry threads for notices that found the lane full; notices are rare, the cap keeps a flood
+/// of disabled slots from spawning threads without bound.
+const MAX_NOTICE_RETRIES: usize = 4;
+static NOTICE_RETRIES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 impl ExtSink for BackgroundSink {
+    fn notice(&self, text: String) {
+        use std::sync::atomic::Ordering;
+        let msg = crate::BackgroundMsg::ExtSpeech {
+            text: Arc::from(text),
+            interrupt: false,
+        };
+        let msg = match self.tx.try_send(msg) {
+            Ok(()) | Err(gorca_rt::mpsc::error::TrySendError::Closed(_)) => return,
+            Err(gorca_rt::mpsc::error::TrySendError::Full(m)) => m,
+        };
+        // The lane is full: wait for room on a thread of its own, never on the caller's.
+        if NOTICE_RETRIES.fetch_add(1, Ordering::AcqRel) >= MAX_NOTICE_RETRIES {
+            NOTICE_RETRIES.fetch_sub(1, Ordering::AcqRel);
+            tracing::warn!("extension notice dropped: the lane is full and retries are busy");
+            return;
+        }
+        let tx = self.tx.clone();
+        #[allow(clippy::disallowed_methods)]
+        let spawned = std::thread::Builder::new()
+            .name("gorca-ext-notice".to_owned())
+            .spawn(move || {
+                // `blocking_send` returns once there is room, or when the Reader is gone.
+                let _ = tx.blocking_send(msg);
+                NOTICE_RETRIES.fetch_sub(1, Ordering::AcqRel);
+            });
+        if spawned.is_err() {
+            NOTICE_RETRIES.fetch_sub(1, Ordering::AcqRel);
+        }
+    }
+
     fn speak(&self, text: String, interrupt: bool) {
         // A full lane drops the notice: extension speech is never worth stalling anyone.
         let _ = self.tx.try_send(crate::BackgroundMsg::ExtSpeech {

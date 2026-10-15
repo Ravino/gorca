@@ -87,8 +87,12 @@ pub struct ExtStats {
     pub faults: AtomicU64,
     pub resets: AtomicU64,
     pub disabled: AtomicU64,
-    /// `present` calls answered by the core because the slot was busy.
+    /// Non-blocking hook calls (`present`, `on_event`) that found their slot busy (a command or
+    /// a rebuild held it) and did not run.
     pub busy_skips: AtomicU64,
+    /// Of those, events consumed anyway because the extension's last decision for that kind of
+    /// event was suppress or rewrite (a busy slot never leaks the core's duplicate speech).
+    pub busy_suppressed: AtomicU64,
     /// Slowest reset (detection excluded): fault to a working instance, in nanoseconds.
     pub max_reset_ns: AtomicU64,
     /// Commands dropped because the worker queue was full.
@@ -109,6 +113,7 @@ pub struct ExtStatsSnapshot {
     pub resets: u64,
     pub disabled: u64,
     pub busy_skips: u64,
+    pub busy_suppressed: u64,
     pub max_reset_ns: u64,
     pub commands_dropped: u64,
     pub attach_skipped: u64,
@@ -126,6 +131,7 @@ impl ExtStats {
             resets: g(&self.resets),
             disabled: g(&self.disabled),
             busy_skips: g(&self.busy_skips),
+            busy_suppressed: g(&self.busy_suppressed),
             max_reset_ns: g(&self.max_reset_ns),
             commands_dropped: g(&self.commands_dropped),
             attach_skipped: g(&self.attach_skipped),
@@ -259,7 +265,8 @@ impl InstShared {
         if self.speaks.fetch_add(1, Ordering::Relaxed) >= MAX_SPEAKS_PER_CALL {
             return;
         }
-        // Never copy a hostile list whole: the iterator stops at the caps.
+        // The WASM backend refuses oversize lifts before copying (hostcall fuel); the clip here
+        // bounds what a native extension can pass.
         let segs = crate::convert::segments_from_iter(segments.iter().take(64).cloned());
         let text = gorca_core::segments_text(&segs);
         if text.is_empty() || !self.allow_speech() {

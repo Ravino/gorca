@@ -59,7 +59,7 @@ landed); the numbers above are from the final head only.
    looping/crashing/OOMing fresh applications, flooding looping commands, and storming events, the real
    `Reader::handle` for a core command key stays at p50 5.0 us / p99 30 us (baseline 4.1 / 26 us).
 4. **Remaining inline cost**, by design (ADR: `present` is inline in the Reader): the first faulting
-   `present` runs up to its fuel limit in the Reader (measured 0.35 ms worst for a bare loop in 20 focus
+   `present` runs up to its fuel limit in the Reader (measured 0.35 ms worst for a bare loop only; host-side attacks are in section 7 in 20 focus
    changes; budget 2 ms of CPU, calibrated fuel is 3M per ms), three times at most per application.
 5. **WASI**: `wasmtime-wasi` is not used. It would call tokio `block_on` from inside the app actor's
    runtime and grant ambient capability. The host links only `wasi:random/*` and `wasi:clocks/*` (pure).

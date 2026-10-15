@@ -454,11 +454,29 @@ fn instances_that_cannot_be_built_count_and_end_in_a_global_disable() {
     let said = sink.all();
     assert_eq!(said.len(), 1, "{said:?}");
     assert_eq!(said[0].0, "Extension ext test disabled");
-    // Instances already running keep working.
-    assert_eq!(
-        kept[0].on_event(&announce("suppress")),
-        ExtVerdict::Suppress
-    );
+    // Review M-2: an extension disabled as a whole stops in the applications it is already
+    // attached to, at once, with no fresh allowance of faults per slot.
+    assert_eq!(kept[0].on_event(&announce("suppress")), ExtVerdict::Pass);
+    assert_eq!(h.stats().faults, 0);
+}
+
+#[test]
+fn a_busy_slot_repeats_its_last_decision_and_counts_the_skip() {
+    // A command holds the slot's lock while it runs (up to its CPU limit); events arriving
+    // meanwhile must neither run nor leak the core's duplicate speech.
+    let (h, _sink, _) = host(Backend::Wasm);
+    let ae = attach(&h, 1, "x");
+    // The extension suppressed announcements last: a busy slot keeps suppressing them.
+    assert_eq!(ae.on_event(&announce("suppress")), ExtVerdict::Suppress);
+    let before = h.stats();
+    let slot = h.slots_of(app(1)).into_iter().next().expect("slot");
+    let busy = slot.hold_for_test();
+    assert_eq!(ae.on_event(&announce("hello")), ExtVerdict::Suppress);
+    drop(busy);
+    let after = h.stats();
+    assert_eq!(after.busy_skips, before.busy_skips + 1);
+    assert_eq!(after.busy_suppressed, before.busy_suppressed + 1);
+    assert_eq!(ae.on_event(&announce("hello")), ExtVerdict::Pass);
 }
 
 #[test]
