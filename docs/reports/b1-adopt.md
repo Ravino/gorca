@@ -210,7 +210,48 @@ Earlier gates (before the review fixes):
 * The 23.5 calls/focus are measured on the fake apps, not on a live desktop.
 * L1c p99 ratio is 1.18x R0 in the final session at load ~10 (1.04x in the low-load invalid
   session): close to the 1.2x limit, noisy under load.
-* After one failed RV-1 retry a cross-app cached focus stays unprotected until the next focus
-  (no earning from a later `StateChanged` with `FOCUSED`).
+* ~~After one failed RV-1 retry a cross-app cached focus stays unprotected until the next focus~~
+  closed by RR-2 (section 8).
 * F-6 is solved by clamping, not by request ids; a future driver that rewrites ops another way
   would need the id.
+
+## 8. Re-review fixes (`docs/reports/b1-adopt-rereview.md`, RR-1..RR-3)
+
+Head `3d09a7e` (code), rebased on main `6fc592b`.
+
+| Finding | Fix | Regression test |
+|---|---|---|
+| RR-1 (medium) | A timed-out re-read is never retried, and no RV-1 follows a Focus *Timeout*; other failures (Busy, Protocol) retry once and only while the app's protection is unearned. A slow app is charged the timeouts main charges it (one per cached move). | `pipeline::two_cached_focus_moves_on_a_slow_app_do_not_declare_it_hung` (150 ms app vs 120 ms deadline: 2 timeouts, app Slow; fails with 4 + "application not responding" before the fix); reader unit tests `a_failed_rv1_is_retried_once_except_after_a_timeout`, `a_failed_rv1_is_not_retried_while_the_app_holds_the_protection`, `a_focus_fetch_failure_over_a_prefetched_node_asks_the_rv1_except_after_a_timeout` |
+| RR-2 (low) | `on_state_reply` earns the protection when the re-read shows the node `FOCUSED` (not for a selection item). | `a_focused_state_reply_earns_protection_after_a_failed_rv1`, `an_unfocused_state_reply_earns_nothing` |
+| RR-3 (low) | The look-ahead direction is tracked by the previous focus *key* (position looked up in the current run), and is set at the first window of a parent. | `a_backward_walk_looks_ahead_behind_the_focus_at_every_step` (40 steps: 0 wrong, was 8; fails on the old code), `backward_travel_rereads_the_row_behind` |
+| F-6 lock-in | `FillDriver::sanitize` is public; a recording policy wrapper proves every op `FocusPrefetch` emits is a fixed point of the clamp (default and small `max_child_range`, forward/backward/big-parent walks). | `the_drivers_clamp_leaves_every_policy_op_unchanged` |
+
+Trade-off of RR-1: after a Focus *Timeout* over a cached node the protection is no longer earned by
+an immediate RV-1, but by the next `FOCUSED` state re-read (RR-2) or the next focus move.
+
+### Report correction
+
+`adopt-rev-quick` (invalid fidelity) measured L1c **1.42x** (6.09 vs 4.29 ms), not only the 1.04x
+of the invalid `adopt-rev-final`; both are kept and neither is authoritative. The reviewer's
+interleaved, fidelity-pass session `rr-l1c` (R0 = main 6fc592b, `taskset -c 2-9`, load 8-16.6)
+gave a median **1.16x** (3.98 vs 3.43 ms; min ratio 1.05x). This is **accepted as the cost of the
+policy** (about 5-15 % of a ~3.5 ms path, far below the 15 ms budget) and is to be re-measured on a
+quiet host before "1.2x met" is claimed.
+
+### L1c after the fixes (head 3d09a7e, R0 = main 6fc592b, walk 3 per arm, interleaved, `taskset -c 2-9`)
+
+| Session | Fidelity | Load (start/end) | L1c p99 R0 | L1c p99 new | Ratio |
+|---|---|---|---|---|---|
+| `rr-fix-l1c` | fail (p50 delta 0.64 ms, INVALID, kept) | 11.7 / 4.6 | 3.437 (3.364-3.465) | 3.910 (3.693-3.946) | 1.14x |
+| `rr-fix-l1c3` | **pass** (valid) | 7.1 / 6.5 | 3.476 (3.396-3.969) | 3.756 (3.553-3.855) | **1.08x** |
+
+`rr-fix-l1c3` (valid): HIT.all 0.883 vs 0.550, M6 0.025 vs 0.232, STALE and LOST 0, MSG.walk 113.7
+vs 31.4 msgs/s. `run-all.sh` reported a fidelity failure at start-up under load in two attempts
+(`rr-fix-l1c`, aborted `rr-fix-l1c2-aborted`); the fidelity test passes alone with `B1_STRICT=1`,
+so `rr-fix-l1c3` ran it first on its own, then `b1 run` (same arguments as `run-all.sh`).
+
+### Gates at 3d09a7e (workstation load 8-11)
+
+fmt clean; clippy `-D warnings` clean; `cargo test --workspace`: 1486 passed, 0 failed, 15 ignored;
+`cargo xtask deps` ok. e2e strict K2/K3/K4/R1 (`rr-k`), M3 quick set (`rr-m3`), M7a quick set
+(`rr-m7`), all with `--impersonate-orca`: every gate PASS. Logs: `bench/results/b1-adopt-rereview-fix/`.

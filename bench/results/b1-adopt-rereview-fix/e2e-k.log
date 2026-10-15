@@ -1,0 +1,380 @@
+== host: load 7.87 7.68 8.79 1/3107 1851543 ==
+   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-ingress)
+   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-dbus)
+   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench-b2)
+   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.71s
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench-b4921a7a1562f132)
+
+running 21 tests
+test e2e::m1::tests::a_double_that_straddles_a_chunk_boundary_is_found ... ok
+test e2e::m1::tests::default_chords_use_real_keycodes ... ok
+test e2e::m1::tests::gates_skip_until_m1_lands ... ok
+test e2e::m1::tests::key_reply_and_app_log_parse ... ok
+test e2e::m1::tests::m1_flag_opens_the_gate ... ok
+test e2e::m1::tests::strict_mode_makes_the_gate_red ... ok
+test e2e::m1::tests::the_process_environment_never_opens_a_gate ... ok
+test e2e::m1::tests::the_reader_gets_desktop_facts_so_it_never_asks_gsettings ... ok
+test e2e::m1::tests::typing_score_detects_lost_and_doubled ... ok
+test e2e::m1::tests::unpaired_presses_and_releases_are_counted ... ok
+test e2e::m1::tests::wrapped_keycodes_are_not_doubles_but_real_doubles_are ... ok
+test e2e::m4::tests::a_late_speech_is_credited_to_its_own_key_and_reported_as_late ... ok
+test e2e::m4::tests::r1_skips_without_the_flag_and_fails_when_strict ... ok
+test e2e::m4::tests::the_tree_has_one_button_per_row_and_balanced_json ... ok
+test e2e::mono::tests::is_monotonic_and_ns ... ok
+test e2e::scenarios::all_tests::all_has_no_duplicates ... ok
+test e2e::scenarios::tests::decoder_understands_stub_tags_and_natural_text ... ok
+test e2e::scenarios::tests::scenario_ids_round_trip ... ok
+test e2e::scenarios::tests::accounting_separates_superseded_from_lost ... ok
+test e2e::mock::tests::voicego_binary_speak_then_stop ... ok
+test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
+
+   Compiling crossbeam-utils v0.8.23
+   Compiling crossbeam-epoch v0.9.21
+   Compiling crossbeam-deque v0.8.8
+   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-rt)
+   Compiling rayon-core v1.13.0
+   Compiling either v1.19.0
+   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-daemon)
+   Compiling gorca-output-api v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-output-api)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-doc-source-api)
+   Compiling gorca-input-api v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-input-api)
+   Compiling gorca-speech v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-speech)
+   Compiling gorca-speech-ssip v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-speech-ssip)
+   Compiling gorca-speech-voicego v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-speech-voicego)
+   Compiling concurrent-queue v2.5.0
+   Compiling crossbeam-queue v0.3.14
+   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-ingress)
+   Compiling async-io v2.6.0
+   Compiling async-channel v2.5.0
+   Compiling async-executor v1.14.0
+   Compiling blocking v1.7.0
+   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
+   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-connector-api)
+   Compiling async-signal v0.2.14
+   Compiling async-process v2.5.0
+   Compiling rayon v1.12.0
+   Compiling zbus v5.19.0
+   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-core)
+   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-dbus)
+   Compiling atspi v0.30.0
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench-b2)
+   Compiling gorca-doc-source-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-doc-source-atspi)
+   Compiling gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-connector-atspi)
+   Compiling gorca-input-mutter v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-input-mutter)
+   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench)
+    Finished `release` profile [optimized + debuginfo] target(s) in 25.40s
+== reader <repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca built from 3d09a7e, tree at 3d09a7e
+== e2e rr-k: reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca backend=voicego repeats=3 load=11.10 8.47 9.03 3/3090 1854538
+-- round 1/3 K2 (load 11.10 8.47 9.03 3/3090 1854538)
+2026-10-15T14:00:33.494680Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-15T14:00:33.495653Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T14:00:33.496374Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:00:33.497518Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T14:00:50.058954Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T14:00:50.059030Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T14:00:50.059065Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-15T14:00:50.059283Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 46, fetch_ok: 61, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 30, utterances: 1231, reader_restarts: 0 }
+2026-10-15T14:00:50.059301Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 1231, replaced: 1, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T14:00:50.059771Z  INFO gorca_daemon: gorca stopped
+-- round 1/3 K3 (load 9.37 8.25 8.94 1/3082 1855640)
+2026-10-15T14:00:50.249583Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-15T14:00:50.250439Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T14:00:50.250958Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:00:50.253069Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T14:01:07.087582Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T14:01:07.087660Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T14:01:07.087702Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-15T14:01:07.089061Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 1494, fetch_ok: 2456, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 1226, utterances: 1726, reader_restarts: 0 }
+2026-10-15T14:01:07.089105Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 1290, replaced: 0, stale_dropped: 435, replace_slow: 0, superseded: 1, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T14:01:07.089151Z  INFO gorca_daemon: gorca stopped
+-- round 1/3 K4 (load 9.84 8.40 8.98 2/3104 1856163)
+2026-10-15T14:01:07.265465Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-15T14:01:07.266581Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T14:01:07.267752Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:01:07.269450Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T14:01:07.961678Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=the keyboard manager restarted backoff=100ms
+2026-10-15T14:01:08.062777Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=200ms
+2026-10-15T14:01:08.265748Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:01:08.807237Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.44") got=Some(":1.170") dropped=1
+2026-10-15T14:01:08.807304Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.44") got=Some(":1.170") dropped=2
+2026-10-15T14:01:08.807318Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.44") got=Some(":1.170") dropped=4
+2026-10-15T14:01:08.807622Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.44") got=Some(":1.170") dropped=8
+2026-10-15T14:01:08.807647Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.44") got=Some(":1.170") dropped=16
+2026-10-15T14:01:08.807993Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.44") got=Some(":1.170") dropped=32
+2026-10-15T14:01:09.133366Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.44") got=Some(":1.171") dropped=64
+2026-10-15T14:01:09.140624Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.44") got=Some(":1.171") dropped=128
+2026-10-15T14:01:09.155183Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.44") got=Some(":1.171") dropped=256
+2026-10-15T14:01:09.185345Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.44") got=Some(":1.171") dropped=512
+2026-10-15T14:01:09.249229Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.44") got=Some(":1.171") dropped=1024
+2026-10-15T14:01:09.272002Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=the keyboard manager restarted backoff=400ms
+2026-10-15T14:01:09.674646Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:01:09.675202Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.172") got=Some(":1.171") dropped=1
+2026-10-15T14:01:09.675222Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.172") got=Some(":1.171") dropped=2
+2026-10-15T14:01:09.675228Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.172") got=Some(":1.171") dropped=4
+2026-10-15T14:01:09.676201Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.172") got=Some(":1.171") dropped=8
+2026-10-15T14:01:09.677141Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.172") got=Some(":1.171") dropped=16
+2026-10-15T14:01:09.678917Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.172") got=Some(":1.171") dropped=32
+2026-10-15T14:01:09.683656Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.172") got=Some(":1.171") dropped=64
+2026-10-15T14:01:09.691977Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.172") got=Some(":1.171") dropped=128
+2026-10-15T14:01:09.708585Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.172") got=Some(":1.171") dropped=256
+2026-10-15T14:01:09.743061Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.172") got=Some(":1.171") dropped=512
+2026-10-15T14:01:09.806708Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.172") got=Some(":1.171") dropped=1024
+2026-10-15T14:01:09.947999Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.172") got=Some(":1.171") dropped=2048
+2026-10-15T14:01:10.202126Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.172") got=Some(":1.171") dropped=4096
+2026-10-15T14:01:10.685646Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.172") got=Some(":1.171") dropped=8192
+2026-10-15T14:02:06.266006Z  INFO gorca_daemon::input: input lane statistics keys=25698 ambiguous=2324 band_forks=0
+2026-10-15T14:03:06.266266Z  INFO gorca_daemon::input: input lane statistics keys=54344 ambiguous=4986 band_forks=0
+2026-10-15T14:04:06.266713Z  INFO gorca_daemon::input: input lane statistics keys=82822 ambiguous=7690 band_forks=0
+2026-10-15T14:04:11.887238Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T14:04:11.887319Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T14:04:11.887353Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-15T14:04:11.887587Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 42, fetch_ok: 61, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 30, utterances: 12575, reader_restarts: 0 }
+2026-10-15T14:04:11.887608Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 12575, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T14:04:11.888109Z  INFO gorca_daemon: gorca stopped
+-- round 1/3 R1 (load 10.06 8.51 8.87 1/3100 1866113)
+2026-10-15T14:04:12.084334Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-15T14:04:12.085232Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T14:04:12.085965Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:04:12.088149Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T14:04:29.117188Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T14:04:29.122405Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T14:04:29.122431Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-15T14:04:29.122708Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 2, focus_requests: 46, fetch_ok: 62, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 30, utterances: 1233, reader_restarts: 0 }
+2026-10-15T14:04:29.122730Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 1233, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T14:04:29.123749Z  INFO gorca_daemon: gorca stopped
+-- round 2/3 K3 (load 10.06 8.59 8.89 1/3116 1866993)
+2026-10-15T14:04:29.300976Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-15T14:04:29.301582Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T14:04:29.302714Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:04:29.304159Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T14:04:46.007260Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T14:04:46.007346Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T14:04:46.007386Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-15T14:04:46.008742Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 1484, fetch_ok: 2458, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 1222, utterances: 1682, reader_restarts: 0 }
+2026-10-15T14:04:46.008768Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 1289, replaced: 0, stale_dropped: 393, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T14:04:46.008834Z  INFO gorca_daemon: gorca stopped
+-- round 2/3 K4 (load 9.34 8.52 8.86 1/3120 1867162)
+2026-10-15T14:04:46.184284Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-15T14:04:46.185150Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T14:04:46.185617Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:04:46.187426Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T14:04:46.881471Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=the keyboard manager restarted backoff=100ms
+2026-10-15T14:04:46.983183Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=200ms
+2026-10-15T14:04:47.185167Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:04:47.737328Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.212") got=Some(":1.337") dropped=1
+2026-10-15T14:04:47.737421Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.212") got=Some(":1.337") dropped=2
+2026-10-15T14:04:47.737460Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.212") got=Some(":1.337") dropped=4
+2026-10-15T14:04:47.737735Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.212") got=Some(":1.337") dropped=8
+2026-10-15T14:04:47.737759Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.212") got=Some(":1.337") dropped=16
+2026-10-15T14:04:47.738116Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.212") got=Some(":1.337") dropped=32
+2026-10-15T14:04:48.063823Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.212") got=Some(":1.338") dropped=64
+2026-10-15T14:04:48.071348Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.212") got=Some(":1.338") dropped=128
+2026-10-15T14:04:48.086286Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.212") got=Some(":1.338") dropped=256
+2026-10-15T14:04:48.117607Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.212") got=Some(":1.338") dropped=512
+2026-10-15T14:04:48.177923Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.212") got=Some(":1.338") dropped=1024
+2026-10-15T14:04:48.202152Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=the keyboard manager restarted backoff=400ms
+2026-10-15T14:04:48.604612Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:04:48.604779Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.339") got=Some(":1.338") dropped=1
+2026-10-15T14:04:48.604801Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.339") got=Some(":1.338") dropped=2
+2026-10-15T14:04:48.604805Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.339") got=Some(":1.338") dropped=4
+2026-10-15T14:04:48.605770Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.339") got=Some(":1.338") dropped=8
+2026-10-15T14:04:48.606717Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.339") got=Some(":1.338") dropped=16
+2026-10-15T14:04:48.608674Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.339") got=Some(":1.338") dropped=32
+2026-10-15T14:04:48.613337Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.339") got=Some(":1.338") dropped=64
+2026-10-15T14:04:48.622211Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.339") got=Some(":1.338") dropped=128
+2026-10-15T14:04:48.639946Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.339") got=Some(":1.338") dropped=256
+2026-10-15T14:04:48.678764Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.339") got=Some(":1.338") dropped=512
+2026-10-15T14:04:48.748139Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.339") got=Some(":1.338") dropped=1024
+2026-10-15T14:04:48.881043Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.339") got=Some(":1.338") dropped=2048
+2026-10-15T14:04:49.159658Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.339") got=Some(":1.338") dropped=4096
+2026-10-15T14:04:49.662780Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.339") got=Some(":1.338") dropped=8192
+2026-10-15T14:05:45.185309Z  INFO gorca_daemon::input: input lane statistics keys=25526 ambiguous=2462 band_forks=0
+2026-10-15T14:06:45.185114Z  INFO gorca_daemon::input: input lane statistics keys=54202 ambiguous=5101 band_forks=0
+2026-10-15T14:07:45.185584Z  INFO gorca_daemon::input: input lane statistics keys=82640 ambiguous=7765 band_forks=0
+2026-10-15T14:07:50.355146Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T14:07:50.355226Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-15T14:07:50.355210Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T14:07:50.355510Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 39, fetch_ok: 61, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 30, utterances: 12548, reader_restarts: 0 }
+2026-10-15T14:07:50.355526Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 12548, replaced: 2, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T14:07:50.356229Z  INFO gorca_daemon: gorca stopped
+-- round 2/3 R1 (load 8.47 8.55 8.82 1/3220 1876486)
+2026-10-15T14:07:50.535876Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-15T14:07:50.536557Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T14:07:50.537099Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:07:50.538250Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T14:08:07.516916Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T14:08:07.517006Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T14:08:07.517026Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-15T14:08:07.517258Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 2, focus_requests: 47, fetch_ok: 62, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 30, utterances: 1233, reader_restarts: 0 }
+2026-10-15T14:08:07.517274Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 1233, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T14:08:07.517904Z  INFO gorca_daemon: gorca stopped
+-- round 2/3 K2 (load 7.09 8.25 8.71 1/3178 1876785)
+2026-10-15T14:08:07.718534Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-15T14:08:07.719253Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T14:08:07.719973Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:08:07.721479Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T14:08:24.109334Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T14:08:24.109431Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T14:08:24.109471Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-15T14:08:24.109764Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 44, fetch_ok: 61, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 30, utterances: 1231, reader_restarts: 0 }
+2026-10-15T14:08:24.109802Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 1231, replaced: 2, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T14:08:24.110372Z  INFO gorca_daemon: gorca stopped
+-- round 3/3 K4 (load 7.54 8.29 8.72 1/3217 1877582)
+2026-10-15T14:08:24.296102Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-15T14:08:24.296829Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T14:08:24.297355Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:08:24.299091Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T14:08:24.992864Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=the keyboard manager restarted backoff=100ms
+2026-10-15T14:08:25.095452Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=200ms
+2026-10-15T14:08:25.297505Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:08:25.814923Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.378") got=Some(":1.504") dropped=1
+2026-10-15T14:08:25.814968Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.378") got=Some(":1.504") dropped=2
+2026-10-15T14:08:25.814976Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.378") got=Some(":1.504") dropped=4
+2026-10-15T14:08:25.815043Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.378") got=Some(":1.504") dropped=8
+2026-10-15T14:08:25.815250Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.378") got=Some(":1.504") dropped=16
+2026-10-15T14:08:25.815596Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.378") got=Some(":1.504") dropped=32
+2026-10-15T14:08:26.141069Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.378") got=Some(":1.505") dropped=64
+2026-10-15T14:08:26.148406Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.378") got=Some(":1.505") dropped=128
+2026-10-15T14:08:26.163034Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.378") got=Some(":1.505") dropped=256
+2026-10-15T14:08:26.192725Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.378") got=Some(":1.505") dropped=512
+2026-10-15T14:08:26.252015Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.378") got=Some(":1.505") dropped=1024
+2026-10-15T14:08:26.280022Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=the keyboard manager restarted backoff=400ms
+2026-10-15T14:08:26.682471Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:08:26.683084Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.506") got=Some(":1.505") dropped=1
+2026-10-15T14:08:26.683092Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.506") got=Some(":1.505") dropped=2
+2026-10-15T14:08:26.683096Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.506") got=Some(":1.505") dropped=4
+2026-10-15T14:08:26.683927Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.506") got=Some(":1.505") dropped=8
+2026-10-15T14:08:26.684739Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.506") got=Some(":1.505") dropped=16
+2026-10-15T14:08:26.686376Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.506") got=Some(":1.505") dropped=32
+2026-10-15T14:08:26.690193Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.506") got=Some(":1.505") dropped=64
+2026-10-15T14:08:26.697355Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.506") got=Some(":1.505") dropped=128
+2026-10-15T14:08:26.712244Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.506") got=Some(":1.505") dropped=256
+2026-10-15T14:08:26.741640Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.506") got=Some(":1.505") dropped=512
+2026-10-15T14:08:26.801018Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.506") got=Some(":1.505") dropped=1024
+2026-10-15T14:08:26.920684Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.506") got=Some(":1.505") dropped=2048
+2026-10-15T14:08:27.160024Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.506") got=Some(":1.505") dropped=4096
+2026-10-15T14:08:27.634180Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.506") got=Some(":1.505") dropped=8192
+2026-10-15T14:08:28.583791Z  WARN gorca_input_mutter::source: dropped a message that failed the sender gate what="KeyEvent" expected=Some(":1.506") got=Some(":1.505") dropped=16384
+2026-10-15T14:09:23.296923Z  INFO gorca_daemon::input: input lane statistics keys=25482 ambiguous=2353 band_forks=0
+2026-10-15T14:10:23.296787Z  INFO gorca_daemon::input: input lane statistics keys=53996 ambiguous=5069 band_forks=0
+2026-10-15T14:11:23.297451Z  INFO gorca_daemon::input: input lane statistics keys=82944 ambiguous=7708 band_forks=0
+2026-10-15T14:11:28.783766Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T14:11:28.783855Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T14:11:28.783900Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-15T14:11:28.784115Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 43, fetch_ok: 61, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 30, utterances: 12554, reader_restarts: 0 }
+2026-10-15T14:11:28.784130Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 12554, replaced: 2, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T14:11:28.784902Z  INFO gorca_daemon: gorca stopped
+-- round 3/3 R1 (load 7.33 7.93 8.50 1/3243 1887962)
+2026-10-15T14:11:28.987816Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-15T14:11:28.988319Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T14:11:28.988621Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:11:28.990606Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T14:11:46.178803Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T14:11:46.178874Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T14:11:46.178934Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-15T14:11:46.179151Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 2, focus_requests: 45, fetch_ok: 62, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 30, utterances: 1233, reader_restarts: 0 }
+2026-10-15T14:11:46.179170Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 1233, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T14:11:46.179799Z  INFO gorca_daemon: gorca stopped
+-- round 3/3 K2 (load 7.28 7.88 8.47 1/3248 1889436)
+2026-10-15T14:11:46.387623Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-15T14:11:46.388278Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T14:11:46.389001Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:11:46.390727Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T14:12:02.799258Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T14:12:02.799318Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T14:12:02.799343Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-15T14:12:02.799545Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 42, fetch_ok: 61, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 30, utterances: 1231, reader_restarts: 0 }
+2026-10-15T14:12:02.799563Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 1231, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T14:12:02.800313Z  INFO gorca_daemon: gorca stopped
+-- round 3/3 K3 (load 7.89 7.97 8.49 5/3157 1890401)
+2026-10-15T14:12:03.018089Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-15T14:12:03.018746Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-15T14:12:03.019351Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-15T14:12:03.021125Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-15T14:12:19.595247Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-15T14:12:19.595491Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0 }
+2026-10-15T14:12:19.595521Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-15T14:12:19.596588Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 1551, fetch_ok: 2456, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 1226, utterances: 1717, reader_restarts: 0 }
+2026-10-15T14:12:19.596619Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 1291, replaced: 0, stale_dropped: 426, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-15T14:12:19.596866Z  INFO gorca_daemon: gorca stopped
+# e2e rr-k
+# utc=2026-10-15T14:12:19Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=7.97 7.99 8.49 1/3238 1891834
+# git_rev=3d09a7e
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=rr-k
+# reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=7.97 7.99 8.49 1/3238 1891831
+# reader_env=GORCA_M1=1 GORCA_M1_STRICT=1 GORCA_M4=1 GORCA_M4_STRICT=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=k2_ms: first SPEAK between a command key and the next one (1200 spoken for 1200 chords)
+# note1=k3_ms: first SPEAK between a command key and the next one (1259 spoken for 1200 chords)
+# note2=K4 app_lost parts: lost or swallowed letters 0, escape not consumed 0; 10000 switches in 178.7 s
+# note3=r1_ms: first SPEAK between a numpad review key and the next one (1200 spoken for 1200 presses); the application calls during the series are RR-1 revalidations (every 2 s), never on the key path
+# note4=k3_ms: first SPEAK between a command key and the next one (1258 spoken for 1200 chords)
+# note5=K4 app_lost parts: lost or swallowed letters 0, escape not consumed 0; 10000 switches in 178.2 s
+# note6=K4 app_lost parts: lost or swallowed letters 0, escape not consumed 0; 10000 switches in 178.6 s
+# note7=k3_ms: first SPEAK between a command key and the next one (1260 spoken for 1200 chords)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+K2.k2_ms.n                 daemon/voicego         1200         1200         1200  3                  info   [samples]
+K2.k2_ms.p50               daemon/voicego        0.129        0.126        0.131  3                  info   [ms]
+K2.k2_ms.p95               daemon/voicego        0.222        0.215        0.223  3                  info   [ms]
+K2.k2_ms.p99               daemon/voicego        0.293        0.284        0.294  3 <=            5  PASS   [ms]
+K2.k2_ms.p999              daemon/voicego        0.668        0.535        1.027  3                  info   [ms]
+K2.k2_ms.max               daemon/voicego        0.730        0.564        3.259  3                  info   [ms]
+K2.lost                    daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+K2.not_consumed            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+K3.k3_ms.n                 daemon/voicego         1200         1200         1200  3                  info   [samples]
+K3.k3_ms.p50               daemon/voicego        0.418        0.411        0.435  3                  info   [ms]
+K3.k3_ms.p95               daemon/voicego        0.863        0.862        0.933  3                  info   [ms]
+K3.k3_ms.p99               daemon/voicego        1.148        1.118        1.155  3 <=           15  PASS   [ms]
+K3.k3_ms.p999              daemon/voicego        1.385        1.345        1.518  3                  info   [ms]
+K3.k3_ms.max               daemon/voicego        1.481        1.430        5.433  3                  info   [ms]
+K3.lost                    daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+K3.not_consumed            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+K4.app_doubled             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+K4.app_lost                daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+K4.chord_leaked            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [chords]
+K4.chord_resent            daemon/voicego            0            0            0  3                  info   [chords]
+K4.chord_resent_per_10k    daemon/voicego            0            0            0  3 <=            5  PASS  Ambiguous chords repeated per 10k switches [chords]
+K4.flap_failed             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [runs]
+K4.forged_accepted         daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+K4.k4_wall_s               daemon/voicego        178.6        178.2        178.7  3                  info   [s]
+K4.restore_failed          daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [runs]
+K4.restore_ms              daemon/voicego        409.8        409.1        411.3  3                  info   [ms]
+K4.switches                daemon/voicego        10000        10000        10000  3                  info   [count]
+K4.typed_keys              daemon/voicego        20072        19864        20101  3                  info   [count]
+K4.wait_timeouts           daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [waits]
+R1.r1_ms.n                 daemon/voicego         1200         1200         1200  3                  info   [samples]
+R1.r1_ms.p50               daemon/voicego        0.191        0.191        0.221  3                  info   [ms]
+R1.r1_ms.p95               daemon/voicego        0.306        0.303        0.374  3                  info   [ms]
+R1.r1_ms.p99               daemon/voicego        0.362        0.359        0.453  3 <=            3  PASS   [ms]
+R1.r1_ms.p999              daemon/voicego        0.425        0.418        0.683  3                  info   [ms]
+R1.r1_ms.max               daemon/voicego        0.500        0.459        1.137  3                  info   [ms]
+R1.lost                    daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+R1.not_consumed            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+R1.r1_ipc_calls            daemon/voicego           49           49           49  3                  info   [calls]
+R1.r1_late_keys            daemon/voicego            0            0            0  3                  info   [events]
+R1.r2_cold_ms              daemon/voicego        4.878        3.682        7.515  3                  info   [ms]
+
+== wrote bench/results/e2e/rr-k/20261015T141219Z.{json,txt}
+exit 0
