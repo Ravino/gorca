@@ -208,10 +208,16 @@ pub fn derive_flags(n: &SrcNode, nested_doc: bool) -> (NodeFlags, u8) {
     if n.role == Role::DocumentWeb && nested_doc {
         f = f | NodeFlags::FRAME;
     }
-    let block = match attr(n, web_attrs::DISPLAY) {
-        Some(d) => display_is_block(d),
-        None => role_is_block(n.role),
-    };
+    // Table cells stay inline: a row is one line, cells separated by a space (NVDA screen layout).
+    let cell = matches!(n.role, Role::Cell | Role::ColumnHeader | Role::RowHeader);
+    if cell {
+        f = f | NodeFlags::CELL;
+    }
+    let block = !cell
+        && match attr(n, web_attrs::DISPLAY) {
+            Some(d) => display_is_block(d),
+            None => role_is_block(n.role),
+        };
     if block {
         f = f | NodeFlags::BLOCK;
     }
@@ -247,24 +253,29 @@ pub fn spec_of(n: &SrcNode, nested_doc: bool) -> NodeSpec {
 }
 
 fn without_breaks(f: NodeFlags) -> NodeFlags {
-    NodeFlags(f.0 & !NodeFlags::BREAK_BEFORE.0)
+    NodeFlags(f.0 & !(NodeFlags::BREAK_BEFORE.0 | NodeFlags::CELL_SEP.0))
 }
 
 /// FT-4 over one sibling list: a line break before a block and before whatever follows one.
 /// Hidden siblings are skipped. Returns the new flags.
 pub fn assign_breaks(flags: &mut [NodeFlags]) {
     let mut prev_block = false;
+    let mut seen = false;
     for f in flags.iter_mut() {
         let hidden = f.contains(NodeFlags::HIDDEN);
         let block = f.contains(NodeFlags::BLOCK);
         let want = !hidden && (block || prev_block);
+        let gap = !hidden && !want && seen && f.contains(NodeFlags::CELL);
         *f = if want {
-            *f | NodeFlags::BREAK_BEFORE
+            without_breaks(*f) | NodeFlags::BREAK_BEFORE
+        } else if gap {
+            without_breaks(*f) | NodeFlags::CELL_SEP
         } else {
             without_breaks(*f)
         };
         if !hidden {
             prev_block = block;
+            seen = true;
         }
     }
 }
@@ -845,7 +856,7 @@ impl Translator {
         let nested =
             n.role == Role::DocumentWeb && doc.parent(id).is_some_and(|p| Self::nested_doc(doc, p));
         let spec = spec_of(n, nested);
-        let keep_breaks = cur.flags.0 & NodeFlags::BREAK_BEFORE.0;
+        let keep_breaks = cur.flags.0 & (NodeFlags::BREAK_BEFORE.0 | NodeFlags::CELL_SEP.0);
         let new_flags = NodeFlags(without_breaks(spec.flags).0 | keep_breaks);
         let mut patch = PropsPatch::default();
         let mut any = false;

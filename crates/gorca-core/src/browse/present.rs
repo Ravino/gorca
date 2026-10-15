@@ -390,7 +390,7 @@ pub fn describe_from(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Vec<Ite
         let Some(v) = doc.node(id) else { continue };
         let own = doc.own_len(id).unwrap_or(0);
         let hidden = v.flags.contains(NodeFlags::HIDDEN);
-        let eff = off + u32::from(v.flags.contains(NodeFlags::BREAK_BEFORE) && !hidden);
+        let eff = off + v.flags.lead_len();
         let first = id == n0;
         if !first && eff >= b {
             break;

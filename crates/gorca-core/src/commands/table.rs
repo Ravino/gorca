@@ -2622,7 +2622,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableNextRow,
         name: "table.next_row",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2632,7 +2632,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TablePrevRow,
         name: "table.prev_row",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2642,7 +2642,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableNextColumn,
         name: "table.next_column",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2652,7 +2652,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TablePrevColumn,
         name: "table.prev_column",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2662,7 +2662,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableFirstRow,
         name: "table.first_row",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2672,7 +2672,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableLastRow,
         name: "table.last_row",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2682,7 +2682,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableFirstColumn,
         name: "table.first_column",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2692,7 +2692,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableLastColumn,
         name: "table.last_column",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2702,7 +2702,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableSayRow,
         name: "table.say_row",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2712,7 +2712,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableSayColumn,
         name: "table.say_column",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2722,7 +2722,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableSayAllRow,
         name: "table.say_all_row",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2732,7 +2732,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableSayAllColumn,
         name: "table.say_all_column",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,

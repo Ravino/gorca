@@ -470,6 +470,14 @@ mod tests {
                         // Neither source reader binds articles by default.
                         "quicknav.next.article",
                         "quicknav.prev.article",
+                        // Orca moves cell by cell and reads a row or a column; it has no
+                        // first/last row or column and no say-all of a row.
+                        "table.first_row",
+                        "table.last_row",
+                        "table.first_column",
+                        "table.last_column",
+                        "table.say_all_row",
+                        "table.say_all_column",
                     ]
                 } else {
                     &[

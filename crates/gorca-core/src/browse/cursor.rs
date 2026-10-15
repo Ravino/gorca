@@ -81,11 +81,7 @@ pub fn cursor_at(doc: &WebDoc, off: u32) -> Option<WebCursor> {
 pub fn content_start(doc: &WebDoc, node: DocNodeId) -> Option<u32> {
     let v = doc.node(node)?;
     let base = doc.offset_of(node)?;
-    let br = u32::from(
-        v.flags.contains(gorca_doc::web::NodeFlags::BREAK_BEFORE)
-            && !v.flags.contains(gorca_doc::web::NodeFlags::HIDDEN),
-    );
-    let start = base + br;
+    let start = base + v.flags.lead_len();
     let Some((_, end)) = doc.subtree_text_range(node) else {
         return Some(start);
     };

@@ -14,6 +14,7 @@ pub mod cursor;
 pub mod forms;
 pub mod present;
 pub mod sayall;
+pub mod tablenav;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;

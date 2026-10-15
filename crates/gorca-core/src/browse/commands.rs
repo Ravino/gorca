@@ -1156,7 +1156,7 @@ impl Reader {
     // ---- speech ---------------------------------------------------------------------------
 
     /// Speak items now, interrupting, with the pending mode word in front.
-    fn web_speak(&mut self, items: &[Item], fx: &mut ReaderEffects) {
+    pub(super) fn web_speak(&mut self, items: &[Item], fx: &mut ReaderEffects) {
         let word = self.web_take_word();
         if items.is_empty() && word.is_none() {
             return;
@@ -1217,6 +1217,10 @@ impl Reader {
             self.web_escape(fx);
         } else if c == CoreCmd::BrowseActivate {
             self.web_activate_cmd(fx);
+        } else if let Some(mv) = super::tablenav::table_move(c) {
+            self.web_table_move(mv, now, fx);
+        } else if let Some(column) = super::tablenav::table_say(c) {
+            self.web_table_say(column, fx);
         } else if let Some((dir, cat, name)) = quicknav(c) {
             self.web_quicknav(dir, cat, name, now, fx);
         } else if let Some((_, mv)) = CURSOR.iter().find(|(cmd, _)| *cmd == c) {

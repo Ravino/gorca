@@ -159,9 +159,25 @@ impl NodeFlags {
     pub const BREAK_BEFORE: NodeFlags = NodeFlags(1 << 12);
     /// A frame or a nested document (`Cat::FRAME`, quick nav M).
     pub const FRAME: NodeFlags = NodeFlags(1 << 13);
+    /// A table cell or header cell (a row reads as one line: cells are inline, FT-4).
+    pub const CELL: NodeFlags = NodeFlags(1 << 14);
+    /// A single space precedes this node's own text: it is a cell that follows another node in
+    /// its row. Set by the translator like `BREAK_BEFORE`, never together with it.
+    pub const CELL_SEP: NodeFlags = NodeFlags(1 << 15);
 
     pub const fn contains(self, other: NodeFlags) -> bool {
         self.0 & other.0 == other.0
+    }
+
+    /// Scalars a visible node contributes ahead of its own text: a line break or a cell gap.
+    pub const fn lead_len(self) -> u32 {
+        if self.0 & (NodeFlags::HIDDEN.0) != 0 {
+            0
+        } else if self.0 & (NodeFlags::BREAK_BEFORE.0 | NodeFlags::CELL_SEP.0) != 0 {
+            1
+        } else {
+            0
+        }
     }
 }
 
