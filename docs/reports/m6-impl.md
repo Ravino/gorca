@@ -118,3 +118,15 @@ Other gates: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D wa
 * Registering text events globally raises the event rate of every application; measured only for terminals.
 * zsh, fish, right prompts, autosuggestions, wide characters, `PS1` with colour: not special cased; the checklist asks.
 * The real-VTE rig depends on the headless seat quirks (keyboard created by the first virtual key, lost first key).
+
+## Review fixes (round 1, `docs/reports/m6-review.md`)
+
+| Finding | Status |
+|---|---|
+| F1 large screen, wrong caret row | Fixed. The reviewer's probe assumed the connector keeps 2048 bytes; it actually keeps the last 64 KiB (`text::MAX_TEXT_BYTES`, not `decode::MAX_TEXT_BYTES` = 2048), so a 200x60 screen (12 KB; 24 KB in Cyrillic) was never clipped. The defect is real above 64 KiB: pre-fix, a 120x300 Cyrillic screen (72 KB) read row 30 for a caret on row 20 and Left read the wrong character (VF failed 2 steps, kept in `bench/results/e2e/m6fix-prefix-vf2`). `screen()` now keeps up to 256 KiB (the reply limit) and, if it must clip, cuts at a row boundary and moves the caret by the dropped scalars (`None` if it fell in the dropped head): `clip_screen` in `crates/gorca-connector-atspi/src/text/mod.rs`. Tests: connector unit tests (the probe's 40x100 case at 2 KiB, Cyrillic scalar-vs-byte case), three ext-vte session tests on 200x60 ASCII/Cyrillic screens (focus row, Left/Right, a password prompt on row 55), and VF steps 60x200 ASCII, 60x200 Cyrillic, 120x300 Cyrillic. |
+| F2 `echo.typed_characters = false` ignored | Fixed in the host arm (`term_step`): the key is still claimed, but the typed character's own speech is dropped; the toggle takes effect at once. Test `echo_typed_characters_off_silences_the_typed_character_but_not_the_rest`. `typed_words` is still not supported in a terminal. |
+| F3 focus workaround | Unchanged by instruction; TODO added in `terminal.rs` pointing at the review. |
+| F6 English-only password prompt | Keywords are a data table (`SECRET_WORDS` in `extensions/ext-vte/src/prompt.rs`): English, Spanish/Portuguese, Russian/Ukrainian (strings checked against `msgunfmt /usr/share/locale/ru/LC_MESSAGES/{sudo,sudoers,Linux-PAM}.mo`; German and French prompts match through `pass`). Full-width colon accepted. No echo-off heuristic: VTE exposes no echo state. |
+| F7 plaintext check too weak | VP and VV use secrets of rare characters and also count, in the part of each log written during the password phase, every secret character that appears as a value of its own (quoted, or after `key=`, `char:`, `text=`, ...) (`secret_leaks`, unit-tested). VP keeps its logs on failure. |
+| F4 text events for every application | See the Firefox comparison below. |
+| F8, F5, F9 | Not in scope (waits for M5 / backlog). |
