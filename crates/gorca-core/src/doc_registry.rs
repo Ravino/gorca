@@ -230,7 +230,7 @@ impl Hub {
     }
 
     fn flush_notices(&mut self) {
-        while let Some(n) = self.pending.front().copied() {
+        while let Some(n) = self.pending.front().cloned() {
             if self.cfg.notices.try_send(n).is_err() {
                 break;
             }

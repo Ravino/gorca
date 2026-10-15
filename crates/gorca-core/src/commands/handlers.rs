@@ -325,6 +325,18 @@ impl Reader {
             | CoreCmd::QuicknavNextFrame
             | CoreCmd::QuicknavPrevFrame
             | CoreCmd::QuicknavNextArticle
+            | CoreCmd::TableNextRow
+            | CoreCmd::TablePrevRow
+            | CoreCmd::TableNextColumn
+            | CoreCmd::TablePrevColumn
+            | CoreCmd::TableFirstRow
+            | CoreCmd::TableLastRow
+            | CoreCmd::TableFirstColumn
+            | CoreCmd::TableLastColumn
+            | CoreCmd::TableSayRow
+            | CoreCmd::TableSayColumn
+            | CoreCmd::TableSayAllRow
+            | CoreCmd::TableSayAllColumn
             | CoreCmd::QuicknavPrevArticle => self.browse_command(c, rep, now, fx),
             planned_cmds!() => {
                 // Declared but not implemented: the keymap never routes these (inert), so this

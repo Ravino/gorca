@@ -19,6 +19,7 @@ use super::present::{self, Item};
 use super::{BrowseState, ModeWord, SavedWeb, WebEv, WebFx, WebMode, step};
 use crate::SpeechIntent;
 use crate::commands::CoreCmd;
+use crate::doc_actor::live::LiveMsg;
 use crate::doc_actor::{DocDirectory, DocNotice, WebJoin};
 use crate::focus::FocusState;
 use crate::mode::{Mode, ModeMsg, WebCursor};
@@ -872,6 +873,7 @@ impl Reader {
             DocNotice::NoDocument { focus } => {
                 self.web_apply(WebEv::NoDocument { focus }, fx, true);
             }
+            DocNotice::Live { doc, msg } => self.web_live(doc, &msg, fx),
             DocNotice::Gone { doc } => {
                 if let Some(b) = self.web.as_mut() {
                     b.saved.remove(&doc);
@@ -1151,6 +1153,47 @@ impl Reader {
                 self.web_place(doc, root);
             }
         }
+    }
+
+    // ---- live regions ---------------------------------------------------------------------
+
+    /// A live region of `doc` changed (ADR-0003 13). Spoken only for the document in front, as a
+    /// notification that waits for the current speech (polite) or as a message that goes ahead
+    /// of other queued speech (assertive); never as an interrupt, so it cannot cut off the focus
+    /// or key speech, and it survives the epoch moves of ordinary navigation.
+    fn web_live(&mut self, doc: DocId, msg: &LiveMsg, fx: &mut ReaderEffects) {
+        let now = self.now;
+        let Some(b) = self.web.as_mut() else { return };
+        let in_front = b.active == Some(doc)
+            && matches!(b.mode, WebMode::Browse { .. } | WebMode::Focus { .. });
+        if !in_front {
+            b.counters.live_muted += 1;
+            return;
+        }
+        let (tokens, last) = b.live_tokens;
+        let dt = last.map_or(0.0, |t| now.saturating_duration_since(t).as_secs_f32());
+        let tokens = (tokens + dt * super::LIVE_RATE).min(super::LIVE_BURST);
+        if tokens < 1.0 {
+            b.live_tokens = (tokens, Some(now));
+            b.counters.live_dropped += 1;
+            return;
+        }
+        b.live_tokens = (tokens - 1.0, Some(now));
+        b.counters.live_spoken += 1;
+        let id = self.utt_id();
+        let mut u = message("", id, self.epoch.current());
+        u.prio = if msg.assertive {
+            Prio::Message
+        } else {
+            Prio::Notification
+        };
+        u.survives_focus_change = true;
+        u.segments.clear();
+        u.segments.push(Segment {
+            text: Arc::clone(&msg.text),
+            kind: SegmentKind::Text,
+        });
+        fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
     }
 
     // ---- speech ---------------------------------------------------------------------------

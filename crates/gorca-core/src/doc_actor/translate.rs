@@ -55,6 +55,9 @@ fn clip_arc(t: Option<&Arc<str>>) -> Option<Arc<str>> {
 /// one). Deeper content is cut and counted, never recursed into.
 pub const MAX_DEPTH: u32 = gorca_doc_source_api::limits::MAX_DEPTH;
 
+/// Touched nodes reported per batch.
+const TOUCHED_CAP: usize = 8192;
+
 /// What a batch changed, for the actor (join table, notices).
 #[derive(Debug, Default)]
 pub struct BatchOutcome {
@@ -66,6 +69,9 @@ pub struct BatchOutcome {
     pub removed: usize,
     /// The batch started a new document (`Reset`).
     pub reset: bool,
+    /// Nodes the batch created, changed or whose child list it changed (capped), for the
+    /// live-region tracker.
+    pub touched: Vec<DocNodeId>,
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -511,6 +517,7 @@ impl Translator {
         }
         Self::markers(w, &touched)?;
 
+        out.touched = touched.iter().copied().take(TOUCHED_CAP).collect();
         // 6. Reap what is still detached.
         self.reap(w, &mut out)?;
         Ok(out)

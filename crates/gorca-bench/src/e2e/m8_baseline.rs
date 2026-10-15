@@ -7,7 +7,6 @@
 //! Rows starting with `rig:` are not gorca faults but limits of the test rig; fix the rig and
 //! delete them. Source: `docs/reports/m8-baseline.md` (run `m8-baseline-raw2`, 2026-10-15).
 
-const SEPARATOR_SILENT: &str = "a separator hit speaks nothing: the node has no text and the line presenter adds no role word for it (LP-1)";
 const NO_EMBEDDED: &str = "O finds no embedded object: role=application and <object> are not in the embedded category on this page (to investigate: Cat::EMBEDDED vs the role Firefox exposes)";
 const GRID_FOCUS: &str = "focus on an ARIA grid cell does not switch to focus mode: the pass-through predicate lacks interactive grid cells (NVDA: TABLECELL/TABLEROW in ALWAYS_SWITCH_TO_PASS_THROUGH_ROLES)";
 const LISTBOX_FOCUS: &str = "focus on a list box lands on its selected option (list item); list items do not switch to focus mode (NVDA: LISTITEM switches on focus, D-1)";
@@ -21,7 +20,6 @@ const RIG_KEYS: &str = "rig: a key typed into Firefox through the compositor lan
 
 /// Step ids per root cause.
 pub(super) const MARKS: &[(&[&str], &str)] = &[
-    (&["QN.s.1", "QN.s.2"], SEPARATOR_SILENT),
     (&["QN.o.1", "QN.o.2"], NO_EMBEDDED),
     (&["TB.grid.focus"], GRID_FOCUS),
     (&["FM.listbox"], LISTBOX_FOCUS),

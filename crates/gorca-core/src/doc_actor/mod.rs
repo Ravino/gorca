@@ -12,6 +12,7 @@
 //! directory entry goes, the Reader is told (`Gone`). The hub creates a new document when the
 //! user's focus or the browser says there is one.
 
+pub mod live;
 pub mod translate;
 
 use std::collections::HashMap;
@@ -28,6 +29,7 @@ use gorca_model::{AppId, DocAction, DocDelta, DocId, DocNodeId, NodeKey};
 use gorca_rt::{CancellationToken, Clock, Deadline, mpsc, oneshot};
 use tokio::task::JoinSet;
 
+use live::{LiveMsg, LiveTracker};
 use translate::Translator;
 
 /// Deltas the sink may hold: a 100k-node first block is ~50 upsert chunks plus one list per
@@ -95,7 +97,7 @@ pub enum DocCtl {
 }
 
 /// What a document tells the Reader (DA-P2). Background lane semantics: never blocks the actor.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DocNotice {
     /// The first batch of a document is published and speakable. `navigated` is true when it
     /// replaced an earlier page of the same document (a new load), false for a fresh document.
@@ -112,6 +114,9 @@ pub enum DocNotice {
     WebApp { app: AppId },
     /// The browser reported `load-complete` (or a reload) for the document rooted at `node`.
     Loaded { node: NodeKey },
+    /// A live region changed (ADR-0003 13): already classified, deduplicated and rate-limited by
+    /// the document, so the Reader only decides whether this document is the one in front.
+    Live { doc: DocId, msg: LiveMsg },
 }
 
 /// Everything the Reader needs to read and steer one document.
@@ -252,6 +257,9 @@ struct Actor {
     /// first-useful and gone notices are kept (bounded by [`MAX_PENDING_NOTICES`]).
     pending_notices: std::collections::VecDeque<DocNotice>,
     read: DocRead,
+    live: LiveTracker,
+    /// The tab is in front: dormant documents track nothing (DM-I5).
+    awake: bool,
 }
 
 impl Actor {
@@ -287,6 +295,13 @@ impl Actor {
                     self.counters
                         .publishes
                         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
+                if published && self.awake {
+                    if out.reset {
+                        self.live.reset();
+                    }
+                    self.live
+                        .on_batch(self.writer.doc(), &out.touched, Instant::now());
                 }
                 // JN-1: keys appear only after the publish that made their node visible.
                 for (l, id) in out.join_add {
@@ -329,6 +344,17 @@ impl Actor {
         }
     }
 
+    /// Deliver the live-region messages that are due.
+    fn live_tick(&mut self) {
+        let msgs = self.live.tick(self.writer.doc(), Instant::now());
+        for msg in msgs {
+            self.notify(DocNotice::Live {
+                doc: self.spec_doc,
+                msg,
+            });
+        }
+    }
+
     fn notify(&mut self, n: DocNotice) {
         // Coalesce `Changed` with a waiting `Changed`; never lose the first-useful or a gone
         // notice (a lost `Gone` leaves browse keys grabbed on a dead document).
@@ -338,13 +364,25 @@ impl Actor {
             *last = n;
         } else {
             if self.pending_notices.len() >= MAX_PENDING_NOTICES {
-                // Make room by dropping the oldest `Changed`; if there is none, the oldest.
+                // Make room by dropping the oldest `Changed`, then the oldest live message
+                // (they are news that goes stale); a live message never evicts anything else.
+                let droppable = |p: &DocNotice| {
+                    matches!(p, DocNotice::Changed { .. } | DocNotice::Live { .. })
+                };
                 let at = self
                     .pending_notices
                     .iter()
                     .position(|p| matches!(p, DocNotice::Changed { .. }))
-                    .unwrap_or(0);
-                self.pending_notices.remove(at);
+                    .or_else(|| self.pending_notices.iter().position(droppable));
+                match at {
+                    Some(at) => {
+                        self.pending_notices.remove(at);
+                    }
+                    None if matches!(n, DocNotice::Live { .. }) => return,
+                    None => {
+                        self.pending_notices.remove(0);
+                    }
+                }
             }
             self.pending_notices.push_back(n);
         }
@@ -352,7 +390,7 @@ impl Actor {
     }
 
     fn retry_notice(&mut self) {
-        while let Some(n) = self.pending_notices.front().copied() {
+        while let Some(n) = self.pending_notices.front().cloned() {
             if self.notices.try_send(n).is_err() {
                 break;
             }
@@ -368,6 +406,14 @@ impl Actor {
 }
 
 const MAX_PENDING_NOTICES: usize = 8;
+
+/// Sleep until the tracker's next deadline; never ready when it has none.
+async fn live_wait(deadline: Option<Instant>) {
+    match deadline {
+        Some(t) => tokio::time::sleep_until(tokio::time::Instant::from_std(t)).await,
+        None => std::future::pending::<()>().await,
+    }
+}
 /// How long retiring waits for room in the Reader's notice queue.
 const GONE_DELIVERY: Duration = Duration::from_secs(2);
 
@@ -420,6 +466,8 @@ async fn run(
         batch: Vec::new(),
         pending_notices: std::collections::VecDeque::new(),
         read,
+        live: LiveTracker::new(),
+        awake: true,
     };
 
     let mut notice_tick = tokio::time::interval(Duration::from_millis(100));
@@ -460,6 +508,10 @@ async fn run(
                 let Some(ctl) = ctl else { break 'main };
                 match ctl {
                     DocCtl::Activity(act) => {
+                        a.awake = matches!(act, Activity::Awake);
+                        if !a.awake {
+                            a.live.reset();
+                        }
                         let _ = a.requests.try_send(DocRequest::SetActivity(act));
                     }
                     DocCtl::Rebuild => { let _ = a.requests.try_send(DocRequest::Rebuild); }
@@ -471,6 +523,7 @@ async fn run(
                 }
             }
             _ = actions.join_next(), if !actions.is_empty() => {}
+            () = live_wait(a.live.next_deadline()) => a.live_tick(),
             _ = notice_tick.tick() => a.retry_notice(),
         }
     }

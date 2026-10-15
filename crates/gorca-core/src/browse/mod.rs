@@ -26,6 +26,11 @@ use smallvec::SmallVec;
 use crate::doc_actor::{DocDirectory, WebJoin};
 use crate::mode::WebCursor;
 
+/// Live-region utterances admitted per second, over every document of the reader.
+pub const LIVE_RATE: f32 = 5.0;
+/// Burst of the live-region admission bucket.
+pub const LIVE_BURST: f32 = 6.0;
+
 /// What a cursor key may roam over (M7b: modal dialogs).
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Scope {
@@ -456,6 +461,10 @@ pub struct BrowseCounters {
     pub moves: u64,
     pub edges: u64,
     pub still_loading: u64,
+    /// Live-region messages spoken, dropped by the admission bucket, and muted (not in front).
+    pub live_spoken: u64,
+    pub live_dropped: u64,
+    pub live_muted: u64,
 }
 
 /// Settings the browse arm reads (NVDA defaults).
@@ -508,6 +517,9 @@ pub struct BrowseState {
     /// The field in focus mode has a popup open (a drop-down, an auto-complete list): Escape
     /// belongs to the page, which closes it; the next Escape leaves focus mode (modes.md 2).
     pub popup_open: bool,
+    /// Live-region speech the Reader admits: a token bucket over all documents (fairness: a
+    /// flooding page cannot make the reader talk without end, whatever its documents send).
+    pub live_tokens: (f32, Option<Instant>),
 }
 
 impl BrowseState {
@@ -529,6 +541,7 @@ impl BrowseState {
             loaded: HashMap::new(),
             auto_read: None,
             popup_open: false,
+            live_tokens: (LIVE_BURST, None),
         }
     }
 }

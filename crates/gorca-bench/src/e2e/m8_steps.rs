@@ -120,7 +120,6 @@ fn esc(id: &'static str) -> Step {
 }
 
 // Reasons repeated across rows.
-const NO_TABLES: &str = "table navigation is Planned(M8): table.* commands are declared, not handled";
 const NO_FRAME_NAV: &str = "quicknav.next.frame (M) is Planned(M7): not implemented on main";
 const NO_NLB: &str = "quicknav.next.not_link_block (N) is Planned(M7): not implemented on main";
 const NO_ANN: &str = "quicknav.next.annotation (A) is Planned(M7): not implemented on main";
@@ -401,22 +400,22 @@ fn lm() -> Vec<Step> {
 
 fn lv() -> Vec<Step> {
     vec![
-        s("LV.polite", P0, "aria-live=polite: the new text is spoken", Act::Do(role::PUSH_BUTTON, "Run polite"), &["Polite message"]).xf(NO_LIVE).gate(Gate::Live).win(1500),
-        s("LV.assertive", P0, "aria-live=assertive: spoken", Act::Do(role::PUSH_BUTTON, "Run assertive"), &["Assertive message"]).xf(NO_LIVE).gate(Gate::Live).win(1500),
-        s("LV.alert", P0, "role=alert added: spoken at once", Act::Do(role::PUSH_BUTTON, "Run alert"), &["Alert: disk almost full"]).xf(NO_LIVE).gate(Gate::Live).win(1500),
-        s("LV.status", P0, "role=status text change", Act::Do(role::PUSH_BUTTON, "Run status"), &["Saved at step"]).xf(NO_LIVE).gate(Gate::Live).win(1500),
-        s("LV.log", P0, "role=log: only the appended entry", Act::Do(role::PUSH_BUTTON, "Run log"), &["Log entry"]).xf(NO_LIVE).gate(Gate::Live).win(1500),
-        s("LV.log2", P1, "role=log again: one utterance, not the whole log", Act::Do(role::PUSH_BUTTON, "Run log"), &["Log entry"]).max(1).xf(NO_LIVE).win(1500),
-        s("LV.atomic", P1, "aria-atomic: the whole region is spoken for one changed part", Act::Do(role::PUSH_BUTTON, "Run atomic"), &["Ticker", "points"]).xf(NO_LIVE).win(1500),
-        s("LV.busy", P1, "aria-busy: only the final text, once", Act::Do(role::PUSH_BUTTON, "Run busy"), &["Busy final text"]).not(&["Busy part one"]).xf(NO_LIVE).win(2200),
+        s("LV.polite", P0, "aria-live=polite: the new text is spoken", Act::Do(role::PUSH_BUTTON, "Run polite"), &["Polite message"]).gate(Gate::Live).win(1500),
+        s("LV.assertive", P0, "aria-live=assertive: spoken", Act::Do(role::PUSH_BUTTON, "Run assertive"), &["Assertive message"]).gate(Gate::Live).win(1500),
+        s("LV.alert", P0, "role=alert added: spoken at once", Act::Do(role::PUSH_BUTTON, "Run alert"), &["Alert: disk almost full"]).gate(Gate::Live).win(1500),
+        s("LV.status", P0, "role=status text change", Act::Do(role::PUSH_BUTTON, "Run status"), &["Saved at step"]).gate(Gate::Live).win(1500),
+        s("LV.log", P0, "role=log: only the appended entry", Act::Do(role::PUSH_BUTTON, "Run log"), &["Log entry"]).gate(Gate::Live).win(1500),
+        s("LV.log2", P1, "role=log again: one utterance, not the whole log", Act::Do(role::PUSH_BUTTON, "Run log"), &["Log entry"]).max(1).win(1500),
+        s("LV.atomic", P1, "aria-atomic: the whole region is spoken for one changed part", Act::Do(role::PUSH_BUTTON, "Run atomic"), &["Ticker", "points"]).win(1500),
+        s("LV.busy", P1, "aria-busy: only the final text, once", Act::Do(role::PUSH_BUTTON, "Run busy"), &["Busy final text"]).not(&["Busy part one"]).win(2200),
         s("LV.off", P0, "aria-live=off: nothing", Act::Do(role::PUSH_BUTTON, "Run off"), &[]).not(&["Silent update"]).win(900),
-        s("LV.remove", P2, "aria-relevant=all: a removal is spoken (ADR-0003 LR-2; NVDA ignores removals)", Act::Do(role::PUSH_BUTTON, "Run remove"), &["Removable text A"]).xf(NO_LIVE).win(1200),
-        s("LV.same", P1, "Same text again: spoken once", Act::Do(role::PUSH_BUTTON, "Run same"), &["Same text again"]).xf(NO_LIVE).win(1200),
+        s("LV.remove", P2, "aria-relevant=all: a removal is spoken (ADR-0003 LR-2; NVDA ignores removals)", Act::Do(role::PUSH_BUTTON, "Run remove"), &["Removable text A"]).win(1200),
+        s("LV.same", P1, "Same text again: spoken once", Act::Do(role::PUSH_BUTTON, "Run same"), &["Same text again"]).win(1200),
         s("LV.same2", P1, "Same text a second time within 10 s: suppressed (dedupe)", Act::Do(role::PUSH_BUTTON, "Run same"), &[]).not(&["Same text again"]).win(1200),
-        s("LV.new", P1, "A region that appears with text: the existing text is not spoken, a later change is", Act::Do(role::PUSH_BUTTON, "Run new region"), &["Text added after the region exists"]).not(&["Text present when the region appears"]).xf(NO_LIVE).win(1800),
+        s("LV.new", P1, "A region that appears with text: the existing text is not spoken, a later change is", Act::Do(role::PUSH_BUTTON, "Run new region"), &["Text added after the region exists"]).not(&["Text present when the region appears"]).win(1800),
         s("LV.hidden", P2, "A hidden region changes: nothing", Act::Do(role::PUSH_BUTTON, "Run hidden"), &[]).not(&["Hidden region changed"]).win(900),
-        s("LV.flood", P0, "200 polite updates in 1 s: bounded speech (bucket 1/s burst 3, 4/s per document)", Act::Do(role::PUSH_BUTTON, "Run flood polite"), &["Flood update"]).max(8).xf(NO_LIVE).win(2600),
-        s("LV.flood.a", P1, "200 assertive updates in 1 s: bounded speech (2/s burst 3)", Act::Do(role::PUSH_BUTTON, "Run flood assertive"), &["Assertive flood"]).max(10).xf(NO_LIVE).win(2600),
+        s("LV.flood", P0, "200 polite updates in 1 s: bounded speech (bucket 1/s burst 3, 4/s per document)", Act::Do(role::PUSH_BUTTON, "Run flood polite"), &["Flood update"]).max(8).win(2600),
+        s("LV.flood.a", P1, "200 assertive updates in 1 s: bounded speech (2/s burst 3)", Act::Do(role::PUSH_BUTTON, "Run flood assertive"), &["Assertive flood"]).max(10).win(2600),
         Step::setup("LV.after", "let the flood end", Act::Wait(1500)),
         s("LV.key", P0, "Down after a flood: the reader still answers", key0(DOWN), &[]).min(1).gate(Gate::Key).win(600),
     ]
@@ -662,7 +661,7 @@ fn forge() -> Vec<Step> {
         s("FG.d", P1, "D x3: banner, search, then the global navigation", rep('d', 3), &["Pull requests"]).extra(&["Global"], NO_LANDMARK_NAME),
         top("FG.top4"),
         s("FG.h2", P1, "2: the files heading", lvl(2), &["Files"]),
-        s("FG.star", P0, "Activating the star button updates a status region: spoken", Act::Do(role::PUSH_BUTTON, "Star this repository"), &["You starred this repository"]).xf(NO_LIVE).gate(Gate::Live).win(1500),
+        s("FG.star", P0, "Activating the star button updates a status region: spoken", Act::Do(role::PUSH_BUTTON, "Star this repository"), &["You starred this repository"]).gate(Gate::Live).win(1500),
     ]
 }
 
@@ -674,7 +673,7 @@ fn app() -> Vec<Step> {
         s("APP.esc", P0, "Escape in the dialog's field: browse mode, the dialog stays", key0(ESC), &["browse mode"]),
         s("APP.h", P0, "Shift+H: the dialog's own heading", p('h'), &["New message"]),
         s("APP.close", P0, "Discard closes it; focus returns to the opener and the cursor is there", Act::Do(role::PUSH_BUTTON, "Discard"), &["Compose"]).win(1500),
-        s("APP.toast", P1, "The toast 'Dialog closed' is a status region", Act::Wait(300), &["Dialog closed"]).xf(NO_LIVE).win(1500),
+        s("APP.toast", P1, "The toast 'Dialog closed' is a status region", Act::Wait(300), &["Dialog closed"]).win(1500),
         // alert dialog without aria-hidden on the app: modal scope must confine navigation
         s("APP.alert", P0, "The alert dialog opens: name and focus on Cancel", Act::Do(role::PUSH_BUTTON, "Empty trash"), &["Cancel"]).extra(&["Empty trash"], "the dialog's name is not spoken when focus enters it").win(1500),
         s("APP.alert.h", P0, "Shift+H: the dialog heading", p('h'), &["Empty trash"]),
@@ -684,7 +683,7 @@ fn app() -> Vec<Step> {
         top("APP.top2"),
         s("APP.tab", P1, "Focus on a tab: tabs switch to focus mode on focus", Act::Focus(role::PAGE_TAB, "Social"), &["tab", "Social"]).extra(&["focus mode"], "NVDA SWITCH_TO_PASS_THROUGH_ON_FOCUS_ROLES includes tabs (D-1)"),
         s("APP.tab.sel", P1, "Activating a tab shows its panel", Act::Do(role::PAGE_TAB, "Social"), &[]).win(700),
-        s("APP.delete", P0, "Delete shows a toast: spoken", Act::Do(role::PUSH_BUTTON, "Delete"), &["Conversation deleted"]).xf(NO_LIVE).win(1500),
+        s("APP.delete", P0, "Delete shows a toast: spoken", Act::Do(role::PUSH_BUTTON, "Delete"), &["Conversation deleted"]).win(1500),
         s("APP.menu", P1, "A menu button opens a menu; focus on a menu item: focus mode", Act::Do(role::PUSH_BUTTON, "More actions"), &[]).win(700),
         s("APP.menu.item", P1, "Focus on a menu item", Act::Focus(role::MENU_ITEM, "Settings"), &["Settings"]).extra(&["focus mode"], "menu items pass through on focus in NVDA (D-1)"),
         s("APP.combo", P1, "The address combo box: focus mode", Act::Focus(role::COMBO_BOX, "To address"), &["focus mode"]),
@@ -703,7 +702,7 @@ fn spa() -> Vec<Step> {
         s("SP.route2", P0, "Back to the first route", Act::Do(role::LINK, "Home route"), &["Home view"]).not(&["List view", "Extra"]).win(1500),
         top("SP.top2"),
         s("SP.items", P0, "I x3: the third list item", rep('i', 3), &["Row 3"]),
-        s("SP.rerender", P0, "The list is re-rendered with the same text: only the toast speaks", Act::Do(role::PUSH_BUTTON, "Re-render list"), &["List refreshed"]).xf(NO_LIVE).not(&["Row 1", "Row 2"]).win(1200),
+        s("SP.rerender", P0, "The list is re-rendered with the same text: only the toast speaks", Act::Do(role::PUSH_BUTTON, "Re-render list"), &["List refreshed"]).not(&["Row 1", "Row 2"]).win(1200),
         s("SP.restore", P0, "Down: the cursor is still on Row 3 (position restore), so Row 4 is next", key0(DOWN), &["Row 4"]).not(&["Row 1"]),
         s("SP.back", P1, "Browser Back (Alt+Left) pops the route: the list view returns", Act::AppKeys(&[56, 105]), &["List view"]).win(1500),
     ]
@@ -745,7 +744,7 @@ pub fn scenarios() -> Vec<Scenario> {
             page: "generated/large-table.html",
             title: "M8 Large table",
             body: Body::TableBig,
-            xfail: Some(NO_TABLES),
+            xfail: None,
         },
     ]
 }

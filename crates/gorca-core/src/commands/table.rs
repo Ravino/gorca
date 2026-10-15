@@ -304,18 +304,6 @@ macro_rules! planned_cmds {
             | CoreCmd::QuicknavPrevDifferentStyle
             | CoreCmd::QuicknavNextReference
             | CoreCmd::QuicknavPrevReference
-            | CoreCmd::TableNextRow
-            | CoreCmd::TablePrevRow
-            | CoreCmd::TableNextColumn
-            | CoreCmd::TablePrevColumn
-            | CoreCmd::TableFirstRow
-            | CoreCmd::TableLastRow
-            | CoreCmd::TableFirstColumn
-            | CoreCmd::TableLastColumn
-            | CoreCmd::TableSayRow
-            | CoreCmd::TableSayColumn
-            | CoreCmd::TableSayAllRow
-            | CoreCmd::TableSayAllColumn
     };
 }
 pub(crate) use planned_cmds;
