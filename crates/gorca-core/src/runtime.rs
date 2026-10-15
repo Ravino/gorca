@@ -250,6 +250,8 @@ struct Shared {
     web: WebShared,
     /// Text events the app actors could not queue for the Reader (ADR-0007 EV-5).
     text_dropped: Arc<AtomicU64>,
+    /// The extension host (ADR-0001 section 10), when the daemon wires one.
+    ext: Option<Arc<dyn crate::ExtSource>>,
 }
 
 /// The document side of the core: the focus join, the directory of documents, the registry's
@@ -322,6 +324,7 @@ impl Core {
                     counters: Arc::new(DocCounters::default()),
                 },
                 text_dropped: Arc::new(AtomicU64::new(0)),
+                ext: None,
             }),
             inbox,
             registrars: Vec::new(),
@@ -361,6 +364,20 @@ impl Core {
     pub fn with_speech(mut self, speech: Arc<dyn SpeechOut>) -> Self {
         if let Some(sh) = Arc::get_mut(&mut self.shared) {
             sh.speech = speech;
+        }
+        self
+    }
+
+    /// Wire an extension host: app actors offer it their events, the Reader its presentations
+    /// and commands, and its speech returns through the Reader's background lane. Call before
+    /// [`Core::run`].
+    #[must_use]
+    pub fn with_ext(mut self, src: Arc<dyn crate::ExtSource>) -> Self {
+        if let Some(sh) = Arc::get_mut(&mut self.shared) {
+            src.set_sink(Arc::new(crate::ext::BackgroundSink::new(
+                sh.senders.background.clone(),
+            )));
+            sh.ext = Some(src);
         }
         self
     }
@@ -628,6 +645,10 @@ fn spawn_app_actor(
             tx: shared.senders.text.clone(),
             dropped: Arc::clone(&shared.text_dropped),
         });
+    let actor = match &shared.ext {
+        Some(src) => actor.with_ext(Arc::clone(src)),
+        None => actor,
+    };
     let actor = if shared.web.factory.is_some() {
         actor.with_web(WebLink {
             hub: shared.web.hub.clone(),
@@ -977,6 +998,9 @@ async fn reader_loop(
     .with_text_dropped(Arc::clone(&shared.text_dropped));
     if let Some(log) = &shared.present_log {
         reader = reader.with_present_log(Arc::clone(log));
+    }
+    if let Some(src) = &shared.ext {
+        reader = reader.with_ext(Arc::clone(src));
     }
     // N1: every armed deadline stays armed until it fires (a set, not one slot).
     let mut timers: std::collections::BTreeSet<Instant> = std::collections::BTreeSet::new();

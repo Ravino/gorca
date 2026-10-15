@@ -60,6 +60,20 @@ impl Reader {
         self.say(text, fx);
     }
 
+    /// An extension command: queued to the host's worker, never run here (the Reader must not
+    /// wait for an extension). The answer arrives as `BackgroundMsg::ExtSpeech`.
+    fn run_ext_command(&mut self, cmd: CmdId) {
+        let Some(spec) = crate::ExtCommands::installed().and_then(|e| e.get(cmd)) else {
+            return;
+        };
+        let Some(node) = self.current_node() else {
+            return;
+        };
+        if let Some(app) = self.ext.as_ref().and_then(|s| s.for_app(node.app)) {
+            app.command(&spec.ext, spec.local);
+        }
+    }
+
     pub(crate) fn run_command(
         &mut self,
         cmd: CmdId,
@@ -68,6 +82,7 @@ impl Reader {
         fx: &mut ReaderEffects,
     ) {
         let Some(c) = CoreCmd::from_id(cmd) else {
+            self.run_ext_command(cmd);
             return;
         };
         let rep = intent.repeat.max(1);
@@ -485,7 +500,11 @@ impl Reader {
     ) {
         let mut text = key_description(intent);
         text.push_str(": ");
+        let ext_help = cmd
+            .and_then(|c| crate::ExtCommands::installed().and_then(|e| e.get(c)))
+            .map(|s| s.help.as_str());
         match cmd.and_then(CoreCmd::from_id) {
+            None if ext_help.is_some() => text.push_str(ext_help.unwrap_or_default()),
             Some(c) => {
                 text.push_str(c.spec().help);
                 if let super::spec::Availability::Planned(_) = c.spec().available {

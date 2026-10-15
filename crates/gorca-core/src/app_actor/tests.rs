@@ -781,3 +781,126 @@ fn text_events_of_a_focused_but_unprotected_app_are_counted_not_silently_lost() 
     assert_eq!(actor.text_events_unprotected(), 2);
     assert!(trx.try_recv().is_ok());
 }
+
+/// A fake extension host: the hook answers by the text of an announcement.
+#[derive(Debug)]
+struct FakeExt;
+
+#[derive(Debug)]
+struct FakeApp;
+
+impl crate::AppExt for FakeApp {
+    fn on_event(&self, ev: &NodeEvent) -> crate::ExtVerdict {
+        if let NodeEvent::Announcement { text, .. } = ev {
+            match &**text {
+                "suppress" => crate::ExtVerdict::Suppress,
+                "rewrite" => crate::ExtVerdict::Rewrite(vec![gorca_model::Segment {
+                    text: Arc::from("said instead"),
+                    kind: gorca_model::SegmentKind::Text,
+                }]),
+                "reevaluate" => crate::ExtVerdict::ReEvaluate,
+                _ => crate::ExtVerdict::Pass,
+            }
+        } else if matches!(ev, NodeEvent::FocusChanged { .. }) {
+            // Even a Suppress on focus must not break the actor's bookkeeping.
+            crate::ExtVerdict::Suppress
+        } else {
+            crate::ExtVerdict::Pass
+        }
+    }
+
+    fn present(
+        &self,
+        _snap: &NodeSnapshot,
+        _ctx: crate::PresentContext,
+        _epoch: u64,
+    ) -> Option<Vec<gorca_model::Segment>> {
+        None
+    }
+
+    fn command(&self, _ext: &str, _local: u32) {}
+}
+
+impl crate::ExtSource for FakeExt {
+    fn attach(&self, _app: AppId, _info: &gorca_model::AppInfo) -> Option<Arc<dyn crate::AppExt>> {
+        Some(Arc::new(FakeApp))
+    }
+    fn detach(&self, _app: AppId) {}
+    fn for_app(&self, _app: AppId) -> Option<Arc<dyn crate::AppExt>> {
+        None
+    }
+    fn set_sink(&self, _sink: Arc<dyn crate::ExtSink>) {}
+}
+
+fn announce(text: &str) -> NodeEvent {
+    NodeEvent::Announcement {
+        node: None,
+        text: Arc::from(text),
+        politeness: Politeness::Polite,
+    }
+}
+
+#[test]
+fn on_event_verdicts_decide_what_the_reader_hears() {
+    let mut r = rig(IngressConfig::default());
+    let actor = r.actor;
+    r.actor = actor.with_ext(Arc::new(FakeExt));
+    r.port
+        .lifecycle(AppLifecycle::Appeared(shell_info()))
+        .unwrap();
+    r.port.push(announce("plain"));
+    r.port.push(announce("suppress"));
+    r.port.push(announce("rewrite"));
+    r.port.push(announce("reevaluate"));
+    let route = r.actor.pump(Instant::now());
+    // `plain` and `reevaluate` are routed; `suppress` is dropped; `rewrite` is replaced by speech.
+    assert_eq!(route.forwarded_to_background, 3);
+    let mut got = Vec::new();
+    while let Some(m) = r.inbox.poll() {
+        got.push(m);
+    }
+    let texts: Vec<String> = got
+        .iter()
+        .filter_map(|m| {
+            if let crate::reader::ReaderMsg::Background(b) = m {
+                match b {
+                    BackgroundMsg::Announcement { text, .. } => {
+                        Some(format!("announcement:{text}"))
+                    }
+                    BackgroundMsg::ExtSpeech { text, interrupt } => {
+                        Some(format!("ext:{text}:{interrupt}"))
+                    }
+                    BackgroundMsg::ResyncNeeded(_) => None,
+                }
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert_eq!(
+        texts,
+        [
+            "announcement:plain",
+            "ext:said instead:false",
+            "announcement:reevaluate"
+        ]
+    );
+    assert!(r.actor.resync_needed(), "ReEvaluate asks for revalidation");
+}
+
+#[test]
+fn a_suppress_verdict_on_focus_never_breaks_focus_routing() {
+    let mut r = rig(IngressConfig::default());
+    let actor = r.actor;
+    r.actor = actor.with_ext(Arc::new(FakeExt));
+    r.port
+        .lifecycle(AppLifecycle::Appeared(shell_info()))
+        .unwrap();
+    r.port.push(NodeEvent::FocusChanged { node: key(7) });
+    let route = r.actor.pump(Instant::now());
+    assert_eq!(route.forwarded_to_focus_lane, 1);
+    assert!(matches!(
+        r.inbox.poll(),
+        Some(crate::reader::ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node })) if node == key(7)
+    ));
+}

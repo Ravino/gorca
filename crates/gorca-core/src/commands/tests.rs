@@ -849,3 +849,140 @@ fn unknown_command_ids_are_ignored() {
 fn overlay_type_is_re_exported_for_saving() {
     assert!(Overlay::default().is_empty());
 }
+
+// ---- extension hook points (M5) ----
+
+#[derive(Debug, Default)]
+struct RecordingExt {
+    commands: std::sync::Mutex<Vec<(String, u32)>>,
+}
+
+impl crate::AppExt for RecordingExt {
+    fn on_event(&self, _ev: &gorca_model::NodeEvent) -> crate::ExtVerdict {
+        crate::ExtVerdict::Pass
+    }
+    fn present(
+        &self,
+        snap: &NodeSnapshot,
+        _ctx: crate::PresentContext,
+        _epoch: u64,
+    ) -> Option<Vec<gorca_model::Segment>> {
+        (snap.name.as_deref() == Some("OK")).then(|| {
+            vec![gorca_model::Segment {
+                text: Arc::from("ext says"),
+                kind: gorca_model::SegmentKind::Text,
+            }]
+        })
+    }
+    fn command(&self, ext: &str, local: u32) {
+        self.commands.lock().unwrap().push((ext.to_owned(), local));
+    }
+}
+
+#[derive(Debug, Default)]
+struct RecordingSource(Arc<RecordingExt>);
+
+impl crate::ExtSource for RecordingSource {
+    fn attach(&self, _app: AppId, _info: &gorca_model::AppInfo) -> Option<Arc<dyn crate::AppExt>> {
+        Some(self.0.clone())
+    }
+    fn detach(&self, _app: AppId) {}
+    fn for_app(&self, _app: AppId) -> Option<Arc<dyn crate::AppExt>> {
+        Some(self.0.clone())
+    }
+    fn set_sink(&self, _sink: Arc<dyn crate::ExtSink>) {}
+}
+
+#[test]
+fn an_extension_presentation_replaces_the_core_one() {
+    let mut f = fixture();
+    f.reader = f.reader.with_ext(Arc::new(RecordingSource::default()));
+    f.writer.apply(
+        SnapshotBatch {
+            nodes: vec![
+                snap(1, Role::Button, "OK", Some(2)),
+                snap(3, Role::Button, "Cancel", Some(2)),
+            ],
+            ..Default::default()
+        },
+        gorca_mirror::ApplyOrigin::Push,
+    );
+    let fx = f.reader.handle(
+        ReaderMsg::Focus(crate::FocusLaneMsg::FocusChanged { node: key(1) }),
+        f.now,
+    );
+    assert_eq!(spoken(&fx), ["ext says"]);
+    // A node the extension declines is presented by the core.
+    let later = f.now + Duration::from_millis(500);
+    let fx = f.reader.handle(
+        ReaderMsg::Focus(crate::FocusLaneMsg::FocusChanged { node: key(3) }),
+        later,
+    );
+    let fx2 = f
+        .reader
+        .handle(ReaderMsg::Timer, later + Duration::from_millis(200));
+    let all: Vec<String> = spoken(&fx).into_iter().chain(spoken(&fx2)).collect();
+    assert_eq!(all, ["Cancel button"]);
+}
+
+#[test]
+fn extension_speech_interrupts_for_answers_and_survives_focus_for_notices() {
+    let mut f = fixture();
+    let fx = f.reader.handle(
+        ReaderMsg::Background(crate::BackgroundMsg::ExtSpeech {
+            text: Arc::from("answer"),
+            interrupt: true,
+        }),
+        f.now,
+    );
+    assert_eq!(spoken(&fx), ["answer"]);
+    let fx = f.reader.handle(
+        ReaderMsg::Background(crate::BackgroundMsg::ExtSpeech {
+            text: Arc::from("notice"),
+            interrupt: false,
+        }),
+        f.now,
+    );
+    let ReaderEffect::Speak(s) = &fx[0] else {
+        panic!("expected speech");
+    };
+    assert!(s.utterance.survives_focus_change);
+}
+
+#[test]
+fn an_extension_command_is_queued_to_the_host_never_run_in_the_reader() {
+    use crate::{ExtCmdSpec, ExtCommands};
+    // The process-wide registry is installed once; this test owns the `ext.core_test.*` names.
+    let mut reg = ExtCommands::new();
+    let id = reg
+        .register(ExtCmdSpec {
+            name: "ext.core_test.run".to_owned(),
+            ext: "core-test".to_owned(),
+            local: 42,
+            help: "run the core test command".to_owned(),
+            contexts: ContextMask::ANY,
+            max_press: 1,
+            interrupts: true,
+        })
+        .unwrap();
+    let _ = reg.install();
+    let id = ExtCommands::installed()
+        .and_then(|r| r.by_name("ext.core_test.run"))
+        .map_or(id, |(i, _)| i);
+
+    let src = Arc::new(RecordingSource::default());
+    let mut f = fixture();
+    f.reader = f.reader.with_ext(src.clone());
+    f.focus(1);
+    let mut it = intent(CoreCmd::SpeechStop, 1, f.epoch.current().0);
+    it.class = KeyClass::Command(id);
+    let fx = f.reader.handle(ReaderMsg::Key(it), f.now);
+    assert!(
+        spoken(&fx).is_empty(),
+        "the answer comes later, from the host"
+    );
+    assert_eq!(
+        *src.0.commands.lock().unwrap(),
+        vec![("core-test".to_owned(), 42)]
+    );
+}

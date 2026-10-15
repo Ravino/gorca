@@ -42,6 +42,8 @@ pub struct PresenterRegistry {
     focus: Presenter,
     selected_item: Presenter,
     overrides: Vec<(PresentContext, Role, Presenter)>,
+    /// Extension hook (ADR-0001 section 10): asked first; `Some` replaces the presentation.
+    ext: Option<std::sync::Arc<dyn crate::ExtSource>>,
 }
 
 impl PresenterRegistry {
@@ -51,7 +53,15 @@ impl PresenterRegistry {
             focus: present_focus,
             selected_item: present_selected_item,
             overrides: Vec::new(),
+            ext: None,
         }
+    }
+
+    /// Ask the extensions of the node's application before the built-in presenters.
+    #[must_use]
+    pub fn with_ext(mut self, src: std::sync::Arc<dyn crate::ExtSource>) -> Self {
+        self.ext = Some(src);
+        self
     }
 
     /// Install `presenter` for nodes of `role` in `ctx`, replacing an earlier override.
@@ -89,7 +99,30 @@ impl PresenterRegistry {
         id: UttId,
         epoch: Epoch,
     ) -> Utterance {
+        if let Some(segs) = self
+            .ext
+            .as_ref()
+            .and_then(|src| src.for_app(n.key.app))
+            .and_then(|app| app.present(n, ctx, epoch.0))
+            .filter(|segs| !segs.is_empty())
+        {
+            return ext_utterance(segs, id, epoch);
+        }
         self.get(ctx, n.role)(n, id, epoch)
+    }
+}
+
+/// An extension's presentation as an utterance: the same priority as a focus presentation.
+fn ext_utterance(segs: Vec<gorca_model::Segment>, id: UttId, epoch: Epoch) -> Utterance {
+    Utterance {
+        id,
+        segments: segs.into_iter().collect(),
+        lang: None,
+        epoch,
+        prio: gorca_model::Prio::Interrupt,
+        may_refine: false,
+        survives_focus_change: false,
+        refines: None,
     }
 }
 

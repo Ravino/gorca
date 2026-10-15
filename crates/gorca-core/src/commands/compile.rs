@@ -9,6 +9,7 @@ use gorca_input_api::{
 
 use super::spec::CommandTable;
 use super::table::CoreCmd;
+use crate::ext::{ExtCmdSpec, ExtCommands};
 
 /// Facts about the desktop that the daemon probes (ADR-0005 8.1). Plain values: nothing here
 /// reads the environment or settings (the daemon's `main` does, and passes the results in).
@@ -149,14 +150,39 @@ fn bound_of(cmd: CoreCmd) -> Bound {
     }
 }
 
-/// Compile a loaded configuration for the input lane.
+fn ext_bound(id: CmdId, s: &ExtCmdSpec) -> Bound {
+    Bound {
+        cmd: id,
+        active: true,
+        repeatable: false,
+        max_press: s.max_press,
+        bypass: false,
+        interrupts: s.interrupts,
+    }
+}
+
+/// Compile a loaded configuration for the input lane, with the extension commands installed for
+/// the process (`ExtCommands::install`).
 pub fn compile(loaded: &Loaded, facts: &PlatformFacts, resolver: &dyn KeyResolver) -> Compiled {
+    compile_with(loaded, facts, resolver, ExtCommands::installed())
+}
+
+/// [`compile`] with an explicit extension registry (tests).
+pub fn compile_with(
+    loaded: &Loaded,
+    facts: &PlatformFacts,
+    resolver: &dyn KeyResolver,
+    ext: Option<&ExtCommands>,
+) -> Compiled {
     let table = CommandTable::get();
+    let mut mentioned: std::collections::HashSet<(ContextName, ChordSpec)> =
+        std::collections::HashSet::new();
     let (mods, caps_lock_dropped) = gorca_modifiers(&loaded.settings, facts);
     let mut km = CompiledKeymap::new(mods);
     let mut diags = Vec::new();
     for (ctx, chords) in &loaded.keymap.contexts {
         for (spec, binding) in chords {
+            mentioned.insert((*ctx, spec.clone()));
             let path = format!("keymap.{}.\"{spec}\"", ctx.name());
             let Some(key) = chord_key(spec, resolver) else {
                 diags.push(Diag::error(
@@ -172,18 +198,26 @@ pub fn compile(loaded: &Loaded, facts: &PlatformFacts, resolver: &dyn KeyResolve
             let bound = match binding {
                 None => None,
                 Some(name) => {
-                    let Some(cmd) = table.by_name(name) else {
+                    let resolved = match table.by_name(name) {
+                        Some(cmd) => Some((cmd.spec().contexts, bound_of(cmd))),
+                        None => ext
+                            .and_then(|e| e.by_name(name))
+                            .map(|(id, s)| (s.contexts, ext_bound(id, s))),
+                    };
+                    let Some((contexts, bound)) = resolved else {
+                        let mut candidates: Vec<&str> = table.names().collect();
+                        candidates.extend(ext.into_iter().flat_map(ExtCommands::names));
                         diags.push(Diag::error(
                             path,
                             None,
                             DiagMsg::UnknownCommand {
                                 command: name.clone(),
-                                suggestion: did_you_mean(name, table.names()),
+                                suggestion: did_you_mean(name, candidates),
                             },
                         ));
                         continue;
                     };
-                    if !cmd.spec().contexts.allows(*ctx) {
+                    if !contexts.allows(*ctx) {
                         diags.push(Diag::error(
                             path,
                             None,
@@ -194,10 +228,36 @@ pub fn compile(loaded: &Loaded, facts: &PlatformFacts, resolver: &dyn KeyResolve
                         ));
                         continue;
                     }
-                    Some(bound_of(cmd))
+                    Some(bound)
                 }
             };
             km.insert(table_kind(*ctx), key, spec.presses, bound);
+        }
+    }
+    // Extension default chords (ADR-0001 section 10): never over a chord the preset or the user
+    // mentioned, tombstones included.
+    if let Some(ext) = ext {
+        for (ctx, chord, id, spec) in ext.default_bindings() {
+            if mentioned.contains(&(ctx, chord.clone())) {
+                continue;
+            }
+            let Some(key) = chord_key(chord, resolver) else {
+                diags.push(Diag::error(
+                    format!("extension `{}` default chord `{chord}`", spec.ext),
+                    None,
+                    DiagMsg::BadChord {
+                        chord: chord.to_string(),
+                        reason: "unknown key name",
+                    },
+                ));
+                continue;
+            };
+            km.insert(
+                table_kind(ctx),
+                key,
+                chord.presses,
+                Some(ext_bound(id, spec)),
+            );
         }
     }
     km.stop = Some(CoreCmd::SpeechStop.id());
@@ -384,6 +444,78 @@ mod tests {
             &PlatformFacts::default(),
             &StaticResolver,
         )
+    }
+
+    fn ext_registry() -> ExtCommands {
+        use super::super::spec::ContextMask;
+        let mut r = ExtCommands::new();
+        for (name, local) in [("ext.t.hello", 1), ("ext.t.other", 2)] {
+            r.register(ExtCmdSpec {
+                name: name.to_owned(),
+                ext: "t".to_owned(),
+                local,
+                help: "h".to_owned(),
+                contexts: ContextMask::of(&[ContextName::Focus]),
+                max_press: 1,
+                interrupts: true,
+            })
+            .unwrap();
+        }
+        r.bind(ContextName::Focus, "gorca+shift+f9", "ext.t.hello")
+            .unwrap();
+        // A default that collides with a core preset chord must lose to the preset.
+        r.bind(ContextName::Focus, "gorca+s", "ext.t.other")
+            .unwrap();
+        r
+    }
+
+    fn compiled_ext(text: &str, ext: &ExtCommands) -> Compiled {
+        compile_with(
+            &load(Some(text), &Presets::builtin()),
+            &PlatformFacts::default(),
+            &StaticResolver,
+            Some(ext),
+        )
+    }
+
+    #[test]
+    fn extension_defaults_merge_without_overriding_the_user_or_the_preset() {
+        let ext = ext_registry();
+        let c = compiled_ext("", &ext);
+        let hello = ext.by_name("ext.t.hello").unwrap().0;
+        let b = c
+            .keymap
+            .lookup(ModeKind::Focus, key(true, Modifiers::SHIFT, "f9"), 1)
+            .expect("the default chord is bound");
+        assert_eq!(b.cmd, hello);
+        assert!(b.active);
+        assert!(c.diags.is_empty(), "{:?}", c.diags);
+        // The user's tombstone for the same chord wins over the extension's default.
+        let c = compiled_ext("[keymap.focus]\n\"gorca+shift+f9\" = \"\"\n", &ext);
+        assert!(
+            c.keymap
+                .lookup(ModeKind::Focus, key(true, Modifiers::SHIFT, "f9"), 1)
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn users_bind_extension_commands_by_name_and_typos_get_a_suggestion() {
+        let ext = ext_registry();
+        let c = compiled_ext("[keymap.focus]\n\"gorca+f10\" = \"ext.t.other\"\n", &ext);
+        let other = ext.by_name("ext.t.other").unwrap().0;
+        assert_eq!(
+            c.keymap
+                .lookup(ModeKind::Focus, key(true, Modifiers::empty(), "f10"), 1)
+                .map(|b| b.cmd),
+            Some(other)
+        );
+        let c = compiled_ext("[keymap.focus]\n\"gorca+f10\" = \"ext.t.helo\"\n", &ext);
+        let text = c.diags.iter().map(ToString::to_string).collect::<String>();
+        assert!(text.contains("ext.t.hello"), "{text}");
+        // Not in this context.
+        let c = compiled_ext("[keymap.review]\n\"gorca+f10\" = \"ext.t.hello\"\n", &ext);
+        assert!(!c.diags.is_empty());
     }
 
     fn key(gorca: bool, mods: Modifiers, name: &str) -> ChordKey {

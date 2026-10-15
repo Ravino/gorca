@@ -251,6 +251,47 @@ pub(crate) fn wire_present_log(
     }
 }
 
+/// Extensions (M5, ADR-0001 section 10): load `--ext-dir`, merge the extensions' commands into the
+/// keymap registry and hand the host to the core. Must run before the settings are compiled (the
+/// config task), so that `ext.*` names in the user's keymap resolve. Nothing here can fail the
+/// daemon: a missing directory, a broken manifest or a component that does not compile is logged
+/// and skipped, and a panic while loading costs only the extensions.
+pub(crate) async fn wire_ext(core: gorca_core::Core, opts: &Options) -> gorca_core::Core {
+    let Some(dir) = opts.ext_dir.clone() else {
+        return core;
+    };
+    let nodes = core.mirrors();
+    let settings = opts.ext_settings.clone();
+    let built = tokio::task::spawn_blocking(move || {
+        let mut b = gorca_ext_host::ExtHost::builder(nodes);
+        if let Some(s) = settings {
+            b = b.settings_file(s);
+        }
+        b.load_dir(&dir);
+        let host = b.build();
+        let (commands, problems) = host.commands();
+        for p in problems {
+            tracing::warn!("extension keymap: {p}");
+        }
+        if !commands.install() {
+            tracing::warn!("extension commands were already installed");
+        }
+        host
+    })
+    .await;
+    match built {
+        Ok(host) => {
+            let names: Vec<_> = host.extension_names().map(str::to_owned).collect();
+            tracing::info!(extensions = ?names, "extensions loaded");
+            core.with_ext(Arc::new(host))
+        }
+        Err(e) => {
+            tracing::error!("extension loading failed, running without extensions: {e}");
+            core
+        }
+    }
+}
+
 /// The connector's `NodeKey` to `(bus, path)` table as the core's presentation-log labeller.
 struct PathLabels(gorca_connector_atspi::AtspiLabels);
 

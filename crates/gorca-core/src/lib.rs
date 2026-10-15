@@ -33,6 +33,7 @@ mod commands;
 mod directory;
 mod doc_actor;
 mod doc_registry;
+mod ext;
 mod focus;
 mod health;
 mod mode;
@@ -54,7 +55,7 @@ pub use commands::{
     Availability, CmdSpec, CommandTable, Compiled, ConfigRequest, ContextMask, ControlMsg, CoreCmd,
     InputNotice, LoadCause, LoadedSettings, LocalTime, Milestone, PASS_TIMEOUT, PlatformFacts,
     SaveResult, SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels, WallClock, browse_grabs,
-    chord_grabs, command_id, compile, escape_grabs, gorca_modifiers, grab_collisions,
+    chord_grabs, command_id, compile, compile_with, escape_grabs, gorca_modifiers, grab_collisions,
     lane_settings,
 };
 pub use directory::MirrorDirectory;
@@ -63,6 +64,10 @@ pub use doc_actor::{
     prepare as prepare_doc_actor,
 };
 pub use doc_registry::{BUILD_HOLD, HubCfg, HubMsg, HubTx, WarmState, hub_channel, run_hub};
+pub use ext::{
+    AppExt, EXT_CMD_BASE, ExtCmdError, ExtCmdSpec, ExtCommands, ExtSink, ExtSource, ExtVerdict,
+    segments_text,
+};
 pub use focus::{FOCUS_FLAP_DELAY, FocusEffect, FocusMsg, FocusState, settle_delay};
 pub use health::{
     AppHealth, HUNG_PROBE_MAX, HUNG_PROBE_MIN, HealthEffect, HealthMsg, HealthStepCtx,

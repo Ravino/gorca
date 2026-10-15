@@ -302,3 +302,20 @@ would measure the same code twice. Recommendation:
   mirror's text runs are rebuilt whole from `GetText` on each change (never spliced by offset), so they need no
   conversion either. A Newton source has no phantoms, so its profile row is empty. The connector's quirk table
   keeps `Gecko => Utf16Bom` (`TextUnit::window_follows`), plus the attribute-name table of `info.formatting`.
+
+
+## 9. Amendment 1 (2026-10-15, M5 implementation)
+
+M5 shipped the host as designed in section 3.3, with these deliberate differences:
+
+- **WIT stays 0.1 in M5.** The 0.2 hooks of section 6.1 (`pass-through-verdict`, `live-politeness`,
+  apply-time `nav-match`, patch-form batch verdicts) move to M7, with the first extension that needs
+  them (phase-2 plan: "TBD-WEB-7 hooks stay for M7"). 0.1 gained only additive pieces needed by the first
+  ports: `get-setting`, the `document-web` role, and the property mask on `properties-changed`.
+- **Fuel is the CPU limit, epoch is the wall-clock backstop** (10x). Epoch alone measured wrong under
+  load: a descheduled healthy hook is interrupted and counted as a fault (WE-5 is a CPU limit).
+  `FUEL_PER_MS` is calibrated on the dev host. Native keeps the post-hoc check.
+- **The hook traits live in `gorca-core`** (`ExtSource`, `AppExt`, `ExtSink`, `ExtCommands`); the host
+  implements them. The core still never links the host or wasmtime (rules 1, 3; new xtask rule 9).
+- **No `wasmtime-wasi`.** Pure WASI clock/random imports are linked by the host; the rest traps.
+- Q-E3 (memory per instance) is measured in `docs/reports/m5-impl.md`.

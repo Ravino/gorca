@@ -102,6 +102,9 @@ pub enum BackgroundMsg {
     },
     /// A background event was dropped for this app; its mirror may be stale.
     ResyncNeeded(AppId),
+    /// Speech from an extension (a command's answer, a rewrite verdict, an "extension disabled"
+    /// notice). `interrupt` answers a key the user pressed.
+    ExtSpeech { text: Arc<str>, interrupt: bool },
 }
 
 #[derive(Debug)]
@@ -359,6 +362,8 @@ pub struct Reader {
     )>,
     /// The caret machine, the text window and say-all (ADR-0007).
     pub(crate) text: TextState,
+    /// Extension commands run through this (the presenter registry holds its own handle).
+    pub(crate) ext: Option<Arc<dyn crate::ExtSource>>,
 }
 
 /// Revalidation and correction counters (B-1 M-6).
@@ -408,7 +413,16 @@ impl Reader {
             revalidate_retried: None,
             web_extra: None,
             text: TextState::new(),
+            ext: None,
         }
+    }
+
+    /// Route `present` hooks and extension commands through `src` (ADR-0001 section 10).
+    #[must_use]
+    pub fn with_ext(mut self, src: Arc<dyn crate::ExtSource>) -> Self {
+        self.presenters = self.presenters.with_ext(Arc::clone(&src));
+        self.ext = Some(src);
+        self
     }
 
     /// Record every node presentation in `log` (PW-10).
@@ -530,6 +544,13 @@ impl Reader {
             ReaderMsg::Background(b) => match b {
                 BackgroundMsg::Announcement { .. } | BackgroundMsg::ResyncNeeded(_) => {
                     // TBD: live-region policy lives in gorca-doc; resync scheduling in the app actor.
+                }
+                BackgroundMsg::ExtSpeech { text, interrupt } => {
+                    if interrupt {
+                        self.say(&text, &mut fx);
+                    } else {
+                        self.announce(&text, &mut fx);
+                    }
                 }
             },
             ReaderMsg::Mode(m) => self.on_mode(m, &mut fx),

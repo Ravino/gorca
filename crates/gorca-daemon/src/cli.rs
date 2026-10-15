@@ -80,6 +80,12 @@ pub struct Options {
     /// with one `Cache.GetItems` after the first focus. Off by default until the Shell main-loop
     /// stall of a dump is measured (B-1 judgement, finding 2).
     pub shell_dump: bool,
+    /// `--ext-dir=DIR` / `GORCA_EXT_DIR`: load extensions from `DIR/<name>/ext.toml` (ADR-0001
+    /// section 10). Off unless given: the daemon never scans a directory nobody named.
+    pub ext_dir: Option<PathBuf>,
+    /// `--ext-settings=PATH` / `GORCA_EXT_SETTINGS`: where the extensions' settings KV lives
+    /// (default: `$XDG_STATE_HOME/gorca/ext-settings.toml`, only when extensions are loaded).
+    pub ext_settings: Option<PathBuf>,
 }
 
 /// `gorca config ...`: tools around the settings file (ADR-0005 7.4, CV-3).
@@ -151,6 +157,10 @@ OPTIONS:
                                  prefetch, the B-1 baseline; candidate = prefetch)
     --shell-cache-dump           let the prefetch policy dump gnome-shell with one Cache.GetItems
                                  (off: the dump stalls the Shell main loop, not yet measured)
+    --ext-dir=DIR                load extensions from DIR/<name>/ext.toml (WASM components; a
+                                 broken extension is reported and skipped, never fatal)
+    --ext-settings=PATH          the extensions' settings file (default:
+                                 $XDG_STATE_HOME/gorca/ext-settings.toml)
     -h, --help                   print this help
 ";
 
@@ -198,6 +208,27 @@ impl Options {
         }
         if o.topology_report.is_none() {
             o.topology_report = get("GORCA_TOPOLOGY_REPORT").filter(|s| !s.is_empty());
+        }
+        if o.ext_dir.is_none() {
+            o.ext_dir = get("GORCA_EXT_DIR")
+                .filter(|s| !s.is_empty())
+                .map(PathBuf::from);
+        }
+        if o.ext_settings.is_none() {
+            o.ext_settings = get("GORCA_EXT_SETTINGS")
+                .filter(|s| !s.is_empty())
+                .map(PathBuf::from);
+        }
+        if o.ext_dir.is_some() && o.ext_settings.is_none() {
+            let base = get("XDG_STATE_HOME")
+                .filter(|s| !s.is_empty())
+                .map(PathBuf::from)
+                .or_else(|| {
+                    get("HOME")
+                        .filter(|s| !s.is_empty())
+                        .map(|h| PathBuf::from(h).join(".local/state"))
+                });
+            o.ext_settings = base.map(|b| b.join("gorca/ext-settings.toml"));
         }
         if get("GORCA_IMPERSONATE_ORCA").is_some_and(|v| v == "1") {
             o.impersonate_orca = true;
@@ -399,6 +430,10 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError
             }
             "--topology-report" => opts.topology_report = Some(value("--topology-report")?),
             "--shell-cache-dump" => opts.shell_dump = true,
+            "--ext-dir" => opts.ext_dir = Some(PathBuf::from(value("--ext-dir")?)),
+            "--ext-settings" => {
+                opts.ext_settings = Some(PathBuf::from(value("--ext-settings")?));
+            }
             "--a11y-address" => opts.a11y_address = Some(value("--a11y-address")?),
             "--session-address" => opts.session_address = Some(value("--session-address")?),
             _ => return Err(CliError::Unknown(arg)),
@@ -463,6 +498,13 @@ mod tests {
         assert_eq!(opts(&[]).fill_policy, FillChoice::Prefetch);
         assert!(!opts(&[]).shell_dump);
         assert!(opts(&["--shell-cache-dump"]).shell_dump);
+        assert_eq!(opts(&[]).ext_dir, None);
+        assert_eq!(
+            opts(&["--ext-dir=/x", "--ext-settings", "/y.toml"]).ext_dir,
+            Some(PathBuf::from("/x"))
+        );
+        let from_env = opts(&[]).with_env(|k| (k == "GORCA_EXT_DIR").then(|| "/e".to_owned()));
+        assert_eq!(from_env.ext_dir, Some(PathBuf::from("/e")));
         assert_eq!(
             opts(&["--bench-fill-policy=candidate"]).fill_policy,
             FillChoice::Prefetch

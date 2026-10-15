@@ -362,6 +362,8 @@ async fn run_inner(
     if let Some(p) = policy {
         core = core.with_fill_policy(p);
     }
+    // Extensions first: their commands must be known before the settings are compiled.
+    let mut core = wire::wire_ext(core, &opts).await;
     let registry = core.connector_registrar(ConnectorId(1));
     let epoch = core.epoch();
     let focused = core.focused_app();
