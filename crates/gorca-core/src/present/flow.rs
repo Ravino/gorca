@@ -282,7 +282,14 @@ impl Reader {
         // Only a request issued strictly after the focus began can have confirmed the content.
         let confirmed_after_trigger =
             v.snap.confirmed_seq > self.focus_seq && v.stale.is_empty() && !v.aged;
-        if revalidate && !confirmed_after_trigger {
+        // A fresh snapshot that did not earn the protection (a prefetched window carries no
+        // `FOCUSED` state) is still re-read: only the re-read can earn it (review F-1, path 4).
+        let unearned = self.selection_node != Some(v.snap.key)
+            && self
+                .focused_app
+                .as_ref()
+                .is_some_and(|f| !f.protects(v.snap.key.app));
+        if revalidate && (!confirmed_after_trigger || unearned) {
             self.counters.revalidations += 1;
             fx.push(Self::fetch_effect(
                 v.snap.key,

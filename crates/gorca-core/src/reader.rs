@@ -1161,6 +1161,40 @@ mod tests {
         assert_eq!(published.get(), Some(app()), "the re-read earned it");
     }
 
+    /// Review F-1 (4): a window that a prefetch issued after the focus began is "confirmed after
+    /// the trigger", but it carries no `FOCUSED`: the fallback must still ask the re-read, or the
+    /// app never earns its protection until the next focus.
+    #[test]
+    fn a_window_confirmed_after_the_focus_still_asks_the_rv1_when_protection_is_unearned() {
+        let mut f = fixture();
+        let published = Arc::new(FocusedApp::new());
+        f.reader.focused_app = Some(Arc::clone(&published));
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        let issued_at = f.reader.focus_seq + 1;
+        f.writer.apply(
+            SnapshotBatch {
+                nodes: vec![snap(1, Role::Button, "Window")],
+                ..Default::default()
+            },
+            gorca_mirror::ApplyOrigin::Reply { issued_at },
+        );
+        let fx = f.reader.handle(
+            err_reply(&f, 1, FetchKind::Focus, BackendError::Timeout),
+            now,
+        );
+        assert!(
+            effects_of(&fx).contains(&"fetch-rv1"),
+            "{:?}",
+            effects_of(&fx)
+        );
+        f.reader.handle(
+            reply(&f, 1, FetchKind::Revalidate, focused_snap(1, "Window")),
+            now,
+        );
+        assert_eq!(published.get(), Some(app()), "the re-read earned it");
+    }
+
     /// Review F-1 (3): a cached move inside the app that owns the protection keeps it (its text
     /// events are not dropped for a round trip); the re-read that shows the node unfocused
     /// withdraws it.
