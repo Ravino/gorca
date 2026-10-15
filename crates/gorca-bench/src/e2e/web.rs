@@ -1307,7 +1307,7 @@ pub fn fm(
     let (mut w, doc) = Web::start(host, reader, flavor, &[url], "M7 Sign in")?;
     w.prime(&doc)?;
     let field = w.find(&doc.path, "entry", "")?;
-    let link = w.find(&doc.path, "link", "Back")?;
+    let link = w.find_partial(&doc.path, "link", "Back")?;
     let (mut fm1, mut fm2) = (Vec::new(), Vec::new());
     let (mut lost, mut not_consumed, mut lost_after_switch, mut race_lost) =
         (0u64, 0u64, 0u64, 0u64);
@@ -1503,7 +1503,7 @@ pub fn w2(
     )?;
     let (mut w, doc) = Web::start(host, reader, flavor, &[file_url(&start)?], "M7 Start")?;
     w.prime(&doc)?;
-    let link = w.find(&doc.path, "link", "go to")?;
+    let link = w.find_partial(&doc.path, "link", "go to")?;
     let mark = w.mark();
     let t_call = w.action(&link)?;
     let heard = w.speech(mark, Duration::from_secs(30), |t| t.contains(&title));
