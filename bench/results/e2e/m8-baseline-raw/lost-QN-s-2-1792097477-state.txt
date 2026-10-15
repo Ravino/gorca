@@ -1,0 +1,84 @@
+713978020450389 said "M8 Quick navigation, document"
+713978059015365 said "browse mode, heading level 1, Quick nav start"
+713978309074400 said "Alpha link, link"
+713978603669909 said "M8 Quick navigation, document, heading level 1, Quick nav start"
+713979075745358 said "heading level 1, Quick nav start"
+713979376059611 said "heading level 2, Heading two first"
+713979507422481 said "heading level 3, Heading three first"
+713979638591099 said "heading level 4, Heading four first"
+713979709218989 said "heading level 5, Heading five first"
+713979779499661 said "heading level 6, Heading six first"
+713979970347340 said "heading level 5, Heading five first"
+713980574980941 said "heading level 1, Quick nav start"
+713980875283903 said "heading level 2, Heading two first"
+713981006332990 said "heading level 2, Heading two second"
+713981137507866 said "no next heading level 2"
+713981741695179 said "heading level 1, Quick nav start"
+713982041998230 said "heading level 3, Heading three first"
+713982173141642 said "heading level 4, Heading four first"
+713982304418034 said "heading level 5, Heading five first"
+713982435633696 said "heading level 6, Heading six first"
+713982566860698 said "End paragraph."
+713982566991498 said "heading level 1, Quick nav start"
+713983162613018 said "heading level 1, Quick nav start"
+713983463024755 said "no previous heading"
+713984068495409 said "heading level 1, Quick nav start"
+713984369022069 said "link, Alpha link"
+713984500403425 said "link, Beta link"
+713984571059445 said "link, Gamma link"
+713984641465775 said "link, inline link one"
+713984832561734 said "link, Gamma link"
+713985440729476 said "heading level 1, Quick nav start"
+713985740985419 said "link, Alpha link"
+713985875985425 said "no next visited link"
+713986005214534 said "no next link"
+713986604548512 said "heading level 1, Quick nav start"
+713986908286993 said "no previous link"
+713987511999399 said "heading level 1, Quick nav start"
+713987813240808 said "edit, blank"
+713988515170581 said "edit, blank"
+713989222712413 said "check box, not checked"
+713989927976832 said "check box, checked"
+713991114138674 said "heading level 1, Quick nav start"
+713991417234899 said "edit, blank"
+713992124852080 said "edit, blank"
+713992830476502 said "edit, invalid entry, bad"
+713994023443276 said "heading level 1, Quick nav start"
+713994322693617 said "check box, not checked"
+713995033783003 said "check box, checked"
+713995740029397 said "radio button, not checked"
+713996451298981 said "radio button, checked"
+713997155894438 said "combo box"
+713997865108221 said "combo box"
+713998572166299 said "button, Go button"
+713999274759419 said "button, Cancel button"
+713999406401236 said "button, Toggle button one"
+714000014939066 said "heading level 1, Quick nav start"
+714000315793091 said "• Apple item, • Banana item, • Cherry item"
+714001025982893 said "1. First numbered, 2. Second numbered"
+714002242214374 said "heading level 1, Quick nav start"
+714002542808499 said "• Apple item"
+714002665652199 said "• Banana item"
+714003274434379 said "heading level 1, Quick nav start"
+714003575639590 said "Chart graphic, graphic"
+714004283760773 said "no next graphic"
+714005464063082 said "heading level 1, Quick nav start"
+714005764722708 said "Quoted wisdom one."
+714006471100317 said "Quoted wisdom two."
+714007650550361 said "heading level 1, Quick nav start"
+bus 2 /org/a11y/atspi/accessible/73
+bus 2 /org/a11y/atspi/accessible/74
+bus 2 /org/a11y/atspi/accessible/76
+bus 2 /org/a11y/atspi/accessible/82
+bus 2 /org/a11y/atspi/accessible/85
+bus 2 /org/a11y/atspi/accessible/86
+bus 2 /org/a11y/atspi/accessible/87
+bus 2 /org/a11y/atspi/accessible/88
+bus 2 /org/a11y/atspi/accessible/89
+bus 2 /org/a11y/atspi/accessible/81
+bus 1 /org/a11y/atspi/accessible/81
+bus 1 /org/a11y/atspi/accessible/81
+bus 1 /org/a11y/atspi/accessible/140
+bus 1 /org/a11y/atspi/accessible/140
+bus 1 /org/a11y/atspi/accessible/81
+bus 1 /org/a11y/atspi/accessible/81

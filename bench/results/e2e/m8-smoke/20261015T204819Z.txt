@@ -1,0 +1,62 @@
+# e2e-m8 m8-smoke
+# utc=2026-10-15T20:48:19Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=25.85 22.07 17.24 9/3626 1505228
+# git_rev=ce548af
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m8-smoke
+# reader=daemon:<repo>/.claude/worktrees/agent-ace36bf376a4668ef/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# quick=true
+# loadavg_before=27.02 21.71 16.85 4/3633 1335282
+# loadavg_end=25.85 22.07 17.24 8/3625 1505213
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# note0=M8-QN QN.f.1 P0 FAIL: heard "edit, blank" 
+# note1=M8-QN QN.f.2 P0 FAIL: heard "edit, blank" 
+# note2=M8-QN QN.f.3 P0 FAIL: heard "check box, not checked" 
+# note3=M8-QN QN.f.4 P0 FAIL: heard "check box, checked" 
+# note4=M8-QN QN.e.1 P0 FAIL: heard "edit, blank" 
+# note5=M8-QN QN.e.2 P0 FAIL: heard "edit, blank" 
+# note6=M8-QN QN.e.3 P1 FAIL: heard "edit, invalid entry, bad" 
+# note7=M8-QN QN.x.1 P0 FAIL: heard "check box, not checked" 
+# note8=M8-QN QN.x.2 P0 FAIL: heard "check box, checked" 
+# note9=M8-QN QN.r.1 P0 FAIL: heard "radio button, not checked" 
+# note10=M8-QN QN.r.2 P0 FAIL: heard "radio button, checked" 
+# note11=M8-QN QN.c.1 P0 FAIL: heard "combo box" 
+# note12=M8-QN QN.c.2 P0 FAIL: heard "combo box" 
+# note13=M8-QN QN.l.1 P0 FAIL: heard "• Apple item, • Banana item, • Cherry item" 
+# note14=M8-QN QN.l.2 P0 FAIL: heard "1. First numbered, 2. Second numbered" 
+# note15=M8-QN QN.g.1 P0 FAIL: heard "Chart graphic, graphic" 
+# note16=M8-QN QN.g.2 P1 FAIL: heard "no next graphic" 
+# note17=M8-QN QN.q.1 P0 FAIL: heard "Quoted wisdom one." 
+# note18=M8-QN QN.q.2 P1 FAIL: heard "Quoted wisdom two." 
+# note19=M8-QN QN.s.1 P1 FAIL: heard "" 
+# note20=M8-QN QN.s.2 P1 FAIL: heard "" 
+# note21=M8-QN QN.d.1 P0 FAIL: heard "Search term, edit, blank, Email address, edit, blank, check box, not checked, Subscribe box, check box, checked, Terms box, radio button, not checked, Small radio, radio button, checked, Large radio, Country, combo box, Colour, combo box, b~" 
+# note22=M8-QN QN.d.2 P0 FAIL: heard "Inside main." 
+# note23=M8-QN QN.d.3 P0 FAIL: heard "Inside aside." 
+# note24=M8-QN QN.o.1 P1 FAIL: heard "no next embedded object" 
+# note25=M8-QN QN.o.2 P1 FAIL: heard "no next embedded object" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-QN.key_ms.n             daemon/voicego            8            8            8  1                  info   [samples]
+M8-QN.key_ms.p50           daemon/voicego        0.383        0.383        0.383  1                  info   [ms]
+M8-QN.key_ms.p95           daemon/voicego        0.459        0.459        0.459  1                  info   [ms]
+M8-QN.key_ms.p99           daemon/voicego        0.459        0.459        0.459  1 <=            5  PASS   [ms]
+M8-QN.key_ms.max           daemon/voicego        0.459        0.459        0.459  1                  info   [ms]
+M8-QN.fail                 daemon/voicego           26           26           26  1 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-QN.gap                  daemon/voicego            1            1            1  1                  info  core ok, NVDA extras missing [steps]
+M8-QN.p0_not_pass          daemon/voicego           19           19           19  1                  info   [steps]
+M8-QN.pass                 daemon/voicego           29           29           29  1                  info   [steps]
+M8-QN.steps                daemon/voicego           68           68           68  1                  info   [steps]
+M8-QN.xfail                daemon/voicego           12           12           12  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-QN.xpass                daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]

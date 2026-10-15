@@ -37,6 +37,10 @@ use super::mono::now_ns;
 use super::runner::{HostEnv, Rig, RigOpts};
 use super::scenarios::{RunOut, Size, ms};
 
+/// M8 parity scenarios (docs/plan/m8-spec.md); a child module so it can use this module's rig.
+#[path = "m8.rs"]
+pub mod m8;
+
 pub(super) const DOWN: K = K {
     code: 116,
     sym: 0xff54,

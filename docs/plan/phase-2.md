@@ -343,6 +343,11 @@ cursor restore success ≥ 85 % on re-rendered corpus pages (GM §3.2 baseline).
 **Risks.** Virtualised lists (TBD-WEB-3) and `aria-posinset` exposure (TBD-WEB-2) may block "N of M"
 announcements in some frameworks.
 
+**Prep status (2026-10-15, web-a11y-engineer).** Done: `docs/plan/m8-spec.md` (NVDA parity matrix, 10 parity deltas D-1..D-10,
+implementation order), corpus `tests/web/m8/` (17 pages incl. news, encyclopedia, code forge, web app and SPA shaped ones, 5 frame pages, generated 100k-node and 12k-cell pages), gate harness
+`e2e-m8` (318 scripted steps, 176 P0, expected-fail marks, ADR-0003 14 thresholds) and the baseline against `main`
+(`docs/reports/m8-baseline.md`: 108 of 176 P0 steps pass on the merged M3b+M7b main).
+
 ### M9 — Chromium/Chrome
 
 **User-testable increment.** The same browse mode and quick navigation as M7/M8 in Chrome launched

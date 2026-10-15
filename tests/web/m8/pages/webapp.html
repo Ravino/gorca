@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 Web app dialogs</title>
+<style>
+[role=dialog],[role=alertdialog]{border:2px solid #444;padding:1em;background:#fff;position:fixed;top:60px;left:60px;z-index:9}
+.backdrop{position:fixed;inset:0;background:#0004;z-index:8}
+</style></head>
+<body>
+<div id="app">
+<header>
+  <h1>Mail app</h1>
+  <div role="toolbar" aria-label="Main toolbar">
+    <button type="button" id="compose">Compose</button>
+    <button type="button" id="delete">Delete</button>
+    <button type="button" id="confirm-open">Empty trash</button>
+    <button type="button" id="menu-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="menu1">More actions</button>
+  </div>
+  <ul role="menu" id="menu1" aria-label="More actions" hidden>
+    <li role="menuitem" tabindex="-1">Mark all read</li><li role="menuitem" tabindex="-1">Settings</li>
+  </ul>
+</header>
+<div class="layout">
+  <nav aria-label="Folders"><ul><li><a href="#inbox" aria-current="page">Inbox (3)</a></li><li><a href="#sent">Sent</a></li><li><a href="#trash">Trash</a></li></ul></nav>
+  <main>
+    <div role="tablist" aria-label="Views">
+      <button role="tab" id="t1" aria-selected="true" aria-controls="p1" type="button">Primary</button>
+      <button role="tab" id="t2" aria-selected="false" aria-controls="p2" tabindex="-1" type="button">Social</button>
+    </div>
+    <div role="tabpanel" id="p1" aria-labelledby="t1">
+      <h2>Inbox</h2>
+      <ul aria-label="Messages">
+        <li><a href="#m1">Quarterly report</a> <span>from Ada</span></li>
+        <li><a href="#m2">Lunch on Friday?</a> <span>from Grace</span></li>
+        <li><a href="#m3">Build failed</a> <span>from CI</span></li>
+      </ul>
+    </div>
+    <div role="tabpanel" id="p2" aria-labelledby="t2" hidden><h2>Social</h2><p>No new social messages.</p></div>
+    <div role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-label="To address" tabindex="0" id="to">ada@example.com</div>
+  </main>
+</div>
+</div>
+<div id="toasts" role="status" aria-live="polite"></div>
+<div id="layer"></div>
+<script>
+const $ = (s) => document.querySelector(s);
+const layer = $("#layer");
+let opener = null;
+function modal(kind, label, html, firstSel, hideApp) {
+  opener = document.activeElement;
+  if (hideApp) $("#app").setAttribute("aria-hidden", "true"); // the alert dialog leaves the page exposed: aria-modal alone must confine the reader
+  layer.innerHTML = `<div class="backdrop"></div><div role="${kind}" aria-modal="true" aria-label="${label}" id="dlg">${html}</div>`;
+  const first = layer.querySelector(firstSel); if (first) first.focus();
+  layer.querySelector("[data-close]").onclick = close;
+  layer.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); }, { once: true });
+}
+function close() {
+  layer.innerHTML = ""; $("#app").removeAttribute("aria-hidden");
+  if (opener) opener.focus();
+  $("#toasts").textContent = "Dialog closed";
+}
+$("#compose").onclick = () => modal("dialog", "New message",
+  `<h2>New message</h2><label for="c-to">To</label> <input id="c-to" type="text"><br>
+   <label for="c-body">Message</label> <textarea id="c-body"></textarea><br>
+   <button type="button" data-send>Send</button> <button type="button" data-close>Discard</button>`, "#c-to", true);
+$("#confirm-open").onclick = () => modal("alertdialog", "Empty trash",
+  `<h2>Empty trash?</h2><p>This cannot be undone.</p><button type="button" data-close>Cancel</button> <button type="button" data-ok>Empty</button>`, "[data-close]", false);
+$("#delete").onclick = () => { $("#toasts").textContent = "Conversation deleted. Undo available."; };
+$("#menu-btn").onclick = () => { const m = $("#menu1"); m.hidden = !m.hidden; $("#menu-btn").setAttribute("aria-expanded", String(!m.hidden)); };
+for (const t of document.querySelectorAll("[role=tab]")) t.onclick = () => {
+  for (const x of document.querySelectorAll("[role=tab]")) { x.setAttribute("aria-selected", String(x === t)); document.getElementById(x.getAttribute("aria-controls")).hidden = x !== t; }
+};
+</script>
+</body>
+</html>

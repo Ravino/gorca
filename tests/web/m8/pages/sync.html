@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 Focus and caret sync</title></head>
+<body>
+<h1>Focus and caret sync</h1>
+<p id="p1">First paragraph with <a href="#p2" id="l1">link one</a> and tail words.</p>
+<p id="p2">Second paragraph with <a href="#p3" id="l2">link two</a>.</p>
+<button type="button" id="btn">Plain button</button>
+<p id="p3">Third paragraph, plain.</p>
+<input type="text" id="inp" aria-label="Sync field" value="field text">
+<p id="p4">Fourth paragraph after the field.</p>
+<a href="#p1" id="l3">Link three</a>
+<div tabindex="0" id="tabdiv">Focusable div with text</div>
+<p>
+  <button type="button" id="jump" onclick="document.getElementById('l3').focus()">Script focus link three</button>
+  <button type="button" id="jump2" onclick="document.getElementById('inp').focus()">Script focus field</button>
+  <button type="button" id="scroll" onclick="window.scrollTo(0, document.body.scrollHeight)">Scroll to end</button>
+</p>
+<div style="height:1600px"></div>
+<p id="far">Far paragraph at the bottom.</p>
+</body>
+</html>

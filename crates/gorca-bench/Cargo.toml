@@ -26,6 +26,10 @@ name = "e2e"
 path = "src/bin/e2e.rs"
 
 [[bin]]
+name = "e2e-m8"
+path = "src/bin/e2e_m8.rs"
+
+[[bin]]
 name = "gorca-stub-reader"
 path = "src/bin/stub_reader.rs"
 

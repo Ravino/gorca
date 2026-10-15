@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 Autofocus</title></head>
+<body>
+<h1>Autofocus on load</h1>
+<p>A page script focuses an edit field at once; the reader must enter focus mode without a key press.</p>
+<form onsubmit="return false">
+  <label for="auto">Search</label> <input id="auto" type="text" autofocus>
+  <button type="submit">Search button</button>
+</form>
+<p><a href="#">A link after the field</a></p>
+<button type="button" id="move" onclick="document.getElementById('plain').focus()">Move focus to the link by script</button>
+<a id="plain" href="#end">Scripted target link</a>
+<p id="end">End of the page.</p>
+</body>
+</html>

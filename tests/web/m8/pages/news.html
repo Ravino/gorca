@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 News article</title>
+<style>body{font-family:sans-serif;max-width:60em;margin:auto}.promo{background:#eee}</style></head>
+<body>
+<a class="skip" href="#content">Skip to main content</a>
+<div id="cookie" role="dialog" aria-label="Cookie consent" aria-modal="false">
+  <p>We use cookies to improve your experience.</p>
+  <button type="button" onclick="document.getElementById('cookie').remove()">Accept cookies</button>
+  <button type="button">Manage cookie settings</button>
+</div>
+<header>
+  <a href="/" aria-label="The Daily Gorca home"><img alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" width="24" height="24"> The Daily Gorca</a>
+  <nav aria-label="Sections">
+    <ul>
+      <li><a href="#world">World</a></li><li><a href="#politics">Politics</a></li><li><a href="#business">Business</a></li>
+      <li><a href="#tech">Technology</a></li><li><a href="#science">Science</a></li><li><a href="#sport">Sport</a></li>
+    </ul>
+  </nav>
+  <form role="search" aria-label="Search the site" onsubmit="return false"><label for="s">Search</label> <input id="s" type="search"> <button type="submit">Search</button></form>
+  <button type="button" aria-expanded="false" aria-controls="acct">Account menu</button>
+</header>
+<main id="content">
+  <nav aria-label="Breadcrumb"><ol><li><a href="#tech">Technology</a></li><li aria-current="page">Accessibility</li></ol></nav>
+  <article>
+    <header>
+      <p class="kicker">Technology</p>
+      <h1>Screen readers learn to keep up with the modern web</h1>
+      <p class="standfirst">A new generation of assistive technology promises faster, steadier reading of complex pages.</p>
+      <p class="byline">By <a href="#author">Ada Lovelace</a>, Technology editor</p>
+      <p><time datetime="2026-10-14T09:30">14 October 2026, 09:30</time> &middot; 6 min read</p>
+      <ul class="share" aria-label="Share this article">
+        <li><a href="#share-mail">Share by email</a></li><li><a href="#share-link">Copy link</a></li><li><button type="button" aria-pressed="false">Save for later</button></li>
+      </ul>
+    </header>
+    <figure>
+      <img alt="A person using a laptop with a braille display" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" width="600" height="300">
+      <figcaption>A reader at work. Photograph: Staff</figcaption>
+    </figure>
+    <p>When a page loads thousands of nodes, a screen reader has to decide quickly what to say first. <a href="#ref1">Researchers</a> measured the delay on a range of sites and found large differences.</p>
+    <h2>The latency problem</h2>
+    <p>The biggest complaint is lag. Users who navigate by heading expect the next heading to be spoken at once, not after a pause that grows with the size of the document.</p>
+    <blockquote><p>Every keystroke should feel instant, whatever is on the page.</p><footer>A user, speaking to the paper</footer></blockquote>
+    <p>Developers can help: <strong>landmarks</strong>, <em>headings</em> and labelled controls make a page easier to scan. See the <a href="#guide">official guidance</a> and the <a href="#tests">test suite</a>.</p>
+    <aside class="promo" aria-label="Advertisement"><h2>Sponsored</h2><p><a href="#ad">Win a free laptop today</a></p></aside>
+    <h2>What changed</h2>
+    <ol>
+      <li>Browse mode keeps a mirror of the page in memory.</li>
+      <li>Navigation commands answer from the mirror without a round trip.</li>
+      <li>Live regions are throttled so a ticker cannot drown the speech.</li>
+    </ol>
+    <h3>Tables of results</h3>
+    <table><caption>Median key-to-speech latency</caption>
+      <thead><tr><th scope="col">Reader</th><th scope="col">Page size</th><th scope="col">Latency (ms)</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Reader A</th><td>10k nodes</td><td>12</td></tr>
+        <tr><th scope="row">Reader B</th><td>10k nodes</td><td>4</td></tr>
+        <tr><th scope="row">Reader B</th><td>100k nodes</td><td>5</td></tr>
+      </tbody></table>
+    <h2>What users say</h2>
+    <p>Responses were mixed but trended positive, with several noting that <a href="#quote2">consistency</a> mattered more than raw speed.</p>
+    <p id="end-of-article">That is all for now. Updated at 14:02.</p>
+    <section aria-labelledby="related-h"><h2 id="related-h">Related articles</h2>
+      <ul><li><a href="#r1">How braille displays work</a></li><li><a href="#r2">A short history of the screen reader</a></li><li><a href="#r3">Why alt text still matters</a></li></ul>
+    </section>
+  </article>
+  <section aria-labelledby="comments-h">
+    <h2 id="comments-h">Comments (3)</h2>
+    <article><h3>Grace</h3><p>Great piece, thank you.</p><button type="button">Reply to Grace</button> <button type="button">Report Grace</button></article>
+    <article><h3>Alan</h3><p>Could you cover Chromium next?</p><button type="button">Reply to Alan</button> <button type="button">Report Alan</button></article>
+    <form onsubmit="return false" aria-label="Add a comment">
+      <label for="cm">Your comment</label><br><textarea id="cm" rows="3"></textarea><br>
+      <label><input type="checkbox"> Notify me of replies</label> <button type="submit">Post comment</button>
+    </form>
+  </section>
+</main>
+<aside aria-label="Most read"><h2>Most read</h2><ol><li><a href="#m1">Story one</a></li><li><a href="#m2">Story two</a></li><li><a href="#m3">Story three</a></li></ol></aside>
+<footer>
+  <nav aria-label="Footer"><a href="#about">About us</a> <a href="#contact">Contact</a> <a href="#privacy">Privacy</a> <a href="#terms">Terms</a> <a href="#jobs">Jobs</a></nav>
+  <p>&copy; 2026 The Daily Gorca</p>
+</footer>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 Quick navigation</title></head>
+<body>
+<!--
+  Every quick-navigation target type appears at least twice, in a fixed document order, with names
+  that are unique across the page, so a scripted walk can name the exact element it expects.
+  Order: heading levels, link block, text, lists, form controls, graphics, quote, separators,
+  landmark, frame, embedded, table, annotation, error, paragraphs, then the keys NVDA leaves unbound.
+-->
+<h1>Quick nav start</h1>
+<p id="linkblock"><a href="#t1">Alpha link</a> <a href="#t2">Beta link</a> <a href="#t3">Gamma link</a></p>
+<p>Text after the link block.</p>
+<h2>Heading two first</h2>
+<h3>Heading three first</h3>
+<h4>Heading four first</h4>
+<h5>Heading five first</h5>
+<h6>Heading six first</h6>
+<h2>Heading two second</h2>
+<p id="t1">Paragraph one with an <a href="#t2">inline link one</a> and trailing text.</p>
+<p id="t2">Paragraph two with <a href="#t3">inline link two</a>.</p>
+<p id="t3">Paragraph three plain.</p>
+<ul><li>Apple item</li><li>Banana item</li><li>Cherry item</li></ul>
+<ol><li>First numbered</li><li>Second numbered</li></ol>
+<form onsubmit="return false" aria-label="Quick form">
+  <p><label for="q1">Search term</label> <input id="q1" type="text"></p>
+  <p><label for="q2">Email address</label> <input id="q2" type="email"></p>
+  <p><label><input type="checkbox"> Subscribe box</label> <label><input type="checkbox" checked> Terms box</label></p>
+  <p><label><input type="radio" name="size" value="s"> Small radio</label> <label><input type="radio" name="size" value="l" checked> Large radio</label></p>
+  <p><label for="q3">Country</label> <select id="q3"><option>Albania</option><option>Belgium</option></select></p>
+  <p><label for="q4">Colour</label> <select id="q4"><option>Red</option><option>Green</option></select></p>
+  <p><button type="submit">Go button</button> <button type="button">Cancel button</button></p>
+</form>
+<p><img alt="Logo graphic" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" width="24" height="24">
+   <img alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" width="24" height="24">
+   <svg role="img" aria-label="Chart graphic" width="20" height="20"><rect width="20" height="20"/></svg></p>
+<blockquote>Quoted wisdom one.</blockquote>
+<blockquote>Quoted wisdom two.</blockquote>
+<hr>
+<p>Between separators.</p>
+<hr>
+<main aria-label="Main content landmark"><p>Inside main.</p></main>
+<aside aria-label="Side note landmark"><p>Inside aside.</p></aside>
+<iframe title="Embedded frame one" srcdoc="&lt;p&gt;frame one text&lt;/p&gt;" width="300" height="60"></iframe>
+<iframe title="Embedded frame two" srcdoc="&lt;p&gt;frame two text&lt;/p&gt;" width="300" height="60"></iframe>
+<div role="application" aria-label="Calculator widget" tabindex="0">Calculator application</div>
+<object data="data:text/plain,embedded" type="text/plain" aria-label="Plain object" width="100" height="30"></object>
+<table><caption>Fruit table</caption>
+  <thead><tr><th>Fruit</th><th>Colour</th></tr></thead>
+  <tbody><tr><td>Apple</td><td>Red</td></tr><tr><td>Lime</td><td>Green</td></tr></tbody></table>
+<table><caption>Veg table</caption>
+  <thead><tr><th>Veg</th><th>Colour</th></tr></thead>
+  <tbody><tr><td>Carrot</td><td>Orange</td></tr></tbody></table>
+<p>Annotations: <ins>Inserted words</ins> and <del>Deleted words</del>, a <span aria-details="note1">detailed claim</span>.</p>
+<div id="note1" role="comment">Comment body</div>
+<p>Errors: <span aria-invalid="spelling">misspeled</span> and <input aria-label="Invalid field" aria-invalid="true" value="bad"></p>
+<p>Plain paragraph alpha.</p>
+<p>Plain paragraph beta.</p>
+<!-- the keys NVDA leaves unbound by default -->
+<label>Volume slider <input type="range" min="0" max="10" value="3"></label>
+<div role="article" aria-label="Embedded article one"><p>Article body.</p></div>
+<figure><img alt="Figure picture" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" width="24" height="24"><figcaption>Figure caption text</figcaption></figure>
+<fieldset><legend>Group legend</legend><label><input type="checkbox"> inside group</label></fieldset>
+<div role="tablist" aria-label="Tabs"><div role="tab" aria-selected="true" tabindex="0">Tab one</div><div role="tab" aria-selected="false" tabindex="-1">Tab two</div></div>
+<div role="menu" aria-label="Menu"><div role="menuitem" tabindex="0">Menu item one</div><div role="menuitem" tabindex="-1">Menu item two</div></div>
+<button type="button" aria-pressed="false">Toggle button one</button>
+<progress value="30" max="100" aria-label="Progress bar one"></progress>
+<math><mi>x</mi><mo>=</mo><mn>1</mn></math>
+<div onclick="void 0" style="cursor:pointer">Clickable div one</div>
+<div role="status" aria-live="polite">Live region one</div>
+<p>End paragraph.</p>
+</body>
+</html>

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 Landmarks</title></head>
+<body>
+<a href="#main" class="skip">Skip to main content</a>
+<header><h1>Site banner heading</h1>
+  <nav aria-label="Primary navigation"><a href="#a">Home link</a> <a href="#b">News link</a> <a href="#c">About link</a></nav>
+  <form role="search" aria-label="Site search" onsubmit="return false"><label>Search <input type="search"></label></form>
+</header>
+<nav aria-label="Breadcrumb"><ol><li><a href="#a">Top crumb</a></li><li>Current crumb</li></ol></nav>
+<main id="main" tabindex="-1">
+  <h2>Main heading</h2>
+  <section aria-label="Named region one"><h3>Region heading</h3><p>Region text.</p></section>
+  <section><h3>Unnamed section heading</h3><p>An unnamed section is not a landmark.</p></section>
+  <article><h3>Article heading</h3><p>Article text.</p>
+    <aside aria-label="Pull quote"><p>Nested complementary.</p></aside></article>
+  <div role="region" aria-labelledby="rh"><h3 id="rh">Labelled by heading</h3><p>Labelled region text.</p></div>
+  <form aria-label="Feedback form" onsubmit="return false"><label>Comment <input type="text"></label></form>
+  <form onsubmit="return false"><label>Unnamed form field <input type="text"></label></form>
+</main>
+<aside aria-label="Related links"><h2>Related heading</h2><a href="#a">Related one</a></aside>
+<footer><p>Footer text.</p><nav aria-label="Footer navigation"><a href="#a">Privacy link</a> <a href="#b">Terms link</a></nav></footer>
+</body>
+</html>

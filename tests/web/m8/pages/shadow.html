@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 Shadow DOM</title></head>
+<body>
+<h1>Shadow DOM</h1>
+<p>Light paragraph before the components.</p>
+<fancy-card id="c1"><span slot="title">Slotted title text</span><p>Slotted body text.</p></fancy-card>
+<fancy-card id="c2"><span slot="title">Second card title</span></fancy-card>
+<x-field id="f1"></x-field>
+<x-nested id="n1"></x-nested>
+<p>Light paragraph after the components.</p>
+<script>
+class FancyCard extends HTMLElement {
+  constructor() {
+    super();
+    const r = this.attachShadow({ mode: "open" });
+    r.innerHTML = `<article aria-label="Card"><h2><slot name="title"></slot></h2><slot></slot>
+      <a href="#c">Shadow card link</a><button type="button">Shadow card button</button></article>`;
+  }
+}
+class XField extends HTMLElement {
+  constructor() {
+    super();
+    const r = this.attachShadow({ mode: "open", delegatesFocus: true });
+    r.innerHTML = `<label>Shadow field <input type="text" value="inside"></label>`;
+  }
+}
+class XNested extends HTMLElement {
+  constructor() {
+    super();
+    const r = this.attachShadow({ mode: "open" });
+    r.innerHTML = `<h3>Nested outer heading</h3><fancy-card><span slot="title">Nested inner title</span></fancy-card>`;
+  }
+}
+customElements.define("fancy-card", FancyCard);
+customElements.define("x-field", XField);
+customElements.define("x-nested", XNested);
+</script>
+</body>
+</html>

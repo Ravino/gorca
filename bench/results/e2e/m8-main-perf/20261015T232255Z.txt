@@ -1,0 +1,61 @@
+# e2e-m8 m8-main-perf
+# utc=2026-10-15T23:22:55Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=10.66 11.97 12.77 4/3265 2817911
+# git_rev=43e58d7
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m8-main-perf
+# reader=daemon:<repo>/.claude/worktrees/agent-ace36bf376a4668ef/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# quick=false
+# loadavg_before=14.38 14.58 13.62 2/3305 2788416
+# loadavg_end=10.66 11.97 12.77 5/3264 2817907
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# note0=M8-RD RD.sa.start P0 XPASS: heard "heading level 1, Selection and say-all | Alpha bravo charlie delta echo. | Foxtrot golf hotel india juliet. | Kilo lima mike november oscar. | Papa quebec romeo sierra tango. | Uniform victor whiskey xray yankee zulu. | • List item one | ~" say-all in browse (browse-mode.md 9) is M7b: not on main
+# note1=M8-RD RD.sa.inline P1 XPASS: heard "heading level 2, Second part | This paragraph has a, link, link inside the sentence, to test say-all through inline roles. | It continues here. | Say-all table | Key | Value | one | 1 | two | 2 | Final paragraph of the say-all page." say-all in browse (browse-mode.md 9) is M7b: not on main
+# note2=M8-RD RD.sa.start2 P0 XPASS: heard "heading level 1, Selection and say-all | Alpha bravo charlie delta echo." say-all in browse (browse-mode.md 9) is M7b: not on main
+# note3=M8-RD RD.sa.stop P0 XPASS: heard "Kilo lima mike november oscar. Papa quebec romeo sierra tango." say-all in browse (browse-mode.md 9) is M7b: not on main
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-PF1.w1_100k_ms.n        daemon/voicego         1200         1200         1200  3                  info   [samples]
+M8-PF1.w1_100k_ms.p50      daemon/voicego        0.312        0.300        0.352  3                  info   [ms]
+M8-PF1.w1_100k_ms.p95      daemon/voicego        0.447        0.437        1.268  3                  info   [ms]
+M8-PF1.w1_100k_ms.p99      daemon/voicego        0.534        0.526        3.318  3 <=            5  PASS   [ms]
+M8-PF1.w1_100k_ms.max      daemon/voicego        3.892        1.033        9.007  3                  info   [ms]
+M8-PF1.late_w1_100k_ms     daemon/voicego            0            0            0  3                  info   [keys]
+M8-PF1.lost_w1_100k_ms     daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+M8-PF1.not_consumed        daemon/voicego            0            0            0  3                  info   [keys]
+M8-PF1.w1_100k_settle_s    daemon/voicego        1.567        1.567        1.570  3                  info   [s]
+M8-FM.mode_ms.n            daemon/voicego            6            6            6  3                  info   [samples]
+M8-FM.mode_ms.p50          daemon/voicego        0.379        0.309        0.388  3                  info   [ms]
+M8-FM.mode_ms.p95          daemon/voicego        2.104        1.662        2.464  3                  info   [ms]
+M8-FM.mode_ms.p99          daemon/voicego        2.104        1.662        2.464  3 <=           15  PASS   [ms]
+M8-FM.mode_ms.max          daemon/voicego        2.104        1.662        2.464  3                  info   [ms]
+M8-FM.fail                 daemon/voicego            0            0            0  3 <=            0  PASS  steps that fail and are not marked expected-fail [steps]
+M8-FM.gap                  daemon/voicego            5            5            5  3                  info  core ok, NVDA extras missing [steps]
+M8-FM.p0_not_pass          daemon/voicego            0            0            0  3                  info   [steps]
+M8-FM.pass                 daemon/voicego           32           32           32  3                  info   [steps]
+M8-FM.steps                daemon/voicego           42           42           42  3                  info   [steps]
+M8-FM.xfail                daemon/voicego            5            5            5  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-FM.xpass                daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]
+M8-RD.key_ms.n             daemon/voicego            5            5            5  3                  info   [samples]
+M8-RD.key_ms.p50           daemon/voicego        0.364        0.351        0.385  3                  info   [ms]
+M8-RD.key_ms.p95           daemon/voicego        0.430        0.422        0.459  3                  info   [ms]
+M8-RD.key_ms.p99           daemon/voicego        0.430        0.422        0.459  3 <=            5  PASS   [ms]
+M8-RD.key_ms.max           daemon/voicego        0.430        0.422        0.459  3                  info   [ms]
+M8-RD.fail                 daemon/voicego            0            0            0  3 <=            0  PASS  steps that fail and are not marked expected-fail [steps]
+M8-RD.gap                  daemon/voicego            0            0            0  3                  info  core ok, NVDA extras missing [steps]
+M8-RD.p0_not_pass          daemon/voicego            2            2            2  3                  info   [steps]
+M8-RD.pass                 daemon/voicego           11           11           11  3                  info   [steps]
+M8-RD.steps                daemon/voicego           26           26           26  3                  info   [steps]
+M8-RD.xfail                daemon/voicego           11           11           11  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-RD.xpass                daemon/voicego            4            4            4  3                  info  expected-fail steps that pass: remove their xf() mark [steps]

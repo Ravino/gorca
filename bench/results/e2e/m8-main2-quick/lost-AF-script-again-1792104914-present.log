@@ -1,0 +1,4 @@
+{"redaction_key":"59f6b679f6e38e4c010d6f46a1d2f741"}
+{"t_ns":721438793600469,"utt_id":1,"epoch":1,"app_bus":":1.33","path":"/org/a11y/atspi/accessible/67","key":"1:1:43c8e0093de9a864","source":"miss_reply","role":"document_web","states":["focused","showing","visible"],"name":"M8 Autofocus","value":null,"may_refine":false,"refines":null}
+{"t_ns":721439092997108,"utt_id":3,"epoch":2,"app_bus":":1.33","path":"/org/a11y/atspi/accessible/85","key":"1:1:43c24e093de444a0","source":"miss_reply","role":"link","states":["enabled","focusable","focused","sensitive","showing","visible"],"name":"Scripted target link","value":null,"may_refine":false,"refines":null}
+{"t_ns":721439426749572,"utt_id":4,"epoch":4,"app_bus":":1.33","path":"/org/a11y/atspi/accessible/88","key":"1:1:43c25b093de45ab7","source":"miss_reply","role":"text_entry","states":["enabled","focusable","focused","sensitive","showing","visible"],"name":"Search","value":null,"may_refine":false,"refines":null}
