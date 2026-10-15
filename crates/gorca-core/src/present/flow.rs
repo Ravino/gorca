@@ -457,7 +457,12 @@ impl Reader {
                         PresentSource::Stale
                     };
                     // The cache is all there is, so the re-read is what can still confirm it.
-                    self.present_cached(&v, src, true, r.epoch, fx);
+                    // After a Timeout the app is slow: a second request on the same deadline
+                    // would double the timeouts charged to it (review RR-1), so none is asked;
+                    // a later FOCUSED state re-read earns the protection (RR-2).
+                    let ask_rv1 =
+                        !matches!(r.result, Err(gorca_connector_api::BackendError::Timeout));
+                    self.present_cached(&v, src, ask_rv1, r.epoch, fx);
                 } else if self.web_focus_fallback(r.node, fx) {
                     // N2: a web node is spoken from the document mirror (name and role).
                 } else if self.focus_retried != Some(r.node) {
@@ -563,16 +568,24 @@ impl Reader {
             Err(gorca_connector_api::BackendError::Gone) => {
                 self.apply_focus(FocusMsg::NodeRemoved(r.node), fx);
             }
-            // The re-read failed: it is the only thing that can confirm a cache-served focus
-            // (protection, text events), so it is asked once more with a fresh deadline.
+            // A timed-out re-read is not repeated: the app is slow, and a retry would double the
+            // timeouts charged to it (review RR-1). A later FOCUSED state re-read earns the
+            // protection (RR-2).
+            Err(gorca_connector_api::BackendError::Timeout) => {}
+            // Any other failure of the re-read: it is the only thing that can confirm a
+            // cache-served focus (protection, text events), so it is asked once more, and only
+            // while the protection is still unearned.
             Err(
-                gorca_connector_api::BackendError::Timeout
-                | gorca_connector_api::BackendError::NotSupported
+                gorca_connector_api::BackendError::NotSupported
                 | gorca_connector_api::BackendError::Busy
                 | gorca_connector_api::BackendError::Protocol(_)
                 | gorca_connector_api::BackendError::Unresolved,
             ) => {
-                if self.revalidate_retried != Some(r.node) {
+                let unearned = self
+                    .focused_app
+                    .as_ref()
+                    .is_some_and(|f| !f.protects(r.node.app));
+                if unearned && self.revalidate_retried != Some(r.node) {
                     self.revalidate_retried = Some(r.node);
                     fx.push(Self::fetch_effect(
                         r.node,
@@ -623,6 +636,14 @@ impl Reader {
             }
             Err(_) => return,
         };
+        // A re-read that shows the node FOCUSED is the proof a failed RV-1 never delivered
+        // (review RR-2): earn the protection now.
+        if self.selection_node != Some(r.node)
+            && new.states.contains(StateSet::FOCUSED)
+            && let Some(f) = &self.focused_app
+        {
+            f.publish(r.node.app);
+        }
         let ch = changed(&p.snap, new, skip_states(p.ctx));
         if ch.is_empty() {
             return;

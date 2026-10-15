@@ -565,8 +565,9 @@ impl FillDriver {
         }
     }
 
-    /// Clamp an op to the hard bounds of the section 7 table.
-    fn sanitize(&self, op: FillOp) -> FillOp {
+    /// Clamp an op to the hard bounds of the section 7 table. Public so that a policy test can
+    /// prove its ops are fixed points (review F-6: the policy remembers the op it emitted).
+    pub fn sanitize(&self, op: FillOp) -> FillOp {
         let l = &self.limits;
         match op {
             FillOp::ChildSnapshots { node, range, want } => {

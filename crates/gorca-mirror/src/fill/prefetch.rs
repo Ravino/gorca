@@ -195,8 +195,9 @@ pub struct FocusPrefetch {
     /// Parents that reported a change while a window for them was in flight: the run that reply
     /// installs predates the change and starts dirty.
     inflight_dirty: SmallVec<[NodeKey; DIRTY_CAP]>,
-    /// Where the last focus sat in its run, and which way it travels (look-ahead direction).
-    prev_pos: Option<(NodeKey, usize)>,
+    /// The parent and node of the last focus (by key: indices shift when a run grows backwards), and
+    /// which way the focus travels (look-ahead direction).
+    prev_pos: Option<(NodeKey, NodeKey)>,
     back: bool,
     /// Parents whose run went dirty since the last refetch (at most `DIRTY_CAP`; the rest stay
     /// dirty and are refreshed when the focus returns).
@@ -584,6 +585,9 @@ impl FocusPrefetch {
         let used = self.used;
         let in_run = self.member.get(&node) == Some(&parent);
         let Some(run) = self.runs.get_mut(&parent).filter(|_| in_run) else {
+            // The first window of a parent: remember where the focus was, so that the next step
+            // already knows which way it travels.
+            self.prev_pos = Some((parent, node));
             self.ask_window(cx, parent, node, false, out);
             return;
         };
@@ -594,12 +598,17 @@ impl FocusPrefetch {
         let dirty = run.dirty;
         let stale = (dirty && age >= MIN_REFETCH) || (force && age > ACTIVATE_AGE);
         // Which way is the focus travelling in this run? Look ahead of it that way.
-        let back = match self.prev_pos {
-            Some((p, i)) if p == parent && idx != i => idx < i,
+        // The previous focus is tracked by key: a run that grows backwards shifts every index.
+        let prev_idx = match self.prev_pos {
+            Some((p, k)) if p == parent => run.keys.iter().position(|x| *x == k),
+            _ => None,
+        };
+        let back = match prev_idx {
+            Some(i) if idx != i => idx < i,
             _ => self.back,
         };
         self.back = back;
-        self.prev_pos = Some((parent, idx));
+        self.prev_pos = Some((parent, node));
         // The stretch of siblings ahead of the focus that is old or stale: one request.
         let span = if back {
             idx.saturating_sub(LOOK)..idx

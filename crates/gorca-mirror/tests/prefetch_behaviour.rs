@@ -2,11 +2,14 @@
 //! small modelled tree: what it asks for, when, and what it leaves alone. No bus, no connector.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use gorca_mirror::driver::{DriverCx, FillDriver, FillError, FillReply, IssuedFill};
-use gorca_mirror::fill::{AppClass, FillInput, FillOp, FocusPrefetch, HealthView, PrefetchConfig};
+use gorca_mirror::fill::{
+    AppClass, FillCtx, FillEffect, FillEffects, FillInput, FillOp, FillPolicy, FocusPrefetch,
+    HealthView, PrefetchConfig,
+};
 use gorca_mirror::{ApplyOrigin, FillLimits, MirrorHandle, MirrorWriter, mirror_for};
 use gorca_model::{
     AppId, AttrMap, ChildList, ConnectorId, Freshness, Ifaces, LocalId, NodeEvent, NodeKey,
@@ -198,7 +201,34 @@ impl Model {
     }
 }
 
+/// Wraps the policy and records every op it emits, before the driver's clamp sees it.
+struct Recording {
+    inner: FocusPrefetch,
+    emitted: Arc<Mutex<Vec<FillOp>>>,
+}
+
+impl FillPolicy for Recording {
+    fn name(&self) -> &'static str {
+        self.inner.name()
+    }
+    fn step(&mut self, cx: &FillCtx<'_>, input: FillInput<'_>, out: &mut FillEffects) {
+        let before = out.len();
+        self.inner.step(cx, input, out);
+        let mut g = self.emitted.lock().unwrap();
+        for e in out.iter().skip(before) {
+            if let FillEffect::Request { op, .. } = e {
+                g.push(op.clone());
+            }
+        }
+    }
+    fn memory_bytes(&self) -> usize {
+        self.inner.memory_bytes()
+    }
+}
+
 struct Rig {
+    /// Ops as the policy emitted them.
+    emitted: Arc<Mutex<Vec<FillOp>>>,
     model: Model,
     driver: FillDriver,
     writer: MirrorWriter,
@@ -229,15 +259,20 @@ impl Rig {
         limits: FillLimits,
     ) -> Rig {
         let (writer, reader) = mirror_for(app(), None);
+        let emitted = Arc::new(Mutex::new(Vec::new()));
         let mut driver = FillDriver::new(
             app(),
             AppClass::Unknown,
-            Box::new(FocusPrefetch::new(cfg)),
+            Box::new(Recording {
+                inner: FocusPrefetch::new(cfg),
+                emitted: Arc::clone(&emitted),
+            }),
             limits,
             None,
         );
         driver.set_dump_complete(dump_complete);
         Rig {
+            emitted,
             model: Model::new(rows),
             driver,
             writer,
@@ -1036,4 +1071,90 @@ fn a_small_configured_range_does_not_confuse_the_request_bookkeeping() {
         }),
         "no request above the configured range"
     );
+}
+
+// ---- second-round review (RR-3, F-6 lock-in) ----
+
+/// RR-3: a long backward walk, slow enough that every step's look-ahead is due. The run grows
+/// backwards (prepends), which used to flip the remembered direction to "forward".
+#[test]
+fn a_backward_walk_looks_ahead_behind_the_focus_at_every_step() {
+    let mut r = Rig::new(60, false);
+    r.focus_on(row(50));
+    let (mut wrong, mut right) = (0, 0);
+    for i in (10..50).rev() {
+        r.advance(600);
+        let before = r.lookaheads(PANEL).len();
+        r.focus_on(row(i));
+        let la = r.lookaheads(PANEL);
+        match la.get(before..).and_then(|s| s.first()) {
+            Some((anchor, _, _)) if anchor.local.0 > key(row(i)).local.0 => wrong += 1,
+            Some(_) => right += 1,
+            None => {}
+        }
+    }
+    assert_eq!(wrong, 0, "wrong-way look-aheads ({right} right)");
+    assert!(right > 20, "look-aheads were issued: {right}");
+}
+
+/// RR-3: the row behind a backward-travelling focus is re-read.
+#[test]
+fn backward_travel_rereads_the_row_behind() {
+    let mut r = Rig::new(40, false);
+    r.focus_on(row(22));
+    r.advance(100);
+    r.focus_on(row(21));
+    r.advance(600);
+    r.writer.invalidate(key(row(19)), PropMask::NAME, r.now);
+    r.writer.invalidate(key(row(18)), PropMask::NAME, r.now);
+    r.advance(30);
+    r.focus_on(row(20));
+    assert!(
+        hit(&r, row(19)),
+        "row behind the focus re-read on a backward walk"
+    );
+}
+
+/// F-6 lock-in: the driver's clamp leaves every op the policy emits unchanged (the policy
+/// remembers the op it asked for, so a clamped echo would break its bookkeeping), over forward
+/// and backward walks, a big parent and a configured-small child range.
+#[test]
+fn the_drivers_clamp_leaves_every_policy_op_unchanged() {
+    for limits in [
+        FillLimits::default(),
+        FillLimits {
+            max_child_range: 16,
+            ..FillLimits::default()
+        },
+    ] {
+        let small = limits.max_child_range == 16;
+        let mut r = Rig::with_limits(120, false, PrefetchConfig::default(), limits);
+        for i in 0..60 {
+            r.advance(300);
+            r.focus_on(row(i));
+        }
+        for i in (0..60).rev() {
+            r.advance(300);
+            r.focus_on(row(i));
+        }
+        r.model.refuse_listing_above = Some(50);
+        for i in (60..100).step_by(7) {
+            r.advance(300);
+            r.focus_on(row(i));
+        }
+        let emitted = r.emitted.lock().unwrap().clone();
+        assert!(
+            emitted.len() > 50,
+            "enough ops to be meaningful: {}",
+            emitted.len()
+        );
+        for op in emitted {
+            // Ancestry depth is not clamped by the policy, so a small configured depth is out of
+            // scope here; the default limits are in.
+            if small && !matches!(op, FillOp::Siblings { .. }) {
+                continue;
+            }
+            assert_eq!(r.driver.sanitize(op.clone()), op, "clamped: {op:?}");
+        }
+    }
 }
