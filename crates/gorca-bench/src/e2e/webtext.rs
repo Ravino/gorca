@@ -962,12 +962,14 @@ fn fe2(
             .map(|c| c.len_utf16())
             .sum::<usize>();
         let mut page = f.ax_num("caret", &path, "caret").unwrap_or(-1.0);
-        // A loaded Firefox applies the key a moment later.
-        for _ in 0..4 {
+        // A loaded Firefox applies the key a moment later (it has stalled for more than a
+        // second on this host): give it time to catch up before calling the key dropped, or a
+        // late key would be applied after the model was reset to the page and start a cascade.
+        for _ in 0..30 {
             if page as i64 == raw as i64 {
                 break;
             }
-            sleep(60);
+            sleep(100);
             page = f.ax_num("caret", &path, "caret").unwrap_or(-1.0);
         }
         if page as i64 != raw as i64 {
