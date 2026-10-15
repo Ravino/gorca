@@ -1,0 +1,37 @@
+head 875ce66 + probes.diff, 2026-10-15T12:38:31Z load 12.17 12.16 12.22
+on focus: ["fetch-focus", "demand"]
+RR-2 on state-changed: ["demand", "fetch-s1"]
+RR-2 published after FOCUSED state reply: None
+on timeout: ["speak", "settled", "fetch-rv1"] published=None
+cached move: ["speak", "settled", "fetch-rv1", "demand"] published=Some(AppId { connector: ConnectorId(1), serial: 1 })
+thread 'reader::tests::probe_timeout_fallback_on_a_prefetched_focus_never_earns_protection' (1584095) panicked at crates/gorca-core/src/reader.rs:1326:9:
+no revalidation is asked
+after rv1 timeout published=Some(AppId { connector: ConnectorId(1), serial: 1 })
+thread 'reader::tests::probe_same_app_cached_move_demotes_and_rv1_timeout_never_restores' (1584094) panicked at crates/gorca-core/src/reader.rs:1359:9:
+same-app cached move demotes (the finding)
+reader::tests::probe_timeout_fallback_on_a_prefetched_focus_never_earns_protection --- FAILED
+reader::tests::probe_same_app_cached_move_demotes_and_rv1_timeout_never_restores --- FAILED
+    reader::tests::probe_same_app_cached_move_demotes_and_rv1_timeout_never_restores
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 408 filtered out; finished in 0.00s
+held ops: [Ancestry { node: NodeKey { app: AppId { connector: ConnectorId(0), serial: 1 }, local: LocalId(14) }, max_depth: 24, want: PropMask(NAME | VALUE | ROLE | STATES | CHILDREN) }]
+windows before=1 after=1 all=[(NodeKey { app: AppId { connector: ConnectorId(0), serial: 1 }, local: LocalId(14) }, 1, 6)]
+lookaheads: [(NodeKey { app: AppId { connector: ConnectorId(0), serial: 1 }, local: LocalId(25) }, 0, 2)]
+row19 hit=false row21 hit=true
+held: [Siblings { parent: NodeKey { app: AppId { connector: ConnectorId(0), serial: 1 }, local: LocalId(2) }, node: NodeKey { app: AppId { connector: ConnectorId(0), serial: 1 }, local: LocalId(14) }, before: 1, after: 6, indexed: false, want: PropMask(NAME | VALUE | ROLE | STATES) }]
+.windows before=1 after=2
+lookaheads: [(NodeKey { app: AppId { connector: ConnectorId(0), serial: 1 }, local: LocalId(25) }, 0, 2)]
+thread 'probe_rr_backward_travel_rereads_behind' (1584111) panicked at crates/gorca-mirror/tests/prefetch_behaviour.rs:1113:5:
+row behind the focus re-read on a backward walk
+probe_rr_backward_travel_rereads_behind --- FAILED
+.misses=0 ancestry_ops=1 calls=11
+.backward walk 40 steps: look-ahead behind(right)=32 ahead(wrong)=8 none=0
+thread 'probe_rr_backward_walk_lookahead_direction' (1584112) panicked at crates/gorca-mirror/tests/prefetch_behaviour.rs:1205:5:
+probe_rr_backward_walk_lookahead_direction --- FAILED
+    probe_rr_backward_travel_rereads_behind
+    probe_rr_backward_walk_lookahead_direction
+test result: FAILED. 4 passed; 2 failed; 0 ignored; 0 measured; 27 filtered out; finished in 0.00s
+RR-1 timeouts=4 spoken=["Subscribe check box checked", "OK button", "Subscribe check box checked", "OK button", "application not responding"]
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 1.51s
+== main 6fc592b + probes-main.diff
+RR-1 timeouts=2 spoken=["Subscribe check box checked", "OK button", "Subscribe check box checked", "OK button"]
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 1.51s
