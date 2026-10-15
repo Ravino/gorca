@@ -1792,25 +1792,7 @@ fn insert(
         let _ = t.expect.forget(len as usize, cx.now_ms);
         return;
     };
-    // Text goes in at the caret (typing, an input method's commit). When the application
-    // reports another offset (Gecko now and then reports one or two too many in an input, with
-    // a caret event that moves by exactly the insert), the window can no longer be trusted:
-    // drop it (it is refilled when a unit needs it) and accept the caret event where the
-    // caret really went, so the insert's own caret move is not spoken a second time.
-    let misplaced = cx.insert_slack > 0
-        && caret_before.is_some_and(|c| offset > c && offset - c <= cx.insert_slack)
-        && !paste;
-    if misplaced {
-        tracing::debug!(target: "gorca_text", quirk = "gecko-insert-offset", offset, caret = ?caret_before, "insert offset slack applied");
-    }
-    if misplaced && let (Some(c), Some(a)) = (caret_before, t.absorb.as_mut()) {
-        a.alt = Some(c.saturating_add(len));
-    }
     t.win.splice(offset, 0, &s);
-    if misplaced {
-        t.win.invalidate();
-        cx.stats.window_dirty += 1;
-    }
     note_hosts(t, &s);
     if is_structure(&s) {
         // A block was added to a rich editable: the window knows, there is nothing to say.
@@ -1820,6 +1802,28 @@ fn insert(
     if !matches!(action, Some(InsertAction::Echoed { .. })) {
         // Text that is none of the typed keys' means they will not come: forget them.
         t.expect.clear();
+    }
+    // Text goes in at the caret (typing, an input method's commit). When the application
+    // reports another offset (the connector's quirk row declares an engine that does: Gecko
+    // now and then reports one or two too many for scripted or committed text, and for a
+    // typed key's own insert it was seen four off, after astral characters), the window can no
+    // longer be trusted: drop it (it is refilled when a unit needs it) and accept the caret
+    // event where the caret really went, so the insert's own caret move is not spoken a second
+    // time. A typed key's insert, explained by the key itself, moves the caret by exactly its
+    // length whatever offset the application names; any other insert only within the slack.
+    let echoed = matches!(action, Some(InsertAction::Echoed { .. }));
+    let misplaced = cx.insert_slack > 0
+        && !paste
+        && caret_before.is_some_and(|c| {
+            offset != c && (echoed || (offset > c && offset - c <= cx.insert_slack))
+        });
+    if misplaced {
+        tracing::debug!(target: "gorca_text", quirk = "gecko-insert-offset", offset, caret = ?caret_before, echoed, "insert offset quirk applied");
+        if let (Some(c), Some(a)) = (caret_before, t.absorb.as_mut()) {
+            a.alt = Some(c.saturating_add(len));
+        }
+        t.win.invalidate();
+        cx.stats.window_dirty += 1;
     }
     match action {
         Some(InsertAction::Echoed { .. }) => {

@@ -2166,3 +2166,25 @@ fn a_typed_key_the_page_dropped_does_not_double_the_next_one() {
     said.extend(spoken(&g.tick(30)));
     assert_eq!(said, ["d", "z"], "z once");
 }
+
+/// Captured in FE2 with debug logs: Gecko named an insert offset four units past the caret for
+/// a typed key's own text, then moved the caret by exactly the insert. The caret move is the
+/// key's echo, not a new event to speak (it was read out as a second "space").
+#[test]
+fn a_typed_key_whose_insert_offset_is_far_off_is_still_spoken_once() {
+    let mut g = gecko_rig();
+    g.entry("abcde fgh", 5);
+    g.advance(1000);
+    let mut said = spoken(&g.typed(' '));
+    said.extend(spoken(&g.insert(9, " ")));
+    said.extend(spoken(&g.caret(6)));
+    said.extend(spoken(&g.tick(60)));
+    assert_eq!(said, ["space"], "once");
+    // The window was dropped, not corrupted: the next read is fresh.
+    g.advance(300);
+    let mut said = spoken(&g.typed('x'));
+    said.extend(spoken(&g.insert(6, "x")));
+    said.extend(spoken(&g.caret(7)));
+    said.extend(spoken(&g.tick(60)));
+    assert_eq!(said, ["x"]);
+}

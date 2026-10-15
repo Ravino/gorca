@@ -54,11 +54,13 @@ impl Toolkit {
 }
 
 impl Toolkit {
-    /// Quirk row `gecko-insert-offset`: Gecko now and then reports a text-inserted offset one
-    /// or two units after the caret while the text went in at the caret, followed by a caret
-    /// event that moves by exactly the insert (measured: 13 of 461 and 24 of 1050 inserts in
-    /// Firefox inputs; none in a contenteditable). The core folds that caret move into the
-    /// edit when the slack is non-zero. Every other engine reports the real offset.
+    /// Quirk row `gecko-insert-offset`: Gecko now and then names a text-inserted offset other
+    /// than where the text went, followed by a caret event that moves by exactly the insert:
+    /// one or two units after the caret for scripted or committed text (13 of 461 and 24 of
+    /// 1050 inserts in Firefox inputs, none in a contenteditable), and up to four off for a
+    /// typed key's own insert in an input holding astral characters (found by FE2). The core
+    /// folds that caret move into the edit when the slack is non-zero. Every other engine
+    /// reports the real offset.
     pub fn text_insert_slack(self) -> u32 {
         match self {
             Toolkit::Firefox => 2,
