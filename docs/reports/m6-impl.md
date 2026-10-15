@@ -130,3 +130,26 @@ Other gates: `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D wa
 | F7 plaintext check too weak | VP and VV use secrets of rare characters and also count, in the part of each log written during the password phase, every secret character that appears as a value of its own (quoted, or after `key=`, `char:`, `text=`, ...) (`secret_leaks`, unit-tested). VP keeps its logs on failure. |
 | F4 text events for every application | See the Firefox comparison below. |
 | F8, F5, F9 | Not in scope (waits for M5 / backlog). |
+
+### Firefox comparison (finding 4: text events registered for every application)
+
+Real Firefox M7a set (B0 W1 BR1 BR2 W2 W2b W3 FM1 FM2, `tests/web/m7/run_m7.sh`), main `4066991` against this branch at
+`855dd35` (code identical to `2898129`), both clean heads, 3 rounds of 3 repeats interleaved main/branch/main/branch/...
+(`bench/results/e2e/m6fix-ff-{main,branch}-{1,2,3}`), host load 9 to 15 from other agents (per-run load in the logs).
+Every gate passes in all 18 runs, 0 lost, 0 failures. Median of the per-run p99 over the three rounds (ms):
+
+| Gate (ceiling) | main | branch |
+|---|---|---|
+| W1 (5) | 0.54 / 0.65 / 0.51 | 0.49 / 0.47 / 0.51 |
+| BR1 (5) | 0.49 / 0.51 / 0.53 | 0.49 / 0.50 / 0.50 |
+| W3 (15) | 0.25 / 0.25 / 0.24 | 0.27 / 0.25 / 0.24 |
+| FM1 (15) | 0.32 / 0.34 / 0.38 | 0.93 / 0.32 / 0.33 |
+| FM2 (5) | 0.52 / 0.50 / 0.51 | 0.55 / 0.53 / 0.51 |
+| W2b (150) | 67.8 / 68.0 / 64.2 | 69.5 / 114.0 / 85.7 |
+
+Only W2b (focus of a Firefox document with a hint, dominated by Firefox's own tree build) looked slower on the branch,
+with wide ranges on both sides (main also reached 150.4 ms in one repeat). A dedicated A/B of 5 repeats each
+(`m6fix-w2b-main-2`, `m6fix-w2b-branch-2`; the first pair, `m6fix-w2b-*-1`, died of ENOSPC when `/tmp` filled up and
+produced no result): p99 median main 67.7 ms [52.2, 3005 (a cold start)], branch 70.6 ms [49.1, 133.0]; main failed
+`untagged_warm` once, the branch 0 times. Verdict: noise; no regression attributable to the text-event registration.
+The W2b warm-up is the same effect B-1 works on; keep it open until re-measured on the B-1 head.
