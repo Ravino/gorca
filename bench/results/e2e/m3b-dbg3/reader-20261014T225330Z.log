@@ -1,0 +1,1072 @@
+2026-10-14T22:53:45.094145Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=0
+2026-10-14T22:53:45.094868Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) }, around: None, radius: 2048 }
+2026-10-14T22:53:45.095175Z DEBUG gorca_text: window reply base=0 chars=0 len=0 caret=Some(0)
+2026-10-14T22:53:45.667457Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:45.674151Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 0, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:45.674172Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=1
+2026-10-14T22:53:45.855273Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=0
+2026-10-14T22:53:45.855319Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:53:46.042338Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 0, len: 1, text: Some(LazyText { bytes: 2, field: 0 }) }
+2026-10-14T22:53:46.042413Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=1
+2026-10-14T22:53:46.047461Z DEBUG gorca_text: say pieces=1 reason=Inserted(Unknown)
+2026-10-14T22:53:46.224216Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:46.228721Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 1, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:46.228796Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=2
+2026-10-14T22:53:46.409871Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:46.415379Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 2, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:46.415450Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=3
+2026-10-14T22:53:46.595390Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:46.600034Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 3, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:46.600069Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=4
+2026-10-14T22:53:46.781040Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:46.784295Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 4, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:46.784325Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=5
+2026-10-14T22:53:46.969563Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Delete { offset: 4, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:46.969630Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:53:46.969649Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=4
+2026-10-14T22:53:47.152150Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:47.154665Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 4, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:47.154686Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=5
+2026-10-14T22:53:47.337798Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:47.340704Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 6, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:47.340723Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=6
+2026-10-14T22:53:47.346837Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: false }
+2026-10-14T22:53:47.526457Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=5
+2026-10-14T22:53:47.526499Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:53:47.709276Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:47.713849Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 5, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:47.713884Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=6
+2026-10-14T22:53:47.894938Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:47.898209Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 6, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:47.898281Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=7
+2026-10-14T22:53:48.080406Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:48.083313Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 7, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:48.083347Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=8
+2026-10-14T22:53:48.268596Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Delete { offset: 7, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:48.268654Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:53:48.268678Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=7
+2026-10-14T22:53:48.454054Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Delete { offset: 6, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:48.454112Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:53:48.454126Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=6
+2026-10-14T22:53:48.637211Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:48.641276Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 6, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:48.641379Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=7
+2026-10-14T22:53:48.825440Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Delete { offset: 6, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:48.825508Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:53:48.825541Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=6
+2026-10-14T22:53:49.008208Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:49.010742Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 6, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:49.010793Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=7
+2026-10-14T22:53:49.195577Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=8
+2026-10-14T22:53:49.195643Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:53:49.379304Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:49.381946Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 8, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:49.381989Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=9
+2026-10-14T22:53:49.564810Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:49.567664Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 9, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:49.567735Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=10
+2026-10-14T22:53:49.750674Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:49.753518Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 11, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:49.753588Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=11
+2026-10-14T22:53:49.759651Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: false }
+2026-10-14T22:53:49.936306Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:49.939070Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 11, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:49.939129Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=12
+2026-10-14T22:53:50.124722Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 12, len: 1, text: Some(LazyText { bytes: 2, field: 0 }) }
+2026-10-14T22:53:50.124843Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=13
+2026-10-14T22:53:50.130894Z DEBUG gorca_text: say pieces=1 reason=Inserted(Unknown)
+2026-10-14T22:53:50.309861Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=14
+2026-10-14T22:53:50.309954Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:53:50.495987Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Delete { offset: 13, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:50.496058Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:53:50.496088Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=13
+2026-10-14T22:53:50.681020Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=12
+2026-10-14T22:53:50.681093Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:53:50.865814Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=13
+2026-10-14T22:53:50.865883Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:53:51.049746Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:51.052108Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 13, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:51.052147Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=14
+2026-10-14T22:53:51.240201Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 14, len: 1, text: Some(LazyText { bytes: 2, field: 0 }) }
+2026-10-14T22:53:51.240254Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=15
+2026-10-14T22:53:51.246318Z DEBUG gorca_text: say pieces=1 reason=Inserted(Unknown)
+2026-10-14T22:53:51.423466Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=0
+2026-10-14T22:53:51.423540Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:53:51.606439Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:51.610517Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 0, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:51.610564Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=1
+2026-10-14T22:53:51.794071Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=0
+2026-10-14T22:53:51.794156Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:53:51.977635Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:51.981915Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 0, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:51.981983Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=1
+2026-10-14T22:53:52.163245Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:52.165601Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 1, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:52.165655Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=2
+2026-10-14T22:53:52.348878Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:52.351999Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 3, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:52.352045Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=3
+2026-10-14T22:53:52.358149Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: false }
+2026-10-14T22:53:52.536463Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=4
+2026-10-14T22:53:52.536522Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:53:52.722134Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=19
+2026-10-14T22:53:52.722192Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:53:52.907711Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=18
+2026-10-14T22:53:52.907771Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:53:53.093997Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=19
+2026-10-14T22:53:53.094085Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:53:53.279544Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 19, len: 1, text: Some(LazyText { bytes: 2, field: 0 }) }
+2026-10-14T22:53:53.279619Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=20
+2026-10-14T22:53:53.285728Z DEBUG gorca_text: say pieces=1 reason=Inserted(Unknown)
+2026-10-14T22:53:53.462982Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:53.466255Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 20, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:53.466286Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=21
+2026-10-14T22:53:53.648571Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:53.651448Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 21, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:53.651475Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=22
+2026-10-14T22:53:53.836996Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 22, len: 2, text: Some(LazyText { bytes: 4, field: 0 }) }
+2026-10-14T22:53:53.837061Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=24
+2026-10-14T22:53:53.843112Z DEBUG gorca_text: say pieces=1 reason=Inserted(Unknown)
+2026-10-14T22:53:54.019600Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:54.022546Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 24, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:54.022614Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=25
+2026-10-14T22:53:54.207499Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=24
+2026-10-14T22:53:54.207541Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:53:54.392858Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=0
+2026-10-14T22:53:54.392914Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:53:54.578702Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=25
+2026-10-14T22:53:54.578737Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:53:54.762104Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:54.765151Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 25, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:54.765174Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=26
+2026-10-14T22:53:54.951003Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Delete { offset: 25, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:54.951059Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:53:54.951082Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=25
+2026-10-14T22:53:55.133201Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:55.137174Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 25, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:55.137199Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=26
+2026-10-14T22:53:55.318796Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:55.321827Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 26, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:55.321843Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=27
+2026-10-14T22:53:55.504497Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:55.508649Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 27, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:55.508693Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=28
+2026-10-14T22:53:55.690174Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:55.693069Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 28, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:55.693093Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=29
+2026-10-14T22:53:55.875666Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:55.879853Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 29, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:55.879894Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=30
+2026-10-14T22:53:56.061266Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:56.063842Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 30, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:56.063864Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=31
+2026-10-14T22:53:56.246805Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:56.249573Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 31, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:56.249595Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=32
+2026-10-14T22:53:56.432318Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:56.434906Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 32, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:56.434944Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=33
+2026-10-14T22:53:56.617818Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:56.622548Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 33, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:56.622578Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=34
+2026-10-14T22:53:56.803353Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:56.806302Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 34, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:56.806355Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=35
+2026-10-14T22:53:56.988910Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:56.992255Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 35, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:56.992281Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=36
+2026-10-14T22:53:57.174539Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:57.178403Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 36, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:57.178439Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=37
+2026-10-14T22:53:57.360053Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:57.362768Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 37, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:57.362803Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=38
+2026-10-14T22:53:57.549806Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Delete { offset: 37, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:57.549875Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:53:57.549896Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=37
+2026-10-14T22:53:57.731163Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:57.734174Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 37, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:57.734198Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=38
+2026-10-14T22:53:57.919948Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 38, len: 2, text: Some(LazyText { bytes: 4, field: 0 }) }
+2026-10-14T22:53:57.920014Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=40
+2026-10-14T22:53:57.926060Z DEBUG gorca_text: say pieces=1 reason=Inserted(Unknown)
+2026-10-14T22:53:58.105245Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Delete { offset: 38, len: 2, text: Some(LazyText { bytes: 4, field: 0 }) }
+2026-10-14T22:53:58.105304Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:53:58.105324Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=38
+2026-10-14T22:53:58.287935Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:58.291006Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 38, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:58.291039Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=39
+2026-10-14T22:53:58.477174Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Delete { offset: 38, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:58.477209Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:53:58.477222Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=38
+2026-10-14T22:53:58.659498Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:58.662320Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 38, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:58.662350Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=39
+2026-10-14T22:53:58.844927Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:58.847830Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 39, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:58.847861Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=40
+2026-10-14T22:53:59.033271Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Delete { offset: 39, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:59.033328Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:53:59.033345Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=39
+2026-10-14T22:53:59.218823Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=39
+2026-10-14T22:53:59.218872Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:53:59.404914Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Delete { offset: 38, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:59.404981Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:53:59.405013Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=38
+2026-10-14T22:53:59.587147Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:53:59.590071Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 38, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:53:59.590137Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=39
+2026-10-14T22:53:59.775866Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 39, len: 1, text: Some(LazyText { bytes: 2, field: 0 }) }
+2026-10-14T22:53:59.775910Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=40
+2026-10-14T22:53:59.782010Z DEBUG gorca_text: say pieces=1 reason=Inserted(Unknown)
+2026-10-14T22:53:59.960729Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=39
+2026-10-14T22:53:59.960793Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:00.146563Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=38
+2026-10-14T22:54:00.146623Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:00.329810Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:00.332840Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 38, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:00.332863Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=39
+2026-10-14T22:54:00.515597Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:00.518141Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 39, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:00.518156Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=40
+2026-10-14T22:54:00.703393Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 40, len: 1, text: Some(LazyText { bytes: 2, field: 0 }) }
+2026-10-14T22:54:00.703446Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=41
+2026-10-14T22:54:00.708562Z DEBUG gorca_text: say pieces=1 reason=Inserted(Unknown)
+2026-10-14T22:54:00.886661Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:00.889090Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 41, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:00.889133Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=42
+2026-10-14T22:54:01.074458Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=43
+2026-10-14T22:54:01.074500Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:01.260953Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Delete { offset: 42, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:01.261007Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:54:01.261023Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=42
+2026-10-14T22:54:01.443656Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:01.446076Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 42, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:01.446099Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=43
+2026-10-14T22:54:01.629416Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:01.632989Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 43, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:01.633030Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=44
+2026-10-14T22:54:01.815039Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:01.818612Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 44, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:01.818652Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=45
+2026-10-14T22:54:02.000686Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:02.004320Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 45, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:02.004395Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=46
+2026-10-14T22:54:02.189552Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=0
+2026-10-14T22:54:02.189596Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:02.373497Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=1
+2026-10-14T22:54:02.373548Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:02.557437Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:02.560987Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 1, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:02.561022Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=2
+2026-10-14T22:54:02.745670Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Delete { offset: 1, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:02.745708Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:54:02.745720Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=1
+2026-10-14T22:54:02.928685Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:02.931355Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 1, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:02.931394Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=2
+2026-10-14T22:54:03.118874Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=0
+2026-10-14T22:54:03.118962Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:03.793756Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=1
+2026-10-14T22:54:03.793799Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:03.977328Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:03.979936Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 1, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:03.979983Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=2
+2026-10-14T22:54:04.162902Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:04.165726Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 2, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:04.165770Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=3
+2026-10-14T22:54:04.348522Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:04.351445Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 3, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:04.351483Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=4
+2026-10-14T22:54:04.537999Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Delete { offset: 3, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:04.538046Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:54:04.538060Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=3
+2026-10-14T22:54:04.721744Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=0
+2026-10-14T22:54:04.721794Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:04.905180Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:04.908053Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 0, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:04.908098Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=1
+2026-10-14T22:54:05.090726Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:05.093419Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 1, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:05.093465Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=2
+2026-10-14T22:54:05.276262Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:05.278773Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 2, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:05.278834Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=3
+2026-10-14T22:54:05.465668Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=2
+2026-10-14T22:54:05.465731Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:05.647499Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:05.651247Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 2, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:05.651289Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=3
+2026-10-14T22:54:05.832965Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:05.837295Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 3, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:05.837321Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=4
+2026-10-14T22:54:06.023675Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 4, len: 1, text: Some(LazyText { bytes: 2, field: 0 }) }
+2026-10-14T22:54:06.023759Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=5
+2026-10-14T22:54:06.029885Z DEBUG gorca_text: say pieces=1 reason=Inserted(Unknown)
+2026-10-14T22:54:06.204275Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:06.207291Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 5, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:06.207329Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=6
+2026-10-14T22:54:06.389792Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:06.393868Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 6, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:06.393904Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=7
+2026-10-14T22:54:06.575414Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:06.578790Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 7, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:06.578842Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=8
+2026-10-14T22:54:06.763220Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=7
+2026-10-14T22:54:06.763276Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:06.946693Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:06.949123Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 7, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:06.949148Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=8
+2026-10-14T22:54:07.132262Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:07.134897Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 8, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:07.134923Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=9
+2026-10-14T22:54:07.317853Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:07.321472Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 9, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:07.321500Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=10
+2026-10-14T22:54:07.503533Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:07.507918Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 10, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:07.507939Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=11
+2026-10-14T22:54:07.689205Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:07.693598Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 11, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:07.693631Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=12
+2026-10-14T22:54:07.879278Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Delete { offset: 11, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:07.879337Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:54:07.879365Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=11
+2026-10-14T22:54:08.062751Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=0
+2026-10-14T22:54:08.062822Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:08.738476Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:08.741185Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 0, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:08.741212Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=1
+2026-10-14T22:54:08.925960Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=2
+2026-10-14T22:54:08.926020Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:09.109541Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:09.113620Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 2, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:09.113652Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=3
+2026-10-14T22:54:09.295117Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:09.298872Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 3, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:09.298906Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=4
+2026-10-14T22:54:09.480836Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:09.484752Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 4, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:09.484830Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=5
+2026-10-14T22:54:09.666352Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:09.670266Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 5, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:09.670295Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=6
+2026-10-14T22:54:09.854737Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=7
+2026-10-14T22:54:09.854810Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:10.040449Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 7, len: 2, text: Some(LazyText { bytes: 4, field: 0 }) }
+2026-10-14T22:54:10.040496Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=9
+2026-10-14T22:54:10.046541Z DEBUG gorca_text: say pieces=1 reason=Inserted(Unknown)
+2026-10-14T22:54:10.225410Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=7
+2026-10-14T22:54:10.225461Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:10.408866Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:10.411845Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 7, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:10.411885Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=8
+2026-10-14T22:54:10.594450Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:10.597526Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 8, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:10.597580Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=9
+2026-10-14T22:54:10.782289Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=0
+2026-10-14T22:54:10.782352Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:10.965501Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:10.968452Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 0, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:10.968481Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=1
+2026-10-14T22:54:11.150992Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:11.153431Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 1, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:11.153457Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=2
+2026-10-14T22:54:11.336551Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:11.339235Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 2, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:11.339269Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=3
+2026-10-14T22:54:11.522201Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:11.524965Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 3, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:11.525031Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=4
+2026-10-14T22:54:11.710320Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=5
+2026-10-14T22:54:11.710391Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:11.896130Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=6
+2026-10-14T22:54:11.896174Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:12.079167Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:12.082011Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 6, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:12.082039Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=7
+2026-10-14T22:54:12.266824Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=0
+2026-10-14T22:54:12.266875Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:12.450170Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:12.452751Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 0, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:12.452778Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=1
+2026-10-14T22:54:12.638048Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=0
+2026-10-14T22:54:12.638104Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:12.821374Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:12.825759Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 0, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:12.825793Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=1
+2026-10-14T22:54:13.009647Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=0
+2026-10-14T22:54:13.009721Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:13.192662Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:13.195175Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 1, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:13.195200Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=1
+2026-10-14T22:54:13.201257Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: false }
+2026-10-14T22:54:13.378162Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:13.382835Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 1, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:13.382895Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=2
+2026-10-14T22:54:13.563777Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:13.566672Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 2, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:13.566706Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=3
+2026-10-14T22:54:13.752601Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 3, len: 1, text: Some(LazyText { bytes: 2, field: 0 }) }
+2026-10-14T22:54:13.752677Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=4
+2026-10-14T22:54:13.758794Z DEBUG gorca_text: say pieces=1 reason=Inserted(Unknown)
+2026-10-14T22:54:13.934921Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:13.938058Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } delta=Insert { offset: 4, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:13.938113Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } offset=5
+2026-10-14T22:54:29.004679Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848375362382324951) } offset=0
+2026-10-14T22:54:29.005216Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882550747623081120) }, around: None, radius: 2048 }
+2026-10-14T22:54:29.005611Z DEBUG gorca_text: window reply base=0 chars=2 len=2 caret=Some(0)
+2026-10-14T22:54:29.599332Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848375362382324951) } offset=1
+2026-10-14T22:54:29.599385Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848375362382324951) }, around: Some(1), radius: 2048 }
+2026-10-14T22:54:29.600522Z DEBUG gorca_text: window reply base=0 chars=10 len=10 caret=None
+2026-10-14T22:54:29.600564Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:29.755768Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848375362382324951) } offset=2
+2026-10-14T22:54:29.755848Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:30.000420Z DEBUG gorca_text: say pieces=1 reason=Boundary
+2026-10-14T22:54:30.064967Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848375362382324951) } offset=3
+2026-10-14T22:54:30.065037Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:30.321118Z DEBUG gorca_text: say pieces=1 reason=Boundary
+2026-10-14T22:54:30.393761Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848375362382324951) } offset=4
+2026-10-14T22:54:30.393818Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:30.552726Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848375362382324951) } offset=6
+2026-10-14T22:54:30.552808Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:30.716553Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848375362382324951) } offset=7
+2026-10-14T22:54:30.716607Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:30.870998Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848375362382324951) } offset=8
+2026-10-14T22:54:30.871068Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:31.030441Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848375362382324951) } offset=9
+2026-10-14T22:54:31.030516Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:31.190986Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848375362382324951) } offset=10
+2026-10-14T22:54:31.191049Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:31.351417Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } offset=0
+2026-10-14T22:54:31.351525Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) }, around: Some(0), radius: 2048 }
+2026-10-14T22:54:31.352206Z DEBUG gorca_text: window reply base=0 chars=10 len=10 caret=None
+2026-10-14T22:54:31.352249Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Char, correlated: true }
+2026-10-14T22:54:31.509449Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:31.513233Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } delta=Insert { offset: 0, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:31.513297Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } offset=1
+2026-10-14T22:54:31.669922Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:54:31.672998Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } delta=Insert { offset: 1, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:31.673046Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } offset=2
+2026-10-14T22:54:31.833163Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } delta=Delete { offset: 1, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:31.833240Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:54:31.833268Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } offset=1
+2026-10-14T22:54:31.994381Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } delta=Delete { offset: 0, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:54:31.994505Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:54:31.994523Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } offset=0
+2026-10-14T22:54:32.153635Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848375362382324951) } offset=0
+2026-10-14T22:54:32.153701Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848375362382324951) }, around: Some(0), radius: 2048 }
+2026-10-14T22:54:32.154269Z DEBUG gorca_text: window reply base=0 chars=10 len=10 caret=None
+2026-10-14T22:54:32.154287Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848375362382324951) }, offset: 0, unit: Line }
+2026-10-14T22:54:32.154955Z DEBUG gorca_text: unit reply range=0..10 chars=10
+2026-10-14T22:54:32.154972Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:54:47.649673Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849340733591704984) } offset=0
+2026-10-14T22:55:04.525437Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=9300
+2026-10-14T22:55:04.526310Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, around: None, radius: 2048 }
+2026-10-14T22:55:04.526973Z DEBUG gorca_text: window reply base=7252 chars=2048 len=9300 caret=Some(9300)
+2026-10-14T22:55:05.104552Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=0
+2026-10-14T22:55:05.104632Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 0, unit: Line }
+2026-10-14T22:55:05.105180Z DEBUG gorca_text: unit reply range=0..9300 chars=9300
+2026-10-14T22:55:05.105236Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:05.601855Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=31
+2026-10-14T22:55:05.601906Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, around: Some(0), radius: 2048 }
+2026-10-14T22:55:05.602457Z DEBUG gorca_text: window reply base=0 chars=2048 len=9300 caret=None
+2026-10-14T22:55:05.602479Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 31, unit: Line }
+2026-10-14T22:55:05.602650Z DEBUG gorca_text: unit reply range=31..62 chars=31
+2026-10-14T22:55:05.602656Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:05.722126Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=62
+2026-10-14T22:55:05.722166Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 62, unit: Line }
+2026-10-14T22:55:05.722431Z DEBUG gorca_text: unit reply range=62..93 chars=31
+2026-10-14T22:55:05.722444Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:05.843186Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=93
+2026-10-14T22:55:05.843224Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 93, unit: Line }
+2026-10-14T22:55:05.843449Z DEBUG gorca_text: unit reply range=93..124 chars=31
+2026-10-14T22:55:05.843456Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:05.963903Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=124
+2026-10-14T22:55:05.963954Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 124, unit: Line }
+2026-10-14T22:55:05.964256Z DEBUG gorca_text: unit reply range=124..155 chars=31
+2026-10-14T22:55:05.964266Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:06.086055Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=155
+2026-10-14T22:55:06.086100Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 155, unit: Line }
+2026-10-14T22:55:06.086495Z DEBUG gorca_text: unit reply range=155..186 chars=31
+2026-10-14T22:55:06.086532Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:06.203668Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=186
+2026-10-14T22:55:06.203711Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 186, unit: Line }
+2026-10-14T22:55:06.204053Z DEBUG gorca_text: unit reply range=186..217 chars=31
+2026-10-14T22:55:06.204068Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:06.325067Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=217
+2026-10-14T22:55:06.325131Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 217, unit: Line }
+2026-10-14T22:55:06.325364Z DEBUG gorca_text: unit reply range=217..248 chars=31
+2026-10-14T22:55:06.325374Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:06.446702Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=248
+2026-10-14T22:55:06.446743Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 248, unit: Line }
+2026-10-14T22:55:06.447203Z DEBUG gorca_text: unit reply range=248..279 chars=31
+2026-10-14T22:55:06.447218Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:06.569526Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=279
+2026-10-14T22:55:06.569547Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 279, unit: Line }
+2026-10-14T22:55:06.569745Z DEBUG gorca_text: unit reply range=279..310 chars=31
+2026-10-14T22:55:06.569753Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:06.686256Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=310
+2026-10-14T22:55:06.686286Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 310, unit: Line }
+2026-10-14T22:55:06.686641Z DEBUG gorca_text: unit reply range=310..341 chars=31
+2026-10-14T22:55:06.686675Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:06.805815Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=341
+2026-10-14T22:55:06.805845Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 341, unit: Line }
+2026-10-14T22:55:06.806053Z DEBUG gorca_text: unit reply range=341..372 chars=31
+2026-10-14T22:55:06.806108Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:06.926279Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=372
+2026-10-14T22:55:06.926338Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 372, unit: Line }
+2026-10-14T22:55:06.926536Z DEBUG gorca_text: unit reply range=372..403 chars=31
+2026-10-14T22:55:06.926559Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:07.047669Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=403
+2026-10-14T22:55:07.047735Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 403, unit: Line }
+2026-10-14T22:55:07.048157Z DEBUG gorca_text: unit reply range=403..434 chars=31
+2026-10-14T22:55:07.048179Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:07.169347Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=434
+2026-10-14T22:55:07.169422Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 434, unit: Line }
+2026-10-14T22:55:07.169757Z DEBUG gorca_text: unit reply range=434..465 chars=31
+2026-10-14T22:55:07.169814Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:07.288134Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=465
+2026-10-14T22:55:07.288189Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 465, unit: Line }
+2026-10-14T22:55:07.288442Z DEBUG gorca_text: unit reply range=465..496 chars=31
+2026-10-14T22:55:07.288457Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:07.408241Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=496
+2026-10-14T22:55:07.408298Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 496, unit: Line }
+2026-10-14T22:55:07.408562Z DEBUG gorca_text: unit reply range=496..527 chars=31
+2026-10-14T22:55:07.408608Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:07.529014Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=527
+2026-10-14T22:55:07.529064Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 527, unit: Line }
+2026-10-14T22:55:07.529367Z DEBUG gorca_text: unit reply range=527..558 chars=31
+2026-10-14T22:55:07.529382Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:07.652847Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=558
+2026-10-14T22:55:07.652915Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 558, unit: Line }
+2026-10-14T22:55:07.653144Z DEBUG gorca_text: unit reply range=558..589 chars=31
+2026-10-14T22:55:07.653172Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:07.771011Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=589
+2026-10-14T22:55:07.771068Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 589, unit: Line }
+2026-10-14T22:55:07.771497Z DEBUG gorca_text: unit reply range=589..620 chars=31
+2026-10-14T22:55:07.771513Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:07.890840Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=620
+2026-10-14T22:55:07.890913Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 620, unit: Line }
+2026-10-14T22:55:07.891265Z DEBUG gorca_text: unit reply range=620..651 chars=31
+2026-10-14T22:55:07.891278Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:08.011460Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=651
+2026-10-14T22:55:08.011545Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 651, unit: Line }
+2026-10-14T22:55:08.012021Z DEBUG gorca_text: unit reply range=651..682 chars=31
+2026-10-14T22:55:08.012058Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:08.136069Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=682
+2026-10-14T22:55:08.136181Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 682, unit: Line }
+2026-10-14T22:55:08.136634Z DEBUG gorca_text: unit reply range=682..713 chars=31
+2026-10-14T22:55:08.136662Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:08.252627Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=713
+2026-10-14T22:55:08.252710Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 713, unit: Line }
+2026-10-14T22:55:08.253020Z DEBUG gorca_text: unit reply range=713..744 chars=31
+2026-10-14T22:55:08.253048Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:08.371468Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=744
+2026-10-14T22:55:08.371548Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 744, unit: Line }
+2026-10-14T22:55:08.371776Z DEBUG gorca_text: unit reply range=744..775 chars=31
+2026-10-14T22:55:08.371803Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:08.492626Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=775
+2026-10-14T22:55:08.492656Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 775, unit: Line }
+2026-10-14T22:55:08.492862Z DEBUG gorca_text: unit reply range=775..806 chars=31
+2026-10-14T22:55:08.492874Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:08.612326Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=806
+2026-10-14T22:55:08.612389Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 806, unit: Line }
+2026-10-14T22:55:08.612604Z DEBUG gorca_text: unit reply range=806..837 chars=31
+2026-10-14T22:55:08.612617Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:08.735957Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=837
+2026-10-14T22:55:08.736016Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 837, unit: Line }
+2026-10-14T22:55:08.736213Z DEBUG gorca_text: unit reply range=837..868 chars=31
+2026-10-14T22:55:08.736226Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:08.854179Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=868
+2026-10-14T22:55:08.854241Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 868, unit: Line }
+2026-10-14T22:55:08.854469Z DEBUG gorca_text: unit reply range=868..899 chars=31
+2026-10-14T22:55:08.854484Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:08.973559Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=899
+2026-10-14T22:55:08.973602Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 899, unit: Line }
+2026-10-14T22:55:08.973806Z DEBUG gorca_text: unit reply range=899..930 chars=31
+2026-10-14T22:55:08.973818Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:09.094473Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=930
+2026-10-14T22:55:09.094531Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 930, unit: Line }
+2026-10-14T22:55:09.094774Z DEBUG gorca_text: unit reply range=930..961 chars=31
+2026-10-14T22:55:09.094788Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:09.214457Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=961
+2026-10-14T22:55:09.214516Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 961, unit: Line }
+2026-10-14T22:55:09.214732Z DEBUG gorca_text: unit reply range=961..992 chars=31
+2026-10-14T22:55:09.214744Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:09.335746Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=992
+2026-10-14T22:55:09.335773Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 992, unit: Line }
+2026-10-14T22:55:09.335970Z DEBUG gorca_text: unit reply range=992..1023 chars=31
+2026-10-14T22:55:09.335980Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:09.454990Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1023
+2026-10-14T22:55:09.455023Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1023, unit: Line }
+2026-10-14T22:55:09.455277Z DEBUG gorca_text: unit reply range=1023..1054 chars=31
+2026-10-14T22:55:09.455286Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:09.575641Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1054
+2026-10-14T22:55:09.575687Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1054, unit: Line }
+2026-10-14T22:55:09.576112Z DEBUG gorca_text: unit reply range=1054..1085 chars=31
+2026-10-14T22:55:09.576129Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:09.696478Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1085
+2026-10-14T22:55:09.696519Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1085, unit: Line }
+2026-10-14T22:55:09.696755Z DEBUG gorca_text: unit reply range=1085..1116 chars=31
+2026-10-14T22:55:09.696763Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:09.819408Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1116
+2026-10-14T22:55:09.819453Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1116, unit: Line }
+2026-10-14T22:55:09.819704Z DEBUG gorca_text: unit reply range=1116..1147 chars=31
+2026-10-14T22:55:09.819734Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:09.937224Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1147
+2026-10-14T22:55:09.937247Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1147, unit: Line }
+2026-10-14T22:55:09.937445Z DEBUG gorca_text: unit reply range=1147..1178 chars=31
+2026-10-14T22:55:09.937452Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:10.057896Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1178
+2026-10-14T22:55:10.057949Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1178, unit: Line }
+2026-10-14T22:55:10.058177Z DEBUG gorca_text: unit reply range=1178..1209 chars=31
+2026-10-14T22:55:10.058192Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:10.177976Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1209
+2026-10-14T22:55:10.178018Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1209, unit: Line }
+2026-10-14T22:55:10.178230Z DEBUG gorca_text: unit reply range=1209..1240 chars=31
+2026-10-14T22:55:10.178241Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:10.302609Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1240
+2026-10-14T22:55:10.302660Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1240, unit: Line }
+2026-10-14T22:55:10.303032Z DEBUG gorca_text: unit reply range=1240..1271 chars=31
+2026-10-14T22:55:10.303068Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:10.419386Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1271
+2026-10-14T22:55:10.419440Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1271, unit: Line }
+2026-10-14T22:55:10.419663Z DEBUG gorca_text: unit reply range=1271..1302 chars=31
+2026-10-14T22:55:10.419673Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:10.539555Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1302
+2026-10-14T22:55:10.539604Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1302, unit: Line }
+2026-10-14T22:55:10.539881Z DEBUG gorca_text: unit reply range=1302..1333 chars=31
+2026-10-14T22:55:10.539941Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:10.660076Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1333
+2026-10-14T22:55:10.660118Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1333, unit: Line }
+2026-10-14T22:55:10.660381Z DEBUG gorca_text: unit reply range=1333..1364 chars=31
+2026-10-14T22:55:10.660417Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:10.780090Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1364
+2026-10-14T22:55:10.780131Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1364, unit: Line }
+2026-10-14T22:55:10.780382Z DEBUG gorca_text: unit reply range=1364..1395 chars=31
+2026-10-14T22:55:10.780398Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:10.902658Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1395
+2026-10-14T22:55:10.902719Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1395, unit: Line }
+2026-10-14T22:55:10.902989Z DEBUG gorca_text: unit reply range=1395..1426 chars=31
+2026-10-14T22:55:10.903002Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:11.021307Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1426
+2026-10-14T22:55:11.021374Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1426, unit: Line }
+2026-10-14T22:55:11.021661Z DEBUG gorca_text: unit reply range=1426..1457 chars=31
+2026-10-14T22:55:11.021677Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:11.142399Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1457
+2026-10-14T22:55:11.142462Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1457, unit: Line }
+2026-10-14T22:55:11.142764Z DEBUG gorca_text: unit reply range=1457..1488 chars=31
+2026-10-14T22:55:11.142781Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:11.262030Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1488
+2026-10-14T22:55:11.262095Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1488, unit: Line }
+2026-10-14T22:55:11.262363Z DEBUG gorca_text: unit reply range=1488..1519 chars=31
+2026-10-14T22:55:11.262385Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:11.386104Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1519
+2026-10-14T22:55:11.386177Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1519, unit: Line }
+2026-10-14T22:55:11.386484Z DEBUG gorca_text: unit reply range=1519..1550 chars=31
+2026-10-14T22:55:11.386520Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:11.502922Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1550
+2026-10-14T22:55:11.502962Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1550, unit: Line }
+2026-10-14T22:55:11.503245Z DEBUG gorca_text: unit reply range=1550..1581 chars=31
+2026-10-14T22:55:11.503266Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:11.623266Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1581
+2026-10-14T22:55:11.623309Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1581, unit: Line }
+2026-10-14T22:55:11.623518Z DEBUG gorca_text: unit reply range=1581..1612 chars=31
+2026-10-14T22:55:11.623541Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:11.743421Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1612
+2026-10-14T22:55:11.743446Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1612, unit: Line }
+2026-10-14T22:55:11.743604Z DEBUG gorca_text: unit reply range=1612..1643 chars=31
+2026-10-14T22:55:11.743616Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:11.863710Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1643
+2026-10-14T22:55:11.863730Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1643, unit: Line }
+2026-10-14T22:55:11.863871Z DEBUG gorca_text: unit reply range=1643..1674 chars=31
+2026-10-14T22:55:11.863881Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:11.985892Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1674
+2026-10-14T22:55:11.985940Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1674, unit: Line }
+2026-10-14T22:55:11.986352Z DEBUG gorca_text: unit reply range=1674..1705 chars=31
+2026-10-14T22:55:11.986375Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:12.105623Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1705
+2026-10-14T22:55:12.105692Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1705, unit: Line }
+2026-10-14T22:55:12.106162Z DEBUG gorca_text: unit reply range=1705..1736 chars=31
+2026-10-14T22:55:12.106185Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:12.225695Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1736
+2026-10-14T22:55:12.225745Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1736, unit: Line }
+2026-10-14T22:55:12.225959Z DEBUG gorca_text: unit reply range=1736..1767 chars=31
+2026-10-14T22:55:12.225977Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:12.347012Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1767
+2026-10-14T22:55:12.347073Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1767, unit: Line }
+2026-10-14T22:55:12.347312Z DEBUG gorca_text: unit reply range=1767..1798 chars=31
+2026-10-14T22:55:12.347329Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:12.469463Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1798
+2026-10-14T22:55:12.469562Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1798, unit: Line }
+2026-10-14T22:55:12.469889Z DEBUG gorca_text: unit reply range=1798..1829 chars=31
+2026-10-14T22:55:12.469945Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:12.589164Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1829
+2026-10-14T22:55:12.589212Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1829, unit: Line }
+2026-10-14T22:55:12.589502Z DEBUG gorca_text: unit reply range=1829..1860 chars=31
+2026-10-14T22:55:12.589513Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:12.708434Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1860
+2026-10-14T22:55:12.708479Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1860, unit: Line }
+2026-10-14T22:55:12.708695Z DEBUG gorca_text: unit reply range=1860..1891 chars=31
+2026-10-14T22:55:12.708706Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:12.829074Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1891
+2026-10-14T22:55:12.829152Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1891, unit: Line }
+2026-10-14T22:55:12.829358Z DEBUG gorca_text: unit reply range=1891..1922 chars=31
+2026-10-14T22:55:12.829370Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:12.952789Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1922
+2026-10-14T22:55:12.952829Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1922, unit: Line }
+2026-10-14T22:55:12.953047Z DEBUG gorca_text: unit reply range=1922..1953 chars=31
+2026-10-14T22:55:12.953058Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:13.069721Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1953
+2026-10-14T22:55:13.069774Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1953, unit: Line }
+2026-10-14T22:55:13.070003Z DEBUG gorca_text: unit reply range=1953..1984 chars=31
+2026-10-14T22:55:13.070016Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:13.189802Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=1984
+2026-10-14T22:55:13.189858Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 1984, unit: Line }
+2026-10-14T22:55:13.190096Z DEBUG gorca_text: unit reply range=1984..2015 chars=31
+2026-10-14T22:55:13.190109Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:13.310667Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2015
+2026-10-14T22:55:13.310734Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2015, unit: Line }
+2026-10-14T22:55:13.311011Z DEBUG gorca_text: unit reply range=2015..2046 chars=31
+2026-10-14T22:55:13.311029Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:13.436561Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2046
+2026-10-14T22:55:13.436614Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2046, unit: Line }
+2026-10-14T22:55:13.436867Z DEBUG gorca_text: unit reply range=2046..2077 chars=31
+2026-10-14T22:55:13.436880Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:13.552770Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2077
+2026-10-14T22:55:13.552851Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2077, unit: Line }
+2026-10-14T22:55:13.553080Z DEBUG gorca_text: unit reply range=2077..2108 chars=31
+2026-10-14T22:55:13.553101Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:13.671573Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2108
+2026-10-14T22:55:13.671608Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2108, unit: Line }
+2026-10-14T22:55:13.671816Z DEBUG gorca_text: unit reply range=2108..2139 chars=31
+2026-10-14T22:55:13.671832Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:13.792992Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2139
+2026-10-14T22:55:13.793040Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2139, unit: Line }
+2026-10-14T22:55:13.793262Z DEBUG gorca_text: unit reply range=2139..2170 chars=31
+2026-10-14T22:55:13.793281Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:13.912951Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2170
+2026-10-14T22:55:13.913016Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2170, unit: Line }
+2026-10-14T22:55:13.913216Z DEBUG gorca_text: unit reply range=2170..2201 chars=31
+2026-10-14T22:55:13.913226Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:14.036179Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2201
+2026-10-14T22:55:14.036235Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2201, unit: Line }
+2026-10-14T22:55:14.036521Z DEBUG gorca_text: unit reply range=2201..2232 chars=31
+2026-10-14T22:55:14.036536Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:14.153938Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2232
+2026-10-14T22:55:14.153987Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2232, unit: Line }
+2026-10-14T22:55:14.154228Z DEBUG gorca_text: unit reply range=2232..2263 chars=31
+2026-10-14T22:55:14.154276Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:14.274187Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2263
+2026-10-14T22:55:14.274229Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2263, unit: Line }
+2026-10-14T22:55:14.274457Z DEBUG gorca_text: unit reply range=2263..2294 chars=31
+2026-10-14T22:55:14.274481Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:14.395606Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2294
+2026-10-14T22:55:14.395668Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2294, unit: Line }
+2026-10-14T22:55:14.396083Z DEBUG gorca_text: unit reply range=2294..2325 chars=31
+2026-10-14T22:55:14.396096Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:14.514854Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2325
+2026-10-14T22:55:14.514877Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2325, unit: Line }
+2026-10-14T22:55:14.515087Z DEBUG gorca_text: unit reply range=2325..2356 chars=31
+2026-10-14T22:55:14.515097Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:14.635873Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2356
+2026-10-14T22:55:14.635902Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2356, unit: Line }
+2026-10-14T22:55:14.636112Z DEBUG gorca_text: unit reply range=2356..2387 chars=31
+2026-10-14T22:55:14.636125Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:14.755791Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2387
+2026-10-14T22:55:14.755838Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2387, unit: Line }
+2026-10-14T22:55:14.756056Z DEBUG gorca_text: unit reply range=2387..2418 chars=31
+2026-10-14T22:55:14.756077Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:14.876362Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2418
+2026-10-14T22:55:14.876412Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2418, unit: Line }
+2026-10-14T22:55:14.876677Z DEBUG gorca_text: unit reply range=2418..2449 chars=31
+2026-10-14T22:55:14.876699Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:14.996604Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2449
+2026-10-14T22:55:14.996651Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2449, unit: Line }
+2026-10-14T22:55:14.997005Z DEBUG gorca_text: unit reply range=2449..2480 chars=31
+2026-10-14T22:55:14.997051Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:15.119403Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2480
+2026-10-14T22:55:15.119461Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2480, unit: Line }
+2026-10-14T22:55:15.119725Z DEBUG gorca_text: unit reply range=2480..2511 chars=31
+2026-10-14T22:55:15.119737Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:15.237797Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2511
+2026-10-14T22:55:15.237832Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2511, unit: Line }
+2026-10-14T22:55:15.238031Z DEBUG gorca_text: unit reply range=2511..2542 chars=31
+2026-10-14T22:55:15.238042Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:15.358427Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2542
+2026-10-14T22:55:15.358487Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2542, unit: Line }
+2026-10-14T22:55:15.358721Z DEBUG gorca_text: unit reply range=2542..2573 chars=31
+2026-10-14T22:55:15.358735Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:15.478621Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2573
+2026-10-14T22:55:15.478702Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2573, unit: Line }
+2026-10-14T22:55:15.479038Z DEBUG gorca_text: unit reply range=2573..2604 chars=31
+2026-10-14T22:55:15.479051Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:15.602587Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2604
+2026-10-14T22:55:15.602644Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2604, unit: Line }
+2026-10-14T22:55:15.602992Z DEBUG gorca_text: unit reply range=2604..2635 chars=31
+2026-10-14T22:55:15.603011Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:15.719171Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2635
+2026-10-14T22:55:15.719208Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2635, unit: Line }
+2026-10-14T22:55:15.719506Z DEBUG gorca_text: unit reply range=2635..2666 chars=31
+2026-10-14T22:55:15.719517Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:15.839409Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2666
+2026-10-14T22:55:15.839442Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2666, unit: Line }
+2026-10-14T22:55:15.839830Z DEBUG gorca_text: unit reply range=2666..2697 chars=31
+2026-10-14T22:55:15.839880Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:15.959921Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2697
+2026-10-14T22:55:15.959961Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2697, unit: Line }
+2026-10-14T22:55:15.960378Z DEBUG gorca_text: unit reply range=2697..2728 chars=31
+2026-10-14T22:55:15.960405Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:16.081897Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2728
+2026-10-14T22:55:16.081952Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2728, unit: Line }
+2026-10-14T22:55:16.082298Z DEBUG gorca_text: unit reply range=2728..2759 chars=31
+2026-10-14T22:55:16.082309Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:16.202793Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2759
+2026-10-14T22:55:16.202847Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2759, unit: Line }
+2026-10-14T22:55:16.203083Z DEBUG gorca_text: unit reply range=2759..2790 chars=31
+2026-10-14T22:55:16.203094Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:16.323207Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2790
+2026-10-14T22:55:16.323269Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2790, unit: Line }
+2026-10-14T22:55:16.323713Z DEBUG gorca_text: unit reply range=2790..2821 chars=31
+2026-10-14T22:55:16.323742Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:16.442827Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2821
+2026-10-14T22:55:16.442886Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2821, unit: Line }
+2026-10-14T22:55:16.443131Z DEBUG gorca_text: unit reply range=2821..2852 chars=31
+2026-10-14T22:55:16.443144Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:16.561994Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2852
+2026-10-14T22:55:16.562027Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2852, unit: Line }
+2026-10-14T22:55:16.562225Z DEBUG gorca_text: unit reply range=2852..2883 chars=31
+2026-10-14T22:55:16.562273Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:16.686335Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2883
+2026-10-14T22:55:16.686410Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2883, unit: Line }
+2026-10-14T22:55:16.686738Z DEBUG gorca_text: unit reply range=2883..2914 chars=31
+2026-10-14T22:55:16.686780Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:16.805102Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2914
+2026-10-14T22:55:16.805197Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2914, unit: Line }
+2026-10-14T22:55:16.805725Z DEBUG gorca_text: unit reply range=2914..2945 chars=31
+2026-10-14T22:55:16.805759Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:16.924917Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2945
+2026-10-14T22:55:16.924995Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2945, unit: Line }
+2026-10-14T22:55:16.925466Z DEBUG gorca_text: unit reply range=2945..2976 chars=31
+2026-10-14T22:55:16.925493Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:17.045819Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=2976
+2026-10-14T22:55:17.045893Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 2976, unit: Line }
+2026-10-14T22:55:17.046472Z DEBUG gorca_text: unit reply range=2976..3007 chars=31
+2026-10-14T22:55:17.046511Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:17.164871Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3007
+2026-10-14T22:55:17.164943Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3007, unit: Line }
+2026-10-14T22:55:17.165393Z DEBUG gorca_text: unit reply range=3007..3038 chars=31
+2026-10-14T22:55:17.165419Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:17.287200Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3038
+2026-10-14T22:55:17.287261Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3038, unit: Line }
+2026-10-14T22:55:17.287701Z DEBUG gorca_text: unit reply range=3038..3069 chars=31
+2026-10-14T22:55:17.287718Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:17.405790Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3069
+2026-10-14T22:55:17.405844Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3069, unit: Line }
+2026-10-14T22:55:17.406125Z DEBUG gorca_text: unit reply range=3069..3100 chars=31
+2026-10-14T22:55:17.406179Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:17.525937Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3100
+2026-10-14T22:55:17.525994Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3100, unit: Line }
+2026-10-14T22:55:17.526261Z DEBUG gorca_text: unit reply range=3100..3131 chars=31
+2026-10-14T22:55:17.526275Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:17.646186Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3131
+2026-10-14T22:55:17.646209Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3131, unit: Line }
+2026-10-14T22:55:17.646449Z DEBUG gorca_text: unit reply range=3131..3162 chars=31
+2026-10-14T22:55:17.646456Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:17.769401Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3162
+2026-10-14T22:55:17.769435Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3162, unit: Line }
+2026-10-14T22:55:17.769626Z DEBUG gorca_text: unit reply range=3162..3193 chars=31
+2026-10-14T22:55:17.769634Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:17.886902Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3193
+2026-10-14T22:55:17.886943Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3193, unit: Line }
+2026-10-14T22:55:17.887297Z DEBUG gorca_text: unit reply range=3193..3224 chars=31
+2026-10-14T22:55:17.887310Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:18.007280Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3224
+2026-10-14T22:55:18.007316Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3224, unit: Line }
+2026-10-14T22:55:18.007490Z DEBUG gorca_text: unit reply range=3224..3255 chars=31
+2026-10-14T22:55:18.007504Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:18.129107Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3255
+2026-10-14T22:55:18.129184Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3255, unit: Line }
+2026-10-14T22:55:18.129630Z DEBUG gorca_text: unit reply range=3255..3286 chars=31
+2026-10-14T22:55:18.129654Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:18.253504Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3286
+2026-10-14T22:55:18.253599Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3286, unit: Line }
+2026-10-14T22:55:18.254099Z DEBUG gorca_text: unit reply range=3286..3317 chars=31
+2026-10-14T22:55:18.254133Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:18.369663Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3317
+2026-10-14T22:55:18.369738Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3317, unit: Line }
+2026-10-14T22:55:18.370046Z DEBUG gorca_text: unit reply range=3317..3348 chars=31
+2026-10-14T22:55:18.370071Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:18.489673Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3348
+2026-10-14T22:55:18.489747Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3348, unit: Line }
+2026-10-14T22:55:18.490004Z DEBUG gorca_text: unit reply range=3348..3379 chars=31
+2026-10-14T22:55:18.490038Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:18.609810Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3379
+2026-10-14T22:55:18.609863Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3379, unit: Line }
+2026-10-14T22:55:18.610323Z DEBUG gorca_text: unit reply range=3379..3410 chars=31
+2026-10-14T22:55:18.610356Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:18.730029Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3410
+2026-10-14T22:55:18.730070Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3410, unit: Line }
+2026-10-14T22:55:18.730331Z DEBUG gorca_text: unit reply range=3410..3441 chars=31
+2026-10-14T22:55:18.730345Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:18.852917Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3441
+2026-10-14T22:55:18.853008Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3441, unit: Line }
+2026-10-14T22:55:18.853344Z DEBUG gorca_text: unit reply range=3441..3472 chars=31
+2026-10-14T22:55:18.853366Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:18.971071Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3472
+2026-10-14T22:55:18.971140Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3472, unit: Line }
+2026-10-14T22:55:18.971431Z DEBUG gorca_text: unit reply range=3472..3503 chars=31
+2026-10-14T22:55:18.971449Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:19.091970Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3503
+2026-10-14T22:55:19.092027Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3503, unit: Line }
+2026-10-14T22:55:19.092312Z DEBUG gorca_text: unit reply range=3503..3534 chars=31
+2026-10-14T22:55:19.092330Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:19.212555Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3534
+2026-10-14T22:55:19.212598Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3534, unit: Line }
+2026-10-14T22:55:19.212903Z DEBUG gorca_text: unit reply range=3534..3565 chars=31
+2026-10-14T22:55:19.212923Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:19.336278Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3565
+2026-10-14T22:55:19.336363Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3565, unit: Line }
+2026-10-14T22:55:19.336653Z DEBUG gorca_text: unit reply range=3565..3596 chars=31
+2026-10-14T22:55:19.336696Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:19.453966Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3596
+2026-10-14T22:55:19.454027Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3596, unit: Line }
+2026-10-14T22:55:19.454294Z DEBUG gorca_text: unit reply range=3596..3627 chars=31
+2026-10-14T22:55:19.454336Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:19.574569Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3627
+2026-10-14T22:55:19.574631Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3627, unit: Line }
+2026-10-14T22:55:19.575012Z DEBUG gorca_text: unit reply range=3627..3658 chars=31
+2026-10-14T22:55:19.575033Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:19.695625Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3658
+2026-10-14T22:55:19.695693Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3658, unit: Line }
+2026-10-14T22:55:19.695967Z DEBUG gorca_text: unit reply range=3658..3689 chars=31
+2026-10-14T22:55:19.695983Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:19.820138Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3689
+2026-10-14T22:55:19.820223Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3689, unit: Line }
+2026-10-14T22:55:19.820769Z DEBUG gorca_text: unit reply range=3689..3720 chars=31
+2026-10-14T22:55:19.820831Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:19.936131Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3720
+2026-10-14T22:55:19.936182Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3720, unit: Line }
+2026-10-14T22:55:19.936460Z DEBUG gorca_text: unit reply range=3720..3751 chars=31
+2026-10-14T22:55:19.936472Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:20.057086Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3751
+2026-10-14T22:55:20.057149Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3751, unit: Line }
+2026-10-14T22:55:20.057566Z DEBUG gorca_text: unit reply range=3751..3782 chars=31
+2026-10-14T22:55:20.057582Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:20.176263Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3782
+2026-10-14T22:55:20.176321Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3782, unit: Line }
+2026-10-14T22:55:20.176647Z DEBUG gorca_text: unit reply range=3782..3813 chars=31
+2026-10-14T22:55:20.176671Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:20.297256Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3813
+2026-10-14T22:55:20.297335Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3813, unit: Line }
+2026-10-14T22:55:20.297666Z DEBUG gorca_text: unit reply range=3813..3844 chars=31
+2026-10-14T22:55:20.297697Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:20.419666Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3844
+2026-10-14T22:55:20.419753Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3844, unit: Line }
+2026-10-14T22:55:20.420176Z DEBUG gorca_text: unit reply range=3844..3875 chars=31
+2026-10-14T22:55:20.420210Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:20.537652Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3875
+2026-10-14T22:55:20.537717Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3875, unit: Line }
+2026-10-14T22:55:20.537974Z DEBUG gorca_text: unit reply range=3875..3906 chars=31
+2026-10-14T22:55:20.537987Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:20.658851Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3906
+2026-10-14T22:55:20.658925Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3906, unit: Line }
+2026-10-14T22:55:20.659428Z DEBUG gorca_text: unit reply range=3906..3937 chars=31
+2026-10-14T22:55:20.659460Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:20.778817Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3937
+2026-10-14T22:55:20.778852Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3937, unit: Line }
+2026-10-14T22:55:20.779167Z DEBUG gorca_text: unit reply range=3937..3968 chars=31
+2026-10-14T22:55:20.779187Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:20.899607Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3968
+2026-10-14T22:55:20.899670Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3968, unit: Line }
+2026-10-14T22:55:20.900064Z DEBUG gorca_text: unit reply range=3968..3999 chars=31
+2026-10-14T22:55:20.900087Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:21.045092Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=3999
+2026-10-14T22:55:21.045153Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 3999, unit: Line }
+2026-10-14T22:55:21.045545Z DEBUG gorca_text: unit reply range=3999..4030 chars=31
+2026-10-14T22:55:21.045573Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:21.139739Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4030
+2026-10-14T22:55:21.139799Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4030, unit: Line }
+2026-10-14T22:55:21.140049Z DEBUG gorca_text: unit reply range=4030..4061 chars=31
+2026-10-14T22:55:21.140060Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:21.259997Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4061
+2026-10-14T22:55:21.260044Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4061, unit: Line }
+2026-10-14T22:55:21.260268Z DEBUG gorca_text: unit reply range=4061..4092 chars=31
+2026-10-14T22:55:21.260280Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:21.380438Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4092
+2026-10-14T22:55:21.380492Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4092, unit: Line }
+2026-10-14T22:55:21.380856Z DEBUG gorca_text: unit reply range=4092..4123 chars=31
+2026-10-14T22:55:21.380870Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:21.501051Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4123
+2026-10-14T22:55:21.501106Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4123, unit: Line }
+2026-10-14T22:55:21.501348Z DEBUG gorca_text: unit reply range=4123..4154 chars=31
+2026-10-14T22:55:21.501366Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:21.621485Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4154
+2026-10-14T22:55:21.621536Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4154, unit: Line }
+2026-10-14T22:55:21.621792Z DEBUG gorca_text: unit reply range=4154..4185 chars=31
+2026-10-14T22:55:21.621805Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:21.743694Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4185
+2026-10-14T22:55:21.743760Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4185, unit: Line }
+2026-10-14T22:55:21.744128Z DEBUG gorca_text: unit reply range=4185..4216 chars=31
+2026-10-14T22:55:21.744157Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:21.865063Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4216
+2026-10-14T22:55:21.865127Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4216, unit: Line }
+2026-10-14T22:55:21.865638Z DEBUG gorca_text: unit reply range=4216..4247 chars=31
+2026-10-14T22:55:21.865674Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:21.984481Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4247
+2026-10-14T22:55:21.984599Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4247, unit: Line }
+2026-10-14T22:55:21.985129Z DEBUG gorca_text: unit reply range=4247..4278 chars=31
+2026-10-14T22:55:21.985175Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:22.103017Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4278
+2026-10-14T22:55:22.103088Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4278, unit: Line }
+2026-10-14T22:55:22.103383Z DEBUG gorca_text: unit reply range=4278..4309 chars=31
+2026-10-14T22:55:22.103394Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:22.226796Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4309
+2026-10-14T22:55:22.226840Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4309, unit: Line }
+2026-10-14T22:55:22.227139Z DEBUG gorca_text: unit reply range=4309..4340 chars=31
+2026-10-14T22:55:22.227162Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:22.345297Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4340
+2026-10-14T22:55:22.345353Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4340, unit: Line }
+2026-10-14T22:55:22.345715Z DEBUG gorca_text: unit reply range=4340..4371 chars=31
+2026-10-14T22:55:22.345742Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:22.464930Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4371
+2026-10-14T22:55:22.465012Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4371, unit: Line }
+2026-10-14T22:55:22.465318Z DEBUG gorca_text: unit reply range=4371..4402 chars=31
+2026-10-14T22:55:22.465338Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:22.585048Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4402
+2026-10-14T22:55:22.585112Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4402, unit: Line }
+2026-10-14T22:55:22.585439Z DEBUG gorca_text: unit reply range=4402..4433 chars=31
+2026-10-14T22:55:22.585479Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:22.705220Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4433
+2026-10-14T22:55:22.705262Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4433, unit: Line }
+2026-10-14T22:55:22.705477Z DEBUG gorca_text: unit reply range=4433..4464 chars=31
+2026-10-14T22:55:22.705485Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:22.827325Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4464
+2026-10-14T22:55:22.827398Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4464, unit: Line }
+2026-10-14T22:55:22.827703Z DEBUG gorca_text: unit reply range=4464..4495 chars=31
+2026-10-14T22:55:22.827738Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:22.946385Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4495
+2026-10-14T22:55:22.946425Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4495, unit: Line }
+2026-10-14T22:55:22.946812Z DEBUG gorca_text: unit reply range=4495..4526 chars=31
+2026-10-14T22:55:22.946827Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:23.068194Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4526
+2026-10-14T22:55:23.068280Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4526, unit: Line }
+2026-10-14T22:55:23.068664Z DEBUG gorca_text: unit reply range=4526..4557 chars=31
+2026-10-14T22:55:23.068686Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:23.187985Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4557
+2026-10-14T22:55:23.188026Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4557, unit: Line }
+2026-10-14T22:55:23.188296Z DEBUG gorca_text: unit reply range=4557..4588 chars=31
+2026-10-14T22:55:23.188303Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:23.310272Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4588
+2026-10-14T22:55:23.310332Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4588, unit: Line }
+2026-10-14T22:55:23.310747Z DEBUG gorca_text: unit reply range=4588..4619 chars=31
+2026-10-14T22:55:23.310768Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:23.429005Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4619
+2026-10-14T22:55:23.429052Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4619, unit: Line }
+2026-10-14T22:55:23.429340Z DEBUG gorca_text: unit reply range=4619..4650 chars=31
+2026-10-14T22:55:23.429362Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:55:23.549725Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } offset=4650
+2026-10-14T22:55:23.549795Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) }, offset: 4650, unit: Line }
+2026-10-14T22:55:23.550021Z DEBUG gorca_text: unit reply range=4650..4681 chars=31
+2026-10-14T22:55:23.550058Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }

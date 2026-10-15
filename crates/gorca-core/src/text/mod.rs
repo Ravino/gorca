@@ -11,6 +11,7 @@
 //! owns, under a deadline, and returns as a [`TextMsg::Fetched`]; the Reader never awaits.
 
 pub mod caret;
+pub mod formatting;
 pub mod native;
 pub mod say_all;
 
@@ -33,7 +34,10 @@ use crate::mode::Mode;
 use crate::present::message;
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 use caret::{CaretState, Cfg, Ctx, Edit, In, Kind, Out, Reply, Spell, Spoken};
-use say_all::{Act, Run, SayAll};
+use say_all::{Act, Run, SayAll, Target};
+
+/// Most parent hops followed to place a node inside the focused rich editable.
+const MAX_ANCESTRY: usize = 16;
 
 /// Identifies one text fetch; unique per Reader.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -57,6 +61,11 @@ pub enum TextOp {
     Selections {
         node: NodeKey,
     },
+    /// The formatting of the run at `offset` (`info.formatting`).
+    Format {
+        node: NodeKey,
+        offset: u32,
+    },
     /// Move the caret (say-all stopping).
     SetCaret {
         node: NodeKey,
@@ -70,6 +79,7 @@ impl TextOp {
             TextOp::Window { node, .. }
             | TextOp::AtOffset { node, .. }
             | TextOp::Selections { node }
+            | TextOp::Format { node, .. }
             | TextOp::SetCaret { node, .. } => *node,
         }
     }
@@ -124,6 +134,8 @@ pub struct TextCounters {
     pub say_all_starved: u64,
     pub say_all_watchdog: u64,
     pub events_dropped: u64,
+    /// The caret moved to another node of a focused rich editable (CE-1).
+    pub retargets: u64,
 }
 
 /// The Reader's text state.
@@ -140,6 +152,10 @@ pub struct TextState {
     dropped_seen: u64,
     /// The utterance of the latest secret text, so the copy command can refuse it (PW-3).
     sensitive_utt: Option<UttId>,
+    /// The `info.formatting` question in flight: its request and the epoch of the key.
+    format_req: Option<(TextReqId, Epoch)>,
+    /// Was the layer active (focus or pass-through mode) after the previous message?
+    was_active: bool,
     out: Vec<Out>,
 }
 
@@ -155,6 +171,8 @@ impl TextState {
             dropped: None,
             dropped_seen: 0,
             sensitive_utt: None,
+            format_req: None,
+            was_active: true,
             out: Vec::new(),
         }
     }
@@ -261,6 +279,35 @@ fn decode(text: Option<&gorca_model::LazyText>) -> Option<String> {
     std::str::from_utf8(&t.msg).ok().map(str::to_owned)
 }
 
+/// An insert as the window must splice it. Gecko reports `len` in UTF-16 units and the text
+/// without the phantom U+FEFF it adds after each astral scalar in the string it hands out
+/// (`DOMtoATK.h`); the window holds that string, so the phantoms the event left out go back in.
+/// A text that already has `len` scalars (every other toolkit) is untouched.
+fn with_phantoms(text: String, len: u32) -> String {
+    let have = text.chars().count();
+    let mut missing = (len as usize).saturating_sub(have);
+    if missing == 0 {
+        return text;
+    }
+    let mut out = String::with_capacity(text.len() + missing * 3);
+    for c in text.chars() {
+        out.push(c);
+        if missing > 0 && u32::from(c) > 0xFFFF {
+            out.push(gorca_text::seg::PHANTOM);
+            missing -= 1;
+        }
+    }
+    out
+}
+
+/// Result of [`Reader::text_ancestry`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Ancestry {
+    Inside,
+    Outside,
+    Unknown,
+}
+
 impl Reader {
     /// Share the counter the app actors bump when they could not queue a text event for us.
     #[must_use]
@@ -302,6 +349,11 @@ impl Reader {
         let now_ms = u64::try_from(now.saturating_duration_since(self.text.origin).as_millis())
             .unwrap_or(u64::MAX);
         let cfg = self.text_cfg();
+        let insert_slack = self
+            .text
+            .caret
+            .tracked()
+            .map_or(0, |t| self.dir.text_insert_slack(t.root.app));
         let epoch_now = self.epoch.current();
         let mut out = std::mem::take(&mut self.text.out);
         out.clear();
@@ -312,6 +364,7 @@ impl Reader {
                 now_ms,
                 epoch_now,
                 cfg,
+                insert_slack,
                 next_req: &mut self.text.next_req,
                 stats: &mut self.text.stats,
                 out: &mut out,
@@ -320,6 +373,14 @@ impl Reader {
         };
         self.text.caret = next;
         for o in out.drain(..) {
+            match &o {
+                Out::Say(s) => {
+                    tracing::debug!(target: "gorca_text", pieces = s.pieces.len(), reason = ?s.reason, "say");
+                }
+                Out::Fetch { op, .. } => {
+                    tracing::debug!(target: "gorca_text", ?op, "fetch");
+                }
+            }
             match o {
                 Out::Say(s) => {
                     let u = self.text_utterance(&s);
@@ -389,9 +450,9 @@ impl Reader {
         if !self.text_active() {
             return;
         }
-        // Text counted in UTF-16 units (a capability the connector reports, not a name) is not
-        // ours until M3b converts offsets: tracking it would speak the wrong characters.
-        if !self.dir.text_scalar(snap.key.app) {
+        // Byte offsets (VTE; a capability the connector reports, not a name) are the terminal
+        // layer's. Gecko's UTF-16 offsets are followed as they are (`TextUnit::window_follows`).
+        if !self.dir.text_window_follows(snap.key.app) {
             self.text_untrack();
             return;
         }
@@ -422,13 +483,22 @@ impl Reader {
         node: Option<NodeKey>,
         app: Option<gorca_model::AppId>,
     ) {
-        let hit = self
-            .text
-            .caret
-            .tracked()
-            .is_some_and(|t| node == Some(t.node) || app == Some(t.node.app));
-        if hit {
+        let Some(t) = self.text.caret.tracked() else {
+            return;
+        };
+        let (current, root) = (t.node, t.root);
+        if node == Some(root) || app == Some(root.app) {
             self.text_untrack();
+        } else if node == Some(current) && current != root {
+            // The paragraph the caret was in is gone (a merge): back to the focused object.
+            let mut sink = ReaderEffects::new();
+            self.text_step(
+                In::Retarget {
+                    node: root,
+                    at: None,
+                },
+                &mut sink,
+            );
         }
     }
 
@@ -443,6 +513,7 @@ impl Reader {
         let Some(key) = classify_text_key(&intent.event) else {
             return false;
         };
+        tracing::debug!(target: "gorca_text", key = ?key, "text key");
         self.text.stats.keys_seen += 1;
         if matches!(key, gorca_input_api::TextKey::Typed { .. }) {
             self.text.stats.keys_typed += 1;
@@ -471,19 +542,31 @@ impl Reader {
                 }
             }
         }
+        match &m {
+            TextMsg::Caret { node, offset } => {
+                tracing::debug!(target: "gorca_text", ?node, offset, "caret event");
+            }
+            TextMsg::Edit { node, delta } => {
+                tracing::debug!(target: "gorca_text", ?node, ?delta, "edit event");
+            }
+            TextMsg::Selection { node } => {
+                tracing::debug!(target: "gorca_text", ?node, "selection event");
+            }
+            TextMsg::Fetched { .. } | TextMsg::Progress(_) => {}
+        }
         match m {
             TextMsg::Caret { node, offset } => {
-                if self.text_is_tracked(node) && self.text_active() {
+                if self.text_active() && self.text_accepts(node, Some(offset), fx) {
                     self.text_step(In::Caret { offset }, fx);
                 }
             }
             TextMsg::Edit { node, delta } => {
-                if self.text_is_tracked(node) && self.text_active() {
+                if self.text_active() && self.text_accepts(node, None, fx) {
                     let edit = match delta {
                         TextDelta::Insert { offset, len, text } => Edit::Insert {
                             offset,
                             len,
-                            text: decode(text.as_ref()),
+                            text: decode(text.as_ref()).map(|t| with_phantoms(t, len)),
                         },
                         TextDelta::Delete { offset, len, text } => Edit::Delete {
                             offset,
@@ -496,7 +579,7 @@ impl Reader {
                 }
             }
             TextMsg::Selection { node } => {
-                if self.text_is_tracked(node) && self.text_active() {
+                if self.text_active() && self.text_accepts(node, None, fx) {
                     self.text_step(In::Selection, fx);
                 }
             }
@@ -505,8 +588,54 @@ impl Reader {
         }
     }
 
-    fn text_is_tracked(&self, node: NodeKey) -> bool {
-        self.text.caret.tracked().is_some_and(|t| t.node == node)
+    /// Does an event of `node` belong to the tracked object? The node itself, yes. In a rich
+    /// editable (contenteditable; its own text is made of embedded objects) the caret, the edits
+    /// and the selection live on the paragraph the caret is in, a descendant of the focused
+    /// object: the machine then moves to that node (CE-1). `at` is the caret offset when the
+    /// event is a caret event.
+    fn text_accepts(&mut self, node: NodeKey, at: Option<u32>, fx: &mut ReaderEffects) -> bool {
+        let Some(t) = self.text.caret.tracked() else {
+            return false;
+        };
+        if t.node == node {
+            return true;
+        }
+        if node.app != t.root.app || !t.kind.editable || !t.hosts {
+            return false;
+        }
+        if node != t.root {
+            match (self.text_ancestry(t.root, node), at.is_some()) {
+                // Outside the editable, or (Unknown) a text change or selection of a node
+                // the mirror does not know: some other part of the page (a clock, a chat log)
+                // that must not steal the editable. Only a caret event may redirect tracking
+                // on an unknown node: Gecko sends caret-moved for the focused editable's
+                // descendants only.
+                (Ancestry::Outside, _) | (Ancestry::Unknown, false) => return false,
+                (Ancestry::Unknown, true) | (Ancestry::Inside, _) => {}
+            }
+        }
+        self.text.stats.retargets += 1;
+        self.text_step(In::Retarget { node, at }, fx);
+        true
+    }
+
+    /// Where does `node` hang relative to `root`, as far as the mirror knows? `Unknown` is an
+    /// ancestry the mirror does not hold (a paragraph just created, or a node of another part of
+    /// the page that was never mirrored).
+    fn text_ancestry(&self, root: NodeKey, node: NodeKey) -> Ancestry {
+        let mut cur = node;
+        for _ in 0..MAX_ANCESTRY {
+            let snap = match self.dir.lookup(cur) {
+                gorca_model::Lookup::Hit(s) => s,
+                gorca_model::Lookup::Miss | gorca_model::Lookup::Gone => return Ancestry::Unknown,
+            };
+            match snap.parent {
+                Some(p) if p == root => return Ancestry::Inside,
+                Some(p) => cur = p,
+                None => return Ancestry::Outside,
+            }
+        }
+        Ancestry::Outside
     }
 
     fn on_text_fetched(
@@ -517,6 +646,27 @@ impl Reader {
         fx: &mut ReaderEffects,
     ) {
         let _ = epoch;
+        match &result {
+            Ok(Reply::Window(w)) => {
+                tracing::debug!(target: "gorca_text", base = w.base, chars = w.text.chars().count(), len = w.len, caret = ?w.caret, "window reply");
+            }
+            Ok(Reply::Unit(u)) => {
+                tracing::debug!(target: "gorca_text", range = ?u.range, chars = u.text.chars().count(), "unit reply");
+            }
+            Ok(_) => {
+                tracing::debug!(target: "gorca_text", "other reply");
+            }
+            Err(e) => {
+                tracing::debug!(target: "gorca_text", error = ?e, "fetch failed");
+            }
+        }
+        if let Some((want, key_epoch)) = self.text.format_req
+            && want == req
+        {
+            self.text.format_req = None;
+            self.text_formatting_reply(result, key_epoch, fx);
+            return;
+        }
         if let SayAll::Running(run) = &self.text.say_all
             && run.fetch == Some(req)
         {
@@ -591,6 +741,67 @@ impl Reader {
         false
     }
 
+    /// `info.formatting`: ask for the attribute run under the caret and speak it when it comes.
+    pub(crate) fn text_say_formatting(&mut self, epoch: Epoch, fx: &mut ReaderEffects) {
+        if !self.text_mode_allows(fx) {
+            return;
+        }
+        let Some(t) = self.text.caret.tracked() else {
+            self.say("not in a text field", fx);
+            return;
+        };
+        let at = t.caret.unwrap_or(0);
+        // Behind the last character there is no run: ask about the one in front of it.
+        let at = if t.win.len() == Some(at) {
+            at.saturating_sub(1)
+        } else {
+            at
+        };
+        let node = t.node;
+        self.text.next_req += 1;
+        let req = TextReqId(self.text.next_req);
+        self.text.format_req = Some((req, epoch));
+        fx.push(ReaderEffect::TextFetch {
+            req,
+            op: TextOp::Format { node, offset: at },
+            class: BudgetClass::Interactive,
+            epoch,
+        });
+    }
+
+    fn text_formatting_reply(
+        &mut self,
+        result: Result<Reply, BackendError>,
+        epoch: Epoch,
+        fx: &mut ReaderEffects,
+    ) {
+        let text = match result {
+            Ok(Reply::Format(f)) => {
+                let d = formatting::describe(&f);
+                if d.is_empty() {
+                    "no formatting information".to_owned()
+                } else {
+                    d
+                }
+            }
+            Ok(Reply::Window(_) | Reply::Unit(_) | Reply::Selections(_) | Reply::Done) => {
+                "no formatting information".to_owned()
+            }
+            Err(BackendError::NotSupported) => "formatting not available here".to_owned(),
+            Err(
+                BackendError::Timeout
+                | BackendError::Gone
+                | BackendError::Busy
+                | BackendError::Protocol(_)
+                | BackendError::Unresolved,
+            ) => "no formatting information".to_owned(),
+        };
+        let id = self.utt_id();
+        let mut u = message(&text, id, epoch);
+        u.prio = Prio::Interrupt;
+        fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+    }
+
     pub(crate) fn text_say_selection(&mut self, epoch: Epoch, fx: &mut ReaderEffects) {
         if !self.text_mode_allows(fx) {
             return;
@@ -631,6 +842,11 @@ impl Reader {
     // ---- say-all -------------------------------------------------------------------------
 
     pub(crate) fn say_all_start(&mut self, epoch: Epoch, fx: &mut ReaderEffects) {
+        // Browse mode reads the page from the virtual cursor (browse design 9).
+        if matches!(self.mode, Mode::Browse { .. }) {
+            let _ = self.web_say_all_start(epoch, fx);
+            return;
+        }
         if !self.text_mode_allows(fx) {
             return;
         }
@@ -644,41 +860,74 @@ impl Reader {
         self.say_all_pump(fx);
     }
 
-    fn say_all_apply(&mut self, acts: smallvec::SmallVec<[Act; 4]>, fx: &mut ReaderEffects) {
+    /// Carry out what a reading asks. True when it was filled from a local source (a document)
+    /// and the reading should be pumped again at once.
+    fn say_all_apply(
+        &mut self,
+        acts: smallvec::SmallVec<[Act; 4]>,
+        fx: &mut ReaderEffects,
+    ) -> bool {
+        let mut refilled = false;
         for a in acts {
             match a {
                 Act::Fetch { around } => {
                     let SayAll::Running(run) = &mut self.text.say_all else {
                         continue;
                     };
-                    self.text.next_req += 1;
-                    let req = TextReqId(self.text.next_req);
-                    run.fetch = Some(req);
-                    fx.push(ReaderEffect::TextFetch {
-                        req,
-                        op: TextOp::Window {
-                            node: run.node,
-                            around: Some(around.saturating_add(say_all::FETCH_RADIUS)),
-                            radius: say_all::FETCH_RADIUS,
-                        },
-                        class: BudgetClass::Prefetch,
-                        epoch: run.epoch,
-                    });
+                    match run.target {
+                        Target::Native(node) => {
+                            self.text.next_req += 1;
+                            let req = TextReqId(self.text.next_req);
+                            run.fetch = Some(req);
+                            fx.push(ReaderEffect::TextFetch {
+                                req,
+                                op: TextOp::Window {
+                                    node,
+                                    around: Some(around.saturating_add(say_all::FETCH_RADIUS)),
+                                    radius: say_all::FETCH_RADIUS,
+                                },
+                                class: BudgetClass::Prefetch,
+                                epoch: run.epoch,
+                            });
+                        }
+                        Target::Doc(doc) => {
+                            // The page is the Reader's own: no fetch, no wait.
+                            let win = self.web_flat_window(doc, around);
+                            if let SayAll::Running(run) = &mut self.text.say_all {
+                                match win {
+                                    Some((base, text, len)) => run.fill(base, &text, len),
+                                    None => run.fill(0, "", 0),
+                                }
+                                refilled = true;
+                            }
+                        }
+                    }
                 }
                 Act::Submit {
                     utt: id,
                     text,
                     first,
-                    ..
+                    range,
                 } => {
                     let SayAll::Running(run) = &self.text.say_all else {
                         continue;
                     };
-                    let (epoch, secret) = (run.epoch, run.secret);
-                    let o = self.verbalize_opts();
-                    let spoken = self.text.verbalizer.unit(&text, How::Text, &o);
-                    let mut u = message(&spoken, id, epoch);
-                    u.prio = Prio::Text;
+                    let (epoch, secret, target) = (run.epoch, run.secret, run.target);
+                    let u = match target {
+                        Target::Native(_) => {
+                            let o = self.verbalize_opts();
+                            let spoken = self.text.verbalizer.unit(&text, How::Text, &o);
+                            let mut u = message(&spoken, id, epoch);
+                            u.prio = Prio::Text;
+                            u
+                        }
+                        Target::Doc(doc) => {
+                            match self.web_chunk_utterance(doc, &range, id, epoch) {
+                                Some(u) => u,
+                                None => continue,
+                            }
+                        }
+                    };
                     if secret {
                         self.text.sensitive_utt = Some(id);
                     }
@@ -690,9 +939,10 @@ impl Reader {
                 }
             }
         }
+        refilled
     }
 
-    fn say_all_pump(&mut self, fx: &mut ReaderEffects) {
+    pub(crate) fn say_all_pump(&mut self, fx: &mut ReaderEffects) {
         let acts = {
             let SayAll::Running(run) = &mut self.text.say_all else {
                 return;
@@ -703,7 +953,11 @@ impl Reader {
                 UttId(*next)
             })
         };
-        self.say_all_apply(acts, fx);
+        if self.say_all_apply(acts, fx) {
+            // A document filled the buffer in place: prepare the chunks it holds.
+            self.say_all_pump(fx);
+            return;
+        }
         self.arm_say_all_watchdog(fx);
         let done = matches!(&self.text.say_all, SayAll::Running(r) if r.is_done());
         if done {
@@ -719,7 +973,7 @@ impl Reader {
                 }
                 self.say_all_pump(fx);
             }
-            Ok(Reply::Unit(_) | Reply::Selections(_) | Reply::Done) | Err(_) => {
+            Ok(Reply::Unit(_) | Reply::Selections(_) | Reply::Format(_) | Reply::Done) | Err(_) => {
                 // The text is not coming: end the reading where it stands.
                 self.text.stats.say_all_starved += 1;
                 self.say_all_finish(false, fx);
@@ -749,13 +1003,22 @@ impl Reader {
 
     /// Put the caret at `offset`; the caret event this causes is gorca's own.
     fn say_all_place(&mut self, offset: u32, fx: &mut ReaderEffects) {
-        if !self.cmd.effective.text.say_all_moves_caret {
-            return;
-        }
         let SayAll::Running(run) = &self.text.say_all else {
             return;
         };
-        let (node, epoch) = (run.node, self.epoch.current());
+        let target = run.target;
+        let node = match target {
+            // The virtual cursor follows the reading whatever the caret setting says.
+            Target::Doc(doc) => {
+                self.web_follow(doc, offset, fx);
+                return;
+            }
+            Target::Native(node) => node,
+        };
+        if !self.cmd.effective.text.say_all_moves_caret {
+            return;
+        }
+        let epoch = self.epoch.current();
         self.text.next_req += 1;
         let req = TextReqId(self.text.next_req);
         self.text.caret.note_own_move(offset, self.now);
@@ -774,19 +1037,27 @@ impl Reader {
         let SayAll::Running(run) = std::mem::take(&mut self.text.say_all) else {
             return;
         };
-        if !natural || !self.cmd.effective.text.say_all_moves_caret {
+        if !natural {
             return;
         }
-        let target = run.end_caret();
+        let at = run.end_caret();
+        let node = match run.target {
+            Target::Doc(doc) => {
+                // The end of the page: the virtual cursor stays on the last chunk read.
+                self.web_follow(doc, at, fx);
+                return;
+            }
+            Target::Native(node) => node,
+        };
+        if !self.cmd.effective.text.say_all_moves_caret {
+            return;
+        }
         self.text.next_req += 1;
         let req = TextReqId(self.text.next_req);
-        self.text.caret.note_own_move(target, self.now);
+        self.text.caret.note_own_move(at, self.now);
         fx.push(ReaderEffect::TextFetch {
             req,
-            op: TextOp::SetCaret {
-                node: run.node,
-                offset: target,
-            },
+            op: TextOp::SetCaret { node, offset: at },
             class: BudgetClass::Prefetch,
             epoch: self.epoch.current(),
         });
@@ -796,6 +1067,33 @@ impl Reader {
     pub(crate) fn text_after(&mut self, fx: &mut ReaderEffects) {
         if self.text.say_all.stopped_by(self.epoch.current()) {
             self.say_all_finish(false, fx);
+        }
+        self.text_mode_changed(fx);
+    }
+
+    /// The text layer works in focus and pass-through mode only; events that arrive in browse
+    /// or review mode are dropped. Coming back, what the layer holds is stale (the field kept
+    /// changing while the virtual cursor read elsewhere), so the window is dropped, and a
+    /// field that got the focus while the mode was browse starts being tracked now (M7a: Enter
+    /// on a field focuses it and switches to focus mode in the same breath; Insert+Space
+    /// switches by hand on a field that already has the focus).
+    fn text_mode_changed(&mut self, fx: &mut ReaderEffects) {
+        let active = self.text_active();
+        if active == self.text.was_active {
+            return;
+        }
+        self.text.was_active = active;
+        if !active {
+            if !self.text.caret.is_off() {
+                self.text_step(In::Dirty, fx);
+            }
+            return;
+        }
+        let snap = self.presented.as_ref().map(|p| Arc::clone(&p.snap));
+        match (self.text.caret.is_off(), snap) {
+            (true, Some(s)) if s.states.contains(StateSet::FOCUSED) => self.text_track(&s, fx),
+            (false, _) => self.text_step(In::Dirty, fx),
+            (true, _) => {}
         }
     }
 }

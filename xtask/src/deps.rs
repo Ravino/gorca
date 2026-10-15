@@ -56,6 +56,7 @@ const CONCRETE: &[&str] = &[
     "gorca-speech-voicego",
     "gorca-input-mutter",
     "gorca-input-inject",
+    "gorca-input-xkb",
     "gorca-braille-brlapi",
     "gorca-ext-host",
 ];

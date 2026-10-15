@@ -1,0 +1,52 @@
+# e2e m3b-fix-dbl-2
+# utc=2026-10-15T12:30:57Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=15.53 12.52 12.06 8/3359 1524475
+# git_rev=7938b23
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m3b-fix-dbl-2
+# reader=daemon:<repo>/.claude/worktrees/agent-a702d0a17a733562c/target/release/gorca
+# backend=voicego
+# repeats=8
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=15.53 12.52 12.06 8/3359 1524472
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info RUST_LOG=warn,gorca_phase=info,gorca_text=debug
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=FE2 #248 Letter('a'): the page caret is 138, the model 139 (not scored, model reset to the page); recent: Cyr at caret 131 of 131 | Letter('q') at caret 132 of 132 | Left at caret 133 of 133 | Letter('a') at caret 132 of 133
+# note1=FE2 first actions: Letter('w') at caret 0 of 0 | Left at caret 1 of 1 | Cyr at caret 0 of 1 | Space at caret 1 of 2 | Letter('q') at caret 2 of 3 | Letter('c') at caret 3 of 4 | Letter('m') at caret 4 of 5 | Back at caret 5 of 6 | Letter('z') at caret 4 of 5 | Letter('w') at caret 5 of 6 | Left at caret 6 of 7 | Letter('g') at caret 5 of 7 | Space at caret 6 of 8 | Letter('q') at caret 7 of 9
+# note2=FE2 first actions: Emoji at caret 0 of 0 | Letter('s') at caret 1 of 1 | Letter('x') at caret 2 of 2 | Left at caret 3 of 3 | Space at caret 2 of 3 | Right at caret 3 of 4 | Letter('s') at caret 4 of 4 | Left at caret 5 of 5 | Back at caret 4 of 5 | Letter('w') at caret 3 of 4 | Letter('j') at caret 4 of 5 | Right at caret 5 of 6 | Letter('t') at caret 6 of 6 | Letter('l') at caret 7 of 7
+# note3=FE2 #254 Back: the page caret is 11, the model 10 (not scored, model reset to the page); recent: Letter('i') at caret 8 of 132 | Space at caret 9 of 133 | Letter('x') at caret 10 of 134 | Back at caret 11 of 135
+# note4=FE2 #596 Letter('p'): the page caret is 358, the model 359 (not scored, model reset to the page); recent: Left at caret 332 of 332 | Letter('r') at caret 331 of 332 | Letter('j') at caret 332 of 333 | Letter('p') at caret 333 of 334
+# note5=FE2 #599 Home: the page caret is 360, the model 0 (not scored, model reset to the page); recent: Letter('p') at caret 333 of 334 | Cyr at caret 333 of 334 | Letter('k') at caret 334 of 335 | Home at caret 335 of 336
+# note6=FE2 #601 Letter('m'): the page caret is 361, the model 362 (not scored, model reset to the page); recent: Letter('k') at caret 334 of 335 | Home at caret 335 of 336 | Letter('o') at caret 335 of 336 | Letter('m') at caret 336 of 337
+# note7=FE2 first actions: Back at caret 0 of 0 | Letter('r') at caret 0 of 0 | Emoji at caret 1 of 1 | Emoji at caret 2 of 2 | Letter('k') at caret 3 of 3 | Home at caret 4 of 4 | Back at caret 0 of 4 | Right at caret 0 of 4 | Back at caret 1 of 4 | Right at caret 0 of 3 | Letter('a') at caret 1 of 3 | Back at caret 2 of 4 | Letter('r') at caret 1 of 3 | Letter('l') at caret 2 of 4
+# note8=FE2 #157 Left: the page caret is 76, the model 75 (not scored, model reset to the page); recent: Back at caret 67 of 70 | Emoji at caret 66 of 69 | End at caret 67 of 70 | Left at caret 70 of 70
+# note9=FE2 first actions: Letter('k') at caret 0 of 0 | Home at caret 1 of 1 | Cyr at caret 0 of 1 | Right at caret 1 of 2 | Right at caret 2 of 2 | Cyr at caret 2 of 2 | Back at caret 3 of 3 | End at caret 2 of 2 | Letter('c') at caret 2 of 2 | Letter('l') at caret 3 of 3 | Space at caret 4 of 4 | Space at caret 5 of 5 | Letter('c') at caret 6 of 6 | Letter('d') at caret 7 of 7
+# note10=FE2 first actions: Letter('n') at caret 0 of 0 | Left at caret 1 of 1 | Letter('t') at caret 0 of 1 | Left at caret 1 of 2 | Letter('d') at caret 0 of 2 | Letter('n') at caret 1 of 3 | Cyr at caret 2 of 4 | Letter('w') at caret 3 of 5 | Letter('a') at caret 4 of 6 | Back at caret 5 of 7 | Cyr at caret 4 of 6 | Letter('b') at caret 5 of 7 | Letter('f') at caret 6 of 8 | Letter('c') at caret 7 of 9
+# note11=FE2 #232 Home: the page caret is 131, the model 0 (not scored, model reset to the page); recent: Left at caret 120 of 120 | Emoji at caret 119 of 120 | Left at caret 120 of 121 | Home at caret 119 of 121
+# note12=FE2 first actions: Letter('v') at caret 0 of 0 | Emoji at caret 1 of 1 | Space at caret 2 of 2 | Letter('r') at caret 3 of 3 | Letter('o') at caret 4 of 4 | Letter('l') at caret 5 of 5 | Letter('f') at caret 6 of 6 | Space at caret 7 of 7 | Emoji at caret 8 of 8 | Emoji at caret 9 of 9 | Back at caret 10 of 10 | Letter('d') at caret 9 of 9 | Emoji at caret 10 of 10 | Space at caret 11 of 11
+# note13=FE2 #594 Space: wanted "space" once, said ["space", "space"]; recent: Home at caret 11 of 319 | Letter('f') at caret 0 of 319 | Emoji at caret 1 of 320 | Space at caret 2 of 321
+# note14=FE2 #598 Space: wanted "space" once, said ["space", "space"]; recent: Letter('n') at caret 3 of 322 | Emoji at caret 4 of 323 | Letter('g') at caret 5 of 324 | Space at caret 6 of 325
+# note15=FE2 #602 Space: wanted "space" once, said ["space", "f😀 n jkw😀жжubr😀fgv😀😀yn xe xiuxdhж yl ж😀😀jub😀thwhn😀cnmmd bf😀ж😀l 😀jqжarp 😀flvw sж nwcpf😀😀s жt ua😀bжau😀hkcjж akh s hitxж szlgowmvskжж cyif жicc😀жx😀yoa w😀imkf жywe ldsж mn😀y😀v p ykd hl swжhjx😀eжfyt😀pfecayy😀 xe жhжyd ogoarr wwfw bnml😀 k wu😀zfz mgp 😀😀gb w😀ww😀lu klcz 😀жж😀rixg jmifbdzi😀 urhtcocie😀x p😀irxж жbmeocizds f😀"]; recent: Back at caret 7 of 326 | Back at caret 6 of 325 | Back at caret 5 of 324 | Space at caret 4 of 323
+# note16=FE2 #604 Space: wanted "space" once, said ["space", "space"]; recent: Back at caret 5 of 324 | Space at caret 4 of 323 | Right at caret 5 of 324 | Space at caret 6 of 324
+# note17=FE2 first actions: Letter('e') at caret 0 of 0 | End at caret 1 of 1 | Space at caret 1 of 1 | Cyr at caret 2 of 2 | Letter('h') at caret 3 of 3 | Cyr at caret 4 of 4 | Letter('y') at caret 5 of 5 | Right at caret 6 of 6 | Letter('h') at caret 6 of 6 | Left at caret 7 of 7 | Letter('d') at caret 6 of 7 | Space at caret 7 of 8 | Space at caret 8 of 9 | Right at caret 9 of 10
+# note18=FE2 #83 End: the page caret is 19, the model 43 (not scored, model reset to the page); recent: Right at caret 14 of 39 | Letter('y') at caret 15 of 39 | Space at caret 16 of 40 | End at caret 17 of 41
+# note19=FE2 first actions: Letter('p') at caret 0 of 0 | Cyr at caret 1 of 1 | Back at caret 2 of 2 | Cyr at caret 1 of 1 | Cyr at caret 2 of 2 | Letter('c') at caret 3 of 3 | Letter('x') at caret 4 of 4 | Space at caret 5 of 5 | Back at caret 6 of 6 | Letter('v') at caret 5 of 5 | Letter('t') at caret 6 of 6 | Back at caret 7 of 7 | Back at caret 6 of 6 | Letter('q') at caret 5 of 5
+
+metric                     bus                median          min          max  n op    threshold  res   note
+FE2.e2_double              daemon/voicego            0            0            4  8 <=            0  FAIL  gated on the max over repeats [actions]
+FE2.e2_keyname             daemon/voicego            0            0            0  8 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_missing             daemon/voicego            0            0            0  8 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_resync              daemon/voicego            1            0            4  8 <=            3  FAIL  FE2 actions the page did not apply (not scored) [actions]
+FE2.e2_swallowed           daemon/voicego            0            0            0  8 <=            0  PASS  gated on the max over repeats [keys]
+FE2.e2_wrong               daemon/voicego            0            0            0  8 <=            0  PASS  gated on the max over repeats [actions]
+FE2.ft_failures            daemon/voicego            0            0            0  8 <=            0  PASS  gated on the max over repeats [checks]

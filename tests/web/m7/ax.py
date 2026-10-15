@@ -43,7 +43,7 @@ REG_ROOT = "/org/a11y/atspi/accessible/root"
 # AtspiRole numbers (stable ABI)
 ROLES = {
     "link": 88, "entry": 79, "page tab": 37, "document web": 95, "heading": 83,
-    "push button": 43, "application": 75, "frame": 23, "section": 85,
+    "push button": 43, "combo box": 11, "application": 75, "frame": 23, "section": 85,
 }
 DOC_WEB = 95
 
@@ -137,11 +137,16 @@ def find_doc(title, timeout_ms):
     return {"ok": False, "error": "document not found"}
 
 
-def find(bus, root, role, name, timeout_ms):
+def find(bus, root, role, name, timeout_ms, partial=False):
     want = ROLES.get(role, role if isinstance(role, int) else -2)
     end = time.monotonic() + timeout_ms / 1000.0
     while time.monotonic() < end:
-        hit = bfs(bus, root, lambda r, n, p: (want < 0 or r == want) and (not name or name in n), 60000)
+        # The exact name ("Typing" must not find "Typing region:"). A part of a name only when
+        # the caller asks for it (`partial`), never as a silent fallback.
+        if partial:
+            hit = bfs(bus, root, lambda r, n, p: (want < 0 or r == want) and (not name or name in n), 60000)
+        else:
+            hit = bfs(bus, root, lambda r, n, p: (want < 0 or r == want) and (not name or n == name), 60000)
         if hit:
             return {"ok": True, "path": hit[0], "name": hit[1], "role": role}
         time.sleep(0.2)
@@ -154,7 +159,7 @@ def handle(req):
         return find_doc(req.get("title", ""), int(req.get("timeout_ms", 20000)))
     if cmd == "find":
         return find(req["bus"], req["root"], req.get("role", ""), req.get("name", ""),
-                    int(req.get("timeout_ms", 5000)))
+                    int(req.get("timeout_ms", 5000)), bool(req.get("partial", False)))
     if cmd == "focus":
         t = time.monotonic_ns()
         r = call(req["bus"], req["path"], COMP, "GrabFocus")
@@ -163,6 +168,25 @@ def handle(req):
         t = time.monotonic_ns()
         r = call(req["bus"], req["path"], ACTION, "DoAction", (int(req.get("index", 0)),), "(i)")
         return {"ok": bool(r and r[0]), "t_emit_ns": t}
+    if cmd == "text":
+        # The whole Text of a node, hex of its UTF-8 (JSON escapes of astral characters are not
+        # worth decoding in the harness).
+        n = prop(req["bus"], req["path"], "org.a11y.atspi.Text", "CharacterCount")
+        t = call(req["bus"], req["path"], "org.a11y.atspi.Text", "GetText", (0, n), "(ii)")[0]
+        return {"ok": True, "hex": t.encode("utf-8").hex(), "n": n}
+    if cmd == "describe":
+        try:
+            rn = call(req["bus"], req["path"], ACC, "GetRoleName")[0]
+        except GLib.Error:
+            rn = "?"
+        return {"ok": True, "role": rn, "name": name_of(req["bus"], req["path"])}
+    if cmd == "caret":
+        return {"ok": True, "caret": prop(req["bus"], req["path"], "org.a11y.atspi.Text", "CaretOffset")}
+    if cmd == "has_state":
+        # AtspiStateType number (default 10, EXPANDED) in the node's state set
+        bits = call(req["bus"], req["path"], ACC, "GetState")[0]
+        st = int(req.get("state", 10))
+        return {"ok": True, "has": (bits[st // 32] >> (st % 32)) & 1}
     if cmd == "tabs":
         root = "/org/a11y/atspi/accessible/root"
         tabs = []

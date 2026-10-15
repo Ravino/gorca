@@ -22,7 +22,8 @@ use gorca_speech::How;
 use gorca_text::caret::{self as tc, Presented, Say};
 use gorca_text::coalesce::{Splice, SpliceKind, compose};
 use gorca_text::echo::{
-    ExpectRing, InsertAction, InsertSource, Reason, TypedWordBuffer, on_insert, word_before,
+    EXPECT_TTL_MS, EXPECT_TTL_QUIRK_MS, ExpectRing, InsertAction, InsertSource, Reason,
+    TypedWordBuffer, on_insert, word_before,
 };
 use gorca_text::sel;
 use gorca_text::space::{Lookup, Need, TextSpace};
@@ -39,6 +40,9 @@ const ABSORB_MS: u64 = 50;
 /// A caret event this long before its key (lanes are separate threads) is still correlated
 /// (EV-4).
 pub const HOLD: Duration = Duration::from_millis(5);
+/// After tracking starts, the first caret event of a descendant of a rich editable is the
+/// browser placing the caret at the focus (CE-1), not a move.
+const PLACING: Duration = Duration::from_millis(600);
 /// Caret moves made by gorca itself are remembered this long (say-all, review).
 const OWN_MOVE: Duration = Duration::from_millis(300);
 /// How long a presentation fetch may take before the machine gives up on it.
@@ -201,6 +205,13 @@ pub enum In {
     Timer,
     /// Events for this object were lost upstream: the window cannot be trusted.
     Dirty,
+    /// A caret, edit or selection event came from another node of the same rich editable
+    /// (contenteditable puts them on the paragraph, CE-1): read that node from now on. `at` is
+    /// the caret offset the event reported, when it was a caret event.
+    Retarget {
+        node: NodeKey,
+        at: Option<u32>,
+    },
 }
 
 /// A fetch reply, as the machine uses it.
@@ -209,6 +220,8 @@ pub enum Reply {
     Window(TextWindowFill),
     Unit(TextUnitAt),
     Selections(TextSelections),
+    /// The formatting of a run (`info.formatting`): answered to the Reader, not the machine.
+    Format(gorca_model::TextFormat),
     Done,
 }
 
@@ -219,6 +232,8 @@ pub struct Ctx<'a> {
     /// The Reader's current epoch.
     pub epoch_now: Epoch,
     pub cfg: Cfg,
+    /// The app's insert-offset slack, from its connector's quirk table (0: none; see `insert`).
+    pub insert_slack: u32,
     pub next_req: &'a mut u64,
     pub stats: &'a mut TextCounters,
     pub out: &'a mut Vec<Out>,
@@ -345,6 +360,9 @@ const HELD_INSERT_MAX: usize = 8;
 #[derive(Copy, Clone, Debug)]
 struct Absorb {
     at: u32,
+    /// A second acceptable caret offset: where the caret really is when the application
+    /// reported the insert at the wrong offset (see [`insert`]).
+    alt: Option<u32>,
     until: Instant,
 }
 
@@ -359,7 +377,16 @@ struct Late {
 /// The tracked text object.
 #[derive(Clone)]
 pub struct Tracked {
+    /// The text object the machine reads now. For a rich editable (a contenteditable region)
+    /// this is the paragraph the caret is in, which can differ from `root` (CE-1).
     pub node: NodeKey,
+    /// The focused object the tracking started on. Never changes.
+    pub root: NodeKey,
+    /// The root's own text holds embedded objects (U+FFFC): its caret lives in descendants.
+    pub hosts: bool,
+    /// When tracking started: a descendant's first caret event right after it is the focus
+    /// placing the caret, not the user moving it.
+    pub since: Option<Instant>,
     pub kind: Kind,
     pub caret: Option<u32>,
     /// The last fetched selection set with its texts.
@@ -402,6 +429,9 @@ impl Tracked {
     pub fn new(node: NodeKey, kind: Kind) -> Self {
         Self {
             node,
+            root: node,
+            hosts: false,
+            since: None,
             kind,
             caret: None,
             sel: Vec::new(),
@@ -516,7 +546,7 @@ impl Tracked {
 
     fn absorbs(&mut self, off: u32, now: Instant) -> bool {
         match self.absorb {
-            Some(a) if a.at == off && now <= a.until => {
+            Some(a) if (a.at == off || a.alt == Some(off)) && now <= a.until => {
                 self.absorb = None;
                 true
             }
@@ -758,7 +788,71 @@ impl CaretState {
                 }
                 state
             }
+            In::Retarget { node, at } => state.retarget(node, at, cx),
         }
+    }
+
+    /// CE-1: the text object under the caret changed within one focused rich editable. What is
+    /// bound to offsets of the old node (window, caret, selection, held edits) goes; what is
+    /// bound to the user (the key slot, typed keys waiting for their insert) stays.
+    fn retarget(mut self, node: NodeKey, at: Option<u32>, cx: &mut Ctx<'_>) -> CaretState {
+        // A presentation in flight was for the old node.
+        self = match self {
+            CaretState::Fetching { t, .. } => CaretState::Idle { t },
+            other @ (CaretState::Off | CaretState::Idle { .. } | CaretState::Awaiting { .. }) => {
+                other
+            }
+        };
+        let idle = matches!(self, CaretState::Idle { .. });
+        let epoch = cx.epoch_now;
+        let now = cx.now;
+        let Some(t) = self.tracked_mut() else {
+            return self;
+        };
+        if t.node == node {
+            return self;
+        }
+        t.node = node;
+        t.caret = None;
+        t.win.invalidate();
+        t.sel.clear();
+        t.absorb = None;
+        t.own_moves.clear();
+        t.held = None;
+        t.words.reset();
+        t.word_fallback = None;
+        for h in [t.held_ins.take(), t.flushed_ins.take()]
+            .into_iter()
+            .flatten()
+        {
+            let mut b = h.text.into_bytes();
+            b.fill(0);
+            std::hint::black_box(&b);
+        }
+        t.held_del = None;
+        // Right after focus the caret event is the browser placing the caret, not the user
+        // moving it: remember where it is and say nothing.
+        let placing = idle
+            && at.is_some()
+            && t.since
+                .is_some_and(|a| now.saturating_duration_since(a) < PLACING);
+        if placing {
+            t.caret = at;
+        }
+        if idle {
+            // With a key waiting, the caret event that follows asks for exactly what it needs.
+            cx.fetch(
+                t,
+                TextOp::Window {
+                    node,
+                    around: None,
+                    radius: WINDOW_RADIUS,
+                },
+                BudgetClass::Prefetch,
+                epoch,
+            );
+        }
+        self
     }
 
     /// A slot that outlived its latest deadline is gone.
@@ -786,6 +880,7 @@ impl CaretState {
             }
             None => Box::new(Tracked::new(node, kind)),
         };
+        t.since = Some(cx.now);
         let epoch = cx.epoch_now;
         cx.fetch(
             &mut t,
@@ -818,6 +913,7 @@ impl CaretState {
                     } else if claimed == Claim::No {
                         // Not ours to echo (the generic key echo speaks it), but an insert that
                         // follows is still the typed key's, not text from elsewhere (TE-2).
+                        t.expect.set_ttl(expect_ttl(cx));
                         t.expect.push(ch, cx.now_ms);
                     }
                 }
@@ -1180,6 +1276,7 @@ impl CaretState {
                     ) => {
                         if fresh {
                             t.win.fill(&fill);
+                            note_hosts(&mut t, &fill.text);
                             if t.caret.is_none() {
                                 t.caret = fill.caret;
                             }
@@ -1210,7 +1307,13 @@ impl CaretState {
                         CaretState::Idle { t }
                     }
                     (
-                        Ok(Reply::Done | Reply::Window(_) | Reply::Unit(_) | Reply::Selections(_)),
+                        Ok(
+                            Reply::Done
+                            | Reply::Window(_)
+                            | Reply::Unit(_)
+                            | Reply::Selections(_)
+                            | Reply::Format(_),
+                        ),
                         _,
                     ) => {
                         let _ = deadline;
@@ -1286,7 +1389,11 @@ impl CaretState {
                     // CR-4: one scalar on the same line is a character, anything else a line.
                     let same = t.caret.is_some_and(|c| t.win.same_line(c, h.off));
                     let old = t.caret.unwrap_or(h.off);
-                    let say = tc::say_for_uncorrelated(old, h.off, same);
+                    let dist = t
+                        .win
+                        .visible_between(old, h.off)
+                        .unwrap_or_else(|| old.abs_diff(h.off));
+                    let say = tc::say_for_uncorrelated_by(dist, same);
                     let reason = Reason::CaretMove {
                         say,
                         correlated: false,
@@ -1608,11 +1715,25 @@ fn stray(t: &mut Tracked, req: TextReqId, result: Result<Reply, ()>) {
     match result {
         Ok(Reply::Window(fill)) => {
             t.win.fill(&fill);
+            note_hosts(t, &fill.text);
             if t.caret.is_none() {
                 t.caret = fill.caret;
             }
         }
-        Ok(Reply::Unit(_) | Reply::Selections(_) | Reply::Done) | Err(()) => {}
+        Ok(Reply::Unit(_) | Reply::Selections(_) | Reply::Format(_) | Reply::Done) | Err(()) => {}
+    }
+}
+
+/// Text that is only embedded-object marks (U+FFFC): structure, not words.
+fn is_structure(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(|c| c == '\u{FFFC}')
+}
+
+/// A rich editable's own text is made of embedded objects (U+FFFC), one per block child; the
+/// caret lives in those children (CE-1).
+fn note_hosts(t: &mut Tracked, text: &str) {
+    if t.node == t.root && text.contains('\u{FFFC}') {
+        t.hosts = true;
     }
 }
 
@@ -1621,6 +1742,7 @@ fn stray(t: &mut Tracked, req: TextReqId, result: Result<Reply, ()>) {
 /// TE-1: the typed character is spoken from the key, before any text event.
 fn echo_typed(t: &mut Tracked, ch: char, epoch: Epoch, claimed: Claim, cx: &mut Ctx<'_>) {
     if claimed == Claim::No {
+        t.expect.set_ttl(expect_ttl(cx));
         t.expect.push(ch, cx.now_ms);
     }
     if cx.cfg.typed_words {
@@ -1646,6 +1768,17 @@ fn echo_typed(t: &mut Tracked, ch: char, epoch: Epoch, claimed: Claim, cx: &mut 
 }
 
 /// An insert in the tracked object (TE-2, TE-3, TE-4).
+/// Expectation lifetime: the long one only for an engine whose connector declares the
+/// `gecko-insert-offset` quirk row (slack > 0): Firefox on a loaded host stalls for >1 s and
+/// then delivers the typed keys' inserts coalesced. Every other toolkit keeps 1 s.
+fn expect_ttl(cx: &Ctx<'_>) -> u64 {
+    if cx.insert_slack > 0 {
+        EXPECT_TTL_QUIRK_MS
+    } else {
+        EXPECT_TTL_MS
+    }
+}
+
 fn insert(
     t: &mut Tracked,
     offset: u32,
@@ -1654,8 +1787,10 @@ fn insert(
     slot: Option<(TextKey, Epoch, Instant, Instant)>,
     cx: &mut Ctx<'_>,
 ) {
+    let caret_before = t.caret;
     t.absorb = Some(Absorb {
         at: offset.saturating_add(len),
+        alt: None,
         until: cx.now + ABSORB,
     });
     let paste = matches!(slot, Some((TextKey::Clipboard(ClipOp::Paste), ..)));
@@ -1672,10 +1807,52 @@ fn insert(
         return;
     };
     t.win.splice(offset, 0, &s);
-    let action = on_insert(&mut t.expect, &s, cx.now_ms, source, cx.cfg.inserted_text);
+    note_hosts(t, &s);
+    if is_structure(&s) {
+        // A block was added to a rich editable: the window knows, there is nothing to say.
+        return;
+    }
+    // The skip over stale keys (a refused key before a typed one) needs positional evidence:
+    // the insert lands at the caret, within the app's slack.
+    let at_caret = caret_before.is_some_and(|c| offset.abs_diff(c) <= cx.insert_slack);
+    t.expect.set_ttl(expect_ttl(cx));
+    let action = on_insert(
+        &mut t.expect,
+        &s,
+        cx.now_ms,
+        source,
+        cx.cfg.inserted_text,
+        at_caret,
+    );
     if !matches!(action, Some(InsertAction::Echoed { .. })) {
         // Text that is none of the typed keys' means they will not come: forget them.
         t.expect.clear();
+    }
+    // Text goes in at the caret (typing, an input method's commit). When the application
+    // reports another offset (the connector's quirk row declares an engine that does: Gecko
+    // now and then reports one or two too many for scripted or committed text, and for a
+    // typed key's own insert it was seen four off, after astral characters), the window can no
+    // longer be trusted: drop it (it is refilled when a unit needs it) and accept the caret
+    // event where the caret really went, so the insert's own caret move is not spoken a second
+    // time. A typed key's insert, explained by the key itself, moves the caret by exactly its
+    // length whatever offset the application names; any other insert only within the slack.
+    //
+    // Accepted limit (R-3): because an echoed insert counts as misplaced at any offset, a typed
+    // key's far-offset insert (a refused key plus a scripted append) can swallow a non-key
+    // mouse caret move to caret+1 arriving within the 50 ms absorb window. Firefox only.
+    let echoed = matches!(action, Some(InsertAction::Echoed { .. }));
+    let misplaced = cx.insert_slack > 0
+        && !paste
+        && caret_before.is_some_and(|c| {
+            offset != c && (echoed || (offset > c && offset - c <= cx.insert_slack))
+        });
+    if misplaced {
+        tracing::debug!(target: "gorca_text", quirk = "gecko-insert-offset", offset, caret = ?caret_before, echoed, "insert offset quirk applied");
+        if let (Some(c), Some(a)) = (caret_before, t.absorb.as_mut()) {
+            a.alt = Some(c.saturating_add(len));
+        }
+        t.win.invalidate();
+        cx.stats.window_dirty += 1;
     }
     match action {
         Some(InsertAction::Echoed { .. }) => {
@@ -1902,10 +2079,32 @@ fn delete(
 ) -> bool {
     let deleted = text.or_else(|| t.win.read(offset..offset.saturating_add(len)));
     t.win.splice(offset, len, "");
+    // BackSpace moves the caret back by what it erased, Delete leaves it: when the application
+    // reports the delete at another offset (see [`insert`]), the caret event is still its echo.
+    let alt = match (t.caret, slot) {
+        (Some(c), Some((TextKey::Erase { dir, .. }, ..))) => {
+            let after = if dir == TextDir::Prev {
+                c.saturating_sub(len)
+            } else {
+                c
+            };
+            if after != offset {
+                t.win.invalidate();
+                cx.stats.window_dirty += 1;
+            }
+            (cx.insert_slack > 0).then_some(after)
+        }
+        _ => None,
+    };
     t.absorb = Some(Absorb {
         at: offset,
+        alt,
         until: cx.now + ABSORB,
     });
+    if deleted.as_deref().is_some_and(is_structure) {
+        // A block left a rich editable: nothing was typed away.
+        return false;
+    }
     t.words.reset();
     t.word_fallback = None;
     let erases = matches!(
@@ -1944,6 +2143,13 @@ fn speak_deleted(t: &mut Tracked, text: String, epoch: Epoch, cx: &mut Ctx<'_>) 
 
 // ---- selection ---------------------------------------------------------------------------
 
+/// Characters in `r`: the window's count when it holds them (a phantom U+FEFF is not a
+/// character), else the offsets' own difference.
+fn visible_count(win: &TextWindow, r: &Range<u32>) -> u32 {
+    win.visible_between(r.start, r.end)
+        .unwrap_or_else(|| r.end.saturating_sub(r.start))
+}
+
 fn count_phrase(n: u32) -> String {
     if n == 1 {
         "1 character".to_owned()
@@ -1975,6 +2181,7 @@ fn speak_selection(
         });
         if whole && (all_requested || delta.added_len() == t.win.len().unwrap_or(0)) {
             let n = t.win.len().unwrap_or(0);
+            let n = visible_count(&t.win, &(0..n));
             pieces.push(Piece::phrase(&format!("all selected, {}", count_phrase(n))));
         } else {
             push_changed(&t.win, &delta.added, &t.sel, "selected", &mut pieces);
@@ -2000,7 +2207,7 @@ fn push_changed(
 ) {
     let total = ranges
         .iter()
-        .fold(0u32, |a, r| a.saturating_add(r.end.saturating_sub(r.start)));
+        .fold(0u32, |a, r| a.saturating_add(visible_count(win, r)));
     // The fetched text of a long selection is left out; a small change to it is still in the
     // window.
     let texts: Option<Vec<String>> = ranges
@@ -2024,9 +2231,10 @@ fn push_changed(
 
 /// `info.selection` (SL-4): what is selected now, from the last fetched set.
 pub fn selected_text(t: &Tracked) -> Option<(String, u32)> {
-    let total = t.sel.iter().fold(0u32, |a, (r, _)| {
-        a.saturating_add(r.end.saturating_sub(r.start))
-    });
+    let total = t
+        .sel
+        .iter()
+        .fold(0u32, |a, (r, _)| a.saturating_add(visible_count(&t.win, r)));
     if total == 0 {
         return None;
     }

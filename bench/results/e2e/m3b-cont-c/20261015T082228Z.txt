@@ -1,0 +1,60 @@
+# e2e m3b-cont-c
+# utc=2026-10-15T08:22:28Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=8.83 11.03 9.68 7/2788 827427
+# git_rev=09ff3ef
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m3b-cont-c
+# reader=daemon:<repo>/.claude/worktrees/agent-a702d0a17a733562c/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=8.83 11.03 9.68 3/2788 827424
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info RUST_LOG=warn,gorca_phase=info,gorca_text=debug
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=FE2 first actions: Letter('n') at caret 0 of 0 | Letter('d') at caret 1 of 1 | Space at caret 2 of 2 | Left at caret 3 of 3 | Right at caret 2 of 3 | Back at caret 3 of 3 | Space at caret 2 of 2 | Letter('i') at caret 3 of 3 | Letter('z') at caret 4 of 4 | Home at caret 5 of 5 | Letter('m') at caret 0 of 5 | End at caret 1 of 6 | Letter('h') at caret 6 of 6 | Space at caret 7 of 7
+
+metric                     bus                median          min          max  n op    threshold  res   note
+FC1h.fc1h_ms.n             daemon/voicego          480          480          480  1                  info   [samples]
+FC1h.fc1h_ms.p50           daemon/voicego        0.184        0.184        0.184  1                  info   [ms]
+FC1h.fc1h_ms.p95           daemon/voicego        0.284        0.284        0.284  1                  info   [ms]
+FC1h.fc1h_ms.p99           daemon/voicego        0.331        0.331        0.331  1 <=            3  PASS   [ms]
+FC1h.fc1h_ms.p999          daemon/voicego        1.328        1.328        1.328  1                  info   [ms]
+FC1h.fc1h_ms.max           daemon/voicego        1.328        1.328        1.328  1                  info   [ms]
+FC1h.fc_double             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+FC1h.fc_extra              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [speeches]
+FC1h.fc_swallowed          daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+FC1h.lost                  daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+FC1h.page_dropped          daemon/voicego            0            0            0  1                  info   [keys]
+FE2.e2_double              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_keyname             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_missing             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_wrong               daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.ft_failures            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checks]
+FCE1.fce1_ms.n             daemon/voicego           17           17           17  1                  info   [samples]
+FCE1.fce1_ms.p50           daemon/voicego        0.178        0.178        0.178  1                  info   [ms]
+FCE1.fce1_ms.p95           daemon/voicego        0.846        0.846        0.846  1                  info   [ms]
+FCE1.fce1_ms.p99           daemon/voicego        0.861        0.861        0.861  1                  info   [ms]
+FCE1.fce1_ms.p999          daemon/voicego        0.861        0.861        0.861  1                  info   [ms]
+FCE1.fce1_ms.max           daemon/voicego        0.861        0.861        0.861  1                  info   [ms]
+FCE1.fc_double             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+FCE1.fc_extra              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [speeches]
+FCE1.ft_failures           daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checks]
+FCE1.lost                  daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+FS2.fs2_ms.n               daemon/voicego          468          468          468  1                  info   [samples]
+FS2.fs2_ms.p50             daemon/voicego        0.671        0.671        0.671  1                  info   [ms]
+FS2.fs2_ms.p95             daemon/voicego        1.099        1.099        1.099  1                  info   [ms]
+FS2.fs2_ms.p99             daemon/voicego        1.384        1.384        1.384  1 <=           15  PASS   [ms]
+FS2.fs2_ms.p999            daemon/voicego        5.480        5.480        5.480  1                  info   [ms]
+FS2.fs2_ms.max             daemon/voicego        5.480        5.480        5.480  1                  info   [ms]
+FS2.fc_extra               daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [speeches]
+FS2.lost                   daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]

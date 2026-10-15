@@ -129,6 +129,29 @@ fn char_name(c: char) -> Option<&'static str> {
     })
 }
 
+/// A unit that holds nothing but embedded-object marks (an inline image or link inside a
+/// paragraph): it is said as "object", never as "blank".
+fn only_objects(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars().all(|c| matches!(c, '\u{FFFC}' | '\u{FEFF}'))
+        && s.contains('\u{FFFC}')
+}
+
+/// Text read from an application, without the phantom U+FEFF Gecko puts after each astral
+/// scalar (and the zero-width no-break space nobody means to say) and without the object
+/// replacement mark U+FFFC that stands for an embedded child: neither is ever spoken.
+fn without_phantoms(s: &str) -> std::borrow::Cow<'_, str> {
+    if s.contains(['\u{FEFF}', '\u{FFFC}']) {
+        std::borrow::Cow::Owned(
+            s.chars()
+                .filter(|c| !matches!(*c, '\u{FEFF}' | '\u{FFFC}'))
+                .collect(),
+        )
+    } else {
+        std::borrow::Cow::Borrowed(s)
+    }
+}
+
 const PHONETIC: [&str; 26] = [
     "alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet",
     "kilo", "lima", "mike", "november", "oscar", "papa", "quebec", "romeo", "sierra", "tango",
@@ -156,6 +179,11 @@ impl Verbalizer {
     /// What to say for the unit `s` read from a text (ADR-0007 section 3.2). Empty input is
     /// "blank".
     pub fn unit(&self, s: &str, how: How, o: &VerbalizeOpts) -> String {
+        if only_objects(s) {
+            return "object".to_owned();
+        }
+        let s = without_phantoms(s);
+        let s = s.as_ref();
         match how {
             How::Char => Self::one_char(s, *o),
             How::Word | How::Line | How::Text => Self::run(s, *o),
@@ -209,6 +237,10 @@ impl Verbalizer {
     /// letters when `phonetic` is set. Every character is named, so spelling a word that holds
     /// a space or a symbol says so.
     pub fn spell(&self, s: &str, phonetic: bool, o: &VerbalizeOpts) -> String {
+        if only_objects(s) {
+            return "object".to_owned();
+        }
+        let s = without_phantoms(s);
         let s = s.trim_end_matches(['\n', '\r']);
         if s.is_empty() {
             return "blank".to_owned();
@@ -322,6 +354,23 @@ mod tests {
         assert_eq!(v.unit("   \n", How::Line, &opts(Punct::Some)), "blank");
         assert_eq!(v.unit("\n", How::Word, &opts(Punct::Some)), "blank");
         assert_eq!(v.unit("", How::Text, &opts(Punct::Some)), "blank");
+    }
+
+    #[test]
+    fn the_phantom_of_an_astral_scalar_is_never_spoken() {
+        let v = Verbalizer;
+        let o = opts(Punct::Some);
+        assert_eq!(v.unit("\u{1F600}\u{FEFF}", How::Char, &o), "\u{1F600}");
+        assert_eq!(
+            v.unit("hi \u{1F600}\u{FEFF} there", How::Word, &o),
+            "hi \u{1F600} there"
+        );
+        assert_eq!(v.unit("\u{FEFF}", How::Char, &o), "blank");
+        assert_eq!(v.spell("a\u{1F600}\u{FEFF}", false, &o), "a, \u{1F600}");
+        // An embedded object alone is an object; inside running text it is silent.
+        assert_eq!(v.unit("\u{FFFC}", How::Char, &o), "object");
+        assert_eq!(v.spell("\u{FFFC}", false, &o), "object");
+        assert_eq!(v.unit("a\u{FFFC}b", How::Word, &o), "ab");
     }
 
     #[test]

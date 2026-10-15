@@ -370,6 +370,7 @@ fn announce_info(port: &AppPort, toolkit: &str, app_name: &str, verified_shell: 
         // verified identity, never `app_name` (B-1 2.2).
         dump_complete: verified_shell,
         text_unit: class.text_unit(),
+        text_insert_slack: class.text_insert_slack(),
         root: Some(NodeKey {
             app: port.app,
             local: gorca_dbus::drain::local_id(ROOT_PATH),

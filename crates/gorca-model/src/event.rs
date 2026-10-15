@@ -167,6 +167,12 @@ pub struct AppInfo {
     /// The unit of this application's text offsets (TQ-1). Native text tracking (ADR-0007) is
     /// for applications that count scalars; UTF-16 offsets wait for M3b.
     pub text_unit: crate::TextUnit,
+    /// Text-event quirk (0: none): this application may name an insert at another offset than
+    /// where the text really went (Gecko). The core then trusts a typed key's own insert for
+    /// where the caret goes (it moves by the insert's length whatever offset is named) and
+    /// accepts any other insert reported up to this many units after the caret. Data from the
+    /// connector's per-engine quirk table (ADR-0008), never derived in the core from a name.
+    pub text_insert_slack: u32,
     /// The application's root node, when the connector knows it. A fill policy that starts at
     /// the root (an eager dump, a window prefetch) gets it with `FillInput::Appeared`.
     pub root: Option<crate::NodeKey>,

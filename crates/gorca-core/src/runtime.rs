@@ -896,6 +896,7 @@ async fn do_fetch(shared: Arc<Shared>, job: FetchJob) {
         | BackendReply::Lines(_)
         | BackendReply::Unit(_)
         | BackendReply::Selections(_)
+        | BackendReply::Format(_)
         | BackendReply::Window(_) => {
             Err(BackendError::Protocol("unexpected reply kind".to_owned()))
         }
@@ -1357,6 +1358,7 @@ fn spawn_text(
             BackendOp::Text(TextQuery::AtOffset { node, offset, unit })
         }
         TextOp::Selections { node } => BackendOp::Text(TextQuery::Selections { node }),
+        TextOp::Format { node, offset } => BackendOp::Text(TextQuery::Format { node, offset }),
         TextOp::SetCaret { node, offset } => {
             BackendOp::Action(ActionReq::SetCaret { node, offset })
         }
@@ -1384,6 +1386,7 @@ fn spawn_text(
             BackendReply::Window(w) => Ok(Reply::Window(w)),
             BackendReply::Unit(u) => Ok(Reply::Unit(u)),
             BackendReply::Selections(s) => Ok(Reply::Selections(s)),
+            BackendReply::Format(f) => Ok(Reply::Format(f)),
             BackendReply::ActionDone => Ok(Reply::Done),
             BackendReply::Node(_)
             | BackendReply::Children(_)

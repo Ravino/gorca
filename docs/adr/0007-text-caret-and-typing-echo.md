@@ -82,6 +82,36 @@ app_actor.rs}`, `crates/gorca-model/src/text.rs`, `crates/gorca-ingress/src/tabl
   - `info.formatting` stays planned (M3b); `speech.punctuation` and `speech.caps` exist, `caps = "pitch"`
     speaks a capital like its lower-case letter until the speech clients can carry a pitch change.
 
+- 2026-10-15: M3b built for Firefox fields (checklist `docs/plan/checklists/M7b.md`, report
+  `docs/reports/m3b-m7b-impl.md`). Where the code differs from the text above, the code is the decision:
+  - **TQ-1 is implemented as "no conversion".** Gecko's ATK strings carry a phantom U+FEFF after every astral scalar so
+    that UTF-16 offsets equal character offsets of the string itself (`refs/firefox/accessible/atk/DOMtoATK.h`). The
+    window therefore keeps the application's string in the application's own offsets. `gorca_text::seg::char_range`
+    keeps a phantom with the scalar before it, word and soft-line rules follow, the verbalizer drops U+FEFF and U+FFFC,
+    counts of "N characters" skip the phantom. A text-changed insert reports the UTF-16 length and a text without
+    phantoms: the Reader puts them back (`with_phantoms`). `TextUnit::window_follows()` is true for scalars and Gecko,
+    false for UTF-8 byte offsets (VTE, M6). `MirrorDirectory::text_scalar` is replaced by `text_window_follows`. The
+    Reader never needs a scalar offset of a field, so there is no raw/scalar map, no `RawMap` in the window and no
+    TX-1 run cache for fields (ADR-0008 Q-E4, measured in `crates/gorca-text/tests/qe4.rs`). The browse mirror still
+    strips phantoms at its text-run layer, which re-reads whole runs, so it converts no offsets either.
+  - **CE-1 rich editables.** In a contenteditable the focused object (Gecko: an `entry` or a document) has a text made of
+    U+FFFC marks, one per block child; caret, text and selection events come from the paragraph the caret is in.
+    The machine tracks a `root` (the focused object) and a current `node`: an event from another node of the same app
+    while the root `hosts` embedded objects retargets the machine (`In::Retarget`), unless the mirror knows the node
+    hangs outside the root. Window, caret, selection and held edits are bound to the node and go; the key slot and the
+    typed-key expectations stay. The caret event right after focus (within 600 ms, no key waiting) only places the
+    caret. A paragraph that goes away hands the machine back to the root. The connector remembers the object path of
+    every caret event's node (`needs_path` now includes `CaretMoved`) so the paragraph can be read.
+    Edits that are only U+FFFC marks (a block added or removed) are structure and are not spoken.
+  - **Mode integration.** `text_mode_changed` runs after every Reader message: leaving focus or pass-through mode
+    drops the window, entering it again drops it too and starts tracking a field that got the focus while the mode was
+    browse (Enter on a field, Insert+Space). Gate FT1.
+  - **`info.formatting`** is implemented: `TextQuery::Format` (`GetAttributeRun(offset, defaults)`) mapped by the
+    connector's attribute-name table (`gorca-connector-atspi/src/text/format.rs`, GTK and Gecko names) to
+    `TextFormat`; the Reader speaks font, size, bold, italic, underline, strikethrough, script, colours, alignment,
+    language. Browse mode refuses ("not available in this mode"); formatting of the virtual cursor is M8.
+  - Say-all in a contenteditable reads the paragraph the caret is in only (no paragraph chaining yet).
+
 ## 1. Context
 
 Phase 1 and M1 speak focus, commands and key names. Nothing speaks the caret: arrows in a text field are

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use gorca_model::{
     AttrMap, NodeKey, NodeSnapshot, Point, PropMask, ReqId, Role, SnapshotBatch, StateSet,
-    TextLines, TextQuery, TextSelections, TextUnitAt, TextWindowFill, Value,
+    TextFormat, TextLines, TextQuery, TextSelections, TextUnitAt, TextWindowFill, Value,
 };
 use gorca_rt::{BudgetClass, Deadline, oneshot};
 
@@ -125,6 +125,8 @@ pub enum BackendReply {
     Selections(TextSelections),
     /// Answer to `TextQuery::Window`.
     Window(TextWindowFill),
+    /// Answer to `TextQuery::Format`.
+    Format(TextFormat),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]

@@ -1,0 +1,62 @@
+2026-10-14T22:49:12.133760Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } offset=0
+2026-10-14T22:49:12.134210Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882554046157965753) }, around: None, radius: 2048 }
+2026-10-14T22:49:12.134703Z DEBUG gorca_text: window reply base=0 chars=2 len=2 caret=Some(0)
+2026-10-14T22:49:12.711888Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } offset=1
+2026-10-14T22:49:12.711968Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) }, around: Some(1), radius: 2048 }
+2026-10-14T22:49:12.712059Z DEBUG gorca_text: fetch failed error=Unresolved
+2026-10-14T22:49:12.869770Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } offset=2
+2026-10-14T22:49:12.869840Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) }, around: Some(2), radius: 2048 }
+2026-10-14T22:49:12.870002Z DEBUG gorca_text: fetch failed error=Unresolved
+2026-10-14T22:49:13.030433Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } offset=3
+2026-10-14T22:49:13.030513Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) }, around: Some(3), radius: 2048 }
+2026-10-14T22:49:13.030674Z DEBUG gorca_text: fetch failed error=Unresolved
+2026-10-14T22:49:13.190185Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } offset=4
+2026-10-14T22:49:13.190228Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) }, around: Some(4), radius: 2048 }
+2026-10-14T22:49:13.190309Z DEBUG gorca_text: fetch failed error=Unresolved
+2026-10-14T22:49:13.350299Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } offset=6
+2026-10-14T22:49:13.350353Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) }, around: Some(6), radius: 2048 }
+2026-10-14T22:49:13.350436Z DEBUG gorca_text: fetch failed error=Unresolved
+2026-10-14T22:49:13.511312Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } offset=7
+2026-10-14T22:49:13.511377Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) }, around: Some(7), radius: 2048 }
+2026-10-14T22:49:13.511481Z DEBUG gorca_text: fetch failed error=Unresolved
+2026-10-14T22:49:13.671297Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } offset=8
+2026-10-14T22:49:13.671350Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) }, around: Some(8), radius: 2048 }
+2026-10-14T22:49:13.671424Z DEBUG gorca_text: fetch failed error=Unresolved
+2026-10-14T22:49:13.831540Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } offset=9
+2026-10-14T22:49:13.831585Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) }, around: Some(9), radius: 2048 }
+2026-10-14T22:49:13.831685Z DEBUG gorca_text: fetch failed error=Unresolved
+2026-10-14T22:49:13.991827Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } offset=10
+2026-10-14T22:49:13.991886Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) }, around: Some(10), radius: 2048 }
+2026-10-14T22:49:13.991992Z DEBUG gorca_text: fetch failed error=Unresolved
+2026-10-14T22:49:14.152224Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848373163359068529) } offset=0
+2026-10-14T22:49:14.152270Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848373163359068529) }, around: Some(0), radius: 2048 }
+2026-10-14T22:49:14.152376Z DEBUG gorca_text: fetch failed error=Unresolved
+2026-10-14T22:49:14.312905Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848373163359068529) } offset=1
+2026-10-14T22:49:14.312974Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848373163359068529) }, around: Some(1), radius: 2048 }
+2026-10-14T22:49:14.313072Z DEBUG gorca_text: fetch failed error=Unresolved
+2026-10-14T22:49:14.473074Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848373163359068529) } offset=2
+2026-10-14T22:49:14.473124Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848373163359068529) }, around: Some(2), radius: 2048 }
+2026-10-14T22:49:14.473222Z DEBUG gorca_text: fetch failed error=Unresolved
+2026-10-14T22:49:14.631489Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:49:14.634444Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848373163359068529) } delta=Insert { offset: 2, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:49:14.634465Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848373163359068529) } offset=3
+2026-10-14T22:49:14.791980Z DEBUG gorca_text: say pieces=1 reason=Typed
+2026-10-14T22:49:14.794594Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848373163359068529) } delta=Insert { offset: 3, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:49:14.794622Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848373163359068529) } offset=4
+2026-10-14T22:49:14.954926Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848373163359068529) } delta=Delete { offset: 3, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:49:14.954984Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:49:14.954997Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848373163359068529) } offset=3
+2026-10-14T22:49:15.115385Z DEBUG gorca_text: edit event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848373163359068529) } delta=Delete { offset: 2, len: 1, text: Some(LazyText { bytes: 1, field: 0 }) }
+2026-10-14T22:49:15.115457Z DEBUG gorca_text: say pieces=1 reason=Erased
+2026-10-14T22:49:15.115476Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848373163359068529) } offset=2
+2026-10-14T22:49:15.275041Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } offset=2
+2026-10-14T22:49:15.275091Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) }, around: Some(2), radius: 2048 }
+2026-10-14T22:49:15.275189Z DEBUG gorca_text: fetch failed error=Unresolved
+2026-10-14T22:49:30.813229Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849338534568448562) } offset=6000
+2026-10-14T22:49:30.814340Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849338534568448562) }, around: None, radius: 2048 }
+2026-10-14T22:49:30.815269Z DEBUG gorca_text: window reply base=3952 chars=2048 len=6000 caret=Some(6000)
+2026-10-14T22:49:31.393135Z DEBUG gorca_text: caret event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849338534568448562) } offset=0
+2026-10-14T22:49:31.393197Z DEBUG gorca_text: fetch op=AtOffset { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849338534568448562) }, offset: 0, unit: Line }
+2026-10-14T22:49:31.393721Z DEBUG gorca_text: unit reply range=0..6000 chars=6000
+2026-10-14T22:49:31.393760Z DEBUG gorca_text: say pieces=1 reason=CaretMove { say: Line, correlated: true }
+2026-10-14T22:49:31.838125Z DEBUG gorca_text: window reply base=0 chars=6000 len=6000 caret=None

@@ -25,6 +25,7 @@ pub fn allowed(interface: &str, member: &str) -> bool {
                 | "GetStringAtOffset"
                 | "GetNSelections"
                 | "GetSelection"
+                | "GetAttributeRun"
                 | "GetRangeExtents"
                 | "GetCharacterExtents"
         ),
@@ -67,6 +68,7 @@ mod tests {
             ("org.a11y.atspi.Text", "GetStringAtOffset"),
             ("org.a11y.atspi.Text", "GetNSelections"),
             ("org.a11y.atspi.Text", "GetSelection"),
+            ("org.a11y.atspi.Text", "GetAttributeRun"),
             ("org.a11y.atspi.Text", "GetRangeExtents"),
             ("org.a11y.atspi.Text", "GetOffsetAtPoint"),
             ("org.a11y.atspi.Component", "GetExtents"),

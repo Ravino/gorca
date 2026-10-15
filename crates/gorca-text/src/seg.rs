@@ -46,8 +46,50 @@ pub fn is_mark(c: char) -> bool {
         | 0xE0100..=0xE01EF)
 }
 
-/// The extended grapheme cluster containing `s[i]` (TL-2). Offsets stay scalar indices.
+/// U+FEFF. Gecko appends one after every astral scalar so that its text offsets (UTF-16 code
+/// units) equal the character offsets of the string it hands to ATK (`DOMtoATK.h`). A window
+/// that keeps the application's own string, in the application's own offsets, therefore holds
+/// these phantoms: they are never text. Every unit rule below keeps one with the scalar in
+/// front of it, so a character is never cut between an astral scalar and its phantom.
+pub const PHANTOM: char = '\u{FEFF}';
+
+/// Is `c` the phantom U+FEFF?
+pub const fn is_phantom(c: char) -> bool {
+    c == PHANTOM
+}
+
+/// Scalars of `s` that are text: everything but the phantom U+FEFF.
+pub fn visible_len(s: &[char]) -> usize {
+    s.iter().filter(|c| !is_phantom(**c)).count()
+}
+
+/// `t` without phantom U+FEFF scalars.
+pub fn strip_phantoms(t: &str) -> std::borrow::Cow<'_, str> {
+    if t.contains(PHANTOM) {
+        std::borrow::Cow::Owned(t.chars().filter(|c| !is_phantom(*c)).collect())
+    } else {
+        std::borrow::Cow::Borrowed(t)
+    }
+}
+
+/// The extended grapheme cluster containing `s[i]` (TL-2). Offsets stay scalar indices. A
+/// phantom U+FEFF joins the cluster of the scalar in front of it.
 pub fn char_range(s: &[char], i: usize) -> Range<usize> {
+    let r = cluster(s, i);
+    if r.is_empty() {
+        return r;
+    }
+    let (mut start, mut end) = (r.start, r.end);
+    while start > 0 && is_phantom(s[start]) {
+        start = cluster(s, start - 1).start;
+    }
+    while end < s.len() && is_phantom(s[end]) {
+        end += 1;
+    }
+    start..end
+}
+
+fn cluster(s: &[char], i: usize) -> Range<usize> {
     let len = s.len();
     if len == 0 {
         return 0..0;
@@ -305,7 +347,10 @@ impl SoftLines<'_> {
             return p;
         }
         let mut cut = limit;
-        while cut > start + 1 && cut < content_end && is_mark(self.s[cut]) {
+        while cut > start + 1
+            && cut < content_end
+            && (is_mark(self.s[cut]) || is_phantom(self.s[cut]))
+        {
             cut -= 1;
         }
         cut
@@ -378,6 +423,33 @@ mod tests {
         assert_eq!(char_range(&s, 6), 6..9);
         assert_eq!(char_range(&s, 9), 9..10);
         assert_eq!(char_range(&s, 99), 9..10);
+    }
+
+    #[test]
+    fn a_phantom_belongs_to_the_scalar_before_it() {
+        // "a", an astral scalar with its phantom, "b": the application's own string.
+        let s = cs("a\u{1F600}\u{FEFF}b");
+        assert_eq!(char_range(&s, 0), 0..1);
+        assert_eq!(char_range(&s, 1), 1..3);
+        assert_eq!(char_range(&s, 2), 1..3);
+        assert_eq!(char_range(&s, 3), 3..4);
+        // Two in a row, each with its phantom.
+        let s = cs("\u{1F600}\u{FEFF}\u{1F600}\u{FEFF}");
+        assert_eq!(char_range(&s, 1), 0..2);
+        assert_eq!(char_range(&s, 2), 2..4);
+        assert_eq!(visible_len(&s), 2);
+        assert_eq!(strip_phantoms("x\u{1F600}\u{FEFF}"), "x\u{1F600}");
+        assert_eq!(strip_phantoms("plain"), "plain");
+    }
+
+    #[test]
+    fn a_phantom_does_not_split_a_word_or_a_soft_line() {
+        let s = cs("hi \u{1F600}\u{FEFF} there");
+        assert_eq!(text(&s, word_range(&s, 4)), "\u{1F600}\u{FEFF} ");
+        assert_eq!(text(&s, word_range(&s, 3)), "\u{1F600}\u{FEFF} ");
+        let s = cs("abcd\u{1F600}\u{FEFF}efgh");
+        let cuts: Vec<_> = soft_lines(&s, 5).collect();
+        assert!(cuts.iter().all(|r| r.start == 0 || !is_phantom(s[r.start])));
     }
 
     #[test]

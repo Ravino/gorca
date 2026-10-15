@@ -1,0 +1,44 @@
+633916507077774 said "M3b Fields, document"
+633916539832050 said "browse mode, heading level 1, Fields"
+633917131582728 said "focus mode, Emoji line, edit"
+633917718368302 said "panel"
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99
+bus 3 /org/a11y/atspi/accessible/99

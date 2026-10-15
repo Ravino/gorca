@@ -34,6 +34,8 @@ pub const READ_DEADLINE: Duration = Duration::from_secs(1);
 /// The file must stay quiet this long before it is reloaded.
 pub const DEBOUNCE: Duration = Duration::from_millis(100);
 const WATCH_RETRY: Duration = Duration::from_secs(3);
+/// How often the input sources are read again (K-8b).
+const LAYOUT_POLL: Duration = Duration::from_secs(10);
 
 /// Where the settings come from.
 #[derive(Clone, Debug, Default)]
@@ -88,10 +90,21 @@ pub fn build(text: Option<&str>, facts: &PlatformFacts, cause: LoadCause) -> Bui
     let (mods, _) = gorca_core::gorca_modifiers(&l.settings, facts);
     // Chords without the gorca modifier (the desktop layout's keypad review keys) are grabbed
     // explicitly, and only once their command is implemented (K-1, K-8a).
-    let (commands, exact) = gorca_core::chord_grabs(&c.keymap, gorca_input_api::ModeKind::Focus);
+    // Every key is grabbed under the keysyms of all configured layouts (K-8b).
+    let keysyms = &facts.keysyms;
+    let (commands, exact) =
+        gorca_core::chord_grabs(&c.keymap, gorca_input_api::ModeKind::Focus, keysyms);
     // Browse mode (M7): the browse keymap's chords, and Escape for auto focus mode (modes.md 2).
-    let (quick_nav, _) = gorca_core::browse_grabs(&c.keymap);
-    let web_escape = gorca_core::escape_grabs(&c.keymap);
+    let (quick_nav, _) = gorca_core::browse_grabs(&c.keymap, keysyms);
+    let web_escape = gorca_core::escape_grabs(&c.keymap, keysyms);
+    let dropped =
+        gorca_core::grab_collisions(&c.keymap, gorca_input_api::ModeKind::Browse, keysyms);
+    if !dropped.is_empty() {
+        tracing::info!(
+            count = dropped.len(),
+            "layout keysyms left out of the grabs (also typed by an unbound key of another layout)"
+        );
+    }
     let loaded = LoadedSettings {
         cause,
         settings: l.settings.clone(),
@@ -198,6 +211,10 @@ struct State {
     /// Hash of the text of the last load (of the empty string for a missing file).
     last_hash: u64,
     last_good: Option<Arc<LoadedSettings>>,
+    /// The layouts the active keysym table was built for (the layout poll compares against it).
+    layout_ids: Vec<String>,
+    /// Set while a keymap build of the layout poll runs on its blocking thread.
+    layout_busy: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl ConfigTask {
@@ -218,9 +235,58 @@ impl ConfigTask {
 
     async fn facts(&self) -> PlatformFacts {
         if self.source.no_probe {
-            self.source.overrides.apply(PlatformFacts::default())
+            // No gsettings, but an explicit layout list (tests, the e2e rig) still counts.
+            let mut f = self.source.overrides.apply(PlatformFacts::default());
+            if let Some(l) = &self.source.overrides.layouts {
+                f.keysyms = crate::platform::keysyms(
+                    crate::platform::parse_layout_list(l),
+                    f.xkb_options.clone(),
+                )
+                .await;
+            }
+            f
         } else {
             probe(&self.source.overrides).await
+        }
+    }
+
+    /// The layouts in effect: the override when given, else the input sources `gsettings`
+    /// reports (`None`: unreadable).
+    async fn layout_ids(&self) -> Option<Vec<String>> {
+        match &self.source.overrides.layouts {
+            Some(l) => Some(crate::platform::parse_layout_list(l)),
+            None => crate::platform::poll_sources().await,
+        }
+    }
+
+    /// One tick of the layout poll: read only the `sources` key, and rebuild the table only
+    /// when the layouts differ. A failed read or build keeps the table in force and says so.
+    async fn poll_layouts(&self, st: &mut State) {
+        let Some(ids) = self.layout_ids().await else {
+            tracing::debug!("input sources unreadable: keeping the keysym table");
+            return;
+        };
+        if ids == st.layout_ids {
+            return;
+        }
+        match crate::platform::try_keysyms(
+            ids.clone(),
+            st.facts.xkb_options.clone(),
+            &st.layout_busy,
+        )
+        .await
+        {
+            Ok(table) => {
+                st.layout_ids = ids;
+                if table != st.facts.keysyms {
+                    tracing::info!("the keyboard layouts changed: grabs rebuilt");
+                    st.facts.keysyms = table;
+                    self.reload(st, LoadCause::Layouts).await;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = ?e, "the keysym table for the new layouts was not built in time: keeping the previous table, will retry");
+            }
         }
     }
 
@@ -365,6 +431,8 @@ impl ConfigTask {
             facts: self.facts().await,
             last_hash: 0,
             last_good: None,
+            layout_ids: self.layout_ids().await.unwrap_or_default(),
+            layout_busy: Arc::default(),
         };
         self.reload(&mut st, LoadCause::Startup).await;
 
@@ -374,6 +442,10 @@ impl ConfigTask {
             .and_then(|(s, n)| s.ok().map(|s| (s, n)));
         let mut retry = tokio::time::interval(WATCH_RETRY);
         retry.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        // The input sources can change while we run (K-8b): look again, slowly, off the lanes.
+        let mut layouts = tokio::time::interval(LAYOUT_POLL);
+        layouts.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        layouts.tick().await;
         loop {
             tokio::select! {
                 biased;
@@ -400,6 +472,9 @@ impl ConfigTask {
                         Some(false) => {}
                         None => events = None,
                     }
+                }
+                _ = layouts.tick(), if !self.source.no_probe => {
+                    self.poll_layouts(&mut st).await;
                 }
                 _ = retry.tick(), if events.is_none() && self.source.path.is_some() => {
                     // The directory did not exist (or the watch broke): look again.

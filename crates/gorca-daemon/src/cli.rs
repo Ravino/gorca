@@ -262,6 +262,9 @@ impl Options {
         if let Some(v) = get("GORCA_CLOCK_24H") {
             o.platform.clock_24h = Some(v != "0");
         }
+        if let Some(v) = get("GORCA_LAYOUTS").filter(|v| !v.is_empty()) {
+            o.platform.layouts = Some(v);
+        }
         o
     }
 

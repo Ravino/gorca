@@ -1,0 +1,37 @@
+# e2e m3b-try10
+# utc=2026-10-14T23:30:03Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=14.69 13.21 11.44 4/2779 117597
+# git_rev=932d611
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m3b-try10
+# reader=daemon:<repo>/.claude/worktrees/agent-a702d0a17a733562c/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=14.69 13.21 11.44 8/2779 117594
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=BL1 FAIL ru Shift+2: wanted "no previous heading level 2", heard [(637066277732128, "heading level 2, Introduction")]
+# note1=BL1 transcript: ["M7 Article, document", "browse mode, heading level 1, Gorca article", "second page link, link", "heading level 2, Introduction", "no previous heading level 2", "heading level 2, Details", "heading level 2, Introduction", "heading level 2, Details", "link, Third link in a list", "heading level 2, Details"]
+# note2=FR1 FAIL Shift+W: not grabbed
+# note3=FR1 FAIL Shift+M: not grabbed
+# note4=FE2 first actions: Right at caret 0 of 0 | Right at caret 0 of 0 | Letter('h') at caret 0 of 0 | Letter('x') at caret 1 of 1 | Right at caret 2 of 2 | Letter('h') at caret 2 of 2 | Home at caret 3 of 3 | Back at caret 0 of 3 | End at caret 0 of 3 | Back at caret 3 of 3 | Space at caret 2 of 2 | Letter('v') at caret 3 of 3 | Space at caret 4 of 4 | Left at caret 5 of 5
+
+metric                     bus                median          min          max  n op    threshold  res   note
+BL1.bl_failures            daemon/voicego            1            1            1  1 <=            0  FAIL  gated on the max over repeats [checks]
+FR1.fr_failures            daemon/voicego            2            2            2  1 <=            0  FAIL  gated on the max over repeats [checks]
+FE2.e2_double              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_keyname             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_missing             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_wrong               daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.ft_failures            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checks]

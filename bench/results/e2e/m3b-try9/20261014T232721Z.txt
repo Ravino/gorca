@@ -1,0 +1,31 @@
+# e2e m3b-try9
+# utc=2026-10-14T23:27:21Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=13.34 12.04 10.81 1/2963 93764
+# git_rev=932d611
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m3b-try9
+# reader=daemon:<repo>/.claude/worktrees/agent-a702d0a17a733562c/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=13.34 12.04 10.81 4/2963 93761
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=BL1 FAIL ru Shift+2: the key was not grabbed (it reached the page)
+# note1=BL1 FAIL ru 2: the key was not grabbed (it reached the page)
+# note2=BL1 FAIL ru K: the key was not grabbed (it reached the page)
+# note3=BL1 FAIL ru Shift+H: the key was not grabbed (it reached the page)
+# note4=BL1 transcript: ["M7 Article, document", "browse mode, heading level 1, Gorca article", "second page link, link", "heading level 2, Introduction", "no previous heading level 2", "heading level 2, Details", "\"", "panel", "2", "л"]
+
+metric                     bus                median          min          max  n op    threshold  res   note
+BL1.bl_failures            daemon/voicego            4            4            4  1 <=            0  FAIL  gated on the max over repeats [checks]

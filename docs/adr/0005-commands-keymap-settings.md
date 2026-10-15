@@ -267,6 +267,24 @@ keysyms; double-tapping CapsLock toggles Caps Lock exactly as Mutter does, and t
   `(keycode, mods)` into the exact `(keysym, mask)` pairs Mutter will see, for every layout group and
   every Caps Lock state. The compiled grab set replaces the hand-written ×4 expansion of K-6 for these
   chords.
+- **K-8b** (M7b, 2026-10-15) Grabs use the **union** of the keysyms a physical key types in every configured
+  input source, at level 0 (no Shift) and level 1 (Shift): the quick-navigation key H is grabbed as `h` and as
+  `Cyrillic_er` when `org.gnome.desktop.input-sources sources` lists `us` and `ru`, and Shift+1..6 follow
+  each layout's digit row (`^` on US, `:` on Russian, `&` on German, `6` on French). Mutter compares the
+  keysym of the *active* layout, so the union needs no active-layout tracking and no regrab when the user
+  switches layouts; the lane still resolves the command by keycode (K-8). The table is plain data
+  (`gorca_input_api::KeysymTable`, in `PlatformFacts`) built by `gorca-input-xkb` from libxkbcommon, loaded
+  with `dlopen` so a machine without it keeps the US-only behaviour. `us` is always part of the union.
+  Limits: (1) outside browse mode a keysym that another configured layout types on a *different, unbound*
+  key is left out of the grab (it would swallow that key) and counted (`grab_collisions`, logged at info);
+  in browse mode it is kept, because browse mode types no text and the keysym is a quick-navigation key on
+  the other layout (Shift+2 and Shift+6 on the Russian layout are `"` and `:`, which US Shift+apostrophe and
+  Shift+semicolon also type; found by gate BL1); (2) IBus engines
+  type through their underlying XKB layout, which is only known if it is also listed as an `xkb` source,
+  so `ibus` sources add nothing; (3) the source list is re-read every 10 s and the grab set is rebuilt
+  silently (`LoadCause::Layouts`) only when the table changed, so a layout added at run time works within
+  10 s; (4) `GORCA_LAYOUTS=us,ru` replaces the probe (tests, the e2e rig); (5) a file-parse failure keeps
+  the previous grabs (last good settings) until the next successful load.
 - **K-6a** Keypad chords are registered **without the Num Lock variants**: with Num Lock on the keypad
   types digits into the app, as in NVDA and Orca. `KP_Insert` as the gorca modifier therefore works only
   with Num Lock off (same as Orca).

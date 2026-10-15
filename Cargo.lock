@@ -830,6 +830,7 @@ dependencies = [
  "gorca-doc-source-atspi",
  "gorca-input-api",
  "gorca-input-mutter",
+ "gorca-input-xkb",
  "gorca-mirror",
  "gorca-model",
  "gorca-output-api",
@@ -969,6 +970,15 @@ dependencies = [
  "tokio",
  "tracing",
  "zbus",
+]
+
+[[package]]
+name = "gorca-input-xkb"
+version = "0.0.0"
+dependencies = [
+ "gorca-input-api",
+ "libc",
+ "tracing",
 ]
 
 [[package]]

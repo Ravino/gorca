@@ -432,7 +432,7 @@ fn echo_dedupe_consumes_exactly_what_was_typed() {
             let n = 1 + rng.below(typed.len() - at);
             let chunk = s(&typed[at..at + n]);
             assert_eq!(
-                ring.consume_insert(&chunk, 50),
+                ring.consume_insert(&chunk, 50, false),
                 Consume::Matched { n },
                 "seed {seed} {chunk:?}"
             );
@@ -441,7 +441,7 @@ fn echo_dedupe_consumes_exactly_what_was_typed() {
         assert!(ring.is_empty());
         // A paste that is not the typed text consumes nothing.
         ring.push('q', 60);
-        assert_eq!(ring.consume_insert("qq", 61), Consume::Unmatched);
+        assert_eq!(ring.consume_insert("qq", 61, false), Consume::Unmatched);
         assert_eq!(ring.len(), 1);
     }
 }

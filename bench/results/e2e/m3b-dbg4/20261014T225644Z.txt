@@ -1,0 +1,39 @@
+# e2e m3b-dbg4
+# utc=2026-10-14T22:56:44Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=7.35 9.42 8.96 1/2765 4099794
+# git_rev=932d611
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m3b-dbg4
+# reader=daemon:<repo>/.claude/worktrees/agent-a702d0a17a733562c/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=7.35 9.42 8.96 1/2765 4099791
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info RUST_LOG=warn,gorca_text=debug
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=FCE1 lost #9: wanted "р", key to next key 160.4 ms, heard [+2.7ms "Т", +162.8ms "р"]
+# note1=FCE1 lost #10: wanted "и", key to next key 160.4 ms, heard [+2.4ms "р", +162.7ms "и"]
+# note2=FCE1 lost #11: wanted "space", key to next key 160.4 ms, heard [+2.3ms "и", +160.7ms "x"]
+# note3=FCE1 event source /org/a11y/atspi/accessible/104: {"ok":true,"role":"paragraph","name":"","event":"reply","id":8}
+# note4=FCE1 event source /org/a11y/atspi/accessible/103: {"ok":true,"role":"paragraph","name":"","event":"reply","id":9}
+
+metric                     bus                median          min          max  n op    threshold  res   note
+FCE1.fce1_ms.n             daemon/voicego           14           14           14  1                  info   [samples]
+FCE1.fce1_ms.p50           daemon/voicego        0.167        0.167        0.167  1                  info   [ms]
+FCE1.fce1_ms.p95           daemon/voicego        0.677        0.677        0.677  1                  info   [ms]
+FCE1.fce1_ms.p99           daemon/voicego        1.159        1.159        1.159  1                  info   [ms]
+FCE1.fce1_ms.p999          daemon/voicego        1.159        1.159        1.159  1                  info   [ms]
+FCE1.fce1_ms.max           daemon/voicego        1.159        1.159        1.159  1                  info   [ms]
+FCE1.fc_double             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+FCE1.ft_failures           daemon/voicego            1            1            1  1 <=            0  FAIL  gated on the max over repeats [checks]
+FCE1.lost                  daemon/voicego            3            3            3  1 <=            0  FAIL  gated on the max over repeats [keys]

@@ -1,0 +1,37 @@
+# e2e m3b-m7b-final2-strict-r1
+# utc=2026-10-15T14:28:13Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=6.56 7.38 8.19 2/2753 1951161
+# git_rev=4bdf6de
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m3b-m7b-final2-strict-r1
+# reader=daemon:<repo>/.claude/worktrees/agent-a702d0a17a733562c/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=6.56 7.38 8.19 2/2753 1951158
+# reader_env=GORCA_M4=1 GORCA_M4_STRICT=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=r1_ms: first SPEAK between a numpad review key and the next one (1200 spoken for 1200 presses); the application calls during the series are RR-1 revalidations (every 2 s), never on the key path
+
+metric                     bus                median          min          max  n op    threshold  res   note
+R1.r1_ms.n                 daemon/voicego         1200         1200         1200  3                  info   [samples]
+R1.r1_ms.p50               daemon/voicego        0.189        0.176        0.193  3                  info   [ms]
+R1.r1_ms.p95               daemon/voicego        0.365        0.335        0.369  3                  info   [ms]
+R1.r1_ms.p99               daemon/voicego        0.470        0.451        0.627  3 <=            3  PASS   [ms]
+R1.r1_ms.p999              daemon/voicego        1.201        1.069        3.295  3                  info   [ms]
+R1.r1_ms.max               daemon/voicego        6.754        1.294        7.807  3                  info   [ms]
+R1.lost                    daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+R1.not_consumed            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+R1.r1_ipc_calls            daemon/voicego           49           49           49  3                  info   [calls]
+R1.r1_late_keys            daemon/voicego            0            0            0  3                  info   [events]
+R1.r2_cold_ms              daemon/voicego        6.139        5.895        9.445  3                  info   [ms]

@@ -1,0 +1,13 @@
+# Q-E4 microbenchmark: cargo test --release -p gorca-text --test qe4 -- --ignored --nocapture
+# host=debian cpu=Intel(R) Core(TM) Ultra 9 285H x16 governor=performance load~11-13 (other agents' e2e runs)
+# git base 09ff3ef (worktree-agent-a702d0a17a733562c)
+A  window of 16384 chars, no emoji: char unit 6 ns, word unit 102 ns per call
+A  window of 17476 chars, emoji every 10th: char unit 208 ns, word unit 1390 ns per call
+A  window of 17476 chars, emoji every 2nd: char unit 208 ns, word unit 1392 ns per call
+B  raw_to_scalar at the middle of 1000 scalars: 0.4 us; scalar_to_raw 0.4 us per call (needs the 1066 chars in front of the caret)
+B  raw_to_scalar at the middle of 16000 scalars: 5.6 us; scalar_to_raw 6.6 us per call (needs the 17066 chars in front of the caret)
+B  raw_to_scalar at the middle of 100000 scalars: 34.9 us; scalar_to_raw 41.8 us per call (needs the 106666 chars in front of the caret)
+B  raw_to_scalar at the middle of 1000000 scalars: 350.4 us; scalar_to_raw 404.9 us per call (needs the 1066666 chars in front of the caret)
+C  run cache over 16000 scalars (1066 phantoms): build 12 us, lookup 5 ns; an edit at the front shifts 1066 entries
+C  run cache over 100000 scalars (6666 phantoms): build 43 us, lookup 6 ns; an edit at the front shifts 6666 entries
+C  run cache over 1000000 scalars (66666 phantoms): build 463 us, lookup 9 ns; an edit at the front shifts 66666 entries

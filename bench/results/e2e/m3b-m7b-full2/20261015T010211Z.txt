@@ -1,0 +1,133 @@
+# e2e m3b-m7b-full2
+# utc=2026-10-15T01:02:10Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=6.29 6.74 7.66 1/2796 512491
+# git_rev=932d611
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m3b-m7b-full2
+# reader=daemon:<repo>/.claude/worktrees/agent-a702d0a17a733562c/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=6.29 6.74 7.66 1/2796 512488
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=FC1h event source /org/a11y/atspi/accessible/101: {"ok":true,"role":"entry","name":"Emoji line","event":"reply","id":8}
+# note1=FE1 event source /org/a11y/atspi/accessible/94: {"ok":true,"role":"entry","name":"Typing region:","event":"reply","id":8}
+# note2=FE2 #141 Cyr: wanted "ж" once, said ["ж", "ж"]; recent: Back at caret 5 of 88 | Letter('x') at caret 4 of 87 | Emoji at caret 5 of 88 | Cyr at caret 6 of 89
+# note3=FE2 #142 Back: wanted "ж" once, said ["ж", "ж"]; recent: Letter('x') at caret 4 of 87 | Emoji at caret 5 of 88 | Cyr at caret 6 of 89 | Back at caret 7 of 90
+# note4=FE2 #236 Back: wanted "space" once, said ["space", "vy itdgj icy 😀toacnteu tl txbж gstszu rw vx😀aжyж wdtoжj q yd ж😀mij😀rbuuyж 😀nccjfrqzmg k a kyz r😀cmc didhsdжvyx erhfжnny wa😀fkжxbar😀ji😀fk k"]; recent: Letter('b') at caret 28 of 139 | Cyr at caret 29 of 140 | Space at caret 30 of 141 | Back at caret 31 of 142
+# note5=FE2 #367 Emoji: wanted "😀" once, said ["😀", "😀"]; recent: Cyr at caret 211 of 211 | Home at caret 212 of 212 | Letter('n') at caret 0 of 212 | Emoji at caret 1 of 213
+# note6=FE2 #389 Emoji: wanted "😀" once, said ["😀", "😀"]; recent: Letter('r') at caret 6 of 222 | Letter('e') at caret 7 of 223 | Back at caret 8 of 224 | Emoji at caret 7 of 223
+# note7=FE2 #406 Emoji: wanted "😀" once, said ["😀", "😀"]; recent: Letter('y') at caret 17 of 234 | Right at caret 18 of 235 | Back at caret 19 of 235 | Emoji at caret 18 of 234
+# note8=FE2 #409 Back: wanted "😀" once, said ["😀", "😀"]; recent: Emoji at caret 18 of 234 | Letter('j') at caret 19 of 235 | Back at caret 20 of 236 | Back at caret 19 of 235
+# note9=FE2 #492 Emoji: wanted "😀" once, said ["😀", "😀"]; recent: Left at caret 3 of 268 | Letter('d') at caret 2 of 268 | Letter('a') at caret 3 of 269 | Emoji at caret 4 of 270
+# note10=FE2 #614 Emoji: wanted "😀" once, said ["😀", "😀"]; recent: Letter('w') at caret 12 of 344 | Back at caret 13 of 345 | Letter('m') at caret 12 of 344 | Emoji at caret 13 of 345
+# note11=FE2 first actions: Letter('q') at caret 0 of 0 | Back at caret 1 of 1 | Space at caret 0 of 0 | Letter('e') at caret 1 of 1 | Letter('r') at caret 2 of 2 | Home at caret 3 of 3 | Left at caret 0 of 3 | Letter('c') at caret 0 of 3 | Letter('d') at caret 1 of 4 | Letter('h') at caret 2 of 5 | Letter('s') at caret 3 of 6 | Letter('d') at caret 4 of 7 | Cyr at caret 5 of 8 | Letter('v') at caret 6 of 9
+# note12=FCE1 event source /org/a11y/atspi/accessible/104: {"ok":true,"role":"paragraph","name":"","event":"reply","id":8}
+# note13=FCE1 event source /org/a11y/atspi/accessible/103: {"ok":true,"role":"paragraph","name":"","event":"reply","id":9}
+# note14=FE1 event source /org/a11y/atspi/accessible/91: {"ok":true,"role":"entry","name":"Typing region:","event":"reply","id":8}
+# note15=FE2 #113 Emoji: wanted "😀" once, said ["😀", "😀"]; recent: Space at caret 50 of 51 | Letter('j') at caret 51 of 52 | Space at caret 52 of 53 | Emoji at caret 53 of 54
+# note16=FE2 #114 Emoji: wanted "😀" once, said ["😀", "😀"]; recent: Letter('j') at caret 51 of 52 | Space at caret 52 of 53 | Emoji at caret 53 of 54 | Emoji at caret 54 of 55
+# note17=FE2 #176 Space: the page caret is 100, the model 101; recent: Space at caret 92 of 92 | Right at caret 93 of 93 | Letter('h') at caret 93 of 93 | Space at caret 94 of 94
+# note18=FE2 #177 Letter('s'): wanted "s" once, said ["s", "s"]; recent: Right at caret 93 of 93 | Letter('h') at caret 93 of 93 | Space at caret 94 of 94 | Letter('s') at caret 95 of 95
+# note19=FE2 #177 Letter('s'): the page caret is 101, the model 102; recent: Right at caret 93 of 93 | Letter('h') at caret 93 of 93 | Space at caret 94 of 94 | Letter('s') at caret 95 of 95
+# note20=FE2 #178 Letter('q'): the page caret is 102, the model 103; recent: Letter('h') at caret 93 of 93 | Space at caret 94 of 94 | Letter('s') at caret 95 of 95 | Letter('q') at caret 96 of 96
+# note21=FE2 #510 Back: wanted "p" once, said ["p", " жgepbyjg n😀😀wwnoжplbqgrxunp uvkqudc omp 😀y t cz ж😀g😀r rcubpqdyx tpdccuuxdжu😀 жtfeжytiuwptz 😀edжqp mb uhedbopbg😀😀tdvqжsocfrx zbrokadefypf elqtq bjhqjжlozжd ehgtwa j 😀😀szegce😀 q😀vxжwr i hsqi😀hmc dc😀px😀carr ik😀 aci😀z spozppajumwugzh yubжv b😀unbjrphжg jbжh c"]; recent: Letter('g') at caret 2 of 260 | Letter('e') at caret 3 of 261 | Letter('p') at caret 4 of 262 | Back at caret 5 of 263
+# note22=FE2 #514 Cyr: wanted "ж" once, said ["ж", "ж"]; recent: Letter('n') at caret 4 of 262 | Cyr at caret 5 of 263 | Left at caret 6 of 264 | Cyr at caret 5 of 264
+# note23=FE2 first actions: Letter('t') at caret 0 of 0 | Back at caret 1 of 1 | Letter('o') at caret 0 of 0 | End at caret 1 of 1 | Letter('x') at caret 1 of 1 | Back at caret 2 of 2 | Letter('k') at caret 1 of 1 | Right at caret 2 of 2 | Letter('e') at caret 2 of 2 | Left at caret 3 of 3 | Letter('a') at caret 2 of 3 | Letter('d') at caret 3 of 4 | End at caret 4 of 5 | Letter('f') at caret 5 of 5
+# note24=FE2 the page holds "xkжszssgwcжжyx😀😀 nlj😀eж fecvfchabkzobжgenжm жpbyjg n😀😀wwnoжplbqgrxunp uvkqudc  omp 😀y t cz ж😀g😀r rcubpqdyx tpdccuuxdжu😀 жtfeжytiuwptz 😀edжqp mb uhedbopbg😀😀tdvqжsocfrx zbrokadefypf elqtq bjhqjжlozжd ehgtwa  j 😀😀szegce😀  q😀vxжwr i hsqi😀hmc dc😀px😀carr ik😀 aci😀z   spozppajumwugzh yubжv b😀unbjrphжg jbжh c  rrbmmof😀 ehuж s 😀iren dbhch  j  kzju 😀😀dq😀vx  b sooftzztж xжжiox", the model "xkжszssgwcжжyx😀😀 nlj😀eж fecvfchabkzobжgenжm жpbyjg n😀😀wwnoжplbqgrxunp uvkqudc  omp 😀y t cz ж😀g😀r rcubpqdyx tpdccuuxdжu😀 жtfeжytiuwptz 😀edжqp mb uhedbopbg😀😀tdvqжsocfrx zbrokadefypf elqtq bjhqjжlozжd ehgtwa  j 😀😀szegce😀  q😀vxжwr i h sqi😀hmc dc😀px😀carr ik😀 aci😀z   spozppajumwugzh yubжv b😀unbjrphжg jbжh c  rrbmmof😀 ehuж s 😀iren dbhch  j  kzju 😀😀dq😀vx  b sooftzztж xжжiox"
+# note25=FCE1 event source /org/a11y/atspi/accessible/105: {"ok":true,"role":"paragraph","name":"","event":"reply","id":8}
+# note26=FCE1 event source /org/a11y/atspi/accessible/104: {"ok":true,"role":"paragraph","name":"","event":"reply","id":9}
+# note27=FC1h event source /org/a11y/atspi/accessible/99: {"ok":true,"role":"entry","name":"Emoji line","event":"reply","id":8}
+# note28=FE1 event source /org/a11y/atspi/accessible/92: {"ok":true,"role":"entry","name":"Typing region:","event":"reply","id":8}
+# note29=FE2 #244 Back: wanted "space" once, said ["space", " uжжebcrwжmira r q😀 jxsdv😀x mrupbewb😀😀 fz l tuwoewhdv hvvmrfi😀vs fl😀nhp h😀😀yiwzgkh svжxlnr aж😀xpf m жr😀 жjpmtpiж noszyy😀jsgwkyжcz icu😀tatkжzжag"]; recent: Cyr at caret 1 of 145 | Back at caret 2 of 146 | Space at caret 1 of 145 | Back at caret 2 of 146
+# note30=FE2 #324 Back: wanted "space" once, said ["space", " h😀r vжwrжpyzepy😀oqyx😀vdd oqdhdwжж😀tж qgfж n😀 uжжebcrwжmira r q😀 jxsdv😀x mrupbewb😀😀 fz l tuwoewhdv hvvmrfi😀vs fl😀nhp h😀😀yiwzgkh svжxlnr aж😀xpf m жr😀 жjpmtpiж noszyy😀jsgwkyжcz icu😀tatkжzжagj😀x"]; recent: Letter('n') at caret 45 of 193 | Emoji at caret 46 of 194 | Space at caret 47 of 195 | Back at caret 48 of 196
+# note31=FE2 #359 Emoji: wanted "😀" once, said ["😀", "😀"]; recent: Space at caret 1 of 211 | Right at caret 2 of 212 | Letter('h') at caret 3 of 212 | Emoji at caret 4 of 213
+# note32=FE2 #365 Cyr: wanted "ж" once, said ["ж", "ж"]; recent: Right at caret 7 of 216 | Space at caret 8 of 216 | Letter('b') at caret 9 of 217 | Cyr at caret 10 of 218
+# note33=FE2 #482 Emoji: wanted "😀" once, said ["😀", "😀"]; recent: Back at caret 2 of 275 | Letter('e') at caret 1 of 274 | Right at caret 2 of 275 | Emoji at caret 3 of 275
+# note34=FE2 #483 Back: wanted "😀" once, said ["😀", "😀"]; recent: Letter('e') at caret 1 of 274 | Right at caret 2 of 275 | Emoji at caret 3 of 275 | Back at caret 4 of 276
+# note35=FE2 #486 Emoji: wanted "😀" once, said ["😀", "😀"]; recent: Back at caret 4 of 276 | Letter('s') at caret 3 of 275 | Letter('c') at caret 4 of 276 | Emoji at caret 5 of 277
+# note36=FE2 #628 Emoji: wanted "😀" once, said ["😀", "😀"]; recent: Letter('x') at caret 21 of 362 | Letter('e') at caret 22 of 363 | Letter('z') at caret 23 of 364 | Emoji at caret 24 of 365
+# note37=FE2 #629 Back: wanted "😀" once, said ["😀", "😀"]; recent: Letter('e') at caret 22 of 363 | Letter('z') at caret 23 of 364 | Emoji at caret 24 of 365 | Back at caret 25 of 366
+# note38=FE2 first actions: Letter('n') at caret 0 of 0 | Back at caret 1 of 1 | Letter('h') at caret 0 of 0 | Letter('p') at caret 1 of 1 | Space at caret 2 of 2 | Letter('h') at caret 3 of 3 | Emoji at caret 4 of 4 | Space at caret 5 of 5 | Right at caret 6 of 6 | Home at caret 6 of 6 | Letter('n') at caret 0 of 6 | End at caret 1 of 7 | End at caret 7 of 7 | Back at caret 7 of 7
+# note39=FC1h lost #16: wanted "c", key to next key 141.1 ms, heard [+104.4ms "😀", +146.8ms "c"]
+# note40=FC1h lost #17: wanted "blank", key to next key 141.7 ms, heard [+5.7ms "c", +149.8ms "😀"]
+# note41=FC1h lost #18: wanted "c", key to next key 144.5 ms, heard [+8.0ms "😀", +157.0ms "😀"]
+# note42=FC1h lost #20: wanted "😀", key to next key 140.5 ms, heard [+7.9ms "b", +149.6ms "😀"]
+# note43=FC1h lost #21: wanted "b", key to next key 140.5 ms, heard [+9.0ms "😀", +145.0ms "a"]
+# note44=FC1h event source /org/a11y/atspi/accessible/98: {"ok":true,"role":"entry","name":"Emoji line","event":"reply","id":8}
+
+metric                     bus                median          min          max  n op    threshold  res   note
+FC1h.fc1h_ms.n             daemon/voicego          160          160          164  3                  info   [samples]
+FC1h.fc1h_ms.p50           daemon/voicego        0.140        0.138        0.141  3                  info   [ms]
+FC1h.fc1h_ms.p95           daemon/voicego        0.205        0.195        0.210  3                  info   [ms]
+FC1h.fc1h_ms.p99           daemon/voicego        0.253        0.227        1.253  3 <=            3  PASS   [ms]
+FC1h.fc1h_ms.p999          daemon/voicego        0.264        0.236        239.4  3                  info   [ms]
+FC1h.fc1h_ms.max           daemon/voicego        0.264        0.236        239.4  3                  info   [ms]
+FC1h.fc_double             daemon/voicego           41           41           41  3 <=            0  FAIL  gated on the max over repeats [keys]
+FC1h.lost                  daemon/voicego          320          316          320  3 <=            0  FAIL  gated on the max over repeats [keys]
+FC1.fc1_ms.n               daemon/voicego          250          250          250  3                  info   [samples]
+FC1.fc1_ms.p50             daemon/voicego        0.438        0.428        0.447  3                  info   [ms]
+FC1.fc1_ms.p95             daemon/voicego        0.645        0.635        0.681  3                  info   [ms]
+FC1.fc1_ms.p99             daemon/voicego        0.965        0.838        1.790  3 <=           15  PASS   [ms]
+FC1.fc1_ms.p999            daemon/voicego        2.911        0.890        5.462  3                  info   [ms]
+FC1.fc1_ms.max             daemon/voicego        2.911        0.890        5.462  3                  info   [ms]
+FC1.fc_double              daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FC1.lost                   daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FE1.fe1_ms.n               daemon/voicego          454          387          483  3                  info   [samples]
+FE1.fe1_ms.p50             daemon/voicego        0.304        0.295        0.316  3                  info   [ms]
+FE1.fe1_ms.p95             daemon/voicego        883.7        883.2         1106  3                  info   [ms]
+FE1.fe1_ms.p99             daemon/voicego         1435         1216         1435  3 <=            3  FAIL   [ms]
+FE1.fe1_ms.p999            daemon/voicego         1436         1436         1436  3                  info   [ms]
+FE1.fe1_ms.max             daemon/voicego         1436         1436         1436  3                  info   [ms]
+FE1.fc_double              daemon/voicego           14           11           18  3 <=            0  FAIL  gated on the max over repeats [keys]
+FE1.lost                   daemon/voicego          146          117          213  3 <=            0  FAIL  gated on the max over repeats [keys]
+FE2.e2_double              daemon/voicego            9            5            9  3 <=            0  FAIL  gated on the max over repeats [actions]
+FE2.e2_keyname             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_missing             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_wrong               daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [actions]
+FE2.ft_failures            daemon/voicego            0            0            1  3 <=            0  FAIL  gated on the max over repeats [checks]
+FS2.fs2_ms.n               daemon/voicego          468          468          468  3                  info   [samples]
+FS2.fs2_ms.p50             daemon/voicego        0.538        0.529        0.572  3                  info   [ms]
+FS2.fs2_ms.p95             daemon/voicego        0.890        0.821        0.934  3                  info   [ms]
+FS2.fs2_ms.p99             daemon/voicego        1.108        0.997        1.171  3 <=           15  PASS   [ms]
+FS2.fs2_ms.p999            daemon/voicego        4.991        2.386        5.603  3                  info   [ms]
+FS2.fs2_ms.max             daemon/voicego        4.991        2.386        5.603  3                  info   [ms]
+FS2.lost                   daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FCE1.fce1_ms.n             daemon/voicego           16           16           16  3                  info   [samples]
+FCE1.fce1_ms.p50           daemon/voicego        0.146        0.141        0.148  3                  info   [ms]
+FCE1.fce1_ms.p95           daemon/voicego        0.693        0.635        0.697  3                  info   [ms]
+FCE1.fce1_ms.p99           daemon/voicego        0.770        0.759        0.975  3                  info   [ms]
+FCE1.fce1_ms.p999          daemon/voicego        0.770        0.759        0.975  3                  info   [ms]
+FCE1.fce1_ms.max           daemon/voicego        0.770        0.759        0.975  3                  info   [ms]
+FCE1.fc_double             daemon/voicego            1            1            1  3 <=            0  FAIL  gated on the max over repeats [keys]
+FCE1.ft_failures           daemon/voicego            1            1            1  3 <=            0  FAIL  gated on the max over repeats [checks]
+FCE1.lost                  daemon/voicego            1            1            1  3 <=            0  FAIL  gated on the max over repeats [keys]
+FT1.ft_failures            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [checks]
+FSA1.fsa1_ms.n             daemon/voicego           30           30           30  3                  info   [samples]
+FSA1.fsa1_ms.p50           daemon/voicego        0.870        0.861        0.871  3                  info   [ms]
+FSA1.fsa1_ms.p95           daemon/voicego        1.201        1.088        1.248  3                  info   [ms]
+FSA1.fsa1_ms.p99           daemon/voicego        1.399        1.331        1.427  3 <=           15  PASS   [ms]
+FSA1.fsa1_ms.p999          daemon/voicego        1.399        1.331        1.427  3                  info   [ms]
+FSA1.fsa1_ms.max           daemon/voicego        1.399        1.331        1.427  3                  info   [ms]
+FSA1.lost                  daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+FSA3.fsa3_stop_ms.n        daemon/voicego            8            8            8  3                  info   [samples]
+FSA3.fsa3_stop_ms.p50      daemon/voicego        0.300        0.299        0.313  3                  info   [ms]
+FSA3.fsa3_stop_ms.p95      daemon/voicego        0.355        0.335        0.413  3                  info   [ms]
+FSA3.fsa3_stop_ms.p99      daemon/voicego        0.355        0.335        0.413  3 <=            2  PASS   [ms]
+FSA3.fsa3_stop_ms.p999     daemon/voicego        0.355        0.335        0.413  3                  info   [ms]
+FSA3.fsa3_stop_ms.max      daemon/voicego        0.355        0.335        0.413  3                  info   [ms]
+FSA3.lost                  daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+FSA3.sa3_caret_wrong       daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+FSA3.sa3_not_silenced      daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+FP1.ft_failures            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [checks]

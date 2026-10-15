@@ -110,6 +110,8 @@ pub enum DocNotice {
     InDocument { focus: NodeKey, doc: DocId },
     /// The application can host web documents (told once at announce).
     WebApp { app: AppId },
+    /// The browser reported `load-complete` (or a reload) for the document rooted at `node`.
+    Loaded { node: NodeKey },
 }
 
 /// Everything the Reader needs to read and steer one document.

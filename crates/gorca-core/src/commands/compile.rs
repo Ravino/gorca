@@ -3,8 +3,8 @@
 
 use gorca_config::{ChordSpec, ContextName, Diag, DiagMsg, Loaded, Settings, did_you_mean};
 use gorca_input_api::{
-    Bound, Chord, ChordKey, CmdId, CompiledKeymap, KeyRef, KeyResolver, LaneSettings, ModeKind,
-    Modifiers, TableKind, keypad_digit_keysym, keysym_of_code, modifier_keysym, sym,
+    Bound, Chord, ChordKey, CmdId, CompiledKeymap, KeyRef, KeyResolver, KeysymTable, LaneSettings,
+    ModeKind, Modifiers, TableKind, keypad_digit_keysym, keysym_of_code, modifier_keysym, sym,
 };
 
 use super::spec::CommandTable;
@@ -20,6 +20,8 @@ pub struct PlatformFacts {
     pub xkb_options: String,
     /// 24-hour clock (`org.gnome.desktop.interface clock-format`).
     pub clock_24h: bool,
+    /// What the keys of the configured input sources type (K-8b). Empty means US only.
+    pub keysyms: KeysymTable,
 }
 
 impl Default for PlatformFacts {
@@ -28,6 +30,7 @@ impl Default for PlatformFacts {
             repeat_delay_ms: 500,
             xkb_options: String::new(),
             clock_24h: true,
+            keysyms: KeysymTable::us(),
         }
     }
 }
@@ -208,14 +211,16 @@ pub fn compile(loaded: &Loaded, facts: &PlatformFacts, resolver: &dyn KeyResolve
     }
 }
 
-/// The keystroke grabs the non-gorca chords of `mode` need (ADR-0005 K-8a, K-6a; ADR-0006 11).
+/// The keystroke grabs the non-gorca chords of `mode` need (ADR-0005 K-8a, K-6a, K-8b; ADR-0006 11).
 ///
 /// Chords with the gorca modifier need no grab of their own: Mutter swallows every key while a
 /// grabbed modifier is held (KM-4). Every other implemented chord is compiled from
-/// `(keycode, mods)` into the keysym and state Mutter will see. Returns `(plain, exact)`:
-/// plain chords are expanded over the Caps Lock and Num Lock states on the wire; keypad chords
-/// are exact, because the keysym of a keypad key depends on Num Lock and Mutter matches the
-/// exact keysym and state (platform check V-1, 2026-10-14):
+/// `(keycode, mods)` into the keysyms and state Mutter will see. Mutter matches the keysym the
+/// *active layout* produced, so a physical key is grabbed under every keysym it types in any
+/// configured layout (`table`, K-8b): `h` and `Cyrillic_er` for the quick-navigation key H. Returns
+/// `(plain, exact)`: plain chords are expanded over the Caps Lock and Num Lock states on the wire;
+/// keypad chords are exact, because the keysym of a keypad key depends on Num Lock and Mutter
+/// matches the exact keysym and state (platform check V-1, 2026-10-14):
 ///
 /// | Num Lock | plain `KP7` | `Shift+KP7` |
 /// |---|---|---|
@@ -223,39 +228,71 @@ pub fn compile(loaded: &Loaded, facts: &PlatformFacts, resolver: &dyn KeyResolve
 /// | on | `(KP_7, Mod2)`, **not** grabbed: the digit reaches the app | `(KP_Home, Shift+Mod2)`, **not** grabbed |
 ///
 /// Each grabbed variant also exists with Caps Lock set.
-pub fn chord_grabs(km: &CompiledKeymap, mode: ModeKind) -> (Vec<Chord>, Vec<Chord>) {
-    grabs_where(km, mode, |_| true)
+pub fn chord_grabs(
+    km: &CompiledKeymap,
+    mode: ModeKind,
+    table: &KeysymTable,
+) -> (Vec<Chord>, Vec<Chord>) {
+    let g = grabs_where(km, mode, table, |_| true);
+    (g.plain, g.exact)
 }
 
 /// The grabs of the browse keymap (browse design 7.4): `(plain, exact)` chords for every active
 /// browse binding except Escape, which is grabbed only in auto focus mode.
-pub fn browse_grabs(km: &CompiledKeymap) -> (Vec<Chord>, Vec<Chord>) {
+pub fn browse_grabs(km: &CompiledKeymap, table: &KeysymTable) -> (Vec<Chord>, Vec<Chord>) {
     let esc = CoreCmd::BrowseEscape.id();
-    grabs_where(km, ModeKind::Browse, |b| b.cmd != esc)
+    let g = grabs_where(km, ModeKind::Browse, table, |b| b.cmd != esc);
+    (g.plain, g.exact)
 }
 
 /// The chords bound to `browse.escape`, for the auto-focus-mode grab set.
-pub fn escape_grabs(km: &CompiledKeymap) -> Vec<Chord> {
+pub fn escape_grabs(km: &CompiledKeymap, table: &KeysymTable) -> Vec<Chord> {
     let esc = CoreCmd::BrowseEscape.id();
-    grabs_where(km, ModeKind::Browse, |b| b.cmd == esc).0
+    grabs_where(km, ModeKind::Browse, table, |b| b.cmd == esc).plain
+}
+
+/// Grabs the layout union left out because the keysym is also typed by a different, unbound
+/// key of another layout (K-8b): grabbing it would swallow that key for the application.
+pub fn grab_collisions(km: &CompiledKeymap, mode: ModeKind, table: &KeysymTable) -> Vec<Chord> {
+    grabs_where(km, mode, table, |_| true).dropped
+}
+
+/// The result of one grab computation.
+struct Grabs {
+    plain: Vec<Chord>,
+    exact: Vec<Chord>,
+    dropped: Vec<Chord>,
 }
 
 fn grabs_where(
     km: &CompiledKeymap,
     mode: ModeKind,
+    table: &KeysymTable,
     keep: impl Fn(&Bound) -> bool,
-) -> (Vec<Chord>, Vec<Chord>) {
+) -> Grabs {
     let mut plain: Vec<Chord> = Vec::new();
     let mut exact: Vec<Chord> = Vec::new();
-    for (ck, _, bound) in km.active_chords(mode) {
-        if ck.mods.contains(Modifiers::GORCA) || !keep(&bound) {
+    let mut dropped: Vec<Chord> = Vec::new();
+    let active = km.active_chords(mode);
+    // The physical keys this mode binds (with their Shift level): a keysym of another layout
+    // that lands on one of them is safe to grab, the lane resolves it by keycode.
+    let bound: std::collections::HashSet<(u16, bool)> = active
+        .iter()
+        .filter(|(ck, _, b)| !ck.mods.contains(Modifiers::GORCA) && keep(b))
+        .filter_map(|(ck, _, _)| match ck.key {
+            KeyRef::Code(c) => Some((c, ck.mods.without_locks().contains(Modifiers::SHIFT))),
+            KeyRef::Sym(_) => None,
+        })
+        .collect();
+    for (ck, _, bound_cmd) in active {
+        if ck.mods.contains(Modifiers::GORCA) || !keep(&bound_cmd) {
             continue;
         }
         let mods = ck.mods.without_locks();
         let shift = mods.contains(Modifiers::SHIFT);
-        let (code_sym, sym_direct) = match ck.key {
-            KeyRef::Code(code) => (keysym_of_code(code), None),
-            KeyRef::Sym(s) => (None, Some(s)),
+        let (code, code_sym, sym_direct) = match ck.key {
+            KeyRef::Code(code) => (Some(code), keysym_of_code(code), None),
+            KeyRef::Sym(s) => (None, None, Some(s)),
         };
         if let Some(s) = sym_direct {
             plain.push(Chord {
@@ -286,28 +323,48 @@ fn grabs_where(
                 });
             }
         } else {
-            // A letter with Shift types the capital.
-            let keysym = if shift && (0x61..=0x7a).contains(&nav) {
-                nav - 0x20
-            } else if shift && (0x31..=0x39).contains(&nav) {
-                // Shift on the digit row types the symbol, not the digit (US layout: the
-                // static keymap this compiler knows); the lane still matches by keycode.
-                const SHIFTED: [u32; 9] = [0x21, 0x40, 0x23, 0x24, 0x25, 0x5e, 0x26, 0x2a, 0x28];
-                SHIFTED[(nav - 0x31) as usize]
-            } else {
-                nav
-            };
-            plain.push(Chord {
-                keysym,
-                modifiers: mods,
-            });
+            // What the key types with or without Shift in every configured layout; a letter with
+            // Shift types the capital, the digit row its symbol. The lane still matches by keycode.
+            let Some(code) = code else { continue };
+            let baseline = KeysymTable::us_sym(code, shift).unwrap_or(nav);
+            let mut syms = table.syms(code, shift);
+            if !syms.contains(&baseline) {
+                syms.push(baseline);
+            }
+            for keysym in syms {
+                // Browse mode swallows the unbound keys it shares a keysym with: in browse mode
+                // no key is typed text (the fields switch to focus mode, which grabs none of
+                // these), and Shift+2 on the Russian layout (a double quote, also typed by
+                // Shift+apostrophe on the US layout) must stay a quick-navigation key.
+                if keysym != baseline
+                    && mode != ModeKind::Browse
+                    && let Some(other) = table.typed_elsewhere(code, shift, keysym)
+                    && !bound.contains(&(other, shift))
+                {
+                    dropped.push(Chord {
+                        keysym,
+                        modifiers: mods,
+                    });
+                    continue;
+                }
+                plain.push(Chord {
+                    keysym,
+                    modifiers: mods,
+                });
+            }
         }
     }
     plain.sort_by_key(|c| (c.keysym, c.modifiers.bits()));
     plain.dedup();
     exact.sort_by_key(|c| (c.keysym, c.modifiers.bits()));
     exact.dedup();
-    (plain, exact)
+    dropped.sort_by_key(|c| (c.keysym, c.modifiers.bits()));
+    dropped.dedup();
+    Grabs {
+        plain,
+        exact,
+        dropped,
+    }
 }
 
 /// The command a chord is bound to in a context, by name (tests and learn-mode helpers).
@@ -407,9 +464,20 @@ mod tests {
                         "review.start_of_line",
                         "object.next_in_flow",
                         "object.prev_in_flow",
+                        // Orca has no key for frames.
+                        "quicknav.next.frame",
+                        "quicknav.prev.frame",
+                        // Neither source reader binds articles by default.
+                        "quicknav.next.article",
+                        "quicknav.prev.article",
                     ]
                 } else {
-                    &["review.simple_toggle", "review.toggle"]
+                    &[
+                        "review.simple_toggle",
+                        "review.toggle",
+                        "quicknav.next.article",
+                        "quicknav.prev.article",
+                    ]
                 };
                 if by_design.contains(&cmd.name()) {
                     continue;
@@ -527,7 +595,7 @@ mod tests {
 
     fn grabs(text: &str) -> (Vec<Chord>, Vec<Chord>) {
         let c = compiled(text);
-        chord_grabs(&c.keymap, ModeKind::Focus)
+        chord_grabs(&c.keymap, ModeKind::Focus, &KeysymTable::us())
     }
 
     const KP_HOME: u32 = 0xff95;
@@ -684,7 +752,7 @@ mod tests {
     #[test]
     fn browse_grabs_cover_letters_shifted_digits_and_leave_escape_to_focus_mode() {
         let c = compiled("[keyboard]\npreset=\"nvda\"\nlayout=\"desktop\"\n");
-        let (plain, _exact) = browse_grabs(&c.keymap);
+        let (plain, _exact) = browse_grabs(&c.keymap, &KeysymTable::us());
         let has =
             |sym: u32, m: Modifiers| plain.iter().any(|ch| ch.keysym == sym && ch.modifiers == m);
         assert!(has(0x68, Modifiers::empty()), "h");
@@ -701,9 +769,66 @@ mod tests {
             "Escape only in focus mode"
         );
         assert!(
-            escape_grabs(&c.keymap)
+            escape_grabs(&c.keymap, &KeysymTable::us())
                 .iter()
                 .any(|ch| ch.keysym == 0xff1b && ch.modifiers.is_empty())
         );
+    }
+
+    /// A table as libxkbcommon would build it for `us` + `ru` (the letters of the home rows and
+    /// the digit row that the tests need).
+    fn us_ru() -> KeysymTable {
+        let mut t = KeysymTable::us();
+        // Physical H, J, K: Cyrillic er, o, el and their capitals.
+        for (code, lower, upper) in [(43, 0x6d2, 0x6f2), (44, 0x6cf, 0x6ef), (45, 0x6cc, 0x6ec)] {
+            t.insert(code, false, lower);
+            t.insert(code, true, upper);
+        }
+        // Russian Shift+6 types a colon, Shift+4 a semicolon.
+        t.insert(15, true, 0x3a);
+        t.insert(13, true, 0x3b);
+        t
+    }
+
+    #[test]
+    fn russian_layout_grabs_the_cyrillic_keysyms_of_the_quick_nav_keys() {
+        let c = compiled("[keyboard]\npreset=\"nvda\"\nlayout=\"desktop\"\n");
+        let (plain, _) = browse_grabs(&c.keymap, &us_ru());
+        let has =
+            |sym: u32, m: Modifiers| plain.iter().any(|ch| ch.keysym == sym && ch.modifiers == m);
+        assert!(has(0x68, Modifiers::empty()), "h stays grabbed (US layout)");
+        assert!(has(0x6d2, Modifiers::empty()), "Cyrillic_er on the H key");
+        assert!(
+            has(0x6f2, Modifiers::SHIFT),
+            "Shift+H on the Russian layout"
+        );
+        assert!(has(0x48, Modifiers::SHIFT), "and on the US layout");
+        // Shift+6 (heading level 6 backwards) follows the layout: ^ on US, : on Russian.
+        assert!(has(0x5e, Modifiers::SHIFT));
+        assert!(has(0x3a, Modifiers::SHIFT));
+        // Without a table nothing but the US keysyms is grabbed.
+        let (us_only, _) = browse_grabs(&c.keymap, &KeysymTable::us());
+        assert!(!us_only.iter().any(|ch| ch.keysym == 0x6d2));
+        assert!(
+            plain.len() > us_only.len(),
+            "the union is larger than the US set"
+        );
+    }
+
+    #[test]
+    fn browse_mode_keeps_a_keysym_that_another_layouts_unbound_key_also_types() {
+        let c = compiled("[keyboard]\npreset=\"nvda\"\nlayout=\"desktop\"\n");
+        let mut t = us_ru();
+        // A made-up layout types Cyrillic_er on physical Y too; Y is not a browse binding.
+        // Browse mode keeps the grab (Y is swallowed there, which costs nothing: browse mode
+        // types no text), so Shift+2 on the Russian layout can be a quick-navigation key.
+        t.insert(29, false, 0x6d2);
+        let (plain, _) = browse_grabs(&c.keymap, &t);
+        assert!(
+            plain
+                .iter()
+                .any(|ch| ch.keysym == 0x6d2 && ch.modifiers.is_empty())
+        );
+        assert!(grab_collisions(&c.keymap, ModeKind::Browse, &t).is_empty());
     }
 }

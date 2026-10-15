@@ -174,11 +174,14 @@ fn non_negative(v: i32) -> u32 {
 }
 
 /// Events whose node the core may have to call later, so the connector must remember the object
-/// path behind the hashed [`LocalId`]: a focus change, and an item that just became selected
-/// (spoken for applications whose profile says so). Rare, unlike text or property noise.
+/// path behind the hashed [`LocalId`]: a focus change, an item that just became selected
+/// (spoken for applications whose profile says so), and a caret move (the caret of a rich
+/// editable lives on a paragraph the core has never fetched and must read the text of, M3b
+/// CE-1; a caret event on a node whose path is already recorded costs one map lookup). Rare,
+/// unlike text or property noise.
 pub fn needs_path(ev: &NodeEvent) -> Option<NodeKey> {
     match ev {
-        NodeEvent::FocusChanged { node } => Some(*node),
+        NodeEvent::FocusChanged { node } | NodeEvent::CaretMoved { node, .. } => Some(*node),
         NodeEvent::PropertiesChanged { node, mask } if mask.contains(PropMask::SELECTED_NOW) => {
             Some(*node)
         }
@@ -186,7 +189,6 @@ pub fn needs_path(ev: &NodeEvent) -> Option<NodeKey> {
         | NodeEvent::PropertiesChanged { .. }
         | NodeEvent::ChildrenChanged { .. }
         | NodeEvent::TextChanged { .. }
-        | NodeEvent::CaretMoved { .. }
         | NodeEvent::SelectionChanged { .. }
         | NodeEvent::Announcement { .. }
         | NodeEvent::WindowEvent { .. }
@@ -476,7 +478,7 @@ mod tests {
     }
 
     #[test]
-    fn only_focus_and_new_selection_need_a_remembered_path() {
+    fn only_focus_caret_and_new_selection_need_a_remembered_path() {
         let on = body("selected", 1, 0, "i", &0i32.to_le_bytes());
         let off = body("selected", 0, 0, "i", &0i32.to_le_bytes());
         let f = body("focused", 1, 0, "i", &0i32.to_le_bytes());

@@ -1560,21 +1560,41 @@ fn password_text_is_not_in_the_debug_output_of_anything_that_holds_it() {
 }
 
 #[test]
-fn an_app_with_non_scalar_text_offsets_is_not_tracked_and_keeps_the_generic_echo() {
+fn an_app_with_byte_text_offsets_is_not_tracked_and_keeps_the_generic_echo() {
     let mut g = rig();
-    // The connector reported UTF-16 offsets for this application (a capability, not a name).
-    g.r.dir.set_text_scalar(node().app, false);
+    // The connector reported UTF-8 byte offsets for this application (a capability, not a name).
+    g.r.dir
+        .set_text_unit(node().app, gorca_model::TextUnit::Utf8);
     let mut fx = ReaderEffects::new();
     g.r.now = g.now();
     g.r.text_track(&snap(Role::TextEntry, StateSet::EDITABLE), &mut fx);
-    assert!(g.r.text.caret.is_off(), "not tracked until M3b");
+    assert!(
+        g.r.text.caret.is_off(),
+        "byte offsets are the terminal layer's"
+    );
     assert!(fetches(&fx).is_empty());
     assert_eq!(spoken(&g.typed('a')), ["a"], "the generic key echo");
     assert!(spoken(&g.caret(3)).is_empty());
     // Scalar apps are tracked as before, and the flag follows the app's announcement.
-    g.r.dir.set_text_scalar(node().app, true);
+    g.r.dir
+        .set_text_unit(node().app, gorca_model::TextUnit::Scalar);
     g.r.text_track(&snap(Role::TextEntry, StateSet::EDITABLE), &mut fx);
     assert!(!g.r.text.caret.is_off());
+}
+
+#[test]
+fn a_gecko_field_is_tracked_in_the_apps_own_utf16_offsets() {
+    let mut g = rig();
+    g.r.dir
+        .set_text_unit(node().app, gorca_model::TextUnit::Utf16Bom);
+    let mut fx = ReaderEffects::new();
+    g.r.now = g.now();
+    g.r.text_track(&snap(Role::TextEntry, StateSet::EDITABLE), &mut fx);
+    assert!(
+        !g.r.text.caret.is_off(),
+        "UTF-16 offsets are followed as they are"
+    );
+    assert!(!fetches(&fx).is_empty(), "the window is fetched");
 }
 
 #[test]
@@ -1698,4 +1718,518 @@ fn hostile_event_streams_never_panic_and_stay_bounded() {
             }
         }
     }
+}
+
+// ---- Gecko: UTF-16 offsets, phantom U+FEFF, rich editables (M3b) ------------------------------
+
+/// The string Gecko hands out for "a", an emoji, "b", an emoji, "c": a phantom U+FEFF follows
+/// each astral scalar, so every offset is the index of a character of this very string.
+const GECKO: &str = "a\u{1F600}\u{FEFF}b\u{1F600}\u{FEFF}c";
+
+fn gecko_rig() -> Rig {
+    let g = rig();
+    g.r.dir
+        .set_text_unit(node().app, gorca_model::TextUnit::Utf16Bom);
+    g.r.dir.set_text_insert_slack(node().app, 2);
+    g
+}
+
+fn leaf(n: u64) -> NodeKey {
+    NodeKey {
+        local: LocalId(n),
+        ..node()
+    }
+}
+
+impl Rig {
+    fn insert_raw(&mut self, offset: u32, len: u32, text: &str) -> ReaderEffects {
+        self.insert_on(node(), offset, len, text)
+    }
+
+    fn caret_on(&mut self, n: NodeKey, off: u32) -> ReaderEffects {
+        self.msg(ReaderMsg::Text(TextMsg::Caret {
+            node: n,
+            offset: off,
+        }))
+    }
+
+    fn insert_on(&mut self, n: NodeKey, offset: u32, len: u32, text: &str) -> ReaderEffects {
+        self.msg(ReaderMsg::Text(TextMsg::Edit {
+            node: n,
+            delta: gorca_model::TextDelta::Insert {
+                offset,
+                len,
+                text: Some(gorca_model::LazyText {
+                    msg: Arc::from(text.as_bytes()),
+                    field: 0,
+                }),
+            },
+        }))
+    }
+
+    fn delete_on(&mut self, n: NodeKey, offset: u32, len: u32, text: &str) -> ReaderEffects {
+        self.msg(ReaderMsg::Text(TextMsg::Edit {
+            node: n,
+            delta: gorca_model::TextDelta::Delete {
+                offset,
+                len,
+                text: Some(gorca_model::LazyText {
+                    msg: Arc::from(text.as_bytes()),
+                    field: 0,
+                }),
+            },
+        }))
+    }
+
+    fn held(&self, r: std::ops::Range<u32>) -> String {
+        self.r
+            .text
+            .caret
+            .tracked()
+            .and_then(|t| t.win.read(r))
+            .unwrap_or_default()
+    }
+
+    /// Focus a contenteditable region (its text is two embedded objects) and let the browser
+    /// place the caret in its first paragraph `p`, whose text is `text`.
+    fn rich(&mut self, p: NodeKey, text: &str) {
+        self.track(
+            Role::TextEntry,
+            StateSet::EDITABLE | StateSet::FOCUSED | StateSet::MULTILINE,
+            "\u{FFFC}\u{FFFC}",
+            0,
+        );
+        self.advance(20);
+        let fx = self.caret_on(p, 0);
+        assert!(
+            spoken(&fx).is_empty(),
+            "the browser placing the caret is silent: {fx:?}"
+        );
+        let f = fetches(&fx);
+        let (req, op) = f.last().copied().expect("the paragraph's window");
+        assert_eq!(
+            op,
+            TextOp::Window {
+                node: p,
+                around: None,
+                radius: 2048
+            }
+        );
+        let len = u32::try_from(text.chars().count()).unwrap_or(0);
+        let _ = self.reply(
+            req,
+            Reply::Window(TextWindowFill {
+                base: 0,
+                text: Arc::from(text),
+                len,
+                caret: Some(0),
+            }),
+        );
+    }
+}
+
+#[test]
+fn gecko_arrows_over_an_emoji_speak_it_once_and_never_the_phantom() {
+    let mut g = gecko_rig();
+    g.entry(GECKO, 0);
+    let _ = g.key(RIGHT, 0, NONE);
+    assert_eq!(
+        spoken(&g.caret(1)),
+        ["\u{1F600}"],
+        "the emoji, not its phantom"
+    );
+    let _ = g.key(RIGHT, 0, NONE);
+    // Gecko's caret skips the phantom: 1 -> 3.
+    assert_eq!(spoken(&g.caret(3)), ["b"]);
+    let _ = g.key(LEFT, 0, NONE);
+    assert_eq!(spoken(&g.caret(1)), ["\u{1F600}"]);
+    // A caret event that lands on the phantom itself still speaks the emoji.
+    let _ = g.key(RIGHT, 0, NONE);
+    assert_eq!(spoken(&g.caret(2)), ["\u{1F600}"]);
+}
+
+#[test]
+fn gecko_word_units_keep_a_phantom_with_its_emoji() {
+    let mut g = gecko_rig();
+    g.entry("hi \u{1F600}\u{FEFF} there", 0);
+    let _ = g.key(RIGHT, 0, Modifiers::CONTROL);
+    assert_eq!(
+        spoken(&g.caret(3)),
+        ["\u{1F600}"],
+        "an emoji is a word of its own"
+    );
+    let _ = g.key(RIGHT, 0, Modifiers::CONTROL);
+    assert_eq!(spoken(&g.caret(6)), ["there"]);
+}
+
+#[test]
+fn gecko_inserts_come_without_phantoms_and_the_window_adds_them() {
+    let mut g = gecko_rig();
+    g.entry("ab", 2);
+    // An input method commits an emoji: 2 UTF-16 units of text that has one scalar.
+    let _ = g.insert_raw(2, 2, "\u{1F600}");
+    assert_eq!(g.held(0..4), "ab\u{1F600}\u{FEFF}");
+    let _ = g.caret(4);
+    // Typing after it lands at the right offset.
+    let _ = g.typed('c');
+    let _ = g.insert(4, "c");
+    assert_eq!(g.held(0..5), "ab\u{1F600}\u{FEFF}c");
+}
+
+#[test]
+fn gecko_backspace_over_an_emoji_speaks_it() {
+    let mut g = gecko_rig();
+    g.entry(GECKO, 3);
+    let _ = g.key(BACKSPACE, 0, NONE);
+    let fx = g.delete(1, Some("\u{1F600}"), 2);
+    assert_eq!(spoken(&fx), ["\u{1F600}"]);
+    assert_eq!(g.held(0..5), "ab\u{1F600}\u{FEFF}c");
+}
+
+#[test]
+fn gecko_an_unexplained_move_over_one_emoji_is_a_character_not_a_line() {
+    let mut g = gecko_rig();
+    g.entry(GECKO, 1);
+    // A script or the mouse moves the caret from 1 to 3: one emoji.
+    let _ = g.caret(3);
+    let fx = g.tick(10);
+    assert_eq!(spoken(&fx), ["b"], "one step on the line is a character");
+}
+
+#[test]
+fn gecko_selection_of_an_emoji_is_spoken_as_the_emoji() {
+    let mut g = gecko_rig();
+    g.entry(GECKO, 1);
+    let _ = g.key(RIGHT, 0, Modifiers::SHIFT);
+    let f = fetches(&g.caret(3));
+    let (req, op) = f.last().copied().expect("a selection fetch");
+    assert!(matches!(op, TextOp::Selections { .. }), "{op:?}");
+    let fx = g.reply(
+        req,
+        Reply::Selections(TextSelections {
+            ranges: vec![(1..3, Arc::from("\u{1F600}"))],
+        }),
+    );
+    assert_eq!(spoken(&fx), ["\u{1F600} selected"]);
+}
+
+#[test]
+fn a_contenteditable_paragraph_takes_over_the_caret() {
+    let mut g = gecko_rig();
+    let p = leaf(96);
+    g.rich(p, "One \u{1F600}\u{FEFF} two");
+    assert_eq!(g.r.text.caret.tracked().map(|t| t.node), Some(p));
+    assert_eq!(g.r.text.caret.tracked().map(|t| t.root), Some(node()));
+    let _ = g.key(RIGHT, 0, NONE);
+    assert_eq!(spoken(&g.caret_on(p, 1)), ["n"]);
+    // Typing: the key speaks, the insert on the paragraph is the key's.
+    let fx = g.typed('x');
+    assert_eq!(spoken(&fx), ["x"]);
+    let fx = g.insert_on(p, 2, 1, "x");
+    assert!(spoken(&fx).is_empty(), "once: {fx:?}");
+    // Backspace is spoken from the delete on the paragraph.
+    let _ = g.key(BACKSPACE, 0, NONE);
+    let fx = g.delete_on(p, 2, 1, "x");
+    assert_eq!(spoken(&fx), ["x"]);
+    assert_eq!(g.r.text_counters().retargets, 1);
+}
+
+#[test]
+fn a_caret_into_the_next_paragraph_is_spoken_as_the_key_moved_it() {
+    let mut g = gecko_rig();
+    let (p, q) = (leaf(96), leaf(97));
+    g.rich(p, "One two");
+    g.advance(1000);
+    let _ = g.key(DOWN, 0, NONE);
+    let fx = g.caret_on(q, 0);
+    // The new paragraph's window is not here yet: it is fetched, then the line is spoken.
+    assert!(spoken(&fx).is_empty());
+    let f = fetches(&fx);
+    // The new paragraph is unknown to the window: it is filled (the paragraph the caret is in
+    // now), then Down speaks the toolkit's line.
+    assert_eq!(f.len(), 1, "one fetch, not a prefetch and a line: {f:?}");
+    let (req, op) = f[0];
+    assert!(
+        matches!(op, TextOp::Window { node, .. } if node == q),
+        "{op:?}"
+    );
+    let fx = g.reply(
+        req,
+        Reply::Window(TextWindowFill {
+            base: 0,
+            text: Arc::from("Tri chetyre"),
+            len: 11,
+            caret: Some(0),
+        }),
+    );
+    let f = fetches(&fx);
+    let (req, op) = f.last().copied().expect("the line");
+    assert!(
+        matches!(op, TextOp::AtOffset { node, .. } if node == q),
+        "{op:?}"
+    );
+    let fx = g.reply(
+        req,
+        Reply::Unit(TextUnitAt {
+            range: 0..11,
+            text: Arc::from("Tri chetyre"),
+        }),
+    );
+    assert_eq!(spoken(&fx), ["Tri chetyre"]);
+    // Back at the region itself (Ctrl+A puts the caret on it): the region is read again.
+    let fx = g.caret_on(node(), 2);
+    assert!(spoken(&fx).is_empty());
+    assert_eq!(g.r.text.caret.tracked().map(|t| t.node), Some(node()));
+}
+
+#[test]
+fn a_plain_entry_ignores_events_of_other_nodes() {
+    let mut g = gecko_rig();
+    g.entry("hello", 0);
+    let fx = g.caret_on(leaf(78), 0);
+    assert!(spoken(&fx).is_empty());
+    assert_eq!(g.r.text_counters().retargets, 0);
+    assert_eq!(g.r.text.caret.tracked().map(|t| t.node), Some(node()));
+}
+
+#[test]
+fn a_removed_paragraph_gives_the_caret_back_to_the_region() {
+    let mut g = gecko_rig();
+    let p = leaf(96);
+    g.rich(p, "One two");
+    g.r.text_node_gone(Some(p), None);
+    assert_eq!(g.r.text.caret.tracked().map(|t| t.node), Some(node()));
+    g.r.text_node_gone(Some(node()), None);
+    assert!(g.r.text.caret.is_off());
+}
+
+#[test]
+fn info_formatting_asks_for_the_run_under_the_caret_and_speaks_it() {
+    let mut g = gecko_rig();
+    g.entry("hello", 2);
+    let e = g.epoch.advance();
+    let mut fx = ReaderEffects::new();
+    g.r.now = g.now();
+    g.r.text_say_formatting(e, &mut fx);
+    let f = fetches(&fx);
+    assert_eq!(f.len(), 1, "{fx:?}");
+    assert_eq!(
+        f[0].1,
+        TextOp::Format {
+            node: node(),
+            offset: 2
+        }
+    );
+    let fx = g.reply(
+        f[0].0,
+        Reply::Format(gorca_model::TextFormat {
+            family: Some(Arc::from("Noto Sans")),
+            size: Some(Arc::from("12")),
+            bold: true,
+            fg: Some([200, 0, 0]),
+            ..gorca_model::TextFormat::default()
+        }),
+    );
+    assert_eq!(spoken(&fx), ["Noto Sans, 12 point, bold, red text"]);
+}
+
+#[test]
+fn info_formatting_behind_the_last_character_asks_about_the_one_before_it() {
+    let mut g = gecko_rig();
+    g.entry("hello", 5);
+    let mut fx = ReaderEffects::new();
+    g.r.now = g.now();
+    g.r.text_say_formatting(g.epoch.current(), &mut fx);
+    assert_eq!(
+        fetches(&fx)[0].1,
+        TextOp::Format {
+            node: node(),
+            offset: 4
+        }
+    );
+}
+
+#[test]
+fn info_formatting_outside_a_text_field_says_so_and_a_refusal_is_spoken() {
+    let mut g = gecko_rig();
+    let mut fx = ReaderEffects::new();
+    g.r.text_say_formatting(g.epoch.current(), &mut fx);
+    assert_eq!(spoken(&fx), ["not in a text field"]);
+    g.entry("hello", 0);
+    let mut fx = ReaderEffects::new();
+    g.r.now = g.now();
+    g.r.text_say_formatting(g.epoch.current(), &mut fx);
+    let (req, _) = fetches(&fx)[0];
+    let fx = g.msg(ReaderMsg::Text(TextMsg::Fetched {
+        req,
+        epoch: g.epoch.current(),
+        result: Err(gorca_connector_api::BackendError::NotSupported),
+    }));
+    assert_eq!(spoken(&fx), ["formatting not available here"]);
+}
+
+#[test]
+fn a_typed_letter_reported_one_offset_too_far_is_not_spoken_twice() {
+    // Gecko sometimes reports the insert of a letter typed in the middle of a text one offset
+    // too far, with the caret event where the caret really is (observed in the private
+    // Firefox, FE2). The key speaks; the caret event is the insert's own; the window is
+    // dropped because it can no longer be trusted.
+    let mut g = gecko_rig();
+    g.entry("abcdef", 5);
+    let fx = g.typed('w');
+    assert_eq!(spoken(&fx), ["w"]);
+    let _ = g.insert(6, "w");
+    let fx = g.caret(6);
+    assert!(spoken(&fx).is_empty(), "once: {fx:?}");
+    assert_eq!(g.r.text_counters().window_dirty, 1);
+}
+
+#[test]
+fn a_commit_reported_one_past_the_caret_is_spoken_once() {
+    // Gecko in an input, after scripted text: the insert says 4, the caret was at 3 and moves
+    // by the insert's length to 4. The caret move is the insert's own, not a second speech.
+    let mut g = gecko_rig();
+    g.entry("abcdef", 3);
+    let fx = g.insert_raw(4, 1, "\u{436}");
+    let mut said = spoken(&fx);
+    let fx = g.caret(4);
+    said.extend(spoken(&fx));
+    said.extend(spoken(&g.tick(400)));
+    assert_eq!(said, ["\u{436}"]);
+}
+
+#[test]
+fn a_backspace_reported_at_the_caret_is_spoken_once() {
+    // BackSpace at 5: Gecko reports the delete at 5 (not 4), the caret then goes to 4.
+    let mut g = gecko_rig();
+    g.entry("abc\u{436}de", 5);
+    let _ = g.key(BACKSPACE, 0, NONE);
+    let fx = g.delete(5, Some("e"), 1);
+    let mut said = spoken(&fx);
+    let fx = g.caret(4);
+    said.extend(spoken(&fx));
+    said.extend(spoken(&g.tick(400)));
+    assert_eq!(said, ["e"]);
+}
+
+/// Review F-1: a script updates an unrelated text object of the same page (a clock) while the
+/// user is in a contenteditable: the machine stays on the paragraph and says nothing.
+#[test]
+fn unrelated_text_change_does_not_steal_the_rich_editable() {
+    let mut g = gecko_rig();
+    let p = leaf(96);
+    g.rich(p, "One two");
+    g.advance(1000);
+    let clock = leaf(500); // not in the mirror: Lookup::Miss
+    let fx = g.insert_on(clock, 0, 5, "12:01");
+    let fx2 = g.tick(50);
+    let tracked = g.r.text.caret.tracked().map(|t| t.node);
+    assert_eq!(
+        (spoken(&fx), spoken(&fx2), tracked),
+        (Vec::<String>::new(), Vec::<String>::new(), Some(p)),
+        "clock insert retargeted or spoken"
+    );
+}
+
+/// Review F-4 (ADR-0008): a scripted insert one unit after the caret in a toolkit without the
+/// Gecko quirk (a GTK entry), then a mouse click puts the caret right there within 50 ms: the
+/// click's move is still spoken, because only an app whose connector declared the insert-offset
+/// slack gets its following caret move folded into the edit.
+#[test]
+fn scripted_insert_after_caret_does_not_swallow_a_real_move_without_the_quirk() {
+    let mut g = rig();
+    g.entry("hello", 2);
+    g.advance(1000);
+    let _ = g.insert(3, "X");
+    let _ = g.tick(5);
+    g.advance(10);
+    let fx = g.caret(3);
+    let fx2 = g.tick(20);
+    let mut s = spoken(&fx);
+    s.extend(spoken(&fx2));
+    assert!(!s.is_empty(), "uncorrelated move to 3 was swallowed");
+}
+
+/// Review F-3 (captured in FE2 with debug logs): a key whose insert never comes (the page
+/// dropped or refused it) leaves a stale expectation; the next key's insert must still be the
+/// typed key's, not "unexplained text" spoken a second time ~5 ms after the key's own echo.
+#[test]
+fn a_typed_key_the_page_dropped_does_not_double_the_next_one() {
+    let mut g = rig();
+    g.entry("abc", 3);
+    g.advance(1000);
+    let mut said = spoken(&g.typed('d')); // dropped by the page: no insert, no caret move
+    g.advance(180);
+    said.extend(spoken(&g.typed('z')));
+    said.extend(spoken(&g.insert(3, "z")));
+    said.extend(spoken(&g.caret(4)));
+    said.extend(spoken(&g.tick(30)));
+    assert_eq!(said, ["d", "z"], "z once");
+}
+
+/// Captured in FE2 with debug logs: Gecko named an insert offset four units past the caret for
+/// a typed key's own text, then moved the caret by exactly the insert. The caret move is the
+/// key's echo, not a new event to speak (it was read out as a second "space").
+#[test]
+fn a_typed_key_whose_insert_offset_is_far_off_is_still_spoken_once() {
+    let mut g = gecko_rig();
+    g.entry("abcde fgh", 5);
+    g.advance(1000);
+    let mut said = spoken(&g.typed(' '));
+    said.extend(spoken(&g.insert(9, " ")));
+    said.extend(spoken(&g.caret(6)));
+    said.extend(spoken(&g.tick(60)));
+    assert_eq!(said, ["space"], "once");
+    // The window was dropped, not corrupted: the next read is fresh.
+    g.advance(300);
+    let mut said = spoken(&g.typed('x'));
+    said.extend(spoken(&g.insert(6, "x")));
+    said.extend(spoken(&g.caret(7)));
+    said.extend(spoken(&g.tick(60)));
+    assert_eq!(said, ["x"]);
+}
+
+/// R-1: a GTK entry refuses the typed "hello" (maxlength); 500 ms later a script inserts "ll"
+/// elsewhere. The insert is not the keys' echo and must be spoken.
+#[test]
+fn a_scripted_insert_after_refused_keys_is_spoken() {
+    let mut g = rig();
+    g.entry("abc", 3);
+    g.advance(1000);
+    for c in "hello".chars() {
+        let _ = g.typed(c);
+        g.advance(100);
+    }
+    g.advance(500);
+    let mut v = spoken(&g.insert(0, "ll"));
+    v.extend(spoken(&g.tick(400)));
+    assert_eq!(v, ["ll"]);
+}
+
+/// R-2: refused "e", then a script inserts "e" 2 s later: spoken on a default toolkit (1 s TTL).
+#[test]
+fn a_stale_expectation_does_not_eat_a_scripted_insert_two_seconds_later() {
+    let mut g = rig();
+    g.entry("abc", 3);
+    g.advance(1000);
+    let _ = g.typed('e');
+    g.advance(2000);
+    let mut v = spoken(&g.insert(0, "e"));
+    v.extend(spoken(&g.tick(400)));
+    assert!(v.iter().any(|s| s == "e"), "{v:?}");
+}
+
+/// R-2, quirk side: Gecko's stalled page delivers a typed key's insert 2 s late; it is still
+/// the key's echo (nothing spoken twice).
+#[test]
+fn a_gecko_insert_two_seconds_late_is_still_the_typed_keys_echo() {
+    let mut g = gecko_rig();
+    g.entry("abc", 3);
+    g.advance(1000);
+    let mut v = spoken(&g.typed('e'));
+    g.advance(2000);
+    v.extend(spoken(&g.insert(3, "e")));
+    v.extend(spoken(&g.caret(4)));
+    v.extend(spoken(&g.tick(400)));
+    assert_eq!(v, ["e"]);
 }

@@ -1,0 +1,16 @@
+[package]
+name = "gorca-input-xkb"
+description = "Keymap-derived keysym table (K-8b): what the keys of the configured layouts type, read through libxkbcommon loaded at run time."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+gorca-input-api = { workspace = true }
+libc = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true

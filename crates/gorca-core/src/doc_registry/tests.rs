@@ -36,6 +36,7 @@ fn info() -> AppInfo {
         verified_shell: false,
         dump_complete: false,
         text_unit: gorca_model::TextUnit::Utf16Bom,
+        text_insert_slack: 0,
         root: None,
     }
 }
