@@ -181,3 +181,23 @@ with 0 e2_double; the one FCE2 `fc_extra` there was F-3c.
 - **Info (ADR-0008 `disabled_quirks`)**: not implemented. It needs a setting in `gorca-config` (settings, load, schema)
   and a pass-through to the connector's quirk lookup; M6 also edits those config files, so it is a follow-up after M6
   merges (decisions.md).
+
+### Re-review fixes: gate runs (workstation not quiet, every run kept)
+
+Rebased on main `ce548af` (B-1 adopted; only `decisions.md` and agent-memory index conflicted, both sides kept). fmt, clippy
+`--all-targets -D warnings`, `cargo xtask deps`, `cargo test --workspace` (1557 passed, 0 failed) pass.
+
+| Run (3 repeats each) | Head | Load at start | Result |
+|---|---|---|---|
+| `m3b-m7b-rereview-fix-ff` | `0f98a2b` (pre-rebase) | 5 to 7 | all pass except FC1h `fc_extra` max 1 and FC1 `fc_late` max 1 (stray page-delayed speech, +101 ms). FC1h `page_dropped` 0/0/1, FS2 `page_dropped` 0, FE2 `e2_resync` 0 |
+| `m3b-m7b-rereview-fix-ff2` | `0f98a2b` rebased | 9.8 | FC1h `fc_double` max 3, FC1 `fc_late` 1, FS2 `fc_extra` 1 and `fc_late` 1, BAR1 1 failure. `page_dropped` FC1h max 1, FS2 0, `e2_resync` 0. W2b gorca p99 69.8 ms (max 108) |
+| `m3b-m7b-rereview-base-fcs` | `3248cd9`, the same rebase WITHOUT the round-2 fixes (old FS2) | 9.6 | FC1h, FC1, FS2 only: **FS2 `fc_late` max 2 FAIL**. So the FS2 lateness failure under load exists without these fixes |
+| `m3b-m7b-rereview-fix-ff3-aborted` | | 8.4 | aborted: stdout redirect hit a 16 KiB cap and the run produced no table (kept as `reader` log only) |
+| `m3b-m7b-rereview-fix-ff4` | `95790d3` | **16.7 (another agent's work alongside)** | 81 pass, 10 FAIL, all caret-key timing under overload: FC1 (`lost` max 21, `fc_late`, `fc_double` max 17, p99 max 1453 ms), FC1h `fc_extra`/`fc_late`/`page_dropped` (max 17 of 480 keys), FS2 `page_dropped` max 8, FE2 `e2_resync` max 11, W2b `untagged_warm` 1 (a 3 s trial). **Not a valid gate run**; typing gates are all 0: FE2 missing/double/wrong/swallowed, FCE2, FE1 `fc_double`/`fc_late` |
+| strict K2/K3/K4 (`m3b-m7b-rereview-fix-strict-k`) | `2710112` | 10.4 | pass, K2 p99 0.315 ms, K3 1.18 ms, 14 rows pass |
+| strict R1 (`...-strict-r1`) | `2710112` | 11.5 | pass, p99 0.414 ms |
+
+Exemption counts per run (`page_dropped` / `e2_resync`): ff 1/0/0 and 0, ff2 1 and 0, ff4 17 and 8 and 11 (host overloaded; the
+bound of 2 and 3 failed as designed instead of hiding it). The caret-only gates (FC1/FC1h/FS2) do not touch the typing path
+changed here; the same failures appear without the fixes (`base-fcs`). A clean 3-repeat pass of the whole set at the final
+head still needs a quiet host; it was not obtained.
