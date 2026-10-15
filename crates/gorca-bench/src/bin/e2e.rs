@@ -255,9 +255,9 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
             if metric == "page_dropped" {
                 // Keys Firefox dropped before the page (FC1h): a handful is the loaded host, a
                 // stream of them would hide what the reader did with them.
-                row = row
-                    .at_most_in_every_run(2.0)
-                    .note("Keys the page dropped (FC1h, FS2; not scored, speech after them judged)");
+                row = row.at_most_in_every_run(2.0).note(
+                    "Keys the page dropped (FC1h, FS2; not scored, speech after them judged)",
+                );
             }
             if sid == "K4" && metric == "chord_resent_per_10k" {
                 // A chord that raced a pending grab change is pressed again by the harness; more

@@ -158,3 +158,26 @@ with 0 e2_double; the one FCE2 `fc_extra` there was F-3c.
   full repeats at `4bdf6de` and `f4630dd`. Not understood; keep FS2 gated.
 - Firefox's text-changed offsets are unreliable in more ways than the quirk row describes (F-3b); a measured model of
   them (astral characters earlier in the field) would let the row name the real rule instead of "any offset".
+
+## Re-review fixes (round 2, `docs/reports/m3b-m7b-rereview.md`)
+
+- **R-1 fixed.** `ExpectRing::consume_insert` takes `at_caret`: a match behind skipped (stale) keys is accepted only
+  when the insert landed at the caret within the app's `text_insert_slack` and every skipped key is at most
+  `SKIP_MAX_AGE_MS` (1 s) old. The reviewer's probe is now `a_scripted_insert_after_refused_keys_is_spoken` (GTK, core)
+  plus `a_scripted_substring_of_refused_keys_is_not_their_echo` (ring). An unknown caret counts as not at the caret.
+- **R-2 fixed.** `EXPECT_TTL_MS` is 1 s again for every toolkit. The 3 s life (`EXPECT_TTL_QUIRK_MS`) applies only to an
+  app whose connector declares the `gecko-insert-offset` row (`insert_slack > 0`, so still data from the connector; the
+  core has no engine name). Tests `a_stale_expectation_does_not_eat_a_scripted_insert_two_seconds_later` (GTK),
+  `a_gecko_insert_two_seconds_late_is_still_the_typed_keys_echo` (Gecko), and ring-level
+  `the_default_ttl_is_one_second_and_a_quirk_ttl_is_longer`. Using the slack as the "Gecko row" switch is a proxy; a
+  second quirk value would become its own `AppInfo` field.
+- **R-3 accepted, documented** (code comment in `caret.rs` `insert`): in Firefox a typed key's far-offset insert (a refused
+  key plus a scripted append) counts as misplaced at any offset, so it can swallow a non-key mouse caret move to
+  caret+1 within the 50 ms absorb window. Needs a measured Gecko offset rule to narrow.
+- **R-4 fixed.** FS2 now derives what each key must say from the page's own caret events (as FC1h) and reports
+  `page_dropped` (gate at most 2 per repeat, `FC1h` and `FS2`); a dropped key is unscored and logged in the run notes.
+  Exemption counts (`page_dropped`, `e2_resync`) per run are in the results table below. Not done: FE2 still does not
+  score doubles on a resynced action.
+- **Info (ADR-0008 `disabled_quirks`)**: not implemented. It needs a setting in `gorca-config` (settings, load, schema)
+  and a pass-through to the connector's quirk lookup; M6 also edits those config files, so it is a follow-up after M6
+  merges (decisions.md).
