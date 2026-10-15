@@ -13,7 +13,7 @@
 //! | FE1 | printable keys typed into an input | `fe1_ms` key emit to SPEAK (gate p99 3 ms), `lost`, `fc_double` |
 //! | FCE2 | printable keys typed into an empty contenteditable region | `fce2_ms` key emit to SPEAK (gate p99 3 ms), `lost`, `fc_double`, `fc_extra`, `fc_late` |
 //! | FE2 | randomised session: letters, space, BackSpace, input-method commits of an emoji and a Cyrillic letter, arrows | `e2_missing`, `e2_double`, `e2_keyname`, `e2_wrong`, `e2_swallowed`, `ft_failures` (all gate 0), `e2_resync` (actions the page did not apply, not scored; gate at most 3 per repeat) |
-//! | FS2 | Shift+Right and Shift+Left over a word | `fs2_ms` caret event arrival to SPEAK (gate p99 15 ms), `lost` |
+//! | FS2 | Shift+Right and Shift+Left over a word | `fs2_ms` caret event arrival to SPEAK (gate p99 15 ms), `lost`; what each key must say follows from the page's own caret events, `page_dropped` (gate at most 2 per repeat) |
 //! | FSA1 | gorca+Down in a text area | `fsa1_ms` key emit to the first chunk's SPEAK (gate p99 15 ms), `lost` |
 //! | FSA3 | any key during say-all | `fsa3_stop_ms` key emit to the cancel (gate p99 2 ms), `sa3_caret_wrong` (the caret must sit at the start of the chunk being read), `sa3_not_silenced` |
 //! | FCE1 | caret, typing and BackSpace in a contenteditable region | `fce1_ms`, `ft_failures` (gate 0) |
@@ -1092,54 +1092,91 @@ fn fs2(
     out: &mut RunOut,
 ) -> Result<()> {
     let mut f = Ft::open(host, reader, flavor, "fields.html", "M3b Fields", CFG_QUIET)?;
-    f.enter("Select")?;
+    let path = f.enter("Select")?;
     let alphabet: Vec<char> = ('a'..='z').collect();
     let cycles = (size.n / 40).clamp(2, 12);
+    // Each probe remembers its key: what must be said follows from where the page put the
+    // caret (its own caret events), as in FC1h, because a loaded Firefox now and then applies
+    // 19 of 20 Shift+Right and every later label of a fixed script would be off by one.
+    #[derive(Clone, Copy, PartialEq)]
+    enum K {
+        Home,
+        Right,
+        Left,
+    }
     let mut probes: Vec<Probe> = Vec::new();
-    let mut failures = 0u64;
-    for _ in 0..cycles {
-        // To the start (Home speaks "a" or nothing at 0; not scored).
-        let (t, _) = f.key(HOME, 0, 0)?;
+    let mut kinds: Vec<K> = Vec::new();
+    let push = |probes: &mut Vec<Probe>, kinds: &mut Vec<K>, t: u64, k: K| {
         probes.push(Probe {
             t_key: t,
             t_ev: 0,
             expect: String::new(),
         });
+        kinds.push(k);
+    };
+    for _ in 0..cycles {
+        // To the start (Home speaks "a" or nothing at 0; not scored).
+        let (t, _) = f.key(HOME, 0, 0)?;
+        push(&mut probes, &mut kinds, t, K::Home);
         sleep(250);
-        for c in alphabet.iter().take(20) {
+        for _ in 0..20 {
             let (t, _) = f.key(RIGHT, 0, SHIFT)?;
-            probes.push(Probe {
-                t_key: t,
-                t_ev: 0,
-                expect: format!("{c} selected"),
-            });
+            push(&mut probes, &mut kinds, t, K::Right);
             sleep(200);
         }
-        for (i, c) in alphabet.iter().take(20).rev().enumerate() {
+        for _ in 0..20 {
             let (t, _) = f.key(LEFT, 0, SHIFT)?;
-            // Releasing the last one collapses the selection onto the caret: the toolkit says
-            // what it says there; only the changes before it are scored.
-            probes.push(Probe {
-                t_key: t,
-                t_ev: 0,
-                expect: if i < 19 {
-                    format!("{c} unselected")
-                } else {
-                    String::new()
-                },
-            });
+            push(&mut probes, &mut kinds, t, K::Left);
             sleep(200);
         }
         sleep(200);
     }
     sleep(400);
-    let (lat, lost, _) = finish(&mut f, "FS2", &mut probes, true, out);
-    if lost > 0 {
-        failures += 1;
+    let first = probes.first().map_or(0, |p| p.t_key);
+    let carets = f.w.tap.events_since(CARET, &f.w.bus, &path, first);
+    let keys: Vec<u64> = probes.iter().map(|p| p.t_key).collect();
+    let mut dropped = 0u64;
+    let mut prev = 0i32;
+    for (i, p) in probes.iter_mut().enumerate() {
+        let next = keys.get(i + 1).copied().unwrap_or(u64::MAX);
+        let at = carets
+            .iter()
+            .rev()
+            .find(|(t, _)| *t >= p.t_key && *t < next)
+            .map(|(_, at)| *at);
+        match (kinds[i], at) {
+            (K::Home, Some(at)) => prev = at,
+            (K::Home, None) => {}
+            (K::Right, Some(at)) if at > prev => {
+                if let Some(c) = alphabet.get((at - 1) as usize) {
+                    p.expect = format!("{c} selected");
+                }
+                prev = at;
+            }
+            (K::Left, Some(at)) if at < prev => {
+                // Releasing the last one collapses the selection onto the caret: the toolkit
+                // says what it says there; only the changes before it are scored.
+                if at > 0
+                    && let Some(c) = alphabet.get(at as usize)
+                {
+                    p.expect = format!("{c} unselected");
+                }
+                prev = at;
+            }
+            (_, Some(at)) => prev = at,
+            (_, None) => dropped += 1,
+        }
     }
+    if dropped > 0 {
+        out.notes.push(format!(
+            "FS2: {dropped} of {} keys moved no caret in the page (not scored)",
+            probes.len()
+        ));
+    }
+    let (lat, lost, _) = finish(&mut f, "FS2", &mut probes, true, out);
     out.s("fs2_ms", lat);
     out.x("lost", lost as f64, "keys");
-    let _ = failures;
+    out.x("page_dropped", dropped as f64, "keys");
     Ok(())
 }
 

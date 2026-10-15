@@ -120,6 +120,7 @@ fn main() {
             i as u64,
             InsertSource::Unknown,
             true,
+            false,
         ));
     });
     run("char_range, Latin 4k text", samples, |i| {
@@ -175,6 +176,7 @@ fn main() {
             i as u64,
             InsertSource::Unknown,
             true,
+            false,
         ));
         black_box(present(&sp_cyr, at, Say::Char));
         black_box(word_before(&cyr, at as usize));

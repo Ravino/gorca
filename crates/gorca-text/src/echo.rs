@@ -9,11 +9,15 @@
 
 use crate::caret::Say;
 
-/// Expectations live this long; older ones mean the app ignored the key (TE-2). A busy page
-/// (Firefox on a loaded host, seen at 1.3 s) delivers the inserts of everything typed meanwhile
-/// as one coalesced text: the keys were echoed, so that text must still match them. A stale
-/// entry no longer blocks later inserts (`consume_insert` skips entries whose insert never came).
-pub const EXPECT_TTL_MS: u64 = 3000;
+/// Default lifetime of an expectation; older ones mean the app ignored the key (TE-2).
+pub const EXPECT_TTL_MS: u64 = 1000;
+/// Lifetime for an engine whose connector declares the `gecko-insert-offset` quirk row: a busy
+/// page (Firefox on a loaded host, seen at 1.3 s) delivers the inserts of everything typed
+/// meanwhile as one coalesced text, and the keys were echoed, so that text must still match.
+pub const EXPECT_TTL_QUIRK_MS: u64 = 3000;
+/// Keys older than this are never skipped over to reach a later match (see `consume_insert`):
+/// beyond it a refused key and a script's insert of the same text cannot be told apart.
+pub const SKIP_MAX_AGE_MS: u64 = 1000;
 /// Ring capacity (TE-2).
 pub const RING: usize = 16;
 /// Inserted text spoken in full up to this many scalars, then "and N more" (TE-3).
@@ -61,6 +65,7 @@ pub struct ExpectRing {
     buf: [Expect; RING],
     head: usize,
     len: usize,
+    ttl_ms: u64,
 }
 
 impl Default for ExpectRing {
@@ -75,7 +80,13 @@ impl ExpectRing {
             buf: [Expect { ch: '\0', t_ms: 0 }; RING],
             head: 0,
             len: 0,
+            ttl_ms: EXPECT_TTL_MS,
         }
+    }
+
+    /// Set the expectation lifetime (default [`EXPECT_TTL_MS`]; connector quirk data).
+    pub fn set_ttl(&mut self, ttl_ms: u64) {
+        self.ttl_ms = ttl_ms;
     }
 
     pub fn len(&self) -> usize {
@@ -127,9 +138,9 @@ impl ExpectRing {
         n
     }
 
-    /// Drop expectations older than [`EXPECT_TTL_MS`].
+    /// Drop expectations older than the ring's lifetime.
     pub fn expire(&mut self, now_ms: u64) {
-        while self.len > 0 && now_ms.saturating_sub(self.at(0).t_ms) > EXPECT_TTL_MS {
+        while self.len > 0 && now_ms.saturating_sub(self.at(0).t_ms) > self.ttl_ms {
             self.pop_front(1);
         }
     }
@@ -143,7 +154,12 @@ impl ExpectRing {
     /// insert is still the typed keys', not text from elsewhere. Without this the stale front
     /// entry makes every later insert "unexplained" and each following key is spoken twice,
     /// once from the key and once from its insert, until the entry expires.
-    pub fn consume_insert(&mut self, text: &str, now_ms: u64) -> Consume {
+    ///
+    /// That skip is evidence-gated (it is generic, every toolkit): it needs `at_caret` (the
+    /// insert landed at the caret, within the app's slack) and every skipped key at most
+    /// [`SKIP_MAX_AGE_MS`] old. Otherwise a script inserting a substring of refused keys, far
+    /// from the caret or later, would be taken for their echo and go unspoken.
+    pub fn consume_insert(&mut self, text: &str, now_ms: u64, at_caret: bool) -> Consume {
         self.expire(now_ms);
         if text.is_empty() {
             return Consume::Unmatched;
@@ -151,6 +167,12 @@ impl ExpectRing {
         let n = text.chars().count();
         for skip in 0..self.len {
             if skip + n > self.len {
+                break;
+            }
+            if skip > 0
+                && !(at_caret
+                    && (0..skip).all(|i| now_ms.saturating_sub(self.at(i).t_ms) <= SKIP_MAX_AGE_MS))
+            {
                 break;
             }
             if text
@@ -187,8 +209,9 @@ pub fn on_insert<'a>(
     now_ms: u64,
     source: InsertSource,
     inserted_text: bool,
+    at_caret: bool,
 ) -> Option<InsertAction<'a>> {
-    match ring.consume_insert(text, now_ms) {
+    match ring.consume_insert(text, now_ms, at_caret) {
         Consume::Matched { n } => Some(InsertAction::Echoed { n }),
         Consume::Unmatched if !inserted_text || text.is_empty() => None,
         Consume::Unmatched => {
@@ -267,7 +290,10 @@ mod tests {
         for (i, c) in "при".chars().enumerate() {
             r.push(c, 100 + i as u64);
         }
-        assert_eq!(r.consume_insert("при", 200), Consume::Matched { n: 3 });
+        assert_eq!(
+            r.consume_insert("при", 200, false),
+            Consume::Matched { n: 3 }
+        );
         assert!(r.is_empty());
     }
 
@@ -277,18 +303,18 @@ mod tests {
         for c in "abc".chars() {
             r.push(c, 0);
         }
-        assert_eq!(r.consume_insert("a", 10), Consume::Matched { n: 1 });
-        assert_eq!(r.consume_insert("bc", 10), Consume::Matched { n: 2 });
+        assert_eq!(r.consume_insert("a", 10, false), Consume::Matched { n: 1 });
+        assert_eq!(r.consume_insert("bc", 10, false), Consume::Matched { n: 2 });
     }
 
     #[test]
     fn mismatch_consumes_nothing() {
         let mut r = ExpectRing::new();
         r.push('a', 0);
-        assert_eq!(r.consume_insert("ab", 1), Consume::Unmatched);
-        assert_eq!(r.consume_insert("x", 1), Consume::Unmatched);
+        assert_eq!(r.consume_insert("ab", 1, false), Consume::Unmatched);
+        assert_eq!(r.consume_insert("x", 1, false), Consume::Unmatched);
         assert_eq!(r.len(), 1);
-        assert_eq!(r.consume_insert("", 1), Consume::Unmatched);
+        assert_eq!(r.consume_insert("", 1, false), Consume::Unmatched);
     }
 
     #[test]
@@ -297,24 +323,55 @@ mod tests {
         let mut r = ExpectRing::new();
         r.push('d', 0);
         r.push('z', 10);
-        assert_eq!(r.consume_insert("z", 20), Consume::Matched { n: 1 });
+        assert_eq!(r.consume_insert("z", 20, true), Consume::Matched { n: 1 });
         assert!(r.is_empty(), "the stale entry went with the match");
         // Text that is none of the typed keys still consumes nothing.
         r.push('d', 30);
         r.push('z', 40);
-        assert_eq!(r.consume_insert("q", 50), Consume::Unmatched);
+        assert_eq!(r.consume_insert("q", 50, false), Consume::Unmatched);
         assert_eq!(r.len(), 2);
+    }
+
+    #[test]
+    fn a_scripted_substring_of_refused_keys_is_not_their_echo() {
+        // R-1: "hello" refused by the field, then a script inserts "ll" (not at the caret).
+        let mut r = ExpectRing::new();
+        for (i, c) in "hello".chars().enumerate() {
+            r.push(c, i as u64 * 100);
+        }
+        assert_eq!(r.consume_insert("ll", 900, false), Consume::Unmatched);
+        assert_eq!(r.len(), 5, "nothing consumed");
+        // Even at the caret, keys older than the skip cap are not skipped.
+        assert_eq!(r.consume_insert("ll", 1300, true), Consume::Unmatched);
+        // At the caret and fresh, the skip still works.
+        let mut r = ExpectRing::new();
+        r.push('d', 0);
+        r.push('z', 10);
+        assert_eq!(r.consume_insert("z", 500, true), Consume::Matched { n: 1 });
+    }
+
+    #[test]
+    fn the_default_ttl_is_one_second_and_a_quirk_ttl_is_longer() {
+        // R-2: refused "e", a script inserts "e" 2 s later: not the key's echo by default.
+        let mut r = ExpectRing::new();
+        r.push('e', 0);
+        assert_eq!(r.consume_insert("e", 2000, true), Consume::Unmatched);
+        let mut r = ExpectRing::new();
+        r.set_ttl(EXPECT_TTL_QUIRK_MS);
+        r.push('e', 0);
+        assert_eq!(r.consume_insert("e", 2000, true), Consume::Matched { n: 1 });
     }
 
     #[test]
     fn a_stalled_page_delivers_a_long_coalesced_insert_that_still_matches() {
         // 13 keys over 1.4 s, one insert 1.5 s after the first key.
         let mut r = ExpectRing::new();
+        r.set_ttl(EXPECT_TTL_QUIRK_MS);
         for (i, c) in "xdopaprozkfnf".chars().enumerate() {
             r.push(c, i as u64 * 110);
         }
         assert_eq!(
-            r.consume_insert("xdopaprozkfnf", 1500),
+            r.consume_insert("xdopaprozkfnf", 1500, false),
             Consume::Matched { n: 13 }
         );
     }
@@ -335,7 +392,7 @@ mod tests {
             r.push(c, 0);
         }
         assert_eq!(r.forget(2, 10), 2);
-        assert_eq!(r.consume_insert("c", 10), Consume::Matched { n: 1 });
+        assert_eq!(r.consume_insert("c", 10, false), Consume::Matched { n: 1 });
         assert_eq!(r.forget(5, 10), 0);
         r.push('x', 0);
         assert_eq!(r.forget(1, EXPECT_TTL_MS + 5), 0, "expired");
@@ -345,7 +402,10 @@ mod tests {
     fn expectations_expire_after_the_ttl() {
         let mut r = ExpectRing::new();
         r.push('a', 0);
-        assert_eq!(r.consume_insert("a", EXPECT_TTL_MS + 1), Consume::Unmatched);
+        assert_eq!(
+            r.consume_insert("a", EXPECT_TTL_MS + 1, false),
+            Consume::Unmatched
+        );
         assert!(r.is_empty());
         r.push('b', 0);
         r.push('c', EXPECT_TTL_MS - 100);
@@ -360,14 +420,14 @@ mod tests {
             r.push(char::from_u32('a' as u32 + i).unwrap_or('?'), 0);
         }
         assert_eq!(r.len(), RING);
-        assert_eq!(r.consume_insert("e", 0), Consume::Matched { n: 1 });
+        assert_eq!(r.consume_insert("e", 0, false), Consume::Matched { n: 1 });
     }
 
     #[test]
     fn untyped_inserts_are_spoken_and_truncated() {
         let mut r = ExpectRing::new();
         let big: String = "ж".repeat(300);
-        match on_insert(&mut r, &big, 0, InsertSource::Paste, true) {
+        match on_insert(&mut r, &big, 0, InsertSource::Paste, true, false) {
             Some(InsertAction::Speak { text, more, source }) => {
                 assert_eq!(text.chars().count(), MAX_INSERT_SCALARS);
                 assert_eq!(more, 44);
@@ -375,10 +435,13 @@ mod tests {
             }
             other => panic!("{other:?}"),
         }
-        assert_eq!(on_insert(&mut r, "x", 0, InsertSource::Ime, false), None);
+        assert_eq!(
+            on_insert(&mut r, "x", 0, InsertSource::Ime, false, false),
+            None
+        );
         r.push('q', 0);
         assert_eq!(
-            on_insert(&mut r, "q", 1, InsertSource::Unknown, true),
+            on_insert(&mut r, "q", 1, InsertSource::Unknown, true, false),
             Some(InsertAction::Echoed { n: 1 })
         );
     }

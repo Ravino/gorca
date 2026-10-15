@@ -22,7 +22,8 @@ use gorca_speech::How;
 use gorca_text::caret::{self as tc, Presented, Say};
 use gorca_text::coalesce::{Splice, SpliceKind, compose};
 use gorca_text::echo::{
-    ExpectRing, InsertAction, InsertSource, Reason, TypedWordBuffer, on_insert, word_before,
+    EXPECT_TTL_MS, EXPECT_TTL_QUIRK_MS, ExpectRing, InsertAction, InsertSource, Reason,
+    TypedWordBuffer, on_insert, word_before,
 };
 use gorca_text::sel;
 use gorca_text::space::{Lookup, Need, TextSpace};
@@ -912,6 +913,7 @@ impl CaretState {
                     } else if claimed == Claim::No {
                         // Not ours to echo (the generic key echo speaks it), but an insert that
                         // follows is still the typed key's, not text from elsewhere (TE-2).
+                        t.expect.set_ttl(expect_ttl(cx));
                         t.expect.push(ch, cx.now_ms);
                     }
                 }
@@ -1740,6 +1742,7 @@ fn note_hosts(t: &mut Tracked, text: &str) {
 /// TE-1: the typed character is spoken from the key, before any text event.
 fn echo_typed(t: &mut Tracked, ch: char, epoch: Epoch, claimed: Claim, cx: &mut Ctx<'_>) {
     if claimed == Claim::No {
+        t.expect.set_ttl(expect_ttl(cx));
         t.expect.push(ch, cx.now_ms);
     }
     if cx.cfg.typed_words {
@@ -1765,6 +1768,17 @@ fn echo_typed(t: &mut Tracked, ch: char, epoch: Epoch, claimed: Claim, cx: &mut 
 }
 
 /// An insert in the tracked object (TE-2, TE-3, TE-4).
+/// Expectation lifetime: the long one only for an engine whose connector declares the
+/// `gecko-insert-offset` quirk row (slack > 0): Firefox on a loaded host stalls for >1 s and
+/// then delivers the typed keys' inserts coalesced. Every other toolkit keeps 1 s.
+fn expect_ttl(cx: &Ctx<'_>) -> u64 {
+    if cx.insert_slack > 0 {
+        EXPECT_TTL_QUIRK_MS
+    } else {
+        EXPECT_TTL_MS
+    }
+}
+
 fn insert(
     t: &mut Tracked,
     offset: u32,
@@ -1798,7 +1812,18 @@ fn insert(
         // A block was added to a rich editable: the window knows, there is nothing to say.
         return;
     }
-    let action = on_insert(&mut t.expect, &s, cx.now_ms, source, cx.cfg.inserted_text);
+    // The skip over stale keys (a refused key before a typed one) needs positional evidence:
+    // the insert lands at the caret, within the app's slack.
+    let at_caret = caret_before.is_some_and(|c| offset.abs_diff(c) <= cx.insert_slack);
+    t.expect.set_ttl(expect_ttl(cx));
+    let action = on_insert(
+        &mut t.expect,
+        &s,
+        cx.now_ms,
+        source,
+        cx.cfg.inserted_text,
+        at_caret,
+    );
     if !matches!(action, Some(InsertAction::Echoed { .. })) {
         // Text that is none of the typed keys' means they will not come: forget them.
         t.expect.clear();
@@ -1811,6 +1836,10 @@ fn insert(
     // event where the caret really went, so the insert's own caret move is not spoken a second
     // time. A typed key's insert, explained by the key itself, moves the caret by exactly its
     // length whatever offset the application names; any other insert only within the slack.
+    //
+    // Accepted limit (R-3): because an echoed insert counts as misplaced at any offset, a typed
+    // key's far-offset insert (a refused key plus a scripted append) can swallow a non-key
+    // mouse caret move to caret+1 arriving within the 50 ms absorb window. Firefox only.
     let echoed = matches!(action, Some(InsertAction::Echoed { .. }));
     let misplaced = cx.insert_slack > 0
         && !paste

@@ -2188,3 +2188,48 @@ fn a_typed_key_whose_insert_offset_is_far_off_is_still_spoken_once() {
     said.extend(spoken(&g.tick(60)));
     assert_eq!(said, ["x"]);
 }
+
+/// R-1: a GTK entry refuses the typed "hello" (maxlength); 500 ms later a script inserts "ll"
+/// elsewhere. The insert is not the keys' echo and must be spoken.
+#[test]
+fn a_scripted_insert_after_refused_keys_is_spoken() {
+    let mut g = rig();
+    g.entry("abc", 3);
+    g.advance(1000);
+    for c in "hello".chars() {
+        let _ = g.typed(c);
+        g.advance(100);
+    }
+    g.advance(500);
+    let mut v = spoken(&g.insert(0, "ll"));
+    v.extend(spoken(&g.tick(400)));
+    assert_eq!(v, ["ll"]);
+}
+
+/// R-2: refused "e", then a script inserts "e" 2 s later: spoken on a default toolkit (1 s TTL).
+#[test]
+fn a_stale_expectation_does_not_eat_a_scripted_insert_two_seconds_later() {
+    let mut g = rig();
+    g.entry("abc", 3);
+    g.advance(1000);
+    let _ = g.typed('e');
+    g.advance(2000);
+    let mut v = spoken(&g.insert(0, "e"));
+    v.extend(spoken(&g.tick(400)));
+    assert!(v.iter().any(|s| s == "e"), "{v:?}");
+}
+
+/// R-2, quirk side: Gecko's stalled page delivers a typed key's insert 2 s late; it is still
+/// the key's echo (nothing spoken twice).
+#[test]
+fn a_gecko_insert_two_seconds_late_is_still_the_typed_keys_echo() {
+    let mut g = gecko_rig();
+    g.entry("abc", 3);
+    g.advance(1000);
+    let mut v = spoken(&g.typed('e'));
+    g.advance(2000);
+    v.extend(spoken(&g.insert(3, "e")));
+    v.extend(spoken(&g.caret(4)));
+    v.extend(spoken(&g.tick(400)));
+    assert_eq!(v, ["e"]);
+}
