@@ -94,3 +94,70 @@ passed alone at that head, and the final run above is clean.
   applications; sized for ~30 apps x 4 extensions with a wide margin, not measured on a real desktop.
 - Disk was at 95 to 98 % during the work (shared `target/` dirs of other worktrees are 15 to 57 GB); I
   deleted only my own incremental directory.
+
+## 7. Review fixes (round 1, `docs/reports/m5-review.md`)
+
+Code head for the numbers: `6c3db08`. Host: Core Ultra 9 285H, RT kernel 7.1.8, governor performance,
+load average 10 to 24 (busy workstation; per-run load in each result header).
+
+| Finding | Status | What changed |
+|---|---|---|
+| H-1 alias bypass | fixed | `compile_with` compares `(ChordKey, presses)` after the resolver (`Mentioned` set); the reviewer's probe is the test `extension_alias_chords_never_shadow_core_chords` (was 72 replacements over 20 chords, now 0) |
+| M-1 host work not metered | fixed | wasmtime hostcall fuel caps every lift (arguments and hook results) at 64 KiB before the copy; a per-call host-work meter (about 1 unit per byte, 300 per call, 1M units per ms of CPU limit) traps loops of host calls; new guest memory is capped at 1 MiB per non-command hook call (touching 16 MiB of fresh pages cost the Reader about 5 ms and fuel does not see it); `present` backstop 3x (6 ms) with a 1 ms epoch tick |
+| M-2 per-slot allowance | fixed | `Slot::call` and `health` honour the extension-wide disable; test updated (it asserted the old behaviour) |
+| M-3 silent busy drops | fixed | `busy_skips` and the new `busy_suppressed` are counted, logged per slot at most every 10 s, summarised when the host stops and printed by x1; busy semantics: a busy slot repeats its last decision for that event kind (suppress/rewrite -> suppress, pass -> pass) |
+| L-2 `with_ext` | fixed | `tracing::error!` and `debug_assert!` if the shared state was already cloned |
+| L-3 disabled notice | fixed | `ExtSink::notice`; the background sink retries on a short-lived thread (at most 4) when the lane is full |
+| L-4 docs | fixed | WIT header and `busy_skips` comment |
+| M-4 scope | deferred, recorded | `ext-gnome-shell` and `ext-vte` ports wait for the M4b and M6 merges (`docs/decisions.md`) |
+
+Busy semantics, why: a busy slot means a command (up to 20 ms CPU) or a rebuild holds the lock. Waiting
+would block the app actor; falling back to Pass would let the core say what the extension has been
+replacing, next to the extension's own command speech (double speech). Repeating the last decision is
+non-blocking and cannot add speech. Limit, stated plainly: events that arrive while the slot is busy
+are not delivered to the extension, so a stateful extension can miss them; `busy_skips` makes that
+visible. A bounded replay queue is not built.
+
+### Hostile worst case (corrects the 0.35 ms claim)
+
+The earlier "0.35 ms worst" covered a bare counting loop only. The reviewer measured a hostile `present`
+holding the Reader for 6.5 to 6.8 ms. After the fix (`tests/hostile.rs`, release, 20 fresh applications
+per attack, three runs, `bench/results/ext-host/20261016-m5-fix-hostile.txt`, load 24 to 14):
+
+| Attack in `present` | max hold of the calling thread |
+|---|---|
+| 16 MiB `log` argument forever | 35 to 72 us |
+| 2000 segments aliasing one 16 MiB string | 33 to 43 us |
+| `log` of the largest accepted string (60 KiB) forever | 123 to 141 us |
+| `get_node` forever | 0.30 to 0.68 ms |
+| worst of all | 0.30 / 0.68 / 0.41 ms |
+
+Before the memory-growth cap the same attacks sat at 6.3 to 7.2 ms (the 6 ms backstop; measured in this
+session at load 14, kept in this report, not in a file). Remaining unmetered cost: a legitimate-looking
+hook can still spend its full 2 ms of fuel plus the host's lowering of its node argument; the debug
+build of the test only checks a 25 ms bound.
+
+### Gates
+
+- `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo xtask deps`
+  (35 crates, 301 packages): ok. `cargo test --workspace --no-fail-fast`: 1620 passed, 0 failed.
+- Strict e2e, `--impersonate-orca`, 3 repeats, committed clean head `6c3db08`
+  (`bench/results/e2e/m5fix-{noext,ext}/` for K2/K3/K4; `m5fix-r1-*` for R1):
+
+| Gate | no ext | ext-test loaded |
+|---|---|---|
+| K2 p99 ms (gate 5) | 0.359 | 0.429 |
+| K3 p99 ms (gate 15) | 1.208 | 1.173 |
+| K4 app_lost / app_doubled / chord_leaked (10,000 switches x3) | 0 / 0 / 0 | 0 / 0 / 0 |
+| K2/K3 lost, not_consumed | 0 | 0 |
+| R1 p99 ms (gate 3) | 0.408 (rerun `m5fix-r1-noext2`) | 0.428 |
+
+  The first R1 run without extensions (`m5fix-r1-noext`, load 15) FAILED (p99 3.11 ms, one lost in one
+  repeat) and is kept as is: it ran with the extension host absent, so it is host noise at that moment;
+  the immediate rerun at load 11 passed (0.408). The first K2/K3/K4 invocations passed
+  `--reader-env` once with four values, which the harness reads as one, so R1 was skipped there; R1 was
+  rerun with one `--reader-env` per variable.
+- X1 (`bench/results/ext-host/20261016-m5-fix-x1.txt`, load 11): WASM `on_event` p50 119 ns / p99 172 ns,
+  `present` none 129 / 159 ns, some 250 / 324 ns, rewrite 226 / 323 ns; storms 1/4/8 threads p99 181 /
+  265 / 454 ns, faults 0, `busy_skips` 0; crash reset + next call 58 us p50; loop interrupt + reset
+  224 us p50. Gate (p99 <= 100 us) holds with margin.
