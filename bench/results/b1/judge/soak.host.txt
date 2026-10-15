@@ -1,0 +1,2 @@
+soak start 2026-10-14T05:24:05Z load 9.01 6.75 6.18 7/2727 2177828; A and C soaks run concurrently (RSS gate only; latency rows from soak are not used)
+soak end 2026-10-14T06:03:00Z load 6.83 5.78 6.01 6/2314 2262030

@@ -1,0 +1,27 @@
+== e2e m3-flakeS-old-1: reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/flake/gorca-old backend=voicego repeats=2 load=7.66 7.54 7.30 26/2457 2711415
+2026-10-14T09:10:12.297059Z  INFO gorca_daemon::input: input lane statistics keys=4142 ambiguous=0 band_forks=0
+2026-10-14T09:11:12.297082Z  INFO gorca_daemon::input: input lane statistics keys=8460 ambiguous=0 band_forks=0
+2026-10-14T09:12:12.303066Z  INFO gorca_daemon::input: input lane statistics keys=12686 ambiguous=0 band_forks=0
+2026-10-14T09:13:12.303085Z  INFO gorca_daemon::input: input lane statistics keys=16922 ambiguous=0 band_forks=0
+2026-10-14T09:14:04.504822Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 10029, replaced: 1, stale_dropped: 1, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-14T09:15:03.943733Z  INFO gorca_daemon::input: input lane statistics keys=3726 ambiguous=0 band_forks=0
+2026-10-14T09:16:03.957504Z  INFO gorca_daemon::input: input lane statistics keys=7888 ambiguous=0 band_forks=0
+2026-10-14T09:17:03.956154Z  INFO gorca_daemon::input: input lane statistics keys=12062 ambiguous=0 band_forks=0
+2026-10-14T09:18:03.956041Z  INFO gorca_daemon::input: input lane statistics keys=16052 ambiguous=0 band_forks=0
+2026-10-14T09:19:03.956082Z  INFO gorca_daemon::input: input lane statistics keys=20316 ambiguous=0 band_forks=0
+2026-10-14T09:19:05.858193Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 10163, replaced: 4, stale_dropped: 1, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+== wrote bench/results/e2e/m3-flakeS-old-1/20261014T091906Z.{json,txt}
+== 2 gate(s) FAILED
+== e2e m3-flakeS-old-2: reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/flake/gorca-old backend=voicego repeats=2 load=23.66 22.47 20.20 14/2941 2765519
+2026-10-14T09:39:53.366957Z  INFO gorca_daemon::input: input lane statistics keys=4126 ambiguous=0 band_forks=0
+2026-10-14T09:40:53.366597Z  INFO gorca_daemon::input: input lane statistics keys=8444 ambiguous=0 band_forks=0
+2026-10-14T09:41:53.368663Z  INFO gorca_daemon::input: input lane statistics keys=12660 ambiguous=0 band_forks=0
+2026-10-14T09:42:53.366948Z  INFO gorca_daemon::input: input lane statistics keys=16840 ambiguous=0 band_forks=0
+2026-10-14T09:43:44.151725Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 10033, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-14T09:44:43.750178Z  INFO gorca_daemon::input: input lane statistics keys=3704 ambiguous=0 band_forks=0
+2026-10-14T09:45:43.750053Z  INFO gorca_daemon::input: input lane statistics keys=7964 ambiguous=0 band_forks=0
+2026-10-14T09:46:43.749348Z  INFO gorca_daemon::input: input lane statistics keys=12146 ambiguous=0 band_forks=0
+2026-10-14T09:47:43.749795Z  INFO gorca_daemon::input: input lane statistics keys=16274 ambiguous=0 band_forks=0
+2026-10-14T09:48:42.866829Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 10576, replaced: 14, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+== wrote bench/results/e2e/m3-flakeS-old-2/20261014T094843Z.{json,txt}
+== 2 gate(s) FAILED

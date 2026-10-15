@@ -1,0 +1,58 @@
+== a/walk/0
+  files      hit-rate=0.695 | hit: n=444 p50=0.25 p99=0.38 max=0.54 | miss_reply: n=195 p50=1.42 p99=4.21 max=5.69
+  gtk3       hit-rate=0.000 | miss_reply: n=30 p50=1.39 p99=2.38 max=2.38
+  hung       hit-rate=0.000 | miss_reply: n=1 p50=0.93 p99=0.93 max=0.93
+  settings   hit-rate=0.280 | hit: n=275 p50=0.21 p99=0.45 max=1.53 | miss_reply: n=704 p50=1.62 p99=4.31 max=26.88 | stale: n=2 p50=0.17 p99=0.27 max=0.27
+  shell      hit-rate=0.000 | miss_reply: n=12 p50=1.10 p99=1.56 max=1.56
+  calls per app: {"files": 3780, "hung": 6, "settings": 7713, "shell": 60, "storm": 3}
+== a/walk/1
+  files      hit-rate=0.695 | hit: n=444 p50=0.24 p99=0.40 max=0.43 | miss_reply: n=195 p50=1.37 p99=3.30 max=4.07
+  gtk3       hit-rate=0.000 | miss_reply: n=30 p50=1.47 p99=2.77 max=2.77
+  hung       hit-rate=0.000 | miss_reply: n=1 p50=0.96 p99=0.96 max=0.96
+  settings   hit-rate=0.280 | hit: n=275 p50=0.16 p99=0.36 max=0.43 | miss_reply: n=704 p50=1.59 p99=3.78 max=4.23 | stale: n=2 p50=0.23 p99=0.35 max=0.35
+  shell      hit-rate=0.000 | miss_reply: n=12 p50=1.04 p99=1.47 max=1.47
+  calls per app: {"files": 3780, "hung": 6, "settings": 7713, "shell": 60, "storm": 3}
+== a/walk/2
+  files      hit-rate=0.695 | hit: n=444 p50=0.23 p99=0.42 max=4.85 | miss_reply: n=195 p50=1.33 p99=3.15 max=3.38
+  gtk3       hit-rate=0.000 | miss_reply: n=30 p50=1.45 p99=2.77 max=2.77
+  hung       hit-rate=0.000 | miss_reply: n=1 p50=0.88 p99=0.88 max=0.88
+  settings   hit-rate=0.279 | hit: n=274 p50=0.17 p99=0.35 max=0.36 | miss_reply: n=705 p50=1.56 p99=3.96 max=7.80 | stale: n=2 p50=0.23 p99=0.34 max=0.34
+  shell      hit-rate=0.000 | miss_reply: n=12 p50=1.10 p99=1.57 max=1.57
+  calls per app: {"files": 3780, "hung": 6, "settings": 7717, "shell": 60, "storm": 3}
+== c/walk/0
+  files      hit-rate=0.991 | hit: n=633 p50=0.22 p99=0.37 max=0.45 | miss_reply: n=6 p50=0.93 p99=1.27 max=1.27
+  gtk3       hit-rate=0.967 | hit: n=29 p50=0.26 p99=0.32 max=0.32 | miss_reply: n=1 p50=0.78 p99=0.78 max=0.78
+  hung       hit-rate=0.000 | miss_reply: n=1 p50=0.79 p99=0.79 max=0.79
+  settings   hit-rate=0.839 | hit: n=823 p50=0.21 p99=0.40 max=0.46 | miss_reply: n=158 p50=1.60 p99=3.90 max=4.14
+  shell      hit-rate=0.500 | hit: n=6 p50=0.13 p99=0.23 max=0.23 | miss_reply: n=6 p50=1.13 p99=1.57 max=1.57
+  calls per app: {"files": 70566, "hung": 6, "settings": 86303, "shell": 14433, "storm": 3}
+== c/walk/1
+  files      hit-rate=0.989 | hit: n=632 p50=0.24 p99=0.34 max=0.38 | miss_reply: n=7 p50=0.99 p99=1.29 max=1.29
+  gtk3       hit-rate=0.967 | hit: n=29 p50=0.25 p99=0.33 max=0.33 | miss_reply: n=1 p50=0.79 p99=0.79 max=0.79
+  hung       hit-rate=0.000 | miss_reply: n=1 p50=0.88 p99=0.88 max=0.88
+  settings   hit-rate=0.839 | hit: n=823 p50=0.27 p99=1.45 max=3.05 | miss_reply: n=158 p50=1.62 p99=4.30 max=6.43
+  shell      hit-rate=0.500 | hit: n=6 p50=0.20 p99=0.24 max=0.24 | miss_reply: n=6 p50=1.13 p99=1.58 max=1.58
+  calls per app: {"files": 70865, "hung": 6, "settings": 85721, "shell": 14433, "storm": 3}
+== c/walk/2
+  files      hit-rate=0.989 | hit: n=632 p50=0.28 p99=1.49 max=6.46 | miss_reply: n=7 p50=1.23 p99=2.42 max=2.42
+  gtk3       hit-rate=0.967 | hit: n=29 p50=0.27 p99=0.47 max=0.47 | miss_reply: n=1 p50=0.92 p99=0.92 max=0.92
+  hung       hit-rate=0.000 | miss_reply: n=1 p50=0.98 p99=0.98 max=0.98
+  settings   hit-rate=0.838 | hit: n=822 p50=0.25 p99=0.67 max=5.24 | miss_reply: n=159 p50=1.68 p99=5.93 max=8.08
+  shell      hit-rate=0.500 | hit: n=6 p50=0.22 p99=0.25 max=0.25 | miss_reply: n=6 p50=1.08 p99=2.05 max=2.05
+  calls per app: {"files": 70780, "hung": 6, "settings": 86215, "shell": 14433, "storm": 3}
+== r0/walk/0
+  files      hit-rate=0.695 | hit: n=444 p50=0.23 p99=0.34 max=0.42 | miss_reply: n=195 p50=1.36 p99=3.52 max=5.10
+  gtk3       hit-rate=0.000 | miss_reply: n=30 p50=1.33 p99=2.44 max=2.44
+  hung       hit-rate=0.000 | miss_reply: n=1 p50=0.85 p99=0.85 max=0.85
+  settings   hit-rate=0.280 | hit: n=275 p50=0.16 p99=0.45 max=1.31 | miss_reply: n=705 p50=1.51 p99=3.73 max=4.35 | stale: n=1 p50=0.25 p99=0.25 max=0.25
+  shell      hit-rate=0.000 | miss_reply: n=12 p50=0.99 p99=1.46 max=1.46
+  calls per app: {"files": 3780, "hung": 6, "settings": 6667, "shell": 60, "storm": 3}
+  info B1-L1c.p50                       1.5496   info B1-L1h.p50                       0.2378   info calls_per_focus                  6.9525  <- a/0
+  info B1-L1c.p50                       1.5126   info B1-L1h.p50                       0.2192   info calls_per_focus                  6.9525  <- a/1
+  info B1-L1c.p50                       1.4753   info B1-L1h.p50                       0.2149   info calls_per_focus                  6.9549  <- a/2
+  info B1-L1c.p50                       1.5617   info B1-L1h.p50                       0.2133   info calls_per_focus                103.0132  <- c/0
+  info B1-L1c.p50                       1.5761   info B1-L1h.p50                       0.2537   info calls_per_focus                102.8431  <- c/1
+  info B1-L1c.p50                       1.6679   info B1-L1h.p50                       0.2654   info calls_per_focus                103.0890  <- c/2
+  info B1-L1c.p50                       1.4736   info B1-L1h.p50                       0.2101   info calls_per_focus                  6.3235  <- r0/0
+  info B1-L1c.p50                       1.5182   info B1-L1h.p50                       0.2302   info calls_per_focus                  6.3235  <- r0/1
+  info B1-L1c.p50                       1.5392   info B1-L1h.p50                       0.2314   info calls_per_focus                  6.3235  <- r0/2

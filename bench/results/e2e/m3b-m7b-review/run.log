@@ -1,0 +1,84 @@
+load_start 15.53 12.47 10.98 4/2690 1101180
+== host: load 15.53 12.47 10.98 4/2691 1101187 ==
+   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a702d0a17a733562c/crates/gorca-bench)
+   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a702d0a17a733562c/crates/gorca-daemon)
+    Finished `release` profile [optimized + debuginfo] target(s) in 15.11s
+private compositor: /tmp/gorca-m7c.58iPlx/x/gorca-m7-1101181
+== reader <repo>/.claude/worktrees/agent-a702d0a17a733562c/target/release/gorca built from 00bdce8, tree at 00bdce8
+== e2e m3b-m7b-review: reader=daemon:<repo>/.claude/worktrees/agent-a702d0a17a733562c/target/release/gorca backend=voicego repeats=3 load=14.88 12.56 11.04 2/2859 1102101
+-- round 1/3 FE2 (load 14.88 12.56 11.04 2/2859 1102101)
+kill: (-1102139): No such process
+-- round 1/3 FCE2 (load 9.27 11.44 10.90 1/2829 1103984)
+kill: (-1104022): No such process
+-- round 1/3 FC1h (load 7.14 10.31 10.55 2/2783 1104929)
+kill: (-1104964): No such process
+-- round 2/3 FCE2 (load 7.62 9.69 10.31 1/2811 1105907)
+kill: (-1105945): No such process
+-- round 2/3 FC1h (load 7.33 9.20 10.09 1/2782 1106834)
+kill: (-1106869): No such process
+-- round 2/3 FE2 (load 7.37 8.64 9.80 1/2769 1107765)
+kill: (-1107801): No such process
+-- round 3/3 FC1h (load 8.58 8.46 9.54 3/2812 1109457)
+kill: (-1109491): No such process
+-- round 3/3 FE2 (load 7.36 8.19 9.36 7/2772 1111544)
+kill: (-1111590): No such process
+-- round 3/3 FCE2 (load 8.57 8.42 9.24 6/2836 1125654)
+kill: (-1125691): No such process
+# e2e m3b-m7b-review
+# utc=2026-10-15T10:22:35Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=6.49 7.92 9.00 5/2833 1127658
+# git_rev=00bdce8
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m3b-m7b-review
+# reader=daemon:<repo>/.claude/worktrees/agent-a702d0a17a733562c/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=6.49 7.92 9.00 9/2833 1127655
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=FE2 first actions: Letter('w') at caret 0 of 0 | Left at caret 1 of 1 | Cyr at caret 0 of 1 | Space at caret 1 of 2 | Letter('q') at caret 2 of 3 | Letter('c') at caret 3 of 4 | Letter('m') at caret 4 of 5 | Back at caret 5 of 6 | Letter('z') at caret 4 of 5 | Letter('w') at caret 5 of 6 | Left at caret 6 of 7 | Letter('g') at caret 5 of 7 | Space at caret 6 of 8 | Letter('q') at caret 7 of 9
+# note1=FE2 first actions: Letter('t') at caret 0 of 0 | Back at caret 1 of 1 | Letter('o') at caret 0 of 0 | End at caret 1 of 1 | Letter('x') at caret 1 of 1 | Back at caret 2 of 2 | Letter('k') at caret 1 of 1 | Right at caret 2 of 2 | Letter('e') at caret 2 of 2 | Left at caret 3 of 3 | Letter('a') at caret 2 of 3 | Letter('d') at caret 3 of 4 | End at caret 4 of 5 | Letter('f') at caret 5 of 5
+# note2=FE2 #260 Space: wanted "space" once, said ["space", "space"]; recent: Home at caret 149 of 150 | Home at caret 0 of 150 | Back at caret 0 of 150 | Space at caret 0 of 150
+# note3=FE2 first actions: Letter('n') at caret 0 of 0 | Back at caret 1 of 1 | Letter('h') at caret 0 of 0 | Letter('p') at caret 1 of 1 | Space at caret 2 of 2 | Letter('h') at caret 3 of 3 | Emoji at caret 4 of 4 | Space at caret 5 of 5 | Right at caret 6 of 6 | Home at caret 6 of 6 | Letter('n') at caret 0 of 6 | End at caret 1 of 7 | End at caret 7 of 7 | Back at caret 7 of 7
+
+metric                     bus                median          min          max  n op    threshold  res   note
+FE2.e2_double              daemon/voicego            0            0            1  3 <=            0  FAIL  gated on the max over repeats [actions]
+FE2.e2_keyname             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_missing             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_wrong               daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [actions]
+FE2.ft_failures            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [checks]
+FCE2.fce2_ms.n             daemon/voicego          600          600          600  3                  info   [samples]
+FCE2.fce2_ms.p50           daemon/voicego        0.287        0.285        0.294  3                  info   [ms]
+FCE2.fce2_ms.p95           daemon/voicego        0.385        0.379        0.416  3                  info   [ms]
+FCE2.fce2_ms.p99           daemon/voicego        0.437        0.436        0.496  3 <=            3  PASS   [ms]
+FCE2.fce2_ms.p999          daemon/voicego        0.522        0.479        0.551  3                  info   [ms]
+FCE2.fce2_ms.max           daemon/voicego        0.527        0.504        0.566  3                  info   [ms]
+FCE2.fc_double             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FCE2.fc_extra              daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+FCE2.lost                  daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FC1h.fc1h_ms.n             daemon/voicego          480          480          480  3                  info   [samples]
+FC1h.fc1h_ms.p50           daemon/voicego        0.126        0.124        0.139  3                  info   [ms]
+FC1h.fc1h_ms.p95           daemon/voicego        0.193        0.176        0.206  3                  info   [ms]
+FC1h.fc1h_ms.p99           daemon/voicego        0.236        0.199        0.282  3 <=            3  PASS   [ms]
+FC1h.fc1h_ms.p999          daemon/voicego        0.414        0.298        3.276  3                  info   [ms]
+FC1h.fc1h_ms.max           daemon/voicego        0.414        0.298        3.276  3                  info   [ms]
+FC1h.fc_double             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FC1h.fc_extra              daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+FC1h.fc_swallowed          daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FC1h.lost                  daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FC1h.page_dropped          daemon/voicego            0            0            0  3                  info   [keys]
+
+== wrote bench/results/e2e/m3b-m7b-review/20261015T102235Z.{json,txt}
+== 1 gate(s) FAILED
+exit 0 load_end 6.49 7.92 9.00 1/2695 1127748

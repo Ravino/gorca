@@ -1,0 +1,10 @@
+INVALID RUN: service-time fidelity check failed (fail: service-time model off in all 1 attempts; last attempt 1: p50 delta 0.735 ms, p99 delta 2.192 ms (strict=true)); scores below are not authoritative
+
+metric                     bus                median          min          max  n op    threshold  res   note
+B1-RSS.soak                c                     NaN          NaN          NaN  1                  FAIL  no value produced by any valid run [MiB]
+B1-RUNS.invalid            c                       1            1            1  1 <=            0  FAIL  soak run needs rss_series_kib covering minutes 10..60 [runs]
+B1-STALE@soak              c                     NaN          NaN          NaN  1                  FAIL  no value produced by any valid run [count]
+
+| arm | rankable | failing gates |
+|---|---|---|
+| c | no | B1-RSS.soak, B1-RUNS.invalid, B1-STALE@soak |

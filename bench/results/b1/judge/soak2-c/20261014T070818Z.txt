@@ -1,0 +1,10 @@
+INVALID RUN: service-time fidelity check failed (fail: service-time model off in all 1 attempts; last attempt 1: p50 delta 0.807 ms, p99 delta 1.859 ms (strict=true)); scores below are not authoritative
+
+metric                     bus                median          min          max  n op    threshold  res   note
+B1-RSS.soak                c                   0.547        0.547        0.547  1 <=            8  PASS   [MiB]
+B1-RUNS.invalid            c                       0            0            0  1 <=            0  PASS  gated on the max over repeats [runs]
+B1-STALE@soak              c                       0            0            0  1 <=            0  PASS  gated on the max over repeats [count]
+
+| arm | rankable | failing gates |
+|---|---|---|
+| c | yes | - |

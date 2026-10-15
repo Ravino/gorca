@@ -1,0 +1,32 @@
+# e2e m7a-rr-w3-15
+# utc=2026-10-14T09:01:42Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=7.84 7.95 7.26 1/2599 2694535
+# git_rev=
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m7a-rr-w3-15
+# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/src/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=7.84 7.95 7.26 1/2599 2694532
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+
+metric                     bus                median          min          max  n op    threshold  res   note
+W3.w3_ms.n                 daemon/voicego           10           10           10  1                  info   [samples]
+W3.w3_ms.p50               daemon/voicego        0.182        0.182        0.182  1                  info   [ms]
+W3.w3_ms.p95               daemon/voicego        0.251        0.251        0.251  1                  info   [ms]
+W3.w3_ms.p99               daemon/voicego        0.251        0.251        0.251  1 <=           15  PASS   [ms]
+W3.w3_ms.p999              daemon/voicego        0.251        0.251        0.251  1                  info   [ms]
+W3.w3_ms.max               daemon/voicego        0.251        0.251        0.251  1                  info   [ms]
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]

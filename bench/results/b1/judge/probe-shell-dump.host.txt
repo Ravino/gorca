@@ -1,0 +1,2 @@
+probe-shell-dump start 2026-10-14T04:52:55Z load 6.73 6.12 6.36 3/2567 2142316; shell.json owns_name=org.gnome.Shell (information only)
+end 2026-10-14T05:23:53Z load 7.99 6.47 6.08 2/2823 2177027

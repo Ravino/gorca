@@ -1,0 +1,140 @@
+diff --git a/crates/gorca-core/src/reader.rs b/crates/gorca-core/src/reader.rs
+index f5bef60..525bd1f 100644
+--- a/crates/gorca-core/src/reader.rs
++++ b/crates/gorca-core/src/reader.rs
+@@ -1096,6 +1096,72 @@ mod tests {
+         assert_eq!(published.get(), None);
+     }
+ 
++    /// Reviewer probe: a focus miss whose fetch times out after a prefetch filled the node is
++    /// presented from the cache with `revalidate == false`: no RV-1, so no protection is ever
++    /// earned for the app that really holds focus.
++    #[test]
++    fn probe_timeout_fallback_on_a_prefetched_focus_never_earns_protection() {
++        let mut f = fixture();
++        let published = Arc::new(FocusedApp::new());
++        f.reader.focused_app = Some(Arc::clone(&published));
++        let now = Instant::now();
++        let fx = focus_on(&mut f, 1, now);
++        println!("on focus: {:?}", effects_of(&fx));
++        // The prefetch window lands while the focus fetch is outstanding.
++        f.writer.apply(
++            SnapshotBatch {
++                nodes: vec![snap(1, Role::Button, "Prefetched")],
++                ..Default::default()
++            },
++            gorca_mirror::ApplyOrigin::Push,
++        );
++        let fx = f.reader.handle(
++            ReaderMsg::Reply(QueryReply {
++                node: key(1),
++                epoch: f.epoch.current(),
++                kind: FetchKind::Focus,
++                result: Err(BackendError::Timeout),
++            }),
++            now,
++        );
++        println!("on timeout: {:?} published={:?}", effects_of(&fx), published.get());
++        assert!(!effects_of(&fx).contains(&"fetch-rv1"), "no revalidation is asked");
++        assert_eq!(published.get(), None, "protection never earned (the finding)");
++    }
++
++    /// Reviewer probe: moving within the protected app onto a prefetched sibling demotes the
++    /// app until RV-1 answers; an RV-1 that times out never restores it.
++    #[test]
++    fn probe_same_app_cached_move_demotes_and_rv1_timeout_never_restores() {
++        let mut f = fixture();
++        let published = Arc::new(FocusedApp::new());
++        f.reader.focused_app = Some(Arc::clone(&published));
++        let now = Instant::now();
++        focus_on(&mut f, 1, now);
++        f.reader.handle(reply(&f, 1, FetchKind::Focus, with_name(1, "Cold", StateSet::FOCUSED)), now);
++        assert_eq!(published.get(), Some(app()), "cold fetch earns");
++        f.writer.apply(
++            SnapshotBatch { nodes: vec![snap(2, Role::Button, "Sibling")], ..Default::default() },
++            gorca_mirror::ApplyOrigin::Push,
++        );
++        let later = now + std::time::Duration::from_millis(500);
++        let fx = focus_on(&mut f, 2, later);
++        println!("cached move: {:?} published={:?}", effects_of(&fx), published.get());
++        let demoted = published.get().is_none();
++        f.reader.handle(
++            ReaderMsg::Reply(QueryReply {
++                node: key(2),
++                epoch: f.epoch.current(),
++                kind: FetchKind::Revalidate,
++                result: Err(BackendError::Timeout),
++            }),
++            later,
++        );
++        println!("after rv1 timeout published={:?}", published.get());
++        assert!(demoted, "same-app cached move demotes (the finding)");
++        assert_eq!(published.get(), None, "rv1 timeout never restores (the finding)");
++    }
++
+     #[test]
+     fn hung_focus_app_is_announced() {
+         let mut f = fixture();
+diff --git a/crates/gorca-mirror/tests/prefetch_behaviour.rs b/crates/gorca-mirror/tests/prefetch_behaviour.rs
+index cf20f31..36fb6de 100644
+--- a/crates/gorca-mirror/tests/prefetch_behaviour.rs
++++ b/crates/gorca-mirror/tests/prefetch_behaviour.rs
+@@ -785,3 +785,58 @@ fn a_dirty_parent_whose_focus_is_gone_is_re_read_once_and_its_run_dropped() {
+     r.advance(1_000);
+     assert_eq!(fetches(&r), 1, "once");
+ }
++
++// ---- reviewer probes (b1-adopt review) ----
++
++/// R-1: walking backwards (Up arrow) the look-ahead never covers the siblings the user reaches
++/// next; a silently renamed row behind the focus is not re-read, one ahead of it is.
++#[test]
++fn probe_backward_walk_gets_no_lookahead() {
++    let mut r = Rig::new(40, false);
++    r.focus_on(row(20));
++    r.advance(600);
++    r.writer.invalidate(key(row(19)), PropMask::NAME, r.now);
++    r.writer.invalidate(key(row(21)), PropMask::NAME, r.now);
++    r.advance(30);
++    r.focus_on(row(20));
++    println!("lookaheads: {:?}", r.lookaheads(PANEL));
++    println!("row19 hit={} row21 hit={}", hit(&r, row(19)), hit(&r, row(21)));
++    assert!(hit(&r, row(21)), "ahead is re-read");
++    assert!(!hit(&r, row(19)), "behind is NOT re-read (the finding)");
++}
++
++/// R-2: a ChildrenChanged that arrives while the first window is in flight is forgotten: the
++/// run is installed clean from a reply that predates the change and never refetched.
++#[test]
++fn probe_children_changed_during_inflight_window_is_lost() {
++    let mut r = Rig::new(40, false);
++    r.hold = true;
++    r.focus_on(row(10));
++    let held = std::mem::take(&mut r.held);
++    assert!(!held.is_empty());
++    // Replies computed now (before the change) ...
++    let replies: Vec<_> = held.iter().map(|f| r.model.serve(&f.op)).collect();
++    // ... the list changes and says so ...
++    let newrow = r.model.add(Some(PANEL), Role::Button);
++    let kids = &mut r.model.nodes[PANEL].children;
++    let pos = kids.iter().position(|c| *c == newrow).unwrap();
++    kids.remove(pos);
++    let at = kids.iter().position(|c| *c == row(11)).unwrap();
++    kids.insert(at, newrow);
++    r.hold = false;
++    r.input(FillInput::Events(&[NodeEvent::ChildrenChanged { node: key(PANEL) }]));
++    // ... and only then do the old replies land.
++    for (f, rep) in held.into_iter().zip(replies) {
++        let cx = DriverCx { now: r.now, health: r.health, mirror: &r.reader, focus: r.focus };
++        r.driver.on_reply(&cx, &mut r.writer, f.id, f.issued_at, rep);
++    }
++    r.settle();
++    let base = r.windows(PANEL).len();
++    for _ in 0..10 {
++        r.advance(200);
++    }
++    println!("windows before={base} after={}", r.windows(PANEL).len());
++    assert_eq!(r.windows(PANEL).len(), base, "no refetch: the change was lost (the finding)");
++    r.focus_on(newrow);
++    println!("new row served from mirror before focus: {}", hit(&r, newrow));
++}

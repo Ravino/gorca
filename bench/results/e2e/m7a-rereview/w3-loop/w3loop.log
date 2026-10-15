@@ -1,0 +1,151 @@
+=== run 1 load 5.29 5.97 6.35 2/2413 2676432
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-1/20261014T085616Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 2 load 9.08 7.13 6.74 4/2487 2680116
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-2/20261014T085640Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 3 load 9.08 7.27 6.79 5/2494 2681096
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-3/20261014T085703Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 4 load 10.63 7.72 6.95 2/2471 2682109
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-4/20261014T085726Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 5 load 9.26 7.63 6.94 1/2492 2683100
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-5/20261014T085749Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 6 load 8.03 7.47 6.90 1/2483 2684056
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-6/20261014T085813Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 7 load 9.48 7.84 7.04 1/2486 2685112
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-7/20261014T085836Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 8 load 9.67 8.03 7.12 1/2508 2686157
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-8/20261014T085859Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 9 load 9.10 8.03 7.15 2/2464 2687201
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-9/20261014T085922Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 10 load 8.71 8.01 7.16 1/2463 2688273
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-10/20261014T085945Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 11 load 8.69 8.03 7.19 3/2488 2689460
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-11/20261014T090009Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 12 load 9.49 8.27 7.29 2/2464 2690489
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-12/20261014T090032Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 13 load 7.87 7.98 7.21 2/2499 2691558
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-13/20261014T090055Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 14 load 7.50 7.87 7.20 2/2511 2692659
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-14/20261014T090118Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 15 load 8.84 8.13 7.29 1/2470 2693634
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-15/20261014T090142Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 16 load 7.84 7.95 7.26 1/2464 2694646
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-16/20261014T090205Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 17 load 6.57 7.63 7.17 1/2460 2695577
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-17/20261014T090228Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 18 load 7.43 7.77 7.23 1/2503 2696605
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-18/20261014T090252Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 19 load 7.00 7.66 7.20 1/2460 2697588
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-19/20261014T090315Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 20 load 7.15 7.63 7.20 1/2459 2698579
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-20/20261014T090338Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 21 load 7.84 7.76 7.26 1/2469 2699931
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-21/20261014T090402Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 22 load 8.24 7.86 7.31 2/2491 2700899
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-22/20261014T090425Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 23 load 7.07 7.61 7.24 1/2490 2702006
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-23/20261014T090448Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 24 load 7.88 7.78 7.30 1/2466 2702913
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-24/20261014T090511Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 25 load 7.53 7.72 7.29 3/2490 2703828
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-25/20261014T090534Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 26 load 7.32 7.66 7.28 1/2504 2704734
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-26/20261014T090558Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 27 load 6.78 7.53 7.25 2/2507 2705682
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-27/20261014T090621Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 28 load 7.10 7.51 7.25 2/2495 2706605
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-28/20261014T090644Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 29 load 5.67 7.15 7.13 2/2475 2707549
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-29/20261014T090707Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+=== run 30 load 7.00 7.36 7.21 1/2512 2708672
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+
+== wrote bench/results/e2e/m7a-rr-w3-30/20261014T090731Z.{json,txt}
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+DONE

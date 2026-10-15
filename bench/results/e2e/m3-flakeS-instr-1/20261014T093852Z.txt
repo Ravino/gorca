@@ -1,0 +1,36 @@
+# e2e m3-flakeS-instr-1
+# utc=2026-10-14T09:38:52Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=24.15 22.55 20.22 14/2941 2765390
+# git_rev=4f4a479
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m3-flakeS-instr-1
+# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/flake/gorca-instr
+# backend=voicego
+# repeats=2
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=24.15 22.55 20.22 13/2941 2765387
+# reader_env=GORCA_M3=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=E2 action #2068: wanted "delta epsilon zeta", key to next key 23.6 ms, heard [+24.7ms "ж"]
+# note1=E2 sent 8018 typed keys (1711 BackSpace, 242 paste, 29 keyless commits)
+# note2=E2: 10000 actions, 9999 speeches heard
+# note3=E2 action #2712: wanted "n", key to next key 23.3 ms, heard [+40.3ms "f", +40.3ms "f"]
+# note4=E2 action #2713: wanted "f", key to next key 26.5 ms, heard [+17.0ms "f", +17.0ms "f", +26.9ms "м"]
+# note5=E2 action #3184: wanted "з", key to next key 23.2 ms, heard [+24.1ms "з"]
+# note6=E2 sent 7973 typed keys (1746 BackSpace, 236 paste, 45 keyless commits)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+E2.e2_double               daemon/voicego        0.500            0            1  2 <=            0  FAIL  gated on the max over repeats [events]
+E2.e2_keyname              daemon/voicego            0            0            0  2 <=            0  PASS  gated on the max over repeats [events]
+E2.e2_missing              daemon/voicego        1.500            1            2  2 <=            0  FAIL  gated on the max over repeats [events]
+E2.e2_wrong                daemon/voicego            0            0            0  2 <=            0  PASS  gated on the max over repeats [events]

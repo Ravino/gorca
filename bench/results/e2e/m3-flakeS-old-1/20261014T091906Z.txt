@@ -1,0 +1,49 @@
+# e2e m3-flakeS-old-1
+# utc=2026-10-14T09:19:06Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=24.38 22.19 15.48 15/2536 2741482
+# git_rev=4f4a479
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m3-flakeS-old-1
+# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/flake/gorca-old
+# backend=voicego
+# repeats=2
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=24.38 22.19 15.48 14/2537 2741479
+# reader_env=GORCA_M3=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=E2 action #251: wanted "pasted words", key to next key 26.5 ms, heard [+28.1ms "m"]
+# note1=E2 action #3432: wanted "alpha beta", key to next key 24.8 ms, heard [+25.6ms "ц"]
+# note2=E2 action #7565: wanted "d", key to next key 34.9 ms, heard [+39.2ms "ч"]
+# note3=E2 action #8746: wanted "y", key to next key 28.4 ms, heard [+52.2ms "t"]
+# note4=E2 action #9443: wanted "ь", key to next key 22.2 ms, heard []
+# note5=E2 action #9444: wanted "a", key to next key 24.9 ms, heard []
+# note6=E2 action #9445: wanted "r", key to next key 25.6 ms, heard [+30.7ms "ь", +30.7ms "a", +30.7ms "r", +30.7ms "h"]
+# note7=E2 action #9446: wanted "h", key to next key 29.7 ms, heard [+5.1ms "ь", +5.1ms "a", +5.1ms "r", +5.1ms "h", +30.5ms "h"]
+# note8=E2 sent 8018 typed keys (1711 BackSpace, 242 paste, 29 keyless commits)
+# note9=E2: 10000 actions, 9996 speeches heard
+# note10=E2 action #3865: wanted "г", key to next key 22.9 ms, heard [+24.0ms "w"]
+# note11=E2 action #4949: wanted "pasted words", key to next key 23.3 ms, heard [+23.5ms "space"]
+# note12=E2 action #5056: wanted "o", key to next key 27.8 ms, heard [+0.4ms "o", +0.6ms "o", +28.1ms "pasted words"]
+# note13=E2 action #5065: wanted "щ", key to next key 27.0 ms, heard [+2.8ms "щ", +26.3ms "iaщ", +27.3ms "d"]
+# note14=E2 action #5074: wanted "v", key to next key 29.3 ms, heard [+1.2ms "w", +1.8ms "v", +33.6ms "v"]
+# note15=E2 action #5083: wanted "q", key to next key 26.6 ms, heard [+0.6ms "q", +7.8ms "q", +27.3ms "space"]
+# note16=E2 action #5092: wanted "space", key to next key 25.1 ms, heard [+0.9ms "space", +12.0ms "ixkr tb", +28.0ms "space"]
+# note17=E2 action #5096: wanted "h", key to next key 347.7 ms, heard [+1.2ms "h", +153.6ms "h", +405.1ms "ключ"]
+# note18=E2 sent 7973 typed keys (1746 BackSpace, 236 paste, 45 keyless commits)
+# note19=E2: 10000 actions, 10130 speeches heard
+
+metric                     bus                median          min          max  n op    threshold  res   note
+E2.e2_double               daemon/voicego           77            3          151  2 <=            0  FAIL  gated on the max over repeats [events]
+E2.e2_keyname              daemon/voicego            0            0            0  2 <=            0  PASS  gated on the max over repeats [events]
+E2.e2_missing              daemon/voicego           14            7           21  2 <=            0  FAIL  gated on the max over repeats [events]
+E2.e2_wrong                daemon/voicego            0            0            0  2 <=            0  PASS  gated on the max over repeats [events]

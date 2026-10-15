@@ -1,0 +1,22 @@
+load 8.80
+test service_time_fidelity ... FAILED
+base p50 0.323 p99 0.617 ms; model p50 0.931 p99 2.599 ms; delta p50 0.608
+service-time model off in all 1 attempts; last attempt 1: p50 delta 0.608 ms, p99 delta 1.981 ms (strict=true)
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.76s
+load 8.86
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.85s
+load 8.86
+test service_time_fidelity ... FAILED
+base p50 0.324 p99 0.507 ms; model p50 0.944 p99 2.579 ms; delta p50 0.620
+service-time model off in all 1 attempts; last attempt 1: p50 delta 0.620 ms, p99 delta 2.072 ms (strict=true)
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.80s
+load 8.61 unpinned
+base p50 0.350 p99 0.899 ms; model p50 1.103 p99 2.776 ms; delta p50 0.753
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.24s
+load 11.08 unpinned
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.92s
+load 10.27 unpinned
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.05s
+load 9.53 unpinned
+base p50 0.193 p99 0.799 ms; model p50 1.049 p99 2.656 ms; delta p50 0.856
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.03s

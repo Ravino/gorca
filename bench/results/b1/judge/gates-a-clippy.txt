@@ -1,0 +1,7 @@
+== a fmt
+== a clippy
+    Checking wit-parser v0.261.0
+    Checking gorca-daemon v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-daemon)
+    Checking gorca-input-inject v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-input-inject)
+    Checking gorca-braille-brlapi v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-braille-brlapi)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 22.65s

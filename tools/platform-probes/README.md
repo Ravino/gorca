@@ -18,3 +18,8 @@ Run with the system `/usr/bin/python3` (needs `python3-gi`); none of them modifi
   PRIVATE session only (it registers as an event listener); apps in `p9apps/`. Needs the private rig described in
   `docs/reports/2026-10-13-p9-cache-p2p.md` section 6. Use `/usr/bin/python3 -I`.
 * `p9enum.py` one-line summary per app (toolkit, child count, cache items, P2P address) on the current bus.
+
+* `adr6/` (2026-10-14) ADR-0006 V-1..V-5 probes, PRIVATE session only (they refuse a bus not under `/tmp/dbus-*`): `rig.py` helpers
+  (RemoteDesktop virtual keyboard via `NotifyKeyboardKeycode` with EVDEV keycodes, KeyboardMonitor, raw AT-SPI calls), `v1.py`/`v1b.py` keypad
+  grabs, `v2*.py` extents (apps `app3.py`, `app4.py`, `appadw.py`), `v34.py` GetOffsetAtPoint + bounds-changed, `v4shell.py`, `v5.py`/`v5b.py` VTE.
+  Report: `docs/reports/2026-10-14-adr0006-platform-checks.md`.

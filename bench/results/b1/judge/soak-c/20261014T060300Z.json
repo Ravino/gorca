@@ -1,0 +1,8 @@
+{
+  "meta": {"utc": "2026-10-14T06:03:00Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "8", "cpus_allowed": "0-1,10-15", "governor": "performance x16", "deep_idle_states": "none enabled", "loadavg_start": "6.83 5.78 6.01 1/2315 2262022", "quiet_host": "no: load average 6.83 >= 1", "harness_git_rev": "edbcc22", "harness_git_dirty": "true", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "dbus_daemon": "D-Bus Message Bus Daemon 1.16.2", "build": "release", "arm_rev.c": "3799ba3-on-edbcc22", "label": "soak-c", "plan": "soak=1", "loadavg_end": "6.83 5.78 6.01 1/2315 2262019", "schedule": "round-robin over arms, rotated by one each round", "loadavg_start_run": "10.59 7.52 6.49 2/2850 2181703", "fidelity": "fail: service-time model off in all 1 attempts; last attempt 1: p50 delta 0.735 ms, p99 delta 2.192 ms (strict=true)", "run_status": "INVALID: service-time fidelity fail: service-time model off in all 1 attempts; last attempt 1: p50 delta 0.735 ms, p99 delta 2.192 ms (strict=true)"},
+  "rows": [
+    {"id": "B1-RSS.soak", "scenario": "soak", "bus": "c", "value": null, "min": null, "max": null, "runs": 1, "unit": "MiB", "op": "", "threshold": null, "verdict": "FAIL", "note": "no value produced by any valid run"},
+    {"id": "B1-RUNS.invalid", "scenario": "soak", "bus": "c", "value": 1, "min": 1, "max": 1, "runs": 1, "unit": "runs", "op": "<=", "threshold": 0, "verdict": "FAIL", "note": "soak run needs rss_series_kib covering minutes 10..60"},
+    {"id": "B1-STALE@soak", "scenario": "soak", "bus": "c", "value": null, "min": null, "max": null, "runs": 1, "unit": "count", "op": "", "threshold": null, "verdict": "FAIL", "note": "no value produced by any valid run"}
+  ]
+}

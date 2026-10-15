@@ -1,0 +1,32 @@
+== a judge_audit debug
+test ma9_arm_c_stops_prefetch_and_background_when_the_app_is_slow_or_hung ... ok
+worst driver step 772 us (debug)
+test ma6_policy_step_is_bounded_arm_c_unoptimised ... ok
+test ma1_policy_memory_accounting_arm_c ... ok
+test policy_state_stays_far_below_the_cap ... ok
+candidate: best-of-7 worst step at the caps = 35 us
+test ma6_the_policy_step_at_the_caps_is_bounded ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+== a judge_audit release
+test ma1_policy_memory_accounting_arm_c ... ok
+test ma6_policy_step_is_bounded_arm_c_unoptimised ... worst driver step 100 us (debug)
+test ma6_the_policy_step_at_the_caps_is_bounded ... candidate: best-of-7 worst step at the caps = 4 us
+test ma9_arm_c_stops_prefetch_and_background_when_the_app_is_slow_or_hung ... ok
+test policy_state_stays_far_below_the_cap ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+== c candidate_audit debug
+test ma9_arm_c_stops_prefetch_and_background_when_the_app_is_slow_or_hung ... ok
+worst driver step 407 us (debug)
+test ma6_policy_step_is_bounded_arm_c_unoptimised ... ok
+test ma1_policy_memory_accounting_arm_c ... ok
+candidate: best-of-7 worst step at the caps = 245 us
+test ma6_the_policy_step_at_the_caps_is_bounded ... ok
+test policy_state_stays_far_below_the_cap ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+== c candidate_audit release
+test ma1_policy_memory_accounting_arm_c ... ok
+test ma6_policy_step_is_bounded_arm_c_unoptimised ... worst driver step 99 us (debug)
+test ma6_the_policy_step_at_the_caps_is_bounded ... candidate: best-of-7 worst step at the caps = 15 us
+test ma9_arm_c_stops_prefetch_and_background_when_the_app_is_slow_or_hung ... ok
+test policy_state_stays_far_below_the_cap ... ok
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s

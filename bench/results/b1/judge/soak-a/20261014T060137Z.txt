@@ -1,0 +1,8 @@
+metric                     bus                median          min          max  n op    threshold  res   note
+B1-RSS.soak                a                     NaN          NaN          NaN  1                  FAIL  no value produced by any valid run [MiB]
+B1-RUNS.invalid            a                       1            1            1  1 <=            0  FAIL  soak run needs rss_series_kib covering minutes 10..60 [runs]
+B1-STALE@soak              a                     NaN          NaN          NaN  1                  FAIL  no value produced by any valid run [count]
+
+| arm | rankable | failing gates |
+|---|---|---|
+| a | no | B1-RSS.soak, B1-RUNS.invalid, B1-STALE@soak |

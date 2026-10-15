@@ -1,0 +1,27 @@
+# e2e m3-flake-old-4
+# utc=2026-10-14T08:03:15Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=12.13 9.81 8.53 4/2633 2585245
+# git_rev=4f4a479
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m3-flake-old-4
+# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/gorca-old
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=12.13 9.81 8.53 4/2633 2585242
+# reader_env=GORCA_M3=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=E2 run failed: the reader did not register with the emulated keyboard monitor (no SetKeyGrabs)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+E2.failed_runs             daemon/voicego            1            1            1  1 <=            0  FAIL  0 ok, 1 failed [runs]

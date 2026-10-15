@@ -1,0 +1,8 @@
+== session s1 start 2026-10-14T01:35:44Z load 10.60 8.45 7.37 4/2278 1610069
+governor: performance 
+idle POLL latency=0us disabled=0
+idle C1_ACPI latency=1us disabled=0
+idle C2_ACPI latency=127us disabled=1
+idle C3_ACPI latency=1048us disabled=1
+load: 10.60 8.45 7.37 3/2279 1610086
+== session s1 end 2026-10-14T02:44:14Z rc 1 load 17.85 7.44 5.16 12/2378 1845815
