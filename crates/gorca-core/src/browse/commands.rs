@@ -443,8 +443,8 @@ fn line_items(d: &WebDoc, max_line: u16, off: u32) -> Vec<Item> {
 }
 
 /// A single character, spoken by name.
-fn single_char(d: &WebDoc, r: &Range<u32>) -> Vec<Item> {
-    let items = present::describe(d, r.start, r.end);
+fn single_char(d: &WebDoc, r: &Range<u32>, from: Option<u32>) -> Vec<Item> {
+    let items = present::describe_from(d, r.start, r.end, from);
     if let [Item::Text(t)] = items.as_slice() {
         let mut it = t.chars();
         if let (Some(c), None) = (it.next(), it.next()) {
@@ -1325,6 +1325,7 @@ impl Reader {
         let page = b.settings.lines_per_page;
         let outcome = h.read.with(|d| {
             let off = cursor::offset_of(d, cur).unwrap_or_else(|| last.min(d.text_len()));
+            let off0 = off;
             let (mv, kind) = match mv_kind {
                 Move::Line(dir) => (cursor::line(d, max_line, off, dir), Kind::Line),
                 Move::Char(dir) => (cursor::character(d, max_line, off, dir), Kind::Char),
@@ -1343,9 +1344,16 @@ impl Reader {
                     };
                     let items = match kind {
                         Kind::Char if blank => vec![Item::Text("blank".to_owned())],
-                        Kind::Char => single_char(d, &speak),
-                        Kind::Word => trim_items(present::describe(d, speak.start, speak.end)),
-                        Kind::Line => present::describe(d, speak.start, speak.end),
+                        Kind::Char => single_char(d, &speak, Some(off0)),
+                        Kind::Word => trim_items(present::describe_from(
+                            d,
+                            speak.start,
+                            speak.end,
+                            Some(off0),
+                        )),
+                        Kind::Line => {
+                            present::describe_from(d, speak.start, speak.end, Some(off0))
+                        }
                     };
                     Outcome::Moved { cur, off, items }
                 }
@@ -1384,7 +1392,9 @@ impl Reader {
         };
         let Some(b) = self.web.as_ref() else { return };
         let Some(h) = b.docs.get(doc) else { return };
+        let last = b.last_off;
         let found = h.read.with(|d| {
+            let from = Some(cursor::offset_of(d, cur).unwrap_or_else(|| last.min(d.text_len())));
             let target = match dir {
                 Dir::Next => d.next(cur.node, cat),
                 // Inside a match: step out of it, or "previous" would find the one we are in.
@@ -1392,7 +1402,7 @@ impl Reader {
             }?;
             let off = cursor::content_start(d, target)?;
             let cur = cursor::cursor_at(d, off)?;
-            Some((cur, off, present::describe_node(d, target)))
+            Some((cur, off, present::describe_node_from(d, target, from)))
         });
         if let Some((cur, off, items)) = found {
             self.web_set_cursor(doc, cur, off, now);

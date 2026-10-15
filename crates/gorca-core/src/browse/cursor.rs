@@ -75,7 +75,9 @@ pub fn cursor_at(doc: &WebDoc, off: u32) -> Option<WebCursor> {
     Some(WebCursor { node, local })
 }
 
-/// The position of the first content of a node: after its own line break.
+/// The position of the first content of a node: after its own line break and after the blank
+/// breaks of the blocks that open inside it (a list starts with the list item's break), so a
+/// container hit lands on its first line of text (FT-4 stacks one break per nested block).
 pub fn content_start(doc: &WebDoc, node: DocNodeId) -> Option<u32> {
     let v = doc.node(node)?;
     let base = doc.offset_of(node)?;
@@ -83,8 +85,26 @@ pub fn content_start(doc: &WebDoc, node: DocNodeId) -> Option<u32> {
         v.flags.contains(gorca_doc::web::NodeFlags::BREAK_BEFORE)
             && !v.flags.contains(gorca_doc::web::NodeFlags::HIDDEN),
     );
-    Some(base + br)
+    let start = base + br;
+    let Some((_, end)) = doc.subtree_text_range(node) else {
+        return Some(start);
+    };
+    let limit = end.min(start.saturating_add(BLANK_SKIP));
+    if start >= limit {
+        return Some(start);
+    }
+    let lead = doc.text_in(start, limit);
+    let blanks = lead.chars().take_while(|c| *c == '\n').count();
+    let blanks = u32::try_from(blanks).unwrap_or(0);
+    // All breaks and nothing behind them within the window: stay on the node itself.
+    if start + blanks >= limit && blanks > 0 {
+        return Some(start);
+    }
+    Some(start + blanks)
 }
+
+/// Leading blank breaks skipped at most this far (nested blocks open a few levels deep).
+const BLANK_SKIP: u32 = 64;
 
 /// The speakable part of a line: without its terminating line break.
 fn trim_break(doc: &WebDoc, r: Range<u32>) -> Range<u32> {
