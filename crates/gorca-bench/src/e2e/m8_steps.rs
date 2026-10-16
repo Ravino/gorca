@@ -522,9 +522,10 @@ fn sy() -> Vec<Step> {
         s("SY.down2", P1, "Cursor onto the second paragraph", Act::Repeat(DOWN, 0, 2), &["Second paragraph"]),
         s("SY.tab", P1, "Tab from the cursor: the next focusable after it, not the first on the page (D-2)", key0(TAB), &["link two"]).win(1500),
         s("SY.tab2", P1, "Tab again after the focus-driven move is the browser's, not consumed (R-5, NVDA #5227)", key0(TAB), &[]).passes_through().win(800),
-        s("SY.down3", P1, "Down: the cursor moves off the focused link, Tab is ours again", key0(DOWN), &[]).win(800),
-        Step::setup("SY.down3.wait", "the grab set follows the settled cursor", Act::Wait(500)),
-        s("SY.stab", P1, "Shift+Tab: the previous focusable before the cursor", Act::Key(TAB, SHIFT), &["link two"]).win(1500),
+        s("SY.btn", P1, "Firefox's own Tab ended on the button: the cursor follows focus", Act::Focus(role::PUSH_BUTTON, "Plain button"), &["Plain button"]).win(800),
+        s("SY.up3", P1, "Up: the cursor moves off the focused button, Tab is ours again", key0(UP), &[]).win(800),
+        Step::setup("SY.up3.wait", "the grab set follows the settled cursor", Act::Wait(500)),
+        s("SY.stab", P1, "Shift+Tab: the previous focusable before the cursor", Act::Key(TAB, SHIFT), &["link"]).not(&["Plain button"]).win(1500),
         // last: with nothing focusable after the cursor Tab is not grabbed and reaches the page,
         // which in this rig leaves the document
         s("SY.end", P1, "Ctrl+End: past the last focusable", ctrl(END), &["Far paragraph at the bottom"]),
