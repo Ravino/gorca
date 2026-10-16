@@ -1,0 +1,20 @@
+label=auth-diag2
+utc=2026-10-16T12:32:30Z
+git_rev=e185a10 dirty=5
+kernel=7.1.8+deb13-rt-amd64
+cpus=16
+governor=performance 
+loadavg_start=13.70 8.53 10.70 9/3362 4093257
+rounds=4 arms=single,lanes-rt,lanes-rt-nopin,lanes-pin conds=sat only=L1,L3-50k,L2-50k,K1-50k,K2s,R1s,K3,A1 quick=no
+rtkit MaxRealtimePriority: i 20 
+rtkit MinNiceLevel: i -15 
+rtkit RTTimeUSecMax: x 200000 
+RLIMIT_RTPRIO=0 RLIMIT_RTTIME=unlimited
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=1
+  idle C3_ACPI latency=1048us disabled=1
+  load: 13.70 8.53 10.70 1/3348 4093292
+loadavg_end=36.72 33.53 34.09 5/3407 69451

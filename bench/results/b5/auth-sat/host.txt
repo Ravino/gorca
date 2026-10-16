@@ -1,0 +1,20 @@
+label=auth-sat
+utc=2026-10-16T09:02:36Z
+git_rev=1993580 dirty=2
+kernel=7.1.8+deb13-rt-amd64
+cpus=16
+governor=performance 
+loadavg_start=15.31 14.78 13.96 23/3526 3309616
+rounds=5 arms=single,lanes,lanes-rt conds=sat only=L1,L2,K1,L3-50k,L2-50k,K1-50k,K2,K2s,K3,R1,R1s,A1 quick=no
+rtkit MaxRealtimePriority: i 20 
+rtkit MinNiceLevel: i -15 
+rtkit RTTimeUSecMax: x 200000 
+RLIMIT_RTPRIO=0 RLIMIT_RTTIME=unlimited
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=1
+  idle C3_ACPI latency=1048us disabled=1
+  load: 15.31 14.78 13.96 17/3530 3309687
+loadavg_end=74.95 68.65 65.86 55/3276 3818751

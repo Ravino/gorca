@@ -20,9 +20,32 @@ SERIES = [
     ("L3-50k", "l1_ms"),
     ("L2-50k", "l2_ms"),
     ("K1-50k", "k1_ms"),
+    ("K2", "k2_ms"),
+    ("K2s", "k2s_ms"),
+    ("K3", "k3_ms"),
+    ("R1", "r1_ms"),
+    ("R1s", "r1s_ms"),
+    ("A1", "a1_ms"),
 ]
+# Conservation-based loss accounting (e2e::account): `lost` is a real silent loss and must be 0;
+# `superseded` (newer answer overwrote an unsent one in the speech lane slot, latest wins) and `late`
+# are information rows. Summed over the run, not a latency.
+EXTRA = ["lost", "superseded", "late"]
 PCTS = ["p50", "p95", "p99"]
 GATES = {"l1_ms": 15.0, "k1_ms": 15.0, "l2_ms": 5.0}
+
+
+def cpu_seconds(path: Path):
+    """Parse the last line of bash `times` (children user, children sys) -> seconds."""
+    try:
+        f = lambda t: int(t.split("m")[0]) * 60 + float(t.split("m")[1].rstrip("s"))
+        total = 0.0
+        for line in path.read_text().splitlines():
+            toks = line.split()
+            total += f(toks[0]) + f(toks[1])
+        return total
+    except Exception:
+        return None
 LANE_THREADS = {"gorca-input", "gorca-speech-io", "gorca-reader"}
 
 
@@ -73,7 +96,12 @@ def main(out: Path):
                     except json.JSONDecodeError:
                         pass
 
-    summary = {"cells": {}, "rt": {}, "loads": {}}
+    summary = {"cells": {}, "rt": {}, "loads": {}, "cpu": {}}
+    for cond_dir in sorted(p for p in raw.iterdir() if p.is_dir()):
+        for arm_dir in sorted(p for p in cond_dir.iterdir() if p.is_dir()):
+            vals = [c for c in (cpu_seconds(r / "cpu.txt") for r in sorted(arm_dir.glob("r*"))) if c is not None]
+            if vals:
+                summary["cpu"].setdefault(cond_dir.name, {})[arm_dir.name] = stats(vals)
     arms_order = []
     for cond in data:
         for arm in data[cond]:
@@ -86,8 +114,8 @@ def main(out: Path):
     for cond, arms in data.items():
         cells = summary["cells"].setdefault(cond, {})
         for scn, metric in SERIES:
-            for p in PCTS + ["lost"]:
-                rid = f"{scn}.{metric}.{p}" if p != "lost" else f"{scn}.lost"
+            for p in PCTS + EXTRA:
+                rid = f"{scn}.{metric}.{p}" if p in PCTS else f"{scn}.{p}"
                 per_arm = {}
                 for arm, rounds in arms.items():
                     vals = [r[rid] for _, r in sorted(rounds.items()) if rid in r]
@@ -155,6 +183,7 @@ def main(out: Path):
             summary["loads"].setdefault(cond, {})[arm] = {
                 str(r): {
                     "load_before": m.get("load_before"),
+                    "busy_pct": m.get("background_cpu_busy_pct"),
                     "load_with_hog": m.get("load_with_hog"),
                     "load_after": m.get("load_after"),
                     "governor": m.get("governor"),
@@ -192,18 +221,26 @@ def main(out: Path):
                         t += f' W{pr["lower"]}/{pr["rounds"]}'
                     row.append(t)
                 md.append("| " + " | ".join(row) + " |")
-        lost = {k: v for k, v in cells.items() if k.endswith(".lost")}
-        if lost:
-            md += ["", "Lost probes (max over rounds): " + "; ".join(
-                f'{k.split(".")[0]}: ' + ", ".join(f'{a}={s["max"]:.0f}' for a, s in v.items())
-                for k, v in lost.items())]
+        for extra, what in (("lost", "Lost (silent loss, max over rounds)"),
+                            ("superseded", "Superseded (info; sum over rounds)"),
+                            ("late", "Late (info; sum over rounds)")):
+            rows = {k: v for k, v in cells.items() if k.endswith("." + extra)}
+            if rows:
+                agg = (lambda s: s["max"]) if extra == "lost" else (lambda s: sum(s["vals"]))
+                md += ["", what + ": " + "; ".join(
+                    f'{k.split(".")[0]}: ' + ", ".join(f'{a}={agg(s):.0f}' for a, s in v.items())
+                    for k, v in rows.items())]
         storm = {k: v for k, v in cells.items() if k.endswith("storm_achieved_eps")}
         if storm:
             md += ["", "Storm achieved rate (ev/s, median): " + "; ".join(
                 f'{k.split(".")[0]}: ' + ", ".join(f'{a}={s["median"]:.0f}' for a, s in v.items())
                 for k, v in storm.items())]
         md.append("")
-    md += ["## Real-time grants", ""]
+    md += ["## Reader CPU seconds per run (user+sys, all threads; same scenario set per run)", ""]
+    for cond, arms in summary["cpu"].items():
+        md.append(f"- `{cond}`: " + ", ".join(
+            f'{a}={s["median"]:.1f} [{s["min"]:.1f}..{s["max"]:.1f}]' for a, s in arms.items()))
+    md += ["", "## Real-time grants", ""]
     for cond, arms in summary["rt"].items():
         for arm, r in arms.items():
             md.append(
@@ -217,7 +254,7 @@ def main(out: Path):
         for arm, rounds in arms.items():
             for r, m in rounds.items():
                 md.append(
-                    f'- `{cond}` / `{arm}` / r{r}: before {m["load_before"]}, with hog {m["load_with_hog"]}, '
+                    f'- `{cond}` / `{arm}` / r{r}: before {m["load_before"]} (host CPU busy {m["busy_pct"]} %), with hog {m["load_with_hog"]}, '
                     f'governor {m["governor"]}, exit {m["exit"]}'
                 )
     (out / "summary.md").write_text("\n".join(md) + "\n")

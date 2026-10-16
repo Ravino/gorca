@@ -1,0 +1,6 @@
+round=2 cond=idle arm=lanes-rt exit=0
+load_before=49.92 51.68 55.82 47/2945 3890009
+background_cpu_busy_pct=100
+load_with_hog=49.12 51.49 55.73 43/2946 3890053
+load_after=61.75 56.02 56.23 59/3056 3901034
+governor=performance 

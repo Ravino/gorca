@@ -1,0 +1,3 @@
+round=1 cond=sat arm=lanes-rt exit=0
+load_before=59.03 54.92 49.49 6/3780 552421
+load_after=62.34 58.88 51.87 12/3748 553989
