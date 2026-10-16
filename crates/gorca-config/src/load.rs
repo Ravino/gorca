@@ -334,6 +334,23 @@ fn apply_key(section: &str, key: &str, v: &Item, s: &mut Settings, diags: &mut V
             }
         }
         ("browse", "say_all_on_load") => b(&mut s.browse.say_all_on_load, diags),
+        ("terminal", "settle_ms") => {
+            if let Some(n) = read_int(v, &path, 10, 200, diags) {
+                s.terminal.settle_ms = u32::try_from(n).unwrap_or(30);
+            }
+        }
+        ("terminal", "burst_lines") => {
+            if let Some(n) = read_int(v, &path, 4, 400, diags) {
+                s.terminal.burst_lines = u32::try_from(n).unwrap_or(40);
+            }
+        }
+        ("terminal", "prompt_markers") => {
+            if let Some(m) = read_str_list(v, &path, diags) {
+                s.terminal.prompt_markers = m;
+            }
+        }
+        ("terminal", "prompt_regex") => read_str(v, &path, &mut s.terminal.prompt_regex, diags),
+        ("terminal", "secret_regex") => read_str(v, &path, &mut s.terminal.secret_regex, diags),
         ("speech", "punctuation") => {
             if let Some(p) = read_enum(v, &path, Punct::parse, Punct::NAMES, diags) {
                 s.speech.punctuation = p;
@@ -416,6 +433,48 @@ fn read_enum<T>(
         ));
     }
     parsed
+}
+
+fn read_str(v: &Item, path: &str, into: &mut String, diags: &mut Vec<Diag>) {
+    if let Some(x) = v.as_str() {
+        x.clone_into(into);
+    } else {
+        diags.push(Diag::error(
+            path,
+            span_of(v),
+            DiagMsg::WrongType {
+                expected: "a string",
+            },
+        ));
+    }
+}
+
+/// A list of non-empty strings, at most 32 of them.
+fn read_str_list(v: &Item, path: &str, diags: &mut Vec<Diag>) -> Option<Vec<String>> {
+    let Some(arr) = v.as_array() else {
+        diags.push(Diag::error(
+            path,
+            span_of(v),
+            DiagMsg::WrongType {
+                expected: "a list of strings",
+            },
+        ));
+        return None;
+    };
+    let mut out: Vec<String> = Vec::new();
+    for e in arr {
+        match e.as_str() {
+            Some(x) if !x.is_empty() && out.len() < 32 => out.push(x.to_owned()),
+            Some(_) | None => diags.push(Diag::error(
+                path,
+                e.span().map(|r| (clamp_u32(r.start), clamp_u32(r.end))),
+                DiagMsg::WrongType {
+                    expected: "a non-empty string",
+                },
+            )),
+        }
+    }
+    Some(out)
 }
 
 fn read_modifiers(v: &Item, path: &str, diags: &mut Vec<Diag>) -> Option<Vec<String>> {
@@ -768,7 +827,8 @@ mod tests {
 multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_control=false\npause_speech_on_shift=false\n\
 [keymap]\nreplace_preset=true\n[speech]\nrate=10\npitch=11\nvolume=12\nrate_step=7\nvoice=\"x\"\npunctuation=\"all\"\ncaps=\"say\"\n\
 [echo]\ntyped_characters=false\ntyped_words=true\ncommand_keys=true\ninserted_text=false\n\
-[text]\nsay_all_moves_caret=false\ncaret_edge_ms=50\ncaret_late_ms=300\n[browse]\nsay_all_on_load=false\n[verbosity]\nlevel=\"brief\"\nconfirmations=\"brief\"\n";
+[text]\nsay_all_moves_caret=false\ncaret_edge_ms=50\ncaret_late_ms=300\n[browse]\nsay_all_on_load=false\n\
+[terminal]\nsettle_ms=40\nburst_lines=20\nprompt_markers=[\"> \"]\nprompt_regex=\"^x\"\nsecret_regex=\"y$\"\n[verbosity]\nlevel=\"brief\"\nconfirmations=\"brief\"\n";
         let l = load_text(text);
         assert!(l.diags.is_empty(), "{:?}", l.diags);
         let d = Settings::default();
@@ -781,7 +841,12 @@ multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_
         assert_eq!(l.settings.keyboard.modifiers, ["Insert"]);
         assert_ne!(l.settings.text, d.text);
         assert_ne!(l.settings.browse, d.browse);
-        assert_eq!(SETTINGS.len(), 27);
+        assert_eq!(l.settings.terminal.settle_ms, 40);
+        assert_eq!(l.settings.terminal.burst_lines, 20);
+        assert_eq!(l.settings.terminal.prompt_markers, ["> "]);
+        assert_eq!(l.settings.terminal.prompt_regex, "^x");
+        assert_eq!(l.settings.terminal.secret_regex, "y$");
+        assert_eq!(SETTINGS.len(), 32);
     }
 
     #[test]

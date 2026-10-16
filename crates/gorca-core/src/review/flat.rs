@@ -4,7 +4,7 @@
 use gorca_model::NodeKey;
 
 use super::cursor::{FlatPos, ZoneAnchor};
-use super::model::{LineModel, Zone, ZoneKind};
+use super::model::{LineModel, LineSource, Zone, ZoneKind};
 use super::segment::{TextUnits, Unit, char_text, slice};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -88,6 +88,10 @@ pub fn anchor_at_node(model: &LineModel, node: NodeKey) -> Option<FlatPos> {
 
 /// Re-anchor a position of an older model (RA-1).
 pub fn reanchor(model: &LineModel, a: ZoneAnchor) -> Option<FlatPos> {
+    if model.source == LineSource::Terminal {
+        // A screen is a grid: the same row is the same place, whatever the text scrolled to.
+        return nearest_line(model, a.y_mid);
+    }
     let zs = model.by_node.get(&a.node)?;
     let pick = zs
         .iter()

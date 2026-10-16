@@ -1,0 +1,107 @@
+{"ev":"snapshot","name":"idle","text":"$ \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n","caret":2,"count":32,"chars":32,"rtt_ms":0.68,"t":2237.26}
+{"ev":"key","name":"home","evdev":[102],"t":3238.36}
+{"ev":"snapshot","name":"focused","text":"$ \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n","caret":2,"count":32,"chars":32,"rtt_ms":0.53,"t":3739.0}
+{"ev":"marker","name":"type echo hi","t":3739.06}
+{"ev":"key","name":"e","evdev":[18],"t":3739.08}
+{"ev":"text-changed","kind":"insert","off":2,"len":1,"text":"e","text_chars":1,"t":3741.28}
+{"ev":"caret","off":3,"t":3741.34}
+{"ev":"key","name":"c","evdev":[46],"t":3820.01}
+{"ev":"text-changed","kind":"insert","off":3,"len":1,"text":"c","text_chars":1,"t":3822.42}
+{"ev":"caret","off":4,"t":3822.54}
+{"ev":"key","name":"h","evdev":[35],"t":3900.68}
+{"ev":"text-changed","kind":"insert","off":4,"len":1,"text":"h","text_chars":1,"t":3902.94}
+{"ev":"caret","off":5,"t":3902.99}
+{"ev":"key","name":"o","evdev":[24],"t":3981.13}
+{"ev":"text-changed","kind":"insert","off":5,"len":1,"text":"o","text_chars":1,"t":3983.38}
+{"ev":"caret","off":6,"t":3983.41}
+{"ev":"key","name":" ","evdev":[57],"t":4061.59}
+{"ev":"text-changed","kind":"insert","off":6,"len":1,"text":" ","text_chars":1,"t":4063.87}
+{"ev":"caret","off":7,"t":4063.92}
+{"ev":"key","name":"h","evdev":[35],"t":4142.15}
+{"ev":"text-changed","kind":"insert","off":7,"len":1,"text":"h","text_chars":1,"t":4144.36}
+{"ev":"caret","off":8,"t":4144.4}
+{"ev":"key","name":"i","evdev":[23],"t":4222.67}
+{"ev":"text-changed","kind":"insert","off":8,"len":1,"text":"i","text_chars":1,"t":4224.97}
+{"ev":"caret","off":9,"t":4225.01}
+{"ev":"snapshot","name":"typed","text":"$ echo hi\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n","caret":9,"count":39,"chars":39,"rtt_ms":0.42,"t":4805.34}
+{"ev":"marker","name":"backspace x2","t":4805.39}
+{"ev":"key","name":"backspace","evdev":[14],"t":4805.4}
+{"ev":"text-changed","kind":"delete","off":8,"len":1,"text":"i","text_chars":1,"t":4807.59}
+{"ev":"caret","off":8,"t":4807.64}
+{"ev":"key","name":"backspace","evdev":[14],"t":4957.17}
+{"ev":"text-changed","kind":"delete","off":7,"len":1,"text":"h","text_chars":1,"t":4959.37}
+{"ev":"caret","off":7,"t":4959.42}
+{"ev":"snapshot","name":"after backspace","text":"$ echo \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n","caret":7,"count":37,"chars":37,"rtt_ms":0.76,"t":5510.91}
+{"ev":"marker","name":"left x2, home, end","t":5510.97}
+{"ev":"key","name":"left","evdev":[105],"t":5510.99}
+{"ev":"caret","off":6,"t":5515.2}
+{"ev":"key","name":"left","evdev":[105],"t":5661.44}
+{"ev":"caret","off":5,"t":5665.79}
+{"ev":"key","name":"home","evdev":[102],"t":5813.22}
+{"ev":"caret","off":2,"t":5817.56}
+{"ev":"key","name":"end","evdev":[107],"t":6013.46}
+{"ev":"caret","off":7,"t":6015.8}
+{"ev":"snapshot","name":"after motions","text":"$ echo \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n","caret":7,"count":37,"chars":37,"rtt_ms":0.53,"t":6616.84}
+{"ev":"marker","name":"enter","t":6616.9}
+{"ev":"key","name":"enter","evdev":[28],"t":6616.91}
+{"ev":"text-changed","kind":"insert","off":9,"len":2,"text":"$ ","text_chars":2,"t":6633.63}
+{"ev":"caret","off":11,"t":6633.69}
+{"ev":"snapshot","name":"after enter","text":"$ echo \n\n$ \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n","caret":11,"count":39,"chars":39,"rtt_ms":0.72,"t":7219.18}
+{"ev":"marker","name":"ec tab","t":7219.22}
+{"ev":"key","name":"e","evdev":[18],"t":7219.23}
+{"ev":"text-changed","kind":"insert","off":11,"len":1,"text":"e","text_chars":1,"t":7238.01}
+{"ev":"caret","off":12,"t":7238.08}
+{"ev":"key","name":"c","evdev":[46],"t":7299.78}
+{"ev":"text-changed","kind":"insert","off":12,"len":1,"text":"c","text_chars":1,"t":7302.03}
+{"ev":"caret","off":13,"t":7302.07}
+{"ev":"key","name":"tab","evdev":[15],"t":7380.37}
+{"ev":"text-changed","kind":"insert","off":13,"len":3,"text":"ho ","text_chars":3,"t":7384.68}
+{"ev":"caret","off":16,"t":7384.71}
+{"ev":"snapshot","name":"after tab","text":"$ echo \n\n$ echo \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n","caret":16,"count":44,"chars":44,"rtt_ms":0.46,"t":8182.24}
+{"ev":"marker","name":"ctrl-u","t":8182.3}
+{"ev":"key","name":"ctrl-u","evdev":[29,22],"t":8182.31}
+{"ev":"text-changed","kind":"delete","off":11,"len":5,"text":"echo ","text_chars":5,"t":8184.48}
+{"ev":"caret","off":11,"t":8184.52}
+{"ev":"snapshot","name":"after kill","text":"$ echo \n\n$ \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n","caret":11,"count":39,"chars":39,"rtt_ms":0.42,"t":8583.64}
+{"ev":"marker","name":"history up","t":8583.72}
+{"ev":"key","name":"up","evdev":[103],"t":8583.73}
+{"ev":"text-changed","kind":"insert","off":11,"len":5,"text":"echo ","text_chars":5,"t":8585.89}
+{"ev":"caret","off":16,"t":8585.95}
+{"ev":"snapshot","name":"after up","text":"$ echo \n\n$ echo \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n","caret":16,"count":44,"chars":44,"rtt_ms":0.85,"t":9085.11}
+{"ev":"key","name":"down","evdev":[108],"t":9085.16}
+{"ev":"text-changed","kind":"delete","off":11,"len":5,"text":"echo ","text_chars":5,"t":9087.39}
+{"ev":"caret","off":11,"t":9087.44}
+{"ev":"snapshot","name":"after down","text":"$ echo \n\n$ \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n","caret":11,"count":39,"chars":39,"rtt_ms":0.43,"t":9586.78}
+{"ev":"marker","name":"seq 1 40","t":9586.83}
+{"ev":"key","name":"s","evdev":[31],"t":9586.84}
+{"ev":"text-changed","kind":"insert","off":11,"len":1,"text":"s","text_chars":1,"t":9589.03}
+{"ev":"caret","off":12,"t":9589.09}
+{"ev":"key","name":"e","evdev":[18],"t":9667.17}
+{"ev":"text-changed","kind":"insert","off":12,"len":1,"text":"e","text_chars":1,"t":9669.64}
+{"ev":"caret","off":13,"t":9669.76}
+{"ev":"key","name":"q","evdev":[16],"t":9747.74}
+{"ev":"text-changed","kind":"insert","off":13,"len":1,"text":"q","text_chars":1,"t":9750.12}
+{"ev":"caret","off":14,"t":9750.2}
+{"ev":"key","name":" ","evdev":[57],"t":9828.02}
+{"ev":"text-changed","kind":"insert","off":14,"len":1,"text":" ","text_chars":1,"t":9830.4}
+{"ev":"caret","off":15,"t":9830.52}
+{"ev":"key","name":"1","evdev":[2],"t":9909.27}
+{"ev":"text-changed","kind":"insert","off":15,"len":1,"text":"1","text_chars":1,"t":9911.58}
+{"ev":"caret","off":16,"t":9911.63}
+{"ev":"key","name":" ","evdev":[57],"t":9989.82}
+{"ev":"text-changed","kind":"insert","off":16,"len":1,"text":" ","text_chars":1,"t":9992.09}
+{"ev":"caret","off":17,"t":9992.13}
+{"ev":"key","name":"4","evdev":[5],"t":10070.42}
+{"ev":"text-changed","kind":"insert","off":17,"len":1,"text":"4","text_chars":1,"t":10072.67}
+{"ev":"caret","off":18,"t":10072.71}
+{"ev":"key","name":"0","evdev":[11],"t":10150.85}
+{"ev":"text-changed","kind":"insert","off":18,"len":1,"text":"0","text_chars":1,"t":10153.19}
+{"ev":"caret","off":19,"t":10153.25}
+{"ev":"key","name":"enter","evdev":[28],"t":10231.26}
+{"ev":"caret","off":20,"t":10235.69}
+{"ev":"text-changed","kind":"delete","off":31,"len":14,"text":"\n\n\n\n\n\n\n\n\n\n\n\n\n\n","text_chars":14,"t":10252.33}
+{"ev":"text-changed","kind":"delete","off":0,"len":31,"text":"$ echo \n\n$ seq 1 40\n\n\n\n\n\n\n\n\n\n\n\n","text_chars":31,"t":10252.37}
+{"ev":"text-changed","kind":"insert","off":0,"len":14,"text":"12\n13\n14\n15\n16","text_chars":14,"t":10252.4}
+{"ev":"text-changed","kind":"insert","off":15,"len":74,"text":"17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n$ ","text_chars":74,"t":10252.42}
+{"ev":"caret","off":89,"t":10252.43}
+{"ev":"snapshot","name":"after seq","text":"12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n$ \n","caret":89,"count":90,"chars":90,"rtt_ms":0.5,"t":11233.85}

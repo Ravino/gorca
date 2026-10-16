@@ -989,6 +989,7 @@ async fn reader_loop(
             biased;
             () = token.cancelled() => {
                 tracing::info!(text = ?reader.text_counters(), "reader text counters");
+                tracing::info!(terminal = ?reader.terminal_counters(), reads = ?reader.terminal_reads(), "reader terminal counters");
                 return;
             }
             Some(_) = review_tasks.join_next(), if !review_tasks.is_empty() => continue,
@@ -1359,6 +1360,7 @@ fn spawn_text(
         }
         TextOp::Selections { node } => BackendOp::Text(TextQuery::Selections { node }),
         TextOp::Format { node, offset } => BackendOp::Text(TextQuery::Format { node, offset }),
+        TextOp::Screen { node } => BackendOp::Text(TextQuery::Screen { node }),
         TextOp::SetCaret { node, offset } => {
             BackendOp::Action(ActionReq::SetCaret { node, offset })
         }

@@ -1,0 +1,41 @@
+# e2e m6-dev
+# utc=2026-10-14T22:30:04Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=7.74 7.78 6.30 1/2602 3956597
+# git_rev=932d611
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m6-dev
+# reader=daemon:<repo>/.claude/worktrees/agent-ab80bab70d6090a95/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=7.74 7.78 6.30 1/2602 3956594
+# reader_env=GORCA_M6=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=V1: emit of the last VTE frame to the SPEAK of the output it carried; includes the 30 ms settle, one GetText of the python fake app and the speech lane (gate: settle <= 30 ms wall + 5 ms gorca)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+V1.v1_ms.n                 daemon/voicego          150          150          150  1                  info   [samples]
+V1.v1_ms.p50               daemon/voicego         32.1         32.1         32.1  1                  info   [ms]
+V1.v1_ms.p95               daemon/voicego         32.4         32.4         32.4  1                  info   [ms]
+V1.v1_ms.p99               daemon/voicego         32.4         32.4         32.4  1                  info   [ms]
+V1.v1_ms.p999              daemon/voicego         32.5         32.5         32.5  1                  info   [ms]
+V1.v1_ms.max               daemon/voicego         32.5         32.5         32.5  1                  info   [ms]
+V1.v1_over_ms.n            daemon/voicego          150          150          150  1                  info   [samples]
+V1.v1_over_ms.p50          daemon/voicego        2.092        2.092        2.092  1                  info   [ms]
+V1.v1_over_ms.p95          daemon/voicego        2.369        2.369        2.369  1                  info   [ms]
+V1.v1_over_ms.p99          daemon/voicego        2.393        2.393        2.393  1                  info   [ms]
+V1.v1_over_ms.p999         daemon/voicego        2.452        2.452        2.452  1                  info   [ms]
+V1.v1_over_ms.max          daemon/voicego        2.452        2.452        2.452  1                  info   [ms]
+V1.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+V1.term_frames             daemon/voicego          151          151          151  1                  info   [frames]
+V1.vte_assert              daemon/voicego            0            0            0  1                  info   [calls]

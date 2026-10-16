@@ -16,7 +16,7 @@ use super::build::{NavFetchError, ProbeItem, RrVerdict};
 use super::cursor::{BuildId, FlatPos, ModelId, NavReqId, ReviewCursor, ReviewFrom, ReviewKind};
 use super::cursor::{ReviewOrigin, ReviewPos};
 use super::flat::{FlatMove, anchor_at_node, flat_step, line_text, nearest_line, pos_at, reanchor};
-use super::model::{Completeness, LineModel};
+use super::model::{Completeness, LineModel, LineSource};
 use super::objnav::{NavMove, NavOp, StepResult, step, step_degraded};
 use super::segment::{Dir, SimpleUnits, Spell, TextUnits, Unit, char_text, slice, spell_letters};
 use super::validity::{Validity, validity};
@@ -849,6 +849,13 @@ impl Reader {
                 return Some(q);
             }
         }
+        // A terminal starts at the line the caret is on.
+        if m.source == LineSource::Terminal
+            && let Some(l) = m.focus_line
+            && let Some(p) = pos_at(m, l, 0, 0)
+        {
+            return Some(p);
+        }
         self.anchor_for(m, cur.nav).or_else(|| pos_at(m, 0, 0, 0))
     }
 
@@ -870,7 +877,12 @@ impl Reader {
         if let ReviewPos::Object { offset, .. } = cur.pos {
             return self.exec_object_text(&cur, nav, offset, mv, rep, attempts, fx);
         }
-        let (model, is_cur) = match self.pick_model(nav) {
+        // A terminal's screen is held by its extension: no build, no IPC (ADR-0006 LS-1).
+        let picked = match self.term_review_model(nav, now, fx) {
+            Some(m) => Pick::Ready(m, true),
+            None => self.pick_model(nav),
+        };
+        let (model, is_cur) = match picked {
             Pick::Ready(m, c) => (m, c),
             Pick::Build(s) => {
                 if attempts >= self.review.limits.nav_suspensions {
@@ -1006,7 +1018,7 @@ impl Reader {
         now: Instant,
         fx: &mut ReaderEffects,
     ) {
-        if !is_cur {
+        if !is_cur || model.source == LineSource::Terminal {
             return;
         }
         let line = pos.line;
@@ -1141,7 +1153,12 @@ impl Reader {
     }
 
     /// Make `model` the model of its surface and carry the cursor over (RA-1).
-    fn install_model(&mut self, model: &Arc<LineModel>, now: Instant, fx: &mut ReaderEffects) {
+    pub(super) fn install_model(
+        &mut self,
+        model: &Arc<LineModel>,
+        now: Instant,
+        fx: &mut ReaderEffects,
+    ) {
         let same_surface = self
             .review
             .cur

@@ -103,6 +103,73 @@ interface hooks {
   command: func(id: u32) -> command-result;
 }
 
+/// Terminal policy (milestone M6, ADR-0001 T-2, ADR-0008 tier W3). One pure function per terminal:
+/// the host owns the clock, the IPC and the speech; the extension turns inputs into actions.
+/// Rust mirror: `gorca_ext_api::terminal`. Not part of the `extension` world yet: M5 adds
+/// `export terminal;` once the host dispatches it.
+interface terminal {
+  variant term-key {
+    typed(char), enter, backspace, delete, tab,
+    char-left, char-right, word-left, word-right, line-start, line-end,
+    line-up, line-down, interrupt, other,
+  }
+
+  variant term-edit {
+    /// `text` is present when the payload arrived and has `len` scalars.
+    insert(tuple<u32, u32, option<string>>),
+    %delete(tuple<u32, u32>),
+    replaced,
+  }
+
+  variant term-input {
+    key(term-key),
+    edit(term-edit),
+    caret(u32),
+    /// Reply to `fetch-screen`: the visible screen and the caret.
+    screen(tuple<string, option<u32>>),
+    screen-failed,
+    tick,
+    focus,
+    blur,
+  }
+
+  enum unit { %char, word, line, text }
+
+  enum urgency { key, queued, output }
+
+  variant term-action {
+    say(tuple<string, unit, urgency, bool>),
+    fetch-screen,
+    /// Call `step` with `tick` at this time (milliseconds) or soon after.
+    arm-timer(u64),
+    /// The key was handled: the generic key echo stays silent.
+    claim-key,
+  }
+
+  record term-config {
+    settle-ms: u32,
+    max-wait-ms: u32,
+    prompt-markers: list<string>,
+    prompt-regex: string,
+    secret-regex: string,
+    burst-lines: u32,
+    burst-tail: u32,
+    max-output-chars: u32,
+  }
+
+  record term-snapshot {
+    text: string,
+    caret: u32,
+    generation: u64,
+  }
+
+  configure: func(cfg: term-config);
+  /// The screen as last known, for review; none before the first reading.
+  snapshot: func() -> option<term-snapshot>;
+  /// `now` is monotonic milliseconds. Limit: 2 ms CPU.
+  step: func(now: u64, input: term-input) -> list<term-action>;
+}
+
 world extension {
   import host;
   export hooks;

@@ -45,6 +45,7 @@ gorca-core = { path = "crates/gorca-core" }
 gorca-braille-brlapi = { path = "crates/gorca-braille-brlapi" }
 gorca-ext-api = { path = "crates/gorca-ext-api" }
 gorca-ext-host = { path = "crates/gorca-ext-host" }
+ext-vte = { path = "extensions/ext-vte" }
 gorca-testkit = { path = "crates/gorca-testkit" }
 gorca-bench-b2 = { path = "crates/gorca-bench-b2" }
 
@@ -91,6 +92,9 @@ inotify = { version = "0.11", default-features = false, features = ["stream"] }
 cargo_metadata = "0.23"
 criterion = { version = "0.8", default-features = false }
 wit-parser = "0.261"
+
+# Terminal policy: user-configurable prompt and password-prompt expressions (ext-vte).
+regex = { version = "1", default-features = false, features = ["std", "unicode-perl", "unicode-case"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

@@ -1,0 +1,37 @@
+# e2e m6fix-k2s-main-3
+# utc=2026-10-16T00:18:00Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=32.13 29.32 28.04 23/3410 3093432
+# git_rev=b8521b1
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m6fix-k2s-main-3
+# reader=daemon:<repo>/.claude/worktrees/m6fix-main/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=32.13 29.32 28.04 22/3407 3093426
+# reader_env=GORCA_M1=1 GORCA_M1_STRICT=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=k2s_ms: first SPEAK between a command key and the next one (1200 spoken for 1200 chords)
+# note1=k2s_ms: first SPEAK between a command key and the next one (1194 spoken for 1200 chords)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+K2s.k2s_ms.n               daemon/voicego         1199         1193         1200  3                  info   [samples]
+K2s.k2s_ms.p50             daemon/voicego        0.357        0.342        0.413  3                  info   [ms]
+K2s.k2s_ms.p95             daemon/voicego        2.542        2.428        3.580  3                  info   [ms]
+K2s.k2s_ms.p99             daemon/voicego        4.580        4.054        6.648  3 <=            6  PASS   [ms]
+K2s.k2s_ms.p999            daemon/voicego        9.383        8.201         10.1  3                  info   [ms]
+K2s.k2s_ms.max             daemon/voicego         10.2        9.704         17.2  3                  info   [ms]
+K2s.lost                   daemon/voicego            1            0            7  3 <=            0  FAIL  gated on the max over repeats [events]
+K2s.not_consumed           daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+K2s.storm_achieved_eps     daemon/voicego        49996        40792        50000  3 >=        45000  PASS  must reach 90% of the target rate [ev/s]
+K2s.storm_target_eps       daemon/voicego        50000        50000        50000  3                  info   [ev/s]

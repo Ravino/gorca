@@ -62,6 +62,22 @@ cannot touch the real session. It never signals anything it did not spawn.
 | SA3a | M3: arrow key during say-all | `sa3a_ms` key to the speech of the line after the reading position (app handles the key), `sa3a_wrong`, `sa3a_caret_moved_back` (gorca never moves the caret back) |
 | PW | M3: typing, moving and selecting in a password entry with `--bench-present-log` and `RUST_LOG=trace` | `pw_plaintext_in_logs` (gate 0: the secret and two 8-character pieces of it, in the log and in the reader's stderr), `pw_echo_missing` (gate 0), `pw_log_lines` (>= 1, so the grep means something) |
 
+| V1 | M6: a command's output and prompt in one VTE frame (`fakeapp.py --scenario terminal --term-trim`) | `v1_ms` last frame emit to SPEAK (gate p99 35 ms = 30 ms settle + 5 ms), `v1_over_ms`, `lost` |
+| VT | M6: 10,000 randomised actions (1,000 with `--quick`) in a terminal: typing, BackSpace, Left, Right, Enter | `vt_missing`, `vt_double`, `vt_extra` (gate 0), `vt_ms` key to SPEAK (gate p99 3 ms), `vt_left_ms`/`vt_right_ms`/`vt_output_ms` (caret- and output-driven, info) |
+| VH | M6: scripted readline session (Tab, arrows, Ctrl+Left, Ctrl+A/E, history, Ctrl+C, a 20-line listing) | `vh_failures` (gate 0) |
+| V2 | M6: `cat`, `yes` and `make -j` floods in the focused terminal (60x240, 60 frames/s), 60 % unattended then typed keys; `GORCA_V2_SECS=n` sets each flood | `v2_worst_cpu_pct` (gate 60), `v2_siocinq_p99_kib` (gate 1024, `ss -xpn` every 50 ms), `v2_*_speaks_per_s`, `v2_*_signal_mb_per_s`, `v2_key_ms` (gate p99 4 ms), `v2_*_after_missing` |
+| V3 | M6: Ctrl+C with an utterance in flight during a flood | `v3_stop_ms` (gate p99 2 ms), `v3_prompt_missing`, `v3_stale`, `v3_no_stop` (gate 0) |
+| VP | M6: `sudo` password prompt, typing a password, presentation log and `RUST_LOG=trace` | `vp_plaintext_in_logs`, `vp_echo_missing`, `vp_prompt_missing` (gate 0) |
+| VR | M6: numpad review of the held terminal screen, and a screen that changes under the cursor | `vr_ms` (gate p99 3 ms), `vr_failures`, `vr_ipc_calls` (gate 0) |
+| VF | M6: pager page, Down moves a cursor row, htop-style repaint (silent), edit in the middle of a screen | `vf_failures` (gate 0) |
+| VB | M6: an unfocused terminal floods while the focused one is typed in (T-4) | `vb_key_ms` (gate p99 4 ms), `vb_stray_speaks` (gate 0) |
+| VV | M6: the daemon against a REAL gnome-terminal-server in a private headless session (`tests/term/run_real_vte.sh`, `GORCA_M6_REAL=1`) | `vv_failures`, `vv_*_prompt_missing`, `vv_type_*` (gate 0), `vv_key_ms` (3 ms), `vv_stop_ms` (2 ms), `vv_worst_cpu_pct`, `vv_siocinq_p99_kib` |
+
+The M6 scenarios (`crates/gorca-bench/src/e2e/m6.rs`) run with `--reader-env GORCA_M6=1` (`GORCA_M6_STRICT=1` fails instead
+of skipping). `fakeapp.py --scenario terminal` plays VTE (frame diff by common head and tail, `delete` + `insert` + caret) and the
+harness plays the shell by writing what bash writes to the pty (`term_feed`, escape sequences included). A negative offset
+sent to `GetText` is counted as the `g_assert` that would abort a real terminal server: `vte_assert` is 0 in every scenario.
+
 The M3 scenarios (`crates/gorca-bench/src/e2e/m3.rs`) run with `--reader-env GORCA_M3=1` (`GORCA_M3_STRICT=1` fails instead of
 skipping). They press real keys through `fake_mutter.py` and let the fake app play the toolkit: after a key the harness tells
 the app to move the caret, insert or delete (`caret`, `type`, `backspace`, `insert_text`, `select_all`, `load_text`,

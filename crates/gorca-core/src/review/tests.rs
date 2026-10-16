@@ -1108,3 +1108,88 @@ fn r1_a_step_on_a_big_valid_model_is_fast_and_pure() {
     };
     assert!(p99 <= bound, "p99 {p99:?} (worst {worst:?}) over {bound:?}");
 }
+
+// ---- terminal review (ADR-0006 LS-1, M6) -------------------------------------------------------
+
+fn terminal_screen() -> Vec<Arc<NodeSnapshot>> {
+    let mut term = (*node(
+        2,
+        Role::Terminal,
+        "Terminal",
+        Some(1),
+        &[],
+        rect(0, 0, 400, 300),
+    ))
+    .clone();
+    term.states |= StateSet::FOCUSED;
+    vec![
+        node(
+            1,
+            Role::Window,
+            "Terminal",
+            None,
+            &[2],
+            rect(0, 0, 400, 300),
+        ),
+        Arc::new(term),
+    ]
+}
+
+#[test]
+fn terminal_review_reads_the_held_screen_by_line_word_and_char_with_no_ipc() {
+    let mut f = fixture();
+    f.load(terminal_screen());
+    // Focus the terminal and collect the screen read it asks for.
+    let mut fx = f.reader.handle(
+        ReaderMsg::Focus(crate::FocusLaneMsg::FocusChanged { node: key(2) }),
+        f.now,
+    );
+    f.now += Duration::from_millis(60);
+    fx.extend(f.reader.handle(ReaderMsg::Timer, f.now));
+    let req = fx
+        .iter()
+        .find_map(|e| match e {
+            ReaderEffect::TextFetch {
+                req,
+                op: crate::TextOp::Screen { .. },
+                ..
+            } => Some(*req),
+            _ => None,
+        })
+        .expect("the focused terminal's screen is read");
+    let screen = "total 3\nalpha beta\nme@box:~$ ls -l";
+    let n = u32::try_from(screen.chars().count()).unwrap();
+    f.reader.handle(
+        ReaderMsg::Text(crate::TextMsg::Fetched {
+            req,
+            epoch: f.epoch.current(),
+            result: Ok(crate::text::caret::Reply::Window(
+                gorca_model::TextWindowFill {
+                    base: 0,
+                    text: Arc::from(screen),
+                    len: n,
+                    caret: Some(n),
+                },
+            )),
+        }),
+        f.now,
+    );
+    // Review starts on the line with the caret, and every step is a mirror-only, IPC-free read.
+    let fx = f.run(CoreCmd::ReviewCurLine);
+    assert_eq!(said(&fx), ["me@box:~$ ls -l"]);
+    assert_eq!(effects(&fx, is_ipc), 0);
+    let fx = f.run(CoreCmd::ReviewPrevLine);
+    assert_eq!(said(&fx), ["alpha beta"]);
+    assert_eq!(effects(&fx, is_ipc), 0);
+    let fx = f.run(CoreCmd::ReviewNextWord);
+    assert_eq!(said(&fx), ["beta"]);
+    let fx = f.run(CoreCmd::ReviewNextChar);
+    assert_eq!(said(&fx), ["e"]);
+    let fx = f.run(CoreCmd::ReviewPrevLine);
+    assert_eq!(said(&fx), ["total 3"]);
+    let fx = f.run(CoreCmd::ReviewPrevLine);
+    assert_eq!(said(&fx), ["Top"]);
+    let fx = f.run(CoreCmd::ReviewBottom);
+    assert_eq!(said(&fx), ["me@box:~$ ls -l"]);
+    assert_eq!(effects(&fx, is_ipc), 0);
+}

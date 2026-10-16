@@ -564,6 +564,8 @@ name = "ext-vte"
 version = "0.0.0"
 dependencies = [
  "gorca-ext-api",
+ "regex",
+ "serde_json",
 ]
 
 [[package]]
@@ -794,10 +796,12 @@ version = "0.0.0"
 dependencies = [
  "arc-swap",
  "chrono",
+ "ext-vte",
  "gorca-config",
  "gorca-connector-api",
  "gorca-doc",
  "gorca-doc-source-api",
+ "gorca-ext-api",
  "gorca-ingress",
  "gorca-input-api",
  "gorca-mirror",
