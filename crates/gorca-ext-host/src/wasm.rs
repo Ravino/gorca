@@ -453,6 +453,11 @@ fn node_to_wit(n: &api::Node) -> wt::Node {
         states: n.states,
         name: n.name.clone(),
         description: n.description.clone(),
+        range: n.range.map(|r| wt::Range {
+            current: r.current,
+            min: r.min,
+            max: r.max,
+        }),
     }
 }
 

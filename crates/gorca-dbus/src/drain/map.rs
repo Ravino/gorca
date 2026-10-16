@@ -181,7 +181,14 @@ fn non_negative(v: i32) -> u32 {
 /// unlike text or property noise.
 pub fn needs_path(ev: &NodeEvent) -> Option<NodeKey> {
     match ev {
-        NodeEvent::FocusChanged { node } | NodeEvent::CaretMoved { node, .. } => Some(*node),
+        // A focus, a caret move, or a window that was just activated (M4b: the Reader
+        // reads its title and text).
+        NodeEvent::FocusChanged { node }
+        | NodeEvent::CaretMoved { node, .. }
+        | NodeEvent::WindowEvent {
+            node,
+            kind: WindowKind::Activate,
+        } => Some(*node),
         NodeEvent::PropertiesChanged { node, mask } if mask.contains(PropMask::SELECTED_NOW) => {
             Some(*node)
         }
@@ -189,6 +196,31 @@ pub fn needs_path(ev: &NodeEvent) -> Option<NodeKey> {
         | NodeEvent::PropertiesChanged { .. }
         | NodeEvent::ChildrenChanged { .. }
         | NodeEvent::TextChanged { .. }
+        | NodeEvent::SelectionChanged { .. }
+        | NodeEvent::Announcement { .. }
+        | NodeEvent::DocumentEvent { .. }
+        | NodeEvent::WindowEvent { .. }
+        | NodeEvent::NodeRemoved { .. } => None,
+    }
+}
+
+/// Events that only the verified Shell needs a path for (M4b): a node that became visible (a
+/// notification banner) and a value that changed (the OSD level bar). Frequent in storms, so
+/// they are recorded through `Router::hint_seen`, which the connector honours only for the
+/// Shell, never through [`needs_path`].
+pub fn needs_hint_path(ev: &NodeEvent) -> Option<NodeKey> {
+    match ev {
+        NodeEvent::PropertiesChanged { node, mask }
+            if mask.intersects(PropMask::SHOWING_NOW | PropMask::VALUE) =>
+        {
+            Some(*node)
+        }
+        NodeEvent::FocusChanged { .. }
+        | NodeEvent::ActiveDescendantChanged { .. }
+        | NodeEvent::PropertiesChanged { .. }
+        | NodeEvent::ChildrenChanged { .. }
+        | NodeEvent::TextChanged { .. }
+        | NodeEvent::CaretMoved { .. }
         | NodeEvent::SelectionChanged { .. }
         | NodeEvent::Announcement { .. }
         | NodeEvent::WindowEvent { .. }
@@ -288,6 +320,12 @@ pub fn map_signal(
                 ("selected", 1) => out.push(NodeEvent::PropertiesChanged {
                     node,
                     mask: PropMask::STATES | PropMask::SELECTED_NOW,
+                }),
+                // A notification banner or an OSD appears: the only signal there is (St sets
+                // the `showing` state when the actor is mapped, clutter-actor.c).
+                ("showing", 1) => out.push(NodeEvent::PropertiesChanged {
+                    node,
+                    mask: PropMask::STATES | PropMask::SHOWING_NOW,
                 }),
                 _ => out.push(NodeEvent::PropertiesChanged {
                     node,
@@ -478,6 +516,34 @@ mod tests {
     }
 
     #[test]
+    fn showing_becomes_a_hint_only_when_set_and_needs_a_path() {
+        let on = body("showing", 1, 0, "i", &0i32.to_le_bytes());
+        let off = body("showing", 0, 0, "i", &0i32.to_le_bytes());
+        let ev = |b: &[u8]| run("org.a11y.atspi.Event.Object", "StateChanged", "/x/1", b);
+        assert!(matches!(
+            ev(&on)[0],
+            NodeEvent::PropertiesChanged { mask, .. } if mask.contains(PropMask::SHOWING_NOW)
+        ));
+        assert!(matches!(
+            ev(&off)[0],
+            NodeEvent::PropertiesChanged { mask, .. } if mask == PropMask::STATES
+        ));
+        // Frequent in storms: a hint path, never a focus-like one.
+        assert!(needs_path(&ev(&on)[0]).is_none());
+        assert!(needs_hint_path(&ev(&on)[0]).is_some());
+        assert!(needs_hint_path(&ev(&off)[0]).is_none());
+    }
+
+    #[test]
+    fn a_window_activation_needs_a_remembered_path() {
+        let b = body("", 0, 0, "i", &0i32.to_le_bytes());
+        let act = run("org.a11y.atspi.Event.Window", "Activate", "/x/1", &b);
+        let gone = run("org.a11y.atspi.Event.Window", "Deactivate", "/x/1", &b);
+        assert!(needs_path(&act[0]).is_some());
+        assert!(needs_path(&gone[0]).is_none());
+    }
+
+    #[test]
     fn only_focus_caret_and_new_selection_need_a_remembered_path() {
         let on = body("selected", 1, 0, "i", &0i32.to_le_bytes());
         let off = body("selected", 0, 0, "i", &0i32.to_le_bytes());
@@ -645,5 +711,25 @@ mod tests {
     fn unknown_interface_is_ignored() {
         let out = run("org.example.Other", "Foo", "/x", &[]);
         assert!(out.is_empty());
+    }
+
+    #[test]
+    fn a_value_change_needs_a_remembered_path() {
+        let b = body("accessible-value", 0, 0, "i", &0i32.to_le_bytes());
+        let e = run("org.a11y.atspi.Event.Object", "PropertyChange", "/x/1", &b);
+        assert!(matches!(
+            e[0],
+            NodeEvent::PropertiesChanged { mask, .. } if mask == PropMask::VALUE
+        ));
+        assert!(needs_path(&e[0]).is_none());
+        assert!(needs_hint_path(&e[0]).is_some());
+        let name = body("accessible-name", 0, 0, "s", b"\x01\0\0\0x\0");
+        let n = run(
+            "org.a11y.atspi.Event.Object",
+            "PropertyChange",
+            "/x/1",
+            &name,
+        );
+        assert!(needs_hint_path(&n[0]).is_none());
     }
 }

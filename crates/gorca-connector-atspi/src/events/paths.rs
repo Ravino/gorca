@@ -74,6 +74,8 @@ fn cost(path: &str) -> usize {
 struct Inner {
     owners: HashMap<Owner, Bucket>,
     app_owner: HashMap<AppId, Owner>,
+    /// Applications whose hint events record paths.
+    hint_apps: std::collections::HashSet<AppId>,
     total_bytes: usize,
 }
 
@@ -173,6 +175,21 @@ impl PathTable {
         self.inner.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
+    /// Let `showing` and value hints of `app` record paths (the verified Shell, M4b). Other
+    /// applications flood such events (a storm of `showing` toggles), and recording them would
+    /// evict the focus paths the Reader needs.
+    pub fn allow_hints(&self, app: AppId) {
+        self.lock().hint_apps.insert(app);
+    }
+
+    /// Record `path` for a hint event of `node` if its application may.
+    pub fn insert_hint(&self, node: NodeKey, path: &str) {
+        let allowed = self.lock().hint_apps.contains(&node.app);
+        if allowed {
+            self.insert(node, path);
+        }
+    }
+
     /// Assign `app` to `owner`. Call once, when the application is published.
     pub fn bind_app(&self, app: AppId, owner: Owner) {
         let mut g = self.lock();
@@ -227,6 +244,7 @@ impl PathTable {
     /// Forget everything of an application that left the bus.
     pub fn forget_app(&self, app: AppId) {
         let mut g = self.lock();
+        g.hint_apps.remove(&app);
         let Some(owner) = g.app_owner.remove(&app) else {
             return;
         };
@@ -477,5 +495,26 @@ mod tests {
             t.insert(key(pid, 1), &long);
         }
         assert!(t.bytes() <= 512 * (MAX_PATH_BYTES + ENTRY_OVERHEAD));
+    }
+
+    #[test]
+    fn hint_events_record_paths_only_for_the_applications_that_may() {
+        let t = PathTable::new();
+        t.bind_app(app(1), Owner::Pid(10));
+        t.bind_app(app(2), Owner::Pid(20));
+        t.allow_hints(app(2));
+        // A storm of `showing` hints from an ordinary app leaves the table alone ...
+        for n in 0..1000 {
+            t.insert_hint(key(1, n), "/a/x");
+        }
+        assert!(t.get(key(1, 5)).is_none());
+        // ... the Shell's are recorded ...
+        t.insert_hint(key(2, 7), "/s/7");
+        assert_eq!(t.get(key(2, 7)).as_deref(), Some("/s/7"));
+        // ... and the permission goes with the application.
+        t.forget_app(app(2));
+        t.bind_app(app(2), Owner::Pid(20));
+        t.insert_hint(key(2, 8), "/s/8");
+        assert!(t.get(key(2, 8)).is_none());
     }
 }

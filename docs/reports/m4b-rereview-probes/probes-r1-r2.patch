@@ -1,0 +1,350 @@
+diff --git a/crates/gorca-core/src/present/fair.rs b/crates/gorca-core/src/present/fair.rs
+index 75638de..29fb9fa 100644
+--- a/crates/gorca-core/src/present/fair.rs
++++ b/crates/gorca-core/src/present/fair.rs
+@@ -477,3 +477,40 @@ mod tests {
+         assert_eq!(total, 64, "nothing is lost, only paced");
+     }
+ }
++
++#[cfg(test)]
++mod m4b_review_probe {
++    use super::*;
++    use gorca_model::{Epoch, Prio, UttId};
++
++    fn u(n: u64) -> Utterance {
++        Utterance {
++            id: UttId(n),
++            segments: smallvec::SmallVec::new(),
++            lang: None,
++            epoch: Epoch(1),
++            prio: Prio::Notification,
++            may_refine: false,
++            survives_focus_change: true,
++            refines: None,
++        }
++    }
++
++    /// P4: waiting utterances released by `take_due` must respect the global ceiling.
++    #[test]
++    fn probe_p4_take_due_respects_the_global_ceiling() {
++        let t = Instant::now();
++        let mut f = Fair::new(t);
++        for o in 0..64u32 {
++            while f.allow(Owner::Pid(o), Kind::Speak, t) {}
++            f.wait(Owner::Pid(o), u(u64::from(o)), t);
++        }
++        let out = f.take_due(t + Duration::from_millis(400));
++        assert!(
++            out.len() as f32 <= GLOBAL_SPEAK_BURST,
++            "{} waiting notices released at once, ceiling {}",
++            out.len(),
++            GLOBAL_SPEAK_BURST
++        );
++    }
++}
+diff --git a/crates/gorca-core/src/present/window.rs b/crates/gorca-core/src/present/window.rs
+index 6b7e5ac..392d09f 100644
+--- a/crates/gorca-core/src/present/window.rs
++++ b/crates/gorca-core/src/present/window.rs
+@@ -1965,3 +1965,9 @@ pub(crate) mod tests {
+         assert!(spoken <= 20, "{spoken} window notices in one second");
+     }
+ }
++
++#[cfg(test)]
++mod m4b_rereview_probes;
++
++#[cfg(test)]
++mod m4b_review_probes;
+diff --git a/crates/gorca-core/src/present/window/m4b_rereview_probes.rs b/crates/gorca-core/src/present/window/m4b_rereview_probes.rs
+new file mode 100644
+index 0000000..90f607b
+--- /dev/null
++++ b/crates/gorca-core/src/present/window/m4b_rereview_probes.rs
+@@ -0,0 +1,153 @@
++//! Reviewer probes (M4b r2). Each asserts what the review fix promises or what the user should hear.
++#![allow(clippy::wildcard_enum_match_arm)]
++use super::tests::{Fx, app, fixture, key, node, prios, said, snap};
++use super::*;
++use crate::reader::{BackgroundMsg, FocusLaneMsg, ReaderMsg};
++use gorca_model::LocalId;
++
++fn k(a: u32, n: u64) -> NodeKey {
++    NodeKey { app: app(a), local: LocalId(n) }
++}
++fn act(f: &mut Fx, w: NodeKey, at: Instant) -> ReaderEffects {
++    f.reader.handle(ReaderMsg::Focus(FocusLaneMsg::WindowActivated { window: w }), at)
++}
++fn foc(f: &mut Fx, n: NodeKey, at: Instant) -> ReaderEffects {
++    f.reader.handle(ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: n }), at)
++}
++fn info(w: NodeKey, role: Role, title: &'static str, texts: &[&'static str]) -> ReaderMsg {
++    ReaderMsg::Background(BackgroundMsg::Window(WindowInfo {
++        window: w,
++        snap: Some(Arc::new(NodeSnapshot {
++            key: w,
++            ..(*snap(&node(w.local.0, role, title, &[]))).clone()
++        })),
++        texts: texts.iter().map(|t| Arc::from(*t)).collect(),
++    }))
++}
++fn count(v: &[String], needle: &str) -> usize {
++    v.iter().map(|s| s.matches(needle).count()).sum()
++}
++
++/// Q1 (M-2): a fresh plain window whose read misses the 10 ms hold. Before the fix the user heard
++/// "Back, button" then "Files"; now the focus name is said twice.
++#[test]
++fn q1_hold_miss_repeats_the_focus() {
++    let mut f = fixture(&[node(2, Role::Button, "Back", &[])]);
++    let t = Instant::now();
++    let mut all = Vec::new();
++    all.extend(said(&act(&mut f, key(1), t)));
++    all.extend(said(&foc(&mut f, key(2), t + Duration::from_millis(2))));
++    all.extend(said(&f.reader.handle(ReaderMsg::Timer, t + WINDOW_HOLD)));
++    all.extend(said(&f.reader.handle(
++        info(key(1), Role::Window, "Files", &[]),
++        t + Duration::from_millis(14),
++    )));
++    assert_eq!(count(&all, "Back, button"), 1, "focus spoken more than once: {all:?}");
++}
++
++/// Q2 (M-2): the title is in the mirror but the dialog text is not, and the focus arrives after
++/// the hold window (no hold at all): title and button are both said twice.
++#[test]
++fn q2_late_focus_without_hold_repeats_title_and_focus() {
++    let mut f = fixture(&[
++        node(1, Role::Dialog, "Delete file", &[2, 3]),
++        node(3, Role::Button, "Delete", &[]),
++    ]);
++    let t = Instant::now();
++    let mut all = Vec::new();
++    all.extend(said(&act(&mut f, key(1), t)));
++    all.extend(said(&foc(&mut f, key(3), t + Duration::from_millis(12))));
++    all.extend(said(&f.reader.handle(
++        info(key(1), Role::Dialog, "Delete file", &["This cannot be undone."]),
++        t + Duration::from_millis(16),
++    )));
++    assert_eq!(count(&all, "Delete file"), 1, "{all:?}");
++}
++
++/// Q3 (H-1): the user switches to another application's window that sends no focus event. Its
++/// title is a polite notice: it neither cancels the previous app's speech nor interrupts.
++#[test]
++fn q3_user_switch_to_app_without_focus_is_only_a_notice() {
++    let mut f = fixture(&[node(2, Role::Button, "Back", &[])]);
++    let t = Instant::now();
++    foc(&mut f, key(2), t);
++    let e0 = f.epoch.current();
++    let at = t + Duration::from_millis(500);
++    act(&mut f, k(2, 40), at);
++    f.reader.handle(
++        info(k(2, 40), Role::Window, "Image Viewer", &[]),
++        at + Duration::from_millis(3),
++    );
++    let fx = f.reader.handle(ReaderMsg::Timer, at + ALONE_DELAY);
++    assert_eq!(said(&fx), ["Image Viewer"]);
++    assert!(
++        f.epoch.current() > e0 || prios(&fx) == [Prio::Message],
++        "a user's own app switch speaks as a polite notice: {:?}",
++        prios(&fx)
++    );
++}
++
++/// Q4 (remaining risk): eight other apps activate within 120 ms of the user's dialog; the global
++/// oldest pending activation (the user's) is evicted and the dialog title never leads its focus.
++#[test]
++fn q4_eight_background_activations_evict_the_users_dialog_title() {
++    let mut f = fixture(&[
++        node(1, Role::Dialog, "Delete file", &[2, 3]),
++        node(2, Role::Label, "This cannot be undone.", &[]),
++        node(3, Role::Button, "Delete", &[]),
++    ]);
++    let t = Instant::now();
++    act(&mut f, key(1), t);
++    for a in 2..10u32 {
++        act(&mut f, k(a, 1), t + Duration::from_millis(1));
++    }
++    let mut all = said(&foc(&mut f, key(3), t + Duration::from_millis(3)));
++    all.extend(said(&f.reader.handle(ReaderMsg::Timer, t + WINDOW_HOLD)));
++    assert!(
++        all.iter().any(|s| s.contains("Delete file")),
++        "dialog title evicted: {all:?}"
++    );
++}
++
++/// Q5 (H-1): the focused app floods activations of its own two windows with no focus.
++#[test]
++fn q5_focused_app_activation_flood_epoch_rate() {
++    let mut f = fixture(&[
++        node(1, Role::Window, "A", &[]),
++        node(5, Role::Window, "B", &[]),
++        node(2, Role::Button, "Back", &[]),
++    ]);
++    let t = Instant::now();
++    foc(&mut f, key(2), t);
++    let e0 = f.epoch.current().0;
++    let mut spoken = 0;
++    for i in 0..100u64 {
++        let at = t + Duration::from_millis(1000 + 101 * i);
++        spoken += said(&act(&mut f, key(if i % 2 == 0 { 1 } else { 5 }), at)).len();
++        spoken += said(&f.reader.handle(ReaderMsg::Timer, at + ALONE_DELAY)).len();
++    }
++    let adv = f.epoch.current().0 - e0;
++    eprintln!("Q5: {adv} epoch advances, {spoken} utterances in ~10 s");
++    assert!(adv <= 33, "{adv} epoch advances in 10 s");
++}
++
++/// Q6 (H-1): another window of the focused app comes due exactly at the hold release; the held
++/// focus is spoken once and not cancelled by that title.
++#[test]
++fn q6_same_app_alone_timer_at_hold_release() {
++    let mut f = fixture(&[
++        node(3, Role::Button, "Delete", &[]),
++        node(5, Role::Window, "Other", &[]),
++    ]);
++    let t = Instant::now();
++    foc(&mut f, key(3), t);
++    let base = t + Duration::from_millis(500);
++    let mut out = vec![act(&mut f, key(5), base - Duration::from_millis(110))];
++    out.push(act(&mut f, key(1), base));
++    out.push(foc(&mut f, key(3), base + Duration::from_millis(2)));
++    let e_before = f.epoch.current();
++    out.push(f.reader.handle(ReaderMsg::Timer, base + WINDOW_HOLD));
++    let all: Vec<String> = out.iter().flat_map(said).collect();
++    assert_eq!(count(&all, "Delete, button"), 1, "{all:?}");
++    assert_eq!(f.epoch.current(), e_before, "held focus cancelled: {all:?}");
++}
+diff --git a/crates/gorca-core/src/present/window/m4b_review_probes.rs b/crates/gorca-core/src/present/window/m4b_review_probes.rs
+new file mode 100644
+index 0000000..f26b29c
+--- /dev/null
++++ b/crates/gorca-core/src/present/window/m4b_review_probes.rs
+@@ -0,0 +1,86 @@
++//! Reviewer probes (M4b r1). Each asserts the behaviour the spec/threat model promises.
++#![allow(clippy::wildcard_enum_match_arm)]
++use super::tests::{fixture, node, said};
++use super::*;
++use crate::reader::{FocusLaneMsg, ReaderMsg};
++use gorca_model::LocalId;
++
++fn other(n: u64) -> NodeKey {
++    NodeKey { app: super::tests::app(2), local: LocalId(n) }
++}
++
++fn all_said(v: &[ReaderEffects]) -> Vec<String> {
++    v.iter().flat_map(said).collect()
++}
++
++/// P1: a background app's activation that no focus follows (and whose window it never
++/// answers for) must not silently cancel the user's speech.
++#[test]
++fn probe_p1_background_activation_does_not_silently_advance_epoch() {
++    let mut f = fixture(&[
++        node(1, Role::Window, "Files", &[2]),
++        node(2, Role::Button, "Back", &[]),
++    ]);
++    let t = Instant::now();
++    let fx = f.reader.handle(ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: super::tests::key(2) }), t);
++    assert_eq!(said(&fx), ["Back, button"]);
++    let e0 = f.epoch.current();
++    let fx1 = f.reader.handle(ReaderMsg::Focus(FocusLaneMsg::WindowActivated { window: other(500) }), t + Duration::from_millis(5));
++    let fx2 = f.reader.handle(ReaderMsg::Timer, t + Duration::from_millis(5) + ALONE_DELAY);
++    let spoken = all_said(&[fx1, fx2]);
++    assert!(
++        f.epoch.current() == e0 || !spoken.is_empty(),
++        "the user's focus speech was cancelled by another app's activation with nothing said: epoch {:?} -> {:?}, said {spoken:?}",
++        e0, f.epoch.current()
++    );
++}
++
++/// P2: a focus utterance held for its window read must not be dropped because another app's
++/// pending activation fired its alone timer during the hold.
++#[test]
++fn probe_p2_held_focus_survives_another_apps_alone_timer() {
++    let mut f = fixture(&[node(3, Role::Button, "Delete", &[])]);
++    let base = Instant::now();
++    let t = base + Duration::from_millis(115);
++    let mut out = Vec::new();
++    // App 2 activated a window 115 ms ago and no focus followed: its alone timer is due at t+5.
++    out.push(f.reader.handle(ReaderMsg::Focus(FocusLaneMsg::WindowActivated { window: other(500) }), base));
++    // App 1's dialog (unknown to the mirror) activates; its focus follows 2 ms later and is held.
++    out.push(f.reader.handle(ReaderMsg::Focus(FocusLaneMsg::WindowActivated { window: super::tests::key(1) }), t));
++    let fx = f.reader.handle(ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: super::tests::key(3) }), t + Duration::from_millis(2));
++    assert!(said(&fx).is_empty(), "held: {:?}", said(&fx));
++    out.push(fx);
++    out.push(f.reader.handle(ReaderMsg::Timer, t + Duration::from_millis(6)));
++    out.push(f.reader.handle(ReaderMsg::Timer, t + WINDOW_HOLD));
++    out.push(f.reader.handle(ReaderMsg::Timer, t + Duration::from_millis(200)));
++    let spoken = all_said(&out);
++    assert!(
++        spoken.iter().any(|s| s.contains("Delete, button")),
++        "the user's focus was never spoken: {spoken:?}"
++    );
++}
++
++/// P3: five quick Alt+Tab switches between two windows of one process (one per 150 ms): the
++/// last activation's title must lead its focus.
++#[test]
++fn probe_p3_last_alt_tab_title_is_spoken() {
++    let mut f = fixture(&[
++        node(1, Role::Window, "Files", &[2]),
++        node(2, Role::Button, "Back", &[]),
++        node(5, Role::Window, "Other", &[6]),
++        node(6, Role::Button, "Go", &[]),
++    ]);
++    let t = Instant::now();
++    let mut last = Vec::new();
++    let mut all: Vec<Vec<String>> = Vec::new();
++    for i in 0..9u64 {
++        let (w, n) = if i % 2 == 0 { (1, 2) } else { (5, 6) };
++        let at = t + Duration::from_millis(125 * i);
++        f.reader.handle(ReaderMsg::Focus(FocusLaneMsg::WindowActivated { window: super::tests::key(w) }), at);
++        let fx = f.reader.handle(ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: super::tests::key(n) }), at + Duration::from_millis(3));
++        last = said(&fx);
++        all.push(last.clone());
++    }
++    assert!(all.iter().all(|s| s[0].starts_with("Files") || s[0].starts_with("Other")), "titles dropped: {all:?}");
++    assert_eq!(last, ["Files, Back, button"], "the final window's title was dropped by the activation limit");
++}
+diff --git a/crates/gorca-speech/src/queue.rs b/crates/gorca-speech/src/queue.rs
+index 98f337c..792ab63 100644
+--- a/crates/gorca-speech/src/queue.rs
++++ b/crates/gorca-speech/src/queue.rs
+@@ -367,3 +367,35 @@ mod tests {
+         assert_eq!(e, vec![SpeechEffect::Speak(UttId(2))]);
+     }
+ }
++
++#[cfg(test)]
++mod m4b_review_probe {
++    use super::*;
++    use gorca_model::UttId;
++    use std::time::Duration;
++
++    /// P5: a notification that arrives at an idle lane inside the grace (after the epoch advance,
++    /// before the focus utterance) must wait like a queued one; else the focus cuts it off.
++    #[test]
++    fn probe_p5_fresh_notification_inside_grace_waits() {
++        let t = Instant::now();
++        let mut q = SpeechQueue::new(true);
++        q.handle(
++            SpeechMsg::Intent(UttMeta { id: UttId(1), prio: Prio::Text, epoch: Epoch(1), survives_focus_change: false }),
++            t,
++            Epoch(1),
++        );
++        q.handle(SpeechMsg::EpochAdvanced, t, Epoch(2));
++        let n = UttMeta { id: UttId(2), prio: Prio::Notification, epoch: Epoch(2), survives_focus_change: true };
++        let e = q.handle(SpeechMsg::Intent(n), t + Duration::from_millis(2), Epoch(2));
++        let e2 = q.handle(
++            SpeechMsg::Intent(UttMeta { id: UttId(3), prio: Prio::Interrupt, epoch: Epoch(2), survives_focus_change: false }),
++            t + Duration::from_millis(10),
++            Epoch(2),
++        );
++        assert!(
++            !e.contains(&SpeechEffect::Speak(UttId(2))),
++            "notification started inside the grace: {e:?}; then the focus did {e2:?}"
++        );
++    }
++}

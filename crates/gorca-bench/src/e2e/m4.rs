@@ -236,7 +236,21 @@ fn series(
         spoken.len()
     ));
     out.s(metric, lat);
-    out.x("lost", lost as f64, "events");
+    // `lost` is a silent loss: a key whose text did not arrive may have been overwritten by the
+    // next key's answer in the lane's interrupt slot (`superseded`, latest wins, counted by the
+    // reader). The reader's own counters decide (see `account`).
+    match rig.account_speech() {
+        Some(a) => {
+            out.x("lost", a.silent_loss() as f64, "events");
+            out.x("superseded", a.superseded as f64, "events");
+            out.x("missing_text", lost as f64, "events");
+            out.notes.push(format!(
+                "{metric}: {lost} keys without their text; reader counters: submitted {}, spoken {}, superseded {}, stale {}, inbox {}, received by the server {}",
+                a.submitted, a.spoken, a.superseded, a.stale_dropped, a.inbox_dropped, a.received
+            ));
+        }
+        None => out.x("lost", lost as f64, "events"),
+    }
     out.x("not_consumed", not_consumed as f64, "events");
     drop(app);
     Ok(())

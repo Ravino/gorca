@@ -9,7 +9,9 @@ pub fn map_role(raw: Raw) -> Role {
         Raw::Application => Role::Application,
         Raw::Frame | Raw::Window => Role::Window,
         Raw::Dialog => Role::Dialog,
-        Raw::Alert => Role::Alert,
+        // The Shell's message banners are `notification`, GTK's info bars `info-bar`: both are
+        // a message that appears by itself, spoken like an alert (M4b).
+        Raw::Alert | Raw::Notification | Raw::InfoBar => Role::Alert,
         Raw::Panel | Raw::Filler | Raw::Grouping | Raw::Section => Role::Panel,
         Raw::DocumentFrame
         | Raw::DocumentText
@@ -37,7 +39,8 @@ pub fn map_role(raw: Raw) -> Role {
         Raw::PasswordText => Role::PasswordEntry,
         Raw::SpinButton => Role::SpinButton,
         Raw::Slider => Role::Slider,
-        Raw::ProgressBar => Role::ProgressBar,
+        // The Shell's OSD and quick-settings sliders draw a `level-bar` with a Value interface.
+        Raw::ProgressBar | Raw::LevelBar => Role::ProgressBar,
         Raw::Menu | Raw::PopupMenu => Role::Menu,
         Raw::MenuBar => Role::MenuBar,
         Raw::MenuItem => Role::MenuItem,
@@ -74,6 +77,9 @@ mod tests {
     fn dialog_and_alert_stay_distinct() {
         assert_eq!(map_role(Raw::Dialog), Role::Dialog);
         assert_eq!(map_role(Raw::Alert), Role::Alert);
+        assert_eq!(map_role(Raw::Notification), Role::Alert);
+        assert_eq!(map_role(Raw::InfoBar), Role::Alert);
+        assert_eq!(map_role(Raw::LevelBar), Role::ProgressBar);
     }
 
     #[test]

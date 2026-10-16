@@ -279,7 +279,8 @@ pub(super) async fn text(
         | TextQuery::Format { .. }
         | TextQuery::AtOffset { .. }
         | TextQuery::Selections { .. }
-        | TextQuery::Window { .. } => Err(BackendError::NotSupported),
+        | TextQuery::Window { .. }
+        | TextQuery::Screen { .. } => Err(BackendError::NotSupported),
         TextQuery::VisibleLines {
             node,
             clip,

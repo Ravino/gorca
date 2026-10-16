@@ -40,6 +40,7 @@ IF_ACC, IF_COMP, IF_TEXT, IF_EDIT, IF_ACT, IF_APP, IF_CACHE = (
     I + "Accessible", I + "Component", I + "Text", I + "EditableText", I + "Action",
     I + "Application", I + "Cache")
 IF_COLL, IF_SEL = I + "Collection", I + "Selection"
+IF_VALUE = I + "Value"
 IF_PROPS = "org.freedesktop.DBus.Properties"
 EV_OBJ, EV_WIN, EV_FOCUS = I + "Event.Object", I + "Event.Window", I + "Event.Focus"
 
@@ -52,7 +53,8 @@ ROLE_BY_NAME = {"application": R_APP, "frame": R_FRAME, "window": 69, "dialog": 
                 "button": R_BUTTON, "entry": R_ENTRY, "text": R_TEXT, "check box": R_CHECK,
                 "list": 31, "list item": R_LIST_ITEM, "status bar": 54, "menu": 33,
                 "menu item": 35, "static": 116, "paragraph": 73, "heading": 83, "section": 85,
-                "terminal": R_TERMINAL}
+                "terminal": R_TERMINAL, "notification": 101, "info bar": 102, "level bar": 103,
+                "slider": 51, "toggle button": 62, "tool tip": 64}
 ROLE_NAMES = {R_APP: "application", R_FRAME: "frame", R_PANEL: "panel", R_LABEL: "label",
               R_BUTTON: "push button", R_ENTRY: "entry", R_TERMINAL: "terminal", R_TEXT: "text",
               R_CHECK: "check box", R_LIST_ITEM: "list item"}
@@ -79,10 +81,10 @@ def path_of(nid):
 
 class Node:
     __slots__ = ("id", "parent", "children", "role", "name", "desc", "states", "text", "caret",
-                 "actions", "editable", "extents", "no_text_extents", "hang", "sel")
+                 "actions", "editable", "extents", "no_text_extents", "hang", "sel", "value")
 
     def __init__(self, nid, parent, role, name, text=None, editable=False, actions=(), states=(),
-                 extents=None, no_text_extents=False):
+                 extents=None, no_text_extents=False, value=None):
         self.id = nid
         self.parent = parent
         self.children = []
@@ -98,6 +100,7 @@ class Node:
         self.no_text_extents = no_text_extents                # GTK4 editables: F-3
         self.hang = False                                     # never answer any call (OB-4)
         self.sel = []                                         # selected ranges [(start, end)], M3
+        self.value = tuple(value) if value else None          # (current, min, max): Value interface, M4b
 
 
 class ApiError(Exception):
@@ -204,6 +207,8 @@ class App:
             r.append(IF_EDIT)
         if n.actions:
             r.append(IF_ACT)
+        if n.value is not None:
+            r.append(IF_VALUE)
         if self.review and n.children:
             r.extend((IF_COLL, IF_SEL))
         return r
@@ -551,6 +556,9 @@ def _(app, n):
 @impl(IF_TEXT, "GetText", "ii", "s")
 def _(app, n, start, end):
     t = n.text
+    if app.term_node is n and (start < 0 or end < -1):
+        # VTE: g_assert((start_offset >= 0) && (end_offset >= -1)) aborts the whole terminal server.
+        app.stats["vte_assert"] = app.stats.get("vte_assert", 0) + 1
     if end < 0:
         end = len(t)
     if app.bad("huge"):
@@ -822,6 +830,10 @@ def _prop_table(app, n):
         p[(IF_TEXT, "CaretOffset")] = dbus.Int32(caret)
     if n.actions:
         p[(IF_ACT, "NActions")] = dbus.Int32(len(n.actions))
+    if n.value is not None:
+        p[(IF_VALUE, "CurrentValue")] = dbus.Double(n.value[0])
+        p[(IF_VALUE, "MinimumValue")] = dbus.Double(n.value[1])
+        p[(IF_VALUE, "MaximumValue")] = dbus.Double(n.value[2])
     if n.id == 0:
         p[(IF_APP, "ToolkitName")] = dbus.String("gorca-fakeapp")
         p[(IF_APP, "Version")] = dbus.String("0")
@@ -912,14 +924,61 @@ def build_service_class(app):
 
 # ---- terminal ------------------------------------------------------------------------------------
 class Term:
-    def __init__(self, rows, cols):
+    def __init__(self, rows, cols, trim=False):
         self.rows, self.cols = rows, cols
         self.lines = [""] * rows
         self.r = self.c = 0
+        self.trim = trim        # VTE-like text: rows right-trimmed, trailing empty rows dropped
+        self.esc = None         # pending escape sequence (M6)
+
+    def _csi(self, params, final):
+        n = [int(x) if x.isdigit() else 0 for x in params.split(";")] if params else []
+        a = n[0] if n else 0
+        if final == "K":
+            if a in (0, 2):
+                self.lines[self.r] = self.lines[self.r][:self.c] if a == 0 else ""
+            elif a == 1:
+                self.lines[self.r] = " " * self.c + self.lines[self.r][self.c:]
+        elif final == "J":
+            if a == 2 or a == 3:
+                self.lines = [""] * self.rows
+            elif a == 0:
+                self.lines[self.r] = self.lines[self.r][:self.c]
+                for i in range(self.r + 1, self.rows):
+                    self.lines[i] = ""
+        elif final == "H" or final == "f":
+            self.r = min(max((n[0] if n else 1) - 1, 0), self.rows - 1)
+            self.c = min(max((n[1] if len(n) > 1 else 1) - 1, 0), self.cols - 1)
+        elif final == "A":
+            self.r = max(0, self.r - max(a, 1))
+        elif final == "B":
+            self.r = min(self.rows - 1, self.r + max(a, 1))
+        elif final == "C":
+            self.c = min(self.cols - 1, self.c + max(a, 1))
+        elif final == "D":
+            self.c = max(0, self.c - max(a, 1))
+        elif final == "G":
+            self.c = min(max(a - 1, 0), self.cols - 1)
 
     def feed(self, s):
         for ch in s:
-            if ch == "\n":
+            if self.esc is not None:
+                self.esc += ch
+                if len(self.esc) == 1:
+                    if ch != "[":
+                        self.esc = None
+                elif ch.isalpha() or ch in "@`~":
+                    self._csi(self.esc[1:-1], ch)
+                    self.esc = None
+                elif len(self.esc) > 24:
+                    self.esc = None
+                continue
+            if ch == "\x1b":
+                self.esc = ""
+                continue
+            if ch == "\b":
+                self.c = max(0, self.c - 1)
+            elif ch == "\n":
                 self.r += 1
                 self.c = 0
             elif ch == "\r":
@@ -940,10 +999,23 @@ class Term:
         self.lines = self.lines[1:] + [""]
         self.r = self.rows - 1
 
+    def _trimmed(self):
+        rows = [l.rstrip() for l in self.lines]
+        while rows and not rows[-1] and len(rows) > self.r + 1:
+            rows.pop()
+        return rows
+
     def snapshot(self):
+        if self.trim:
+            return "\n".join(self._trimmed())
         return "".join(l + "\n" for l in self.lines)
 
     def caret(self):
+        if self.trim:
+            rows = self._trimmed()
+            before = sum(len(rows[i]) + 1 if i < len(rows) else 1 for i in range(self.r))
+            row = rows[self.r] if self.r < len(rows) else ""
+            return before + min(self.c, len(row))
         return sum(len(l) + 1 for l in self.lines[:self.r]) + self.c
 
 
@@ -955,6 +1027,12 @@ def term_frame(app):
     new = t.snapshot()
     old = n.text
     if new == old:
+        # Only the cursor moved (readline Left / Right): VTE signals the caret alone.
+        c = t.caret()
+        if c != n.caret:
+            n.caret = c
+            app.ev_caret(n)
+            app.stats["term_frames"] += 1
         return True
     head = 0
     m = min(len(old), len(new))
@@ -977,7 +1055,7 @@ def term_frame(app):
     return True
 
 
-def term_start(app, fps, lines_per_frame):
+def term_start(app, fps, lines_per_frame, kind="seq"):
     if app.term_timer:
         GLib.source_remove(app.term_timer)
         app.term_timer = None
@@ -988,8 +1066,13 @@ def term_start(app, fps, lines_per_frame):
         def gen():
             for _ in range(lines_per_frame):
                 counter[0] += 1
-                body = "".join(app.rng.choice("abcdefghij klmnopqrst") for _ in range(app.term.cols - 12))
-                app.term.feed("%08d %s\n" % (counter[0], body))
+                if kind == "yes":
+                    app.term.feed("y\n")
+                elif kind == "build":
+                    app.term.feed("[%3d%%] Building CXX object src/mod%05d.o\n" % (counter[0] % 100, counter[0]))
+                else:
+                    body = "".join(app.rng.choice("abcdefghij klmnopqrst") for _ in range(app.term.cols - 12))
+                    app.term.feed("%08d %s\n" % (counter[0], body))
         app.term_source = gen
     if fps > 0:
         app.term_timer = GLib.timeout_add(max(1, int(1000 / fps)), lambda: term_frame(app))
@@ -1141,13 +1224,20 @@ def _build_below(app, parent, spec):
     text = spec.get("text")
     n = app.add(parent.id, _role_of(spec.get("role", "panel")), spec.get("name", ""), text=text,
                 editable=editable, actions=tuple(spec.get("actions", ())), states=states,
-                extents=spec.get("extents"),
+                extents=spec.get("extents"), value=spec.get("value"),
                 no_text_extents=bool(spec.get("no_text_extents", editable and app.coord == "window")))
     if spec.get("hang"):
         n.hang = True
     for child in spec.get("children", ()):
         _build_below(app, n, child)
     return n
+
+
+def _walk(app, n):
+    """`n` and its descendants, parents first."""
+    yield n
+    for c in n.children:
+        yield from _walk(app, app.nodes[c])
 
 
 def build_tree_cmd(app, cmd):
@@ -1177,9 +1267,11 @@ def build_terminal(app):
     a = app.args
     app.add(None, R_APP, a.name)
     frame = app.add(0, R_FRAME, "Terminal", states=(S_ACTIVE,))
-    app.term = Term(a.term_rows, a.term_cols)
+    app.term = Term(a.term_rows, a.term_cols, trim=a.term_trim)
     app.term_node = app.add(frame.id, R_TERMINAL, "term", text=app.term.snapshot(),
                             states=(S_FOCUSABLE, S_MULTI_LINE))
+    # A second focusable node, so a test can move the focus away from the terminal and back.
+    app.add(frame.id, R_ENTRY, "other", text="", editable=True, states=(S_FOCUSABLE,))
 
 
 # ---- control channel -----------------------------------------------------------------------------
@@ -1205,6 +1297,52 @@ def handle(app, cmd):
         app.conn.flush()
         return {"t_emit_ns": app.t_focus_ns}
         return {"t_emit_ns": app.t_focus_ns}
+    elif c == "activate":
+        # M4b: a window becomes the active one, and (after `gap_ms`, GTK sends it a few
+        # milliseconds later) its focus widget takes focus. Returns both emit times.
+        w = app.node(cmd["node"])
+        w.states.add(S_ACTIVE)
+        t_act = time.monotonic_ns()
+        app.emit(path_of(w.id), EV_WIN, "Activate", "", 0, 0, dbus.Int32(0))
+        app.conn.flush()
+        res = {"t_act_ns": t_act}
+        if "focus" in cmd:
+            gap = float(cmd.get("gap_ms", 2))
+            if gap > 0:
+                time.sleep(gap / 1000.0)
+            app.t_focus_ns = 0
+            app.set_focus(app.node(cmd["focus"]))
+            res["t_focus_ns"] = app.t_focus_ns
+        return res
+    elif c == "popup":
+        # M4b: a subtree appears under `parent` (a notification banner, an OSD) and its root
+        # reports `showing`, which is all St sets when an actor is mapped.
+        parent = app.node(cmd.get("parent", 0))
+        n = _build_below(app, parent, cmd["tree"])
+        for x in _walk(app, n):
+            app.ev_cache("AddAccessible", x)
+        app.ev_children(parent, "add", len(parent.children) - 1, n)
+        t = time.monotonic_ns()
+        app.ev_state(n, S_SHOWING, True)
+        app.conn.flush()
+        return {"t_emit_ns": t, "id": n.id, "path": path_of(n.id)}
+    elif c == "set_value":
+        # M4b: a Value interface changes (the OSD level bar animates); `accessible-value` is
+        # signalled like a toolkit does.
+        n = app.node(cmd["node"])
+        n.value = (float(cmd["value"]), n.value[1], n.value[2])
+        t = time.monotonic_ns()
+        app.emit(path_of(n.id), EV_OBJ, "PropertyChange", "accessible-value", 0, 0, dbus.Int32(0))
+        app.conn.flush()
+        return {"t_emit_ns": t}
+    elif c == "announce":
+        # Object:Announcement: `d1` is the politeness (1 polite, 2 assertive), any_data the text.
+        n = app.node(cmd.get("node", 0))
+        t = time.monotonic_ns()
+        app.emit(path_of(n.id), EV_OBJ, "Announcement", "", int(cmd.get("politeness", 1)), 0,
+                 dbus.String(cmd["text"]))
+        app.conn.flush()
+        return {"t_emit_ns": t}
     elif c == "type":
         n = app.node(cmd["node"])
         app.first_emit_ns = 0
@@ -1310,13 +1448,20 @@ def handle(app, cmd):
         if bad:
             raise ValueError("unknown malformed mode(s): %s" % sorted(bad))
     elif c == "term_feed":
+        # The text is what a program writes to the pty (escape sequences included). One VTE frame
+        # follows unless `defer`; the reply carries the emit time of its first signal.
+        app.first_emit_ns = 0
         app.term.feed(cmd["text"])
         if not cmd.get("defer"):
             term_frame(app)
+        app.conn.flush()
+        return {"t_emit_ns": app.first_emit_ns, "caret": app.term_node.caret}
     elif c == "term_gen":
-        term_start(app, float(cmd.get("fps", 60)), int(cmd.get("lines", 1)))
+        term_start(app, float(cmd.get("fps", 60)), int(cmd.get("lines", 1)), cmd.get("kind", "seq"))
     elif c == "term_stop":
         term_start(app, 0, 0)
+        app.conn.flush()
+        return {"frames": app.stats["term_frames"]}
     elif c == "build":
         return build_tree_cmd(app, cmd)
     elif c == "calls":
@@ -1397,6 +1542,8 @@ def main():
     ap.add_argument("--term-cols", type=int, default=80)
     ap.add_argument("--term-fps", type=float, default=60)
     ap.add_argument("--term-gen", type=int, default=0, help="auto-generate N lines per frame")
+    ap.add_argument("--term-trim", action="store_true",
+                    help="VTE-like text: rows right-trimmed, trailing empty rows dropped (M6)")
     ap.add_argument("--term-charcount-quirk", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--no-register", action="store_true", help="do not call Registry Socket.Embed")
     ap.add_argument("--own-shell-name", action="store_true",

@@ -15,6 +15,7 @@ pub mod flat;
 pub mod model;
 pub mod objnav;
 pub mod segment;
+pub mod terminal;
 pub mod validity;
 
 use std::sync::Arc;

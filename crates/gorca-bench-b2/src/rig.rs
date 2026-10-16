@@ -204,7 +204,14 @@ impl HarnessRouter {
         self.routes
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
-            .insert(sender.to_owned(), AppRoute { app, tx });
+            .insert(
+                sender.to_owned(),
+                AppRoute {
+                    app,
+                    tx,
+                    hints: false,
+                },
+            );
         app
     }
 

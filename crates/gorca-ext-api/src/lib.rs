@@ -35,6 +35,7 @@ pub mod host;
 
 #[cfg(target_arch = "wasm32")]
 pub mod guest;
+pub mod terminal;
 
 pub use api::*;
 
@@ -131,6 +132,19 @@ mod tests {
             .map(|r| format!("{r:?}").to_ascii_lowercase())
             .collect();
         assert_eq!(wit_names, rust_names);
+    }
+
+    #[test]
+    fn the_terminal_interface_is_declared_with_step() {
+        let mut resolve = Resolve::new();
+        resolve.push_str("gorca-ext.wit", WIT_SOURCE).unwrap();
+        let (_, iface) = resolve
+            .interfaces
+            .iter()
+            .find(|(_, i)| i.name.as_deref() == Some("terminal"))
+            .unwrap();
+        assert!(iface.functions.contains_key("step"));
+        assert!(iface.functions.contains_key("configure"));
     }
 
     #[test]

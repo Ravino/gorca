@@ -143,6 +143,9 @@ pub struct LineModel {
     pub completeness: Completeness,
     /// The rectangle text lines were asked for; revalidation uses the same one (F-5).
     pub clip: Rect,
+    /// The line the caret is on, for a model of a screen that has one (a terminal, LS-1):
+    /// where flat review starts.
+    pub focus_line: Option<u32>,
 }
 
 static NEXT_MODEL: AtomicU64 = AtomicU64::new(1);

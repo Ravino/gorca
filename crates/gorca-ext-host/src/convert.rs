@@ -102,6 +102,14 @@ pub fn role_to_ext(r: Role) -> api::Role {
 pub fn node_to_ext(n: &NodeSnapshot) -> api::Node {
     let secret = n.role == Role::PasswordEntry;
     api::Node {
+        range: match &n.value {
+            Some(gorca_model::Value::Range { current, min, max }) => Some(api::Range {
+                current: *current,
+                min: *min,
+                max: *max,
+            }),
+            _ => None,
+        },
         key: key_to_ext(n.key),
         role: role_to_ext(n.role),
         states: n.states.bits(),

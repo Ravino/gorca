@@ -870,7 +870,12 @@ fn on_event_verdicts_decide_what_the_reader_hears() {
                     BackgroundMsg::ExtSpeech { text, interrupt } => {
                         Some(format!("ext:{text}:{interrupt}"))
                     }
-                    BackgroundMsg::ResyncNeeded(_) => None,
+                    BackgroundMsg::Window(_)
+                    | BackgroundMsg::Showing { .. }
+                    | BackgroundMsg::LevelChanged { .. }
+                    | BackgroundMsg::LevelRead { .. }
+                    | BackgroundMsg::Notice { .. }
+                    | BackgroundMsg::ResyncNeeded(_) => None,
                 }
             } else {
                 None
@@ -903,4 +908,106 @@ fn a_suppress_verdict_on_focus_never_breaks_focus_routing() {
         r.inbox.poll(),
         Some(crate::reader::ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node })) if node == key(7)
     ));
+}
+
+// ---- M4b: window activation and showing routes ----
+
+fn showing(n: u64) -> NodeEvent {
+    NodeEvent::PropertiesChanged {
+        node: key(n),
+        mask: PropMask::STATES | PropMask::SHOWING_NOW,
+    }
+}
+
+fn alert_snap(n: u64) -> Arc<NodeSnapshot> {
+    let mut s = (*snap(n)).clone();
+    s.role = Role::Alert;
+    Arc::new(s)
+}
+
+#[test]
+fn window_activation_goes_to_the_focus_lane() {
+    let mut r = rig(IngressConfig::default());
+    r.port.push(NodeEvent::WindowEvent {
+        node: key(4),
+        kind: WindowKind::Activate,
+    });
+    let route = r.actor.pump(Instant::now());
+    assert_eq!(route.forwarded_to_focus_lane, 1);
+    assert!(matches!(
+        r.inbox.poll(),
+        Some(crate::reader::ReaderMsg::Focus(FocusLaneMsg::WindowActivated { window })) if window == key(4)
+    ));
+    r.port.push(NodeEvent::WindowEvent {
+        node: key(4),
+        kind: WindowKind::Deactivate,
+    });
+    r.actor.pump(Instant::now());
+    assert!(r.inbox.poll().is_none(), "only an activation is spoken");
+}
+
+#[test]
+fn the_shell_forwards_an_unknown_node_that_became_visible() {
+    let mut r = rig(IngressConfig::default());
+    r.port
+        .lifecycle(AppLifecycle::Appeared(shell_info()))
+        .unwrap();
+    r.port.push(showing(7));
+    let route = r.actor.pump(Instant::now());
+    assert!(r.actor.profile().watch_showing);
+    assert_eq!(route.forwarded_to_background, 1);
+    assert!(matches!(
+        r.inbox.poll(),
+        Some(crate::reader::ReaderMsg::Background(
+            BackgroundMsg::Showing { node }
+        )) if node == key(7)
+    ));
+}
+
+#[test]
+fn another_app_forwards_only_a_known_alert_that_became_visible() {
+    let mut r = rig(IngressConfig::default());
+    r.port
+        .push_snapshot(SnapshotBatch {
+            nodes: vec![alert_snap(1), snap(2)],
+            ..Default::default()
+        })
+        .unwrap();
+    r.actor.pump(Instant::now());
+    r.port.push(showing(1));
+    r.port.push(showing(2));
+    r.port.push(showing(3));
+    let route = r.actor.pump(Instant::now());
+    assert_eq!(
+        route.forwarded_to_background, 1,
+        "the alert only: a button is known, an unknown node of a non-Shell app is not asked about"
+    );
+    assert!(matches!(
+        r.inbox.poll(),
+        Some(crate::reader::ReaderMsg::Background(
+            BackgroundMsg::Showing { node }
+        )) if node == key(1)
+    ));
+    assert!(r.inbox.poll().is_none());
+}
+
+#[test]
+fn a_flood_of_showing_events_is_bounded_and_never_asks_for_a_resync() {
+    let mut r = rig(IngressConfig::default());
+    r.port
+        .lifecycle(AppLifecycle::Appeared(shell_info()))
+        .unwrap();
+    for n in 100..260 {
+        r.port.push(showing(n));
+    }
+    let route = r.actor.pump(Instant::now());
+    assert_eq!(
+        route.forwarded_to_background,
+        usize::try_from(SHOWING_BURST).unwrap()
+    );
+    assert_eq!(
+        route.dropped_background, 0,
+        "dropping a showing is not a loss"
+    );
+    assert!(!r.actor.resync_needed);
 }

@@ -79,6 +79,9 @@ bitflags! {
         const SELECTED_NOW = 1 << 9;
         /// The node's parent reference (B-1 PW-2). Part of `ALL`, never of `PRESENT`.
         const PARENT      = 1 << 10;
+        /// Hint on `PropertiesChanged` only: the node just became visible
+        /// (`state-changed:showing(1)`, M4b notifications). Never part of a fetch mask.
+        const SHOWING_NOW = 1 << 11;
     }
 }
 
@@ -372,6 +375,7 @@ mod tests {
         assert!(PropMask::PRESENT.contains(PropMask::NAME | PropMask::ROLE));
         assert!(!PropMask::PRESENT.contains(PropMask::BOUNDS));
         assert!(!PropMask::ALL.contains(PropMask::SELECTED_NOW));
+        assert!(!PropMask::ALL.contains(PropMask::SHOWING_NOW));
         assert!(PropMask::ALL.contains(PropMask::PARENT));
         assert!(!PropMask::CACHE_ITEM.contains(PropMask::VALUE));
     }

@@ -31,6 +31,7 @@ mod input;
 mod platform;
 mod probe;
 mod rtkit;
+mod shell_policy;
 mod topology;
 mod wire;
 
@@ -364,6 +365,8 @@ async fn run_inner(
     }
     // Extensions first: their commands must be known before the settings are compiled.
     let mut core = wire::wire_ext(core, &opts).await;
+    // The Shell's presentation policy: a native extension behind the core's `AppPolicy` seam.
+    core = core.with_app_policy(Arc::new(shell_policy::ShellPolicy::default()));
     let registry = core.connector_registrar(ConnectorId(1));
     let epoch = core.epoch();
     let focused = core.focused_app();

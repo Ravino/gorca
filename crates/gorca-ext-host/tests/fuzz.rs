@@ -201,6 +201,7 @@ fn extreme_values_straight_into_a_component_are_contained() {
             states: r.next(),
             name: Some(r.text(5000)),
             description: None,
+            range: None,
         };
         let _ = inst.present(
             &n,

@@ -41,6 +41,11 @@ pub fn node_to_wit(n: Node) -> wt::Node {
         states: n.states,
         name: n.name,
         description: n.description,
+        range: n.range.map(|r| wt::Range {
+            current: r.current,
+            min: r.min,
+            max: r.max,
+        }),
     }
 }
 
@@ -51,6 +56,11 @@ pub fn node_from_wit(n: wt::Node) -> Node {
         states: n.states,
         name: n.name,
         description: n.description,
+        range: n.range.map(|r| crate::Range {
+            current: r.current,
+            min: r.min,
+            max: r.max,
+        }),
     }
 }
 

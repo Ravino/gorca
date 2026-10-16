@@ -558,6 +558,7 @@ pub fn build_line_model(input: &BuildInput, limits: &ReviewLimits) -> LineModel 
         built_at: input.built_at,
         completeness,
         clip: clip_of(input.nodes.first().and_then(|n| n.snap.bounds)),
+        focus_line: None,
     }
 }
 

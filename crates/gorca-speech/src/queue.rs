@@ -1,8 +1,11 @@
 use std::time::Instant;
 
-use gorca_model::Epoch;
+use gorca_model::{Epoch, Prio};
 
 use crate::state::{SpeechEffect, SpeechMsg, SpeechState, StepCtx, UttMeta};
+
+/// How long a queued notification waits after an epoch advance before it may start.
+pub const NOTICE_GRACE: std::time::Duration = std::time::Duration::from_millis(40);
 
 /// FIFO bound (section 6.2: "1 + 32").
 pub const FIFO_CAPACITY: usize = 32;
@@ -21,6 +24,10 @@ pub struct SpeechQueue {
     fifo: Vec<Queued>,
     seq: u64,
     atomic_replace: bool,
+    /// After an epoch advance a queued `Notification` is not started for [`NOTICE_GRACE`]: the
+    /// focus utterance that caused the advance is about to arrive and would cut it off after a
+    /// blip (M4b N1).
+    quiet_until: Option<Instant>,
     replace_slow: u64,
     dropped: u64,
 }
@@ -32,6 +39,7 @@ impl SpeechQueue {
             fifo: Vec::with_capacity(FIFO_CAPACITY),
             seq: 0,
             atomic_replace,
+            quiet_until: None,
             replace_slow: 0,
             dropped: 0,
         }
@@ -39,6 +47,15 @@ impl SpeechQueue {
 
     pub fn state(&self) -> SpeechState {
         self.state
+    }
+
+    /// When a queued notification becomes startable, if it is waiting out the grace.
+    pub fn next_wake(&self, now: Instant) -> Option<Instant> {
+        let until = self.quiet_until.filter(|u| now < *u)?;
+        self.fifo
+            .iter()
+            .any(|q| q.meta.prio == Prio::Notification)
+            .then_some(until)
     }
 
     pub fn queued(&self) -> usize {
@@ -62,6 +79,21 @@ impl SpeechQueue {
             atomic_replace: self.atomic_replace,
         };
         let mut out = Vec::new();
+        if matches!(msg, SpeechMsg::EpochAdvanced) {
+            self.quiet_until = Some(now + NOTICE_GRACE);
+        }
+        // A fresh notification reaching an idle lane inside the grace waits like a queued one:
+        // the focus utterance that caused the advance is about to cut it off (M-1). The lane
+        // wakes at `next_wake` and ticks the queue.
+        if let SpeechMsg::Intent(meta) = msg
+            && meta.prio == Prio::Notification
+            && self.state == SpeechState::Idle
+            && meta.is_valid(epoch_now)
+            && self.quiet_until.is_some_and(|u| now < u)
+        {
+            self.enqueue(meta, now, &mut out);
+            return out;
+        }
         let mut pending = vec![msg];
         // Bounded: each PopNext consumes one FIFO entry.
         while let Some(m) = pending.pop() {
@@ -77,7 +109,7 @@ impl SpeechQueue {
                         self.purge(|q| now.saturating_duration_since(q.at) <= age, &mut out);
                     }
                     SpeechEffect::PopNext => {
-                        if let Some(meta) = self.pop(epoch_now, &mut out) {
+                        if let Some(meta) = self.pop(epoch_now, now, &mut out) {
                             pending.push(SpeechMsg::Intent(meta));
                         }
                     }
@@ -141,12 +173,19 @@ impl SpeechQueue {
     }
 
     /// Highest priority first, oldest first within a priority; stale entries are discarded.
-    fn pop(&mut self, epoch_now: Epoch, out: &mut Vec<SpeechEffect>) -> Option<UttMeta> {
+    fn pop(
+        &mut self,
+        epoch_now: Epoch,
+        now: Instant,
+        out: &mut Vec<SpeechEffect>,
+    ) -> Option<UttMeta> {
         self.purge(|q| q.meta.is_valid(epoch_now), out);
+        let quiet = self.quiet_until.is_some_and(|u| now < u);
         let (i, _) = self
             .fifo
             .iter()
             .enumerate()
+            .filter(|(_, q)| !(quiet && q.meta.prio == Prio::Notification))
             .min_by_key(|(_, q)| (q.meta.prio, q.seq))?;
         Some(self.fifo.remove(i).meta)
     }
@@ -259,5 +298,72 @@ mod tests {
         q.handle(SpeechMsg::Intent(meta(2, Prio::Interrupt, 1)), t, Epoch(1));
         q.handle(SpeechMsg::Tick, t + Duration::from_millis(40), Epoch(1));
         assert_eq!(q.replace_slow_count(), 1);
+    }
+
+    #[test]
+    fn a_queued_notification_waits_out_the_grace_after_an_epoch_advance() {
+        use std::time::Duration;
+        let mut q = SpeechQueue::new(true);
+        let t = Instant::now();
+        q.handle(SpeechMsg::Intent(meta(1, Prio::Text, 1)), t, Epoch(1));
+        let mut n = meta(2, Prio::Notification, 1);
+        n.survives_focus_change = true;
+        q.handle(SpeechMsg::Intent(n), t, Epoch(1));
+        // The epoch advances: the stale speech stops. The notification must not start in the
+        // gap before the focus utterance that caused the advance arrives (it would be cut).
+        let e = q.handle(SpeechMsg::EpochAdvanced, t, Epoch(2));
+        assert!(
+            !e.iter()
+                .any(|x| matches!(x, SpeechEffect::Speak(_) | SpeechEffect::Replace { .. })),
+            "{e:?}"
+        );
+        assert!(q.next_wake(t).is_some());
+        // After the grace an idle tick starts it.
+        let later = t + NOTICE_GRACE + Duration::from_millis(1);
+        let e = q.handle(SpeechMsg::Tick, later, Epoch(2));
+        assert!(e.contains(&SpeechEffect::Speak(UttId(2))), "{e:?}");
+    }
+
+    #[test]
+    fn a_fresh_notification_inside_the_grace_waits_and_is_not_cut_by_the_focus() {
+        let t = Instant::now();
+        let mut q = SpeechQueue::new(true);
+        q.handle(SpeechMsg::Intent(meta(1, Prio::Text, 1)), t, Epoch(1));
+        q.handle(SpeechMsg::EpochAdvanced, t, Epoch(2));
+        let e = q.handle(
+            SpeechMsg::Intent(meta(2, Prio::Notification, 2)),
+            t + Duration::from_millis(2),
+            Epoch(2),
+        );
+        assert!(!e.contains(&SpeechEffect::Speak(UttId(2))), "{e:?}");
+        assert_eq!(q.queued(), 1);
+        assert!(q.next_wake(t + Duration::from_millis(2)).is_some());
+        let e = q.handle(
+            SpeechMsg::Intent(meta(3, Prio::Interrupt, 2)),
+            t + Duration::from_millis(10),
+            Epoch(2),
+        );
+        assert!(
+            !e.iter().any(|x| matches!(x, SpeechEffect::Stop(UttId(2)))),
+            "{e:?}"
+        );
+        assert_eq!(
+            q.queued(),
+            1,
+            "the notice still waits behind the focus utterance"
+        );
+    }
+
+    #[test]
+    fn a_fresh_notification_on_an_idle_lane_after_the_grace_starts_at_once() {
+        let t = Instant::now();
+        let mut q = SpeechQueue::new(true);
+        q.handle(SpeechMsg::EpochAdvanced, t, Epoch(2));
+        let e = q.handle(
+            SpeechMsg::Intent(meta(2, Prio::Notification, 2)),
+            t + NOTICE_GRACE + Duration::from_millis(1),
+            Epoch(2),
+        );
+        assert_eq!(e, vec![SpeechEffect::Speak(UttId(2))]);
     }
 }

@@ -130,13 +130,22 @@ macro_rules! define_role {
 }
 for_each_role!(define_role);
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+/// A numeric value as the application reports it (WIT `range`).
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Range {
+    pub current: f64,
+    pub min: f64,
+    pub max: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Node {
     pub key: NodeKey,
     pub role: Role,
     pub states: u64,
     pub name: Option<String>,
     pub description: Option<String>,
+    pub range: Option<Range>,
 }
 
 /// Bits of the property mask of `Event::PropertiesChanged` and of `Host::fetch`.

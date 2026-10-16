@@ -827,6 +827,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ext-gnome-shell"
+version = "0.0.0"
+dependencies = [
+ "gorca-ext-api",
+]
+
+[[package]]
 name = "ext-test"
 version = "0.0.0"
 dependencies = [
@@ -838,6 +845,8 @@ name = "ext-vte"
 version = "0.0.0"
 dependencies = [
  "gorca-ext-api",
+ "regex",
+ "serde_json",
 ]
 
 [[package]]
@@ -1142,10 +1151,12 @@ version = "0.0.0"
 dependencies = [
  "arc-swap",
  "chrono",
+ "ext-vte",
  "gorca-config",
  "gorca-connector-api",
  "gorca-doc",
  "gorca-doc-source-api",
+ "gorca-ext-api",
  "gorca-ingress",
  "gorca-input-api",
  "gorca-mirror",
@@ -1169,6 +1180,7 @@ name = "gorca-daemon"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "ext-gnome-shell",
  "futures-lite",
  "gorca-config",
  "gorca-connector-api",

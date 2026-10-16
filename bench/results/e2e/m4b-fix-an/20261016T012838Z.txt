@@ -1,0 +1,29 @@
+# e2e m4b-fix-an
+# utc=2026-10-16T01:28:38Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=14.92 16.57 19.14 7/3101 3895113
+# git_rev=e00a659
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m4b-fix-an
+# reader=daemon:<repo>/.claude/worktrees/agent-a5fab50a294ec6e11/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=14.92 16.57 19.14 9/3101 3895110
+# reader_env=
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=A1 SKIPPED: set GORCA_M4B=1 to run the M4b gates
+# note1=N1 SKIPPED: set GORCA_M4B=1 to run the M4b gates
+
+metric                     bus                median          min          max  n op    threshold  res   note
+A1.skipped                 daemon/voicego            1            1            1  3                  info   [flag]
+N1.skipped                 daemon/voicego            1            1            1  3                  info   [flag]
