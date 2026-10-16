@@ -166,3 +166,12 @@ The W2b warm-up is the same effect B-1 works on; keep it open until re-measured 
   `TextOp::Screen` arm and a log line (one screen read in flight per tracked terminal, through the normal admission
   control); `app_actor.rs::note_text_lost` bumps an atomic counter for the protected focus app only, no queue, nothing
   that lets one app delay another's speech or grow unbounded. No invariant violated; accepted, no code change.
+
+### Final pass at the rebased head `d211b02` (new conservation accounting), host load 15 to 33
+
+`bench/results/e2e/m6fix-r3-{fake,real,strict-m1,strict-m4}`, 3 repeats, `git_dirty=false`. Tests 1688 passed, deps clean.
+Strict K2/K2s/K3 `lost` 0 and R1/R1s/RS pass; K4 `chord_resent_per_10k` 13 (max 25, ceiling 5) fails in one-of-three
+repeats, a non-terminal gate under the load of another agent's `gorca-hog`. Under that load the M6 latency and count
+gates also missed in single repeats (V1 p99 39.4 ms, VT 1 missing/2 extra, VH 2, V3 1 stale, VV 1 failed step); they
+passed at load 5 to 11 in the earlier runs (`m6-gates-r3`, `m6fix-fake`, `m6fix-real`, `m6fix-r2-*-rerun`). Not
+re-run clean at low load: this is open until the host is quiet.
