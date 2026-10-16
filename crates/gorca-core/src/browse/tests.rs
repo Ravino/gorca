@@ -2153,11 +2153,7 @@ fn r5_tab_belongs_to_the_browser_after_a_focus_driven_move_and_inside_the_focuse
     let mut r = tab_rig();
     r.focus(1002);
     settle(&mut r);
-    assert_eq!(
-        r.reader.web_tab_targets().0,
-        true,
-        "from the heading Tab is ours"
-    );
+    assert!(r.reader.web_tab_targets().0, "from the heading Tab is ours");
     // The browser focuses the link (our Tab, or its own): the cursor came from a focus change.
     let fx = r.focus(1006);
     let fx2 = settle(&mut r);

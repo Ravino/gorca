@@ -17,8 +17,8 @@ use super::cursor::{self, Edge, Mv};
 use super::forms::{self, Reason};
 use super::present::{self, Item};
 use super::{
-    BrowseState, LIVE_TTL_ASSERTIVE, LIVE_TTL_POLITE, ModeWord, SavedWeb, WebEv, WebFx, WebMode,
-    step,
+    BrowseState, CursorFrom, LIVE_TTL_ASSERTIVE, LIVE_TTL_POLITE, ModeWord, SavedWeb, WebEv, WebFx,
+    WebMode, step,
 };
 use crate::SpeechIntent;
 use crate::commands::CoreCmd;
@@ -952,11 +952,16 @@ impl Reader {
                 if let Some(b) = self.web.as_mut()
                     && let Some(h) = b.docs.get(doc)
                 {
-                    b.cursor_by_focus = h.read.with(|d| {
+                    let on_control = h.read.with(|d| {
                         !is_document(d, id)
                             && d.node(id)
                                 .is_some_and(|v| v.cats.intersects(Cat::FOCUSABLE))
                     });
+                    b.cursor_from = if on_control {
+                        CursorFrom::Focus
+                    } else {
+                        CursorFrom::Own
+                    };
                 }
                 self.web_root_entry(doc, id);
                 self.web_container_tail(doc, id);
@@ -1917,7 +1922,7 @@ impl Reader {
         }
         b.last_off = off;
         b.sel = None;
-        b.cursor_by_focus = false;
+        b.cursor_from = CursorFrom::Own;
         b.counters.moves += 1;
         b.scroll_due = Some((now + SCROLL_DEBOUNCE, doc, cur.node, cur.local));
     }
@@ -2155,7 +2160,7 @@ impl Reader {
         };
         // R-5 (NVDA `_tabOverride`): the page's own tab order is not ours to override while the
         // cursor came from a focus change or sits on or inside the focused node.
-        if b.cursor_by_focus
+        if b.cursor_from == CursorFrom::Focus
             || b.focus_node.is_some_and(|(fd, fid)| {
                 fd == doc
                     && h.read.with(|d| {

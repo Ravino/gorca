@@ -485,6 +485,15 @@ impl Default for BrowseSettings {
     }
 }
 
+/// What last put the browse cursor where it is.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum CursorFrom {
+    /// A reading or navigation command of ours.
+    Own,
+    /// A focus change onto a control.
+    Focus,
+}
+
 /// Everything the Reader keeps for browse mode.
 #[derive(Debug)]
 pub struct BrowseState {
@@ -544,7 +553,7 @@ pub struct BrowseState {
     /// focus change (NVDA `_lastCaretMoveWasFocus`, #5227). While the cursor is on or inside the
     /// focused node, or came from a focus change, Tab belongs to the browser (R-5).
     pub focus_node: Option<(DocId, DocNodeId)>,
-    pub cursor_by_focus: bool,
+    pub cursor_from: CursorFrom,
     /// Native selection mode (gorca+Shift+F10, D-3): the page's own selection follows the
     /// virtual one. Off by default; the virtual selection never touches the page.
     pub native_selection: bool,
@@ -590,7 +599,7 @@ impl BrowseState {
             sel: None,
             tab_grab: std::cell::Cell::new((true, true)),
             focus_node: None,
-            cursor_by_focus: false,
+            cursor_from: CursorFrom::Own,
             native_selection: false,
             native_sel_node: None,
             lead_dialog: None,

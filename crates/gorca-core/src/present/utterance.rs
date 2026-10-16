@@ -25,11 +25,14 @@ const STATE_WORDS: &[(StateSet, &str)] = &[
 /// checked", a toggle button "half pressed" (`aria-pressed=mixed`), a progress bar
 /// "indeterminate" (no value). Other roles say nothing for it.
 pub(crate) fn mixed_word(role: Role) -> Option<&'static str> {
-    match role {
-        Role::CheckBox | Role::RadioButton => Some("half checked"),
-        Role::ToggleButton => Some("half pressed"),
-        Role::ProgressBar => Some("indeterminate"),
-        _ => None,
+    if matches!(role, Role::CheckBox | Role::RadioButton) {
+        Some("half checked")
+    } else if role == Role::ToggleButton {
+        Some("half pressed")
+    } else if role == Role::ProgressBar {
+        Some("indeterminate")
+    } else {
+        None
     }
 }
 
