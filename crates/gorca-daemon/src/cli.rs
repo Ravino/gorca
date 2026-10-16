@@ -73,8 +73,8 @@ pub struct Options {
     pub shadow: bool,
     /// `--bench-fill-policy=r0|prefetch|candidate`: default is the adopted focus-window prefetch.
     pub fill_policy: FillChoice,
-    /// `--topology=...` / `GORCA_TOPOLOGY`: where the lanes run (bake-off B-5). Default: one
-    /// multi-threaded runtime, the behaviour before the switch existed.
+    /// `--topology=...` / `GORCA_TOPOLOGY`: where the lanes run (bake-off B-5). Default `auto`:
+    /// `lanes-rt` when rtkit grants real-time, else `single`.
     pub topology: crate::topology::Arm,
     /// `--topology-report=PATH` / `GORCA_TOPOLOGY_REPORT`: JSON of what was granted to which
     /// lane (`%p` in the path becomes the pid). Passive; benchmarks read it.
@@ -193,9 +193,10 @@ OPTIONS:
     --no-probe                   do not ask gsettings about the keyboard and clock
     --bench-present-log=PATH     benchmarks only: write the presentation log (absolute PATH, mode
                                  0600, created anew; secret text is redacted)
-    --topology=single|lanes|lanes-rt
-                                 where the lanes run (bake-off B-5; default: single = one
-                                 multi-threaded runtime). lanes: input and speech on their own
+    --topology=auto|single|lanes|lanes-rt
+                                 where the lanes run (bake-off B-5; default: auto = lanes-rt when
+                                 rtkit grants real-time, else single = one multi-threaded
+                                 runtime). lanes: input and speech on their own
                                  threads, workers and a bulk pool apart. lanes-rt: lanes plus
                                  real-time scheduling through rtkit and pinning to the fast cores, with a
                                  fallback to the plain lanes when rtkit refuses

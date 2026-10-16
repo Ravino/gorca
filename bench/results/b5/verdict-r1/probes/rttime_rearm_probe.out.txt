@@ -1,0 +1,7 @@
+# 2026-10-16, host load ~50, run as the user, pinned to CPU 3, rtkit MakeThreadRealtimeWithPID prio 10
+start: RLIMIT_RTTIME soft=100000 hard=200000
+spin1: policy=1073741826 (2=RR)
+spin1: spun 123 ms, xcpu=1 policy now=1073741824
+after first SIGXCPU: RLIMIT_RTTIME soft=1100000 hard=200000
+spin2: policy=1073741826 (2=RR)
+Killed   (exit=137: SIGKILL at the 200 ms hard limit, no SIGXCPU first)

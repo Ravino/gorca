@@ -45,6 +45,8 @@ fn main() -> Result<ExitCode> {
     let rtkit_bus = ["GORCA_RTKIT_BUS_ADDRESS", "DBUS_SYSTEM_BUS_ADDRESS"]
         .iter()
         .find_map(|k| std::env::var(k).ok().filter(|s| !s.is_empty()));
+    let mut opts = opts;
+    opts.topology = opts.topology.resolve(rtkit_bus.as_deref());
     let runtime = gorca_daemon::build_runtime_for(
         opts.topology,
         opts.topology_report.as_deref(),

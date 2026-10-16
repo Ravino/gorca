@@ -1,0 +1,6 @@
+round=1 cond=idle arm=single exit=0
+load_before=74.95 68.65 65.86 47/3357 3818906
+background_cpu_busy_pct=100
+load_with_hog=73.76 68.51 65.83 48/3355 3818967
+load_after=54.84 60.61 63.38 45/3083 3833756
+governor=performance 
