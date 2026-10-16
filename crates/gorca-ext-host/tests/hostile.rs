@@ -82,9 +82,11 @@ fn present_hold(attack: &str, n: u32) -> (Duration, Duration, Duration, u64) {
     for i in 0..n {
         let ae = h.attach(app(i + 1), &info("victim")).expect("matches");
         let node = snap(app(i + 1), 1, Role::Button, Some(attack));
-        let t0 = Instant::now();
-        let r = ae.present(&node, PresentContext::Focus, 1);
-        times.push(t0.elapsed());
+        // CPU time of the calling thread: the hold is the work the Reader does, not the
+        // scheduler's mood (the host runs at load 10 to 48 here).
+        let (r, held) =
+            gorca_testkit::cpu::cpu_time(|| ae.present(&node, PresentContext::Focus, 1));
+        times.push(held);
         assert!(r.is_none(), "{attack}: a faulting hook has no opinion");
         settle(&h);
     }

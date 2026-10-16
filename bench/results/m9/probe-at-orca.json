@@ -1,0 +1,67 @@
+private compositor: /tmp/gorca-m7c.9JmXXx/x/gorca-m7-1722387
+{
+ "mode": "orca",
+ "status_before": {
+  "is_enabled": true,
+  "screen_reader_enabled": false
+ },
+ "chrome": "/home/user/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome",
+ "app_registered": true,
+ "t_app_s": 0.6,
+ "poked": true,
+ "app_name": "Google Chrome for Testing",
+ "toolkit": "Chromium",
+ "document": true,
+ "t_doc_s": 0.63,
+ "doc_ifaces": [
+  "org.a11y.atspi.Accessible",
+  "org.a11y.atspi.Action",
+  "org.a11y.atspi.Component",
+  "org.a11y.atspi.Text",
+  "org.a11y.atspi.Hypertext",
+  "org.a11y.atspi.Collection",
+  "org.a11y.atspi.Document",
+  "org.a11y.atspi.Hyperlink"
+ ],
+ "walk_s": 0.007,
+ "nodes": 34,
+ "roles": {
+  "static": 16,
+  "paragraph": 4,
+  "heading": 3,
+  "link": 3,
+  "list item": 2,
+  "document web": 1,
+  "list": 1,
+  "form": 1,
+  "label": 1,
+  "entry": 1,
+  "button": 1
+ },
+ "sample": {
+  "role": "heading",
+  "char_count": 13,
+  "line": [
+   "Gorca article",
+   0,
+   13
+  ],
+  "word": [
+   "Gorca ",
+   0,
+   6
+  ],
+  "sentence": [
+   "Gorca",
+   0,
+   5
+  ],
+  "attrs": {
+   "text-align": "left",
+   "name-from": "contents",
+   "level": "1",
+   "tag": "h1",
+   "display": "block"
+  }
+ }
+}

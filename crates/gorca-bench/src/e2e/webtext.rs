@@ -38,7 +38,9 @@ use super::m3::{Probe, lost_notes};
 use super::mock::{Flavor, Kind};
 use super::runner::HostEnv;
 use super::scenarios::{RunOut, Size, ms};
-use super::web::{CARET, DocRef, Web, file_url, gate_open, pages_dir, speaks_since};
+use super::web::{
+    CARET, DocRef, Web, chromium_selected, file_url, gate_open, pages_dir, speaks_since,
+};
 
 /// The scenario ids of this module, in the order of a full run.
 pub const IDS: &[&str] = &[
@@ -725,9 +727,31 @@ fn fc1h(
     Ok(())
 }
 
+/// Length of `c` in the engine's text offset unit: UTF-16 units for Gecko, code points for Blink
+/// (M9; `Toolkit::text_unit` in the connector).
+fn text_unit_len(c: char) -> usize {
+    if chromium_selected() {
+        1
+    } else {
+        c.len_utf16()
+    }
+}
+
 /// What is said for the caret at UTF-16 offset `at` of `a😀b😀😀c` (a phantom U+FEFF follows
 /// each emoji in Gecko's string, so 2, 5 and 7 are never a caret position).
 fn emoji_line_at(at: i32) -> String {
+    if chromium_selected() {
+        // Blink counts code points: a caret never stands inside a pair.
+        return match at {
+            0 => "a",
+            1 | 3 | 4 => "\u{1F600}",
+            2 => "b",
+            5 => "c",
+            6 => "blank",
+            _ => "<caret outside the line>",
+        }
+        .to_owned();
+    }
     match at {
         0 => "a",
         1 | 4 | 6 => "\u{1F600}",
@@ -959,7 +983,7 @@ fn fe2(
         // The page's own caret against the model's: the first divergence names the action.
         let raw = text[..caret.min(text.len())]
             .iter()
-            .map(|c| c.len_utf16())
+            .map(|c| text_unit_len(*c))
             .sum::<usize>();
         let mut page = f.ax_num("caret", &path, "caret").unwrap_or(-1.0);
         // A loaded Firefox applies the key a moment later (it has stalled for more than a
@@ -989,7 +1013,7 @@ fn fe2(
                         caret = k;
                         break;
                     }
-                    units += c.len_utf16();
+                    units += text_unit_len(*c);
                 }
             }
             sleep(40);

@@ -1,0 +1,72 @@
+# e2e m9-cr-m7
+# utc=2026-10-16T06:38:53Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=18.39 14.63 13.44 3/3632 1795823
+# git_rev=38775b3
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m9-cr-m7
+# reader=daemon:<repo>/.claude/worktrees/agent-aaa6bbc3e7741e405/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=18.39 14.63 13.44 2/3632 1795820
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=entry: []
+# note1=Down: "heading level 1, Gorca article, Gorca article" (0.31 ms)
+# note2=Right: "o" (0.17 ms)
+# note3=Ctrl+Right: "article, Gorca" (0.18 ms)
+# note4=H: "heading level 2, Introduction, Introduction" (0.21 ms)
+# note5=2: "heading level 2, Details, Details" (0.40 ms)
+# note6=H at the last heading: "no next heading" (0.14 ms)
+# note7=Shift+H: "heading level 2, Introduction, Introduction" (0.26 ms)
+# note8=K: "link, details below, details below" (0.07 ms)
+# note9=Escape: "browse mode, Your name, Your name, edit, blank, button, Send" (0.36 ms)
+# note10=Tab onto a link: "second page link, link"
+# note11=after Enter: ["M7 Second, document"]
+# note12=FAIL entry: the first line was not spoken
+# note13=FAIL Down: wanted ["This is the first paragraph"], heard "heading level 1, Gorca article, Gorca article"
+# note14=W1 run failed: gorca never entered browse mode for large 10000; it said ["large 10000 - Google Chrome for Testing", "large 10000, document", "browse mode, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B"]; the bus carried 25 focus and 4 load events
+# note15=BR1 run failed: gorca never entered browse mode for large 10000; it said ["large 10000 - Google Chrome for Testing", "large 10000, document", "browse mode, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B"]; the bus carried 25 focus and 4 load events
+# note16=BR2 run failed: gorca never entered browse mode for large 10000; it said ["large 10000 - Google Chrome for Testing", "large 10000, document", "browse mode, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B", "A, link", "large 10000, document, link, A, A, link, B, B"]; the bus carried 25 focus and 4 load events
+# note17=W2 run failed: gorca never entered browse mode for M7 Start; it said ["M7 Start - Google Chrome for Testing, M7 Start, document", "browse mode, heading level 1, Start, Start", "go to the large page, link", "M7 Start, document, heading level 1, Start, Start", "go to the large page, link", "M7 Start, document, heading level 1, Start, Start", "go to the large page, link", "M7 Start, document, heading level 1, Start, Start", "go to the large page, link", "M7 Start, document, heading level 1, Start, Start", "go to the large page, link", "M7 Start, document, heading level 1, Start, Start", "go to the large page, link", "M7 Start, document, heading level 1, Start, Start", "go to the large page, link", "M7 Start, document, heading level 1, Start, Start", "go to the large page, link", "M7 Start, document, heading level 1, Start, Start", "go to the large page, link", "M7 Start, document, heading level 1, Start, Start", "go to the large page, link", "M7 Start, document, heading level 1, Start, Start", "go to the large page, link", "M7 Start, document, heading level 1, Start, Start", "go to the large page, link", "M7 Start, document, heading level 1, Start, Start"]; the bus carried 25 focus and 4 load events
+# note18=W2b lost: heard []; 1 focus, 4 load events on the bus
+# note19=W3 run failed: gorca never entered browse mode for M7 Article; it said ["M7 Article - Google Chrome for Testing, M7 Article, document", "browse mode, heading level 1, Gorca article, Gorca article", "second page link, link", "M7 Article, document, heading level 1, Gorca article, Gorca article", "second page link, link", "M7 Article, document, heading level 1, Gorca article, Gorca article", "second page link, link", "M7 Article, document, heading level 1, Gorca article, Gorca article", "second page link, link", "M7 Article, document, heading level 1, Gorca article, Gorca article", "second page link, link", "M7 Article, document, heading level 1, Gorca article, Gorca article", "second page link, link", "M7 Article, document, heading level 1, Gorca article, Gorca article", "second page link, link", "M7 Article, document, heading level 1, Gorca article, Gorca article", "second page link, link", "M7 Article, document, heading level 1, Gorca article, Gorca article", "second page link, link", "M7 Article, document, heading level 1, Gorca article, Gorca article", "second page link, link", "M7 Article, document, heading level 1, Gorca article, Gorca article", "second page link, link", "M7 Article, document, heading level 1, Gorca article, Gorca article", "second page link, link", "M7 Article, document, heading level 1, Gorca article, Gorca article"]; the bus carried 25 focus and 4 load events
+# note20=FM1 run failed: gorca never entered browse mode for M7 Sign in; it said ["M7 Sign in - Google Chrome for Testing, M7 Sign in, document", "browse mode, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in"]; the bus carried 25 focus and 4 load events
+# note21=FM2 run failed: gorca never entered browse mode for M7 Sign in; it said ["M7 Sign in - Google Chrome for Testing, M7 Sign in, document", "browse mode, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in", "Back to the article, link", "M7 Sign in, document, heading level 1, Sign in, Sign in"]; the bus carried 25 focus and 4 load events
+
+metric                     bus                median          min          max  n op    threshold  res   note
+B0.web_failures            daemon/voicego            2            2            2  1 <=            0  FAIL  gated on the max over repeats [checks]
+W1.failed_runs             daemon/voicego            1            1            1  1 <=            0  FAIL  0 ok, 1 failed [runs]
+BR1.failed_runs            daemon/voicego            1            1            1  1 <=            0  FAIL  0 ok, 1 failed [runs]
+BR2.failed_runs            daemon/voicego            1            1            1  1 <=            0  FAIL  0 ok, 1 failed [runs]
+W2.failed_runs             daemon/voicego            1            1            1  1 <=            0  FAIL  0 ok, 1 failed [runs]
+W2b.w2b_gorca_ms.n         daemon/voicego            0            0            0  1                  info   [samples]
+W2b.w2b_gorca_ms.p50       daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_gorca_ms.p95       daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_gorca_ms.p99       daemon/voicego            0            0            0  1 <=          150  PASS   [ms]
+W2b.w2b_gorca_ms.p999      daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_gorca_ms.max       daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_ms.n               daemon/voicego            0            0            0  1                  info   [samples]
+W2b.w2b_ms.p50             daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_ms.p95             daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_ms.p99             daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_ms.p999            daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_ms.max             daemon/voicego            0            0            0  1                  info   [ms]
+W2b.lost                   daemon/voicego            6            6            6  1 <=            0  FAIL  gated on the max over repeats [trials]
+W2b.untagged_warm          daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+W3.failed_runs             daemon/voicego            1            1            1  1 <=            0  FAIL  0 ok, 1 failed [runs]
+FM1.failed_runs            daemon/voicego            1            1            1  1 <=            0  FAIL  0 ok, 1 failed [runs]
+FM2.failed_runs            daemon/voicego            1            1            1  1 <=            0  FAIL  0 ok, 1 failed [runs]

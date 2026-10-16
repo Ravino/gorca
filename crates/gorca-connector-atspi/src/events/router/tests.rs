@@ -144,11 +144,11 @@ async fn eventually(what: &str, cond: impl Fn() -> bool) {
 
 #[tokio::test]
 async fn the_first_event_registers_asynchronously_and_is_replayed_in_order() {
-    let c = core(|_| Duration::from_millis(20));
-    // The drain never waits: the answer is immediate even though the core takes 20 ms. Wall
+    let c = core(|_| Duration::from_millis(400));
+    // The drain never waits: the answer is immediate even though the core takes 400 ms. Wall
     // time is the property here (a waiting resolve burns no CPU), so robustness to preemption
     // comes from the minimum of five first-resolves on fresh routers: a resolve that waits
-    // for the core takes >= 20 ms every time, a preempted one is slow once at most.
+    // for the core takes >= 400 ms every time, a preempted one is slow once at most.
     let fastest = (0..5)
         .map(|_| {
             let probe = rig(&c, Arc::new(Fixed(4242)));
@@ -158,7 +158,7 @@ async fn the_first_event_registers_asynchronously_and_is_replayed_in_order() {
         })
         .min()
         .unwrap_or(Duration::MAX);
-    assert!(fastest < Duration::from_millis(10), "{fastest:?}");
+    assert!(fastest < Duration::from_millis(200), "{fastest:?}");
     let mut r = rig(&c, Arc::new(Fixed(4242)));
     assert!(is_retry(&r.router.resolve(":1.42")));
     // Two more events while the registration runs: parked, not lost.

@@ -1,0 +1,153 @@
+# e2e m9-cr4-fe2dbg
+# utc=2026-10-16T08:05:26Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=12.33 17.04 17.04 4/3045 2650258
+# git_rev=33fed59
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m9-cr4-fe2dbg
+# reader=daemon:<repo>/.claude/worktrees/agent-aaa6bbc3e7741e405/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=12.33 17.04 17.04 4/3045 2650255
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info RUST_LOG=warn,gorca_phase=info,gorca_text=debug
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=FE2 #9 Letter('w'): wanted "w" once, said ["w", "w"]; recent: Letter('m') at caret 4 of 5 | Back at caret 5 of 6 | Letter('z') at caret 4 of 5 | Letter('w') at caret 5 of 6
+# note1=FE2 #22 Letter('w'): wanted "w" once, said ["w", "w"]; recent: Right at caret 7 of 9 | Space at caret 8 of 9 | Letter('p') at caret 9 of 10 | Letter('w') at caret 10 of 11
+# note2=FE2 #34 Letter('i'): the page caret is 0, the model 1 (not scored, model reset to the page); recent: Home at caret 15 of 15 | Space at caret 0 of 15 | Left at caret 1 of 16 | Letter('i') at caret 0 of 16
+# note3=FE2 #36 Space: wanted "space" once, said ["space", "space"]; recent: Left at caret 1 of 16 | Letter('i') at caret 0 of 16 | Letter('s') at caret 0 of 16 | Space at caret 1 of 17
+# note4=FE2 #91 Space: wanted "space" once, said ["space", "space"]; recent: Space at caret 43 of 44 | Home at caret 44 of 45 | Right at caret 0 of 45 | Space at caret 1 of 45
+# note5=FE2 #92 Back: wanted "space" once, said ["space", "s ж qczg w pw жfжжrp😀aohn m znwlkt dqжod a ж"]; recent: Home at caret 44 of 45 | Right at caret 0 of 45 | Space at caret 1 of 45 | Back at caret 2 of 46
+# note6=FE2 #102 Letter('s'): wanted "s" once, said ["s", "s"]; recent: Space at caret 3 of 48 | Back at caret 4 of 49 | Home at caret 3 of 48 | Letter('s') at caret 0 of 48
+# note7=FE2 #145 Space: wanted "space" once, said ["space", "space"]; recent: Left at caret 1 of 75 | Space at caret 0 of 75 | Home at caret 1 of 76 | Space at caret 0 of 76
+# note8=FE2 #312 Space: wanted "space" once, said ["space", "space"]; recent: Letter('p') at caret 5 of 165 | Right at caret 6 of 166 | Letter('m') at caret 7 of 166 | Space at caret 8 of 167
+# note9=FE2 #378 Space: wanted "space" once, said ["space", "space"]; recent: Letter('m') at caret 6 of 199 | Right at caret 7 of 200 | Cyr at caret 8 of 200 | Space at caret 9 of 201
+# note10=FE2 #381 Space: wanted "space" once, said ["space", "space"]; recent: Space at caret 9 of 201 | Emoji at caret 10 of 202 | Letter('s') at caret 11 of 203 | Space at caret 12 of 204
+# note11=FE2 #411 Space: wanted "space" once, said ["space", "space"]; recent: Space at caret 7 of 216 | Left at caret 8 of 217 | Cyr at caret 7 of 217 | Space at caret 8 of 218
+# note12=FE2 #416 Letter('u'): wanted "u" once, said ["u", "😀glifgeж uukawj mlж 😀s rm vm fwp😀m vu gug t xdжneznwzzk yih😀y wzжn jqeme swddjsxqm😀c ж yuwyqxdsuwi ж qczg w pw жfжжrp😀aohn m znwlkt dqжod a жqqag o😀 ry😀awas ж al jjub exj😀жr жqwlжa😀m raaveovqp l 😀qn yxko 😀rpjcddxж😀k"]; recent: Back at caret 10 of 220 | Right at caret 9 of 219 | Back at caret 10 of 219 | Letter('u') at caret 9 of 218
+# note13=FE2 #480 Space: wanted "space" once, said ["space", "space"]; recent: Home at caret 255 of 255 | Space at caret 0 of 255 | Home at caret 1 of 256 | Space at caret 0 of 256
+# note14=FE2 #481 Back: wanted "space" once, said ["space", " 😀glifgeж u e dhmukawj mlж 😀s rm vm fwp😀m vu gug t xdжneznwzzk yih😀y wzжn jqeme swddjsxqm😀c ж yuwyqxdsuwi ж qczg w pw жfжжrp😀aohn m znwlkt dqжod a жqqag o😀 ry😀awas ж al jjub exj😀жr жqwlжa😀m raaveovqp l 😀qn yxko 😀rpjcddxж😀knc😀 aжeo😀fжam😀😀z e😀 😀gxж e g"]; recent: Space at caret 0 of 255 | Home at caret 1 of 256 | Space at caret 0 of 256 | Back at caret 1 of 257
+# note15=FE2 #484 Space: wanted "space" once, said ["space", "space"]; recent: Back at caret 1 of 257 | Letter('x') at caret 0 of 256 | Emoji at caret 1 of 257 | Space at caret 2 of 258
+# note16=FE2 #486 Space: wanted "space" once, said ["space", "space"]; recent: Emoji at caret 1 of 257 | Space at caret 2 of 258 | Letter('f') at caret 3 of 259 | Space at caret 4 of 260
+# note17=FE2 #563 Letter('y'): wanted "y" once, said ["y", "x😀 f qfdou gzgeh 😀yucmzvopzb 😀glifgeж u e dhmukawj mlж 😀s rm vm fwp😀m vu gug t xdжneznwzzk yih😀y wzжn jqeme swddjsxqm😀c ж yuwyqxdsuwi ж qczg w pw жfжжrp😀aohn m znwlkt dqжod a жqqag o😀 ry😀awas ж al jjub exj😀жr жqwlжa😀m raaveovqp l 😀qn yxko 😀rpjcddxж😀knc😀 aжeo😀fжam😀😀z e😀 😀gxж e gni😀жlf iva😀bmtalyy"]; recent: Back at caret 301 of 302 | Back at caret 300 of 301 | Letter('l') at caret 299 of 300 | Letter('y') at caret 300 of 301
+# note18=FE2 #564 Back: wanted "y" once, said ["y", "y"]; recent: Back at caret 300 of 301 | Letter('l') at caret 299 of 300 | Letter('y') at caret 300 of 301 | Back at caret 301 of 302
+# note19=FE2 #586 Emoji: wanted "😀" once, said ["😀", "o😀zxu😀😀 f qfdou gzgeh 😀yucmzvopzb 😀glifgeж u e dhmukawj mlж 😀s rm vm fwp😀m vu gug t xdжneznwzzk yih😀y wzжn jqeme swddjsxqm😀c ж yuwyqxdsuwi ж qczg w pw жfжжrp😀aohn m znwlkt dqжod a жqqag o😀 ry😀awas ж al jjub exj😀жr жqwlжa😀m raaveovqp l 😀qn yxko 😀rpjcddxж😀knc😀 aжeo😀fжam😀😀z e😀 😀gxж e gni😀жlf iva😀bmtaohuжpye😀f"]; recent: Space at caret 4 of 311 | Back at caret 5 of 312 | Letter('u') at caret 4 of 311 | Emoji at caret 5 of 312
+# note20=FE2 #590 Emoji: wanted "😀" once, said ["😀", "o😀zxu😀ж😀😀 f qfdou gzgeh 😀yucmzvopzb 😀glifgeж u e dhmukawj mlж 😀s rm vm fwp😀m vu gug t xdжneznwzzk yih😀y wzжn jqeme swddjsxqm😀c ж yuwyqxdsuwi ж qczg w pw жfжжrp😀aohn m znwlkt dqжod a жqqag o😀 ry😀awas ж al jjub exj😀жr жqwlжa😀m raaveovqp l 😀qn yxko 😀rpjcddxж😀knc😀 aжeo😀fжam😀😀z e😀 😀gxж e gni😀жlf iva😀bmtaohuжpye😀f"]; recent: Letter('t') at caret 6 of 313 | Back at caret 7 of 314 | Cyr at caret 6 of 313 | Emoji at caret 7 of 314
+# note21=FE2 #592 Emoji: wanted "😀" once, said ["😀", "😀"]; recent: Cyr at caret 6 of 313 | Emoji at caret 7 of 314 | Letter('u') at caret 8 of 315 | Emoji at caret 9 of 316
+# note22=FE2 #599 Space: wanted "space" once, said ["space", "o😀zxu😀ж😀u😀qhfm f qfdou gzgeh 😀yucmzvopzb 😀glifgeж u e dhmukawj mlж 😀s rm vm fwp😀m vu gug t xdжneznwzzk yih😀y wzжn jqeme swddjsxqm😀c ж yuwyqxdsuwi ж qczg w pw жfжжrp😀aohn m znwlkt dqжod a жqqag o😀 ry😀awas ж al jjub exj😀жr жqwlжa😀m raaveovqp l 😀qn yxko 😀rpjcddxж😀knc😀 aжeo😀fжam😀😀z e😀 😀gxж e gni😀жlf iva😀bmtaohuжpye😀f"]; recent: Letter('m') at caret 13 of 320 | Right at caret 14 of 321 | Back at caret 15 of 321 | Space at caret 14 of 320
+# note23=FE2 #663 Space: wanted "space" once, said ["space", "space"]; recent: Letter('r') at caret 5 of 345 | Space at caret 6 of 346 | Left at caret 7 of 347 | Space at caret 6 of 347
+# note24=FE2 #666 Space: wanted "space" once, said ["space", "space"]; recent: Space at caret 6 of 347 | Letter('i') at caret 7 of 348 | Letter('s') at caret 8 of 349 | Space at caret 9 of 350
+# note25=FE2 #667 Back: wanted "space" once, said ["space", " eahqr is i wgжg uo😀zxu😀ж😀u😀qhfm fqw qfdou gzgeh 😀yucmzvopzb 😀glifgeж u e dhmukawj mlж 😀s rm vm fwp😀m vu gug t xdжneznwzzk yih😀y wzжn jqeme swddjsxqm😀c ж yuwyqxdsuwi ж qczg w pw жfжжrp😀aohn m znwlkt dqжod a жqqag o😀 ry😀awas ж al jjub exj😀жr жqwlжa😀m raaveovqp l 😀qn yxko 😀rpjcddxж😀knc😀 aжeo😀fжam😀😀z e😀 😀gxж e gni😀жlf iva😀bmtaohuжpye😀😀ldnxgж"]; recent: Letter('i') at caret 7 of 348 | Letter('s') at caret 8 of 349 | Space at caret 9 of 350 | Back at caret 10 of 351
+# note26=FE2 #674 Letter('y'): wanted "y" once, said ["y", "y"]; recent: Left at caret 10 of 352 | Letter('j') at caret 9 of 352 | Space at caret 10 of 353 | Letter('y') at caret 11 of 354
+# note27=FE2 #675 Back: wanted "y" once, said ["y", " eahqr ikj ys i wgжg uo😀zxu😀ж😀u😀qhfm fqw qfdou gzgeh 😀yucmzvopzb 😀glifgeж u e dhmukawj mlж 😀s rm vm fwp😀m vu gug t xdжneznwzzk yih😀y wzжn jqeme swddjsxqm😀c ж yuwyqxdsuwi ж qczg w pw жfжжrp😀aohn m znwlkt dqжod a жqqag o😀 ry😀awas ж al jjub exj😀жr жqwlжa😀m raaveovqp l 😀qn yxko 😀rpjcddxж😀knc😀 aжeo😀fжam😀😀z e😀 😀gxж e gni😀жlf iva😀bmtaohuжpye😀😀ldnxgж"]; recent: Letter('j') at caret 9 of 352 | Space at caret 10 of 353 | Letter('y') at caret 11 of 354 | Back at caret 12 of 355
+# note28=FE2 #676 Letter('y'): wanted "y" once, said ["y", "y"]; recent: Space at caret 10 of 353 | Letter('y') at caret 11 of 354 | Back at caret 12 of 355 | Letter('y') at caret 11 of 354
+# note29=FE2 #693 Space: wanted "space" once, said ["space", "😀qe eahqr ikj yob😀ys i wgжg uo😀zxu😀ж😀u😀qhfm fqw qfdou gzgeh 😀yucmzvopzb 😀glifgeж u e dhmukawj mlж 😀s rm vm fwp😀m vu gug t xdжneznwzzk yih😀y wzжn jqeme swddjsxqm😀c ж yuwyqxdsuwi ж qczg w pw жfжжrp😀aohn m znwlkt dqжod a жqqag o😀 ry😀awas ж al jjub exj😀жr жqwlжa😀m raaveovqp l 😀qn yxko 😀rpjcddxж😀knc😀 aжeo😀fжam😀😀z e😀 😀gxж e gni😀жlf iva😀bmtaohuжpye😀😀ldnxgж"]; recent: Letter('e') at caret 2 of 360 | Letter('i') at caret 3 of 361 | Back at caret 4 of 362 | Space at caret 3 of 361
+# note30=FE2 first actions: Letter('w') at caret 0 of 0 | Left at caret 1 of 1 | Cyr at caret 0 of 1 | Space at caret 1 of 2 | Letter('q') at caret 2 of 3 | Letter('c') at caret 3 of 4 | Letter('m') at caret 4 of 5 | Back at caret 5 of 6 | Letter('z') at caret 4 of 5 | Letter('w') at caret 5 of 6 | Left at caret 6 of 7 | Letter('g') at caret 5 of 7 | Space at caret 6 of 8 | Letter('q') at caret 7 of 9
+
+metric                     bus                median          min          max  n op    threshold  res   note
+FE2.e2_double              daemon/voicego           29           29           29  1 <=            0  FAIL  gated on the max over repeats [actions]
+FE2.e2_keyname             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_missing             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_resync              daemon/voicego            1            1            1  1 <=            3  PASS  FE2 actions the page did not apply (not scored) [actions]
+FE2.e2_swallowed           daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+FE2.e2_wrong               daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.ft_failures            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checks]
+W2b.w2b_gorca_ms.n         daemon/voicego            6            6            6  1                  info   [samples]
+W2b.w2b_gorca_ms.p50       daemon/voicego        2.171        2.171        2.171  1                  info   [ms]
+W2b.w2b_gorca_ms.p95       daemon/voicego        7.484        7.484        7.484  1                  info   [ms]
+W2b.w2b_gorca_ms.p99       daemon/voicego        7.484        7.484        7.484  1 <=          150  PASS   [ms]
+W2b.w2b_gorca_ms.p999      daemon/voicego        7.484        7.484        7.484  1                  info   [ms]
+W2b.w2b_gorca_ms.max       daemon/voicego        7.484        7.484        7.484  1                  info   [ms]
+W2b.w2b_ms.n               daemon/voicego            6            6            6  1                  info   [samples]
+W2b.w2b_ms.p50             daemon/voicego         77.5         77.5         77.5  1                  info   [ms]
+W2b.w2b_ms.p95             daemon/voicego         83.5         83.5         83.5  1                  info   [ms]
+W2b.w2b_ms.p99             daemon/voicego         83.5         83.5         83.5  1                  info   [ms]
+W2b.w2b_ms.p999            daemon/voicego         83.5         83.5         83.5  1                  info   [ms]
+W2b.w2b_ms.max             daemon/voicego         83.5         83.5         83.5  1                  info   [ms]
+W2b.w2b_phase_create_ms.n  daemon/voicego            6            6            6  1                  info   [samples]
+W2b.w2b_phase_create_ms.p50 daemon/voicego        0.005        0.005        0.005  1                  info   [ms]
+W2b.w2b_phase_create_ms.p95 daemon/voicego        0.011        0.011        0.011  1                  info   [ms]
+W2b.w2b_phase_create_ms.p99 daemon/voicego        0.011        0.011        0.011  1                  info   [ms]
+W2b.w2b_phase_create_ms.p999 daemon/voicego        0.011        0.011        0.011  1                  info   [ms]
+W2b.w2b_phase_create_ms.max daemon/voicego        0.011        0.011        0.011  1                  info   [ms]
+W2b.w2b_phase_fetch_calls.n daemon/voicego            6            6            6  1                  info   [samples]
+W2b.w2b_phase_fetch_calls.p50 daemon/voicego          947          947          947  1                  info   [ms]
+W2b.w2b_phase_fetch_calls.p95 daemon/voicego          947          947          947  1                  info   [ms]
+W2b.w2b_phase_fetch_calls.p99 daemon/voicego          947          947          947  1                  info   [ms]
+W2b.w2b_phase_fetch_calls.p999 daemon/voicego          947          947          947  1                  info   [ms]
+W2b.w2b_phase_fetch_calls.max daemon/voicego          947          947          947  1                  info   [ms]
+W2b.w2b_phase_fetch_get_tree_ms.n daemon/voicego            6            6            6  1                  info   [samples]
+W2b.w2b_phase_fetch_get_tree_ms.p50 daemon/voicego        2.743        2.743        2.743  1                  info   [ms]
+W2b.w2b_phase_fetch_get_tree_ms.p95 daemon/voicego        3.341        3.341        3.341  1                  info   [ms]
+W2b.w2b_phase_fetch_get_tree_ms.p99 daemon/voicego        3.341        3.341        3.341  1                  info   [ms]
+W2b.w2b_phase_fetch_get_tree_ms.p999 daemon/voicego        3.341        3.341        3.341  1                  info   [ms]
+W2b.w2b_phase_fetch_get_tree_ms.max daemon/voicego        3.341        3.341        3.341  1                  info   [ms]
+W2b.w2b_phase_fetch_heaviest_get_tree_ms.n daemon/voicego            6            6            6  1                  info   [samples]
+W2b.w2b_phase_fetch_heaviest_get_tree_ms.p50 daemon/voicego        0.628        0.628        0.628  1                  info   [ms]
+W2b.w2b_phase_fetch_heaviest_get_tree_ms.p95 daemon/voicego        0.837        0.837        0.837  1                  info   [ms]
+W2b.w2b_phase_fetch_heaviest_get_tree_ms.p99 daemon/voicego        0.837        0.837        0.837  1                  info   [ms]
+W2b.w2b_phase_fetch_heaviest_get_tree_ms.p999 daemon/voicego        0.837        0.837        0.837  1                  info   [ms]
+W2b.w2b_phase_fetch_heaviest_get_tree_ms.max daemon/voicego        0.837        0.837        0.837  1                  info   [ms]
+W2b.w2b_phase_fetch_nodes.n daemon/voicego            6            6            6  1                  info   [samples]
+W2b.w2b_phase_fetch_nodes.p50 daemon/voicego        21203        21203        21203  1                  info   [ms]
+W2b.w2b_phase_fetch_nodes.p95 daemon/voicego        21203        21203        21203  1                  info   [ms]
+W2b.w2b_phase_fetch_nodes.p99 daemon/voicego        21203        21203        21203  1                  info   [ms]
+W2b.w2b_phase_fetch_nodes.p999 daemon/voicego        21203        21203        21203  1                  info   [ms]
+W2b.w2b_phase_fetch_nodes.max daemon/voicego        21203        21203        21203  1                  info   [ms]
+W2b.w2b_phase_fetch_total_ms.n daemon/voicego            6            6            6  1                  info   [samples]
+W2b.w2b_phase_fetch_total_ms.p50 daemon/voicego        602.9        602.9        602.9  1                  info   [ms]
+W2b.w2b_phase_fetch_total_ms.p95 daemon/voicego        611.7        611.7        611.7  1                  info   [ms]
+W2b.w2b_phase_fetch_total_ms.p99 daemon/voicego        611.7        611.7        611.7  1                  info   [ms]
+W2b.w2b_phase_fetch_total_ms.p999 daemon/voicego        611.7        611.7        611.7  1                  info   [ms]
+W2b.w2b_phase_fetch_total_ms.max daemon/voicego        611.7        611.7        611.7  1                  info   [ms]
+W2b.w2b_phase_firefox_blocked_ms.n daemon/voicego            6            6            6  1                  info   [samples]
+W2b.w2b_phase_firefox_blocked_ms.p50 daemon/voicego         75.6         75.6         75.6  1                  info   [ms]
+W2b.w2b_phase_firefox_blocked_ms.p95 daemon/voicego         77.0         77.0         77.0  1                  info   [ms]
+W2b.w2b_phase_firefox_blocked_ms.p99 daemon/voicego         77.0         77.0         77.0  1                  info   [ms]
+W2b.w2b_phase_firefox_blocked_ms.p999 daemon/voicego         77.0         77.0         77.0  1                  info   [ms]
+W2b.w2b_phase_firefox_blocked_ms.max daemon/voicego         77.0         77.0         77.0  1                  info   [ms]
+W2b.w2b_phase_first_block_ms.n daemon/voicego            6            6            6  1                  info   [samples]
+W2b.w2b_phase_first_block_ms.p50 daemon/voicego         60.5         60.5         60.5  1                  info   [ms]
+W2b.w2b_phase_first_block_ms.p95 daemon/voicego         62.7         62.7         62.7  1                  info   [ms]
+W2b.w2b_phase_first_block_ms.p99 daemon/voicego         62.7         62.7         62.7  1                  info   [ms]
+W2b.w2b_phase_first_block_ms.p999 daemon/voicego         62.7         62.7         62.7  1                  info   [ms]
+W2b.w2b_phase_first_block_ms.max daemon/voicego         62.7         62.7         62.7  1                  info   [ms]
+W2b.w2b_phase_first_block_nodes.n daemon/voicego            6            6            6  1                  info   [samples]
+W2b.w2b_phase_first_block_nodes.p50 daemon/voicego          416          416          416  1                  info   [ms]
+W2b.w2b_phase_first_block_nodes.p95 daemon/voicego          416          416          416  1                  info   [ms]
+W2b.w2b_phase_first_block_nodes.p99 daemon/voicego          416          416          416  1                  info   [ms]
+W2b.w2b_phase_first_block_nodes.p999 daemon/voicego          416          416          416  1                  info   [ms]
+W2b.w2b_phase_first_block_nodes.max daemon/voicego          416          416          416  1                  info   [ms]
+W2b.w2b_phase_locate_ms.n  daemon/voicego            6            6            6  1                  info   [samples]
+W2b.w2b_phase_locate_ms.p50 daemon/voicego         13.6         13.6         13.6  1                  info   [ms]
+W2b.w2b_phase_locate_ms.p95 daemon/voicego         16.5         16.5         16.5  1                  info   [ms]
+W2b.w2b_phase_locate_ms.p99 daemon/voicego         16.5         16.5         16.5  1                  info   [ms]
+W2b.w2b_phase_locate_ms.p999 daemon/voicego         16.5         16.5         16.5  1                  info   [ms]
+W2b.w2b_phase_locate_ms.max daemon/voicego         16.5         16.5         16.5  1                  info   [ms]
+W2b.w2b_phase_translate_ms.n daemon/voicego            6            6            6  1                  info   [samples]
+W2b.w2b_phase_translate_ms.p50 daemon/voicego        1.165        1.165        1.165  1                  info   [ms]
+W2b.w2b_phase_translate_ms.p95 daemon/voicego        4.455        4.455        4.455  1                  info   [ms]
+W2b.w2b_phase_translate_ms.p99 daemon/voicego        4.455        4.455        4.455  1                  info   [ms]
+W2b.w2b_phase_translate_ms.p999 daemon/voicego        4.455        4.455        4.455  1                  info   [ms]
+W2b.w2b_phase_translate_ms.max daemon/voicego        4.455        4.455        4.455  1                  info   [ms]
+W2b.lost                   daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+W2b.untagged_warm          daemon/voicego            6            6            6  1 <=            0  FAIL  gated on the max over repeats [trials]
+W3.w3_ms.n                 daemon/voicego           10           10           10  1                  info   [samples]
+W3.w3_ms.p50               daemon/voicego        0.173        0.173        0.173  1                  info   [ms]
+W3.w3_ms.p95               daemon/voicego        0.322        0.322        0.322  1                  info   [ms]
+W3.w3_ms.p99               daemon/voicego        0.322        0.322        0.322  1 <=           15  PASS   [ms]
+W3.w3_ms.p999              daemon/voicego        0.322        0.322        0.322  1                  info   [ms]
+W3.w3_ms.max               daemon/voicego        0.322        0.322        0.322  1                  info   [ms]
+W3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]

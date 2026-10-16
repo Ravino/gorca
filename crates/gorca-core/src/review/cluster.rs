@@ -900,10 +900,14 @@ mod tests {
             ));
         }
         let inp = input(nodes);
-        let t = Instant::now();
-        let m = build_line_model(&inp, &ReviewLimits::default());
-        let took = t.elapsed();
-        assert_eq!(m.zones.len(), 2_000);
+        // Best of five: a build slowed by preemption is slow once, a regression is slow in all.
+        let mut took = std::time::Duration::MAX;
+        for _ in 0..5 {
+            let t = Instant::now();
+            let m = build_line_model(&inp, &ReviewLimits::default());
+            took = took.min(t.elapsed());
+            assert_eq!(m.zones.len(), 2_000);
+        }
         let bound = if cfg!(debug_assertions) {
             std::time::Duration::from_millis(400)
         } else {

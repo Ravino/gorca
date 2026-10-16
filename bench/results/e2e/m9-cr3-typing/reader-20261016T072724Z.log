@@ -1,0 +1,9 @@
+2026-10-16T07:27:35.816730Z  INFO gorca_phase: phase="locate" wall_ms=5.383
+2026-10-16T07:27:35.816824Z  INFO gorca_phase: phase="create" wall_ms=0.0033079999999999997
+2026-10-16T07:27:35.851383Z  INFO gorca_phase: phase="fetch" total_ms=34.119679 warm_ms=28.490283 frontier_ms=0.074755 get_tree_ms=2.197162 roles_ms=1.011963 states_ms=0.746556 text_ms=0.868393 assemble_ms=0.018916 heaviest_get_tree_ms=0.712 calls=174 tree_bytes=13601 nodes=58
+2026-10-16T07:27:35.852936Z  INFO gorca_phase: phase="translate" wall_ms=1.351449 nodes=102
+2026-10-16T07:27:52.591239Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=the keyboard manager restarted backoff=100ms
+2026-10-16T07:27:52.618792Z  WARN gorca_daemon: speech backend changed notice=Unavailable
+2026-10-16T07:27:52.709168Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=200ms
+2026-10-16T07:27:52.913522Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=400ms
+2026-10-16T07:27:53.316908Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=800ms

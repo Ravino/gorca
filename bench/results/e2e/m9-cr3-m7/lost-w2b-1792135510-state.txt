@@ -1,0 +1,8 @@
+752015672872976 said "large 10000 - Google Chrome for Testing"
+752015970543869 said "large 10000, document"
+752016034522669 said "browse mode, link, A, A, link, B, B"
+bus 2 /org/a11y/atspi/accessible/33
+bus 1 /org/a11y/atspi/accessible/268
+bus 2 /org/a11y/atspi/accessible/268
+bus 2 /org/a11y/atspi/accessible/33
+bus 2 /org/a11y/atspi/accessible/268
