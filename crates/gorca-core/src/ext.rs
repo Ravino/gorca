@@ -66,6 +66,15 @@ pub trait AppExt: Send + Sync + fmt::Debug {
     /// busy, faulted or disabled: the core's own presentation runs.
     fn present(&self, snap: &NodeSnapshot, ctx: PresentContext, epoch: u64)
     -> Option<Vec<Segment>>;
+    /// `policy`: the first extension that does not defer wins (ADR-0008 W3). `None` when no
+    /// extension has an opinion, is busy, faulted or disabled: the core's own policy (if any)
+    /// runs. The default answers `None`.
+    fn policy(
+        &self,
+        _facts: &crate::builtin_ext::PolicyFacts<'_>,
+    ) -> Option<crate::builtin_ext::PolicyVerdict> {
+        None
+    }
     /// Queue `command(local)` of extension `ext`. Returns at once; the answer is spoken through
     /// the [`ExtSink`].
     fn command(&self, ext: &str, local: u32);

@@ -36,6 +36,7 @@ mod topology;
 mod wire;
 
 pub use probe::{DaemonProbe, ProbeRead};
+pub use shell_policy::ShellPolicy as NativeShellPolicy;
 pub use topology::{Arm, LaneRuntimes, build_runtime_for, bulk_pool, finish as finish_topology};
 
 use std::io::IsTerminal;
@@ -60,7 +61,10 @@ use smallvec::smallvec;
 use tokio::signal::unix::{Signal, SignalKind, signal};
 use tracing_subscriber::EnvFilter;
 
-pub use cli::{CliError, ConfigCmd, FillChoice, Options, Parsed, SpeechMode, USAGE, parse};
+pub use cli::{
+    CliError, ConfigCmd, FillChoice, Options, Parsed, ShellPolicyMode, SpeechMode, USAGE,
+    default_ext_dirs, parse,
+};
 pub use config_task::{Built, ConfigSource, ConfigTask, build as build_settings, run_config_cmd};
 pub use platform::{PlatformOverrides, probe as probe_platform};
 
@@ -364,9 +368,16 @@ async fn run_inner(
         core = core.with_fill_policy(p);
     }
     // Extensions first: their commands must be known before the settings are compiled.
-    let mut core = wire::wire_ext(core, &opts).await;
-    // The Shell's presentation policy: a native extension behind the core's `AppPolicy` seam.
-    core = core.with_app_policy(Arc::new(shell_policy::ShellPolicy::default()));
+    let (mut core, shell_in_host) = wire::wire_ext(core, &opts).await;
+    // The Shell's presentation policy (ADR-0008 amendment 1): the `ext-gnome-shell` WASM component
+    // when the extension host loaded it, else the native build of the same source behind the
+    // core's `AppPolicy` seam.
+    if shell_in_host {
+        tracing::info!("shell policy: ext-gnome-shell WASM component");
+    } else {
+        tracing::info!("shell policy: ext-gnome-shell native build");
+        core = core.with_app_policy(Arc::new(shell_policy::ShellPolicy::default()));
+    }
     let registry = core.connector_registrar(ConnectorId(1));
     let epoch = core.epoch();
     let focused = core.focused_app();

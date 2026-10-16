@@ -189,10 +189,7 @@ impl Reader {
         if is_notice_role(role) {
             return true;
         }
-        let Some(policy) = &self.app_policy else {
-            return false;
-        };
-        if !self.dir.has_policy(app) {
+        if !self.policy_active(app) {
             return false;
         }
         let facts = PolicyFacts {
@@ -203,7 +200,7 @@ impl Reader {
             description: None,
             range: None,
         };
-        policy.decide(&facts) == PolicyVerdict::Notice
+        self.decide_policy(app, &facts) == PolicyVerdict::Notice
     }
 
     /// Speak `u` for `app` within its owner's budget, else keep it as the newest waiting one.
@@ -298,7 +295,7 @@ impl Reader {
     /// The value of a node that does not hold focus changed (the OSD level bar): note it, and
     /// read it when the animation is over.
     pub(crate) fn on_level_changed(&mut self, node: NodeKey, fx: &mut ReaderEffects) {
-        if self.app_policy.is_none() || !self.dir.has_policy(node.app) {
+        if !self.policy_active(node.app) {
             return;
         }
         let now = self.now;
@@ -330,10 +327,10 @@ impl Reader {
     /// The application answered a level read: the installed policy decides what is said.
     pub(crate) fn on_level_read(&mut self, info: &WindowInfo, fx: &mut ReaderEffects) {
         use crate::builtin_ext::{PolicyFacts, PolicyMoment, PolicyVerdict};
-        let (Some(policy), Some(snap)) = (self.app_policy.clone(), info.snap.as_ref()) else {
+        let Some(snap) = info.snap.as_ref() else {
             return;
         };
-        if !self.dir.has_policy(snap.key.app) {
+        if !self.policy_active(snap.key.app) {
             return;
         }
         let range = match &snap.value {
@@ -349,7 +346,7 @@ impl Reader {
             description: snap.description.as_deref(),
             range,
         };
-        let PolicyVerdict::Say(segs) = policy.decide(&facts) else {
+        let PolicyVerdict::Say(segs) = self.decide_policy(snap.key.app, &facts) else {
             return;
         };
         let text: String = segs.iter().map(|s| &*s.text).collect::<Vec<_>>().join(",");

@@ -177,10 +177,7 @@ impl Reader {
     /// when it says to stay silent. Only applications whose profile asks for it are asked.
     fn apply_policy(&self, snap: &NodeSnapshot, u: &mut Utterance) -> bool {
         use crate::builtin_ext::{PolicyFacts, PolicyMoment, PolicyVerdict};
-        let Some(policy) = &self.app_policy else {
-            return false;
-        };
-        if !self.dir.has_policy(snap.key.app) {
+        if !self.policy_active(snap.key.app) {
             return false;
         }
         let range = match &snap.value {
@@ -195,7 +192,7 @@ impl Reader {
             description: snap.description.as_deref(),
             range,
         };
-        match policy.decide(&facts) {
+        match self.decide_policy(snap.key.app, &facts) {
             PolicyVerdict::Default | PolicyVerdict::Notice => false,
             PolicyVerdict::Silence => true,
             PolicyVerdict::Value(text) => {

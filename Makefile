@@ -3,10 +3,15 @@
 SHELL := /bin/bash
 ENV   := . ./env.sh &&
 
-.PHONY: check fmt fmt-check clippy test deps build release bench run clean
+.PHONY: check ext fmt fmt-check clippy test deps build release bench run clean
 
 # The gates from CLAUDE.md, plus the ADR-0001 dependency rules. All must pass.
-check: fmt-check clippy test deps
+check: fmt-check clippy ext test deps
+
+# The shipped extensions as wasm32-wasip2 components, laid out beside the debug and release
+# binaries (`target/<profile>/extensions`), where the daemon finds them by default.
+ext:
+	$(ENV) cargo xtask build-ext
 
 fmt:
 	$(ENV) cargo fmt --all
@@ -26,7 +31,7 @@ deps:
 build:
 	$(ENV) cargo build --workspace
 
-release:
+release: ext
 	$(ENV) cargo build --release -p gorca-daemon
 
 bench:

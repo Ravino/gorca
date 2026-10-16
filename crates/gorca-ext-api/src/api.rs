@@ -224,6 +224,40 @@ pub enum CommandResult {
     Speak(Vec<Segment>),
 }
 
+/// When the core asks an application policy (WIT `policy-moment`).
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum PolicyMoment {
+    Focus,
+    Value,
+    Activate,
+    Showing,
+}
+
+/// What a policy sees of a node (WIT `policy-facts`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct PolicyFacts {
+    pub moment: PolicyMoment,
+    pub role: Role,
+    pub states: u64,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub range: Option<Range>,
+}
+
+/// What a policy decides (WIT `policy-verdict`).
+#[derive(Clone, Debug, PartialEq)]
+pub enum PolicyVerdict {
+    /// No opinion: the core presents the node as for any application.
+    Defer,
+    Silence,
+    /// Replace the value in the core's presentation.
+    Value(String),
+    /// Say this instead.
+    Say(Vec<Segment>),
+    /// Read the node as a notice when it appears.
+    Notice,
+}
+
 /// Host functions an extension may call (WIT `host` interface). In the native build the host
 /// installs an implementation for the duration of each hook call ([`crate::host::with_host`]);
 /// in the component build the calls are WIT imports.
@@ -248,6 +282,10 @@ pub trait Hooks {
     }
     fn present(&mut self, _n: &Node, _ctx: PresentCtx) -> Option<Vec<Segment>> {
         None
+    }
+    /// The application policy: facts in, verdict out (ADR-0008 W3). Defers by default.
+    fn policy(&mut self, _f: &PolicyFacts) -> PolicyVerdict {
+        PolicyVerdict::Defer
     }
     fn nav_units(&self) -> Vec<NavUnit> {
         Vec::new()

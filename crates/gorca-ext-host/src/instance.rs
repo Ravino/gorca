@@ -21,6 +21,7 @@ use crate::manifest::Capabilities;
 pub enum HookKind {
     OnEvent,
     Present,
+    Policy,
     NavUnits,
     NavMatch,
     Command,
@@ -30,9 +31,11 @@ impl HookKind {
     /// CPU limit of the hook (ADR-0001 section 10, WE-5).
     pub fn limit(self) -> Duration {
         match self {
-            HookKind::OnEvent | HookKind::Present | HookKind::NavUnits | HookKind::NavMatch => {
-                Duration::from_millis(u64::from(LIMIT_HOOK_MS))
-            }
+            HookKind::OnEvent
+            | HookKind::Present
+            | HookKind::Policy
+            | HookKind::NavUnits
+            | HookKind::NavMatch => Duration::from_millis(u64::from(LIMIT_HOOK_MS)),
             HookKind::Command => Duration::from_millis(u64::from(LIMIT_COMMAND_MS)),
         }
     }
@@ -74,6 +77,7 @@ pub trait HookInstance: Send {
         n: &api::Node,
         ctx: api::PresentCtx,
     ) -> Result<Option<Vec<api::Segment>>, Fault>;
+    fn policy(&mut self, f: &api::PolicyFacts) -> Result<api::PolicyVerdict, Fault>;
     fn nav_units(&mut self) -> Result<Vec<api::NavUnit>, Fault>;
     fn nav_match(&mut self, unit: u32, n: &api::Node) -> Result<bool, Fault>;
     fn command(&mut self, id: u32) -> Result<api::CommandResult, Fault>;
