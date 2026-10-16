@@ -113,3 +113,23 @@ labels is the way to settle it.
 6. Spelling errors (W) need the `invalid:spelling` text attribute in the mirror.
 7. `main` has moved on (M6, speech priority slot, M4b). `git merge-tree` against the main of this session: one conflict, `crates/gorca-core/src/text/mod.rs` (the `TextMsg::Caret` arm, where this branch adds `web_caret`); `lib.rs` merges cleanly. The command table (`COUNT`, `impl_names.len()` in `spec.rs`) must be rechecked after the merge.
 8. Quiet-host gate-quality runs of the M7 set were not possible; the typing/caret gates are load-sensitive (documented in `docs/reports/m3b-m7b-impl.md`).
+
+## 8. Review fixes (round 1, `docs/reports/m8-review.md`)
+
+Merged `main` (M4b, follow-ups, M5, speech-lane priority, M6, ext-gnome-shell WASM) first, with the six
+conflicts resolved as the review describes (`text/mod.rs` web join first, then the terminal branch;
+`present/flow.rs` policy silence, web suppress, window hold; unions in `commands/mod.rs`, `lib.rs`; both sides'
+tests and decision rows).
+
+| Finding | Fix |
+|---|---|
+| H-1 | Caret follow removed (no `SetCaret` is sent from reading any more). D-2 as adopted: new commands `browse.tab_next` / `browse.tab_prev` (nvda presets, Tab and Shift+Tab). Target: `next`/`prev(Cat::FOCUSABLE)` from the cursor node on the mirror index, the document root excluded, the modal dialog respected; `Action::Focus`, so focus moves only on the user's Tab. Pass-through design: the Tab chords are in the browse grab set only for a direction that has a target (`current_grabs`, recomputed on mode entry and by the scroll-debounce timer, one `SetGrabSet` when it flips). With no target the key is not grabbed and Firefox gets it, with no injection needed. Costs: a Tab pressed inside the 150 ms after a cursor move uses the previous availability (stale grab: the target is still focused, or a spoken "no next focusable element" when the target is gone); a page change that adds a target after the cursor is noticed at the next cursor move; no wrap-around. Rig: SY.tab, SY.tab2, SY.stab and SY.tab.out (not consumed) pass. SY.nomove steps now also count page caret events, and K onto a link and Shift+Right in a link are checked (SY.nomove.k, .sel). |
+| M-1 | `present_change` treats EXPANDED/COLLAPSED as one tri-state: "expanded" / "collapsed". |
+| M-2 | `StateSet::MIXED` from AT-SPI `Indeterminate`; "half checked" in focus, change and browse speech, never "not checked" together with it. |
+| M-3 | The live tracker's load window ends once for good (first quiet period); later bulk batches are re-renders and never hide a new alert. Test `an_alert_in_a_bulk_rerender_is_not_lost` (0, 63, 500 extra nodes). |
+| M-4 | `Utterance.ttl_secs` (5 polite, 10 assertive, ADR-0003 13.2) honoured by the speech queue at dequeue and when full; an expiring item ranks below a non-expiring one of the same priority, so a Shell notification evicts live news instead of being dropped. Live speech goes through `notice_speak` (the owner's `Kind::Speak` bucket, newest-waiting). Tests in `gorca-speech/src/queue.rs` and `browse/tests.rs`. |
+| M-5 | Virtual selection by default; `browse.native_selection_toggle` (gorca+Shift+F10) turns the page mirror on. In native mode a range is set only inside one text node that is not in a focusable element, otherwise (and when the range goes away) the page selection we set is collapsed. Ctrl+C grabbing and clipboard output are still deferred (gap table). |
+| M-6 | The only Gecko rule in core was the caret follow; it is gone. Gecko role and state normalisation stays in `gorca-doc-source-atspi` / the connector decode. |
+| 100k H/Shift+H key loss | Recorded, not chased: 8 of 150 in `m8-review-full` and one repeat of `m8-final-full`; main lost 7 in `m8-baseline-perf` (shared). |
+
+Gate results are in section 9.

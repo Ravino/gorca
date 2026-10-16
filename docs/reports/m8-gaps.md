@@ -27,7 +27,7 @@ Legend: **closed** = the scripted steps pass; **partial** = core words pass, a r
 | 15 | Position restore | **closed** | SP.restore | the cursor is re-resolved at the saved offset for 1.5 s after its node vanished; the step now re-renders after a delay with the cursor in the list |
 | 16 | Shift+D from a nested landmark | **closed** | LM.d.prev, LM.d.prev2 | |
 | 17 | Role prefix repeated inside a heading | **closed** | RD.char.left, RD.word.left, RD.home | |
-| 18 | Tab starts from the browse cursor (D-2) | **unverified** | SY.tab, FM.tab.real, SP.back (rig) | the browse cursor moves Firefox's caret (debounced `SetCaret` on the cursor's text node, never into a form field), and Firefox starts Tab from its caret when nothing is focused. The rig cannot type into the page, so this is for the live checklist |
+| 18 | Tab starts from the browse cursor (D-2) | **closed** | SY.tab, SY.tab2, SY.stab, SY.tab.out (pass), FM.tab.real, SP.back (rig) | Review H-1: the caret-follow substitute is removed (it never fired on text and focused links). Tab / Shift+Tab are bound in browse mode (`browse.tab_next`/`browse.tab_prev`): next/previous `Cat::FOCUSABLE` after/before the cursor in the mirror (never the document, inside a modal dialog while the cursor is), focused with `Action::Focus`; the focus event then moves the cursor and speaks. Tab is part of the browse grab set only in a direction that has a target (updated 150 ms after the cursor settles), otherwise the key reaches the page: a grabbed key cannot be given back (key injection is a stub). Wrap-around is not done |
 
 ## Steps that are not PASS (final run `m8-final2-full`)
 
