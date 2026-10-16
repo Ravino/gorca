@@ -665,13 +665,17 @@ impl AtspiDocSource {
                 else {
                     continue;
                 };
-                let showing = n.states.contains(StateSet::SHOWING);
-                if live.scroll_back.is_none() && i > 0 && showing {
+                // `internal frame` is not a stateful role: its state in the block is the plain
+                // default. The task asks for the real one.
+                if live.scroll_back.is_none()
+                    && i > 0
+                    && roles::is_stateful(raw)
+                    && n.states.contains(StateSet::SHOWING)
+                {
                     live.scroll_back = live.paths.path_of(key);
                 }
                 if raw == INTERNAL_FRAME
                     && count == 0
-                    && !showing
                     && live.sleeping_frames.len() < WAKE_FRAMES_MAX
                     && let Some(p) = live.paths.path_of(key)
                 {
@@ -691,8 +695,19 @@ impl AtspiDocSource {
         let app = Arc::clone(&self.app);
         let timeout = self.config.call_timeout;
         tokio::spawn(async move {
-            let mut woke = 0usize;
+            let (mut woke, mut scrolled) = (0usize, 0usize);
             for f in &frames {
+                let dl = Deadline(Instant::now() + timeout);
+                // Only a frame that is not in view sleeps.
+                let showing = app
+                    .call(app.next_lane(), dl, f, ACCESSIBLE, "GetState", &())
+                    .await
+                    .ok()
+                    .and_then(|m| wire::parse_state(m.body().data().bytes()).ok())
+                    .is_some_and(|st| st & (1 << roles::state_bit::SHOWING) != 0);
+                if showing {
+                    continue;
+                }
                 let dl = Deadline(Instant::now() + timeout);
                 if app
                     .call(app.next_lane(), dl, f, COMPONENT, "ScrollTo", &(6u32,))
@@ -701,6 +716,7 @@ impl AtspiDocSource {
                 {
                     continue;
                 }
+                scrolled += 1;
                 // The frame's renderer needs a frame or two to serialize its tree.
                 for _ in 0..WAKE_FRAME_POLLS {
                     tokio::time::sleep(WAKE_FRAME_POLL).await;
@@ -717,7 +733,9 @@ impl AtspiDocSource {
                     }
                 }
             }
-            if let Some(b) = back {
+            if scrolled > 0
+                && let Some(b) = back
+            {
                 let dl = Deadline(Instant::now() + timeout);
                 let _ = app
                     .call(app.next_lane(), dl, &b, COMPONENT, "ScrollTo", &(0u32,))
