@@ -205,7 +205,8 @@ impl RunLayer {
             // are cut from this batch, and removed if an earlier batch already carried them.
             let mut dropped: std::collections::HashSet<SrcNodeId> = dropped.into_iter().collect();
             // Their own runs go with them.
-            let mut dead_runs: std::collections::HashSet<SrcNodeId> = std::collections::HashSet::new();
+            let mut dead_runs: std::collections::HashSet<SrcNodeId> =
+                std::collections::HashSet::new();
             for id in &dropped {
                 if let Some(c) = self.containers.remove(id) {
                     dead_runs.extend(c.runs.iter().map(|(r, _)| *r));
@@ -457,7 +458,10 @@ mod tests {
         assert_eq!(list.len(), 3, "run, link, run: {list:?}");
         assert!(is_run(list[0]) && list[1] == SrcNodeId(3) && is_run(list[2]));
         let up = upserted(&out);
-        assert!(up.iter().all(|n| n.id != SrcNodeId(2) && n.id != SrcNodeId(4)));
+        assert!(
+            up.iter()
+                .all(|n| n.id != SrcNodeId(2) && n.id != SrcNodeId(4))
+        );
         // Heading: Text "Title", one static child with the same text.
         let out = l.process(vec![
             DocDelta::Upsert(vec![node(10, Some("Title")), static_node(11, "Title")]),
@@ -471,7 +475,9 @@ mod tests {
         assert!(is_run(list[0]));
         let up = upserted(&out);
         assert_eq!(
-            up.iter().filter(|n| n.text.as_deref() == Some("Title")).count(),
+            up.iter()
+                .filter(|n| n.text.as_deref() == Some("Title"))
+                .count(),
             1,
             "the text is in exactly one node"
         );

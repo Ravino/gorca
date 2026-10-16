@@ -185,10 +185,12 @@ mod tests {
             assert!(!t.needs_wake_call());
             assert!(!t.text_leaf_children_repeat_parent_text());
             assert_eq!(t.name_source_attribute(), None);
+            assert_eq!(t.page_events_settle_ms(), 0);
         }
         assert!(Toolkit::Chromium.needs_wake_call());
         assert!(Toolkit::Chromium.text_leaf_children_repeat_parent_text());
         assert_eq!(Toolkit::Chromium.name_source_attribute(), Some("name-from"));
+        assert!(Toolkit::Chromium.page_events_settle_ms() >= 1000);
         // Chrome and Electron classify as Chromium, so they get the rows.
         assert!(Toolkit::classify("", "Google Chrome for Testing").needs_wake_call());
         assert!(Toolkit::classify("Chromium", "slack").needs_wake_call());

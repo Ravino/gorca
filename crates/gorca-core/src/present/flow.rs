@@ -522,13 +522,19 @@ impl Reader {
                     // A web dialog just entered: its name and role lead the focus speech.
                     for (i, (text, kind)) in [
                         (name, gorca_model::SegmentKind::Text),
-                        (Arc::from(gorca_model::Role::Dialog.spoken()), gorca_model::SegmentKind::Role),
+                        (
+                            Arc::from(gorca_model::Role::Dialog.spoken()),
+                            gorca_model::SegmentKind::Role,
+                        ),
                     ]
                     .into_iter()
                     .enumerate()
                     {
                         let at = usize::from(word.is_some()) + i;
-                        u.segments.insert(at.min(u.segments.len()), gorca_model::Segment { text, kind });
+                        u.segments.insert(
+                            at.min(u.segments.len()),
+                            gorca_model::Segment { text, kind },
+                        );
                     }
                 }
                 self.web_extra = (word.is_some() || !tail.is_empty()).then_some((id, word, tail));

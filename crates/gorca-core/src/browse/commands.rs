@@ -687,7 +687,11 @@ impl Reader {
                 return None;
             }
             let off = cursor::content_start(dd, id)?;
-            Some((cursor::cursor_at(dd, off)?, off, line_items(dd, max_line, off)))
+            Some((
+                cursor::cursor_at(dd, off)?,
+                off,
+                line_items(dd, max_line, off),
+            ))
         });
         let Some((cur, off, items)) = placed else {
             return false;

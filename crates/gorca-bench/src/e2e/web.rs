@@ -929,7 +929,9 @@ fn once(fails: &mut Vec<String>, what: &str, heard: &Result<(String, f64)>, word
     if let Ok((text, _)) = heard
         && text.matches(word).count() > 1
     {
-        fails.push(format!("{what}: {word:?} is spoken more than once in {text:?}"));
+        fails.push(format!(
+            "{what}: {word:?} is spoken more than once in {text:?}"
+        ));
     }
 }
 
@@ -950,7 +952,10 @@ pub fn b0(
     w.prime(&doc)?;
     out.notes.push(format!(
         "before entry: {:?}",
-        speaks_since(&w, 0).into_iter().map(|s| s.1).collect::<Vec<_>>()
+        speaks_since(&w, 0)
+            .into_iter()
+            .map(|s| s.1)
+            .collect::<Vec<_>>()
     ));
     let mark = w.mark();
     w.focus(&doc.path)?;
@@ -966,7 +971,9 @@ pub fn b0(
     ));
     // Chromium announces the page by itself when its window activates, so the focus above is
     // not a change: the first line was spoken before it.
-    let before = speaks_since(&w, 0).iter().any(|s| s.1.contains("Gorca article"));
+    let before = speaks_since(&w, 0)
+        .iter()
+        .any(|s| s.1.contains("Gorca article"));
     if heard.is_none() && !(chromium_selected() && before) {
         fails.push("entry: the first line was not spoken".into());
     }

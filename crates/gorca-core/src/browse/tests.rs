@@ -1740,3 +1740,57 @@ fn the_load_complete_of_another_document_does_not_start_the_read() {
         "another document's load-complete read this page: {fx:?}"
     );
 }
+
+#[test]
+fn a_caret_move_to_a_heading_is_an_anchor_jump_the_cursor_follows() {
+    // Chromium's scroll-to-anchor signal: text-caret-moved(0) on the target (no focus event).
+    let mut r = rig();
+    r.focus(1006);
+    assert!(matches!(r.mode(), WebMode::Browse { .. }));
+    let fx = r.reader.handle(
+        ReaderMsg::Text(crate::TextMsg::Caret {
+            node: nk(1009),
+            offset: 0,
+        }),
+        r.now,
+    );
+    let said = spoken(&fx);
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(
+        said[0].contains("heading level 2") && said[0].contains("Details"),
+        "{said:?}"
+    );
+    // The same jump again says nothing new; Down continues from the target.
+    let fx = r.reader.handle(
+        ReaderMsg::Text(crate::TextMsg::Caret {
+            node: nk(1009),
+            offset: 0,
+        }),
+        r.now,
+    );
+    assert!(spoken(&fx).is_empty());
+    let fx = r.key(CoreCmd::BrowseCursorNextLine);
+    assert_eq!(spoken(&fx), ["Last line"]);
+}
+
+#[test]
+fn a_caret_move_in_a_field_or_at_another_offset_is_not_an_anchor_jump() {
+    let mut r = rig();
+    r.focus(1006);
+    let fx = r.reader.handle(
+        ReaderMsg::Text(crate::TextMsg::Caret {
+            node: nk(1014),
+            offset: 0,
+        }),
+        r.now,
+    );
+    assert!(spoken(&fx).is_empty(), "an editable node is not an anchor");
+    let fx = r.reader.handle(
+        ReaderMsg::Text(crate::TextMsg::Caret {
+            node: nk(1009),
+            offset: 3,
+        }),
+        r.now,
+    );
+    assert!(spoken(&fx).is_empty(), "only offset 0 is the anchor signal");
+}

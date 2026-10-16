@@ -72,6 +72,16 @@ pub struct SourceConfig {
     /// Split container text into run leaves (TX-1, FT-2). Needs `fetch.text == All` to do
     /// anything; off for the B-6 harness, which compares against raw fetches.
     pub runs: bool,
+    /// What this engine's AT-SPI tree needs on top of the generic build (data from the
+    /// connector's quirk table, never decided here from a name).
+    pub quirks: EngineQuirks,
+    /// Events that did not fit while dormant, after which a wake rebuilds from scratch anyway.
+    pub dormant_marks: usize,
+}
+
+/// Engine quirks of the tree the source reads (Blink today).
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct EngineQuirks {
     /// Chromium reorders keyed lists without an event (`SourceCaps::silent_reorders`).
     pub silent_reorders: bool,
     /// Blink: `static` children repeat the text the parent's hypertext already holds (connector
@@ -82,8 +92,17 @@ pub struct SourceConfig {
     /// is scrolled into view. The source scrolls each such frame into view once, then back
     /// (`docs/reports/m9-impl.md`, iframes).
     pub wake_offscreen_frames: bool,
-    /// Events that did not fit while dormant, after which a wake rebuilds from scratch anyway.
-    pub dormant_marks: usize,
+}
+
+impl EngineQuirks {
+    /// Every Blink quirk on, none otherwise.
+    pub fn blink(on: bool) -> Self {
+        Self {
+            silent_reorders: on,
+            static_leaves_repeat_text: on,
+            wake_offscreen_frames: on,
+        }
+    }
 }
 
 impl SourceConfig {
@@ -96,9 +115,7 @@ impl SourceConfig {
             },
             text_unit,
             runs: true,
-            silent_reorders: chromium,
-            static_leaves_repeat_text: chromium,
-            wake_offscreen_frames: chromium,
+            quirks: EngineQuirks::blink(chromium),
             ..Self::default()
         }
     }
@@ -117,9 +134,7 @@ impl Default for SourceConfig {
             use_dom_id: true,
             first_nodes: 400,
             runs: false,
-            silent_reorders: false,
-            static_leaves_repeat_text: false,
-            wake_offscreen_frames: false,
+            quirks: EngineQuirks::default(),
             dormant_marks: 100_000,
         }
     }
@@ -270,7 +285,7 @@ impl DocSource for AtspiDocSource {
                 | ActionCaps::SET_SELECTION,
             // The object path validated by a DOM id and a signature is the heuristic key.
             join_keys: JoinKeyCaps::EXACT | JoinKeyCaps::HEURISTIC,
-            silent_reorders: self.config.silent_reorders,
+            silent_reorders: self.config.quirks.silent_reorders,
         }
     }
 
@@ -445,7 +460,7 @@ impl AtspiDocSource {
             root_key: None,
             out: Pusher {
                 runs: (self.config.runs && self.config.fetch.text == TextPolicy::All).then(|| {
-                    if self.config.static_leaves_repeat_text {
+                    if self.config.quirks.static_leaves_repeat_text {
                         RunLayer::dropping_static_children()
                     } else {
                         RunLayer::new()
@@ -614,8 +629,8 @@ impl AtspiDocSource {
     ) {
         live.ident.load_parts(docs);
         live.root_key = docs.first().and_then(|d| d.keys.first().copied());
-        if self.config.wake_offscreen_frames {
-            self.note_sleeping_frames(live, docs);
+        if self.config.quirks.wake_offscreen_frames {
+            Self::note_sleeping_frames(live, docs);
         }
         let nodes: usize = docs.iter().map(|d| d.block.node_count()).sum();
         let mut timings = docs[0].timings.clone();
@@ -655,7 +670,7 @@ impl AtspiDocSource {
 
     /// Remember the empty, not showing `internal frame`s of the blocks (at most
     /// [`WAKE_FRAMES_MAX`]) and the first node in view.
-    fn note_sleeping_frames(&self, live: &mut Live, docs: &[&FetchedDoc]) {
+    fn note_sleeping_frames(live: &mut Live, docs: &[&FetchedDoc]) {
         /// ATSPI_ROLE_INTERNAL_FRAME.
         const INTERNAL_FRAME: u32 = 28;
         for d in docs {
@@ -741,7 +756,11 @@ impl AtspiDocSource {
                     .call(app.next_lane(), dl, &b, COMPONENT, "ScrollTo", &(0u32,))
                     .await;
             }
-            tracing::debug!(frames = frames.len(), woke, "offscreen frames scrolled into view");
+            tracing::debug!(
+                frames = frames.len(),
+                woke,
+                "offscreen frames scrolled into view"
+            );
         });
     }
 
