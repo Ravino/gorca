@@ -1,0 +1,44 @@
+# e2e fix2
+# utc=2026-10-16T02:30:35Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=10.65 12.02 13.30 2/3591 569881
+# git_rev=89c225c
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=fix2
+# reader=daemon:<repo>/.claude/worktrees/agent-a9787c6b3fb7f34ee/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=10.65 12.02 13.30 2/3591 569878
+# reader_env=GORCA_M1=1 GORCA_M6=1 GORCA_M6_REAL=1 GORCA_M6_STRICT=1 GORCA_VV_NO_FLOOD=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=VV: floods skipped (GORCA_VV_NO_FLOOD)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+VV.vv_key_ms.n             daemon/voicego           10           10           10  1                  info   [samples]
+VV.vv_key_ms.p50           daemon/voicego        0.342        0.342        0.342  1                  info   [ms]
+VV.vv_key_ms.p95           daemon/voicego        0.494        0.494        0.494  1                  info   [ms]
+VV.vv_key_ms.p99           daemon/voicego        0.494        0.494        0.494  1 <=            3  PASS   [ms]
+VV.vv_key_ms.p999          daemon/voicego        0.494        0.494        0.494  1                  info   [ms]
+VV.vv_key_ms.max           daemon/voicego        0.494        0.494        0.494  1                  info   [ms]
+VV.vv_failures             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [steps]
+VV.vv_focus_failures       daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [steps]
+VV.vv_password_echo_double daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_password_echo_extra  daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_password_echo_missing daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_password_log_empty   daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [files]
+VV.vv_password_plaintext_in_logs daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [occurrences]
+VV.vv_password_prompt_missing daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_screen_failures      daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [steps]
+VV.vv_type_double          daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_type_extra           daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_type_missing         daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]

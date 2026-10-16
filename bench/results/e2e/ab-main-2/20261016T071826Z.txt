@@ -1,0 +1,74 @@
+# e2e ab-main-2
+# utc=2026-10-16T07:18:26Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=13.27 12.17 11.49 3/2978 1941183
+# git_rev=8ec61e0
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=ab-main-2
+# reader=daemon:<repo>/.claude/worktrees/agent-a9787c6b3fb7f34ee/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=13.27 12.17 11.49 5/2978 1941180
+# reader_env=GORCA_M1=1 GORCA_M6=1 GORCA_M6_STRICT=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=V1: emit of the last VTE frame to the SPEAK of the output it carried; includes the 30 ms settle, one GetText of the python fake app and the speech lane (gate: settle <= 30 ms wall + 5 ms gorca)
+# note1=VT: 9686 keys (typed 8550, BackSpace 357, Left 337, Right 337, Enter 105); every one spoken exactly once, nothing else
+# note2=VT: 9661 keys (typed 8562, BackSpace 331, Left 347, Right 347, Enter 74); every one spoken exactly once, nothing else
+# note3=VT: 9642 keys (typed 8468, BackSpace 366, Left 361, Right 361, Enter 86); every one spoken exactly once, nothing else
+
+metric                     bus                median          min          max  n op    threshold  res   note
+V1.v1_ms.n                 daemon/voicego          150          150          150  3                  info   [samples]
+V1.v1_ms.p50               daemon/voicego         32.1         32.1         32.2  3                  info   [ms]
+V1.v1_ms.p95               daemon/voicego         32.4         32.4         32.7  3                  info   [ms]
+V1.v1_ms.p99               daemon/voicego         32.6         32.5         34.8  3 <=           35  PASS   [ms]
+V1.v1_ms.p999              daemon/voicego         32.6         32.5         36.4  3                  info   [ms]
+V1.v1_ms.max               daemon/voicego         32.6         32.5         36.4  3                  info   [ms]
+V1.v1_over_ms.n            daemon/voicego          150          150          150  3                  info   [samples]
+V1.v1_over_ms.p50          daemon/voicego        2.083        2.082        2.162  3                  info   [ms]
+V1.v1_over_ms.p95          daemon/voicego        2.410        2.401        2.654  3                  info   [ms]
+V1.v1_over_ms.p99          daemon/voicego        2.580        2.482        4.764  3                  info   [ms]
+V1.v1_over_ms.p999         daemon/voicego        2.612        2.514        6.403  3                  info   [ms]
+V1.v1_over_ms.max          daemon/voicego        2.612        2.514        6.403  3                  info   [ms]
+V1.lost                    daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+V1.term_frames             daemon/voicego          151          151          151  3                  info   [frames]
+V1.vte_assert              daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [calls]
+VT.vt_left_ms.n            daemon/voicego          347          337          361  3                  info   [samples]
+VT.vt_left_ms.p50          daemon/voicego         10.6         10.6         10.7  3                  info   [ms]
+VT.vt_left_ms.p95          daemon/voicego         11.2         10.9         11.2  3                  info   [ms]
+VT.vt_left_ms.p99          daemon/voicego         12.7         11.0         14.9  3                  info   [ms]
+VT.vt_left_ms.p999         daemon/voicego         16.6         11.1         16.9  3                  info   [ms]
+VT.vt_left_ms.max          daemon/voicego         16.6         11.1         16.9  3                  info   [ms]
+VT.vt_ms.n                 daemon/voicego         8893         8834         8907  3                  info   [samples]
+VT.vt_ms.p50               daemon/voicego        0.318        0.298        0.328  3                  info   [ms]
+VT.vt_ms.p95               daemon/voicego        0.486        0.447        0.518  3                  info   [ms]
+VT.vt_ms.p99               daemon/voicego        1.242        0.518        1.389  3 <=            3  PASS   [ms]
+VT.vt_ms.p999              daemon/voicego        3.860        0.624        4.890  3                  info   [ms]
+VT.vt_ms.max               daemon/voicego         15.4        0.859         18.2  3                  info   [ms]
+VT.vt_output_ms.n          daemon/voicego           86           74          105  3                  info   [samples]
+VT.vt_output_ms.p50        daemon/voicego         42.3         42.2         42.4  3                  info   [ms]
+VT.vt_output_ms.p95        daemon/voicego         43.3         42.8         44.3  3                  info   [ms]
+VT.vt_output_ms.p99        daemon/voicego         43.4         43.2         47.5  3                  info   [ms]
+VT.vt_output_ms.p999       daemon/voicego         43.7         43.3         50.2  3                  info   [ms]
+VT.vt_output_ms.max        daemon/voicego         43.7         43.3         50.2  3                  info   [ms]
+VT.vt_right_ms.n           daemon/voicego          347          337          361  3                  info   [samples]
+VT.vt_right_ms.p50         daemon/voicego         10.7         10.6         10.7  3                  info   [ms]
+VT.vt_right_ms.p95         daemon/voicego         11.1         10.9         11.2  3                  info   [ms]
+VT.vt_right_ms.p99         daemon/voicego         12.6         11.0         13.6  3                  info   [ms]
+VT.vt_right_ms.p999        daemon/voicego         13.4         11.3         14.3  3                  info   [ms]
+VT.vt_right_ms.max         daemon/voicego         13.4         11.3         14.3  3                  info   [ms]
+VT.term_frames             daemon/voicego         9440         9416         9464  3                  info   [frames]
+VT.vt_double               daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+VT.vt_extra                daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+VT.vt_keys                 daemon/voicego         9661         9642         9686  3                  info   [keys]
+VT.vt_missing              daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+VT.vte_assert              daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [calls]

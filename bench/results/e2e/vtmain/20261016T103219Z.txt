@@ -1,0 +1,79 @@
+# e2e vtmain
+# utc=2026-10-16T10:32:18Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=64.30 65.93 64.69 52/3565 3798758
+# git_rev=78fa165
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=vtmain
+# reader=daemon:<repo>/.claude/worktrees/agent-a9787c6b3fb7f34ee/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=64.30 65.93 64.69 53/3561 3798750
+# reader_env=GORCA_M1=1 GORCA_M6=1 GORCA_M6_STRICT=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=probe #1978 (type; before: type "b", type "m") wanted "4", heard [-39.8ms "m", +139.4ms "4", +139.4ms "j", +139.4ms "9", +139.4ms "j"]
+# note1=probe #1979 (type; before: type "m", type "4") wanted "j", heard [+98.6ms "4", +98.6ms "j", +98.6ms "9", +98.6ms "j", +150.8ms "j"]
+# note2=probe #1980 (type; before: type "4", type "j") wanted "9", heard [+48.9ms "4", +48.9ms "j", +48.9ms "9", +48.9ms "j", +101.1ms "j"]
+# note3=probe #1981 (type; before: type "j", type "9") wanted "j", heard [+7.4ms "4", +7.4ms "j", +7.4ms "9", +7.4ms "j", +59.5ms "j", +129.3ms "blank"]
+# note4=probe #2180 (right; before: right "blank", left "p") wanted "blank", heard [+37.1ms "v", +75.8ms "r", +112.9ms "5", +144.1ms "5"]
+# note5=probe #2315 (type; before: type "1", type "e") wanted "w", heard [-39.4ms "e", +1.1ms "w", +24.0ms "1", +37.2ms "d", +79.6ms "d", +115.5ms "1", +138.5ms "5"]
+# note6=VT: 9676 keys (typed 8433, BackSpace 349, Left 390, Right 390, Enter 114); every one spoken exactly once, nothing else
+# note7=probe #1831 (right; before: type "b", left "b") wanted "blank", heard [+71.4ms "6", +128.3ms "d", +172.7ms "x"]
+# note8=probe #4285 (right; before: type "8", left "8") wanted "blank", heard [-56.5ms "8", +17.2ms "u", +41.6ms "s", +79.5ms "h", +136.0ms "9"]
+# note9=probe #4630 (backspace; before: type "1", type "z") wanted "z", heard [-32.2ms "z", +16.4ms "1", +42.5ms "space", +82.0ms "z", +120.5ms "m"]
+# note10=probe #4839 (right; before: type "z", left "z") wanted "blank", heard [-26.9ms "z", +13.0ms "g", +32.7ms "8", +75.2ms "9", +112.7ms "2"]
+# note11=probe #4844 (right; before: type "2", left "2") wanted "blank", heard [-23.4ms "2", +11.0ms "g", +34.6ms "9", +77.1ms "6", +116.8ms "5"]
+# note12=probe #7157 (enter; before: type "x", type "i") wanted "o54" (contained), heard [-41.3ms "i", +18.3ms "me at box: tilde dollar h51qr7yitxi", +1043.6ms "m", +1086.9ms "6", +1122.4ms "4", +1156.1ms "j"]
+# note13=VT: 9661 keys (typed 8562, BackSpace 331, Left 347, Right 347, Enter 74); every one spoken exactly once, nothing else
+# note14=probe #28 (type; before: type "g", type "c") wanted "space", heard [-37.0ms "c", +2.2ms "space", +32.5ms "g", +39.9ms "j", +74.5ms "b", +114.5ms "y", +155.1ms "3"]
+# note15=probe #66 (type; before: type "v", backspace "v") wanted "z", heard [-32.3ms "v", +0.4ms "z", +9.3ms "vg", +41.0ms "4", +74.8ms "l", +108.0ms "e", +139.5ms "d"]
+# note16=probe #2460 (type; before: type "r", type "2") wanted "0", heard [-40.2ms "2", +0.4ms "0", +26.4ms "r", +51.8ms "0", +84.5ms "r", +115.5ms "m"]
+# note17=probe #2462 (right; before: type "0", left "0") wanted "blank", heard [-44.8ms "r", -19.4ms "0", +13.2ms "r", +44.2ms "m", +89.3ms "f", +132.3ms "1"]
+# note18=probe #2497 (type; before: type "b", backspace "b") wanted "h", heard [-36.8ms "b", +1.0ms "h", +13.4ms "br", +36.2ms "space", +71.1ms "g", +120.4ms "a"]
+# note19=probe #3734 (type; before: type "e", type "space") wanted "u", heard [-31.1ms "space", +56.1ms "f", +94.4ms "f", +138.9ms "blank"]
+# note20=VT: 9686 keys (typed 8513, BackSpace 373, Left 355, Right 355, Enter 90); every one spoken exactly once, nothing else
+
+metric                     bus                median          min          max  n op    threshold  res   note
+VT.vt_left_ms.n            daemon/voicego          353          347          389  3                  info   [samples]
+VT.vt_left_ms.p50          daemon/voicego         13.4         12.6         14.4  3                  info   [ms]
+VT.vt_left_ms.p95          daemon/voicego         21.7         20.4         24.1  3                  info   [ms]
+VT.vt_left_ms.p99          daemon/voicego         31.5         27.5         34.5  3                  info   [ms]
+VT.vt_left_ms.p999         daemon/voicego         33.8         32.8         67.8  3                  info   [ms]
+VT.vt_left_ms.max          daemon/voicego         33.8         32.8         67.8  3                  info   [ms]
+VT.vt_ms.n                 daemon/voicego         8884         8776         8892  3                  info   [samples]
+VT.vt_ms.p50               daemon/voicego        0.539        0.531        0.542  3                  info   [ms]
+VT.vt_ms.p95               daemon/voicego        4.597        4.253        5.292  3                  info   [ms]
+VT.vt_ms.p99               daemon/voicego        7.797        7.453        8.598  3 <=            3  FAIL   [ms]
+VT.vt_ms.p999              daemon/voicego         18.7         14.3         19.3  3                  info   [ms]
+VT.vt_ms.max               daemon/voicego        249.4         24.7        406.8  3                  info   [ms]
+VT.vt_output_ms.n          daemon/voicego           89           73          114  3                  info   [samples]
+VT.vt_output_ms.p50        daemon/voicego         47.6         45.8         48.0  3                  info   [ms]
+VT.vt_output_ms.p95        daemon/voicego         57.2         53.6         58.1  3                  info   [ms]
+VT.vt_output_ms.p99        daemon/voicego         60.7         57.6         61.5  3                  info   [ms]
+VT.vt_output_ms.p999       daemon/voicego         69.7         60.3         90.4  3                  info   [ms]
+VT.vt_output_ms.max        daemon/voicego         69.7         60.3         90.4  3                  info   [ms]
+VT.vt_right_ms.n           daemon/voicego          352          339          379  3                  info   [samples]
+VT.vt_right_ms.p50         daemon/voicego         13.4         12.4         14.3  3                  info   [ms]
+VT.vt_right_ms.p95         daemon/voicego         22.1         20.2         22.4  3                  info   [ms]
+VT.vt_right_ms.p99         daemon/voicego         25.3         25.2         25.5  3                  info   [ms]
+VT.vt_right_ms.p999        daemon/voicego         29.8         29.3         35.1  3                  info   [ms]
+VT.vt_right_ms.max         daemon/voicego         29.8         29.3         35.1  3                  info   [ms]
+VT.term_frames             daemon/voicego         9453         9440         9463  3                  info   [frames]
+VT.vt_double               daemon/voicego            0            0            1  3 <=            0  FAIL  gated on the max over repeats [events]
+VT.vt_extra                daemon/voicego           11            8           17  3 <=            0  FAIL  gated on the max over repeats [events]
+VT.vt_keys                 daemon/voicego         9676         9661         9686  3                  info   [keys]
+VT.vt_missing              daemon/voicego           10            8           17  3 <=            0  FAIL  gated on the max over repeats [events]
+VT.vte_assert              daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [calls]
