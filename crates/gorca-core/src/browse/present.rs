@@ -97,7 +97,9 @@ fn role_phrase(v: &NodeView<'_>) -> String {
 fn push_states(role: Role, st: StateSet, out: &mut Vec<Item>) {
     let checkable = matches!(role, Role::CheckBox | Role::RadioButton);
     if checkable {
-        out.push(Item::State(if st.contains(StateSet::CHECKED) {
+        out.push(Item::State(if st.contains(StateSet::MIXED) {
+            "half checked"
+        } else if st.contains(StateSet::CHECKED) {
             "checked"
         } else {
             "not checked"

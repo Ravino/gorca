@@ -11,6 +11,7 @@ use smallvec::SmallVec;
 /// State words in speaking order. TBD: localisation and verbosity settings.
 const STATE_WORDS: &[(StateSet, &str)] = &[
     (StateSet::DISABLED, "unavailable"),
+    (StateSet::MIXED, "half checked"),
     (StateSet::CHECKED, "checked"),
     (StateSet::PRESSED, "pressed"),
     (StateSet::SELECTED, "selected"),
@@ -77,13 +78,19 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
     } else {
         skip
     };
+    // A tri-state check box in its middle state says "half checked" only.
+    let mixed = n.states.contains(StateSet::MIXED);
     for (flag, word) in STATE_WORDS {
+        if *flag == StateSet::CHECKED && mixed {
+            continue;
+        }
         if n.states.contains(*flag) && !skip.contains(*flag) {
             segments.push(seg(word, SegmentKind::State));
         }
     }
     // A checkable control says its off state too ("check box not checked", "not pressed").
     let off = if matches!(n.role, Role::CheckBox | Role::RadioButton)
+        && !mixed
         && !n.states.contains(StateSet::CHECKED)
         && !skip.contains(StateSet::CHECKED)
     {
@@ -240,7 +247,35 @@ pub(crate) fn present_change(
             segments.push(seg(role, SegmentKind::Role));
         }
     }
+    // Checked/half checked and expanded/collapsed are each one tri-state: say only the state
+    // the control is in now ("expanded", "collapsed", "half checked", "not checked"), never the
+    // flipped partner ("not collapsed").
+    let check = StateSet::CHECKED | StateSet::MIXED;
+    let expand = StateSet::EXPANDED | StateSet::COLLAPSED;
+    if ch.states.intersects(check) {
+        let w = if new.states.contains(StateSet::MIXED) {
+            "half checked"
+        } else if new.states.contains(StateSet::CHECKED) {
+            "checked"
+        } else {
+            "not checked"
+        };
+        segments.push(seg(w, SegmentKind::State));
+    }
+    if ch.states.intersects(expand) {
+        let w = if new.states.contains(StateSet::EXPANDED) {
+            "expanded"
+        } else if new.states.contains(StateSet::COLLAPSED) {
+            "collapsed"
+        } else {
+            "not expanded"
+        };
+        segments.push(seg(w, SegmentKind::State));
+    }
     for (flag, word) in STATE_WORDS {
+        if (check | expand).contains(*flag) {
+            continue;
+        }
         if ch.states.contains(*flag) {
             if new.states.contains(*flag) {
                 segments.push(seg(word, SegmentKind::State));
@@ -389,6 +424,41 @@ mod change_tests {
 
     fn texts(u: &Utterance) -> Vec<String> {
         u.segments.iter().map(|s| s.text.to_string()).collect()
+    }
+
+    // Review M-1 / M-2 regressions: expand/collapse and the tri-state check box.
+    fn change_words(old: &NodeSnapshot, new: &NodeSnapshot) -> Vec<String> {
+        let ch = changed(old, new, StateSet::empty());
+        texts(&present_change(new, ch, UttId(1), Epoch(1), None))
+    }
+
+    #[test]
+    fn expand_and_collapse_say_only_the_state_that_holds() {
+        let mut col = snap("Fruit", StateSet::COLLAPSED, None);
+        col.role = Role::ComboBox;
+        let mut exp = col.clone();
+        exp.states = StateSet::EXPANDED;
+        assert_eq!(change_words(&col, &exp), ["expanded"]);
+        assert_eq!(change_words(&exp, &col), ["collapsed"]);
+    }
+
+    #[test]
+    fn a_mixed_check_box_says_half_checked_and_never_not_checked() {
+        let mut mixed = snap("Select all", StateSet::MIXED, None);
+        mixed.role = Role::CheckBox;
+        let words = texts(&present_focus(&mixed, UttId(1), Epoch(1)));
+        assert!(words.contains(&"half checked".to_owned()), "{words:?}");
+        assert!(
+            !words.iter().any(|w| w.contains("not checked")),
+            "{words:?}"
+        );
+        let mut off = mixed.clone();
+        off.states = StateSet::empty();
+        assert_eq!(change_words(&off, &mixed), ["half checked"]);
+        let mut on = mixed.clone();
+        on.states = StateSet::CHECKED;
+        assert_eq!(change_words(&mixed, &on), ["checked"]);
+        assert_eq!(change_words(&on, &off), ["not checked"]);
     }
 
     #[test]

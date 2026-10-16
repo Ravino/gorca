@@ -380,6 +380,9 @@ impl Reader {
             | CoreCmd::BrowseCursorPrevParagraph
             | CoreCmd::BrowseCursorNextSentence
             | CoreCmd::BrowseCursorPrevSentence
+            | CoreCmd::BrowseTabNext
+            | CoreCmd::BrowseTabPrev
+            | CoreCmd::BrowseNativeSelectionToggle
             | CoreCmd::QuicknavPrevArticle => self.browse_command(c, rep, now, fx),
             planned_cmds!() => {
                 // Declared but not implemented: the keymap never routes these (inert), so this

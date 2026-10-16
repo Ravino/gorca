@@ -536,6 +536,15 @@ pub struct BrowseState {
     pub lead_dialog: Option<DocNodeId>,
     /// The virtual selection `(anchor, active)` in flat offsets (D-3).
     pub sel: Option<(u32, u32)>,
+    /// Which Tab directions were last offered to the key grab (next, previous): D-2 grabs Tab
+    /// only while the mirror has a focusable target in that direction.
+    pub tab_grab: (bool, bool),
+    /// Native selection mode (gorca+Shift+F10, D-3): the page's own selection follows the
+    /// virtual one. Off by default; the virtual selection never touches the page.
+    pub native_selection: bool,
+    /// The text node whose page selection we set last: it is cleared when the virtual range
+    /// moves elsewhere or goes away, so the page never keeps a stale selection.
+    pub native_sel_node: Option<(DocId, DocNodeId)>,
     pub click_target: Option<(DocNodeId, Instant)>,
 }
 
@@ -568,6 +577,9 @@ impl BrowseState {
             activated: None,
             click_target: None,
             sel: None,
+            tab_grab: (true, true),
+            native_selection: false,
+            native_sel_node: None,
             lead_dialog: None,
         }
     }

@@ -362,6 +362,18 @@ pub fn letter_grabs(km: &CompiledKeymap, table: &KeysymTable) -> Vec<Chord> {
     g.plain
 }
 
+/// The chords of `browse.tab_next` and `browse.tab_prev` (D-2): grabbed only while the browse
+/// cursor has a focusable target in that direction (the Reader decides, from the mirror).
+pub fn tab_grabs(km: &CompiledKeymap, table: &KeysymTable) -> (Vec<Chord>, Vec<Chord>) {
+    let of = |name: &'static str| {
+        grabs_where(km, ModeKind::Browse, table, |b| {
+            CoreCmd::from_id(b.cmd).is_some_and(|c| c.name() == name)
+        })
+        .plain
+    };
+    (of("browse.tab_next"), of("browse.tab_prev"))
+}
+
 /// The chords bound to `browse.escape`, for the auto-focus-mode grab set.
 pub fn escape_grabs(km: &CompiledKeymap, table: &KeysymTable) -> Vec<Chord> {
     let esc = CoreCmd::BrowseEscape.id();
@@ -728,6 +740,10 @@ mod tests {
                         "browse.select_page_up",
                         "browse.select_page_down",
                         "browse.select_all",
+                        // Orca leaves Tab to the application and has no native selection mode.
+                        "browse.tab_next",
+                        "browse.tab_prev",
+                        "browse.native_selection_toggle",
                         // Orca moves cell by cell and reads a row or a column; it has no
                         // first/last row or column and no say-all of a row.
                         "table.first_row",

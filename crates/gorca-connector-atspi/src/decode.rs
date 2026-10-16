@@ -74,6 +74,7 @@ pub fn states_from_raw(words: &[u32]) -> StateSet {
         (Raw::Selectable, StateSet::SELECTABLE),
         (Raw::Transient, StateSet::TRANSIENT),
         (Raw::ManagesDescendants, StateSet::MANAGES_DESCENDANTS),
+        (Raw::Indeterminate, StateSet::MIXED),
     ];
     for (raw, core) in table {
         if has(bits, raw) {
@@ -170,6 +171,26 @@ pub fn snapshot(key: NodeKey, raw: &RawNode, now: Instant) -> Arc<NodeSnapshot> 
 mod tests {
     use super::*;
     use gorca_model::{AppId, ConnectorId, LocalId};
+
+    #[test]
+    fn indeterminate_decodes_to_mixed_and_expandable_to_one_expansion_state() {
+        let mixed = states_from_raw(&words(&[
+            Raw::Enabled,
+            Raw::Sensitive,
+            Raw::Checkable,
+            Raw::Indeterminate,
+        ]));
+        assert!(mixed.contains(StateSet::MIXED));
+        let col = states_from_raw(&words(&[Raw::Enabled, Raw::Sensitive, Raw::Expandable]));
+        assert!(col.contains(StateSet::COLLAPSED) && !col.contains(StateSet::EXPANDED));
+        let exp = states_from_raw(&words(&[
+            Raw::Enabled,
+            Raw::Sensitive,
+            Raw::Expandable,
+            Raw::Expanded,
+        ]));
+        assert!(exp.contains(StateSet::EXPANDED) && !exp.contains(StateSet::COLLAPSED));
+    }
 
     fn key() -> NodeKey {
         NodeKey {

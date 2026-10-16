@@ -515,6 +515,24 @@ fn modal_scope(d: &WebDoc, mut node: DocNodeId) -> Option<DocNodeId> {
     None
 }
 
+/// The outermost focusable node from `node` up to, but not including, the document (which
+/// every engine reports as focusable).
+fn focusable_around(d: &WebDoc, node: DocNodeId) -> Option<DocNodeId> {
+    let root = d.root();
+    let mut found = None;
+    let mut n = node;
+    for _ in 0..64 {
+        if Some(n) != root && d.node(n).is_some_and(|v| v.cats.intersects(Cat::FOCUSABLE)) {
+            found = Some(n);
+        }
+        match d.parent(n) {
+            Some(p) => n = p,
+            None => break,
+        }
+    }
+    found
+}
+
 fn title_of(d: &WebDoc) -> Option<String> {
     d.root()
         .and_then(|r| d.node(r))
@@ -587,6 +605,21 @@ impl Reader {
         {
             for c in &self.keys.letters {
                 set.chords.remove(c);
+            }
+        }
+        if matches!(self.mode, Mode::Browse { .. }) {
+            // D-2: Tab is ours only while the mirror has a focusable target in its direction;
+            // otherwise the key stays with the page (a grabbed key cannot be given back).
+            let (next, prev) = self.web_tab_targets();
+            if !next {
+                for c in &self.keys.tab_next {
+                    set.chords.remove(c);
+                }
+            }
+            if !prev {
+                for c in &self.keys.tab_prev {
+                    set.chords.remove(c);
+                }
             }
         }
         if matches!(self.mode, Mode::Focus)
@@ -1511,7 +1544,8 @@ impl Reader {
     pub(crate) fn web_timer(&mut self, now: Instant, fx: &mut ReaderEffects) {
         self.web_auto_read_timer(fx);
         let Some(b) = self.web.as_mut() else { return };
-        if let Some((due, doc, node, local)) = b.scroll_due {
+        let mut sync_tabs = false;
+        if let Some((due, doc, node, _)) = b.scroll_due {
             if due <= now {
                 b.scroll_due = None;
                 fx.push(ReaderEffect::Web(WebEffect::Act {
@@ -1519,30 +1553,9 @@ impl Reader {
                     node,
                     act: DocAction::ScrollIntoView,
                 }));
-                // D-2: Firefox starts Tab from its caret when nothing is focused, so the caret
-                // follows the browse cursor and Tab begins at the cursor, as in NVDA. The cursor
-                // never moves focus (SY.nomove); a caret is not focus.
-                // Never into a form field or a focusable widget: Firefox focuses an editable
-                // that gets a caret, which would switch the mode under the user.
-                let plain = b.docs.get(doc).is_some_and(|h| {
-                    h.read.with(|d| {
-                        up_to(d, node, Cat::FORM_FIELD | Cat::FOCUSABLE | Cat::EDIT, 8)
-                            .and_then(|n| d.node(n))
-                            .is_none_or(|v| {
-                                v.cats.intersects(Cat::LINK)
-                                    && !v.cats.intersects(Cat::FORM_FIELD | Cat::EDIT)
-                            })
-                    })
-                });
-                if matches!(b.mode, WebMode::Browse { .. }) && b.sel.is_none() && plain {
-                    // The caret event this causes is ours, not a page following a click.
-                    b.activated = None;
-                    fx.push(ReaderEffect::Web(WebEffect::Act {
-                        doc,
-                        node,
-                        act: DocAction::SetCaret(local),
-                    }));
-                }
+                // D-2: Tab availability follows the cursor (a grabbed Tab cannot be passed on).
+                // Reading never moves focus or the page caret (BM-2).
+                sync_tabs = true;
             } else {
                 fx.push(ReaderEffect::ArmTimer(due));
             }
@@ -1584,6 +1597,13 @@ impl Reader {
                     true,
                 );
                 self.web_place(doc, root);
+            }
+        }
+        if sync_tabs {
+            self.web_sync_tab_grabs(fx);
+            // A plain move dropped the virtual range: the page selection we mirrored goes too.
+            if self.web.as_ref().is_some_and(|b| b.sel.is_none()) {
+                self.web_native_clear(fx);
             }
         }
     }
@@ -1700,6 +1720,12 @@ impl Reader {
             self.web_table_move(mv, now, fx);
         } else if let Some(column) = super::tablenav::table_say(c) {
             self.web_table_say(column, fx);
+        } else if c == CoreCmd::BrowseTabNext {
+            self.web_tab(Dir::Next, fx);
+        } else if c == CoreCmd::BrowseTabPrev {
+            self.web_tab(Dir::Prev, fx);
+        } else if c == CoreCmd::BrowseNativeSelectionToggle {
+            self.web_native_selection_toggle(fx);
         } else if c == CoreCmd::BrowseSingleLetterToggle {
             self.web_single_letter_toggle(fx);
         } else if matches!(
@@ -1977,23 +2003,163 @@ impl Reader {
         fx.push(ReaderEffect::ArmTimer(now + SCROLL_DEBOUNCE));
     }
 
-    /// Mirror a virtual selection into the page when both ends are in one text node, so the
-    /// page's own Ctrl+C copies it (D-3 native selection, best effort).
+    /// Native selection mode (D-3): mirror the virtual range into the page's own selection so
+    /// its Ctrl+C copies it. Only when the mode is on and both ends lie in one text node that is
+    /// not inside a focusable element (an engine may focus the element that gets a selection,
+    /// which would move system focus, BM-2). Anything else clears what we set before, so the
+    /// page never keeps a stale selection.
     fn web_native_selection(&mut self, doc: DocId, a: u32, b_off: u32, fx: &mut ReaderEffects) {
         let Some(b) = self.web.as_ref() else { return };
+        if !b.native_selection {
+            return;
+        }
         let Some(h) = b.docs.get(doc) else { return };
         let target = h.read.with(|d| {
             let (n1, l1) = d.at_offset(a)?;
             let (n2, l2) = d.at_offset(b_off)?;
-            (n1 == n2).then(|| (n1, l1.min(l2)..l1.max(l2)))
+            let inside_focusable = focusable_around(d, n1).is_some();
+            (n1 == n2 && !inside_focusable).then(|| (n1, l1.min(l2)..l1.max(l2)))
         });
-        if let Some((node, range)) = target {
+        let prev = self.web.as_ref().and_then(|b| b.native_sel_node);
+        match target {
+            Some((node, range)) => {
+                if let Some((pd, pn)) = prev
+                    && (pd, pn) != (doc, node)
+                {
+                    self.web_native_clear(fx);
+                }
+                if let Some(b) = self.web.as_mut() {
+                    b.native_sel_node = Some((doc, node));
+                }
+                fx.push(ReaderEffect::Web(WebEffect::Act {
+                    doc,
+                    node,
+                    act: DocAction::SetSelection(range),
+                }));
+            }
+            None => self.web_native_clear(fx),
+        }
+    }
+
+    /// Collapse the page selection we set earlier, if any.
+    fn web_native_clear(&mut self, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_mut() else { return };
+        if let Some((doc, node)) = b.native_sel_node.take() {
             fx.push(ReaderEffect::Web(WebEffect::Act {
                 doc,
                 node,
-                act: DocAction::SetSelection(range),
+                act: DocAction::SetSelection(0..0),
             }));
         }
+    }
+
+    /// D-2 target of Tab (`Dir::Next`) or Shift+Tab (`Dir::Prev`): the first focusable node after
+    /// (before) the browse cursor, never the document itself, inside the modal dialog when the
+    /// cursor is in one. Pure mirror lookup, O(log n).
+    fn tab_target(d: &WebDoc, cur: WebCursor, dir: Dir) -> Option<DocNodeId> {
+        let root = d.root();
+        let scope = modal_scope(d, cur.node);
+        let found = match dir {
+            Dir::Next => match scope {
+                Some(s) => d.next_in(cur.node, Cat::FOCUSABLE, s),
+                None => d.next(cur.node, Cat::FOCUSABLE),
+            },
+            Dir::Prev => {
+                // Step out of the focusable the cursor is in, or "previous" finds it again.
+                let inner = focusable_around(d, cur.node).unwrap_or(cur.node);
+                match scope {
+                    Some(s) => d.prev_in(inner, Cat::FOCUSABLE, s),
+                    None => d.prev(inner, Cat::FOCUSABLE),
+                }
+            }
+        };
+        found.filter(|n| Some(*n) != root)
+    }
+
+    /// Whether Tab / Shift+Tab have a target from the current browse cursor.
+    pub(crate) fn web_tab_targets(&self) -> (bool, bool) {
+        let Some(b) = self.web.as_ref() else {
+            return (false, false);
+        };
+        let WebMode::Browse { doc, cur, .. } = b.mode else {
+            return (false, false);
+        };
+        let Some(h) = b.docs.get(doc) else {
+            return (false, false);
+        };
+        h.read.with(|d| {
+            (
+                Self::tab_target(d, cur, Dir::Next).is_some(),
+                Self::tab_target(d, cur, Dir::Prev).is_some(),
+            )
+        })
+    }
+
+    /// Offer Tab to the key grab only in the directions that have a target; one grab-set update
+    /// when that changes (the cursor settled, 150 ms after the last move).
+    fn web_sync_tab_grabs(&mut self, fx: &mut ReaderEffects) {
+        if !matches!(self.mode, Mode::Browse { .. }) {
+            return;
+        }
+        let now_avail = self.web_tab_targets();
+        let Some(b) = self.web.as_mut() else { return };
+        if b.tab_grab != now_avail {
+            b.tab_grab = now_avail;
+            fx.push(ReaderEffect::SetGrabSet(self.current_grabs()));
+        }
+    }
+
+    /// Tab / Shift+Tab in browse mode (D-2, NVDA `_tabOverride`): focus the next (previous)
+    /// focusable element after the browse cursor. The focus event then moves the cursor and
+    /// speaks the element like any focus. With no target the chord is not grabbed (the page
+    /// gets the key); a grab that went stale for a moment says so instead of staying silent.
+    fn web_tab(&mut self, dir: Dir, fx: &mut ReaderEffects) {
+        let Some((doc, cur, _)) = self.browse_ctx(fx) else {
+            return;
+        };
+        let Some(b) = self.web.as_ref() else { return };
+        let Some(h) = b.docs.get(doc) else { return };
+        let target = h.read.with(|d| Self::tab_target(d, cur, dir));
+        if let Some(node) = target {
+            fx.push(ReaderEffect::Web(WebEffect::Act {
+                doc,
+                node,
+                act: DocAction::Focus,
+            }));
+        } else {
+            let w = match dir {
+                Dir::Next => "no next focusable element",
+                Dir::Prev => "no previous focusable element",
+            };
+            self.say(w, fx);
+        }
+    }
+
+    /// gorca+Shift+F10: the page's own selection follows the virtual one, or stops following.
+    fn web_native_selection_toggle(&mut self, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_mut() else { return };
+        b.native_selection = !b.native_selection;
+        let on = b.native_selection;
+        let sel = b.sel;
+        let doc = match b.mode {
+            WebMode::Browse { doc, .. } => Some(doc),
+            WebMode::Inactive | WebMode::Loading { .. } | WebMode::Focus { .. } => None,
+        };
+        if on {
+            if let (Some(doc), Some((a, e))) = (doc, sel) {
+                self.web_native_selection(doc, a, e, fx);
+            }
+        } else {
+            self.web_native_clear(fx);
+        }
+        self.say(
+            if on {
+                "native selection on"
+            } else {
+                "native selection off"
+            },
+            fx,
+        );
     }
 
     /// gorca+Shift+Space: the bare quick-navigation keys go to the page, or come back.

@@ -97,6 +97,11 @@ pub struct ModeKeys {
     /// The bare single-letter quick-navigation chords (a subset of `quick_nav`): not grabbed
     /// while single-letter navigation is off.
     pub letters: Vec<Chord>,
+    /// The chord(s) of `browse.tab_next`: grabbed (a subset of `quick_nav`) only while a target
+    /// exists after the browse cursor, otherwise the key goes to the page (D-2).
+    pub tab_next: Vec<Chord>,
+    /// The chord(s) of `browse.tab_prev`, same rule for a target before the cursor.
+    pub tab_prev: Vec<Chord>,
     /// The chord(s) that leave pass-through.
     pub pass_through_exit: Vec<Chord>,
     /// The chord(s) bound to `browse.escape`: grabbed only in auto focus mode (modes.md 2).
@@ -337,6 +342,8 @@ mod tests {
             }],
             web_escape: Vec::new(),
             letters: Vec::new(),
+            tab_next: Vec::new(),
+            tab_prev: Vec::new(),
         }
     }
 
