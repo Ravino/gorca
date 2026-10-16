@@ -21,6 +21,26 @@ fn pid_t(tid: u32) -> io::Result<libc::pid_t> {
     libc::pid_t::try_from(tid).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))
 }
 
+/// CPU time consumed so far by the calling thread (`CLOCK_THREAD_CPUTIME_ID`: on-CPU time,
+/// unaffected by descheduling). Zero if the kernel refuses the clock, which cannot happen on
+/// Linux; callers treat that as "no CPU time used", never as an error.
+#[must_use]
+pub fn thread_cpu_time() -> std::time::Duration {
+    let mut ts = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // SAFETY: `ts` is a valid, writable timespec and the clock id is a constant Linux supports.
+    let rc = unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &raw mut ts) };
+    if rc != 0 {
+        return std::time::Duration::ZERO;
+    }
+    std::time::Duration::new(
+        u64::try_from(ts.tv_sec).unwrap_or(0),
+        u32::try_from(ts.tv_nsec).unwrap_or(0),
+    )
+}
+
 /// Kernel thread id of the calling thread.
 #[must_use]
 pub fn current_tid() -> u32 {

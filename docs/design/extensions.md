@@ -55,7 +55,8 @@ keymap     compile()  -> ExtCommands names + default chords merged (never over t
 |---|---|---|
 | `on-event`, `present`, `nav-*` | 2 ms CPU | fuel (`3_000_000` per ms, calibrated on this host) |
 | `command` | 20 ms CPU | fuel |
-| wall-clock backstop | 10 x the CPU limit | epoch deadline (5 ms tick, one ticker thread, started on first use) |
+| backstop (CPU) | 3 x the CPU limit for `present`/`policy`, 10 x for the rest, in **thread CPU time** | epoch deadline (1 ms tick, one ticker thread, started on first use); the epoch callback reads `CLOCK_THREAD_CPUTIME_ID` and extends the deadline while the call is under its CPU budget |
+| hard wall-clock ceiling | 50 x the CPU limit (100 ms for hooks, 1 s for commands) | same callback: a call that spent no CPU but is still running at the ceiling (a stuck host call) is interrupted at its next return into the guest; counts as a strike |
 | memory | 32 MiB per instance | pooling allocator `max_memory_size` + `ResourceLimiter` |
 | memory shape | one linear memory, 4 tables of at most 10,000 elements, 8 core instances per component | pooling allocator + `ResourceLimiter` |
 | answer size | 32 segments, 2048 characters each, 8192 in all | host clamps (`convert.rs`), stops pulling at the cap |
@@ -64,7 +65,7 @@ keymap     compile()  -> ExtCommands names + default chords merged (never over t
 | settings | 128 keys, 64 B keys, 4 KiB values per extension | `SettingsKv` |
 | manifest | 64 KiB, 64 commands, 32 globs per list, 64-character chords, 64 extensions per host | parser and builder |
 
-Why fuel first: the limits are *CPU* limits. An epoch deadline is wall time: on a loaded workstation a
+Why fuel first, and why the backstop is CPU time too: the limits are *CPU* limits. An epoch deadline is wall time: on a loaded workstation a
 healthy hook that is merely descheduled for 2 ms would be interrupted and counted as a fault. An early
 epoch-only storm run at load 25 showed this (per-call medians collapsed to ~35 ns, a disabled slot
 answering "no opinion"); with fuel the same storm has 0 faults.
