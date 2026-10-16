@@ -13,6 +13,7 @@
 //! | `Announcement("std")` | uses `HashMap`, `Instant` and `SystemTime`; `Rewrite("std ok")` |
 //! | `Announcement("rewrite:<text>")` | `Rewrite` verdict speaking `<text>` |
 //! | node named `gorca-ext-present` | `present` answers `ext presented` |
+//! | node / policy facts named `gorca-ext-speak` | `present` / `policy` make one `host::speak` call, then a short guest loop (a host call that takes wall time but no CPU), then answer `ext spoke` / `Defer` |
 //! | policy facts named `gorca-ext-silence` / `-crash` / `-spin` | `policy` answers `Silence` / panics / loops |
 //! | command 1 | speaks `ext hello` |
 //! | command 4 | counts calls in the settings KV, speaks the count |
@@ -37,6 +38,16 @@ pub struct TestExtension {
 fn spin() -> ! {
     let mut x: u64 = 0;
     loop {
+        x = std::hint::black_box(x.wrapping_add(1));
+    }
+}
+
+/// One host call, then a bounded amount of guest work (so the epoch is checked after the host
+/// call returns, like any real hook that does something with the answer).
+fn speak_then_work() {
+    host::speak(vec![Segment::text("spoke")], Prio::Message);
+    let mut x: u64 = 0;
+    for _ in 0..64 {
         x = std::hint::black_box(x.wrapping_add(1));
     }
 }
@@ -109,6 +120,10 @@ impl Hooks for TestExtension {
     fn present(&mut self, n: &Node, _ctx: PresentCtx) -> Option<Vec<Segment>> {
         match n.name.as_deref() {
             Some("gorca-ext-present") => Some(vec![Segment::text("ext presented")]),
+            Some("gorca-ext-speak") => {
+                speak_then_work();
+                Some(vec![Segment::text("ext spoke")])
+            }
             Some("gorca-ext-crash") => crash(),
             Some("gorca-ext-spin") => spin(),
             _ => None,
@@ -118,6 +133,10 @@ impl Hooks for TestExtension {
     fn policy(&mut self, f: &PolicyFacts) -> PolicyVerdict {
         match f.name.as_deref() {
             Some("gorca-ext-silence") => PolicyVerdict::Silence,
+            Some("gorca-ext-speak") => {
+                speak_then_work();
+                PolicyVerdict::Defer
+            }
             Some("gorca-ext-crash") => crash(),
             Some("gorca-ext-spin") => spin(),
             _ => PolicyVerdict::Defer,

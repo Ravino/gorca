@@ -86,6 +86,8 @@ struct Core {
     /// Unique name of the owner of `org.a11y.atspi.Registry`, once seen.
     registry: Option<String>,
     storm_stop: Arc<AtomicBool>,
+    /// Signals the storm task has emitted (folded into `signals_sent` by `stats_now`).
+    storm_sent: Arc<std::sync::atomic::AtomicU64>,
     peer: Arc<PeerCtl>,
     /// P9-1: false while no AT listener registered and the model has the gate.
     listeners: Arc<AtomicBool>,
@@ -245,6 +247,7 @@ impl Core {
 
     fn stats_now(&self) -> AppStats {
         let mut s = self.stats.clone();
+        s.signals_sent += self.storm_sent.load(Ordering::SeqCst);
         s.nodes_live = u64::from(self.world.live_count());
         s.bus_callers = self.callers.len() as u64;
         s.now_ns = now_ns();
@@ -291,6 +294,7 @@ impl Core {
                         path,
                         shape,
                         Arc::clone(&self.storm_stop),
+                        Arc::clone(&self.storm_sent),
                     );
                     CmdReply::ok(serde_json::Value::Null)
                 }
@@ -509,6 +513,7 @@ fn spawn_storm(
     path: String,
     shape: StormShape,
     stop: Arc<AtomicBool>,
+    sent: Arc<std::sync::atomic::AtomicU64>,
 ) {
     let StormShape {
         rate,
@@ -517,19 +522,21 @@ fn spawn_storm(
         targets,
     } = shape;
     handle.spawn(async move {
-        let end = Instant::now() + Duration::from_millis(duration_ms);
+        // The count is fixed (`rate * duration`); the clock only paces it. A starved host
+        // stretches the storm but never shrinks it, so a test can assert exact counts.
+        let start = Instant::now();
+        let total = rate.saturating_mul(duration_ms) / 1000;
         let mut tick = tokio::time::interval(Duration::from_millis(1));
         tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Burst);
-        let mut owed = 0.0f64;
+        let mut emitted = 0u64;
         let mut offset = 0i32;
         let mut n = 0usize;
-        #[allow(clippy::cast_precision_loss)]
-        let per_tick = rate as f64 / 1000.0;
-        while Instant::now() < end && !stop.load(Ordering::Relaxed) {
+        while emitted < total && !stop.load(Ordering::Relaxed) {
             tick.tick().await;
-            owed += per_tick;
-            while owed >= 1.0 {
-                owed -= 1.0;
+            let us = u64::try_from(start.elapsed().as_micros()).unwrap_or(u64::MAX);
+            let due = (u128::from(rate) * u128::from(us) / 1_000_000).min(u128::from(total));
+            while u128::from(emitted) < due {
+                emitted += 1;
                 offset = (offset + 1) % 4096;
                 let props: HashMap<String, OwnedValue> = HashMap::new();
                 let at = if distinct_nodes == 0 {
@@ -550,6 +557,7 @@ fn spawn_storm(
                         &("insert", offset, 1i32, Value::from("x"), props),
                     )
                     .await;
+                sent.fetch_add(1, Ordering::SeqCst);
             }
         }
     });
@@ -712,6 +720,7 @@ impl FakeApp {
             callers: BTreeSet::new(),
             registry: None,
             storm_stop: Arc::new(AtomicBool::new(false)),
+            storm_sent: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             peer: Arc::clone(&peer),
             listeners: Arc::clone(&listeners),
         };

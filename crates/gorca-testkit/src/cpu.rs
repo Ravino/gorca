@@ -97,14 +97,15 @@ pub fn best_of(attempts: u32, bound: Duration, mut run: impl FnMut() -> Duration
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Instant;
 
     /// Real CPU work is counted.
     #[test]
     fn spin_is_measured() {
         let ((), dt) = cpu_time(|| {
-            let t = Instant::now();
-            while t.elapsed() < Duration::from_millis(2) {
+            // Spin until this thread has *run* 2 ms: a wall-clock loop would end early in CPU
+            // terms when the host preempts the thread mid-spin.
+            let t = thread_cpu_now();
+            while thread_cpu_now().saturating_sub(t) < Duration::from_millis(2) {
                 std::hint::spin_loop();
             }
         });

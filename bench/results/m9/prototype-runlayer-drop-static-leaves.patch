@@ -1,0 +1,87 @@
+diff --git a/crates/gorca-doc-source-atspi/src/runs.rs b/crates/gorca-doc-source-atspi/src/runs.rs
+index 650eb91..83cdadd 100644
+--- a/crates/gorca-doc-source-atspi/src/runs.rs
++++ b/crates/gorca-doc-source-atspi/src/runs.rs
+@@ -79,6 +79,11 @@ struct Container {
+ #[derive(Debug, Default)]
+ pub struct RunLayer {
+     containers: HashMap<SrcNodeId, Container>,
++    /// Blink: `static` children repeat the text the parent's hypertext already holds
++    /// (`Toolkit::text_leaf_children_repeat_parent_text`): their ids are dropped from the child
++    /// lists so that the runs are the only text leaves.
++    drop_static_kids: bool,
++    static_ids: std::collections::HashSet<SrcNodeId>,
+ }
+ 
+ fn split_parts(text: &str) -> Vec<Arc<str>> {
+@@ -102,6 +107,14 @@ impl RunLayer {
+         Self::default()
+     }
+ 
++    /// A layer for an engine whose text leaves are real children (Blink).
++    pub fn dropping_static_children() -> Self {
++        Self {
++            drop_static_kids: true,
++            ..Self::default()
++        }
++    }
++
+     /// Number of containers tracked (tests, metrics).
+     pub fn tracked(&self) -> usize {
+         self.containers.len()
+@@ -122,6 +135,13 @@ impl RunLayer {
+                     head.push(DocDelta::Reset { root, nav_id });
+                 }
+                 DocDelta::Upsert(mut nodes) => {
++                    if self.drop_static_kids {
++                        for n in &nodes {
++                            if n.role == Role::StaticText && !is_run(n.id) {
++                                self.static_ids.insert(n.id);
++                            }
++                        }
++                    }
+                     for n in &mut nodes {
+                         let c = self.containers.entry(n.id).or_default();
+                         c.parts = match n.text.take() {
+@@ -188,7 +208,20 @@ impl RunLayer {
+             }
+             c.dirty = false;
+             let parts = &c.parts;
+-            let kids: &[SrcNodeId] = c.kids.as_deref().unwrap_or(&[]);
++            let filtered: Vec<SrcNodeId>;
++            let kids: &[SrcNodeId] = if self.drop_static_kids && !parts.is_empty() {
++                filtered = c
++                    .kids
++                    .as_deref()
++                    .unwrap_or(&[])
++                    .iter()
++                    .copied()
++                    .filter(|k| !self.static_ids.contains(k))
++                    .collect();
++                &filtered
++            } else {
++                c.kids.as_deref().unwrap_or(&[])
++            };
+             let mut children: Vec<SrcNodeId> = Vec::with_capacity(parts.len() + kids.len());
+             let mut runs: Vec<(SrcNodeId, Arc<str>)> = Vec::new();
+             for (i, part) in parts.iter().enumerate() {
+diff --git a/crates/gorca-doc-source-atspi/src/source.rs b/crates/gorca-doc-source-atspi/src/source.rs
+index b769ec0..a473496 100644
+--- a/crates/gorca-doc-source-atspi/src/source.rs
++++ b/crates/gorca-doc-source-atspi/src/source.rs
+@@ -424,8 +424,13 @@ impl AtspiDocSource {
+             root_errors: 0,
+             root_key: None,
+             out: Pusher {
+-                runs: (self.config.runs && self.config.fetch.text == TextPolicy::All)
+-                    .then(RunLayer::new),
++                runs: (self.config.runs && self.config.fetch.text == TextPolicy::All).then(|| {
++                    if self.config.silent_reorders {
++                        RunLayer::dropping_static_children()
++                    } else {
++                        RunLayer::new()
++                    }
++                }),
+                 batch: 0,
+             },
+             locals: HashMap::new(),

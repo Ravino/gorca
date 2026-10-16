@@ -1101,12 +1101,17 @@ fn r1_a_step_on_a_big_valid_model_is_fast_and_pure() {
     }
     samples.sort();
     let p99 = samples[samples.len() * 99 / 100];
-    let bound = if cfg!(debug_assertions) {
-        Duration::from_millis(30)
+    // The strict p99 gate is the release bound; a debug run on a loaded host gates the median
+    // (preemption victims land in the tail, an O(n) regression moves the median).
+    let (stat, bound) = if cfg!(debug_assertions) {
+        (samples[samples.len() / 2], Duration::from_millis(10))
     } else {
-        Duration::from_millis(3)
+        (p99, Duration::from_millis(3))
     };
-    assert!(p99 <= bound, "p99 {p99:?} (worst {worst:?}) over {bound:?}");
+    assert!(
+        stat <= bound,
+        "{stat:?} (p99 {p99:?}, worst {worst:?}) over {bound:?}"
+    );
 }
 
 // ---- terminal review (ADR-0006 LS-1, M6) -------------------------------------------------------
