@@ -1,0 +1,10 @@
+private compositor: /tmp/gorca-m7c.P43yzw/x/gorca-m7-1707907
+{
+ "mode": "none",
+ "status_before": {
+  "is_enabled": true,
+  "screen_reader_enabled": false
+ },
+ "chrome": "/home/user/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome",
+ "app_registered": false
+}

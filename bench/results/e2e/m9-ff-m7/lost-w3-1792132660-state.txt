@@ -1,0 +1,56 @@
+749178258913730 said "M7 Article — Mozilla Firefox, M7 Article, document"
+749178291946206 said "browse mode, heading level 1, Gorca article"
+749178549007405 said "second page link, link"
+749178958294649 said "M7 Article — Mozilla Firefox, panel"
+749180393111140 said "M7 Second, document"
+749180396554718 said "browse mode, heading level 1, Second page"
+749181208120554 said "second page link, link"
+749181212163458 said "heading level 2, Introduction"
+749181550963484 said "M7 Second, document"
+749182374388410 said "second page link, link"
+749182376319176 said "heading level 2, Introduction"
+749186483637228 said "The second paragraph mentions, link, details below, and ends here."
+749186820347370 said "M7 Second, document"
+749187633627500 said "second page link, link"
+749187640145963 said "heading level 2, Introduction"
+749187973911533 said "M7 Second, document"
+bus 2 /org/a11y/atspi/accessible/74
+bus 2 /org/a11y/atspi/accessible/75
+bus 2 /org/a11y/atspi/accessible/80
+bus 2 /org/a11y/atspi/accessible/81
+bus 2 /org/a11y/atspi/accessible/82
+bus 2 /org/a11y/atspi/accessible/84
+bus 1 /org/a11y/atspi/accessible/65
+bus 1 /org/a11y/atspi/accessible/65
+bus 3 /org/a11y/atspi/accessible/93
+bus 1 /org/a11y/atspi/accessible/83
+bus 1 /org/a11y/atspi/accessible/83
+bus 1 /org/a11y/atspi/accessible/102
+bus 4 /org/a11y/atspi/accessible/61
+bus 4 /org/a11y/atspi/accessible/61
+bus 1 /org/a11y/atspi/accessible/84
+bus 1 /org/a11y/atspi/accessible/84
+bus 4 /org/a11y/atspi/accessible/61
+bus 4 /org/a11y/atspi/accessible/61
+bus 1 /org/a11y/atspi/accessible/83
+bus 1 /org/a11y/atspi/accessible/83
+bus 4 /org/a11y/atspi/accessible/61
+bus 4 /org/a11y/atspi/accessible/61
+bus 1 /org/a11y/atspi/accessible/84
+bus 1 /org/a11y/atspi/accessible/84
+bus 4 /org/a11y/atspi/accessible/61
+bus 4 /org/a11y/atspi/accessible/61
+bus 1 /org/a11y/atspi/accessible/83
+bus 1 /org/a11y/atspi/accessible/83
+bus 4 /org/a11y/atspi/accessible/61
+bus 4 /org/a11y/atspi/accessible/61
+bus 1 /org/a11y/atspi/accessible/84
+bus 1 /org/a11y/atspi/accessible/84
+bus 4 /org/a11y/atspi/accessible/61
+bus 4 /org/a11y/atspi/accessible/61
+bus 1 /org/a11y/atspi/accessible/83
+bus 1 /org/a11y/atspi/accessible/83
+bus 4 /org/a11y/atspi/accessible/61
+bus 4 /org/a11y/atspi/accessible/61
+bus 1 /org/a11y/atspi/accessible/84
+bus 1 /org/a11y/atspi/accessible/84

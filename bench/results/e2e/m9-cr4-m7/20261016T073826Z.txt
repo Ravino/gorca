@@ -1,0 +1,123 @@
+# e2e m9-cr4-m7
+# utc=2026-10-16T07:38:26Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=29.63 20.18 16.60 11/3693 2042698
+# git_rev=33fed59
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m9-cr4-m7
+# reader=daemon:<repo>/.claude/worktrees/agent-aaa6bbc3e7741e405/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=29.63 20.18 16.60 14/3694 2042693
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=entry: []
+# note1=Down: "heading level 1, Gorca article, Gorca article" (0.44 ms)
+# note2=Right: "o" (0.24 ms)
+# note3=Ctrl+Right: "article, Gorca" (0.14 ms)
+# note4=H: "heading level 2, Introduction, Introduction" (0.11 ms)
+# note5=2: "heading level 2, Details, Details" (0.12 ms)
+# note6=H at the last heading: "no next heading" (0.21 ms)
+# note7=Shift+H: "heading level 2, Introduction, Introduction" (0.11 ms)
+# note8=K: "link, details below, details below" (0.21 ms)
+# note9=Escape: "browse mode, Your name, Your name, edit, blank, button, Send" (0.43 ms)
+# note10=Tab onto a link: "second page link, link"
+# note11=after Enter: ["M7 Second, document"]
+# note12=FAIL entry: the first line was not spoken
+# note13=FAIL Down: wanted ["This is the first paragraph"], heard "heading level 1, Gorca article, Gorca article"
+# note14=W2b lost: heard []; 1 focus, 4 load events on the bus
+# note15=W3 run failed: find_doc failed: {"ok":false,"error":"document not found","event":"reply","id":3}
+
+metric                     bus                median          min          max  n op    threshold  res   note
+B0.web_failures            daemon/voicego            2            2            2  1 <=            0  FAIL  gated on the max over repeats [checks]
+W1.w1_ms.n                 daemon/voicego         1200         1200         1200  1                  info   [samples]
+W1.w1_ms.p50               daemon/voicego        0.369        0.369        0.369  1                  info   [ms]
+W1.w1_ms.p95               daemon/voicego        0.597        0.597        0.597  1                  info   [ms]
+W1.w1_ms.p99               daemon/voicego        2.158        2.158        2.158  1 <=            5  PASS   [ms]
+W1.w1_ms.p999              daemon/voicego         40.5         40.5         40.5  1                  info   [ms]
+W1.w1_ms.max               daemon/voicego         42.1         42.1         42.1  1                  info   [ms]
+W1.late_w1_ms              daemon/voicego            0            0            0  1                  info   [keys]
+W1.lost_w1_ms              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+W1.not_consumed            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+BR1.br1_ms.n               daemon/voicego         1200         1200         1200  1                  info   [samples]
+BR1.br1_ms.p50             daemon/voicego        0.369        0.369        0.369  1                  info   [ms]
+BR1.br1_ms.p95             daemon/voicego        0.520        0.520        0.520  1                  info   [ms]
+BR1.br1_ms.p99             daemon/voicego        0.664        0.664        0.664  1 <=            5  PASS   [ms]
+BR1.br1_ms.p999            daemon/voicego        1.262        1.262        1.262  1                  info   [ms]
+BR1.br1_ms.max             daemon/voicego        1.658        1.658        1.658  1                  info   [ms]
+BR1.br1c_ms.n              daemon/voicego         1200         1200         1200  1                  info   [samples]
+BR1.br1c_ms.p50            daemon/voicego        0.360        0.360        0.360  1                  info   [ms]
+BR1.br1c_ms.p95            daemon/voicego        0.487        0.487        0.487  1                  info   [ms]
+BR1.br1c_ms.p99            daemon/voicego        0.546        0.546        0.546  1 <=            5  PASS   [ms]
+BR1.br1c_ms.p999           daemon/voicego        0.772        0.772        0.772  1                  info   [ms]
+BR1.br1c_ms.max            daemon/voicego        0.841        0.841        0.841  1                  info   [ms]
+BR1.br1w_ms.n              daemon/voicego         1200         1200         1200  1                  info   [samples]
+BR1.br1w_ms.p50            daemon/voicego        0.365        0.365        0.365  1                  info   [ms]
+BR1.br1w_ms.p95            daemon/voicego        0.484        0.484        0.484  1                  info   [ms]
+BR1.br1w_ms.p99            daemon/voicego        0.542        0.542        0.542  1 <=            5  PASS   [ms]
+BR1.br1w_ms.p999           daemon/voicego        0.753        0.753        0.753  1                  info   [ms]
+BR1.br1w_ms.max            daemon/voicego        0.797        0.797        0.797  1                  info   [ms]
+BR1.late_br1_ms            daemon/voicego            0            0            0  1                  info   [keys]
+BR1.late_br1c_ms           daemon/voicego            0            0            0  1                  info   [keys]
+BR1.late_br1w_ms           daemon/voicego            0            0            0  1                  info   [keys]
+BR1.lost_br1_ms            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+BR1.lost_br1c_ms           daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+BR1.lost_br1w_ms           daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+BR1.not_consumed           daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+BR2.keys                   daemon/voicego           90           90           90  1                  info   [keys]
+BR2.last_ok                daemon/voicego            1            1            1  1                  info   [bool]
+BR2.spoken                 daemon/voicego           24           24           24  1                  info   [utterances]
+BR2.stale                  daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [utterances]
+W2.w2_wall_ms              daemon/voicego        621.8        621.8        621.8  1                  info   [ms]
+W2b.w2b_gorca_ms.n         daemon/voicego            0            0            0  1                  info   [samples]
+W2b.w2b_gorca_ms.p50       daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_gorca_ms.p95       daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_gorca_ms.p99       daemon/voicego            0            0            0  1 <=          150  PASS   [ms]
+W2b.w2b_gorca_ms.p999      daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_gorca_ms.max       daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_ms.n               daemon/voicego            0            0            0  1                  info   [samples]
+W2b.w2b_ms.p50             daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_ms.p95             daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_ms.p99             daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_ms.p999            daemon/voicego            0            0            0  1                  info   [ms]
+W2b.w2b_ms.max             daemon/voicego            0            0            0  1                  info   [ms]
+W2b.lost                   daemon/voicego            6            6            6  1 <=            0  FAIL  gated on the max over repeats [trials]
+W2b.untagged_warm          daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+W3.failed_runs             daemon/voicego            1            1            1  1 <=            0  FAIL  0 ok, 1 failed [runs]
+FM1.fm1_ms.n               daemon/voicego           60           60           60  1                  info   [samples]
+FM1.fm1_ms.p50             daemon/voicego        0.235        0.235        0.235  1                  info   [ms]
+FM1.fm1_ms.p95             daemon/voicego        2.385        2.385        2.385  1                  info   [ms]
+FM1.fm1_ms.p99             daemon/voicego        3.633        3.633        3.633  1 <=           15  PASS   [ms]
+FM1.fm1_ms.p999            daemon/voicego        5.099        5.099        5.099  1                  info   [ms]
+FM1.fm1_ms.max             daemon/voicego        5.099        5.099        5.099  1                  info   [ms]
+FM1.fm_grab_ms.n           daemon/voicego           60           60           60  1                  info   [samples]
+FM1.fm_grab_ms.p50         daemon/voicego        0.824        0.824        0.824  1                  info   [ms]
+FM1.fm_grab_ms.p95         daemon/voicego        3.028        3.028        3.028  1                  info   [ms]
+FM1.fm_grab_ms.p99         daemon/voicego        7.089        7.089        7.089  1 <=           15  PASS   [ms]
+FM1.fm_grab_ms.p999        daemon/voicego        9.604        9.604        9.604  1                  info   [ms]
+FM1.fm_grab_ms.max         daemon/voicego        9.604        9.604        9.604  1                  info   [ms]
+FM1.lost                   daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+FM1.lost_after_switch      daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+FM1.not_consumed           daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+FM1.race_lost_at_once      daemon/voicego           28           28           28  1                  info   [keys]
+FM2.fm2_ms.n               daemon/voicego           60           60           60  1                  info   [samples]
+FM2.fm2_ms.p50             daemon/voicego        0.559        0.559        0.559  1                  info   [ms]
+FM2.fm2_ms.p95             daemon/voicego        3.983        3.983        3.983  1                  info   [ms]
+FM2.fm2_ms.p99             daemon/voicego        4.341        4.341        4.341  1 <=            5  PASS   [ms]
+FM2.fm2_ms.p999            daemon/voicego        7.443        7.443        7.443  1                  info   [ms]
+FM2.fm2_ms.max             daemon/voicego        7.443        7.443        7.443  1                  info   [ms]
+FM2.lost                   daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+FM2.not_consumed           daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
