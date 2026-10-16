@@ -135,3 +135,23 @@ tests and decision rows).
 Harness: FM.pass.tab and FM.pass.shift_tab ("Tab is not grabbed" in browse mode) are removed (`m8-fix2-full` keeps the Shift+Tab failure and the FM.tab.real.0 knock-on: Shift+Tab had already focused the first link), its premise is what D-2 replaces; `m8-fix-full` (head `5944ebc`) keeps the run where it failed (Tab moved focus to the next field, as designed). SY.tab, SY.tab2, SY.stab and SY.tab.out cover Tab now.
 
 Gate results are in section 9.
+
+## 9. Gates after the review fixes
+
+All runs at a clean committed head (`git_dirty=false`) and `--impersonate-orca`; the host was shared with other agents (load 6 to 70), so
+every row carries its load. Labels (all kept, including the red ones):
+
+| Run | Head | Load at start | Result |
+|---|---|---|---|
+| `m8-fix-sy1` (SY, --quick) | `a74dd8c` | 18 | 16 of 16 pass, incl. SY.tab, SY.tab2, SY.stab, SY.tab.out (not consumed), SY.nomove.k/.sel (no focus or caret event) |
+| `m8-fix-full` | `5944ebc` | 11 | kept: FM.pass.tab failed (premise replaced by D-2) |
+| `m8-fix2-full` | `32ce45c` | 15 | kept: FM.pass.shift_tab failed, same cause; `m8-fix2-perf`/`-m7`/`-strict`/`-shell` ran at load 39 to 70 and are not evidence (non-M8 rows such as K2 and FC1 fail too); the shell gates were skipped there (env not passed), rerun below |
+| `m8-fixab-{main,branch}-*` | main `ae79840`-era vs `fa5b19d` | 10 to 52 | interleaved main / branch / branch / main, strict K2-K4, typing FC1h FS2 FE2, A1 N1 R1s, 1 repeat per arm: every red row is red on main at the same load (main r1 load 52: K2 lost 61, A1 p99 123 ms; branch r1 load 28: K2 lost 3); at load 10 main A1 13.6 ms, branch A1 15 to 22 ms at load 27 to 31 (not same-load, see fix4/fix5) |
+| `m8-fix4-full` (--quick x3) | `fa5b19d` | 44 | median 0 unmarked failures; FM.listbox, AF.field, AN.para.go failed in one repeat each (load); LV live p99 103 ms (gate 100); PF1 100k p99 8.1 ms, lost max 5 |
+| `m8-fix4-strict`, `-shell`, `-m7` | `fa5b19d` | 35 to 37 | load-bound reds (K2/K3 lost, A1 p99 36 ms); M7 set 67 pass rows, reds in single repeats (FC1h, FS2, FE2, L1) as on main |
+| **`m8-fix5-full`** (--quick x3, all 20 scenarios) | `3fffcb3` (merged with main `08a11b3`) | 25 | no step failure; PF1 100k p99 14.7 ms (min 7.4, max 66) and lost max 1: the shared 100k key-loss, recorded, not chased; PF2 one failed run of three |
+| **`m8-fix5-strict`** (K2 K3 K4 R1 strict x3) | `3fffcb3` | 15 | K2 p99 0.32 ms, K3 1.25 ms, R1 pass; K4 chord_resent max 7 in one repeat (median 0) |
+| **`m8-fix5-shell`** (A1 N1 R1s strict x3) | `3fffcb3` | 18 | A1 p99 6.7 ms, N1 0.45 ms (never interrupted), R1s 0.49 ms; A1 lost max 1 in one repeat |
+
+The 100k-node H/Shift+H key loss (8 of 150 in `m8-review-full`, 5 and 1 here) is shared with main and is left to the perf owner.
+`cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`, `cargo test --workspace` (0 failed) and `cargo xtask deps` pass at `3fffcb3`.
