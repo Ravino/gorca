@@ -591,7 +591,11 @@ fn run_step(w: &mut Web, doc: &DocRef, sc: &'static str, st: &Step) -> StepRes {
         heard.insert_str(0, "[key passed to the app] ");
     }
     if heard.len() > 240 {
-        heard.truncate(240);
+        let mut cut = 240;
+        while !heard.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        heard.truncate(cut);
         heard.push('~');
     }
     res.heard = heard;
