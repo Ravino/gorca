@@ -46,6 +46,12 @@ const SUMMARY_EVERY: Duration = Duration::from_secs(5);
 const MAX_LINES: usize = 256;
 /// Characters kept per line.
 const MAX_LINE: usize = 1024;
+/// An announcement is cut at this many characters (a page cannot make the reader read a book).
+pub const MAX_ANNOUNCE: usize = 300;
+/// Characters of a region read per snapshot (bounds the cost of one settle).
+const MAX_SNAPSHOT: u32 = 16 * 1024;
+/// Snapshots taken per `tick` over all regions (the rest wait for the next tick).
+const MAX_SNAPSHOTS_PER_TICK: usize = 16;
 /// Per-document rate (messages per second, burst).
 const DOC_RATE: (f32, f32) = (4.0, 4.0);
 
@@ -136,7 +142,7 @@ fn lines_of(doc: &WebDoc, id: DocNodeId) -> Vec<String> {
     let Some((a, b)) = doc.subtree_text_range(id) else {
         return Vec::new();
     };
-    let text = doc.text_in(a, b.min(a.saturating_add(64 * 1024)));
+    let text = doc.text_in(a, b.min(a.saturating_add(MAX_SNAPSHOT)));
     let mut out: Vec<String> = text
         .split('\n')
         .map(|l| {
@@ -166,7 +172,7 @@ fn diff(old: &[String], new: &[String], props: &Props) -> Option<String> {
     }
     if props.atomic {
         let text = new.join(" ");
-        return (!text.is_empty()).then_some(text);
+        return (!text.is_empty()).then(|| cut(text));
     }
     let mut pool: HashMap<&str, usize> = HashMap::new();
     for l in old {
@@ -207,7 +213,15 @@ fn diff(old: &[String], new: &[String], props: &Props) -> Option<String> {
         parts.extend(gone.iter().map(|s| (*s).to_owned()));
     }
     let text = parts.join(" ");
-    (!text.trim().is_empty()).then_some(text)
+    (!text.trim().is_empty()).then(|| cut(text))
+}
+
+/// Cut an announcement at [`MAX_ANNOUNCE`] characters.
+fn cut(mut text: String) -> String {
+    if let Some((ix, _)) = text.char_indices().nth(MAX_ANNOUNCE) {
+        text.truncate(ix);
+    }
+    text
 }
 
 /// Case and spacing do not make a message new.
@@ -340,15 +354,14 @@ impl LiveTracker {
     pub fn on_batch(&mut self, doc: &WebDoc, touched: &[DocNodeId], now: Instant) {
         let started = *self.started.get_or_insert(now);
         let quiet = now.saturating_duration_since(started) < LOAD_QUIET;
-        let mut seen: Vec<DocNodeId> = Vec::new();
+        let mut seen: std::collections::HashSet<DocNodeId> = std::collections::HashSet::new();
         for id in touched.iter().take(MAX_TOUCHED) {
             let Some((root, props)) = region_of(doc, *id) else {
                 continue;
             };
-            if seen.contains(&root) {
+            if !seen.insert(root) {
                 continue;
             }
-            seen.push(root);
             if let Some(r) = self.regions.get_mut(&root) {
                 r.first_dirty.get_or_insert(now);
                 r.last_touch = now;
@@ -393,6 +406,7 @@ impl LiveTracker {
         let mut out: Vec<LiveMsg> = Vec::new();
         let mut gone: Vec<DocNodeId> = Vec::new();
         let ids: Vec<DocNodeId> = self.regions.keys().copied().collect();
+        let mut budget = MAX_SNAPSHOTS_PER_TICK;
         for id in ids {
             let Some(region) = self.regions.get_mut(&id) else {
                 continue;
@@ -416,6 +430,11 @@ impl LiveTracker {
             if props.busy && now.saturating_duration_since(first) < BUSY_MAX {
                 continue;
             }
+            if budget == 0 {
+                // Over the per-tick budget: stays dirty, settles on the next tick.
+                continue;
+            }
+            budget -= 1;
             region.first_dirty = None;
             let lines = lines_of(doc, id);
             let text = diff(&region.base, &lines, &props);
@@ -604,6 +623,34 @@ mod tests {
         let leaf = set_text(&mut d, r, "Saved at step 1");
         t.on_batch(&d, &[leaf], later + Duration::from_secs(2));
         assert!(t.tick(&d, later + Duration::from_millis(2100)).is_empty());
+    }
+
+    #[test]
+    fn a_hostile_flood_of_regions_and_long_text_stays_bounded() {
+        let t0 = Instant::now();
+        let (mut d, r) = page("idle", "polite");
+        let mut t = LiveTracker::new();
+        t.on_batch(&d, &[r], t0);
+        let start = t0 + Duration::from_secs(3);
+        let long = "word ".repeat(4_000);
+        let mut spoken = 0usize;
+        let mut worst = 0usize;
+        // 3 000 batches in 9 simulated seconds, each touching the region, with a huge text.
+        for i in 0..3_000u32 {
+            let now = start + Duration::from_micros(u64::from(i) * 3000);
+            let leaf = set_text(&mut d, r, &format!("{i} {long}"));
+            t.on_batch(&d, &[leaf], now);
+            while let Some(due) = t.next_deadline().filter(|due| *due <= now) {
+                for m in t.tick(&d, due) {
+                    spoken += 1;
+                    worst = worst.max(m.text.chars().count());
+                }
+            }
+        }
+        assert!(worst <= MAX_ANNOUNCE, "announcement of {worst} chars");
+        // polite 1/s burst 3 over 10 s, plus summaries, far below the 3 000 updates
+        assert!(spoken <= 20, "spoken {spoken}");
+        assert!(t.regions.len() <= MAX_REGIONS);
     }
 
     #[test]

@@ -364,22 +364,39 @@ impl Actor {
         {
             *last = n;
         } else {
+            // A polite update is superseded by a newer one that has not been delivered yet.
+            if let DocNotice::Live { msg, .. } = &n
+                && !msg.assertive
+                && let Some(at) = self.pending_notices.iter().position(
+                    |p| matches!(p, DocNotice::Live { msg: m, .. } if !m.assertive),
+                )
+            {
+                self.pending_notices.remove(at);
+            }
             if self.pending_notices.len() >= MAX_PENDING_NOTICES {
                 // Make room by dropping the oldest `Changed`, then the oldest live message
                 // (they are news that goes stale); a live message never evicts anything else.
-                let droppable = |p: &DocNotice| {
-                    matches!(p, DocNotice::Changed { .. } | DocNotice::Live { .. })
+                let live_new = matches!(n, DocNotice::Live { .. });
+                let at = if live_new {
+                    // News never evicts structure: only older news makes room for it.
+                    self.pending_notices
+                        .iter()
+                        .position(|p| matches!(p, DocNotice::Live { .. }))
+                } else {
+                    self.pending_notices
+                        .iter()
+                        .position(|p| matches!(p, DocNotice::Changed { .. }))
+                        .or_else(|| {
+                            self.pending_notices
+                                .iter()
+                                .position(|p| matches!(p, DocNotice::Live { .. }))
+                        })
                 };
-                let at = self
-                    .pending_notices
-                    .iter()
-                    .position(|p| matches!(p, DocNotice::Changed { .. }))
-                    .or_else(|| self.pending_notices.iter().position(droppable));
                 match at {
                     Some(at) => {
                         self.pending_notices.remove(at);
                     }
-                    None if matches!(n, DocNotice::Live { .. }) => return,
+                    None if live_new => return,
                     None => {
                         self.pending_notices.remove(0);
                     }

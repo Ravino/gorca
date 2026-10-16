@@ -1332,7 +1332,9 @@ impl Reader {
         } else {
             Prio::Notification
         };
-        u.survives_focus_change = true;
+        // Polite news waits for the speech lane and survives navigation; assertive news is
+        // stale after a focus change, so a flood can never queue in front of focus speech.
+        u.survives_focus_change = !msg.assertive;
         u.segments.clear();
         u.segments.push(Segment {
             text: Arc::clone(&msg.text),
