@@ -19,9 +19,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use gorca_core::TermSession;
-use gorca_ext_api::terminal::{
-    Ms, TermAction, TermConfig, TermCounters, TermInput, TermSnapshot,
-};
+use gorca_ext_api::terminal::{Ms, TermAction, TermConfig, TermCounters, TermInput, TermSnapshot};
 
 use crate::instance::HookKind;
 use crate::slot::Slot;
@@ -36,7 +34,7 @@ pub struct HostTermSession {
     stale: bool,
     /// `step` ran since the snapshot cache was filled.
     dirty: Cell<bool>,
-    cache: RefCell<Option<Option<TermSnapshot>>>,
+    cache: RefCell<Option<TermSnapshot>>,
 }
 
 impl fmt::Debug for HostTermSession {
@@ -63,7 +61,15 @@ impl HostTermSession {
 }
 
 impl TermSession for HostTermSession {
+    fn alive(&self) -> bool {
+        !self.stale
+    }
+
     fn step(&mut self, now: Ms, input: TermInput, out: &mut Vec<TermAction>) {
+        if matches!(input, TermInput::Blur) && self.seen == 0 {
+            // A session the policy never ran for has nothing to wipe.
+            return;
+        }
         self.dirty.set(true);
         let slot = &self.slot;
         let cfg = &self.cfg;
@@ -108,10 +114,8 @@ impl TermSession for HostTermSession {
     }
 
     fn snapshot(&self) -> Option<TermSnapshot> {
-        if !self.dirty.get()
-            && let Some(c) = self.cache.borrow().as_ref()
-        {
-            return c.clone();
+        if !self.dirty.get() {
+            return self.cache.borrow().clone();
         }
         // A session that has not (successfully) stepped on the current instance has no screen.
         let fresh = self.seen == self.slot.generation() && !self.stale;
@@ -123,7 +127,7 @@ impl TermSession for HostTermSession {
             None
         };
         self.dirty.set(false);
-        *self.cache.borrow_mut() = Some(snap.clone());
+        self.cache.borrow_mut().clone_from(&snap);
         snap
     }
 }

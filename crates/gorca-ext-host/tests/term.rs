@@ -83,8 +83,13 @@ fn after_a_fault_the_next_instance_is_configured_and_re_baselined_before_the_key
             let t = Instant::now();
             // The faulting key answers nothing (and the policy never reaches its next key).
             assert_eq!(step(&mut s, 10, key(crash_key)), [], "{b:?} {crash_key}");
-            assert!(t.elapsed() < Duration::from_secs(2), "{b:?} {crash_key}: the fault is bounded");
+            assert!(
+                t.elapsed() < Duration::from_secs(2),
+                "{b:?} {crash_key}: the fault is bounded"
+            );
             assert_eq!(h.stats().faults, 1, "{b:?} {crash_key}");
+            // Fail closed: the Reader is told the policy is down (typed keys count as secret).
+            assert!(!s.alive(), "{b:?} {crash_key}");
             settle(&h);
             // The next key goes to a fresh instance: configure, focus (read the screen again),
             // then the key itself.
@@ -92,6 +97,7 @@ fn after_a_fault_the_next_instance_is_configured_and_re_baselined_before_the_key
             let mut want = vec![TermAction::FetchScreen];
             want.extend(said('b'));
             assert_eq!(got, want, "{b:?} {crash_key}");
+            assert!(s.alive(), "{b:?} {crash_key}");
             assert_eq!(snapshot_text(&*s), "steps=2 focuses=1 configs=1", "{b:?}");
             // And from then on it is steady.
             assert_eq!(step(&mut s, 30, key('c')), said('c'));
@@ -111,7 +117,10 @@ fn three_faults_disable_the_policy_for_the_application() {
             // A new instance each time: the next step re-baselines first.
             if round < 2 {
                 let got = step(&mut s, 20 + round, key('x'));
-                assert!(got.contains(&TermAction::FetchScreen), "{b:?} round {round}: {got:?}");
+                assert!(
+                    got.contains(&TermAction::FetchScreen),
+                    "{b:?} round {round}: {got:?}"
+                );
             }
         }
         assert_eq!(h.stats().disabled, 1, "{b:?}");

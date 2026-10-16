@@ -14,7 +14,7 @@
 //! The driver is `support/replay.rs`, shared with the parity test of the daemon, which replays the
 //! same session through the native build and the WASM component.
 
-#![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
+#![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used, dead_code)]
 
 #[path = "support/replay.rs"]
 mod driver;

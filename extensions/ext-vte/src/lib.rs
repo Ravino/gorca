@@ -116,7 +116,7 @@ mod tests {
             let a = Screen::new(s);
             let b = Rows::new(s);
             assert_eq!(a.line_count(), b.line_count(), "{s:?}");
-            for i in 0..a.line_count() + 1 {
+            for i in 0..=a.line_count() {
                 assert_eq!(a.line(i), b.line(i), "{s:?} row {i}");
             }
             for off in 0..a.char_len() + 3 {

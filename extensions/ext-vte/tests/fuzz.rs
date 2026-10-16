@@ -6,7 +6,7 @@
 //!
 //! The driver is `support/fuzz.rs`, shared with the parity test of the daemon, which runs the
 //! same sessions through the native build and the WASM component.
-#![allow(clippy::unwrap_used)]
+#![allow(clippy::unwrap_used, dead_code)]
 
 #[path = "support/fuzz.rs"]
 mod driver;

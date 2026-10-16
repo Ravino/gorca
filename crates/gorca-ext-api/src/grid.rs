@@ -150,7 +150,7 @@ mod tests {
     #[test]
     fn units_at_the_caret() {
         let t = "echo hello world\nsecond";
-        assert_eq!(unit_at(t, 6, Unit::Char).as_deref(), Some("h"));
+        assert_eq!(unit_at(t, 5, Unit::Char).as_deref(), Some("h"));
         assert_eq!(unit_at(t, 7, Unit::Word).as_deref(), Some("hello"));
         assert_eq!(unit_at(t, 20, Unit::Line).as_deref(), Some("second"));
         assert_eq!(unit_at("  \n", 1, Unit::Line), None);

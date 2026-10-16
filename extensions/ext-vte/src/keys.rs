@@ -117,14 +117,8 @@ mod tests {
         assert_eq!(classify(&key(0xff52, 0, '-')), TermKey::LineUp);
         assert_eq!(classify(&key(0xff51, 0, '-')), TermKey::CharLeft);
         assert_eq!(classify(&ctrl(key(0xff51, 0, '-'))), TermKey::WordLeft);
-        assert_eq!(
-            classify(&ctrl(key('c' as u32, 3, 'c'))),
-            TermKey::Interrupt
-        );
-        assert_eq!(
-            classify(&ctrl(key('a' as u32, 1, 'a'))),
-            TermKey::LineStart
-        );
+        assert_eq!(classify(&ctrl(key('c' as u32, 3, 'c'))), TermKey::Interrupt);
+        assert_eq!(classify(&ctrl(key('a' as u32, 1, 'a'))), TermKey::LineStart);
         assert_eq!(classify(&ctrl(key('e' as u32, 5, 'e'))), TermKey::LineEnd);
         assert_eq!(classify(&alt(key('b' as u32, 0, 'b'))), TermKey::WordLeft);
         assert_eq!(classify(&alt(key('f' as u32, 0, 'f'))), TermKey::WordRight);

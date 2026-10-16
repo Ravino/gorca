@@ -263,7 +263,10 @@ const TERMINAL_EXT: &str = "ext-vte";
 ///
 /// Returns the core and whether the Shell policy component (`ext-gnome-shell`) was loaded, so the
 /// caller installs the native build only when it was not.
-pub(crate) async fn wire_ext(core: gorca_core::Core, opts: &Options) -> (gorca_core::Core, bool, bool) {
+pub(crate) async fn wire_ext(
+    core: gorca_core::Core,
+    opts: &Options,
+) -> (gorca_core::Core, bool, bool) {
     let Some(dir) = opts.ext_dir.clone().filter(|d| !d.as_os_str().is_empty()) else {
         return (core, false, false);
     };

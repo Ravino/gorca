@@ -116,7 +116,9 @@ impl HookInstance for NativeInstance {
     }
 
     fn term_snapshot(&mut self) -> Result<Option<api::terminal::TermSnapshot>, Fault> {
-        self.run(HookKind::Terminal, |e| e.terminal().and_then(|t| t.snapshot()))
+        self.run(HookKind::Terminal, |e| {
+            e.terminal().and_then(|t| t.snapshot())
+        })
     }
 
     fn term_counters(&mut self) -> Result<api::terminal::TermCounters, Fault> {

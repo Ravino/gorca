@@ -33,9 +33,9 @@
 pub mod api;
 pub mod host;
 
+pub mod grid;
 #[cfg(target_arch = "wasm32")]
 pub mod guest;
-pub mod grid;
 pub mod terminal;
 
 pub use api::*;

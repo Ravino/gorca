@@ -54,31 +54,31 @@ impl Session {
         let ext = &mut self.ext;
         let mut local = Vec::new();
         let r = catch_unwind(AssertUnwindSafe(|| ext.step(now, input, &mut local)));
-        match r {
-            Ok(()) => {
-                out.append(&mut local);
-                true
-            }
-            Err(_) => {
-                let n = self.panics.fetch_add(1, Ordering::Relaxed) + 1;
-                tracing::error!(
-                    panics = n,
-                    "the native terminal policy panicked; it starts over{}",
-                    if n >= DISABLE_AFTER {
-                        " and is now off"
-                    } else {
-                        ""
-                    }
-                );
-                self.ext = VteExtension::new(&self.cfg);
-                self.lost = true;
-                false
-            }
+        if r.is_ok() {
+            out.append(&mut local);
+            return true;
         }
+        let n = self.panics.fetch_add(1, Ordering::Relaxed) + 1;
+        tracing::error!(
+            panics = n,
+            "the native terminal policy panicked; it starts over{}",
+            if n >= DISABLE_AFTER {
+                " and is now off"
+            } else {
+                ""
+            }
+        );
+        self.ext = VteExtension::new(&self.cfg);
+        self.lost = true;
+        false
     }
 }
 
 impl TermSession for Session {
+    fn alive(&self) -> bool {
+        !self.lost && !self.off()
+    }
+
     fn step(&mut self, now: Ms, input: TermInput, out: &mut Vec<TermAction>) {
         if self.off() {
             return;

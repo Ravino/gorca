@@ -141,6 +141,7 @@ pub enum TermEdit {
 /// The Control and Alt shortcuts are matched on the physical key (`phys`) so they work in every
 /// keyboard layout. Lock modifiers are already removed.
 #[derive(Copy, Clone, Eq, PartialEq)]
+#[allow(clippy::struct_excessive_bools)] // mirrors the WIT record: four independent modifier flags
 pub struct RawKey {
     /// X11 keysym of the pressed key in the active layout.
     pub keysym: u32,

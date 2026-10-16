@@ -262,7 +262,9 @@ fn term_input_from_wit(i: wtm::TermInput) -> tm::TermInput {
     match i {
         wtm::TermInput::Key(k) => tm::TermInput::Key(term_key_from_wit(k)),
         wtm::TermInput::Edit(e) => tm::TermInput::Edit(match e {
-            wtm::TermEdit::Insert((offset, len, text)) => tm::TermEdit::Insert { offset, len, text },
+            wtm::TermEdit::Insert((offset, len, text)) => {
+                tm::TermEdit::Insert { offset, len, text }
+            }
             wtm::TermEdit::Delete((offset, len)) => tm::TermEdit::Delete { offset, len },
             wtm::TermEdit::Replaced => tm::TermEdit::Replaced,
         }),

@@ -109,7 +109,10 @@ pub const POOL_INSTANCES: u32 = 512;
 /// Epoch ticks of the wall-clock backstop for `kind`.
 fn ticks(kind: HookKind) -> u64 {
     let t = TICK.as_micros().max(1);
-    let factor = if matches!(kind, HookKind::Present | HookKind::Policy | HookKind::Terminal) {
+    let factor = if matches!(
+        kind,
+        HookKind::Present | HookKind::Policy | HookKind::Terminal
+    ) {
         BACKSTOP_FACTOR_PRESENT
     } else {
         BACKSTOP_FACTOR

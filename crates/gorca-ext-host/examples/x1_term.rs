@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! cargo xtask build-ext
-//! cargo run --release -p gorca-ext-host --example x1_term -- [iterations] > out.tsv
+//! cargo run --release -p gorca-ext-host --example x1_term -- [iterations] [wasm|native-host|direct] > out.tsv
 //! ```
 //!
 //! Output (TSV, nanoseconds): `case n p50 p99 p999 max mean`. Rows:
@@ -32,7 +32,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use gorca_core::{AppExt, ExtSource, MirrorDirectory, TermSession};
+use gorca_core::{ExtSource, MirrorDirectory, TermSession};
 use gorca_ext_api::terminal::{
     RawKey, TermAction, TermConfig, TermCounters, TermEdit, TermInput, TermSnapshot, TerminalHooks,
 };
@@ -141,7 +141,11 @@ fn screen(rows: usize, cols: usize, shift: usize, cyr: bool) -> String {
     let mut s = String::new();
     for r in 0..rows {
         let n = shift + r;
-        let word = if cyr { "\u{43f}\u{440}\u{438}\u{432}\u{435}\u{442}" } else { "line" };
+        let word = if cyr {
+            "\u{43f}\u{440}\u{438}\u{432}\u{435}\u{442}"
+        } else {
+            "line"
+        };
         let mut line = format!("{word} {n} ");
         while line.chars().count() < cols - 8 {
             line.push_str(&format!("{word}{} ", n % 7));
@@ -172,7 +176,11 @@ fn main() {
     let wasm = std::fs::read(root.join("target/ext-wasm/wasm32-wasip2/release/ext_vte.wasm"))
         .expect("build the component first: cargo xtask build-ext");
 
+    let only = args.get(2).cloned();
     for label in ["wasm", "native-host", "direct"] {
+        if only.as_deref().is_some_and(|o| o != label) {
+            continue;
+        }
         let (h, mut s) = session(label, &wasm);
         let mut out: Vec<TermAction> = Vec::new();
         baseline(&mut *s, "me@box:~$ \n");

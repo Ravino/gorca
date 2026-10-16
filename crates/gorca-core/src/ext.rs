@@ -96,6 +96,11 @@ pub trait TermSession: Send + fmt::Debug {
     /// One input at `now` (monotonic milliseconds); actions are appended to `out`.
     fn step(&mut self, now: Ms, input: TermInput, out: &mut Vec<TermAction>);
     fn counters(&self) -> TermCounters;
+    /// Did the policy answer the last input? `false` after a fault, a busy or disabled slot: the
+    /// Reader then treats typed keys as possibly secret (fail closed) until it answers again.
+    fn alive(&self) -> bool {
+        true
+    }
     /// The screen as last known, for review and the "say current" commands.
     fn snapshot(&self) -> Option<TermSnapshot>;
 }

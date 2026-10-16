@@ -27,8 +27,7 @@
 #![allow(clippy::panic)]
 
 use gorca_ext_api::terminal::{
-    Ms, TermAction, TermConfig, TermCounters, TermInput, TermSnapshot, TerminalHooks, Unit,
-    Urgency,
+    Ms, TermAction, TermConfig, TermCounters, TermInput, TermSnapshot, TerminalHooks, Unit, Urgency,
 };
 use gorca_ext_api::{
     CommandResult, Event, EventVerdict, Hooks, Node, PolicyFacts, PolicyVerdict, PresentCtx, Prio,
