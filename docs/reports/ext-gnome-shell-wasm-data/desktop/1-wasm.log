@@ -1,0 +1,90 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s
+     Running tests/desktop.rs (target/debug/deps/desktop-97082bd93440597a)
+
+running 6 tests
+shell policy under test: WASM component (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-daemon/../../target/debug/extensions)
+2026-10-16T06:22:36.560190Z  INFO gorca_daemon: shell policy: ext-gnome-shell native build
+2026-10-16T06:22:36.560487Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
+2026-10-16T06:22:36.560521Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
+2026-10-16T06:22:36.560602Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-16T06:22:36.562003Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-16T06:22:36.562068Z  INFO gorca_daemon: shell policy: ext-gnome-shell native build
+2026-10-16T06:22:36.562186Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
+2026-10-16T06:22:36.562204Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
+2026-10-16T06:22:36.580418Z  INFO gorca_daemon: shell policy: ext-gnome-shell native build
+2026-10-16T06:22:36.580613Z  INFO gorca_daemon: shell policy: ext-gnome-shell native build
+2026-10-16T06:22:36.580691Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
+2026-10-16T06:22:36.580717Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
+2026-10-16T06:22:36.580729Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
+2026-10-16T06:22:36.580743Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
+shell policy under test: WASM component (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-daemon/../../target/debug/extensions)
+2026-10-16T06:22:36.617063Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-16T06:22:36.617797Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-16T06:22:36.618952Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-16T06:22:36.628577Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-16T06:22:36.628893Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-16T06:22:36.629337Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-16T06:22:36.634866Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-16T06:22:36.646514Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-16T06:22:36.647960Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-16T06:22:36.651505Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-16T06:22:36.807044Z  INFO gorca_daemon::wire: extensions loaded extensions=["ext-gnome-shell"]
+2026-10-16T06:22:36.807142Z  INFO gorca_daemon: shell policy: ext-gnome-shell WASM component
+2026-10-16T06:22:36.807336Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
+2026-10-16T06:22:36.807367Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
+2026-10-16T06:22:36.807526Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-16T06:22:36.808671Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-16T06:22:36.816386Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-16T06:22:36.819301Z  WARN gorca_daemon::wire: extension commands were already installed
+2026-10-16T06:22:36.819517Z  INFO gorca_daemon::wire: extensions loaded extensions=["ext-gnome-shell"]
+2026-10-16T06:22:36.819567Z  INFO gorca_daemon: shell policy: ext-gnome-shell WASM component
+2026-10-16T06:22:36.819696Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
+2026-10-16T06:22:36.819714Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
+2026-10-16T06:22:36.819814Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-16T06:22:36.820609Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-16T06:22:36.837370Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-16T06:22:37.295348Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-16T06:22:37.295412Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-16T06:22:37.295488Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0 }
+2026-10-16T06:22:37.296163Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 2, fetch_ok: 3, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 1, utterances: 2, reader_restarts: 0 }
+2026-10-16T06:22:37.296247Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 2, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-16T06:22:37.296931Z  INFO gorca_daemon: gorca stopped
+2026-10-16T06:22:37.416037Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-16T06:22:37.416120Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0 }
+2026-10-16T06:22:37.416162Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-16T06:22:37.416476Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 2, fetch_ok: 3, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 1, utterances: 3, reader_restarts: 0 }
+2026-10-16T06:22:37.416506Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 3, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-16T06:22:37.418141Z  INFO gorca_daemon: gorca stopped
+2026-10-16T06:22:38.143425Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-16T06:22:38.143474Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-16T06:22:38.143580Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0 }
+2026-10-16T06:22:38.146204Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 1, fetch_ok: 1, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 0, utterances: 2, reader_restarts: 0 }
+2026-10-16T06:22:38.146310Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 2, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-16T06:22:38.146637Z  INFO gorca_daemon: gorca stopped
+2026-10-16T06:22:38.508228Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-16T06:22:38.508230Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-16T06:22:38.508327Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0 }
+2026-10-16T06:22:38.508802Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 3, fetch_ok: 3, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 1, utterances: 3, reader_restarts: 0 }
+2026-10-16T06:22:38.508829Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 3, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-16T06:22:38.509394Z  INFO gorca_daemon: gorca stopped
+2026-10-16T06:22:38.517533Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-16T06:22:38.517604Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0 }
+2026-10-16T06:22:38.517620Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-16T06:22:38.518909Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 2, fetch_ok: 3, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 1, utterances: 3, reader_restarts: 0 }
+2026-10-16T06:22:38.518939Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 3, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-16T06:22:38.519073Z  INFO gorca_daemon: gorca stopped
+test a_dialog_opening_speaks_its_title_its_text_and_the_focused_button_in_that_order ... ok
+2026-10-16T06:22:38.672664Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-16T06:22:38.672664Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-16T06:22:38.672762Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0 }
+2026-10-16T06:22:38.673296Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 3, fetch_ok: 5, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 2, utterances: 4, reader_restarts: 0 }
+2026-10-16T06:22:38.673322Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 4, replaced: 1, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-16T06:22:38.673955Z  INFO gorca_daemon: gorca stopped
+test a_plain_window_speaks_its_title_with_the_focus_and_a_window_without_focus_speaks_alone ... ok
+test the_shells_osd_level_is_announced_once_when_it_stops_changing ... ok
+test an_announcement_is_spoken_after_the_focus_speech_and_never_cuts_it_off ... ok
+test a_notification_banner_in_the_shell_is_read_and_waits_for_the_speech_in_progress ... ok
+test a_new_focus_is_not_held_back_by_a_queued_announcement ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.64s
+
