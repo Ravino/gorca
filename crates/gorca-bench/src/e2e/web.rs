@@ -124,7 +124,12 @@ user_pref("browser.sessionstore.resume_from_crash", false);
 user_pref("security.sandbox.content.level", 4);
 "#;
 
-/// A Firefox of ours: own profile, own process group, signalled only through that group.
+/// M9: the engine under test is Chromium (`GORCA_M7_BROWSER=chromium`), Firefox otherwise.
+pub(super) fn chromium_selected() -> bool {
+    std::env::var("GORCA_M7_BROWSER").as_deref() == Ok("chromium")
+}
+
+/// A Firefox of ours (or, with `GORCA_M7_BROWSER=chromium`, a Chromium): own profile, own process group, signalled only through that group.
 #[derive(Debug)]
 pub(super) struct Firefox {
     child: Child,
@@ -132,14 +137,21 @@ pub(super) struct Firefox {
     /// `tests/web/m7/rd.py`: a RemoteDesktop session on the private compositor. A headless
     /// shell has no keyboard, so no window is ever active until a virtual input device clicks.
     rd: Option<Child>,
-    /// The throw-away profile of this launch (~130 MB on tmpfs): removed once Firefox is gone.
+    /// The throw-away profile, removed when the browser stops (disk is tight).
     profile: PathBuf,
+    /// `GORCA_M9_AT=orca`: a process whose argv[0] is `orca`, killed with the browser.
+    decoy: Option<Child>,
 }
 
 impl Firefox {
     pub(super) fn launch(host: &HostEnv, tag: &str, urls: &[String]) -> Result<Self> {
         let wayland = std::env::var("GORCA_M7_WAYLAND").context("GORCA_M7_WAYLAND not set")?;
-        let bin = std::env::var("GORCA_M7_FIREFOX").unwrap_or_else(|_| "firefox".to_owned());
+        let chromium = chromium_selected();
+        let bin = if chromium {
+            std::env::var("GORCA_M7_CHROMIUM").unwrap_or_else(|_| "chromium".to_owned())
+        } else {
+            std::env::var("GORCA_M7_FIREFOX").unwrap_or_else(|_| "firefox".to_owned())
+        };
         let root = std::env::var("GORCA_HARNESS_DIR").context("GORCA_HARNESS_DIR not set")?;
         if !host.a11y_addr.contains("/gorca-h.") {
             bail!("refusing to start a browser outside a harness session");
@@ -150,18 +162,61 @@ impl Firefox {
         let n = LAUNCHES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let profile = PathBuf::from(&root).join(format!("ffprofile-{tag}{n}"));
         std::fs::create_dir_all(&profile)?;
-        std::fs::write(profile.join("user.js"), USER_JS)?;
         let log = std::fs::File::create(PathBuf::from(&root).join(format!("ff-{tag}{n}.log")))?;
         let err = log.try_clone()?;
-        let child = Command::new(&bin)
-            .args(["--no-remote", "--new-instance", "--profile"])
-            .arg(&profile)
-            .args(["--width", "1200", "--height", "800"])
-            .args(urls)
+        let mut cmd = Command::new(&bin);
+        let mut decoy: Option<Child> = None;
+        if chromium {
+            // M9: a Chromium of ours. `GORCA_M9_AT` says how it finds out that a screen reader
+            // runs: `isenabled` (default: only the a11y bus `IsEnabled` flag, what gorca writes),
+            // `force` (`--force-renderer-accessibility`).
+            cmd.arg(format!("--user-data-dir={}", profile.display()))
+                .args([
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                    "--ozone-platform=wayland",
+                    "--window-size=1200,800",
+                    "--password-store=basic",
+                    "--disable-sync",
+                    "--disable-background-networking",
+                    "--disable-component-update",
+                    "--disable-features=Translate,MediaRouter",
+                    "--no-proxy-server",
+                ])
+                .args(
+                    std::env::var("GORCA_M9_CHROMIUM_ARGS")
+                        .unwrap_or_default()
+                        .split_whitespace(),
+                );
+            if std::env::var("GORCA_M9_AT").as_deref() == Ok("force") {
+                cmd.arg("--force-renderer-accessibility");
+            }
+            if std::env::var("GORCA_M9_AT").as_deref() == Ok("orca") {
+                // Chromium's /proc scan looks for an argv element equal to "orca"
+                // (browser_accessibility_state_impl_auralinux.cc); this stands in for it.
+                decoy = Command::new("/bin/bash")
+                    .args(["-c", "exec -a orca sleep 7200"])
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .process_group(0)
+                    .spawn()
+                    .ok();
+                std::thread::sleep(Duration::from_millis(300));
+            }
+            cmd.args(urls);
+        } else {
+            std::fs::write(profile.join("user.js"), USER_JS)?;
+            cmd.args(["--no-remote", "--new-instance", "--profile"])
+                .arg(&profile)
+                .args(["--width", "1200", "--height", "800"])
+                .args(urls)
+                .env("MOZ_ENABLE_WAYLAND", "1")
+                .env("GNOME_ACCESSIBILITY", "1");
+        }
+        let child = cmd
             .env_remove("DISPLAY")
             .env("WAYLAND_DISPLAY", wayland)
-            .env("MOZ_ENABLE_WAYLAND", "1")
-            .env("GNOME_ACCESSIBILITY", "1")
             .stdin(Stdio::null())
             .stdout(Stdio::from(log))
             .stderr(Stdio::from(err))
@@ -175,6 +230,7 @@ impl Firefox {
             pgid,
             rd,
             profile,
+            decoy,
         })
     }
 
@@ -233,6 +289,11 @@ impl Drop for Firefox {
             drop(rd.stdin.take());
             let _ = rd.wait();
         }
+        if let Some(mut d) = self.decoy.take() {
+            let _ = d.kill();
+            let _ = d.wait();
+        }
+        let _ = std::fs::remove_dir_all(&self.profile);
     }
 }
 
@@ -731,6 +792,19 @@ impl Web {
         let end = Instant::now() + Duration::from_secs(30);
         let mut flip = false;
         while Instant::now() < end {
+            // Chromium announces the page by itself when its window gets the focus (browse mode
+            // within 40 ms of the title), before this loop moves any focus; the mode word is
+            // never repeated, so a mark taken now would not see it.
+            if chromium_selected()
+                && self
+                    .speech(0, Duration::from_millis(1), |t| {
+                        t.contains("browse mode") || t.contains("focus mode")
+                    })
+                    .is_some()
+            {
+                std::thread::sleep(Duration::from_millis(300));
+                return Ok(());
+            }
             let mark = self.mark();
             let target = if flip { link.clone() } else { None }.unwrap_or_else(|| doc.path.clone());
             flip = !flip;
@@ -749,7 +823,12 @@ impl Web {
                 return Ok(());
             }
         }
-        let heard: Vec<String> = speaks_since(self, 0).into_iter().map(|s| s.1).collect();
+        let all = speaks_since(self, 0);
+        let t0 = all.first().map_or(0, |s| s.0);
+        let heard: Vec<String> = all
+            .into_iter()
+            .map(|s| format!("+{}ms {}", s.0.saturating_sub(t0) / 1_000_000, s.1))
+            .collect();
         bail!(
             "gorca never entered browse mode for {}; it said {heard:?}; the bus carried {} focus and {} load events",
             doc.name,
@@ -1207,8 +1286,13 @@ pub fn w2b(
         let (mut w, _doc) = Web::start(host, reader, flavor, &[url], &title)?;
         // Let the attach-time cache warm-up settle (it runs in the background).
         std::thread::sleep(Duration::from_secs(4));
-        let mark = w.mark();
-        let t0 = super::mono::now_ns();
+        // Chromium focuses the document and the reader announces it as soon as the window is
+        // active, long before the 4 s above are over: the whole run is the trial (M9).
+        let (mark, t0) = if chromium_selected() {
+            (0, 0)
+        } else {
+            (w.mark(), super::mono::now_ns())
+        };
         let mut heard = None;
         for _ in 0..10 {
             if w.tap.count(FOCUS) == 0 {
@@ -1276,7 +1360,7 @@ pub fn w2b(
                     .or_default()
                     .push(firefox);
                 // Attribute completeness: the warm-up's sample must have carried tags.
-                if f("warm", "tagged_nodes").unwrap_or(0.0) < 1.0 {
+                if !chromium_selected() && f("warm", "tagged_nodes").unwrap_or(0.0) < 1.0 {
                     untagged_warm += 1;
                 }
             }
@@ -1438,14 +1522,22 @@ pub fn w3(
     let b = file_url(&pages_dir(host).join("second.html"))?;
     let (mut w, doc_a) = Web::start(host, reader, flavor, &[a, b], "M7 Article")?;
     w.prime(&doc_a)?;
-    let r = w.ax.request(
-        "find_doc",
-        "\"title\":\"M7 Second\",\"timeout_ms\":20000",
-        Duration::from_secs(30),
-    )?;
-    let doc_b = DocRef {
-        path: json_str(&r, "path").context("second document not found")?,
-        name: "M7 Second".to_owned(),
+    // Chromium exposes no document for a background tab until the tab is shown (M9).
+    let doc_b = if chromium_selected() {
+        DocRef {
+            path: doc_a.path.clone(),
+            name: "M7 Second".to_owned(),
+        }
+    } else {
+        let r = w.ax.request(
+            "find_doc",
+            "\"title\":\"M7 Second\",\"timeout_ms\":20000",
+            Duration::from_secs(30),
+        )?;
+        DocRef {
+            path: json_str(&r, "path").context("second document not found")?,
+            name: "M7 Second".to_owned(),
+        }
     };
     let mut lat = Vec::new();
     let mut lost = 0u64;

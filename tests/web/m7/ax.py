@@ -96,6 +96,13 @@ def name_of(bus, path):
         return ""
 
 
+# App names on the a11y bus: "Firefox"; "Chromium" or "Chrome for Testing" (M9: GORCA_M7_BROWSER=chromium).
+BROWSER_WORDS = ("chrom",) if os.environ.get("GORCA_M7_BROWSER", "firefox") == "chromium" else ("firefox",)
+
+
+POKE = os.environ.get("GORCA_M9_AT", "") in ("poke", "orca")
+
+
 def firefox_buses():
     found = []
     try:
@@ -104,7 +111,16 @@ def firefox_buses():
         return found
     for (b, p) in kids:
         nm = name_of(b, p).lower()
-        if "firefox" in nm:
+        if any(w in nm for w in BROWSER_WORDS):
+            if POKE:
+                # Chromium builds its web tree only after an AT used GetAttributes or
+                # GetRelationSet (ax_platform_node_auralinux.cc AtkGetAttributes); this driver
+                # stands in for the reader's wake-up call (tests/web/m9/README.md).
+                for m in ("GetAttributes", "GetRelationSet"):
+                    try:
+                        call(b, p, ACC, m)
+                    except GLib.Error:
+                        pass
             found.append(b)
     return found
 

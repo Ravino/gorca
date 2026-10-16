@@ -1,0 +1,14 @@
+HOSTILE present logforever   p50   15.882µs p90   33.055µs max   41.702µs faults 20/20
+HOSTILE present logmax       p50  141.334µs p90  174.199µs max  240.701µs faults 20/20
+HOSTILE present nodeforever  p50    397.3µs p90  425.891µs max  436.052µs faults 20/20
+HOSTILE present alias:2000   p50   36.956µs p90   60.611µs max   89.801µs faults 20/20
+HOSTILE present alias:1      p50   18.804µs p90   33.007µs max   35.895µs faults 20/20
+HOSTILE present randforever  p50  133.842µs p90  163.807µs max  170.393µs faults 20/20
+HOSTILE present clockforever p50  932.508µs p90  996.273µs max 1.050374ms faults 20/20
+HOSTILE present randtime:5000 p50  142.025µs p90  191.593µs max  329.344µs faults 20/20
+HOSTILE present clocktime:5000 p50  328.363µs p90  341.286µs max  346.191µs faults 20/20
+HOSTILE worst p90 Reader hold: 996.273µs
+test oversize_arguments_are_refused_without_the_copy ... HOSTILE on_event(log:1): 81.975µs (a 16 MiB lift would take milliseconds)
+HOSTILE on_event(alias:2000): 139.706µs (a 16 MiB lift would take milliseconds)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.54s
+36.29 35.64 35.55 25/3361 31261

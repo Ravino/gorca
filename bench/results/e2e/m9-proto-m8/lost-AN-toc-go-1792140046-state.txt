@@ -1,0 +1,21 @@
+756570356475548 said "M8 Anchors - Google Chrome for Testing, M8 Anchors, document"
+756570391376112 said "browse mode, link, Skip to content"
+756572891911127 said "link, Skip to content"
+756573200032506 said "landmark"
+756574823752328 said "heading level 2, Section one"
+756575529763689 said "M8 Anchors, document, link, Skip to content"
+756576002101401 said "link, Skip to content"
+756576302438514 said "link, Go to section one"
+756576372930504 said "link, Go to section two"
+bus 2 /org/a11y/atspi/accessible/197
+bus 1 /org/a11y/atspi/accessible/197
+bus 2 /org/a11y/atspi/accessible/199
+bus 2 /org/a11y/atspi/accessible/199
+bus 2 /org/a11y/atspi/accessible/197
+bus 4 /org/a11y/atspi/accessible/145
+bus 1 /org/a11y/atspi/accessible/203
+bus 3 /org/a11y/atspi/accessible/203
+bus 1 /org/a11y/atspi/accessible/197
+bus 4 /org/a11y/atspi/accessible/145
+bus 4 /org/a11y/atspi/accessible/145
+bus 3 /org/a11y/atspi/accessible/285

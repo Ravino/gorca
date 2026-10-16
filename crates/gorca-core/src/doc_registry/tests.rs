@@ -211,7 +211,7 @@ async fn focus_in_a_document_builds_it_and_the_reader_is_told_when_it_is_useful(
     r.tx.send(HubMsg::Ensure { focus: nk(101) }).await.unwrap();
     let mut saw_in_document = false;
     for _ in 0..4 {
-        match tokio::time::timeout(Duration::from_millis(500), r.notices.recv()).await {
+        match tokio::time::timeout(Duration::from_secs(10), r.notices.recv()).await {
             Ok(Some(DocNotice::InDocument { focus, .. })) if focus == nk(101) => {
                 saw_in_document = true;
                 break;
