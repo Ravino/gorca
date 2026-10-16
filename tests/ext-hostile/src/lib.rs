@@ -13,6 +13,32 @@ unsafe extern "C" {
     fn raw_log(level: i32, ptr: *const u8, len: usize);
 }
 
+#[link(wasm_import_module = "wasi:random/random@0.2.0")]
+unsafe extern "C" {
+    #[link_name = "get-random-bytes"]
+    fn raw_random_bytes(len: i64, ret: *mut u32);
+}
+
+/// WASI random bytes in a loop, until `us` microseconds have passed (`None`: forever). Few guest
+/// instructions per call, so fuel never fires; only the host-work meter can stop it.
+fn random_until(us: Option<u64>) {
+    let t0 = std::time::Instant::now();
+    let mut ret = [0u32; 2];
+    while us.is_none_or(|us| t0.elapsed() < std::time::Duration::from_micros(us)) {
+        unsafe { raw_random_bytes(1 << 16, ret.as_mut_ptr()) };
+        let v = unsafe { Vec::from_raw_parts(ret[0] as *mut u8, ret[1] as usize, ret[1] as usize) };
+        drop(std::hint::black_box(v));
+    }
+}
+
+/// The WASI monotonic clock in a loop, until `us` microseconds have passed (`None`: forever).
+fn clock_until(us: Option<u64>) {
+    let t0 = std::time::Instant::now();
+    while us.is_none_or(|us| t0.elapsed() < std::time::Duration::from_micros(us)) {
+        std::hint::black_box(std::time::Instant::now());
+    }
+}
+
 const BIG: usize = 16 << 20;
 
 /// `n` segment records (12 bytes: string ptr, string len, kind u8) all aliasing one `BIG` string.
@@ -83,6 +109,10 @@ impl Hooks for Hostile {
             Some("logforever") => log_loop(usize::MAX),
             Some("logmax") => log_max_loop(),
             Some("nodeforever") => node_loop(),
+            Some("randforever") => random_until(None),
+            Some("clockforever") => clock_until(None),
+            Some(t) if t.starts_with("randtime:") => random_until(arg(t, "randtime:").map(|n| n as u64)),
+            Some(t) if t.starts_with("clocktime:") => clock_until(arg(t, "clocktime:").map(|n| n as u64)),
             Some(t) if t.starts_with("alias:") => alias_speak(arg(t, "alias:").unwrap_or(1)),
             _ => {}
         }

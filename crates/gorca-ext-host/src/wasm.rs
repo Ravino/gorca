@@ -329,6 +329,12 @@ impl HostWork {
     }
 }
 
+impl crate::wasi_pure::HostMeter for StoreData {
+    fn charge(&mut self, bytes: usize) -> wasmtime::Result<()> {
+        self.work.charge(bytes)
+    }
+}
+
 pub struct WasmInstance {
     store: Store<StoreData>,
     bindings: Extension,
@@ -528,8 +534,10 @@ impl wh::Host for StoreData {
     }
 
     fn get_setting(&mut self, k: String) -> wasmtime::Result<Option<String>> {
-        self.work.charge(k.len())?;
-        Ok(self.shared.get_setting(&k))
+        // The value is copied (and lowered into guest memory) on the way out: charge it too.
+        let v = self.shared.get_setting(&k);
+        self.work.charge(k.len() + v.as_ref().map_or(0, String::len) * 2)?;
+        Ok(v)
     }
 
     fn set_setting(&mut self, k: String, v: String) -> wasmtime::Result<()> {
