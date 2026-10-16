@@ -103,6 +103,10 @@ pub(super) enum Act {
     Wait(u64),
     /// Set the mock speech server's utterance length (ms); say-all needs speech that takes time.
     Speak(u64),
+    /// Reviewer probe: a key press only (no release), a Mutter autorepeat of it, its release.
+    PrbDown(K, u32),
+    PrbRep(K, u32),
+    PrbUp(K, u32),
 }
 
 /// The latency budget a passing step is scored against.
@@ -496,6 +500,16 @@ fn act(w: &mut Web, doc: &DocRef, a: Act, node: &mut Option<String>) -> Result<(
             std::thread::sleep(Duration::from_millis(ms));
             Ok((now_ns(), true))
         }
+        Act::PrbDown(k, st) | Act::PrbRep(k, st) | Act::PrbUp(k, st) => {
+            let m = w.rig.mutter.as_mut().context("no mutter")?;
+            w.ty.t_ms += 12;
+            let r = match a {
+                Act::PrbDown(..) => m.key_ex(k.code, k.sym, st, false, w.ty.t_ms)?,
+                Act::PrbUp(..) => m.key_ex(k.code, k.sym, st, true, w.ty.t_ms)?,
+                _ => m.key_repeat(k.code, k.sym, st, w.ty.t_ms)?,
+            };
+            Ok((r.t_emit_ns, r.consumed))
+        }
         Act::Speak(len) => {
             w.rig
                 .mock
@@ -595,6 +609,13 @@ fn run_step(w: &mut Web, doc: &DocRef, sc: &'static str, st: &Step) -> StepRes {
         res.lat_ms = Some(ms(t.saturating_sub(t_emit)));
     }
     let mut heard = texts.join(" | ");
+    if st.id.starts_with("PRB") {
+        heard = format!(
+            "[consumed {consumed} focus {} caret {}] {heard}",
+            w.tap.count(FOCUS).saturating_sub(focus0),
+            w.tap.count(super::CARET).saturating_sub(caret0)
+        );
+    }
     if !consumed && matches!(st.act, Act::Key(..) | Act::Repeat(..) | Act::Chord(..)) {
         heard.insert_str(0, "[key passed to the app] ");
     }

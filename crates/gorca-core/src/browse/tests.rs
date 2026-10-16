@@ -2077,3 +2077,85 @@ fn live_speech_carries_the_adr_ttl_and_a_flood_spends_only_its_owners_budget() {
         "a flood spoke {spoken_now} messages at once"
     );
 }
+
+// ---- m8 re-review probes (reviewer) ---------------------------------------------------------
+
+fn track(last: &mut Option<gorca_input_api::GrabSet>, fx: &ReaderEffects) {
+    if let Some(g) = last_grabs(fx) {
+        eprintln!("PROBE push: Tab={} ShiftTab={}", g.contains(0xff09, Modifiers::empty()), g.contains(0xfe20, Modifiers::SHIFT));
+        *last = Some(g);
+    }
+}
+
+#[test]
+fn probe_rr_stale_tab_grab_after_a_foreign_grab_push() {
+    let mut r = tab_rig();
+    let mut last = None;
+    track(&mut last, &r.focus(1002));
+    track(&mut last, &r.key(CoreCmd::BrowseCursorNextLine));
+    track(&mut last, &r.key(CoreCmd::BrowseCursorTop));
+    track(&mut last, &settle(&mut r)); // tab_grab = (true, false) at the heading
+    eprintln!("PROBE -- settled at the heading");
+    track(&mut last, &r.focus(1014)); // focus mode on the edit
+    track(&mut last, &r.key(CoreCmd::BrowseEscape)); // browse at the edit: pushed live (false, true)
+    track(&mut last, &settle(&mut r));
+    r.now += Duration::from_secs(5);
+    eprintln!("PROBE -- settled at the edit, 5 s later");
+    track(&mut last, &r.key(CoreCmd::BrowseCursorTop)); // back to the heading within 150 ms
+    track(&mut last, &settle(&mut r));
+    let g = last.unwrap();
+    let live = r.reader.web_tab_targets();
+    eprintln!(
+        "PROBE live targets (next, prev) = {live:?}; grabbed Tab = {}, grabbed Shift+Tab = {}",
+        g.contains(0xff09, Modifiers::empty()),
+        g.contains(0xfe20, Modifiers::SHIFT)
+    );
+    let fx = r.key(CoreCmd::BrowseTabPrev);
+    eprintln!("PROBE Shift+Tab at the heading says {:?} acts {:?}", spoken(&fx), acts(&fx));
+}
+
+#[test]
+fn probe_rr_shift_tab_inside_a_focusable_container_skips_its_links() {
+    let mut r = tab_rig();
+    // <p tabindex=-1> around "Read <a>the docs</a> now." (think <main tabindex=-1>).
+    let mut p = block(src(4, Role::Paragraph, Some(1004)));
+    p.states |= StateSet::FOCUSABLE;
+    r.tr.apply(&mut r.writer, vec![DocDelta::Upsert(vec![p]), DocDelta::Settled { batch: 3 }])
+        .unwrap();
+    r.writer.publish();
+    r.focus(1002);
+    settle(&mut r);
+    r.key(CoreCmd::BrowseCursorNextLine);
+    for _ in 0..15 {
+        r.key(CoreCmd::BrowseCursorNextChar);
+    }
+    let fx = r.key(CoreCmd::BrowseCursorNextChar);
+    eprintln!("PROBE cursor char {:?}", spoken(&fx));
+    let link = r.join.get(nk(1006)).unwrap().1;
+    let fx = r.key(CoreCmd::BrowseTabPrev);
+    eprintln!(
+        "PROBE Shift+Tab after the link in a focusable <p>: says {:?} acts {:?} (link is {link:?})",
+        spoken(&fx),
+        acts(&fx)
+    );
+}
+
+#[test]
+fn probe_rr_alert_waiting_for_budget_is_replaced_by_later_polite_news() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    let mut said = Vec::new();
+    for m in ["news 1", "news 2", "news 3"] {
+        said.extend(spoken(&r.reader.handle(live_msg(m, false), r.now)));
+    }
+    r.now += Duration::from_millis(20);
+    said.extend(spoken(&r.reader.handle(live_msg("ALERT payment failed", true), r.now)));
+    r.now += Duration::from_millis(20);
+    said.extend(spoken(&r.reader.handle(live_msg("news 4", false), r.now)));
+    for _ in 0..20 {
+        r.now += Duration::from_millis(200);
+        said.extend(spoken(&r.reader.handle(ReaderMsg::Timer, r.now)));
+    }
+    eprintln!("PROBE spoken over 4 s: {said:?}");
+}

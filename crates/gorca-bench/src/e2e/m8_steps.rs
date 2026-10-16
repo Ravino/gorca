@@ -437,6 +437,14 @@ fn iframes() -> Vec<Step> {
         s("IF.end", P1, "Ctrl+End: the last line of the outer page after all frames", ctrl(END), &["Outer paragraph after the frames"]),
         s("IF.late", P2, "A frame reloads its content: no speech", Act::Do(role::PUSH_BUTTON, "Reload late frame"), &[]).not(&["After reload text"]).win(900),
         s("IF.late2", P2, "The page is still navigable", ctrl(HOME), &["Outer page heading"]),
+        // reviewer probes: Tab from the top of a page with nested frames
+        top("PRB.iftop"),
+        s("PRB.if.tab1", P1, "probe: Tab 1 from the top", key0(TAB), &[]).extra(&["zzzprobe"], "probe").win(1500),
+        s("PRB.if.tab2", P1, "probe: Tab 2", key0(TAB), &[]).extra(&["zzzprobe"], "probe").win(1500),
+        s("PRB.if.tab3", P1, "probe: Tab 3", key0(TAB), &[]).extra(&["zzzprobe"], "probe").win(1500),
+        s("PRB.if.tab4", P1, "probe: Tab 4", key0(TAB), &[]).extra(&["zzzprobe"], "probe").win(1500),
+        s("PRB.if.tab5", P1, "probe: Tab 5", key0(TAB), &[]).extra(&["zzzprobe"], "probe").win(1500),
+        s("PRB.if.stab", P1, "probe: Shift+Tab", Act::Key(TAB, SHIFT), &[]).extra(&["zzzprobe"], "probe").win(1500),
     ]
 }
 
@@ -518,6 +526,16 @@ fn sy() -> Vec<Step> {
         s("SY.end", P1, "Ctrl+End: past the last focusable", ctrl(END), &["Far paragraph at the bottom"]),
         Step::setup("SY.end.wait", "the grab set follows the settled cursor", Act::Wait(500)),
         s("SY.tab.out", P1, "Tab with no focusable after the cursor is not consumed (D-2 pass-through)", key0(TAB), &[]).passes_through(),
+        // reviewer probes: Tab held across the grab flip its own focus move causes
+        s("PRB.down", P1, "probe: Tab down past the last focusable (passes)", Act::PrbDown(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(300),
+        s("PRB.ffocus", P1, "probe: Firefox's native Tab focuses link one", Act::Focus(role::LINK, "link one"), &["link one"]).extra(&["zzzprobe"], "probe").win(500),
+        s("PRB.rep", P1, "probe: Mutter autorepeat of the held Tab", Act::PrbRep(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(800),
+        s("PRB.up", P1, "probe: Tab released", Act::PrbUp(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(800),
+        s("PRB.f.field", P1, "probe: focus the field: focus mode", Act::Focus(role::ENTRY, "Sync field"), &["focus mode"]).extra(&["zzzprobe"], "probe").win(1000),
+        s("PRB.f.down", P1, "probe: Tab down in focus mode (passes)", Act::PrbDown(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(300),
+        s("PRB.f.link", P1, "probe: Firefox's native Tab lands on Link three: browse mode", Act::Focus(role::LINK, "Link three"), &["Link three"]).extra(&["zzzprobe"], "probe").win(1000),
+        s("PRB.f.rep", P1, "probe: Mutter autorepeat of the still-held Tab", Act::PrbRep(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(800),
+        s("PRB.f.up", P1, "probe: Tab released: must reach the app (it got the press)", Act::PrbUp(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(800),
     ]
 }
 
