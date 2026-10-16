@@ -296,6 +296,166 @@ pub fn line_end(doc: &WebDoc, max_line: u16, off: u32) -> Mv {
     char_land(doc, at)
 }
 
+/// Ctrl+Down / Ctrl+Up: the next or previous paragraph (a hard line: soft wrapping is ignored).
+pub fn paragraph(doc: &WebDoc, off: u32, dir: Dir) -> Mv {
+    let len = doc.text_len();
+    let edge = match dir {
+        Dir::Next => Edge::Bottom,
+        Dir::Prev => Edge::Top,
+    };
+    let (start, end) = doc.line_range(off.min(len.saturating_sub(1)));
+    let mut probe = match dir {
+        Dir::Next => end.saturating_add(1),
+        Dir::Prev => {
+            // Inside a paragraph, Up goes to its start first.
+            if off > start {
+                return Mv::Landed {
+                    off: start,
+                    speak: start..end,
+                    blank: false,
+                };
+            }
+            start.saturating_sub(1)
+        }
+    };
+    for _ in 0..MAX_SKIP {
+        if probe >= len || (dir == Dir::Prev && start == 0) {
+            return Mv::Edge(edge);
+        }
+        let (s, e) = doc.line_range(probe);
+        let r = s..e;
+        if !is_blank(doc, &r) {
+            return Mv::Landed {
+                off: s,
+                speak: r,
+                blank: false,
+            };
+        }
+        probe = match dir {
+            Dir::Next => e.saturating_add(1),
+            Dir::Prev => {
+                if s == 0 {
+                    return Mv::Edge(edge);
+                }
+                s - 1
+            }
+        };
+    }
+    Mv::Edge(edge)
+}
+
+fn sentence_end_char(c: char) -> bool {
+    matches!(c, '.' | '!' | '?' | '\u{2026}')
+}
+
+/// Alt+Down / Alt+Up: the next or previous sentence inside its paragraph (a sentence ends at
+/// `.`, `!`, `?` followed by white space, or at the paragraph end).
+pub fn sentence(doc: &WebDoc, off: u32, dir: Dir) -> Mv {
+    let len = doc.text_len();
+    let edge = match dir {
+        Dir::Next => Edge::Bottom,
+        Dir::Prev => Edge::Top,
+    };
+    let (ps, pe) = doc.line_range(off.min(len.saturating_sub(1)));
+    let text: Vec<char> = doc.text_in(ps, pe).chars().collect();
+    // Sentence starts within the paragraph, as scalar offsets.
+    let mut starts: Vec<u32> = vec![0];
+    for (i, c) in text.iter().enumerate() {
+        if sentence_end_char(*c) && text.get(i + 1).is_some_and(|n| n.is_whitespace()) {
+            let mut j = i + 1;
+            while text.get(j).is_some_and(|n| n.is_whitespace()) {
+                j += 1;
+            }
+            if j < text.len() {
+                starts.push(u32::try_from(j).unwrap_or(u32::MAX));
+            }
+        }
+    }
+    let rel = off.saturating_sub(ps);
+    let ends = |k: usize| -> u32 {
+        starts.get(k + 1).map_or(pe, |n| {
+            // Up to, not including, the white space before the next sentence.
+            let mut e = ps + n;
+            while e > ps && text.get((e - ps - 1) as usize).is_some_and(|c| c.is_whitespace()) {
+                e -= 1;
+            }
+            e
+        })
+    };
+    let cur = starts.iter().rposition(|s| *s <= rel).unwrap_or(0);
+    match dir {
+        Dir::Next => {
+            if cur + 1 < starts.len() {
+                let s = ps + starts[cur + 1];
+                Mv::Landed {
+                    off: s,
+                    speak: s..ends(cur + 1),
+                    blank: false,
+                }
+            } else {
+                // The first sentence of the next paragraph.
+                match paragraph(doc, off, Dir::Next) {
+                    Mv::Landed { off: n, .. } => sentence_first(doc, n),
+                    e @ Mv::Edge(_) => e,
+                }
+            }
+        }
+        Dir::Prev => {
+            if starts[cur] < rel {
+                let s = ps + starts[cur];
+                Mv::Landed {
+                    off: s,
+                    speak: s..ends(cur),
+                    blank: false,
+                }
+            } else if cur > 0 {
+                let s = ps + starts[cur - 1];
+                Mv::Landed {
+                    off: s,
+                    speak: s..ends(cur - 1),
+                    blank: false,
+                }
+            } else {
+                match paragraph(doc, off, Dir::Prev) {
+                    Mv::Landed { off: n, .. } => sentence_last(doc, n),
+                    e @ Mv::Edge(_) => e,
+                }
+            }
+        }
+    }
+}
+
+/// The first sentence of the paragraph starting at `start`.
+fn sentence_first(doc: &WebDoc, start: u32) -> Mv {
+    let (_, pe) = doc.line_range(start);
+    let text: Vec<char> = doc.text_in(start, pe).chars().collect();
+    let mut end = text.len();
+    for (i, c) in text.iter().enumerate() {
+        if sentence_end_char(*c) && text.get(i + 1).is_some_and(|n| n.is_whitespace()) {
+            end = i + 1;
+            break;
+        }
+    }
+    Mv::Landed {
+        off: start,
+        speak: start..start + u32::try_from(end).unwrap_or(0),
+        blank: false,
+    }
+}
+
+/// The last sentence of the paragraph starting at `start`.
+fn sentence_last(doc: &WebDoc, start: u32) -> Mv {
+    let (_, pe) = doc.line_range(start);
+    match sentence(doc, pe.saturating_sub(1).max(start), Dir::Prev) {
+        Mv::Landed { off, speak, .. } if off >= start => Mv::Landed {
+            off,
+            speak,
+            blank: false,
+        },
+        _ => sentence_first(doc, start),
+    }
+}
+
 fn char_land(doc: &WebDoc, at: u32) -> Mv {
     let r = at..(at + 1).min(doc.text_len().max(at));
     let blank = r.start >= r.end || char_is(doc, at, '\n');
@@ -464,5 +624,37 @@ mod tests {
         assert_eq!(offset_of(&d, c), Some(4));
         let beyond = cursor_at(&d, 99).unwrap();
         assert_eq!(offset_of(&d, beyond), Some(d.text_len() - 1));
+    }
+
+    #[test]
+    fn paragraphs_move_by_hard_line_and_skip_blank_ones() {
+        let d = doc_of("one two\n\nthree four\nfive");
+        let m = paragraph(&d, 0, Dir::Next);
+        assert_eq!(spoken(&d, &m), Some((9, "three four".into(), false)));
+        let m = paragraph(&d, 9, Dir::Next);
+        assert_eq!(spoken(&d, &m), Some((20, "five".into(), false)));
+        assert_eq!(paragraph(&d, 20, Dir::Next), Mv::Edge(Edge::Bottom));
+        // Up inside a paragraph goes to its start, then to the one before.
+        let m = paragraph(&d, 12, Dir::Prev);
+        assert_eq!(spoken(&d, &m).map(|x| x.0), Some(9));
+        let m = paragraph(&d, 9, Dir::Prev);
+        assert_eq!(spoken(&d, &m), Some((0, "one two".into(), false)));
+        assert_eq!(paragraph(&d, 0, Dir::Prev), Mv::Edge(Edge::Top));
+    }
+
+    #[test]
+    fn sentences_split_at_terminators_and_cross_paragraphs() {
+        let d = doc_of("Alpha one. Beta two! Gamma?\nDelta.");
+        let m = sentence(&d, 0, Dir::Next);
+        assert_eq!(spoken(&d, &m), Some((11, "Beta two!".into(), false)));
+        let m = sentence(&d, 11, Dir::Next);
+        assert_eq!(spoken(&d, &m), Some((21, "Gamma?".into(), false)));
+        let m = sentence(&d, 21, Dir::Next);
+        assert_eq!(spoken(&d, &m), Some((28, "Delta.".into(), false)));
+        assert_eq!(sentence(&d, 28, Dir::Next), Mv::Edge(Edge::Bottom));
+        let m = sentence(&d, 28, Dir::Prev);
+        assert_eq!(spoken(&d, &m), Some((21, "Gamma?".into(), false)));
+        let m = sentence(&d, 14, Dir::Prev);
+        assert_eq!(spoken(&d, &m).map(|x| x.0), Some(11));
     }
 }

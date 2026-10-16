@@ -121,7 +121,6 @@ fn esc(id: &'static str) -> Step {
 
 // Reasons repeated across rows.
 const NO_FRAME_NAV: &str = "quicknav.next.frame (M) is Planned(M7): not implemented on main";
-const NO_SEL: &str = "browse-mode selection (Shift+arrows, Ctrl+A) is Planned: not on main";
 const NAME_OMITTED: &str = "the accessible name of a labelled form control is not spoken on quick nav: the label is separate text outside the control's range and the presenter speaks the range only (LP-1, LP-4)";
 const NO_ROLE_WORD: &str = "the role word and count of a container are not spoken when the cursor lands on it (field diff, LP-2: M7b)";
 const NO_LANDMARK_NAME: &str = "a landmark hit is presented as the content at its start; its name and role word are not spoken (BM-3/LP-2 field diff: M7b)";
@@ -535,20 +534,20 @@ fn rd() -> Vec<Step> {
         s("RD.pgup", P1, "Page Up back to the first line", key0(PGUP), &["Selection and say-all"]),
         top("RD.top2"),
         pos("RD.p1", key0(DOWN)),
-        s("RD.para", P1, "Ctrl+Down: next paragraph", ctrl(DOWN), &["Kilo lima"]).xf("paragraph and sentence moves are M7b: not on main"),
+        s("RD.para", P1, "Ctrl+Down: next paragraph", ctrl(DOWN), &["Kilo lima"]),
         top("RD.top2b"),
         pos("RD.p1b", key0(DOWN)),
-        s("RD.sent", P1, "Alt+Down: next sentence (only the sentence is spoken)", Act::Key(DOWN, ALT), &[]).exact("Foxtrot golf hotel india juliet.").xf("paragraph and sentence moves are M7b: not on main"),
+        s("RD.sent", P1, "Alt+Down: next sentence (only the sentence is spoken)", Act::Key(DOWN, ALT), &[]).exact("Foxtrot golf hotel india juliet."),
         // selection
         top("RD.top3"),
         pos("RD.sel.0", key0(DOWN)),
-        s("RD.sel.right", P1, "Shift+Right: the character is spoken as selected", Act::Key(RIGHT, SHIFT), &["selected"]).xf(NO_SEL),
-        s("RD.sel.left", P1, "Shift+Left: unselected", Act::Key(LEFT, SHIFT), &["unselected"]).xf(NO_SEL),
-        s("RD.sel.word", P1, "Ctrl+Shift+Right: the word, selected", Act::Key(RIGHT, CTRL | SHIFT), &["selected"]).xf(NO_SEL),
-        s("RD.sel.down", P1, "Shift+Down: the lines, selected", Act::Key(DOWN, SHIFT), &["selected"]).xf(NO_SEL),
-        s("RD.sel.all", P1, "Ctrl+A: select all", ctrl(KEY_A), &["selected"]).xf(NO_SEL),
+        s("RD.sel.right", P1, "Shift+Right: the character is spoken as selected", Act::Key(RIGHT, SHIFT), &["selected"]),
+        s("RD.sel.left", P1, "Shift+Left: unselected", Act::Key(LEFT, SHIFT), &["unselected"]),
+        s("RD.sel.word", P1, "Ctrl+Shift+Right: the word, selected", Act::Key(RIGHT, CTRL | SHIFT), &["selected"]),
+        s("RD.sel.down", P1, "Shift+Down: the lines, selected", Act::Key(DOWN, SHIFT), &["selected"]),
+        s("RD.sel.all", P1, "Ctrl+A: select all", ctrl(KEY_A), &["selected"]),
         pos("RD.copy", ctrl(KEY_C)),
-        s("RD.copy.say", P1, "Ctrl+C then gorca+C reads the clipboard: the selected text", gorca(KEY_C), &["Alpha"]).xf(NO_SEL),
+        s("RD.copy.say", P1, "Ctrl+C then gorca+C reads the clipboard: the selected text", gorca(KEY_C), &["Alpha"]).xf("system clipboard read (gorca+C) is not implemented; Ctrl+C reaches the page, which copies the native selection mirrored for single-node spans"),
         // say-all
         top("RD.top4"),
         Step::setup("RD.sa.slow", "speech takes 120 ms per utterance from here", Act::Speak(120)),

@@ -46,6 +46,8 @@ pub enum WebEffect {
 const RESTORE_WINDOW: Duration = Duration::from_millis(1500);
 /// A focus event this soon after a click on a check box is the click's own.
 const CLICK_FOCUS_WINDOW: Duration = Duration::from_millis(800);
+/// Characters of a selected span that are read back.
+const SELECT_SPEAK_CAP: u32 = 300;
 const WORD_TTL: Duration = Duration::from_millis(600);
 /// The line that follows a document's focus utterance waits for a cold fetch this long (M4).
 const TAIL_TTL: Duration = Duration::from_secs(2);
@@ -61,7 +63,11 @@ enum Outcome {
     Moved {
         cur: WebCursor,
         off: u32,
+        /// Where the cursor was (the active end of a selection being extended).
+        from: u32,
         items: Vec<Item>,
+        /// The text between `from` and `off`, for selection speech.
+        span: String,
     },
     Edge(Edge),
     Nothing,
@@ -85,6 +91,8 @@ enum Move {
     Top,
     Bottom,
     Page(Dir),
+    Paragraph(Dir),
+    Sentence(Dir),
 }
 
 const CURSOR: &[(CoreCmd, Move)] = &[
@@ -100,6 +108,26 @@ const CURSOR: &[(CoreCmd, Move)] = &[
     (CoreCmd::BrowseCursorBottom, Move::Bottom),
     (CoreCmd::BrowseCursorPageUp, Move::Page(Dir::Prev)),
     (CoreCmd::BrowseCursorPageDown, Move::Page(Dir::Next)),
+    (CoreCmd::BrowseCursorNextParagraph, Move::Paragraph(Dir::Next)),
+    (CoreCmd::BrowseCursorPrevParagraph, Move::Paragraph(Dir::Prev)),
+    (CoreCmd::BrowseCursorNextSentence, Move::Sentence(Dir::Next)),
+    (CoreCmd::BrowseCursorPrevSentence, Move::Sentence(Dir::Prev)),
+];
+
+/// Selection commands: the same moves, extending the virtual selection (D-3).
+const SELECT: &[(CoreCmd, Move)] = &[
+    (CoreCmd::BrowseSelectNextLine, Move::Line(Dir::Next)),
+    (CoreCmd::BrowseSelectPrevLine, Move::Line(Dir::Prev)),
+    (CoreCmd::BrowseSelectNextChar, Move::Char(Dir::Next)),
+    (CoreCmd::BrowseSelectPrevChar, Move::Char(Dir::Prev)),
+    (CoreCmd::BrowseSelectNextWord, Move::Word(Dir::Next)),
+    (CoreCmd::BrowseSelectPrevWord, Move::Word(Dir::Prev)),
+    (CoreCmd::BrowseSelectLineStart, Move::LineStart),
+    (CoreCmd::BrowseSelectLineEnd, Move::LineEnd),
+    (CoreCmd::BrowseSelectTop, Move::Top),
+    (CoreCmd::BrowseSelectBottom, Move::Bottom),
+    (CoreCmd::BrowseSelectPageUp, Move::Page(Dir::Prev)),
+    (CoreCmd::BrowseSelectPageDown, Move::Page(Dir::Next)),
 ];
 
 /// The quick-navigation commands that are implemented: direction, category, spoken name.
@@ -1383,7 +1411,7 @@ impl Reader {
                 // D-2: Firefox starts Tab from its caret when nothing is focused, so the caret
                 // follows the browse cursor and Tab begins at the cursor, as in NVDA. The cursor
                 // never moves focus (SY.nomove); a caret is not focus.
-                if matches!(b.mode, WebMode::Browse { .. }) {
+                if matches!(b.mode, WebMode::Browse { .. }) && b.sel.is_none() {
                     // The caret event this causes is ours, not a page following a click.
                     b.activated = None;
                     fx.push(ReaderEffect::Web(WebEffect::Act {
@@ -1569,7 +1597,11 @@ impl Reader {
         } else if let Some((dir, cat, name)) = quicknav(c) {
             self.web_quicknav(dir, cat, name, now, fx);
         } else if let Some((_, mv)) = CURSOR.iter().find(|(cmd, _)| *cmd == c) {
-            self.web_cursor_cmd(*mv, now, fx);
+            self.web_cursor_cmd(*mv, false, now, fx);
+        } else if let Some((_, mv)) = SELECT.iter().find(|(cmd, _)| *cmd == c) {
+            self.web_cursor_cmd(*mv, true, now, fx);
+        } else if c == CoreCmd::BrowseSelectAll {
+            self.web_select_all(now, fx);
         }
     }
 
@@ -1675,11 +1707,12 @@ impl Reader {
             *c = cur;
         }
         b.last_off = off;
+        b.sel = None;
         b.counters.moves += 1;
         b.scroll_due = Some((now + SCROLL_DEBOUNCE, doc, cur.node, cur.local));
     }
 
-    fn web_cursor_cmd(&mut self, mv_kind: Move, now: Instant, fx: &mut ReaderEffects) {
+    fn web_cursor_cmd(&mut self, mv_kind: Move, select: bool, now: Instant, fx: &mut ReaderEffects) {
         let Some((doc, cur, max_line)) = self.browse_ctx(fx) else {
             return;
         };
@@ -1699,6 +1732,8 @@ impl Reader {
                 Move::Top => (cursor::first_line(d, max_line), Kind::Line),
                 Move::Bottom => (cursor::last_line(d, max_line), Kind::Line),
                 Move::Page(dir) => (cursor::page(d, max_line, off, dir, page), Kind::Line),
+                Move::Paragraph(dir) => (cursor::paragraph(d, off, dir), Kind::Line),
+                Move::Sentence(dir) => (cursor::sentence(d, off, dir), Kind::Line),
             };
             // A modal dialog is a wall for the cursor while it is inside (ADR-0003 11).
             let wall = modal_scope(d, cur.node).and_then(|s| d.subtree_text_range(s));
@@ -1725,14 +1760,50 @@ impl Reader {
                             present::describe_from(d, speak.start, speak.end, Some(off0))
                         }
                     };
-                    Outcome::Moved { cur, off, items }
+                    let (lo, hi) = (off0.min(off), off0.max(off));
+                    let span = d.text_in(lo, hi.min(lo.saturating_add(SELECT_SPEAK_CAP)));
+                    Outcome::Moved {
+                        cur,
+                        off,
+                        from: off0,
+                        items,
+                        span,
+                    }
                 }
             }
         });
         match outcome {
-            Outcome::Moved { cur, off, items } => {
+            Outcome::Moved {
+                cur,
+                off,
+                from,
+                items,
+                span,
+            } => {
+                let anchor = self
+                    .web
+                    .as_ref()
+                    .and_then(|b| b.sel)
+                    .map_or(from, |(a, _)| a);
                 self.web_set_cursor(doc, cur, off, now);
-                self.web_speak(&items, fx);
+                if select {
+                    let growing = off.abs_diff(anchor) >= from.abs_diff(anchor);
+                    if let Some(b) = self.web.as_mut() {
+                        b.sel = (off != anchor).then_some((anchor, off));
+                    }
+                    let text = span.split_whitespace().collect::<Vec<_>>().join(" ");
+                    let text = if text.is_empty() { "blank".to_owned() } else { text };
+                    self.web_speak(
+                        &[
+                            Item::Text(text),
+                            Item::State(if growing { "selected" } else { "unselected" }),
+                        ],
+                        fx,
+                    );
+                    self.web_native_selection(doc, anchor, off, fx);
+                } else {
+                    self.web_speak(&items, fx);
+                }
                 fx.push(ReaderEffect::ArmTimer(now + SCROLL_DEBOUNCE));
             }
             Outcome::Edge(e) => {
@@ -1746,6 +1817,51 @@ impl Reader {
                 self.say(w, fx);
             }
             Outcome::Nothing => {}
+        }
+    }
+
+    /// Ctrl+A: select the whole document (virtual, and native when it fits one text node).
+    fn web_select_all(&mut self, now: Instant, fx: &mut ReaderEffects) {
+        let Some((doc, _, max_line)) = self.browse_ctx(fx) else {
+            return;
+        };
+        let Some(b) = self.web.as_ref() else { return };
+        let Some(h) = b.docs.get(doc) else { return };
+        let end = h.read.with(|d| {
+            let len = d.text_len();
+            (len > 0).then(|| {
+                let last = len - 1;
+                (last, cursor::cursor_at(d, last), max_line)
+            })
+        });
+        let Some((last, Some(cu), _)) = end else {
+            return;
+        };
+        self.web_set_cursor(doc, cu, last, now);
+        if let Some(b) = self.web.as_mut() {
+            b.sel = Some((0, last));
+        }
+        self.web_speak(&[Item::Text("all".to_owned()), Item::State("selected")], fx);
+        self.web_native_selection(doc, 0, last, fx);
+        fx.push(ReaderEffect::ArmTimer(now + SCROLL_DEBOUNCE));
+    }
+
+    /// Mirror a virtual selection into the page when both ends are in one text node, so the
+    /// page's own Ctrl+C copies it (D-3 native selection, best effort).
+    fn web_native_selection(&mut self, doc: DocId, a: u32, b_off: u32, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_ref() else { return };
+        let Some(h) = b.docs.get(doc) else { return };
+        let target = h.read.with(|d| {
+            let (n1, l1) = d.at_offset(a)?;
+            let (n2, l2) = d.at_offset(b_off)?;
+            (n1 == n2).then(|| (n1, l1.min(l2)..l1.max(l2)))
+        });
+        if let Some((node, range)) = target {
+            fx.push(ReaderEffect::Web(WebEffect::Act {
+                doc,
+                node,
+                act: DocAction::SetSelection(range),
+            }));
         }
     }
 

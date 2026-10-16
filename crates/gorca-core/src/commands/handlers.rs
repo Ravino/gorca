@@ -348,6 +348,23 @@ impl Reader {
             | CoreCmd::QuicknavPrevError
             | CoreCmd::QuicknavNextParagraph
             | CoreCmd::QuicknavPrevParagraph
+            | CoreCmd::BrowseSelectNextChar
+            | CoreCmd::BrowseSelectPrevChar
+            | CoreCmd::BrowseSelectNextWord
+            | CoreCmd::BrowseSelectPrevWord
+            | CoreCmd::BrowseSelectNextLine
+            | CoreCmd::BrowseSelectPrevLine
+            | CoreCmd::BrowseSelectLineStart
+            | CoreCmd::BrowseSelectLineEnd
+            | CoreCmd::BrowseSelectTop
+            | CoreCmd::BrowseSelectBottom
+            | CoreCmd::BrowseSelectPageUp
+            | CoreCmd::BrowseSelectPageDown
+            | CoreCmd::BrowseSelectAll
+            | CoreCmd::BrowseCursorNextParagraph
+            | CoreCmd::BrowseCursorPrevParagraph
+            | CoreCmd::BrowseCursorNextSentence
+            | CoreCmd::BrowseCursorPrevSentence
             | CoreCmd::QuicknavPrevArticle => self.browse_command(c, rep, now, fx),
             planned_cmds!() => {
                 // Declared but not implemented: the keymap never routes these (inert), so this

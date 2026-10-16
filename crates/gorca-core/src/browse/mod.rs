@@ -534,6 +534,8 @@ pub struct BrowseState {
     /// The check box, radio button or toggle that browse mode just clicked.
     /// The dialog whose name was last announced on focus entry.
     pub lead_dialog: Option<DocNodeId>,
+    /// The virtual selection `(anchor, active)` in flat offsets (D-3).
+    pub sel: Option<(u32, u32)>,
     pub click_target: Option<(DocNodeId, Instant)>,
 }
 
@@ -565,6 +567,7 @@ impl BrowseState {
             suppress_focus: None,
             activated: None,
             click_target: None,
+            sel: None,
             lead_dialog: None,
         }
     }
