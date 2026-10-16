@@ -31,7 +31,7 @@ mod tests {
         for (ids, why) in super::MARKS {
             assert!(!ids.is_empty() && !why.is_empty());
         }
-        assert!(super::reason("SP.restore").is_some());
+        assert!(super::reason("SP.back").is_some());
         assert!(super::reason("QN.h.1").is_none());
     }
 }
