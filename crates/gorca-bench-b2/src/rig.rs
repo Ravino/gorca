@@ -209,7 +209,7 @@ impl HarnessRouter {
                 AppRoute {
                     app,
                     tx,
-                    hints: false,
+                    hints: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 },
             );
         app

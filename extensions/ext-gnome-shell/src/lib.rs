@@ -239,16 +239,21 @@ impl Hooks for ShellExtension {
         match decide(&facts) {
             Verdict::Silence => Some(Vec::new()),
             Verdict::Say(s) => Some(s),
-            Verdict::Value(v) => Some(vec![
-                Segment {
-                    text: n.name.clone().unwrap_or_default(),
-                    kind: SegmentKind::Text,
-                },
-                Segment {
+            Verdict::Value(v) => {
+                let mut segs = Vec::with_capacity(2);
+                // An unnamed slider says only its value, never an empty text segment (N-6).
+                if let Some(name) = n.name.as_ref().filter(|s| !s.trim().is_empty()) {
+                    segs.push(Segment {
+                        text: name.clone(),
+                        kind: SegmentKind::Text,
+                    });
+                }
+                segs.push(Segment {
                     text: v,
                     kind: SegmentKind::Value,
-                },
-            ]),
+                });
+                Some(segs)
+            }
             Verdict::Default | Verdict::Notice => None,
         }
     }
@@ -370,6 +375,30 @@ mod tests {
             panic!("say")
         };
         assert_eq!(s[0].text, "level");
+    }
+
+    #[test]
+    fn an_unnamed_unit_slider_says_only_its_value() {
+        let mut e = ShellExtension;
+        let mut node = Node {
+            key: (1, 1),
+            role: role::SLIDER,
+            states: 0,
+            name: None,
+            description: None,
+            range: unit(0.5),
+        };
+        let focus = PresentCtx {
+            epoch: 1,
+            reason: PresentReason::Focus,
+        };
+        let segs = e.present(&node, focus).unwrap_or_default();
+        assert_eq!(segs.len(), 1, "{segs:?}");
+        assert_eq!(segs[0].text, "50 percent");
+        node.name = Some("Volume".into());
+        let segs = e.present(&node, focus).unwrap_or_default();
+        assert_eq!(segs.len(), 2);
+        assert_eq!(segs[0].text, "Volume");
     }
 
     #[test]

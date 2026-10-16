@@ -381,15 +381,30 @@ mod m4b_review_probe {
         let t = Instant::now();
         let mut q = SpeechQueue::new(true);
         q.handle(
-            SpeechMsg::Intent(UttMeta { id: UttId(1), prio: Prio::Text, epoch: Epoch(1), survives_focus_change: false }),
+            SpeechMsg::Intent(UttMeta {
+                id: UttId(1),
+                prio: Prio::Text,
+                epoch: Epoch(1),
+                survives_focus_change: false,
+            }),
             t,
             Epoch(1),
         );
         q.handle(SpeechMsg::EpochAdvanced, t, Epoch(2));
-        let n = UttMeta { id: UttId(2), prio: Prio::Notification, epoch: Epoch(2), survives_focus_change: true };
+        let n = UttMeta {
+            id: UttId(2),
+            prio: Prio::Notification,
+            epoch: Epoch(2),
+            survives_focus_change: true,
+        };
         let e = q.handle(SpeechMsg::Intent(n), t + Duration::from_millis(2), Epoch(2));
         let e2 = q.handle(
-            SpeechMsg::Intent(UttMeta { id: UttId(3), prio: Prio::Interrupt, epoch: Epoch(2), survives_focus_change: false }),
+            SpeechMsg::Intent(UttMeta {
+                id: UttId(3),
+                prio: Prio::Interrupt,
+                epoch: Epoch(2),
+                survives_focus_change: false,
+            }),
             t + Duration::from_millis(10),
             Epoch(2),
         );

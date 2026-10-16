@@ -2,7 +2,7 @@
 //!
 //! | id | stimulus | metrics |
 //! |---|---|---|
-//! | A1 | a window is activated and, 2 ms later (GTK order), its widget takes focus: fresh dialogs (title, a text label, two buttons) and fresh plain windows (title, one button), mirror cold each time | `a1_ms` / `a1w_ms` activation emit to the SPEAK that carries the focus (gate p99 15 ms), `a1f_ms` focus emit to that SPEAK, `a1_wrong` (neither one utterance in reading order title, role, label, focus nor the focus followed by that complete line within 400 ms; gate 0), `a1_split` (the read missed the hold: the focus went first and the complete line, in reading order, followed in a later utterance; informational), `lost` |
+//! | A1 | a window is activated and, 2 ms later (GTK order), its widget takes focus: fresh dialogs (title, a text label, two buttons) and fresh plain windows (title, one button), mirror cold each time | `a1_ms` / `a1w_ms` activation emit to the SPEAK that carries the focus (gate p99 15 ms), `a1f_ms` focus emit to that SPEAK, `a1_wrong` (neither one utterance in reading order title, role, label, focus nor the focus followed by that complete line within 400 ms; gate 0), `a1_split` (the read missed the hold: the focus went first and the complete line, in reading order, followed in a later utterance that replaces it; informational), `a1_full_ms` (activation to the complete line, led or split; informational), `lost` |
 //! | N1 | a focus speech of 400 ms is in progress; an announcement (polite, assertive) or a Shell banner arrives; in half the trials a newer focus follows at once | `n1_interrupted` (the notification cut the focus speech or spoke before it ended; gate 0), `n1_focus_ms` (the newer focus is not held back by the queued notification; gate p99 15 ms), `n1_text_wrong`, `lost` (a notification that never spoke; gate 0) |
 //!
 //! Skipped unless `--reader-env GORCA_M4B=1`; `GORCA_M4B_STRICT=1` fails instead of skipping.
@@ -145,6 +145,8 @@ struct Probe {
     got: String,
     /// The focus came first and the complete line followed in a later utterance.
     split: bool,
+    /// Activation emit to the first utterance that is the complete line (`None`: never came).
+    full_ms: Option<f64>,
 }
 
 fn a1_probe(
@@ -174,17 +176,19 @@ fn a1_probe(
     };
     let exact = *text == w.full;
     let mut split = false;
+    let mut full_ns = exact.then_some(first.t_ns);
     if !exact {
         // On a loaded host the window read can miss its 10 ms bound: the focus (with whatever was
         // known) goes first and the whole line follows once as a queued utterance, in reading
         // order (title, role, text, focus). That is the designed fallback, counted as a split;
         // wrong is when the complete line never comes (the text after the button is wrong).
-        split = rig
+        let later = rig
             .mock
             .wait_for(mark, Duration::from_millis(400), |rec| {
                 matches!(&rec.kind, Kind::Speak { text, .. } if *text == w.full && rec.t_ns > first.t_ns)
-            })
-            .is_some();
+            });
+        split = later.is_some();
+        full_ns = later.map(|rec| rec.t_ns);
     }
     let _ = dialog;
     pause(rng, A1_PACE_MS, A1_PACE_MS + 40);
@@ -194,6 +198,7 @@ fn a1_probe(
         exact,
         got: text.clone(),
         split,
+        full_ms: full_ns.map(|ns| ms(ns.saturating_sub(t_act))),
     }))
 }
 
@@ -218,6 +223,7 @@ pub fn a1(
     prime(&rig, &mut app, 2, 3)?;
     let mut rng = Rng::new(seed);
     let (mut d_ms, mut f_ms, mut w_ms) = (Vec::new(), Vec::new(), Vec::new());
+    let mut full_ms = Vec::new();
     let (mut wrong, mut split, mut lost) = (0u64, 0u64, 0u64);
     for (windows, is_dialog) in [(&dialogs, true), (&plain, false)] {
         for (i, w) in windows.iter().enumerate() {
@@ -237,6 +243,7 @@ pub fn a1(
                     if p.split {
                         split += 1;
                     }
+                    full_ms.extend(p.full_ms);
                     if !p.exact && !p.split {
                         wrong += 1;
                         if wrong == 1 {
@@ -256,6 +263,8 @@ pub fn a1(
     out.s("a1_ms", d_ms);
     out.s("a1f_ms", f_ms);
     out.s("a1w_ms", w_ms);
+    // Informational (N-5): activation to the complete line, whether it led or followed a split.
+    out.s("a1_full_ms", full_ms);
     out.x("a1_wrong", wrong as f64, "events");
     out.x("a1_split", split as f64, "events");
     out.x("lost", lost as f64, "events");

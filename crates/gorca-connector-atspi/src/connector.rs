@@ -800,6 +800,7 @@ fn spawn_app(
         verified_shell,
         identity,
         shell_rx,
+        hints,
     } = new;
     let caller = Caller::new(conn.clone(), Arc::clone(&bus_name));
     let caller = if shadow {
@@ -817,6 +818,7 @@ fn spawn_app(
         verified_shell,
         identity,
         shell_rx: Some(shell_rx),
+        hints,
         counters: Arc::clone(&shared.counters),
         shutdown: shutdown.child_token(),
     };

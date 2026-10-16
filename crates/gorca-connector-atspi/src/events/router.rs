@@ -81,6 +81,8 @@ pub struct NewApp {
     pub identity: Option<(u32, u64)>,
     /// The protected Shell process as it changes.
     pub shell_rx: tokio::sync::watch::Receiver<Option<(u32, u64)>>,
+    /// The route's hint flag: set when the registration is verified as the Shell later (N-4).
+    pub hints: Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// Who owns a bus connection (`org.freedesktop.DBus.GetConnectionCredentials`).
@@ -667,7 +669,7 @@ impl AtspiRouter {
         let route = AppRoute {
             app,
             tx: port.ingress_sender(),
-            hints: verified_shell,
+            hints: Arc::new(std::sync::atomic::AtomicBool::new(verified_shell)),
         };
         let gone = CancellationToken::new();
         let new = NewApp {
@@ -677,6 +679,7 @@ impl AtspiRouter {
             verified_shell,
             identity: group.zip(info.start),
             shell_rx: self.shell_tx.subscribe(),
+            hints: Arc::clone(&route.hints),
         };
         let focused = self.focused.as_deref();
         // Fall back to the pid as the cap group when the process group is unknown.

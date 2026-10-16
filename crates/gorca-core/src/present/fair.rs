@@ -498,6 +498,7 @@ mod m4b_review_probe {
 
     /// P4: waiting utterances released by `take_due` must respect the global ceiling.
     #[test]
+    #[allow(clippy::cast_precision_loss)]
     fn probe_p4_take_due_respects_the_global_ceiling() {
         let t = Instant::now();
         let mut f = Fair::new(t);

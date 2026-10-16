@@ -6,13 +6,20 @@ use crate::reader::{BackgroundMsg, FocusLaneMsg, ReaderMsg};
 use gorca_model::LocalId;
 
 fn k(a: u32, n: u64) -> NodeKey {
-    NodeKey { app: app(a), local: LocalId(n) }
+    NodeKey {
+        app: app(a),
+        local: LocalId(n),
+    }
 }
 fn act(f: &mut Fx, w: NodeKey, at: Instant) -> ReaderEffects {
-    f.reader.handle(ReaderMsg::Focus(FocusLaneMsg::WindowActivated { window: w }), at)
+    f.reader.handle(
+        ReaderMsg::Focus(FocusLaneMsg::WindowActivated { window: w }),
+        at,
+    )
 }
 fn foc(f: &mut Fx, n: NodeKey, at: Instant) -> ReaderEffects {
-    f.reader.handle(ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: n }), at)
+    f.reader
+        .handle(ReaderMsg::Focus(FocusLaneMsg::FocusChanged { node: n }), at)
 }
 fn info(w: NodeKey, role: Role, title: &'static str, texts: &[&'static str]) -> ReaderMsg {
     ReaderMsg::Background(BackgroundMsg::Window(WindowInfo {
@@ -50,7 +57,12 @@ fn q1_hold_miss_repeats_the_focus() {
         info(key(1), Role::Window, "Files", &["More"]),
         t + Duration::from_millis(400),
     );
-    assert_eq!(count(&said(&late), "Back"), 0, "focus repeated: {:?}", said(&late));
+    assert_eq!(
+        count(&said(&late), "Back"),
+        0,
+        "focus repeated: {:?}",
+        said(&late)
+    );
 }
 
 /// Q1b: the first answer comes too late to replace the focus: only what is missing is spoken.
@@ -82,12 +94,20 @@ fn q2_late_focus_without_hold_repeats_title_and_focus() {
     all.extend(said(&act(&mut f, key(1), t)));
     all.extend(said(&foc(&mut f, key(3), t + Duration::from_millis(12))));
     all.extend(said(&f.reader.handle(
-        info(key(1), Role::Dialog, "Delete file", &["This cannot be undone."]),
+        info(
+            key(1),
+            Role::Dialog,
+            "Delete file",
+            &["This cannot be undone."],
+        ),
         t + Duration::from_millis(16),
     )));
     // The late text replaces the focus utterance with the complete line, once (N-1).
     assert_eq!(all.len(), 2, "{all:?}");
-    assert_eq!(all[1], "Delete file, dialog, This cannot be undone., Delete, button");
+    assert_eq!(
+        all[1],
+        "Delete file, dialog, This cannot be undone., Delete, button"
+    );
 }
 
 /// Q3 (H-1): the user switches to another application's window that sends no focus event. Its
@@ -106,7 +126,11 @@ fn q3_user_switch_to_app_without_focus_is_only_a_notice() {
     );
     let fx = f.reader.handle(ReaderMsg::Timer, at + ALONE_DELAY);
     assert_eq!(said(&fx), ["Image Viewer"]);
-    assert_eq!(prios(&fx), [Prio::Notification], "no user signal: polite notice");
+    assert_eq!(
+        prios(&fx),
+        [Prio::Notification],
+        "no user signal: polite notice"
+    );
     assert_eq!(f.epoch.current(), e0);
 }
 
@@ -119,7 +143,7 @@ fn q3b_user_switch_after_input_interrupts() {
     foc(&mut f, key(2), t);
     let e0 = f.epoch.current();
     let at = t + Duration::from_millis(500);
-    f.reader.win.last_input = Some(at - Duration::from_millis(30));
+    f.reader.win.last_input = Some(t + Duration::from_millis(470));
     act(&mut f, k(2, 40), at);
     f.reader.handle(
         info(k(2, 40), Role::Window, "Image Viewer", &[]),
@@ -215,7 +239,7 @@ fn q6_same_app_alone_timer_at_hold_release() {
     let t = Instant::now();
     foc(&mut f, key(3), t);
     let base = t + Duration::from_millis(500);
-    let mut out = vec![act(&mut f, key(5), base - Duration::from_millis(110))];
+    let mut out = vec![act(&mut f, key(5), t + Duration::from_millis(390))];
     out.push(act(&mut f, key(1), base));
     out.push(foc(&mut f, key(3), base + Duration::from_millis(2)));
     let e_before = f.epoch.current();
