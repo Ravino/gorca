@@ -192,6 +192,7 @@ try:
             res["document"] = True
             res["t_doc_s"] = round(time.monotonic() - t0, 2)
             res["doc_ifaces"] = safe(lambda: call(bus, doc, ACC, "GetInterfaces")[0], [])
+            time.sleep(float(os.environ.get("M9_WAIT", "0")))
             # walk the document
             counts = {}
             n = 0
@@ -225,7 +226,7 @@ try:
             # name, text and children of every non-static node of the first 12 (what the mirror reads)
             dump = []
             queue = [doc]
-            while queue and len(dump) < 24:
+            while queue and len(dump) < int(os.environ.get("M9_DUMP", "24")):
                 p = queue.pop(0)
                 rn = role_name(bus, p)
                 ifs = safe(lambda: call(bus, p, ACC, "GetInterfaces")[0], [])

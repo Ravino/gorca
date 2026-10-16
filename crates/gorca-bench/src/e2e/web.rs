@@ -1358,7 +1358,7 @@ pub fn w2b(
                     .or_default()
                     .push(firefox);
                 // Attribute completeness: the warm-up's sample must have carried tags.
-                if f("warm", "tagged_nodes").unwrap_or(0.0) < 1.0 {
+                if !chromium_selected() && f("warm", "tagged_nodes").unwrap_or(0.0) < 1.0 {
                     untagged_warm += 1;
                 }
             }

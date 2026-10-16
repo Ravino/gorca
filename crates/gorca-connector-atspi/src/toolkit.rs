@@ -73,11 +73,7 @@ impl Toolkit {
     pub fn text_insert_slack(self) -> u32 {
         match self {
             Toolkit::Firefox | Toolkit::Chromium => 2,
-            Toolkit::Gtk3
-            | Toolkit::Gtk4
-            | Toolkit::Qt
-            | Toolkit::Vte
-            | Toolkit::Other => 0,
+            Toolkit::Gtk3 | Toolkit::Gtk4 | Toolkit::Qt | Toolkit::Vte | Toolkit::Other => 0,
         }
     }
 }

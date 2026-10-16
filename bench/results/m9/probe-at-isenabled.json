@@ -1,0 +1,20 @@
+private compositor: /tmp/gorca-m7c.aO3pav/x/gorca-m7-1701782
+{
+ "mode": "isenabled",
+ "status_before": {
+  "is_enabled": true,
+  "screen_reader_enabled": false
+ },
+ "chrome": "/home/user/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome",
+ "app_registered": true,
+ "t_app_s": 0.6,
+ "app_name": "Google Chrome for Testing",
+ "toolkit": "Chromium",
+ "document": false,
+ "app_nodes": 7,
+ "app_roles": {
+  "frame": 3,
+  "?": 3,
+  "application": 1
+ }
+}
