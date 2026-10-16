@@ -104,8 +104,16 @@ struct DaemonSut {
 impl Drop for DaemonSut {
     fn drop(&mut self) {
         self.token.cancel();
+        // Never join unboundedly: a daemon thread that does not stop within 40 s is detached
+        // (the runtime inside it is shut down with a timeout as well).
         if let Some(t) = self.thread.take() {
-            let _ = t.join();
+            let t0 = Instant::now();
+            while !t.is_finished() && t0.elapsed() < Duration::from_secs(40) {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            if t.is_finished() {
+                let _ = t.join();
+            }
         }
     }
 }
@@ -250,15 +258,20 @@ fn make_with(policy: PolicyFactory, fills: bool) -> Box<dyn Sut> {
             })
             .await;
         });
+        rt.shutdown_timeout(Duration::from_secs(10));
     });
+    // A failed start-up must stop the daemon thread before the session goes away.
+    let start_guard = token.clone().drop_guard();
     let runtime = rt_rx
-        .recv_timeout(Duration::from_secs(20))
+        .recv_timeout(Duration::from_secs(120))
         .expect("runtime");
-    let probe = rx.recv_timeout(Duration::from_secs(20)).expect("daemon up");
+    let probe = rx
+        .recv_timeout(Duration::from_secs(120))
+        .expect("daemon up");
     // Events sent before the drain installed its match rules are lost: start the apps after.
     let t0 = Instant::now();
     while !probe.ready() {
-        assert!(t0.elapsed() < Duration::from_secs(20), "drain never ready");
+        assert!(t0.elapsed() < Duration::from_secs(120), "drain never ready");
         std::thread::sleep(Duration::from_millis(20));
     }
     let cfg = RealConfig {
@@ -273,6 +286,7 @@ fn make_with(policy: PolicyFactory, fills: bool) -> Box<dyn Sut> {
         register_listeners: false,
     };
     let sut = RealSut::new(cfg, "r0").with_probe(Arc::new(Probing(probe)));
+    start_guard.disarm();
     Box::new(DaemonSut {
         sut,
         token,
@@ -447,7 +461,7 @@ fn the_policy_hears_of_a_new_app_before_it_does_anything() {
     s.start_app("settings", "settings").unwrap();
     // No event, no focus: the apps are announced and known.
     let t0 = Instant::now();
-    while seen().len() < 4 && t0.elapsed() < Duration::from_secs(10) {
+    while seen().len() < 4 && t0.elapsed() < Duration::from_secs(60) {
         s.advance(50);
     }
     let before = seen();

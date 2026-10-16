@@ -26,6 +26,39 @@ pub struct VoiceParams {
     pub volume: i8,
 }
 
+/// Which language, output module and synthesis voice the server speaks with (the user's
+/// `[speech]` language, output_module and voice). An empty string leaves that item at the
+/// server default. Sent at connect and when the settings change.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct VoiceSetup {
+    /// BCP-47 or ISO 639 code, for example `ru`.
+    pub language: Arc<str>,
+    /// Server output module, for example `espeak-ng` or `rhvoice`.
+    pub output_module: Arc<str>,
+    /// Synthesis voice name.
+    pub voice: Arc<str>,
+}
+
+impl VoiceSetup {
+    /// The SSIP `SET self ...` lines (no line ending). The module comes first because
+    /// switching it resets the language and voice on some servers.
+    pub fn ssip_lines(&self) -> Vec<String> {
+        // A value with a control character could end the line and start another command.
+        let ok = |s: &str| !s.is_empty() && !s.chars().any(char::is_control);
+        let mut v = Vec::with_capacity(3);
+        if ok(&self.output_module) {
+            v.push(format!("SET self OUTPUT_MODULE {}", self.output_module));
+        }
+        if ok(&self.language) {
+            v.push(format!("SET self LANGUAGE {}", self.language));
+        }
+        if ok(&self.voice) {
+            v.push(format!("SET self SYNTHESIS_VOICE {}", self.voice));
+        }
+        v
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SpeechCmd {
     Speak {
@@ -47,6 +80,8 @@ pub enum SpeechCmd {
     Pause,
     Resume,
     SetParams(VoiceParams),
+    /// Language, output module and voice.
+    Configure(VoiceSetup),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]

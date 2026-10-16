@@ -280,15 +280,10 @@ impl Reader {
         }
         if let Some(t) = &mut self.text.term.tracked {
             t.key_epoch = intent.epoch;
-            // TODO(m6-review finding 3, docs/reports/m6-review.md): delete this publish once the
-            // B-1 F-1 fix lets the revalidated cached focus path earn protection.
-            // A key pressed while this terminal is the focus object is the proof of focus that
-            // the presentation may have lacked: a toolkit can announce the focus node before its
-            // state says FOCUSED (the snapshot was served from a cache older than the focus), and
-            // then the application's text events would never be routed to the Reader.
-            if let Some(f) = &self.focused_app {
-                f.publish(t.node.app);
-            }
+            // Not a publish: the key is no proof of focus. A terminal whose application has not
+            // earned the protection reads its focus state again (the earlier read failed).
+            let node = t.node;
+            self.reconfirm_on_key(node, fx);
         }
         let key = classify_term_key(&intent.event);
         self.text.stats.keys_seen += 1;

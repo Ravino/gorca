@@ -38,6 +38,8 @@ fn sock_dir(session: &Session, name: &str) -> PathBuf {
 struct Daemon {
     token: CancellationToken,
     join: tokio::task::JoinHandle<anyhow::Result<()>>,
+    /// Cancels the daemon when it is dropped without `stop` (a failing test).
+    _guard: tokio_util::sync::DropGuard,
 }
 
 impl Daemon {
@@ -69,7 +71,11 @@ impl Daemon {
         };
         let token = CancellationToken::new();
         let join = tokio::spawn(run_with(opts, token.clone()));
-        Self { token, join }
+        Self {
+            _guard: token.clone().drop_guard(),
+            token,
+            join,
+        }
     }
 
     async fn stop(self) {
@@ -83,12 +89,7 @@ impl Daemon {
 }
 
 fn run<F: std::future::Future<Output = ()>>(f: F) {
-    tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(4)
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(f);
+    gorca_testkit::harness::run_bounded(4, std::time::Duration::from_secs(300), f);
 }
 
 async fn wait_text(server: &MockSpeechServer, text: &str, timeout: Duration) -> Option<Duration> {

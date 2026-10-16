@@ -24,7 +24,9 @@ use gorca_core::{
     SaveResult, SettingsMsg, compile,
 };
 use gorca_input_api::{LaneLinks, StaticResolver};
+use gorca_output_api::VoiceSetup;
 use gorca_rt::{CancellationToken, mpsc};
+use gorca_speech::{SpeechControl, SpeechHandle};
 use inotify::{Inotify, WatchMask};
 
 use crate::platform::{PlatformOverrides, probe};
@@ -209,6 +211,38 @@ pub struct ConfigTask {
     pub links: Arc<LaneLinks>,
     pub control: mpsc::Sender<ControlMsg>,
     pub requests: mpsc::Receiver<ConfigRequest>,
+    /// The speech lane, which gets the language, output module and voice on every load.
+    pub speech: Option<SpeechHandle>,
+    /// The language the locale gives, used while `[speech] language` is empty.
+    pub env_language: String,
+}
+
+/// What the speech server is told: the configured language, else the locale's, else `en`.
+pub fn voice_setup(s: &gorca_config::SpeechSettings, env_language: &str) -> VoiceSetup {
+    let language = if !s.language.trim().is_empty() {
+        s.language.trim()
+    } else if !env_language.is_empty() {
+        env_language
+    } else {
+        "en"
+    };
+    VoiceSetup {
+        language: Arc::from(language),
+        output_module: Arc::from(s.output_module.trim()),
+        voice: Arc::from(s.voice.trim()),
+    }
+}
+
+/// `[speech] backend` of the settings file, read once before the speech lane is wired (a change
+/// needs a restart). `None` when there is no readable file.
+pub async fn startup_backend(path: &Path) -> Option<gorca_config::Backend> {
+    let text = read_file(path).await.ok()??;
+    Some(
+        gorca_config::load(Some(&text), &Presets::builtin())
+            .settings
+            .speech
+            .backend,
+    )
 }
 
 struct State {
@@ -226,6 +260,10 @@ impl ConfigTask {
     fn publish(&self, b: &Built) {
         self.links.keymap.store(Arc::new(b.compiled.keymap.clone()));
         self.links.settings.store(Arc::new(b.compiled.lane.clone()));
+        if let Some(speech) = &self.speech {
+            let setup = voice_setup(&b.loaded.settings.speech, &self.env_language);
+            speech.control(SpeechControl::SetVoice(setup));
+        }
     }
 
     async fn send(&self, m: SettingsMsg) {
@@ -528,6 +566,7 @@ async fn drain_quiet(s: &mut EventStream, name: &OsString) {
 pub fn run_config_cmd(cmd: &crate::ConfigCmd, default_path: Option<&Path>) -> (String, bool) {
     match cmd {
         crate::ConfigCmd::Defaults => (gorca_config::defaults_toml(), true),
+        crate::ConfigCmd::PrintDefault => (gorca_config::defaults_toml_commented(), true),
         crate::ConfigCmd::Check(path) => {
             let Some(path) = path.as_deref().or(default_path) else {
                 return ("no settings file path is known\n".to_owned(), false);
@@ -618,6 +657,29 @@ mod tests {
     }
 
     #[test]
+    fn the_voice_setup_prefers_the_setting_then_the_locale_then_english() {
+        let mut s = gorca_config::SpeechSettings::default();
+        assert_eq!(&*voice_setup(&s, "ru").language, "ru");
+        assert_eq!(&*voice_setup(&s, "").language, "en");
+        s.language = " de ".to_owned();
+        s.output_module = "rhvoice".to_owned();
+        let v = voice_setup(&s, "ru");
+        assert_eq!(
+            (&*v.language, &*v.output_module, &*v.voice),
+            ("de", "rhvoice", "")
+        );
+    }
+
+    #[tokio::test]
+    async fn the_backend_comes_from_the_file() {
+        let d = tmpdir("backend");
+        let p = d.join("gorca.toml");
+        assert_eq!(startup_backend(&p).await, None);
+        std::fs::write(&p, "[speech]\nbackend = \"ssip\"\n").unwrap();
+        assert_eq!(startup_backend(&p).await, Some(gorca_config::Backend::Ssip));
+    }
+
+    #[test]
     fn caps_lock_is_dropped_from_the_published_keys() {
         let f = PlatformFacts {
             xkb_options: "grp:caps_toggle".into(),
@@ -647,6 +709,8 @@ mod tests {
                 links: LaneLinks::new(),
                 control: ctl_tx,
                 requests: req_rx,
+                speech: None,
+                env_language: String::new(),
             },
             ctl_rx,
             req_tx,
@@ -893,6 +957,8 @@ mod tests {
             links: LaneLinks::new(),
             control: ctl_tx,
             requests: req_rx,
+            speech: None,
+            env_language: String::new(),
         };
         let stop = CancellationToken::new();
         let h = tokio::spawn(t.run(stop.clone()));

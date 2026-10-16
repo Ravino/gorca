@@ -1,0 +1,18 @@
+fix run 1 exit 124 load 36.22
+fix run 3 exit 124 load 33.97
+fix run 4 exit 124 load 44.06
+fix run 5 exit 124 load 38.17
+main run 6 exit 124 load 44.26
+fix run 6 exit 124 load 43.12
+main run 7 exit 124 load 41.59
+fix run 10 exit 124 load 34.85
+fix run 11 exit 124 load 38.83
+fix run 12 exit 124 load 36.64
+fix run 13 exit 124 load 31.84
+fix run 16 exit 124 load 33.57
+fix run 17 exit 124 load 34.76
+fix run 19 exit 124 load 34.41
+main run 20 exit 124 load 36.68
+main nonzero 3/20, fix nonzero 12/20
+
+[exited with code 0]

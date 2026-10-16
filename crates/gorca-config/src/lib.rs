@@ -22,7 +22,8 @@ pub use load::{Loaded, MAX_FILE_BYTES, load};
 pub use presets::Presets;
 pub use save::{SaveError, save};
 pub use settings::{
-    Apply, Caps, Confirmations, EchoSettings, InterruptPolicy, KeyboardSettings, Layout, Overlay,
-    Preset, Punct, SCHEMA, SETTINGS, SettingDef, SettingType, Settings, SpeechSettings,
-    TextSettings, Verbosity, VerbositySettings, defaults_toml, sections,
+    Apply, Backend, Caps, Confirmations, EchoSettings, InterruptPolicy, KeyboardSettings, Layout,
+    Overlay, Preset, Punct, SCHEMA, SETTINGS, SettingDef, SettingType, Settings, SpeechSettings,
+    TextSettings, Verbosity, VerbositySettings, defaults_toml, defaults_toml_commented,
+    resolve_language, sections,
 };

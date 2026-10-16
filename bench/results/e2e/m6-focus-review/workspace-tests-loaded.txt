@@ -1,0 +1,130 @@
+      1 test a_dialog_opening_speaks_its_title_its_text_and_the_focused_button_in_that_order ... FAILED
+      1 test a_focus_storm_ends_with_only_the_last_focus_audible ... FAILED
+      1 test a_hung_app_leaves_the_reader_responsive ... FAILED
+      1 test a_hung_node_cannot_stall_the_fetch_past_its_deadline ... FAILED
+      1 test a_new_focus_is_not_held_back_by_a_queued_announcement ... FAILED
+      1 test a_notification_banner_in_the_shell_is_read_and_waits_for_the_speech_in_progress ... FAILED
+      1 test a_stalled_consumer_does_not_stall_the_socket ... FAILED
+      1 test b1::audit::tests::audit_apply_bounded ... FAILED
+      1 test events::router::tests::registration_and_departure_churn_leaks_nothing ... FAILED
+      1 test every_selection_move_in_a_shell_style_switcher_is_spoken ... FAILED
+      1 test fetch::strategy_ref_tests::subtree_is_breadth_first_and_bounded ... FAILED
+      1 test hostile_present_holds_the_reader_near_the_cpu_limit ... FAILED
+      1 test instances_that_cannot_be_built_count_and_end_in_a_global_disable ... FAILED
+      1 test key_to_speech_is_unaffected_by_hostile_extension_traffic ... FAILED
+      1 test ma6_apply_slices_are_cheap_even_unoptimised ... FAILED
+      1 test memory_loops_and_oom_are_faults_at_every_reset ... FAILED
+      1 test random_events_nodes_and_commands_never_panic_the_core ... FAILED
+      1 test re_announcing_an_application_does_not_reset_its_strikes ... FAILED
+      1 test result: FAILED. 10 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.88s
+      1 test result: FAILED. 13 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.09s
+      1 test result: FAILED. 140 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 145.89s
+      1 test result: FAILED. 15 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.86s
+      1 test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 242.79s
+      1 test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 256.49s
+      1 test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 497.21s
+      1 test result: FAILED. 22 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 104.68s
+      1 test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 228.45s
+      1 test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 680.81s
+      1 test result: FAILED. 3 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 67.67s
+      1 test result: FAILED. 5 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 127.28s
+      1 test result: FAILED. 8 passed; 1 failed; 2 ignored; 0 measured; 0 filtered out; finished in 12.58s
+      1 test result: FAILED. 96 passed; 1 failed; 8 ignored; 0 measured; 0 filtered out; finished in 6.74s
+     35 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+      1 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+      3 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+      2 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+      1 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+      2 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+      2 test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+      1 test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.03s
+      1 test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+      1 test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+      1 test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+      1 test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.41s
+      1 test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 20.11s
+      1 test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.65s
+      1 test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+      1 test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+      1 test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+      1 test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+      1 test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.43s
+      1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+      1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.82s
+      1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.66s
+      1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.81s
+      1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 58.00s
+      1 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.27s
+      1 test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+      1 test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+      1 test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.92s
+      1 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+      1 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+      1 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.30s
+      1 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 13.92s
+      1 test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 40.70s
+      1 test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.32s
+      1 test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+      1 test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.14s
+      1 test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+      1 test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+      1 test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.18s
+      1 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+      1 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 125.75s
+      1 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.61s
+      1 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.82s
+      1 test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.06s
+      1 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+      1 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.26s
+      1 test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.56s
+      1 test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 6.56s
+      1 test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+      1 test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+      1 test result: ok. 56 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+      1 test result: ok. 571 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 20.02s
+      1 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+      1 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+      1 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 137.99s
+      1 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.66s
+      1 test result: ok. 67 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.72s
+      1 test result: ok. 69 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s
+      1 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+      1 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.48s
+      1 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.42s
+      1 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s
+      1 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.54s
+      1 test result: ok. 82 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.23s
+      1 test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+      1 test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+      1 test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.59s
+      1 test storm_emits_signals_at_roughly_the_requested_rate ... FAILED
+      1 test supervisor::tests::completed_and_panicked_tasks_are_reported_with_names ... ok
+      1 test the_component_never_faults_on_the_grid ... FAILED
+      1 test the_invalidation_suite_passes_against_the_real_daemon ... FAILED
+      1 test the_invalidation_suite_passes_with_the_candidate_policy ... FAILED
+      1 test the_native_adapter_the_native_extension_and_the_component_agree_on_every_fact ... FAILED
+      1 test voicego_down_falls_back_to_ssip_and_returns_when_it_is_back ... FAILED
+      1 thread 'a_dialog_opening_speaks_its_title_its_text_and_the_focused_button_in_that_order' (4120354) panicked at crates/gorca-daemon/tests/desktop.rs:222:22:
+      1 thread 'a_focus_storm_ends_with_only_the_last_focus_audible' (4126307) panicked at crates/gorca-daemon/tests/e2e.rs:260:9:
+      1 thread 'a_hung_app_leaves_the_reader_responsive' (4126308) panicked at crates/gorca-daemon/tests/e2e.rs:301:9:
+      1 thread 'a_hung_node_cannot_stall_the_fetch_past_its_deadline' (4160376) panicked at crates/gorca-doc-source-atspi/tests/fake_peer.rs:513:10:
+      1 thread 'a_new_focus_is_not_held_back_by_a_queued_announcement' (4120355) panicked at crates/gorca-daemon/tests/desktop.rs:359:9:
+      1 thread 'a_notification_banner_in_the_shell_is_read_and_waits_for_the_speech_in_progress' (4120356) panicked at crates/gorca-daemon/tests/desktop.rs:390:9:
+      1 thread 'a_stalled_consumer_does_not_stall_the_socket' (3999701) panicked at crates/gorca-bench-b2/tests/drain.rs:598:5:
+      1 thread 'b1::audit::tests::audit_apply_bounded' (16398) panicked at crates/gorca-testkit/src/b1/audit.rs:1149:64:
+      1 thread 'events::router::tests::registration_and_departure_churn_leaks_nothing' (4008953) panicked at crates/gorca-connector-atspi/src/events/router/tests.rs:140:9:
+      1 thread 'every_selection_move_in_a_shell_style_switcher_is_spoken' (4126310) panicked at crates/gorca-daemon/tests/e2e.rs:555:13:
+      1 thread 'fetch::strategy_ref_tests::subtree_is_breadth_first_and_bounded' (4014366) panicked at crates/gorca-connector-atspi/src/fetch/strategy_ref_tests.rs:182:9:
+      1 thread 'hostile_present_holds_the_reader_near_the_cpu_limit' (6228) panicked at crates/gorca-ext-host/tests/hostile.rs:131:5:
+      1 thread 'instances_that_cannot_be_built_count_and_end_in_a_global_disable' (4178298) panicked at crates/gorca-ext-host/tests/ext.rs:489:5:
+      1 thread 'key_to_speech_is_unaffected_by_hostile_extension_traffic' (4160594) panicked at crates/gorca-ext-host/tests/core_path.rs:169:5:
+      1 thread 'ma6_apply_slices_are_cheap_even_unoptimised' (15563) panicked at crates/gorca-mirror/tests/real_audit.rs:189:61:
+      1 thread 'memory_loops_and_oom_are_faults_at_every_reset' (4178308) panicked at crates/gorca-ext-host/tests/ext.rs:604:5:
+      1 thread 'random_events_nodes_and_commands_never_panic_the_core' (4181013) panicked at crates/gorca-ext-host/tests/fuzz.rs:157:9:
+      1 thread 're_announcing_an_application_does_not_reset_its_strikes' (4178477) panicked at crates/gorca-ext-host/tests/ext.rs:473:9:
+      1 thread 'storm_emits_signals_at_roughly_the_requested_rate' (3995619) panicked at tests/harness/b1/fakeapp/tests/bus.rs:417:5:
+      1 thread 'the_component_never_faults_on_the_grid' (4133872) panicked at crates/gorca-daemon/tests/shell_parity.rs:229:5:
+      1 thread 'the_invalidation_suite_passes_against_the_real_daemon' (4083386) panicked at crates/gorca-daemon/tests/b1_ic.rs:371:5:
+      1 thread 'the_invalidation_suite_passes_with_the_candidate_policy' (4083387) panicked at crates/gorca-daemon/tests/b1_ic.rs:371:5:
+      1 thread 'the_native_adapter_the_native_extension_and_the_component_agree_on_every_fact' (4133874) panicked at crates/gorca-daemon/tests/shell_parity.rs:214:9:
+      1 thread 'voicego_down_falls_back_to_ssip_and_returns_when_it_is_back' (4131109) panicked at crates/gorca-daemon/tests/e2e.rs:344:9:

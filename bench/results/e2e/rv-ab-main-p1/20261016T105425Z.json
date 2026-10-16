@@ -1,0 +1,7 @@
+{
+  "meta": {"utc": "2026-10-16T10:54:25Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "4", "governor": "performance x16", "loadavg_start": "37.57 53.03 58.15 3/3080 3865596", "git_rev": "5c99628", "git_dirty": "false", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "label": "rv-ab-main-p1", "reader": "daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/m6ab/gorca-main", "backend": "voicego", "repeats": "1", "samples_per_series": "1200", "l2_trials": "400", "quick": "false", "loadavg_end": "37.57 53.03 58.15 2/3080 3865593", "reader_env": "GORCA_M1=1 GORCA_M6=1 GORCA_M6_STRICT=1", "gates": "L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats", "reader_args": "", "ext_dir": "none", "extensions": "none", "note0": "VT run failed: the reader did not register with the emulated keyboard monitor (no SetKeyGrabs)", "note1": "V1 run failed: the reader did not register with the emulated keyboard monitor (no SetKeyGrabs)"},
+  "rows": [
+    {"id": "VT.failed_runs", "scenario": "VT", "bus": "daemon/voicego", "value": 1, "min": 1, "max": 1, "runs": 1, "unit": "runs", "op": "<=", "threshold": 0, "verdict": "FAIL", "note": "0 ok, 1 failed"},
+    {"id": "V1.failed_runs", "scenario": "V1", "bus": "daemon/voicego", "value": 1, "min": 1, "max": 1, "runs": 1, "unit": "runs", "op": "<=", "threshold": 0, "verdict": "FAIL", "note": "0 ok, 1 failed"}
+  ]
+}

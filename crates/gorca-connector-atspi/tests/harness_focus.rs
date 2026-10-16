@@ -8,7 +8,7 @@
     clippy::disallowed_methods
 )]
 
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 
 use gorca_connector_api::{Connector, ConnectorCtx};
@@ -17,6 +17,9 @@ use gorca_core::{Core, CoreConfig, SpeechOut};
 use gorca_model::{ConnectorId, Utterance};
 use gorca_rt::{CancellationToken, Clock};
 use gorca_testkit::harness::{FakeApp, Session};
+
+/// The CPU-time test needs the process to itself; every other test shares the read side.
+static EXCLUSIVE: RwLock<()> = RwLock::new(());
 
 #[derive(Debug, Default)]
 struct Recording {
@@ -52,7 +55,7 @@ impl SpeechOut for Recording {
 }
 
 struct Rig {
-    session: Session,
+    session: Option<Session>,
     speech: Arc<Recording>,
     shutdown: CancellationToken,
     core: tokio::task::JoinHandle<Result<(), gorca_core::CoreError>>,
@@ -95,7 +98,7 @@ async fn rig(session: Session) -> Rig {
     };
     let connector = tokio::spawn(connector.run(ctx));
     Rig {
-        session,
+        session: Some(session),
         speech,
         shutdown,
         core,
@@ -134,25 +137,31 @@ impl Rig {
         None
     }
 
-    async fn stop(self) {
+    async fn stop(mut self) {
         self.shutdown.cancel();
-        assert_eq!(self.core.await.unwrap(), Ok(()));
-        assert!(self.connector.await.unwrap().is_ok());
-        drop(self.session);
+        let core = tokio::time::timeout(Duration::from_secs(20), &mut self.core).await;
+        assert_eq!(core.expect("core did not stop").unwrap(), Ok(()));
+        let conn = tokio::time::timeout(Duration::from_secs(20), &mut self.connector).await;
+        assert!(conn.expect("connector did not stop").unwrap().is_ok());
+    }
+}
+
+impl Drop for Rig {
+    /// On a failing test the rig is dropped while unwinding: stop the core and the connector
+    /// *before* the field drop tears the private buses down (a connector that outlives its bus
+    /// must not be what keeps the test binary alive).
+    fn drop(&mut self) {
+        self.shutdown.cancel();
     }
 }
 
 fn run<F: std::future::Future<Output = ()>>(f: F) {
-    tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(4)
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(f);
+    gorca_testkit::harness::run_bounded(4, Duration::from_secs(240), f);
 }
 
 #[test]
 fn tabbing_through_a_form_is_heard() {
+    let _shared = EXCLUSIVE.read().unwrap_or_else(PoisonError::into_inner);
     let Some(session) = session() else { return };
     run(async {
         let mut app = FakeApp::start(&session, &["--scenario", "form"]).unwrap();
@@ -189,6 +198,7 @@ fn tabbing_through_a_form_is_heard() {
 
 #[test]
 fn a_hung_app_does_not_stop_the_reader() {
+    let _shared = EXCLUSIVE.read().unwrap_or_else(PoisonError::into_inner);
     let Some(session) = session() else { return };
     run(async {
         let mut good = FakeApp::start(&session, &["--scenario", "form", "--name", "good"]).unwrap();
@@ -227,6 +237,7 @@ fn a_hung_app_does_not_stop_the_reader() {
 
 #[test]
 fn an_app_that_quits_is_retired_and_a_new_one_is_heard() {
+    let _shared = EXCLUSIVE.read().unwrap_or_else(PoisonError::into_inner);
     let Some(session) = session() else { return };
     run(async {
         let mut first = FakeApp::start(&session, &["--scenario", "form", "--name", "one"]).unwrap();
@@ -236,11 +247,52 @@ fn an_app_that_quits_is_retired_and_a_new_one_is_heard() {
         assert!(r.wait_for("Submit button").await.is_some());
         drop(first);
         tokio::time::sleep(Duration::from_millis(300)).await;
-        let mut second =
-            FakeApp::start(&r.session, &["--scenario", "form", "--name", "two"]).unwrap();
+        let mut second = FakeApp::start(
+            r.session.as_ref().unwrap(),
+            &["--scenario", "form", "--name", "two"],
+        )
+        .unwrap();
         second.focus("Cancel").unwrap();
         assert!(r.wait_for("Cancel button").await.is_some());
         drop(second);
         r.stop().await;
+    });
+}
+
+/// Process CPU time (user + system) in clock ticks, from `/proc/self/stat`.
+fn cpu_ticks() -> u64 {
+    let stat = std::fs::read_to_string("/proc/self/stat").unwrap();
+    let rest = &stat[stat.rfind(')').unwrap() + 2..];
+    let f: Vec<&str> = rest.split_whitespace().collect();
+    f[11].parse::<u64>().unwrap() + f[12].parse::<u64>().unwrap()
+}
+
+/// Regression: when the buses vanish under a running connector, it must go quiet, not spin.
+/// (`watch_shell` kept a closed `NameOwnerChanged` stream in its `select!`, which completed
+/// instantly on every turn: a busy loop sending messages, and a runtime that never shut down.)
+#[test]
+fn losing_the_buses_does_not_make_the_connector_spin() {
+    let _alone = EXCLUSIVE.write().unwrap_or_else(PoisonError::into_inner);
+    let Some(session) = session() else { return };
+    run(async {
+        let mut app = FakeApp::start(&session, &["--scenario", "form"]).unwrap();
+        let mut r = rig(session).await;
+        r.prime(&mut app, "email").await;
+        drop(app);
+        drop(r.session.take());
+        let hz = 100;
+        let (c0, t0) = (cpu_ticks(), Instant::now());
+        tokio::time::sleep(Duration::from_secs(4)).await;
+        let used = f64::from(u32::try_from(cpu_ticks() - c0).unwrap()) / f64::from(hz);
+        let wall = t0.elapsed().as_secs_f64();
+        // A spinning worker burns about one core (>= 0.9 of the wall time); an idle connector
+        // a few percent. 0.5 separates them even on a starved host.
+        assert!(
+            used < 0.5 * wall,
+            "{used:.2} s of CPU in {wall:.2} s after the buses went"
+        );
+        r.shutdown.cancel();
+        let _ = tokio::time::timeout(Duration::from_secs(20), &mut r.core).await;
+        let _ = tokio::time::timeout(Duration::from_secs(20), &mut r.connector).await;
     });
 }

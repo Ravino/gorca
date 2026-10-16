@@ -24,8 +24,8 @@ use super::{PresentContext, changed, message, present_change};
 use crate::SpeechIntent;
 use crate::focus::{FocusEffect, FocusMsg, FocusState, settle_delay};
 use crate::reader::{
-    DUPLICATE_FOCUS_WINDOW, FetchKind, FocusLaneMsg, QueryReply, Reader, ReaderEffect,
-    ReaderEffects,
+    DUPLICATE_FOCUS_WINDOW, FetchKind, FocusLaneMsg, QueryReply, RECONFIRM_KEY_INTERVAL, Reader,
+    ReaderEffect, ReaderEffects, Reconfirm,
 };
 
 /// A correction replaces the earlier utterance only if less than this much time has passed
@@ -99,6 +99,7 @@ fn apply_web_extra(
 
 impl Reader {
     pub(crate) fn on_focus(&mut self, f: FocusLaneMsg, now: Instant, fx: &mut ReaderEffects) {
+        tracing::debug!(msg = ?f, "focus lane");
         match f {
             FocusLaneMsg::FocusChanged { node } => {
                 self.selection_node = None;
@@ -137,9 +138,12 @@ impl Reader {
             && now.saturating_duration_since(at) < DUPLICATE_FOCUS_WINDOW
         {
             self.duplicate_focus_dropped += 1;
+            self.reconfirm_focus(node, fx);
             return;
         }
         self.last_focus = Some((node, now));
+        self.reconfirm = Reconfirm::Idle;
+        self.timeout_charged = false;
         self.text_untrack();
         // Review follows the focus (ADR-0006 4.1) unless the user turned that off.
         self.review_focus_changed(fx);
@@ -166,6 +170,108 @@ impl Reader {
                 fx.push(ReaderEffect::ArmTimer(until));
             }
         }
+    }
+
+    /// Whether the application of `node` has not earned the protection yet (and `node` is a real
+    /// focus, not a switcher selection). The grace of the previous application does not count:
+    /// it ends, and only publishing makes the application current.
+    fn protection_unearned(&self, node: NodeKey) -> bool {
+        self.selection_node != Some(node)
+            && self
+                .focused_app
+                .as_ref()
+                .is_some_and(|f| f.get() != Some(node.app))
+    }
+
+    /// A repeated focus event for the node in focus. It is not presented again, but a toolkit
+    /// that announces the focus before the widget says `FOCUSED` (the real VTE) repeats it once
+    /// the state is true: read the state once, and `on_state_reply` earns the protection.
+    fn reconfirm_focus(&mut self, node: NodeKey, fx: &mut ReaderEffects) {
+        tracing::debug!(?node, state = ?self.reconfirm, unearned = self.protection_unearned(node), presented = ?self.presented.as_ref().map(|p| p.node), "repeated focus event");
+        if self.reconfirm.node() == Some(node) || !self.protection_unearned(node) {
+            return;
+        }
+        if self.presented.as_ref().is_some_and(|p| p.node == node) {
+            self.ask_state(node, fx);
+        } else {
+            // The first presentation is still on its way; `present_with` asks when it is done.
+            self.reconfirm = Reconfirm::Pending(node);
+        }
+    }
+
+    /// A key press in the focused terminal whose application has not earned the protection: the
+    /// reconfirm read failed or never ran, and nothing else restores it (the key publish is
+    /// gone), so read the focus state again. Never a blind publish. Throttled by
+    /// `RECONFIRM_KEY_INTERVAL` so a slow app is charged at most one timeout per interval.
+    pub(crate) fn reconfirm_on_key(&mut self, node: NodeKey, fx: &mut ReaderEffects) {
+        if !self.protection_unearned(node) {
+            return;
+        }
+        let may_ask = match self.reconfirm {
+            Reconfirm::Idle => true,
+            Reconfirm::Failed(n, at) => {
+                n != node || self.now.saturating_duration_since(at) >= RECONFIRM_KEY_INTERVAL
+            }
+            Reconfirm::Pending(_) | Reconfirm::Asked(_) | Reconfirm::Retried(_) => false,
+        };
+        if may_ask && self.presented.as_ref().is_some_and(|p| p.node == node) {
+            self.counters.focus_reconfirm_key_reads += 1;
+            self.ask_state(node, fx);
+        }
+    }
+
+    /// The reply of a reconfirm read. True when it was one (the caller handles nothing more for
+    /// a failure). A `Timeout`/`Busy` is retried once with a fresh deadline, but a `Timeout` only
+    /// when no other timeout was charged to this focus (B-1 RR-1: at most two per focus, below
+    /// the Hung threshold of three); the second failure leaves the state `Failed`, which a key
+    /// press can reopen.
+    fn reconfirm_failed(&mut self, r: &QueryReply, fx: &mut ReaderEffects) -> bool {
+        use gorca_connector_api::BackendError as E;
+        let Err(e) = &r.result else {
+            if self.reconfirm.node() == Some(r.node) {
+                // Answered: asked once per focus change, whatever the state says.
+                self.reconfirm = Reconfirm::Asked(r.node);
+            }
+            return false;
+        };
+        let prior_timeout = self.timeout_charged;
+        let retryable = match e {
+            E::Timeout => {
+                self.timeout_charged = true;
+                !prior_timeout
+            }
+            E::Busy => true,
+            E::Gone | E::NotSupported | E::Protocol(_) | E::Unresolved => false,
+        };
+        match self.reconfirm {
+            Reconfirm::Asked(n) if n == r.node && retryable => {
+                self.counters.focus_reconfirm_retries += 1;
+                self.ask_state(r.node, fx);
+                self.reconfirm = Reconfirm::Retried(r.node);
+                true
+            }
+            Reconfirm::Asked(n) | Reconfirm::Retried(n) if n == r.node => {
+                self.reconfirm = Reconfirm::Failed(n, self.now);
+                true
+            }
+            Reconfirm::Idle
+            | Reconfirm::Pending(_)
+            | Reconfirm::Asked(_)
+            | Reconfirm::Retried(_)
+            | Reconfirm::Failed(..) => false,
+        }
+    }
+
+    fn ask_state(&mut self, node: NodeKey, fx: &mut ReaderEffects) {
+        tracing::debug!(?node, "focus reconfirm: reading the state");
+        self.reconfirm = Reconfirm::Asked(node);
+        self.counters.focus_reconfirms += 1;
+        fx.push(Self::fetch_effect(
+            node,
+            PropMask::STATES | PropMask::VALUE | PropMask::NAME,
+            self.epoch.current(),
+            FetchKind::StateChange,
+        ));
     }
 
     pub(crate) fn apply_focus(&mut self, msg: FocusMsg, fx: &mut ReaderEffects) {
@@ -390,6 +496,7 @@ impl Reader {
         from_cache: bool,
         fx: &mut ReaderEffects,
     ) {
+        tracing::debug!(node = ?snap.key, states = ?snap.states, ?source, from_cache, "focus presented");
         let (next, effect) = self.focus.step(FocusMsg::Presented { node: snap.key });
         self.focus = next;
         match effect {
@@ -471,6 +578,11 @@ impl Reader {
                         f.demote();
                     }
                 }
+                if self.reconfirm == Reconfirm::Pending(snap.key)
+                    && self.protection_unearned(snap.key)
+                {
+                    self.ask_state(snap.key, fx);
+                }
             }
             Some(
                 FocusEffect::BeginPresent { .. }
@@ -506,6 +618,11 @@ impl Reader {
         if r.epoch < self.epoch.current() {
             self.stale_replies_dropped += 1;
             return;
+        }
+        if matches!(r.kind, FetchKind::Focus | FetchKind::Revalidate)
+            && matches!(r.result, Err(gorca_connector_api::BackendError::Timeout))
+        {
+            self.timeout_charged = true;
         }
         match r.kind {
             FetchKind::Focus => self.on_focus_reply(r, fx),
@@ -706,6 +823,7 @@ impl Reader {
     }
 
     fn on_state_reply(&mut self, r: &QueryReply, fx: &mut ReaderEffects) {
+        tracing::debug!(node = ?r.node, states = ?r.result.as_ref().map(|n| n.states), presented = ?self.presented.as_ref().map(|p| p.node), "state reply");
         let Some(p) = self.presented.clone() else {
             return;
         };
@@ -722,8 +840,12 @@ impl Reader {
                 self.apply_focus(FocusMsg::NodeRemoved(r.node), fx);
                 return;
             }
-            Err(_) => return,
+            Err(_) => {
+                self.reconfirm_failed(r, fx);
+                return;
+            }
         };
+        self.reconfirm_failed(r, fx);
         // A re-read that shows the node FOCUSED is the proof a failed RV-1 never delivered
         // (review RR-2): earn the protection now.
         if self.selection_node != Some(r.node)

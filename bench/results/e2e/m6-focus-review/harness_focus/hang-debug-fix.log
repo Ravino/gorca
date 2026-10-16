@@ -1,0 +1,98 @@
+
+running 3 tests
+2026-10-16T13:22:24.111468Z DEBUG gorca_core::runtime: core running
+2026-10-16T13:22:24.112631Z DEBUG gorca_core::runtime: core running
+2026-10-16T13:22:24.189472Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-16T13:22:24.208361Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-16T13:22:24.630941Z DEBUG gorca_connector_atspi::connector: event listeners registered registered=11
+2026-10-16T13:22:24.633585Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-16T13:22:24.636245Z DEBUG gorca_connector_atspi::events::router: application announced sender=":1.2" app=AppId { connector: ConnectorId(1), serial: 1 } replayed=0
+2026-10-16T13:22:24.638329Z DEBUG gorca_connector_atspi::fetch: application identified app=AppId { connector: ConnectorId(1), serial: 1 } class=Other
+2026-10-16T13:22:24.641838Z DEBUG gorca_core::runtime: core running
+2026-10-16T13:22:24.716189Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-16T13:22:24.890522Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169206694736959701) } }
+2026-10-16T13:22:25.004937Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169206694736959701) } states=StateSet(FOCUSED | FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=MissReply from_cache=false
+2026-10-16T13:22:25.201507Z DEBUG gorca_core::present::flow: focus lane msg=StateChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169206694736959701) }, mask: PropMask(STATES) }
+2026-10-16T13:22:25.201674Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169205595225331490) } }
+2026-10-16T13:22:25.317316Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169205595225331490) } states=StateSet(FOCUSED | FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=MissReply from_cache=false
+2026-10-16T13:22:25.419722Z DEBUG gorca_connector_atspi::connector: event listeners registered registered=11
+2026-10-16T13:22:25.438573Z DEBUG gorca_core::present::flow: focus lane msg=StateChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169205595225331490) }, mask: PropMask(STATES) }
+2026-10-16T13:22:25.490711Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169206694736959701) } }
+2026-10-16T13:22:25.490872Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169206694736959701) } states=StateSet(FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=Hit from_cache=true
+2026-10-16T13:22:25.515119Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-16T13:22:25.607438Z DEBUG gorca_connector_atspi::events::router: application announced sender=":1.3" app=AppId { connector: ConnectorId(1), serial: 1 } replayed=0
+2026-10-16T13:22:25.617443Z DEBUG gorca_connector_atspi::connector: application left the bus name=:1.2 app=AppId { connector: ConnectorId(1), serial: 1 }
+2026-10-16T13:22:25.618399Z DEBUG gorca_core::runtime: fetch failed node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169205595225331490) } error=request timed out
+2026-10-16T13:22:25.618470Z DEBUG gorca_core::runtime: fetch failed node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169206694736959701) } error=request timed out
+2026-10-16T13:22:25.684514Z DEBUG gorca_connector_atspi::fetch: application identified app=AppId { connector: ConnectorId(1), serial: 1 } class=Other
+2026-10-16T13:22:25.705976Z DEBUG gorca_connector_atspi::connector: event listeners registered registered=11
+2026-10-16T13:22:25.724913Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169208893760216123) } }
+2026-10-16T13:22:25.940898Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169208893760216123) } states=StateSet(FOCUSED | FOCUSABLE | EDITABLE | SHOWING | VISIBLE | ENABLED) source=MissReply from_cache=false
+2026-10-16T13:22:25.941135Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169208893760216123) }, around: None, radius: 2048 }
+2026-10-16T13:22:26.060317Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-16T13:22:26.159382Z DEBUG gorca_core::present::flow: focus lane msg=StateChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169208893760216123) }, mask: PropMask(STATES) }
+2026-10-16T13:22:26.159558Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169205595225331490) } }
+2026-10-16T13:22:26.159821Z DEBUG gorca_text: window reply base=0 chars=0 len=0 caret=Some(0)
+2026-10-16T13:22:26.280928Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169205595225331490) } states=StateSet(FOCUSED | FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=MissReply from_cache=false
+2026-10-16T13:22:26.296916Z DEBUG gorca_connector_atspi::events::router: application announced sender=":1.4" app=AppId { connector: ConnectorId(1), serial: 2 } replayed=0
+2026-10-16T13:22:26.324932Z DEBUG gorca_connector_atspi::events::router: application announced sender=":1.3" app=AppId { connector: ConnectorId(1), serial: 1 } replayed=0
+2026-10-16T13:22:26.420938Z DEBUG gorca_core::runtime: fetch failed node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169208893760216123) } error=request timed out
+2026-10-16T13:22:26.451049Z DEBUG gorca_connector_atspi::fetch: application identified app=AppId { connector: ConnectorId(1), serial: 1 } class=Other
+2026-10-16T13:22:26.507941Z DEBUG gorca_connector_atspi::fetch: application identified app=AppId { connector: ConnectorId(1), serial: 2 } class=Other
+2026-10-16T13:22:26.539257Z DEBUG gorca_core::present::flow: focus lane msg=StateChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169205595225331490) }, mask: PropMask(STATES) }
+2026-10-16T13:22:26.539430Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169208893760216123) } }
+2026-10-16T13:22:26.539509Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169208893760216123) } states=StateSet(FOCUSED | FOCUSABLE | EDITABLE | SHOWING | VISIBLE | ENABLED) source=Stale from_cache=true
+2026-10-16T13:22:26.539587Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169208893760216123) }, around: None, radius: 2048 }
+2026-10-16T13:22:26.539742Z DEBUG gorca_core::present::flow: focus lane msg=StateChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169208893760216123) }, mask: PropMask(STATES) }
+2026-10-16T13:22:26.539764Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169207794248587912) } }
+2026-10-16T13:22:26.539929Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169205595225331490) } }
+2026-10-16T13:22:26.678617Z DEBUG gorca_core::runtime: fetch failed node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169207794248587912) } error=request timed out
+2026-10-16T13:22:26.678843Z DEBUG gorca_core::runtime: fetch failed node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169205595225331490) } error=request timed out
+2026-10-16T13:22:26.678912Z DEBUG gorca_core::runtime: fetch failed node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169208893760216123) } error=request timed out
+2026-10-16T13:22:26.678966Z DEBUG gorca_core::runtime: fetch failed node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169208893760216123) } error=request timed out
+2026-10-16T13:22:26.751302Z DEBUG gorca_core::runtime: fetch failed node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169205595225331490) } error=request timed out
+2026-10-16T13:22:26.782280Z DEBUG gorca_core::present::flow: focus lane msg=AppHung(AppId { connector: ConnectorId(1), serial: 1 })
+2026-10-16T13:22:26.788353Z DEBUG gorca_text: window reply base=0 chars=0 len=0 caret=Some(0)
+2026-10-16T13:22:26.864886Z DEBUG gorca_core::present::flow: focus lane msg=StateChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169205595225331490) }, mask: PropMask(STATES) }
+2026-10-16T13:22:26.864980Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169211092783472545) } }
+2026-10-16T13:22:27.045830Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169211092783472545) } states=StateSet(FOCUSED | FOCUSABLE | EDITABLE | SHOWING | VISIBLE | ENABLED) source=MissReply from_cache=false
+2026-10-16T13:22:27.045985Z DEBUG gorca_text: fetch op=Window { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169211092783472545) }, around: None, radius: 2048 }
+2026-10-16T13:22:27.133062Z DEBUG gorca_text: window reply base=0 chars=0 len=0 caret=Some(0)
+2026-10-16T13:22:27.175783Z DEBUG gorca_core::present::flow: focus lane msg=StateChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169211092783472545) }, mask: PropMask(STATES) }
+2026-10-16T13:22:27.178826Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169205595225331490) } }
+2026-10-16T13:22:27.178970Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169205595225331490) } states=StateSet(FOCUSED | FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=Stale from_cache=true
+2026-10-16T13:22:27.361620Z DEBUG gorca_core::runtime: fetch failed node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169205595225331490) } error=request timed out
+2026-10-16T13:22:27.503102Z DEBUG gorca_core::present::flow: focus lane msg=StateChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169205595225331490) }, mask: PropMask(STATES) }
+2026-10-16T13:22:27.503227Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169208893760216123) } }
+2026-10-16T13:22:27.627772Z DEBUG gorca_core::runtime: fetch failed node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169205595225331490) } error=request timed out
+2026-10-16T13:22:27.675213Z DEBUG gorca_core::runtime: fetch failed node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169208893760216123) } error=request timed out
+2026-10-16T13:22:27.687760Z DEBUG gorca_core::present::flow: focus lane msg=AppHung(AppId { connector: ConnectorId(1), serial: 2 })
+2026-10-16T13:22:27.747749Z DEBUG gorca_core::present::flow: focus lane msg=StateChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169208893760216123) }, mask: PropMask(STATES) }
+2026-10-16T13:22:27.747856Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169206694736959701) } }
+2026-10-16T13:22:27.931701Z DEBUG gorca_core::present::flow: focus lane msg=StateChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169206694736959701) }, mask: PropMask(STATES) }
+2026-10-16T13:22:27.931795Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169207794248587912) } }
+2026-10-16T13:22:28.116888Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169206694736959701) } }
+2026-10-16T13:22:28.228919Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169206694736959701) } states=StateSet(FOCUSED | FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=MissReply from_cache=false
+2026-10-16T13:22:28.404873Z DEBUG gorca_connector_atspi::events::router: application announced sender=":1.6" app=AppId { connector: ConnectorId(1), serial: 2 } replayed=1
+2026-10-16T13:22:28.419571Z DEBUG gorca_connector_atspi::connector: application left the bus name=:1.3 app=AppId { connector: ConnectorId(1), serial: 1 }
+2026-10-16T13:22:28.424891Z DEBUG gorca_core::present::flow: focus lane msg=WindowActivated { window: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169214391318357178) } }
+2026-10-16T13:22:28.466205Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169205595225331490) } }
+2026-10-16T13:22:28.614436Z DEBUG gorca_core::runtime: fetch failed node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169205595225331490) } error=request timed out
+2026-10-16T13:22:28.642043Z DEBUG gorca_core::runtime: fetch failed node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 2 }, local: LocalId(5169205595225331490) } error=request timed out
+2026-10-16T13:22:28.651696Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-16T13:22:28.651760Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0 }
+2026-10-16T13:22:28.657826Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-16T13:22:28.659150Z DEBUG gorca_core::runtime: core shutting down
+2026-10-16T13:22:28.905739Z DEBUG gorca_core::runtime: core shutting down
+2026-10-16T13:22:28.905969Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-16T13:22:28.933021Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 1, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-16T13:22:28.933081Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0 }
+
+thread 'tabbing_through_a_form_is_heard' (30950) panicked at crates/gorca-connector-atspi/tests/harness_focus.rs:168:13:
+`Subscribe check box` was not spoken; got ["email edit", "Cancel button", "email edit", "application not responding", "unknown"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test an_app_that_quits_is_retired_and_a_new_one_is_heard ... ok
+test a_hung_app_does_not_stop_the_reader ... ok
+2026-10-16T13:22:45.797690Z  WARN gorca_connector_atspi::connector: cannot reconcile with the bus; eviction is frozen
+2026-10-16T13:22:45.932953Z  WARN gorca_connector_atspi::connector: event drain lost; restarting why=end of stream
+2026-10-16T13:22:45.956952Z  WARN gorca_connector_atspi::connector: drain start failed error=connecting to the bus failed: No such file or directory (os error 2) backoff=100ms

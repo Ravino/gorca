@@ -72,12 +72,7 @@ fn resolved(cx: &CallCx, i: u64) -> Resolved {
 }
 
 fn run<F: std::future::Future<Output = ()>>(f: F) {
-    tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(f);
+    gorca_testkit::harness::run_bounded(2, std::time::Duration::from_secs(300), f);
 }
 
 fn names(b: &RawBatch) -> Vec<String> {
