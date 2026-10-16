@@ -87,10 +87,16 @@ fn shell_runtime(shell: bool) -> (Option<PathBuf>, gorca_daemon::ShellPolicyMode
     };
     let dir = target.join(profile).join("extensions");
     if dir.join("ext-gnome-shell/ext_gnome_shell.wasm").is_file() {
-        eprintln!("shell policy under test: WASM component ({})", dir.display());
+        eprintln!(
+            "shell policy under test: WASM component ({})",
+            dir.display()
+        );
         (Some(dir), ShellPolicyMode::Auto)
     } else {
-        eprintln!("shell policy under test: native build (no component in {})", dir.display());
+        eprintln!(
+            "shell policy under test: native build (no component in {})",
+            dir.display()
+        );
         (None, ShellPolicyMode::Native)
     }
 }

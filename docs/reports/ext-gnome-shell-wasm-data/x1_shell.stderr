@@ -1,0 +1,2 @@
+wasm: faults 0 busy_skips 0 hook_calls 1320000
+native: faults 0 busy_skips 0 hook_calls 1320000

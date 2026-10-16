@@ -266,6 +266,47 @@ fn the_core_still_presents_when_the_extension_faults() {
 }
 
 #[test]
+fn a_faulting_policy_hook_is_no_opinion_and_the_instance_is_reset() {
+    use gorca_core::{PolicyFacts, PolicyMoment, PolicyVerdict};
+    use gorca_model::StateSet;
+    let facts = |name| PolicyFacts {
+        moment: PolicyMoment::Focus,
+        role: Role::Button,
+        states: StateSet::empty(),
+        name: Some(name),
+        description: None,
+        range: None,
+    };
+    for b in BACKENDS {
+        let (h, _sink, _) = host(b);
+        let ae = attach(&h, 1, "x");
+        assert_eq!(
+            ae.policy(&facts("gorca-ext-silence")),
+            Some(PolicyVerdict::Silence),
+            "{b:?}"
+        );
+        assert_eq!(ae.policy(&facts("OK")), None, "defer is no opinion: {b:?}");
+        for name in ["gorca-ext-crash", "gorca-ext-spin"] {
+            if b == Backend::Native && name == "gorca-ext-spin" {
+                continue;
+            }
+            let t = Instant::now();
+            assert_eq!(ae.policy(&facts(name)), None, "{b:?} {name}");
+            let took = t.elapsed();
+            assert!(took < Duration::from_millis(50), "{b:?} {name}: {took:?}");
+            settle(&h);
+            // The replacement instance answers.
+            assert_eq!(
+                ae.policy(&facts("gorca-ext-silence")),
+                Some(PolicyVerdict::Silence),
+                "{b:?} after {name}"
+            );
+        }
+        assert!(h.stats().faults >= 1, "{b:?}");
+    }
+}
+
+#[test]
 fn settings_are_per_extension_and_need_the_capability() {
     for b in BACKENDS {
         let (h, sink, _) = host(b);

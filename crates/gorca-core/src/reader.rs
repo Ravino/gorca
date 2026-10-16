@@ -450,8 +450,6 @@ impl Reader {
         self
     }
 
-    /// Present the applications whose profile asks for it through `policy`.
-    #[must_use]
     /// Is an application policy asked about `app`? The profile must ask for it (the verified
     /// Shell) and a policy must exist: a native one installed by the daemon, or an extension host
     /// whose `policy` hook may answer.
@@ -481,6 +479,8 @@ impl Reader {
         }
     }
 
+    /// Present the applications whose profile asks for it through `policy`.
+    #[must_use]
     pub fn with_app_policy(mut self, policy: Arc<dyn crate::builtin_ext::AppPolicy>) -> Self {
         self.app_policy = Some(policy);
         self
