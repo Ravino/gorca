@@ -126,7 +126,6 @@ const NO_ANN: &str = "quicknav.next.annotation (A) is Planned(M7): not implement
 const NO_ERR: &str = "quicknav.next.error (W) is Planned(M7): not implemented on main";
 const NO_PARA: &str = "quicknav.next.paragraph (P) is Planned(M7): not implemented on main";
 const NO_SEL: &str = "browse-mode selection (Shift+arrows, Ctrl+A) is Planned: not on main";
-const NO_CARET_ANCHOR: &str = "a same-page anchor with no focus moves the DOM caret, not focus: CaretMoved is ignored in Browse (ADR-0003 11); NVDA follows it through scrollingStart";
 const NAME_OMITTED: &str = "the accessible name of a labelled form control is not spoken on quick nav: the label is separate text outside the control's range and the presenter speaks the range only (LP-1, LP-4)";
 const NO_ROLE_WORD: &str = "the role word and count of a container are not spoken when the cursor lands on it (field diff, LP-2: M7b)";
 const NO_LANDMARK_NAME: &str = "a landmark hit is presented as the content at its start; its name and role word are not spoken (BM-3/LP-2 field diff: M7b)";
@@ -477,10 +476,10 @@ fn an() -> Vec<Step> {
         s("AN.toc.go", P0, "Enter: the cursor lands on the heading", key0(ENTER), &["Section two"]).win(1500),
         top("AN.top3"),
         s("AN.para", P0, "Link to a paragraph id", rep('k', 3), &["Go to paragraph three"]),
-        s("AN.para.go", P0, "Enter: the paragraph is spoken", key0(ENTER), &["Paragraph three is the target"]).xf(NO_CARET_ANCHOR).win(1500),
+        s("AN.para.go", P0, "Enter: the paragraph is spoken", key0(ENTER), &["Paragraph three is the target"]).win(1500),
         top("AN.top4"),
         s("AN.named", P1, "Link to a named anchor", rep('k', 4), &["Go to named anchor"]),
-        s("AN.named.go", P1, "Enter: the text after the anchor is spoken", key0(ENTER), &["Text after a named anchor"]).xf(NO_CARET_ANCHOR).win(1500),
+        s("AN.named.go", P1, "Enter: the text after the anchor is spoken", key0(ENTER), &["Text after a named anchor"]).win(1500),
         top("AN.top5"),
         s("AN.foc", P0, "Link to a focusable div", rep('k', 5), &["Go to focusable target"]),
         s("AN.foc.go", P0, "Enter: focus moves to the div, the cursor follows", key0(ENTER), &["focusable div target"]).win(1500),
@@ -670,8 +669,7 @@ fn app() -> Vec<Step> {
         s("APP.compose", P0, "Compose opens a modal dialog; focus moves into it: name, and the first field", Act::Do(role::PUSH_BUTTON, "Compose"), &["To"]).extra(&["New message"], "the dialog's name is not spoken when focus enters it").win(1500),
         s("APP.esc", P0, "Escape in the dialog's field: browse mode, the dialog stays", key0(ESC), &["browse mode"]),
         s("APP.h", P0, "Shift+H: the dialog's own heading", p('h'), &["New message"]),
-        s("APP.close", P0, "Discard closes it; focus returns to the opener and the cursor is there", Act::Do(role::PUSH_BUTTON, "Discard"), &["Compose"]).win(1500),
-        s("APP.toast", P1, "The toast 'Dialog closed' is a status region", Act::Wait(300), &["Dialog closed"]).win(1500),
+        s("APP.close", P0, "Discard closes it; focus returns to the opener and the cursor is there; the toast 'Dialog closed' (a status region) is spoken after the focus speech", Act::Do(role::PUSH_BUTTON, "Discard"), &["Compose", "Dialog closed"]).win(3000),
         // alert dialog without aria-hidden on the app: modal scope must confine navigation
         s("APP.alert", P0, "The alert dialog opens: name and focus on Cancel", Act::Do(role::PUSH_BUTTON, "Empty trash"), &["Cancel"]).extra(&["Empty trash"], "the dialog's name is not spoken when focus enters it").win(1500),
         s("APP.alert.h", P0, "Shift+H: the dialog heading", p('h'), &["Empty trash"]),

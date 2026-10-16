@@ -37,7 +37,9 @@ const SETTLE_MAX: Duration = Duration::from_millis(200);
 /// `aria-busy` defers a region at most this long.
 const BUSY_MAX: Duration = Duration::from_secs(3);
 /// Regions that appear within this time of the first batch are part of the page, not news.
-const LOAD_QUIET: Duration = Duration::from_millis(1500);
+const LOAD_QUIET: Duration = Duration::from_millis(600);
+/// A batch touching at least this many nodes is page construction, not an update.
+const BULK_TOUCH: usize = 64;
 /// The same text in the same region is not spoken twice within this time.
 const DEDUPE_WINDOW: Duration = Duration::from_secs(10);
 /// A summary of dropped updates is spoken at most this often.
@@ -352,7 +354,11 @@ impl LiveTracker {
 
     /// A batch was published: mark the regions that own the touched nodes.
     pub fn on_batch(&mut self, doc: &WebDoc, touched: &[DocNodeId], now: Instant) {
-        let started = *self.started.get_or_insert(now);
+        // The quiet period runs from the last bulk batch (page construction), not from the first.
+        if touched.len() >= BULK_TOUCH || self.started.is_none() {
+            self.started = Some(now);
+        }
+        let started = self.started.unwrap_or(now);
         let quiet = now.saturating_duration_since(started) < LOAD_QUIET;
         let mut seen: std::collections::HashSet<DocNodeId> = std::collections::HashSet::new();
         for id in touched.iter().take(MAX_TOUCHED) {

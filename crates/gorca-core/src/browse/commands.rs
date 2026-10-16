@@ -406,22 +406,26 @@ fn up_to(d: &WebDoc, mut id: DocNodeId, c: Cat, hops: usize) -> Option<DocNodeId
     None
 }
 
-/// The ancestor-or-self of `n` that is the outermost node of category `c` containing it.
-fn outermost_match(d: &WebDoc, n: DocNodeId, c: Cat) -> DocNodeId {
-    let mut best = n;
-    let mut cur = Some(n);
-    let mut hops = 0;
-    while let Some(x) = cur {
-        if d.node(x).is_some_and(|v| v.cats.intersects(c)) {
-            best = x;
-        }
-        cur = d.parent(x);
-        hops += 1;
-        if hops > 64 {
-            break;
-        }
+/// The previous match before the cursor: the previous one in document order from the innermost
+/// match the cursor is in, or that match's enclosing match when it starts later (Shift+D from a
+/// landmark inside a landmark goes to the outer one: it starts before the inner one).
+fn prev_match(d: &WebDoc, node: DocNodeId, c: Cat, scope: Option<DocNodeId>) -> Option<DocNodeId> {
+    let inner = up_to(d, node, c, 64).unwrap_or(node);
+    let before = match scope {
+        Some(s) => d.prev_in(inner, c, s),
+        None => d.prev(inner, c),
+    };
+    let outer = d
+        .parent(inner)
+        .and_then(|p| up_to(d, p, c, 64))
+        .filter(|o| scope.is_none_or(|s| d.cmp_order(s, *o).is_some_and(|x| x.is_le())));
+    match (before, outer) {
+        (Some(b), Some(o)) => match d.cmp_order(b, o) {
+            Some(std::cmp::Ordering::Less) => Some(o),
+            _ => Some(b),
+        },
+        (b, o) => b.or(o),
     }
-    best
 }
 
 /// The modal dialog around `node` (`aria-modal`, the MODAL state), if any: the cursor keys
@@ -744,6 +748,7 @@ impl Reader {
         let Some(b) = self.web.as_mut() else { return };
         b.entry_wait = None;
         let hit = b.join.get(node);
+        tracing::info!(target: "gorca_phase", phase = "web_focus", hit = hit.is_some());
         if let Some((doc, id)) = hit
             && let Some(h) = b.docs.get(doc)
             && let Some((role, states)) = h.read.with(|d| {
@@ -1604,8 +1609,8 @@ impl Reader {
                 (Dir::Next, None) => d.next(cur.node, cat),
                 (Dir::Next, Some(s)) => d.next_in(cur.node, cat, s),
                 // Inside a match: step out of it, or "previous" would find the one we are in.
-                (Dir::Prev, None) => d.prev(outermost_match(d, cur.node, cat), cat),
-                (Dir::Prev, Some(s)) => d.prev_in(outermost_match(d, cur.node, cat), cat, s),
+                (Dir::Prev, None) => prev_match(d, cur.node, cat, None),
+                (Dir::Prev, Some(s)) => prev_match(d, cur.node, cat, Some(s)),
             }?;
             let off = cursor::content_start(d, target)?;
             let cur = cursor::cursor_at(d, off)?;
