@@ -400,12 +400,6 @@ fn raw_keys_and_a_password_prompt_behave_the_same_and_leak_nothing() {
     );
 }
 
-// Release builds only: with an unoptimised wasmtime the 72 KB screen alone exceeds the CPU backstop
-// of the hook (measured: "interrupted at the CPU limit"; the optimised host takes 0.44 ms).
-#[cfg_attr(
-    debug_assertions,
-    ignore = "needs an optimised host: cargo test --release -p gorca-daemon --test term_parity"
-)]
 #[test]
 fn a_big_screen_goes_through_the_component_whole() {
     let _ = gorca_daemon::init_tracing();

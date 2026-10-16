@@ -184,7 +184,7 @@ fn setup(
         .configure(Duration::from_millis(1), Duration::from_millis(utter_ms));
     let mut args = vec!["--term-trim"];
     args.extend_from_slice(extra);
-    let app = FakeApp::spawn(&rig.env.harness_dir, "terminal", "termapp", 0, &args)?;
+    let app = FakeApp::spawn(&rig.env.harness_dir, "terminal", "gnome-terminal-fake", 0, &args)?;
     Ok(T {
         rig,
         app,
@@ -408,7 +408,7 @@ pub fn vw(
     let mut bg = FakeApp::spawn(
         &t.rig.env.harness_dir,
         "terminal",
-        "termbg",
+        "gnome-terminal-bg",
         0,
         &["--term-trim"],
     )?;
@@ -1266,7 +1266,7 @@ pub fn vb(
     let mut bg = FakeApp::spawn(
         &t.rig.env.harness_dir,
         "terminal",
-        "termbg",
+        "gnome-terminal-bg",
         0,
         &["--term-trim", "--term-rows", "50", "--term-cols", "200"],
     )?;
@@ -1360,7 +1360,7 @@ pub fn vp(
     let app = FakeApp::spawn(
         &rig.env.harness_dir,
         "terminal",
-        "termapp",
+        "gnome-terminal-fake",
         0,
         &["--term-trim"],
     )?;

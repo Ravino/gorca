@@ -248,7 +248,7 @@ interface terminal {
   /// The screen as last known, for review; none before the first reading.
   snapshot: func() -> option<term-snapshot>;
   counters: func() -> term-counters;
-  /// `now` is monotonic milliseconds. Limit: 8 ms CPU (a screen diff, run inline on the Reader).
+  /// `now` is monotonic milliseconds. Limit: 16 ms CPU (reading a screen of up to 256 KiB, run inline on the Reader; typical 24x80 step: 13 us).
   step: func(now: u64, input: term-input) -> list<term-action>;
 }
 

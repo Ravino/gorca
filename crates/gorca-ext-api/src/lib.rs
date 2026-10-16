@@ -77,7 +77,7 @@ pub const LIMIT_HOOK_MS: u32 = 2;
 /// CPU limit for `command` (milliseconds).
 pub const LIMIT_COMMAND_MS: u32 = 20;
 /// CPU limit for the terminal `step` (milliseconds): a screen diff, run inline on the Reader.
-pub const LIMIT_TERMINAL_MS: u32 = 8;
+pub const LIMIT_TERMINAL_MS: u32 = 16;
 /// Memory limit per instance (bytes).
 pub const LIMIT_MEMORY_BYTES: usize = 32 * 1024 * 1024;
 /// Resets within [`DISABLE_WINDOW_SECS`] that disable the extension for that app.
