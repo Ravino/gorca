@@ -142,3 +142,57 @@ passed on the rerun: load flake, unrelated). Strict `K2,K3,K4,R1` with `--impers
 no `--topology` flag and rtkit reachable (`bench/results/b5/default-strict`, load 13-41): all 12 reader
 starts resolved to `lanes-rt` with all lanes real-time, 0 FAIL rows, `lost` 0 in K2/K3/R1, K4 clean
 (10000 switches x 3), K2 p99 0.25 ms, K3 1.2 ms, R1 0.41 ms, 0 watchdog demotions.
+
+## Verdict conditions F-1, F-2, F-3 and the A1 follow-up (2026-10-16)
+
+Reviewer verdict: `docs/reports/b5-verdict.md` (adopt `auto` with conditions). Fixes on this branch:
+
+* **F-1 (SIGKILL on the second runaway).** The `SIGXCPU` handler (`crates/gorca-rt/src/sched.rs`) now
+  re-arms `RLIMIT_RTTIME` to the configured soft/hard after demoting the thread (a plain `setrlimit`
+  syscall, async-signal-safe), counted in `xcpu_rearm_failures` (report field). The watchdog logs a
+  WARN when `xcpu_demotions` grows. Regression test
+  `topology::tests::a_second_runaway_is_demoted_not_killed` (gorca-daemon): re-executes the test binary,
+  gets a real rtkit grant, spins three RT runaways with soft=100 ms / hard=200 ms and checks the limit
+  is restored after each. With the re-arm disabled the child fails ("limit not re-armed after runaway 1");
+  skips when rtkit is unreachable.
+* **F-2 (refused grant left lanes pinned).** `auto` now makes a test grant: `resolve` reads rtkit's
+  limits and asks `MakeThreadRealtime` for one throw-away thread, else `single`. Lanes pin only after
+  their own grant succeeds, and `lanes-rt` no longer restricts workers/bulk threads to other CPUs, so a
+  refusal can never leave the pinned-without-RT shape. Tests with a fake rtkit on a private
+  `dbus-daemon` that grants or refuses (`auto_resolves_to_lanes_rt_only_after_a_real_grant`,
+  `a_refused_lane_is_not_pinned`). `RLIMIT_RTTIME` is lowered by the probe and cannot be raised again;
+  it is inert while no thread is RT.
+* **Small machines.** `auto` -> `single` unless the process has more than 4 CPUs and at least 4 fast CPUs
+  besides CPU 0 (`lanes_fit`, tested). The per-core duty sum stays a follow-up (ADR-0001 section 15.1).
+* **F-3 (harness hid the default).** `tests/harness/run-isolated.sh` exports
+  `GORCA_RTKIT_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket` to the daemon when the socket exists
+  (`GORCA_HARNESS_RTKIT=0` opts out). `e2e run` forces a topology report per reader, records
+  `topology_arms=` in the result header, and `--expect-topology ARM` / `GORCA_E2E_EXPECT_TOPOLOGY` fails
+  the run with exit 3 (not softened by `--no-fail`) on a mismatch or when no report exists.
+* **A1 under saturation (follow-up gate).** Cause per the verdict: pinning moved the workers off 4 of 6
+  P-cores. Fix: workers and the bulk pool are no longer kept off the hot cores in `lanes-rt` (still the
+  case in the diagnostic `lanes-pin`). Measured with `bench/b5/judge.sh f3-a1 --arms single,lanes-rt
+  --conds sat --only A1 --rounds 5` (interleaved, `bench/results/b5/f3-a1`, all 5 lanes-rt readers
+  `lanes-rt`, `rt_granted_all` true; memory PSI `full avg10` at most 3.2 %, log
+  `f3-a1/psi-memory.log`): A1 p99 median **lanes-rt 26.2 ms [24.9..32.1], single 29.6 ms [19.4..35.4]**
+  (before: 44.6 vs 23.8), p95 14.1 vs 16.2. The ranges overlap and the arm ordering is not stable (W3/5),
+  so "no worse than single" holds at the median; it is not proof of a win. p50 equal.
+
+### Gates on the shipped default
+
+* `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo xtask deps`: clean.
+  `cargo test --workspace --no-fail-fast -- --test-threads=4`: all result lines ok, 0 failed.
+* Strict `K2,K3,K4,R1,A1`, `--impersonate-orca`, no `--topology`, 3 repeats, through the fixed harness,
+  `--expect-topology lanes-rt` (the check passed: `topology_arms=lanes-rtx15`):
+  * `f3-strict`: round 3 died when the harness temp dir under `/tmp` was removed by something else
+    (`bind /tmp/gorca-h.*/run/sp11.sock: No such file`); kept, not used.
+  * `f3-strict2` (host load 15-20): K2 p99 1.07 ms, K3 1.42, R1 1.09, lost 0, K4 leaked/doubled/lost 0.
+    **Two FAIL rows:** `K4.chord_resent_per_10k` (repeats 0/2/13 against a gate of 5) and `A1.a1_wrong`
+    (0/0/10 against 0). One disturbed repeat each.
+  * Controls (`f3-ctl1..4`, K4+A1, 3 repeats each, interleaved single / lanes-rt / single / lanes-rt,
+    same host): lanes-rt `chord_resent` 0/0, `a1_wrong` 0/0 (A1 p99 median 6.0 and 5.6 ms); single
+    `a1_wrong` max 1 in the first, 0 in the second. So `a1_wrong` and `chord_resent` outliers also occur on
+    `single` on this loaded host (`f3-strict` itself had `a1_wrong` 1), and lanes-rt reproduced clean in 6 of
+    6 control repeats. Not proven to be host noise: the 13 and 10 were not reproduced, nor explained.
+    Treat the strict gate as open until a quiet-host repeat.
+* Open: per-core duty sum for the watchdog; quiet-host repeat (SPEC section 7); the A1 and K4 outliers above.

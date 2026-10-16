@@ -1,0 +1,286 @@
+{
+ "cells": {
+  "sat": {
+   "A1.a1_ms.p50": {
+    "lanes-rt": {
+     "vals": [
+      6.959263,
+      7.572964,
+      9.824473,
+      8.69945,
+      8.069889
+     ],
+     "median": 8.069889,
+     "min": 6.959263,
+     "max": 9.824473,
+     "stdev": 1.099399493486194,
+     "paired_vs_single": {
+      "rounds": 5,
+      "lower": 1,
+      "equal": 0
+     }
+    },
+    "single": {
+     "vals": [
+      7.554121,
+      6.628004,
+      9.204393,
+      8.194776,
+      7.809351
+     ],
+     "median": 7.809351,
+     "min": 6.628004,
+     "max": 9.204393,
+     "stdev": 0.9396496199751797
+    }
+   },
+   "A1.a1_ms.p95": {
+    "lanes-rt": {
+     "vals": [
+      12.54073,
+      14.105649,
+      18.532091,
+      13.546022,
+      14.512143
+     ],
+     "median": 14.105649,
+     "min": 12.54073,
+     "max": 18.532091,
+     "stdev": 2.2942158098503946,
+     "paired_vs_single": {
+      "rounds": 5,
+      "lower": 4,
+      "equal": 0
+     }
+    },
+    "single": {
+     "vals": [
+      15.046704,
+      16.393217,
+      17.453217,
+      15.436731,
+      16.244139
+     ],
+     "median": 16.244139,
+     "min": 15.046704,
+     "max": 17.453217,
+     "stdev": 0.9335699361407259
+    }
+   },
+   "A1.a1_ms.p99": {
+    "lanes-rt": {
+     "vals": [
+      29.921435,
+      32.055682,
+      25.086249,
+      24.911222,
+      26.209192
+     ],
+     "median": 26.209192,
+     "min": 24.911222,
+     "max": 32.055682,
+     "stdev": 3.1905417111682612,
+     "paired_vs_single": {
+      "rounds": 5,
+      "lower": 3,
+      "equal": 0
+     }
+    },
+    "single": {
+     "vals": [
+      33.698789,
+      35.376179,
+      24.199375,
+      19.429373,
+      29.581704
+     ],
+     "median": 29.581704,
+     "min": 19.429373,
+     "max": 35.376179,
+     "stdev": 6.637804021260571
+    }
+   },
+   "A1.lost": {
+    "lanes-rt": {
+     "vals": [
+      0,
+      1,
+      0,
+      0,
+      0
+     ],
+     "median": 0,
+     "min": 0,
+     "max": 1,
+     "stdev": 0.4472135954999579,
+     "paired_vs_single": {
+      "rounds": 5,
+      "lower": 3,
+      "equal": 1
+     }
+    },
+    "single": {
+     "vals": [
+      4,
+      0,
+      0,
+      1,
+      1
+     ],
+     "median": 1,
+     "min": 0,
+     "max": 4,
+     "stdev": 1.6431676725154984
+    }
+   }
+  }
+ },
+ "rt": {
+  "sat": {
+   "lanes-rt": {
+    "reader_starts": 5,
+    "rt_granted_all": 5,
+    "lane_grants": {
+     "rr:15": 5,
+     "rr:12": 10,
+     "rr:13": 5
+    },
+    "rt_status": [
+     "rtkit available"
+    ],
+    "watchdog_demotions": 0,
+    "xcpu_demotions": 0,
+    "stray_non_other_threads": []
+   },
+   "single": {
+    "reader_starts": 5,
+    "rt_granted_all": 0,
+    "lane_grants": {},
+    "rt_status": [
+     "not requested"
+    ],
+    "watchdog_demotions": 0,
+    "xcpu_demotions": 0,
+    "stray_non_other_threads": []
+   }
+  }
+ },
+ "loads": {
+  "sat": {
+   "lanes-rt": {
+    "1": {
+     "load_before": "29.88 24.11 34.20 14/3400 701404",
+     "busy_pct": "35",
+     "load_with_hog": "28.53 23.93 34.08 26/3527 701583",
+     "load_after": "41.19 29.31 35.00 11/3513 707604",
+     "governor": "performance ",
+     "exit": "0"
+    },
+    "2": {
+     "load_before": "41.19 29.31 35.00 12/3511 707611",
+     "busy_pct": "46",
+     "load_with_hog": "40.13 29.28 34.96 26/3523 708097",
+     "load_after": "34.31 30.34 34.79 4/3514 715492",
+     "governor": "performance ",
+     "exit": "0"
+    },
+    "3": {
+     "load_before": "48.70 38.36 37.03 25/3622 728039",
+     "busy_pct": "99",
+     "load_with_hog": "47.04 38.19 36.98 40/3449 728254",
+     "load_after": "53.88 43.12 38.87 21/3308 735208",
+     "governor": "performance ",
+     "exit": "0"
+    },
+    "4": {
+     "load_before": "53.88 43.12 38.87 24/3308 735213",
+     "busy_pct": "99",
+     "load_with_hog": "54.05 43.33 38.97 42/3372 735432",
+     "load_after": "54.47 46.35 40.47 30/3515 739096",
+     "governor": "performance ",
+     "exit": "0"
+    },
+    "5": {
+     "load_before": "40.84 44.56 40.99 12/3672 752157",
+     "busy_pct": "61",
+     "load_with_hog": "40.45 44.42 40.96 33/3680 752458",
+     "load_after": "42.65 43.85 41.08 19/3707 761002",
+     "governor": "performance ",
+     "exit": "0"
+    }
+   },
+   "single": {
+    "1": {
+     "load_before": "14.46 21.17 34.55 6/3704 694849",
+     "busy_pct": "15",
+     "load_with_hog": "13.94 20.95 34.41 24/3718 694899",
+     "load_after": "29.88 24.11 34.20 15/3401 701399",
+     "governor": "performance ",
+     "exit": "0"
+    },
+    "2": {
+     "load_before": "34.31 30.34 34.79 8/3511 715497",
+     "busy_pct": "13",
+     "load_with_hog": "33.73 30.28 34.75 25/3532 715601",
+     "load_after": "45.65 34.64 35.83 28/3443 721475",
+     "governor": "performance ",
+     "exit": "0"
+    },
+    "3": {
+     "load_before": "45.65 34.64 35.83 25/3445 721482",
+     "busy_pct": "100",
+     "load_with_hog": "45.65 34.64 35.83 41/3567 721744",
+     "load_after": "48.70 38.36 37.03 23/3622 728033",
+     "governor": "performance ",
+     "exit": "0"
+    },
+    "4": {
+     "load_before": "54.47 46.35 40.47 25/3515 739101",
+     "busy_pct": "99",
+     "load_with_hog": "54.47 46.35 40.47 40/3540 739156",
+     "load_after": "49.40 47.16 41.35 2/3459 744925",
+     "governor": "performance ",
+     "exit": "0"
+    },
+    "5": {
+     "load_before": "49.40 47.16 41.35 5/3456 744930",
+     "busy_pct": "14",
+     "load_with_hog": "46.32 46.56 41.19 24/3476 744990",
+     "load_after": "40.84 44.56 40.99 11/3671 752150",
+     "governor": "performance ",
+     "exit": "0"
+    }
+   }
+  }
+ },
+ "cpu": {
+  "sat": {
+   "lanes-rt": {
+    "vals": [
+     1.056,
+     1.096,
+     1.059,
+     1.034,
+     1.19
+    ],
+    "median": 1.059,
+    "min": 1.034,
+    "max": 1.19,
+    "stdev": 0.061733297336202586
+   },
+   "single": {
+    "vals": [
+     0.9929999999999999,
+     0.925,
+     0.881,
+     0.871,
+     0.995
+    ],
+    "median": 0.925,
+    "min": 0.871,
+    "max": 0.995,
+    "stdev": 0.059279001341115696
+   }
+  }
+ }
+}
