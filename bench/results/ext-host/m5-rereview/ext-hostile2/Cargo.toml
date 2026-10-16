@@ -1,0 +1,16 @@
+[package]
+name = "ext-hostile2"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+gorca-ext-api = { path = "../../../../../crates/gorca-ext-api" }
+
+[workspace]
+
+[profile.release]
+opt-level = 2

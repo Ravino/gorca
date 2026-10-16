@@ -1,0 +1,59 @@
+# e2e m4b-gates-a3
+# utc=2026-10-15T23:24:44Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=11.71 11.93 12.66 1/3319 2820669
+# git_rev=41e083e
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m4b-gates-a3
+# reader=daemon:<repo>/.claude/worktrees/agent-a5fab50a294ec6e11/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=11.71 11.93 12.66 5/3319 2820666
+# reader_env=GORCA_M4B=1 GORCA_M4B_STRICT=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=A1: 150 fresh dialogs and 150 fresh plain windows after 6 warm-up ones; the focus follows the activation by 2 ms; a1_ms is the activation emit to the first SPEAK carrying the focus button (the title, role and dialog text lead it in one utterance)
+# note1=N1 trial 17 Assertive follow=true: spoke 0.0 ms vs end Some(405.420267)
+# note2=N1 trial 17 Assertive follow=true: a live speech was cancelled right before the notification
+# note3=N1: 60 trials of 400 ms focus speech, cycling polite announcement, assertive announcement + newer focus, Shell banner, banner + newer focus; 60 notifications spoken
+
+metric                     bus                median          min          max  n op    threshold  res   note
+A1.a1_ms.n                 daemon/voicego          150          150          150  3                  info   [samples]
+A1.a1_ms.p50               daemon/voicego        3.652        3.570        3.911  3                  info   [ms]
+A1.a1_ms.p95               daemon/voicego        5.186        4.976        5.209  3                  info   [ms]
+A1.a1_ms.p99               daemon/voicego        5.492        5.353        5.506  3 <=           15  PASS   [ms]
+A1.a1_ms.p999              daemon/voicego        5.587        5.510        5.602  3                  info   [ms]
+A1.a1_ms.max               daemon/voicego        5.587        5.510        5.602  3                  info   [ms]
+A1.a1f_ms.n                daemon/voicego          150          150          150  3                  info   [samples]
+A1.a1f_ms.p50              daemon/voicego        1.439        1.334        1.673  3                  info   [ms]
+A1.a1f_ms.p95              daemon/voicego        2.916        2.626        2.950  3                  info   [ms]
+A1.a1f_ms.p99              daemon/voicego        3.210        3.028        3.257  3                  info   [ms]
+A1.a1f_ms.p999             daemon/voicego        3.261        3.251        3.285  3                  info   [ms]
+A1.a1f_ms.max              daemon/voicego        3.261        3.251        3.285  3                  info   [ms]
+A1.a1w_ms.n                daemon/voicego          150          150          150  3                  info   [samples]
+A1.a1w_ms.p50              daemon/voicego        2.795        2.781        2.797  3                  info   [ms]
+A1.a1w_ms.p95              daemon/voicego        3.216        3.100        3.505  3                  info   [ms]
+A1.a1w_ms.p99              daemon/voicego        3.480        3.471        6.659  3 <=           15  PASS   [ms]
+A1.a1w_ms.p999             daemon/voicego        3.723        3.476        7.584  3                  info   [ms]
+A1.a1w_ms.max              daemon/voicego        3.723        3.476        7.584  3                  info   [ms]
+A1.a1_split                daemon/voicego            0            0            0  3                  info   [events]
+A1.a1_wrong                daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+A1.lost                    daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+N1.n1_focus_ms.n           daemon/voicego           30           30           30  3                  info   [samples]
+N1.n1_focus_ms.p50         daemon/voicego        0.243        0.234        0.257  3                  info   [ms]
+N1.n1_focus_ms.p95         daemon/voicego        0.360        0.351        0.405  3                  info   [ms]
+N1.n1_focus_ms.p99         daemon/voicego        0.376        0.356        1.636  3 <=           15  PASS   [ms]
+N1.n1_focus_ms.p999        daemon/voicego        0.376        0.356        1.636  3                  info   [ms]
+N1.n1_focus_ms.max         daemon/voicego        0.376        0.356        1.636  3                  info   [ms]
+N1.lost                    daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+N1.n1_interrupted          daemon/voicego            0            0            2  3 <=            0  FAIL  gated on the max over repeats [events]
+N1.n1_text_wrong           daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]

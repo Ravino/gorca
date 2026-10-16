@@ -33,6 +33,7 @@ mod commands;
 mod directory;
 mod doc_actor;
 mod doc_registry;
+mod ext;
 mod focus;
 mod health;
 mod mode;
@@ -40,6 +41,7 @@ mod present;
 mod reader;
 mod review;
 mod runtime;
+mod terminal;
 mod text;
 
 pub use app_actor::{
@@ -50,19 +52,24 @@ pub use browse::{
     BrowseCounters, BrowseSettings, FocusCause, ModeWord, Scope, WebEv, WebFx, WebMode,
 };
 pub use builtin_ext::AppProfile;
+pub use builtin_ext::{AppPolicy, PolicyFacts, PolicyMoment, PolicyVerdict};
 pub use commands::{
     Availability, CmdSpec, CommandTable, Compiled, ConfigRequest, ContextMask, ControlMsg, CoreCmd,
     InputNotice, LoadCause, LoadedSettings, LocalTime, Milestone, PASS_TIMEOUT, PlatformFacts,
     SaveResult, SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels, WallClock, browse_grabs,
-    chord_grabs, command_id, compile, escape_grabs, gorca_modifiers, grab_collisions,
+    chord_grabs, command_id, compile, compile_with, escape_grabs, gorca_modifiers, grab_collisions,
     lane_settings, letter_grabs,
 };
-pub use directory::MirrorDirectory;
+pub use directory::{MirrorDirectory, Owner};
 pub use doc_actor::{
     DocActorSpec, DocCounters, DocCtl, DocDirectory, DocHandle, DocNotice, WebJoin,
     prepare as prepare_doc_actor,
 };
 pub use doc_registry::{BUILD_HOLD, HubCfg, HubMsg, HubTx, WarmState, hub_channel, run_hub};
+pub use ext::{
+    AppExt, EXT_CMD_BASE, ExtCmdError, ExtCmdSpec, ExtCommands, ExtSink, ExtSource, ExtVerdict,
+    segments_text,
+};
 pub use focus::{FOCUS_FLAP_DELAY, FocusEffect, FocusMsg, FocusState, settle_delay};
 pub use health::{
     AppHealth, HUNG_PROBE_MAX, HUNG_PROBE_MIN, HealthEffect, HealthMsg, HealthStepCtx,
@@ -71,6 +78,11 @@ pub use health::{
 pub use mode::{BaseMode, Mode, ModeEffect, ModeKeys, ModeMsg, PassScope, WebCursor};
 pub use present::log_states as snapshot_state_names;
 pub use present::value_text;
+pub use present::{
+    Content, DesktopEffect, WindowEffect, WindowInfo, WindowMsg, WindowState,
+    announcement_utterance, clean_announcement, dialog_content, fetch_level, fetch_window,
+    is_notice_role, lead_segments, notice_segments, reads_content,
+};
 pub use present::{
     FOCUS_FIELDS, NoLabels, NodeLabel, PresentContext, PresentJob, PresentKind, PresentLog,
     PresentRecord, PresentSource, Presented, Presenter, PresenterRegistry, RAPID_FOCUS,
@@ -89,4 +101,5 @@ pub use review::{
 pub use runtime::{
     Core, CoreConfig, CoreError, CoreStats, CoreStatsSnapshot, NullSpeech, SpeechOut,
 };
+pub use terminal::{TermReads, classify_term_key};
 pub use text::{TextCounters, TextMsg, TextOp, TextReqId};

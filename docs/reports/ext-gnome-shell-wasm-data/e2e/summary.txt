@@ -1,0 +1,12 @@
+round 1 native load 11.90 11.96 11.72
+  exit 0
+round 1 wasm load 12.18 13.37 13.08
+  exit 0
+round 2 native load 14.41 14.28 13.41
+  exit 0
+round 2 wasm load 14.32 14.41 13.54
+  exit 1
+round 3 native load 13.33 13.95 13.71
+  exit 0
+round 3 wasm load 11.48 11.26 12.40
+  exit 0

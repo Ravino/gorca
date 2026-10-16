@@ -43,8 +43,18 @@ const E1_P99_MS: f64 = 3.0;
 const S2_P99_MS: f64 = 15.0;
 const SA1_P99_MS: f64 = 15.0;
 const SA3_STOP_P99_MS: f64 = 2.0;
+/// M6 gates (docs/plan/phase-2.md 2.1 V1-V3), ceilings. V1: the T-1 settle of 30 ms wall plus 5 ms
+/// of gorca. V3: silence after Ctrl+C, the L2 path. V2: the reader's CPU while a flood runs (percent
+/// of one core, the plan says 60 % of a core) and the backlog on its bus socket (KiB, 1 MiB).
+const V1_P99_MS: f64 = 35.0;
+const V3_STOP_P99_MS: f64 = 2.0;
+const V2_CPU_PCT: f64 = 60.0;
+const V2_SIOCINQ_KIB: f64 = 1024.0;
 /// R1 under the L3-50k storm: R1's ceiling plus the 1 ms allowed by ADR-0006 18.
 const R1S_P99_MS: f64 = 4.0;
+/// M4b gate A1 (phase-2.md M4): window or dialog activation to the speech of title and focus,
+/// p99 15 ms gorca-side. N1 holds a newer focus to the same bound while a notification is queued.
+const A1_P99_MS: f64 = 15.0;
 /// M7a gates (browse-mode design 15): ceilings in ms; W2b is wall time.
 const W1_P99_MS: f64 = 5.0;
 const FM1_P99_MS: f64 = 15.0;
@@ -144,6 +154,9 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     ("K3", "k3_ms", "p99") => Some(K3_P99_MS),
                     ("R1", "r1_ms", "p99") => Some(R1_P99_MS),
                     ("R1s", "r1s_ms", "p99") => Some(R1S_P99_MS),
+                    ("A1", "a1_ms" | "a1w_ms", "p99") | ("N1", "n1_focus_ms", "p99") => {
+                        Some(A1_P99_MS)
+                    }
                     ("W1", "w1_ms", "p99")
                     | ("BR1", "br1_ms" | "br1c_ms" | "br1w_ms", "p99")
                     | ("FM2", "fm2_ms", "p99") => Some(W1_P99_MS),
@@ -168,6 +181,16 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     ("FSA3", "fsa3_stop_ms", "p99") => Some(SA3_STOP_P99_MS),
                     // M7b: browse say-all, first chunk after the key (browse design 15, SAB).
                     ("BSA1", "bsa1_ms", "p99") => Some(BSA_P99_MS),
+                    ("V1", "v1_ms", "p99") => Some(V1_P99_MS),
+                    ("VT", "vt_ms", "p99") => Some(E1_P99_MS),
+                    ("V3", "v3_stop_ms", "p99") => Some(V3_STOP_P99_MS),
+                    ("VR", "vr_ms", "p99") => Some(R1_P99_MS),
+                    ("V2", "v2_key_ms", "p99") | ("VB", "vb_key_ms", "p99") => {
+                        Some(E1_P99_MS + 1.0)
+                    }
+                    ("VV", "vv_key_ms", "p99") => Some(E1_P99_MS),
+                    ("VV", "vv_flood_key_ms", "p99") => Some(E1_P99_MS + 1.0),
+                    ("VV", "vv_stop_ms", "p99") => Some(V3_STOP_P99_MS),
                     _ => None,
                 };
                 if let Some(t) = thr {
@@ -241,6 +264,50 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "bar_failures"
                     | "bl_failures"
                     | "fr_failures"
+                    | "vt_missing"
+                    | "vt_double"
+                    | "vt_extra"
+                    | "vh_failures"
+                    | "v3_stale"
+                    | "v3_prompt_missing"
+                    | "v3_no_stop"
+                    | "vp_prompt_missing"
+                    | "vp_echo_missing"
+                    | "vp_echo_double"
+                    | "vp_plaintext_in_logs"
+                    | "vr_failures"
+                    | "vr_lost"
+                    | "vr_ipc_calls"
+                    | "vf_failures"
+                    | "vb_missing"
+                    | "vb_double"
+                    | "vb_stray_speaks"
+                    | "vte_assert"
+                    | "v2_key_lost"
+                    | "v2_cat_after_missing"
+                    | "v2_yes_after_missing"
+                    | "v2_make_after_missing"
+                    | "vv_failures"
+                    | "vv_type_missing"
+                    | "vv_type_double"
+                    | "vv_type_extra"
+                    | "vv_yes_key_lost"
+                    | "vv_seq_key_lost"
+                    | "vv_seq_prompt_missing"
+                    | "vv_yes_prompt_missing"
+                    | "vv_yes_flood_unspoken"
+                    | "vv_seq_flood_unspoken"
+                    | "vv_screen_failures"
+                    | "vv_password_prompt_missing"
+                    | "vv_password_echo_missing"
+                    | "vv_password_echo_double"
+                    | "vv_password_echo_extra"
+                    | "vv_password_plaintext_in_logs"
+                    | "vv_password_log_empty"
+                    | "vv_server_aborts"
+                    | "a1_wrong"
+                    | "n1_interrupted"
+                    | "n1_text_wrong"
             ) {
                 // Worst repeat, not the median: one lost focus in three runs is a failure.
                 row = row.at_most_in_every_run(0.0);
@@ -270,6 +337,36 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                 row = row
                     .at_least(0.99)
                     .note("next chunk at the server before the previous one ended (ADR-0007 SA2)");
+            }
+            if metric == "v2_worst_cpu_pct" {
+                row = row.at_most_in_every_run(V2_CPU_PCT).note(
+                    "reader CPU during the worst flood, percent of one core (V2: below 60 %)",
+                );
+            }
+            if metric == "vv_worst_cpu_pct" {
+                row = row
+                    .at_most_in_every_run(V2_CPU_PCT)
+                    .note("reader CPU during the worst real flood, percent of one core");
+            }
+            if metric == "vv_siocinq_p99_kib" {
+                row = row.at_most_in_every_run(V2_SIOCINQ_KIB).note(
+                    "p99 of the unread bytes on the reader's bus sockets during the real floods",
+                );
+            }
+            if metric == "v2_siocinq_p99_kib" {
+                row = row
+                    .at_most_in_every_run(V2_SIOCINQ_KIB)
+                    .note("p99 of the unread bytes on the reader's bus sockets during the floods (V2: below 1 MiB)");
+            }
+            if metric == "v2_siocinq_measured" {
+                row = row
+                    .at_least(1.0)
+                    .note("`ss` saw the reader's sockets, so the backlog number means something");
+            }
+            if metric == "vp_log_lines" {
+                row = row
+                    .at_least(1.0)
+                    .note("the presentation log was written, so an empty grep means something");
             }
             if metric == "pw_log_lines" {
                 row = row
@@ -435,6 +532,7 @@ fn main() -> Result<()> {
         flavor.name()
     );
     let all_rows = rows(&acc, &label_bus, &scns);
+    let reader_meta = host::reader_meta(&reader, &host_env.reader_env);
     let mut meta = host::meta(&[
         ("label", label.clone()),
         ("reader", reader.label()),
@@ -460,6 +558,7 @@ fn main() -> Result<()> {
             ),
         ),
     ]);
+    meta.extend(reader_meta.into_iter().map(|(k, v)| (k.to_owned(), v)));
     for (i, n) in acc.notes.iter().enumerate() {
         meta.push((format!("note{i}"), n.clone()));
     }

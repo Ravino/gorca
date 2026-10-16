@@ -1,0 +1,48 @@
+D1_run_dialog              events=  183 load= 14.84 {'Object.StateChanged[focused]': 9, 'Object.StateChanged[active]': 4, 'Window.Activate[]': 2, 'Window.Deactivate[]': 2}
+D2_end_session_dialog      events=  143 load= 14.85 {'Object.StateChanged[focused]': 9, 'Object.StateChanged[active]': 4, 'Window.Activate[]': 2, 'Window.Deactivate[]': 2, 'Object.TextChanged[delete]': 2, 'Object.TextChanged[insert]': 3, 'Object.TextCaretMoved[]': 1}
+D3_polkit_dialog           events=  839 load= 16.31 {'Object.StateChanged[focused]': 13, 'Object.StateChanged[active]': 4, 'Window.Activate[]': 2, 'Window.Deactivate[]': 2}
+L1_lock_screen             events= 4831 load= 15.40 {'Object.StateChanged[focused]': 25, 'Object.StateChanged[active]': 8, 'Window.Activate[]': 4, 'Window.Deactivate[]': 4, 'Object.TextCaretMoved[]': 10, 'Object.Announcement[]': 4}
+N1_notification            events=  314 load= 21.14 {}
+N2_notification_actions    events=  341 load= 18.56 {}
+N3_second_and_replace      events=  738 load= 17.41 {}
+N4_critical                events=  231 load= 20.40 {}
+O1_osd                     events=   51 load= 19.70 {}
+O2_osd_nolevel             events=   28 load= 19.40 {}
+Q1_quick_settings          events=  103 load= 14.21 {'Object.StateChanged[focused]': 7, 'Object.StateChanged[active]': 4, 'Window.Activate[]': 2, 'Window.Deactivate[]': 2}
+S0_idle                    events=  768 load= 21.50 {}
+T1_alt_tab                 events=  224 load= 11.84 {'Object.StateChanged[focused]': 7, 'Object.StateChanged[active]': 4, 'Window.Activate[]': 2, 'Window.Deactivate[]': 2}
+T2_alt_grave               events=  352 load= 13.01 {'Object.StateChanged[focused]': 7, 'Object.StateChanged[active]': 4, 'Window.Activate[]': 2, 'Window.Deactivate[]': 2}
+V1_overview_eval           events=  375 load= 18.33 {'Object.TextCaretMoved[]': 2}
+V2_overview_super_key      events=  377 load= 17.58 {'Object.TextCaretMoved[]': 2}
+V3_overview_search         events=  942 load= 15.81 {'Object.TextCaretMoved[]': 4, 'Object.StateChanged[focused]': 3, 'Object.StateChanged[active]': 2, 'Window.Activate[]': 1, 'Object.TextChanged[insert]': 3, 'Window.Deactivate[]': 1}
+V4_app_grid                events=  559 load= 16.06 {}
+W1_windows_appear          events= 1386 load= 16.76 {'Window.Activate[]': 2, 'Object.StateChanged[focused]': 5, 'Object.StateChanged[active]': 3, 'Object.TextChanged[insert]': 1, 'Window.Deactivate[]': 1}
+TOTAL BY KIND:
+    2497 ('Object', 'StateChanged', 'showing')
+    1859 ('Object', 'StateChanged', 'visible')
+    1552 ('Object', 'StateChanged', 'defunct')
+    1445 ('Object', 'PropertyChange', 'accessible-parent')
+    1442 ('Object', 'ChildrenChanged', 'add')
+    1372 ('Object', 'ChildrenChanged', 'remove')
+     731 ('Object', 'PropertyChange', 'accessible-role')
+     490 ('Object', 'StateChanged', 'sensitive')
+     490 ('Object', 'StateChanged', 'enabled')
+     315 ('Object', 'PropertyChange', 'accessible-name')
+     183 ('Object', 'PropertyChange', 'widget')
+     158 ('Object', 'BoundsChanged', '')
+      85 ('Object', 'StateChanged', 'focused')
+      37 ('Object', 'StateChanged', 'active')
+      23 ('Object', 'PropertyChange', 'accessible-value')
+      19 ('Window', 'Activate', '')
+      19 ('Object', 'TextCaretMoved', '')
+      18 ('Window', 'Deactivate', '')
+       9 ('Object', 'StateChanged', 'selected')
+       9 ('Object', 'StateChanged', 'checked')
+       7 ('Object', 'TextChanged', 'insert')
+       7 ('Object', 'StateChanged', 'focusable')
+       4 ('Object', 'StateChanged', 'editable')
+       4 ('Object', 'Announcement', '')
+       4 ('Object', 'StateChanged', 'iconified')
+       3 ('Object', 'VisibleDataChanged', '')
+       2 ('Object', 'TextChanged', 'delete')
+       1 ('Object', 'StateChanged', 'expanded')

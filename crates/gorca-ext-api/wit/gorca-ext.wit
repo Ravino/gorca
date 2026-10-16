@@ -1,5 +1,8 @@
 // gorca extension world, ADR-0001 section 10.
-// Hooks run on `workers` in the app actor's context, never on the Reader lane.
+// Where hooks run: `on-event` in the app actor's context, `command` on the host's worker threads,
+// and `present` (with `nav-units` / `nav-match` when a presenter asks) inline on the Reader lane,
+// which is why it has the tightest wall-clock backstop. No hook ever blocks: the host calls them
+// with a fuel budget, an epoch deadline and a per-call host-work budget (see gorca-ext-host).
 package gorca:ext@0.1.0;
 
 interface types {
@@ -7,12 +10,15 @@ interface types {
   type node-key = tuple<u64, u64>;
 
   enum role {
-    unknown, application, window, dialog, panel, document, heading, paragraph, link, image,
+    unknown, application, window, dialog, panel, document, document-web, heading, paragraph, link, image,
     %list, list-item, table, row, cell, column-header, row-header, button, toggle-button,
     check-box, radio-button, combo-box, text-entry, password-entry, spin-button, slider,
     progress-bar, menu, menu-bar, menu-item, popover, tab, tab-list, tree, tree-item, toolbar,
     status-bar, separator, label, static-text, terminal, landmark, alert,
   }
+
+  /// A numeric value as the application reports it (sliders, level bars).
+  record range { current: f64, min: f64, max: f64 }
 
   record node {
     key: node-key,
@@ -21,7 +27,9 @@ interface types {
     states: u64,
     name: option<string>,
     description: option<string>,
-    // TBD: value, attrs, relations, bounds as the host API grows.
+    /// The range value of a slider or level bar, if it has one.
+    range: option<range>,
+    // TBD: text value, attrs, relations, bounds as the host API grows.
   }
 
   enum budget { interactive, prefetch, background }
@@ -37,7 +45,9 @@ interface types {
   /// Normalised events an extension may inspect (subset of core NodeEvent).
   variant event {
     focus-changed(node-key),
-    properties-changed(node-key),
+    /// `(node, mask)`: the `prop` bits of what changed (see `gorca_ext_api::prop`), for example
+    /// `selected-now` when a node just became selected (the Shell's Alt+Tab switcher).
+    properties-changed(tuple<node-key, u32>),
     children-changed(node-key),
     text-changed(node-key),
     caret-moved(tuple<node-key, u32>),
@@ -68,6 +78,40 @@ interface types {
     name: string,
   }
 
+  /// When the core asks an application policy (ADR-0008 tier W3).
+  enum policy-moment {
+    /// A node took focus and is about to be presented.
+    focus,
+    /// The value of a node that does not hold focus changed (an OSD level bar).
+    value,
+    /// A window was activated and is about to be announced.
+    activate,
+    /// A node became visible: does it read like a notice?
+    showing,
+  }
+
+  /// What a policy sees of a node: plain data (the `showing` moment carries only the role).
+  record policy-facts {
+    moment: policy-moment,
+    role: role,
+    states: u64,
+    name: option<string>,
+    description: option<string>,
+    range: option<range>,
+  }
+
+  variant policy-verdict {
+    /// No opinion: the core presents the node as for any application.
+    defer,
+    silence,
+    /// Replace the value in the core's presentation with this text.
+    value(string),
+    /// Say this instead of the core's presentation.
+    say(list<segment>),
+    /// Read the node as a notice when it appears (title, role word, text).
+    notice,
+  }
+
   variant command-result {
     handled,
     not-handled,
@@ -86,21 +130,94 @@ interface host {
   /// Tagged with the current epoch by the host.
   speak: func(segments: list<segment>, prio: prio);
   /// Own namespace only.
+  get-setting: func(k: string) -> option<string>;
+  /// Own namespace only; bounded key and value sizes, extra keys are dropped.
   set-setting: func(k: string, v: string);
   log: func(level: u8, msg: string);
 }
 
 interface hooks {
-  use types.{node, event, event-verdict, present-ctx, segment, nav-unit, command-result};
+  use types.{node, event, event-verdict, present-ctx, segment, nav-unit, command-result, policy-facts, policy-verdict};
 
-  /// Limit: 2 ms CPU.
+  /// Limit: 2 ms CPU. Focus and removal events are routed whatever the verdict (the core keeps
+  /// its focus bookkeeping); a `rewrite` there still speaks.
   on-event: func(ev: event) -> event-verdict;
   /// Limit: 2 ms CPU. `some` replaces the core presentation (first match wins).
   present: func(n: node, ctx: present-ctx) -> option<list<segment>>;
+  /// Limit: 2 ms CPU. The application policy (ADR-0008 W3): facts in, verdict out; runs inline on
+  /// the Reader like `present`. The first extension that does not `defer` wins.
+  policy: func(f: policy-facts) -> policy-verdict;
   nav-units: func() -> list<nav-unit>;
   nav-match: func(unit: u32, n: node) -> bool;
   /// Limit: 20 ms CPU.
   command: func(id: u32) -> command-result;
+}
+
+/// Terminal policy (milestone M6, ADR-0001 T-2, ADR-0008 tier W3). One pure function per terminal:
+/// the host owns the clock, the IPC and the speech; the extension turns inputs into actions.
+/// Rust mirror: `gorca_ext_api::terminal`. Not part of the `extension` world yet: M5 adds
+/// `export terminal;` once the host dispatches it.
+interface terminal {
+  variant term-key {
+    typed(char), enter, backspace, delete, tab,
+    char-left, char-right, word-left, word-right, line-start, line-end,
+    line-up, line-down, interrupt, other,
+  }
+
+  variant term-edit {
+    /// `text` is present when the payload arrived and has `len` scalars.
+    insert(tuple<u32, u32, option<string>>),
+    %delete(tuple<u32, u32>),
+    replaced,
+  }
+
+  variant term-input {
+    key(term-key),
+    edit(term-edit),
+    caret(u32),
+    /// Reply to `fetch-screen`: the visible screen and the caret.
+    screen(tuple<string, option<u32>>),
+    screen-failed,
+    tick,
+    focus,
+    blur,
+  }
+
+  enum unit { %char, word, line, text }
+
+  enum urgency { key, queued, output }
+
+  variant term-action {
+    say(tuple<string, unit, urgency, bool>),
+    fetch-screen,
+    /// Call `step` with `tick` at this time (milliseconds) or soon after.
+    arm-timer(u64),
+    /// The key was handled: the generic key echo stays silent.
+    claim-key,
+  }
+
+  record term-config {
+    settle-ms: u32,
+    max-wait-ms: u32,
+    prompt-markers: list<string>,
+    prompt-regex: string,
+    secret-regex: string,
+    burst-lines: u32,
+    burst-tail: u32,
+    max-output-chars: u32,
+  }
+
+  record term-snapshot {
+    text: string,
+    caret: u32,
+    generation: u64,
+  }
+
+  configure: func(cfg: term-config);
+  /// The screen as last known, for review; none before the first reading.
+  snapshot: func() -> option<term-snapshot>;
+  /// `now` is monotonic milliseconds. Limit: 2 ms CPU.
+  step: func(now: u64, input: term-input) -> list<term-action>;
 }
 
 world extension {

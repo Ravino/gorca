@@ -250,6 +250,10 @@ struct Shared {
     web: WebShared,
     /// Text events the app actors could not queue for the Reader (ADR-0007 EV-5).
     text_dropped: Arc<AtomicU64>,
+    /// The extension host (ADR-0001 section 10), when the daemon wires one.
+    ext: Option<Arc<dyn crate::ExtSource>>,
+    /// The application policy the Reader consults (ADR-0008 W3), if the daemon installed one.
+    app_policy: Option<Arc<dyn crate::builtin_ext::AppPolicy>>,
 }
 
 /// The document side of the core: the focus join, the directory of documents, the registry's
@@ -322,6 +326,8 @@ impl Core {
                     counters: Arc::new(DocCounters::default()),
                 },
                 text_dropped: Arc::new(AtomicU64::new(0)),
+                ext: None,
+                app_policy: None,
             }),
             inbox,
             registrars: Vec::new(),
@@ -329,6 +335,16 @@ impl Core {
             config_rx: Some(config_rx),
             hub_rx: Some(hub_rx),
         }
+    }
+
+    /// Install the presentation policy of the applications whose profile asks for one (the
+    /// native `ext-gnome-shell` today). Call before [`Core::run`].
+    #[must_use]
+    pub fn with_app_policy(mut self, policy: Arc<dyn crate::builtin_ext::AppPolicy>) -> Self {
+        if let Some(sh) = Arc::get_mut(&mut self.shared) {
+            sh.app_policy = Some(policy);
+        }
+        self
     }
 
     /// Turn browse mode on: web documents are mirrored through sources made by `factory`
@@ -362,6 +378,27 @@ impl Core {
         if let Some(sh) = Arc::get_mut(&mut self.shared) {
             sh.speech = speech;
         }
+        self
+    }
+
+    /// Wire an extension host: app actors offer it their events, the Reader its presentations
+    /// and commands, and its speech returns through the Reader's background lane. Call before
+    /// [`Core::run`].
+    #[must_use]
+    pub fn with_ext(mut self, src: Arc<dyn crate::ExtSource>) -> Self {
+        let Some(sh) = Arc::get_mut(&mut self.shared) else {
+            // A silent no-op would load extensions that never run.
+            tracing::error!("Core::with_ext called after the shared state was cloned: ignored");
+            debug_assert!(
+                false,
+                "Core::with_ext must run before anything clones the shared state"
+            );
+            return self;
+        };
+        src.set_sink(Arc::new(crate::ext::BackgroundSink::new(
+            sh.senders.background.clone(),
+        )));
+        sh.ext = Some(src);
         self
     }
 
@@ -628,6 +665,10 @@ fn spawn_app_actor(
             tx: shared.senders.text.clone(),
             dropped: Arc::clone(&shared.text_dropped),
         });
+    let actor = match &shared.ext {
+        Some(src) => actor.with_ext(Arc::clone(src)),
+        None => actor,
+    };
     let actor = if shared.web.factory.is_some() {
         actor.with_web(WebLink {
             hub: shared.web.hub.clone(),
@@ -978,10 +1019,19 @@ async fn reader_loop(
     if let Some(log) = &shared.present_log {
         reader = reader.with_present_log(Arc::clone(log));
     }
+    if let Some(src) = &shared.ext {
+        reader = reader.with_ext(Arc::clone(src));
+    }
+    if let Some(p) = &shared.app_policy {
+        reader = reader.with_app_policy(Arc::clone(p));
+    }
     // N1: every armed deadline stays armed until it fires (a set, not one slot).
     let mut timers: std::collections::BTreeSet<Instant> = std::collections::BTreeSet::new();
     // Review fetches, builds and actions: each in a task this loop owns (aborted with it).
     let mut review_tasks: JoinSet<()> = JoinSet::new();
+    // Desktop reads (windows, notices, the OSD level) have their own bound, so slow or hostile
+    // applications can never use up the slots of the user's review keys (M-3).
+    let mut desktop_tasks: JoinSet<()> = JoinSet::new();
     // Text fetches, likewise: bounded, owned here, aborted with the loop (ADR-0007 TW-5).
     let mut text_tasks: JoinSet<()> = JoinSet::new();
     loop {
@@ -989,9 +1039,11 @@ async fn reader_loop(
             biased;
             () = token.cancelled() => {
                 tracing::info!(text = ?reader.text_counters(), "reader text counters");
+                tracing::info!(terminal = ?reader.terminal_counters(), reads = ?reader.terminal_reads(), "reader terminal counters");
                 return;
             }
             Some(_) = review_tasks.join_next(), if !review_tasks.is_empty() => continue,
+            Some(_) = desktop_tasks.join_next(), if !desktop_tasks.is_empty() => continue,
             Some(_) = text_tasks.join_next(), if !text_tasks.is_empty() => continue,
             m = inbox.next() => match m {
                 Some(m) => m,
@@ -1093,9 +1145,57 @@ async fn reader_loop(
                 | ReaderEffect::ReviewRevalidate { .. }
                 | ReaderEffect::ReviewStatusBar { .. }
                 | ReaderEffect::ReviewAct { .. }) => spawn_review(&mut review_tasks, shared, e),
+                ReaderEffect::Desktop(d) => spawn_desktop(&mut desktop_tasks, shared, d),
             }
         }
     }
+}
+
+/// The app side of a desktop effect (windows, notifications; M4b): a task bounded by request
+/// deadlines whose outcome goes to the Reader on the background lane. An app that is gone, hung
+/// or refusing answers with nothing, so the Reader keeps what it has (I-4).
+fn spawn_desktop(set: &mut JoinSet<()>, shared: &Arc<Shared>, d: crate::present::DesktopEffect) {
+    use crate::present::{DesktopEffect, fetch_level, fetch_window};
+    use crate::reader::BackgroundMsg;
+    let app = match &d {
+        DesktopEffect::Window { window } => window.app,
+        DesktopEffect::Notice { node, .. } | DesktopEffect::Level { node } => node.app,
+    };
+    if !desktop_has_room(set) {
+        return;
+    }
+    let io = match (shared.apps.get(app), shared.mirrors.handle(app)) {
+        (Some(h), Some(mirror)) if h.admits.load(Ordering::Acquire) => {
+            Some(crate::review::ReviewIo {
+                requests: h.requests,
+                fill: h.fill,
+                health: Some(h.health),
+                mirror,
+                clock: shared.clock.clone(),
+                next_req: Arc::clone(&shared.next_req),
+                limits: crate::review::ReviewLimits::default(),
+            })
+        }
+        _ => None,
+    };
+    let Some(io) = io else { return };
+    let tx = shared.senders.background.clone();
+    set.spawn(async move {
+        let msg = match d {
+            DesktopEffect::Window { window } => {
+                BackgroundMsg::Window(fetch_window(&io, window).await)
+            }
+            DesktopEffect::Level { node } => BackgroundMsg::LevelRead {
+                info: fetch_level(&io, node).await,
+            },
+            DesktopEffect::Notice { node, .. } => BackgroundMsg::Notice {
+                info: fetch_window(&io, node).await,
+            },
+        };
+        if tx.try_send(msg).is_err() {
+            tracing::warn!("reader background queue full; dropped a desktop result");
+        }
+    });
 }
 
 /// Browse-mode effects of the Reader: fire and forget, never awaited (BI-1).
@@ -1129,6 +1229,17 @@ fn exec_web(shared: &Shared, w: WebEffect) {
 /// Most review tasks in flight at once (a held review key queues behind the Reader's own
 /// pending-operation rule long before this).
 const REVIEW_TASKS_MAX: usize = 32;
+/// Most desktop reads in flight at once; over it the read is dropped (the Reader keeps what it
+/// has), never a review task refused.
+const DESKTOP_TASKS_MAX: usize = 16;
+
+fn review_has_room(review_tasks: &JoinSet<()>) -> bool {
+    review_tasks.len() < REVIEW_TASKS_MAX
+}
+
+fn desktop_has_room(desktop_tasks: &JoinSet<()>) -> bool {
+    desktop_tasks.len() < DESKTOP_TASKS_MAX
+}
 /// Soft deadlines of a model build (ADR-0006 6.8): the key press waits for the first, the
 /// continuation runs in the background.
 const BUILD_FIRST: Duration = Duration::from_millis(120);
@@ -1161,13 +1272,12 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
         | ReaderEffect::TextFetch { .. }
         | ReaderEffect::SayAllChunk { .. }
         | ReaderEffect::Config(_)
+        | ReaderEffect::Desktop(_)
         | ReaderEffect::Web(_) => return,
     };
     let tx = shared.senders.review.clone();
     let io = match (shared.apps.get(app), shared.mirrors.handle(app)) {
-        (Some(h), Some(mirror))
-            if h.admits.load(Ordering::Acquire) && set.len() < REVIEW_TASKS_MAX =>
-        {
+        (Some(h), Some(mirror)) if h.admits.load(Ordering::Acquire) && review_has_room(set) => {
             Some(ReviewIo {
                 requests: h.requests,
                 fill: h.fill,
@@ -1300,6 +1410,7 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
         | ReaderEffect::TextFetch { .. }
         | ReaderEffect::SayAllChunk { .. }
         | ReaderEffect::Config(_)
+        | ReaderEffect::Desktop(_)
         | ReaderEffect::Web(_) => {}
     }
 }
@@ -1359,6 +1470,7 @@ fn spawn_text(
         }
         TextOp::Selections { node } => BackendOp::Text(TextQuery::Selections { node }),
         TextOp::Format { node, offset } => BackendOp::Text(TextQuery::Format { node, offset }),
+        TextOp::Screen { node } => BackendOp::Text(TextQuery::Screen { node }),
         TextOp::SetCaret { node, offset } => {
             BackendOp::Action(ActionReq::SetCaret { node, offset })
         }
@@ -1453,5 +1565,21 @@ mod tests {
         assert!(core.mirrors().is_empty());
         assert_eq!(core.slot_budget().limit(), GLOBAL_SLOT_BUDGET);
         assert_eq!(core.stats().snapshot(), CoreStatsSnapshot::default());
+    }
+
+    #[tokio::test]
+    async fn slow_desktop_reads_can_never_use_up_the_review_slots() {
+        let mut desktop: JoinSet<()> = JoinSet::new();
+        let review: JoinSet<()> = JoinSet::new();
+        while desktop_has_room(&desktop) {
+            desktop.spawn(std::future::pending());
+        }
+        assert_eq!(desktop.len(), DESKTOP_TASKS_MAX);
+        assert!(!desktop_has_room(&desktop), "the desktop reads are bounded");
+        assert!(
+            review_has_room(&review),
+            "and review navigation still has all its slots"
+        );
+        desktop.abort_all();
     }
 }

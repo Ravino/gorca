@@ -85,3 +85,35 @@ GNOME Terminal 3.56 uses. Bridge side: `refs/at-spi2-core/atk-adaptor/event.c`. 
   instead of waiting for caret events.
 * Consider registering `Object:TextChanged:*` per application (`app_bus_name` argument of
   `RegisterEvent`) only for the focused terminal and a catch-up poll (`GetText`) when it regains focus.
+
+## Measured on a real VTE (2026-10-15, M6)
+
+gnome-terminal 3.56.2 with libvte 0.80.1 in a private headless gnome-shell, 100x30 window, bash, driven by
+`tests/term/vte_probe.py` (see `tests/term/README.md`; the recorded session is
+`extensions/ext-vte/tests/fixtures/`). This corrects or settles several points above.
+
+* **Text**: every one of the 30 rows, each followed by `'\n'`, empty rows included (`"$ \n" + 29 x "\n"`, 32 scalars).
+  A written trailing blank is kept (`"$ cho \n"`); only unwritten cells are dropped. `CharacterCount` equalled the
+  scalars of `GetText(0, -1)` and the caret is a scalar offset (the 31830/20995 mismatch of the first probe did not
+  reproduce). Offsets in `Text` are scalars; only attribute runs are bytes, so the connector table says `Scalar`.
+* **Typed character**: `text-changed:insert off=N len=1` with the character as payload, then `text-caret-moved N+1`, 2 to
+  5 ms after the key reached the compositor. A key and its echo are that close: the key event and the screen change
+  can arrive in either order.
+* **BackSpace**: `delete off len=1` whose payload is the deleted character, then the caret. **Left/Right/Home/End**: caret
+  only. **Tab** completion: an insert of the added text. **Ctrl+U**: a delete whose payload is what went. **History
+  Up/Down**: an insert / delete of the command text.
+* **Enter with output**: `delete off len=1 "\n"` immediately followed by `insert off len=N "output\n$ "` and the caret:
+  the T-1 pair. A partial scroll (`seq 1 40`) is two deletes and two inserts with offsets that apply in order.
+* **Flood** (`seq 1 100000000`, `yes`): one `delete` of the whole screen text and one `insert` of the whole new text per
+  frame, 110 to 165 events/s, 5 to 30 KB/s of payload at 30x100, gnome-terminal-server at 60 to 82 % of a core. The
+  last row is often a partial line (the program is mid-write).
+* **Only registered events are emitted**: atk-bridge drops `text-changed`, `text-caret-moved` and
+  `text-selection-changed` unless a listener registered them (`Registry.RegisterEvent`). A reader started alone heard none
+  until `REGISTERED_EVENTS` listed them (connector, `events/session.rs`).
+* **P-11 settled by source**: `RegisterEvent`'s `app_bus_name` is stored by registryd (`registry.c:1011`) but the
+  `EventListenerRegistered` signal carries only `(sender, event, properties)` and the code sets the destination on the
+  incoming call, not on the signal (`registry.c:1028`); atk-bridge parses the same three fields
+  (`atk-adaptor/bridge.c:793`). Per-application registration therefore does not reach the application: D-5 is not
+  available, a flooding background terminal is handled by T-4 (`Flooded`).
+* **Focus**: the terminal widget got `state-changed:focused` only when the first key reached it on a headless seat; the
+  Reader's focus presentation may be served from a snapshot without `FOCUSED` (see `docs/reports/m6-impl.md`, risks).

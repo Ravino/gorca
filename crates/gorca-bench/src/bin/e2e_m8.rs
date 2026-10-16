@@ -357,6 +357,7 @@ fn main() -> Result<()> {
         flavor.name()
     );
     let all_rows = rows(&acc, &label_bus, &scns);
+    let reader_meta = host::reader_meta(&reader, &host_env.reader_env);
     let mut meta = host::meta(&[
         ("label", label.clone()),
         ("reader", reader.label()),
@@ -373,6 +374,7 @@ fn main() -> Result<()> {
             ),
         ),
     ]);
+    meta.extend(reader_meta.into_iter().map(|(k, v)| (k.to_owned(), v)));
     for (i, n) in acc.notes.iter().enumerate() {
         meta.push((format!("note{i}"), n.clone()));
     }

@@ -1,0 +1,96 @@
+diff --git a/crates/gorca-core/src/present/fair.rs b/crates/gorca-core/src/present/fair.rs
+index 5bcb163..a8f8da8 100644
+--- a/crates/gorca-core/src/present/fair.rs
++++ b/crates/gorca-core/src/present/fair.rs
+@@ -430,3 +430,40 @@ mod tests {
+         assert!(f.allow(owner(9_999), Kind::Speak, t + Duration::from_secs(1)));
+     }
+ }
++
++#[cfg(test)]
++mod m4b_review_probe {
++    use super::*;
++    use gorca_model::{Epoch, Prio, UttId};
++
++    fn u(n: u64) -> Utterance {
++        Utterance {
++            id: UttId(n),
++            segments: smallvec::SmallVec::new(),
++            lang: None,
++            epoch: Epoch(1),
++            prio: Prio::Notification,
++            may_refine: false,
++            survives_focus_change: true,
++            refines: None,
++        }
++    }
++
++    /// P4: waiting utterances released by `take_due` must respect the global ceiling.
++    #[test]
++    fn probe_p4_take_due_respects_the_global_ceiling() {
++        let t = Instant::now();
++        let mut f = Fair::new(t);
++        for o in 0..64u32 {
++            while f.allow(Owner::Pid(o), Kind::Speak, t) {}
++            f.wait(Owner::Pid(o), u(u64::from(o)), t);
++        }
++        let out = f.take_due(t + Duration::from_millis(400));
++        assert!(
++            out.len() as f32 <= GLOBAL_SPEAK_BURST,
++            "{} waiting notices released at once, ceiling {}",
++            out.len(),
++            GLOBAL_SPEAK_BURST
++        );
++    }
++}
+diff --git a/crates/gorca-core/src/present/window.rs b/crates/gorca-core/src/present/window.rs
+index bb5e0a4..76810e8 100644
+--- a/crates/gorca-core/src/present/window.rs
++++ b/crates/gorca-core/src/present/window.rs
+@@ -1718,3 +1718,6 @@ pub(crate) mod tests {
+         assert!(said(&fx).is_empty());
+     }
+ }
++
++#[cfg(test)]
++mod m4b_review_probes;
+diff --git a/crates/gorca-speech/src/queue.rs b/crates/gorca-speech/src/queue.rs
+index a310978..3ee5006 100644
+--- a/crates/gorca-speech/src/queue.rs
++++ b/crates/gorca-speech/src/queue.rs
+@@ -312,3 +312,35 @@ mod tests {
+         assert!(e.contains(&SpeechEffect::Speak(UttId(2))), "{e:?}");
+     }
+ }
++
++#[cfg(test)]
++mod m4b_review_probe {
++    use super::*;
++    use gorca_model::UttId;
++    use std::time::Duration;
++
++    /// P5: a notification that arrives at an idle lane inside the grace (after the epoch advance,
++    /// before the focus utterance) must wait like a queued one; else the focus cuts it off.
++    #[test]
++    fn probe_p5_fresh_notification_inside_grace_waits() {
++        let t = Instant::now();
++        let mut q = SpeechQueue::new(true);
++        q.handle(
++            SpeechMsg::Intent(UttMeta { id: UttId(1), prio: Prio::Text, epoch: Epoch(1), survives_focus_change: false }),
++            t,
++            Epoch(1),
++        );
++        q.handle(SpeechMsg::EpochAdvanced, t, Epoch(2));
++        let n = UttMeta { id: UttId(2), prio: Prio::Notification, epoch: Epoch(2), survives_focus_change: true };
++        let e = q.handle(SpeechMsg::Intent(n), t + Duration::from_millis(2), Epoch(2));
++        let e2 = q.handle(
++            SpeechMsg::Intent(UttMeta { id: UttId(3), prio: Prio::Interrupt, epoch: Epoch(2), survives_focus_change: false }),
++            t + Duration::from_millis(10),
++            Epoch(2),
++        );
++        assert!(
++            !e.contains(&SpeechEffect::Speak(UttId(2))),
++            "notification started inside the grace: {e:?}; then the focus did {e2:?}"
++        );
++    }
++}

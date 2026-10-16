@@ -98,6 +98,54 @@ pub fn meta(extra: &[(&str, String)]) -> Vec<(String, String)> {
     m
 }
 
+/// Reader configuration for the result header: the daemon arguments, the extension directory
+/// (`--ext-dir` argument or `GORCA_EXT_DIR` in the reader environment) and the extensions found
+/// in it, so a run with an extension loaded can never be mistaken for one without.
+pub fn reader_meta(
+    reader: &super::apps::ReaderSpec,
+    reader_env: &[(String, String)],
+) -> Vec<(&'static str, String)> {
+    let args: &[String] = match reader {
+        super::apps::ReaderSpec::Daemon { args, .. } => args,
+        super::apps::ReaderSpec::Stub => &[],
+    };
+    let mut ext_dir = reader_env
+        .iter()
+        .find(|(k, _)| k == "GORCA_EXT_DIR")
+        .map(|(_, v)| v.clone());
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        if let Some(v) = a.strip_prefix("--ext-dir=") {
+            ext_dir = Some(v.to_owned());
+        } else if a == "--ext-dir" {
+            ext_dir = it.next().cloned();
+        }
+    }
+    let extensions = ext_dir.as_deref().map_or_else(
+        || "none".to_owned(),
+        |d| {
+            let mut names: Vec<String> = std::fs::read_dir(d)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .filter(|e| e.path().join("ext.toml").is_file())
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .collect();
+            names.sort();
+            if names.is_empty() {
+                "none found".to_owned()
+            } else {
+                names.join(",")
+            }
+        },
+    );
+    vec![
+        ("reader_args", args.join(" ")),
+        ("ext_dir", ext_dir.unwrap_or_else(|| "none".to_owned())),
+        ("extensions", extensions),
+    ]
+}
+
 /// `YYYYMMDDThhmmssZ`, used in result file names.
 pub fn stamp() -> String {
     sh("date", &["-u", "+%Y%m%dT%H%M%SZ"])

@@ -1,0 +1,44 @@
+# e2e m5rr2-k4-1-noext
+# utc=2026-10-16T02:31:43Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=11.88 12.15 13.26 1/3584 572955
+# git_rev=ea2c1ee
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m5rr2-k4-1-noext
+# reader=daemon:<repo>/.claude/worktrees/agent-a5aefe82e077800c6/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=11.88 12.15 13.26 1/3584 572952
+# reader_env=GORCA_M1=1 GORCA_M1_STRICT=1 GORCA_M4=1 GORCA_M4_STRICT=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=K4 app_lost parts: lost or swallowed letters 0, escape not consumed 0; 10000 switches in 181.9 s
+# note1=K4 app_lost parts: lost or swallowed letters 0, escape not consumed 0; 10000 switches in 180.7 s
+# note2=K4 app_lost parts: lost or swallowed letters 0, escape not consumed 0; 10000 switches in 182.6 s
+
+metric                     bus                median          min          max  n op    threshold  res   note
+K4.app_doubled             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+K4.app_lost                daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+K4.chord_leaked            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [chords]
+K4.chord_resent            daemon/voicego            0            0            1  3                  info   [chords]
+K4.chord_resent_per_10k    daemon/voicego            0            0            1  3 <=            5  PASS  Ambiguous chords repeated per 10k switches [chords]
+K4.flap_failed             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [runs]
+K4.forged_accepted         daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+K4.k4_wall_s               daemon/voicego        181.9        180.7        182.6  3                  info   [s]
+K4.restore_failed          daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [runs]
+K4.restore_ms              daemon/voicego        410.7        393.4        411.1  3                  info   [ms]
+K4.switches                daemon/voicego        10000        10000        10000  3                  info   [count]
+K4.typed_keys              daemon/voicego        20101        19991        20105  3                  info   [count]
+K4.wait_timeouts           daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [waits]

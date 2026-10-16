@@ -176,6 +176,16 @@ pub(super) fn m1_env(host: &HostEnv) -> HostEnv {
 pub(super) fn m1_rig(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor) -> Result<Rig> {
     let mut o = base_opts(reader, flavor);
     o.keys = true;
+    if matches!(reader, ReaderSpec::Daemon { .. }) {
+        // The shutdown counters of the reader's speech lane: see `account`.
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.subsec_nanos());
+        o.reader_stderr = Some(
+            host.sock_dir
+                .join(format!("reader-{}-{nanos}.log", std::process::id())),
+        );
+    }
     let rig = Rig::start(&m1_env(host), &o)?;
     rig.mock
         .configure(Duration::from_millis(1), Duration::from_millis(1));
@@ -228,13 +238,14 @@ fn chord_series(
     let recs = rig.mock.since(mark);
     let spoken: Vec<u64> = speaks(&recs).map(|(r, _)| r.t_ns).collect();
     let mut lat = Vec::with_capacity(n);
-    let mut lost = 0u64;
-    // The first SPEAK in [emit_i, emit_i+1) belongs to chord i; none in the window means lost.
+    let mut window_miss = 0u64;
+    // The first SPEAK in [emit_i, emit_i+1) belongs to chord i; none in the window means the
+    // answer is missing from it (late, superseded by the next chord, or lost: see below).
     for (i, t) in emits.iter().enumerate() {
         let next = emits.get(i + 1).copied().unwrap_or(u64::MAX);
         match spoken.iter().find(|s| **s >= *t && **s < next) {
             Some(s) => lat.push(ms(s - *t)),
-            None => lost += 1,
+            None => window_miss += 1,
         }
     }
     out.notes.push(format!(
@@ -242,7 +253,26 @@ fn chord_series(
         spoken.len()
     ));
     out.s(metric, lat);
-    out.x("lost", lost as f64, "events");
+    // `lost` is a silent loss. A chord with no SPEAK in its window is not one by itself: its
+    // answer may have reached the server after the next key (late), or the next command's
+    // answer may have overwritten it in the lane's interrupt slot before the lane thread woke
+    // (`superseded`, latest wins, counted by the reader). The reader's own counters decide.
+    match rig.account_speech() {
+        Some(a) => {
+            out.x("lost", a.silent_loss() as f64, "events");
+            out.x("superseded", a.superseded as f64, "events");
+            out.x(
+                "late",
+                window_miss.saturating_sub(a.counted_drops()) as f64,
+                "events",
+            );
+            out.notes.push(format!(
+                "{metric}: {window_miss} chords without a SPEAK in their window; reader counters: submitted {}, spoken {}, superseded {}, stale {}, inbox {}, received by the server {}",
+                a.submitted, a.spoken, a.superseded, a.stale_dropped, a.inbox_dropped, a.received
+            ));
+        }
+        None => out.x("lost", window_miss as f64, "events"),
+    }
     out.x("not_consumed", not_consumed as f64, "events");
     Ok(())
 }

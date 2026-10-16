@@ -10,6 +10,9 @@
 //!    (except `-api`) or `gorca-ext-host`. Only `gorca-daemon` wires concrete implementations.
 //! 4. `gorca-model`, `gorca-doc` and `gorca-text` must not depend on `tokio`.
 //! 5. Extensions depend only on `gorca-ext-api`.
+//! 9. The WASM runtime is confined (M5): only `gorca-ext-host` may depend on `wasmtime*`, only
+//!    `gorca-ext-api` (for the `wasm32` component build) on `wit-bindgen*`, and the host must not
+//!    reach `zbus*` or `atspi*` (an extension sees the core's types, never a connector's).
 //!
 //! Rules 6 and 7 (lints, release profile) are enforced by `Cargo.toml` and clippy.
 
@@ -32,6 +35,8 @@ const NEUTRAL: &[&str] = &[
     "gorca-core",
     "gorca-speech",
     "gorca-config",
+    // The extension API is what a WASM extension links: no transport, no runtime.
+    "gorca-ext-api",
 ];
 const MAY_USE_ZBUS: &[&str] = &[
     "gorca-dbus",
@@ -145,6 +150,14 @@ fn is_zbus(name: &str) -> bool {
     name == "zbus" || name.starts_with("zbus-") || name.starts_with("zbus_")
 }
 
+fn is_wasmtime(name: &str) -> bool {
+    name == "wasmtime" || name.starts_with("wasmtime-")
+}
+
+fn is_wit_bindgen(name: &str) -> bool {
+    name == "wit-bindgen" || name.starts_with("wit-bindgen-")
+}
+
 fn is_atspi(name: &str) -> bool {
     name == "atspi" || name.starts_with("atspi-") || name.starts_with("atspi_")
 }
@@ -233,6 +246,42 @@ pub fn check(g: &Graph) -> Vec<Violation> {
                 format!(
                     "extension `{}` may depend only on `gorca-ext-api`: {}",
                     p.name,
+                    chain.join(" -> ")
+                ),
+            );
+        }
+    }
+    // Rule 9.
+    for p in g.pkgs.values().filter(|p| p.in_workspace) {
+        if p.name != "gorca-ext-host"
+            && let Some(d) = g.depends_directly(&p.name, is_wasmtime)
+        {
+            report(
+                9,
+                format!(
+                    "`{}` may not depend on `{d}`; only `gorca-ext-host` runs WASM",
+                    p.name
+                ),
+            );
+        }
+        if p.name != "gorca-ext-api"
+            && let Some(d) = g.depends_directly(&p.name, is_wit_bindgen)
+        {
+            report(
+                9,
+                format!(
+                    "`{}` may not depend on `{d}`; only `gorca-ext-api` generates guest bindings",
+                    p.name
+                ),
+            );
+        }
+    }
+    for banned in [is_zbus as fn(&str) -> bool, is_atspi] {
+        if let Some(chain) = g.path_to("gorca-ext-host", banned) {
+            report(
+                9,
+                format!(
+                    "`gorca-ext-host` must not reach a connector transport: {}",
                     chain.join(" -> ")
                 ),
             );
@@ -437,6 +486,28 @@ mod tests {
             ("gorca-model", true, &[]),
         ]);
         assert_eq!(rules(&check(&bad)), vec![5]);
+    }
+
+    #[test]
+    fn the_wasm_runtime_is_confined_to_the_host() {
+        let ok = graph(&[
+            ("gorca-ext-host", true, &["wasmtime", "gorca-core"]),
+            ("gorca-core", true, &[]),
+            ("gorca-ext-api", true, &["wit-bindgen"]),
+            ("wasmtime", false, &[]),
+            ("wit-bindgen", false, &[]),
+        ]);
+        assert_eq!(check(&ok), vec![]);
+        let bad = graph(&[
+            ("gorca-daemon", true, &["wasmtime"]),
+            ("ext-vte", true, &["gorca-ext-api", "wit-bindgen"]),
+            ("gorca-ext-host", true, &["zbus"]),
+            ("gorca-ext-api", true, &[]),
+            ("wasmtime", false, &[]),
+            ("wit-bindgen", false, &[]),
+            ("zbus", false, &[]),
+        ]);
+        assert_eq!(rules(&check(&bad)), vec![2, 9, 9, 9]);
     }
 
     #[test]

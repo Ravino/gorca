@@ -105,6 +105,7 @@ impl Reader {
                 self.focus_retried = None;
                 self.revalidate_retried = None;
                 self.web_on_focus(node, fx);
+                self.window_on_focus(node.app);
                 self.begin_focus(node, now, fx);
             }
             FocusLaneMsg::ItemSelected { node } => {
@@ -124,6 +125,7 @@ impl Reader {
                 self.apply_focus(FocusMsg::AppGone(a), fx);
             }
             FocusLaneMsg::AppHung(a) => self.apply_focus(FocusMsg::AppHung(a), fx),
+            FocusLaneMsg::WindowActivated { window } => self.on_window_activated(window, fx),
             FocusLaneMsg::StateChanged { node, mask } => self.on_state_changed(node, mask, fx),
         }
     }
@@ -182,6 +184,50 @@ impl Reader {
                 let id = self.utt_id();
                 let u = message("application not responding", id, self.epoch.current());
                 fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+            }
+        }
+    }
+
+    /// Ask the installed application policy (ADR-0008 W3) how to present `snap`; returns `true`
+    /// when it says to stay silent. Only applications whose profile asks for it are asked.
+    fn apply_policy(&self, snap: &NodeSnapshot, u: &mut Utterance) -> bool {
+        use crate::builtin_ext::{PolicyFacts, PolicyMoment, PolicyVerdict};
+        if !self.policy_active(snap.key.app) {
+            return false;
+        }
+        let range = match &snap.value {
+            Some(gorca_model::Value::Range { current, min, max }) => Some((*current, *min, *max)),
+            Some(gorca_model::Value::Text(_)) | None => None,
+        };
+        let facts = PolicyFacts {
+            moment: PolicyMoment::Focus,
+            role: snap.role,
+            states: snap.states,
+            name: snap.name.as_deref(),
+            description: snap.description.as_deref(),
+            range,
+        };
+        match self.decide_policy(snap.key.app, &facts) {
+            PolicyVerdict::Default | PolicyVerdict::Notice => false,
+            PolicyVerdict::Silence => true,
+            PolicyVerdict::Value(text) => {
+                let seg = gorca_model::Segment {
+                    text: Arc::from(text),
+                    kind: gorca_model::SegmentKind::Value,
+                };
+                match u
+                    .segments
+                    .iter_mut()
+                    .find(|g| g.kind == gorca_model::SegmentKind::Value)
+                {
+                    Some(g) => *g = seg,
+                    None => u.segments.push(seg),
+                }
+                false
+            }
+            PolicyVerdict::Say(segs) => {
+                u.segments = segs.into_iter().collect();
+                false
             }
         }
     }
@@ -356,6 +402,10 @@ impl Reader {
                 };
                 let mut u = self.presenters.present(ctx, snap, id, epoch);
                 self.drop_web_unavailable(&mut u, snap);
+                let silent = ctx == PresentContext::Focus && self.apply_policy(snap, &mut u);
+                let hold = ctx == PresentContext::Focus
+                    && !silent
+                    && self.window_lead_in(snap, epoch, &mut u);
                 if from_cache {
                     // Every cache-served presentation may be refined by RV-1 (ADR-0001 8.1).
                     u.may_refine = true;
@@ -387,7 +437,12 @@ impl Reader {
                     at: self.now,
                     ctx,
                 });
-                if !self.web_suppress_focus(snap.key) {
+                if silent {
+                    // The policy says nothing for this node; the bookkeeping above stands.
+                } else if self.web_suppress_focus(snap.key) {
+                } else if hold {
+                    self.window_hold(u, fx);
+                } else {
                     fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
                 }
                 fx.push(ReaderEffect::FocusSettled { node: snap.key });

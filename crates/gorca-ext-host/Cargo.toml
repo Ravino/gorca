@@ -1,6 +1,6 @@
 [package]
 name = "gorca-ext-host"
-description = "Extension host: wasmtime embedding (later), limits, manifests, matching."
+description = "Extension host: wasmtime component embedding, limits, manifests, matching, keymap merge."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,7 +11,27 @@ publish.workspace = true
 gorca-ext-api = { workspace = true }
 gorca-model = { workspace = true }
 gorca-rt = { workspace = true }
+gorca-core = { workspace = true }
+gorca-config = { workspace = true }
 bitflags = { workspace = true }
+toml_edit = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+wasmtime = { workspace = true, features = [
+    "component-model",
+    "cranelift",
+    "runtime",
+    "pooling-allocator",
+    "std",
+    "parallel-compilation",
+] }
+
+[dev-dependencies]
+# The native build of the test extension: the same source as the component (ADR-0008 3.3).
+ext-test = { path = "../../extensions/ext-test" }
+ext-gnome-shell = { path = "../../extensions/ext-gnome-shell" }
+gorca-testkit = { workspace = true }
+gorca-input-api = { workspace = true }
 
 [lints]
 workspace = true

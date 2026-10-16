@@ -89,6 +89,14 @@ pub enum TextQuery {
         around: Option<u32>,
         radius: u32,
     },
+    /// The whole text of `node` and its caret, for a terminal's visible screen (M6, ADR-0001
+    /// T-2): one `GetText(0, -1)` (the character count of a VTE is not reliable) and the caret.
+    /// Answered with `BackendReply::Window` whose `base` is 0, `len` the scalars read and
+    /// `caret` the caret when the app answered. A text longer than the reply cap keeps its end
+    /// (the cursor line is at the bottom of a screen).
+    Screen {
+        node: NodeKey,
+    },
 }
 
 /// Granularity of a `GetStringAtOffset` call (the values of `AtspiTextGranularity`).

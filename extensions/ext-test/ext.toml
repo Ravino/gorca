@@ -1,0 +1,37 @@
+# Manifest of the test extension (format: docs/design/extensions.md).
+name = "ext-test"
+# `wasm` (default, sandboxed, hang-protected) or `native` (in-tree only, no hang protection).
+backend = "wasm"
+# The component, relative to this file.
+module = "ext_test.wasm"
+hooks = ["on-event", "present", "policy", "command"]
+capabilities = ["speak", "settings"]
+
+[matcher]
+# Every application: the extension is benign unless triggered.
+app_name = ["*"]
+
+[[keymap]]
+command = "hello"
+id = 1
+help = "say hello from the test extension"
+contexts = ["focus", "global"]
+chord = "gorca+shift+f9"
+
+[[keymap]]
+command = "crash"
+id = 2
+help = "crash the test extension"
+contexts = ["focus", "global"]
+
+[[keymap]]
+command = "spin"
+id = 3
+help = "make the test extension loop"
+contexts = ["focus", "global"]
+
+[[keymap]]
+command = "count"
+id = 4
+help = "count test extension calls in its settings"
+contexts = ["focus", "global"]

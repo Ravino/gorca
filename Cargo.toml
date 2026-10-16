@@ -45,6 +45,7 @@ gorca-core = { path = "crates/gorca-core" }
 gorca-braille-brlapi = { path = "crates/gorca-braille-brlapi" }
 gorca-ext-api = { path = "crates/gorca-ext-api" }
 gorca-ext-host = { path = "crates/gorca-ext-host" }
+ext-vte = { path = "extensions/ext-vte" }
 gorca-testkit = { path = "crates/gorca-testkit" }
 gorca-bench-b2 = { path = "crates/gorca-bench-b2" }
 
@@ -76,7 +77,10 @@ libc = "0.2"
 
 # Pinned for later phases, not yet used by any crate.
 rayon = "1.12"
-wasmtime = { version = "50.0.0-rc.1", default-features = false }
+# Extension host (M5). 49.0.3 is what the ADR-0008 prototype measured; no WASI crate on purpose:
+# extensions get no ambient capability, the host links only what the WIT world and a few pure
+# WASI clock/random imports need.
+wasmtime = { version = "=49.0.3", default-features = false }
 
 # Local wall-clock time for info.time_date (pure Rust time zone handling, no libc calls).
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
@@ -91,6 +95,9 @@ inotify = { version = "0.11", default-features = false, features = ["stream"] }
 cargo_metadata = "0.23"
 criterion = { version = "0.8", default-features = false }
 wit-parser = "0.261"
+
+# Terminal policy: user-configurable prompt and password-prompt expressions (ext-vte).
+regex = { version = "1", default-features = false, features = ["std", "unicode-perl", "unicode-case"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

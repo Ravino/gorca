@@ -37,6 +37,7 @@ pub fn tap_map(m: &Msg<'_>) -> SmallVec<[Ev; 2]> {
                     ("focused", 1) => Ev::Focus(node),
                     ("defunct", 1) => Ev::Removed(node),
                     ("selected", 1) => Ev::Props(node, (1 << 4) | (1 << 9)),
+                    ("showing", 1) => Ev::Props(node, (1 << 4) | (1 << 11)),
                     _ => Ev::Props(node, 1 << 4),
                 });
             }

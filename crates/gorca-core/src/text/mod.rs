@@ -71,6 +71,10 @@ pub enum TextOp {
         node: NodeKey,
         offset: u32,
     },
+    /// The whole visible screen of a terminal and its caret (M6, `TextQuery::Screen`).
+    Screen {
+        node: NodeKey,
+    },
 }
 
 impl TextOp {
@@ -80,7 +84,8 @@ impl TextOp {
             | TextOp::AtOffset { node, .. }
             | TextOp::Selections { node }
             | TextOp::Format { node, .. }
-            | TextOp::SetCaret { node, .. } => *node,
+            | TextOp::SetCaret { node, .. }
+            | TextOp::Screen { node } => *node,
         }
     }
 }
@@ -144,18 +149,20 @@ pub struct TextState {
     pub caret: CaretState,
     pub say_all: SayAll,
     pub stats: TextCounters,
-    next_req: u64,
-    origin: Instant,
-    verbalizer: Verbalizer,
+    pub(crate) next_req: u64,
+    pub(crate) origin: Instant,
+    pub(crate) verbalizer: Verbalizer,
     /// Events the app actor could not queue for us: the window cannot be trusted.
     dropped: Option<Arc<AtomicU64>>,
     dropped_seen: u64,
     /// The utterance of the latest secret text, so the copy command can refuse it (PW-3).
-    sensitive_utt: Option<UttId>,
+    pub(crate) sensitive_utt: Option<UttId>,
     /// The `info.formatting` question in flight: its request and the epoch of the key.
     format_req: Option<(TextReqId, Epoch)>,
     /// Was the layer active (focus or pass-through mode) after the previous message?
     was_active: bool,
+    /// The terminal arm (M6).
+    pub(crate) term: crate::terminal::TermState,
     out: Vec<Out>,
 }
 
@@ -173,6 +180,7 @@ impl TextState {
             sensitive_utt: None,
             format_req: None,
             was_active: true,
+            term: crate::terminal::TermState::default(),
             out: Vec::new(),
         }
     }
@@ -274,7 +282,7 @@ fn trackable(snap: &NodeSnapshot) -> Option<Kind> {
     })
 }
 
-fn decode(text: Option<&gorca_model::LazyText>) -> Option<String> {
+pub(crate) fn decode(text: Option<&gorca_model::LazyText>) -> Option<String> {
     let t = text?;
     std::str::from_utf8(&t.msg).ok().map(str::to_owned)
 }
@@ -328,7 +336,7 @@ impl Reader {
         }
     }
 
-    fn text_active(&self) -> bool {
+    pub(crate) fn text_active(&self) -> bool {
         matches!(self.mode, Mode::Focus | Mode::PassThrough { .. })
     }
 
@@ -405,7 +413,7 @@ impl Reader {
         }
     }
 
-    fn verbalize_opts(&self) -> VerbalizeOpts {
+    pub(crate) fn verbalize_opts(&self) -> VerbalizeOpts {
         let s = &self.cmd.effective.speech;
         VerbalizeOpts {
             punct: punct(s.punctuation),
@@ -456,6 +464,14 @@ impl Reader {
             self.text_untrack();
             return;
         }
+        // A terminal has its own arm (M6): the caret machine would speak a screen repaint as
+        // inserted text.
+        if snap.role == Role::Terminal {
+            self.text_untrack_caret();
+            self.term_track(snap, fx);
+            return;
+        }
+        self.term_untrack();
         match trackable(snap) {
             Some(kind) => self.text_step(
                 In::Track {
@@ -470,6 +486,11 @@ impl Reader {
 
     /// Focus moved on (or the object is gone): forget the window, zeroing it for a secret one.
     pub(crate) fn text_untrack(&mut self) {
+        self.term_untrack();
+        self.text_untrack_caret();
+    }
+
+    fn text_untrack_caret(&mut self) {
         if self.text.caret.is_off() {
             return;
         }
@@ -483,6 +504,7 @@ impl Reader {
         node: Option<NodeKey>,
         app: Option<gorca_model::AppId>,
     ) {
+        self.term_node_gone(node, app);
         let Some(t) = self.text.caret.tracked() else {
             return;
         };
@@ -507,6 +529,9 @@ impl Reader {
     /// A key that reaches the application. Returns whether the text layer speaks it itself, so
     /// the generic key echo stays silent (no double echo, TI-3).
     pub(crate) fn text_key(&mut self, intent: &KeyIntent, fx: &mut ReaderEffects) -> bool {
+        if self.term_tracked() {
+            return self.term_key(intent, fx);
+        }
         if !intent.event.pressed || self.text.caret.is_off() || !self.text_active() {
             return false;
         }
@@ -537,6 +562,7 @@ impl Reader {
             if n != self.text.dropped_seen {
                 self.text.dropped_seen = n;
                 self.text.stats.events_dropped = n;
+                self.term_events_lost(fx);
                 if !self.text.caret.is_off() {
                     self.text_step(In::Dirty, fx);
                 }
@@ -559,12 +585,16 @@ impl Reader {
                 if self.web_caret(node, offset, fx) {
                     return;
                 }
-                if self.text_active() && self.text_accepts(node, Some(offset), fx) {
+                if self.term_is(node) {
+                    self.term_caret(offset, fx);
+                } else if self.text_active() && self.text_accepts(node, Some(offset), fx) {
                     self.text_step(In::Caret { offset }, fx);
                 }
             }
             TextMsg::Edit { node, delta } => {
-                if self.text_active() && self.text_accepts(node, None, fx) {
+                if self.term_is(node) {
+                    self.term_edit(delta, fx);
+                } else if self.text_active() && self.text_accepts(node, None, fx) {
                     let edit = match delta {
                         TextDelta::Insert { offset, len, text } => Edit::Insert {
                             offset,
@@ -663,6 +693,24 @@ impl Reader {
                 tracing::debug!(target: "gorca_text", error = ?e, "fetch failed");
             }
         }
+        if self.term_owns_fetch(req) {
+            let r = match result {
+                Ok(r) => Ok(r),
+                Err(BackendError::Timeout) => {
+                    self.text.stats.fetch_timeout += 1;
+                    Err(())
+                }
+                Err(
+                    BackendError::Gone
+                    | BackendError::NotSupported
+                    | BackendError::Busy
+                    | BackendError::Protocol(_)
+                    | BackendError::Unresolved,
+                ) => Err(()),
+            };
+            self.term_fetched(req, r, fx);
+            return;
+        }
         if let Some((want, key_epoch)) = self.text.format_req
             && want == req
         {
@@ -694,6 +742,7 @@ impl Reader {
     }
 
     pub(crate) fn text_timer(&mut self, fx: &mut ReaderEffects) {
+        self.term_timer(fx);
         if !self.text.caret.is_off() {
             self.text_step(In::Timer, fx);
         }
@@ -725,6 +774,10 @@ impl Reader {
         epoch: Epoch,
         fx: &mut ReaderEffects,
     ) {
+        if self.term_tracked() {
+            self.term_say_unit(say, spell, epoch, fx);
+            return;
+        }
         if self.text.caret.is_off() || !self.text_active() {
             self.say("not in a text field", fx);
             return;

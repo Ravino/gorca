@@ -1,0 +1,57 @@
+# e2e m6-dev
+# utc=2026-10-14T22:58:45Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=8.83 8.82 8.77 1/3045 4107600
+# git_rev=932d611
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m6-dev
+# reader=daemon:<repo>/.claude/worktrees/agent-ab80bab70d6090a95/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=8.83 8.82 8.77 3/3045 4107597
+# reader_env=GORCA_M6=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=V2: three floods of 6 s each (60 % unattended, then typed keys) at 60 frames/s on a 60x240 screen (cat: 150 distinct lines per frame, yes: 600, make: 40); gates: cpu < 60 % of a core, SIOCINQ p99 < 1 MiB (ss -xpn on the reader's sockets every 50 ms), no broker disconnect (the reader answers after every flood)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+V2.v2_key_ms.n             daemon/voicego           24           24           24  1                  info   [samples]
+V2.v2_key_ms.p50           daemon/voicego        0.341        0.341        0.341  1                  info   [ms]
+V2.v2_key_ms.p95           daemon/voicego        0.374        0.374        0.374  1                  info   [ms]
+V2.v2_key_ms.p99           daemon/voicego        0.391        0.391        0.391  1 <=            4  PASS   [ms]
+V2.v2_key_ms.p999          daemon/voicego        0.391        0.391        0.391  1                  info   [ms]
+V2.v2_key_ms.max           daemon/voicego        0.391        0.391        0.391  1                  info   [ms]
+V2.term_frames             daemon/voicego          806          806          806  1                  info   [frames]
+V2.v2_alive                daemon/voicego            1            1            1  1                  info   [flag]
+V2.v2_cat_after_missing    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+V2.v2_cat_cpu_pct          daemon/voicego        1.498        1.498        1.498  1                  info   [% of one core]
+V2.v2_cat_frames_per_s     daemon/voicego         62.3         62.3         62.3  1                  info   [frames/s]
+V2.v2_cat_signal_mb_per_s  daemon/voicego        1.747        1.747        1.747  1                  info   [MB/s of text-changed payload]
+V2.v2_cat_siocinq_p99_kib  daemon/voicego            0            0            0  1                  info   [KiB]
+V2.v2_cat_speaks_per_s     daemon/voicego        0.556        0.556        0.556  1                  info   [1/s]
+V2.v2_key_lost             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+V2.v2_make_after_missing   daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+V2.v2_make_cpu_pct         daemon/voicego        1.589        1.589        1.589  1                  info   [% of one core]
+V2.v2_make_frames_per_s    daemon/voicego         62.2         62.2         62.2  1                  info   [frames/s]
+V2.v2_make_signal_mb_per_s daemon/voicego        0.307        0.307        0.307  1                  info   [MB/s of text-changed payload]
+V2.v2_make_siocinq_p99_kib daemon/voicego            0            0            0  1                  info   [KiB]
+V2.v2_make_speaks_per_s    daemon/voicego        0.556        0.556        0.556  1                  info   [1/s]
+V2.v2_siocinq_measured     daemon/voicego            1            1            1  1 >=            1  PASS  `ss` saw the reader's sockets, so the backlog number means something [flag]
+V2.v2_siocinq_p99_kib      daemon/voicego            0            0            0  1 <=         1024  PASS  p99 of the unread bytes on the reader's bus sockets during the floods (V2: below 1 MiB) [KiB]
+V2.v2_worst_cpu_pct        daemon/voicego        1.589        1.589        1.589  1 <=           60  PASS  reader CPU during the worst flood, percent of one core (V2: below 60 %) [% of one core]
+V2.v2_yes_after_missing    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+V2.v2_yes_cpu_pct          daemon/voicego        0.266        0.266        0.266  1                  info   [% of one core]
+V2.v2_yes_frames_per_s     daemon/voicego        0.155        0.155        0.155  1                  info   [frames/s]
+V2.v2_yes_signal_mb_per_s  daemon/voicego        0.002        0.002        0.002  1                  info   [MB/s of text-changed payload]
+V2.v2_yes_siocinq_p99_kib  daemon/voicego            0            0            0  1                  info   [KiB]
+V2.v2_yes_speaks_per_s     daemon/voicego        0.278        0.278        0.278  1                  info   [1/s]
+V2.vte_assert              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [calls]

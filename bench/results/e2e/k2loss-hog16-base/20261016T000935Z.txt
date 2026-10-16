@@ -1,0 +1,55 @@
+# e2e k2loss-hog16-base
+# utc=2026-10-16T00:09:35Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=44.51 38.67 28.62 24/2942 3054225
+# git_rev=b8521b1
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=k2loss-hog16-base
+# reader=daemon:<repo>/.claude/worktrees/k2loss/target/release/gorca
+# backend=voicego
+# repeats=20
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=44.51 38.67 28.62 22/2942 3054222
+# reader_env=GORCA_M1=1 GORCA_M1_STRICT=1 GORCA_M4=1 GORCA_M4_STRICT=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=k2_ms: first SPEAK between a command key and the next one (1200 spoken for 1200 chords)
+# note1=k2s_ms: first SPEAK between a command key and the next one (1198 spoken for 1200 chords)
+# note2=k2s_ms: first SPEAK between a command key and the next one (1195 spoken for 1200 chords)
+# note3=k2s_ms: first SPEAK between a command key and the next one (1199 spoken for 1200 chords)
+# note4=k2s_ms: first SPEAK between a command key and the next one (1192 spoken for 1200 chords)
+# note5=k2s_ms: first SPEAK between a command key and the next one (1200 spoken for 1200 chords)
+# note6=k2s_ms: first SPEAK between a command key and the next one (1196 spoken for 1200 chords)
+# note7=k2_ms: first SPEAK between a command key and the next one (1199 spoken for 1200 chords)
+# note8=k2_ms: first SPEAK between a command key and the next one (1198 spoken for 1200 chords)
+# note9=k2_ms: first SPEAK between a command key and the next one (1196 spoken for 1200 chords)
+# note10=k2_ms: first SPEAK between a command key and the next one (1180 spoken for 1200 chords)
+# note11=k2s_ms: first SPEAK between a command key and the next one (1197 spoken for 1200 chords)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+K2.k2_ms.n                 daemon/voicego         1200         1178         1200 20                  info   [samples]
+K2.k2_ms.p50               daemon/voicego        0.372        0.257        0.547 20                  info   [ms]
+K2.k2_ms.p95               daemon/voicego        2.676        2.057        5.565 20                  info   [ms]
+K2.k2_ms.p99               daemon/voicego        4.507        3.339         10.2 20 <=            5  PASS   [ms]
+K2.k2_ms.p999              daemon/voicego        8.017        5.290         17.1 20                  info   [ms]
+K2.k2_ms.max               daemon/voicego         10.5        5.482         22.5 20                  info   [ms]
+K2.lost                    daemon/voicego            0            0           22 20 <=            0  FAIL  gated on the max over repeats [events]
+K2.not_consumed            daemon/voicego            0            0            0 20 <=            0  PASS  gated on the max over repeats [events]
+K2s.k2s_ms.n               daemon/voicego         1198         1190         1200 20                  info   [samples]
+K2s.k2s_ms.p50             daemon/voicego        0.370        0.241        0.451 20                  info   [ms]
+K2s.k2s_ms.p95             daemon/voicego        2.906        1.886        4.394 20                  info   [ms]
+K2s.k2s_ms.p99             daemon/voicego        5.486        3.457        8.554 20 <=            6  PASS   [ms]
+K2s.k2s_ms.p999            daemon/voicego        9.636        5.735         20.9 20                  info   [ms]
+K2s.k2s_ms.max             daemon/voicego         11.8        6.691         26.5 20                  info   [ms]
+K2s.lost                   daemon/voicego            2            0           10 20 <=            0  FAIL  gated on the max over repeats [events]
+K2s.not_consumed           daemon/voicego            0            0            0 20 <=            0  PASS  gated on the max over repeats [events]
+K2s.storm_achieved_eps     daemon/voicego        49225        42151        50000 20 >=        45000  PASS  must reach 90% of the target rate [ev/s]
+K2s.storm_target_eps       daemon/voicego        50000        50000        50000 20                  info   [ev/s]

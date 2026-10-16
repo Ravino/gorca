@@ -80,6 +80,54 @@ pub struct Options {
     /// with one `Cache.GetItems` after the first focus. Off by default until the Shell main-loop
     /// stall of a dump is measured (B-1 judgement, finding 2).
     pub shell_dump: bool,
+    /// `--ext-dir=DIR` / `GORCA_EXT_DIR`: load extensions from `DIR/<name>/ext.toml` (ADR-0001
+    /// section 10). Off unless given: the daemon never scans a directory nobody named.
+    pub ext_dir: Option<PathBuf>,
+    /// `--ext-settings=PATH` / `GORCA_EXT_SETTINGS`: where the extensions' settings KV lives
+    /// (default: `$XDG_STATE_HOME/gorca/ext-settings.toml`, only when extensions are loaded).
+    pub ext_settings: Option<PathBuf>,
+    /// `--shell-policy=auto|native` / `GORCA_SHELL_POLICY`: where the GNOME Shell presentation
+    /// policy runs. `auto` (default): the `ext-gnome-shell` WASM component when the extension
+    /// host loaded it, else the native build linked into the daemon. `native`: always the native
+    /// build (the component is not loaded).
+    pub shell_policy: ShellPolicyMode,
+}
+
+/// Where the Shell policy runs (ADR-0008 amendment 1: one source, two builds).
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub enum ShellPolicyMode {
+    /// The component if the host loaded it, else the native build.
+    #[default]
+    Auto,
+    /// The native build only.
+    Native,
+}
+
+impl ShellPolicyMode {
+    fn parse(v: &str) -> Option<Self> {
+        match v {
+            "auto" | "wasm" => Some(Self::Auto),
+            "native" => Some(Self::Native),
+            _ => None,
+        }
+    }
+}
+
+/// Where the shipped extensions are looked for when no directory is named, first match wins:
+/// next to the binary (the build tree: `target/<profile>/extensions`, written by `cargo xtask
+/// build-ext`), the prefix layout beside `bin/`, then the system locations.
+pub fn default_ext_dirs() -> Vec<PathBuf> {
+    let mut v = Vec::new();
+    if let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(PathBuf::from))
+    {
+        v.push(dir.join("extensions"));
+        v.push(dir.join("../lib/gorca/extensions"));
+    }
+    v.push(PathBuf::from("/usr/local/lib/gorca/extensions"));
+    v.push(PathBuf::from("/usr/lib/gorca/extensions"));
+    v
 }
 
 /// `gorca config ...`: tools around the settings file (ADR-0005 7.4, CV-3).
@@ -151,10 +199,52 @@ OPTIONS:
                                  prefetch, the B-1 baseline; candidate = prefetch)
     --shell-cache-dump           let the prefetch policy dump gnome-shell with one Cache.GetItems
                                  (off: the dump stalls the Shell main loop, not yet measured)
+    --ext-dir=DIR                load extensions from DIR/<name>/ext.toml (WASM components; a
+                                 broken extension is reported and skipped, never fatal). Default:
+                                 the first of <exe dir>/extensions, <exe dir>/../lib/gorca/extensions,
+                                 /usr/local/lib/gorca/extensions, /usr/lib/gorca/extensions that
+                                 exists; `--ext-dir=` (empty) loads none
+    --shell-policy=auto|native   where the GNOME Shell presentation policy runs: the ext-gnome-shell
+                                 WASM component when it is installed (auto, default), or the
+                                 native build linked into the daemon (native)
+    --ext-settings=PATH          the extensions' settings file (default:
+                                 $XDG_STATE_HOME/gorca/ext-settings.toml)
     -h, --help                   print this help
 ";
 
 impl Options {
+    /// The extensions' settings file defaults next to the other state (only when extensions are
+    /// loaded, i.e. a directory is named).
+    fn default_ext_settings(&mut self, get: &impl Fn(&str) -> Option<String>) {
+        if self.ext_dir.is_some() && self.ext_settings.is_none() {
+            let base = get("XDG_STATE_HOME")
+                .filter(|s| !s.is_empty())
+                .map(PathBuf::from)
+                .or_else(|| {
+                    get("HOME")
+                        .filter(|s| !s.is_empty())
+                        .map(|h| PathBuf::from(h).join(".local/state"))
+                });
+            self.ext_settings = base.map(|b| b.join("gorca/ext-settings.toml"));
+        }
+    }
+
+    /// When no extension directory was named, use the first of `candidates` that is a directory
+    /// (the installed or build-tree extensions next to the binary). Called by `main` only: a
+    /// library user or a test never picks up a directory nobody named.
+    #[must_use]
+    pub fn with_default_ext_dir(
+        mut self,
+        candidates: &[PathBuf],
+        get: impl Fn(&str) -> Option<String>,
+    ) -> Self {
+        if self.ext_dir.is_none() {
+            self.ext_dir = candidates.iter().find(|p| p.is_dir()).cloned();
+            self.default_ext_settings(&get);
+        }
+        self
+    }
+
     /// Fill unset fields from the environment (the seam of the e2e latency harness and of
     /// service managers). Command-line flags win.
     ///
@@ -199,6 +289,22 @@ impl Options {
         if o.topology_report.is_none() {
             o.topology_report = get("GORCA_TOPOLOGY_REPORT").filter(|s| !s.is_empty());
         }
+        if o.ext_dir.is_none() {
+            o.ext_dir = get("GORCA_EXT_DIR")
+                .filter(|s| !s.is_empty())
+                .map(PathBuf::from);
+        }
+        if o.ext_settings.is_none() {
+            o.ext_settings = get("GORCA_EXT_SETTINGS")
+                .filter(|s| !s.is_empty())
+                .map(PathBuf::from);
+        }
+        if o.shell_policy == ShellPolicyMode::Auto
+            && let Some(p) = get("GORCA_SHELL_POLICY").and_then(|v| ShellPolicyMode::parse(&v))
+        {
+            o.shell_policy = p;
+        }
+        o.default_ext_settings(&get);
         if get("GORCA_IMPERSONATE_ORCA").is_some_and(|v| v == "1") {
             o.impersonate_orca = true;
         }
@@ -399,6 +505,18 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError
             }
             "--topology-report" => opts.topology_report = Some(value("--topology-report")?),
             "--shell-cache-dump" => opts.shell_dump = true,
+            "--ext-dir" => opts.ext_dir = Some(PathBuf::from(value("--ext-dir")?)),
+            "--shell-policy" => {
+                let v = value("--shell-policy")?;
+                opts.shell_policy = ShellPolicyMode::parse(&v).ok_or(CliError::BadValue {
+                    flag: "--shell-policy",
+                    value: v,
+                    expected: "auto or native",
+                })?;
+            }
+            "--ext-settings" => {
+                opts.ext_settings = Some(PathBuf::from(value("--ext-settings")?));
+            }
             "--a11y-address" => opts.a11y_address = Some(value("--a11y-address")?),
             "--session-address" => opts.session_address = Some(value("--session-address")?),
             _ => return Err(CliError::Unknown(arg)),
@@ -463,6 +581,13 @@ mod tests {
         assert_eq!(opts(&[]).fill_policy, FillChoice::Prefetch);
         assert!(!opts(&[]).shell_dump);
         assert!(opts(&["--shell-cache-dump"]).shell_dump);
+        assert_eq!(opts(&[]).ext_dir, None);
+        assert_eq!(
+            opts(&["--ext-dir=/x", "--ext-settings", "/y.toml"]).ext_dir,
+            Some(PathBuf::from("/x"))
+        );
+        let from_env = opts(&[]).with_env(|k| (k == "GORCA_EXT_DIR").then(|| "/e".to_owned()));
+        assert_eq!(from_env.ext_dir, Some(PathBuf::from("/e")));
         assert_eq!(
             opts(&["--bench-fill-policy=candidate"]).fill_policy,
             FillChoice::Prefetch

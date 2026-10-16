@@ -1,0 +1,12 @@
+rerun 1 wasm load 9.85 10.08 11.33
+  exit 0
+rerun 1 native load 9.34 9.81 11.03
+  exit 0
+rerun 2 wasm load 9.23 9.66 10.79
+  exit 0
+rerun 2 native load 13.44 10.61 10.91
+  exit 1
+rerun 3 wasm load 14.72 12.63 11.67
+  exit 0
+rerun 3 native load 10.77 11.85 11.54
+  exit 0

@@ -1,0 +1,12 @@
+wasm-policy_slider_focus_value	200000	268	329	481	23735	273
+wasm-policy_window_focus_silence	200000	149	178	221	39944	152
+wasm-policy_stage_activate_silence	200000	154	192	221	21596	159
+wasm-policy_dialog_showing_notice	200000	109	117	131	24289	110
+wasm-policy_osd_level_say	200000	417	486	659	18836	423
+wasm-policy_button_focus_defer	200000	148	171	207	11155	150
+native-policy_slider_focus_value	200000	122	145	163	10774	124
+native-policy_window_focus_silence	200000	76	83	87	6964	77
+native-policy_stage_activate_silence	200000	81	90	103	6952	82
+native-policy_dialog_showing_notice	200000	68	72	75	11913	69
+native-policy_osd_level_say	200000	173	207	221	11060	176
+native-policy_button_focus_defer	200000	76	82	86	8182	76

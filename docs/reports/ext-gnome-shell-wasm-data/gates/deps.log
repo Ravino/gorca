@@ -1,0 +1,2 @@
+dependency rules: ok (36 workspace crates, 302 packages)
+environment rule: ok (only gorca-daemon/src/main.rs reads the environment)

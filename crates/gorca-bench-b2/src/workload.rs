@@ -236,7 +236,16 @@ impl GenEvent {
         let mut v = SmallVec::new();
         match self.kind {
             Kind::FocusSignal | Kind::FocusState => v.push(Ev::Focus(n)),
-            Kind::FocusLost | Kind::State => v.push(Ev::Props(n, PropMask::STATES.bits())),
+            Kind::FocusLost => v.push(Ev::Props(n, PropMask::STATES.bits())),
+            // `showing` set is a hint (M4b); cleared it is plain state noise.
+            Kind::State => {
+                let mask = if self.seq & 1 == 1 {
+                    PropMask::STATES | PropMask::SHOWING_NOW
+                } else {
+                    PropMask::STATES
+                };
+                v.push(Ev::Props(n, mask.bits()));
+            }
             Kind::Defunct => v.push(Ev::Removed(n)),
             Kind::PropName => v.push(Ev::Props(n, PropMask::NAME.bits())),
             Kind::PropDesc => v.push(Ev::Props(n, PropMask::DESCRIPTION.bits())),

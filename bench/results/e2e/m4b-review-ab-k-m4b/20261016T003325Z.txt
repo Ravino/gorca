@@ -1,0 +1,35 @@
+# e2e m4b-review-ab-k-m4b
+# utc=2026-10-16T00:33:25Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=37.70 39.25 35.89 24/2915 3278952
+# git_rev=46062fc
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m4b-review-ab-k-m4b
+# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/bin/rv-gorca-m4b
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=37.70 39.25 35.89 26/2915 3278949
+# reader_env=GORCA_M1=1 GORCA_M1_STRICT=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=k2_ms: first SPEAK between a command key and the next one (1200 spoken for 1200 chords)
+# note1=k2_ms: first SPEAK between a command key and the next one (1199 spoken for 1200 chords)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+K2.k2_ms.n                 daemon/voicego         1200         1199         1200  3                  info   [samples]
+K2.k2_ms.p50               daemon/voicego        0.413        0.314        0.422  3                  info   [ms]
+K2.k2_ms.p95               daemon/voicego        3.732        2.718        3.801  3                  info   [ms]
+K2.k2_ms.p99               daemon/voicego        5.687        4.325        6.123  3 <=            5  FAIL   [ms]
+K2.k2_ms.p999              daemon/voicego        9.535        8.440         10.1  3                  info   [ms]
+K2.k2_ms.max               daemon/voicego         14.7         11.9         16.2  3                  info   [ms]
+K2.lost                    daemon/voicego            0            0            1  3 <=            0  FAIL  gated on the max over repeats [events]
+K2.not_consumed            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]

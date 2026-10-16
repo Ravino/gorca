@@ -219,8 +219,17 @@ pub struct AppServer {
     /// `(owner pid, start time)` of the registration, for re-verification (F8).
     pub identity: Option<(u32, u64)>,
     pub shell_rx: Option<tokio::sync::watch::Receiver<Option<(u32, u64)>>>,
+    /// The route's hint flag, raised with the path table's when a late verification succeeds.
+    pub hints: Arc<std::sync::atomic::AtomicBool>,
     pub counters: Arc<FetchCounters>,
     pub shutdown: CancellationToken,
+}
+
+/// A registration verified as the Shell after it was published: its hint events record paths
+/// from now on, in the drain's route flag and in the path table (N-4).
+pub(crate) fn raise_hints(hints: &std::sync::atomic::AtomicBool, paths: &PathTable, app: AppId) {
+    hints.store(true, std::sync::atomic::Ordering::Relaxed);
+    paths.allow_hints(app);
 }
 
 /// Does the registration with `identity` belong to the verified Shell process?
@@ -292,6 +301,8 @@ impl AppServer {
                         && is_the_shell(*rx.borrow(), self.identity)
                     {
                         verified = true;
+                        // The Shell's hint events record paths from now on (N-4).
+                        raise_hints(&self.hints, &self.paths, port.app);
                         // Announce again: the profile, the dump eligibility and the protection
                         // follow the verified identity.
                         if let Some((t, n)) = &known {
@@ -494,6 +505,28 @@ fn closed_receiver() -> gorca_rt::mpsc::Receiver<BackendRequest> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_late_verified_shell_gets_its_hint_paths() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let app = AppId {
+            connector: gorca_model::ConnectorId(1),
+            serial: 7,
+        };
+        let key = NodeKey {
+            app,
+            local: gorca_model::LocalId(3),
+        };
+        let paths = PathTable::new();
+        paths.bind_app(app, crate::paths::Owner::Pid(10));
+        let hints = AtomicBool::new(false);
+        paths.insert_hint(key, "/s/3");
+        assert!(paths.get(key).is_none(), "not verified yet: no hint paths");
+        raise_hints(&hints, &paths, app);
+        assert!(hints.load(Ordering::Relaxed));
+        paths.insert_hint(key, "/s/3");
+        assert_eq!(paths.get(key).as_deref(), Some("/s/3"));
+    }
+
     use super::*;
 
     #[test]

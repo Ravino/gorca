@@ -254,7 +254,11 @@ impl Router for StubRouter {
                 }
             }
         });
-        let route = AppRoute { app, tx };
+        let route = AppRoute {
+            app,
+            tx,
+            hints: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        };
         routes.insert(sender.to_owned(), route.clone());
         Some(route)
     }

@@ -24,8 +24,15 @@ impl UttMeta {
         self.epoch >= current || self.survives_focus_change
     }
 
+    /// A `Notification` never interrupts (M4b): it waits behind whatever is being spoken, even
+    /// when its epoch is newer than the one in flight (say-all and focus speech are not cut off
+    /// by a notification that happened to be created after a key press).
     fn interrupts(&self, cur_epoch: Epoch) -> bool {
-        self.prio == Prio::Interrupt || self.epoch > cur_epoch
+        match self.prio {
+            Prio::Interrupt => true,
+            Prio::Notification => false,
+            Prio::Message | Prio::Text | Prio::Progress => self.epoch > cur_epoch,
+        }
     }
 }
 
@@ -205,8 +212,10 @@ fn idle(msg: SpeechMsg, ctx: &StepCtx) -> (SpeechState, Effects) {
         | SpeechMsg::Stopped(_)
         | SpeechMsg::Failed(_)
         | SpeechMsg::Resume
-        | SpeechMsg::Tick
         | SpeechMsg::Reconnected => (SpeechState::Idle, smallvec![]),
+        // The lane ticks an idle queue that holds something it could not start earlier (a
+        // notification waiting out the grace after an epoch advance).
+        SpeechMsg::Tick => (SpeechState::Idle, smallvec![SpeechEffect::PopNext]),
         SpeechMsg::Pause => (
             SpeechState::Paused { resume: None },
             smallvec![SpeechEffect::Pause],
@@ -533,10 +542,22 @@ mod tests {
         let t = Instant::now();
         let s = speaking_state(meta(1, Prio::Text, 5), t);
         let (s, _) = s.step(
-            SpeechMsg::Intent(meta(2, Prio::Notification, 6)),
+            SpeechMsg::Intent(meta(2, Prio::Progress, 6)),
             &ctx(t, 6, true),
         );
         assert!(matches!(s, SpeechState::Replacing { .. }));
+    }
+
+    #[test]
+    fn a_notification_never_interrupts_even_with_a_newer_epoch() {
+        let t = Instant::now();
+        let mut cur = meta(1, Prio::Text, 5);
+        cur.survives_focus_change = true;
+        let s = speaking_state(cur, t);
+        let n = meta(2, Prio::Notification, 6);
+        let (s2, e) = s.step(SpeechMsg::Intent(n), &ctx(t, 6, true));
+        assert_eq!(s2, s);
+        assert_eq!(e.as_slice(), &[SpeechEffect::Enqueue(n)]);
     }
 
     #[test]

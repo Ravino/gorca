@@ -22,6 +22,7 @@ bitflags! {
         const PRESENT   = 1 << 1;
         const NAV_UNITS = 1 << 2;
         const COMMAND   = 1 << 3;
+        const POLICY    = 1 << 4;
     }
 }
 
@@ -32,6 +33,10 @@ pub struct Matcher {
     pub toolkit: Vec<String>,
     pub connector: Vec<String>,
     pub document_role: Vec<String>,
+    /// Only an application the connector verified as the protected Shell (`AppInfo::verified_shell`).
+    /// A self-reported name proves nothing; an extension for the Shell asks for this, not for a
+    /// name (the core's own `AppProfile` does the same).
+    pub verified_shell: bool,
 }
 
 fn any(globs: &[String], text: &str) -> bool {
@@ -48,7 +53,8 @@ fn connector_name(k: ConnectorKind) -> &'static str {
 
 impl Matcher {
     pub fn matches(&self, app: &AppInfo, document_role: Option<&str>) -> bool {
-        any(&self.app_name, &app.app_name)
+        (!self.verified_shell || app.verified_shell)
+            && any(&self.app_name, &app.app_name)
             && any(&self.toolkit, &app.toolkit)
             && any(&self.connector, connector_name(app.connector_kind))
             && (self.document_role.is_empty()
@@ -69,9 +75,40 @@ pub struct Manifest {
     pub name: String,
     pub matcher: Matcher,
     pub hooks: HookSet,
-    /// `(key description, command id)` pairs. TBD: syntax.
-    pub keymap: Vec<(String, u32)>,
+    /// Commands the extension declares, with their default chords.
+    pub keymap: Vec<KeymapEntry>,
     pub capabilities: Capabilities,
+    /// How the extension runs. `Native` is for in-tree first-party extensions only and loses hang
+    /// protection (ADR-0008 3.3); the manifest must say so.
+    pub backend: ExtBackend,
+    /// The component file, relative to the manifest (`Wasm` only).
+    pub module: Option<String>,
+}
+
+/// How an extension executes (ADR-0008 section 3.3).
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub enum ExtBackend {
+    /// A `wasm32-wasip2` component under wasmtime: fuel/epoch limit, 32 MiB, trap becomes reset.
+    #[default]
+    Wasm,
+    /// Linked in-process: `catch_unwind` and a post-hoc deadline check; cannot pre-empt a hang.
+    Native,
+}
+
+/// One command of an extension, as the manifest declares it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct KeymapEntry {
+    /// Short name; the registry name is `ext.<extension>.<command>`.
+    pub command: String,
+    /// The id the extension's `command` hook receives.
+    pub local_id: u32,
+    pub help: String,
+    /// Where the command may be bound; the default chord goes to the first one.
+    pub contexts: Vec<gorca_config::ContextName>,
+    /// Default chord (`gorca+shift+f9`), bound unless the preset or the user mentions it.
+    pub chord: Option<String>,
+    pub max_press: u8,
+    pub interrupts: bool,
 }
 
 impl Manifest {
@@ -126,6 +163,8 @@ mod tests {
             hooks: HookSet::PRESENT,
             keymap: vec![],
             capabilities: Capabilities::empty(),
+            backend: ExtBackend::Wasm,
+            module: None,
         }
     }
 
@@ -138,6 +177,22 @@ mod tests {
         };
         assert!(!m.matches(&app("x", "gtk"), None));
         assert!(m.matches(&app("x", "gtk"), Some("web-document")));
+    }
+
+    #[test]
+    fn verified_shell_matches_only_the_verified_shell_never_a_name() {
+        let m = Matcher {
+            verified_shell: true,
+            ..Matcher::default()
+        };
+        let mut shell = app("gnome-shell", "clutter");
+        assert!(
+            !m.matches(&shell, None),
+            "a self-reported name is not enough"
+        );
+        shell.verified_shell = true;
+        assert!(m.matches(&shell, None));
+        assert!(!m.matches(&app("anything", "gtk"), None));
     }
 
     #[test]

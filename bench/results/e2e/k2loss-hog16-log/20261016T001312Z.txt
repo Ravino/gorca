@@ -1,0 +1,35 @@
+# e2e k2loss-hog16-log
+# utc=2026-10-16T00:13:12Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=34.22 36.11 29.64 45/3024 3063798
+# git_rev=b8521b1
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=k2loss-hog16-log
+# reader=daemon:<repo>/.claude/worktrees/k2loss/target/release/gorca
+# backend=voicego
+# repeats=10
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=34.22 36.11 29.64 52/3024 3063795
+# reader_env=GORCA_M1=1 GORCA_M1_STRICT=1 GORCA_M4=1 GORCA_M4_STRICT=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=k2_ms: first SPEAK between a command key and the next one (1200 spoken for 1200 chords)
+# note1=k2_ms: first SPEAK between a command key and the next one (1199 spoken for 1200 chords)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+K2.k2_ms.n                 daemon/voicego         1200         1196         1200 10                  info   [samples]
+K2.k2_ms.p50               daemon/voicego        0.349        0.285        0.456 10                  info   [ms]
+K2.k2_ms.p95               daemon/voicego        3.156        2.021        4.252 10                  info   [ms]
+K2.k2_ms.p99               daemon/voicego        5.083        3.179        6.321 10 <=            5  FAIL   [ms]
+K2.k2_ms.p999              daemon/voicego        8.488        5.248         12.2 10                  info   [ms]
+K2.k2_ms.max               daemon/voicego        9.755        5.375         23.2 10                  info   [ms]
+K2.lost                    daemon/voicego            0            0            4 10 <=            0  FAIL  gated on the max over repeats [events]
+K2.not_consumed            daemon/voicego            0            0            0 10 <=            0  PASS  gated on the max over repeats [events]

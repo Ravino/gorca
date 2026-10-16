@@ -7,6 +7,18 @@ use arc_swap::ArcSwap;
 use gorca_mirror::{MirrorHandle, MirrorRead};
 use gorca_model::{AppId, Lookup, NodeKey, NodeSnapshot, NodeView, TextUnit};
 
+/// Who is behind an application connection, for budgets that a misbehaving local app must not
+/// escape by reconnecting, taking a new bus name or opening more connections: the process id the
+/// connector read from the bus credentials. A pid-less connection (credentials unavailable)
+/// shares one owner with every other. Budgets are token buckets that refill within a second and
+/// stay in the table until idle, so a reconnect carries the spent budget over, and a reused pid
+/// at worst meets a bucket that has refilled.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum Owner {
+    Pid(u32),
+    Unknown,
+}
+
 /// Maps an `AppId` to its mirror read handle. Readers load the current map without a lock;
 /// the supervisor replaces it (copy-on-write) when an app appears or goes away, which is rare.
 #[derive(Debug, Default)]
@@ -18,6 +30,10 @@ pub struct MirrorDirectory {
     unfollowed_text: ArcSwap<HashSet<AppId>>,
     /// Per-app insert-offset slack (connector quirk data); apps without the quirk are absent.
     insert_slack: ArcSwap<HashMap<AppId, u32>>,
+    /// Process id of each application connection, as the connector reported it (M4b budgets).
+    pids: ArcSwap<HashMap<AppId, u32>>,
+    /// Applications whose presentation goes through the installed `AppPolicy`.
+    policy: ArcSwap<HashSet<AppId>>,
 }
 
 impl MirrorDirectory {
@@ -71,7 +87,46 @@ impl MirrorDirectory {
         !self.unfollowed_text.load().contains(&app)
     }
 
+    /// Record the process behind `app` (`None` when the connector could not tell).
+    pub fn set_pid(&self, app: AppId, pid: Option<u32>) {
+        self.pids.rcu(|cur| {
+            let mut next = HashMap::clone(cur);
+            match pid {
+                Some(p) => next.insert(app, p),
+                None => next.remove(&app),
+            };
+            next
+        });
+    }
+
+    /// Mark whether `app` is presented through the installed policy.
+    pub fn set_policy(&self, app: AppId, on: bool) {
+        self.policy.rcu(|cur| {
+            let mut next = HashSet::clone(cur);
+            if on {
+                next.insert(app);
+            } else {
+                next.remove(&app);
+            }
+            next
+        });
+    }
+
+    pub fn has_policy(&self, app: AppId) -> bool {
+        self.policy.load().contains(&app)
+    }
+
+    /// The owner whose budgets `app` spends.
+    pub fn owner(&self, app: AppId) -> Owner {
+        self.pids
+            .load()
+            .get(&app)
+            .map_or(Owner::Unknown, |p| Owner::Pid(*p))
+    }
+
     pub fn remove(&self, app: AppId) {
+        self.set_pid(app, None);
+        self.set_policy(app, false);
         if !self.text_window_follows(app) {
             self.set_text_unit(app, TextUnit::Scalar);
         }
@@ -209,5 +264,31 @@ mod tests {
         dir.remove(app(1));
         assert_eq!(dir.lookup(k), Lookup::Gone);
         assert!(dir.is_empty());
+    }
+
+    #[test]
+    fn owners_are_processes_stable_across_reconnects_and_never_per_connection() {
+        let dir = MirrorDirectory::new();
+        dir.set_pid(app(1), Some(100));
+        dir.set_pid(app(2), Some(100));
+        dir.set_pid(app(3), Some(200));
+        assert_eq!(
+            dir.owner(app(1)),
+            dir.owner(app(2)),
+            "two names, one process"
+        );
+        assert_ne!(dir.owner(app(1)), dir.owner(app(3)));
+        // The process disconnects and comes back under a new connection: the same owner, so the
+        // budget it had spent is still its own.
+        let before = dir.owner(app(1));
+        dir.remove(app(1));
+        dir.remove(app(2));
+        dir.set_pid(app(4), Some(100));
+        assert_eq!(dir.owner(app(4)), before);
+        // No credentials: one shared owner, so a new connection is no fresh budget.
+        dir.set_pid(app(5), None);
+        dir.set_pid(app(6), None);
+        assert_eq!(dir.owner(app(5)), Owner::Unknown);
+        assert_eq!(dir.owner(app(5)), dir.owner(app(6)));
     }
 }

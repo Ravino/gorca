@@ -1218,6 +1218,7 @@ async fn a_shell_published_before_it_is_resolved_is_verified_when_the_process_be
     r.router.complete(r.to_register.try_recv().unwrap()).await;
     let new = r.new_apps.try_recv().unwrap();
     assert!(!new.verified_shell);
+    assert!(!new.hints.load(std::sync::atomic::Ordering::Relaxed));
     assert_eq!(new.identity, Some((SHELL_PID, SHELL_START)));
     assert!(!crate::fetch::is_the_shell(
         *new.shell_rx.borrow(),

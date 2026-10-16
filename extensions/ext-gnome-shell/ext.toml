@@ -1,0 +1,14 @@
+# Manifest of the GNOME Shell extension (format: docs/design/extensions.md).
+# The same source is built as a wasm32-wasip2 component (default, shipped as ext_gnome_shell.wasm
+# next to this file by `cargo xtask build-ext`) and natively (the daemon's fallback).
+name = "ext-gnome-shell"
+backend = "wasm"
+module = "ext_gnome_shell.wasm"
+# The Shell's rule table runs behind the `policy` hook: dialog-as-notice, OSD level, the unit
+# slider as a percentage, the window focus claim and the "Main stage" activation.
+hooks = ["policy"]
+capabilities = []
+
+[matcher]
+# Only the connector-verified Shell, never a self-reported name.
+verified_shell = true

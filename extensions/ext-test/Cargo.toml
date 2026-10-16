@@ -1,0 +1,19 @@
+[package]
+name = "ext-test"
+description = "Test extension: benign unless triggered; crashes, loops, allocates and speaks on demand."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+# `rlib` for the native build (tests, debugging, emergency fallback), `cdylib` for the
+# wasm32-wasip2 component (ADR-0008 section 3.3: one source, two builds).
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+gorca-ext-api = { workspace = true }
+
+[lints]
+workspace = true
