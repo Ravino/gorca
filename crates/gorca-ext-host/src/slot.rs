@@ -139,9 +139,11 @@ pub(crate) enum Outcome<R> {
 ///
 /// While a slot is busy its hook cannot run, and falling back to the core's own speech would
 /// say what the extension has been replacing (double speech next to the extension's own
-/// output). So a busy slot repeats its last decision for that kind of event: it stays silent
-/// where the extension had suppressed or rewritten (the rewrite text is not reproducible), and
-/// passes where the extension passed.
+/// output). So a busy slot repeats its last decision for the high-rate kinds of event
+/// (properties, children, text, caret, selection): it stays silent where the extension had
+/// suppressed or rewritten (the rewrite text is not reproducible), and passes where the extension
+/// passed. Discrete events (focus, window, announcement, removal) always pass, so an unrelated
+/// change is never silenced.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub(crate) enum Decision {

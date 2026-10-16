@@ -20,9 +20,9 @@
 //! random), which are implemented here from the host's own clock: an extension can use
 //! `HashMap` and `Instant`, and nothing else ambient.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
-use std::thread::JoinHandle;
+use std::thread::{JoinHandle, Thread};
 use std::time::Duration;
 
 use gorca_ext_api as api;
@@ -106,10 +106,39 @@ fn host_units(kind: HookKind) -> u64 {
 }
 
 /// The wasmtime engine and its epoch ticker.
+///
+/// The ticker only runs while a guest call is in flight (see [`InFlight`]); idle, it is parked and
+/// costs nothing, so a host with extensions loaded does not wake the CPU 1000 times a second for
+/// nothing. Epoch deadlines are relative to the current epoch, so a paused clock changes nothing
+/// for the next call.
 pub struct ExtEngine {
     engine: Engine,
     stop: Arc<AtomicBool>,
+    in_flight: Arc<AtomicUsize>,
+    ticks_done: Arc<AtomicU64>,
     ticker: OnceLock<JoinHandle<()>>,
+    ticker_thread: OnceLock<Thread>,
+}
+
+/// Marks a guest call (or instantiation) in flight: the epoch ticker runs while any exists.
+struct InFlight<'a>(&'a ExtEngine);
+
+impl ExtEngine {
+    fn enter(&self) -> InFlight<'_> {
+        if self.in_flight.fetch_add(1, Ordering::AcqRel) == 0 {
+            // A token left by an unpark that races the park is consumed by the next park.
+            if let Some(t) = self.ticker_thread.get() {
+                t.unpark();
+            }
+        }
+        InFlight(self)
+    }
+}
+
+impl Drop for InFlight<'_> {
+    fn drop(&mut self) {
+        self.0.in_flight.fetch_sub(1, Ordering::AcqRel);
+    }
 }
 
 impl std::fmt::Debug for ExtEngine {
@@ -141,8 +170,16 @@ impl ExtEngine {
         Ok(Arc::new(Self {
             engine: Engine::new(&c)?,
             stop: Arc::new(AtomicBool::new(false)),
+            in_flight: Arc::new(AtomicUsize::new(0)),
+            ticks_done: Arc::new(AtomicU64::new(0)),
             ticker: OnceLock::new(),
+            ticker_thread: OnceLock::new(),
         }))
+    }
+
+    /// Epoch ticks the backstop clock has made so far (tests: an idle engine makes none).
+    pub fn ticks_done(&self) -> u64 {
+        self.ticks_done.load(Ordering::Relaxed)
     }
 
     pub fn engine(&self) -> &Engine {
@@ -151,17 +188,25 @@ impl ExtEngine {
 
     /// Start the epoch ticker (once, on first use: a host with no WASM extension runs no thread).
     fn ensure_ticker(&self) {
-        self.ticker.get_or_init(|| {
+        let handle = self.ticker.get_or_init(|| {
             let engine = self.engine.clone();
             let stop = Arc::clone(&self.stop);
+            let in_flight = Arc::clone(&self.in_flight);
+            let ticks_done = Arc::clone(&self.ticks_done);
             // A dedicated OS thread: its sleep is the clock that interrupts hung extensions.
             #[allow(clippy::disallowed_methods)]
             std::thread::Builder::new()
                 .name("gorca-ext-epoch".to_owned())
                 .spawn(move || {
                     while !stop.load(Ordering::Relaxed) {
+                        if in_flight.load(Ordering::Acquire) == 0 {
+                            // Idle: sleep until a call starts (or the engine is dropped).
+                            std::thread::park();
+                            continue;
+                        }
                         std::thread::sleep(TICK);
                         engine.increment_epoch();
+                        ticks_done.fetch_add(1, Ordering::Relaxed);
                     }
                 })
                 .unwrap_or_else(|e| {
@@ -171,12 +216,16 @@ impl ExtEngine {
                     std::thread::spawn(|| {})
                 })
         });
+        let _ = self.ticker_thread.get_or_init(|| handle.thread().clone());
     }
 }
 
 impl Drop for ExtEngine {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
+        if let Some(t) = self.ticker_thread.get() {
+            t.unpark();
+        }
         if let Some(t) = self.ticker.take() {
             let _ = t.join();
         }
@@ -229,8 +278,13 @@ impl WasmModule {
         // Instantiation runs the start function: bound it like a command.
         store.set_epoch_deadline(ticks(HookKind::Command));
         store.set_fuel(fuel(HookKind::Command))?;
+        let _running = self.engine.enter();
         let bindings = self.pre.instantiate(&mut store)?;
-        Ok(WasmInstance { store, bindings })
+        Ok(WasmInstance {
+            store,
+            bindings,
+            engine: Arc::clone(&self.engine),
+        })
     }
 }
 
@@ -338,6 +392,7 @@ impl crate::wasi_pure::HostMeter for StoreData {
 pub struct WasmInstance {
     store: Store<StoreData>,
     bindings: Extension,
+    engine: Arc<ExtEngine>,
 }
 
 impl std::fmt::Debug for WasmInstance {
@@ -368,6 +423,7 @@ impl WasmInstance {
         kind: HookKind,
         f: impl FnOnce(&wk::Guest, &mut Store<StoreData>) -> wasmtime::Result<R>,
     ) -> Result<R, Fault> {
+        let _running = self.engine.enter();
         self.store.data().shared.begin_call();
         self.store.data_mut().work = HostWork::new(host_units(kind));
         self.store.data_mut().limiter.allowance = growth_allowance(kind);

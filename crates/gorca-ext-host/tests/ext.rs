@@ -461,22 +461,50 @@ fn instances_that_cannot_be_built_count_and_end_in_a_global_disable() {
 }
 
 #[test]
-fn a_busy_slot_repeats_its_last_decision_and_counts_the_skip() {
+fn a_busy_slot_passes_discrete_events_and_counts_the_skip() {
     // A command holds the slot's lock while it runs (up to its CPU limit); events arriving
     // meanwhile must neither run nor leak the core's duplicate speech.
     let (h, _sink, _) = host(Backend::Wasm);
     let ae = attach(&h, 1, "x");
-    // The extension suppressed announcements last: a busy slot keeps suppressing them.
+    // The extension suppressed announcements last; the high-rate repeat is unit-tested in host.rs.
     assert_eq!(ae.on_event(&announce("suppress")), ExtVerdict::Suppress);
     let before = h.stats();
     let slot = h.slots_of(app(1)).into_iter().next().expect("slot");
     let busy = slot.hold_for_test();
-    assert_eq!(ae.on_event(&announce("hello")), ExtVerdict::Suppress);
+    // Review N-3: announcements are discrete, so a busy slot lets them through instead of
+    // repeating the suppress (which would silence an unrelated announcement).
+    assert_eq!(ae.on_event(&announce("hello")), ExtVerdict::Pass);
     drop(busy);
     let after = h.stats();
     assert_eq!(after.busy_skips, before.busy_skips + 1);
-    assert_eq!(after.busy_suppressed, before.busy_suppressed + 1);
+    assert_eq!(after.busy_suppressed, before.busy_suppressed);
     assert_eq!(ae.on_event(&announce("hello")), ExtVerdict::Pass);
+}
+
+#[test]
+fn the_epoch_ticker_runs_only_while_a_call_is_in_flight() {
+    // Review N-4: no 1 kHz wake-ups while idle, but the backstop still ends a hung hook.
+    let (h, _sink, _) = host(Backend::Wasm);
+    let ae = attach(&h, 1, "x");
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    let idle0 = h.epoch_ticks();
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    assert_eq!(h.epoch_ticks(), idle0, "an idle host must not tick");
+    // A hung hook is still cut (fuel first, the epoch backstop for the rest).
+    assert_eq!(ae.on_event(&announce("spin")), ExtVerdict::Pass);
+    assert_eq!(h.stats().faults, 1);
+    // The faulted slot rebuilds its instance in the background (also a guarded call).
+    for _ in 0..200 {
+        if h.settled() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    let after = h.epoch_ticks();
+    assert!(after > idle0, "the hung hook was cut by ticks: {after} vs {idle0}");
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    assert_eq!(h.epoch_ticks(), after, "the ticker parks again after the call");
 }
 
 #[test]

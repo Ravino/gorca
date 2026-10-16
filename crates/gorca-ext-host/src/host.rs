@@ -298,6 +298,12 @@ impl ExtHost {
         self.stats.snapshot()
     }
 
+    /// Epoch ticks made by the backstop clock so far; it only runs while a WASM call is in
+    /// flight, so an idle host does not advance it (tests).
+    pub fn epoch_ticks(&self) -> u64 {
+        self._engine.as_ref().map_or(0, |e| e.ticks_done())
+    }
+
     pub fn reports(&self) -> &[LoadReport] {
         &self.reports
     }
@@ -507,6 +513,15 @@ fn present_reason(ctx: PresentContext) -> api::PresentReason {
     }
 }
 
+/// Whether a busy slot may repeat its last decision for events of `kind`. Only the high-rate
+/// kinds (properties, children, text, caret, selection) qualify: one decision stands for a
+/// burst of near-identical events. Focus, window, announcement and removal events are discrete
+/// and unrelated to the previous one, so a repeated suppress would silence an unrelated change
+/// (or turn a rewrite into silence); they pass through to the core's own speech.
+pub(crate) fn repeats_when_busy(kind: usize) -> bool {
+    matches!(kind, 1..=5)
+}
+
 /// Index of the event's kind, for the slot's per-kind last decision.
 fn event_kind(e: &api::Event) -> usize {
     match e {
@@ -553,8 +568,8 @@ impl AppExt for AppExts {
                     ExtVerdict::Pass
                 }
                 Outcome::Busy => {
-                    // See `Decision`: repeat the last decision for this kind of event.
-                    if slot.last_decision(kind) == Decision::Consume {
+                    // See `Decision`: repeat the last decision, for high-rate kinds only.
+                    if repeats_when_busy(kind) && slot.last_decision(kind) == Decision::Consume {
                         self.stats
                             .busy_suppressed
                             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -625,6 +640,30 @@ impl AppExt for AppExts {
                     .commands_dropped
                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod busy_tests {
+    use super::{event_kind, repeats_when_busy};
+    use gorca_ext_api as api;
+
+    #[test]
+    fn only_high_rate_kinds_repeat_a_decision_while_busy() {
+        let k = (1, 1);
+        for (e, repeats) in [
+            (api::Event::FocusChanged(k), false),
+            (api::Event::PropertiesChanged(k, 0), true),
+            (api::Event::ChildrenChanged(k), true),
+            (api::Event::TextChanged(k), true),
+            (api::Event::CaretMoved(k, 0), true),
+            (api::Event::SelectionChanged(k), true),
+            (api::Event::Announcement(String::new()), false),
+            (api::Event::WindowActivated(k), false),
+            (api::Event::NodeRemoved(k), false),
+        ] {
+            assert_eq!(repeats_when_busy(event_kind(&e)), repeats, "{e:?}");
         }
     }
 }
