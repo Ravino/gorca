@@ -176,6 +176,19 @@ impl Mentioned {
             None => self.unresolved.insert(spec.clone()),
         }
     }
+
+    /// Reserve the presses a binding owns beyond its own: a command with `max_press = m` bound at
+    /// `(chord, p)` also answers presses `p + 1..=m` (the input lane looks an explicit
+    /// `(chord, n)` up first and falls back to the lower press with a repeat count), so an
+    /// extension chord at any of those presses would replace them.
+    fn reserve_presses(&mut self, spec: &ChordSpec, max_press: u8, resolver: &dyn KeyResolver) {
+        let Some(k) = chord_key(spec, resolver) else {
+            return;
+        };
+        for n in spec.presses.saturating_add(1)..=max_press {
+            self.resolved.insert((k, n));
+        }
+    }
 }
 
 /// Compile a loaded configuration for the input lane, with the extension commands installed for
@@ -255,6 +268,9 @@ pub fn compile_with(
                     Some(bound)
                 }
             };
+            if let Some(b) = &bound {
+                mentioned.reserve_presses(spec, b.max_press, resolver);
+            }
             km.insert(table_kind(*ctx), key, spec.presses, bound);
         }
     }
@@ -1110,5 +1126,59 @@ mod tests {
             shadowed.len(),
             shadowed.join("\n")
         );
+    }
+
+    /// A core command with `max_press > 1` owns presses `2..=max_press` of its chord: an extension
+    /// default chord at those presses must lose (regression for review finding N-1).
+    #[test]
+    fn extension_chords_never_take_over_core_multi_press() {
+        use super::super::spec::ContextMask;
+        let mut shadowed = Vec::new();
+        let mut tried = 0usize;
+        for text in ["", "[keyboard]\npreset=\"orca\"\n", "[keyboard]\nlayout=\"laptop\"\n"] {
+            let l = load(Some(text), &Presets::builtin());
+            let base = compile_with(&l, &PlatformFacts::default(), &StaticResolver, None);
+            for (ctx, spec, cmd) in l.keymap.bound() {
+                let Some(k) = chord_key(spec, &StaticResolver) else {
+                    continue;
+                };
+                if spec.presses != 1 {
+                    continue;
+                }
+                for mode in [ModeKind::Focus, ModeKind::Browse, ModeKind::Review] {
+                    let Some(core) = base.keymap.lookup(mode, k, 1) else {
+                        continue;
+                    };
+                    for n in 2..=core.max_press {
+                        if base.keymap.lookup(mode, k, n).is_some() {
+                            continue;
+                        }
+                        tried += 1;
+                        let mut r = ExtCommands::new();
+                        r.register(ExtCmdSpec {
+                            name: "ext.evil.grab".into(),
+                            ext: "evil".into(),
+                            local: 1,
+                            help: "h".into(),
+                            contexts: ContextMask::ANY,
+                            max_press: 3,
+                            interrupts: true,
+                        })
+                        .unwrap();
+                        let v = format!("{spec}*{n}");
+                        if r.bind(ctx, &v, "ext.evil.grab").is_err() {
+                            continue;
+                        }
+                        let evil = r.by_name("ext.evil.grab").unwrap().0;
+                        let c = compile_with(&l, &PlatformFacts::default(), &StaticResolver, Some(&r));
+                        if c.keymap.lookup(mode, k, n).map(|b| b.cmd) == Some(evil) {
+                            shadowed.push(format!("{ctx:?} {spec} ({cmd}) press {n} in {mode:?}"));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(tried > 20, "the probe must exercise the multi-press chords, tried {tried}");
+        assert!(shadowed.is_empty(), "shadowed: {shadowed:#?}");
     }
 }
