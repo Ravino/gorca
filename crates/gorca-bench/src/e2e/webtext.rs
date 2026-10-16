@@ -1453,8 +1453,14 @@ fn fp1(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor, out: &mut RunOut) ->
     let mut f = Ft::open(host, reader, flavor, "fields.html", "M3b Fields", CFG_QUIET)?;
     let mut fails: Vec<String> = Vec::new();
     let path = f.enter_role("combo box", "Combo")?;
-    // Alt+Down opens the popup (the page's own widget).
-    let (_, took) = f.key(DOWN, 0, ALT)?;
+    // Alt+Down opens the popup (the page's own widget). Chromium treats the release of Alt as
+    // a menu-bar gesture and the next key (our Escape) never reaches the page, so there the
+    // page's F4 opens it instead.
+    let (_, took) = if chromium_selected() {
+        f.key(k(62, 0xffc1), 0, 0)?
+    } else {
+        f.key(DOWN, 0, ALT)?
+    };
     if took {
         fails.push("Alt+Down was swallowed".into());
     }
