@@ -1,0 +1,113 @@
+== phase2 acceptance: DRY RUN (not acceptance), PARTIAL (m4 x1)
+mode=DRY RUN (not acceptance), PARTIAL (m4 x1)
+utc=2026-10-16T23:16:25Z
+git_rev=c4183c7 dirty_tracked_files=0 branch=worktree-agent-a212e0b0695e3d0d9
+kernel=7.1.8+deb13-rt-amd64 cpus=16
+loadavg=13.33 10.71 10.16 5/3129 2442354
+psi_memory_some_avg10=0.01 psi_memory_full_avg10=0.01
+psi_cpu_some_avg10=0.72 psi_io_some_avg10=0.00
+mem_available_mb=14642
+governor=performance 
+rtkit MaxRealtimePriority: i 20 
+rtkit RTTimeUSecMax: x 200000 
+topology: shipped default (--topology=auto); expected arm: lanes-rt (gated by e2e --expect-topology)
+repeats=1 quick=--quick suites=m4 x1
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=1
+  idle C3_ACPI latency=1048us disabled=1
+  load: 13.33 10.71 10.16 5/3131 2442394
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! HOST NOT QUIET: load average 13.33 > 4
+!! dry run: continuing, results are NOT acceptance data
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+WARNING: 2 other cargo/rustc processes are running (one cargo at a time)
+== build (release, CARGO_BUILD_JOBS=4)
+
+######## suite m4
+== m4/e2e attempt 1  load 15.33 15.10 12.31 13/3248 2475655  cap 2400s
+   -> ok (exit 0, 104 s)
+
+######## suite x1
+== x1/hooks attempt 1  load 12.68 14.50 12.41 4/3252 2482996  cap 1800s
+   -> ok (exit 0, 13 s)
+# Phase 2 acceptance: DRY RUN, NOT ACCEPTANCE DATA (gates pass)
+
+Mode: **DRY RUN (not acceptance), PARTIAL (m4 x1)**. Run dir: `<repo>/.claude/worktrees/agent-a212e0b0695e3d0d9/bench/results/acceptance/phase2-dryrun-20261017-a`.
+Resolved topology (from the reader reports): lanes-rtx2.
+
+## Steps
+
+| step | result | attempt | wall | load1 min-max | mem PSI max | gated rows | FAIL rows | notes |
+|---|---|---|---|---|---|---|---|---|
+| m4/e2e | PASS | a1 | 104 s | 13.0-16.2 | 2.510 | 8 | 0 | - |
+| x1/hooks | PASS | a1 | 13 s | 11.8-12.7 | 1.010 | 19 | 0 | - |
+summary: <repo>/.claude/worktrees/agent-a212e0b0695e3d0d9/bench/results/acceptance/phase2-dryrun-20261017-a/summary.md (exit 0)
+== phase2 acceptance: DRY RUN (not acceptance), PARTIAL (m4 x1)
+mode=DRY RUN (not acceptance), PARTIAL (m4 x1)
+utc=2026-10-16T23:16:25Z
+git_rev=c4183c7 dirty_tracked_files=0 branch=worktree-agent-a212e0b0695e3d0d9
+kernel=7.1.8+deb13-rt-amd64 cpus=16
+loadavg=13.33 10.71 10.16 5/3129 2442354
+psi_memory_some_avg10=0.01 psi_memory_full_avg10=0.01
+psi_cpu_some_avg10=0.72 psi_io_some_avg10=0.00
+mem_available_mb=14642
+governor=performance 
+rtkit MaxRealtimePriority: i 20 
+rtkit RTTimeUSecMax: x 200000 
+topology: shipped default (--topology=auto); expected arm: lanes-rt (gated by e2e --expect-topology)
+repeats=1 quick=--quick suites=m4 x1
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=1
+  idle C3_ACPI latency=1048us disabled=1
+  load: 13.33 10.71 10.16 5/3131 2442394
+git_rev_built=c4183c7 binary=e945a7b9567bd5de mtime=2026-10-17 02:18:56.945936891 +0300
+loadavg_end=11.33 14.11 12.31 4/3257 2483733 elapsed_s=117
+---- resumed ----
+mode=DRY RUN (not acceptance), PARTIAL (m4 x1)
+utc=2026-10-16T23:47:14Z
+git_rev=c4183c7 dirty_tracked_files=1 branch=worktree-agent-a212e0b0695e3d0d9
+kernel=7.1.8+deb13-rt-amd64 cpus=16
+loadavg=12.56 14.68 15.15 1/2662 2647548
+psi_memory_some_avg10=0.41 psi_memory_full_avg10=0.41
+psi_cpu_some_avg10=0.07 psi_io_some_avg10=0.00
+mem_available_mb=16906
+governor=performance 
+rtkit MaxRealtimePriority: i 20 
+rtkit RTTimeUSecMax: x 200000 
+topology: shipped default (--topology=auto); expected arm: lanes-rt (gated by e2e --expect-topology)
+repeats=1 quick=--quick suites=m4 x1
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=1
+  idle C3_ACPI latency=1048us disabled=1
+  load: 12.56 14.68 15.15 1/2664 2647588
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! HOST NOT QUIET: load average 12.56 > 4
+!! dry run: continuing, results are NOT acceptance data
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+######## suite m4
+== m4/e2e: already ok, skipped (resume)
+
+######## suite x1
+== x1/hooks: already ok, skipped (resume)
+# Phase 2 acceptance: DRY RUN, NOT ACCEPTANCE DATA (gates pass)
+
+Mode: **DRY RUN (not acceptance), PARTIAL (m4 x1)**. Run dir: `<repo>/.claude/worktrees/agent-a212e0b0695e3d0d9/bench/results/acceptance/phase2-dryrun-20261017-a`.
+Resolved topology (from the reader reports): lanes-rtx2.
+
+## Steps
+
+| step | result | attempt | wall | load1 min-max | mem PSI max | gated rows | FAIL rows | notes |
+|---|---|---|---|---|---|---|---|---|
+| m4/e2e | PASS | a1 | 104 s | 13.0-16.2 | 2.510 | 8 | 0 | - |
+| x1/hooks | PASS | a1 | 13 s | 11.8-12.7 | 1.010 | 19 | 0 | - |
+summary: <repo>/.claude/worktrees/agent-a212e0b0695e3d0d9/bench/results/acceptance/phase2-dryrun-20261017-a/summary.md (exit 0)

@@ -1,0 +1,14 @@
+suite=x1
+step=hooks
+attempt=1
+kind=x1
+exit=0
+label=acc-20261016T231624Z-x1-hooks-a1
+start=1792192963
+end=1792192976
+seconds=13
+load_start=12.68 14.50 12.41 4/3252 2482996
+load_end=11.33 14.11 12.31 1/3257 2483727
+governor=performance 
+git_rev=c4183c7
+cap_seconds=1800
