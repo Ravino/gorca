@@ -127,6 +127,7 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
         prio: Prio::Interrupt,
         may_refine,
         survives_focus_change: false,
+        ttl_secs: 0,
         refines: None,
     }
 }
@@ -302,6 +303,7 @@ pub(crate) fn present_change(
         prio: Prio::Message,
         may_refine: false,
         survives_focus_change: false,
+        ttl_secs: 0,
         refines,
     }
 }

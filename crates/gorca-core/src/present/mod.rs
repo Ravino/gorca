@@ -134,6 +134,7 @@ fn ext_utterance(segs: Vec<gorca_model::Segment>, id: UttId, epoch: Epoch) -> Ut
         prio: gorca_model::Prio::Interrupt,
         may_refine: false,
         survives_focus_change: false,
+        ttl_secs: 0,
         refines: None,
     }
 }

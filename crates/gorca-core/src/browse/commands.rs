@@ -16,7 +16,10 @@ use gorca_text::{Dir, TextSpace, Unit};
 use super::cursor::{self, Edge, Mv};
 use super::forms::{self, Reason};
 use super::present::{self, Item};
-use super::{BrowseState, ModeWord, SavedWeb, WebEv, WebFx, WebMode, step};
+use super::{
+    BrowseState, LIVE_TTL_ASSERTIVE, LIVE_TTL_POLITE, ModeWord, SavedWeb, WebEv, WebFx, WebMode,
+    step,
+};
 use crate::SpeechIntent;
 use crate::commands::CoreCmd;
 use crate::doc_actor::live::LiveMsg;
@@ -1617,6 +1620,7 @@ impl Reader {
     fn web_live(&mut self, doc: DocId, msg: &LiveMsg, fx: &mut ReaderEffects) {
         let now = self.now;
         let Some(b) = self.web.as_mut() else { return };
+        let app = b.docs.get(doc).map(|h| h.app);
         let in_front = b.active == Some(doc)
             && matches!(b.mode, WebMode::Browse { .. } | WebMode::Focus { .. });
         if !in_front {
@@ -1644,12 +1648,23 @@ impl Reader {
         // Polite news waits for the speech lane and survives navigation; assertive news is
         // stale after a focus change, so a flood can never queue in front of focus speech.
         u.survives_focus_change = !msg.assertive;
+        // News expires in the speech queue (ADR-0003 13.2): 5 s polite, 10 s assertive.
+        u.ttl_secs = if msg.assertive {
+            LIVE_TTL_ASSERTIVE
+        } else {
+            LIVE_TTL_POLITE
+        };
         u.segments.clear();
         u.segments.push(Segment {
             text: Arc::clone(&msg.text),
             kind: SegmentKind::Text,
         });
-        fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+        // Through the owner's speech budget like any other notice (2026-10-16 fairness): a page
+        // that floods its regions spends its own process's tokens, never another app's.
+        match app {
+            Some(app) => self.notice_speak(app, u, fx),
+            None => fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u })),
+        }
     }
 
     // ---- speech ---------------------------------------------------------------------------

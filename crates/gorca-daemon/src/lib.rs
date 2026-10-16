@@ -258,6 +258,7 @@ async fn announce_notices(
             prio: Prio::Message,
             may_refine: false,
             survives_focus_change: true,
+            ttl_secs: 0,
             refines: None,
         };
         speech.submit(u);

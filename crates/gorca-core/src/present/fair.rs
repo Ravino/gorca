@@ -419,6 +419,7 @@ mod tests {
             prio: Prio::Notification,
             may_refine: false,
             survives_focus_change: false,
+            ttl_secs: 0,
             refines: None,
         };
         assert_eq!(f.wait(owner(1), u(1), t), 0);
@@ -456,6 +457,7 @@ mod tests {
             prio: gorca_model::Prio::Notification,
             may_refine: false,
             survives_focus_change: true,
+            ttl_secs: 0,
             refines: None,
         };
         for o in 0..64u32 {
@@ -492,6 +494,7 @@ mod m4b_review_probe {
             prio: Prio::Notification,
             may_refine: false,
             survives_focus_change: true,
+            ttl_secs: 0,
             refines: None,
         }
     }

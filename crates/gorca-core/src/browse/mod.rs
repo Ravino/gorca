@@ -548,6 +548,11 @@ pub struct BrowseState {
     pub click_target: Option<(DocNodeId, Instant)>,
 }
 
+/// How long polite live-region news may wait in the speech queue (ADR-0003 13.2).
+pub const LIVE_TTL_POLITE: u8 = 5;
+/// How long assertive live-region news may wait in the speech queue (ADR-0003 13.2).
+pub const LIVE_TTL_ASSERTIVE: u8 = 10;
+
 /// How long after our own activation a caret event moves the browse cursor.
 pub const CARET_FOLLOW: std::time::Duration = std::time::Duration::from_millis(700);
 

@@ -1881,7 +1881,7 @@ fn acts(fx: &ReaderEffects) -> Vec<(DocAction, DocNodeId)> {
         .iter()
         .filter_map(|w| match w {
             WebEffect::Act { node, act, .. } => Some((act.clone(), *node)),
-            _ => None,
+            WebEffect::Ensure { .. } | WebEffect::Activity { .. } => None,
         })
         .collect()
 }
@@ -2026,4 +2026,54 @@ fn virtual_selection_never_touches_the_page_unless_native_mode_is_on() {
     );
     let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
     assert_eq!(spoken(&fx), ["native selection off"]);
+}
+
+// ---- review round 1: M-4 live speech expires and spends the owner's budget ---------------------
+
+fn live_msg(text: &str, assertive: bool) -> ReaderMsg {
+    ReaderMsg::Doc(DocNotice::Live {
+        doc: DocId(1),
+        msg: crate::doc_actor::live::LiveMsg {
+            text: Arc::from(text),
+            assertive,
+        },
+    })
+}
+
+fn speak_utts(fx: &ReaderEffects) -> Vec<gorca_model::Utterance> {
+    fx.iter()
+        .filter_map(|e| {
+            if let ReaderEffect::Speak(s) = e {
+                Some(s.utterance.clone())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn live_speech_carries_the_adr_ttl_and_a_flood_spends_only_its_owners_budget() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    let fx = r.reader.handle(live_msg("polite news", false), r.now);
+    let u = speak_utts(&fx);
+    assert_eq!(u.len(), 1);
+    assert_eq!(u[0].ttl_secs, 5);
+    let fx = r.reader.handle(live_msg("alert news", true), r.now);
+    assert_eq!(speak_utts(&fx)[0].ttl_secs, 10);
+    // A flood in one instant: the owner's speech bucket (burst 3) lets a few through and holds
+    // only the newest of the rest; nothing near the 32-entry speech FIFO is ever produced.
+    let mut spoken_now = 0;
+    for i in 0..200 {
+        let fx = r
+            .reader
+            .handle(live_msg(&format!("flood {i}"), false), r.now);
+        spoken_now += speak_utts(&fx).len();
+    }
+    assert!(
+        spoken_now <= 4,
+        "a flood spoke {spoken_now} messages at once"
+    );
 }

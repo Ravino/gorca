@@ -326,6 +326,9 @@ impl Region {
 pub struct LiveTracker {
     regions: HashMap<DocNodeId, Region>,
     started: Option<Instant>,
+    /// The initial load is over (one quiet period passed after construction began): later bulk
+    /// batches are SPA re-renders, which must not hide a newly shown alert (review M-3).
+    loaded: bool,
     doc_bucket: Option<Bucket>,
     next_summary: Option<Instant>,
 }
@@ -341,6 +344,7 @@ impl LiveTracker {
         Self {
             regions: HashMap::new(),
             started: None,
+            loaded: false,
             doc_bucket: None,
             next_summary: None,
         }
@@ -351,16 +355,26 @@ impl LiveTracker {
     pub fn reset(&mut self) {
         self.regions.clear();
         self.started = None;
+        self.loaded = false;
     }
 
     /// A batch was published: mark the regions that own the touched nodes.
     pub fn on_batch(&mut self, doc: &WebDoc, touched: &[DocNodeId], now: Instant) {
-        // The quiet period runs from the last bulk batch (page construction), not from the first.
-        if touched.len() >= BULK_TOUCH || self.started.is_none() {
+        // The quiet period runs from the last bulk batch of the initial load (page
+        // construction), not from the first. Once it has passed, the document is loaded for good:
+        // a later bulk batch is a re-render and never restarts it, so an alert that appears in
+        // the same update as a hundred other changes is still news (M-3).
+        if !self.loaded
+            && self
+                .started
+                .is_some_and(|s| now.saturating_duration_since(s) >= LOAD_QUIET)
+        {
+            self.loaded = true;
+        }
+        if !self.loaded && (touched.len() >= BULK_TOUCH || self.started.is_none()) {
             self.started = Some(now);
         }
-        let started = self.started.unwrap_or(now);
-        let quiet = now.saturating_duration_since(started) < LOAD_QUIET;
+        let quiet = !self.loaded;
         let mut seen: std::collections::HashSet<DocNodeId> = std::collections::HashSet::new();
         for id in touched.iter().take(MAX_TOUCHED) {
             let Some((root, props)) = region_of(doc, *id) else {
@@ -614,6 +628,49 @@ mod tests {
             .is_ok()
         );
         leaf
+    }
+
+    // Review M-3 regression: an alert inserted in a batch that also touches >= BULK_TOUCH other
+    // nodes (an SPA re-render) is spoken, exactly like the same alert alone.
+    fn alert_after_load(extra_touched: usize) -> usize {
+        let t0 = Instant::now();
+        let (d0, r) = page("idle", "polite");
+        let mut d = d0;
+        let mut t = LiveTracker::new();
+        t.on_batch(&d, &[r], t0);
+        let _ = t.tick(&d, t0 + Duration::from_millis(700));
+        let later = t0 + Duration::from_secs(5);
+        let alert = SubtreeSpec::with_children(
+            NodeSpec::new(Role::Alert).flags(NodeFlags::BLOCK),
+            vec![SubtreeSpec::leaf(
+                NodeSpec::new(Role::StaticText).text("Payment failed"),
+            )],
+        );
+        let root = d.root().unwrap();
+        assert!(
+            d.apply(&DocOp::InsertSubtree {
+                parent: Some(root),
+                before: None,
+                subtree: Arc::new(alert)
+            })
+            .is_ok()
+        );
+        let a = d.children(root).last().unwrap();
+        let mut touched = vec![a];
+        touched.extend(std::iter::repeat_n(root, extra_touched));
+        t.on_batch(&d, &touched, later);
+        let mut n = 0;
+        for ms in [60u64, 250, 1000] {
+            n += t.tick(&d, later + Duration::from_millis(ms)).len();
+        }
+        n
+    }
+
+    #[test]
+    fn an_alert_in_a_bulk_rerender_is_not_lost() {
+        assert_eq!(alert_after_load(0), 1, "alert alone");
+        assert_eq!(alert_after_load(BULK_TOUCH - 1), 1, "alert + a re-render");
+        assert_eq!(alert_after_load(500), 1, "alert + a large re-render");
     }
 
     #[test]
