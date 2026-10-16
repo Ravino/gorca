@@ -134,6 +134,12 @@ impl Big {
     }
 }
 
+#[derive(Clone, Copy)]
+enum Gate {
+    P99,
+    Median,
+}
+
 fn pct(v: &mut [Duration], p: f64) -> Duration {
     v.sort_unstable();
     let i = ((v.len() as f64 * p).ceil() as usize).clamp(1, v.len()) - 1;
@@ -153,7 +159,10 @@ fn run_series(b: &mut Big, cmd: CoreCmd, n: usize, reset_every: usize) -> (Durat
     (pct(&mut v, 0.5), pct(&mut v, 0.99))
 }
 
-fn report(nodes: usize, bound: Duration) {
+/// `gate` picks the statistic the bound applies to. The strict p99 gates run in release on a
+/// quiet host (the `#[ignore]` test below); the debug test gates the median, which a loaded
+/// host cannot move but an O(n) regression on a 10k mirror still does (p99 is printed anyway).
+fn report(nodes: usize, bound: Duration, gate: Gate) {
     let mut b = big(nodes);
     let len = b.writer.doc().len();
     // Warm.
@@ -170,7 +179,11 @@ fn report(nodes: usize, bound: Duration) {
     ] {
         let (p50, p99) = run_series(&mut b, cmd, 400, reset);
         eprintln!("{nodes} nodes ({len} in mirror): {name}: p50 {p50:?} p99 {p99:?}");
-        assert!(p99 < bound, "{name}: p99 {p99:?} over {bound:?}");
+        let gated = if matches!(gate, Gate::P99) { p99 } else { p50 };
+        assert!(
+            gated < bound,
+            "{name}: p50 {p50:?} p99 {p99:?} over {bound:?}"
+        );
     }
     // Far jumps: top of a 100k page, then to the bottom, then back.
     let mut far = Vec::new();
@@ -180,7 +193,12 @@ fn report(nodes: usize, bound: Duration) {
     }
     let p99 = pct(&mut far, 0.99);
     eprintln!("{nodes} nodes: top/bottom p99 {p99:?}");
-    assert!(p99 < bound, "top/bottom p99 {p99:?}");
+    let gated = if matches!(gate, Gate::P99) {
+        p99
+    } else {
+        pct(&mut far, 0.5)
+    };
+    assert!(gated < bound, "top/bottom p99 {p99:?} gated {gated:?}");
 }
 
 /// J1: the focus join, `WebJoin` plus the `DocRead` check, over a 100k-key table.
@@ -228,21 +246,26 @@ fn join_series() -> (Duration, Duration) {
 
 #[test]
 fn hot_paths_stay_far_below_the_gates_on_a_10k_mirror_even_in_debug() {
-    report(10_000, Duration::from_millis(50));
+    report(10_000, Duration::from_millis(10), Gate::Median);
 }
 
 #[test]
 fn the_focus_join_is_microseconds_even_in_debug() {
     let (p50, p99) = join_series();
     eprintln!("J1: p50 {p50:?} p99 {p99:?}");
-    assert!(p99 < Duration::from_micros(200), "J1 p99 {p99:?}");
+    // Median, not p99: 200 of the 20k samples are preemption victims on a loaded host. The strict
+    // p99 gate is the release test below.
+    assert!(
+        p50 < Duration::from_micros(50),
+        "J1 p50 {p50:?} (p99 {p99:?})"
+    );
 }
 
 #[test]
 #[ignore = "release-mode gate run: cargo test --release -p gorca-core --lib browse::latency -- --ignored --nocapture"]
 fn gates_w1_br1_and_j1_on_10k_and_100k_mirrors() {
-    report(10_000, Duration::from_millis(5));
-    report(100_000, Duration::from_millis(5));
+    report(10_000, Duration::from_millis(5), Gate::P99);
+    report(100_000, Duration::from_millis(5), Gate::P99);
     let (p50, p99) = join_series();
     eprintln!("J1: p50 {p50:?} p99 {p99:?}");
     assert!(p99 < Duration::from_micros(10), "J1 p99 {p99:?}");

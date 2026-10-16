@@ -474,7 +474,9 @@ mod tests {
         for _ in 0..(LOG_QUEUE + 2_000) {
             log.record(rec(Arc::clone(&s), PresentSource::Hit, None));
         }
-        assert!(t0.elapsed() < std::time::Duration::from_secs(2));
+        // The writer is stuck for good: a `record` that blocked on it would never return, so a
+        // generous bound separates "never blocks" from "hangs" without measuring the host.
+        assert!(t0.elapsed() < std::time::Duration::from_secs(30));
         assert!(log.dropped() > 0);
     }
 

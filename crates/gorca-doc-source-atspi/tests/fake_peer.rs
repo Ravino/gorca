@@ -506,13 +506,17 @@ async fn a_hung_node_cannot_stall_the_fetch_past_its_deadline() {
     let interner = Arc::new(AttrInterner::default());
     let mut paths = PathTable::default();
     let mut o = fast_opts(Split::Whole);
-    o.call_timeout = Duration::from_millis(150);
+    // Long enough that a healthy call is never timed out by a loaded host (the test counts
+    // failed calls exactly); the hung one takes the full timeout either way.
+    o.call_timeout = Duration::from_millis(1500);
     let t = Instant::now();
     let d = fetch_document(&conn, &interner, &mut paths, &path_of(doc), &o)
         .await
         .unwrap();
+    // The hung call ends at its 1.5 s timeout instead of its 30 s delay: the fetch is not
+    // stalled past the deadline.
     assert!(
-        t.elapsed() < Duration::from_secs(2),
+        t.elapsed() < Duration::from_secs(20),
         "took {:?}",
         t.elapsed()
     );

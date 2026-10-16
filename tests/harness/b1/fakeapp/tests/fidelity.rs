@@ -73,10 +73,13 @@ async fn measure(c: &zbus::Connection, base: (&str, &str), model: (&str, &str)) 
 /// - `B1_STRICT=1` (set by `bench/b1/run-all.sh`, authoritative runs on a quiet host): one
 ///   measurement, p50 delta within +-20 % of the model and p99 delta within +1 ms of it.
 ///   `run-all.sh` records the result in the run's host meta and marks a failing run INVALID.
-/// - default (`make check`, shared host): a gross-breakage sanity check only. The p50 delta
-///   must be within 3x of the model (`0.5/3 ..= 0.5*3` ms), judged best of up to 3
-///   measurements. A model that is ignored (zero delay) or grossly off (10x) fails every
-///   attempt; the p99 is not checked, since it is dominated by scheduler noise.
+/// - default (`make check`, shared host, load 10 to 70): a gross-breakage sanity check only. The
+///   p50 delta must be at least a third of the model (an ignored model, zero delay, fails every
+///   attempt: that bound cannot be inflated by load) and at most 20x of it (a hang or a runaway
+///   sleep; a loaded host measured 2.8 to 3.8 ms for the 0.5 ms model, so a tighter ceiling
+///   judges the scheduler), best of up to 3 measurements. A model that is merely too slow by a
+///   small factor is caught by the `B1_STRICT` run, which is the authoritative fidelity gate.
+///   The p99 is not checked, since it is dominated by scheduler noise.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn service_time_fidelity() {
     let bus = Bus::start();
@@ -88,7 +91,8 @@ async fn service_time_fidelity() {
         )
         .await;
     // `B1_FIDELITY_TEST_SCALE` is a test-only knob to prove the relaxed check catches a broken
-    // model (0 = zero delay, 10 = 10x); unset in normal runs.
+    // model (0 = zero delay, 40 = a 20 ms runaway); unset in normal runs. A 10x model is only
+    // caught by the `B1_STRICT` run.
     let scale: f64 = std::env::var("B1_FIDELITY_TEST_SCALE")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -112,7 +116,7 @@ async fn service_time_fidelity() {
         let ok = if strict {
             (d50 - 0.5).abs() <= 0.5 * 0.20 && d99 <= 2.0 + 1.0
         } else {
-            (0.5 / 3.0..=0.5 * 3.0).contains(&d50)
+            (0.5 / 3.0..=0.5 * 20.0).contains(&d50)
         };
         if ok {
             return;

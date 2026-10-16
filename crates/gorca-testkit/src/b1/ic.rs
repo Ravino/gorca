@@ -558,6 +558,19 @@ fn ic09(s: &mut dyn Sut) -> CaseResult {
         mirror_has(s, label, &row, &old)?;
         s.must(label, Cmd::Scroll { steps: 7 })?;
         s.advance(100);
+        if evented {
+            // The case's premise is that the evented change has settled before the focus. On a
+            // loaded host 100 ms is not enough for the event to be applied, so wait for the
+            // mirror to stop holding the old name (generous deadline, polled; virtual time
+            // makes this free).
+            let mut waited = 0;
+            while waited < 30_000
+                && matches!(s.probe(label, &row), Probe::Hit { name: n, .. } if n == old)
+            {
+                s.advance(50);
+                waited += 50;
+            }
+        }
         s.focus(label, &row)?;
         let (p, v) = last_pres(s, &row).ok_or_else(|| Fail("row not presented".into()))?;
         need(v != Verdict::Stale, || format!("recycled row: {p:?}"))?;
@@ -1125,6 +1138,20 @@ fn ic23(s: &mut dyn Sut) -> CaseResult {
     let before = s.presentations().len();
     s.focus("settings", &p)?;
     s.advance(500);
+    // The revalidation is an app round trip: on a loaded host it can take longer than the 500 ms
+    // above. Poll (generous deadline) until the refinement is spoken; absence after the deadline
+    // is the failure.
+    let refined = |s: &dyn Sut| {
+        s.presentations()
+            .split_off(before)
+            .iter()
+            .any(|x| x.path == p && x.refines.is_some() && x.name == "Parent renamed")
+    };
+    let mut waited = 0;
+    while waited < 30_000 && !refined(s) {
+        s.advance(50);
+        waited += 50;
+    }
     let new: Vec<Presentation> = s.presentations().split_off(before);
     let spoke = new
         .iter()
