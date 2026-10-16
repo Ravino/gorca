@@ -327,8 +327,7 @@ fn fm() -> Vec<Step> {
         s("FM.esc2", P0, "Escape again", key0(ESC), &["browse mode"]).gate(Gate::Mode),
         // keys that must reach the page in browse mode (NVDA's passThrough gesture list)
         // Tab is no longer in this list: D-2 grabs it in browse mode while a focusable follows the
-        // cursor (SY.tab; SY.tab.out covers the released case).
-        s("FM.pass.shift_tab", P0, "Shift+Tab is not grabbed", Act::Key(TAB, SHIFT), &[]).passes_through(),
+        // cursor (SY.tab; SY.tab.out covers the released case); Shift+Tab likewise (SY.stab).
         s("FM.pass.ctrl_enter", P0, "Ctrl+Enter is not grabbed", Act::Key(ENTER, CTRL), &[]).passes_through(),
         s("FM.pass.shift_f10", P1, "Shift+F10 is not grabbed", Act::Key(key(76, 0xffc7), SHIFT), &[]).passes_through(),
         // a real Tab through the compositor (not the emulated Mutter): focus follows
