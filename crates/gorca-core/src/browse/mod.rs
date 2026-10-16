@@ -531,6 +531,8 @@ pub struct BrowseState {
     /// When we last clicked a link or button for the user (`DoDefault`): a caret event within
     /// [`CARET_FOLLOW`] of it is the page answering our action (anchor jumps), not the user.
     pub activated: Option<Instant>,
+    /// The check box, radio button or toggle that browse mode just clicked.
+    pub click_target: Option<(DocNodeId, Instant)>,
 }
 
 /// How long after our own activation a caret event moves the browse cursor.
@@ -560,6 +562,7 @@ impl BrowseState {
             live_tokens: (LIVE_BURST, None),
             suppress_focus: None,
             activated: None,
+            click_target: None,
         }
     }
 }

@@ -44,6 +44,8 @@ pub enum WebEffect {
 /// A mode word waits this long for the utterance it belongs to.
 /// How long after the cursor's node vanished a re-render may still move the cursor back.
 const RESTORE_WINDOW: Duration = Duration::from_millis(1500);
+/// A focus event this soon after a click on a check box is the click's own.
+const CLICK_FOCUS_WINDOW: Duration = Duration::from_millis(800);
 const WORD_TTL: Duration = Duration::from_millis(600);
 /// The line that follows a document's focus utterance waits for a cold fetch this long (M4).
 const TAIL_TTL: Duration = Duration::from_secs(2);
@@ -799,6 +801,12 @@ impl Reader {
                 b.suppress_focus = Some(node);
                 return;
             }
+            if let Some((t, at)) = b.click_target.take()
+                && t == id
+                && self.now.saturating_duration_since(at) < CLICK_FOCUS_WINDOW
+            {
+                b.suppress_focus = Some(node);
+            }
             let passes = forms::passes_through(role, states, Reason::Focus);
             let application = forms::is_application(role);
             let last_before = match b.mode {
@@ -823,6 +831,7 @@ impl Reader {
                 self.web_container_tail(doc, id);
             }
             self.web_dialog_lead(doc, id, last_before);
+            self.web_listbox_lead(doc, id, last_before);
             self.web_refresh_popup(fx);
             return;
         }
@@ -941,6 +950,53 @@ impl Reader {
                         out.push(Item::Lead(name.to_owned()));
                     }
                     out.push(Item::Lead("dialog".to_owned()));
+                    return Some(out);
+                }
+                cur = d.parent(n);
+            }
+            None
+        });
+        if let Some(mut lead) = lead {
+            let now = self.now;
+            let rest = b.pending_tail.take().map(|(t, _)| t).unwrap_or_default();
+            lead.extend(rest);
+            b.pending_tail = Some((lead, now));
+        }
+    }
+
+    /// Focus landed on an option of a list box the focus was not in: the list box's name leads
+    /// ("Toppings list box, Cheese selected").
+    fn web_listbox_lead(&mut self, doc: DocId, id: DocNodeId, before: Option<DocNodeId>) {
+        let Some(b) = self.web.as_mut() else { return };
+        let Some(h) = b.docs.get(doc) else { return };
+        let lead = h.read.with(|d| {
+            if d.node(id)?.role != Role::ListItem {
+                return None;
+            }
+            let mut cur = d.parent(id);
+            for _ in 0..4 {
+                let n = cur?;
+                let v = d.node(n)?;
+                if v.cats.intersects(Cat::LISTBOX) {
+                    let inside = before.is_some_and(|p| {
+                        let mut c = Some(p);
+                        for _ in 0..64 {
+                            match c {
+                                Some(x) if x == n => return true,
+                                Some(x) => c = d.parent(x),
+                                None => return false,
+                            }
+                        }
+                        false
+                    });
+                    if inside {
+                        return None;
+                    }
+                    let mut out = Vec::new();
+                    if let Some(name) = v.name.filter(|n| !n.is_empty()) {
+                        out.push(Item::Lead(name.to_owned()));
+                    }
+                    out.push(Item::Lead("list box".to_owned()));
                     return Some(out);
                 }
                 cur = d.parent(n);
@@ -1563,9 +1619,18 @@ impl Reader {
                 8,
             )?;
             let (role, states) = role_states(d, n);
-            Some((n, forms::passes_through(role, states, Reason::Activate)))
+            Some((
+                n,
+                forms::passes_through(role, states, Reason::Activate),
+                matches!(
+                    role,
+                    Role::CheckBox | Role::RadioButton | Role::ToggleButton
+                ),
+            ))
         });
-        let Some((node, passes)) = target else { return };
+        let Some((node, passes, checkable)) = target else {
+            return;
+        };
         if passes {
             // Browse -> Focus{Auto}; the machine emits `Action::Focus`.
             self.web_apply(WebEv::Activate { node, passes }, fx, false);
@@ -1573,6 +1638,9 @@ impl Reader {
         } else {
             if let Some(b) = self.web.as_mut() {
                 b.activated = Some(self.now);
+                // The click focuses a check box: its focus speech would announce the state it
+                // had before the click. The new state is what the user wants to hear.
+                b.click_target = checkable.then_some((node, self.now));
             }
             fx.push(ReaderEffect::Web(WebEffect::Act {
                 doc,

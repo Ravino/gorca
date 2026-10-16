@@ -211,6 +211,9 @@ pub fn derive_flags(n: &SrcNode, nested_doc: bool) -> (NodeFlags, u8) {
     {
         f = f | NodeFlags::LIVE;
     }
+    if n.role == Role::List && (has_token(xml, "listbox") || tag == Some("select")) {
+        f = f | NodeFlags::LISTBOX;
+    }
     if matches!(tag, Some("ins" | "del"))
         || ["comment", "suggestion", "insertion", "deletion"]
             .iter()
@@ -218,7 +221,13 @@ pub fn derive_flags(n: &SrcNode, nested_doc: bool) -> (NodeFlags, u8) {
     {
         f = f | NodeFlags::ANNOTATION;
     }
-    if n.states.contains(StateSet::INVALID) {
+    // A form field that is invalid is announced as the field; W finds the marked-up text.
+    if n.states.contains(StateSet::INVALID)
+        && !matches!(
+            n.role,
+            Role::TextEntry | Role::PasswordEntry | Role::ComboBox | Role::SpinButton | Role::Slider
+        )
+    {
         f = f | NodeFlags::ERROR;
     }
     if n.role == Role::DocumentWeb && nested_doc {

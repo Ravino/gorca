@@ -219,8 +219,11 @@ fn qn() -> Vec<Step> {
         // the keys gorca has not built yet
         top("QN.top19"),
         s("QN.n.1", P1, "N: skip past a block of links", n('n'), &["Text after the link block"]),
+        top("QN.a.1.t"),
         s("QN.a.1", P2, "A: next annotation (inserted text)", n('a'), &["Inserted words"]),
+        top("QN.w.1.t"),
         s("QN.w.1", P2, "W: next error", n('w'), &["misspeled"]),
+        top("QN.p.1.t"),
         s("QN.p.1", P2, "P: next text paragraph", n('p'), &["Alpha link"]),
         // containers (comma / Shift+comma)
         top("QN.top20"),

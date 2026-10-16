@@ -259,6 +259,19 @@ fn container_items(doc: &WebDoc, v: &NodeView<'_>, id: DocNodeId) -> Option<Vec<
             out.push(Item::Name(n.to_owned()));
         }
         out.push(Item::Role("dialog".to_owned()));
+    } else if v.cats.intersects(Cat::EMBEDDED) {
+        // role=application, or an <object>/<embed> (both are ATK_ROLE_EMBEDDED).
+        let application = v.meta.is_some_and(|m| {
+            m.attrs.iter().any(|(k, x)| {
+                *k == web_attrs::XML_ROLES && x.split_ascii_whitespace().any(|t| t == "application")
+            })
+        });
+        if let Some(n) = name {
+            out.push(Item::Name(n.to_owned()));
+        }
+        out.push(Item::Role(
+            if application { "application" } else { "embedded object" }.to_owned(),
+        ));
     } else {
         return None;
     }
