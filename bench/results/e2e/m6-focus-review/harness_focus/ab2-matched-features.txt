@@ -1,0 +1,12 @@
+34.74 35.33 35.45 26/3351 32933
+main run 1 exit 124 load 37.13
+fix2 run 2 exit 124 load 35.73
+fix2 run 4 exit 124 load 34.64
+main run 8 exit 124 load 32.33
+main run 9 exit 124 load 34.35
+fix2 run 9 exit 124 load 31.24
+main run 11 exit 124 load 31.56
+main run 13 exit 124 load 31.23
+main nonzero 5/20, fix2 nonzero 3/20
+
+[exited with code 0]
