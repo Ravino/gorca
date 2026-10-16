@@ -1740,3 +1740,104 @@ fn the_load_complete_of_another_document_does_not_start_the_read() {
         "another document's load-complete read this page: {fx:?}"
     );
 }
+
+// ---- M8: containers, selection, single-letter toggle, out-of announcements -------------------
+
+/// The page with a two-item list between "Details" and "Last line".
+fn with_list(r: &mut Rig) {
+    r.focus(1002);
+    let list = block(src(40, Role::List, None));
+    let li1 = block(src(41, Role::ListItem, None));
+    let li2 = block(src(43, Role::ListItem, None));
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            DocDelta::Upsert(vec![list, li1, run(42, "One"), li2, run(44, "Two")]),
+            kids(1, &[2, 4, 9, 40, 11, 13]),
+            kids(40, &[41, 43]),
+            kids(41, &[42]),
+            kids(43, &[44]),
+            DocDelta::Settled { batch: 2 },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed {
+            doc: DocId(1),
+            rev: 2,
+        }),
+        r.now,
+    );
+}
+
+#[test]
+fn comma_jumps_past_the_end_of_the_container_and_shift_comma_back_to_its_start() {
+    let mut r = rig();
+    with_list(&mut r);
+    // Outside any container.
+    let fx = r.key(CoreCmd::BrowseContainerEnd);
+    assert_eq!(spoken(&fx), ["Not in a container"]);
+    let fx = r.key(CoreCmd::QuicknavNextList);
+    assert_eq!(spoken(&fx)[0], "list with 2 items One");
+    // Past the end: the line after the list, and the exit is announced.
+    let fx = r.key(CoreCmd::BrowseContainerEnd);
+    assert_eq!(spoken(&fx), ["out of list Last line"]);
+    // Back inside, then to the start of the list.
+    let _ = r.key(CoreCmd::QuicknavPrevList);
+    let fx = r.key(CoreCmd::BrowseCursorNextLine);
+    assert_eq!(spoken(&fx), ["Two"]);
+    let fx = r.key(CoreCmd::BrowseContainerStart);
+    assert_eq!(spoken(&fx), ["One"], "already inside: not announced again");
+}
+
+#[test]
+fn single_letter_navigation_toggles_and_releases_the_bare_keys() {
+    let mut r = rig();
+    r.focus(1002);
+    let h = Chord {
+        keysym: 0x68,
+        modifiers: Modifiers::empty(),
+    };
+    let down = Chord {
+        keysym: 0xff54,
+        modifiers: Modifiers::empty(),
+    };
+    r.reader.keys.letters = vec![h];
+    r.reader.keys.quick_nav = vec![h, down];
+    let fx = r.key(CoreCmd::BrowseSingleLetterToggle);
+    assert_eq!(spoken(&fx), ["single letter navigation off"]);
+    let g = last_grab(&fx).expect("the grab set is republished");
+    assert!(!g.contains(0x68, Modifiers::empty()), "H goes to the page");
+    assert!(g.contains(0xff54, Modifiers::empty()), "Down stays ours");
+    let fx = r.key(CoreCmd::BrowseSingleLetterToggle);
+    assert_eq!(spoken(&fx), ["single letter navigation on"]);
+    let g = last_grab(&fx).expect("the grab set is republished");
+    assert!(g.contains(0x68, Modifiers::empty()));
+}
+
+#[test]
+fn shift_arrows_select_and_unselect_and_a_plain_move_clears() {
+    let mut r = rig();
+    r.focus(1002);
+    let fx = r.key(CoreCmd::BrowseSelectNextChar);
+    assert_eq!(spoken(&fx), ["W selected"]);
+    let fx = r.key(CoreCmd::BrowseSelectNextChar);
+    assert_eq!(spoken(&fx), ["e selected"]);
+    let fx = r.key(CoreCmd::BrowseSelectPrevChar);
+    assert_eq!(spoken(&fx), ["e unselected"]);
+    assert!(r.reader.web.as_ref().is_some_and(|w| w.sel.is_some()));
+    let _ = r.key(CoreCmd::BrowseCursorNextChar);
+    assert!(r.reader.web.as_ref().is_some_and(|w| w.sel.is_none()));
+    let fx = r.key(CoreCmd::BrowseSelectAll);
+    assert_eq!(spoken(&fx), ["all selected"]);
+}
+
+#[test]
+fn a_field_that_gets_the_focus_with_its_help_text_is_not_mistaken_for_a_dialog() {
+    // The dialog lead is by node: a focus in the same document without a dialog says nothing.
+    let mut r = rig();
+    r.focus(1002);
+    let fx = r.focus(1014);
+    assert!(!spoken(&fx).iter().any(|s| s.contains("dialog")));
+}
