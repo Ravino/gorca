@@ -229,8 +229,8 @@ impl Scn {
             "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K2s", "K3",
             "K4", "K4r", "K4h", "R1", "R1s", "RS", "B0", "W1", "BR1", "BR2", "W2", "W2b", "W3",
             "FM1", "FM2", "C1", "C1h", "C2", "E1", "E2", "E2f", "S2", "SA1", "SA2", "SA3", "SA3a",
-            "PW", "C1hs", "E1s", "V1", "VT", "VH", "V2", "V3", "VP", "VR", "VF", "VB", "VV", "PW",
-            "C1hs", "E1s", "A1", "N1",
+            "PW", "C1hs", "E1s", "V1", "VT", "VH", "V2", "V3", "VP", "VR", "VF", "VB", "VV", "A1",
+            "N1",
         ]
         .iter()
         .chain(super::webtext::IDS)
