@@ -280,6 +280,10 @@ impl Reader {
         }
         if let Some(t) = &mut self.text.term.tracked {
             t.key_epoch = intent.epoch;
+            // Not a publish: the key is no proof of focus. A terminal whose application has not
+            // earned the protection reads its focus state again (the earlier read failed).
+            let node = t.node;
+            self.reconfirm_on_key(node, fx);
         }
         let key = classify_term_key(&intent.event);
         self.text.stats.keys_seen += 1;

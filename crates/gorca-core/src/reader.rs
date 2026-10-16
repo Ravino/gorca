@@ -92,6 +92,24 @@ pub(crate) enum Reconfirm {
     Pending(NodeKey),
     /// The state was asked for after a repeated event (once per focus change).
     Asked(NodeKey),
+    /// The read failed with `Timeout`/`Busy` and was asked once more.
+    Retried(NodeKey),
+    /// The reads failed (or the reply did not show `FOCUSED`) at the given time; only a key press
+    /// in the terminal reads again, after `RECONFIRM_KEY_INTERVAL`.
+    Failed(NodeKey, Instant),
+}
+
+/// The least time between two reconfirm reads started by key presses.
+pub(crate) const RECONFIRM_KEY_INTERVAL: std::time::Duration =
+    std::time::Duration::from_millis(500);
+
+impl Reconfirm {
+    pub(crate) fn node(self) -> Option<NodeKey> {
+        match self {
+            Self::Idle => None,
+            Self::Pending(n) | Self::Asked(n) | Self::Retried(n) | Self::Failed(n, _) => Some(n),
+        }
+    }
 }
 
 /// Why the Reader asked for a node, so the reply is handled the right way when it comes back.
@@ -390,6 +408,9 @@ pub struct Reader {
     pub(crate) revalidate_retried: Option<NodeKey>,
     /// A repeated focus event after a presentation that could not show `FOCUSED` yet.
     pub(crate) reconfirm: Reconfirm,
+    /// A Focus or RV-1 read of the focus in hand timed out (reset on a focus change): the
+    /// reconfirm retry is then not repeated on a Timeout (B-1 RR-1).
+    pub(crate) timeout_charged: bool,
     /// The browse mode word and line spoken with the last focus utterance, so an RV-1 refine of
     /// that utterance repeats them instead of cutting them off.
     pub(crate) web_extra: Option<(
@@ -415,6 +436,10 @@ pub struct ReaderCounters {
     pub cached_presentations: u64,
     /// State reads asked for after a repeated focus event (the first presentation lacked `FOCUSED`).
     pub focus_reconfirms: u64,
+    /// Reconfirm reads repeated once after a `Timeout`/`Busy`.
+    pub focus_reconfirm_retries: u64,
+    /// Reconfirm reads started by a key press in an unprotected terminal.
+    pub focus_reconfirm_key_reads: u64,
     /// RV-1 fetches issued.
     pub revalidations: u64,
     /// RV-1 replies that agreed with what was presented.
@@ -456,6 +481,7 @@ impl Reader {
             focus_retried: None,
             revalidate_retried: None,
             reconfirm: Reconfirm::Idle,
+            timeout_charged: false,
             web_extra: None,
             text: TextState::new(),
             ext: None,
@@ -1620,6 +1646,107 @@ mod tests {
         assert_eq!(published.get(), None);
         let fx = focus_on(&mut f, 1, now + Duration::from_millis(30));
         assert!(effects_of(&fx).is_empty(), "asked once per focus change");
+    }
+
+    /// Drives a repeated focus event up to the reconfirm read; returns the fixture state.
+    fn reconfirm_asked() -> (Fixture, Arc<FocusedApp>, Instant) {
+        let mut f = fixture();
+        let published = Arc::new(FocusedApp::new());
+        f.reader.focused_app = Some(Arc::clone(&published));
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        f.reader.handle(
+            reply(&f, 1, FetchKind::Focus, snap(1, Role::Button, "Term")),
+            now,
+        );
+        let fx = focus_on(&mut f, 1, now + Duration::from_millis(8));
+        assert_eq!(effects_of(&fx), ["fetch-s1"]);
+        (f, published, now)
+    }
+
+    fn state_err(f: &Fixture, e: gorca_connector_api::BackendError) -> ReaderMsg {
+        ReaderMsg::Reply(QueryReply {
+            node: key(1),
+            epoch: f.epoch.current(),
+            kind: FetchKind::StateChange,
+            result: Err(e),
+        })
+    }
+
+    /// M6 review F1: a reconfirm read that times out is asked once more (a fresh deadline), and
+    /// the retry's FOCUSED reply earns the protection. Turned from the reviewer's probe
+    /// `probe_reconfirm_fail.rs`.
+    #[test]
+    fn a_failed_reconfirm_read_is_retried_once_and_the_retry_earns() {
+        use gorca_connector_api::BackendError as E;
+        let (mut f, published, now) = reconfirm_asked();
+        let fx = f.reader.handle(state_err(&f, E::Timeout), now);
+        assert_eq!(effects_of(&fx), ["fetch-s1"], "retried once");
+        let fx = f.reader.handle(state_err(&f, E::Timeout), now);
+        assert!(effects_of(&fx).is_empty(), "no third read");
+        assert_eq!(published.get(), None);
+        let fx = focus_on(&mut f, 1, now + Duration::from_millis(40));
+        assert!(
+            effects_of(&fx).is_empty(),
+            "a repeated event asks nothing either"
+        );
+        // Busy then success.
+        let (mut f, published, now) = reconfirm_asked();
+        let fx = f.reader.handle(state_err(&f, E::Busy), now);
+        assert_eq!(effects_of(&fx), ["fetch-s1"]);
+        f.reader.handle(
+            reply(&f, 1, FetchKind::StateChange, focused_snap(1, "Term")),
+            now,
+        );
+        assert_eq!(published.get(), Some(app()));
+    }
+
+    /// RR-1 accounting: a Timeout is not retried when the Focus or RV-1 read of this focus
+    /// already timed out (3 consecutive timeouts declare the app Hung); Busy still is.
+    #[test]
+    fn the_reconfirm_retry_does_not_double_charge_a_slow_app() {
+        use gorca_connector_api::BackendError as E;
+        let (mut f, published, now) = reconfirm_asked();
+        f.reader.timeout_charged = true;
+        let fx = f.reader.handle(state_err(&f, E::Timeout), now);
+        assert!(effects_of(&fx).is_empty(), "no retry after another timeout");
+        assert_eq!(published.get(), None);
+        let (mut f, _, now) = reconfirm_asked();
+        f.reader.timeout_charged = true;
+        let fx = f.reader.handle(state_err(&f, E::Busy), now);
+        assert_eq!(effects_of(&fx), ["fetch-s1"], "Busy charges nothing");
+    }
+
+    /// M6 review F1: with the retries spent, a key press in the unprotected terminal reads the
+    /// focus state again (throttled), and only that FOCUSED reply earns; never a blind publish.
+    #[test]
+    fn a_key_in_an_unprotected_terminal_rereads_the_focus_state() {
+        use gorca_connector_api::BackendError as E;
+        let (mut f, published, now) = reconfirm_asked();
+        f.reader.handle(state_err(&f, E::Timeout), now);
+        f.reader.handle(state_err(&f, E::Timeout), now);
+        assert_eq!(published.get(), None);
+        let mut fx = ReaderEffects::default();
+        f.reader.reconfirm_on_key(key(1), &mut fx);
+        assert!(
+            effects_of(&fx).is_empty(),
+            "throttled right after a failure"
+        );
+        f.reader.now = now + RECONFIRM_KEY_INTERVAL + Duration::from_millis(1);
+        f.reader.reconfirm_on_key(key(1), &mut fx);
+        assert_eq!(effects_of(&fx), ["fetch-s1"], "the key reads the state");
+        assert_eq!(published.get(), None, "the key itself publishes nothing");
+        let mut fx2 = ReaderEffects::default();
+        f.reader.reconfirm_on_key(key(1), &mut fx2);
+        assert!(effects_of(&fx2).is_empty(), "one read in flight at a time");
+        f.reader.handle(
+            reply(&f, 1, FetchKind::StateChange, focused_snap(1, "Term")),
+            now,
+        );
+        assert_eq!(published.get(), Some(app()));
+        let mut fx3 = ReaderEffects::default();
+        f.reader.reconfirm_on_key(key(1), &mut fx3);
+        assert!(effects_of(&fx3).is_empty(), "protected: nothing to read");
     }
 
     #[test]
