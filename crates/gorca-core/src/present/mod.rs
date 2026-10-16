@@ -15,7 +15,9 @@ mod utterance;
 mod window;
 
 pub use echo::{key_echo, key_echo_text, message};
-pub use flow::{FOCUS_FIELDS, Presented, RAPID_FOCUS, REFINE_WINDOW, STORM_HOLD, focus_need};
+pub use flow::{
+    FOCUS_FIELDS, FocusBackoff, Presented, RAPID_FOCUS, REFINE_WINDOW, STORM_HOLD, focus_need,
+};
 pub use job::{PresentJob, PresentKind, SpeechIntent};
 pub use log::{NoLabels, NodeLabel, PresentLog, PresentRecord, PresentSource};
 pub(crate) use notification::NoticeCtx;

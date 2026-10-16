@@ -404,6 +404,10 @@ pub struct Reader {
     pub(crate) web: Option<BrowseState>,
     /// The focus whose fetch failed and was tried once more (N2).
     pub(crate) focus_retried: Option<NodeKey>,
+    /// A focus (or switcher selection) whose fetch was refused as `Busy` and is asked again
+    /// after a growing delay (the application is flooded, e.g. the Shell opening the Alt+Tab
+    /// switcher: asking again at once meets the same full queue).
+    pub(crate) focus_backoff: Option<crate::present::FocusBackoff>,
     /// The focus whose failed RV-1 re-read was already retried once (a fresh deadline).
     pub(crate) revalidate_retried: Option<NodeKey>,
     /// A repeated focus event after a presentation that could not show `FOCUSED` yet.
@@ -479,6 +483,7 @@ impl Reader {
             review: ReviewState::new(),
             web: None,
             focus_retried: None,
+            focus_backoff: None,
             revalidate_retried: None,
             reconfirm: Reconfirm::Idle,
             timeout_charged: false,
@@ -693,6 +698,7 @@ impl Reader {
                 self.review_timer(now, &mut fx);
                 self.web_timer(now, &mut fx);
                 self.text_timer(&mut fx);
+                self.focus_backoff_timer(now, &mut fx);
                 self.window_timer(&mut fx);
                 self.notice_timer(&mut fx);
                 self.level_timer(&mut fx);
@@ -1259,6 +1265,16 @@ mod tests {
             now,
         );
         assert_eq!(published.get(), None);
+    }
+
+    fn timer_of(fx: &ReaderEffects) -> Option<Instant> {
+        fx.iter().find_map(|e| {
+            if let ReaderEffect::ArmTimer(at) = e {
+                Some(*at)
+            } else {
+                None
+            }
+        })
     }
 
     fn err_reply(f: &Fixture, n: u64, kind: FetchKind, e: BackendError) -> ReaderMsg {
@@ -2252,6 +2268,123 @@ mod tests {
             })
         ));
         assert_eq!(utterance(&fx).segments[0].text.as_ref(), "Vol");
+    }
+
+    /// Alt+Tab bug: the Shell opens the switcher and floods itself, so the fetch of the selected
+    /// item is refused `Busy` twice in a row (the immediate retry meets the same full queue).
+    /// The item is asked again after a pause and read; "unknown" is never spoken for it.
+    #[test]
+    fn a_busy_switcher_item_is_asked_again_after_a_pause_and_never_says_unknown() {
+        let mut f = fixture();
+        let t = Instant::now();
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node: key(1) }),
+            t,
+        );
+        f.reader
+            .handle(ReaderMsg::Timer, t + std::time::Duration::from_millis(5));
+        let mut all = Vec::new();
+        // The first fetch and the immediate retry are both refused.
+        let fx1 = f
+            .reader
+            .handle(err_reply(&f, 1, FetchKind::Focus, BackendError::Busy), t);
+        all.extend(spoken(&fx1));
+        let fx2 = f
+            .reader
+            .handle(err_reply(&f, 1, FetchKind::Focus, BackendError::Busy), t);
+        all.extend(spoken(&fx2));
+        assert!(all.is_empty(), "nothing is spoken while it waits: {all:?}");
+        let at = timer_of(&fx2).expect("a delayed retry is armed");
+        assert!(at > t, "not at once");
+        // Early timer: re-armed, nothing asked yet.
+        let early = f.reader.handle(ReaderMsg::Timer, t);
+        assert!(
+            !effects_of(&early).contains(&"fetch-focus"),
+            "{:?}",
+            effects_of(&early)
+        );
+        let due = f.reader.handle(ReaderMsg::Timer, at);
+        assert_eq!(effects_of(&due), ["fetch-focus"]);
+        let fx = f.reader.handle(
+            reply(&f, 1, FetchKind::Focus, selected_snap(1, "Files")),
+            at,
+        );
+        assert_eq!(spoken(&fx), ["Files button"]);
+    }
+
+    /// The tries are bounded: a switcher item that stays unreadable is silent, a real focus
+    /// that stays unreadable still says that nothing is known.
+    #[test]
+    fn busy_for_good_is_silent_for_a_switcher_item_and_unknown_for_a_real_focus() {
+        for selection in [true, false] {
+            let mut f = fixture();
+            let mut now = Instant::now();
+            let msg = if selection {
+                FocusLaneMsg::ItemSelected { node: key(1) }
+            } else {
+                FocusLaneMsg::FocusChanged { node: key(1) }
+            };
+            f.reader.handle(ReaderMsg::Focus(msg), now);
+            // Settling may need its timer; fire it far enough ahead.
+            now += std::time::Duration::from_millis(5);
+            f.reader.handle(ReaderMsg::Timer, now);
+            let mut said: Vec<String> = Vec::new();
+            let mut tries = 0;
+            for _ in 0..8 {
+                let fx = f
+                    .reader
+                    .handle(err_reply(&f, 1, FetchKind::Focus, BackendError::Busy), now);
+                said.extend(spoken(&fx));
+                match timer_of(&fx) {
+                    Some(at) => {
+                        now = at;
+                        let fx = f.reader.handle(ReaderMsg::Timer, now);
+                        assert!(effects_of(&fx).contains(&"fetch-focus"));
+                        tries += 1;
+                    }
+                    None if effects_of(&fx).contains(&"fetch-focus") => {}
+                    None => break,
+                }
+            }
+            assert_eq!(tries, 3, "selection {selection}");
+            if selection {
+                assert!(said.is_empty(), "{said:?}");
+            } else {
+                assert_eq!(said, ["unknown"]);
+            }
+        }
+    }
+
+    /// A newer focus ends the waiting: the late timer asks nothing for the old node.
+    #[test]
+    fn a_newer_focus_cancels_the_delayed_busy_retry() {
+        let mut f = fixture();
+        let t = Instant::now();
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node: key(1) }),
+            t,
+        );
+        f.reader
+            .handle(ReaderMsg::Timer, t + std::time::Duration::from_millis(5));
+        f.reader
+            .handle(err_reply(&f, 1, FetchKind::Focus, BackendError::Busy), t);
+        let fx = f
+            .reader
+            .handle(err_reply(&f, 1, FetchKind::Focus, BackendError::Busy), t);
+        let at = timer_of(&fx).expect("armed");
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node: key(2) }),
+            t,
+        );
+        let fx = f.reader.handle(ReaderMsg::Timer, at);
+        assert!(
+            !fx.iter().any(|e| matches!(
+                e,
+                ReaderEffect::Fetch { node, .. } if *node == key(1)
+            )),
+            "{:?}",
+            effects_of(&fx)
+        );
     }
 
     /// 5.5: focus on a removed key is not final; one Interactive fetch decides.
