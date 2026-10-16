@@ -1020,9 +1020,13 @@ impl Reader {
 
     /// Focus entered a dialog (its name and role lead the focus speech, once): the dialog around
     /// `id` does not hold the cursor's previous place.
-    fn web_dialog_lead(&mut self, doc: DocId, id: DocNodeId, before: Option<DocNodeId>) {
-        let Some(b) = self.web.as_mut() else { return };
-        let Some(h) = b.docs.get(doc) else { return };
+    fn web_dialog_lead(&mut self, doc: DocId, id: DocNodeId, before: Option<DocNodeId>) -> bool {
+        let Some(b) = self.web.as_mut() else {
+            return false;
+        };
+        let Some(h) = b.docs.get(doc) else {
+            return false;
+        };
         let last_lead = b.lead_dialog;
         let lead = h.read.with(|d| {
             let mut cur = Some(id);
@@ -1068,14 +1072,20 @@ impl Reader {
             let rest = b.pending_tail.take().map(|(t, _)| t).unwrap_or_default();
             lead.extend(rest);
             b.pending_tail = Some((lead, now));
+            return true;
         }
+        false
     }
 
     /// Focus landed on an option of a list box the focus was not in: the list box's name leads
     /// ("Toppings list box, Cheese selected").
-    fn web_listbox_lead(&mut self, doc: DocId, id: DocNodeId, before: Option<DocNodeId>) {
-        let Some(b) = self.web.as_mut() else { return };
-        let Some(h) = b.docs.get(doc) else { return };
+    fn web_listbox_lead(&mut self, doc: DocId, id: DocNodeId, before: Option<DocNodeId>) -> bool {
+        let Some(b) = self.web.as_mut() else {
+            return false;
+        };
+        let Some(h) = b.docs.get(doc) else {
+            return false;
+        };
         let lead = h.read.with(|d| {
             if d.node(id)?.role != Role::ListItem {
                 return None;
@@ -1115,7 +1125,9 @@ impl Reader {
             let rest = b.pending_tail.take().map(|(t, _)| t).unwrap_or_default();
             lead.extend(rest);
             b.pending_tail = Some((lead, now));
+            return true;
         }
+        false
     }
 
     /// Focus moved to a container (a landmark, a `tabindex=-1` block: the target of a skip
@@ -1470,11 +1482,21 @@ impl Reader {
         if matches!(self.web_mode(), WebMode::Browse { .. }) {
             self.web_place(doc, id);
         }
-        self.web_dialog_lead(doc, id, None);
-        self.web_listbox_lead(doc, id, None);
-        if !inline {
+        let dialog = self.web_dialog_lead(doc, id, None);
+        let listbox = self.web_listbox_lead(doc, id, None);
+        if !inline && (dialog || listbox) {
+            // The focus was already spoken without its lead: say the lead now; whatever else
+            // waits for the next utterance (the first line of a document) stays.
             let tail = self.web_take_tail();
-            self.web_speak(&tail, fx);
+            let (lead, rest): (Vec<Item>, Vec<Item>) =
+                tail.into_iter().partition(|i| matches!(i, Item::Lead(_)));
+            self.web_speak(&lead, fx);
+            if !rest.is_empty() {
+                let now = self.now;
+                if let Some(b) = self.web.as_mut() {
+                    b.pending_tail = Some((rest, now));
+                }
+            }
         }
     }
 
