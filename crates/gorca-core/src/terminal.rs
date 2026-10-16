@@ -12,6 +12,7 @@
 //! (WE-1). Quirks of one terminal widget live in connector data (`Toolkit::text_unit`, the
 //! `Screen` query that avoids VTE's unreliable character count).
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use ext_vte::VteExtension;
@@ -20,7 +21,7 @@ use gorca_ext_api::terminal::{
     TerminalHooks, Unit, Urgency,
 };
 use gorca_input_api::{KeyEvent, KeyIntent, Modifiers, static_keycode};
-use gorca_model::{Epoch, NodeKey, NodeSnapshot, Prio, TextDelta, Utterance};
+use gorca_model::{Epoch, NodeKey, NodeSnapshot, Prio, Role, TextDelta, Utterance};
 use gorca_rt::BudgetClass;
 use gorca_speech::How;
 
@@ -38,6 +39,8 @@ pub struct TermState {
     retired: TermCounters,
     /// Screen reads started, answered and lost, for the e2e gates.
     pub reads: TermReads,
+    /// Numbers the trackings: a screen generation is only comparable within one tracking.
+    next_serial: u64,
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -47,11 +50,17 @@ pub struct TermReads {
     pub failed: u64,
     /// Events the app actor could not queue for us (the screen is then read again).
     pub events_lost: u64,
+    /// Review steps that waited for a fresh screen read (events lost, focus not protected, or the
+    /// terminal not tracked).
+    pub review_syncs: u64,
 }
 
 #[derive(Debug)]
 struct Tracked {
     node: NodeKey,
+    /// Which tracking this is (every `term_track` makes a new extension whose generation counts
+    /// from zero).
+    serial: u64,
     ext: VteExtension,
     /// The screen read in flight.
     fetch: Option<TextReqId>,
@@ -209,7 +218,50 @@ impl Reader {
     /// The extension's current idea of the focused terminal's screen, for review.
     pub(crate) fn term_snapshot(&self, node: NodeKey) -> Option<TermSnapshot> {
         let t = self.text.term.tracked.as_ref().filter(|t| t.node == node)?;
-        t.ext.snapshot()
+        let mut s = t.ext.snapshot()?;
+        // Unique over the whole run: a model built from an earlier tracking of the same terminal
+        // (Alt+Tab away and back) must never look current because the counts happen to agree.
+        s.generation = (t.serial << 32) | (s.generation & 0xffff_ffff);
+        Some(s)
+    }
+
+    /// The presented snapshot of `node` when it is the focused terminal but not tracked (its
+    /// tracking was skipped or lost; review starts it on demand).
+    pub(crate) fn term_untracked_focus(&self, node: NodeKey) -> Option<Arc<NodeSnapshot>> {
+        let p = self.presented.as_ref()?;
+        (p.node == node
+            && p.snap.role == Role::Terminal
+            && !self.term_is(node)
+            && self.dir.text_window_follows(node.app))
+        .then(|| Arc::clone(&p.snap))
+    }
+
+    /// Start tracking the presented terminal `snap` for review (its first screen read is under
+    /// way). Review mode does not speak, so the extension's own speech is silent.
+    pub(crate) fn term_adopt(&mut self, snap: &NodeSnapshot, fx: &mut ReaderEffects) {
+        self.text.term.reads.review_syncs += 1;
+        self.term_track(snap, fx);
+    }
+
+    /// May the held screen of `node` be missing output? True when events were lost, or when its
+    /// application does not hold the protection (its text events are dropped, uncounted); the
+    /// screen is then read again, and the caller waits for the answer.
+    pub(crate) fn term_review_untrusted(&mut self, node: NodeKey, fx: &mut ReaderEffects) -> bool {
+        if !self.term_is(node) {
+            return false;
+        }
+        let lost = self.text_losses(fx);
+        let unprotected = self
+            .focused_app
+            .as_ref()
+            .is_some_and(|f| !f.protects(node.app));
+        if unprotected && !lost {
+            self.term_events_lost(fx);
+        }
+        if lost || unprotected {
+            self.text.term.reads.review_syncs += 1;
+        }
+        lost || unprotected
     }
 
     fn term_ms(&self) -> Ms {
@@ -237,8 +289,10 @@ impl Reader {
     pub(crate) fn term_track(&mut self, snap: &NodeSnapshot, fx: &mut ReaderEffects) {
         self.term_untrack();
         let cfg = self.term_config();
+        self.text.term.next_serial += 1;
         self.text.term.tracked = Some(Tracked {
             node: snap.key,
+            serial: self.text.term.next_serial,
             ext: VteExtension::new(&cfg),
             fetch: None,
             key_epoch: self.epoch.current(),
@@ -344,6 +398,7 @@ impl Reader {
             }
         };
         self.term_step(input, fx);
+        self.review_term_replied(fx);
         true
     }
 
