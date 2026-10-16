@@ -383,7 +383,7 @@ mod tests {
         let mut e = ShellExtension;
         let mut node = Node {
             key: (1, 1),
-            role: role::SLIDER,
+            role: gorca_ext_api::Role::Slider,
             states: 0,
             name: None,
             description: None,
