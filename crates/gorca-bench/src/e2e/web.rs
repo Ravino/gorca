@@ -124,7 +124,12 @@ user_pref("browser.sessionstore.resume_from_crash", false);
 user_pref("security.sandbox.content.level", 4);
 "#;
 
-/// A Firefox of ours: own profile, own process group, signalled only through that group.
+/// M9: the engine under test is Chromium (`GORCA_M7_BROWSER=chromium`), Firefox otherwise.
+pub(super) fn chromium_selected() -> bool {
+    std::env::var("GORCA_M7_BROWSER").as_deref() == Ok("chromium")
+}
+
+/// A Firefox of ours (or, with `GORCA_M7_BROWSER=chromium`, a Chromium): own profile, own process group, signalled only through that group.
 #[derive(Debug)]
 pub(super) struct Firefox {
     child: Child,
@@ -132,12 +137,21 @@ pub(super) struct Firefox {
     /// `tests/web/m7/rd.py`: a RemoteDesktop session on the private compositor. A headless
     /// shell has no keyboard, so no window is ever active until a virtual input device clicks.
     rd: Option<Child>,
+    /// The throw-away profile, removed when the browser stops (disk is tight).
+    profile: PathBuf,
+    /// `GORCA_M9_AT=orca`: a process whose argv[0] is `orca`, killed with the browser.
+    decoy: Option<Child>,
 }
 
 impl Firefox {
     pub(super) fn launch(host: &HostEnv, tag: &str, urls: &[String]) -> Result<Self> {
         let wayland = std::env::var("GORCA_M7_WAYLAND").context("GORCA_M7_WAYLAND not set")?;
-        let bin = std::env::var("GORCA_M7_FIREFOX").unwrap_or_else(|_| "firefox".to_owned());
+        let chromium = chromium_selected();
+        let bin = if chromium {
+            std::env::var("GORCA_M7_CHROMIUM").unwrap_or_else(|_| "chromium".to_owned())
+        } else {
+            std::env::var("GORCA_M7_FIREFOX").unwrap_or_else(|_| "firefox".to_owned())
+        };
         let root = std::env::var("GORCA_HARNESS_DIR").context("GORCA_HARNESS_DIR not set")?;
         if !host.a11y_addr.contains("/gorca-h.") {
             bail!("refusing to start a browser outside a harness session");
@@ -148,18 +162,61 @@ impl Firefox {
         let n = LAUNCHES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let profile = PathBuf::from(&root).join(format!("ffprofile-{tag}{n}"));
         std::fs::create_dir_all(&profile)?;
-        std::fs::write(profile.join("user.js"), USER_JS)?;
         let log = std::fs::File::create(PathBuf::from(&root).join(format!("ff-{tag}{n}.log")))?;
         let err = log.try_clone()?;
-        let child = Command::new(&bin)
-            .args(["--no-remote", "--new-instance", "--profile"])
-            .arg(&profile)
-            .args(["--width", "1200", "--height", "800"])
-            .args(urls)
+        let mut cmd = Command::new(&bin);
+        let mut decoy: Option<Child> = None;
+        if chromium {
+            // M9: a Chromium of ours. `GORCA_M9_AT` says how it finds out that a screen reader
+            // runs: `isenabled` (default: only the a11y bus `IsEnabled` flag, what gorca writes),
+            // `force` (`--force-renderer-accessibility`).
+            cmd.arg(format!("--user-data-dir={}", profile.display()))
+                .args([
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                    "--ozone-platform=wayland",
+                    "--window-size=1200,800",
+                    "--password-store=basic",
+                    "--disable-sync",
+                    "--disable-background-networking",
+                    "--disable-component-update",
+                    "--disable-features=Translate,MediaRouter",
+                    "--no-proxy-server",
+                ])
+                .args(
+                    std::env::var("GORCA_M9_CHROMIUM_ARGS")
+                        .unwrap_or_default()
+                        .split_whitespace(),
+                );
+            if std::env::var("GORCA_M9_AT").as_deref() == Ok("force") {
+                cmd.arg("--force-renderer-accessibility");
+            }
+            if std::env::var("GORCA_M9_AT").as_deref() == Ok("orca") {
+                // Chromium's /proc scan looks for an argv element equal to "orca"
+                // (browser_accessibility_state_impl_auralinux.cc); this stands in for it.
+                decoy = Command::new("/bin/bash")
+                    .args(["-c", "exec -a orca sleep 7200"])
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .process_group(0)
+                    .spawn()
+                    .ok();
+                std::thread::sleep(Duration::from_millis(300));
+            }
+            cmd.args(urls);
+        } else {
+            std::fs::write(profile.join("user.js"), USER_JS)?;
+            cmd.args(["--no-remote", "--new-instance", "--profile"])
+                .arg(&profile)
+                .args(["--width", "1200", "--height", "800"])
+                .args(urls)
+                .env("MOZ_ENABLE_WAYLAND", "1")
+                .env("GNOME_ACCESSIBILITY", "1");
+        }
+        let child = cmd
             .env_remove("DISPLAY")
             .env("WAYLAND_DISPLAY", wayland)
-            .env("MOZ_ENABLE_WAYLAND", "1")
-            .env("GNOME_ACCESSIBILITY", "1")
             .stdin(Stdio::null())
             .stdout(Stdio::from(log))
             .stderr(Stdio::from(err))
@@ -168,7 +225,13 @@ impl Firefox {
             .with_context(|| format!("starting {bin}"))?;
         let pgid = i32::try_from(child.id()).context("pid")?;
         let rd = Self::start_rd(&root);
-        Ok(Self { child, pgid, rd })
+        Ok(Self {
+            child,
+            pgid,
+            rd,
+            profile,
+            decoy,
+        })
     }
 
     fn start_rd(root: &str) -> Option<Child> {
@@ -224,6 +287,11 @@ impl Drop for Firefox {
             drop(rd.stdin.take());
             let _ = rd.wait();
         }
+        if let Some(mut d) = self.decoy.take() {
+            let _ = d.kill();
+            let _ = d.wait();
+        }
+        let _ = std::fs::remove_dir_all(&self.profile);
     }
 }
 

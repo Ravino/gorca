@@ -9,7 +9,8 @@
 #   --hold               Do not run a command. Print the session environment as KEY=VALUE
 #                        lines followed by a line "READY", then keep the session alive
 #                        until stdin reaches EOF (for Rust test helpers, see README.md).
-#   --no-screen-reader   Set only org.a11y.Status.IsEnabled (default sets ScreenReaderEnabled too).
+#   --no-screen-reader   Set only org.a11y.Status.IsEnabled (default sets ScreenReaderEnabled too;
+#                        env GORCA_HARNESS_SCREEN_READER=0 does the same, for wrappers).
 #   --keep               Keep the temp dir after exit (also GORCA_HARNESS_KEEP=1).
 #   -h, --help
 #
@@ -27,7 +28,7 @@
 set -u
 
 : "${GORCA_PASSTHROUGH:=}"
-HOLD=0; SCREEN_READER=1; KEEP=${GORCA_HARNESS_KEEP:-0}
+HOLD=0; SCREEN_READER=${GORCA_HARNESS_SCREEN_READER:-1}; KEEP=${GORCA_HARNESS_KEEP:-0}
 while [ $# -gt 0 ]; do
   case "$1" in
     --hold) HOLD=1 ;;
