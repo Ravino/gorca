@@ -231,3 +231,140 @@ impl<T: Hooks + Default + 'static> wh::Guest for Adapter<T> {
         command_to_wit(with::<T, _>(|e| e.command(id)))
     }
 }
+
+// ---- the `terminal` export ------------------------------------------------------------------
+
+use wit::exports::gorca::ext::terminal as wtm;
+
+use crate::terminal as tm;
+
+fn term_key_from_wit(k: wtm::TermKey) -> tm::TermKey {
+    match k {
+        wtm::TermKey::Typed(c) => tm::TermKey::Typed(c),
+        wtm::TermKey::Enter => tm::TermKey::Enter,
+        wtm::TermKey::Backspace => tm::TermKey::Backspace,
+        wtm::TermKey::Delete => tm::TermKey::Delete,
+        wtm::TermKey::Tab => tm::TermKey::Tab,
+        wtm::TermKey::CharLeft => tm::TermKey::CharLeft,
+        wtm::TermKey::CharRight => tm::TermKey::CharRight,
+        wtm::TermKey::WordLeft => tm::TermKey::WordLeft,
+        wtm::TermKey::WordRight => tm::TermKey::WordRight,
+        wtm::TermKey::LineStart => tm::TermKey::LineStart,
+        wtm::TermKey::LineEnd => tm::TermKey::LineEnd,
+        wtm::TermKey::LineUp => tm::TermKey::LineUp,
+        wtm::TermKey::LineDown => tm::TermKey::LineDown,
+        wtm::TermKey::Interrupt => tm::TermKey::Interrupt,
+        wtm::TermKey::Other => tm::TermKey::Other,
+    }
+}
+
+fn term_input_from_wit(i: wtm::TermInput) -> tm::TermInput {
+    match i {
+        wtm::TermInput::Key(k) => tm::TermInput::Key(term_key_from_wit(k)),
+        wtm::TermInput::Edit(e) => tm::TermInput::Edit(match e {
+            wtm::TermEdit::Insert((offset, len, text)) => tm::TermEdit::Insert { offset, len, text },
+            wtm::TermEdit::Delete((offset, len)) => tm::TermEdit::Delete { offset, len },
+            wtm::TermEdit::Replaced => tm::TermEdit::Replaced,
+        }),
+        wtm::TermInput::Caret(o) => tm::TermInput::Caret(o),
+        wtm::TermInput::Screen((text, caret)) => tm::TermInput::Screen { text, caret },
+        wtm::TermInput::ScreenFailed => tm::TermInput::ScreenFailed,
+        wtm::TermInput::Tick => tm::TermInput::Tick,
+        wtm::TermInput::Focus => tm::TermInput::Focus,
+        wtm::TermInput::Blur => tm::TermInput::Blur,
+        wtm::TermInput::Raw(k) => tm::TermInput::Raw(tm::RawKey {
+            keysym: k.keysym,
+            unichar: k.unichar,
+            phys: k.phys,
+            shift: k.shift,
+            ctrl: k.ctrl,
+            alt: k.alt,
+            logo: k.logo,
+        }),
+    }
+}
+
+fn term_action_to_wit(a: tm::TermAction) -> wtm::TermAction {
+    match a {
+        tm::TermAction::Say {
+            text,
+            unit,
+            urgency,
+            sensitive,
+        } => wtm::TermAction::Say((
+            text,
+            match unit {
+                tm::Unit::Char => wtm::Unit::Char,
+                tm::Unit::Word => wtm::Unit::Word,
+                tm::Unit::Line => wtm::Unit::Line,
+                tm::Unit::Text => wtm::Unit::Text,
+            },
+            match urgency {
+                tm::Urgency::Key => wtm::Urgency::Key,
+                tm::Urgency::Queued => wtm::Urgency::Queued,
+                tm::Urgency::Output => wtm::Urgency::Output,
+            },
+            sensitive,
+        )),
+        tm::TermAction::FetchScreen => wtm::TermAction::FetchScreen,
+        tm::TermAction::ArmTimer(t) => wtm::TermAction::ArmTimer(t),
+        tm::TermAction::ClaimKey => wtm::TermAction::ClaimKey,
+    }
+}
+
+fn with_terminal<T: Hooks + Default + 'static, R>(
+    f: impl FnOnce(&mut dyn tm::TerminalHooks) -> R,
+) -> Option<R> {
+    with::<T, _>(|e| e.terminal().map(f))
+}
+
+impl<T: Hooks + Default + 'static> wtm::Guest for Adapter<T> {
+    fn configure(cfg: wtm::TermConfig) {
+        let cfg = tm::TermConfig {
+            settle_ms: cfg.settle_ms,
+            max_wait_ms: cfg.max_wait_ms,
+            prompt_markers: cfg.prompt_markers,
+            prompt_regex: cfg.prompt_regex,
+            secret_regex: cfg.secret_regex,
+            burst_lines: cfg.burst_lines,
+            burst_tail: cfg.burst_tail,
+            max_output_chars: cfg.max_output_chars,
+        };
+        with_terminal::<T, _>(|t| t.configure(&cfg));
+    }
+
+    fn snapshot() -> Option<wtm::TermSnapshot> {
+        with_terminal::<T, _>(|t| t.snapshot())
+            .flatten()
+            .map(|s| wtm::TermSnapshot {
+                text: s.text,
+                caret: s.caret,
+                generation: s.generation,
+            })
+    }
+
+    fn counters() -> wtm::TermCounters {
+        let c = with_terminal::<T, _>(|t| t.counters()).unwrap_or_default();
+        wtm::TermCounters {
+            fetches: c.fetches,
+            fetch_failed: c.fetch_failed,
+            settled_local: c.settled_local,
+            resync_mismatch: c.resync_mismatch,
+            output_spoken: c.output_spoken,
+            output_lines_spoken: c.output_lines_spoken,
+            output_lines_skipped: c.output_lines_skipped,
+            repaints: c.repaints,
+            typed_echoed: c.typed_echoed,
+            typed_explained: c.typed_explained,
+            history_read: c.history_read,
+            secret_prompts: c.secret_prompts,
+        }
+    }
+
+    fn step(now: u64, input: wtm::TermInput) -> Vec<wtm::TermAction> {
+        let input = term_input_from_wit(input);
+        let mut out = Vec::new();
+        with_terminal::<T, _>(|t| t.step(now, input, &mut out));
+        out.into_iter().map(term_action_to_wit).collect()
+    }
+}

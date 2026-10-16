@@ -5,7 +5,7 @@
 //! name = "ext-vte"                 # [a-z0-9_-], at most 48 chars; keymap names derive from it
 //! backend = "wasm"                 # or "native" (in-tree only, no hang protection)
 //! module = "ext_vte.wasm"          # relative to this file (wasm only)
-//! hooks = ["on-event", "present", "policy", "nav-units", "command"]
+//! hooks = ["on-event", "present", "policy", "terminal", "nav-units", "command"]
 //! capabilities = ["speak", "settings", "fetch:prefetch", "fetch:background"]
 //!
 //! [matcher]                        # every key is a glob list; omitted = any
@@ -134,6 +134,7 @@ impl Manifest {
                 "nav-units" => HookSet::NAV_UNITS,
                 "command" => HookSet::COMMAND,
                 "policy" => HookSet::POLICY,
+                "terminal" => HookSet::TERMINAL,
                 _ => return Err(bad("hooks", &format!("unknown hook `{h}`"))),
             };
         }

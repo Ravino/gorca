@@ -14,13 +14,42 @@ use gorca_model::{
 };
 use gorca_rt::EpochCell;
 
-use super::classify_term_key;
+use gorca_ext_api::terminal::{
+    Ms, TermAction, TermConfig, TermCounters, TermInput, TermSnapshot, TerminalHooks,
+};
+
+use super::raw_key;
 use crate::directory::MirrorDirectory;
 use crate::mode::ModeKeys;
 use crate::reader::{Reader, ReaderEffect, ReaderEffects, ReaderMsg};
 use crate::text::caret::Reply;
 use crate::text::{TextMsg, TextOp, TextReqId};
-use gorca_ext_api::terminal::TermKey;
+
+/// The native build of `ext-vte` behind the core's seam (what the daemon installs with
+/// `--terminal-policy=native`).
+#[derive(Debug)]
+struct NativeTerm;
+
+#[derive(Debug)]
+struct NativeSess(ext_vte::VteExtension);
+
+impl crate::TermSession for NativeSess {
+    fn step(&mut self, now: Ms, input: TermInput, out: &mut Vec<TermAction>) {
+        self.0.step(now, input, out);
+    }
+    fn counters(&self) -> TermCounters {
+        self.0.counters()
+    }
+    fn snapshot(&self) -> Option<TermSnapshot> {
+        self.0.snapshot()
+    }
+}
+
+impl crate::TermProvider for NativeTerm {
+    fn open(&self, cfg: &TermConfig) -> Box<dyn crate::TermSession> {
+        Box::new(NativeSess(ext_vte::VteExtension::new(cfg)))
+    }
+}
 
 fn node() -> NodeKey {
     NodeKey {
@@ -65,6 +94,7 @@ fn rig() -> Rig {
     let dir = Arc::new(MirrorDirectory::new());
     let dropped = Arc::new(AtomicU64::new(0));
     let r = Reader::new(Arc::clone(&epoch), dir, ModeKeys::default())
+        .with_term_provider(Arc::new(NativeTerm))
         .with_text_dropped(Arc::clone(&dropped));
     Rig {
         r,
@@ -238,66 +268,25 @@ fn ev(code: u16, keysym: u32, unichar: u32, mods: Modifiers) -> KeyEvent {
     }
 }
 
+/// The core hands the key over unclassified (which key is a readline motion is the extension's
+/// policy, `ext-vte`'s `keys` tests): only the facts of the press.
 #[test]
-fn keys_are_classified_for_a_terminal() {
+fn a_key_reaches_the_extension_unclassified_with_its_physical_letter() {
     let code = |n: &str| static_keycode(n).unwrap_or(0);
-    assert_eq!(
-        classify_term_key(&ev(0, 'a' as u32, 'a' as u32, NONE)),
-        TermKey::Typed('a')
-    );
-    assert_eq!(
-        classify_term_key(&ev(0, 0x20, 0x20, NONE)),
-        TermKey::Typed(' ')
-    );
-    assert_eq!(classify_term_key(&ev(0, 0xff0d, 13, NONE)), TermKey::Enter);
-    assert_eq!(
-        classify_term_key(&ev(0, 0xff08, 8, NONE)),
-        TermKey::Backspace
-    );
-    assert_eq!(classify_term_key(&ev(0, 0xff09, 9, NONE)), TermKey::Tab);
-    assert_eq!(classify_term_key(&ev(0, 0xff52, 0, NONE)), TermKey::LineUp);
-    assert_eq!(
-        classify_term_key(&ev(0, 0xff51, 0, NONE)),
-        TermKey::CharLeft
-    );
-    assert_eq!(
-        classify_term_key(&ev(0, 0xff51, 0, Modifiers::CONTROL)),
-        TermKey::WordLeft
-    );
-    assert_eq!(
-        classify_term_key(&ev(code("c"), 'c' as u32, 3, Modifiers::CONTROL)),
-        TermKey::Interrupt
-    );
-    assert_eq!(
-        classify_term_key(&ev(code("a"), 'a' as u32, 1, Modifiers::CONTROL)),
-        TermKey::LineStart
-    );
-    assert_eq!(
-        classify_term_key(&ev(code("e"), 'e' as u32, 5, Modifiers::CONTROL)),
-        TermKey::LineEnd
-    );
-    assert_eq!(
-        classify_term_key(&ev(code("b"), 'b' as u32, 0, Modifiers::MOD1)),
-        TermKey::WordLeft
-    );
-    // Shift keeps the character; a lone modifier, Escape and F-keys are not characters.
-    assert_eq!(
-        classify_term_key(&ev(0, 'A' as u32, 'A' as u32, Modifiers::SHIFT)),
-        TermKey::Typed('A')
-    );
-    assert_eq!(classify_term_key(&ev(0, 0xffe1, 0, NONE)), TermKey::Other);
-    assert_eq!(classify_term_key(&ev(0, 0xff1b, 27, NONE)), TermKey::Other);
-    assert_eq!(classify_term_key(&ev(0, 0xffbe, 0, NONE)), TermKey::Other);
-    // Super and Ctrl+Alt belong to the desktop.
-    assert_eq!(
-        classify_term_key(&ev(0, 'x' as u32, 'x' as u32, Modifiers::MOD4)),
-        TermKey::Other
-    );
-    // Num Lock does not change the meaning of a key.
-    assert_eq!(
-        classify_term_key(&ev(0, 0xff51, 0, Modifiers::MOD2)),
-        TermKey::CharLeft
-    );
+    let k = raw_key(&ev(code("c"), 'c' as u32, 3, Modifiers::CONTROL));
+    assert_eq!((k.phys, k.ctrl, k.alt, k.shift, k.logo), (b'c', true, false, false, false));
+    assert!(!k.types_a_character());
+    let k = raw_key(&ev(0, 'A' as u32, 'A' as u32, Modifiers::SHIFT));
+    assert_eq!((k.phys, k.shift, k.keysym, k.unichar), (0, true, 'A' as u32, 'A' as u32));
+    assert!(k.types_a_character());
+    // Num Lock is not a modifier of the key; Super is.
+    let k = raw_key(&ev(0, 0xff51, 0, Modifiers::MOD2));
+    assert_eq!((k.ctrl, k.alt, k.shift, k.logo), (false, false, false, false));
+    assert!(raw_key(&ev(0, 'x' as u32, 'x' as u32, Modifiers::MOD4)).logo);
+    // Enter types no character.
+    assert!(!raw_key(&ev(0, 0xff0d, 13, NONE)).types_a_character());
+    // A key never shows its character in debug output.
+    assert!(!format!("{:?}", raw_key(&ev(0, 'q' as u32, 'q' as u32, NONE))).contains('q'));
 }
 
 #[test]

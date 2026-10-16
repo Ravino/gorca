@@ -35,6 +35,7 @@ pub mod host;
 
 #[cfg(target_arch = "wasm32")]
 pub mod guest;
+pub mod grid;
 pub mod terminal;
 
 pub use api::*;
@@ -69,12 +70,14 @@ macro_rules! export_extension {
 /// The WIT source of the extension world.
 pub const WIT_SOURCE: &str = include_str!("../wit/gorca-ext.wit");
 /// `package` line of [`WIT_SOURCE`].
-pub const WIT_PACKAGE: &str = "gorca:ext@0.1.0";
+pub const WIT_PACKAGE: &str = "gorca:ext@0.2.0";
 
 /// CPU limit for `on-event` and `present` (milliseconds).
 pub const LIMIT_HOOK_MS: u32 = 2;
 /// CPU limit for `command` (milliseconds).
 pub const LIMIT_COMMAND_MS: u32 = 20;
+/// CPU limit for the terminal `step` (milliseconds): a screen diff, run inline on the Reader.
+pub const LIMIT_TERMINAL_MS: u32 = 8;
 /// Memory limit per instance (bytes).
 pub const LIMIT_MEMORY_BYTES: usize = 32 * 1024 * 1024;
 /// Resets within [`DISABLE_WINDOW_SECS`] that disable the extension for that app.
@@ -94,7 +97,7 @@ mod tests {
         assert_eq!(format!("{}:{}", name.namespace, name.name), "gorca:ext");
         assert_eq!(
             name.version.as_ref().map(ToString::to_string).as_deref(),
-            Some("0.1.0")
+            Some("0.2.0")
         );
         assert!(WIT_SOURCE.contains(WIT_PACKAGE));
         let world = resolve
@@ -110,7 +113,7 @@ mod tests {
         let imports: Vec<_> = world.imports.values().filter_map(iface_names).collect();
         let exports: Vec<_> = world.exports.values().filter_map(iface_names).collect();
         assert!(imports.contains(&"host".to_owned()), "{imports:?}");
-        assert_eq!(exports, vec!["hooks".to_owned()]);
+        assert_eq!(exports, vec!["hooks".to_owned(), "terminal".to_owned()]);
     }
 
     #[test]

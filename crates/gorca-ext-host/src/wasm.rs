@@ -72,6 +72,7 @@ mod bindings {
 }
 
 use bindings::exports::gorca::ext::hooks as wk;
+use bindings::exports::gorca::ext::terminal as wtm;
 use bindings::gorca::ext::{host as wh, types as wt};
 use bindings::{Extension, ExtensionPre};
 
@@ -108,7 +109,7 @@ pub const POOL_INSTANCES: u32 = 512;
 /// Epoch ticks of the wall-clock backstop for `kind`.
 fn ticks(kind: HookKind) -> u64 {
     let t = TICK.as_micros().max(1);
-    let factor = if matches!(kind, HookKind::Present | HookKind::Policy) {
+    let factor = if matches!(kind, HookKind::Present | HookKind::Policy | HookKind::Terminal) {
         BACKSTOP_FACTOR_PRESENT
     } else {
         BACKSTOP_FACTOR
@@ -387,10 +388,23 @@ struct Limiter {
 /// memory (16 MiB costs the calling thread about 5 ms), so a hook that is supposed to take
 /// microseconds may grow by 1 MiB per call; commands and instantiation may use the whole cap.
 fn growth_allowance(kind: HookKind) -> usize {
-    if kind == HookKind::Command {
-        api::LIMIT_MEMORY_BYTES
+    match kind {
+        HookKind::Command => api::LIMIT_MEMORY_BYTES,
+        // A screen of up to 256 KiB is copied, indexed and diffed (a few copies of it).
+        HookKind::Terminal => 8 << 20,
+        _ => 1 << 20,
+    }
+}
+
+/// Most bytes the host lifts out of the guest in one terminal result: the snapshot of a screen
+/// (up to 256 KiB of text, four bytes a scalar at most) is the biggest.
+pub const HOSTCALL_LIFT_TERMINAL: usize = 1 << 20;
+
+fn hostcall_fuel(kind: HookKind) -> usize {
+    if kind == HookKind::Terminal {
+        HOSTCALL_LIFT_TERMINAL
     } else {
-        1 << 20
+        HOSTCALL_LIFT_BYTES
     }
 }
 
@@ -505,23 +519,115 @@ fn classify(store: &Store<StoreData>, e: &wasmtime::Error) -> Fault {
 }
 
 impl WasmInstance {
+    /// Arm the limits of one call of `kind`: fuel, epoch deadline, host-work meter, growth.
+    fn arm(store: &mut Store<StoreData>, kind: HookKind) -> Result<(), Fault> {
+        store.data().shared.begin_call();
+        store.data_mut().work = HostWork::new(host_units(kind));
+        store.data_mut().limiter.allowance = growth_allowance(kind);
+        store.data_mut().clock = CallClock::start(kind);
+        store.set_epoch_deadline(ticks(kind));
+        store.set_hostcall_fuel(hostcall_fuel(kind));
+        // A store that cannot be refuelled is broken: report it as a fault, never panic.
+        if let Err(e) = store.set_fuel(fuel(kind)) {
+            return Err(Fault::Trap(format!("cannot refuel: {e:#}")));
+        }
+        Ok(())
+    }
+
     fn call<R>(
         &mut self,
         kind: HookKind,
         f: impl FnOnce(&wk::Guest, &mut Store<StoreData>) -> wasmtime::Result<R>,
     ) -> Result<R, Fault> {
         let _running = self.engine.enter();
-        self.store.data().shared.begin_call();
-        self.store.data_mut().work = HostWork::new(host_units(kind));
-        self.store.data_mut().limiter.allowance = growth_allowance(kind);
-        self.store.data_mut().clock = CallClock::start(kind);
-        self.store.set_epoch_deadline(ticks(kind));
-        // A store that cannot be refuelled is broken: report it as a fault, never panic.
-        if let Err(e) = self.store.set_fuel(fuel(kind)) {
-            return Err(Fault::Trap(format!("cannot refuel: {e:#}")));
-        }
+        Self::arm(&mut self.store, kind)?;
         let hooks = self.bindings.gorca_ext_hooks();
         f(hooks, &mut self.store).map_err(|e| classify(&self.store, &e))
+    }
+
+    /// A call into the `terminal` export.
+    fn call_term<R>(
+        &mut self,
+        f: impl FnOnce(&wtm::Guest, &mut Store<StoreData>) -> wasmtime::Result<R>,
+    ) -> Result<R, Fault> {
+        let _running = self.engine.enter();
+        Self::arm(&mut self.store, HookKind::Terminal)?;
+        let term = self.bindings.gorca_ext_terminal();
+        f(term, &mut self.store).map_err(|e| classify(&self.store, &e))
+    }
+}
+
+fn term_key_to_wit(k: api::terminal::TermKey) -> wtm::TermKey {
+    use api::terminal::TermKey as K;
+    match k {
+        K::Typed(c) => wtm::TermKey::Typed(c),
+        K::Enter => wtm::TermKey::Enter,
+        K::Backspace => wtm::TermKey::Backspace,
+        K::Delete => wtm::TermKey::Delete,
+        K::Tab => wtm::TermKey::Tab,
+        K::CharLeft => wtm::TermKey::CharLeft,
+        K::CharRight => wtm::TermKey::CharRight,
+        K::WordLeft => wtm::TermKey::WordLeft,
+        K::WordRight => wtm::TermKey::WordRight,
+        K::LineStart => wtm::TermKey::LineStart,
+        K::LineEnd => wtm::TermKey::LineEnd,
+        K::LineUp => wtm::TermKey::LineUp,
+        K::LineDown => wtm::TermKey::LineDown,
+        K::Interrupt => wtm::TermKey::Interrupt,
+        K::Other => wtm::TermKey::Other,
+    }
+}
+
+fn term_input_to_wit(i: api::terminal::TermInput) -> wtm::TermInput {
+    use api::terminal::{TermEdit as E, TermInput as I};
+    match i {
+        I::Key(k) => wtm::TermInput::Key(term_key_to_wit(k)),
+        I::Raw(k) => wtm::TermInput::Raw(wtm::RawKey {
+            keysym: k.keysym,
+            unichar: k.unichar,
+            phys: k.phys,
+            shift: k.shift,
+            ctrl: k.ctrl,
+            alt: k.alt,
+            logo: k.logo,
+        }),
+        I::Edit(E::Insert { offset, len, text }) => {
+            wtm::TermInput::Edit(wtm::TermEdit::Insert((offset, len, text)))
+        }
+        I::Edit(E::Delete { offset, len }) => {
+            wtm::TermInput::Edit(wtm::TermEdit::Delete((offset, len)))
+        }
+        I::Edit(E::Replaced) => wtm::TermInput::Edit(wtm::TermEdit::Replaced),
+        I::Caret(o) => wtm::TermInput::Caret(o),
+        I::Screen { text, caret } => wtm::TermInput::Screen((text, caret)),
+        I::ScreenFailed => wtm::TermInput::ScreenFailed,
+        I::Tick => wtm::TermInput::Tick,
+        I::Focus => wtm::TermInput::Focus,
+        I::Blur => wtm::TermInput::Blur,
+    }
+}
+
+fn term_action_to_api(a: wtm::TermAction) -> api::terminal::TermAction {
+    use api::terminal::{TermAction as A, Unit, Urgency};
+    match a {
+        wtm::TermAction::Say((text, unit, urgency, sensitive)) => A::Say {
+            text,
+            unit: match unit {
+                wtm::Unit::Char => Unit::Char,
+                wtm::Unit::Word => Unit::Word,
+                wtm::Unit::Line => Unit::Line,
+                wtm::Unit::Text => Unit::Text,
+            },
+            urgency: match urgency {
+                wtm::Urgency::Key => Urgency::Key,
+                wtm::Urgency::Queued => Urgency::Queued,
+                wtm::Urgency::Output => Urgency::Output,
+            },
+            sensitive,
+        },
+        wtm::TermAction::FetchScreen => A::FetchScreen,
+        wtm::TermAction::ArmTimer(t) => A::ArmTimer(t),
+        wtm::TermAction::ClaimKey => A::ClaimKey,
     }
 }
 
@@ -661,6 +767,57 @@ impl HookInstance for WasmInstance {
             wt::CommandResult::Speak(s) => {
                 api::CommandResult::Speak(s.into_iter().map(segment_to_api).collect())
             }
+        })
+    }
+
+    fn term_configure(&mut self, cfg: &api::terminal::TermConfig) -> Result<(), Fault> {
+        let cfg = wtm::TermConfig {
+            settle_ms: cfg.settle_ms,
+            max_wait_ms: cfg.max_wait_ms,
+            prompt_markers: cfg.prompt_markers.clone(),
+            prompt_regex: cfg.prompt_regex.clone(),
+            secret_regex: cfg.secret_regex.clone(),
+            burst_lines: cfg.burst_lines,
+            burst_tail: cfg.burst_tail,
+            max_output_chars: cfg.max_output_chars,
+        };
+        self.call_term(|t, s| t.call_configure(s, &cfg))
+    }
+
+    fn term_step(
+        &mut self,
+        now: u64,
+        input: api::terminal::TermInput,
+    ) -> Result<Vec<api::terminal::TermAction>, Fault> {
+        let input = term_input_to_wit(input);
+        let r = self.call_term(|t, s| t.call_step(s, now, &input))?;
+        Ok(r.into_iter().map(term_action_to_api).collect())
+    }
+
+    fn term_snapshot(&mut self) -> Result<Option<api::terminal::TermSnapshot>, Fault> {
+        let r = self.call_term(|t, s| t.call_snapshot(s))?;
+        Ok(r.map(|x| api::terminal::TermSnapshot {
+            text: x.text,
+            caret: x.caret,
+            generation: x.generation,
+        }))
+    }
+
+    fn term_counters(&mut self) -> Result<api::terminal::TermCounters, Fault> {
+        let c = self.call_term(|t, s| t.call_counters(s))?;
+        Ok(api::terminal::TermCounters {
+            fetches: c.fetches,
+            fetch_failed: c.fetch_failed,
+            settled_local: c.settled_local,
+            resync_mismatch: c.resync_mismatch,
+            output_spoken: c.output_spoken,
+            output_lines_spoken: c.output_lines_spoken,
+            output_lines_skipped: c.output_lines_skipped,
+            repaints: c.repaints,
+            typed_echoed: c.typed_echoed,
+            typed_explained: c.typed_explained,
+            history_read: c.history_read,
+            secret_prompts: c.secret_prompts,
         })
     }
 }

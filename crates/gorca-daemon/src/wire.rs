@@ -253,6 +253,7 @@ pub(crate) fn wire_present_log(
 
 /// The name of the Shell policy extension (its manifest's `name`).
 const SHELL_EXT: &str = "ext-gnome-shell";
+const TERMINAL_EXT: &str = "ext-vte";
 
 /// Extensions (M5, ADR-0001 section 10): load `--ext-dir`, merge the extensions' commands into the
 /// keymap registry and hand the host to the core. Must run before the settings are compiled (the
@@ -262,13 +263,14 @@ const SHELL_EXT: &str = "ext-gnome-shell";
 ///
 /// Returns the core and whether the Shell policy component (`ext-gnome-shell`) was loaded, so the
 /// caller installs the native build only when it was not.
-pub(crate) async fn wire_ext(core: gorca_core::Core, opts: &Options) -> (gorca_core::Core, bool) {
+pub(crate) async fn wire_ext(core: gorca_core::Core, opts: &Options) -> (gorca_core::Core, bool, bool) {
     let Some(dir) = opts.ext_dir.clone().filter(|d| !d.as_os_str().is_empty()) else {
-        return (core, false);
+        return (core, false, false);
     };
     let nodes = core.mirrors();
     let settings = opts.ext_settings.clone();
     let native_shell = opts.shell_policy == crate::cli::ShellPolicyMode::Native;
+    let native_terminal = opts.terminal_policy == crate::cli::ShellPolicyMode::Native;
     let built = tokio::task::spawn_blocking(move || {
         let mut b = gorca_ext_host::ExtHost::builder(nodes);
         if let Some(s) = settings {
@@ -276,6 +278,9 @@ pub(crate) async fn wire_ext(core: gorca_core::Core, opts: &Options) -> (gorca_c
         }
         if native_shell {
             b = b.skip(SHELL_EXT);
+        }
+        if native_terminal {
+            b = b.skip(TERMINAL_EXT);
         }
         b.load_dir(&dir);
         let host = b.build();
@@ -294,11 +299,12 @@ pub(crate) async fn wire_ext(core: gorca_core::Core, opts: &Options) -> (gorca_c
             let names: Vec<_> = host.extension_names().map(str::to_owned).collect();
             tracing::info!(extensions = ?names, "extensions loaded");
             let shell = names.iter().any(|n| n == SHELL_EXT);
-            (core.with_ext(Arc::new(host)), shell)
+            let terminal = names.iter().any(|n| n == TERMINAL_EXT);
+            (core.with_ext(Arc::new(host)), shell, terminal)
         }
         Err(e) => {
             tracing::error!("extension loading failed, running without extensions: {e}");
-            (core, false)
+            (core, false, false)
         }
     }
 }

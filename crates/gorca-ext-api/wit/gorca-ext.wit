@@ -3,7 +3,7 @@
 // and `present` (with `nav-units` / `nav-match` when a presenter asks) inline on the Reader lane,
 // which is why it has the tightest wall-clock backstop. No hook ever blocks: the host calls them
 // with a fuel budget, an epoch deadline and a per-call host-work budget (see gorca-ext-host).
-package gorca:ext@0.1.0;
+package gorca:ext@0.2.0;
 
 interface types {
   /// (app id, local id) of a core NodeKey.
@@ -155,9 +155,22 @@ interface hooks {
 
 /// Terminal policy (milestone M6, ADR-0001 T-2, ADR-0008 tier W3). One pure function per terminal:
 /// the host owns the clock, the IPC and the speech; the extension turns inputs into actions.
-/// Rust mirror: `gorca_ext_api::terminal`. Not part of the `extension` world yet: M5 adds
-/// `export terminal;` once the host dispatches it.
+/// Rust mirror: `gorca_ext_api::terminal`. Exported by the `extension` world since 0.2.0; an
+/// extension that is not a terminal policy answers no actions and no snapshot.
 interface terminal {
+  /// A key press the core did not classify: Enter, motion and the readline / emacs shortcuts are
+  /// shell policy and belong to the extension. `phys` is the lowercase ASCII letter of the
+  /// physical key (layout independent), 0 for a key that is not a letter key.
+  record raw-key {
+    keysym: u32,
+    unichar: u32,
+    phys: u8,
+    shift: bool,
+    ctrl: bool,
+    alt: bool,
+    logo: bool,
+  }
+
   variant term-key {
     typed(char), enter, backspace, delete, tab,
     char-left, char-right, word-left, word-right, line-start, line-end,
@@ -181,6 +194,8 @@ interface terminal {
     tick,
     focus,
     blur,
+    /// A key the extension classifies itself (added in 0.2.0).
+    raw(raw-key),
   }
 
   enum unit { %char, word, line, text }
@@ -213,14 +228,32 @@ interface terminal {
     generation: u64,
   }
 
+  /// Counters for tests and the e2e gates (added in 0.2.0).
+  record term-counters {
+    fetches: u64,
+    fetch-failed: u64,
+    settled-local: u64,
+    resync-mismatch: u64,
+    output-spoken: u64,
+    output-lines-spoken: u64,
+    output-lines-skipped: u64,
+    repaints: u64,
+    typed-echoed: u64,
+    typed-explained: u64,
+    history-read: u64,
+    secret-prompts: u64,
+  }
+
   configure: func(cfg: term-config);
   /// The screen as last known, for review; none before the first reading.
   snapshot: func() -> option<term-snapshot>;
-  /// `now` is monotonic milliseconds. Limit: 2 ms CPU.
+  counters: func() -> term-counters;
+  /// `now` is monotonic milliseconds. Limit: 8 ms CPU (a screen diff, run inline on the Reader).
   step: func(now: u64, input: term-input) -> list<term-action>;
 }
 
 world extension {
   import host;
   export hooks;
+  export terminal;
 }

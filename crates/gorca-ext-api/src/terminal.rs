@@ -21,8 +21,74 @@
 /// Monotonic milliseconds since an origin the host chooses. Only differences matter.
 pub type Ms = u64;
 
+pub use crate::grid::{Rows, unit_at, word_at};
+
+// A typed key may be a password character and a screen may show one: the `Debug` output of the
+// input types never contains text (VP gate: no plaintext in any log).
+impl std::fmt::Debug for TermKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            TermKey::Typed(_) => "Typed(..)",
+            TermKey::Enter => "Enter",
+            TermKey::Backspace => "Backspace",
+            TermKey::Delete => "Delete",
+            TermKey::Tab => "Tab",
+            TermKey::CharLeft => "CharLeft",
+            TermKey::CharRight => "CharRight",
+            TermKey::WordLeft => "WordLeft",
+            TermKey::WordRight => "WordRight",
+            TermKey::LineStart => "LineStart",
+            TermKey::LineEnd => "LineEnd",
+            TermKey::LineUp => "LineUp",
+            TermKey::LineDown => "LineDown",
+            TermKey::Interrupt => "Interrupt",
+            TermKey::Other => "Other",
+        };
+        f.write_str(name)
+    }
+}
+
+impl std::fmt::Debug for TermEdit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TermEdit::Insert { offset, len, text } => f
+                .debug_struct("Insert")
+                .field("offset", offset)
+                .field("len", len)
+                .field("payload", &text.is_some())
+                .finish(),
+            TermEdit::Delete { offset, len } => f
+                .debug_struct("Delete")
+                .field("offset", offset)
+                .field("len", len)
+                .finish(),
+            TermEdit::Replaced => f.write_str("Replaced"),
+        }
+    }
+}
+
+impl std::fmt::Debug for TermInput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TermInput::Key(k) => f.debug_tuple("Key").field(k).finish(),
+            TermInput::Raw(k) => f.debug_tuple("Raw").field(k).finish(),
+            TermInput::Edit(e) => f.debug_tuple("Edit").field(e).finish(),
+            TermInput::Caret(o) => f.debug_tuple("Caret").field(o).finish(),
+            TermInput::Screen { text, caret } => f
+                .debug_struct("Screen")
+                .field("chars", &text.chars().count())
+                .field("caret", caret)
+                .finish(),
+            TermInput::ScreenFailed => f.write_str("ScreenFailed"),
+            TermInput::Tick => f.write_str("Tick"),
+            TermInput::Focus => f.write_str("Focus"),
+            TermInput::Blur => f.write_str("Blur"),
+        }
+    }
+}
+
 /// A key press that reaches the terminal, as the host classified it.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub enum TermKey {
     /// A printable character, a space included. Combined with Control or Alt it is `Other`.
     Typed(char),
@@ -53,7 +119,7 @@ pub enum TermKey {
 }
 
 /// One `text-changed` of the terminal, as the host decoded it.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum TermEdit {
     /// `offset`/`len` in scalars; `text` when the payload arrived and has `len` scalars.
     Insert {
@@ -69,10 +135,56 @@ pub enum TermEdit {
     Replaced,
 }
 
+/// A key press as the core saw it, unclassified. Which keys are Enter, motion or shell shortcuts
+/// is shell policy (readline and emacs bindings), so the extension decides (WIT `raw-key`).
+///
+/// The Control and Alt shortcuts are matched on the physical key (`phys`) so they work in every
+/// keyboard layout. Lock modifiers are already removed.
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub struct RawKey {
+    /// X11 keysym of the pressed key in the active layout.
+    pub keysym: u32,
+    /// The Unicode scalar the key types, 0 when it types none.
+    pub unichar: u32,
+    /// The lowercase ASCII letter of the physical (layout independent) key, 0 for a key that is
+    /// not one of the 26 letter keys.
+    pub phys: u8,
+    pub shift: bool,
+    pub ctrl: bool,
+    /// Mod1 / Alt.
+    pub alt: bool,
+    /// Mod4 / Super.
+    pub logo: bool,
+}
+
+// A typed key may be a password character: only the modifiers are shown.
+impl std::fmt::Debug for RawKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RawKey")
+            .field("shift", &self.shift)
+            .field("ctrl", &self.ctrl)
+            .field("alt", &self.alt)
+            .field("logo", &self.logo)
+            .finish_non_exhaustive()
+    }
+}
+
+impl RawKey {
+    /// Does the key type a character on its own (no Control, Alt or Super held)? The generic
+    /// definition of "a typed character"; the extension still decides what the key means.
+    pub fn types_a_character(&self) -> bool {
+        !(self.ctrl || self.alt || self.logo)
+            && self.unichar != 0
+            && char::from_u32(self.unichar).is_some_and(|c| !c.is_control())
+    }
+}
+
 /// What the host tells the extension.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum TermInput {
     Key(TermKey),
+    /// A key the extension classifies itself (the host does not know readline).
+    Raw(RawKey),
     Edit(TermEdit),
     /// `text-caret-moved`.
     Caret(u32),

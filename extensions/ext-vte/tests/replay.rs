@@ -10,243 +10,25 @@
 //!
 //! Two deliveries are replayed: the raw events, and the events as the ingress T-1 collapse hands
 //! them to the Reader (a delete followed at once by an insert becomes one `Replaced`).
+//!
+//! The driver is `support/replay.rs`, shared with the parity test of the daemon, which replays the
+//! same session through the native build and the WASM component.
 
-#![allow(
-    clippy::if_not_else,
-    clippy::panic,
-    clippy::expect_used,
-    clippy::unwrap_used,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::match_same_arms
-)]
+#![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
+#[path = "support/replay.rs"]
+mod driver;
+
+use driver::{SESSION, during, run, texts};
 use ext_vte::VteExtension;
-use gorca_ext_api::terminal::{
-    Ms, TermAction, TermEdit, TermInput, TermKey, TerminalHooks, Unit, Urgency,
-};
+use gorca_ext_api::terminal::TerminalHooks;
 
-const SESSION: &str = include_str!("fixtures/gnome-terminal-3.56-vte-0.80-session.jsonl");
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Said {
-    at: Ms,
-    text: String,
-    unit: Unit,
-    urgency: Urgency,
-}
-
-struct Replay {
-    ext: VteExtension,
-    now: Ms,
-    screen: Vec<char>,
-    caret: u32,
-    tick_due: Option<Ms>,
-    read_due: Option<Ms>,
-    said: Vec<Said>,
-    /// Marker name and the index into `said` where it started.
-    marks: Vec<(String, usize)>,
-}
-
-fn key_of(name: &str) -> TermKey {
-    match name {
-        "backspace" => TermKey::Backspace,
-        "tab" => TermKey::Tab,
-        "enter" => TermKey::Enter,
-        "left" => TermKey::CharLeft,
-        "right" => TermKey::CharRight,
-        "up" => TermKey::LineUp,
-        "down" => TermKey::LineDown,
-        "home" => TermKey::LineStart,
-        "end" => TermKey::LineEnd,
-        "ctrl-c" => TermKey::Interrupt,
-        "ctrl-a" => TermKey::LineStart,
-        "ctrl-e" => TermKey::LineEnd,
-        "ctrl-u" | "ctrl-l" | "ctrl-left" => TermKey::Other,
-        c if c.chars().count() == 1 => TermKey::Typed(c.chars().next().unwrap_or(' ')),
-        other => panic!("unknown key {other}"),
-    }
-}
-
-impl Replay {
-    fn new() -> Self {
-        Self {
-            ext: VteExtension::default(),
-            now: 0,
-            screen: Vec::new(),
-            caret: 0,
-            tick_due: None,
-            read_due: None,
-            said: Vec::new(),
-            marks: Vec::new(),
-        }
-    }
-
-    fn deliver(&mut self, input: TermInput) {
-        let mut out = Vec::new();
-        self.ext.step(self.now, input, &mut out);
-        for a in out {
-            match a {
-                TermAction::Say {
-                    text,
-                    unit,
-                    urgency,
-                    sensitive: _,
-                } => self.said.push(Said {
-                    at: self.now,
-                    text,
-                    unit,
-                    urgency,
-                }),
-                TermAction::FetchScreen => self.read_due = Some(self.now + 2),
-                TermAction::ArmTimer(t) => {
-                    self.tick_due = Some(self.tick_due.map_or(t, |d| d.min(t)));
-                }
-                TermAction::ClaimKey => {}
-            }
-        }
-    }
-
-    fn text(&self) -> String {
-        self.screen.iter().collect()
-    }
-
-    /// Run the clock to `t`, delivering timer ticks and screen reads on the way.
-    fn advance_to(&mut self, t: Ms) {
-        while self.now < t {
-            self.now += 1;
-            if self.read_due.is_some_and(|d| d <= self.now) {
-                self.read_due = None;
-                let input = TermInput::Screen {
-                    text: self.text(),
-                    caret: Some(self.caret),
-                };
-                self.deliver(input);
-            }
-            if self.tick_due.is_some_and(|d| d <= self.now) {
-                self.tick_due = None;
-                self.deliver(TermInput::Tick);
-            }
-        }
-    }
-
-    fn apply_insert(&mut self, off: usize, text: &str) {
-        let at = off.min(self.screen.len());
-        for (i, c) in text.chars().enumerate() {
-            self.screen.insert(at + i, c);
-        }
-    }
-
-    fn apply_delete(&mut self, off: usize, len: usize) {
-        let end = (off + len).min(self.screen.len());
-        let start = off.min(end);
-        self.screen.drain(start..end);
-    }
-}
-
-fn run(session: &str, collapse: bool) -> Replay {
-    let mut r = Replay::new();
-    let mut pending_delete: Option<(u32, u32, Ms)> = None;
-    let mut started = false;
-    for line in session.lines() {
-        let e: serde_json::Value = serde_json::from_str(line).expect("fixture line");
-        let t = e["t"].as_f64().unwrap_or(0.0) as Ms;
-        r.advance_to(t);
-        // A delete is held back for a possible insert right behind it (T-1).
-        if let Some((off, len, at)) = pending_delete {
-            let next_is_insert = e["ev"] == "text-changed" && e["kind"] == "insert";
-            if !(collapse && next_is_insert && t.saturating_sub(at) <= 3) {
-                if collapse {
-                    r.deliver(TermInput::Edit(TermEdit::Delete { offset: off, len }));
-                }
-                pending_delete = None;
-            }
-        }
-        match e["ev"].as_str().unwrap_or("") {
-            "snapshot" => {
-                let text = e["text"].as_str().unwrap_or("");
-                if !started {
-                    r.screen = text.chars().collect();
-                    r.caret = u32::try_from(e["caret"].as_u64().unwrap_or(0)).unwrap_or(0);
-                    r.deliver(TermInput::Focus);
-                    started = true;
-                } else {
-                    // The replay is faithful only if the rebuilt screen is the recorded one.
-                    r.advance_to(t + 100);
-                    assert_eq!(r.text(), text, "snapshot {:?} at {t} ms", e["name"]);
-                    assert_eq!(u64::from(r.caret), e["caret"].as_u64().unwrap_or(0));
-                }
-            }
-            "marker" => r
-                .marks
-                .push((e["name"].as_str().unwrap_or("").to_owned(), r.said.len())),
-            "key" => {
-                let k = key_of(e["name"].as_str().unwrap_or(""));
-                r.deliver(TermInput::Key(k));
-            }
-            "caret" => {
-                r.caret = u32::try_from(e["off"].as_u64().unwrap_or(0)).unwrap_or(0);
-                r.deliver(TermInput::Caret(r.caret));
-            }
-            "text-changed" => {
-                let off = e["off"].as_u64().unwrap_or(0) as usize;
-                let len = e["len"].as_u64().unwrap_or(0) as usize;
-                let text = e["text"].as_str().unwrap_or("").to_owned();
-                if e["kind"] == "insert" {
-                    r.apply_insert(off, &text);
-                    let edit = if collapse && pending_delete.take().is_some() {
-                        TermEdit::Replaced
-                    } else {
-                        TermEdit::Insert {
-                            offset: off as u32,
-                            len: len as u32,
-                            text: Some(text),
-                        }
-                    };
-                    r.deliver(TermInput::Edit(edit));
-                } else {
-                    // The payload of a delete is the text that went.
-                    assert_eq!(
-                        text.chars().count(),
-                        len,
-                        "delete payload is the deleted text"
-                    );
-                    r.apply_delete(off, len);
-                    if collapse {
-                        pending_delete = Some((off as u32, len as u32, t));
-                    } else {
-                        r.deliver(TermInput::Edit(TermEdit::Delete {
-                            offset: off as u32,
-                            len: len as u32,
-                        }));
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-    r.advance_to(r.now + 2000);
-    r
-}
-
-/// What was said between the marker `name` and the next one.
-fn during<'a>(r: &'a Replay, name: &str) -> Vec<&'a Said> {
-    let i = r
-        .marks
-        .iter()
-        .position(|(n, _)| n == name)
-        .unwrap_or_else(|| panic!("no marker {name}"));
-    let from = r.marks[i].1;
-    let to = r.marks.get(i + 1).map_or(r.said.len(), |(_, s)| *s);
-    r.said[from..to].iter().collect()
-}
-
-fn texts(v: &[&Said]) -> Vec<String> {
-    v.iter().map(|s| s.text.clone()).collect()
+fn native() -> Box<dyn TerminalHooks> {
+    Box::new(VteExtension::default())
 }
 
 fn check(collapse: bool) {
-    let r = run(SESSION, collapse);
+    let r = run(SESSION, collapse, &native);
     let said = |m: &str| texts(&during(&r, m));
     // Six typed keys: the key says each character once, the shell echo says nothing.
     assert_eq!(said("type echo hi"), ["e", "c", "h", "o", " ", "h", "i"]);
