@@ -1,0 +1,24 @@
+HOSTILE on_event(log:1): 36.385µs (a 16 MiB lift would take milliseconds)
+HOSTILE on_event(alias:2000): 25.452µs (a 16 MiB lift would take milliseconds)
+HOSTILE present logforever   p50   10.478µs max   38.608µs faults 20/20
+HOSTILE present logmax       p50   99.752µs max  139.549µs faults 20/20
+HOSTILE present nodeforever  p50  266.968µs max  409.886µs faults 20/20
+HOSTILE present alias:2000   p50    9.483µs max   43.272µs faults 20/20
+HOSTILE present alias:1      p50   13.007µs max   42.663µs faults 20/20
+HOSTILE worst Reader hold: 409.886µs
+HOSTILE on_event(log:1): 32.184µs (a 16 MiB lift would take milliseconds)
+HOSTILE on_event(alias:2000): 22.526µs (a 16 MiB lift would take milliseconds)
+HOSTILE present logforever   p50   10.214µs max   34.997µs faults 20/20
+HOSTILE present logmax       p50   98.788µs max    141.1µs faults 20/20
+HOSTILE present nodeforever  p50   607.93µs max  682.149µs faults 20/20
+HOSTILE present alias:2000   p50   10.949µs max   39.284µs faults 20/20
+HOSTILE present alias:1      p50    8.457µs max   38.929µs faults 20/20
+HOSTILE worst Reader hold: 682.149µs
+HOSTILE on_event(log:1): 39.404µs (a 16 MiB lift would take milliseconds)
+HOSTILE on_event(alias:2000): 26.098µs (a 16 MiB lift would take milliseconds)
+HOSTILE present logforever   p50   25.947µs max   72.225µs faults 20/20
+HOSTILE present logmax       p50    100.8µs max  123.126µs faults 20/20
+HOSTILE present nodeforever  p50  282.146µs max  302.322µs faults 20/20
+HOSTILE present alias:2000   p50   10.031µs max   33.048µs faults 20/20
+HOSTILE present alias:1      p50    8.419µs max   40.411µs faults 20/20
+HOSTILE worst Reader hold: 302.322µs

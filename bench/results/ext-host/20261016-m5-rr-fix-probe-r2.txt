@@ -1,0 +1,13 @@
+# load 29.71 31.72 33.70; release; after N-2 fix + get_setting result charge
+test probe_fault_paths ... PROBE fresh random          n 20 p50 118.726µs p99 1.360523ms max 1.360523ms faults 20 answered 0
+PROBE fresh clock           n 20 p50 330.863µs p99 813.758µs max 813.758µs faults 20 answered 0
+PROBE fresh settings        n 20 p50 102.719µs p99 131.077µs max 131.077µs faults 20 answered 0
+PROBE fresh bigresult:10    n 20 p50 22.684µs p99 44.626µs max 44.626µs faults 0 answered 20
+PROBE fresh bigresult:100   n 20 p50 54.775µs p99 80.677µs max 80.677µs faults 20 answered 0
+PROBE fresh bigresult:2000  n 20 p50 367.807µs p99 399.207µs max 399.207µs faults 20 answered 0
+test probe_sustained_one_app ... PROBE sustained selftime:1000   n 300 p50 34ns p99 361.183µs max 376.235µs faults 3 disabled 1
+PROBE sustained randtime:2000   n 300 p50 35ns p99 147.328µs max 170.867µs faults 3 disabled 1
+PROBE sustained randtime:4000   n 300 p50 35ns p99 143.627µs max 182.959µs faults 3 disabled 1
+PROBE sustained randtime:5000   n 300 p50 77ns p99 313.559µs max 347.013µs faults 3 disabled 1
+PROBE sustained randtime:5500   n 300 p50 36ns p99 143.428µs max 160.22µs faults 3 disabled 1
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s

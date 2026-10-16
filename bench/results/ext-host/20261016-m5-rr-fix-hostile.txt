@@ -1,0 +1,33 @@
+# run 1 load 28.48 31.18 33.41
+HOSTILE present logforever   p50   14.413µs p90   52.985µs max   57.563µs faults 20/20
+HOSTILE present logmax       p50  161.251µs p90  169.028µs max  182.568µs faults 20/20
+HOSTILE present nodeforever  p50    410.8µs p90 1.116349ms max 1.228873ms faults 20/20
+HOSTILE present alias:2000   p50   56.889µs p90   98.996µs max  407.924µs faults 20/20
+HOSTILE present alias:1      p50   16.447µs p90  132.247µs max  143.014µs faults 20/20
+HOSTILE present randforever  p50  168.334µs p90  632.399µs max 1.066399ms faults 20/20
+HOSTILE present clockforever p50  398.037µs p90  567.212µs max  645.589µs faults 20/20
+HOSTILE present randtime:5000 p50  137.017µs p90  148.997µs max  151.788µs faults 20/20
+HOSTILE present clocktime:5000 p50  333.015µs p90  344.844µs max  353.984µs faults 20/20
+HOSTILE worst p90 Reader hold: 1.116349ms
+# run 2 load 27.70 30.38 33.00
+HOSTILE present logforever   p50   83.526µs p90  297.192µs max  310.351µs faults 20/20
+HOSTILE present logmax       p50  249.233µs p90 2.576533ms max 3.074411ms faults 20/20
+HOSTILE present nodeforever  p50  885.832µs p90 3.340195ms max 3.839589ms faults 20/20
+HOSTILE present alias:2000   p50   22.934µs p90   74.423µs max   82.829µs faults 20/20
+HOSTILE present alias:1      p50   37.315µs p90   81.064µs max  196.385µs faults 20/20
+HOSTILE present randforever  p50  542.053µs p90  650.623µs max  717.821µs faults 20/20
+HOSTILE present clockforever p50  874.043µs p90   957.84µs max 1.127014ms faults 20/20
+HOSTILE present randtime:5000 p50  150.565µs p90  157.508µs max  157.921µs faults 20/20
+HOSTILE present clocktime:5000 p50  483.542µs p90  672.714µs max  778.325µs faults 20/20
+HOSTILE worst p90 Reader hold: 3.340195ms
+# run 3 load 27.70 30.38 33.00
+HOSTILE present logforever   p50   15.655µs p90   57.688µs max  102.569µs faults 20/20
+HOSTILE present logmax       p50  164.599µs p90  198.428µs max  271.427µs faults 20/20
+HOSTILE present nodeforever  p50  564.063µs p90 1.334986ms max 2.254031ms faults 20/20
+HOSTILE present alias:2000   p50   14.268µs p90    43.77µs max   77.994µs faults 20/20
+HOSTILE present alias:1      p50    41.07µs p90   50.677µs max   69.502µs faults 20/20
+HOSTILE present randforever  p50  150.502µs p90  192.731µs max  195.718µs faults 20/20
+HOSTILE present clockforever p50  361.542µs p90  767.907µs max 1.244704ms faults 20/20
+HOSTILE present randtime:5000 p50  153.968µs p90  463.028µs max  831.982µs faults 20/20
+HOSTILE present clocktime:5000 p50   396.53µs p90  420.606µs max  420.991µs faults 20/20
+HOSTILE worst p90 Reader hold: 1.334986ms

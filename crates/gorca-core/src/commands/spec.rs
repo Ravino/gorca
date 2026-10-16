@@ -50,6 +50,20 @@ impl ContextMask {
     pub const ANY: ContextMask = ContextMask(0b1111);
     pub const BROWSE_ONLY: ContextMask = ContextMask(0b0100);
 
+    /// The mask allowing exactly `ctxs` (extension commands declare theirs in the manifest).
+    pub fn of(ctxs: &[ContextName]) -> ContextMask {
+        let mut bits = 0u8;
+        for c in ctxs {
+            bits |= match c {
+                ContextName::Global => 0b0001,
+                ContextName::Focus => 0b0010,
+                ContextName::Browse => 0b0100,
+                ContextName::Review => 0b1000,
+            };
+        }
+        ContextMask(bits)
+    }
+
     pub fn allows(self, ctx: ContextName) -> bool {
         let bit = match ctx {
             ContextName::Global => 0b0001,

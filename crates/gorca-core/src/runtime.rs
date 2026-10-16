@@ -250,6 +250,8 @@ struct Shared {
     web: WebShared,
     /// Text events the app actors could not queue for the Reader (ADR-0007 EV-5).
     text_dropped: Arc<AtomicU64>,
+    /// The extension host (ADR-0001 section 10), when the daemon wires one.
+    ext: Option<Arc<dyn crate::ExtSource>>,
     /// The application policy the Reader consults (ADR-0008 W3), if the daemon installed one.
     app_policy: Option<Arc<dyn crate::builtin_ext::AppPolicy>>,
 }
@@ -324,6 +326,7 @@ impl Core {
                     counters: Arc::new(DocCounters::default()),
                 },
                 text_dropped: Arc::new(AtomicU64::new(0)),
+                ext: None,
                 app_policy: None,
             }),
             inbox,
@@ -375,6 +378,27 @@ impl Core {
         if let Some(sh) = Arc::get_mut(&mut self.shared) {
             sh.speech = speech;
         }
+        self
+    }
+
+    /// Wire an extension host: app actors offer it their events, the Reader its presentations
+    /// and commands, and its speech returns through the Reader's background lane. Call before
+    /// [`Core::run`].
+    #[must_use]
+    pub fn with_ext(mut self, src: Arc<dyn crate::ExtSource>) -> Self {
+        let Some(sh) = Arc::get_mut(&mut self.shared) else {
+            // A silent no-op would load extensions that never run.
+            tracing::error!("Core::with_ext called after the shared state was cloned: ignored");
+            debug_assert!(
+                false,
+                "Core::with_ext must run before anything clones the shared state"
+            );
+            return self;
+        };
+        src.set_sink(Arc::new(crate::ext::BackgroundSink::new(
+            sh.senders.background.clone(),
+        )));
+        sh.ext = Some(src);
         self
     }
 
@@ -641,6 +665,10 @@ fn spawn_app_actor(
             tx: shared.senders.text.clone(),
             dropped: Arc::clone(&shared.text_dropped),
         });
+    let actor = match &shared.ext {
+        Some(src) => actor.with_ext(Arc::clone(src)),
+        None => actor,
+    };
     let actor = if shared.web.factory.is_some() {
         actor.with_web(WebLink {
             hub: shared.web.hub.clone(),
@@ -990,6 +1018,9 @@ async fn reader_loop(
     .with_text_dropped(Arc::clone(&shared.text_dropped));
     if let Some(log) = &shared.present_log {
         reader = reader.with_present_log(Arc::clone(log));
+    }
+    if let Some(src) = &shared.ext {
+        reader = reader.with_ext(Arc::clone(src));
     }
     if let Some(p) = &shared.app_policy {
         reader = reader.with_app_policy(Arc::clone(p));

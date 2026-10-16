@@ -1,0 +1,13 @@
+ 02:44:11 up 8 days, 21:09,  1 user,  load average: 11.19, 11.94, 12.44
+test probe_fault_paths ... PROBE fresh random          n 20 p50 6.20857ms p99 6.392862ms max 6.392862ms faults 20 answered 0
+PROBE fresh clock           n 20 p50 2.194607ms p99 2.302877ms max 2.302877ms faults 20 answered 0
+PROBE fresh settings        n 20 p50 1.070645ms p99 1.112959ms max 1.112959ms faults 20 answered 0
+PROBE fresh bigresult:10    n 20 p50 17.839µs p99 25.806µs max 25.806µs faults 0 answered 20
+PROBE fresh bigresult:100   n 20 p50 49.384µs p99 70.72µs max 70.72µs faults 20 answered 0
+PROBE fresh bigresult:2000  n 20 p50 357.685µs p99 399.524µs max 399.524µs faults 20 answered 0
+test probe_sustained_one_app ... PROBE sustained selftime:1000   n 300 p50 1.000289ms p99 1.003235ms max 1.022384ms faults 0 disabled 0
+PROBE sustained randtime:2000   n 300 p50 2.048563ms p99 2.156105ms max 2.159599ms faults 0 disabled 0
+PROBE sustained randtime:4000   n 300 p50 4.046544ms p99 4.159122ms max 4.162254ms faults 0 disabled 0
+PROBE sustained randtime:5000   n 300 p50 5.080606ms p99 5.154287ms max 5.161501ms faults 0 disabled 0
+PROBE sustained randtime:5500   n 300 p50 29ns p99 5.590754ms max 5.619536ms faults 3 disabled 1
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.10s

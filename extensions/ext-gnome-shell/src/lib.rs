@@ -24,9 +24,9 @@ pub use gorca_ext_api::{Range, Segment, SegmentKind};
 pub mod role {
     pub const WINDOW: u8 = 2;
     pub const DIALOG: u8 = 3;
-    pub const SLIDER: u8 = 25;
-    pub const PROGRESS_BAR: u8 = 26;
-    pub const ALERT: u8 = 42;
+    pub const SLIDER: u8 = 26;
+    pub const PROGRESS_BAR: u8 = 27;
+    pub const ALERT: u8 = 43;
 }
 
 /// When a decision is asked for.
@@ -230,7 +230,8 @@ impl Hooks for ShellExtension {
         }
         let facts = Facts {
             moment: Moment::Focus,
-            role: n.role,
+            // The WIT role numbers are the order of the `Role` enum (kept in step by a test).
+            role: n.role as u8,
             states: n.states,
             name: n.name.as_deref(),
             description: n.description.as_deref(),
@@ -415,7 +416,7 @@ mod tests {
         let mut e = ShellExtension;
         let node = Node {
             key: (1, 1),
-            role: role::WINDOW,
+            role: gorca_ext_api::Role::Window,
             states: 0,
             name: Some("Main".into()),
             description: None,
@@ -458,7 +459,7 @@ mod tests {
         let mut e = ShellExtension;
         let node = Node {
             key: (1, 2),
-            role: role::SLIDER,
+            role: gorca_ext_api::Role::Slider,
             states: 0,
             name: Some("Volume".into()),
             description: None,

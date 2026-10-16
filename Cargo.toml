@@ -77,7 +77,10 @@ libc = "0.2"
 
 # Pinned for later phases, not yet used by any crate.
 rayon = "1.12"
-wasmtime = { version = "50.0.0-rc.1", default-features = false }
+# Extension host (M5). 49.0.3 is what the ADR-0008 prototype measured; no WASI crate on purpose:
+# extensions get no ambient capability, the host links only what the WIT world and a few pure
+# WASI clock/random imports need.
+wasmtime = { version = "=49.0.3", default-features = false }
 
 # Local wall-clock time for info.time_date (pure Rust time zone handling, no libc calls).
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
