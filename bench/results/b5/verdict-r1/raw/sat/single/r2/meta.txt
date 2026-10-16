@@ -1,0 +1,3 @@
+round=2 cond=sat arm=single exit=0
+load_before=69.57 61.30 54.65 10/3775 560005
+load_after=66.80 63.48 56.47 23/3775 561905

@@ -1,0 +1,5 @@
+label=verdict-r1 reviewer verdict run; binary code=d0a13c0 stamp=gorca e185a10
+loadavg_start=50.57 52.70 46.67 17/3865 547129
+rounds=3 arms=single,lanes-rt conds=idle,sat only=L3-10k,L3-50k,A1
+               total        used        free      shared  buff/cache   available
+Mem:              30          28           0           0           2           2
