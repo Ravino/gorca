@@ -17,7 +17,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use gorca_model::{NodeKey, Utterance};
+use gorca_model::{NodeKey, Prio, Utterance};
 use smallvec::SmallVec;
 
 use crate::directory::Owner;
@@ -124,8 +124,11 @@ pub struct Entry {
     pub last_announcement: Option<(u64, Instant)>,
     /// Nodes whose read was asked recently (a banner re-shows while it animates).
     pub asked: SmallVec<[(NodeKey, Instant); ASKED_MAX]>,
-    /// The newest utterance over the speech budget (drop-oldest coalescing).
+    /// The newest ordinary (notification-class) utterance over the speech budget (drop-oldest).
     pub waiting: Option<Utterance>,
+    /// The newest urgent one (alert, message-class or above). Never replaced by an ordinary
+    /// utterance, and spoken first (R-3).
+    pub waiting_urgent: Option<Utterance>,
 }
 
 impl Entry {
@@ -135,6 +138,7 @@ impl Entry {
             last_announcement: None,
             asked: SmallVec::new(),
             waiting: None,
+            waiting_urgent: None,
         }
     }
 
@@ -149,6 +153,7 @@ impl Entry {
 
     fn idle(&mut self, now: Instant) -> bool {
         self.waiting.is_none()
+            && self.waiting_urgent.is_none()
             && self
                 .buckets
                 .iter_mut()
@@ -262,7 +267,12 @@ impl Fair {
         if over {
             return 1;
         }
-        let dropped = u64::from(e.waiting.replace(u).is_some());
+        let slot = if u.prio < Prio::Notification {
+            &mut e.waiting_urgent
+        } else {
+            &mut e.waiting
+        };
+        let dropped = u64::from(slot.replace(u).is_some());
         if !self.waiting.contains(&owner) {
             self.waiting.push(owner);
         }
@@ -294,13 +304,18 @@ impl Fair {
         let mut keep = Vec::new();
         for o in std::mem::take(&mut self.waiting) {
             let ready = match self.map.get(&o) {
-                Some(e) if e.waiting.is_some() => e.ready_at(Kind::Speak) <= now,
+                Some(e) if e.waiting.is_some() || e.waiting_urgent.is_some() => {
+                    e.ready_at(Kind::Speak) <= now
+                }
                 Some(_) | None => continue,
             };
             if ready && self.global_take(now) {
                 if let Some(e) = self.map.get_mut(&o) {
                     e.take(Kind::Speak, now);
-                    out.extend(e.waiting.take());
+                    out.extend(e.waiting_urgent.take().or_else(|| e.waiting.take()));
+                    if e.waiting.is_some() || e.waiting_urgent.is_some() {
+                        keep.push(o);
+                    }
                 }
             } else {
                 keep.push(o);
@@ -404,6 +419,34 @@ mod tests {
             .filter(|o| f.allow(*o, Kind::Read, t))
             .count();
         assert_eq!(quiet, 5);
+    }
+
+    #[test]
+    fn an_urgent_utterance_waits_in_its_own_slot_and_is_spoken_first() {
+        use gorca_model::{Epoch, Prio, UttId};
+        let t = Instant::now();
+        let mut f = Fair::new(t);
+        let u = |i: u64, prio| Utterance {
+            id: UttId(i),
+            segments: SmallVec::new(),
+            lang: None,
+            epoch: Epoch(1),
+            prio,
+            may_refine: false,
+            survives_focus_change: false,
+            ttl_secs: 0,
+            refines: None,
+        };
+        let o = owner(1);
+        f.wait(o, u(1, Prio::Notification), t);
+        f.wait(o, u(2, Prio::Message), t);
+        // Later polite news replaces the older polite one, never the alert.
+        assert_eq!(f.wait(o, u(3, Prio::Notification), t), 1);
+        let later = t + Duration::from_secs(60);
+        let first = f.take_due(later);
+        assert_eq!(first.iter().map(|x| x.id.0).collect::<Vec<_>>(), [2]);
+        let second = f.take_due(later + Duration::from_secs(60));
+        assert_eq!(second.iter().map(|x| x.id.0).collect::<Vec<_>>(), [3]);
     }
 
     #[test]

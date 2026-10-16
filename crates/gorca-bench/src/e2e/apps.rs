@@ -318,7 +318,13 @@ impl FakeMutter {
     }
 
     /// Reviewer probe: one Mutter autorepeat event of a key that is down.
-    pub fn key_repeat(&mut self, keycode: u16, keysym: u32, state: u32, time_ms: u64) -> Result<KeyReply> {
+    pub fn key_repeat(
+        &mut self,
+        keycode: u16,
+        keysym: u32,
+        state: u32,
+        time_ms: u64,
+    ) -> Result<KeyReply> {
         let r = self.proc.request(
             "key",
             &format!(

@@ -114,6 +114,9 @@ pub enum DocNotice {
     WebApp { app: AppId },
     /// The browser reported `load-complete` (or a reload) for the document rooted at `node`.
     Loaded { node: NodeKey },
+    /// A focus request on a node of this document failed (refused, timed out, gone): the key
+    /// that asked (a grabbed Tab) must not stay silent.
+    FocusFailed { doc: DocId },
     /// A live region changed (ADR-0003 13): already classified, deduplicated and rate-limited by
     /// the document, so the Reader only decides whether this document is the one in front.
     Live { doc: DocId, msg: LiveMsg },
@@ -581,6 +584,9 @@ fn spawn_action(set: &mut JoinSet<()>, a: &Actor, node: DocNodeId, act: DocActio
         .with(|d| d.node(node).and_then(|v| v.meta).and_then(|m| m.src));
     let Some(src) = src else { return };
     let req = a.requests.clone();
+    let notices = a.notices.clone();
+    let doc = a.spec_doc;
+    let is_focus = matches!(act, DocAction::Focus);
     set.spawn(async move {
         let (reply, rx) = oneshot::channel();
         let deadline = Deadline(Instant::now() + ACTION_DEADLINE);
@@ -592,8 +598,16 @@ fn spawn_action(set: &mut JoinSet<()>, a: &Actor, node: DocNodeId, act: DocActio
                 reply,
             })
             .await;
-        if sent.is_ok() {
-            let _ = tokio::time::timeout(ACTION_DEADLINE + Duration::from_millis(50), rx).await;
+        let ok = if sent.is_ok() {
+            matches!(
+                tokio::time::timeout(ACTION_DEADLINE + Duration::from_millis(50), rx).await,
+                Ok(Ok(Ok(())))
+            )
+        } else {
+            false
+        };
+        if is_focus && !ok {
+            let _ = notices.try_send(DocNotice::FocusFailed { doc });
         }
     });
 }

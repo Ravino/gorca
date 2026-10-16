@@ -518,22 +518,43 @@ fn modal_scope(d: &WebDoc, mut node: DocNodeId) -> Option<DocNodeId> {
     None
 }
 
-/// The outermost focusable node from `node` up to, but not including, the document (which
-/// every engine reports as focusable).
+/// The nearest focusable node from `node` up to, but not including, the document (which every
+/// engine reports as focusable). An embedded document (`Cat::FRAME`) is not one: its content is
+/// reached through its own focusable elements, and a frame is never a Tab stop (R-4, R-5).
 fn focusable_around(d: &WebDoc, node: DocNodeId) -> Option<DocNodeId> {
     let root = d.root();
-    let mut found = None;
     let mut n = node;
     for _ in 0..64 {
-        if Some(n) != root && d.node(n).is_some_and(|v| v.cats.intersects(Cat::FOCUSABLE)) {
-            found = Some(n);
+        if Some(n) != root
+            && d.node(n).is_some_and(|v| {
+                v.cats.intersects(Cat::FOCUSABLE) && !v.cats.intersects(Cat::FRAME)
+            })
+        {
+            return Some(n);
+        }
+        n = d.parent(n)?;
+    }
+    None
+}
+
+/// The document itself (or an embedded one): focus on it is not a move onto a control.
+fn is_document(d: &WebDoc, node: DocNodeId) -> bool {
+    d.root() == Some(node) || d.node(node).is_some_and(|v| v.role == Role::DocumentWeb)
+}
+
+/// Whether `anc` is `node` or one of its ancestors.
+fn is_ancestor_or_self(d: &WebDoc, anc: DocNodeId, node: DocNodeId) -> bool {
+    let mut n = node;
+    for _ in 0..64 {
+        if n == anc {
+            return true;
         }
         match d.parent(n) {
             Some(p) => n = p,
-            None => break,
+            None => return false,
         }
     }
-    found
+    false
 }
 
 fn title_of(d: &WebDoc) -> Option<String> {
@@ -614,6 +635,9 @@ impl Reader {
             // D-2: Tab is ours only while the mirror has a focusable target in its direction;
             // otherwise the key stays with the page (a grabbed key cannot be given back).
             let (next, prev) = self.web_tab_targets();
+            if let Some(w) = self.web.as_ref() {
+                w.tab_grab.set((next, prev));
+            }
             if !next {
                 for c in &self.keys.tab_next {
                     set.chords.remove(c);
@@ -881,6 +905,7 @@ impl Reader {
             })
         {
             b.counters.join_hits += 1;
+            b.focus_node = Some((doc, id));
             // The browser re-focuses the document we are already browsing (after a same-page
             // link, a click): the cursor stays where it is and nothing is announced.
             // Only when we caused it (a click or Enter a moment ago): a document that is focused
@@ -922,6 +947,17 @@ impl Reader {
             );
             if matches!(self.web_mode(), WebMode::Browse { .. }) {
                 self.web_place(doc, id);
+                // The document itself gaining focus is not a "focus move": Tab from the top of a
+                // page still walks the mirror.
+                if let Some(b) = self.web.as_mut()
+                    && let Some(h) = b.docs.get(doc)
+                {
+                    b.cursor_by_focus = h.read.with(|d| {
+                        !is_document(d, id)
+                            && d.node(id)
+                                .is_some_and(|v| v.cats.intersects(Cat::FOCUSABLE))
+                    });
+                }
                 self.web_root_entry(doc, id);
                 self.web_container_tail(doc, id);
             }
@@ -955,6 +991,9 @@ impl Reader {
                 fx.push(ReaderEffect::ArmTimer(now + LOADING_GRACE));
             }
         } else {
+            if let Some(b) = self.web.as_mut() {
+                b.focus_node = None;
+            }
             self.web_apply(WebEv::FocusAway, fx, false);
         }
     }
@@ -1290,6 +1329,12 @@ impl Reader {
                 self.web_apply(WebEv::NoDocument { focus }, fx, true);
             }
             DocNotice::Live { doc, msg } => self.web_live(doc, &msg, fx),
+            DocNotice::FocusFailed { doc } => {
+                // The grabbed Tab asked for a focus the page refused: say so (R-6).
+                if self.web.as_ref().is_some_and(|b| b.mode.doc() == Some(doc)) {
+                    self.say("can't move focus there", fx);
+                }
+            }
             DocNotice::Gone { doc } => {
                 if let Some(b) = self.web.as_mut() {
                     b.saved.remove(&doc);
@@ -1872,6 +1917,7 @@ impl Reader {
         }
         b.last_off = off;
         b.sel = None;
+        b.cursor_by_focus = false;
         b.counters.moves += 1;
         b.scroll_due = Some((now + SCROLL_DEBOUNCE, doc, cur.node, cur.local));
     }
@@ -2074,21 +2120,26 @@ impl Reader {
     fn tab_target(d: &WebDoc, cur: WebCursor, dir: Dir) -> Option<DocNodeId> {
         let root = d.root();
         let scope = modal_scope(d, cur.node);
-        let found = match dir {
-            Dir::Next => match scope {
-                Some(s) => d.next_in(cur.node, Cat::FOCUSABLE, s),
-                None => d.next(cur.node, Cat::FOCUSABLE),
-            },
-            Dir::Prev => {
-                // Step out of the focusable the cursor is in, or "previous" finds it again.
-                let inner = focusable_around(d, cur.node).unwrap_or(cur.node);
-                match scope {
-                    Some(s) => d.prev_in(inner, Cat::FOCUSABLE, s),
-                    None => d.prev(inner, Cat::FOCUSABLE),
-                }
+        let mut from = cur.node;
+        // Walk past the document itself, embedded documents and (backwards) the focusable
+        // containers the cursor is inside: they precede the cursor in document order but are not
+        // "before" it (R-4). The walk is bounded by the number of such stops.
+        for _ in 0..256 {
+            let n = match (dir, scope) {
+                (Dir::Next, Some(s)) => d.next_in(from, Cat::FOCUSABLE, s),
+                (Dir::Next, None) => d.next(from, Cat::FOCUSABLE),
+                (Dir::Prev, Some(s)) => d.prev_in(from, Cat::FOCUSABLE, s),
+                (Dir::Prev, None) => d.prev(from, Cat::FOCUSABLE),
+            }?;
+            let skip = Some(n) == root
+                || d.node(n).is_some_and(|v| v.cats.intersects(Cat::FRAME))
+                || (dir == Dir::Prev && is_ancestor_or_self(d, n, cur.node));
+            if !skip {
+                return Some(n);
             }
-        };
-        found.filter(|n| Some(*n) != root)
+            from = n;
+        }
+        None
     }
 
     /// Whether Tab / Shift+Tab have a target from the current browse cursor.
@@ -2102,6 +2153,21 @@ impl Reader {
         let Some(h) = b.docs.get(doc) else {
             return (false, false);
         };
+        // R-5 (NVDA `_tabOverride`): the page's own tab order is not ours to override while the
+        // cursor came from a focus change or sits on or inside the focused node.
+        if b.cursor_by_focus
+            || b.focus_node.is_some_and(|(fd, fid)| {
+                fd == doc
+                    && h.read.with(|d| {
+                        !is_document(d, fid)
+                            && d.node(fid)
+                                .is_some_and(|v| v.cats.intersects(Cat::FOCUSABLE))
+                            && is_ancestor_or_self(d, fid, cur.node)
+                    })
+            })
+        {
+            return (false, false);
+        }
         h.read.with(|d| {
             (
                 Self::tab_target(d, cur, Dir::Next).is_some(),
@@ -2117,9 +2183,8 @@ impl Reader {
             return;
         }
         let now_avail = self.web_tab_targets();
-        let Some(b) = self.web.as_mut() else { return };
-        if b.tab_grab != now_avail {
-            b.tab_grab = now_avail;
+        let Some(b) = self.web.as_ref() else { return };
+        if b.tab_grab.get() != now_avail {
             fx.push(ReaderEffect::SetGrabSet(self.current_grabs()));
         }
     }
@@ -2152,6 +2217,10 @@ impl Reader {
 
     /// gorca+Shift+F10: the page's own selection follows the virtual one, or stops following.
     fn web_native_selection_toggle(&mut self, fx: &mut ReaderEffects) {
+        if self.web.as_ref().is_none_or(|b| b.mode.doc().is_none()) {
+            self.say("native selection is only available on web pages", fx);
+            return;
+        }
         let Some(b) = self.web.as_mut() else { return };
         b.native_selection = !b.native_selection;
         let on = b.native_selection;

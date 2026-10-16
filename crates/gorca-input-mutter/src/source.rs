@@ -783,15 +783,6 @@ fn take_ready(
     deferred.take()
 }
 
-/// The grab set that was waiting for the modifiers to come up, once they have.
-fn take_deferred(deferred: &mut Option<GrabSet>, held: &[u32]) -> Option<GrabSet> {
-    if held.is_empty() {
-        deferred.take()
-    } else {
-        None
-    }
-}
-
 /// Publish the committed and wanted sets to the input lane when they change.
 fn publish(
     state: &MonitorState,
@@ -1170,9 +1161,9 @@ mod tests {
             "learn mode keeps them"
         );
         let mut deferred = Some(none);
-        assert!(take_deferred(&mut deferred, &held).is_none());
+        assert!(take_ready(&mut deferred, &held, &state, &[], std::time::Instant::now()).is_none());
         track_held(&mut held, &state, &[], &ev(0xff63, false));
-        assert!(take_deferred(&mut deferred, &held).is_some());
+        assert!(take_ready(&mut deferred, &held, &state, &[], std::time::Instant::now()).is_some());
         assert!(deferred.is_none());
     }
 
@@ -1199,11 +1190,11 @@ mod tests {
         restore.modifiers.insert(0xff63);
         let mut deferred = Some(restore);
         assert!(
-            take_deferred(&mut deferred, &held).is_none(),
+            take_ready(&mut deferred, &held, &state, &[], std::time::Instant::now()).is_none(),
             "not while Insert is down"
         );
         track_held(&mut held, &state, &[0xff63], &ev(false));
-        assert!(take_deferred(&mut deferred, &held).is_some());
+        assert!(take_ready(&mut deferred, &held, &state, &[], std::time::Instant::now()).is_some());
     }
 
     #[test]

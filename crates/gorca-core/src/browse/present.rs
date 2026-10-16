@@ -96,16 +96,23 @@ fn role_phrase(v: &NodeView<'_>) -> String {
 /// States spoken after a control's role.
 fn push_states(role: Role, st: StateSet, out: &mut Vec<Item>) {
     let checkable = matches!(role, Role::CheckBox | Role::RadioButton);
+    let mixed = st
+        .contains(StateSet::MIXED)
+        .then(|| crate::present::mixed_word(role))
+        .flatten();
+    if !checkable && let Some(w) = mixed {
+        out.push(Item::State(w));
+    }
     if checkable {
-        out.push(Item::State(if st.contains(StateSet::MIXED) {
-            "half checked"
+        out.push(Item::State(if let Some(w) = mixed {
+            w
         } else if st.contains(StateSet::CHECKED) {
             "checked"
         } else {
             "not checked"
         }));
     }
-    if st.contains(StateSet::PRESSED) {
+    if st.contains(StateSet::PRESSED) && mixed.is_none() {
         out.push(Item::State("pressed"));
     }
     if st.contains(StateSet::EXPANDED) {

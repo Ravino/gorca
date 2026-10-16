@@ -536,9 +536,15 @@ pub struct BrowseState {
     pub lead_dialog: Option<DocNodeId>,
     /// The virtual selection `(anchor, active)` in flat offsets (D-3).
     pub sel: Option<(u32, u32)>,
-    /// Which Tab directions were last offered to the key grab (next, previous): D-2 grabs Tab
-    /// only while the mirror has a focusable target in that direction.
-    pub tab_grab: (bool, bool),
+    /// Which Tab directions the last built grab set offered (next, previous): D-2 grabs Tab
+    /// only while the mirror has a focusable target in that direction. Written by
+    /// `current_grabs`, the one place every pushed set is built, so it cannot go stale (R-2).
+    pub tab_grab: std::cell::Cell<(bool, bool)>,
+    /// The web node that has system focus, and whether the browse cursor was last put there by a
+    /// focus change (NVDA `_lastCaretMoveWasFocus`, #5227). While the cursor is on or inside the
+    /// focused node, or came from a focus change, Tab belongs to the browser (R-5).
+    pub focus_node: Option<(DocId, DocNodeId)>,
+    pub cursor_by_focus: bool,
     /// Native selection mode (gorca+Shift+F10, D-3): the page's own selection follows the
     /// virtual one. Off by default; the virtual selection never touches the page.
     pub native_selection: bool,
@@ -582,7 +588,9 @@ impl BrowseState {
             activated: None,
             click_target: None,
             sel: None,
-            tab_grab: (true, true),
+            tab_grab: std::cell::Cell::new((true, true)),
+            focus_node: None,
+            cursor_by_focus: false,
             native_selection: false,
             native_sel_node: None,
             lead_dialog: None,

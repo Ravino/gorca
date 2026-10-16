@@ -2078,70 +2078,103 @@ fn live_speech_carries_the_adr_ttl_and_a_flood_spends_only_its_owners_budget() {
     );
 }
 
-// ---- m8 re-review probes (reviewer) ---------------------------------------------------------
+// ---- m8 re-review (round 2) regressions ------------------------------------------------------
 
+fn tab_pair(g: &gorca_input_api::GrabSet) -> (bool, bool) {
+    (
+        g.contains(0xff09, Modifiers::empty()),
+        g.contains(0xfe20, Modifiers::SHIFT),
+    )
+}
+
+/// The Tab grabs of the newest pushed set, or the last one seen.
 fn track(last: &mut Option<gorca_input_api::GrabSet>, fx: &ReaderEffects) {
     if let Some(g) = last_grabs(fx) {
-        eprintln!("PROBE push: Tab={} ShiftTab={}", g.contains(0xff09, Modifiers::empty()), g.contains(0xfe20, Modifiers::SHIFT));
         *last = Some(g);
     }
 }
 
 #[test]
-fn probe_rr_stale_tab_grab_after_a_foreign_grab_push() {
+fn r2_the_tab_grabs_follow_the_live_targets_after_a_foreign_grab_push() {
     let mut r = tab_rig();
     let mut last = None;
     track(&mut last, &r.focus(1002));
     track(&mut last, &r.key(CoreCmd::BrowseCursorNextLine));
     track(&mut last, &r.key(CoreCmd::BrowseCursorTop));
-    track(&mut last, &settle(&mut r)); // tab_grab = (true, false) at the heading
-    eprintln!("PROBE -- settled at the heading");
+    track(&mut last, &settle(&mut r));
+    assert_eq!(
+        tab_pair(last.as_ref().unwrap()),
+        (true, false),
+        "at the heading"
+    );
     track(&mut last, &r.focus(1014)); // focus mode on the edit
-    track(&mut last, &r.key(CoreCmd::BrowseEscape)); // browse at the edit: pushed live (false, true)
+    track(&mut last, &r.key(CoreCmd::BrowseEscape)); // browse at the edit: pushed by the mode change
     track(&mut last, &settle(&mut r));
     r.now += Duration::from_secs(5);
-    eprintln!("PROBE -- settled at the edit, 5 s later");
-    track(&mut last, &r.key(CoreCmd::BrowseCursorTop)); // back to the heading within 150 ms
+    track(&mut last, &r.key(CoreCmd::BrowseCursorTop));
     track(&mut last, &settle(&mut r));
     let g = last.unwrap();
-    let live = r.reader.web_tab_targets();
-    eprintln!(
-        "PROBE live targets (next, prev) = {live:?}; grabbed Tab = {}, grabbed Shift+Tab = {}",
-        g.contains(0xff09, Modifiers::empty()),
-        g.contains(0xfe20, Modifiers::SHIFT)
+    assert_eq!(
+        r.reader.web_tab_targets(),
+        (true, false),
+        "the live targets at the top"
     );
-    let fx = r.key(CoreCmd::BrowseTabPrev);
-    eprintln!("PROBE Shift+Tab at the heading says {:?} acts {:?}", spoken(&fx), acts(&fx));
+    assert_eq!(
+        tab_pair(&g),
+        (true, false),
+        "the grabs follow them, not a stale cache"
+    );
 }
 
 #[test]
-fn probe_rr_shift_tab_inside_a_focusable_container_skips_its_links() {
+fn r4_shift_tab_inside_a_focusable_container_finds_the_link_before_the_cursor() {
     let mut r = tab_rig();
-    // <p tabindex=-1> around "Read <a>the docs</a> now." (think <main tabindex=-1>).
     let mut p = block(src(4, Role::Paragraph, Some(1004)));
     p.states |= StateSet::FOCUSABLE;
-    r.tr.apply(&mut r.writer, vec![DocDelta::Upsert(vec![p]), DocDelta::Settled { batch: 3 }])
-        .unwrap();
+    r.tr.apply(
+        &mut r.writer,
+        vec![DocDelta::Upsert(vec![p]), DocDelta::Settled { batch: 3 }],
+    )
+    .unwrap();
     r.writer.publish();
     r.focus(1002);
     settle(&mut r);
     r.key(CoreCmd::BrowseCursorNextLine);
-    for _ in 0..15 {
+    for _ in 0..16 {
         r.key(CoreCmd::BrowseCursorNextChar);
     }
-    let fx = r.key(CoreCmd::BrowseCursorNextChar);
-    eprintln!("PROBE cursor char {:?}", spoken(&fx));
     let link = r.join.get(nk(1006)).unwrap().1;
     let fx = r.key(CoreCmd::BrowseTabPrev);
-    eprintln!(
-        "PROBE Shift+Tab after the link in a focusable <p>: says {:?} acts {:?} (link is {link:?})",
-        spoken(&fx),
-        acts(&fx)
-    );
+    assert_eq!(acts(&fx), [(DocAction::Focus, link)], "{:?}", spoken(&fx));
 }
 
 #[test]
-fn probe_rr_alert_waiting_for_budget_is_replaced_by_later_polite_news() {
+fn r5_tab_belongs_to_the_browser_after_a_focus_driven_move_and_inside_the_focused_node() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    assert_eq!(
+        r.reader.web_tab_targets().0,
+        true,
+        "from the heading Tab is ours"
+    );
+    // The browser focuses the link (our Tab, or its own): the cursor came from a focus change.
+    let fx = r.focus(1006);
+    let fx2 = settle(&mut r);
+    let fx: ReaderEffects = fx.into_iter().chain(fx2).collect();
+    assert_eq!(r.reader.web_tab_targets(), (false, false));
+    if let Some(g) = last_grabs(&fx) {
+        assert_eq!(tab_pair(&g), (false, false));
+    }
+    // Any cursor move of our own ends it: the cursor is no longer on the focused node.
+    r.key(CoreCmd::BrowseCursorNextLine);
+    r.key(CoreCmd::BrowseCursorNextLine);
+    let _ = settle(&mut r);
+    assert_ne!(r.reader.web_tab_targets(), (false, false));
+}
+
+#[test]
+fn r3_an_alert_waiting_for_the_budget_is_not_replaced_by_polite_news() {
     let mut r = tab_rig();
     r.focus(1002);
     settle(&mut r);
@@ -2150,12 +2183,32 @@ fn probe_rr_alert_waiting_for_budget_is_replaced_by_later_polite_news() {
         said.extend(spoken(&r.reader.handle(live_msg(m, false), r.now)));
     }
     r.now += Duration::from_millis(20);
-    said.extend(spoken(&r.reader.handle(live_msg("ALERT payment failed", true), r.now)));
+    said.extend(spoken(
+        &r.reader
+            .handle(live_msg("ALERT payment failed", true), r.now),
+    ));
     r.now += Duration::from_millis(20);
     said.extend(spoken(&r.reader.handle(live_msg("news 4", false), r.now)));
     for _ in 0..20 {
         r.now += Duration::from_millis(200);
         said.extend(spoken(&r.reader.handle(ReaderMsg::Timer, r.now)));
     }
-    eprintln!("PROBE spoken over 4 s: {said:?}");
+    assert!(
+        said.iter().any(|s| s.contains("ALERT payment failed")),
+        "the alert is spoken: {said:?}"
+    );
+    assert!(
+        said.iter().any(|s| s.contains("news 4")),
+        "polite coalescing keeps the newest: {said:?}"
+    );
+}
+
+#[test]
+fn r6_native_selection_toggle_outside_a_web_page_says_it_is_unavailable() {
+    let mut r = rig();
+    let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
+    assert_eq!(
+        spoken(&fx),
+        ["native selection is only available on web pages"]
+    );
 }

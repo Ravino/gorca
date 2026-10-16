@@ -21,6 +21,18 @@ const STATE_WORDS: &[(StateSet, &str)] = &[
     (StateSet::INVALID, "invalid entry"),
 ];
 
+/// What the MIXED state means for `role` (R-6): a tri-state check box or radio button is "half
+/// checked", a toggle button "half pressed" (`aria-pressed=mixed`), a progress bar
+/// "indeterminate" (no value). Other roles say nothing for it.
+pub(crate) fn mixed_word(role: Role) -> Option<&'static str> {
+    match role {
+        Role::CheckBox | Role::RadioButton => Some("half checked"),
+        Role::ToggleButton => Some("half pressed"),
+        Role::ProgressBar => Some("indeterminate"),
+        _ => None,
+    }
+}
+
 pub(super) fn seg(text: &str, kind: SegmentKind) -> Segment {
     Segment {
         text: Arc::from(text),
@@ -78,10 +90,20 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
     } else {
         skip
     };
-    // A tri-state check box in its middle state says "half checked" only.
-    let mixed = n.states.contains(StateSet::MIXED);
+    // A tri-state control in its middle state says that only ("half checked", "half pressed").
+    let mixed_w = mixed_word(n.role).filter(|_| n.states.contains(StateSet::MIXED));
+    let mixed = mixed_w.is_some();
     for (flag, word) in STATE_WORDS {
+        if *flag == StateSet::MIXED {
+            if let Some(w) = mixed_w {
+                segments.push(seg(w, SegmentKind::State));
+            }
+            continue;
+        }
         if *flag == StateSet::CHECKED && mixed {
+            continue;
+        }
+        if *flag == StateSet::PRESSED && mixed {
             continue;
         }
         if n.states.contains(*flag) && !skip.contains(*flag) {
@@ -96,6 +118,7 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
     {
         Some("not checked")
     } else if n.role == Role::ToggleButton
+        && !mixed
         && !n.states.intersects(StateSet::PRESSED | StateSet::CHECKED)
         && !skip.contains(StateSet::PRESSED)
     {
@@ -253,9 +276,10 @@ pub(crate) fn present_change(
     // flipped partner ("not collapsed").
     let check = StateSet::CHECKED | StateSet::MIXED;
     let expand = StateSet::EXPANDED | StateSet::COLLAPSED;
-    if ch.states.intersects(check) {
-        let w = if new.states.contains(StateSet::MIXED) {
-            "half checked"
+    let mixed_w = mixed_word(new.role).filter(|_| new.states.contains(StateSet::MIXED));
+    if ch.states.intersects(check) && (mixed_w.is_some() || !new.states.contains(StateSet::MIXED)) {
+        let w = if let Some(w) = mixed_w {
+            w
         } else if new.states.contains(StateSet::CHECKED) {
             "checked"
         } else {
@@ -275,6 +299,9 @@ pub(crate) fn present_change(
     }
     for (flag, word) in STATE_WORDS {
         if (check | expand).contains(*flag) {
+            continue;
+        }
+        if *flag == StateSet::PRESSED && mixed_w.is_some() {
             continue;
         }
         if ch.states.contains(*flag) {
@@ -442,6 +469,28 @@ mod change_tests {
         exp.states = StateSet::EXPANDED;
         assert_eq!(change_words(&col, &exp), ["expanded"]);
         assert_eq!(change_words(&exp, &col), ["collapsed"]);
+    }
+
+    #[test]
+    fn mixed_words_depend_on_the_role() {
+        // R-6: only check boxes say "half checked".
+        let mut bar = snap("Loading", StateSet::MIXED, None);
+        bar.role = Role::ProgressBar;
+        let w = texts(&present_focus(&bar, UttId(1), Epoch(1)));
+        assert!(w.contains(&"indeterminate".to_owned()), "{w:?}");
+        assert!(!w.iter().any(|x| x.contains("checked")), "{w:?}");
+        let mut tog = snap("Mute", StateSet::MIXED, None);
+        tog.role = Role::ToggleButton;
+        let w = texts(&present_focus(&tog, UttId(1), Epoch(1)));
+        assert!(w.contains(&"half pressed".to_owned()), "{w:?}");
+        assert!(
+            !w.iter()
+                .any(|x| x.contains("checked") || x.contains("not pressed")),
+            "{w:?}"
+        );
+        let mut off = tog.clone();
+        off.states = StateSet::empty();
+        assert_eq!(change_words(&off, &tog), ["half pressed"]);
     }
 
     #[test]
