@@ -926,7 +926,11 @@ impl Reader {
         let h = b.docs.get(doc)?;
         h.read.with(|d| {
             let v = d.node(id)?;
-            if v.flags.contains(gorca_doc::web::NodeFlags::HIDDEN) {
+            // A document root keeps the full path: its title, the mode word and the first line
+            // are arranged around the fetch (BM-5, W3).
+            if v.flags.contains(gorca_doc::web::NodeFlags::HIDDEN)
+                || matches!(v.role, Role::DocumentWeb | Role::Document)
+            {
                 return None;
             }
             let name = v.name.filter(|n| !n.is_empty())?;
