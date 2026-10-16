@@ -9,8 +9,8 @@ use crate::diag::{Diag, DiagMsg, did_you_mean, fnv1a};
 use crate::keymap::{ContextName, LayerEntry, ResolvedKeymap, merge_layer};
 use crate::presets::Presets;
 use crate::settings::{
-    Caps, Confirmations, InterruptPolicy, Layout, Preset, Punct, SCHEMA, SETTINGS, Settings,
-    Verbosity, sections,
+    Backend, Caps, Confirmations, InterruptPolicy, Layout, Preset, Punct, SCHEMA, SETTINGS,
+    Settings, Verbosity, sections,
 };
 
 /// Files larger than this are ignored (ADR-0005 7.4).
@@ -351,6 +351,13 @@ fn apply_key(section: &str, key: &str, v: &Item, s: &mut Settings, diags: &mut V
         }
         ("terminal", "prompt_regex") => read_str(v, &path, &mut s.terminal.prompt_regex, diags),
         ("terminal", "secret_regex") => read_str(v, &path, &mut s.terminal.secret_regex, diags),
+        ("speech", "language") => read_str(v, &path, &mut s.speech.language, diags),
+        ("speech", "output_module") => read_str(v, &path, &mut s.speech.output_module, diags),
+        ("speech", "backend") => {
+            if let Some(p) = read_enum(v, &path, Backend::parse, Backend::NAMES, diags) {
+                s.speech.backend = p;
+            }
+        }
         ("speech", "punctuation") => {
             if let Some(p) = read_enum(v, &path, Punct::parse, Punct::NAMES, diags) {
                 s.speech.punctuation = p;
@@ -825,7 +832,7 @@ mod tests {
         let text = "\
 [keyboard]\npreset=\"orca\"\nlayout=\"laptop\"\nmodifiers=[\"Insert\"]\ncaps_lock_layout_guard=false\n\
 multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_control=false\npause_speech_on_shift=false\n\
-[keymap]\nreplace_preset=true\n[speech]\nrate=10\npitch=11\nvolume=12\nrate_step=7\nvoice=\"x\"\npunctuation=\"all\"\ncaps=\"say\"\n\
+[keymap]\nreplace_preset=true\n[speech]\nrate=10\npitch=11\nvolume=12\nrate_step=7\nvoice=\"x\"\nlanguage=\"ru\"\noutput_module=\"rhvoice\"\nbackend=\"ssip\"\npunctuation=\"all\"\ncaps=\"say\"\n\
 [echo]\ntyped_characters=false\ntyped_words=true\ncommand_keys=true\ninserted_text=false\n\
 [text]\nsay_all_moves_caret=false\ncaret_edge_ms=50\ncaret_late_ms=300\n[browse]\nsay_all_on_load=false\n\
 [terminal]\nsettle_ms=40\nburst_lines=20\nprompt_markers=[\"> \"]\nprompt_regex=\"^x\"\nsecret_regex=\"y$\"\n[verbosity]\nlevel=\"brief\"\nconfirmations=\"brief\"\n";
@@ -846,7 +853,10 @@ multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_
         assert_eq!(l.settings.terminal.prompt_markers, ["> "]);
         assert_eq!(l.settings.terminal.prompt_regex, "^x");
         assert_eq!(l.settings.terminal.secret_regex, "y$");
-        assert_eq!(SETTINGS.len(), 32);
+        assert_eq!(l.settings.speech.language, "ru");
+        assert_eq!(l.settings.speech.output_module, "rhvoice");
+        assert_eq!(l.settings.speech.backend, Backend::Ssip);
+        assert_eq!(SETTINGS.len(), 35);
     }
 
     #[test]

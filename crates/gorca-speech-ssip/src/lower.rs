@@ -105,6 +105,11 @@ pub fn lower(cmd: &SpeechCmd, prio: Prio) -> Vec<SsipOut> {
             SsipOut::Line(format!("SET self PITCH {pitch}\r\n")),
             SsipOut::Line(format!("SET self VOLUME {volume}\r\n")),
         ],
+        SpeechCmd::Configure(setup) => setup
+            .ssip_lines()
+            .into_iter()
+            .map(|l| SsipOut::Line(format!("{l}\r\n")))
+            .collect(),
     }
 }
 
@@ -120,7 +125,7 @@ pub fn handshake(client_name: &str) -> Vec<SsipOut> {
 mod tests {
     use super::*;
     use gorca_model::UttId;
-    use gorca_output_api::Verbalized;
+    use gorca_output_api::{Verbalized, VoiceSetup};
     use std::sync::Arc;
 
     fn speak(text: &str) -> SpeechCmd {
@@ -219,6 +224,32 @@ mod tests {
                 "SET self VOLUME 50\r\n"
             ]
         );
+    }
+
+    #[test]
+    fn configure_sets_module_then_language_then_voice_and_skips_empty() {
+        let full = SpeechCmd::Configure(VoiceSetup {
+            language: Arc::from("ru"),
+            output_module: Arc::from("espeak-ng"),
+            voice: Arc::from("ru"),
+        });
+        assert_eq!(
+            lines(&lower(&full, Prio::Text)),
+            [
+                "SET self OUTPUT_MODULE espeak-ng\r\n",
+                "SET self LANGUAGE ru\r\n",
+                "SET self SYNTHESIS_VOICE ru\r\n"
+            ]
+        );
+        let lang = SpeechCmd::Configure(VoiceSetup {
+            language: Arc::from("ru"),
+            ..VoiceSetup::default()
+        });
+        assert_eq!(
+            lines(&lower(&lang, Prio::Text)),
+            ["SET self LANGUAGE ru\r\n"]
+        );
+        assert!(lower(&SpeechCmd::Configure(VoiceSetup::default()), Prio::Text).is_empty());
     }
 
     #[test]
