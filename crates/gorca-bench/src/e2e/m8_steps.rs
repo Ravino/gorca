@@ -534,7 +534,7 @@ fn sy() -> Vec<Step> {
         // A held Tab across the grab flip its own focus move causes (R-1): Mutter swallows the
         // release of a key whose grab was added while it was down.
         s("SY.hold.down", P1, "Tab down past the last focusable (passes)", Act::PrbDown(TAB, 0), &[]).passes_through().win(300),
-        s("SY.hold.ffocus", P1, "Firefox's native Tab focuses link one", Act::Focus(role::LINK, "link one"), &["link one"]).win(500),
+        s("SY.hold.ffocus", P1, "Firefox's native Tab focuses the button", Act::Focus(role::PUSH_BUTTON, "Plain button"), &["Plain button"]).win(500),
         s("SY.hold.rep", P1, "Mutter autorepeat of the held Tab is not consumed", Act::PrbRep(TAB, 0), &[]).passes_through().win(800),
         s("SY.hold.up", P1, "Tab released: reaches the app", Act::PrbUp(TAB, 0), &[]).passes_through().win(800),
         s("SY.hold.field", P1, "Focus the field: focus mode", Act::Focus(role::ENTRY, "Sync field"), &["focus mode"]).win(1000),
