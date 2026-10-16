@@ -10,8 +10,29 @@
 //! hook that happens to be preempted for 2 ms would be interrupted and counted as a fault (three
 //! of those disable the extension). An early epoch-only run of the storm benchmark in
 //! `examples/x1.rs` (host load average 25) showed per-call medians near 35 ns, which is a disabled
-//! slot answering "no opinion": consistent with this failure mode. The epoch deadline stays, ten
-//! times as long, as the backstop against anything fuel cannot see.
+//! slot answering "no opinion": consistent with this failure mode.
+//!
+//! The epoch deadline stays as the backstop against what fuel cannot see (host work, page faults),
+//! but it is no longer a wall-clock limit. When the deadline fires, the epoch callback
+//! ([`backstop`]) reads the calling thread's **CPU time** (`CLOCK_THREAD_CPUTIME_ID`) and
+//! traps only when the call has consumed its CPU backstop (3x the limit for `present`/`policy`,
+//! 10x for the rest), or hit a hard wall-clock ceiling ([`WALL_CEILING_FACTOR`] times the limit:
+//! 100 ms for the hooks, 1 s for commands) that no scheduling delay should reach. Otherwise it
+//! extends the deadline by one tick. A healthy hook that was descheduled therefore never faults;
+//! a looping hook is cut by fuel at about 2 ms; a hook that stalls without CPU (a stuck host call)
+//! is cut by the ceiling at its next return into the guest.
+//!
+//! # Worst-case Reader hold (`present`, `policy` run inline)
+//!
+//! - CPU the Reader spends in one call: bounded by fuel (2 ms) and the host-work meter; at most
+//!   6 ms by the CPU backstop.
+//! - Wall time: unchanged on an unloaded host (about 2 ms). On a loaded host the call can be as
+//!   long as the Reader thread is descheduled, which no code of ours can shorten (the same delay
+//!   hits every other Reader instruction); the hard ceiling bounds it at 100 ms of wall time, after
+//!   which the call faults (a strike). The old 6 ms wall cut did not help the Reader here either:
+//!   it ended the call but a descheduled thread resumes only when it is scheduled again.
+//! - The host functions never block (they only touch in-memory state), so a host call cannot stall
+//!   a call beyond the ceiling plus its own duration.
 //!
 //! `FUEL_PER_MS` converts the limit to fuel; see the constant for the calibration.
 //!
@@ -23,13 +44,13 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::thread::{JoinHandle, Thread};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use gorca_ext_api as api;
 use wasmtime::component::{Component, HasSelf, Linker};
 use wasmtime::{
     Config, Engine, InstanceAllocationStrategy, PoolingAllocationConfig, ResourceLimiter, Store,
-    Trap,
+    Trap, UpdateDeadline,
 };
 
 use crate::instance::{Fault, HookInstance, HookKind, InstShared};
@@ -56,13 +77,17 @@ use bindings::{Extension, ExtensionPre};
 
 /// Epoch tick of the wall-clock backstop.
 pub const TICK: Duration = Duration::from_millis(1);
-/// The backstop is this many times the CPU limit. `present` runs inline on the Reader, so its
-/// backstop is tight (6 ms against the 2 ms limit; with fuel and the host-work budget below the
-/// backstop only catches what neither can see, such as a descheduled thread or a slow page
-/// fault). The other hooks run on workers or the app actor and keep a wide margin so a loaded
-/// host does not turn a preempted healthy hook into a fault.
+/// The backstop is this many times the CPU limit, measured in **thread CPU time** (see the module
+/// documentation). `present` runs inline on the Reader, so its backstop is tight (6 ms of CPU
+/// against the 2 ms limit; with fuel and the host-work budget below it, the backstop only catches
+/// what neither can see, such as a slow page fault). The other hooks run on workers or the app
+/// actor and keep a wide margin.
 const BACKSTOP_FACTOR: u128 = 10;
 const BACKSTOP_FACTOR_PRESENT: u128 = 3;
+/// Hard wall-clock ceiling, as a multiple of the CPU limit: 100 ms for the 2 ms hooks, 1 s for
+/// the 20 ms commands. Far above any scheduling delay a loaded workstation produces, so reaching
+/// it means the call is stuck, not slow.
+pub const WALL_CEILING_FACTOR: u32 = 50;
 /// Most bytes (and bytes' worth of list elements) the host lifts out of guest memory in one
 /// call into the host or one hook result. wasmtime refuses the lift before copying when a string
 /// or list would exceed it ("hostcall fuel"), so a hostile length costs the host nothing.
@@ -89,6 +114,58 @@ fn ticks(kind: HookKind) -> u64 {
         BACKSTOP_FACTOR
     };
     u64::try_from((kind.limit().as_micros() * factor).div_ceil(t)).unwrap_or(u64::MAX)
+}
+
+/// Hard wall-clock ceiling of one call of `kind`.
+pub fn wall_ceiling(kind: HookKind) -> Duration {
+    kind.limit() * WALL_CEILING_FACTOR
+}
+
+/// CPU time a call of `kind` may consume before the backstop cuts it (the backstop ticks).
+fn cpu_backstop(kind: HookKind) -> Duration {
+    TICK * u32::try_from(ticks(kind)).unwrap_or(u32::MAX)
+}
+
+/// What the epoch callback does when a call's deadline fires.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum Backstop {
+    /// The call is healthy (under its CPU backstop, inside the ceiling): keep going one tick.
+    Extend,
+    /// The call consumed its CPU backstop: interrupt.
+    CpuExhausted,
+    /// The call is stuck: it hit the wall-clock ceiling without spending the CPU.
+    Stuck,
+}
+
+/// Pure decision of the epoch callback, from the call's CPU and wall time so far.
+fn backstop(clock: &CallClock, cpu_used: Duration, wall_used: Duration) -> Backstop {
+    if cpu_used >= clock.cpu_backstop {
+        Backstop::CpuExhausted
+    } else if wall_used >= clock.wall_ceiling {
+        Backstop::Stuck
+    } else {
+        Backstop::Extend
+    }
+}
+
+/// Clock of the running call, read by the epoch callback.
+#[derive(Debug)]
+struct CallClock {
+    cpu_start: Duration,
+    wall_start: Instant,
+    cpu_backstop: Duration,
+    wall_ceiling: Duration,
+}
+
+impl CallClock {
+    fn start(kind: HookKind) -> Self {
+        Self {
+            cpu_start: gorca_rt::sched::thread_cpu_time(),
+            wall_start: Instant::now(),
+            cpu_backstop: cpu_backstop(kind),
+            wall_ceiling: wall_ceiling(kind),
+        }
+    }
 }
 
 /// Fuel for one call of `kind`.
@@ -271,8 +348,17 @@ impl WasmModule {
                     allowance: api::LIMIT_MEMORY_BYTES,
                 },
                 work: HostWork::new(host_units(HookKind::Command)),
+                clock: CallClock::start(HookKind::Command),
             },
         );
+        store.epoch_deadline_callback(|ctx| {
+            let c = &ctx.data().clock;
+            let cpu = gorca_rt::sched::thread_cpu_time().saturating_sub(c.cpu_start);
+            match backstop(c, cpu, c.wall_start.elapsed()) {
+                Backstop::Extend => Ok(UpdateDeadline::Continue(1)),
+                Backstop::CpuExhausted | Backstop::Stuck => Ok(UpdateDeadline::Interrupt),
+            }
+        });
         store.limiter(|d| &mut d.limiter);
         store.set_hostcall_fuel(HOSTCALL_LIFT_BYTES);
         // Instantiation runs the start function: bound it like a command.
@@ -350,6 +436,7 @@ pub struct StoreData {
     shared: Arc<InstShared>,
     limiter: Limiter,
     work: HostWork,
+    clock: CallClock,
 }
 
 /// The host-side work meter of the running call (see [`HOST_UNITS_PER_MS`]).
@@ -427,6 +514,7 @@ impl WasmInstance {
         self.store.data().shared.begin_call();
         self.store.data_mut().work = HostWork::new(host_units(kind));
         self.store.data_mut().limiter.allowance = growth_allowance(kind);
+        self.store.data_mut().clock = CallClock::start(kind);
         self.store.set_epoch_deadline(ticks(kind));
         // A store that cannot be refuelled is broken: report it as a fault, never panic.
         if let Err(e) = self.store.set_fuel(fuel(kind)) {
@@ -655,5 +743,39 @@ fn query_error_to_wit(e: api::QueryError) -> wt::QueryError {
         api::QueryError::Gone => wt::QueryError::Gone,
         api::QueryError::NotSupported => wt::QueryError::NotSupported,
         api::QueryError::Denied => wt::QueryError::Denied,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_slow_but_idle_call_extends() {
+        let c = CallClock::start(HookKind::Present);
+        assert_eq!(
+            backstop(&c, Duration::from_micros(200), Duration::from_millis(60)),
+            Backstop::Extend
+        );
+    }
+
+    #[test]
+    fn a_call_that_spent_its_cpu_backstop_is_cut() {
+        let c = CallClock::start(HookKind::Present);
+        assert_eq!(
+            backstop(&c, Duration::from_millis(6), Duration::from_millis(7)),
+            Backstop::CpuExhausted
+        );
+    }
+
+    #[test]
+    fn a_call_past_the_wall_ceiling_without_cpu_is_stuck() {
+        let c = CallClock::start(HookKind::Present);
+        assert_eq!(
+            backstop(&c, Duration::ZERO, Duration::from_millis(100)),
+            Backstop::Stuck
+        );
+        assert_eq!(wall_ceiling(HookKind::Present), Duration::from_millis(100));
+        assert_eq!(wall_ceiling(HookKind::Command), Duration::from_secs(1));
     }
 }

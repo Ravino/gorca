@@ -178,7 +178,8 @@ struct SlotInner {
 ///
 /// - Callers on hot paths (`present` in the Reader, `on_event` in the app actor) only `try_lock`:
 ///   a slot that is busy answers "no opinion" at once.
-/// - A call is bounded by fuel (CPU) and the epoch backstop (wall time).
+/// - A call is bounded by fuel (CPU), the epoch CPU-time backstop and a hard wall-clock ceiling
+///   (`wasm.rs`); a descheduled healthy hook is never faulted.
 /// - A fault never rebuilds on the caller's thread: the dead instance is dropped and its
 ///   replacement built by a worker. Until it is ready the slot answers "no opinion".
 /// - Commands are queued to the workers, at most four per slot, over a bounded queue.
