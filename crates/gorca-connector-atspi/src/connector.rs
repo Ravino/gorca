@@ -396,14 +396,21 @@ async fn watch_shell(session: Connection, router: Arc<AtspiRouter>, clock: Clock
         if let Some(p) = process {
             router.set_protected_process(Some(p));
         }
+        // A closed or failed stream (the session bus went away) must not stay in the select:
+        // it would complete instantly on every turn and turn this loop into a busy loop that
+        // keeps sending messages. Drop it and fall back to the slow poll.
         let changed = async {
             match stream.as_mut() {
-                Some(s) => s.next().await.is_some(),
+                Some(s) => matches!(s.next().await, Some(Ok(_))),
                 None => std::future::pending().await,
             }
         };
         tokio::select! {
-            _ = changed => {}
+            alive = changed => {
+                if !alive {
+                    stream = None;
+                }
+            }
             () = tokio::time::sleep(SHELL_POLL) => {}
         }
     }

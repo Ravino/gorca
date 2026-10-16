@@ -7,7 +7,9 @@
 //! test can skip loudly instead of failing on a machine without AT-SPI.
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::io::{BufRead, BufReader, Write};
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
@@ -112,8 +114,10 @@ impl Session {
     pub fn start() -> Result<Self, HarnessError> {
         forbid_ambient_environment();
         let script = harness_dir().join("run-isolated.sh");
+        // Its own process group: a stuck session script is torn down as a group (see `Drop`).
         let mut child = Command::new(script)
             .arg("--hold")
+            .process_group(0)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
@@ -184,9 +188,67 @@ impl Session {
 }
 
 impl Drop for Session {
+    /// Closing stdin makes the script tear the session down (about a second). Never wait for
+    /// it unboundedly: after 20 s the script's own process group (this PID's, recorded at
+    /// spawn) is sent TERM, and after 30 s KILL. Nothing is ever killed by name.
     fn drop(&mut self) {
         drop(self.stdin.take());
-        let _ = self.child.wait();
+        let t0 = Instant::now();
+        let pgid = self.child.id().to_string();
+        let mut termed = false;
+        loop {
+            match self.child.try_wait() {
+                Ok(Some(_)) | Err(_) => return,
+                Ok(None) => {}
+            }
+            let waited = t0.elapsed();
+            if waited > Duration::from_secs(30) {
+                let _ = Command::new("kill")
+                    .args(["-KILL", "--", &format!("-{pgid}")])
+                    .status();
+                let _ = self.child.kill();
+                let _ = self.child.wait();
+                return;
+            }
+            if waited > Duration::from_secs(20) && !termed {
+                termed = true;
+                let _ = Command::new("kill")
+                    .args(["-TERM", "--", &format!("-{pgid}")])
+                    .status();
+            }
+            #[allow(clippy::disallowed_methods)]
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+}
+
+/// Run an async test body on a fresh multi-thread runtime with a hard deadline and a bounded
+/// teardown, so a failing test can never hang the test binary:
+///
+/// * the body is abandoned (and its locals dropped) after `deadline` and the test panics;
+/// * a panic in the body is re-raised only after the runtime was shut down with
+///   [`tokio::runtime::Runtime::shutdown_timeout`], which detaches a worker or blocking task
+///   that does not stop instead of waiting for it forever (the default drop would).
+///
+/// Everything the body owns (sessions, apps, daemons) is dropped while the panic unwinds, so
+/// give such types `Drop` guards that stop their own children.
+#[allow(clippy::panic)]
+pub fn run_bounded<F: Future<Output = ()>>(workers: usize, deadline: Duration, body: F) {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(workers)
+        .enable_all()
+        .build()
+        .unwrap_or_else(|e| panic!("cannot build the test runtime: {e}"));
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        rt.block_on(async {
+            if tokio::time::timeout(deadline, body).await.is_err() {
+                panic!("test body exceeded its {deadline:?} deadline");
+            }
+        });
+    }));
+    rt.shutdown_timeout(Duration::from_secs(15));
+    if let Err(p) = outcome {
+        std::panic::resume_unwind(p);
     }
 }
 

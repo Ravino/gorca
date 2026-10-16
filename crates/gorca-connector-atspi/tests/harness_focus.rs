@@ -134,21 +134,26 @@ impl Rig {
         None
     }
 
-    async fn stop(self) {
+    async fn stop(mut self) {
         self.shutdown.cancel();
-        assert_eq!(self.core.await.unwrap(), Ok(()));
-        assert!(self.connector.await.unwrap().is_ok());
-        drop(self.session);
+        let core = tokio::time::timeout(Duration::from_secs(20), &mut self.core).await;
+        assert_eq!(core.expect("core did not stop").unwrap(), Ok(()));
+        let conn = tokio::time::timeout(Duration::from_secs(20), &mut self.connector).await;
+        assert!(conn.expect("connector did not stop").unwrap().is_ok());
+    }
+}
+
+impl Drop for Rig {
+    /// On a failing test the rig is dropped while unwinding: stop the core and the connector
+    /// *before* the field drop tears the private buses down (a connector that outlives its bus
+    /// must not be what keeps the test binary alive).
+    fn drop(&mut self) {
+        self.shutdown.cancel();
     }
 }
 
 fn run<F: std::future::Future<Output = ()>>(f: F) {
-    tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(4)
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(f);
+    gorca_testkit::harness::run_bounded(4, Duration::from_secs(240), f);
 }
 
 #[test]
