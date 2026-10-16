@@ -23,6 +23,7 @@ use std::time::{Duration, Instant};
 use gorca_model::{Epoch, Prio, UttId, Utterance};
 use gorca_output_api::{
     ClientHealth, SpeechClient, SpeechCmd, SpeechEvent, SubmitError, VoiceParams, VoiceRef,
+    VoiceSetup,
 };
 use gorca_rt::{EpochCell, Notify, TaskSet, mpsc};
 
@@ -31,10 +32,12 @@ use crate::state::{SpeechEffect, SpeechMsg, SpeechState, UttMeta};
 use crate::verbalize::Verbalizer;
 
 /// Speech control, applied by the lane before the utterances that follow it (ADR-0005 6.2).
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SpeechControl {
     /// Voice parameters; also re-sent after a reconnect.
     SetParams(VoiceParams),
+    /// Language, output module and voice; also re-sent after a reconnect.
+    SetVoice(VoiceSetup),
     Pause,
     Resume,
     /// While muted, new utterances are dropped at `submit`. Utterances already submitted are
@@ -63,6 +66,8 @@ pub struct LaneConfig {
     pub down_poll: Duration,
     /// Re-sent after a reconnect (`ResendVoiceParams`).
     pub voice_params: Option<VoiceParams>,
+    /// Re-sent after a reconnect, before `voice_params`.
+    pub voice_setup: Option<VoiceSetup>,
 }
 
 impl Default for LaneConfig {
@@ -71,6 +76,7 @@ impl Default for LaneConfig {
             idle_poll: Duration::from_millis(250),
             down_poll: Duration::from_millis(25),
             voice_params: None,
+            voice_setup: None,
         }
     }
 }
@@ -527,6 +533,10 @@ impl Lane {
                 self.cfg.voice_params = Some(p);
                 self.send(SpeechCmd::SetParams(p), None);
             }
+            SpeechControl::SetVoice(v) => {
+                self.cfg.voice_setup = Some(v.clone());
+                self.send(SpeechCmd::Configure(v), None);
+            }
             SpeechControl::Pause => self.feed(SpeechMsg::Pause),
             SpeechControl::Resume => self.feed(SpeechMsg::Resume),
             // Applied at `submit`; nothing to do on the lane.
@@ -675,6 +685,10 @@ impl Lane {
                     .fetch_add(1, Ordering::Relaxed);
             }
             SpeechEffect::ResendVoiceParams => {
+                // The voice first: a module switch may reset the rate on some servers.
+                if let Some(v) = self.cfg.voice_setup.clone() {
+                    self.send(SpeechCmd::Configure(v), None);
+                }
                 if let Some(p) = self.cfg.voice_params {
                     self.send(SpeechCmd::SetParams(p), None);
                 }
@@ -1039,6 +1053,23 @@ mod tests {
         assert!(eventually(WAIT, || ctl.cmds().len() >= 2).await);
         let cmds = ctl.cmds();
         assert_eq!(cmds[0], SpeechCmd::SetParams(p));
+        assert!(matches!(&cmds[1], SpeechCmd::Speak { .. }));
+    }
+
+    #[tokio::test]
+    async fn the_voice_setup_goes_to_the_client_before_the_next_utterance() {
+        let (h, ctl, epoch, _t) = start(true, ClientHealth::Ready);
+        let v = VoiceSetup {
+            language: "ru".into(),
+            output_module: "espeak-ng".into(),
+            voice: "".into(),
+        };
+        h.control(SpeechControl::SetVoice(v.clone()));
+        let e = epoch.advance();
+        h.submit(utt(1, e.0, Prio::Interrupt, "privet"));
+        assert!(eventually(WAIT, || ctl.cmds().len() >= 2).await);
+        let cmds = ctl.cmds();
+        assert_eq!(cmds[0], SpeechCmd::Configure(v));
         assert!(matches!(&cmds[1], SpeechCmd::Speak { .. }));
     }
 
