@@ -136,6 +136,7 @@ pub fn info(name: &str) -> AppInfo {
         dump_complete: false,
         text_unit: gorca_model::TextUnit::Scalar,
         text_insert_slack: 0,
+        page_events_settle_ms: 0,
         root: None,
     }
 }

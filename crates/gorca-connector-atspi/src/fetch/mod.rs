@@ -393,6 +393,7 @@ fn announce_info(port: &AppPort, toolkit: &str, app_name: &str, verified_shell: 
         dump_complete: verified_shell,
         text_unit: class.text_unit(),
         text_insert_slack: class.text_insert_slack(),
+        page_events_settle_ms: class.page_events_settle_ms(),
         root: Some(NodeKey {
             app: port.app,
             local: gorca_dbus::drain::local_id(ROOT_PATH),

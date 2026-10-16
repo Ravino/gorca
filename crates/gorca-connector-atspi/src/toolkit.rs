@@ -89,6 +89,22 @@ impl Toolkit {
         matches!(self, Toolkit::Chromium)
     }
 
+    /// Quirk row `blink-tree-load-complete` (M9): how long after the application appeared a
+    /// `document:load-complete` still belongs to the tree being created for the wake-up call
+    /// (`AppInfo::page_events_settle_ms`). Measured: the first events follow the wake call within
+    /// about a second; a 100k-node page needs longer, hence the generous bound.
+    pub fn page_events_settle_ms(self) -> u32 {
+        match self {
+            Toolkit::Chromium => 3000,
+            Toolkit::Firefox
+            | Toolkit::Gtk3
+            | Toolkit::Gtk4
+            | Toolkit::Qt
+            | Toolkit::Vte
+            | Toolkit::Other => 0,
+        }
+    }
+
     /// Quirk row `blink-static-leaves` (M9): Chromium exposes every text run as a `static` child
     /// whose own `Text` repeats the text the parent's hypertext already holds (and the parent has
     /// no U+FFFC for it), so a text-leaf rebuild that appends children after the parent's runs

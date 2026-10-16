@@ -65,6 +65,7 @@ fn shell_info() -> AppInfo {
         dump_complete: false,
         text_unit: TextUnit::Scalar,
         text_insert_slack: 0,
+        page_events_settle_ms: 0,
         root: None,
     }
 }

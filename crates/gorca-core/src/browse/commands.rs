@@ -1041,7 +1041,7 @@ impl Reader {
                     self.web_place_first_line(doc);
                 }
                 let spoke = self.web_speak_entry(doc, at_top || at_root, at_top, fx);
-                if at_top || at_root {
+                if (at_top || at_root) && !self.dir.is_settling(app, self.now) {
                     self.web_auto_read(doc, spoke, fx);
                 }
             }
@@ -1062,7 +1062,9 @@ impl Reader {
                     self.web_place(doc, root);
                     self.web_place_first_line(doc);
                     let spoke = self.web_speak_entry(doc, true, true, fx);
-                    self.web_auto_read(doc, spoke, fx);
+                    if !self.dir.is_settling(app, self.now) {
+                        self.web_auto_read(doc, spoke, fx);
+                    }
                 }
             }
             WebMode::Browse { .. } | WebMode::Focus { .. } => {}

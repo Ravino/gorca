@@ -30,6 +30,10 @@ pub struct MirrorDirectory {
     unfollowed_text: ArcSwap<HashSet<AppId>>,
     /// Per-app insert-offset slack (connector quirk data); apps without the quirk are absent.
     insert_slack: ArcSwap<HashMap<AppId, u32>>,
+    /// Per-app end of the "tree creation" window (connector quirk `page_events_settle_ms`):
+    /// a document that appears before it was built for the reader's wake-up call, not loaded by
+    /// the user's navigation.
+    settle_until: ArcSwap<HashMap<AppId, std::time::Instant>>,
     /// Process id of each application connection, as the connector reported it (M4b budgets).
     pids: ArcSwap<HashMap<AppId, u32>>,
     /// Applications whose presentation goes through the installed `AppPolicy`.
@@ -74,6 +78,24 @@ impl MirrorDirectory {
             }
             next
         });
+    }
+
+    /// Open the app's tree-creation window for `ms` milliseconds from now (0: no window).
+    pub fn set_page_events_settle(&self, app: AppId, ms: u32) {
+        if ms == 0 {
+            return;
+        }
+        let until = std::time::Instant::now() + std::time::Duration::from_millis(u64::from(ms));
+        self.settle_until.rcu(|cur| {
+            let mut next = HashMap::clone(cur);
+            next.entry(app).or_insert(until);
+            next
+        });
+    }
+
+    /// Is `app` still inside its tree-creation window at `now`?
+    pub fn is_settling(&self, app: AppId, now: std::time::Instant) -> bool {
+        self.settle_until.load().get(&app).is_some_and(|t| now < *t)
     }
 
     /// The app's insert-offset slack: 0 unless its connector declared the quirk.
@@ -131,6 +153,11 @@ impl MirrorDirectory {
             self.set_text_unit(app, TextUnit::Scalar);
         }
         self.set_text_insert_slack(app, 0);
+        self.settle_until.rcu(|cur| {
+            let mut next = HashMap::clone(cur);
+            next.remove(&app);
+            next
+        });
         self.apps.rcu(|cur| {
             let mut next = HashMap::clone(cur);
             next.remove(&app);

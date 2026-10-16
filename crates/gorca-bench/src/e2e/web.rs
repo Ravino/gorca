@@ -576,6 +576,16 @@ impl Web {
         settings: &str,
     ) -> Result<(Self, DocRef)> {
         let env = m1_env(host);
+        // M9 `GORCA_M9_BROWSER_FIRST=1`: the browser is up (and has registered on the a11y bus)
+        // before the reader starts, as when the user starts gorca with Chrome already open.
+        let browser_first = std::env::var("GORCA_M9_BROWSER_FIRST").is_ok_and(|v| v == "1");
+        let mut early = if browser_first {
+            let b = Firefox::launch(&env, "a", urls)?;
+            std::thread::sleep(Duration::from_secs(6));
+            Some(b)
+        } else {
+            None
+        };
         // The presentation log of the run: copied next to the results when a trial is lost.
         static RUNS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let run_no = RUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -609,7 +619,10 @@ impl Web {
         }
         let tap = EventTap::start(&env.a11y_addr)?;
         let ax = JsonProc::spawn(&host.harness_dir.join("../web/m7/ax.py"), &[])?;
-        let ff = Firefox::launch(&env, "a", urls)?;
+        let ff = match early.take() {
+            Some(b) => b,
+            None => Firefox::launch(&env, "a", urls)?,
+        };
         let mut w = Self {
             ff,
             ax,

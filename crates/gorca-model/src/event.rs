@@ -173,6 +173,12 @@ pub struct AppInfo {
     /// accepts any other insert reported up to this many units after the caret. Data from the
     /// connector's per-engine quirk table (ADR-0008), never derived in the core from a name.
     pub text_insert_slack: u32,
+    /// Connector quirk (0: none): `document:load-complete` that arrives within this many
+    /// milliseconds of the application's appearance announces the creation of the tree (the
+    /// application built it for the wake-up call), not a page load that happened while the
+    /// reader was running. Chromium's tree appears after the first read; its documents then
+    /// report `load-complete` although their pages were loaded long ago.
+    pub page_events_settle_ms: u32,
     /// The application's root node, when the connector knows it. A fill policy that starts at
     /// the root (an eager dump, a window prefetch) gets it with `FillInput::Appeared`.
     pub root: Option<crate::NodeKey>,
