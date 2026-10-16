@@ -289,6 +289,17 @@ impl AppServer {
                     // toolkit or name): the reader and the policies know it exists.
                     let (toolkit, app_name) = found.unwrap_or_default();
                     announce_info(&port, &toolkit, &app_name, verified);
+                    // Quirk row `blink-wake-call`: once, at first sight (a re-announcement
+                    // after Shell verification does not repeat it).
+                    if Toolkit::classify(&toolkit, &app_name).needs_wake_call() {
+                        let (caller, clock) = (self.caller.clone(), self.clock.clone());
+                        inflight.spawn(async move {
+                            let deadline =
+                                Deadline::for_class(&clock, gorca_rt::BudgetClass::Startup);
+                            let answered = caller.wake(deadline).await;
+                            tracing::debug!(answered, "wake call sent to an application whose tree needs it");
+                        });
+                    }
                     // Announced and served: policies that fill at readiness start here (once;
                     // a later announcement only refines the identity).
                     let _ = port.lifecycle(AppLifecycle::Ready);

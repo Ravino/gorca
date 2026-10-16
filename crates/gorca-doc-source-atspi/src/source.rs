@@ -70,6 +70,9 @@ pub struct SourceConfig {
     pub runs: bool,
     /// Chromium reorders keyed lists without an event (`SourceCaps::silent_reorders`).
     pub silent_reorders: bool,
+    /// Blink: `static` children repeat the text the parent's hypertext already holds (connector
+    /// quirk row `Toolkit::text_leaf_children_repeat_parent_text`), so the run layer drops them.
+    pub static_leaves_repeat_text: bool,
     /// Events that did not fit while dormant, after which a wake rebuilds from scratch anyway.
     pub dormant_marks: usize,
 }
@@ -85,6 +88,7 @@ impl SourceConfig {
             text_unit,
             runs: true,
             silent_reorders: chromium,
+            static_leaves_repeat_text: chromium,
             ..Self::default()
         }
     }
@@ -104,6 +108,7 @@ impl Default for SourceConfig {
             first_nodes: 400,
             runs: false,
             silent_reorders: false,
+            static_leaves_repeat_text: false,
             dormant_marks: 100_000,
         }
     }
@@ -424,8 +429,13 @@ impl AtspiDocSource {
             root_errors: 0,
             root_key: None,
             out: Pusher {
-                runs: (self.config.runs && self.config.fetch.text == TextPolicy::All)
-                    .then(RunLayer::new),
+                runs: (self.config.runs && self.config.fetch.text == TextPolicy::All).then(|| {
+                    if self.config.static_leaves_repeat_text {
+                        RunLayer::dropping_static_children()
+                    } else {
+                        RunLayer::new()
+                    }
+                }),
                 batch: 0,
             },
             locals: HashMap::new(),
