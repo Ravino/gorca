@@ -317,7 +317,7 @@ impl FakeMutter {
         self.key_full(keycode, keysym, 0, state, released, time_ms)
     }
 
-    /// Reviewer probe: one Mutter autorepeat event of a key that is down.
+    /// One Mutter autorepeat event of a key that is down.
     pub fn key_repeat(
         &mut self,
         keycode: u16,

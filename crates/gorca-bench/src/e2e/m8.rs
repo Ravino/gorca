@@ -103,7 +103,7 @@ pub(super) enum Act {
     Wait(u64),
     /// Set the mock speech server's utterance length (ms); say-all needs speech that takes time.
     Speak(u64),
-    /// Reviewer probe: a key press only (no release), a Mutter autorepeat of it, its release.
+    /// A key press only (no release), a Mutter autorepeat of it, its release.
     PrbDown(K, u32),
     PrbRep(K, u32),
     PrbUp(K, u32),
@@ -609,7 +609,7 @@ fn run_step(w: &mut Web, doc: &DocRef, sc: &'static str, st: &Step) -> StepRes {
         res.lat_ms = Some(ms(t.saturating_sub(t_emit)));
     }
     let mut heard = texts.join(" | ");
-    if st.id.starts_with("PRB") {
+    if st.id.starts_with("SY.hold") {
         heard = format!(
             "[consumed {consumed} focus {} caret {}] {heard}",
             w.tap.count(FOCUS).saturating_sub(focus0),

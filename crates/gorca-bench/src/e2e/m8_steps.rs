@@ -324,6 +324,8 @@ fn fm() -> Vec<Step> {
         esc("FM.e14b"),
         s("FM.letters", P0, "In focus mode letters are not grabbed", Act::Focus(role::ENTRY, "Full name"), &["focus mode"]),
         s("FM.letters.key", P0, "H is not consumed: it reaches the field", n('h'), &[]).passes_through(),
+        s("FM.letters.tab", P0, "Tab is not consumed in focus mode: the page's own tab order (R-6)", key0(TAB), &[]).passes_through(),
+        s("FM.letters.stab", P0, "Shift+Tab is not consumed in focus mode", Act::Key(TAB, SHIFT), &[]).passes_through(),
         s("FM.esc2", P0, "Escape again", key0(ESC), &["browse mode"]).gate(Gate::Mode),
         // keys that must reach the page in browse mode (NVDA's passThrough gesture list)
         // Tab is no longer in this list: D-2 grabs it in browse mode while a focusable follows the
@@ -437,14 +439,14 @@ fn iframes() -> Vec<Step> {
         s("IF.end", P1, "Ctrl+End: the last line of the outer page after all frames", ctrl(END), &["Outer paragraph after the frames"]),
         s("IF.late", P2, "A frame reloads its content: no speech", Act::Do(role::PUSH_BUTTON, "Reload late frame"), &[]).not(&["After reload text"]).win(900),
         s("IF.late2", P2, "The page is still navigable", ctrl(HOME), &["Outer page heading"]),
-        // reviewer probes: Tab from the top of a page with nested frames
-        top("PRB.iftop"),
-        s("PRB.if.tab1", P1, "probe: Tab 1 from the top", key0(TAB), &[]).extra(&["zzzprobe"], "probe").win(1500),
-        s("PRB.if.tab2", P1, "probe: Tab 2", key0(TAB), &[]).extra(&["zzzprobe"], "probe").win(1500),
-        s("PRB.if.tab3", P1, "probe: Tab 3", key0(TAB), &[]).extra(&["zzzprobe"], "probe").win(1500),
-        s("PRB.if.tab4", P1, "probe: Tab 4", key0(TAB), &[]).extra(&["zzzprobe"], "probe").win(1500),
-        s("PRB.if.tab5", P1, "probe: Tab 5", key0(TAB), &[]).extra(&["zzzprobe"], "probe").win(1500),
-        s("PRB.if.stab", P1, "probe: Shift+Tab", Act::Key(TAB, SHIFT), &[]).extra(&["zzzprobe"], "probe").win(1500),
+        // Tab from the top of a page with nested frames (R-4, R-5): our first Tab lands on a real
+        // control, never on a frame document; after that focus moved the cursor, so the
+        // browser's own tab order takes over (NVDA #5227).
+        top("IF.tab.top"),
+        s("IF.tab.1", P1, "Tab from the top: the first link, not a frame document", key0(TAB), &["link"]).not(&["document"]).win(1500),
+        s("IF.tab.2", P1, "Tab after a focus-driven move is the browser's (not consumed)", key0(TAB), &[]).passes_through().win(1500),
+        s("IF.tab.3", P1, "Tab again: still the browser's", key0(TAB), &[]).passes_through().win(1500),
+        s("IF.stab", P1, "Shift+Tab after a focus-driven move is the browser's", Act::Key(TAB, SHIFT), &[]).passes_through().win(1500),
     ]
 }
 
@@ -526,16 +528,17 @@ fn sy() -> Vec<Step> {
         s("SY.end", P1, "Ctrl+End: past the last focusable", ctrl(END), &["Far paragraph at the bottom"]),
         Step::setup("SY.end.wait", "the grab set follows the settled cursor", Act::Wait(500)),
         s("SY.tab.out", P1, "Tab with no focusable after the cursor is not consumed (D-2 pass-through)", key0(TAB), &[]).passes_through(),
-        // reviewer probes: Tab held across the grab flip its own focus move causes
-        s("PRB.down", P1, "probe: Tab down past the last focusable (passes)", Act::PrbDown(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(300),
-        s("PRB.ffocus", P1, "probe: Firefox's native Tab focuses link one", Act::Focus(role::LINK, "link one"), &["link one"]).extra(&["zzzprobe"], "probe").win(500),
-        s("PRB.rep", P1, "probe: Mutter autorepeat of the held Tab", Act::PrbRep(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(800),
-        s("PRB.up", P1, "probe: Tab released", Act::PrbUp(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(800),
-        s("PRB.f.field", P1, "probe: focus the field: focus mode", Act::Focus(role::ENTRY, "Sync field"), &["focus mode"]).extra(&["zzzprobe"], "probe").win(1000),
-        s("PRB.f.down", P1, "probe: Tab down in focus mode (passes)", Act::PrbDown(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(300),
-        s("PRB.f.link", P1, "probe: Firefox's native Tab lands on Link three: browse mode", Act::Focus(role::LINK, "Link three"), &["Link three"]).extra(&["zzzprobe"], "probe").win(1000),
-        s("PRB.f.rep", P1, "probe: Mutter autorepeat of the still-held Tab", Act::PrbRep(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(800),
-        s("PRB.f.up", P1, "probe: Tab released: must reach the app (it got the press)", Act::PrbUp(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(800),
+        // A held Tab across the grab flip its own focus move causes (R-1): Mutter swallows the
+        // release of a key whose grab was added while it was down.
+        s("SY.hold.down", P1, "Tab down past the last focusable (passes)", Act::PrbDown(TAB, 0), &[]).passes_through().win(300),
+        s("SY.hold.ffocus", P1, "Firefox's native Tab focuses link one", Act::Focus(role::LINK, "link one"), &["link one"]).win(500),
+        s("SY.hold.rep", P1, "Mutter autorepeat of the held Tab is not consumed", Act::PrbRep(TAB, 0), &[]).passes_through().win(800),
+        s("SY.hold.up", P1, "Tab released: reaches the app", Act::PrbUp(TAB, 0), &[]).passes_through().win(800),
+        s("SY.hold.field", P1, "Focus the field: focus mode", Act::Focus(role::ENTRY, "Sync field"), &["focus mode"]).win(1000),
+        s("SY.hold.f.down", P1, "Tab down in focus mode (passes)", Act::PrbDown(TAB, 0), &[]).passes_through().win(300),
+        s("SY.hold.f.link", P1, "Firefox's native Tab lands on Link three: browse mode", Act::Focus(role::LINK, "Link three"), &["Link three"]).win(1000),
+        s("SY.hold.f.rep", P1, "Mutter autorepeat of the still-held Tab is not consumed", Act::PrbRep(TAB, 0), &[]).passes_through().win(800),
+        s("SY.hold.f.up", P1, "Tab released: reaches the app (it got the press)", Act::PrbUp(TAB, 0), &[]).passes_through().win(800),
     ]
 }
 
