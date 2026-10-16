@@ -20,7 +20,7 @@ pub const RAPID_FOCUS: Duration = Duration::from_millis(20);
 pub const STORM_HOLD: Duration = Duration::from_millis(4);
 
 use super::log::{PresentRecord, PresentSource};
-use super::{PresentContext, changed, message, present_change};
+use super::{Changed, PresentContext, changed, message, present_change};
 use crate::SpeechIntent;
 use crate::focus::{FocusEffect, FocusMsg, FocusState, settle_delay};
 use crate::reader::{
@@ -47,6 +47,36 @@ pub struct FocusBackoff {
     pub attempt: usize,
     /// When the next try is due; `None` while one is in flight.
     pub due: Option<Instant>,
+}
+
+/// How long after presenting a nameless node its one late name re-read is made: a relation or
+/// label child usually arrives within a few frames.
+pub const NAME_RETRY_DELAY: Duration = Duration::from_millis(120);
+
+/// A presented node without a name, waiting for its one late re-read.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct NameRetry {
+    pub node: NodeKey,
+    pub epoch: Epoch,
+    /// When the re-read is due; `None` once it is in flight.
+    pub due: Option<Instant>,
+}
+
+/// Roles that are only meaningful with a name: speaking one bare ("button") is the symptom of a
+/// late label.
+fn needs_name(role: Role) -> bool {
+    matches!(
+        role,
+        Role::Button
+            | Role::ToggleButton
+            | Role::CheckBox
+            | Role::RadioButton
+            | Role::MenuItem
+            | Role::Link
+            | Role::Tab
+            | Role::ListItem
+            | Role::ComboBox
+    )
 }
 
 /// A correction replaces the earlier utterance only if less than this much time has passed
@@ -544,6 +574,7 @@ impl Reader {
                     fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
                 }
                 fx.push(ReaderEffect::FocusSettled { node: snap.key });
+                self.name_retry_arm(snap, epoch, fx);
                 if self.selection_node != Some(snap.key) {
                     self.text_track(snap, fx);
                 }
@@ -619,6 +650,7 @@ impl Reader {
             FetchKind::Focus => self.on_focus_reply(r, fx),
             FetchKind::Revalidate => self.on_revalidated(&r, fx),
             FetchKind::StateChange => self.on_state_reply(&r, fx),
+            FetchKind::Name => self.on_name_reply(&r, fx),
             // An answer to `info.where_am_i` and friends (CR-3), not a focus presentation.
             FetchKind::Info => {
                 self.take_pending_reply(r.node, r.epoch, r.result.as_ref().ok().cloned(), fx);
@@ -685,6 +717,86 @@ impl Reader {
                 }
             }
         }
+    }
+
+    /// A node presented without a name gets one late re-read (once per node, only for roles
+    /// that need a name and only if the speech was not silenced by policy).
+    fn name_retry_arm(&mut self, snap: &Arc<NodeSnapshot>, epoch: Epoch, fx: &mut ReaderEffects) {
+        let nameless = snap.name.as_deref().is_none_or(|n| n.trim().is_empty());
+        if !nameless || !needs_name(snap.role) || self.name_retried == Some(snap.key) {
+            return;
+        }
+        self.name_retried = Some(snap.key);
+        let due = self.now + NAME_RETRY_DELAY;
+        self.name_retry = Some(NameRetry {
+            node: snap.key,
+            epoch,
+            due: Some(due),
+        });
+        fx.push(ReaderEffect::ArmTimer(due));
+    }
+
+    /// The timer of [`Self::name_retry_arm`].
+    pub(crate) fn name_retry_timer(&mut self, now: Instant, fx: &mut ReaderEffects) {
+        let Some(r) = self.name_retry else { return };
+        let Some(due) = r.due else { return };
+        if r.epoch != self.epoch.current() {
+            self.name_retry = None;
+        } else if now < due {
+            fx.push(ReaderEffect::ArmTimer(due));
+        } else {
+            self.name_retry = Some(NameRetry { due: None, ..r });
+            fx.push(Self::fetch_effect(
+                r.node,
+                PropMask::NAME | PropMask::STATES,
+                r.epoch,
+                FetchKind::Name,
+            ));
+        }
+    }
+
+    /// The late re-read: speak the name alone when it has appeared (no role again).
+    fn on_name_reply(&mut self, r: &QueryReply, fx: &mut ReaderEffects) {
+        if self.name_retry.is_some_and(|n| n.node == r.node) {
+            self.name_retry = None;
+        }
+        let Some(p) = self.presented.clone() else {
+            return;
+        };
+        if p.node != r.node || p.epoch != r.epoch {
+            return;
+        }
+        let Ok(new) = &r.result else { return };
+        if new.states.contains(StateSet::DEFUNCT) {
+            return;
+        }
+        let Some(name) = new.name.as_deref().filter(|n| !n.trim().is_empty()) else {
+            return;
+        };
+        if p.snap.name.as_deref().is_some_and(|n| !n.trim().is_empty()) {
+            return;
+        }
+        let ch = Changed {
+            name: true,
+            role: false,
+            states: StateSet::empty(),
+            value: false,
+        };
+        let mut merged = (*p.snap).clone();
+        merged.name = Some(name.into());
+        let merged = Arc::new(merged);
+        let id = self.utt_id();
+        let u = present_change(&merged, ch, id, self.epoch.current(), None);
+        self.log_presentation(&u, &merged, PresentSource::StateChange, None);
+        self.presented = Some(Presented {
+            node: p.node,
+            snap: merged,
+            utt: id,
+            epoch: p.epoch,
+            at: self.now,
+            ctx: p.ctx,
+        });
+        fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
     }
 
     /// Schedule the next delayed try of a `Busy` focus fetch. False when the tries are used up.
