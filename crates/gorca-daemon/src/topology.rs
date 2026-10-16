@@ -105,19 +105,33 @@ impl Arm {
         !matches!(self, Self::Auto | Self::Single)
     }
 
-    /// Resolve [`Arm::Auto`]: `lanes-rt` when rtkit is reachable and offers a real-time budget,
-    /// else `single` (the plain lanes were not better than `single` in the B-5 runs, so a refusal
-    /// must not leave the daemon on them). Any other arm is returned unchanged. Touches nothing
-    /// process-wide: it only asks rtkit for its limits.
+    /// Resolve [`Arm::Auto`]: `lanes-rt` when the machine is big enough and rtkit really grants
+    /// real-time scheduling, else `single` (the plain lanes were not better than `single` in the
+    /// B-5 runs, so a refusal must not leave the daemon on them). Any other arm is returned
+    /// unchanged.
+    ///
+    /// The grant is tested, not assumed: rtkit's limits are read and one throw-away thread is
+    /// asked for real-time (polkit, the burst limit or the per-user cap may refuse it). Process
+    /// side effect: `RLIMIT_RTTIME` is lowered (a hard limit cannot be raised again); it is inert
+    /// while no thread is real-time.
     #[must_use]
     pub fn resolve(self, rtkit_address: Option<&str>) -> Self {
         if self != Self::Auto {
             return self;
         }
+        let allowed = sched::allowed_cpus();
+        let fast = sched::fast_cpus(&allowed);
+        Self::resolve_on(rtkit_address, &allowed, &fast)
+    }
+
+    /// [`Arm::resolve`] with the CPU sets given (testable).
+    #[must_use]
+    pub fn resolve_on(rtkit_address: Option<&str>, allowed: &[usize], fast: &[usize]) -> Self {
+        if !lanes_fit(allowed, fast) {
+            return Self::Single;
+        }
         match Rtkit::connect(rtkit_address, RTKIT_CONNECT) {
-            Ok(k) if k.limits().rttime_usec_max > 0 && k.limits().max_realtime_priority > 0 => {
-                Self::LanesRt
-            }
+            Ok(k) if probe_grant(&k).is_ok() => Self::LanesRt,
             _ => Self::Single,
         }
     }
@@ -127,10 +141,48 @@ impl Arm {
         matches!(self, Self::LanesRt | Self::LanesRtNoPin)
     }
 
+    /// Workers and the bulk pool are kept off the hot cores. Only the diagnostic `lanes-pin` arm
+    /// does it: in the B-5 verdict the restriction cost A1 p99 (the workers lost 4 of 6 P-cores).
+    #[must_use]
+    pub fn keep_workers_off(self) -> bool {
+        matches!(self, Self::LanesPin)
+    }
+
     #[must_use]
     pub fn pin(self) -> bool {
         matches!(self, Self::LanesRt | Self::LanesPin)
     }
+}
+
+/// Whether the CPU set can hold the hot lanes one per core: more than [`HOT_LANES`] CPUs, and at
+/// least that many fast ones besides CPU 0. The duty watchdog is per thread, so two lanes sharing
+/// a core could together starve it (B-5 verdict, small machines).
+fn lanes_fit(allowed: &[usize], fast: &[usize]) -> bool {
+    allowed.len() > HOT_LANES && fast.iter().filter(|&&c| c != 0).count() >= HOT_LANES
+}
+
+/// Ask rtkit for one real-time grant on a throw-away thread, to learn whether lanes would get
+/// one. The thread is real-time for the length of the call only.
+fn probe_grant(k: &Rtkit) -> Result<(), String> {
+    let hard = u64::try_from(k.limits().rttime_usec_max).unwrap_or(0);
+    if hard == 0 || k.limits().max_realtime_priority <= 0 {
+        return Err("rtkit offers no real-time budget".to_owned());
+    }
+    // rtkit refuses a process whose RLIMIT_RTTIME is unset.
+    sched::set_rttime_limit(hard / 2, hard).map_err(|e| format!("setting RLIMIT_RTTIME: {e}"))?;
+    std::thread::scope(|s| {
+        std::thread::Builder::new()
+            .name("gorca-rt-probe".to_owned())
+            .spawn_scoped(s, || {
+                let tid = sched::current_tid();
+                let r = k.make_realtime(tid, 12, RTKIT_WAIT).map(drop);
+                let _ = sched::demote_tid(tid);
+                r
+            })
+            .map_err(|e| format!("spawning the probe thread: {e}"))?
+            .join()
+            .map_err(|_| "the probe thread panicked".to_owned())?
+    })
 }
 
 /// Wanted real-time priority of a lane (P-12, section 5).
@@ -182,6 +234,8 @@ pub struct Placement {
     grants: Mutex<Vec<LaneGrant>>,
     watched: Mutex<Vec<Watched>>,
     watchdog_demotions: AtomicU64,
+    /// `sched::xcpu_demotions()` as last seen by the watchdog, to log the new ones.
+    xcpu_seen: AtomicU64,
     report_path: Option<PathBuf>,
     threads_json: Mutex<String>,
     stop: AtomicBool,
@@ -270,7 +324,7 @@ impl Placement {
             fast.clone()
         };
         let hot: Vec<usize> = pool.iter().copied().take(HOT_LANES).collect();
-        let background = {
+        let background = if arm.keep_workers_off() {
             let rest: Vec<usize> = allowed
                 .iter()
                 .copied()
@@ -281,6 +335,8 @@ impl Placement {
             } else {
                 rest
             }
+        } else {
+            allowed.clone()
         };
         let mut rtkit = None;
         let mut rttime = None;
@@ -309,6 +365,7 @@ impl Placement {
             grants: Mutex::new(Vec::new()),
             watched: Mutex::new(Vec::new()),
             watchdog_demotions: AtomicU64::new(0),
+            xcpu_seen: AtomicU64::new(0),
             report_path: report
                 .map(|r| PathBuf::from(r.replace("%p", &std::process::id().to_string()))),
             threads_json: Mutex::new("[]".to_owned()),
@@ -341,7 +398,7 @@ impl Placement {
         if self.arm.rt() && sched::policy_of(tid).is_ok_and(Policy::is_realtime) {
             let _ = sched::demote_tid(tid);
         }
-        if self.arm.pin() {
+        if self.arm.keep_workers_off() {
             let _ = sched::set_affinity(tid, &self.background);
         }
     }
@@ -374,16 +431,19 @@ impl Placement {
             error: None,
             watchdog_demoted: false,
         };
+        if self.arm.rt() && wanted_priority(lane) > 0 {
+            self.request_rt(lane, tid, &mut g);
+        }
+        // Pin only after real-time was granted: a refused lane stays unpinned, so a refusal
+        // never leaves the daemon in the pinned-without-RT shape (B-5 verdict F-2).
         if self.arm.pin()
+            && (!self.arm.rt() || g.realtime)
             && let Some(cpu) = self.core_for(lane)
         {
             match sched::set_affinity(tid, &[cpu]) {
                 Ok(()) => g.pinned_to = Some(cpu),
                 Err(e) => g.pin_error = Some(e.to_string()),
             }
-        }
-        if self.arm.rt() && wanted_priority(lane) > 0 {
-            self.request_rt(lane, tid, &mut g);
         }
         if g.realtime {
             self.watched
@@ -470,6 +530,16 @@ impl Placement {
     }
 
     fn watch_once(&self) {
+        let xcpu = sched::xcpu_demotions();
+        let seen = self.xcpu_seen.swap(xcpu, Ordering::Relaxed);
+        if xcpu > seen {
+            tracing::warn!(
+                new = xcpu - seen,
+                total = xcpu,
+                rearm_failures = sched::xcpu_rearm_failures(),
+                "RLIMIT_RTTIME SIGXCPU: a real-time lane ran 100 ms without blocking and was demoted to SCHED_OTHER"
+            );
+        }
         let wall = u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
         let mut doomed = Vec::new();
         {
@@ -532,7 +602,7 @@ impl Placement {
             "{{\"arm\":\"{}\",\"pid\":{},\"final\":{},\"uptime_ms\":{},\"rt_requested\":{},\"rt_status\":{},\
 \"rtkit_limits\":{},\"rttime_soft_hard_us\":{},\"rt_lanes_wanted\":{},\"rt_lanes_granted\":{},\
 \"rt_granted_all\":{},\"pin_requested\":{},\"cpus_allowed\":{:?},\"fast_cpus\":{:?},\"hot_cpus\":{:?},\
-\"background_cpus\":{:?},\"watchdog_demotions\":{},\"xcpu_demotions\":{},\"lanes\":[{}],\"threads\":{}}}\n",
+\"background_cpus\":{:?},\"watchdog_demotions\":{},\"xcpu_demotions\":{},\"xcpu_rearm_failures\":{},\"lanes\":[{}],\"threads\":{}}}\n",
             self.arm.name(),
             std::process::id(),
             last,
@@ -552,6 +622,7 @@ impl Placement {
             self.background,
             self.watchdog_demotions.load(Ordering::Relaxed),
             sched::xcpu_demotions(),
+            sched::xcpu_rearm_failures(),
             lanes.join(","),
             self.threads_json
                 .lock()
@@ -775,6 +846,286 @@ mod tests {
             d.dedup();
             assert_eq!(d.len(), HOT_LANES);
         }
+    }
+
+    #[test]
+    fn lanes_rt_does_not_restrict_the_workers() {
+        let p = Placement::plan(Arm::LanesRt, None, Some("unix:path=/nonexistent/x"), 16);
+        assert_eq!(p.background, p.allowed);
+    }
+
+    #[test]
+    fn small_machines_never_resolve_to_lanes() {
+        let cpus: Vec<usize> = (0..4).collect();
+        assert!(!lanes_fit(&cpus, &cpus));
+        let five: Vec<usize> = (0..5).collect();
+        assert!(lanes_fit(&five, &five));
+        // many CPUs but too few fast ones besides CPU 0
+        let eight: Vec<usize> = (0..8).collect();
+        assert!(!lanes_fit(&eight, &[0, 1, 2]));
+        // the guard runs before rtkit is asked: a 2-CPU machine is single even with rtkit
+        assert_eq!(
+            Arm::resolve_on(Some("unix:path=/nonexistent/x"), &[0, 1], &[0, 1]),
+            Arm::Single
+        );
+    }
+
+    /// A private bus with a fake rtkit that grants or refuses `MakeThreadRealtime`.
+    struct FakeRtkit {
+        dir: std::path::PathBuf,
+        bus: std::process::Child,
+        stop: Arc<AtomicBool>,
+        server: Option<std::thread::JoinHandle<()>>,
+        address: String,
+    }
+
+    struct FakeIface {
+        grant: bool,
+    }
+
+    #[allow(clippy::unused_self, clippy::used_underscore_binding)]
+    #[zbus::interface(name = "org.freedesktop.RealtimeKit1")]
+    impl FakeIface {
+        #[zbus(property)]
+        fn max_realtime_priority(&self) -> i32 {
+            20
+        }
+        #[zbus(property)]
+        fn min_nice_level(&self) -> i32 {
+            -15
+        }
+        #[zbus(property, name = "RTTimeUSecMax")]
+        fn rttime_usec_max(&self) -> i64 {
+            200_000
+        }
+        fn make_thread_realtime(&self, tid: u64, priority: u32) -> zbus::fdo::Result<()> {
+            let _ = (tid, priority);
+            if self.grant {
+                Ok(())
+            } else {
+                Err(zbus::fdo::Error::AccessDenied("refused by the fake".into()))
+            }
+        }
+        fn make_thread_high_priority(&self, tid: u64, nice: i32) -> zbus::fdo::Result<()> {
+            let _ = (tid, nice);
+            if self.grant {
+                Ok(())
+            } else {
+                Err(zbus::fdo::Error::AccessDenied("refused by the fake".into()))
+            }
+        }
+    }
+
+    impl FakeRtkit {
+        fn start(grant: bool) -> Option<Self> {
+            use std::sync::atomic::AtomicU32;
+            static N: AtomicU32 = AtomicU32::new(0);
+            let dir = std::env::temp_dir().join(format!(
+                "gorca-fake-rtkit-{}-{}",
+                std::process::id(),
+                N.fetch_add(1, Ordering::Relaxed)
+            ));
+            std::fs::create_dir_all(&dir).ok()?;
+            let address = format!("unix:path={}/bus", dir.display());
+            let bus = std::process::Command::new("dbus-daemon")
+                .args(["--session", "--nofork", "--address", &address])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .ok()?;
+            let mut me = Self {
+                dir,
+                bus,
+                stop: Arc::new(AtomicBool::new(false)),
+                server: None,
+                address: address.clone(),
+            };
+            let sock = me.dir.join("bus");
+            for _ in 0..100 {
+                if sock.exists() {
+                    break;
+                }
+                // A test helper waiting for a socket on its own thread.
+                #[allow(clippy::disallowed_methods)]
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            let stop = Arc::clone(&me.stop);
+            let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+            me.server = Some(std::thread::spawn(move || {
+                let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                else {
+                    return;
+                };
+                let conn = rt.block_on(async {
+                    zbus::connection::Builder::address(address.as_str())?
+                        .name("org.freedesktop.RealtimeKit1")?
+                        .serve_at("/org/freedesktop/RealtimeKit1", FakeIface { grant })?
+                        .build()
+                        .await
+                });
+                let _ = ready_tx.send(conn.is_ok());
+                rt.block_on(async {
+                    while !stop.load(Ordering::Acquire) {
+                        tokio::time::sleep(Duration::from_millis(20)).await;
+                    }
+                });
+                drop(conn);
+            }));
+            ready_rx
+                .recv_timeout(Duration::from_secs(5))
+                .ok()
+                .filter(|ok| *ok)?;
+            Some(me)
+        }
+    }
+
+    impl Drop for FakeRtkit {
+        fn drop(&mut self) {
+            self.stop.store(true, Ordering::Release);
+            if let Some(s) = self.server.take() {
+                let _ = s.join();
+            }
+            let _ = self.bus.kill();
+            let _ = self.bus.wait();
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    fn eight() -> Vec<usize> {
+        (0..8).collect()
+    }
+
+    #[test]
+    fn auto_resolves_to_lanes_rt_only_after_a_real_grant() {
+        let Some(granting) = FakeRtkit::start(true) else {
+            eprintln!("SKIP: dbus-daemon unavailable");
+            return;
+        };
+        assert_eq!(
+            Arm::resolve_on(Some(&granting.address), &eight(), &eight()),
+            Arm::LanesRt
+        );
+        let Some(refusing) = FakeRtkit::start(false) else {
+            return;
+        };
+        // rtkit answers and reports a budget, but refuses the grant: single, not lanes-rt
+        assert_eq!(
+            Arm::resolve_on(Some(&refusing.address), &eight(), &eight()),
+            Arm::Single
+        );
+    }
+
+    #[test]
+    fn a_refused_lane_is_not_pinned() {
+        let Some(refusing) = FakeRtkit::start(false) else {
+            eprintln!("SKIP: dbus-daemon unavailable");
+            return;
+        };
+        let addr = refusing.address.clone();
+        std::thread::spawn(move || {
+            let p = Placement::plan(Arm::LanesRt, None, Some(&addr), 16);
+            let before = sched::allowed_cpus();
+            p.place_lane(Lane::Input);
+            let g = p.grants.lock().unwrap();
+            // a host that lets this user go real-time without rtkit would grant it
+            if !g[0].realtime {
+                assert_eq!(g[0].pinned_to, None);
+                assert_eq!(sched::allowed_cpus(), before);
+            }
+        })
+        .join()
+        .unwrap();
+    }
+
+    /// Child half of [`a_second_runaway_is_demoted_not_killed`]: runs only when re-executed.
+    #[test]
+    fn runaway_child() {
+        if std::env::var_os("GORCA_TEST_RUNAWAY_CHILD").is_none() {
+            return;
+        }
+        let verdict = runaway_scenario();
+        println!("RUNAWAY-RESULT: {verdict}");
+        let ok = verdict.starts_with("OK") || verdict.starts_with("SKIP");
+        std::process::exit(i32::from(!ok));
+    }
+
+    fn runaway_scenario() -> String {
+        let addr = std::env::var("GORCA_RTKIT_BUS_ADDRESS").ok();
+        let Ok(k) = Rtkit::connect(addr.as_deref(), Duration::from_millis(1500)) else {
+            return "SKIP: no rtkit".to_owned();
+        };
+        // The same shape as gorca: soft = hard / 2.
+        let (soft, hard) = (100_000, 200_000);
+        if sched::set_rttime_limit(soft, hard).is_err() || sched::install_xcpu_demoter().is_err() {
+            return "FAIL: limits".to_owned();
+        }
+        let spin = |k: &Rtkit, n: u64| -> String {
+            let k: &Rtkit = k;
+            std::thread::scope(|s| {
+                s.spawn(|| {
+                    let tid = sched::current_tid();
+                    if let Some(&c) = sched::allowed_cpus().last() {
+                        let _ = sched::set_affinity(tid, &[c]);
+                    }
+                    if let Err(e) = k.make_realtime(tid, 12, Duration::from_millis(1200)) {
+                        return format!("SKIP: refused: {e}");
+                    }
+                    let t0 = Instant::now();
+                    while sched::xcpu_demotions() < n && t0.elapsed() < Duration::from_secs(2) {
+                        std::hint::spin_loop();
+                    }
+                    if sched::xcpu_demotions() < n {
+                        return format!("FAIL: spin {n} was not demoted");
+                    }
+                    "OK".to_owned()
+                })
+                .join()
+                .unwrap_or_else(|_| "FAIL: panic".to_owned())
+            })
+        };
+        for n in 1..=3 {
+            let r = spin(&k, n);
+            if r != "OK" {
+                return r;
+            }
+            if sched::rttime_limit().ok() != Some((soft, hard)) {
+                return format!("FAIL: limit not re-armed after runaway {n}");
+            }
+        }
+        format!("OK: {} demotions, limit re-armed", sched::xcpu_demotions())
+    }
+
+    /// Regression for B-5 verdict F-1: after the first SIGXCPU the kernel raises the soft limit
+    /// above the hard one, so the second runaway used to get SIGKILL. The scenario runs in a
+    /// child process so that a regression fails the test instead of killing the test runner.
+    #[test]
+    fn a_second_runaway_is_demoted_not_killed() {
+        let exe = std::env::current_exe().unwrap();
+        let out = std::process::Command::new(exe)
+            .args([
+                "--exact",
+                "topology::tests::runaway_child",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env("GORCA_TEST_RUNAWAY_CHILD", "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            out.status.success() && stdout.contains("RUNAWAY-RESULT: "),
+            "child status {:?}: {stdout}",
+            out.status
+        );
+        eprintln!(
+            "{}",
+            stdout
+                .lines()
+                .find(|l| l.contains("RUNAWAY-RESULT"))
+                .unwrap_or("")
+        );
     }
 
     #[test]

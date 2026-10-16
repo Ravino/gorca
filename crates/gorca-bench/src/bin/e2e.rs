@@ -451,7 +451,7 @@ fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) != Some("run") {
         bail!(
-            "usage: e2e run [--label L] [--quick] [--repeats N] [--reader stub|daemon:PATH] [--backend voicego|ssip] [--only IDS] [--reader-env K=V] [--out DIR] [--no-fail]"
+            "usage: e2e run [--label L] [--quick] [--repeats N] [--reader stub|daemon:PATH] [--backend voicego|ssip] [--only IDS] [--reader-env K=V] [--expect-topology ARM] [--out DIR] [--no-fail]"
         );
     }
     if cfg!(debug_assertions) && !args.iter().any(|a| a == "--allow-debug") {
@@ -490,6 +490,13 @@ fn main() -> Result<()> {
     let out_dir = PathBuf::from(
         arg_value(&args, "--out").unwrap_or_else(|| format!("bench/results/e2e/{label}")),
     );
+    // Every daemon reader reports the topology arm it resolved to; the run records it and the
+    // strict check (`--expect-topology ARM` or GORCA_E2E_EXPECT_TOPOLOGY) gates on it.
+    let topology_pattern = matches!(reader, ReaderSpec::Daemon { .. })
+        .then(|| host::ensure_topology_report(&mut host_env.reader_env, &out_dir.join("topology")));
+    let expect_topology = arg_value(&args, "--expect-topology")
+        .or_else(|| std::env::var("GORCA_E2E_EXPECT_TOPOLOGY").ok())
+        .filter(|s| !s.is_empty());
     let load_before = host::loadavg();
     eprintln!(
         "== e2e {label}: reader={} backend={} repeats={repeats} load={load_before}",
@@ -533,7 +540,27 @@ fn main() -> Result<()> {
     );
     let all_rows = rows(&acc, &label_bus, &scns);
     let reader_meta = host::reader_meta(&reader, &host_env.reader_env);
+    let arms = topology_pattern
+        .as_deref()
+        .map(host::topology_arms)
+        .unwrap_or_default();
+    let topology_verdict = host::check_topology(&arms, expect_topology.as_deref());
     let mut meta = host::meta(&[
+        (
+            "topology_arms",
+            if arms.is_empty() {
+                "none".to_owned()
+            } else {
+                arms.iter()
+                    .map(|(a, n)| format!("{a}x{n}"))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            },
+        ),
+        (
+            "topology_expected",
+            expect_topology.clone().unwrap_or_else(|| "-".to_owned()),
+        ),
         ("label", label.clone()),
         ("reader", reader.label()),
         ("backend", flavor.name().to_owned()),
@@ -579,6 +606,11 @@ fn main() -> Result<()> {
     )?;
     std::fs::write(out_dir.join(format!("{stamp}.txt")), &text)?;
     eprintln!("== wrote {}/{stamp}.{{json,txt}}", out_dir.display());
+    if let Err(e) = &topology_verdict {
+        // Strict: never softened by --no-fail, the numbers would describe another arm.
+        eprintln!("== TOPOLOGY CHECK FAILED: {e}");
+        std::process::exit(3);
+    }
     let failed = all_rows
         .iter()
         .filter(|r| matches!(r.verdict, Verdict::Fail))

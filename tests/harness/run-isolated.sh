@@ -15,6 +15,7 @@
 #   -h, --help
 #
 # Extra env vars to pass through to <cmd>: GORCA_PASSTHROUGH="FOO BAR".
+# GORCA_HARNESS_RTKIT=0 stops the harness from pointing the daemon's rtkit client at the host system bus (default: pointed, so --topology=auto can resolve to lanes-rt).
 #
 # Isolation model (see README.md):
 #   * private XDG_RUNTIME_DIR/HOME under a fresh mktemp dir; deleted on exit
@@ -50,10 +51,19 @@ SESSION_ADDR="unix:path=$RT/bus"
 PIDS=()   # pids of setsid-ed daemons (each is its own process-group leader)
 CMD_PID=""
 
+# The reader's own real-time grants (B-5): with the default `--topology=auto` the daemon asks
+# rtkit on the system bus. The isolated session has no system bus of its own, so point the
+# daemon's rtkit client (only that) at the host's socket, which makes the e2e gates run the
+# shipped default instead of the `single` fallback. Opt out with GORCA_HARNESS_RTKIT=0.
+RTKIT_SOCK=/run/dbus/system_bus_socket
+RTKIT_ADDR=""
+if [ "${GORCA_HARNESS_RTKIT:-1}" != 0 ] && [ -S "$RTKIT_SOCK" ]; then RTKIT_ADDR="unix:path=$RTKIT_SOCK"; fi
+
 # Environment for every process the harness starts (daemons and the test command).
 base_env() {
   local v extra=()
-  for v in PATH LANG LC_ALL TERM CARGO_HOME RUSTUP_HOME CARGO_TARGET_DIR RUST_LOG RUST_BACKTRACE \
+  [ -n "$RTKIT_ADDR" ] && extra+=("GORCA_RTKIT_BUS_ADDRESS=$RTKIT_ADDR")
+  for v in GORCA_E2E_EXPECT_TOPOLOGY PATH LANG LC_ALL TERM CARGO_HOME RUSTUP_HOME CARGO_TARGET_DIR RUST_LOG RUST_BACKTRACE \
            GOROOT GOPATH VIRTUAL_ENV LD_LIBRARY_PATH $GORCA_PASSTHROUGH; do
     [ -n "${!v+x}" ] && extra+=("$v=${!v}")
   done
