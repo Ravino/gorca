@@ -4,7 +4,9 @@
 //!
 //! - an interrupting utterance (priority `Interrupt`, or an epoch newer than what is being
 //!   spoken) goes into a **single slot**; a newer one replaces an older one that the lane has
-//!   not picked up yet, so a focus storm leaves only the last focus to be spoken;
+//!   not picked up yet, so a focus storm leaves only the last focus to be spoken. The one
+//!   exception is a notice (`Message` that survives focus changes): speech of another class
+//!   takes the slot and the notice is queued right behind it instead of being overwritten;
 //! - everything else goes into a bounded FIFO (32), dropping the newest when full.
 //!
 //! After advancing the `EpochCell` (a key press, a mode change) the producer calls
@@ -154,6 +156,27 @@ impl LaneShared {
     }
 }
 
+/// A notice that must not be lost to speech of another class: priority `Message` that
+/// survives focus changes (the daemon's notices, `Reader::announce`). Ordinary `Message`
+/// presentations, key echoes and confirmations stay latest-wins.
+fn is_protected(u: &Utterance) -> bool {
+    u.prio == Prio::Message && u.survives_focus_change
+}
+
+impl LaneShared {
+    /// Put `u` at the front of the FIFO. A full FIFO drops it, counted.
+    fn queue_front(&self, u: Utterance) {
+        let mut q = lock(&self.inbox);
+        if q.len() >= FIFO_CAPACITY {
+            drop(q);
+            self.stats.inbox_dropped.fetch_add(1, Ordering::Relaxed);
+            self.dropped(u.id);
+            return;
+        }
+        q.push_front(u);
+    }
+}
+
 fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
@@ -183,11 +206,29 @@ impl SpeechHandle {
             u.prio == Prio::Interrupt || u.epoch.0 > s.inflight_epoch.load(Ordering::Acquire);
         if interrupts {
             let mut slot = lock(&s.slot);
-            match slot.as_ref() {
+            match slot.take() {
                 Some(old) if old.epoch > u.epoch => {
                     // An older interrupt arrived late: the one in the slot is newer.
-                    s.stats.stale_dropped.fetch_add(1, Ordering::Relaxed);
-                    s.dropped(u.id);
+                    *slot = Some(old);
+                    drop(slot);
+                    if is_protected(&u) {
+                        // A notice survives its epoch: it follows what is in the slot.
+                        s.queue_front(u);
+                        s.wake.notify_one();
+                    } else {
+                        s.stats.stale_dropped.fetch_add(1, Ordering::Relaxed);
+                        s.dropped(u.id);
+                    }
+                    return;
+                }
+                Some(old) if is_protected(&old) && u.prio != Prio::Message => {
+                    // A notice is not displaced by speech of another class (a key echo, a
+                    // confirmation): the newcomer takes the slot and speaks at once, the
+                    // notice is queued right behind it.
+                    *slot = Some(u);
+                    drop(slot);
+                    s.queue_front(old);
+                    s.wake.notify_one();
                     return;
                 }
                 Some(old) => {
@@ -760,6 +801,114 @@ mod tests {
         assert!(eventually(WAIT, || !ctl.cmds().is_empty()).await);
         tokio::time::sleep(Duration::from_millis(20)).await;
         assert_eq!(speaks(&ctl), [3]);
+    }
+
+    /// A handle with no lane behind it: the slot and the inbox stay where the producer left them.
+    fn detached() -> (SpeechHandle, Arc<EpochCell>) {
+        let epoch = Arc::new(EpochCell::new());
+        let shared = Arc::new(LaneShared {
+            slot: Mutex::new(None),
+            inbox: Mutex::new(VecDeque::new()),
+            controls: Mutex::new(VecDeque::new()),
+            muted: AtomicBool::new(false),
+            wake: Notify::new(),
+            epoch: Arc::clone(&epoch),
+            inflight_epoch: AtomicU64::new(0),
+            stats: Counters::default(),
+            progress: Mutex::new(None),
+            tracked: Mutex::new(HashSet::new()),
+        });
+        (SpeechHandle { shared }, epoch)
+    }
+
+    fn slot_id(h: &SpeechHandle) -> Option<u64> {
+        lock(&h.shared.slot).as_ref().map(|u| u.id.0)
+    }
+
+    fn inbox_ids(h: &SpeechHandle) -> Vec<u64> {
+        lock(&h.shared.inbox).iter().map(|u| u.id.0).collect()
+    }
+
+    fn notice(id: u64, epoch: u64, text: &str) -> Utterance {
+        let mut u = utt(id, epoch, Prio::Message, text);
+        u.survives_focus_change = true;
+        u
+    }
+
+    #[test]
+    fn a_pending_notice_is_not_overwritten_by_a_key_echo() {
+        let (h, epoch) = detached();
+        let e = epoch.advance();
+        h.submit(notice(1, e.0, "application not responding"));
+        h.submit(utt(2, e.0, Prio::Interrupt, "a"));
+        // The echo owns the slot (spoken at once), the notice waits right behind it.
+        assert_eq!((slot_id(&h), inbox_ids(&h)), (Some(2), vec![1]));
+        assert_eq!(h.stats().superseded, 0);
+    }
+
+    #[test]
+    fn a_notice_goes_ahead_of_queued_speech_and_survives_a_newer_epoch() {
+        let (h, epoch) = detached();
+        let e = epoch.advance();
+        h.submit_say_all(utt(9, e.0, Prio::Text, "queued"), false);
+        h.submit(notice(1, e.0, "insert stuck"));
+        let e2 = epoch.advance();
+        h.submit(utt(2, e2.0, Prio::Interrupt, "b"));
+        assert_eq!((slot_id(&h), inbox_ids(&h)), (Some(2), vec![1, 9]));
+        assert_eq!(h.stats().superseded, 0);
+    }
+
+    #[test]
+    fn a_late_notice_follows_a_newer_interrupt_instead_of_being_dropped() {
+        let (h, epoch) = detached();
+        let e = epoch.advance();
+        let e2 = epoch.advance();
+        h.submit(utt(2, e2.0, Prio::Interrupt, "newer"));
+        h.submit(notice(1, e.0, "late notice"));
+        assert_eq!((slot_id(&h), inbox_ids(&h)), (Some(2), vec![1]));
+        assert_eq!(h.stats().stale_dropped, 0);
+        // An ordinary late utterance is still dropped.
+        h.submit(utt(3, e.0, Prio::Interrupt, "late echo"));
+        assert_eq!(h.stats().stale_dropped, 1);
+    }
+
+    #[test]
+    fn same_class_notices_and_ordinary_messages_stay_latest_wins() {
+        let (h, epoch) = detached();
+        let e = epoch.advance();
+        h.submit(notice(1, e.0, "one"));
+        h.submit(notice(2, e.0, "two"));
+        h.submit(utt(3, e.0, Prio::Message, "plain"));
+        h.submit(utt(4, e.0, Prio::Interrupt, "echo"));
+        assert_eq!((slot_id(&h), inbox_ids(&h)), (Some(4), vec![]));
+        assert_eq!(h.stats().superseded, 3);
+    }
+
+    #[test]
+    fn a_full_fifo_drops_the_displaced_notice_counted() {
+        let (h, epoch) = detached();
+        let e = epoch.advance();
+        for i in 0..FIFO_CAPACITY as u64 {
+            h.submit_say_all(utt(100 + i, e.0, Prio::Text, "fill"), false);
+        }
+        h.submit(notice(1, e.0, "n"));
+        h.submit(utt(2, e.0, Prio::Interrupt, "echo"));
+        let s = h.stats();
+        assert_eq!((s.inbox_dropped, s.superseded), (1, 0));
+        assert_eq!(slot_id(&h), Some(2));
+    }
+
+    #[tokio::test]
+    async fn a_notice_and_a_key_echo_are_both_accounted_for_end_to_end() {
+        let (h, ctl, epoch, _t) = start(true, ClientHealth::Ready);
+        let e = epoch.advance();
+        h.submit(notice(1, e.0, "notice"));
+        h.submit(utt(2, e.0, Prio::Interrupt, "a"));
+        assert!(eventually(WAIT, || speaks(&ctl).contains(&2)).await);
+        let s = h.stats();
+        // Never a silent loss: nothing is superseded, both reach the server or are counted.
+        assert_eq!(s.superseded, 0);
+        assert!(s.spoken >= 1);
     }
 
     #[tokio::test]
