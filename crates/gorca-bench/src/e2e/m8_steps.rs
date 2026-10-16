@@ -326,7 +326,8 @@ fn fm() -> Vec<Step> {
         s("FM.letters.key", P0, "H is not consumed: it reaches the field", n('h'), &[]).passes_through(),
         s("FM.esc2", P0, "Escape again", key0(ESC), &["browse mode"]).gate(Gate::Mode),
         // keys that must reach the page in browse mode (NVDA's passThrough gesture list)
-        s("FM.pass.tab", P0, "Tab is not grabbed", key0(TAB), &[]).passes_through(),
+        // Tab is no longer in this list: D-2 grabs it in browse mode while a focusable follows the
+        // cursor (SY.tab; SY.tab.out covers the released case).
         s("FM.pass.shift_tab", P0, "Shift+Tab is not grabbed", Act::Key(TAB, SHIFT), &[]).passes_through(),
         s("FM.pass.ctrl_enter", P0, "Ctrl+Enter is not grabbed", Act::Key(ENTER, CTRL), &[]).passes_through(),
         s("FM.pass.shift_f10", P1, "Shift+F10 is not grabbed", Act::Key(key(76, 0xffc7), SHIFT), &[]).passes_through(),

@@ -132,4 +132,6 @@ tests and decision rows).
 | M-6 | The only Gecko rule in core was the caret follow; it is gone. Gecko role and state normalisation stays in `gorca-doc-source-atspi` / the connector decode. |
 | 100k H/Shift+H key loss | Recorded, not chased: 8 of 150 in `m8-review-full` and one repeat of `m8-final-full`; main lost 7 in `m8-baseline-perf` (shared). |
 
+Harness: FM.pass.tab ("Tab is not grabbed" in browse mode) is removed, its premise is what D-2 replaces; `m8-fix-full` (head `5944ebc`) keeps the run where it failed (Tab moved focus to the next field, as designed). SY.tab, SY.tab2, SY.stab and SY.tab.out cover Tab now.
+
 Gate results are in section 9.
