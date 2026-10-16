@@ -37,7 +37,7 @@ REG_ROOT = "/org/a11y/atspi/accessible/root"
 DOC_WEB = 95
 
 kind = sys.argv[1]
-page = os.path.abspath(sys.argv[2])
+page = sys.argv[2] if "://" in sys.argv[2] else os.path.abspath(sys.argv[2])
 title = sys.argv[3] if len(sys.argv) > 3 else ""
 addr = os.environ["AT_SPI_BUS_ADDRESS"]
 if "/gorca-h." not in addr:
@@ -157,9 +157,14 @@ for a in os.environ.get("GORCA_M9_CHROMIUM_ARGS", "").split():
         OPTS[k] = v or "1"
     else:
         args.append(a)
-args.append("file://" + page)
+args.append(page if "://" in page else "file://" + page)
 env = dict(os.environ, WAYLAND_DISPLAY=os.environ["GORCA_M7_WAYLAND"])
 env.pop("DISPLAY", None)
+decoy = None
+if OPTS.get("decoy"):
+    # a process whose argv[0] is "orca": Chromium's /proc scan then turns its screen reader mode on
+    decoy = subprocess.Popen(["/bin/bash", "-c", "exec -a orca sleep 600"], start_new_session=True)
+    time.sleep(0.3)
 br = subprocess.Popen(args, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                       start_new_session=True)
 res = {"kind": kind}
@@ -192,7 +197,15 @@ try:
         sys.exit("no document")
     pump(float(OPTS.get("wait", "3")))
     res["doc"] = doc
-    if kind == "frames":
+    if kind == "dump":
+        lines = []
+        q = [(doc, 0)]
+        while q and len(lines) < int(OPTS.get("max", "300")):
+            p, dep = q.pop(0)
+            lines.append("%s%s %r" % ("  " * dep, role(bus, p), name(bus, p)[:70]))
+            q = [(c, dep + 1) for (b2, c) in kids(bus, p) if b2 == bus] + q
+        res["lines"] = lines
+    elif kind == "frames":
         frames = []
         q = [doc]
         n = 0
@@ -242,6 +255,11 @@ try:
                         if (bus and path.startswith("/org/a11y/atspi/accessible")) else path, "d1": a1})
         res["events"] = evs[:60]
 finally:
+    if decoy is not None:
+        try:
+            os.killpg(decoy.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
     try:
         os.killpg(br.pid, signal.SIGTERM)
     except ProcessLookupError:
