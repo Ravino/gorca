@@ -15,8 +15,8 @@ mod state;
 mod table;
 
 pub use compile::{
-    Compiled, PlatformFacts, browse_grabs, chord_grabs, command_id, compile, escape_grabs, letter_grabs,
-    gorca_modifiers, grab_collisions, lane_settings,
+    Compiled, PlatformFacts, browse_grabs, chord_grabs, command_id, compile, escape_grabs,
+    gorca_modifiers, grab_collisions, lane_settings, letter_grabs,
 };
 pub use handlers::PASS_TIMEOUT;
 pub use spec::{Availability, CmdSpec, CommandTable, ContextMask, Milestone};

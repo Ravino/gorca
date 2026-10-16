@@ -324,7 +324,7 @@ impl Reader {
             self.counters.revalidations += 1;
             fx.push(Self::fetch_effect(
                 v.snap.key,
-                FOCUS_FIELDS,
+                focus_need(&v.snap),
                 self.epoch.current(),
                 FetchKind::Revalidate,
             ));

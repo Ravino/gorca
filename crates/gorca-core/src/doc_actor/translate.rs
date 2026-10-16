@@ -225,7 +225,11 @@ pub fn derive_flags(n: &SrcNode, nested_doc: bool) -> (NodeFlags, u8) {
     if n.states.contains(StateSet::INVALID)
         && !matches!(
             n.role,
-            Role::TextEntry | Role::PasswordEntry | Role::ComboBox | Role::SpinButton | Role::Slider
+            Role::TextEntry
+                | Role::PasswordEntry
+                | Role::ComboBox
+                | Role::SpinButton
+                | Role::Slider
         )
     {
         f = f | NodeFlags::ERROR;

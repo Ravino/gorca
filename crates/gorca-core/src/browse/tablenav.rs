@@ -17,6 +17,7 @@ use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 const SAY_CAP: usize = 256;
 
 /// The table move a command stands for.
+#[allow(clippy::wildcard_enum_match_arm)] // the command set is closed; only the table moves matter here
 pub fn table_move(c: CoreCmd) -> Option<TableMove> {
     Some(match c {
         CoreCmd::TableNextRow => TableMove::NextRow,
@@ -32,6 +33,7 @@ pub fn table_move(c: CoreCmd) -> Option<TableMove> {
 }
 
 /// The row/column reading commands: `(whole column, say-all)`.
+#[allow(clippy::wildcard_enum_match_arm)] // the command set is closed; only four matter here
 pub fn table_say(c: CoreCmd) -> Option<bool> {
     match c {
         CoreCmd::TableSayRow | CoreCmd::TableSayAllRow => Some(false),
@@ -126,7 +128,9 @@ impl Reader {
             Ok((cur, off, items)) => {
                 self.web_set_cursor(doc, cur, off, now);
                 self.web_speak(&items, fx);
-                fx.push(ReaderEffect::ArmTimer(now + super::commands::SCROLL_DEBOUNCE));
+                fx.push(ReaderEffect::ArmTimer(
+                    now + super::commands::SCROLL_DEBOUNCE,
+                ));
             }
             Err(TableEdge::NotInCell) => self.say("Not in a table cell", fx),
             Err(TableEdge::Edge) => self.say("Edge of table", fx),

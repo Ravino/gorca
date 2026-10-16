@@ -142,16 +142,13 @@ fn last_row_in(doc: &WebDoc, n: DocNodeId, depth: u8) -> Option<DocNodeId> {
 
 /// The first row of the table.
 pub fn first_row(doc: &WebDoc, table: DocNodeId) -> Option<DocNodeId> {
-    doc.children(table)
-        .find_map(|c| first_row_in(doc, c, 1))
+    doc.children(table).find_map(|c| first_row_in(doc, c, 1))
 }
 
 /// The last row of the table.
 pub fn last_row(doc: &WebDoc, table: DocNodeId) -> Option<DocNodeId> {
     let kids: Vec<DocNodeId> = doc.children(table).collect();
-    kids.into_iter()
-        .rev()
-        .find_map(|c| last_row_in(doc, c, 1))
+    kids.into_iter().rev().find_map(|c| last_row_in(doc, c, 1))
 }
 
 /// The row after `row` in document order, through row groups.

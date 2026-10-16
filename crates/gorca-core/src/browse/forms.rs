@@ -40,7 +40,42 @@ pub fn passes_through(role: Role, states: StateSet, reason: Reason) -> bool {
                     Role::RadioButton | Role::Tab | Role::MenuItem => true,
                     Role::ListItem => focusable || states.contains(StateSet::SELECTABLE),
                     Role::Cell | Role::Row | Role::ColumnHeader | Role::RowHeader => focusable,
-                    _ => false,
+                    Role::Unknown
+                    | Role::Application
+                    | Role::Window
+                    | Role::Dialog
+                    | Role::Panel
+                    | Role::Document
+                    | Role::DocumentWeb
+                    | Role::Heading
+                    | Role::Paragraph
+                    | Role::Link
+                    | Role::Image
+                    | Role::List
+                    | Role::Table
+                    | Role::Button
+                    | Role::ToggleButton
+                    | Role::CheckBox
+                    | Role::ComboBox
+                    | Role::TextEntry
+                    | Role::PasswordEntry
+                    | Role::SpinButton
+                    | Role::Slider
+                    | Role::ProgressBar
+                    | Role::Menu
+                    | Role::MenuBar
+                    | Role::Popover
+                    | Role::TabList
+                    | Role::Tree
+                    | Role::TreeItem
+                    | Role::Toolbar
+                    | Role::StatusBar
+                    | Role::Separator
+                    | Role::Label
+                    | Role::StaticText
+                    | Role::Terminal
+                    | Role::Landmark
+                    | Role::Alert => false,
                 };
             editable
                 || focus_widget
@@ -170,12 +205,33 @@ mod tests {
 
     #[test]
     fn d1_radios_tabs_menu_items_and_grid_cells_pass_keys_through_on_focus_only() {
-        for r in [Role::RadioButton, Role::Tab, Role::MenuItem, Role::ListItem, Role::Cell] {
-            assert!(passes_through(r, st(StateSet::FOCUSABLE), Reason::Focus), "{r:?}");
+        for r in [
+            Role::RadioButton,
+            Role::Tab,
+            Role::MenuItem,
+            Role::ListItem,
+            Role::Cell,
+        ] {
+            assert!(
+                passes_through(r, st(StateSet::FOCUSABLE), Reason::Focus),
+                "{r:?}"
+            );
         }
-        assert!(!passes_through(Role::RadioButton, st(StateSet::FOCUSABLE), Reason::Activate));
+        assert!(!passes_through(
+            Role::RadioButton,
+            st(StateSet::FOCUSABLE),
+            Reason::Activate
+        ));
         // a plain table cell or list item (not focusable) stays document text
-        assert!(!passes_through(Role::Cell, st(StateSet::empty()), Reason::Focus));
-        assert!(!passes_through(Role::ListItem, st(StateSet::empty()), Reason::Focus));
+        assert!(!passes_through(
+            Role::Cell,
+            st(StateSet::empty()),
+            Reason::Focus
+        ));
+        assert!(!passes_through(
+            Role::ListItem,
+            st(StateSet::empty()),
+            Reason::Focus
+        ));
     }
 }

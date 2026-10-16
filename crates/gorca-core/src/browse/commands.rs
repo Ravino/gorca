@@ -108,11 +108,24 @@ const CURSOR: &[(CoreCmd, Move)] = &[
     (CoreCmd::BrowseCursorBottom, Move::Bottom),
     (CoreCmd::BrowseCursorPageUp, Move::Page(Dir::Prev)),
     (CoreCmd::BrowseCursorPageDown, Move::Page(Dir::Next)),
-    (CoreCmd::BrowseCursorNextParagraph, Move::Paragraph(Dir::Next)),
-    (CoreCmd::BrowseCursorPrevParagraph, Move::Paragraph(Dir::Prev)),
+    (
+        CoreCmd::BrowseCursorNextParagraph,
+        Move::Paragraph(Dir::Next),
+    ),
+    (
+        CoreCmd::BrowseCursorPrevParagraph,
+        Move::Paragraph(Dir::Prev),
+    ),
     (CoreCmd::BrowseCursorNextSentence, Move::Sentence(Dir::Next)),
     (CoreCmd::BrowseCursorPrevSentence, Move::Sentence(Dir::Prev)),
 ];
+
+/// Where `,` or Shift+`,` lands.
+enum Out {
+    NoContainer,
+    Bottom,
+    To(WebCursor, u32, Vec<Item>),
+}
 
 /// Selection commands: the same moves, extending the virtual selection (D-3).
 const SELECT: &[(CoreCmd, Move)] = &[
@@ -476,7 +489,9 @@ fn prev_match(d: &WebDoc, node: DocNodeId, c: Cat, scope: Option<DocNodeId>) -> 
     let outer = d
         .parent(inner)
         .and_then(|p| up_to(d, p, c, 64))
-        .filter(|o| scope.is_none_or(|s| d.cmp_order(s, *o).is_some_and(|x| x.is_le())));
+        .filter(|o| {
+            scope.is_none_or(|s| d.cmp_order(s, *o).is_some_and(std::cmp::Ordering::is_le))
+        });
     match (before, outer) {
         (Some(b), Some(o)) => match d.cmp_order(b, o) {
             Some(std::cmp::Ordering::Less) => Some(o),
@@ -613,9 +628,8 @@ impl Reader {
         let WebMode::Browse { doc, .. } = b.mode else {
             return false;
         };
-        if !b
-            .activated
-            .is_some_and(|t| now.saturating_duration_since(t) <= super::CARET_FOLLOW)
+        if b.activated
+            .is_none_or(|t| now.saturating_duration_since(t) > super::CARET_FOLLOW)
         {
             return false;
         }
@@ -632,8 +646,15 @@ impl Reader {
         let placed = h.read.with(|d| {
             let start = cursor::content_start(d, id)?;
             let end = d.subtree_text_range(id)?.1;
-            let off = start.saturating_add(offset).min(end.saturating_sub(1)).max(start);
-            Some((cursor::cursor_at(d, off)?, off, line_items(d, max_line, off)))
+            let off = start
+                .saturating_add(offset)
+                .min(end.saturating_sub(1))
+                .max(start);
+            Some((
+                cursor::cursor_at(d, off)?,
+                off,
+                line_items(d, max_line, off),
+            ))
         });
         let Some((cur, off, items)) = placed else {
             return false;
@@ -840,7 +861,10 @@ impl Reader {
             let last_before = match b.mode {
                 WebMode::Browse { doc: d, cur, .. } if d == doc => Some(cur.node),
                 WebMode::Focus { doc: d, node, .. } if d == doc => Some(node),
-                _ => None,
+                WebMode::Inactive
+                | WebMode::Loading { .. }
+                | WebMode::Browse { .. }
+                | WebMode::Focus { .. } => None,
             };
             self.web_activate(doc, fx);
             self.web_apply(
@@ -1001,7 +1025,9 @@ impl Reader {
             for _ in 0..32 {
                 let n = cur?;
                 let v = d.node(n)?;
-                if v.cats.intersects(Cat::DIALOG) && !v.flags.contains(gorca_doc::web::NodeFlags::HIDDEN) {
+                if v.cats.intersects(Cat::DIALOG)
+                    && !v.flags.contains(gorca_doc::web::NodeFlags::HIDDEN)
+                {
                     // The previous place was inside this dialog (a node test: the flat offsets
                     // shift when the dialog appears).
                     let holds = before.is_some_and(|p| {
@@ -1343,7 +1369,9 @@ impl Reader {
                 let Some(h) = b.docs.get(doc) else { return };
                 let last = b.last_off;
                 let now = self.now;
-                let window = b.restore_until.is_some_and(|(t, off)| now < t && off == last);
+                let window = b
+                    .restore_until
+                    .is_some_and(|(t, off)| now < t && off == last);
                 let fixed = h.read.with(|d| {
                     if d.is_attached(cur.node) && !window {
                         None
@@ -1774,7 +1802,13 @@ impl Reader {
         b.scroll_due = Some((now + SCROLL_DEBOUNCE, doc, cur.node, cur.local));
     }
 
-    fn web_cursor_cmd(&mut self, mv_kind: Move, select: bool, now: Instant, fx: &mut ReaderEffects) {
+    fn web_cursor_cmd(
+        &mut self,
+        mv_kind: Move,
+        select: bool,
+        now: Instant,
+        fx: &mut ReaderEffects,
+    ) {
         let Some((doc, cur, max_line)) = self.browse_ctx(fx) else {
             return;
         };
@@ -1818,9 +1852,7 @@ impl Reader {
                             speak.end,
                             Some(off0),
                         )),
-                        Kind::Line => {
-                            present::describe_from(d, speak.start, speak.end, Some(off0))
-                        }
+                        Kind::Line => present::describe_from(d, speak.start, speak.end, Some(off0)),
                     };
                     let (lo, hi) = (off0.min(off), off0.max(off));
                     let span = d.text_in(lo, hi.min(lo.saturating_add(SELECT_SPEAK_CAP)));
@@ -1854,7 +1886,11 @@ impl Reader {
                         b.sel = (off != anchor).then_some((anchor, off));
                     }
                     let text = span.split_whitespace().collect::<Vec<_>>().join(" ");
-                    let text = if text.is_empty() { "blank".to_owned() } else { text };
+                    let text = if text.is_empty() {
+                        "blank".to_owned()
+                    } else {
+                        text
+                    };
                     self.web_speak(
                         &[
                             Item::Text(text),
@@ -1955,11 +1991,6 @@ impl Reader {
         let Some(h) = b.docs.get(doc) else { return };
         let max_line = b.settings.max_line;
         let last = b.last_off;
-        enum Out {
-            NoContainer,
-            Bottom,
-            To(WebCursor, u32, Vec<Item>),
-        }
         let out = h.read.with(|d| {
             let from = cursor::offset_of(d, cur).unwrap_or_else(|| last.min(d.text_len()));
             let Some(c) = up_to(d, cur.node, Cat::CONTAINER, 64) else {
@@ -2014,7 +2045,8 @@ impl Reader {
             let from = cursor::offset_of(d, cur).unwrap_or_else(|| last.min(d.text_len()));
             let link_line = |r: &std::ops::Range<u32>| -> bool {
                 let at = |off: u32| {
-                    cursor::cursor_at(d, off).is_some_and(|c| up_to(d, c.node, Cat::LINK, 16).is_some())
+                    cursor::cursor_at(d, off)
+                        .is_some_and(|c| up_to(d, c.node, Cat::LINK, 16).is_some())
                 };
                 r.end > r.start && at(r.start) && at(r.end.saturating_sub(1))
             };

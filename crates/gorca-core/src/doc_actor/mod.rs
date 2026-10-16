@@ -367,9 +367,10 @@ impl Actor {
             // A polite update is superseded by a newer one that has not been delivered yet.
             if let DocNotice::Live { msg, .. } = &n
                 && !msg.assertive
-                && let Some(at) = self.pending_notices.iter().position(
-                    |p| matches!(p, DocNotice::Live { msg: m, .. } if !m.assertive),
-                )
+                && let Some(at) = self
+                    .pending_notices
+                    .iter()
+                    .position(|p| matches!(p, DocNotice::Live { msg: m, .. } if !m.assertive))
             {
                 self.pending_notices.remove(at);
             }

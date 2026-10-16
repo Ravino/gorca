@@ -83,19 +83,18 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
         }
     }
     // A checkable control says its off state too ("check box not checked", "not pressed").
-    let off = match n.role {
-        Role::CheckBox | Role::RadioButton
-            if !n.states.contains(StateSet::CHECKED) && !skip.contains(StateSet::CHECKED) =>
-        {
-            Some("not checked")
-        }
-        Role::ToggleButton
-            if !n.states.intersects(StateSet::PRESSED | StateSet::CHECKED)
-                && !skip.contains(StateSet::PRESSED) =>
-        {
-            Some("not pressed")
-        }
-        _ => None,
+    let off = if matches!(n.role, Role::CheckBox | Role::RadioButton)
+        && !n.states.contains(StateSet::CHECKED)
+        && !skip.contains(StateSet::CHECKED)
+    {
+        Some("not checked")
+    } else if n.role == Role::ToggleButton
+        && !n.states.intersects(StateSet::PRESSED | StateSet::CHECKED)
+        && !skip.contains(StateSet::PRESSED)
+    {
+        Some("not pressed")
+    } else {
+        None
     };
     if let Some(w) = off {
         segments.push(seg(w, SegmentKind::State));
@@ -104,10 +103,8 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
         segments.push(seg(&v, SegmentKind::Value));
     }
     // A field's description is its help or error text (aria-describedby, aria-errormessage).
-    if matches!(
-        n.role,
-        Role::TextEntry | Role::PasswordEntry | Role::ComboBox | Role::SpinButton
-    ) && let Some(d) = n.description.as_deref().filter(|d| !d.is_empty())
+    if speaks_description(n.role)
+        && let Some(d) = desc(n)
     {
         segments.push(seg(d, SegmentKind::Text));
     }
@@ -177,22 +174,36 @@ pub fn log_states(n: &NodeSnapshot) -> SmallVec<[&'static str; 8]> {
 
 /// What differs between two snapshots in the fields a presentation speaks.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+#[allow(clippy::struct_excessive_bools)] // one flag per spoken field
 pub(crate) struct Changed {
     pub name: bool,
     pub role: bool,
     /// Spoken states whose presence differs.
     pub states: StateSet,
     pub value: bool,
+    /// A field's help or error text (spoken after the value).
+    pub description: bool,
 }
 
 impl Changed {
     pub fn is_empty(self) -> bool {
-        !self.name && !self.role && self.states.is_empty() && !self.value
+        !self.name && !self.role && self.states.is_empty() && !self.value && !self.description
     }
 }
 
 /// What differs in the spoken fields. `skip` are states that are not spoken in this context (a
 /// switcher item is spoken *because* it is selected, so `SELECTED` is never news).
+fn speaks_description(role: Role) -> bool {
+    matches!(
+        role,
+        Role::TextEntry | Role::PasswordEntry | Role::ComboBox | Role::SpinButton
+    )
+}
+
+fn desc(n: &NodeSnapshot) -> Option<&str> {
+    n.description.as_deref().filter(|d| !d.is_empty())
+}
+
 pub(crate) fn changed(old: &NodeSnapshot, new: &NodeSnapshot, skip: StateSet) -> Changed {
     let name = |n: &NodeSnapshot| {
         n.name
@@ -205,6 +216,7 @@ pub(crate) fn changed(old: &NodeSnapshot, new: &NodeSnapshot, skip: StateSet) ->
         role: old.role != new.role,
         states: (spoken_states(old) ^ spoken_states(new)) & !skip,
         value: value_text(old.value.as_ref()) != value_text(new.value.as_ref()),
+        description: speaks_description(new.role) && desc(old) != desc(new) && desc(new).is_some(),
     }
 }
 
@@ -241,6 +253,11 @@ pub(crate) fn present_change(
         && let Some(v) = value_text(new.value.as_ref())
     {
         segments.push(seg(&v, SegmentKind::Value));
+    }
+    if ch.description
+        && let Some(d) = desc(new)
+    {
+        segments.push(seg(d, SegmentKind::Text));
     }
     Utterance {
         id,

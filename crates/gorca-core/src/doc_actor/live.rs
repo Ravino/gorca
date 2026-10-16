@@ -72,6 +72,7 @@ enum Politeness {
 }
 
 #[derive(Copy, Clone, Debug)]
+#[allow(clippy::struct_excessive_bools)] // independent ARIA flags of one region
 struct Props {
     politeness: Politeness,
     atomic: bool,
@@ -168,7 +169,7 @@ fn lines_of(doc: &WebDoc, id: DocNodeId) -> Vec<String> {
 }
 
 /// What was added (or removed) between two snapshots of a region, as one text.
-fn diff(old: &[String], new: &[String], props: &Props) -> Option<String> {
+fn diff(old: &[String], new: &[String], props: Props) -> Option<String> {
     if old == new {
         return None;
     }
@@ -443,7 +444,7 @@ impl LiveTracker {
             budget -= 1;
             region.first_dirty = None;
             let lines = lines_of(doc, id);
-            let text = diff(&region.base, &lines, &props);
+            let text = diff(&region.base, &lines, props);
             region.base = lines;
             if props.politeness == Politeness::Off {
                 continue;
@@ -527,14 +528,14 @@ mod tests {
 
     #[test]
     fn additions_are_the_new_lines_only() {
-        let d = diff(&lines(&["a", "b"]), &lines(&["a", "b", "c"]), &polite());
+        let d = diff(&lines(&["a", "b"]), &lines(&["a", "b", "c"]), polite());
         assert_eq!(d.as_deref(), Some("c"));
-        assert_eq!(diff(&lines(&["a"]), &lines(&["a"]), &polite()), None);
+        assert_eq!(diff(&lines(&["a"]), &lines(&["a"]), polite()), None);
         // A replaced line is new text.
-        let d = diff(&lines(&["Saved at 1"]), &lines(&["Saved at 2"]), &polite());
+        let d = diff(&lines(&["Saved at 1"]), &lines(&["Saved at 2"]), polite());
         assert_eq!(d.as_deref(), Some("Saved at 2"));
         // A grown line says its tail.
-        let d = diff(&lines(&["Saved"]), &lines(&["Saved. Retrying"]), &polite());
+        let d = diff(&lines(&["Saved"]), &lines(&["Saved. Retrying"]), polite());
         assert_eq!(d.as_deref(), Some("Retrying"));
     }
 
@@ -544,14 +545,21 @@ mod tests {
             atomic: true,
             ..polite()
         };
-        let d = diff(&lines(&["Ticker: 1 points"]), &lines(&["Ticker: 2 points"]), &atomic);
+        let d = diff(
+            &lines(&["Ticker: 1 points"]),
+            &lines(&["Ticker: 2 points"]),
+            atomic,
+        );
         assert_eq!(d.as_deref(), Some("Ticker: 2 points"));
-        assert_eq!(diff(&lines(&["gone"]), &lines(&[]), &polite()), None);
+        assert_eq!(diff(&lines(&["gone"]), &lines(&[]), polite()), None);
         let rm = Props {
             removals: true,
             ..polite()
         };
-        assert_eq!(diff(&lines(&["gone"]), &lines(&[]), &rm).as_deref(), Some("gone"));
+        assert_eq!(
+            diff(&lines(&["gone"]), &lines(&[]), rm).as_deref(),
+            Some("gone")
+        );
     }
 
     #[test]
@@ -579,7 +587,9 @@ mod tests {
                 .flags(NodeFlags::BLOCK | NodeFlags::LIVE)
                 .name("Flood region")
                 .meta(Arc::new(m)),
-            vec![SubtreeSpec::leaf(NodeSpec::new(Role::StaticText).text(text))],
+            vec![SubtreeSpec::leaf(
+                NodeSpec::new(Role::StaticText).text(text),
+            )],
         );
         let root = SubtreeSpec::with_children(NodeSpec::new(Role::DocumentWeb), vec![region]);
         assert!(
@@ -617,7 +627,10 @@ mod tests {
         let later = t0 + Duration::from_secs(3);
         let leaf = set_text(&mut d, r, "Saved at step 1");
         t.on_batch(&d, &[leaf], later);
-        assert!(t.tick(&d, later + Duration::from_millis(10)).is_empty(), "settling");
+        assert!(
+            t.tick(&d, later + Duration::from_millis(10)).is_empty(),
+            "settling"
+        );
         let m = t.tick(&d, later + Duration::from_millis(60));
         assert_eq!(m.len(), 1);
         assert_eq!(&*m[0].text, "Saved at step 1");

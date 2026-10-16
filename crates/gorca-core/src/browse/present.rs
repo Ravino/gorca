@@ -230,7 +230,10 @@ fn container_items(doc: &WebDoc, v: &NodeView<'_>, id: DocNodeId) -> Option<Vec<
             .children(id)
             .filter(|c| doc.node(*c).is_some_and(|x| x.role == Role::ListItem))
             .count();
-        out.push(Item::Role(format!("list with {}", counted(n, "item", "items"))));
+        out.push(Item::Role(format!(
+            "list with {}",
+            counted(n, "item", "items")
+        )));
     } else if v.cats.intersects(Cat::TABLE) {
         let (r, c) = table_dims(doc, id);
         if let Some(n) = name {
@@ -270,7 +273,12 @@ fn container_items(doc: &WebDoc, v: &NodeView<'_>, id: DocNodeId) -> Option<Vec<
             out.push(Item::Name(n.to_owned()));
         }
         out.push(Item::Role(
-            if application { "application" } else { "embedded object" }.to_owned(),
+            if application {
+                "application"
+            } else {
+                "embedded object"
+            }
+            .to_owned(),
         ));
     } else {
         return None;
@@ -283,7 +291,7 @@ fn name_spoken(items: &[Item], name: &str) -> bool {
     let name = name.trim().to_lowercase();
     items.iter().any(|i| match i {
         Item::Text(t) | Item::Name(t) => t.to_lowercase().contains(&name),
-        _ => false,
+        Item::Role(_) | Item::State(_) | Item::Lead(_) => false,
     })
 }
 
@@ -306,7 +314,8 @@ fn is_named_control(role: Role) -> bool {
 fn selected_value(doc: &WebDoc, id: DocNodeId) -> Option<String> {
     for n in doc.subtree(id).skip(1) {
         let v = doc.node(n)?;
-        if v.meta.is_some_and(|m| m.states.contains(StateSet::SELECTED))
+        if v.meta
+            .is_some_and(|m| m.states.contains(StateSet::SELECTED))
             && matches!(v.role, Role::MenuItem | Role::ListItem)
         {
             let t = v.name.filter(|t| !t.is_empty()).or(v.text)?;
@@ -588,7 +597,7 @@ fn dedupe_names(items: &mut Vec<Item>) {
         .iter()
         .filter_map(|i| match i {
             Item::Text(t) => Some(t.to_lowercase()),
-            _ => None,
+            Item::Role(_) | Item::State(_) | Item::Name(_) | Item::Lead(_) => None,
         })
         .collect();
     items.retain(|i| match i {
@@ -596,7 +605,7 @@ fn dedupe_names(items: &mut Vec<Item>) {
             let n = n.trim().to_lowercase();
             n.is_empty() || !texts.iter().any(|t| t.contains(&n))
         }
-        _ => true,
+        Item::Text(_) | Item::Role(_) | Item::State(_) | Item::Lead(_) => true,
     });
 }
 
@@ -716,27 +725,35 @@ mod tests {
         let mut d = WebDoc::new(7);
         let blk = NodeFlags::BLOCK | NodeFlags::BREAK_BEFORE;
         let txt = |t: &str| SubtreeSpec::leaf(leaf(Role::StaticText).text(t));
-        let li = |t: &str| SubtreeSpec::with_children(leaf(Role::ListItem).flags(blk), vec![txt(t)]);
-        let ul = SubtreeSpec::with_children(leaf(Role::List).flags(blk), vec![li("One"), li("Two")]);
+        let li =
+            |t: &str| SubtreeSpec::with_children(leaf(Role::ListItem).flags(blk), vec![txt(t)]);
+        let ul =
+            SubtreeSpec::with_children(leaf(Role::List).flags(blk), vec![li("One"), li("Two")]);
         let main = SubtreeSpec::with_children(
             named(Role::Landmark, "Main content")
                 .flags(blk)
                 .meta(Arc::new(NodeMeta {
-                    attrs: [(web_attrs::TAG, Arc::<str>::from("main"))].into_iter().collect(),
+                    attrs: [(web_attrs::TAG, Arc::<str>::from("main"))]
+                        .into_iter()
+                        .collect(),
                     ..NodeMeta::default()
                 })),
             vec![ul],
         );
-        let edit = SubtreeSpec::leaf(
-            with_states(
-                named(Role::TextEntry, "Search term").flags(blk).text("\u{FFFC}"),
-                StateSet::ENABLED | StateSet::EDITABLE,
-            ),
-        );
+        let edit = SubtreeSpec::leaf(with_states(
+            named(Role::TextEntry, "Search term")
+                .flags(blk)
+                .text("\u{FFFC}"),
+            StateSet::ENABLED | StateSet::EDITABLE,
+        ));
         let opt = |n: &str, sel: bool| {
             SubtreeSpec::leaf(with_states(
                 named(Role::MenuItem, n),
-                if sel { StateSet::SELECTED } else { StateSet::empty() },
+                if sel {
+                    StateSet::SELECTED
+                } else {
+                    StateSet::empty()
+                },
             ))
         };
         let combo = SubtreeSpec::with_children(
@@ -757,10 +774,8 @@ mod tests {
             named(Role::Table, "Fruit").flags(blk),
             vec![row("a", "b"), row("c", "d")],
         );
-        let root = SubtreeSpec::with_children(
-            leaf(Role::DocumentWeb),
-            vec![main, edit, combo, table],
-        );
+        let root =
+            SubtreeSpec::with_children(leaf(Role::DocumentWeb), vec![main, edit, combo, table]);
         assert!(
             d.apply(&DocOp::InsertSubtree {
                 parent: None,

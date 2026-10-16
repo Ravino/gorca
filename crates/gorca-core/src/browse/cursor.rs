@@ -352,10 +352,6 @@ fn sentence_end_char(c: char) -> bool {
 /// `.`, `!`, `?` followed by white space, or at the paragraph end).
 pub fn sentence(doc: &WebDoc, off: u32, dir: Dir) -> Mv {
     let len = doc.text_len();
-    let edge = match dir {
-        Dir::Next => Edge::Bottom,
-        Dir::Prev => Edge::Top,
-    };
     let (ps, pe) = doc.line_range(off.min(len.saturating_sub(1)));
     let text: Vec<char> = doc.text_in(ps, pe).chars().collect();
     // Sentence starts within the paragraph, as scalar offsets.
@@ -376,7 +372,11 @@ pub fn sentence(doc: &WebDoc, off: u32, dir: Dir) -> Mv {
         starts.get(k + 1).map_or(pe, |n| {
             // Up to, not including, the white space before the next sentence.
             let mut e = ps + n;
-            while e > ps && text.get((e - ps - 1) as usize).is_some_and(|c| c.is_whitespace()) {
+            while e > ps
+                && text
+                    .get((e - ps - 1) as usize)
+                    .is_some_and(|c| c.is_whitespace())
+            {
                 e -= 1;
             }
             e
@@ -452,7 +452,7 @@ fn sentence_last(doc: &WebDoc, start: u32) -> Mv {
             speak,
             blank: false,
         },
-        _ => sentence_first(doc, start),
+        Mv::Landed { .. } | Mv::Edge(_) => sentence_first(doc, start),
     }
 }
 

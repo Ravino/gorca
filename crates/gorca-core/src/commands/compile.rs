@@ -883,13 +883,17 @@ mod tests {
     fn container_keys_and_the_letter_subset_are_grabbed() {
         let c = compiled("[keyboard]\npreset=\"nvda\"\nlayout=\"desktop\"\n");
         let (plain, _) = browse_grabs(&c.keymap, &KeysymTable::us());
-        let has =
-            |v: &[Chord], sym: u32, m: Modifiers| v.iter().any(|ch| ch.keysym == sym && ch.modifiers == m);
+        let has = |v: &[Chord], sym: u32, m: Modifiers| {
+            v.iter().any(|ch| ch.keysym == sym && ch.modifiers == m)
+        };
         assert!(has(&plain, 0x2c, Modifiers::empty()), "comma");
         assert!(has(&plain, 0x3c, Modifiers::SHIFT), "Shift+comma is less");
         let letters = letter_grabs(&c.keymap, &KeysymTable::us());
         assert!(has(&letters, 0x68, Modifiers::empty()), "h is a letter key");
         assert!(has(&letters, 0x2c, Modifiers::empty()));
-        assert!(!letters.iter().any(|ch| ch.keysym == 0xff54), "Down stays grabbed");
+        assert!(
+            !letters.iter().any(|ch| ch.keysym == 0xff54),
+            "Down stays grabbed"
+        );
     }
 }
