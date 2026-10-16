@@ -115,5 +115,8 @@ gnome-terminal 3.56.2 with libvte 0.80.1 in a private headless gnome-shell, 100x
   incoming call, not on the signal (`registry.c:1028`); atk-bridge parses the same three fields
   (`atk-adaptor/bridge.c:793`). Per-application registration therefore does not reach the application: D-5 is not
   available, a flooding background terminal is handled by T-4 (`Flooded`).
-* **Focus**: the terminal widget got `state-changed:focused` only when the first key reached it on a headless seat; the
-  Reader's focus presentation may be served from a snapshot without `FOCUSED` (see `docs/reports/m6-impl.md`, risks).
+* **Focus**: the terminal widget got `state-changed:focused` only when the first key reached it on a headless seat. On
+  every first focus of a terminal (new window, new tab) the Reader sees two focus events a few ms apart; a read that
+  follows the first one answers without `FOCUSED`, the second event (inside the Reader's 150 ms duplicate window) is the
+  one that comes after the state is true. The Reader reads the state again on that repeated event
+  (`docs/reports/m6-focus-fix.md`).

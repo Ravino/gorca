@@ -1,0 +1,60 @@
+# e2e nokey2
+# utc=2026-10-16T02:13:29Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=11.69 13.38 15.98 1/3573 489993
+# git_rev=210e144
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=nokey2
+# reader=daemon:<repo>/.claude/worktrees/agent-a9787c6b3fb7f34ee/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=11.69 13.38 15.98 1/3573 489990
+# reader_env=GORCA_M1=1 GORCA_M6=1 GORCA_M6_REAL=1 GORCA_M6_STRICT=1 GORCA_VV_NO_FLOOD=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=Left: wanted ["o"], heard []
+# note1=Left again: wanted ["l"], heard []
+# note2=Home: wanted ["e"], heard []
+# note3=End: wanted ["blank"], heard []
+# note4=Enter: wanted ["~hello"], heard []
+# note5=Up: history: wanted ["echo hello"], heard []
+# note6=Down: empty line: wanted ["blank"], heard []
+# note7=Tab completes: wanted ["echo"], heard []
+# note8=BackSpace removes the completion's blank: wanted ["space"], heard ["c"]
+# note9=Ctrl+U: the deleted text: wanted ["echo"], heard []
+# note10=VV password prompt: heard []
+# note11=VV prompt after the password: heard []
+# note12=VV less opens on the first page: heard []
+# note13=VV Space: the next page: heard ["space"]
+# note14=VV b: the page before: heard ["b"]
+# note15=VV Down: the new bottom row: heard []
+# note16=VV q: back at the prompt: heard ["q"]
+# note17=VV: floods skipped (GORCA_VV_NO_FLOOD)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+VV.vv_key_ms.n             daemon/voicego           10           10           10  1                  info   [samples]
+VV.vv_key_ms.p50           daemon/voicego        0.481        0.481        0.481  1                  info   [ms]
+VV.vv_key_ms.p95           daemon/voicego        1.746        1.746        1.746  1                  info   [ms]
+VV.vv_key_ms.p99           daemon/voicego        1.746        1.746        1.746  1 <=            3  PASS   [ms]
+VV.vv_key_ms.p999          daemon/voicego        1.746        1.746        1.746  1                  info   [ms]
+VV.vv_key_ms.max           daemon/voicego        1.746        1.746        1.746  1                  info   [ms]
+VV.vv_failures             daemon/voicego           10           10           10  1 <=            0  FAIL  gated on the max over repeats [steps]
+VV.vv_password_echo_double daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_password_echo_extra  daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_password_echo_missing daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_password_log_empty   daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [files]
+VV.vv_password_plaintext_in_logs daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [occurrences]
+VV.vv_password_prompt_missing daemon/voicego            1            1            1  1 <=            0  FAIL  gated on the max over repeats [events]
+VV.vv_screen_failures      daemon/voicego            7            7            7  1 <=            0  FAIL  gated on the max over repeats [steps]
+VV.vv_type_double          daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_type_extra           daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_type_missing         daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]

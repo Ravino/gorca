@@ -185,6 +185,27 @@ impl FakeApp {
         Ok(Self { proc, bus_name })
     }
 
+    /// Alt+Tab into the window and focus node `id` (`order` is "activate_first" or
+    /// "focus_first"; GetState hides FOCUSED for `stale_ms` after the Focus event and the
+    /// `focused=1` signal follows it by `lag_ms`, 0 = at once). Returns `t_emit_ns` of the Focus
+    /// event.
+    pub fn focus_window(
+        &mut self,
+        id: usize,
+        order: &str,
+        lag_ms: u64,
+        stale_ms: u64,
+    ) -> Result<u64> {
+        let r = self.proc.request(
+            "focus_window",
+            &format!(
+                "\"node\":{id},\"order\":\"{order}\",\"lag_ms\":{lag_ms},\"stale_ms\":{stale_ms}"
+            ),
+            Duration::from_secs(5),
+        )?;
+        Ok(json_num(&r, "t_emit_ns").unwrap_or(0.0) as u64)
+    }
+
     /// Focus node `id`; returns `t_emit_ns` (0 when the app reported none).
     pub fn focus(&mut self, id: usize) -> Result<u64> {
         let r = self

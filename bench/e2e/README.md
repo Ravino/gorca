@@ -71,6 +71,7 @@ cannot touch the real session. It never signals anything it did not spawn.
 | VR | M6: numpad review of the held terminal screen, and a screen that changes under the cursor | `vr_ms` (gate p99 3 ms), `vr_failures`, `vr_ipc_calls` (gate 0) |
 | VF | M6: pager page, Down moves a cursor row, htop-style repaint (silent), edit in the middle of a screen | `vf_failures` (gate 0) |
 | VB | M6: an unfocused terminal floods while the focused one is typed in (T-4) | `vb_key_ms` (gate p99 4 ms), `vb_stray_speaks` (gate 0) |
+| VW | M6: output after Alt+Tab into the terminal and before any key (window activation and focus in both orders, FOCUSED lagging the focus, a tab-like bounce) | `vw_ms` (gate p99 35 ms), `vw_lost` (gate 0) |
 | VV | M6: the daemon against a REAL gnome-terminal-server in a private headless session (`tests/term/run_real_vte.sh`, `GORCA_M6_REAL=1`) | `vv_failures`, `vv_*_prompt_missing`, `vv_type_*` (gate 0), `vv_key_ms` (3 ms), `vv_stop_ms` (2 ms), `vv_worst_cpu_pct`, `vv_siocinq_p99_kib` |
 
 The M6 scenarios (`crates/gorca-bench/src/e2e/m6.rs`) run with `--reader-env GORCA_M6=1` (`GORCA_M6_STRICT=1` fails instead

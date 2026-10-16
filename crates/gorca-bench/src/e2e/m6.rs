@@ -318,10 +318,23 @@ fn finish(t: &mut T, out: &mut RunOut) -> Result<()> {
         json_num(&r, "term_frames").unwrap_or(0.0),
         "frames",
     );
+    keep_reader_log(t.rig.reader_log.as_deref());
     if !t.rig.reader.alive() {
         bail!("the reader died during the scenario");
     }
     Ok(())
+}
+
+/// Copy the reader's log into `GORCA_VV_KEEP_DIR` (a diagnosis aid; the scenarios delete it).
+fn keep_reader_log(log: Option<&std::path::Path>) {
+    let (Some(log), Some(dir)) = (log, std::env::var_os("GORCA_VV_KEEP_DIR")) else {
+        return;
+    };
+    let dir = std::path::PathBuf::from(dir);
+    let _ = std::fs::create_dir_all(&dir);
+    if let Some(name) = log.file_name() {
+        let _ = std::fs::copy(log, dir.join(name));
+    }
 }
 
 fn n_of(size: Size, cap: usize) -> usize {
@@ -370,6 +383,92 @@ pub fn v1(
         "V1: emit of the last VTE frame to the SPEAK of the output it carried; includes the 30 ms settle, one GetText of the python fake app and the speech lane (gate: settle <= 30 ms wall + 5 ms gorca)"
             .into(),
     );
+    finish(&mut t, out)
+}
+
+// ---- VW: output after a window switch, before any key --------------------------------------
+
+/// VW: another application has the focus, the terminal's window is activated (Alt+Tab) and the
+/// terminal takes the focus; the program's output that arrives before any key press is spoken
+/// within the V1 budget. Window activation and focus event in both orders, the node's FOCUSED
+/// state with and without lag (a state read from a cache older than the focus), and the focus
+/// bouncing between two nodes of the application (a tab switch). The reader sees no key.
+pub fn vw(
+    host: &HostEnv,
+    reader: &ReaderSpec,
+    flavor: Flavor,
+    size: Size,
+    _seed: u64,
+    out: &mut RunOut,
+) -> Result<()> {
+    if !gate_open(host, "VW", out)? {
+        return Ok(());
+    }
+    let mut t = setup(host, reader, flavor, 1, &[])?;
+    let mut bg = FakeApp::spawn(
+        &t.rig.env.harness_dir,
+        "terminal",
+        "termbg",
+        0,
+        &["--term-trim"],
+    )?;
+    feed(&mut bg, "bg$ ")?;
+    focus_term(&mut t, PROMPT)?;
+    // (order, delay of the `focused=1` signal = ms GetState hides FOCUSED, bounce through the
+    // second node of the application first). The real VTE is (focus_first, 8, 8): the repeated
+    // event comes inside the reader's duplicate window and the first read is stale.
+    const CASES: [(&str, u64, bool); 7] = [
+        ("activate_first", 0, false),
+        ("focus_first", 0, false),
+        ("focus_first", 8, false),
+        ("activate_first", 8, false),
+        ("focus_first", 8, true),
+        ("focus_first", 160, false),
+        ("focus_first", 400, false),
+    ];
+    let rounds = n_of(size, 12) / CASES.len() + 1;
+    let (mut lat, mut lost) = (Vec::new(), 0u64);
+    let mut by_case = vec![0u64; CASES.len()];
+    for r in 0..rounds {
+        for (ci, (order, lag, bounce)) in CASES.iter().enumerate() {
+            // The other application takes the focus (and with it the protection).
+            bg.focus(TERM)?;
+            std::thread::sleep(Duration::from_millis(500));
+            if *bounce {
+                // Two nodes of one application, as two tabs: the focus leaves and comes back.
+                t.app.focus(OTHER)?;
+                std::thread::sleep(Duration::from_millis(500));
+                bg.focus(OTHER)?;
+                std::thread::sleep(Duration::from_millis(300));
+            }
+            let mark = t.rig.mock.mark();
+            t.app.focus_window(TERM, order, *lag, *lag)?;
+            // The focus speech and the baseline read of the screen come first.
+            std::thread::sleep(Duration::from_millis(1300));
+            let tag = format!("w{r:02}c{ci}");
+            let t_emit = feed(&mut t.app, &format!("\r\n{tag}\r\n{PROMPT}"))?;
+            let hit = t.rig.mock.wait_for(
+                mark,
+                Duration::from_secs(2),
+                |rec| matches!(&rec.kind, Kind::Speak { text, .. } if text.contains(&tag)),
+            );
+            match hit {
+                Some(rec) => lat.push(ms(rec.t_ns.saturating_sub(t_emit))),
+                None => {
+                    lost += 1;
+                    by_case[ci] += 1;
+                    out.notes.push(format!(
+                        "VW: output not spoken after {order}, FOCUSED lag {lag} ms, bounce {bounce}"
+                    ));
+                }
+            }
+        }
+    }
+    out.s("vw_ms", lat);
+    out.x("vw_lost", lost as f64, "events");
+    out.notes.push(format!(
+        "VW: output after Alt+Tab into the terminal before any key; lost per case {by_case:?} (order, FOCUSED lag, bounce: {CASES:?}); latency is frame emit to SPEAK as in V1"
+    ));
     finish(&mut t, out)
 }
 
@@ -1702,6 +1801,8 @@ struct RealTerm {
     server: std::process::Child,
     client: std::process::Child,
     rd: std::process::Child,
+    /// A second application (its own server and window), started by `open_second_app`.
+    extra: Vec<std::process::Child>,
 }
 
 impl RealTerm {
@@ -1788,7 +1889,12 @@ impl RealTerm {
             .process_group(0)
             .spawn()
             .context("starting gnome-terminal")?;
-        Ok(Self { server, client, rd })
+        Ok(Self {
+            server,
+            client,
+            rd,
+            extra: Vec::new(),
+        })
     }
 
     fn rd_line(&mut self, line: &str) {
@@ -1799,6 +1905,87 @@ impl RealTerm {
         }
     }
 
+    /// A second terminal application (its own `gnome-terminal-server` under another application
+    /// id, so another AT-SPI application) with one window running `script`. The new window takes
+    /// the focus.
+    fn open_second_app(&mut self, script: &str) -> Result<()> {
+        use std::os::unix::process::CommandExt;
+        use std::process::{Command, Stdio};
+        const ID: &str = "org.gnome.TerminalTwo";
+        let wayland = std::env::var("GORCA_VTE_WAYLAND").context("GORCA_VTE_WAYLAND not set")?;
+        let root = std::env::var("GORCA_HARNESS_DIR").context("GORCA_HARNESS_DIR not set")?;
+        let log = |n: &str| std::fs::File::create(std::path::Path::new(&root).join(n));
+        let server = Command::new("/usr/libexec/gnome-terminal-server")
+            .args(["--app-id", ID])
+            .env_remove("DISPLAY")
+            .env("GDK_BACKEND", "wayland")
+            .env("WAYLAND_DISPLAY", &wayland)
+            .env("LANG", "C.UTF-8")
+            .stdin(Stdio::null())
+            .stdout(Stdio::from(log("vte2-server.log")?))
+            .stderr(Stdio::from(log("vte2-server.err")?))
+            .process_group(0)
+            .spawn()
+            .context("starting the second gnome-terminal-server")?;
+        self.extra.push(server);
+        std::thread::sleep(Duration::from_millis(1500));
+        let client = Command::new("gnome-terminal")
+            .args(["--app-id", ID, "--window", "--geometry=60x15"])
+            .args([
+                "--",
+                "env",
+                "PS1=$ ",
+                "bash",
+                "--norc",
+                "--noprofile",
+                "-c",
+                script,
+            ])
+            .env_remove("DISPLAY")
+            .env("GDK_BACKEND", "wayland")
+            .env("WAYLAND_DISPLAY", &wayland)
+            .stdin(Stdio::null())
+            .stdout(Stdio::from(log("vte2-client.log")?))
+            .stderr(Stdio::from(log("vte2-client.err")?))
+            .process_group(0)
+            .spawn()
+            .context("starting the second gnome-terminal")?;
+        self.extra.push(client);
+        Ok(())
+    }
+
+    /// A new tab of the first application's window running `script`. It takes the focus.
+    fn open_tab(&mut self, script: &str) -> Result<()> {
+        use std::os::unix::process::CommandExt;
+        use std::process::{Command, Stdio};
+        let wayland = std::env::var("GORCA_VTE_WAYLAND").context("GORCA_VTE_WAYLAND not set")?;
+        let root = std::env::var("GORCA_HARNESS_DIR").context("GORCA_HARNESS_DIR not set")?;
+        let log = |n: &str| std::fs::File::create(std::path::Path::new(&root).join(n));
+        let client = Command::new("gnome-terminal")
+            .args(["--app-id", "org.gnome.Terminal", "--tab"])
+            .args([
+                "--",
+                "env",
+                "PS1=$ ",
+                "bash",
+                "--norc",
+                "--noprofile",
+                "-c",
+                script,
+            ])
+            .env_remove("DISPLAY")
+            .env("GDK_BACKEND", "wayland")
+            .env("WAYLAND_DISPLAY", &wayland)
+            .stdin(Stdio::null())
+            .stdout(Stdio::from(log("vte-tab-client.log")?))
+            .stderr(Stdio::from(log("vte-tab-client.err")?))
+            .process_group(0)
+            .spawn()
+            .context("starting gnome-terminal for a tab")?;
+        self.extra.push(client);
+        Ok(())
+    }
+
     fn server_pid(&self) -> u32 {
         self.server.id()
     }
@@ -1807,14 +1994,20 @@ impl RealTerm {
 impl Drop for RealTerm {
     fn drop(&mut self) {
         drop(self.rd.stdin.take());
-        for c in [&mut self.rd, &mut self.client, &mut self.server] {
+        for c in [&mut self.rd, &mut self.client, &mut self.server]
+            .into_iter()
+            .chain(self.extra.iter_mut())
+        {
             let group = format!("-{}", c.id());
             let _ = std::process::Command::new("kill")
                 .args(["-TERM", "--", &group])
                 .status();
         }
         std::thread::sleep(Duration::from_millis(500));
-        for c in [&mut self.rd, &mut self.client, &mut self.server] {
+        for c in [&mut self.rd, &mut self.client, &mut self.server]
+            .into_iter()
+            .chain(self.extra.iter_mut())
+        {
             let _ = c.kill();
             let _ = c.wait();
         }
@@ -1845,6 +2038,7 @@ fn evdev_of(c: char) -> Option<u32> {
         '-' => Some(12),
         '.' => Some(52),
         '/' => Some(53),
+        ';' => Some(39),
         _ => None,
     }
 }
@@ -2106,12 +2300,34 @@ pub fn vv(
     vv_password(&mut v, &mut c, out, &[&err_path, &present_path])?;
     vv_pager(&mut v, &mut c)?;
     vv_tabs(&mut v, &mut c)?;
+    let before_focus = c.failures;
+    vv_focus(&mut v, &mut c)?;
+    out.x(
+        "vv_focus_failures",
+        (c.failures - before_focus) as f64,
+        "steps",
+    );
     out.x(
         "vv_screen_failures",
         (c.failures - failures_before) as f64,
         "steps",
     );
     out.notes.extend(std::mem::take(&mut c.notes));
+    // Keep the reader's trace and the presentation log for a diagnosis (`GORCA_VV_KEEP_DIR`).
+    if let Some(dir) = std::env::var_os("GORCA_VV_KEEP_DIR") {
+        let dir = std::path::PathBuf::from(dir);
+        let _ = std::fs::create_dir_all(&dir);
+        for f in [&err_path, &present_path] {
+            if let Some(name) = f.file_name() {
+                let _ = std::fs::copy(f, dir.join(name));
+            }
+        }
+    }
+    if flag(host, "GORCA_VV_NO_FLOOD") {
+        out.notes
+            .push("VV: floods skipped (GORCA_VV_NO_FLOOD)".into());
+        return Ok(());
+    }
 
     // Floods in the real terminal.
     let pid = v.term.server_pid();
@@ -2407,6 +2623,67 @@ fn vv_tabs(v: &mut V, c: &mut Check) -> Result<()> {
     c.expect(
         "Ctrl+PgUp: the first tab's prompt",
         heard(&got, "dollar"),
+        &got,
+    );
+    Ok(())
+}
+
+/// VV focus: output that arrives after a terminal got the focus and before any key is spoken.
+/// Nothing in these steps reaches the reader as a key (the compositor's keyboard only, or no key
+/// at all), so only the focus and window events of the application can route the terminal's text
+/// events to it. The terminals are focused for the first time (a new window of another
+/// application, a new tab), the first presentation of such a node is read from the application
+/// and a toolkit can still answer without `FOCUSED` there (the real VTE does).
+fn vv_focus(v: &mut V, c: &mut Check) -> Result<()> {
+    const ALT_TAB: &str = "key 56 15";
+    // A new window of another application takes the focus and prints after a while.
+    let got = v.said_during(11_000, |v| {
+        v.term
+            .open_second_app("sleep 9 ; echo focusa ; exec bash --norc -i")
+    })?;
+    c.expect(
+        "a new window: its output before any key",
+        heard(&got, "focusa"),
+        &got,
+    );
+    // A new tab of the first window: the same, in the same application as the old tab.
+    let got = v.said_during(11_000, |v| {
+        v.term
+            .open_tab("sleep 9 ; echo focusb ; exec bash --norc -i")
+    })?;
+    c.expect(
+        "a new tab: its output before any key",
+        heard(&got, "focusb"),
+        &got,
+    );
+    // Back to the other application with Alt+Tab, and the old tab of the first window with
+    // Ctrl+PgUp: both are cached nodes now. The shell prints when told to by a key typed to the
+    // compositor only.
+    let quiet = |v: &mut V, text: &str| {
+        for ch in text.chars() {
+            if let Some(e) = evdev_of(ch) {
+                v.term.rd_line(&format!("key {e}"));
+                std::thread::sleep(Duration::from_millis(60));
+            }
+        }
+        v.term.rd_line("key 28");
+    };
+    let got = v.said_during(2500, |v| {
+        v.term.rd_line(ALT_TAB);
+        Ok(())
+    })?;
+    c.expect("Alt+Tab is spoken", !got.is_empty(), &got);
+    quiet(v, "sleep 8 ; echo focusc");
+    std::thread::sleep(Duration::from_millis(500));
+    v.term.rd_line(ALT_TAB);
+    std::thread::sleep(Duration::from_millis(2000));
+    let got = v.said_during(9000, |v| {
+        v.term.rd_line(ALT_TAB);
+        Ok(())
+    })?;
+    c.expect(
+        "Alt+Tab back: output before any key",
+        heard(&got, "focusc"),
         &got,
     );
     Ok(())
