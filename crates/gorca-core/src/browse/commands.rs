@@ -41,13 +41,13 @@ pub enum WebEffect {
     },
 }
 
-/// A mode word waits this long for the utterance it belongs to.
 /// How long after the cursor's node vanished a re-render may still move the cursor back.
 const RESTORE_WINDOW: Duration = Duration::from_millis(1500);
 /// A focus event this soon after a click on a check box is the click's own.
 const CLICK_FOCUS_WINDOW: Duration = Duration::from_millis(800);
 /// Characters of a selected span that are read back.
 const SELECT_SPEAK_CAP: u32 = 300;
+/// A mode word waits this long for the utterance it belongs to.
 const WORD_TTL: Duration = Duration::from_millis(600);
 /// The line that follows a document's focus utterance waits for a cold fetch this long (M4).
 const TAIL_TTL: Duration = Duration::from_secs(2);
@@ -892,6 +892,50 @@ impl Reader {
         }
     }
 
+    /// A cold focus on a mirrored web node: its snapshot from the document mirror (role, states,
+    /// name, value), so the first focus into a field is spoken at once and the fetch only
+    /// confirms it (the mirror knows the node: this is what the page last told us).
+    pub(crate) fn web_focus_snapshot(&self, node: NodeKey) -> Option<gorca_model::NodeSnapshot> {
+        use gorca_model::{AttrMap, ChildList, Freshness, Ifaces, PropMask, Relations};
+        let b = self.web.as_ref()?;
+        let (doc, id) = b.join.get(node)?;
+        let h = b.docs.get(doc)?;
+        h.read.with(|d| {
+            let v = d.node(id)?;
+            if v.flags.contains(gorca_doc::web::NodeFlags::HIDDEN) {
+                return None;
+            }
+            let name = v.name.filter(|n| !n.is_empty())?;
+            let meta = v.meta?;
+            let mut have = PropMask::NAME | PropMask::ROLE | PropMask::STATES;
+            // A password's value is never spoken, not even from the mirror.
+            let value = meta.value.clone().filter(|_| v.role != Role::PasswordEntry);
+            if value.is_some() {
+                have |= PropMask::VALUE;
+            }
+            Some(gorca_model::NodeSnapshot {
+                key: node,
+                role: v.role,
+                states: meta.states,
+                name: Some(Arc::from(name)),
+                description: None,
+                value,
+                parent: None,
+                children: ChildList::Unknown,
+                interfaces: Ifaces::empty(),
+                attrs: AttrMap::default(),
+                relations: Relations::default(),
+                bounds: None,
+                have,
+                confirmed_seq: 0,
+                fresh: Freshness::Stale {
+                    since: Instant::now(),
+                    mask: PropMask::VALUE,
+                },
+            })
+        })
+    }
+
     /// N2: the focus fetch failed and nothing is cached: speak a web node from the document
     /// mirror (its name and role are there). False when the node is not in a mirrored document.
     pub(crate) fn web_focus_fallback(&mut self, node: NodeKey, fx: &mut ReaderEffects) -> bool {
@@ -942,7 +986,7 @@ impl Reader {
             known: true,
         };
         if editable {
-            self.web_retry_loading(fx);
+            self.web_retry_loading(true, fx);
         }
     }
 
@@ -1155,7 +1199,7 @@ impl Reader {
                         known,
                     };
                 }
-                self.web_retry_loading(fx);
+                self.web_retry_loading(false, fx);
             }
             DocNotice::NoDocument { focus } => {
                 self.web_apply(WebEv::NoDocument { focus }, fx, true);
@@ -1290,7 +1334,7 @@ impl Reader {
         self.web_late_entry(doc, fx);
         let Some(b) = self.web.as_mut() else { return };
         match b.mode {
-            WebMode::Loading { .. } => self.web_retry_loading(fx),
+            WebMode::Loading { .. } => self.web_retry_loading(false, fx),
             WebMode::Browse { doc: d, cur, .. } if d == doc => {
                 // The mirror changed under the cursor: follow the node, or the flat offset. A
                 // re-render replaces nodes in several publishes: for a moment after the node
@@ -1367,7 +1411,9 @@ impl Reader {
     }
 
     /// Focus waited for the mirror: look the join up again.
-    fn web_retry_loading(&mut self, fx: &mut ReaderEffects) {
+    /// `inline`: called while the focus utterance is being built, which takes the mode word and
+    /// the lead itself; otherwise the focus was already spoken and they are spoken now.
+    fn web_retry_loading(&mut self, inline: bool, fx: &mut ReaderEffects) {
         let Some(b) = self.web.as_ref() else { return };
         let WebMode::Loading { focus, .. } = b.mode else {
             return;
@@ -1394,6 +1440,10 @@ impl Reader {
         }
         self.web_dialog_lead(doc, id, None);
         self.web_listbox_lead(doc, id, None);
+        if !inline {
+            let tail = self.web_take_tail();
+            self.web_speak(&tail, fx);
+        }
     }
 
     /// Timers: a document that is slow to mirror, and the debounced scroll (LP-6).
@@ -1411,7 +1461,19 @@ impl Reader {
                 // D-2: Firefox starts Tab from its caret when nothing is focused, so the caret
                 // follows the browse cursor and Tab begins at the cursor, as in NVDA. The cursor
                 // never moves focus (SY.nomove); a caret is not focus.
-                if matches!(b.mode, WebMode::Browse { .. }) && b.sel.is_none() {
+                // Never into a form field or a focusable widget: Firefox focuses an editable
+                // that gets a caret, which would switch the mode under the user.
+                let plain = b.docs.get(doc).is_some_and(|h| {
+                    h.read.with(|d| {
+                        up_to(d, node, Cat::FORM_FIELD | Cat::FOCUSABLE | Cat::EDIT, 8)
+                            .and_then(|n| d.node(n))
+                            .is_none_or(|v| {
+                                v.cats.intersects(Cat::LINK)
+                                    && !v.cats.intersects(Cat::FORM_FIELD | Cat::EDIT)
+                            })
+                    })
+                });
+                if matches!(b.mode, WebMode::Browse { .. }) && b.sel.is_none() && plain {
                     // The caret event this causes is ours, not a page following a click.
                     b.activated = None;
                     fx.push(ReaderEffect::Web(WebEffect::Act {

@@ -253,6 +253,22 @@ impl Reader {
                 });
             }
             gorca_model::Lookup::Miss => {
+                // A node of a mirrored web document: speak it from the mirror now, then confirm
+                // (RV-1); the cold fetch would cost a round trip into a possibly busy browser.
+                if let Some(snap) = self.web_focus_snapshot(node) {
+                    let v = NodeView {
+                        snap: Arc::new(snap),
+                        stale: PropMask::VALUE,
+                        aged: true,
+                    };
+                    self.present_cached(&v, PresentSource::Stale, true, epoch, fx);
+                    fx.push(ReaderEffect::Demand {
+                        node,
+                        why: DemandWhy::Focus,
+                        outcome: DemandOutcome::Miss,
+                    });
+                    return;
+                }
                 fx.push(Self::fetch_effect(
                     node,
                     FOCUS_FIELDS,

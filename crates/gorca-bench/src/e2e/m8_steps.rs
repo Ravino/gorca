@@ -680,6 +680,7 @@ fn app() -> Vec<Step> {
         s("APP.tab.sel", P1, "Activating a tab shows its panel", Act::Do(role::PAGE_TAB, "Social"), &[]).win(700),
         s("APP.delete", P0, "Delete shows a toast: spoken", Act::Do(role::PUSH_BUTTON, "Delete"), &["Conversation deleted"]).win(1500),
         s("APP.menu", P1, "A menu button opens a menu; focus on a menu item: focus mode", Act::Do(role::PUSH_BUTTON, "More actions"), &[]).win(700),
+        esc("APP.menu.esc"),
         s("APP.menu.item", P1, "Focus on a menu item", Act::Focus(role::MENU_ITEM, "Settings"), &["Settings"]).extra(&["focus mode"], "menu items pass through on focus in NVDA (D-1)"),
         s("APP.combo", P1, "The address combo box: focus mode", Act::Focus(role::COMBO_BOX, "To address"), &["focus mode"]),
     ]
