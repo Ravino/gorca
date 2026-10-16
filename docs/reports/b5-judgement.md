@@ -132,3 +132,13 @@ Consistent across three independent runs (`auth-sat`, `auth-idle`, `auth-diag2`)
 * Open items: A1 under real-time (caveat 1), drain throughput under RT (caveat 2), a quiet-host repeat
   when one exists (the policy is to judge on ordering, which is consistent, but the 50k/s rate rule
   was not met).
+
+## Validation of the new default
+
+`cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo xtask deps` clean;
+`cargo test --workspace --no-fail-fast`: 1873 passed, 0 failed (one `gorca-ext-host` crash-reset
+timing test, `a_crash_is_contained_and_the_instance_is_reset_under_50_ms`, failed once at load 83 and
+passed on the rerun: load flake, unrelated). Strict `K2,K3,K4,R1` with `--impersonate-orca`, 3 repeats,
+no `--topology` flag and rtkit reachable (`bench/results/b5/default-strict`, load 13-41): all 12 reader
+starts resolved to `lanes-rt` with all lanes real-time, 0 FAIL rows, `lost` 0 in K2/K3/R1, K4 clean
+(10000 switches x 3), K2 p99 0.25 ms, K3 1.2 ms, R1 0.41 ms, 0 watchdog demotions.
