@@ -155,3 +155,35 @@ every row carries its load. Labels (all kept, including the red ones):
 
 The 100k-node H/Shift+H key loss (8 of 150 in `m8-review-full`, 5 and 1 here) is shared with main and is left to the perf owner.
 `cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`, `cargo test --workspace` (0 failed) and `cargo xtask deps` pass at `3fffcb3`.
+
+## 10. Re-review fixes (round 2, `docs/reports/m8-rereview.md`)
+
+First `m8-rereview.md`, the probes patch and the reviewer's results were committed, then `main` (03e6f9b and later) merged (only `decisions.md` conflicted, both rows kept) and the merged tree compiled. The probes are now regression tests and rig steps.
+
+| Finding | Fix |
+|---|---|
+| R-1 | `gorca-input-mutter/src/source.rs`: ordinary keys that are down are tracked by keycode (`Down`, refreshed by every autorepeat). A grab set that adds or removes a chord/exact grab for a held key (Tab and ISO_Left_Tab count as one key) is deferred until its release, or until the key has been silent for 1.5 s (a timer arm in the loop, so a lost release cannot block grabs for ever). Test `a_keystroke_grab_is_never_added_for_a_held_key`; rig steps `SY.hold.*` (press, autorepeat, release through the Mutter emulation: the repeat and the release are not consumed). Together with R-5 the scenario no longer grabs Tab at all after a focus-driven move. |
+| R-2 | `BrowseState.tab_grab` is a `Cell` written by `current_grabs`, the only place a pushed set is built, so it cannot go stale. Test `r2_the_tab_grabs_follow_the_live_targets_after_a_foreign_grab_push` (Escape then Ctrl+Home). |
+| R-3 | `fair::Entry` has a second waiting slot for urgent utterances (priority above Notification). Polite news coalesces latest-wins in its own slot, an alert is never replaced by it and is released first. Tests `an_urgent_utterance_waits_in_its_own_slot_and_is_spoken_first`, `r3_an_alert_waiting_for_the_budget_is_not_replaced_by_polite_news`. |
+| R-4 | `tab_target` walks from the cursor node and skips the document root, embedded documents (`Cat::FRAME`) and, backwards, the focusable ancestors of the cursor; `focusable_around` (native-selection guard) returns the nearest non-frame focusable. Test `r4_shift_tab_inside_a_focusable_container_finds_the_link_before_the_cursor`. |
+| R-5 | NVDA `_tabOverride` / #5227: while the cursor was last put there by a focus change onto a control (`CursorFrom::Focus`), or sits on or inside the focused control, Tab is not grabbed and the browser's own order applies. Any cursor command of ours ends it. The grab set is pushed at once on such a focus move (no scroll timer is armed by a focus). Frame documents are not Tab stops. Test `r5_...`; rig steps `IF.tab.*`, `SY.tab2`, `SY.btn`, `SY.up3`, `SY.stab`. |
+| R-6 | A failed `GrabFocus` (false, error, timeout) sends `DocNotice::FocusFailed` and says "can't move focus there". Native selection toggle outside a web page says "native selection is only available on web pages". `mixed_word(role)`: check box and radio "half checked", toggle button "half pressed", progress bar "indeterminate", nothing for other roles; a mixed toggle no longer says "not pressed". Tests in `utterance.rs`. Rig steps `FM.letters.tab`, `FM.letters.stab` (Tab and Shift+Tab pass through in focus mode). |
+
+Rig notes: in this rig a key typed into Firefox through the compositor lands on a browser panel, so after the hand-back (R-5) the steps only check "not consumed" (`SY.tab2`, `IF.tab.2/3`, `IF.stab`); the real Tab result is covered by `SY.hold.*` and the manual checklist. `LV.assertive` failed once in `m8-rr5-full` (Firefox delivered the assertive event together with the next alert, 2 s late; the window is 1.5 s): load flake, green in `m8-rr6-sy-lv`.
+
+### Gates (all at a clean committed head, `--impersonate-orca`; load and `/proc/pressure/memory` at start)
+
+`cargo fmt --check`, `cargo clippy --workspace --all-targets -D warnings`, `cargo test --workspace` (0 failed) and `cargo xtask deps` pass. The `.toolchain` symlink was committed by mistake in one commit and untracked right after (`52ffc67`).
+
+| Run | Head | Load | Memory pressure some avg10 | Result |
+|---|---|---|---|---|
+| `m8-rr2-full`, `m8-rr3-full` | `7627f99`, `be1a181` | 25, 15 | 0.00 | kept, failed on the way: IF.tab.2/3 (Tab grab not pushed on focus move, fixed), then SY.tab2/SY.stab (premise replaced by R-5, steps rewritten). `m8-rr2-m7` and `m8-rr4-m7` are aborted partial runs (source edited during the chain) |
+| `m8-rr4-full` (SY IF FM, 3 repeats) | `feab4b0`-era | 12 | 0.00 | SY.stab silent (target already focused), step fixed |
+| `m8-rr5-full` (full corpus, 3 repeats) | `feab4b0` | 7 | 0.00 | PF1 100k p99 0.48 ms, lost 0; two step failures: LV.assertive (1 of 3, flake above), SY.hold.ffocus (focused a node that was already focused; step fixed) |
+| `m8-rr6-sy-lv` (SY LV IF FM, 3 repeats) | `7697d7f` | 8.5 | 1.10 | 0 failures, 0 XPASS |
+| `m8-rr5-shell` (A1 N1 R1s strict, 3) | `feab4b0` | 8 | 0 | A1 p99 5.2 ms (max 7.6), N1 0.41 ms, R1s 0.43 ms, lost 0 |
+| `m8-rr5-strict` (K2 K3 K4 R1 strict, 3) | `feab4b0` | 11 | 0 | K2 p99 0.28 ms, K3 1.12 ms, K4 leaked 0 and resent 0, R1 pass |
+| `m8-rr5-m7` (standard set, 3) | `feab4b0` | 10 | 0 | reds in single repeats: L1s lost 1, FC1 fc_double 1, lost 1, fc_late 132, FE2 e2_double 1 |
+| `m8-rr6-fc` (FC1 FC1h L1s FE2 FS2, 3) | `7697d7f` | 29 (other agents) | 1.1 | FC1 fc_late 54, lost 1; FC1h page_dropped 10: single repeats at load 29, the typing gates that are red on main at load >= 10 |
+
+The M7 typing reds are not cleared at low load (as in round 1). The full-corpus run `m8-rr5-full` predates the two step-only fixes; the affected scenarios were rerun in `m8-rr6-sy-lv` (non-step code is identical at `feab4b0` and `7697d7f`).
