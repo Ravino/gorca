@@ -77,6 +77,10 @@ impl HookInstance for NativeInstance {
         self.run(HookKind::Present, |e| e.present(n, ctx))
     }
 
+    fn policy(&mut self, f: &api::PolicyFacts) -> Result<api::PolicyVerdict, Fault> {
+        self.run(HookKind::Policy, |e| e.policy(f))
+    }
+
     fn nav_units(&mut self) -> Result<Vec<api::NavUnit>, Fault> {
         self.run(HookKind::NavUnits, |e| e.nav_units())
     }

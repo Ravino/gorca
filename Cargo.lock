@@ -1281,6 +1281,7 @@ name = "gorca-ext-host"
 version = "0.0.0"
 dependencies = [
  "bitflags",
+ "ext-gnome-shell",
  "ext-test",
  "gorca-config",
  "gorca-core",

@@ -10,12 +10,15 @@ use std::time::Duration;
 
 use gorca_core::{
     AppExt, ContextMask, ExtCmdSpec, ExtCommands, ExtSink, ExtSource, ExtVerdict, MirrorDirectory,
-    PresentContext,
+    PolicyFacts, PolicyMoment, PolicyVerdict, PresentContext,
 };
 use gorca_ext_api as api;
 use gorca_model::{AppId, AppInfo, NodeEvent, NodeSnapshot, Segment};
 
-use crate::convert::{event_to_ext, node_to_ext, segments_from_ext};
+use crate::convert::{
+    MAX_NODE_TEXT_CHARS, MAX_SEGMENT_CHARS, event_to_ext, node_to_ext, role_to_ext,
+    segments_from_ext,
+};
 use crate::instance::{ExtStats, ExtStatsSnapshot, HookKind, InstShared};
 use crate::kv::SettingsKv;
 use crate::manifest::{ExtBackend, HookSet, Manifest, order_matching};
@@ -53,9 +56,18 @@ pub struct ExtHostBuilder {
     exts: Vec<Arc<LoadedExt>>,
     reports: Vec<LoadReport>,
     bind_errors: Vec<String>,
+    skip: Vec<String>,
 }
 
 impl ExtHostBuilder {
+    /// Do not load the extension called `name` from a directory (the daemon's `--shell-policy=
+    /// native` keeps the Shell component out). A skipped extension is not an error.
+    #[must_use]
+    pub fn skip(mut self, name: &str) -> Self {
+        self.skip.push(name.to_owned());
+        self
+    }
+
     fn engine(&mut self) -> Result<Arc<ExtEngine>, String> {
         if let Some(e) = &self.engine {
             return Ok(Arc::clone(e));
@@ -147,6 +159,10 @@ impl ExtHostBuilder {
             let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
             let manifest = Manifest::parse(&text).map_err(|e| e.to_string())?;
             report.name = Some(manifest.name.clone());
+            if self.skip.contains(&manifest.name) {
+                tracing::info!(ext = %manifest.name, "extension skipped by configuration");
+                return Ok(());
+            }
             match manifest.backend {
                 ExtBackend::Native => Err(
                     "native extensions are linked in by the daemon, not loaded from a directory"
@@ -291,6 +307,7 @@ impl ExtHost {
             exts: Vec::new(),
             reports: Vec::new(),
             bind_errors: Vec::new(),
+            skip: Vec::new(),
         }
     }
 
@@ -507,6 +524,32 @@ impl AppExts {
     }
 }
 
+/// The core's policy facts as an extension sees them (name and description clipped like a node's;
+/// a password field's text withheld).
+pub(crate) fn policy_facts_to_ext(f: &PolicyFacts<'_>) -> api::PolicyFacts {
+    let secret = f.role == gorca_model::Role::PasswordEntry;
+    let clip = |s: &str| s.chars().take(MAX_NODE_TEXT_CHARS).collect::<String>();
+    api::PolicyFacts {
+        moment: match f.moment {
+            PolicyMoment::Focus => api::PolicyMoment::Focus,
+            PolicyMoment::Value => api::PolicyMoment::Value,
+            PolicyMoment::Activate => api::PolicyMoment::Activate,
+            PolicyMoment::Showing => api::PolicyMoment::Showing,
+        },
+        role: role_to_ext(f.role),
+        states: f.states.bits(),
+        name: if secret { None } else { f.name.map(clip) },
+        description: if secret {
+            None
+        } else {
+            f.description.map(clip)
+        },
+        range: f
+            .range
+            .map(|(current, min, max)| api::Range { current, min, max }),
+    }
+}
+
 fn present_reason(ctx: PresentContext) -> api::PresentReason {
     match ctx {
         PresentContext::Focus | PresentContext::SelectedItem => api::PresentReason::Focus,
@@ -609,6 +652,38 @@ impl AppExt for AppExts {
                 let segs = segments_from_ext(segs);
                 if !segs.is_empty() {
                     return Some(segs);
+                }
+            }
+        }
+        None
+    }
+
+    fn policy(&self, facts: &PolicyFacts<'_>) -> Option<PolicyVerdict> {
+        let mut converted = None;
+        for slot in &self.slots {
+            if !slot.manifest().hooks.contains(HookSet::POLICY) {
+                continue;
+            }
+            let f = converted.get_or_insert_with(|| policy_facts_to_ext(facts));
+            // Never block the Reader: a busy or faulted slot is "no opinion".
+            let Some(v) = slot.call(HookKind::Policy, false, |i| i.policy(f)) else {
+                continue;
+            };
+            match v {
+                api::PolicyVerdict::Defer => {}
+                api::PolicyVerdict::Silence => return Some(PolicyVerdict::Silence),
+                api::PolicyVerdict::Notice => return Some(PolicyVerdict::Notice),
+                api::PolicyVerdict::Value(t) => {
+                    let t: String = t.chars().take(MAX_SEGMENT_CHARS).collect();
+                    if !t.is_empty() {
+                        return Some(PolicyVerdict::Value(t));
+                    }
+                }
+                api::PolicyVerdict::Say(s) => {
+                    let segs = segments_from_ext(s);
+                    if !segs.is_empty() {
+                        return Some(PolicyVerdict::Say(segs));
+                    }
                 }
             }
         }

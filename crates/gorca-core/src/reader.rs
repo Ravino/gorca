@@ -450,6 +450,35 @@ impl Reader {
         self
     }
 
+    /// Is an application policy asked about `app`? The profile must ask for it (the verified
+    /// Shell) and a policy must exist: a native one installed by the daemon, or an extension host
+    /// whose `policy` hook may answer.
+    pub(crate) fn policy_active(&self, app: AppId) -> bool {
+        self.dir.has_policy(app) && (self.app_policy.is_some() || self.ext.is_some())
+    }
+
+    /// The application policy's verdict: the extension host's `policy` hook first (WASM or
+    /// native build of an extension, ADR-0008 amendment 1), then the daemon's built-in policy,
+    /// else `Default`. Inline on the Reader: both are quick and neither blocks.
+    pub(crate) fn decide_policy(
+        &self,
+        app: AppId,
+        facts: &crate::builtin_ext::PolicyFacts<'_>,
+    ) -> crate::builtin_ext::PolicyVerdict {
+        if let Some(v) = self
+            .ext
+            .as_ref()
+            .and_then(|src| src.for_app(app))
+            .and_then(|a| a.policy(facts))
+        {
+            return v;
+        }
+        match &self.app_policy {
+            Some(p) => p.decide(facts),
+            None => crate::builtin_ext::PolicyVerdict::Default,
+        }
+    }
+
     /// Present the applications whose profile asks for it through `policy`.
     #[must_use]
     pub fn with_app_policy(mut self, policy: Arc<dyn crate::builtin_ext::AppPolicy>) -> Self {

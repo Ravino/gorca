@@ -68,6 +68,39 @@ const TREE: &str = r#""cmd":"build","tree":[
    {"name":"level","role":"level bar","value":[0.5,0.0,1.0]}]}
 ]"#;
 
+/// Where the Shell policy runs in these tests. `GORCA_TEST_SHELL=native` forces the native build;
+/// otherwise the `ext-gnome-shell` component is loaded when `cargo xtask build-ext` (`make ext`)
+/// installed it, exactly as the daemon's default does, else the native build runs.
+fn shell_runtime(shell: bool) -> (Option<PathBuf>, gorca_daemon::ShellPolicyMode) {
+    use gorca_daemon::ShellPolicyMode;
+    if !shell || std::env::var("GORCA_TEST_SHELL").is_ok_and(|v| v == "native") {
+        return (None, ShellPolicyMode::Native);
+    }
+    let target = std::env::var_os("CARGO_TARGET_DIR").map_or_else(
+        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target"),
+        PathBuf::from,
+    );
+    let profile = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+    let dir = target.join(profile).join("extensions");
+    if dir.join("ext-gnome-shell/ext_gnome_shell.wasm").is_file() {
+        eprintln!(
+            "shell policy under test: WASM component ({})",
+            dir.display()
+        );
+        (Some(dir), ShellPolicyMode::Auto)
+    } else {
+        eprintln!(
+            "shell policy under test: native build (no component in {})",
+            dir.display()
+        );
+        (None, ShellPolicyMode::Native)
+    }
+}
+
 async fn start(session: &Session, shell: bool, speak_ms: u64) -> Rig {
     // Logs go to stderr when `GORCA_LOG` is set (a failure under load is diagnosed from them).
     let _ = gorca_daemon::init_tracing();
@@ -83,8 +116,11 @@ async fn start(session: &Session, shell: bool, speak_ms: u64) -> Rig {
     }
     let mut app = FakeApp::start(session, &args).unwrap();
     app.cmd(&TREE.replace('\n', "")).unwrap();
+    let (ext_dir, shell_policy) = shell_runtime(shell);
     let opts = Options {
         speech: SpeechMode::Voicego,
+        ext_dir,
+        shell_policy,
         ..Options::isolated(
             session.a11y_address(),
             session.session_address(),

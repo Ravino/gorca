@@ -40,7 +40,8 @@ if [ "${1:-}" = "--uninstall" ]; then
     exit 0
 fi
 
-[ -x "$root/target/release/gorca" ] || echo "warning: $root/target/release/gorca not built (cargo build --release -p gorca-daemon)" >&2
+[ -x "$root/target/release/gorca" ] || echo "warning: $root/target/release/gorca not built (make release)" >&2
+[ -f "$root/target/release/extensions/ext-gnome-shell/ext_gnome_shell.wasm" ] || echo "warning: the Shell policy component is not built (make ext); gorca falls back to the native build of the same policy" >&2
 
 mkdir -p "$(dirname "$unit_dst")"
 ln -sfn "$unit_src" "$unit_dst"

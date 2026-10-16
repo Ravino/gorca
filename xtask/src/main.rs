@@ -3,6 +3,7 @@
 
 mod deps;
 mod envrule;
+mod ext;
 
 use std::process::ExitCode;
 
@@ -17,12 +18,22 @@ fn main() -> ExitCode {
                 ExitCode::from(2)
             }
         },
+        Some("build-ext") => match ext::run(args) {
+            Ok(true) => ExitCode::SUCCESS,
+            Ok(false) => ExitCode::FAILURE,
+            Err(e) => {
+                eprintln!("xtask build-ext: {e:#}");
+                ExitCode::from(2)
+            }
+        },
         Some(other) => {
-            eprintln!("unknown xtask command `{other}`\n\nusage: cargo xtask deps");
+            eprintln!(
+                "unknown xtask command `{other}`\n\nusage: cargo xtask deps | build-ext [--dest DIR]"
+            );
             ExitCode::from(2)
         }
         None => {
-            eprintln!("usage: cargo xtask deps");
+            eprintln!("usage: cargo xtask deps | build-ext [--dest DIR]");
             ExitCode::from(2)
         }
     }

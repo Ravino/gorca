@@ -5,8 +5,8 @@ use std::cell::RefCell;
 use std::marker::PhantomData;
 
 use crate::api::{
-    Budget, CommandResult, Event, EventVerdict, Hooks, NavUnit, Node, PresentCtx, PresentReason,
-    Prio, QueryError, Role, Segment, SegmentKind,
+    Budget, CommandResult, Event, EventVerdict, Hooks, NavUnit, Node, PolicyFacts, PolicyMoment,
+    PolicyVerdict, PresentCtx, PresentReason, Prio, QueryError, Role, Segment, SegmentKind,
 };
 
 #[allow(clippy::all, clippy::pedantic, missing_docs, unused_unsafe)]
@@ -140,6 +140,38 @@ fn ctx_from_wit(c: wt::PresentCtx) -> PresentCtx {
     }
 }
 
+fn policy_facts_from_wit(f: wt::PolicyFacts) -> PolicyFacts {
+    PolicyFacts {
+        moment: match f.moment {
+            wt::PolicyMoment::Focus => PolicyMoment::Focus,
+            wt::PolicyMoment::Value => PolicyMoment::Value,
+            wt::PolicyMoment::Activate => PolicyMoment::Activate,
+            wt::PolicyMoment::Showing => PolicyMoment::Showing,
+        },
+        role: role_from_wit(f.role),
+        states: f.states,
+        name: f.name,
+        description: f.description,
+        range: f.range.map(|r| crate::Range {
+            current: r.current,
+            min: r.min,
+            max: r.max,
+        }),
+    }
+}
+
+fn policy_verdict_to_wit(v: PolicyVerdict) -> wt::PolicyVerdict {
+    match v {
+        PolicyVerdict::Defer => wt::PolicyVerdict::Defer,
+        PolicyVerdict::Silence => wt::PolicyVerdict::Silence,
+        PolicyVerdict::Value(s) => wt::PolicyVerdict::Value(s),
+        PolicyVerdict::Say(s) => {
+            wt::PolicyVerdict::Say(s.into_iter().map(segment_to_wit).collect())
+        }
+        PolicyVerdict::Notice => wt::PolicyVerdict::Notice,
+    }
+}
+
 fn command_to_wit(r: CommandResult) -> wt::CommandResult {
     match r {
         CommandResult::Handled => wt::CommandResult::Handled,
@@ -175,6 +207,10 @@ impl<T: Hooks + Default + 'static> wh::Guest for Adapter<T> {
     fn present(n: wt::Node, ctx: wt::PresentCtx) -> Option<Vec<wt::Segment>> {
         with::<T, _>(|e| e.present(&node_from_wit(n), ctx_from_wit(ctx)))
             .map(|v| v.into_iter().map(segment_to_wit).collect())
+    }
+
+    fn policy(f: wt::PolicyFacts) -> wt::PolicyVerdict {
+        policy_verdict_to_wit(with::<T, _>(|e| e.policy(&policy_facts_from_wit(f))))
     }
 
     fn nav_units() -> Vec<wt::NavUnit> {

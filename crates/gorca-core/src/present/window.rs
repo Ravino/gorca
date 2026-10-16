@@ -848,10 +848,7 @@ impl Reader {
     /// speaking (the Shell's own "Main stage" window activates for every popup)?
     fn window_silenced(&self, snap: &NodeSnapshot) -> bool {
         use crate::builtin_ext::{PolicyFacts, PolicyMoment, PolicyVerdict};
-        let Some(policy) = &self.app_policy else {
-            return false;
-        };
-        if !self.dir.has_policy(snap.key.app) {
+        if !self.policy_active(snap.key.app) {
             return false;
         }
         let facts = PolicyFacts {
@@ -862,7 +859,7 @@ impl Reader {
             description: snap.description.as_deref(),
             range: None,
         };
-        policy.decide(&facts) == PolicyVerdict::Silence
+        self.decide_policy(snap.key.app, &facts) == PolicyVerdict::Silence
     }
 
     /// How a window's title goes out when no focus event followed it (`interrupts`) or when the

@@ -15,7 +15,9 @@ fn main() -> Result<ExitCode> {
         return Ok(ExitCode::SUCCESS);
     }
     let opts = match gorca_daemon::parse(std::env::args().skip(1)) {
-        Ok(Parsed::Run(opts)) => opts.with_env(|k| std::env::var(k).ok()),
+        Ok(Parsed::Run(opts)) => opts
+            .with_env(|k| std::env::var(k).ok())
+            .with_default_ext_dir(&gorca_daemon::default_ext_dirs(), |k| std::env::var(k).ok()),
         Ok(Parsed::Config(cmd)) => {
             let default = gorca_daemon::Options::default()
                 .with_env(|k| std::env::var(k).ok())

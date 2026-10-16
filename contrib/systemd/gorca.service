@@ -6,7 +6,12 @@ After=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=<repo>/target/release/gorca --speech=auto --impersonate-orca
+# The extensions (the GNOME Shell policy as a WASM component) are built by `make ext` (also part
+# of `make release` and `make check`) into target/release/extensions. The daemon would find that
+# directory beside the binary by itself; it is named here so the unit says where they come from.
+# If the directory or the component is missing, the daemon logs it and runs the native build of
+# the same Shell policy (`--shell-policy=native` forces that).
+ExecStart=<repo>/target/release/gorca --speech=auto --impersonate-orca --ext-dir=<repo>/target/release/extensions
 # ADR-0001 17.2: do not restart after an explicit kill (e.g. an operator or OOM
 # policy); restart only on crashes and non-zero exits.
 Restart=on-failure

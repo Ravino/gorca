@@ -4,7 +4,7 @@ name = "ext-test"
 backend = "wasm"
 # The component, relative to this file.
 module = "ext_test.wasm"
-hooks = ["on-event", "present", "command"]
+hooks = ["on-event", "present", "policy", "command"]
 capabilities = ["speak", "settings"]
 
 [matcher]

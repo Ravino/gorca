@@ -78,6 +78,40 @@ interface types {
     name: string,
   }
 
+  /// When the core asks an application policy (ADR-0008 tier W3).
+  enum policy-moment {
+    /// A node took focus and is about to be presented.
+    focus,
+    /// The value of a node that does not hold focus changed (an OSD level bar).
+    value,
+    /// A window was activated and is about to be announced.
+    activate,
+    /// A node became visible: does it read like a notice?
+    showing,
+  }
+
+  /// What a policy sees of a node: plain data (the `showing` moment carries only the role).
+  record policy-facts {
+    moment: policy-moment,
+    role: role,
+    states: u64,
+    name: option<string>,
+    description: option<string>,
+    range: option<range>,
+  }
+
+  variant policy-verdict {
+    /// No opinion: the core presents the node as for any application.
+    defer,
+    silence,
+    /// Replace the value in the core's presentation with this text.
+    value(string),
+    /// Say this instead of the core's presentation.
+    say(list<segment>),
+    /// Read the node as a notice when it appears (title, role word, text).
+    notice,
+  }
+
   variant command-result {
     handled,
     not-handled,
@@ -103,13 +137,16 @@ interface host {
 }
 
 interface hooks {
-  use types.{node, event, event-verdict, present-ctx, segment, nav-unit, command-result};
+  use types.{node, event, event-verdict, present-ctx, segment, nav-unit, command-result, policy-facts, policy-verdict};
 
   /// Limit: 2 ms CPU. Focus and removal events are routed whatever the verdict (the core keeps
   /// its focus bookkeeping); a `rewrite` there still speaks.
   on-event: func(ev: event) -> event-verdict;
   /// Limit: 2 ms CPU. `some` replaces the core presentation (first match wins).
   present: func(n: node, ctx: present-ctx) -> option<list<segment>>;
+  /// Limit: 2 ms CPU. The application policy (ADR-0008 W3): facts in, verdict out; runs inline on
+  /// the Reader like `present`. The first extension that does not `defer` wins.
+  policy: func(f: policy-facts) -> policy-verdict;
   nav-units: func() -> list<nav-unit>;
   nav-match: func(unit: u32, n: node) -> bool;
   /// Limit: 20 ms CPU.

@@ -83,7 +83,7 @@ pub const POOL_INSTANCES: u32 = 512;
 /// Epoch ticks of the wall-clock backstop for `kind`.
 fn ticks(kind: HookKind) -> u64 {
     let t = TICK.as_micros().max(1);
-    let factor = if kind == HookKind::Present {
+    let factor = if matches!(kind, HookKind::Present | HookKind::Policy) {
         BACKSTOP_FACTOR_PRESENT
     } else {
         BACKSTOP_FACTOR
@@ -518,6 +518,36 @@ impl HookInstance for WasmInstance {
         };
         let r = self.call(HookKind::Present, |h, s| h.call_present(s, &node, ctx))?;
         Ok(r.map(|v| v.into_iter().map(segment_to_api).collect()))
+    }
+
+    fn policy(&mut self, f: &api::PolicyFacts) -> Result<api::PolicyVerdict, Fault> {
+        let facts = wt::PolicyFacts {
+            moment: match f.moment {
+                api::PolicyMoment::Focus => wt::PolicyMoment::Focus,
+                api::PolicyMoment::Value => wt::PolicyMoment::Value,
+                api::PolicyMoment::Activate => wt::PolicyMoment::Activate,
+                api::PolicyMoment::Showing => wt::PolicyMoment::Showing,
+            },
+            role: role_to_wit(f.role),
+            states: f.states,
+            name: f.name.clone(),
+            description: f.description.clone(),
+            range: f.range.map(|r| wt::Range {
+                current: r.current,
+                min: r.min,
+                max: r.max,
+            }),
+        };
+        let v = self.call(HookKind::Policy, |h, s| h.call_policy(s, &facts))?;
+        Ok(match v {
+            wt::PolicyVerdict::Defer => api::PolicyVerdict::Defer,
+            wt::PolicyVerdict::Silence => api::PolicyVerdict::Silence,
+            wt::PolicyVerdict::Value(s) => api::PolicyVerdict::Value(s),
+            wt::PolicyVerdict::Say(s) => {
+                api::PolicyVerdict::Say(s.into_iter().map(segment_to_api).collect())
+            }
+            wt::PolicyVerdict::Notice => api::PolicyVerdict::Notice,
+        })
     }
 
     fn nav_units(&mut self) -> Result<Vec<api::NavUnit>, Fault> {

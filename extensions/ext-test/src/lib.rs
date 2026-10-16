@@ -13,6 +13,7 @@
 //! | `Announcement("std")` | uses `HashMap`, `Instant` and `SystemTime`; `Rewrite("std ok")` |
 //! | `Announcement("rewrite:<text>")` | `Rewrite` verdict speaking `<text>` |
 //! | node named `gorca-ext-present` | `present` answers `ext presented` |
+//! | policy facts named `gorca-ext-silence` / `-crash` / `-spin` | `policy` answers `Silence` / panics / loops |
 //! | command 1 | speaks `ext hello` |
 //! | command 4 | counts calls in the settings KV, speaks the count |
 //! | command 5 | speaks through the `host` import (`host::speak`) |
@@ -22,8 +23,8 @@
 #![allow(clippy::panic)]
 
 use gorca_ext_api::{
-    CommandResult, Event, EventVerdict, Hooks, Node, PresentCtx, Prio, Segment, export_extension,
-    host,
+    CommandResult, Event, EventVerdict, Hooks, Node, PolicyFacts, PolicyVerdict, PresentCtx, Prio,
+    Segment, export_extension, host,
 };
 
 #[derive(Debug, Default)]
@@ -111,6 +112,15 @@ impl Hooks for TestExtension {
             Some("gorca-ext-crash") => crash(),
             Some("gorca-ext-spin") => spin(),
             _ => None,
+        }
+    }
+
+    fn policy(&mut self, f: &PolicyFacts) -> PolicyVerdict {
+        match f.name.as_deref() {
+            Some("gorca-ext-silence") => PolicyVerdict::Silence,
+            Some("gorca-ext-crash") => crash(),
+            Some("gorca-ext-spin") => spin(),
+            _ => PolicyVerdict::Defer,
         }
     }
 

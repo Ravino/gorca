@@ -5,18 +5,18 @@
 //! closes. The core presents it like any application; this extension holds only what is
 //! specific to the Shell, **as data**: a table of [`RULES`], each with a stable id, a condition
 //! over [`Facts`] and one of a closed set of outcomes ([`Then`]). There is no code per rule
-//! beyond the evaluation loop, so the same table is the WASM component of M5 unchanged.
+//! beyond the evaluation loop, so the same table is the WASM component unchanged.
 //!
 //! The interface is narrow on purpose: facts in (role, states, name, description, a value range,
-//! which moment), [`Verdict`] out. It depends only on `gorca-ext-api`; the host (today the
-//! daemon's native adapter, after M5 the WASM host) turns its own node types into [`Facts`].
+//! which moment), [`Verdict`] out. It depends only on `gorca-ext-api`. It is built twice from this
+//! one source (ADR-0008 amendment 1): as a `wasm32-wasip2` component, which the extension host
+//! loads by default (the `policy` hook, [`ShellExtension`]), and natively, as the fallback the
+//! daemon's `shell_policy` adapter links when the component is not installed.
 //! Sources of the rules: `refs/orca/src/orca/scripts/apps/gnome-shell/script.py` (focus claims
 //! of the window after the switcher), `refs/gnome-shell/js/ui/barLevel.js` and `slider.js`
 //! (levels run 0..1), `refs/gnome-shell/js/ui/osdWindow.js` (the OSD is a level bar).
 
-use gorca_ext_api::{
-    CommandResult, Event, EventVerdict, Hooks, NavUnit, Node, PresentCtx, PresentReason,
-};
+use gorca_ext_api::{Hooks, PolicyFacts, PolicyMoment, PolicyVerdict, export_extension};
 pub use gorca_ext_api::{Range, Segment, SegmentKind};
 
 /// Role numbers of the WIT `role` enum (`gorca-ext-api/wit/gorca-ext.wit`); a test keeps them in
@@ -215,62 +215,37 @@ pub fn decide(f: &Facts<'_>) -> Verdict {
     }
 }
 
-/// The same policy through the extension API, for the host of M5.
+/// The same policy through the extension API: the component the host loads.
 #[derive(Debug, Default)]
 pub struct ShellExtension;
 
 impl Hooks for ShellExtension {
-    fn on_event(&mut self, _ev: &Event) -> EventVerdict {
-        EventVerdict::Pass
-    }
-
-    fn present(&mut self, n: &Node, ctx: PresentCtx) -> Option<Vec<Segment>> {
-        if ctx.reason != PresentReason::Focus {
-            return None;
-        }
+    fn policy(&mut self, f: &PolicyFacts) -> PolicyVerdict {
         let facts = Facts {
-            moment: Moment::Focus,
+            moment: match f.moment {
+                PolicyMoment::Focus => Moment::Focus,
+                PolicyMoment::Value => Moment::Value,
+                PolicyMoment::Activate => Moment::Activate,
+                PolicyMoment::Showing => Moment::Showing,
+            },
             // The WIT role numbers are the order of the `Role` enum (kept in step by a test).
-            role: n.role as u8,
-            states: n.states,
-            name: n.name.as_deref(),
-            description: n.description.as_deref(),
-            range: n.range,
+            role: f.role as u8,
+            states: f.states,
+            name: f.name.as_deref(),
+            description: f.description.as_deref(),
+            range: f.range,
         };
         match decide(&facts) {
-            Verdict::Silence => Some(Vec::new()),
-            Verdict::Say(s) => Some(s),
-            Verdict::Value(v) => {
-                let mut segs = Vec::with_capacity(2);
-                // An unnamed slider says only its value, never an empty text segment (N-6).
-                if let Some(name) = n.name.as_ref().filter(|s| !s.trim().is_empty()) {
-                    segs.push(Segment {
-                        text: name.clone(),
-                        kind: SegmentKind::Text,
-                    });
-                }
-                segs.push(Segment {
-                    text: v,
-                    kind: SegmentKind::Value,
-                });
-                Some(segs)
-            }
-            Verdict::Default | Verdict::Notice => None,
+            Verdict::Default => PolicyVerdict::Defer,
+            Verdict::Silence => PolicyVerdict::Silence,
+            Verdict::Value(v) => PolicyVerdict::Value(v),
+            Verdict::Say(s) => PolicyVerdict::Say(s),
+            Verdict::Notice => PolicyVerdict::Notice,
         }
     }
-
-    fn nav_units(&self) -> Vec<NavUnit> {
-        Vec::new()
-    }
-
-    fn nav_match(&self, _unit: u32, _n: &Node) -> bool {
-        false
-    }
-
-    fn command(&mut self, _id: u32) -> CommandResult {
-        CommandResult::NotHandled
-    }
 }
+
+export_extension!(ShellExtension);
 
 #[cfg(test)]
 mod tests {
@@ -379,63 +354,12 @@ mod tests {
     }
 
     #[test]
-    fn an_unnamed_unit_slider_says_only_its_value() {
-        let mut e = ShellExtension;
-        let mut node = Node {
-            key: (1, 1),
-            role: gorca_ext_api::Role::Slider,
-            states: 0,
-            name: None,
-            description: None,
-            range: unit(0.5),
-        };
-        let focus = PresentCtx {
-            epoch: 1,
-            reason: PresentReason::Focus,
-        };
-        let segs = e.present(&node, focus).unwrap_or_default();
-        assert_eq!(segs.len(), 1, "{segs:?}");
-        assert_eq!(segs[0].text, "50 percent");
-        node.name = Some("Volume".into());
-        let segs = e.present(&node, focus).unwrap_or_default();
-        assert_eq!(segs.len(), 2);
-        assert_eq!(segs[0].text, "Volume");
-    }
-
-    #[test]
     fn rules_have_unique_stable_ids() {
         let mut ids: Vec<&str> = RULES.iter().map(|r| r.id).collect();
         ids.sort_unstable();
         ids.dedup();
         assert_eq!(ids.len(), RULES.len());
         assert!(RULES.iter().all(|r| r.id.starts_with("shell.")));
-    }
-
-    #[test]
-    fn the_extension_api_silences_the_window_claim_only_for_focus() {
-        let mut e = ShellExtension;
-        let node = Node {
-            key: (1, 1),
-            role: gorca_ext_api::Role::Window,
-            states: 0,
-            name: Some("Main".into()),
-            description: None,
-            range: None,
-        };
-        let focus = PresentCtx {
-            epoch: 1,
-            reason: PresentReason::Focus,
-        };
-        let nav = PresentCtx {
-            epoch: 1,
-            reason: PresentReason::Navigation,
-        };
-        assert_eq!(e.present(&node, focus), Some(Vec::new()));
-        assert_eq!(e.present(&node, nav), None);
-        assert_eq!(
-            e.on_event(&Event::Announcement("x".into())),
-            EventVerdict::Pass
-        );
     }
 
     #[test]
@@ -454,23 +378,65 @@ mod tests {
         );
     }
 
-    #[test]
-    fn the_extension_api_speaks_a_unit_slider_as_a_percentage() {
-        let mut e = ShellExtension;
-        let node = Node {
-            key: (1, 2),
-            role: gorca_ext_api::Role::Slider,
+    fn pf(
+        moment: PolicyMoment,
+        role: gorca_ext_api::Role,
+        name: Option<&str>,
+        range: Option<Range>,
+    ) -> PolicyFacts {
+        PolicyFacts {
+            moment,
+            role,
             states: 0,
-            name: Some("Volume".into()),
+            name: name.map(str::to_owned),
             description: None,
-            range: unit(0.5),
+            range,
+        }
+    }
+
+    #[test]
+    fn the_policy_hook_speaks_the_same_verdicts_as_the_table() {
+        use gorca_ext_api::Role;
+        let mut e = ShellExtension;
+        assert_eq!(
+            e.policy(&pf(PolicyMoment::Focus, Role::Window, Some("Main"), None)),
+            PolicyVerdict::Silence
+        );
+        assert_eq!(
+            e.policy(&pf(
+                PolicyMoment::Activate,
+                Role::Window,
+                Some("Main"),
+                None
+            )),
+            PolicyVerdict::Silence
+        );
+        assert_eq!(
+            e.policy(&pf(PolicyMoment::Showing, Role::Dialog, None, None)),
+            PolicyVerdict::Notice
+        );
+        assert_eq!(
+            e.policy(&pf(PolicyMoment::Focus, Role::Button, Some("OK"), None)),
+            PolicyVerdict::Defer
+        );
+        assert_eq!(
+            e.policy(&pf(
+                PolicyMoment::Focus,
+                Role::Slider,
+                Some("Volume"),
+                unit(0.5)
+            )),
+            PolicyVerdict::Value("50 percent".to_owned())
+        );
+        let PolicyVerdict::Say(s) = e.policy(&pf(
+            PolicyMoment::Value,
+            Role::ProgressBar,
+            Some("Volume"),
+            unit(0.25),
+        )) else {
+            panic!("say")
         };
-        let focus = PresentCtx {
-            epoch: 1,
-            reason: PresentReason::Focus,
-        };
-        let segs = e.present(&node, focus).expect("a verdict");
-        assert_eq!(segs[0].text, "Volume");
-        assert_eq!(segs[1].text, "50 percent");
+        assert_eq!(s[0].text, "Volume");
+        assert_eq!(s[1].text, "25 percent");
     }
 }

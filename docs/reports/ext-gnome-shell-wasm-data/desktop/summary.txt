@@ -1,0 +1,20 @@
+load 9.48 11.18 11.44 run 1 native
+  exit 0 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.54s policy=0wasm/6native
+load 9.48 11.18 11.44 run 1 wasm
+  exit 0 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.64s policy=2wasm/4native
+load 10.57 11.37 11.50 run 2 native
+  exit 0 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.56s policy=0wasm/6native
+load 11.08 11.47 11.53 run 2 wasm
+  exit 0 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.66s policy=2wasm/4native
+load 11.48 11.54 11.56 run 3 native
+  exit 0 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.60s policy=0wasm/6native
+load 11.48 11.54 11.56 run 3 wasm
+  exit 0 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.56s policy=2wasm/4native
+load 15.36 12.35 11.82 run 4 native
+  exit 0 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.58s policy=0wasm/6native
+load 15.25 12.37 11.83 run 4 wasm
+  exit 0 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.73s policy=2wasm/4native
+load 14.91 12.35 11.83 run 5 native
+  exit 0 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.70s policy=0wasm/6native
+load 14.91 12.35 11.83 run 5 wasm
+  exit 0 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.68s policy=2wasm/4native

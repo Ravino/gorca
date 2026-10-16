@@ -26,6 +26,7 @@ The manifest says which (`backend = "native"` must be chosen explicitly and is i
 ```
 app actor  --on_event--> AppExt      after the mirror update; never between raw event and dirty mark (WE-2)
 Reader     --present---> AppExt      inside PresenterRegistry::present; try_lock, busy = "no opinion"
+Reader     --policy----> AppExt      the application policy (focus, value, activate, showing); try_lock, busy = "no opinion"
 Reader     --command---> AppExt      queued to the host worker; answer returns as BackgroundMsg::ExtSpeech
 keymap     compile()  -> ExtCommands names + default chords merged (never over the preset or the user)
 ```
@@ -88,8 +89,8 @@ so the core keeps speaking.
 ## 4. The sandbox
 
 `wit/gorca-ext.wit` (package `gorca:ext@0.1.0`): `host` (`get-node`, `fetch`, `text`, `speak`,
-`get-setting`, `set-setting`, `log`) and `hooks` (`on-event`, `present`, `nav-units`, `nav-match`,
-`command`). Capabilities in the manifest gate `speak`, `settings` and `fetch:*`; an undeclared one is
+`get-setting`, `set-setting`, `log`) and `hooks` (`on-event`, `present`, `policy`, `nav-units`,
+`nav-match`, `command`). Capabilities in the manifest gate `speak`, `settings` and `fetch:*`; an undeclared one is
 denied (`fetch` and `text` return `denied`, or `not-supported` when declared: they need an asynchronous
 prefetch path that M6 adds for `ext-vte`).
 
@@ -108,7 +109,7 @@ actor's runtime and grant ambient capability.
 name = "ext-vte"                      # [a-z0-9_-]; commands become ext.ext_vte.<command>
 backend = "wasm"                      # or "native"
 module = "ext_vte.wasm"               # relative; wasm only
-hooks = ["on-event", "present", "nav-units", "command"]
+hooks = ["on-event", "present", "policy", "nav-units", "command"]
 capabilities = ["speak", "settings", "fetch:prefetch", "fetch:background"]
 
 [matcher]                             # glob lists; omitted = any
@@ -149,9 +150,22 @@ default chord.
 
 ## 6. Daemon
 
-`gorca --ext-dir=DIR [--ext-settings=PATH]` (env `GORCA_EXT_DIR`, `GORCA_EXT_SETTINGS`). Off unless a
-directory is named. The settings KV defaults to `$XDG_STATE_HOME/gorca/ext-settings.toml` when
-extensions are loaded; it is written by the worker thread, atomically, never from a hook.
+`gorca --ext-dir=DIR [--ext-settings=PATH] [--shell-policy=auto|native]` (env `GORCA_EXT_DIR`,
+`GORCA_EXT_SETTINGS`, `GORCA_SHELL_POLICY`). When no directory is named, the binary (not the library,
+so tests never pick one up) uses the first existing of `<exe dir>/extensions`,
+`<exe dir>/../lib/gorca/extensions`, `/usr/local/lib/gorca/extensions`, `/usr/lib/gorca/extensions`;
+`--ext-dir=` (empty) loads none. `cargo xtask build-ext` (`make ext`, part of `make check` and
+`make release`) builds the shipped components and installs them as
+`target/<debug|release>/extensions/<name>/{ext.toml,<module>.wasm}`, which is `<exe dir>/extensions`.
+The settings KV defaults to `$XDG_STATE_HOME/gorca/ext-settings.toml` when extensions are loaded; it
+is written by the worker thread, atomically, never from a hook.
+
+**The Shell policy** (`ext-gnome-shell`) runs as the component when the host loaded it, else as the
+native build of the same source linked into the daemon (`--shell-policy=native` forces the native
+build; the log says which one runs: `shell policy: ext-gnome-shell WASM component` or `... native
+build`). The two are exclusive: the daemon installs the native `AppPolicy` only when the component
+is not loaded. If the component faults, three strikes disable it and the core presents the Shell
+like any application (the same degradation as the native adapter's three panics).
 
 ## 7. Writing an extension
 
@@ -186,8 +200,9 @@ Both are native code today (`ext-vte` is a skeleton; the Shell switcher policy i
    only workspace dependency stays `gorca-ext-api`. Implement `Hooks` (the existing `ext-vte`
    skeleton already does; the nav hooks now have defaults and can be deleted). Add
    `export_extension!(YourType);` (the type needs `Default`).
-2. **Manifest.** Copy `extensions/ext-test/ext.toml`. `ext-gnome-shell`: `verified_shell = true`, hooks
-   `["on-event", "present"]`, capability `speak` if it speaks directly. `ext-vte`: `toolkit` or
+2. **Manifest.** Copy `extensions/ext-test/ext.toml`. `ext-gnome-shell` (ported, see
+   `extensions/ext-gnome-shell/ext.toml`): `verified_shell = true`, hooks `["policy"]`, no
+   capabilities. `ext-vte`: `toolkit` or
    `app_name` for GNOME Terminal (`gnome-terminal*`), hooks `["on-event", "present", "command"]`, its
    review/prompt commands as `[[keymap]]` entries.
 3. **Event shape.** Hooks get the WIT subset (`gorca_ext_api::Event`): `FocusChanged`,
@@ -197,7 +212,11 @@ Both are native code today (`ext-vte` is a skeleton; the Shell switcher policy i
    `ext-vte` prompt heuristics), extend the WIT `event` variant and the one `event_to_ext` function in
    `gorca-ext-host/src/convert.rs`, then the guest and host conversions (`guest.rs`, `wasm.rs`): all
    are plain `match`es, additive, and the WIT/Rust role test fails if the two drift.
-4. **Moving the policy.** The Shell switcher today is an app-actor routing rule (`speak_selection`
+4. **Moving the policy.** (Done for the Shell *rule table*: dialog-as-notice, OSD level, unit slider
+   percentage, window focus claim, "Main stage" activation. They moved behind the `policy` hook, a
+   fourth core hook with the core's `AppPolicy` facts and verdict as WIT `policy-facts` /
+   `policy-verdict`; the Alt+Tab switcher routing below is still the `AppProfile::speak_selection`
+   switch.) The Shell switcher today is an app-actor routing rule (`speak_selection`
    -> `FocusLaneMsg::ItemSelected`). As an extension it becomes `on_event(PropertiesChanged with
    SELECTED_NOW)` answering `Rewrite(segments)` (speak the item) or `Suppress`; the core's focus
    presenter is untouched. Keep the `AppProfile` switch until the extension reproduces the M1/M4
@@ -222,7 +241,8 @@ Both are native code today (`ext-vte` is a skeleton; the Shell switcher policy i
 
 - `document_role` matching needs a role at `attach`; the host passes `None` until M7 wires documents,
   so a manifest that requires one matches nothing.
-- Native extensions are linked in by the daemon (none is yet); a directory only loads components.
+- Native extensions are linked in by the daemon (only the native build of `ext-gnome-shell`, as the
+  fallback when its component is not installed); a directory only loads components.
 - `nav-units` and `nav-match` exist in the WIT and the host but no core caller runs them yet (ADR-0003
   section 15, M7).
 - The Reader runs `present` inline: a looping `present` costs up to its fuel limit (about 1 to 4 ms)
