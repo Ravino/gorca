@@ -80,6 +80,10 @@ pub fn states_from_raw(words: &[u32]) -> StateSet {
             out |= core;
         }
     }
+    // Gecko and GTK never set `collapsed`: expandable and not expanded is collapsed.
+    if has(bits, Raw::Expandable) && !has(bits, Raw::Expanded) {
+        out |= StateSet::COLLAPSED;
+    }
     if bits != 0 && !has(bits, Raw::Sensitive) {
         out |= StateSet::DISABLED;
     }

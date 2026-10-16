@@ -367,6 +367,39 @@ fn node_holds(doc: &WebDoc, id: DocNodeId, at: u32) -> bool {
         .is_some_and(|(s, e)| s <= at && at < e)
 }
 
+/// "out of list", "out of table", "out of block quote" for the containers that hold `from` but
+/// not `to` (innermost first).
+fn leaving_items(doc: &WebDoc, from: u32, to: u32) -> Vec<Item> {
+    let mut out = Vec::new();
+    let Some((mut cur, _)) = doc.at_offset(from.min(doc.text_len().saturating_sub(1))) else {
+        return out;
+    };
+    for _ in 0..64 {
+        let Some(v) = doc.node(cur) else { break };
+        let word = if v.cats.intersects(Cat::TABLE) {
+            Some("table")
+        } else if v.role == Role::List && v.cats.intersects(Cat::LIST) {
+            Some("list")
+        } else if v.cats.intersects(Cat::BLOCKQUOTE) {
+            Some("block quote")
+        } else {
+            None
+        };
+        if let Some(w) = word
+            && !v.flags.contains(NodeFlags::HIDDEN)
+            && node_holds(doc, cur, from)
+            && !node_holds(doc, cur, to)
+        {
+            out.push(Item::Role(format!("out of {w}")));
+        }
+        match doc.parent(cur) {
+            Some(p) => cur = p,
+            None => break,
+        }
+    }
+    out
+}
+
 /// Describe `[a, b)` as a move from the cursor at `from` (BM-3 field diff): a container or
 /// control that already holds `from` was entered earlier and is not announced again.
 pub fn describe_from(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Vec<Item> {
@@ -379,6 +412,10 @@ pub fn describe_from(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Vec<Ite
     let Some((n0, local0)) = doc.at_offset(a) else {
         return out;
     };
+    // Containers the cursor leaves with this move (NVDA "out of list").
+    if let Some(f) = from {
+        out.extend(leaving_items(doc, f, a));
+    }
     // Ancestors whose content starts exactly here were entered on this range.
     let mut chain: Vec<DocNodeId> = Vec::new();
     let mut cur = doc.parent(n0);

@@ -923,6 +923,7 @@ impl Reader {
     fn web_dialog_lead(&mut self, doc: DocId, id: DocNodeId, before: Option<DocNodeId>) {
         let Some(b) = self.web.as_mut() else { return };
         let Some(h) = b.docs.get(doc) else { return };
+        let last_lead = b.lead_dialog;
         let lead = h.read.with(|d| {
             let mut cur = Some(id);
             for _ in 0..32 {
@@ -942,21 +943,25 @@ impl Reader {
                         }
                         false
                     });
-                    if holds {
-                        return None;
+                    if holds || last_lead == Some(n) {
+                        return Some((n, Vec::new()));
                     }
                     let mut out = Vec::new();
                     if let Some(name) = v.name.filter(|n| !n.is_empty()) {
                         out.push(Item::Lead(name.to_owned()));
                     }
                     out.push(Item::Lead("dialog".to_owned()));
-                    return Some(out);
+                    return Some((n, out));
                 }
                 cur = d.parent(n);
             }
             None
         });
-        if let Some(mut lead) = lead {
+        // Remember the dialog announced; leaving every dialog forgets it.
+        b.lead_dialog = lead.as_ref().map(|(n, _)| *n);
+        if let Some((_, mut lead)) = lead
+            && !lead.is_empty()
+        {
             let now = self.now;
             let rest = b.pending_tail.take().map(|(t, _)| t).unwrap_or_default();
             lead.extend(rest);
@@ -1359,13 +1364,15 @@ impl Reader {
         if matches!(self.web_mode(), WebMode::Browse { .. }) {
             self.web_place(doc, id);
         }
+        self.web_dialog_lead(doc, id, None);
+        self.web_listbox_lead(doc, id, None);
     }
 
     /// Timers: a document that is slow to mirror, and the debounced scroll (LP-6).
     pub(crate) fn web_timer(&mut self, now: Instant, fx: &mut ReaderEffects) {
         self.web_auto_read_timer(fx);
         let Some(b) = self.web.as_mut() else { return };
-        if let Some((due, doc, node)) = b.scroll_due {
+        if let Some((due, doc, node, local)) = b.scroll_due {
             if due <= now {
                 b.scroll_due = None;
                 fx.push(ReaderEffect::Web(WebEffect::Act {
@@ -1373,6 +1380,18 @@ impl Reader {
                     node,
                     act: DocAction::ScrollIntoView,
                 }));
+                // D-2: Firefox starts Tab from its caret when nothing is focused, so the caret
+                // follows the browse cursor and Tab begins at the cursor, as in NVDA. The cursor
+                // never moves focus (SY.nomove); a caret is not focus.
+                if matches!(b.mode, WebMode::Browse { .. }) {
+                    // The caret event this causes is ours, not a page following a click.
+                    b.activated = None;
+                    fx.push(ReaderEffect::Web(WebEffect::Act {
+                        doc,
+                        node,
+                        act: DocAction::SetCaret(local),
+                    }));
+                }
             } else {
                 fx.push(ReaderEffect::ArmTimer(due));
             }
@@ -1657,7 +1676,7 @@ impl Reader {
         }
         b.last_off = off;
         b.counters.moves += 1;
-        b.scroll_due = Some((now + SCROLL_DEBOUNCE, doc, cur.node));
+        b.scroll_due = Some((now + SCROLL_DEBOUNCE, doc, cur.node, cur.local));
     }
 
     fn web_cursor_cmd(&mut self, mv_kind: Move, now: Instant, fx: &mut ReaderEffects) {

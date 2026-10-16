@@ -513,7 +513,7 @@ pub struct BrowseState {
     pub single_letter: bool,
     pub restore_until: Option<(Instant, u32)>,
     /// Latest scroll request: sent after a pause so held keys do not flood the page (LP-6).
-    pub scroll_due: Option<(Instant, DocId, DocNodeId)>,
+    pub scroll_due: Option<(Instant, DocId, DocNodeId, u32)>,
     /// When the browser last reported `load-complete`, by document root (page auto-read): the
     /// load of another tab or of an iframe of the same browser is not this page's.
     pub loaded: HashMap<gorca_model::NodeKey, Instant>,
@@ -532,6 +532,8 @@ pub struct BrowseState {
     /// [`CARET_FOLLOW`] of it is the page answering our action (anchor jumps), not the user.
     pub activated: Option<Instant>,
     /// The check box, radio button or toggle that browse mode just clicked.
+    /// The dialog whose name was last announced on focus entry.
+    pub lead_dialog: Option<DocNodeId>,
     pub click_target: Option<(DocNodeId, Instant)>,
 }
 
@@ -563,6 +565,7 @@ impl BrowseState {
             suppress_focus: None,
             activated: None,
             click_target: None,
+            lead_dialog: None,
         }
     }
 }

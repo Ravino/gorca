@@ -61,6 +61,14 @@ pub fn focus_need(n: &NodeSnapshot) -> PropMask {
     if n.name.as_deref().is_none_or(str::is_empty) {
         need |= PropMask::RELATIONS;
     }
+    // A field's help or error text is spoken after its value: asked for only once the role is
+    // known to be a field (the cold path stays as measured, B-1).
+    if matches!(
+        n.role,
+        Role::TextEntry | Role::PasswordEntry | Role::ComboBox | Role::SpinButton
+    ) {
+        need |= PropMask::DESCRIPTION;
+    }
     need
 }
 

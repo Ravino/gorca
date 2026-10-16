@@ -223,6 +223,7 @@ pub mod state_bit {
     pub const DEFUNCT: u8 = 6;
     pub const EDITABLE: u8 = 7;
     pub const ENABLED: u8 = 8;
+    pub const EXPANDABLE: u8 = 9;
     pub const EXPANDED: u8 = 10;
     pub const FOCUSABLE: u8 = 11;
     pub const FOCUSED: u8 = 12;
@@ -280,6 +281,10 @@ pub fn map_states(bits: u64) -> StateSet {
         if has(n) {
             s |= f;
         }
+    }
+    // Gecko never sets `collapsed`: an expandable node that is not expanded is collapsed.
+    if has(state_bit::EXPANDABLE) && !has(EXPANDED) {
+        s |= StateSet::COLLAPSED;
     }
     s
 }

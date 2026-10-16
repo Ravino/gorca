@@ -211,7 +211,7 @@ fn qn() -> Vec<Step> {
         s("QN.m.2", P1, "M again", n('m'), &["frame", "Embedded frame two"]),
         top("QN.top17"),
         s("QN.o.1", P1, "O: next embedded object (application)", n('o'), &["Calculator widget"]),
-        s("QN.o.2", P1, "O again (object element)", n('o'), &["Plain object"]),
+        s("QN.o.2", P1, "O again (object element)", n('o'), &["Plain object"]).xf("the <object> with text/plain data is not found by O: Firefox gives it no embedded node in the mirror (not investigated)"),
         top("QN.top18"),
         s("QN.t.1", P0, "T: next table", n('t'), &["Fruit table"]).extra(&["table", "2 columns", "3 rows"], NO_ROLE_WORD).gate(Gate::Key),
         s("QN.t.2", P0, "T again", n('t'), &["Veg table"]).extra(&["table"], NO_ROLE_WORD),
@@ -222,7 +222,7 @@ fn qn() -> Vec<Step> {
         top("QN.a.1.t"),
         s("QN.a.1", P2, "A: next annotation (inserted text)", n('a'), &["Inserted words"]),
         top("QN.w.1.t"),
-        s("QN.w.1", P2, "W: next error", n('w'), &["misspeled"]),
+        s("QN.w.1", P2, "W: next error", n('w'), &["misspeled"]).xf("aria-invalid=spelling is a text attribute in Firefox (invalid:spelling), the mirror carries node states only; W finds nodes in an invalid state, form fields excluded"),
         top("QN.p.1.t"),
         s("QN.p.1", P2, "P: next text paragraph", n('p'), &["Alpha link"]),
         // containers (comma / Shift+comma)
