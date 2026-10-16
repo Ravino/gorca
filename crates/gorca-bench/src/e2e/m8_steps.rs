@@ -500,6 +500,9 @@ fn sy() -> Vec<Step> {
         s("SY.esc", P0, "Escape", key0(ESC), &["browse mode"]),
         top("SY.top2"),
         s("SY.nomove", P1, "Moving the browse cursor never moves system focus (BM-2)", Act::Repeat(DOWN, 0, 6), &[]).no_focus().win(1200),
+        top("SY.top5"),
+        s("SY.nomove.k", P1, "K onto a link: reading never focuses it or sets the page caret (BM-2, review H-1)", n('k'), &["link one"]).no_focus().win(1500),
+        s("SY.nomove.sel", P1, "Shift+Right inside the link: the virtual selection never touches the page", Act::Key(RIGHT, SHIFT), &["selected"]).no_focus().win(1500),
         top("SY.top4"),
         s("SY.far", P2, "Ctrl+End: the far paragraph after a long spacer", ctrl(END), &["Far paragraph at the bottom"]),
         s("SY.back", P2, "Ctrl+Home back", ctrl(HOME), &["Focus and caret sync"]),
@@ -507,7 +510,14 @@ fn sy() -> Vec<Step> {
         // Tab starts from the browse cursor (NVDA _tabOverride, browseMode.py:2121)
         top("SY.top3"),
         s("SY.down2", P1, "Cursor onto the second paragraph", Act::Repeat(DOWN, 0, 2), &["Second paragraph"]),
-        s("SY.tab", P1, "Tab from the cursor: the next focusable after it, not the first on the page", Act::AppKeys(&[15]), &["link two"]).xf("gorca passes Tab to Firefox, which starts from its own focus point; NVDA's Tab override uses the browse cursor (parity delta D-2)").win(1500),
+        s("SY.tab", P1, "Tab from the cursor: the next focusable after it, not the first on the page (D-2)", key0(TAB), &["link two"]).win(1500),
+        s("SY.tab2", P1, "Tab again: the next focusable after the link", key0(TAB), &["Plain button"]).win(1500),
+        s("SY.stab", P1, "Shift+Tab: the previous focusable", Act::Key(TAB, SHIFT), &["link two"]).win(1500),
+        // last: with nothing focusable after the cursor Tab is not grabbed and reaches the page,
+        // which in this rig leaves the document
+        s("SY.end", P1, "Ctrl+End: past the last focusable", ctrl(END), &["Far paragraph at the bottom"]),
+        Step::setup("SY.end.wait", "the grab set follows the settled cursor", Act::Wait(500)),
+        s("SY.tab.out", P1, "Tab with no focusable after the cursor is not consumed (D-2 pass-through)", key0(TAB), &[]).passes_through(),
     ]
 }
 

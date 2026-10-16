@@ -519,6 +519,7 @@ fn run_step(w: &mut Web, doc: &DocRef, sc: &'static str, st: &Step) -> StepRes {
         why: st.xfail.unwrap_or_default().to_owned(),
     };
     let focus0 = w.tap.count(FOCUS);
+    let caret0 = w.tap.count(super::CARET);
     let mark_before = w.mark();
     let mut node = None;
     let (mut t_emit, consumed) = match act(w, doc, st.act, &mut node) {
@@ -572,7 +573,14 @@ fn run_step(w: &mut Web, doc: &DocRef, sc: &'static str, st: &Step) -> StepRes {
         std::thread::sleep(Duration::from_millis(10));
     };
     let sp = speaks_since(w, mark);
-    let focus_events = w.tap.count(FOCUS).saturating_sub(focus0);
+    // BM-2: a step that must not move focus must not move the page caret either (a caret in a
+    // focusable node is a focus in some engines), so caret events count like focus events.
+    let focus_events = w.tap.count(FOCUS).saturating_sub(focus0)
+        + if st.no_focus_events {
+            w.tap.count(super::CARET).saturating_sub(caret0)
+        } else {
+            0
+        };
     res.status = judge(st, &texts, consumed, focus_events);
     let first = st
         .say

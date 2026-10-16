@@ -10,7 +10,7 @@
 const RIG_KEYS: &str = "rig: a key typed into Firefox through the compositor lands on an unnamed browser 'panel', not in the page (probe m8-probe-tab, m8-probe-tab2); the page needs keyboard focus, which a click and AT-SPI GrabFocus did not give";
 
 /// Step ids per root cause.
-pub(super) const MARKS: &[(&[&str], &str)] = &[(&["FM.tab.real", "SY.tab", "SP.back"], RIG_KEYS)];
+pub(super) const MARKS: &[(&[&str], &str)] = &[(&["FM.tab.real", "SP.back"], RIG_KEYS)];
 
 /// Why this step is expected to fail today; `None` = it must pass.
 pub(super) fn reason(id: &str) -> Option<&'static str> {
