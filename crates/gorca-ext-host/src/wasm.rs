@@ -592,7 +592,8 @@ impl wh::Host for StoreData {
     fn get_setting(&mut self, k: String) -> wasmtime::Result<Option<String>> {
         // The value is copied (and lowered into guest memory) on the way out: charge it too.
         let v = self.shared.get_setting(&k);
-        self.work.charge(k.len() + v.as_ref().map_or(0, String::len) * 2)?;
+        self.work
+            .charge(k.len() + v.as_ref().map_or(0, String::len) * 2)?;
         Ok(v)
     }
 

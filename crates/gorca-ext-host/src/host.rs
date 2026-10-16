@@ -200,7 +200,7 @@ impl ExtHostBuilder {
             tx,
             workers: Mutex::new(workers),
             stopping,
-            _engine: self.engine,
+            engine: self.engine,
             reports: self.reports,
             bind_errors: self.bind_errors,
         }
@@ -268,7 +268,7 @@ pub struct ExtHost {
     tx: SyncSender<Job>,
     workers: Mutex<Vec<JoinHandle<()>>>,
     stopping: Arc<std::sync::atomic::AtomicBool>,
-    _engine: Option<Arc<ExtEngine>>,
+    engine: Option<Arc<ExtEngine>>,
     reports: Vec<LoadReport>,
     bind_errors: Vec<String>,
 }
@@ -301,7 +301,7 @@ impl ExtHost {
     /// Epoch ticks made by the backstop clock so far; it only runs while a WASM call is in
     /// flight, so an idle host does not advance it (tests).
     pub fn epoch_ticks(&self) -> u64 {
-        self._engine.as_ref().map_or(0, |e| e.ticks_done())
+        self.engine.as_ref().map_or(0, |e| e.ticks_done())
     }
 
     pub fn reports(&self) -> &[LoadReport] {

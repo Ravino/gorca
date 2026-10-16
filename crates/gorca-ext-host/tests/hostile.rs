@@ -114,7 +114,9 @@ fn hostile_present_holds_the_reader_near_the_cpu_limit() {
         "clocktime:5000",
     ] {
         let (p50, p90, max, faults) = present_hold(attack, 20);
-        eprintln!("HOSTILE present {attack:<12} p50 {p50:>10?} p90 {p90:>10?} max {max:>10?} faults {faults}/20");
+        eprintln!(
+            "HOSTILE present {attack:<12} p50 {p50:>10?} p90 {p90:>10?} max {max:>10?} faults {faults}/20"
+        );
         // The self-timed attacks stop by themselves after 5 ms; in a debug build the host is so
         // slow that they can finish before the meter (calibrated for release) cuts them.
         if !(cfg!(debug_assertions) && attack.contains("time:")) {

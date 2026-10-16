@@ -502,9 +502,16 @@ fn the_epoch_ticker_runs_only_while_a_call_is_in_flight() {
     }
     std::thread::sleep(std::time::Duration::from_millis(20));
     let after = h.epoch_ticks();
-    assert!(after > idle0, "the hung hook was cut by ticks: {after} vs {idle0}");
+    assert!(
+        after > idle0,
+        "the hung hook was cut by ticks: {after} vs {idle0}"
+    );
     std::thread::sleep(std::time::Duration::from_millis(150));
-    assert_eq!(h.epoch_ticks(), after, "the ticker parks again after the call");
+    assert_eq!(
+        h.epoch_ticks(),
+        after,
+        "the ticker parks again after the call"
+    );
 }
 
 #[test]

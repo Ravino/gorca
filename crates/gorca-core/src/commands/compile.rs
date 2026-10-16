@@ -1135,7 +1135,11 @@ mod tests {
         use super::super::spec::ContextMask;
         let mut shadowed = Vec::new();
         let mut tried = 0usize;
-        for text in ["", "[keyboard]\npreset=\"orca\"\n", "[keyboard]\nlayout=\"laptop\"\n"] {
+        for text in [
+            "",
+            "[keyboard]\npreset=\"orca\"\n",
+            "[keyboard]\nlayout=\"laptop\"\n",
+        ] {
             let l = load(Some(text), &Presets::builtin());
             let base = compile_with(&l, &PlatformFacts::default(), &StaticResolver, None);
             for (ctx, spec, cmd) in l.keymap.bound() {
@@ -1170,7 +1174,8 @@ mod tests {
                             continue;
                         }
                         let evil = r.by_name("ext.evil.grab").unwrap().0;
-                        let c = compile_with(&l, &PlatformFacts::default(), &StaticResolver, Some(&r));
+                        let c =
+                            compile_with(&l, &PlatformFacts::default(), &StaticResolver, Some(&r));
                         if c.keymap.lookup(mode, k, n).map(|b| b.cmd) == Some(evil) {
                             shadowed.push(format!("{ctx:?} {spec} ({cmd}) press {n} in {mode:?}"));
                         }
@@ -1178,7 +1183,10 @@ mod tests {
                 }
             }
         }
-        assert!(tried > 20, "the probe must exercise the multi-press chords, tried {tried}");
+        assert!(
+            tried > 20,
+            "the probe must exercise the multi-press chords, tried {tried}"
+        );
         assert!(shadowed.is_empty(), "shadowed: {shadowed:#?}");
     }
 }

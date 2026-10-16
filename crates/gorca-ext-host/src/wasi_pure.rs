@@ -69,10 +69,13 @@ pub fn add<T: HostMeter + 'static>(
         match base {
             "wasi:random/random" | "wasi:random/insecure" => {
                 let mut i = linker.instance(name)?;
-                i.func_wrap("get-random-u64", |mut cx: StoreContextMut<'_, T>, (): ()| {
-                    cx.data_mut().charge(8)?;
-                    Ok((next_u64(),))
-                })?;
+                i.func_wrap(
+                    "get-random-u64",
+                    |mut cx: StoreContextMut<'_, T>, (): ()| {
+                        cx.data_mut().charge(8)?;
+                        Ok((next_u64(),))
+                    },
+                )?;
                 i.func_wrap(
                     "get-random-bytes",
                     |mut cx: StoreContextMut<'_, T>, (len,): (u64,)| {
@@ -91,12 +94,13 @@ pub fn add<T: HostMeter + 'static>(
                 )?;
             }
             "wasi:random/insecure-seed" => {
-                linker
-                    .instance(name)?
-                    .func_wrap("insecure-seed", |mut cx: StoreContextMut<'_, T>, (): ()| {
+                linker.instance(name)?.func_wrap(
+                    "insecure-seed",
+                    |mut cx: StoreContextMut<'_, T>, (): ()| {
                         cx.data_mut().charge(16)?;
                         Ok(((next_u64(), next_u64()),))
-                    })?;
+                    },
+                )?;
             }
             "wasi:clocks/monotonic-clock" => {
                 let mut i = linker.instance(name)?;
