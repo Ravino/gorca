@@ -647,6 +647,117 @@ impl Reader {
         }
     }
 
+    /// The page moved its caret to a node of the document that nobody tracks as a text field
+    /// (the browser's "scrolled to anchor" signal: Chromium sends `text-caret-moved(0)` on the
+    /// anchor target, `CaretOrigin::ScrollToAnchor`): in browse mode the virtual cursor follows
+    /// and the line there is spoken, like NVDA's browse mode follows the caret. False when the
+    /// event is not such a jump (editable node, focus mode, the document root, a node already
+    /// under the cursor).
+    pub(crate) fn web_caret_jump(
+        &mut self,
+        node: NodeKey,
+        offset: u32,
+        fx: &mut ReaderEffects,
+    ) -> bool {
+        if offset != 0 {
+            return false;
+        }
+        let Some(b) = self.web.as_mut() else {
+            return false;
+        };
+        let WebMode::Browse { doc, .. } = b.mode else {
+            return false;
+        };
+        let Some((d, id)) = b.join.get(node) else {
+            return false;
+        };
+        if d != doc {
+            return false;
+        }
+        let Some(h) = b.docs.get(doc) else {
+            return false;
+        };
+        let max_line = b.settings.max_line;
+        let placed = h.read.with(|dd| {
+            if dd.root() == Some(id) {
+                return None;
+            }
+            let (role, states) = role_states(dd, id);
+            if forms::passes_through(role, states, Reason::Focus) {
+                return None;
+            }
+            let off = cursor::content_start(dd, id)?;
+            Some((cursor::cursor_at(dd, off)?, off, line_items(dd, max_line, off)))
+        });
+        let Some((cur, off, items)) = placed else {
+            return false;
+        };
+        if b.last_off == off {
+            return true;
+        }
+        if let WebMode::Browse { cur: c, .. } = &mut b.mode {
+            *c = cur;
+        }
+        b.last_off = off;
+        self.web_speak(&items, fx);
+        true
+    }
+
+    /// Track the web dialog the focus is in. Entering a named one (from outside it) leaves its
+    /// name for the focus utterance (the presenter drops it when the browser announced the
+    /// dialog as a window: Firefox, `window_lead_in`).
+    fn web_note_dialog(&mut self, doc: DocId, id: DocNodeId) {
+        let Some(b) = self.web.as_mut() else { return };
+        let Some(h) = b.docs.get(doc) else { return };
+        let found = h.read.with(|d| {
+            let mut cur = Some(id);
+            for _ in 0..24 {
+                let x = cur?;
+                if let Some(v) = d.node(x)
+                    && matches!(v.role, Role::Dialog | Role::Alert)
+                {
+                    return Some((x, v.name.filter(|n| !n.trim().is_empty()).map(Arc::from)));
+                }
+                cur = d.parent(x);
+            }
+            None
+        });
+        let now = found.as_ref().map(|(x, _)| *x);
+        if now == b.focus_dialog {
+            return;
+        }
+        b.focus_dialog = now;
+        b.dialog_lead = match found {
+            Some((_, Some(name))) => Some((name, self.now)),
+            Some(_) | None => None,
+        };
+    }
+
+    /// The name of a dialog focus just entered, if still fresh.
+    pub(crate) fn web_take_dialog_lead(&mut self) -> Option<Arc<str>> {
+        let now = self.now;
+        let b = self.web.as_mut()?;
+        let (name, at) = b.dialog_lead.take()?;
+        (now.saturating_duration_since(at) <= WORD_TTL).then_some(name)
+    }
+
+    /// Put the cursor on the first line of the page (the line an entry speaks).
+    fn web_place_first_line(&mut self, doc: DocId) {
+        let Some(b) = self.web.as_mut() else { return };
+        let Some(h) = b.docs.get(doc) else { return };
+        let max_line = b.settings.max_line;
+        let placed = h.read.with(|d| match cursor::first_line(d, max_line) {
+            Mv::Landed { off, .. } => cursor::cursor_at(d, off).map(|c| (c, off)),
+            Mv::Edge(_) => None,
+        });
+        if let Some((cur, off)) = placed {
+            b.last_off = off;
+            if let WebMode::Browse { cur: c, .. } = &mut b.mode {
+                *c = cur;
+            }
+        }
+    }
+
     // ---- focus ----------------------------------------------------------------------------
 
     /// Keep `popup_open` true to the field in focus mode, and the grab set with it: Escape is
@@ -693,6 +804,7 @@ impl Reader {
             let passes = forms::passes_through(role, states, Reason::Focus);
             let application = forms::is_application(role);
             self.web_activate(doc, fx);
+            self.web_note_dialog(doc, id);
             self.web_apply(
                 WebEv::FocusIn {
                     doc,
@@ -922,6 +1034,12 @@ impl Reader {
                 let at_root = focus_node.is_some_and(|(n, _)| n == root);
                 let at_top = focus_node.is_none();
                 self.web_place(doc, focus_node.map_or(root, |(n, _)| n));
+                if at_top || at_root {
+                    // The first line is about to be spoken: the cursor sits on it, so that Down
+                    // reads the line after it (Chromium announces the page by itself when its
+                    // window activates, with no focus event of ours to place the cursor).
+                    self.web_place_first_line(doc);
+                }
                 let spoke = self.web_speak_entry(doc, at_top || at_root, at_top, fx);
                 if at_top || at_root {
                     self.web_auto_read(doc, spoke, fx);
@@ -942,6 +1060,7 @@ impl Reader {
                         true,
                     );
                     self.web_place(doc, root);
+                    self.web_place_first_line(doc);
                     let spoke = self.web_speak_entry(doc, true, true, fx);
                     self.web_auto_read(doc, spoke, fx);
                 }

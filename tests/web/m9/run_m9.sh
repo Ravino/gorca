@@ -35,7 +35,7 @@ fi
 [ -x "$CHR" ] || { echo "no Chromium found: set M9_CHROMIUM" >&2; exit 2; }
 export GORCA_M7_BROWSER=chromium
 export GORCA_M7_CHROMIUM=$CHR
-export GORCA_M9_AT=${M9_AT:-poke}
+export GORCA_M9_AT=${M9_AT:-isenabled}
 export GORCA_M9_CHROMIUM_ARGS=${M9_ARGS:-}
 # gorca writes IsEnabled only; the harness must not set ScreenReaderEnabled either
 export GORCA_HARNESS_SCREEN_READER=0
@@ -47,6 +47,8 @@ case "$KIND" in
     exec "$ROOT/tests/web/m7/run_m7.sh" --probe /usr/bin/python3 "$ROOT/tests/web/m9/probe_at.py" "$MODE" "$PAGE" "$TITLE" ;;
   probe-load)
     exec "$ROOT/tests/web/m7/run_m7.sh" --probe /usr/bin/python3 "$ROOT/tests/web/m9/probe_load.py" "$@" ;;
+  probe-scn)
+    exec "$ROOT/tests/web/m7/run_m7.sh" --probe /usr/bin/python3 "$ROOT/tests/web/m9/probe_scn.py" "$@" ;;
   probe-typing)
     exec "$ROOT/tests/web/m7/run_m7.sh" --probe /usr/bin/python3 "$ROOT/tests/web/m9/probe_typing.py" "$@" ;;
   *) echo "usage: $0 m7|m8|probe ..." >&2; exit 64 ;;

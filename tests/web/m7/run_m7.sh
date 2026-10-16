@@ -81,5 +81,5 @@ mkdir -p "bench/results/e2e/$LABEL"
 export GORCA_E2E_READER_LOG=$ROOT/bench/results/e2e/$LABEL/reader-$(date -u +%Y%m%dT%H%M%SZ).log
 tests/harness/run-isolated.sh target/release/e2e run --label "$LABEL" \
   --reader "daemon:$ROOT/target/release/gorca,--impersonate-orca" \
-  --reader-env GORCA_M7=1 --reader-env NO_COLOR=1 --reader-env RUST_LOG=warn,gorca_phase=info "$@"
+  --reader-env GORCA_M7=1 --reader-env NO_COLOR=1 --reader-env RUST_LOG=${M7_RUST_LOG:-warn,gorca_phase=info} "$@"
 exit $?

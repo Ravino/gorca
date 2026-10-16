@@ -479,6 +479,7 @@ impl Reader {
                 let mut u = self.presenters.present(ctx, snap, id, epoch);
                 self.drop_web_unavailable(&mut u, snap);
                 let silent = ctx == PresentContext::Focus && self.apply_policy(snap, &mut u);
+                let window_led = self.window_lead_pending();
                 let hold = ctx == PresentContext::Focus
                     && !silent
                     && self.window_lead_in(snap, epoch, &mut u);
@@ -492,6 +493,21 @@ impl Reader {
                 let word = self.web_take_word();
                 let tail = self.web_take_tail();
                 apply_web_extra(&mut u, word, &tail);
+                if let Some(name) = self.web_take_dialog_lead()
+                    && !window_led
+                {
+                    // A web dialog just entered: its name and role lead the focus speech.
+                    for (i, (text, kind)) in [
+                        (name, gorca_model::SegmentKind::Text),
+                        (Arc::from(gorca_model::Role::Dialog.spoken()), gorca_model::SegmentKind::Role),
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    {
+                        let at = usize::from(word.is_some()) + i;
+                        u.segments.insert(at.min(u.segments.len()), gorca_model::Segment { text, kind });
+                    }
+                }
                 self.web_extra = (word.is_some() || !tail.is_empty()).then_some((id, word, tail));
                 // The context asserts `selected`, which the spoken text omits, so the log must
                 // not carry a cached snapshot from before the event.

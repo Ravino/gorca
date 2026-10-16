@@ -586,6 +586,9 @@ impl Reader {
                     self.term_caret(offset, fx);
                 } else if self.text_active() && self.text_accepts(node, Some(offset), fx) {
                     self.text_step(In::Caret { offset }, fx);
+                } else {
+                    // Not a tracked field: the page scrolled to an anchor (browse mode).
+                    let _ = self.web_caret_jump(node, offset, fx);
                 }
             }
             TextMsg::Edit { node, delta } => {

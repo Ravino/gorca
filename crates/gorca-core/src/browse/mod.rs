@@ -507,6 +507,12 @@ pub struct BrowseState {
     /// The field in focus mode has a popup open (a drop-down, an auto-complete list): Escape
     /// belongs to the page, which closes it; the next Escape leaves focus mode (modes.md 2).
     pub popup_open: bool,
+    /// The web dialog (`dialog`, `alertdialog`) the last focus was in, and the name of one that
+    /// focus has just entered, for the next focus utterance. A browser that sends no window
+    /// event for a page's dialog (Chromium) is announced from the mirror, as NVDA announces a
+    /// context change.
+    pub focus_dialog: Option<DocNodeId>,
+    pub dialog_lead: Option<(Arc<str>, Instant)>,
 }
 
 impl BrowseState {
@@ -528,6 +534,8 @@ impl BrowseState {
             loaded: HashMap::new(),
             auto_read: None,
             popup_open: false,
+            focus_dialog: None,
+            dialog_lead: None,
         }
     }
 }
