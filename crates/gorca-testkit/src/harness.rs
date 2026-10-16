@@ -138,7 +138,7 @@ impl Session {
             }
         });
         let mut env = HashMap::new();
-        let deadline = Instant::now() + Duration::from_secs(30);
+        let deadline = Instant::now() + Duration::from_secs(120);
         loop {
             let left = deadline.saturating_duration_since(Instant::now());
             match rx.recv_timeout(left) {
