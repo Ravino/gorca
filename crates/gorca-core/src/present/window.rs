@@ -21,7 +21,7 @@ use std::time::{Duration, Instant};
 
 use gorca_model::{
     AppId, ChildList, Epoch, Lookup, NodeKey, NodeSnapshot, Prio, PropMask, Role, Segment,
-    SegmentKind, Utterance,
+    SegmentKind, StateSet, Utterance,
 };
 use gorca_rt::BudgetClass;
 use smallvec::SmallVec;
@@ -509,6 +509,16 @@ pub const WINDOW_HOLD: Duration = Duration::from_millis(10);
 
 /// Activations, answers and reads kept at once; the oldest is dropped beyond it.
 const PENDING_MAX: usize = 8;
+
+/// A window answer arriving this soon after the focus utterance went out replaces that
+/// utterance (still playing) with the complete line; later ones only add what is missing (N-1).
+const REPLACE_WITHIN: Duration = Duration::from_millis(150);
+
+/// An input event this recent before an activation makes the window the user's own (N-2).
+const USER_INPUT_WINDOW: Duration = Duration::from_millis(600);
+
+/// How long an app the user switched to stays the user's app without a focus event (N-2).
+const USER_APP_VALID: Duration = Duration::from_secs(2);
 /// Waiting activations one application may hold.
 const PENDING_PER_APP: usize = 2;
 
@@ -572,6 +582,11 @@ pub(crate) struct WindowCtx {
     led: Option<Led>,
     /// A focus utterance waiting for the window read (at most [`WINDOW_HOLD`]).
     held: Option<Held>,
+    /// Latest key or control input, for telling a user's window switch from a background one.
+    pub(crate) last_input: Option<Instant>,
+    /// The app of the window the user switched to (input followed by its activation, or the
+    /// window holds the `active` state) and when.
+    user_app: Option<(AppId, Instant)>,
 }
 
 /// How the rest of a window's speech goes out when the application's answer arrives late.
@@ -600,6 +615,8 @@ struct Led {
     /// The focus utterance's own segments, repeated at the end of a [`LedMode::Lead`]
     /// re-announcement.
     tail: SmallVec<[Segment; 4]>,
+    /// When the focus utterance this led went out ([`LedMode::Lead`] only).
+    focus_at: Option<Instant>,
 }
 
 impl Led {
@@ -611,6 +628,7 @@ impl Led {
             spoken: Vec::new(),
             mode,
             tail: SmallVec::new(),
+            focus_at: None,
         }
     }
 }
@@ -635,6 +653,8 @@ impl WindowCtx {
             inflight: SmallVec::new(),
             led: None,
             held: None,
+            last_input: None,
+            user_app: None,
         }
     }
 }
@@ -655,6 +675,18 @@ impl Reader {
         // newest: the last Alt+Tab window is always spoken, L-2).
         let owner = self.dir.owner(window.app);
         let reads = self.notice.allow_activation(owner, now);
+        let by_input = self
+            .win
+            .last_input
+            .is_some_and(|at| now.saturating_duration_since(at) < USER_INPUT_WINDOW);
+        let active = self
+            .dir
+            .lookup(window)
+            .hit()
+            .is_some_and(|s| s.states.contains(StateSet::ACTIVE));
+        if by_input || active {
+            self.win.user_app = Some((window.app, now));
+        }
         self.win.last_activation = Some((window, now));
         self.win.known.retain(|k| k.window != window);
         // Ask the application for what the mirror lacks now, so the answer is in by the time the
@@ -752,7 +784,15 @@ impl Reader {
                         self.win.pending.remove(i);
                     }
                     if self.win.pending.len() >= PENDING_MAX {
-                        self.win.pending.remove(0);
+                        // Never the focused app's own activation while another app's can go (N-3).
+                        let focused = self.last_focus.map(|(n, _)| n.app);
+                        let switched = self.win.user_app.map(|(a, _)| a);
+                        let other = |st: &WindowState| {
+                            !matches!(st, WindowState::Pending { window: w, .. }
+                                if Some(w.app) == focused || Some(w.app) == switched)
+                        };
+                        let i = self.win.pending.iter().position(other).unwrap_or(0);
+                        self.win.pending.remove(i);
                     }
                     self.win.pending.push(next);
                 }
@@ -833,7 +873,11 @@ impl Reader {
         }
         // Only the application the user is working in may cancel the user's speech; every other
         // application's window is a polite notice, however often it activates (H-1).
-        if self.last_focus.is_none_or(|(n, _)| n.app != window.app) {
+        let focused_app = self.last_focus.is_some_and(|(n, _)| n.app == window.app);
+        let switched = self.win.user_app.is_some_and(|(a, at)| {
+            a == window.app && self.now.saturating_duration_since(at) < USER_APP_VALID
+        });
+        if !focused_app && !switched {
             return LedMode::Background;
         }
         // The user's own focus speech, parked for a window read, goes out first and is never
@@ -943,7 +987,9 @@ impl Reader {
             return false;
         }
         if self.window_read_pending(window).is_some() {
-            self.win.led = Some(Led::new(window, epoch, LedMode::Lead));
+            let mut led = Led::new(window, epoch, LedMode::Lead);
+            led.focus_at = Some(self.now);
+            self.win.led = Some(led);
             self.win.held = Some(Held {
                 utt: u.clone(),
                 window,
@@ -968,6 +1014,7 @@ impl Reader {
         u: &mut Utterance,
     ) {
         let mut led = Led::new(window, epoch, LedMode::Lead);
+        led.focus_at = Some(self.now);
         led.tail = u.segments.iter().cloned().collect();
         let Some(win) = self.window_snap(window) else {
             self.win.led = Some(led);
@@ -1062,19 +1109,45 @@ impl Reader {
             return;
         }
         if led.mode == LedMode::Lead {
-            // The focus went out before this answer: say the whole line again in reading order
-            // (title, role, text, then the focus), so what the user hears last is never out of
-            // order. Rare: only when the read missed its bound.
             let mut texts = std::mem::take(&mut led.spoken);
+            let prior = texts.len();
             texts.extend(fresh);
-            let segs: SmallVec<[Segment; 8]> = lead_segments(snap)
-                .into_iter()
-                .chain(content_segments(&texts))
-                .chain(led.tail.iter().cloned())
-                .collect();
-            led.title_done = true;
+            let near = led
+                .focus_at
+                .is_some_and(|at| self.now.saturating_duration_since(at) <= REPLACE_WITHIN);
             led.spoken = texts;
-            self.emit_window_line(&mut led, segs, fx);
+            if near {
+                // The focus utterance is still playing: replace it by the complete line in
+                // reading order (title, role, text, focus), so the focus is never heard twice.
+                let segs: SmallVec<[Segment; 8]> = lead_segments(snap)
+                    .into_iter()
+                    .chain(content_segments(&led.spoken))
+                    .chain(led.tail.iter().cloned())
+                    .collect();
+                led.title_done = true;
+                led.mode = LedMode::Queued;
+                let id = self.utt_id();
+                let mut u = follow_up(segs, id, led.epoch);
+                u.prio = Prio::Interrupt;
+                fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+            } else {
+                // Too late to replace: only what the user has not heard, never the focus again.
+                let lead = if led.title_done {
+                    SmallVec::new()
+                } else {
+                    lead_segments(snap)
+                };
+                led.title_done = true;
+                led.mode = LedMode::Queued;
+                let new_texts = led.spoken.get(prior..).unwrap_or(&[]).to_vec();
+                if !lead.is_empty() || !new_texts.is_empty() {
+                    self.emit_window_line(
+                        &mut led,
+                        lead.into_iter().chain(content_segments(&new_texts)),
+                        fx,
+                    );
+                }
+            }
         } else {
             let lead = if led.title_done {
                 SmallVec::new()
@@ -1571,8 +1644,8 @@ pub(crate) mod tests {
         let fx = f.reader.handle(ReaderMsg::Timer, t + WINDOW_HOLD);
         assert_eq!(said(&fx), ["Delete, button"]);
         assert_eq!(prios(&fx), [Prio::Interrupt]);
-        // ... and the answer follows, queued, as the whole line in reading order (the user's
-        // last word is never a window line after its button).
+        // ... and the answer (within 150 ms) replaces the still-playing focus by the whole line
+        // in reading order, so the focus is never heard twice.
         let fx = f.reader.handle(
             ReaderMsg::Background(BackgroundMsg::Window(dialog_info())),
             t + Duration::from_millis(30),
@@ -1581,7 +1654,7 @@ pub(crate) mod tests {
             said(&fx),
             ["Delete file, dialog, This cannot be undone., Delete, button"]
         );
-        assert_eq!(prios(&fx), [Prio::Notification]);
+        assert_eq!(prios(&fx), [Prio::Interrupt]);
         // Once: the same answer again adds nothing.
         let fx = f.reader.handle(
             ReaderMsg::Background(BackgroundMsg::Window(dialog_info())),
@@ -1965,3 +2038,9 @@ pub(crate) mod tests {
         assert!(spoken <= 20, "{spoken} window notices in one second");
     }
 }
+
+#[cfg(test)]
+mod m4b_rereview_probes;
+
+#[cfg(test)]
+mod m4b_review_probes;

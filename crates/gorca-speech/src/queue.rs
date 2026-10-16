@@ -367,3 +367,35 @@ mod tests {
         assert_eq!(e, vec![SpeechEffect::Speak(UttId(2))]);
     }
 }
+
+#[cfg(test)]
+mod m4b_review_probe {
+    use super::*;
+    use gorca_model::UttId;
+    use std::time::Duration;
+
+    /// P5: a notification that arrives at an idle lane inside the grace (after the epoch advance,
+    /// before the focus utterance) must wait like a queued one; else the focus cuts it off.
+    #[test]
+    fn probe_p5_fresh_notification_inside_grace_waits() {
+        let t = Instant::now();
+        let mut q = SpeechQueue::new(true);
+        q.handle(
+            SpeechMsg::Intent(UttMeta { id: UttId(1), prio: Prio::Text, epoch: Epoch(1), survives_focus_change: false }),
+            t,
+            Epoch(1),
+        );
+        q.handle(SpeechMsg::EpochAdvanced, t, Epoch(2));
+        let n = UttMeta { id: UttId(2), prio: Prio::Notification, epoch: Epoch(2), survives_focus_change: true };
+        let e = q.handle(SpeechMsg::Intent(n), t + Duration::from_millis(2), Epoch(2));
+        let e2 = q.handle(
+            SpeechMsg::Intent(UttMeta { id: UttId(3), prio: Prio::Interrupt, epoch: Epoch(2), survives_focus_change: false }),
+            t + Duration::from_millis(10),
+            Epoch(2),
+        );
+        assert!(
+            !e.contains(&SpeechEffect::Speak(UttId(2))),
+            "notification started inside the grace: {e:?}; then the focus did {e2:?}"
+        );
+    }
+}
