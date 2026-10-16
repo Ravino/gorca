@@ -132,6 +132,8 @@ pub(super) struct Firefox {
     /// `tests/web/m7/rd.py`: a RemoteDesktop session on the private compositor. A headless
     /// shell has no keyboard, so no window is ever active until a virtual input device clicks.
     rd: Option<Child>,
+    /// The throw-away profile of this launch (~130 MB on tmpfs): removed once Firefox is gone.
+    profile: PathBuf,
 }
 
 impl Firefox {
@@ -168,7 +170,12 @@ impl Firefox {
             .with_context(|| format!("starting {bin}"))?;
         let pgid = i32::try_from(child.id()).context("pid")?;
         let rd = Self::start_rd(&root);
-        Ok(Self { child, pgid, rd })
+        Ok(Self {
+            child,
+            pgid,
+            rd,
+            profile,
+        })
     }
 
     fn start_rd(root: &str) -> Option<Child> {
@@ -220,6 +227,8 @@ impl Drop for Firefox {
         }
         let _ = Command::new("kill").args(["-KILL", "--", &group]).status();
         let _ = self.child.wait();
+        // Logs stay (`ff-*.log` is next to the profile, not in it).
+        let _ = std::fs::remove_dir_all(&self.profile);
         if let Some(mut rd) = self.rd.take() {
             drop(rd.stdin.take());
             let _ = rd.wait();
