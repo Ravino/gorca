@@ -31,6 +31,8 @@ use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 const GRACE: Duration = Duration::from_millis(40);
 /// A model build gets this long before the Reader degrades (the task publishes at 120 ms).
 const BUILD_WAIT: Duration = Duration::from_millis(500);
+/// How long a review step waits for a terminal's screen to be read again.
+const TERM_WAIT: Duration = Duration::from_millis(400);
 /// One review step, queue included, is over after this long: OB-3 and R4 allow the 120 ms Interactive
 /// deadline plus 5 ms. Whatever is still unknown then is spoken degraded, with no further IPC.
 const STEP_BUDGET: Duration = Duration::from_millis(125);
@@ -126,6 +128,8 @@ pub(crate) enum What {
     Build(BuildId),
     StatusBar(NavReqId),
     Act(NavReqId, ActStage),
+    /// A terminal's screen is being read again before the review step speaks from it.
+    Term,
 }
 
 /// The one suspended review operation (RS-1).
@@ -792,8 +796,13 @@ impl Reader {
     }
 
     fn pick_model(&self, nav: NodeKey) -> Pick {
+        // A terminal's model is true only while the tracked screen has the generation it was
+        // built from (`term_review_model`); it has no zones to check, so served from here it
+        // would stay "valid" for ever.
         let serves = |m: &Arc<LineModel>| {
-            m.app == nav.app && (m.surface == nav || m.by_node.contains_key(&nav))
+            m.source != LineSource::Terminal
+                && m.app == nav.app
+                && (m.surface == nav || m.by_node.contains_key(&nav))
         };
         if let Some(m) = self.review.cur.as_ref().filter(|m| serves(m)) {
             return Pick::Ready(Arc::clone(m), true);
@@ -803,10 +812,12 @@ impl Reader {
         }
         match self.surface_of(nav) {
             Ok(s) => {
-                if let Some(m) = self.review.cur.as_ref().filter(|m| m.surface == s) {
+                let of_surface =
+                    |m: &&Arc<LineModel>| m.surface == s && m.source != LineSource::Terminal;
+                if let Some(m) = self.review.cur.as_ref().filter(of_surface) {
                     return Pick::Ready(Arc::clone(m), true);
                 }
-                if let Some(m) = self.review.prev.as_ref().filter(|m| m.surface == s) {
+                if let Some(m) = self.review.prev.as_ref().filter(of_surface) {
                     return Pick::Ready(Arc::clone(m), false);
                 }
                 if matches!(self.dir.view(s), Lookup::Gone) {
@@ -816,6 +827,25 @@ impl Reader {
             }
             Err(op) => Pick::Ancestry(op),
         }
+    }
+
+    /// Wait for the terminal's screen read (`review_term_replied` resumes the step).
+    fn term_wait(&mut self) -> Step {
+        Step::Suspend {
+            what: What::Term,
+            effect: ReaderEffect::ArmTimer(self.now + TERM_WAIT + GRACE),
+            wait: TERM_WAIT,
+        }
+    }
+
+    /// The terminal's extension took an answer to a screen read: a review step that waited for it
+    /// goes on.
+    pub(crate) fn review_term_replied(&mut self, fx: &mut ReaderEffects) {
+        let Some(p) = self.take_pending(|w| w == What::Term) else {
+            return;
+        };
+        let now = self.now;
+        self.resume(p, None, now, fx);
     }
 
     fn build_suspend(
@@ -877,7 +907,19 @@ impl Reader {
         if let ReviewPos::Object { offset, .. } = cur.pos {
             return self.exec_object_text(&cur, nav, offset, mv, rep, attempts, fx);
         }
-        // A terminal's screen is held by its extension: no build, no IPC (ADR-0006 LS-1).
+        // A terminal's screen is held by its extension: no build, no IPC (ADR-0006 LS-1). When
+        // that screen may be missing output (events lost, or the application's events are being
+        // dropped because it is not the protected one) or the terminal is not tracked at all, it
+        // is read first and the step waits for it, once.
+        if attempts == 0 {
+            if let Some(snap) = self.term_untracked_focus(nav) {
+                self.term_adopt(&snap, fx);
+                return self.term_wait();
+            }
+            if self.term_review_untrusted(nav, fx) {
+                return self.term_wait();
+            }
+        }
         let picked = match self.term_review_model(nav, now, fx) {
             Some(m) => Pick::Ready(m, true),
             None => self.pick_model(nav),

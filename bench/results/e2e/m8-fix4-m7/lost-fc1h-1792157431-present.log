@@ -1,0 +1,4 @@
+{"redaction_key":"ab0a2f24818792b8481baeeee6b4305e"}
+{"t_ns":773891621432879,"utt_id":1,"epoch":1,"app_bus":":1.165","path":"/org/a11y/atspi/accessible/79","key":"1:1:43c5d2093de75ac3","source":"miss_reply","role":"document_web","states":["focused","showing","visible"],"name":"M3b Fields","value":null,"may_refine":false,"refines":null}
+{"t_ns":773892252467769,"utt_id":3,"epoch":3,"app_bus":":1.165","path":"/org/a11y/atspi/accessible/125","key":"1:1:43425db44c889577","source":"miss_reply","role":"panel","states":["enabled","focusable","focused","sensitive","showing","visible"],"name":null,"value":null,"may_refine":false,"refines":null}
+{"t_ns":773893700370903,"utt_id":4,"epoch":4,"app_bus":":1.165","path":"/org/a11y/atspi/accessible/104","key":"1:1:4348e0b44c8ddfbe","source":"stale","role":"text_entry","states":["enabled","focusable","sensitive","visible"],"name":"Emoji line","value":null,"may_refine":true,"refines":null}

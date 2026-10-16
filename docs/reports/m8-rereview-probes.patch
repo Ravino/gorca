@@ -1,0 +1,195 @@
+diff --git a/crates/gorca-bench/src/e2e/apps.rs b/crates/gorca-bench/src/e2e/apps.rs
+index 43b815e..5d36fbf 100644
+--- a/crates/gorca-bench/src/e2e/apps.rs
++++ b/crates/gorca-bench/src/e2e/apps.rs
+@@ -296,6 +296,18 @@ impl FakeMutter {
+         self.key_full(keycode, keysym, 0, state, released, time_ms)
+     }
+ 
++    /// Reviewer probe: one Mutter autorepeat event of a key that is down.
++    pub fn key_repeat(&mut self, keycode: u16, keysym: u32, state: u32, time_ms: u64) -> Result<KeyReply> {
++        let r = self.proc.request(
++            "key",
++            &format!(
++                "\"keycode\":{keycode},\"keysym\":{keysym},\"unichar\":0,\"state\":{state},\"released\":false,\"time_ms\":{time_ms},\"repeat\":true"
++            ),
++            Duration::from_secs(5),
++        )?;
++        Ok(KeyReply::parse(&r))
++    }
++
+     /// [`Self::key_ex`] with the Unicode scalar the key produces (typing).
+     pub fn key_full(
+         &mut self,
+diff --git a/crates/gorca-bench/src/e2e/m8.rs b/crates/gorca-bench/src/e2e/m8.rs
+index 7ba9dc1..52d7e00 100644
+--- a/crates/gorca-bench/src/e2e/m8.rs
++++ b/crates/gorca-bench/src/e2e/m8.rs
+@@ -103,6 +103,10 @@ pub(super) enum Act {
+     Wait(u64),
+     /// Set the mock speech server's utterance length (ms); say-all needs speech that takes time.
+     Speak(u64),
++    /// Reviewer probe: a key press only (no release), a Mutter autorepeat of it, its release.
++    PrbDown(K, u32),
++    PrbRep(K, u32),
++    PrbUp(K, u32),
+ }
+ 
+ /// The latency budget a passing step is scored against.
+@@ -496,6 +500,16 @@ fn act(w: &mut Web, doc: &DocRef, a: Act, node: &mut Option<String>) -> Result<(
+             std::thread::sleep(Duration::from_millis(ms));
+             Ok((now_ns(), true))
+         }
++        Act::PrbDown(k, st) | Act::PrbRep(k, st) | Act::PrbUp(k, st) => {
++            let m = w.rig.mutter.as_mut().context("no mutter")?;
++            w.ty.t_ms += 12;
++            let r = match a {
++                Act::PrbDown(..) => m.key_ex(k.code, k.sym, st, false, w.ty.t_ms)?,
++                Act::PrbUp(..) => m.key_ex(k.code, k.sym, st, true, w.ty.t_ms)?,
++                _ => m.key_repeat(k.code, k.sym, st, w.ty.t_ms)?,
++            };
++            Ok((r.t_emit_ns, r.consumed))
++        }
+         Act::Speak(len) => {
+             w.rig
+                 .mock
+@@ -595,6 +609,13 @@ fn run_step(w: &mut Web, doc: &DocRef, sc: &'static str, st: &Step) -> StepRes {
+         res.lat_ms = Some(ms(t.saturating_sub(t_emit)));
+     }
+     let mut heard = texts.join(" | ");
++    if st.id.starts_with("PRB") {
++        heard = format!(
++            "[consumed {consumed} focus {} caret {}] {heard}",
++            w.tap.count(FOCUS).saturating_sub(focus0),
++            w.tap.count(super::CARET).saturating_sub(caret0)
++        );
++    }
+     if !consumed && matches!(st.act, Act::Key(..) | Act::Repeat(..) | Act::Chord(..)) {
+         heard.insert_str(0, "[key passed to the app] ");
+     }
+diff --git a/crates/gorca-bench/src/e2e/m8_steps.rs b/crates/gorca-bench/src/e2e/m8_steps.rs
+index 4b8f05a..804ca7b 100644
+--- a/crates/gorca-bench/src/e2e/m8_steps.rs
++++ b/crates/gorca-bench/src/e2e/m8_steps.rs
+@@ -437,6 +437,14 @@ fn iframes() -> Vec<Step> {
+         s("IF.end", P1, "Ctrl+End: the last line of the outer page after all frames", ctrl(END), &["Outer paragraph after the frames"]),
+         s("IF.late", P2, "A frame reloads its content: no speech", Act::Do(role::PUSH_BUTTON, "Reload late frame"), &[]).not(&["After reload text"]).win(900),
+         s("IF.late2", P2, "The page is still navigable", ctrl(HOME), &["Outer page heading"]),
++        // reviewer probes: Tab from the top of a page with nested frames
++        top("PRB.iftop"),
++        s("PRB.if.tab1", P1, "probe: Tab 1 from the top", key0(TAB), &[]).extra(&["zzzprobe"], "probe").win(1500),
++        s("PRB.if.tab2", P1, "probe: Tab 2", key0(TAB), &[]).extra(&["zzzprobe"], "probe").win(1500),
++        s("PRB.if.tab3", P1, "probe: Tab 3", key0(TAB), &[]).extra(&["zzzprobe"], "probe").win(1500),
++        s("PRB.if.tab4", P1, "probe: Tab 4", key0(TAB), &[]).extra(&["zzzprobe"], "probe").win(1500),
++        s("PRB.if.tab5", P1, "probe: Tab 5", key0(TAB), &[]).extra(&["zzzprobe"], "probe").win(1500),
++        s("PRB.if.stab", P1, "probe: Shift+Tab", Act::Key(TAB, SHIFT), &[]).extra(&["zzzprobe"], "probe").win(1500),
+     ]
+ }
+ 
+@@ -518,6 +526,16 @@ fn sy() -> Vec<Step> {
+         s("SY.end", P1, "Ctrl+End: past the last focusable", ctrl(END), &["Far paragraph at the bottom"]),
+         Step::setup("SY.end.wait", "the grab set follows the settled cursor", Act::Wait(500)),
+         s("SY.tab.out", P1, "Tab with no focusable after the cursor is not consumed (D-2 pass-through)", key0(TAB), &[]).passes_through(),
++        // reviewer probes: Tab held across the grab flip its own focus move causes
++        s("PRB.down", P1, "probe: Tab down past the last focusable (passes)", Act::PrbDown(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(300),
++        s("PRB.ffocus", P1, "probe: Firefox's native Tab focuses link one", Act::Focus(role::LINK, "link one"), &["link one"]).extra(&["zzzprobe"], "probe").win(500),
++        s("PRB.rep", P1, "probe: Mutter autorepeat of the held Tab", Act::PrbRep(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(800),
++        s("PRB.up", P1, "probe: Tab released", Act::PrbUp(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(800),
++        s("PRB.f.field", P1, "probe: focus the field: focus mode", Act::Focus(role::ENTRY, "Sync field"), &["focus mode"]).extra(&["zzzprobe"], "probe").win(1000),
++        s("PRB.f.down", P1, "probe: Tab down in focus mode (passes)", Act::PrbDown(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(300),
++        s("PRB.f.link", P1, "probe: Firefox's native Tab lands on Link three: browse mode", Act::Focus(role::LINK, "Link three"), &["Link three"]).extra(&["zzzprobe"], "probe").win(1000),
++        s("PRB.f.rep", P1, "probe: Mutter autorepeat of the still-held Tab", Act::PrbRep(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(800),
++        s("PRB.f.up", P1, "probe: Tab released: must reach the app (it got the press)", Act::PrbUp(TAB, 0), &[]).extra(&["zzzprobe"], "probe").win(800),
+     ]
+ }
+ 
+diff --git a/crates/gorca-core/src/browse/tests.rs b/crates/gorca-core/src/browse/tests.rs
+index 5e32230..1729317 100644
+--- a/crates/gorca-core/src/browse/tests.rs
++++ b/crates/gorca-core/src/browse/tests.rs
+@@ -2077,3 +2077,85 @@ fn live_speech_carries_the_adr_ttl_and_a_flood_spends_only_its_owners_budget() {
+         "a flood spoke {spoken_now} messages at once"
+     );
+ }
++
++// ---- m8 re-review probes (reviewer) ---------------------------------------------------------
++
++fn track(last: &mut Option<gorca_input_api::GrabSet>, fx: &ReaderEffects) {
++    if let Some(g) = last_grabs(fx) {
++        eprintln!("PROBE push: Tab={} ShiftTab={}", g.contains(0xff09, Modifiers::empty()), g.contains(0xfe20, Modifiers::SHIFT));
++        *last = Some(g);
++    }
++}
++
++#[test]
++fn probe_rr_stale_tab_grab_after_a_foreign_grab_push() {
++    let mut r = tab_rig();
++    let mut last = None;
++    track(&mut last, &r.focus(1002));
++    track(&mut last, &r.key(CoreCmd::BrowseCursorNextLine));
++    track(&mut last, &r.key(CoreCmd::BrowseCursorTop));
++    track(&mut last, &settle(&mut r)); // tab_grab = (true, false) at the heading
++    eprintln!("PROBE -- settled at the heading");
++    track(&mut last, &r.focus(1014)); // focus mode on the edit
++    track(&mut last, &r.key(CoreCmd::BrowseEscape)); // browse at the edit: pushed live (false, true)
++    track(&mut last, &settle(&mut r));
++    r.now += Duration::from_secs(5);
++    eprintln!("PROBE -- settled at the edit, 5 s later");
++    track(&mut last, &r.key(CoreCmd::BrowseCursorTop)); // back to the heading within 150 ms
++    track(&mut last, &settle(&mut r));
++    let g = last.unwrap();
++    let live = r.reader.web_tab_targets();
++    eprintln!(
++        "PROBE live targets (next, prev) = {live:?}; grabbed Tab = {}, grabbed Shift+Tab = {}",
++        g.contains(0xff09, Modifiers::empty()),
++        g.contains(0xfe20, Modifiers::SHIFT)
++    );
++    let fx = r.key(CoreCmd::BrowseTabPrev);
++    eprintln!("PROBE Shift+Tab at the heading says {:?} acts {:?}", spoken(&fx), acts(&fx));
++}
++
++#[test]
++fn probe_rr_shift_tab_inside_a_focusable_container_skips_its_links() {
++    let mut r = tab_rig();
++    // <p tabindex=-1> around "Read <a>the docs</a> now." (think <main tabindex=-1>).
++    let mut p = block(src(4, Role::Paragraph, Some(1004)));
++    p.states |= StateSet::FOCUSABLE;
++    r.tr.apply(&mut r.writer, vec![DocDelta::Upsert(vec![p]), DocDelta::Settled { batch: 3 }])
++        .unwrap();
++    r.writer.publish();
++    r.focus(1002);
++    settle(&mut r);
++    r.key(CoreCmd::BrowseCursorNextLine);
++    for _ in 0..15 {
++        r.key(CoreCmd::BrowseCursorNextChar);
++    }
++    let fx = r.key(CoreCmd::BrowseCursorNextChar);
++    eprintln!("PROBE cursor char {:?}", spoken(&fx));
++    let link = r.join.get(nk(1006)).unwrap().1;
++    let fx = r.key(CoreCmd::BrowseTabPrev);
++    eprintln!(
++        "PROBE Shift+Tab after the link in a focusable <p>: says {:?} acts {:?} (link is {link:?})",
++        spoken(&fx),
++        acts(&fx)
++    );
++}
++
++#[test]
++fn probe_rr_alert_waiting_for_budget_is_replaced_by_later_polite_news() {
++    let mut r = tab_rig();
++    r.focus(1002);
++    settle(&mut r);
++    let mut said = Vec::new();
++    for m in ["news 1", "news 2", "news 3"] {
++        said.extend(spoken(&r.reader.handle(live_msg(m, false), r.now)));
++    }
++    r.now += Duration::from_millis(20);
++    said.extend(spoken(&r.reader.handle(live_msg("ALERT payment failed", true), r.now)));
++    r.now += Duration::from_millis(20);
++    said.extend(spoken(&r.reader.handle(live_msg("news 4", false), r.now)));
++    for _ in 0..20 {
++        r.now += Duration::from_millis(200);
++        said.extend(spoken(&r.reader.handle(ReaderMsg::Timer, r.now)));
++    }
++    eprintln!("PROBE spoken over 4 s: {said:?}");
++}

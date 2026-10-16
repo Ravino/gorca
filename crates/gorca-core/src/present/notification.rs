@@ -97,6 +97,7 @@ pub fn announcement_utterance(
         prio: Prio::Notification,
         may_refine: false,
         survives_focus_change: survives,
+        ttl_secs: 0,
         refines: None,
     })
 }

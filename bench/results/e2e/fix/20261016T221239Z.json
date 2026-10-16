@@ -1,0 +1,10 @@
+{
+  "meta": {"utc": "2026-10-16T22:12:39Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "10.38 10.18 10.27 1/3060 2266833", "git_rev": "67ab7bd", "git_dirty": "true", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "topology_arms": "lanes-rtx1", "topology_expected": "-", "label": "fix", "reader": "daemon:/var/tmp/vsb/fix/gorca", "backend": "voicego", "repeats": "1", "samples_per_series": "1200", "l2_trials": "400", "quick": "false", "loadavg_end": "10.38 10.18 10.27 3/3060 2266830", "reader_env": "GORCA_M6=1 GORCA_M6_REAL=1 GORCA_M6_STRICT=1 GORCA_VS_SECS=240 GORCA_TOPOLOGY_REPORT=bench/results/e2e/fix/topology/topology.%p.json", "gates": "L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats", "reader_args": "--impersonate-orca", "ext_dir": "none", "extensions": "none", "note0": "VS: flat review of a real gnome-terminal that keeps printing, Alt+Tab away and back between reads (vs_stale gate 0)"},
+  "rows": [
+    {"id": "VS.vs_cycles", "scenario": "VS", "bus": "daemon/voicego", "value": 19, "min": 19, "max": 19, "runs": 1, "unit": "cycles", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "VS.vs_reads", "scenario": "VS", "bus": "daemon/voicego", "value": 76, "min": 76, "max": 76, "runs": 1, "unit": "reads", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "VS.vs_silent", "scenario": "VS", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "reads", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "VS.vs_stale", "scenario": "VS", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "reads", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "VS.vs_worst_lag_ticks", "scenario": "VS", "bus": "daemon/voicego", "value": 3, "min": 3, "max": 3, "runs": 1, "unit": "ticks", "op": "", "threshold": null, "verdict": "info", "note": ""}
+  ]
+}

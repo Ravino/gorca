@@ -72,4 +72,7 @@ pub enum SourceError {
     NotSupported,
     #[error("protocol error: {0}")]
     Protocol(String),
+    /// The object answered but declined (a `GrabFocus` that returned false).
+    #[error("request refused")]
+    Refused,
 }

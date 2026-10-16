@@ -1,0 +1,14 @@
+suite=m4
+step=e2e
+attempt=1
+kind=e2e
+exit=0
+label=acc-20261016T231624Z-m4-e2e-a1
+start=1792192859
+end=1792192963
+seconds=104
+load_start=15.33 15.10 12.31 13/3248 2475655
+load_end=12.68 14.50 12.41 4/3251 2482988
+governor=performance 
+git_rev=c4183c7
+cap_seconds=2400

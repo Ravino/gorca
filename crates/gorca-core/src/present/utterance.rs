@@ -11,6 +11,7 @@ use smallvec::SmallVec;
 /// State words in speaking order. TBD: localisation and verbosity settings.
 const STATE_WORDS: &[(StateSet, &str)] = &[
     (StateSet::DISABLED, "unavailable"),
+    (StateSet::MIXED, "half checked"),
     (StateSet::CHECKED, "checked"),
     (StateSet::PRESSED, "pressed"),
     (StateSet::SELECTED, "selected"),
@@ -19,6 +20,21 @@ const STATE_WORDS: &[(StateSet, &str)] = &[
     (StateSet::REQUIRED, "required"),
     (StateSet::INVALID, "invalid entry"),
 ];
+
+/// What the MIXED state means for `role` (R-6): a tri-state check box or radio button is "half
+/// checked", a toggle button "half pressed" (`aria-pressed=mixed`), a progress bar
+/// "indeterminate" (no value). Other roles say nothing for it.
+pub(crate) fn mixed_word(role: Role) -> Option<&'static str> {
+    if matches!(role, Role::CheckBox | Role::RadioButton) {
+        Some("half checked")
+    } else if role == Role::ToggleButton {
+        Some("half pressed")
+    } else if role == Role::ProgressBar {
+        Some("indeterminate")
+    } else {
+        None
+    }
+}
 
 pub(super) fn seg(text: &str, kind: SegmentKind) -> Segment {
     Segment {
@@ -77,13 +93,53 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
     } else {
         skip
     };
+    // A tri-state control in its middle state says that only ("half checked", "half pressed").
+    let mixed_w = mixed_word(n.role).filter(|_| n.states.contains(StateSet::MIXED));
+    let mixed = mixed_w.is_some();
     for (flag, word) in STATE_WORDS {
+        if *flag == StateSet::MIXED {
+            if let Some(w) = mixed_w {
+                segments.push(seg(w, SegmentKind::State));
+            }
+            continue;
+        }
+        if *flag == StateSet::CHECKED && mixed {
+            continue;
+        }
+        if *flag == StateSet::PRESSED && mixed {
+            continue;
+        }
         if n.states.contains(*flag) && !skip.contains(*flag) {
             segments.push(seg(word, SegmentKind::State));
         }
     }
+    // A checkable control says its off state too ("check box not checked", "not pressed").
+    let off = if matches!(n.role, Role::CheckBox | Role::RadioButton)
+        && !mixed
+        && !n.states.contains(StateSet::CHECKED)
+        && !skip.contains(StateSet::CHECKED)
+    {
+        Some("not checked")
+    } else if n.role == Role::ToggleButton
+        && !mixed
+        && !n.states.intersects(StateSet::PRESSED | StateSet::CHECKED)
+        && !skip.contains(StateSet::PRESSED)
+    {
+        Some("not pressed")
+    } else {
+        None
+    };
+    if let Some(w) = off {
+        segments.push(seg(w, SegmentKind::State));
+    }
     if let Some(v) = value_text(n.value.as_ref()) {
         segments.push(seg(&v, SegmentKind::Value));
+    }
+    // A field's description is its help or error text (aria-describedby, aria-errormessage).
+    if speaks_description(n.role)
+        && let Some(d) = desc(n)
+    {
+        segments.push(seg(d, SegmentKind::Text));
     }
     let may_refine = match n.fresh {
         Freshness::Fresh { .. } => false,
@@ -97,6 +153,7 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
         prio: Prio::Interrupt,
         may_refine,
         survives_focus_change: false,
+        ttl_secs: 0,
         refines: None,
     }
 }
@@ -151,22 +208,36 @@ pub fn log_states(n: &NodeSnapshot) -> SmallVec<[&'static str; 8]> {
 
 /// What differs between two snapshots in the fields a presentation speaks.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+#[allow(clippy::struct_excessive_bools)] // one flag per spoken field
 pub(crate) struct Changed {
     pub name: bool,
     pub role: bool,
     /// Spoken states whose presence differs.
     pub states: StateSet,
     pub value: bool,
+    /// A field's help or error text (spoken after the value).
+    pub description: bool,
 }
 
 impl Changed {
     pub fn is_empty(self) -> bool {
-        !self.name && !self.role && self.states.is_empty() && !self.value
+        !self.name && !self.role && self.states.is_empty() && !self.value && !self.description
     }
 }
 
 /// What differs in the spoken fields. `skip` are states that are not spoken in this context (a
 /// switcher item is spoken *because* it is selected, so `SELECTED` is never news).
+fn speaks_description(role: Role) -> bool {
+    matches!(
+        role,
+        Role::TextEntry | Role::PasswordEntry | Role::ComboBox | Role::SpinButton
+    )
+}
+
+fn desc(n: &NodeSnapshot) -> Option<&str> {
+    n.description.as_deref().filter(|d| !d.is_empty())
+}
+
 pub(crate) fn changed(old: &NodeSnapshot, new: &NodeSnapshot, skip: StateSet) -> Changed {
     let name = |n: &NodeSnapshot| {
         n.name
@@ -179,6 +250,7 @@ pub(crate) fn changed(old: &NodeSnapshot, new: &NodeSnapshot, skip: StateSet) ->
         role: old.role != new.role,
         states: (spoken_states(old) ^ spoken_states(new)) & !skip,
         value: value_text(old.value.as_ref()) != value_text(new.value.as_ref()),
+        description: speaks_description(new.role) && desc(old) != desc(new) && desc(new).is_some(),
     }
 }
 
@@ -202,7 +274,39 @@ pub(crate) fn present_change(
             segments.push(seg(role, SegmentKind::Role));
         }
     }
+    // Checked/half checked and expanded/collapsed are each one tri-state: say only the state
+    // the control is in now ("expanded", "collapsed", "half checked", "not checked"), never the
+    // flipped partner ("not collapsed").
+    let check = StateSet::CHECKED | StateSet::MIXED;
+    let expand = StateSet::EXPANDED | StateSet::COLLAPSED;
+    let mixed_w = mixed_word(new.role).filter(|_| new.states.contains(StateSet::MIXED));
+    if ch.states.intersects(check) && (mixed_w.is_some() || !new.states.contains(StateSet::MIXED)) {
+        let w = if let Some(w) = mixed_w {
+            w
+        } else if new.states.contains(StateSet::CHECKED) {
+            "checked"
+        } else {
+            "not checked"
+        };
+        segments.push(seg(w, SegmentKind::State));
+    }
+    if ch.states.intersects(expand) {
+        let w = if new.states.contains(StateSet::EXPANDED) {
+            "expanded"
+        } else if new.states.contains(StateSet::COLLAPSED) {
+            "collapsed"
+        } else {
+            "not expanded"
+        };
+        segments.push(seg(w, SegmentKind::State));
+    }
     for (flag, word) in STATE_WORDS {
+        if (check | expand).contains(*flag) {
+            continue;
+        }
+        if *flag == StateSet::PRESSED && mixed_w.is_some() {
+            continue;
+        }
         if ch.states.contains(*flag) {
             if new.states.contains(*flag) {
                 segments.push(seg(word, SegmentKind::State));
@@ -216,6 +320,11 @@ pub(crate) fn present_change(
     {
         segments.push(seg(&v, SegmentKind::Value));
     }
+    if ch.description
+        && let Some(d) = desc(new)
+    {
+        segments.push(seg(d, SegmentKind::Text));
+    }
     Utterance {
         id,
         segments,
@@ -224,6 +333,7 @@ pub(crate) fn present_change(
         prio: Prio::Message,
         may_refine: false,
         survives_focus_change: false,
+        ttl_secs: 0,
         refines,
     }
 }
@@ -346,6 +456,63 @@ mod change_tests {
 
     fn texts(u: &Utterance) -> Vec<String> {
         u.segments.iter().map(|s| s.text.to_string()).collect()
+    }
+
+    // Review M-1 / M-2 regressions: expand/collapse and the tri-state check box.
+    fn change_words(old: &NodeSnapshot, new: &NodeSnapshot) -> Vec<String> {
+        let ch = changed(old, new, StateSet::empty());
+        texts(&present_change(new, ch, UttId(1), Epoch(1), None))
+    }
+
+    #[test]
+    fn expand_and_collapse_say_only_the_state_that_holds() {
+        let mut col = snap("Fruit", StateSet::COLLAPSED, None);
+        col.role = Role::ComboBox;
+        let mut exp = col.clone();
+        exp.states = StateSet::EXPANDED;
+        assert_eq!(change_words(&col, &exp), ["expanded"]);
+        assert_eq!(change_words(&exp, &col), ["collapsed"]);
+    }
+
+    #[test]
+    fn mixed_words_depend_on_the_role() {
+        // R-6: only check boxes say "half checked".
+        let mut bar = snap("Loading", StateSet::MIXED, None);
+        bar.role = Role::ProgressBar;
+        let w = texts(&present_focus(&bar, UttId(1), Epoch(1)));
+        assert!(w.contains(&"indeterminate".to_owned()), "{w:?}");
+        assert!(!w.iter().any(|x| x.contains("checked")), "{w:?}");
+        let mut tog = snap("Mute", StateSet::MIXED, None);
+        tog.role = Role::ToggleButton;
+        let w = texts(&present_focus(&tog, UttId(1), Epoch(1)));
+        assert!(w.contains(&"half pressed".to_owned()), "{w:?}");
+        assert!(
+            !w.iter()
+                .any(|x| x.contains("checked") || x.contains("not pressed")),
+            "{w:?}"
+        );
+        let mut off = tog.clone();
+        off.states = StateSet::empty();
+        assert_eq!(change_words(&off, &tog), ["half pressed"]);
+    }
+
+    #[test]
+    fn a_mixed_check_box_says_half_checked_and_never_not_checked() {
+        let mut mixed = snap("Select all", StateSet::MIXED, None);
+        mixed.role = Role::CheckBox;
+        let words = texts(&present_focus(&mixed, UttId(1), Epoch(1)));
+        assert!(words.contains(&"half checked".to_owned()), "{words:?}");
+        assert!(
+            !words.iter().any(|w| w.contains("not checked")),
+            "{words:?}"
+        );
+        let mut off = mixed.clone();
+        off.states = StateSet::empty();
+        assert_eq!(change_words(&off, &mixed), ["half checked"]);
+        let mut on = mixed.clone();
+        on.states = StateSet::CHECKED;
+        assert_eq!(change_words(&mixed, &on), ["checked"]);
+        assert_eq!(change_words(&on, &off), ["not checked"]);
     }
 
     #[test]

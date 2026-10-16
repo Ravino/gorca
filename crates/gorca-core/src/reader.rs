@@ -121,6 +121,8 @@ pub enum FetchKind {
     Revalidate,
     /// S1: the focused node's state or value changed; speak the change.
     StateChange,
+    /// The one late re-read of a presented node that had no name: speak the name alone.
+    Name,
     /// A command's answer (`info.where_am_i`, `info.window_title`, debug): speak the reply.
     Info,
 }
@@ -408,6 +410,11 @@ pub struct Reader {
     /// after a growing delay (the application is flooded, e.g. the Shell opening the Alt+Tab
     /// switcher: asking again at once meets the same full queue).
     pub(crate) focus_backoff: Option<crate::present::FocusBackoff>,
+    /// A presented node that had no name, waiting for its one late re-read (the name may come
+    /// from a relation or label child that arrives after the node).
+    pub(crate) name_retry: Option<crate::present::NameRetry>,
+    /// The node whose late name re-read was already used (once per node).
+    pub(crate) name_retried: Option<NodeKey>,
     /// The focus whose failed RV-1 re-read was already retried once (a fresh deadline).
     pub(crate) revalidate_retried: Option<NodeKey>,
     /// A repeated focus event after a presentation that could not show `FOCUSED` yet.
@@ -484,6 +491,8 @@ impl Reader {
             web: None,
             focus_retried: None,
             focus_backoff: None,
+            name_retry: None,
+            name_retried: None,
             revalidate_retried: None,
             reconfirm: Reconfirm::Idle,
             timeout_charged: false,
@@ -699,6 +708,7 @@ impl Reader {
                 self.web_timer(now, &mut fx);
                 self.text_timer(&mut fx);
                 self.focus_backoff_timer(now, &mut fx);
+                self.name_retry_timer(now, &mut fx);
                 self.window_timer(&mut fx);
                 self.notice_timer(&mut fx);
                 self.level_timer(&mut fx);
@@ -1895,6 +1905,10 @@ mod tests {
                     kind: FetchKind::Info,
                     ..
                 } => "fetch-info",
+                ReaderEffect::Fetch {
+                    kind: FetchKind::Name,
+                    ..
+                } => "fetch-name",
                 ReaderEffect::Demand { .. } => "demand",
                 ReaderEffect::FocusSettled { .. } => "settled",
                 ReaderEffect::QueryActiveWindowFocus => "query",
@@ -2033,7 +2047,7 @@ mod tests {
         assert!(!u.may_refine);
         assert_eq!(u.epoch, first.epoch);
         let words: Vec<_> = u.segments.iter().map(|s| s.text.to_string()).collect();
-        assert_eq!(words, ["New name", "check box"]);
+        assert_eq!(words, ["New name", "check box", "not checked"]);
         assert_eq!(f.reader.counters().refined, 1);
     }
 
@@ -2312,6 +2326,67 @@ mod tests {
         assert_eq!(spoken(&fx), ["Files button"]);
     }
 
+    /// An unnamed button is spoken bare once, then its late name is read again after a short
+    /// pause and only the name is added (no second role, no repeat).
+    #[test]
+    fn a_nameless_button_gets_one_late_name_and_only_the_name_is_spoken() {
+        let mut f = fixture();
+        let t = Instant::now();
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node: key(1) }),
+            t,
+        );
+        f.reader
+            .handle(ReaderMsg::Timer, t + std::time::Duration::from_millis(5));
+        let fx = f.reader.handle(
+            reply(&f, 1, FetchKind::Focus, selected_snap(1, "")),
+            t + std::time::Duration::from_millis(6),
+        );
+        assert_eq!(spoken(&fx), ["button"]);
+        let at = timer_of(&fx).expect("the late name read is armed");
+        let early = f.reader.handle(ReaderMsg::Timer, t);
+        assert!(!effects_of(&early).contains(&"fetch-name"));
+        let due = f.reader.handle(ReaderMsg::Timer, at);
+        assert!(
+            effects_of(&due).contains(&"fetch-name"),
+            "{:?}",
+            effects_of(&due)
+        );
+        let fx = f
+            .reader
+            .handle(reply(&f, 1, FetchKind::Name, selected_snap(1, "Files")), at);
+        assert_eq!(spoken(&fx), ["Files"]);
+        // Once per node: presenting the same item again does not read it a third time.
+        let again = f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node: key(1) }),
+            at + std::time::Duration::from_secs(1),
+        );
+        assert!(timer_of(&again).is_none() || !effects_of(&again).contains(&"fetch-name"));
+    }
+
+    /// Nothing is added when the late read is still nameless or the focus moved on.
+    #[test]
+    fn a_late_name_that_is_still_empty_or_stale_says_nothing() {
+        let mut f = fixture();
+        let t = Instant::now();
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node: key(1) }),
+            t,
+        );
+        f.reader
+            .handle(ReaderMsg::Timer, t + std::time::Duration::from_millis(5));
+        let fx = f.reader.handle(
+            reply(&f, 1, FetchKind::Focus, selected_snap(1, "")),
+            t + std::time::Duration::from_millis(6),
+        );
+        let at = timer_of(&fx).expect("armed");
+        f.reader.handle(ReaderMsg::Timer, at);
+        let fx = f
+            .reader
+            .handle(reply(&f, 1, FetchKind::Name, selected_snap(1, "")), at);
+        assert!(spoken(&fx).is_empty(), "{:?}", spoken(&fx));
+    }
+
     /// The tries are bounded: a switcher item that stays unreadable is silent, a real focus
     /// that stays unreadable still says that nothing is known.
     #[test]
@@ -2410,7 +2485,7 @@ mod tests {
             ),
             now,
         );
-        assert_eq!(spoken(&fx), ["Row check box"]);
+        assert_eq!(spoken(&fx), ["Row check box not checked"]);
     }
 
     #[test]
@@ -2453,7 +2528,7 @@ mod tests {
             }),
             now,
         );
-        assert_eq!(spoken(&fx), ["Row check box"]);
+        assert_eq!(spoken(&fx), ["Row check box not checked"]);
         assert!(utterance(&fx).may_refine);
         assert!(!matches!(f.reader.focus(), FocusState::Orphaned { .. }));
     }

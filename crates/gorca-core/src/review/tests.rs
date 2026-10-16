@@ -1198,3 +1198,159 @@ fn terminal_review_reads_the_held_screen_by_line_word_and_char_with_no_ipc() {
     assert_eq!(said(&fx), ["me@box:~$ ls -l"]);
     assert_eq!(effects(&fx, is_ipc), 0);
 }
+
+// ---- a terminal whose screen keeps changing (terminal-review-stale) -----------------------------
+
+fn term_fixture(
+    dropped: Option<Arc<std::sync::atomic::AtomicU64>>,
+    focused: Option<Arc<gorca_rt::FocusedApp>>,
+) -> Fx {
+    let epoch = Arc::new(EpochCell::new());
+    let dir = Arc::new(MirrorDirectory::new());
+    let (writer, handle) = mirror();
+    dir.insert(app(), &handle);
+    let mut reader = Reader::new(Arc::clone(&epoch), dir, ModeKeys::default());
+    if let Some(d) = dropped {
+        reader = reader.with_text_dropped(d);
+    }
+    if let Some(f) = focused {
+        reader = reader.with_focused(f);
+    }
+    let mut f = Fx {
+        reader,
+        writer,
+        epoch,
+        now: Instant::now(),
+    };
+    f.load(terminal_screen());
+    f
+}
+
+fn screen_read(fx: &ReaderEffects) -> Option<crate::TextReqId> {
+    fx.iter().find_map(|e| match e {
+        ReaderEffect::TextFetch {
+            req,
+            op: crate::TextOp::Screen { .. },
+            ..
+        } => Some(*req),
+        _ => None,
+    })
+}
+
+impl Fx {
+    /// Answer the screen read `req` with `screen` (the caret at its end).
+    fn screen_reply(&mut self, req: crate::TextReqId, screen: &str) -> ReaderEffects {
+        let n = u32::try_from(screen.chars().count()).unwrap();
+        self.now += Duration::from_millis(5);
+        self.reader.handle(
+            ReaderMsg::Text(crate::TextMsg::Fetched {
+                req,
+                epoch: self.epoch.current(),
+                result: Ok(crate::text::caret::Reply::Window(
+                    gorca_model::TextWindowFill {
+                        base: 0,
+                        text: Arc::from(screen),
+                        len: n,
+                        caret: Some(n),
+                    },
+                )),
+            }),
+            self.now,
+        )
+    }
+
+    /// Focus the terminal and answer its baseline read with `screen`.
+    fn focus_terminal(&mut self, screen: &str) {
+        let mut fx = self.reader.handle(
+            ReaderMsg::Focus(crate::FocusLaneMsg::FocusChanged { node: key(2) }),
+            self.now,
+        );
+        self.now += Duration::from_millis(60);
+        fx.extend(self.reader.handle(ReaderMsg::Timer, self.now));
+        let req = screen_read(&fx).expect("the focused terminal's screen is read");
+        self.screen_reply(req, screen);
+    }
+
+    /// Let the extension's settle timer run and answer the screen read it asks for.
+    fn settle_and_answer(&mut self, fx: &mut ReaderEffects, screen: &str) -> ReaderEffects {
+        for _ in 0..4 {
+            if let Some(req) = screen_read(fx) {
+                return self.screen_reply(req, screen);
+            }
+            self.now += Duration::from_millis(40);
+            *fx = self.reader.handle(ReaderMsg::Timer, self.now);
+        }
+        panic!("no screen read: {fx:?}");
+    }
+}
+
+#[test]
+fn review_of_a_terminal_whose_events_were_lost_reads_the_screen_again_before_it_speaks() {
+    let dropped = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let mut f = term_fixture(Some(Arc::clone(&dropped)), None);
+    f.focus_terminal("old 1\nold 2\n$ ");
+    let fx = f.run(CoreCmd::ReviewCurLine);
+    assert_eq!(said(&fx), ["$"]);
+    // The app actor lost text events (a flood, a full queue) and nothing followed: the held
+    // screen is old. The next review step reads the screen first and speaks the new one.
+    dropped.fetch_add(3, std::sync::atomic::Ordering::Relaxed);
+    let mut fx = f.run(CoreCmd::ReviewPrevLine);
+    assert!(said(&fx).is_empty(), "stale speech: {:?}", said(&fx));
+    let fx = f.settle_and_answer(&mut fx, "new 8\nnew 9\n$ ");
+    assert_eq!(said(&fx), ["new 9"]);
+    assert_eq!(f.reader.terminal_reads().review_syncs, 1);
+    // Trusted again: the next step reads the held screen with no wait.
+    let fx = f.run(CoreCmd::ReviewPrevLine);
+    assert_eq!(said(&fx), ["new 8"]);
+    assert!(screen_read(&fx).is_none());
+}
+
+#[test]
+fn review_of_a_terminal_that_is_not_the_protected_application_reads_the_screen_again() {
+    // Its text events are dropped (uncounted) while the application is not the protected one.
+    let cell = Arc::new(gorca_rt::FocusedApp::new());
+    let mut f = term_fixture(None, Some(Arc::clone(&cell)));
+    f.focus_terminal("old 1\nold 2\n$ ");
+    cell.forget(app());
+    let mut fx = f.run(CoreCmd::ReviewCurLine);
+    assert!(said(&fx).is_empty(), "stale speech: {:?}", said(&fx));
+    let fx = f.settle_and_answer(&mut fx, "new 8\nnew 9\n$ ");
+    assert_eq!(said(&fx), ["$"]);
+    let mut fx = f.run(CoreCmd::ReviewPrevLine);
+    assert!(said(&fx).is_empty(), "stale speech: {:?}", said(&fx));
+    let fx = f.settle_and_answer(&mut fx, "newer 9\nnewer 10\n$ ");
+    assert_eq!(
+        said(&fx),
+        ["newer 10"],
+        "the screen read again, not the old one"
+    );
+    assert!(f.reader.terminal_reads().review_syncs >= 2);
+}
+
+#[test]
+fn review_never_serves_the_model_of_a_terminal_that_is_no_longer_tracked() {
+    let mut f = term_fixture(None, None);
+    f.focus_terminal("old 1\nold 2\n$ ");
+    let fx = f.run(CoreCmd::ReviewCurLine);
+    assert_eq!(said(&fx), ["$"]);
+    // The tracking is gone (a focus event the presentation did not finish, a lost track): the
+    // model built from the old screen has no zones to check and must not be read from.
+    f.reader.term_untrack();
+    let mut fx = f.run(CoreCmd::ReviewPrevLine);
+    assert!(said(&fx).is_empty(), "stale speech: {:?}", said(&fx));
+    let fx = f.settle_and_answer(&mut fx, "new 8\nnew 9\n$ ");
+    assert_eq!(said(&fx), ["new 9"]);
+}
+
+#[test]
+fn a_new_tracking_never_matches_a_model_built_from_an_earlier_one() {
+    let mut f = term_fixture(None, None);
+    f.focus_terminal("a\nb\n$ ");
+    let g1 = f.reader.term_snapshot(key(2)).unwrap().generation;
+    f.reader.term_untrack();
+    f.now += Duration::from_millis(500);
+    f.focus_terminal("c\nd\n$ ");
+    let g2 = f.reader.term_snapshot(key(2)).unwrap().generation;
+    assert_ne!(g1, g2);
+    assert_ne!(g1 >> 32, g2 >> 32, "the tracking is part of the generation");
+}

@@ -10,7 +10,8 @@
 
 use std::sync::Arc;
 
-use gorca_doc::web::{NodeFlags, NodeView, WebDoc};
+use gorca_doc::web::{Cat, NodeFlags, NodeView, WebDoc};
+use gorca_doc_source_api::web_attrs;
 use gorca_model::{DocNodeId, Role, Segment, SegmentKind, StateSet};
 use smallvec::SmallVec;
 
@@ -29,12 +30,15 @@ pub enum Item {
     Role(String),
     State(&'static str),
     Name(String),
+    /// Spoken before the focused control (a dialog entered with the focus): placed in front of
+    /// the focus utterance by the presenter, not after it.
+    Lead(String),
 }
 
 impl Item {
     pub fn kind(&self) -> SegmentKind {
         match self {
-            Item::Text(_) | Item::Name(_) => SegmentKind::Text,
+            Item::Text(_) | Item::Name(_) | Item::Lead(_) => SegmentKind::Text,
             Item::Role(_) => SegmentKind::Role,
             Item::State(_) => SegmentKind::State,
         }
@@ -42,7 +46,7 @@ impl Item {
 
     pub fn text(&self) -> &str {
         match self {
-            Item::Text(t) | Item::Role(t) | Item::Name(t) => t,
+            Item::Text(t) | Item::Role(t) | Item::Name(t) | Item::Lead(t) => t,
             Item::State(s) => s,
         }
     }
@@ -92,14 +96,23 @@ fn role_phrase(v: &NodeView<'_>) -> String {
 /// States spoken after a control's role.
 fn push_states(role: Role, st: StateSet, out: &mut Vec<Item>) {
     let checkable = matches!(role, Role::CheckBox | Role::RadioButton);
+    let mixed = st
+        .contains(StateSet::MIXED)
+        .then(|| crate::present::mixed_word(role))
+        .flatten();
+    if !checkable && let Some(w) = mixed {
+        out.push(Item::State(w));
+    }
     if checkable {
-        out.push(Item::State(if st.contains(StateSet::CHECKED) {
+        out.push(Item::State(if let Some(w) = mixed {
+            w
+        } else if st.contains(StateSet::CHECKED) {
             "checked"
         } else {
             "not checked"
         }));
     }
-    if st.contains(StateSet::PRESSED) {
+    if st.contains(StateSet::PRESSED) && mixed.is_none() {
         out.push(Item::State("pressed"));
     }
     if st.contains(StateSet::EXPANDED) {
@@ -136,6 +149,191 @@ fn push_states(role: Role, st: StateSet, out: &mut Vec<Item>) {
     }
 }
 
+/// The ARIA landmark kind of a landmark node, spoken before the word "landmark".
+fn landmark_kind(v: &NodeView<'_>) -> &'static str {
+    let attr = |k| {
+        v.meta
+            .and_then(|m| m.attrs.iter().find(|(a, _)| *a == k).map(|(_, x)| &**x))
+    };
+    let from_role = attr(web_attrs::XML_ROLES).and_then(|r| {
+        r.split_ascii_whitespace().find_map(|t| match t {
+            "banner" => Some("banner"),
+            "main" => Some("main"),
+            "navigation" => Some("navigation"),
+            "search" => Some("search"),
+            "complementary" => Some("complementary"),
+            "contentinfo" => Some("content info"),
+            "form" => Some("form"),
+            "region" => Some("region"),
+            _ => None,
+        })
+    });
+    from_role.unwrap_or_else(|| match attr(web_attrs::TAG) {
+        Some("main") => "main",
+        Some("nav") => "navigation",
+        Some("aside") => "complementary",
+        Some("header") => "banner",
+        Some("footer") => "content info",
+        Some("form") => "form",
+        _ => "region",
+    })
+}
+
+/// "1 item" / "3 items".
+fn counted(n: usize, one: &str, many: &str) -> String {
+    if n == 1 {
+        format!("1 {one}")
+    } else {
+        format!("{n} {many}")
+    }
+}
+
+/// Rows and columns of a table node, from the tree (rows are `Row` descendants through at most
+/// two group levels; columns are the widest row). `aria-rowcount`/`aria-colcount` win.
+pub fn table_dims(doc: &WebDoc, id: DocNodeId) -> (usize, usize) {
+    let num = |v: &NodeView<'_>, k| -> Option<usize> {
+        v.meta
+            .and_then(|m| m.attrs.iter().find(|(a, _)| *a == k).map(|(_, x)| &**x))
+            .and_then(|x| x.parse::<usize>().ok())
+    };
+    let mut rows = 0usize;
+    let mut cols = 0usize;
+    let mut stack: Vec<(DocNodeId, u8)> = doc.children(id).map(|c| (c, 0)).collect();
+    while let Some((n, depth)) = stack.pop() {
+        let Some(v) = doc.node(n) else { continue };
+        if v.role == Role::Row {
+            rows += 1;
+            let w = doc
+                .children(n)
+                .filter(|c| {
+                    doc.node(*c).is_some_and(|cv| {
+                        matches!(cv.role, Role::Cell | Role::ColumnHeader | Role::RowHeader)
+                            && !cv.flags.contains(NodeFlags::HIDDEN)
+                    })
+                })
+                .count();
+            cols = cols.max(w);
+        } else if depth < 2 && !v.flags.contains(NodeFlags::HIDDEN) {
+            stack.extend(doc.children(n).map(|c| (c, depth + 1)));
+        }
+    }
+    if let Some(v) = doc.node(id) {
+        if let Some(r) = num(&v, web_attrs::ROWCOUNT).filter(|r| *r > 0) {
+            rows = r;
+        }
+        if let Some(c) = num(&v, web_attrs::COLCOUNT).filter(|c| *c > 0) {
+            cols = c;
+        }
+    }
+    (rows, cols)
+}
+
+/// What entering a container says (BM-3 field diff, NVDA `getControlFieldSpeech`): lists and
+/// tables with their sizes, block quotes, landmarks and regions with their names, dialogs and
+/// forms. `None` for nodes that are not announced as containers.
+fn container_items(doc: &WebDoc, v: &NodeView<'_>, id: DocNodeId) -> Option<Vec<Item>> {
+    let mut out = Vec::new();
+    let name = v.name.filter(|n| !n.is_empty());
+    if v.cats.intersects(Cat::LIST) && v.role == Role::List {
+        let n = doc
+            .children(id)
+            .filter(|c| doc.node(*c).is_some_and(|x| x.role == Role::ListItem))
+            .count();
+        out.push(Item::Role(format!(
+            "list with {}",
+            counted(n, "item", "items")
+        )));
+    } else if v.cats.intersects(Cat::TABLE) {
+        let (r, c) = table_dims(doc, id);
+        if let Some(n) = name {
+            out.push(Item::Name(n.to_owned()));
+        }
+        out.push(Item::Role(format!(
+            "table with {} and {}",
+            counted(c, "column", "columns"),
+            counted(r, "row", "rows")
+        )));
+    } else if v.cats.intersects(Cat::BLOCKQUOTE) {
+        out.push(Item::Role("block quote".to_owned()));
+    } else if v.cats.intersects(Cat::ANY_LANDMARK) {
+        let kind = landmark_kind(v);
+        let region = v.flags.contains(NodeFlags::REGION) || kind == "region";
+        if let Some(n) = name {
+            out.push(Item::Name(n.to_owned()));
+        }
+        out.push(Item::Role(if region || kind == "form" {
+            kind.to_owned()
+        } else {
+            format!("{kind} landmark")
+        }));
+    } else if v.cats.intersects(Cat::DIALOG) {
+        if let Some(n) = name {
+            out.push(Item::Name(n.to_owned()));
+        }
+        out.push(Item::Role("dialog".to_owned()));
+    } else if v.cats.intersects(Cat::EMBEDDED) {
+        // role=application, or an <object>/<embed> (both are ATK_ROLE_EMBEDDED).
+        let application = v.meta.is_some_and(|m| {
+            m.attrs.iter().any(|(k, x)| {
+                *k == web_attrs::XML_ROLES && x.split_ascii_whitespace().any(|t| t == "application")
+            })
+        });
+        if let Some(n) = name {
+            out.push(Item::Name(n.to_owned()));
+        }
+        out.push(Item::Role(
+            if application {
+                "application"
+            } else {
+                "embedded object"
+            }
+            .to_owned(),
+        ));
+    } else {
+        return None;
+    }
+    Some(out)
+}
+
+/// Is `name` already part of what is said?
+fn name_spoken(items: &[Item], name: &str) -> bool {
+    let name = name.trim().to_lowercase();
+    items.iter().any(|i| match i {
+        Item::Text(t) | Item::Name(t) => t.to_lowercase().contains(&name),
+        Item::Role(_) | Item::State(_) | Item::Lead(_) => false,
+    })
+}
+
+/// A form control spoken on its own (quick navigation, focus follow): its accessible name first.
+fn is_named_control(role: Role) -> bool {
+    matches!(
+        role,
+        Role::TextEntry
+            | Role::PasswordEntry
+            | Role::ComboBox
+            | Role::CheckBox
+            | Role::RadioButton
+            | Role::Slider
+            | Role::SpinButton
+            | Role::ToggleButton
+    )
+}
+
+/// The text of the selected option of a combo box or list box.
+fn selected_value(doc: &WebDoc, id: DocNodeId) -> Option<String> {
+    for n in doc.subtree(id).skip(1) {
+        let v = doc.node(n)?;
+        if v.meta
+            .is_some_and(|m| m.states.contains(StateSet::SELECTED))
+            && matches!(v.role, Role::MenuItem | Role::ListItem)
+        {
+            let t = v.name.filter(|t| !t.is_empty()).or(v.text)?;
+            return Some(t.trim().to_owned());
+        }
+    }
+    None
+}
+
 fn enter_items(v: &NodeView<'_>, out: &mut Vec<Item>) {
     out.push(Item::Role(role_phrase(v)));
     let st = v.meta.map_or(StateSet::empty(), |m| m.states);
@@ -170,18 +368,59 @@ fn marker_items(v: &NodeView<'_>, out: &mut Vec<Item>) {
     }
 }
 
-/// Offset where the node's content starts: after its own line break.
-fn eff_start(doc: &WebDoc, id: DocNodeId, v: &NodeView<'_>) -> Option<u32> {
-    let base = doc.offset_of(id)?;
-    Some(
-        base + u32::from(
-            v.flags.contains(NodeFlags::BREAK_BEFORE) && !v.flags.contains(NodeFlags::HIDDEN),
-        ),
-    )
+/// Offset where the node's content starts: after its own line break and the blank breaks of
+/// the blocks that open inside it.
+fn eff_start(doc: &WebDoc, id: DocNodeId, _v: &NodeView<'_>) -> Option<u32> {
+    super::cursor::content_start(doc, id)
 }
 
 /// Describe the flat-text range `[a, b)`.
 pub fn describe(doc: &WebDoc, a: u32, b: u32) -> Vec<Item> {
+    describe_from(doc, a, b, None)
+}
+
+/// Is the flat offset `at` inside the node's text?
+fn node_holds(doc: &WebDoc, id: DocNodeId, at: u32) -> bool {
+    doc.subtree_text_range(id)
+        .is_some_and(|(s, e)| s <= at && at < e)
+}
+
+/// "out of list", "out of table", "out of block quote" for the containers that hold `from` but
+/// not `to` (innermost first).
+fn leaving_items(doc: &WebDoc, from: u32, to: u32) -> Vec<Item> {
+    let mut out = Vec::new();
+    let Some((mut cur, _)) = doc.at_offset(from.min(doc.text_len().saturating_sub(1))) else {
+        return out;
+    };
+    for _ in 0..64 {
+        let Some(v) = doc.node(cur) else { break };
+        let word = if v.cats.intersects(Cat::TABLE) {
+            Some("table")
+        } else if v.role == Role::List && v.cats.intersects(Cat::LIST) {
+            Some("list")
+        } else if v.cats.intersects(Cat::BLOCKQUOTE) {
+            Some("block quote")
+        } else {
+            None
+        };
+        if let Some(w) = word
+            && !v.flags.contains(NodeFlags::HIDDEN)
+            && node_holds(doc, cur, from)
+            && !node_holds(doc, cur, to)
+        {
+            out.push(Item::Role(format!("out of {w}")));
+        }
+        match doc.parent(cur) {
+            Some(p) => cur = p,
+            None => break,
+        }
+    }
+    out
+}
+
+/// Describe `[a, b)` as a move from the cursor at `from` (BM-3 field diff): a container or
+/// control that already holds `from` was entered earlier and is not announced again.
+pub fn describe_from(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Vec<Item> {
     let mut out: Vec<Item> = Vec::new();
     let total = doc.text_len();
     let b = b.min(total).min(a.saturating_add(LINE_CAP));
@@ -191,6 +430,10 @@ pub fn describe(doc: &WebDoc, a: u32, b: u32) -> Vec<Item> {
     let Some((n0, local0)) = doc.at_offset(a) else {
         return out;
     };
+    // Containers the cursor leaves with this move (NVDA "out of list").
+    if let Some(f) = from {
+        out.extend(leaving_items(doc, f, a));
+    }
     // Ancestors whose content starts exactly here were entered on this range.
     let mut chain: Vec<DocNodeId> = Vec::new();
     let mut cur = doc.parent(n0);
@@ -200,11 +443,16 @@ pub fn describe(doc: &WebDoc, a: u32, b: u32) -> Vec<Item> {
     }
     for id in chain.into_iter().rev() {
         let Some(v) = doc.node(id) else { continue };
-        if announced(v.role)
-            && !v.flags.contains(NodeFlags::HIDDEN)
-            && eff_start(doc, id, &v) == Some(a)
+        if v.flags.contains(NodeFlags::HIDDEN)
+            || eff_start(doc, id, &v) != Some(a)
+            || from.is_some_and(|f| node_holds(doc, id, f))
         {
+            continue;
+        }
+        if announced(v.role) {
             enter_items(&v, &mut out);
+        } else if let Some(items) = container_items(doc, &v, id) {
+            out.extend(items);
         }
     }
     // Then everything from the first node on.
@@ -213,7 +461,7 @@ pub fn describe(doc: &WebDoc, a: u32, b: u32) -> Vec<Item> {
         let Some(v) = doc.node(id) else { continue };
         let own = doc.own_len(id).unwrap_or(0);
         let hidden = v.flags.contains(NodeFlags::HIDDEN);
-        let eff = off + u32::from(v.flags.contains(NodeFlags::BREAK_BEFORE) && !hidden);
+        let eff = off + v.flags.lead_len();
         let first = id == n0;
         if !first && eff >= b {
             break;
@@ -240,6 +488,7 @@ pub fn describe(doc: &WebDoc, a: u32, b: u32) -> Vec<Item> {
         }
         off += own;
     }
+    dedupe_names(&mut out);
     out
 }
 
@@ -269,6 +518,12 @@ pub fn char_name(c: char) -> String {
 
 /// The items for a quick-nav target: its own text range with its role announced first (LP-4).
 pub fn describe_node(doc: &WebDoc, id: DocNodeId) -> Vec<Item> {
+    describe_node_from(doc, id, None)
+}
+
+/// [`describe_node`] for a move from the cursor at `from`: containers the cursor is already in
+/// are not announced again.
+pub fn describe_node_from(doc: &WebDoc, id: DocNodeId, from: Option<u32>) -> Vec<Item> {
     let Some(v) = doc.node(id) else {
         return Vec::new();
     };
@@ -278,12 +533,29 @@ pub fn describe_node(doc: &WebDoc, id: DocNodeId) -> Vec<Item> {
     let Some((_, end)) = doc.subtree_text_range(id) else {
         return Vec::new();
     };
-    let b = end.min(a + QUICK_NAV_CAP);
+    // A container is announced by what it is, then by its first line; anything else by its
+    // whole text, capped (LP-4).
+    let container = container_items(doc, &v, id).is_some();
+    let mut b = end.min(a + QUICK_NAV_CAP);
+    if container {
+        let (_, line_end) = doc.line_range(a);
+        b = b.min(line_end.max(a));
+    }
     let mut items = if a < b {
-        describe(doc, a, b)
+        describe_from(doc, a, b, from)
     } else {
         Vec::new()
     };
+    // A container whose first line starts later than its own content (a table that opens with
+    // a caption line, an empty list) still gets its head.
+    if container
+        && !from.is_some_and(|f| node_holds(doc, id, f))
+        && !items.iter().any(|i| matches!(i, Item::Role(_)))
+        && let Some(mut head) = container_items(doc, &v, id)
+    {
+        head.append(&mut items);
+        items = head;
+    }
     // A node with no content on the page (an empty heading, a link that is all image) is still
     // announced, once.
     let announced_here = items.iter().any(|i| matches!(i, Item::Role(_)));
@@ -292,6 +564,23 @@ pub fn describe_node(doc: &WebDoc, id: DocNodeId) -> Vec<Item> {
         enter_items(&v, &mut pre);
         pre.append(&mut items);
         items = pre;
+    }
+    if !announced_here && v.role == Role::Separator {
+        items.insert(0, Item::Role("separator".to_owned()));
+    }
+    // A form control alone on its range is a marker: it has no label of its own in the flat
+    // text, so its accessible name leads (NVDA: "Search term edit blank").
+    if is_named_control(v.role)
+        && let Some(n) = v.name.filter(|n| !n.is_empty())
+        && !name_spoken(&items, n)
+    {
+        items.insert(0, Item::Name(n.to_owned()));
+    }
+    if v.role == Role::ComboBox
+        && let Some(val) = selected_value(doc, id)
+        && !val.is_empty()
+    {
+        items.push(Item::Text(val));
     }
     // A frame (a nested document) and an article are announced by what they are, then by name.
     let mut pre: Vec<Item> = Vec::new();
@@ -316,7 +605,26 @@ pub fn describe_node(doc: &WebDoc, id: DocNodeId) -> Vec<Item> {
         pre.append(&mut items);
         items = pre;
     }
+    dedupe_names(&mut items);
     items
+}
+
+/// A container's name is dropped when its first line says it already ("Fruit table table").
+fn dedupe_names(items: &mut Vec<Item>) {
+    let texts: Vec<String> = items
+        .iter()
+        .filter_map(|i| match i {
+            Item::Text(t) => Some(t.to_lowercase()),
+            Item::Role(_) | Item::State(_) | Item::Name(_) | Item::Lead(_) => None,
+        })
+        .collect();
+    items.retain(|i| match i {
+        Item::Name(n) => {
+            let n = n.trim().to_lowercase();
+            n.is_empty() || !texts.iter().any(|t| t.contains(&n))
+        }
+        Item::Text(_) | Item::Role(_) | Item::State(_) | Item::Lead(_) => true,
+    });
 }
 
 #[cfg(test)]
@@ -324,6 +632,7 @@ mod tests {
     use std::sync::Arc;
 
     use gorca_doc::web::{DocOp, NodeMeta, NodeSpec, SubtreeSpec};
+    use gorca_doc_source_api::web_attrs;
 
     use super::*;
 
@@ -422,6 +731,123 @@ mod tests {
         assert_eq!(say(&describe_node(&d, h)), "heading level 2 Products");
         let l = d.first_of(gorca_doc::web::Cat::LINK).unwrap();
         assert_eq!(say(&describe_node(&d, l)), "visited link docs");
+    }
+
+    fn named(role: Role, name: &str) -> NodeSpec {
+        leaf(role).name(name)
+    }
+
+    // main "Main content" > [ul > 2 li], then a form field "Search term", a combo box "Country"
+    // with options, a 2x2 table "Fruit".
+    fn containers() -> WebDoc {
+        let mut d = WebDoc::new(7);
+        let blk = NodeFlags::BLOCK | NodeFlags::BREAK_BEFORE;
+        let txt = |t: &str| SubtreeSpec::leaf(leaf(Role::StaticText).text(t));
+        let li =
+            |t: &str| SubtreeSpec::with_children(leaf(Role::ListItem).flags(blk), vec![txt(t)]);
+        let ul =
+            SubtreeSpec::with_children(leaf(Role::List).flags(blk), vec![li("One"), li("Two")]);
+        let main = SubtreeSpec::with_children(
+            named(Role::Landmark, "Main content")
+                .flags(blk)
+                .meta(Arc::new(NodeMeta {
+                    attrs: [(web_attrs::TAG, Arc::<str>::from("main"))]
+                        .into_iter()
+                        .collect(),
+                    ..NodeMeta::default()
+                })),
+            vec![ul],
+        );
+        let edit = SubtreeSpec::leaf(with_states(
+            named(Role::TextEntry, "Search term")
+                .flags(blk)
+                .text("\u{FFFC}"),
+            StateSet::ENABLED | StateSet::EDITABLE,
+        ));
+        let opt = |n: &str, sel: bool| {
+            SubtreeSpec::leaf(with_states(
+                named(Role::MenuItem, n),
+                if sel {
+                    StateSet::SELECTED
+                } else {
+                    StateSet::empty()
+                },
+            ))
+        };
+        let combo = SubtreeSpec::with_children(
+            with_states(
+                named(Role::ComboBox, "Country").flags(blk).text("\u{FFFC}"),
+                StateSet::ENABLED,
+            ),
+            vec![SubtreeSpec::with_children(
+                leaf(Role::Menu),
+                vec![opt("Albania", true), opt("Belgium", false)],
+            )],
+        );
+        let cell = |t: &str| SubtreeSpec::with_children(leaf(Role::Cell).flags(blk), vec![txt(t)]);
+        let row = |a: &str, b: &str| {
+            SubtreeSpec::with_children(leaf(Role::Row).flags(blk), vec![cell(a), cell(b)])
+        };
+        let table = SubtreeSpec::with_children(
+            named(Role::Table, "Fruit").flags(blk),
+            vec![row("a", "b"), row("c", "d")],
+        );
+        let root =
+            SubtreeSpec::with_children(leaf(Role::DocumentWeb), vec![main, edit, combo, table]);
+        assert!(
+            d.apply(&DocOp::InsertSubtree {
+                parent: None,
+                before: None,
+                subtree: Arc::new(root),
+            })
+            .is_ok()
+        );
+        d
+    }
+
+    #[test]
+    fn entering_a_landmark_and_a_list_is_announced_on_the_first_line() {
+        let d = containers();
+        let m = d.first_of(gorca_doc::web::Cat::LANDMARK).unwrap();
+        let s = super::super::cursor::content_start(&d, m).unwrap();
+        let (_, e) = d.line_range(s);
+        assert_eq!(
+            say(&describe(&d, s, e)),
+            "Main content main landmark list with 2 items One"
+        );
+        // The second item enters nothing.
+        let (_, e1) = d.line_range(s);
+        let (s2, e2) = d.line_range(e1 + 1);
+        assert_eq!(say(&describe(&d, s2, e2)), "Two");
+    }
+
+    #[test]
+    fn quick_nav_to_a_list_or_landmark_says_what_it_is_then_one_line() {
+        let d = containers();
+        let l = d.first_of(gorca_doc::web::Cat::LIST).unwrap();
+        assert_eq!(
+            say(&describe_node(&d, l)),
+            "Main content main landmark list with 2 items One"
+        );
+        let m = d.first_of(gorca_doc::web::Cat::LANDMARK).unwrap();
+        assert_eq!(
+            say(&describe_node(&d, m)),
+            "Main content main landmark list with 2 items One"
+        );
+        let t = d.first_of(gorca_doc::web::Cat::TABLE).unwrap();
+        assert_eq!(
+            say(&describe_node(&d, t)),
+            "Fruit table with 2 columns and 2 rows a"
+        );
+    }
+
+    #[test]
+    fn a_form_control_on_quick_nav_leads_with_its_name_and_a_combo_with_its_value() {
+        let d = containers();
+        let e = d.first_of(gorca_doc::web::Cat::EDIT).unwrap();
+        assert_eq!(say(&describe_node(&d, e)), "Search term edit blank");
+        let c = d.first_of(gorca_doc::web::Cat::COMBOBOX).unwrap();
+        assert_eq!(say(&describe_node(&d, c)), "Country combo box Albania");
     }
 
     #[test]

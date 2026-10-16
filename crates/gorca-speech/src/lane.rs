@@ -725,6 +725,7 @@ mod tests {
             prio,
             may_refine: false,
             survives_focus_change: false,
+            ttl_secs: 0,
             refines: None,
         }
     }

@@ -1741,56 +1741,469 @@ fn the_load_complete_of_another_document_does_not_start_the_read() {
     );
 }
 
-#[test]
-fn a_caret_move_to_a_heading_is_an_anchor_jump_the_cursor_follows() {
-    // Chromium's scroll-to-anchor signal: text-caret-moved(0) on the target (no focus event).
-    let mut r = rig();
-    r.focus(1006);
-    assert!(matches!(r.mode(), WebMode::Browse { .. }));
-    let fx = r.reader.handle(
-        ReaderMsg::Text(crate::TextMsg::Caret {
-            node: nk(1009),
-            offset: 0,
+// ---- M8: containers, selection, single-letter toggle, out-of announcements -------------------
+
+/// The page with a two-item list between "Details" and "Last line".
+fn with_list(r: &mut Rig) {
+    r.focus(1002);
+    let list = block(src(40, Role::List, None));
+    let li1 = block(src(41, Role::ListItem, None));
+    let li2 = block(src(43, Role::ListItem, None));
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            DocDelta::Upsert(vec![list, li1, run(42, "One"), li2, run(44, "Two")]),
+            kids(1, &[2, 4, 9, 40, 11, 13]),
+            kids(40, &[41, 43]),
+            kids(41, &[42]),
+            kids(43, &[44]),
+            DocDelta::Settled { batch: 2 },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed {
+            doc: DocId(1),
+            rev: 2,
         }),
         r.now,
     );
-    let said = spoken(&fx);
-    assert_eq!(said.len(), 1, "{said:?}");
-    assert!(
-        said[0].contains("heading level 2") && said[0].contains("Details"),
-        "{said:?}"
-    );
-    // The same jump again says nothing new; Down continues from the target.
-    let fx = r.reader.handle(
-        ReaderMsg::Text(crate::TextMsg::Caret {
-            node: nk(1009),
-            offset: 0,
-        }),
-        r.now,
-    );
-    assert!(spoken(&fx).is_empty());
-    let fx = r.key(CoreCmd::BrowseCursorNextLine);
-    assert_eq!(spoken(&fx), ["Last line"]);
 }
 
 #[test]
-fn a_caret_move_in_a_field_or_at_another_offset_is_not_an_anchor_jump() {
+fn comma_jumps_past_the_end_of_the_container_and_shift_comma_back_to_its_start() {
     let mut r = rig();
-    r.focus(1006);
-    let fx = r.reader.handle(
-        ReaderMsg::Text(crate::TextMsg::Caret {
-            node: nk(1014),
-            offset: 0,
-        }),
-        r.now,
+    with_list(&mut r);
+    // Outside any container.
+    let fx = r.key(CoreCmd::BrowseContainerEnd);
+    assert_eq!(spoken(&fx), ["Not in a container"]);
+    let fx = r.key(CoreCmd::QuicknavNextList);
+    assert_eq!(spoken(&fx)[0], "list with 2 items One");
+    // Past the end: the line after the list, and the exit is announced.
+    let fx = r.key(CoreCmd::BrowseContainerEnd);
+    assert_eq!(spoken(&fx), ["out of list Last line"]);
+    // Back inside, then to the start of the list.
+    let _ = r.key(CoreCmd::QuicknavPrevList);
+    let fx = r.key(CoreCmd::BrowseCursorNextLine);
+    assert_eq!(spoken(&fx), ["Two"]);
+    let fx = r.key(CoreCmd::BrowseContainerStart);
+    assert_eq!(spoken(&fx), ["One"], "already inside: not announced again");
+}
+
+#[test]
+fn single_letter_navigation_toggles_and_releases_the_bare_keys() {
+    let mut r = rig();
+    r.focus(1002);
+    let h = Chord {
+        keysym: 0x68,
+        modifiers: Modifiers::empty(),
+    };
+    let down = Chord {
+        keysym: 0xff54,
+        modifiers: Modifiers::empty(),
+    };
+    r.reader.keys.letters = vec![h];
+    r.reader.keys.quick_nav = vec![h, down];
+    let fx = r.key(CoreCmd::BrowseSingleLetterToggle);
+    assert_eq!(spoken(&fx), ["single letter navigation off"]);
+    let g = last_grab(&fx).expect("the grab set is republished");
+    assert!(!g.contains(0x68, Modifiers::empty()), "H goes to the page");
+    assert!(g.contains(0xff54, Modifiers::empty()), "Down stays ours");
+    let fx = r.key(CoreCmd::BrowseSingleLetterToggle);
+    assert_eq!(spoken(&fx), ["single letter navigation on"]);
+    let g = last_grab(&fx).expect("the grab set is republished");
+    assert!(g.contains(0x68, Modifiers::empty()));
+}
+
+#[test]
+fn shift_arrows_select_and_unselect_and_a_plain_move_clears() {
+    let mut r = rig();
+    r.focus(1002);
+    let fx = r.key(CoreCmd::BrowseSelectNextChar);
+    assert_eq!(spoken(&fx), ["W selected"]);
+    let fx = r.key(CoreCmd::BrowseSelectNextChar);
+    assert_eq!(spoken(&fx), ["e selected"]);
+    let fx = r.key(CoreCmd::BrowseSelectPrevChar);
+    assert_eq!(spoken(&fx), ["e unselected"]);
+    assert!(r.reader.web.as_ref().is_some_and(|w| w.sel.is_some()));
+    let _ = r.key(CoreCmd::BrowseCursorNextChar);
+    assert!(r.reader.web.as_ref().is_some_and(|w| w.sel.is_none()));
+    let fx = r.key(CoreCmd::BrowseSelectAll);
+    assert_eq!(spoken(&fx), ["all selected"]);
+}
+
+#[test]
+fn a_field_that_gets_the_focus_with_its_help_text_is_not_mistaken_for_a_dialog() {
+    // The dialog lead is by node: a focus in the same document without a dialog says nothing.
+    let mut r = rig();
+    r.focus(1002);
+    let fx = r.focus(1014);
+    assert!(!spoken(&fx).iter().any(|s| s.contains("dialog")));
+}
+
+// ---- review round 1: H-1 (D-2 Tab) and M-5 (native selection) ---------------------------------
+
+fn tab_chord() -> Chord {
+    Chord {
+        keysym: 0xff09,
+        modifiers: Modifiers::empty(),
+    }
+}
+
+fn shift_tab_chord() -> Chord {
+    Chord {
+        keysym: 0xfe20,
+        modifiers: Modifiers::SHIFT,
+    }
+}
+
+/// A rig whose document root is FOCUSABLE as Gecko reports it and whose keys know the Tab chords.
+fn tab_rig() -> Rig {
+    let mut r = rig();
+    let mut body = block(src(1, Role::DocumentWeb, Some(1001)));
+    body.name = Some(Arc::from("Test page"));
+    body.states |= StateSet::FOCUSABLE;
+    r.tr.apply(
+        &mut r.writer,
+        vec![DocDelta::Upsert(vec![body]), DocDelta::Settled { batch: 2 }],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.keys.quick_nav = vec![tab_chord(), shift_tab_chord()];
+    r.reader.keys.tab_next = vec![tab_chord()];
+    r.reader.keys.tab_prev = vec![shift_tab_chord()];
+    r
+}
+
+fn acts(fx: &ReaderEffects) -> Vec<(DocAction, DocNodeId)> {
+    effects_web(fx)
+        .iter()
+        .filter_map(|w| match w {
+            WebEffect::Act { node, act, .. } => Some((act.clone(), *node)),
+            WebEffect::Ensure { .. } | WebEffect::Activity { .. } => None,
+        })
+        .collect()
+}
+
+fn last_grabs(fx: &ReaderEffects) -> Option<gorca_input_api::GrabSet> {
+    fx.iter().rev().find_map(|e| {
+        if let ReaderEffect::SetGrabSet(g) = e {
+            Some(g.clone())
+        } else {
+            None
+        }
+    })
+}
+
+/// Let the debounced cursor timers run (scroll, tab availability).
+fn settle(r: &mut Rig) -> ReaderEffects {
+    r.now += Duration::from_millis(300);
+    r.reader.handle(ReaderMsg::Timer, r.now)
+}
+
+#[test]
+fn reading_never_sets_a_page_caret_or_moves_focus() {
+    // H-1: the caret-follow substitute is gone: Down, K and the timers send only scrolls.
+    let mut r = tab_rig();
+    r.focus(1002);
+    let mut all = acts(&settle(&mut r));
+    for cmd in [
+        CoreCmd::BrowseCursorNextLine,
+        CoreCmd::QuicknavNextLink,
+        CoreCmd::BrowseCursorNextLine,
+        CoreCmd::BrowseCursorNextChar,
+    ] {
+        let fx = r.key(cmd);
+        all.extend(acts(&fx));
+        all.extend(acts(&settle(&mut r)));
+    }
+    assert!(!all.is_empty(), "the scrolls still go out");
+    assert!(
+        all.iter()
+            .all(|(a, _)| matches!(a, DocAction::ScrollIntoView)),
+        "reading only scrolls: {all:?}"
     );
-    assert!(spoken(&fx).is_empty(), "an editable node is not an anchor");
-    let fx = r.reader.handle(
-        ReaderMsg::Text(crate::TextMsg::Caret {
-            node: nk(1009),
-            offset: 3,
-        }),
-        r.now,
+}
+
+#[test]
+fn tab_focuses_the_next_focusable_after_the_cursor_and_shift_tab_the_previous() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    let link = r.join.get(nk(1006)).unwrap().1;
+    let edit = r.join.get(nk(1014)).unwrap().1;
+    // From the heading: the link comes first, never the document root.
+    let fx = r.key(CoreCmd::BrowseTabNext);
+    assert_eq!(acts(&fx), [(DocAction::Focus, link)]);
+    // The cursor moves with a plain read to the last line: the edit is next.
+    for _ in 0..3 {
+        r.key(CoreCmd::BrowseCursorNextLine);
+    }
+    let fx = r.key(CoreCmd::BrowseTabNext);
+    assert_eq!(acts(&fx), [(DocAction::Focus, edit)]);
+    // Shift+Tab from the same place goes back to the link, never to the document.
+    let fx = r.key(CoreCmd::BrowseTabPrev);
+    assert_eq!(acts(&fx), [(DocAction::Focus, link)]);
+}
+
+#[test]
+fn tab_is_grabbed_only_in_the_directions_that_have_a_target() {
+    let mut r = tab_rig();
+    let fx = r.focus(1002);
+    let g = last_grabs(&fx).expect("browse mode sets the grabs");
+    assert!(
+        g.contains(0xff09, Modifiers::empty()),
+        "a target after the heading"
     );
-    assert!(spoken(&fx).is_empty(), "only offset 0 is the anchor signal");
+    assert!(
+        !g.contains(0xfe20, Modifiers::SHIFT),
+        "nothing focusable before the heading: Shift+Tab goes to the page"
+    );
+    // Past the last focusable (the edit): Tab is released, Shift+Tab comes back.
+    for _ in 0..6 {
+        r.key(CoreCmd::BrowseCursorNextLine);
+    }
+    let fx = settle(&mut r);
+    let g = last_grabs(&fx).expect("the grab set follows the cursor");
+    assert!(!g.contains(0xff09, Modifiers::empty()));
+    assert!(g.contains(0xfe20, Modifiers::SHIFT));
+    // A grab that went stale says so instead of staying silent.
+    let fx = r.key(CoreCmd::BrowseTabNext);
+    assert!(acts(&fx).is_empty());
+    assert_eq!(spoken(&fx), ["no next focusable element"]);
+}
+
+#[test]
+fn virtual_selection_never_touches_the_page_unless_native_mode_is_on() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    let mut seen = Vec::new();
+    for _ in 0..3 {
+        seen.extend(acts(&r.key(CoreCmd::BrowseSelectNextChar)));
+    }
+    seen.extend(acts(&r.key(CoreCmd::BrowseSelectAll)));
+    assert!(
+        !seen
+            .iter()
+            .any(|(a, _)| matches!(a, DocAction::SetSelection(_))),
+        "default: virtual only {seen:?}"
+    );
+    // gorca+Shift+F10 turns the mirror on; a range inside one text node is set.
+    let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
+    assert_eq!(spoken(&fx), ["native selection on"]);
+    r.key(CoreCmd::BrowseCursorTop);
+    let _ = r.key(CoreCmd::BrowseSelectNextChar);
+    let fx = r.key(CoreCmd::BrowseSelectNextChar);
+    assert!(
+        acts(&fx)
+            .iter()
+            .any(|(a, _)| matches!(a, DocAction::SetSelection(_))),
+        "{:?}",
+        acts(&fx)
+    );
+    // Extending over a node boundary (a range in two nodes) clears the page selection.
+    let mut later = Vec::new();
+    for _ in 0..20 {
+        later.extend(acts(&r.key(CoreCmd::BrowseSelectNextChar)));
+    }
+    assert!(
+        later
+            .iter()
+            .any(|(a, _)| matches!(a, DocAction::SetSelection(range) if range.is_empty())),
+        "a range over several nodes leaves no stale page selection: {later:?}"
+    );
+    // A plain move drops the range: nothing of ours stays selected (checked after the timer).
+    let fx = r.key(CoreCmd::BrowseCursorTop);
+    let mut moved = acts(&fx);
+    moved.extend(acts(&settle(&mut r)));
+    assert!(
+        !moved
+            .iter()
+            .any(|(a, _)| matches!(a, DocAction::SetSelection(range) if !range.is_empty())),
+        "{moved:?}"
+    );
+    let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
+    assert_eq!(spoken(&fx), ["native selection off"]);
+}
+
+// ---- review round 1: M-4 live speech expires and spends the owner's budget ---------------------
+
+fn live_msg(text: &str, assertive: bool) -> ReaderMsg {
+    ReaderMsg::Doc(DocNotice::Live {
+        doc: DocId(1),
+        msg: crate::doc_actor::live::LiveMsg {
+            text: Arc::from(text),
+            assertive,
+        },
+    })
+}
+
+fn speak_utts(fx: &ReaderEffects) -> Vec<gorca_model::Utterance> {
+    fx.iter()
+        .filter_map(|e| {
+            if let ReaderEffect::Speak(s) = e {
+                Some(s.utterance.clone())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn live_speech_carries_the_adr_ttl_and_a_flood_spends_only_its_owners_budget() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    let fx = r.reader.handle(live_msg("polite news", false), r.now);
+    let u = speak_utts(&fx);
+    assert_eq!(u.len(), 1);
+    assert_eq!(u[0].ttl_secs, 5);
+    let fx = r.reader.handle(live_msg("alert news", true), r.now);
+    assert_eq!(speak_utts(&fx)[0].ttl_secs, 10);
+    // A flood in one instant: the owner's speech bucket (burst 3) lets a few through and holds
+    // only the newest of the rest; nothing near the 32-entry speech FIFO is ever produced.
+    let mut spoken_now = 0;
+    for i in 0..200 {
+        let fx = r
+            .reader
+            .handle(live_msg(&format!("flood {i}"), false), r.now);
+        spoken_now += speak_utts(&fx).len();
+    }
+    assert!(
+        spoken_now <= 4,
+        "a flood spoke {spoken_now} messages at once"
+    );
+}
+
+// ---- m8 re-review (round 2) regressions ------------------------------------------------------
+
+fn tab_pair(g: &gorca_input_api::GrabSet) -> (bool, bool) {
+    (
+        g.contains(0xff09, Modifiers::empty()),
+        g.contains(0xfe20, Modifiers::SHIFT),
+    )
+}
+
+/// The Tab grabs of the newest pushed set, or the last one seen.
+fn track(last: &mut Option<gorca_input_api::GrabSet>, fx: &ReaderEffects) {
+    if let Some(g) = last_grabs(fx) {
+        *last = Some(g);
+    }
+}
+
+#[test]
+fn r2_the_tab_grabs_follow_the_live_targets_after_a_foreign_grab_push() {
+    let mut r = tab_rig();
+    let mut last = None;
+    track(&mut last, &r.focus(1002));
+    track(&mut last, &r.key(CoreCmd::BrowseCursorNextLine));
+    track(&mut last, &r.key(CoreCmd::BrowseCursorTop));
+    track(&mut last, &settle(&mut r));
+    assert_eq!(
+        tab_pair(last.as_ref().unwrap()),
+        (true, false),
+        "at the heading"
+    );
+    track(&mut last, &r.focus(1014)); // focus mode on the edit
+    track(&mut last, &r.key(CoreCmd::BrowseEscape)); // browse at the edit: pushed by the mode change
+    track(&mut last, &settle(&mut r));
+    r.now += Duration::from_secs(5);
+    track(&mut last, &r.key(CoreCmd::BrowseCursorTop));
+    track(&mut last, &settle(&mut r));
+    let g = last.unwrap();
+    assert_eq!(
+        r.reader.web_tab_targets(),
+        (true, false),
+        "the live targets at the top"
+    );
+    assert_eq!(
+        tab_pair(&g),
+        (true, false),
+        "the grabs follow them, not a stale cache"
+    );
+}
+
+#[test]
+fn r4_shift_tab_inside_a_focusable_container_finds_the_link_before_the_cursor() {
+    let mut r = tab_rig();
+    let mut p = block(src(4, Role::Paragraph, Some(1004)));
+    p.states |= StateSet::FOCUSABLE;
+    r.tr.apply(
+        &mut r.writer,
+        vec![DocDelta::Upsert(vec![p]), DocDelta::Settled { batch: 3 }],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.focus(1002);
+    settle(&mut r);
+    r.key(CoreCmd::BrowseCursorNextLine);
+    for _ in 0..16 {
+        r.key(CoreCmd::BrowseCursorNextChar);
+    }
+    let link = r.join.get(nk(1006)).unwrap().1;
+    let fx = r.key(CoreCmd::BrowseTabPrev);
+    assert_eq!(acts(&fx), [(DocAction::Focus, link)], "{:?}", spoken(&fx));
+}
+
+#[test]
+fn r5_tab_belongs_to_the_browser_after_a_focus_driven_move_and_inside_the_focused_node() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    assert!(r.reader.web_tab_targets().0, "from the heading Tab is ours");
+    // The browser focuses the link (our Tab, or its own): the cursor came from a focus change.
+    let fx = r.focus(1006);
+    assert_eq!(r.reader.web_tab_targets(), (false, false));
+    // The grab set follows at once, not at the next scroll timer.
+    let g = last_grabs(&fx).expect("the focus move pushes the grab set");
+    assert_eq!(tab_pair(&g), (false, false));
+    let _ = settle(&mut r);
+    // Any cursor move of our own ends it: the cursor is no longer on the focused node.
+    r.key(CoreCmd::BrowseCursorNextLine);
+    r.key(CoreCmd::BrowseCursorNextLine);
+    let _ = settle(&mut r);
+    assert_ne!(r.reader.web_tab_targets(), (false, false));
+}
+
+#[test]
+fn r3_an_alert_waiting_for_the_budget_is_not_replaced_by_polite_news() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    let mut said = Vec::new();
+    for m in ["news 1", "news 2", "news 3"] {
+        said.extend(spoken(&r.reader.handle(live_msg(m, false), r.now)));
+    }
+    r.now += Duration::from_millis(20);
+    said.extend(spoken(
+        &r.reader
+            .handle(live_msg("ALERT payment failed", true), r.now),
+    ));
+    r.now += Duration::from_millis(20);
+    said.extend(spoken(&r.reader.handle(live_msg("news 4", false), r.now)));
+    for _ in 0..20 {
+        r.now += Duration::from_millis(200);
+        said.extend(spoken(&r.reader.handle(ReaderMsg::Timer, r.now)));
+    }
+    assert!(
+        said.iter().any(|s| s.contains("ALERT payment failed")),
+        "the alert is spoken: {said:?}"
+    );
+    assert!(
+        said.iter().any(|s| s.contains("news 4")),
+        "polite coalescing keeps the newest: {said:?}"
+    );
+}
+
+#[test]
+fn r6_native_selection_toggle_outside_a_web_page_says_it_is_unavailable() {
+    let mut r = rig();
+    let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
+    assert_eq!(
+        spoken(&fx),
+        ["native selection is only available on web pages"]
+    );
 }

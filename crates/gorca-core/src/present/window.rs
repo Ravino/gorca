@@ -414,6 +414,7 @@ pub fn follow_up(
         prio: Prio::Notification,
         may_refine: false,
         survives_focus_change: false,
+        ttl_secs: 0,
         refines: None,
     }
 }
@@ -660,11 +661,6 @@ impl WindowCtx {
 }
 
 impl Reader {
-    /// Is a window activation paired with the focus about to be presented?
-    pub(crate) fn window_lead_pending(&self) -> bool {
-        self.win.lead.is_some()
-    }
-
     /// `window:activate` of `window` (forwarded by its app actor).
     pub(crate) fn on_window_activated(&mut self, window: NodeKey, fx: &mut ReaderEffects) {
         let now = self.now;

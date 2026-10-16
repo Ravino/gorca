@@ -1,0 +1,11 @@
+== reader <repo>/.claude/worktrees/agent-a212e0b0695e3d0d9/target/release/gorca built from c4183c7, tree at c4183c7
+== e2e acc-20261016T232704Z-m1-e2e-a1: reader=daemon:<repo>/.claude/worktrees/agent-a212e0b0695e3d0d9/target/release/gorca backend=voicego repeats=1 load=17.54 16.82 13.82 3/3138 2497645
+-- round 1/1 K2 (load 17.54 16.82 13.82 4/3138 2497645)
+-- round 1/1 K2s (load 16.61 16.64 13.78 4/3136 2497843)
+-- round 1/1 K3 (load 15.68 16.45 13.73 2/3150 2498266)
+-- round 1/1 K4 (load 16.11 16.52 13.77 2/3208 2498928)
+-- round 1/1 K4h (load 14.90 16.25 13.72 2/3192 2502563)
+-- round 1/1 R1 (load 14.66 16.18 13.71 3/3174 2502794)
+-- round 1/1 R1s (load 14.66 16.18 13.71 2/3165 2502954)
+-- round 1/1 RS (load 14.85 16.19 13.73 2/3196 2503896)
+== wrote <repo>/.claude/worktrees/agent-a212e0b0695e3d0d9/bench/results/acceptance/phase2-dryrun-20261017-b/m1/e2e.a1/res/20261016T232748Z.{json,txt}

@@ -1,0 +1,27 @@
+771040495391441 said "M8 Autofocus — Mozilla Firefox"
+771041274696454 said "Scripted target link, link, unavailable"
+771042414596161 said "M8 Autofocus, document"
+771042721101896 said "application not responding"
+771043274904732 said "browse mode, heading level 1, Autofocus on load"
+bus 4 /org/a11y/atspi/accessible/42
+bus 4 /org/a11y/atspi/accessible/56
+bus 4 /org/a11y/atspi/accessible/58
+bus 4 /org/a11y/atspi/accessible/58
+bus 4 /org/a11y/atspi/accessible/58
+bus 4 /org/a11y/atspi/accessible/56
+bus 4 /org/a11y/atspi/accessible/63
+bus 4 /org/a11y/atspi/accessible/74
+bus 2 /org/a11y/atspi/accessible/78
+bus 2 /org/a11y/atspi/accessible/79
+bus 2 /org/a11y/atspi/accessible/80
+bus 2 /org/a11y/atspi/accessible/81
+bus 2 /org/a11y/atspi/accessible/82
+bus 4 /org/a11y/atspi/accessible/56
+bus 4 /org/a11y/atspi/accessible/56
+bus 2 /org/a11y/atspi/accessible/84
+bus 2 /org/a11y/atspi/accessible/85
+bus 1 /org/a11y/atspi/accessible/91
+bus 1 /org/a11y/atspi/accessible/91
+bus 3 /org/a11y/atspi/accessible/92
+bus 1 /org/a11y/atspi/accessible/84
+bus 1 /org/a11y/atspi/accessible/84

@@ -1,0 +1,52 @@
+2026-10-16T00:04:18.565950Z  INFO gorca_phase: phase="warm" wall_ms=43.890910999999996 waited_ms=38.380145999999996 blocked_ms=10.009871 slept_ms=28.293669 rounds=2 probes=19 sampled_nodes=3 tagged_nodes=3 ready=true
+2026-10-16T00:04:18.566467Z  INFO gorca_phase: phase="locate" wall_ms=0.426419
+2026-10-16T00:04:18.566507Z  INFO gorca_phase: phase="create" wall_ms=0.0028179999999999998
+2026-10-16T00:04:18.585333Z  INFO gorca_phase: phase="fetch" total_ms=18.755217000000002 warm_ms=0.0 frontier_ms=0.07305299999999999 get_tree_ms=8.260636 roles_ms=3.7300839999999997 states_ms=1.5478619999999998 text_ms=5.0199609999999995 assemble_ms=0.006672 heaviest_get_tree_ms=7.471 calls=96 tree_bytes=7711 nodes=31
+2026-10-16T00:04:18.585514Z  INFO gorca_phase: phase="translate" wall_ms=0.079318 nodes=64
+2026-10-16T00:04:19.170674Z  INFO gorca_phase: phase="live_msg" text=Polite message 1 assertive=false
+2026-10-16T00:04:19.675279Z  INFO gorca_phase: phase="live_msg" text=Assertive message 2 assertive=true
+2026-10-16T00:04:20.154868Z  INFO gorca_phase: phase="live_msg" text=Alert: disk almost full assertive=true
+2026-10-16T00:04:20.418594Z  INFO gorca_phase: phase="live_msg" text=Saved at step 3 assertive=false
+2026-10-16T00:04:20.805360Z  INFO gorca_phase: phase="live_msg" text=Log entry 4 assertive=false
+2026-10-16T00:04:21.079754Z  INFO gorca_phase: phase="live_msg" text=Log entry 5 assertive=false
+2026-10-16T00:04:22.636196Z  INFO gorca_phase: phase="live_msg" text=Ticker: 1 points assertive=false
+2026-10-16T00:04:23.419912Z  INFO gorca_phase: phase="live_msg" text=Busy final text assertive=false
+2026-10-16T00:04:26.023086Z  INFO gorca_phase: phase="live_msg" text=Removable text A assertive=false
+2026-10-16T00:04:26.299006Z  INFO gorca_phase: phase="live_msg" text=Same text again assertive=false
+2026-10-16T00:04:28.072686Z  INFO gorca_phase: phase="live_msg" text=Text added after the region exists assertive=false
+2026-10-16T00:04:30.669991Z  INFO gorca_phase: phase="live_msg" text=Flood update 23 assertive=false
+2026-10-16T00:04:30.801403Z  INFO gorca_phase: phase="live_msg" text=Flood update 50 assertive=false
+2026-10-16T00:04:30.942610Z  INFO gorca_phase: phase="live_msg" text=Flood update 77 assertive=false
+2026-10-16T00:04:33.300104Z  INFO gorca_phase: phase="live_msg" text=Assertive flood 26 assertive=true
+2026-10-16T00:04:33.440825Z  INFO gorca_phase: phase="live_msg" text=Assertive flood 53 assertive=true
+2026-10-16T00:04:33.572193Z  INFO gorca_phase: phase="live_msg" text=Assertive flood 80 assertive=true
+2026-10-16T00:04:33.833601Z  INFO gorca_phase: phase="live_msg" text=Assertive flood 133 assertive=true
+2026-10-16T00:04:36.070694Z  INFO gorca_phase: phase="live_msg" text=11 updates in Flood region assertive=false
+2026-10-16T00:04:54.130235Z  INFO gorca_phase: phase="warm" wall_ms=139.171746 waited_ms=131.435604 blocked_ms=105.197148 slept_ms=26.150251 rounds=2 probes=23 sampled_nodes=9 tagged_nodes=9 ready=true
+2026-10-16T00:04:54.153798Z  INFO gorca_phase: phase="locate" wall_ms=23.459955
+2026-10-16T00:04:54.153893Z  INFO gorca_phase: phase="create" wall_ms=0.006959
+2026-10-16T00:04:54.296736Z  INFO gorca_phase: phase="fetch" total_ms=142.774868 warm_ms=0.0 frontier_ms=17.953328000000003 get_tree_ms=93.188728 roles_ms=8.028007 states_ms=2.31714 text_ms=13.471572 assemble_ms=0.011208000000000001 heaviest_get_tree_ms=82.12 calls=109 tree_bytes=6593 nodes=33
+2026-10-16T00:04:54.297039Z  INFO gorca_phase: phase="translate" wall_ms=0.10376400000000001 nodes=57
+2026-10-16T00:04:55.619624Z  INFO gorca_phase: phase="locate" wall_ms=8.452196
+2026-10-16T00:04:56.336423Z  INFO gorca_phase: phase="locate" wall_ms=38.704114
+2026-10-16T00:04:56.383889Z  INFO gorca_phase: phase="live_msg" text=Dialog closed assertive=false
+2026-10-16T00:04:58.377138Z  INFO gorca_phase: phase="locate" wall_ms=6.945406
+2026-10-16T00:04:58.447792Z  INFO gorca_phase: phase="live_msg" text=Empty trash? This cannot be undone. Cancel Empty assertive=true
+2026-10-16T00:05:02.190770Z  INFO gorca_phase: phase="live_msg" text=Conversation deleted. Undo available. assertive=false
+2026-10-16T00:05:02.360147Z  INFO gorca_phase: phase="locate" wall_ms=9.986519
+2026-10-16T00:05:13.263134Z  INFO gorca_phase: phase="warm" wall_ms=51.906056 waited_ms=34.207464 blocked_ms=7.986841 slept_ms=26.171923 rounds=2 probes=25 sampled_nodes=4 tagged_nodes=4 ready=true
+2026-10-16T00:05:13.264820Z  INFO gorca_phase: phase="locate" wall_ms=1.620157
+2026-10-16T00:05:13.264870Z  INFO gorca_phase: phase="create" wall_ms=0.004245
+2026-10-16T00:05:13.276991Z  INFO gorca_phase: phase="fetch" total_ms=12.068964999999999 warm_ms=0.0 frontier_ms=1.9749659999999998 get_tree_ms=4.215488 roles_ms=1.778899 states_ms=0.298065 text_ms=1.694195 assemble_ms=0.006076 heaviest_get_tree_ms=3.447 calls=102 tree_bytes=5965 nodes=31
+2026-10-16T00:05:13.277171Z  INFO gorca_phase: phase="translate" wall_ms=0.076556 nodes=56
+2026-10-16T00:05:33.035572Z  INFO gorca_phase: phase="warm" wall_ms=131.24392600000002 waited_ms=102.400807 blocked_ms=75.82161900000001 slept_ms=26.460919999999998 rounds=2 probes=27 sampled_nodes=9 tagged_nodes=9 ready=true
+2026-10-16T00:05:33.122422Z  INFO gorca_phase: phase="locate" wall_ms=81.65708400000001
+2026-10-16T00:05:33.122539Z  INFO gorca_phase: phase="create" wall_ms=0.025965
+2026-10-16T00:05:33.130700Z  INFO gorca_phase: phase="locate" wall_ms=89.951233
+2026-10-16T00:05:33.264834Z  INFO gorca_phase: phase="fetch" total_ms=142.16540899999998 warm_ms=0.0 frontier_ms=20.540300000000002 get_tree_ms=60.29454 roles_ms=5.269496999999999 states_ms=2.251095 text_ms=1.419754 assemble_ms=0.009297 heaviest_get_tree_ms=48.734 calls=140 tree_bytes=8573 nodes=46
+2026-10-16T00:05:33.265086Z  INFO gorca_phase: phase="translate" wall_ms=0.09170400000000001 nodes=75
+2026-10-16T00:05:57.206846Z  INFO gorca_phase: phase="warm" wall_ms=121.752562 waited_ms=121.094088 blocked_ms=93.17252099999999 slept_ms=27.869004999999998 rounds=2 probes=19 sampled_nodes=3 tagged_nodes=3 ready=true
+2026-10-16T00:05:57.207569Z  INFO gorca_phase: phase="locate" wall_ms=0.483196
+2026-10-16T00:05:57.207600Z  INFO gorca_phase: phase="create" wall_ms=0.0030180000000000003
+2026-10-16T00:05:57.218400Z  INFO gorca_phase: phase="fetch" total_ms=10.731302999999999 warm_ms=0.0 frontier_ms=0.07053100000000001 get_tree_ms=2.6419680000000003 roles_ms=2.208316 states_ms=4.371575 text_ms=1.289753 assemble_ms=0.015359 heaviest_get_tree_ms=1.355 calls=203 tree_bytes=18807 nodes=82
+2026-10-16T00:05:57.218670Z  INFO gorca_phase: phase="translate" wall_ms=0.118521 nodes=139

@@ -1,0 +1,13 @@
+== run 1 arm base start 2026-10-16T19:04:59Z load 19.80 18.95 19.94 12/3374 1398503 mempressure some avg10=0.00 avg60=0.75 avg300=1.18 total=2817048509 avail_gb 11
+== run 1 arm base end 2026-10-16T19:12:09Z rc 0 load 13.47 20.97 20.94 5/3301 1465352 mempressure some avg10=0.00 avg60=0.70 avg300=1.41 total=2824323869
+== run 2 arm branch start 2026-10-16T19:12:09Z load 13.47 20.97 20.94 5/3301 1465355 mempressure some avg10=0.00 avg60=0.70 avg300=1.41 total=2824323869 avail_gb 12
+== run 2 arm branch end 2026-10-16T19:19:06Z rc 0 load 12.93 16.41 18.81 5/3072 1498733 mempressure some avg10=0.01 avg60=1.15 avg300=1.22 total=2829132162
+== run 3 arm branch start 2026-10-16T19:19:06Z load 12.93 16.41 18.81 8/3067 1498736 mempressure some avg10=0.01 avg60=1.15 avg300=1.22 total=2829132162 avail_gb 12
+== run 3 arm branch end 2026-10-16T19:26:06Z rc 0 load 10.13 13.14 16.38 1/3166 1526520 mempressure some avg10=0.00 avg60=0.02 avg300=0.32 total=2829781562
+== run 4 arm base start 2026-10-16T19:26:06Z load 10.13 13.14 16.38 1/3166 1526523 mempressure some avg10=0.00 avg60=0.02 avg300=0.32 total=2829781562 avail_gb 12
+== run 4 arm base end 2026-10-16T19:32:37Z rc 0 load 11.59 13.10 15.33 1/3298 1539303 mempressure some avg10=0.00 avg60=0.37 avg300=0.47 total=2832370547
+== run 5 arm base start 2026-10-16T19:32:37Z load 11.59 13.10 15.33 1/3298 1539306 mempressure some avg10=0.00 avg60=0.37 avg300=0.47 total=2832370547 avail_gb 12
+== run 5 arm base end 2026-10-16T19:39:07Z rc 0 load 11.13 11.55 13.81 1/3224 1551760 mempressure some avg10=1.33 avg60=0.32 avg300=0.28 total=2833797471
+== run 6 arm branch start 2026-10-16T19:39:07Z load 11.13 11.55 13.81 2/3224 1551763 mempressure some avg10=1.33 avg60=0.32 avg300=0.28 total=2833797471 avail_gb 12
+== run 6 arm branch end 2026-10-16T19:45:36Z rc 0 load 7.95 9.70 12.27 1/3203 1562238 mempressure some avg10=0.00 avg60=0.00 avg300=0.12 total=2834541270
+DONE

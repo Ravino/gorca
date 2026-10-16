@@ -42,11 +42,11 @@ function render(name, push) {
 }
 function wire() {
   const rr = document.getElementById("rerender");
-  if (rr) rr.onclick = () => { // same text, brand-new nodes
+  if (rr) rr.onclick = () => setTimeout(() => { // same text, brand-new nodes, 1200 ms after the click
     const ul = document.getElementById("re");
     ul.replaceWith(Object.assign(document.createElement("ul"), { id: "re", innerHTML: items.slice(0, 5).map((t) => `<li>${t}</li>`).join("") }));
     document.getElementById("toast").textContent = "List refreshed";
-  };
+  }, 1200);
   const m = document.getElementById("more");
   if (m) m.onclick = () => {
     const ul = document.getElementById("inf");

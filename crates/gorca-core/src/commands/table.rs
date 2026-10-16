@@ -229,6 +229,26 @@ pub enum CoreCmd {
     TableSayColumn,
     TableSayAllRow,
     TableSayAllColumn,
+    BrowseSelectNextChar,
+    BrowseSelectPrevChar,
+    BrowseSelectNextWord,
+    BrowseSelectPrevWord,
+    BrowseSelectNextLine,
+    BrowseSelectPrevLine,
+    BrowseSelectLineStart,
+    BrowseSelectLineEnd,
+    BrowseSelectTop,
+    BrowseSelectBottom,
+    BrowseSelectPageUp,
+    BrowseSelectPageDown,
+    BrowseSelectAll,
+    BrowseCursorNextParagraph,
+    BrowseCursorPrevParagraph,
+    BrowseCursorNextSentence,
+    BrowseCursorPrevSentence,
+    BrowseTabNext,
+    BrowseTabPrev,
+    BrowseNativeSelectionToggle,
 }
 
 /// Pattern matching every command that is declared but not implemented yet.
@@ -253,29 +273,18 @@ macro_rules! planned_cmds {
             | CoreCmd::ReviewCaretFollowsToggle
             | CoreCmd::ReviewAbove
             | CoreCmd::ReviewBelow
-            | CoreCmd::BrowseSingleLetterToggle
             | CoreCmd::BrowseElementsList
             | CoreCmd::BrowseFind
             | CoreCmd::BrowseFindNext
             | CoreCmd::BrowseFindPrev
             | CoreCmd::BrowseRefresh
             | CoreCmd::BrowseLiveRegionsToggle
-            | CoreCmd::BrowseContainerStart
-            | CoreCmd::BrowseContainerEnd
             | CoreCmd::QuicknavNextHeading7
             | CoreCmd::QuicknavPrevHeading7
             | CoreCmd::QuicknavNextHeading8
             | CoreCmd::QuicknavPrevHeading8
             | CoreCmd::QuicknavNextHeading9
             | CoreCmd::QuicknavPrevHeading9
-            | CoreCmd::QuicknavNextNotLinkBlock
-            | CoreCmd::QuicknavPrevNotLinkBlock
-            | CoreCmd::QuicknavNextAnnotation
-            | CoreCmd::QuicknavPrevAnnotation
-            | CoreCmd::QuicknavNextError
-            | CoreCmd::QuicknavPrevError
-            | CoreCmd::QuicknavNextParagraph
-            | CoreCmd::QuicknavPrevParagraph
             | CoreCmd::QuicknavNextClickable
             | CoreCmd::QuicknavPrevClickable
             | CoreCmd::QuicknavNextSlider
@@ -304,24 +313,12 @@ macro_rules! planned_cmds {
             | CoreCmd::QuicknavPrevDifferentStyle
             | CoreCmd::QuicknavNextReference
             | CoreCmd::QuicknavPrevReference
-            | CoreCmd::TableNextRow
-            | CoreCmd::TablePrevRow
-            | CoreCmd::TableNextColumn
-            | CoreCmd::TablePrevColumn
-            | CoreCmd::TableFirstRow
-            | CoreCmd::TableLastRow
-            | CoreCmd::TableFirstColumn
-            | CoreCmd::TableLastColumn
-            | CoreCmd::TableSayRow
-            | CoreCmd::TableSayColumn
-            | CoreCmd::TableSayAllRow
-            | CoreCmd::TableSayAllColumn
     };
 }
 pub(crate) use planned_cmds;
 
 /// Number of commands.
-pub const COUNT: usize = 219;
+pub const COUNT: usize = 239;
 
 impl CoreCmd {
     /// Every command, in discriminant order.
@@ -545,6 +542,26 @@ impl CoreCmd {
         CoreCmd::TableSayColumn,
         CoreCmd::TableSayAllRow,
         CoreCmd::TableSayAllColumn,
+        CoreCmd::BrowseSelectNextChar,
+        CoreCmd::BrowseSelectPrevChar,
+        CoreCmd::BrowseSelectNextWord,
+        CoreCmd::BrowseSelectPrevWord,
+        CoreCmd::BrowseSelectNextLine,
+        CoreCmd::BrowseSelectPrevLine,
+        CoreCmd::BrowseSelectLineStart,
+        CoreCmd::BrowseSelectLineEnd,
+        CoreCmd::BrowseSelectTop,
+        CoreCmd::BrowseSelectBottom,
+        CoreCmd::BrowseSelectPageUp,
+        CoreCmd::BrowseSelectPageDown,
+        CoreCmd::BrowseSelectAll,
+        CoreCmd::BrowseCursorNextParagraph,
+        CoreCmd::BrowseCursorPrevParagraph,
+        CoreCmd::BrowseCursorNextSentence,
+        CoreCmd::BrowseCursorPrevSentence,
+        CoreCmd::BrowseTabNext,
+        CoreCmd::BrowseTabPrev,
+        CoreCmd::BrowseNativeSelectionToggle,
     ];
 }
 
@@ -1452,7 +1469,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::BrowseSingleLetterToggle,
         name: "browse.single_letter_toggle",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1532,7 +1549,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::BrowseContainerStart,
         name: "browse.container_start",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1542,7 +1559,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::BrowseContainerEnd,
         name: "browse.container_end",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2182,7 +2199,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextNotLinkBlock,
         name: "quicknav.next.not_link_block",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2192,7 +2209,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevNotLinkBlock,
         name: "quicknav.prev.not_link_block",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2242,7 +2259,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextAnnotation,
         name: "quicknav.next.annotation",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2252,7 +2269,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevAnnotation,
         name: "quicknav.prev.annotation",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2262,7 +2279,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextError,
         name: "quicknav.next.error",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2272,7 +2289,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevError,
         name: "quicknav.prev.error",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2282,7 +2299,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextParagraph,
         name: "quicknav.next.paragraph",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2292,7 +2309,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevParagraph,
         name: "quicknav.prev.paragraph",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2622,7 +2639,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableNextRow,
         name: "table.next_row",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2632,7 +2649,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TablePrevRow,
         name: "table.prev_row",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2642,7 +2659,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableNextColumn,
         name: "table.next_column",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2652,7 +2669,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TablePrevColumn,
         name: "table.prev_column",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2662,7 +2679,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableFirstRow,
         name: "table.first_row",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2672,7 +2689,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableLastRow,
         name: "table.last_row",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2682,7 +2699,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableFirstColumn,
         name: "table.first_column",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2692,7 +2709,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableLastColumn,
         name: "table.last_column",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2702,7 +2719,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableSayRow,
         name: "table.say_row",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2712,7 +2729,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableSayColumn,
         name: "table.say_column",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2722,7 +2739,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableSayAllRow,
         name: "table.say_all_row",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2732,11 +2749,211 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::TableSayAllColumn,
         name: "table.say_all_column",
-        available: Availability::Planned(Milestone::M8),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
         help: "table: read all of the column",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseSelectNextChar,
+        name: "browse.select_next_char",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "extend the selection by a character",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseSelectPrevChar,
+        name: "browse.select_prev_char",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "shrink or extend the selection back by a character",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseSelectNextWord,
+        name: "browse.select_next_word",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "extend the selection by a word",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseSelectPrevWord,
+        name: "browse.select_prev_word",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "extend the selection back by a word",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseSelectNextLine,
+        name: "browse.select_next_line",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "extend the selection down a line",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseSelectPrevLine,
+        name: "browse.select_prev_line",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "extend the selection up a line",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseSelectLineStart,
+        name: "browse.select_line_start",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "select to the start of the line",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseSelectLineEnd,
+        name: "browse.select_line_end",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "select to the end of the line",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseSelectTop,
+        name: "browse.select_top",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "select to the start of the document",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseSelectBottom,
+        name: "browse.select_bottom",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "select to the end of the document",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseSelectPageUp,
+        name: "browse.select_page_up",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "select up one page",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseSelectPageDown,
+        name: "browse.select_page_down",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "select down one page",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseSelectAll,
+        name: "browse.select_all",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "select the whole document",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseCursorNextParagraph,
+        name: "browse.cursor_next_paragraph",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move to the next paragraph",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseCursorPrevParagraph,
+        name: "browse.cursor_prev_paragraph",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move to the previous paragraph",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseCursorNextSentence,
+        name: "browse.cursor_next_sentence",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move to the next sentence",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseCursorPrevSentence,
+        name: "browse.cursor_prev_sentence",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "move to the previous sentence",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseTabNext,
+        name: "browse.tab_next",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "focus the next focusable element after the browse cursor",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseTabPrev,
+        name: "browse.tab_prev",
+        available: Availability::Implemented,
+        contexts: ContextMask::BROWSE_ONLY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "focus the previous focusable element before the browse cursor",
+    },
+    CmdSpec {
+        cmd: CoreCmd::BrowseNativeSelectionToggle,
+        name: "browse.native_selection_toggle",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "toggle native selection mode",
     },
 ];

@@ -270,6 +270,18 @@ impl KeysymTable {
         Some(match base {
             0x61..=0x7a => base - 0x20,
             0x31..=0x39 => US_SHIFTED_DIGITS[(base - 0x31) as usize],
+            // The punctuation keys of the US layout (`,` types `<` with Shift, and so on).
+            0x2c => 0x3c,
+            0x2e => 0x3e,
+            0x2f => 0x3f,
+            0x3b => 0x3a,
+            0x27 => 0x22,
+            0x2d => 0x5f,
+            0x3d => 0x2b,
+            0x5b => 0x7b,
+            0x5d => 0x7d,
+            0x5c => 0x7c,
+            0x60 => 0x7e,
             other => other,
         })
     }
