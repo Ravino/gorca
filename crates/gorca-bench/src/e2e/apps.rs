@@ -489,6 +489,25 @@ impl Reader {
         matches!(self.child.try_wait(), Ok(None))
     }
 
+    /// Ask the reader to shut down (SIGTERM to the child this struct spawned) and wait up to
+    /// `within` for it to exit, so its shutdown path prints its counters. `false` when it did
+    /// not exit in time (it is then killed by `Drop`).
+    pub fn stop(&mut self, within: Duration) -> bool {
+        drop(self.stdin.take());
+        let _ = Command::new("kill")
+            .arg("-TERM")
+            .arg(self.pid.to_string())
+            .status();
+        let end = Instant::now() + within;
+        while Instant::now() < end {
+            if matches!(self.child.try_wait(), Ok(Some(_))) {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        false
+    }
+
     /// CPU time (user + system, all threads incl. exited ones counted by the kernel) in ns.
     pub fn cpu_ns(&self) -> u64 {
         proc_cpu_ns(self.pid)
