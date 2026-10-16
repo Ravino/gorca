@@ -599,7 +599,7 @@ impl<'a> Conn<'a> {
         for ev in self.mapped.drain(..) {
             if let Some(node) = needs_path(&ev) {
                 self.router.focus_seen(route.app, node, path);
-            } else if route.hints
+            } else if route.hints.load(Ordering::Relaxed)
                 && let Some(node) = needs_hint_path(&ev)
             {
                 self.router.hint_seen(route.app, node, path);
@@ -877,7 +877,7 @@ mod tests {
                     serial: 1,
                 },
                 tx,
-                hints: false,
+                hints: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             },
         });
         let mut cfg = DrainConfig::new(format!("unix:path={}", path.display()));
@@ -959,7 +959,7 @@ mod tests {
                     serial: 1,
                 },
                 tx,
-                hints: false,
+                hints: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             },
         });
         let mut cfg = DrainConfig::new(format!("unix:path={}", path.display()));
@@ -1046,7 +1046,7 @@ mod tests {
                     serial: 1,
                 },
                 tx,
-                hints: false,
+                hints: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             },
         });
         let mut cfg = DrainConfig::new(format!("unix:path={}", path.display()));
@@ -1083,7 +1083,7 @@ mod tests {
                     serial: 1,
                 },
                 tx,
-                hints: false,
+                hints: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             },
         });
         let mut cfg = DrainConfig::new(format!("unix:path={}", path.display()));
@@ -1142,12 +1142,12 @@ mod tests {
             first: AppRoute {
                 app: app(1),
                 tx: tx1,
-                hints: false,
+                hints: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             },
             second: AppRoute {
                 app: app(2),
                 tx: tx2,
-                hints: false,
+                hints: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             },
         });
         let mut cfg = DrainConfig::new(format!("unix:path={}", path.display()));

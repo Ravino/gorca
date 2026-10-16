@@ -53,7 +53,7 @@ pub struct AppRoute {
     pub tx: IngressSender,
     /// `showing` and value hint events of this app record node paths (the verified Shell); for
     /// every other app the drain skips the path-table lock for them (L-3).
-    pub hints: bool,
+    pub hints: Arc<AtomicBool>,
 }
 
 /// Creates the per-app ingresses of one process. Every ingress made here is charged to the one

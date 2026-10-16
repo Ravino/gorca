@@ -554,6 +554,9 @@ impl Reader {
         let mut fx = ReaderEffects::new();
         let is_key = matches!(msg, ReaderMsg::Key(_) | ReaderMsg::Control(_));
         self.now = now;
+        if is_key {
+            self.win.last_input = Some(now);
+        }
         match msg {
             ReaderMsg::Key(intent) => self.on_key(intent, now, &mut fx),
             ReaderMsg::Control(c) => self.on_control(c, now, &mut fx),

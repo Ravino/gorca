@@ -477,3 +477,41 @@ mod tests {
         assert_eq!(total, 64, "nothing is lost, only paced");
     }
 }
+
+#[cfg(test)]
+mod m4b_review_probe {
+    use super::*;
+    use gorca_model::{Epoch, Prio, UttId};
+
+    fn u(n: u64) -> Utterance {
+        Utterance {
+            id: UttId(n),
+            segments: smallvec::SmallVec::new(),
+            lang: None,
+            epoch: Epoch(1),
+            prio: Prio::Notification,
+            may_refine: false,
+            survives_focus_change: true,
+            refines: None,
+        }
+    }
+
+    /// P4: waiting utterances released by `take_due` must respect the global ceiling.
+    #[test]
+    #[allow(clippy::cast_precision_loss)]
+    fn probe_p4_take_due_respects_the_global_ceiling() {
+        let t = Instant::now();
+        let mut f = Fair::new(t);
+        for o in 0..64u32 {
+            while f.allow(Owner::Pid(o), Kind::Speak, t) {}
+            f.wait(Owner::Pid(o), u(u64::from(o)), t);
+        }
+        let out = f.take_due(t + Duration::from_millis(400));
+        assert!(
+            out.len() as f32 <= GLOBAL_SPEAK_BURST,
+            "{} waiting notices released at once, ceiling {}",
+            out.len(),
+            GLOBAL_SPEAK_BURST
+        );
+    }
+}
