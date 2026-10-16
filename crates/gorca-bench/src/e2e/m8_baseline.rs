@@ -7,14 +7,10 @@
 //! Rows starting with `rig:` are not gorca faults but limits of the test rig; fix the rig and
 //! delete them. Source: `docs/reports/m8-baseline.md` (run `m8-baseline-raw2`, 2026-10-15).
 
-const ARIA_COMBO: &str = "a div with role=combobox and text content does not switch to focus mode here, while the one on forms.html (aria-controls) does: to investigate";
 const RIG_KEYS: &str = "rig: a key typed into Firefox through the compositor lands on an unnamed browser 'panel', not in the page (probe m8-probe-tab, m8-probe-tab2); the page needs keyboard focus, which a click and AT-SPI GrabFocus did not give";
 
 /// Step ids per root cause.
-pub(super) const MARKS: &[(&[&str], &str)] = &[
-    (&["APP.combo"], ARIA_COMBO),
-    (&["FM.tab.real", "SY.tab", "SP.back"], RIG_KEYS),
-];
+pub(super) const MARKS: &[(&[&str], &str)] = &[(&["FM.tab.real", "SY.tab", "SP.back"], RIG_KEYS)];
 
 /// Why this step is expected to fail today; `None` = it must pass.
 pub(super) fn reason(id: &str) -> Option<&'static str> {

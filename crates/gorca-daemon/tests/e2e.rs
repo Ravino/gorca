@@ -157,9 +157,13 @@ fn the_lanes_topology_speaks_and_stops_cleanly() {
         prime(&mut app, &voicego, "Submit").await;
         app.focus("Subscribe").unwrap();
         assert!(
-            wait_text(&voicego, "Subscribe, check box", Duration::from_secs(5))
-                .await
-                .is_some(),
+            wait_text(
+                &voicego,
+                "Subscribe, check box, not checked",
+                Duration::from_secs(5)
+            )
+            .await
+            .is_some(),
             "got {:?}",
             voicego.spoken()
         );
@@ -185,7 +189,7 @@ fn a_fake_app_moving_focus_reaches_voicego_as_the_right_utterances() {
         prime(&mut app, &voicego, "name").await;
 
         for (node, said) in [
-            ("Subscribe", "Subscribe, check box"),
+            ("Subscribe", "Subscribe, check box, not checked"),
             ("Submit", "Submit, button"),
         ] {
             app.focus(node).unwrap();
