@@ -1,0 +1,41 @@
+== round 1 arm base load 15.75 14.79 13.85 3/3815 1873255
+FE2.ft_failures            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checks]
+
+== wrote bench/results/e2e/m8-review-ab-base-r1/20261016T065624Z.{json,txt}
+== 6 gate(s) FAILED
+== round 1 arm branch load 8.69 11.67 12.88 1/3686 1895766
+FE2.e2_wrong               daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.ft_failures            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checks]
+
+== wrote bench/results/e2e/m8-review-ab-branch-r1/20261016T070235Z.{json,txt}
+== round 2 arm branch load 7.91 10.08 11.84 2/2846 1911134
+FE2.e2_wrong               daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.ft_failures            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checks]
+
+== wrote bench/results/e2e/m8-review-ab-branch-r2/20261016T070847Z.{json,txt}
+== round 2 arm base load 9.86 10.18 11.29 1/3204 1922710
+FE2.e2_wrong               daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.ft_failures            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checks]
+
+== wrote bench/results/e2e/m8-review-ab-base-r2/20261016T071459Z.{json,txt}
+== round 3 arm base load 9.75 9.65 10.66 1/3198 1931856
+FE2.ft_failures            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checks]
+
+== wrote bench/results/e2e/m8-review-ab-base-r3/20261016T072115Z.{json,txt}
+== 2 gate(s) FAILED
+== round 3 arm branch load 11.30 12.08 11.60 1/3320 1949137
+FE2.e2_wrong               daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.ft_failures            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checks]
+
+== wrote bench/results/e2e/m8-review-ab-branch-r3/20261016T072732Z.{json,txt}
+== round 4 arm branch load 16.78 14.44 12.73 3/3300 1968926
+FE2.ft_failures            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checks]
+
+== wrote bench/results/e2e/m8-review-ab-branch-r4/20261016T073350Z.{json,txt}
+== 7 gate(s) FAILED
+== round 4 arm base load 11.13 17.08 15.15 3/3267 1998285
+FE2.ft_failures            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checks]
+
+== wrote bench/results/e2e/m8-review-ab-base-r4/20261016T074042Z.{json,txt}
+== 4 gate(s) FAILED
+AB-DONE
