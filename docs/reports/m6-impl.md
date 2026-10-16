@@ -153,3 +153,16 @@ with wide ranges on both sides (main also reached 150.4 ms in one repeat). A ded
 produced no result): p99 median main 67.7 ms [52.2, 3005 (a cold start)], branch 70.6 ms [49.1, 133.0]; main failed
 `untagged_warm` once, the branch 0 times. Verdict: noise; no regression attributable to the text-event registration.
 The W2b warm-up is the same effect B-1 works on; keep it open until re-measured on the B-1 head.
+
+### Strict K2s loss under load, and accepted limits
+
+* Strict K2s `lost` (1 to 7 events in single repeats, also K3 1, R1 1, R1s 2, VT 3 missing/1 extra, V1 35.3 ms,
+  VV flood key p99 8.3 ms in single repeats of the first runs at the rebased heads) coincided with host load 13 to 37
+  (another agent's `gorca-hog`). Interleaved K2s A/B, 3 rounds of 3 repeats at the same load (`bench/results/e2e/m6fix-k2s-{main,branch}-{1,2,3}`):
+  max `lost` per round main 1 / 0 / 7, branch 0 / 4 / 1. Main loses too: a load effect, not an M6 regression. Main
+  has since changed the accounting (latest-wins speech slot `superseded`, conservation counters); the final run uses it.
+  Reruns at lower load (`m6fix-r2-fake-rerun`: V1 34.6, VT 0/0; `m6fix-r2-real-rerun`: VV flood key p99 median 0.84 ms) pass.
+* Security-review flags, judged against the fairness threat model (decisions.md 2026-10-16): `runtime.rs` adds only the
+  `TextOp::Screen` arm and a log line (one screen read in flight per tracked terminal, through the normal admission
+  control); `app_actor.rs::note_text_lost` bumps an atomic counter for the protected focus app only, no queue, nothing
+  that lets one app delay another's speech or grow unbounded. No invariant violated; accepted, no code change.
