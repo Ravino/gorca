@@ -201,7 +201,7 @@ is the M5 one (it has `document-web`), so the WIT role numbers of `ext-gnome-she
 ### Gates
 
 - `cargo fmt --all --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo xtask deps`
-  (36 crates, 302 packages): ok. `cargo test --workspace`: see the final line of the task report.
+  (36 crates, 302 packages): ok. `cargo test --workspace`: 1854 passed, 0 failed (final code head `f297163`).
 - Strict e2e (K2, K3, K4, R1, `--impersonate-orca`, 3 repeats, `GORCA_M1/M4(_STRICT)=1`), interleaved
   no-ext / ext-test / main (`668f145`, built in a scratch worktree), 2 rounds, clean committed merged head `7d1d72c`,
   load 9.5 to 12.5 (`bench/results/e2e/m5rr3-*`): all gates pass in all 6 runs.
@@ -218,3 +218,4 @@ is the M5 one (it has `document-web`), so the WIT role numbers of `ext-gnome-she
   both arms and of main (no-ext arm: R1 lost 4 and 1, K3 lost 3; ext arm: K2 lost 1, K4 chord_resent 14 and 53).
   A dedicated K4 series at load 10 to 17 (`m5rr2-k4-*`, 3 rounds x {ext, no-ext, main}) gave chord_resent
   max 0 or 1 in every arm. All failing runs are kept. Conclusion: failures follow host load, not the extension.
+- Confirmation at the final code head `f297163` (`m5rr4-*`, 2 rounds no-ext / ext-test, load 7 to 13, clean tree): all gates pass in all 4 runs. K2 p99 0.282 to 0.328 (ext 0.295, 0.282), K3 1.15 to 1.23, R1 0.38 to 0.51, K4 chord_resent 0; lost / not_consumed / app_lost / chord_leaked 0. Outliers in the repeat maxima (K2 3.6, K3 5.6, R1 2.4 to 2.7 ms) occur only in the no-ext arm.
