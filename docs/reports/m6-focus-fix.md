@@ -25,3 +25,15 @@ A/B V1+VT vs the three core files at the base, alternating, 2 rounds: main clean
 
 ## Not covered
 Window activation is only modelled in the fake (the reader does not consume it for protection); a toolkit that never reports FOCUSED stays unprotected (fail closed).
+
+## F1 follow-up (review m6-focus-fix-review.md F1): a failed reconfirm read is retried, a key re-reads
+Problem: if the extra state read on a repeated focus event failed (Timeout/Busy), nothing retried it, and with the key publish gone nothing restored the protection: the terminal stayed silent, typed echo included, until the next focus change (reviewer probe `bench/results/e2e/m6-focus-review/probes/probe_reconfirm_fail.rs`).
+Fix (`present/flow.rs`, `reader.rs`, `terminal.rs`):
+- `Reconfirm` gained `Retried` and `Failed(node, at)`. A reconfirm read that fails with `Busy` is asked once more. A `Timeout` is asked once more only if no other Focus/RV-1 read of this focus timed out (`timeout_charged`, reset per focus): a slow app is charged at most two timeouts per focus, below the Hung threshold of three (B-1 RR-1, `docs/reports/b1-adopt-rereview.md`).
+- `term_key` calls `reconfirm_on_key`: for an unprotected application of the tracked terminal it reads the focus state again (never a blind publish; only a FOCUSED reply earns). At most one read in flight, and at most one per `RECONFIRM_KEY_INTERVAL` (500 ms) after a failure, so typing on a slow app does not pile up timeouts.
+- Counters: `focus_reconfirm_retries`, `focus_reconfirm_key_reads`.
+Tests (`reader.rs`): `a_failed_reconfirm_read_is_retried_once_and_the_retry_earns` (the probe as a regression), `the_reconfirm_retry_does_not_double_charge_a_slow_app`, `a_key_in_an_unprotected_terminal_rereads_the_focus_state`.
+
+### Verification (head ca764a5 plus this commit's docs; main merged at 08a11b3)
+- fmt, `clippy --workspace --all-targets -D warnings`, `cargo xtask deps` clean. `cargo test --workspace`: all pass; the ext-host and shell_parity targets first failed only because the worktree toolchain lacked `wasm32-wasip2` (`rustup target add wasm32-wasip2`, project-local); rerun `-p gorca-ext-host -p gorca-daemon -- --test-threads=4`: all pass.
+- e2e, ONE repeat (not three: the host was out of memory and at load 25-42 from other agents; runs in `bench/results/e2e/f1-*`): VV real gnome-terminal PASS including `vv_focus_failures` 0 and `vv_failures` 0. M6 fake: VH, VP, VF, VB, V3 content gates, VR content gates PASS; latency tails FAIL (V1 p99 299.9 ms, VT p99 7.1 ms, 7 missing / 8 extra, V3 stop 5.5 ms, VR 6.7 ms). Strict K/R gates: K3 and RS pass (VW: vw_lost 0, p99 46.4 ms vs 35; VB: no missing/double/stray, key p99 9.8 vs 4); every latency gate (K2 9.6, K2s, R1, R1s, K4 chord resend) fails at the same load, in code this change does not touch, which matches the reviewer's finding that main fails V1/VT under load. NOT proven on a quiet host: rerun V1/VT/VW and K/R on a quiet host (3 repeats) before M6 is called done.
