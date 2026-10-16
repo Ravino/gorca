@@ -6,6 +6,7 @@
 #   tests/web/m9/run_m9.sh m7 <label> [e2e options]     M7a set + typing set (e2e --only ...)
 #   tests/web/m9/run_m9.sh m8 <label> [e2e-m8 options]  the NVDA parity corpus
 #   tests/web/m9/run_m9.sh probe <mode> [page] [title]  how Chromium finds out an AT runs
+#   tests/web/m9/run_m9.sh probe-load <page|URL> [title]  tree arrival and event rate while a page loads
 #
 # env:
 #   M9_CHROMIUM   browser binary (default: the Playwright Chrome for Testing in ~/.cache/ms-playwright,
@@ -44,5 +45,7 @@ case "$KIND" in
   probe)
     MODE=${1:-poke}; PAGE=${2:-$ROOT/tests/web/m7/pages/article.html}; TITLE=${3:-M7 Article}
     exec "$ROOT/tests/web/m7/run_m7.sh" --probe /usr/bin/python3 "$ROOT/tests/web/m9/probe_at.py" "$MODE" "$PAGE" "$TITLE" ;;
+  probe-load)
+    exec "$ROOT/tests/web/m7/run_m7.sh" --probe /usr/bin/python3 "$ROOT/tests/web/m9/probe_load.py" "$@" ;;
   *) echo "usage: $0 m7|m8|probe ..." >&2; exit 64 ;;
 esac

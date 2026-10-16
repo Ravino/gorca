@@ -222,6 +222,19 @@ try:
                     res["sample"][nm] = r if r is None else [r[0][:40], r[1], r[2]]
                 attrs = safe(lambda: call(bus, p, ACC, "GetAttributes")[0], {})
                 res["sample"]["attrs"] = attrs
+            # name, text and children of every non-static node of the first 12 (what the mirror reads)
+            dump = []
+            queue = [doc]
+            while queue and len(dump) < 24:
+                p = queue.pop(0)
+                rn = role_name(bus, p)
+                ifs = safe(lambda: call(bus, p, ACC, "GetInterfaces")[0], [])
+                cc = safe(lambda: prop(bus, p, TEXT, "CharacterCount"), None) if TEXT in ifs else None
+                txt = safe(lambda: call(bus, p, TEXT, "GetText", (0, min(cc, 60)), "(ii)")[0], None) if cc else None
+                dump.append({"role": rn, "name": name_of(bus, p)[:40], "text": txt, "chars": cc,
+                             "kids": len(kids(bus, p))})
+                queue.extend(c for (b2, c) in kids(bus, p) if b2 == bus)
+            res["dump"] = dump
 finally:
     for pr in procs:
         try:

@@ -798,8 +798,12 @@ impl Web {
                 std::thread::sleep(Duration::from_millis(300));
             }
             self.focus(&target)?;
+            // Chromium builds its tree lazily after the first focus (M9: the first browse-mode word
+            // comes later than the 1.2 s Firefox needs, see docs/reports/m9-baseline.md); a short window would only see the
+            // answer to an earlier focus, which never repeats the mode word.
+            let window = if chromium_selected() { 6000 } else { 1200 };
             if self
-                .speech(mark, Duration::from_millis(1200), |t| {
+                .speech(mark, Duration::from_millis(window), |t| {
                     t.contains("browse mode") || t.contains("focus mode")
                 })
                 .is_some()
