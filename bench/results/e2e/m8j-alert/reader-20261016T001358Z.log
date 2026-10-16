@@ -1,0 +1,84 @@
+2026-10-16T00:14:11.325498Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T00:14:11.384642Z  INFO gorca_phase: phase="warm" wall_ms=59.014319 waited_ms=57.72367199999999 blocked_ms=32.396962 slept_ms=25.241232 rounds=2 probes=19 sampled_nodes=3 tagged_nodes=3 ready=true
+2026-10-16T00:14:11.385235Z  INFO gorca_phase: phase="locate" wall_ms=0.506688
+2026-10-16T00:14:11.385261Z  INFO gorca_phase: phase="create" wall_ms=0.0033699999999999997
+2026-10-16T00:14:11.387388Z  INFO gorca_phase: phase="fetch" total_ms=2.076373 warm_ms=0.0 frontier_ms=0.060313 get_tree_ms=0.795356 roles_ms=0.438964 states_ms=0.241476 text_ms=0.42505899999999996 assemble_ms=0.010086 heaviest_get_tree_ms=0.345 calls=96 tree_bytes=7711 nodes=31
+2026-10-16T00:14:11.387546Z  INFO gorca_phase: phase="translate" wall_ms=0.07868399999999999 nodes=64
+2026-10-16T00:14:11.387559Z  INFO gorca_phase: phase="live_dbg_noregion" role=Button name=Some("Run atomic")
+2026-10-16T00:14:11.387564Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387568Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387573Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387579Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.387587Z  INFO gorca_phase: phase="live_dbg_noregion" role=Button name=Some("Run flood polite")
+2026-10-16T00:14:11.387593Z  INFO gorca_phase: phase="live_dbg_noregion" role=Button name=Some("Run status")
+2026-10-16T00:14:11.387596Z  INFO gorca_phase: phase="live_dbg_noregion" role=Panel name=None
+2026-10-16T00:14:11.387599Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.387604Z  INFO gorca_phase: phase="live_dbg_noregion" role=Panel name=None
+2026-10-16T00:14:11.387613Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.387621Z  INFO gorca_phase: phase="live_dbg_noregion" role=Button name=Some("Run log")
+2026-10-16T00:14:11.387628Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387631Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387634Z  INFO gorca_phase: phase="live_dbg_noregion" role=Button name=Some("Run off")
+2026-10-16T00:14:11.387637Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.387641Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.387648Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.387652Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387656Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.387659Z  INFO gorca_phase: phase="live_dbg_noregion" role=Button name=Some("Run same")
+2026-10-16T00:14:11.387666Z  INFO gorca_phase: phase="live_dbg_noregion" role=Button name=Some("Run new region")
+2026-10-16T00:14:11.387669Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387671Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.387675Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.387678Z  INFO gorca_phase: phase="live_dbg_noregion" role=Button name=Some("Run assertive")
+2026-10-16T00:14:11.387682Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387686Z  INFO gorca_phase: phase="live_dbg_noregion" role=Button name=Some("Run polite")
+2026-10-16T00:14:11.387689Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387693Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387696Z  INFO gorca_phase: phase="live_dbg_noregion" role=Heading name=Some("Live region policy")
+2026-10-16T00:14:11.387699Z  INFO gorca_phase: phase="live_dbg_noregion" role=Paragraph name=None
+2026-10-16T00:14:11.387703Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387714Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.387734Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387738Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387740Z  INFO gorca_phase: phase="live_dbg_noregion" role=Button name=Some("Run alert")
+2026-10-16T00:14:11.387743Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387747Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387750Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387755Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.387759Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387765Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387770Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387774Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387778Z  INFO gorca_phase: phase="live_dbg_noregion" role=Button name=Some("Run busy")
+2026-10-16T00:14:11.387783Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387787Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387790Z  INFO gorca_phase: phase="live_dbg_noregion" role=Button name=Some("Run hidden")
+2026-10-16T00:14:11.387792Z  INFO gorca_phase: phase="live_dbg_noregion" role=Button name=Some("Run flood assertive")
+2026-10-16T00:14:11.387795Z  INFO gorca_phase: phase="live_dbg_noregion" role=DocumentWeb name=Some("M8 Live regions")
+2026-10-16T00:14:11.387798Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387800Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.387803Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.387812Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387815Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.387818Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387821Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387824Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.387827Z  INFO gorca_phase: phase="live_dbg_noregion" role=Button name=Some("Run remove")
+2026-10-16T00:14:11.387834Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387836Z  INFO gorca_phase: phase="live_dbg_noregion" role=StaticText name=None
+2026-10-16T00:14:11.387841Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.387844Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.899283Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:14:11.899339Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:14:11.925372Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.925421Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:11.976771Z  INFO gorca_phase: phase="live_msg" text=Polite message 1 assertive=false
+2026-10-16T00:14:12.112961Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:14:12.145873Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:12.145924Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=false
+2026-10-16T00:14:12.196317Z  INFO gorca_phase: phase="live_msg" text=Assertive message 2 assertive=true
+2026-10-16T00:14:12.336047Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:14:12.336119Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:14:12.364778Z  INFO gorca_phase: phase="live_dbg_noregion" role=Panel name=None
+2026-10-16T00:14:12.364845Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=true
+2026-10-16T00:14:12.364863Z  INFO gorca_phase: phase="live_dbg_region" quiet=true alert=true

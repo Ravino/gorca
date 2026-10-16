@@ -55,8 +55,19 @@ impl Cat {
     pub const TEXT_BLOCK: Cat = Cat::bit(38);
     pub const LINE_HOST: Cat = Cat::bit(39);
     pub const TEXT_RUN: Cat = Cat::bit(40);
+    /// A node in an invalid state (`aria-invalid`, a spelling or grammar error): quick nav W.
+    pub const ERROR: Cat = Cat::bit(41);
 
     /// "Landmark" navigation unit: landmarks and regions (ADR-0003 section 12).
+    pub const EMBEDDED_OR_DIALOG: Cat = Cat(Cat::EMBEDDED.0 | Cat::DIALOG.0);
+    /// What `,` and Shift+`,` jump out of: lists, tables, quotes, landmarks, dialogs, articles.
+    pub const CONTAINER: Cat = Cat(Cat::LIST.0
+        | Cat::TABLE.0
+        | Cat::BLOCKQUOTE.0
+        | Cat::LANDMARK.0
+        | Cat::REGION.0
+        | Cat::DIALOG.0
+        | Cat::ARTICLE.0);
     pub const ANY_LANDMARK: Cat = Cat(Cat::LANDMARK.0 | Cat::REGION.0);
 
     pub const fn bit(n: u32) -> Cat {
@@ -159,9 +170,29 @@ impl NodeFlags {
     pub const BREAK_BEFORE: NodeFlags = NodeFlags(1 << 12);
     /// A frame or a nested document (`Cat::FRAME`, quick nav M).
     pub const FRAME: NodeFlags = NodeFlags(1 << 13);
+    /// A table cell or header cell (a row reads as one line: cells are inline, FT-4).
+    pub const CELL: NodeFlags = NodeFlags(1 << 14);
+    /// A single space precedes this node's own text: it is a cell that follows another node in
+    /// its row. Set by the translator like `BREAK_BEFORE`, never together with it.
+    pub const CELL_SEP: NodeFlags = NodeFlags(1 << 15);
+    /// An annotation: inserted or deleted text, a comment (quick nav A).
+    pub const ANNOTATION: NodeFlags = NodeFlags(1 << 16);
+    /// The node is in an invalid state (quick nav W).
+    pub const ERROR: NodeFlags = NodeFlags(1 << 17);
 
     pub const fn contains(self, other: NodeFlags) -> bool {
         self.0 & other.0 == other.0
+    }
+
+    /// Scalars a visible node contributes ahead of its own text: a line break or a cell gap.
+    pub const fn lead_len(self) -> u32 {
+        if self.0 & (NodeFlags::HIDDEN.0) != 0 {
+            0
+        } else if self.0 & (NodeFlags::BREAK_BEFORE.0 | NodeFlags::CELL_SEP.0) != 0 {
+            1
+        } else {
+            0
+        }
     }
 }
 
@@ -201,6 +232,7 @@ pub fn cats_of(role: Role, level: u8, flags: NodeFlags) -> Cat {
             }
         }
         Role::Dialog => Cat::DIALOG,
+        Role::Application => Cat::EMBEDDED,
         Role::Alert => Cat::ALERT | Cat::LIVE_REGION,
         Role::Table => {
             if flags.contains(NodeFlags::LAYOUT) {
@@ -216,7 +248,6 @@ pub fn cats_of(role: Role, level: u8, flags: NodeFlags) -> Cat {
         Role::Paragraph => Cat::TEXT_BLOCK,
         Role::StaticText => Cat::TEXT_RUN,
         Role::Unknown
-        | Role::Application
         | Role::Window
         | Role::Panel
         | Role::Document
@@ -259,6 +290,12 @@ pub fn cats_of(role: Role, level: u8, flags: NodeFlags) -> Cat {
     }
     if flags.contains(NodeFlags::FRAME) {
         c = c | Cat::FRAME;
+    }
+    if flags.contains(NodeFlags::ANNOTATION) {
+        c = c | Cat::ANNOTATION;
+    }
+    if flags.contains(NodeFlags::ERROR) {
+        c = c | Cat::ERROR;
     }
     c
 }

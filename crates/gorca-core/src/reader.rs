@@ -2033,7 +2033,7 @@ mod tests {
         assert!(!u.may_refine);
         assert_eq!(u.epoch, first.epoch);
         let words: Vec<_> = u.segments.iter().map(|s| s.text.to_string()).collect();
-        assert_eq!(words, ["New name", "check box"]);
+        assert_eq!(words, ["New name", "check box", "not checked"]);
         assert_eq!(f.reader.counters().refined, 1);
     }
 
@@ -2410,7 +2410,7 @@ mod tests {
             ),
             now,
         );
-        assert_eq!(spoken(&fx), ["Row check box"]);
+        assert_eq!(spoken(&fx), ["Row check box not checked"]);
     }
 
     #[test]
@@ -2453,7 +2453,7 @@ mod tests {
             }),
             now,
         );
-        assert_eq!(spoken(&fx), ["Row check box"]);
+        assert_eq!(spoken(&fx), ["Row check box not checked"]);
         assert!(utterance(&fx).may_refine);
         assert!(!matches!(f.reader.focus(), FocusState::Orphaned { .. }));
     }

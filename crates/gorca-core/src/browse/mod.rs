@@ -14,6 +14,7 @@ pub mod cursor;
 pub mod forms;
 pub mod present;
 pub mod sayall;
+pub mod tablenav;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -24,6 +25,11 @@ use smallvec::SmallVec;
 
 use crate::doc_actor::{DocDirectory, WebJoin};
 use crate::mode::WebCursor;
+
+/// Live-region utterances admitted per second, over every document of the reader.
+pub const LIVE_RATE: f32 = 5.0;
+/// Burst of the live-region admission bucket.
+pub const LIVE_BURST: f32 = 6.0;
 
 /// What a cursor key may roam over (M7b: modal dialogs).
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -455,6 +461,10 @@ pub struct BrowseCounters {
     pub moves: u64,
     pub edges: u64,
     pub still_loading: u64,
+    /// Live-region messages spoken, dropped by the admission bucket, and muted (not in front).
+    pub live_spoken: u64,
+    pub live_dropped: u64,
+    pub live_muted: u64,
 }
 
 /// Settings the browse arm reads (NVDA defaults).
@@ -473,6 +483,15 @@ impl Default for BrowseSettings {
             lines_per_page: cursor::LINES_PER_PAGE,
         }
     }
+}
+
+/// What last put the browse cursor where it is.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum CursorFrom {
+    /// A reading or navigation command of ours.
+    Own,
+    /// A focus change onto a control.
+    Focus,
 }
 
 /// Everything the Reader keeps for browse mode.
@@ -497,8 +516,13 @@ pub struct BrowseState {
     pub counters: BrowseCounters,
     /// Offset of the cursor in the flat text at the last move, to restore after an edit.
     pub last_off: u32,
+    /// The cursor's node vanished: until this instant (and while the offset is unchanged) a
+    /// re-render re-resolves the cursor at the saved offset.
+    /// Bare quick-navigation keys are grabbed (gorca+Shift+Space turns them off).
+    pub single_letter: bool,
+    pub restore_until: Option<(Instant, u32)>,
     /// Latest scroll request: sent after a pause so held keys do not flood the page (LP-6).
-    pub scroll_due: Option<(Instant, DocId, DocNodeId)>,
+    pub scroll_due: Option<(Instant, DocId, DocNodeId, u32)>,
     /// When the browser last reported `load-complete`, by document root (page auto-read): the
     /// load of another tab or of an iframe of the same browser is not this page's.
     pub loaded: HashMap<gorca_model::NodeKey, Instant>,
@@ -507,7 +531,45 @@ pub struct BrowseState {
     /// The field in focus mode has a popup open (a drop-down, an auto-complete list): Escape
     /// belongs to the page, which closes it; the next Escape leaves focus mode (modes.md 2).
     pub popup_open: bool,
+    /// Live-region speech the Reader admits: a token bucket over all documents (fairness: a
+    /// flooding page cannot make the reader talk without end, whatever its documents send).
+    pub live_tokens: (f32, Option<Instant>),
+    /// The focus event of this node is the browser re-focusing the document we already browse
+    /// (a same-page link, a click): nothing is spoken for it and the cursor stays.
+    pub suppress_focus: Option<NodeKey>,
+    /// When we last clicked a link or button for the user (`DoDefault`): a caret event within
+    /// [`CARET_FOLLOW`] of it is the page answering our action (anchor jumps), not the user.
+    pub activated: Option<Instant>,
+    /// The check box, radio button or toggle that browse mode just clicked.
+    /// The dialog whose name was last announced on focus entry.
+    pub lead_dialog: Option<DocNodeId>,
+    /// The virtual selection `(anchor, active)` in flat offsets (D-3).
+    pub sel: Option<(u32, u32)>,
+    /// Which Tab directions the last built grab set offered (next, previous): D-2 grabs Tab
+    /// only while the mirror has a focusable target in that direction. Written by
+    /// `current_grabs`, the one place every pushed set is built, so it cannot go stale (R-2).
+    pub tab_grab: std::cell::Cell<(bool, bool)>,
+    /// The web node that has system focus, and whether the browse cursor was last put there by a
+    /// focus change (NVDA `_lastCaretMoveWasFocus`, #5227). While the cursor is on or inside the
+    /// focused node, or came from a focus change, Tab belongs to the browser (R-5).
+    pub focus_node: Option<(DocId, DocNodeId)>,
+    pub cursor_from: CursorFrom,
+    /// Native selection mode (gorca+Shift+F10, D-3): the page's own selection follows the
+    /// virtual one. Off by default; the virtual selection never touches the page.
+    pub native_selection: bool,
+    /// The text node whose page selection we set last: it is cleared when the virtual range
+    /// moves elsewhere or goes away, so the page never keeps a stale selection.
+    pub native_sel_node: Option<(DocId, DocNodeId)>,
+    pub click_target: Option<(DocNodeId, Instant)>,
 }
+
+/// How long polite live-region news may wait in the speech queue (ADR-0003 13.2).
+pub const LIVE_TTL_POLITE: u8 = 5;
+/// How long assertive live-region news may wait in the speech queue (ADR-0003 13.2).
+pub const LIVE_TTL_ASSERTIVE: u8 = 10;
+
+/// How long after our own activation a caret event moves the browse cursor.
+pub const CARET_FOLLOW: std::time::Duration = std::time::Duration::from_millis(700);
 
 impl BrowseState {
     pub fn new(docs: Arc<DocDirectory>, join: Arc<WebJoin>) -> Self {
@@ -524,10 +586,23 @@ impl BrowseState {
             settings: BrowseSettings::default(),
             counters: BrowseCounters::default(),
             last_off: 0,
+            restore_until: None,
+            single_letter: true,
             scroll_due: None,
             loaded: HashMap::new(),
             auto_read: None,
             popup_open: false,
+            live_tokens: (LIVE_BURST, None),
+            suppress_focus: None,
+            activated: None,
+            click_target: None,
+            sel: None,
+            tab_grab: std::cell::Cell::new((true, true)),
+            focus_node: None,
+            cursor_from: CursorFrom::Own,
+            native_selection: false,
+            native_sel_node: None,
+            lead_dialog: None,
         }
     }
 }

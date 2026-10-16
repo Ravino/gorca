@@ -1,0 +1,201 @@
+diff --git a/crates/gorca-bench/src/e2e/m8.rs b/crates/gorca-bench/src/e2e/m8.rs
+index 0855547..18a0b5f 100644
+--- a/crates/gorca-bench/src/e2e/m8.rs
++++ b/crates/gorca-bench/src/e2e/m8.rs
+@@ -519,6 +519,7 @@ fn run_step(w: &mut Web, doc: &DocRef, sc: &'static str, st: &Step) -> StepRes {
+         why: st.xfail.unwrap_or_default().to_owned(),
+     };
+     let focus0 = w.tap.count(FOCUS);
++    let caret0 = w.tap.count(super::CARET);
+     let mark_before = w.mark();
+     let mut node = None;
+     let (mut t_emit, consumed) = match act(w, doc, st.act, &mut node) {
+@@ -587,6 +588,9 @@ fn run_step(w: &mut Web, doc: &DocRef, sc: &'static str, st: &Step) -> StepRes {
+         res.lat_ms = Some(ms(t.saturating_sub(t_emit)));
+     }
+     let mut heard = texts.join(" | ");
++    if st.id.starts_with("PRB") {
++        heard = format!("[focus {focus_events} caret {}] {heard}", w.tap.count(super::CARET).saturating_sub(caret0));
++    }
+     if !consumed && matches!(st.act, Act::Key(..) | Act::Repeat(..) | Act::Chord(..)) {
+         heard.insert_str(0, "[key passed to the app] ");
+     }
+diff --git a/crates/gorca-bench/src/e2e/m8_steps.rs b/crates/gorca-bench/src/e2e/m8_steps.rs
+index a5113fc..c95842c 100644
+--- a/crates/gorca-bench/src/e2e/m8_steps.rs
++++ b/crates/gorca-bench/src/e2e/m8_steps.rs
+@@ -503,6 +503,12 @@ fn sy() -> Vec<Step> {
+         top("SY.top4"),
+         s("SY.far", P2, "Ctrl+End: the far paragraph after a long spacer", ctrl(END), &["Far paragraph at the bottom"]),
+         s("SY.back", P2, "Ctrl+Home back", ctrl(HOME), &["Focus and caret sync"]),
++        top("PRB.top"),
++        s("PRB.k", P1, "probe: K onto link one; the caret follow must not move focus or repeat", n('k'), &["link one"]).extra(&["zzzprobe"], "probe").win(1500),
++        s("PRB.sel", P1, "probe: Shift+Right inside the link; selection mirror must not move focus", Act::Key(RIGHT, SHIFT), &["selected"]).extra(&["zzzprobe"], "probe").win(1500),
++        top("PRB.top2"),
++        s("PRB.k3", P1, "probe: K x3 onto Link three (a line of its own)", rep('k', 3), &["Link three"]).extra(&["zzzprobe"], "probe").win(1500),
++        s("PRB.ctl", P1, "probe control: AT-SPI focus on link two", Act::Focus(role::LINK, "link two"), &["link two"]).extra(&["zzzprobe"], "probe").win(1500),
+         // last: the real Tab leaves the page in this rig and the reader is not in the document afterwards
+         // Tab starts from the browse cursor (NVDA _tabOverride, browseMode.py:2121)
+         top("SY.top3"),
+diff --git a/crates/gorca-connector-atspi/src/decode.rs b/crates/gorca-connector-atspi/src/decode.rs
+index 56a0302..13346ea 100644
+--- a/crates/gorca-connector-atspi/src/decode.rs
++++ b/crates/gorca-connector-atspi/src/decode.rs
+@@ -171,6 +171,15 @@ mod tests {
+     use super::*;
+     use gorca_model::{AppId, ConnectorId, LocalId};
+ 
++    // m8-review probes (reviewer): state decoding of expandable and mixed controls.
++    #[test]
++    fn probe_m8r_expandable_and_mixed() {
++        let collapsed = states_from_raw(&words(&[Raw::Enabled, Raw::Sensitive, Raw::Expandable]));
++        let expanded = states_from_raw(&words(&[Raw::Enabled, Raw::Sensitive, Raw::Expandable, Raw::Expanded]));
++        let mixed = states_from_raw(&words(&[Raw::Enabled, Raw::Sensitive, Raw::Checkable, Raw::Indeterminate]));
++        eprintln!("PROBE collapsed={collapsed:?}\nPROBE expanded={expanded:?}\nPROBE mixed={mixed:?}");
++    }
++
+     fn key() -> NodeKey {
+         NodeKey {
+             app: AppId {
+diff --git a/crates/gorca-core/src/browse/tests.rs b/crates/gorca-core/src/browse/tests.rs
+index 1bc0ecd..e7aaea2 100644
+--- a/crates/gorca-core/src/browse/tests.rs
++++ b/crates/gorca-core/src/browse/tests.rs
+@@ -1841,3 +1841,53 @@ fn a_field_that_gets_the_focus_with_its_help_text_is_not_mistaken_for_a_dialog()
+     let fx = r.focus(1014);
+     assert!(!spoken(&fx).iter().any(|s| s.contains("dialog")));
+ }
++
++// ---- m8-review probes (reviewer): which cursor positions get a D-2 SetCaret --------------------
++mod probe_m8r_caret {
++    use super::*;
++
++    fn acts(fx: &ReaderEffects) -> Vec<String> {
++        effects_web(fx)
++            .iter()
++            .filter_map(|w| match w {
++                WebEffect::Act { node, act, .. } => Some(format!("{act:?} on {node:?}")),
++                _ => None,
++            })
++            .collect()
++    }
++
++    fn walk(r: &mut Rig, label: &str) {
++        r.focus(1002);
++        r.now += Duration::from_millis(300);
++        let _ = r.reader.handle(ReaderMsg::Timer, r.now);
++        for (name, cmd) in [
++            ("Down (plain paragraph line)", CoreCmd::BrowseCursorNextLine),
++            ("K (link)", CoreCmd::QuicknavNextLink),
++            ("Down (heading line)", CoreCmd::BrowseCursorNextLine),
++        ] {
++            let fx = r.key(cmd);
++            r.now += Duration::from_millis(200);
++            let t = r.reader.handle(ReaderMsg::Timer, r.now);
++            eprintln!("PROBE [{label}] {name}: spoke {:?} acts {:?}", spoken(&fx), acts(&t));
++        }
++    }
++
++    #[test]
++    fn probe_m8r_caret_follow_targets() {
++        let mut r = rig();
++        walk(&mut r, "root not focusable (fixture)");
++        // Gecko's document accessible is FOCUSABLE: the same page with that state.
++        let mut r = rig();
++        let mut body = block(src(1, Role::DocumentWeb, Some(1001)));
++        body.name = Some(Arc::from("Test page"));
++        body.states |= StateSet::FOCUSABLE;
++        r.tr
++            .apply(
++                &mut r.writer,
++                vec![DocDelta::Upsert(vec![body]), DocDelta::Settled { batch: 2 }],
++            )
++            .unwrap();
++        r.writer.publish();
++        walk(&mut r, "root FOCUSABLE (as Gecko)");
++    }
++}
+diff --git a/crates/gorca-core/src/doc_actor/live.rs b/crates/gorca-core/src/doc_actor/live.rs
+index 592f950..de0decf 100644
+--- a/crates/gorca-core/src/doc_actor/live.rs
++++ b/crates/gorca-core/src/doc_actor/live.rs
+@@ -616,6 +616,40 @@ mod tests {
+         leaf
+     }
+ 
++
++    // m8-review probe (reviewer): an alert inserted after the load, in a batch that also
++    // touches >= 64 other nodes (an SPA re-render), versus the same alert alone.
++    fn alert_after_load(extra_touched: usize) -> usize {
++        let t0 = Instant::now();
++        let (d0, r) = page("idle", "polite");
++        let mut d = d0;
++        let mut t = LiveTracker::new();
++        t.on_batch(&d, &[r], t0);
++        let _ = t.tick(&d, t0 + Duration::from_millis(700));
++        let later = t0 + Duration::from_secs(5);
++        let alert = SubtreeSpec::with_children(
++            NodeSpec::new(Role::Alert).flags(NodeFlags::BLOCK),
++            vec![SubtreeSpec::leaf(NodeSpec::new(Role::StaticText).text("Payment failed"))],
++        );
++        let root = d.root().unwrap();
++        assert!(d.apply(&DocOp::InsertSubtree { parent: Some(root), before: None, subtree: Arc::new(alert) }).is_ok());
++        let a = d.children(root).last().unwrap();
++        let mut touched = vec![a];
++        touched.extend(std::iter::repeat_n(root, extra_touched));
++        t.on_batch(&d, &touched, later);
++        let mut n = 0;
++        for ms in [60u64, 250, 1000] {
++            n += t.tick(&d, later + Duration::from_millis(ms)).len();
++        }
++        n
++    }
++
++    #[test]
++    fn probe_m8r_alert_in_a_bulk_batch() {
++        eprintln!("PROBE alert alone: {} messages", alert_after_load(0));
++        eprintln!("PROBE alert + 63 other touched nodes: {} messages", alert_after_load(63));
++    }
++
+     #[test]
+     fn a_change_after_the_load_is_spoken_once_the_burst_settles() {
+         let t0 = Instant::now();
+diff --git a/crates/gorca-core/src/present/utterance.rs b/crates/gorca-core/src/present/utterance.rs
+index beb3a0a..9a3bbc3 100644
+--- a/crates/gorca-core/src/present/utterance.rs
++++ b/crates/gorca-core/src/present/utterance.rs
+@@ -391,6 +391,34 @@ mod change_tests {
+         u.segments.iter().map(|s| s.text.to_string()).collect()
+     }
+ 
++    // m8-review probes (reviewer): what is spoken for an expand / collapse change and for a
++    // mixed (tri-state) check box whose INDETERMINATE state the model cannot carry.
++    #[test]
++    fn probe_m8r_expand_change_words() {
++        let mut old = snap("Fruit", StateSet::COLLAPSED, None);
++        old.role = Role::ComboBox;
++        let mut new = old.clone();
++        new.states = StateSet::EXPANDED;
++        let ch = changed(&old, &new, StateSet::empty());
++        let u = present_change(&new, ch, UttId(1), Epoch(1), None);
++        eprintln!("PROBE expand -> {:?}", texts(&u));
++        let ch = changed(&new, &old, StateSet::empty());
++        let u = present_change(&old, ch, UttId(2), Epoch(1), None);
++        eprintln!("PROBE collapse -> {:?}", texts(&u));
++    }
++    #[test]
++    fn probe_m8r_mixed_checkbox_focus_words() {
++        let n = snap("Select all", StateSet::empty(), None); // INDETERMINATE dropped by decode
++        let u = present_focus(&n, UttId(1), Epoch(1));
++        eprintln!("PROBE mixed focus -> {:?}", texts(&u));
++        let mut t = snap("Bold", StateSet::empty(), None);
++        t.role = Role::ToggleButton;
++        eprintln!("PROBE toggle off focus -> {:?}", texts(&present_focus(&t, UttId(2), Epoch(1))));
++        let mut b = snap("OK", StateSet::empty(), None);
++        b.role = Role::Button;
++        eprintln!("PROBE push button focus -> {:?}", texts(&present_focus(&b, UttId(3), Epoch(1))));
++    }
++
+     #[test]
+     fn equal_snapshots_have_no_change_and_focus_state_is_ignored() {
+         let a = snap("Wi-Fi", StateSet::CHECKED, None);

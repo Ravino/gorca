@@ -1,0 +1,36 @@
+725997643518785 said "M8 Live regions, document"
+725997673775509 said "browse mode, heading level 1, Live region policy"
+725998255229600 said "Run polite, button"
+725998332129335 said "Polite message 1"
+725998484351923 said "Run assertive, button"
+725998560478572 said "Assertive message 2"
+725998711446762 said "Run alert, button"
+bus 4 /org/a11y/atspi/accessible/42
+bus 4 /org/a11y/atspi/accessible/56
+bus 4 /org/a11y/atspi/accessible/58
+bus 4 /org/a11y/atspi/accessible/56
+bus 4 /org/a11y/atspi/accessible/58
+bus 4 /org/a11y/atspi/accessible/58
+bus 4 /org/a11y/atspi/accessible/63
+bus 2 /org/a11y/atspi/accessible/77
+bus 4 /org/a11y/atspi/accessible/74
+bus 4 /org/a11y/atspi/accessible/56
+bus 4 /org/a11y/atspi/accessible/56
+bus 2 /org/a11y/atspi/accessible/79
+bus 2 /org/a11y/atspi/accessible/80
+bus 2 /org/a11y/atspi/accessible/81
+bus 2 /org/a11y/atspi/accessible/82
+bus 2 /org/a11y/atspi/accessible/83
+bus 2 /org/a11y/atspi/accessible/84
+bus 1 /org/a11y/atspi/accessible/79
+bus 1 /org/a11y/atspi/accessible/79
+bus 3 /org/a11y/atspi/accessible/100
+bus 4 /org/a11y/atspi/accessible/87
+bus 1 /org/a11y/atspi/accessible/101
+bus 1 /org/a11y/atspi/accessible/101
+bus 4 /org/a11y/atspi/accessible/88
+bus 1 /org/a11y/atspi/accessible/102
+bus 1 /org/a11y/atspi/accessible/102
+bus 4 /org/a11y/atspi/accessible/89
+bus 1 /org/a11y/atspi/accessible/103
+bus 1 /org/a11y/atspi/accessible/103

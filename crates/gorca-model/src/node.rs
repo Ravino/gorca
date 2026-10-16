@@ -41,6 +41,8 @@ bitflags! {
         const MANAGES_DESCENDANTS = 1 << 23;
         /// A link whose target was visited (AT-SPI `Visited`).
         const VISITED    = 1 << 24;
+        /// A tri-state check box in its middle state (AT-SPI `Indeterminate`): "half checked".
+        const MIXED      = 1 << 25;
     }
 }
 

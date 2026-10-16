@@ -1,0 +1,4 @@
+{"redaction_key":"348112be96d387e0894222b983f46cd0"}
+{"t_ns":761499727982809,"utt_id":1,"epoch":1,"app_bus":":1.489","path":"/org/a11y/atspi/accessible/56","key":"1:1:43cc5f093decb608","source":"miss_reply","role":"document_web","states":["focused","showing","visible"],"name":"M3b Fields","value":null,"may_refine":false,"refines":null}
+{"t_ns":761500444122559,"utt_id":3,"epoch":3,"app_bus":":1.489","path":"/org/a11y/atspi/accessible/119","key":"1:1:434c51b44c90d598","source":"miss_reply","role":"panel","states":["enabled","focusable","focused","sensitive","showing","visible"],"name":null,"value":null,"may_refine":false,"refines":null}
+{"t_ns":761501860184367,"utt_id":4,"epoch":4,"app_bus":":1.489","path":"/org/a11y/atspi/accessible/114","key":"1:1:434c4eb44c90d07f","source":"stale","role":"text_entry","states":["enabled","focusable","sensitive","showing","visible"],"name":"Say all text","value":null,"may_refine":true,"refines":null}

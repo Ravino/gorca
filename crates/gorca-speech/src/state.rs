@@ -16,6 +16,8 @@ pub struct UttMeta {
     pub prio: Prio,
     pub epoch: Epoch,
     pub survives_focus_change: bool,
+    /// Queue lifetime of live-region news; 0 waits as long as needed.
+    pub ttl_secs: u8,
 }
 
 impl UttMeta {
@@ -43,6 +45,7 @@ impl From<&Utterance> for UttMeta {
             prio: u.prio,
             epoch: u.epoch,
             survives_focus_change: u.survives_focus_change,
+            ttl_secs: u.ttl_secs,
         }
     }
 }
@@ -465,6 +468,7 @@ mod tests {
             prio,
             epoch: Epoch(epoch),
             survives_focus_change: false,
+            ttl_secs: 0,
         }
     }
 

@@ -17,6 +17,15 @@ struct Queued {
     seq: u64,
 }
 
+impl Queued {
+    /// The utterance outlived its `ttl` while it waited.
+    fn expired(&self, now: Instant) -> bool {
+        self.meta.ttl_secs != 0
+            && now.saturating_duration_since(self.at)
+                > std::time::Duration::from_secs(u64::from(self.meta.ttl_secs))
+    }
+}
+
 /// The state machine plus the bounded gorca-side FIFO (S-1). Pure: no I/O, no clock of its own.
 #[derive(Debug)]
 pub struct SpeechQueue {
@@ -103,7 +112,7 @@ impl SpeechQueue {
                 match e {
                     SpeechEffect::Enqueue(meta) => self.enqueue(meta, now, &mut out),
                     SpeechEffect::PurgeStale => {
-                        self.purge(|q| q.meta.is_valid(epoch_now), &mut out);
+                        self.purge(|q| q.meta.is_valid(epoch_now) && !q.expired(now), &mut out);
                     }
                     SpeechEffect::DiscardOlderThan(age) => {
                         self.purge(|q| now.saturating_duration_since(q.at) <= age, &mut out);
@@ -134,15 +143,24 @@ impl SpeechQueue {
 
     fn enqueue(&mut self, meta: UttMeta, at: Instant, out: &mut Vec<SpeechEffect>) {
         if self.fifo.len() >= FIFO_CAPACITY {
-            // Drop lowest-priority-oldest: the worst entry among queue and newcomer.
+            // News that outlived its ttl is not worth a place.
+            self.purge(|q| !q.expired(at), out);
+        }
+        if self.fifo.len() >= FIFO_CAPACITY {
+            // Drop lowest-priority-oldest: the worst entry among queue and newcomer. Of equal
+            // priority, expiring news (a page's live regions) ranks below anything that does not
+            // expire (a Shell notification), so a flooding page cannot make a notice fail.
             let worst = self
                 .fifo
                 .iter()
                 .enumerate()
-                .max_by_key(|(_, q)| (q.meta.prio, std::cmp::Reverse(q.seq)))
+                .max_by_key(|(_, q)| (q.meta.prio, q.meta.ttl_secs != 0, std::cmp::Reverse(q.seq)))
                 .map(|(i, q)| (i, q.meta));
             match worst {
-                Some((i, w)) if w.prio > meta.prio => {
+                Some((i, w))
+                    if w.prio > meta.prio
+                        || (w.prio == meta.prio && w.ttl_secs != 0 && meta.ttl_secs == 0) =>
+                {
                     self.fifo.swap_remove(i);
                     self.dropped += 1;
                     out.push(SpeechEffect::Discard(w.id));
@@ -179,7 +197,7 @@ impl SpeechQueue {
         now: Instant,
         out: &mut Vec<SpeechEffect>,
     ) -> Option<UttMeta> {
-        self.purge(|q| q.meta.is_valid(epoch_now), out);
+        self.purge(|q| q.meta.is_valid(epoch_now) && !q.expired(now), out);
         let quiet = self.quiet_until.is_some_and(|u| now < u);
         let (i, _) = self
             .fifo
@@ -203,7 +221,80 @@ mod tests {
             prio,
             epoch: Epoch(epoch),
             survives_focus_change: false,
+            ttl_secs: 0,
         }
+    }
+
+    fn live(id: u64, prio: Prio, ttl: Duration) -> UttMeta {
+        UttMeta {
+            ttl_secs: u8::try_from(ttl.as_secs()).unwrap_or(u8::MAX),
+            ..meta(id, prio, 1)
+        }
+    }
+
+    /// Review M-4: live-region news expires in the queue instead of being spoken minutes later.
+    #[test]
+    fn expired_live_news_is_dropped_unspoken() {
+        let t = Instant::now();
+        let mut q = SpeechQueue::new(true);
+        q.handle(SpeechMsg::Intent(meta(1, Prio::Text, 1)), t, Epoch(1));
+        q.handle(
+            SpeechMsg::Intent(live(2, Prio::Notification, Duration::from_secs(5))),
+            t,
+            Epoch(1),
+        );
+        q.handle(
+            SpeechMsg::Intent(live(3, Prio::Notification, Duration::from_secs(5))),
+            t + Duration::from_secs(4),
+            Epoch(1),
+        );
+        // At t+6 s the first live item is older than 5 s, the second (queued at +4 s) is not.
+        let e = q.handle(
+            SpeechMsg::Ended(UttId(1)),
+            t + Duration::from_secs(6),
+            Epoch(1),
+        );
+        assert_eq!(
+            e,
+            vec![
+                SpeechEffect::Discard(UttId(2)),
+                SpeechEffect::Speak(UttId(3))
+            ]
+        );
+    }
+
+    /// Review M-4: a flooding page fills the FIFO with live news; a notification (no ttl, same
+    /// priority) still gets a place by evicting the oldest live item.
+    #[test]
+    fn a_notification_is_never_dropped_because_live_news_filled_the_queue() {
+        let t = Instant::now();
+        let mut q = SpeechQueue::new(true);
+        q.handle(SpeechMsg::Intent(meta(1, Prio::Text, 1)), t, Epoch(1));
+        for i in 0..FIFO_CAPACITY as u64 {
+            q.handle(
+                SpeechMsg::Intent(live(100 + i, Prio::Notification, Duration::from_secs(5))),
+                t,
+                Epoch(1),
+            );
+        }
+        assert_eq!(q.queued(), FIFO_CAPACITY);
+        let e = q.handle(
+            SpeechMsg::Intent(meta(9, Prio::Notification, 1)),
+            t,
+            Epoch(1),
+        );
+        assert!(
+            e.iter().all(|x| *x != SpeechEffect::Discard(UttId(9))),
+            "the notice is kept: {e:?}"
+        );
+        assert_eq!(q.queued(), FIFO_CAPACITY, "one live item made room");
+        // A second live item finds the queue full of its own kind and is the one dropped.
+        let e = q.handle(
+            SpeechMsg::Intent(live(500, Prio::Notification, Duration::from_secs(5))),
+            t,
+            Epoch(1),
+        );
+        assert!(e.contains(&SpeechEffect::Discard(UttId(500))), "{e:?}");
     }
 
     #[test]
@@ -386,6 +477,7 @@ mod m4b_review_probe {
                 prio: Prio::Text,
                 epoch: Epoch(1),
                 survives_focus_change: false,
+                ttl_secs: 0,
             }),
             t,
             Epoch(1),
@@ -396,6 +488,7 @@ mod m4b_review_probe {
             prio: Prio::Notification,
             epoch: Epoch(2),
             survives_focus_change: true,
+            ttl_secs: 0,
         };
         let e = q.handle(SpeechMsg::Intent(n), t + Duration::from_millis(2), Epoch(2));
         let e2 = q.handle(
@@ -404,6 +497,7 @@ mod m4b_review_probe {
                 prio: Prio::Interrupt,
                 epoch: Epoch(2),
                 survives_focus_change: false,
+                ttl_secs: 0,
             }),
             t + Duration::from_millis(10),
             Epoch(2),

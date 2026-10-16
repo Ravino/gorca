@@ -1,0 +1,1205 @@
+   Compiling unicode-ident v1.0.26
+   Compiling foldhash v0.2.0
+   Compiling equivalent v1.0.2
+   Compiling pin-project-lite v0.2.17
+   Compiling bitflags v2.13.2
+   Compiling futures-core v0.3.34
+   Compiling winnow v1.0.4
+   Compiling once_cell v1.21.4
+   Compiling serde_core v1.0.229
+   Compiling toml_datetime v1.1.2+spec-1.1.0
+   Compiling cfg-if v1.0.5
+   Compiling libc v0.2.190
+   Compiling crossbeam-utils v0.8.23
+   Compiling bytes v1.12.1
+   Compiling futures-sink v0.3.34
+   Compiling parking v2.2.1
+   Compiling endi v1.1.1
+   Compiling libm v0.2.16
+   Compiling proc-macro2 v1.0.107
+   Compiling memchr v2.8.3
+   Compiling linux-raw-sys v0.12.1
+   Compiling hashbrown v0.17.1
+   Compiling log v0.4.34
+   Compiling fastrand v2.5.0
+   Compiling tracing-core v0.1.36
+   Compiling futures-io v0.3.34
+   Compiling event-listener v5.4.2
+   Compiling slab v0.4.12
+   Compiling serde_json v1.0.154
+   Compiling zmij v1.0.23
+   Compiling futures-lite v2.6.1
+   Compiling crossbeam-queue v0.3.14
+   Compiling quote v1.0.47
+   Compiling concurrent-queue v2.5.0
+   Compiling event-listener-strategy v0.5.4
+   Compiling itoa v1.0.18
+   Compiling arc-swap v1.9.2
+   Compiling regex-syntax v0.8.11
+   Compiling async-task v4.7.1
+   Compiling syn v3.0.8
+   Compiling syn v2.0.119
+   Compiling errno v0.3.14
+   Compiling socket2 v0.6.5
+   Compiling mio v1.2.4
+   Compiling typenum v1.20.1
+   Compiling wasmtime-internal-core v49.0.3
+   Compiling signal-hook-registry v1.4.8
+   Compiling toml_parser v1.1.5+spec-1.1.0
+   Compiling async-channel v2.5.0
+   Compiling rustix v1.1.5
+   Compiling num-traits v0.2.19
+   Compiling saa v5.6.2
+   Compiling atomic-waker v1.1.2
+   Compiling piper v0.2.5
+   Compiling getrandom v0.4.3
+   Compiling cranelift-bitset v0.136.3
+   Compiling async-lock v3.4.2
+   Compiling unicode-segmentation v1.13.3
+   Compiling leb128fmt v0.1.0
+   Compiling sdd v4.8.11
+   Compiling gorca-ext-api v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-ext-api)
+   Compiling generic-array v0.14.7
+   Compiling toml_writer v1.1.3+spec-1.1.0
+   Compiling blocking v1.7.0
+   Compiling async-executor v1.14.0
+   Compiling indexmap v2.14.2
+   Compiling regex-automata v0.4.18
+   Compiling scc v3.8.8
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling uuid v1.28.0
+   Compiling async-broadcast v0.7.2
+   Compiling ordered-stream v0.2.0
+   Compiling cranelift-codegen-shared v0.136.3
+   Compiling iana-time-zone v0.1.65
+   Compiling hex v0.4.3
+   Compiling digest v0.10.7
+   Compiling toml_edit v0.25.17+spec-1.1.0
+   Compiling fnv v1.0.7
+   Compiling chrono v0.4.45
+   Compiling allocator-api2 v0.2.21
+   Compiling hashbrown v0.16.1
+   Compiling cpufeatures v0.2.17
+   Compiling sha2 v0.10.9
+   Compiling wasmparser v0.258.3
+   Compiling target-lexicon v0.13.5
+   Compiling bumpalo v3.20.3
+   Compiling arbitrary v1.5.0
+   Compiling rustc-hash v2.1.3
+   Compiling cranelift-assembler-x64 v0.136.3
+   Compiling proc-macro-crate v3.5.0
+   Compiling gimli v0.33.0
+   Compiling semver v1.0.28
+   Compiling static_assertions v1.1.0
+   Compiling anyhow v1.0.104
+   Compiling crc32fast v1.5.2
+   Compiling lazy_static v1.5.1
+   Compiling termcolor v1.4.1
+   Compiling wasmtime-internal-component-util v49.0.3
+   Compiling sharded-slab v0.1.7
+   Compiling object v0.40.0
+   Compiling crossbeam-epoch v0.9.21
+   Compiling wasm-encoder v0.258.3
+   Compiling thread_local v1.1.10
+   Compiling cranelift-control v0.136.3
+   Compiling nu-ansi-term v0.50.3
+   Compiling either v1.19.0
+   Compiling crossbeam-deque v0.8.8
+   Compiling scopeguard v1.2.0
+   Compiling simdutf8 v0.1.5
+   Compiling core_detect v1.0.0
+   Compiling rayon-core v1.13.0
+   Compiling itertools v0.14.0
+   Compiling regex v1.13.1
+   Compiling matchers v0.2.0
+   Compiling encoding_rs v0.8.42
+   Compiling futures-task v0.3.34
+   Compiling inotify-sys v0.1.8
+   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-daemon)
+   Compiling polling v3.11.0
+   Compiling async-io v2.6.0
+   Compiling tracing-attributes v0.1.31
+   Compiling enumflags2_derive v0.7.12
+   Compiling pulley-macros v49.0.3
+   Compiling ext-vte v0.0.0 (<repo>/.claude/worktrees/m8-review/extensions/ext-vte)
+   Compiling wasmtime-internal-versioned-export-macros v49.0.3
+   Compiling async-signal v0.2.14
+   Compiling pulley-interpreter v49.0.3
+   Compiling async-process v2.5.0
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling tokio-macros v2.7.2
+   Compiling async-trait v0.1.92
+   Compiling async-recursion v1.2.0
+   Compiling tracing v0.1.44
+   Compiling serde_repr v0.1.21
+   Compiling wasmtime v49.0.3
+   Compiling futures-macro v0.3.34
+   Compiling tracing-subscriber v0.3.23
+   Compiling tokio v1.53.2
+   Compiling memfd v0.6.6
+   Compiling rayon v1.12.0
+   Compiling ext-gnome-shell v0.0.0 (<repo>/.claude/worktrees/m8-review/extensions/ext-gnome-shell)
+   Compiling thiserror v2.0.21
+   Compiling cranelift-codegen-meta v0.136.3
+   Compiling cobs v0.3.0
+   Compiling gorca-config v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-config)
+   Compiling futures-util v0.3.34
+   Compiling serde v1.0.229
+   Compiling smallvec v1.16.3
+   Compiling zvariant_utils v4.2.0
+   Compiling zcheapstr v1.1.0
+   Compiling enumflags2 v0.7.12
+   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-model)
+   Compiling postcard v1.1.3
+   Compiling regalloc2 v0.15.2
+   Compiling wit-parser v0.258.3
+   Compiling gorca-text v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-text)
+   Compiling cranelift-entity v0.136.3
+   Compiling gorca-doc v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-doc)
+   Compiling cranelift-bforest v0.136.3
+   Compiling zvariant_derive v5.15.0
+   Compiling wasm-metadata v0.258.3
+   Compiling wasmtime-internal-jit-icache-coherence v49.0.3
+   Compiling zvariant v5.15.0
+   Compiling cranelift-codegen v0.136.3
+   Compiling tokio-util v0.7.20
+   Compiling inotify v0.11.5
+   Compiling wit-component v0.258.3
+   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-ingress)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-doc-source-api)
+   Compiling gorca-output-api v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-output-api)
+   Compiling gorca-input-api v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-input-api)
+   Compiling zbus_names v4.3.4
+   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-connector-api)
+   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-mirror)
+   Compiling gorca-speech v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-speech)
+   Compiling gorca-input-xkb v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-input-xkb)
+   Compiling zbus_xml v5.2.1
+   Compiling gorca-speech-ssip v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-speech-ssip)
+   Compiling zbus_macros v5.19.0
+   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-testkit)
+   Compiling gorca-speech-voicego v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-speech-voicego)
+   Compiling zbus-lockstep v0.5.2
+   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-core)
+   Compiling wasmtime-internal-wit-bindgen v49.0.3
+   Compiling zbus-lockstep-macros v0.5.2
+   Compiling wasmprinter v0.258.3
+   Compiling atspi-common v0.14.0
+   Compiling wasmtime-internal-component-macro v49.0.3
+   Compiling zbus v5.19.0
+   Compiling wasmtime-environ v49.0.3
+   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-dbus)
+   Compiling atspi v0.30.0
+   Compiling gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-connector-atspi)
+   Compiling gorca-input-mutter v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-input-mutter)
+   Compiling gorca-doc-source-atspi v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-doc-source-atspi)
+   Compiling cranelift-frontend v0.136.3
+   Compiling wasmtime-internal-unwinder v49.0.3
+   Compiling cranelift-native v0.136.3
+   Compiling wasmtime-internal-cranelift v49.0.3
+   Compiling gorca-ext-host v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-ext-host)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 47.70s
+     Running unittests src/lib.rs (target/debug/deps/gorca_connector_atspi-bea2bc45bd8f2f67)
+
+running 142 tests
+test decode::tests::clip_respects_char_boundaries ... ok
+test decode::tests::hostile_state_arrays_do_not_panic ... ok
+test decode::tests::roles_map_and_unknown_numbers_are_unknown ... ok
+test decode::tests::snapshot_drops_empty_names_and_non_finite_values ... ok
+test decode::tests::state_numbers_match_the_atspi_abi ... ok
+test decode::tests::states_map_and_unavailable_follows_sensitive ... ok
+test doc_source::tests::caps_advertise_exact_joins_and_all_actions ... ok
+test enablement::tests::a_screen_reader_started_meanwhile_keeps_is_enabled ... ok
+test connector::tests::missing_addresses_are_an_error_not_an_environment_lookup ... ok
+test enablement::tests::already_enabled_is_a_noop ... ok
+test enablement::tests::screen_reader_enabled_is_never_changed ... ok
+test enablement::tests::startup_enables_only_is_enabled_and_shutdown_restores_it ... ok
+test events::paths::tests::absurd_paths_are_refused ... ok
+test decode::tests::snapshot_clips_huge_names ... ok
+test connector::tests::run_fails_fast_when_the_bus_is_missing ... ok
+test events::paths::tests::forgetting_the_last_app_of_an_owner_frees_everything ... ok
+test events::paths::tests::insert_get_and_forget ... ok
+test events::paths::tests::hint_events_record_paths_only_for_the_applications_that_may ... ok
+test events::paths::tests::a_cleared_bucket_of_a_gone_owner_is_dropped_and_survivors_shrink ... ok
+test events::router::tests::a_shell_published_before_it_is_resolved_is_verified_when_the_process_becomes_known ... ok
+test events::router::tests::a_recycled_shell_pid_does_not_inherit_protection ... ok
+test events::router::tests::credentials_are_retried_before_a_name_is_filed_as_unknown ... ok
+test events::router::tests::an_unknown_start_time_never_matches_the_shell ... ok
+test events::router::tests::focus_during_backoff_or_the_pending_cap_is_kept_for_the_next_attempt ... ok
+test events::router::tests::forget_marks_departed_and_departed_names_expire ... ok
+test events::router::tests::forget_cancels_the_app_and_drops_its_paths ... ok
+test events::router::tests::frozen_eviction_thaws_at_the_next_good_reconciliation ... ok
+test events::router::tests::ignored_and_well_known_names_are_not_applications ... ok
+test events::router::tests::hostile_parkers_cannot_drop_a_new_apps_focus ... ok
+test events::router::tests::a_burst_of_other_events_never_displaces_the_focus ... ok
+test events::router::tests::only_the_protected_process_is_announced_as_the_verified_shell ... ok
+test events::router::tests::parked_strings_are_bounded ... ok
+test events::router::tests::newest_focus_survives_the_park_cap ... ok
+test events::router::tests::a_failed_registration_backs_off_and_then_succeeds ... ok
+test events::router::tests::registrations_in_flight_and_parked_events_are_bounded ... ok
+test events::router::tests::resolve_park_race_does_not_lose_the_event ... ok
+test events::paths::tests::exempt_newest_paths_never_push_the_total_past_the_cap ... ok
+test events::router::tests::reconciliation_retires_names_the_bus_no_longer_has ... ok
+test events::router::tests::take_all_returns_every_app_once ... ok
+test events::paths::tests::cap_preemption_keeps_every_owners_newest_path ... ok
+test events::router::tests::registration_and_departure_churn_leaks_nothing ... ok
+test events::router::tests::the_first_event_registers_asynchronously_and_is_replayed_in_order ... ok
+test events::paths::tests::the_global_cap_evicts_the_largest_owner_not_the_newcomer ... ok
+test events::paths::tests::unknown_credentials_get_a_small_private_bucket ... ok
+test events::router::tests::one_process_cannot_hold_unbounded_names ... ok
+test events::paths::tests::an_owners_newest_path_survives_quota_clears ... ok
+test events::router::tests::the_ignored_set_does_not_grow_with_churn ... ok
+test events::router::tests::an_app_dying_mid_registration_leaks_nothing ... ok
+test events::paths::tests::one_owner_is_bounded_by_its_own_quota ... ok
+test events::router::tests::unknown_credentials_share_one_small_quota ... ok
+test events::router::tests::when_revalidation_fails_eviction_freezes_and_reading_continues ... ok
+test events::router::tests::the_per_process_name_cap_refuses_with_a_backoff_not_a_verdict ... ok
+test events::session::tests::connecting_to_a_missing_bus_fails_fast_with_an_error ... ok
+test events::session::tests::registered_events_are_a_small_explicit_set ... ok
+test events::subscription::tests::cache_signals_add_exactly_one_interface_rule ... ok
+test events::subscription::tests::the_default_adds_nothing_to_the_base_set ... ok
+test fetch::admission_tests::background_is_capped_whatever_is_free ... ok
+test fetch::admission_tests::interactive_keeps_two_slots_nobody_else_may_take ... ok
+test fetch::items::tests::a_dump_in_hash_order_becomes_a_tree ... ok
+test fetch::items::tests::an_incomplete_child_list_stays_a_count ... ok
+test fetch::items::tests::an_oversized_reply_is_rejected_whole ... ok
+test fetch::items::tests::big_endian_replies_decode ... ok
+test fetch::items::tests::counts_text_and_paths_are_bounded ... ok
+test fetch::items::tests::duplicate_paths_keep_the_first ... ok
+test fetch::items::tests::foreign_refs_are_dropped_and_counted ... ok
+test events::router::tests::a_victim_that_becomes_focused_before_the_commit_is_spared ... ok
+test fetch::items::tests::self_parents_and_cycles_are_cut ... ok
+test fetch::items::tests::the_node_cap_truncates ... ok
+test fetch::review::tests::a_normal_walk_collects_lines_until_the_clip_bottom ... ok
+test fetch::review::tests::a_walk_never_loops_on_non_advancing_lines ... ok
+test fetch::review::tests::abort_marks_truncation_once ... ok
+test fetch::review::tests::bogus_rectangles_are_missing ... ok
+test fetch::review::tests::hostile_replies_stay_bounded ... ok
+test fetch::review::tests::huge_count_clamps_ranges_to_the_count ... ok
+test fetch::review::tests::lines_above_the_clip_are_skipped_without_counting ... ok
+test fetch::review::tests::max_lines_and_max_bytes_truncate ... ok
+test fetch::review::tests::status_bar_role_maps_to_its_atspi_numbers ... ok
+test fetch::review::tests::the_wire_rule_matches_roles_any_and_states_all ... ok
+test events::router::tests::shell_launched_apps_are_grouped_by_scope_not_by_process_group ... ok
+test events::router::tests::a_refusal_at_the_cap_is_never_permanent ... ok
+test events::router::tests::an_evicted_application_comes_back_through_the_backoff_path ... ok
+test events::router::tests::the_application_cap_makes_the_largest_group_give_way ... ok
+test events::router::tests::the_focused_application_is_never_evicted ... ok
+test fetch::items::tests::hostile_bytes_never_panic ... ok
+test events::router::tests::the_focused_app_survives_a_newcomer_while_protection_is_unverified ... ok
+test events::router::tests::the_shell_as_a_newcomer_is_admitted_at_the_cap ... ok
+test fetch::shadow::tests::the_allowlist_admits_reads_and_nothing_that_writes ... ok
+test events::router::tests::the_shell_is_admitted_over_the_cap_while_eviction_is_frozen ... ok
+test events::router::tests::the_shell_is_never_evicted_or_refused ... ok
+test events::router::tests::a_legitimate_app_launched_after_the_attacker_filled_the_cap_wins_and_stays ... ok
+test fetch::strategy::tests::map_concurrent_preserves_order_and_the_bound ... ok
+test events::router::tests::with_only_singletons_the_newcomer_is_refused_and_nobody_is_evicted ... ok
+test events::router::tests::the_name_cap_holds_under_concurrency ... ok
+test events::router::tests::singleton_forks_never_evict_the_first_application ... ok
+test fetch::review_tests::a_bogus_rectangle_is_none_but_the_node_is_marked_answered ... ok
+test fetch::review_tests::an_editable_answers_one_line_at_its_own_extents ... ok
+test fetch::review_tests::actions_report_success_or_not_supported ... ok
+test fetch::review_tests::the_status_bar_is_found_by_role_and_showing ... ok
+test fetch::review_tests::get_text_is_clamped_and_the_caret_is_read ... ok
+test fetch::review_tests::visible_lines_follow_the_text_and_the_clip ... ok
+test fetch::strategy_ref_tests::strategy_sources_cannot_reach_the_raw_connection ... ok
+test fetch::strategy::tests::a_wide_range_keeps_the_children_in_order_on_both_paths ... ok
+test fetch::tests::a_late_verified_shell_gets_its_hint_paths ... ok
+test fetch::tests::dbus_errors_map_to_backend_errors ... ok
+test fetch::tests::labels_are_read_only_from_the_same_application ... ok
+test fetch::tests::password_fields_are_read_like_any_other_entry ... ok
+test proc::tests::a_hostile_command_name_cannot_shift_the_fields ... ok
+test proc::tests::garbage_is_unknown_not_a_panic ... ok
+test proc::tests::grouping_prefers_the_scope_over_the_process_group ... ok
+test proc::tests::our_own_process_is_known ... ok
+test proc::tests::pgrp_and_start_time_are_read ... ok
+test proc::tests::the_systemd_unit_comes_from_the_cgroup_path ... ok
+test role_map::tests::common_roles_map ... ok
+test role_map::tests::dialog_and_alert_stay_distinct ... ok
+test role_map::tests::unmapped_roles_are_unknown_not_a_panic ... ok
+test text::format::tests::gecko_plain_text ... ok
+test text::format::tests::gecko_styled_text ... ok
+test text::format::tests::gtk_names_and_sixteen_bit_colours ... ok
+test text::format::tests::nonsense_is_left_out ... ok
+test text::tests::a_clipped_screen_starts_on_a_row_and_the_caret_moves_with_it ... ok
+test text::tests::a_screen_that_fits_is_untouched ... ok
+test text::tests::granularity_wire_values_are_the_atspi_ones ... ok
+test text::tests::offsets_count_scalars_not_bytes_for_multibyte_rows ... ok
+test text::tests::wire_numbers_are_clamped_not_wrapped ... ok
+test toolkit::tests::classification ... ok
+test toolkit::tests::only_gecko_has_the_insert_offset_quirk ... ok
+test toolkit::tests::text_units_follow_tu2 ... ok
+test fetch::strategy::tests::ancestry_reads_each_parent_from_the_fetch_of_its_child ... ok
+test fetch::strategy::tests::a_huge_parent_costs_the_same_by_index_and_is_refused_when_listed ... ok
+test fetch::review_tests::a_hung_node_costs_only_its_own_bounds ... ok
+test fetch::strategy::tests::siblings_by_index_matches_the_listing_and_a_huge_listing_is_refused_undecoded ... ok
+test fetch::strategy::tests::siblings_finds_the_index_in_the_child_list_and_windows_around_it ... ok
+test fetch::strategy::tests::siblings_of_a_node_that_is_not_a_child_of_the_parent_is_empty_not_an_error ... ok
+test fetch::strategy_ref_tests::a_dead_node_is_gone_and_an_unknown_key_is_unresolved ... ok
+test fetch::strategy_ref_tests::cache_dump_decodes_the_whole_app_and_records_paths ... ok
+test fetch::review_tests::bounds_are_window_relative_in_both_toolkit_flavours ... ok
+test fetch::strategy_ref_tests::ancestry_climbs_to_the_root_and_truncates_at_the_depth ... ok
+test fetch::strategy_ref_tests::child_snapshots_returns_the_range_with_parent_links_and_records_paths ... ok
+test fetch::strategy_ref_tests::fetch_reports_what_was_asked_in_have ... ok
+test fetch::strategy_ref_tests::hostile_refs_are_dropped_and_counted ... ok
+test fetch::strategy_ref_tests::subtree_is_breadth_first_and_bounded ... ok
+test events::paths::tests::many_bus_names_of_one_process_share_one_quota ... ok
+
+test result: ok. 142 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.35s
+
+     Running tests/harness_focus.rs (target/debug/deps/harness_focus-ce2d29eef70b8d33)
+
+running 3 tests
+test tabbing_through_a_form_is_heard ... ok
+test an_app_that_quits_is_retired_and_a_new_one_is_heard ... ok
+test a_hung_app_does_not_stop_the_reader ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.88s
+
+     Running tests/path_table_rss.rs (target/debug/deps/path_table_rss-0042018954290914)
+
+running 1 test
+test rss_stays_near_the_byte_cap_under_owner_churn ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.12s
+
+     Running unittests src/lib.rs (target/debug/deps/gorca_core-d8c3d8b64e950f7d)
+
+running 586 tests
+test app_actor::tests::a_spoofed_shell_never_speaks_selection ... ok
+test app_actor::tests::a_name_change_reaches_content_named_ancestors ... ok
+test app_actor::tests::a_fill_reply_is_applied_with_the_late_reply_rules ... ok
+test app_actor::tests::a_full_background_lane_drops_and_requests_a_resync ... ok
+test app_actor::tests::a_gone_app_releases_its_mirror_at_once ... ok
+test app_actor::tests::another_app_forwards_only_a_known_alert_that_became_visible ... ok
+test app_actor::tests::a_suppress_verdict_on_focus_never_breaks_focus_routing ... ok
+test app_actor::tests::hung_transition_tells_the_reader_once ... ok
+test app_actor::tests::on_event_verdicts_decide_what_the_reader_hears ... ok
+test app_actor::tests::focus_goes_to_the_focus_lane_and_snapshots_fill_the_mirror ... ok
+test app_actor::tests::owner_gone_marks_the_app_gone_and_notifies_the_reader ... ok
+test app_actor::tests::only_the_focused_nodes_state_change_reaches_the_reader ... ok
+test app_actor::tests::other_apps_never_speak_selection_but_a_selected_focus_is_an_s1_change ... ok
+test app_actor::tests::reader_fetch_replies_are_applied_and_gone_tombstones ... ok
+test app_actor::tests::property_noise_invalidates_the_mirror_and_wakes_nobody ... ok
+test app_actor::tests::text_events_of_a_focused_but_unprotected_app_are_counted_not_silently_lost ... ok
+test app_actor::tests::only_a_verified_shell_is_protected_and_may_dump ... ok
+test app_actor::tests::removal_tombstones_the_mirror_and_tells_the_reader ... ok
+test app_actor::tests::a_flood_ends_with_a_lazy_resync_and_a_healthy_app ... ok
+test app_actor::tests::the_focused_app_is_protected_from_global_shedding_until_the_focus_leaves ... ok
+test app_actor::tests::removal_and_window_destroy_tombstone_and_dirty_the_parent ... ok
+test app_actor::tests::the_shell_forwards_an_unknown_node_that_became_visible ... ok
+test app_actor::tests::every_row_of_the_invalidation_table_marks_the_right_fields ... ok
+test app_actor::tests::a_flood_invalidates_the_dirty_nodes_and_dirty_all_is_o1 ... ok
+test browse::cursor::tests::characters_step_over_line_ends_and_say_blank_for_empty_lines ... ok
+test browse::cursor::tests::cursor_offsets_round_trip_through_nodes ... ok
+test app_actor::tests::the_shell_forwards_only_the_newest_selection_of_a_batch ... ok
+test app_actor::tests::window_activation_goes_to_the_focus_lane ... ok
+test browse::cursor::tests::home_and_end_speak_the_character_at_the_line_edge ... ok
+test app_actor::tests::a_flood_of_showing_events_is_bounded_and_never_asks_for_a_resync ... ok
+test browse::cursor::tests::paragraphs_move_by_hard_line_and_skip_blank_ones ... ok
+test browse::cursor::tests::sentences_split_at_terminators_and_cross_paragraphs ... ok
+test browse::latency::gates_w1_br1_and_j1_on_10k_and_100k_mirrors ... ignored, release-mode gate run: cargo test --release -p gorca-core --lib browse::latency -- --ignored --nocapture
+test browse::cursor::tests::lines_skip_blank_lines_and_report_edges ... ok
+test app_actor::tests::the_policy_sees_events_after_the_invalidation_and_demands_drive_requests ... ok
+test browse::cursor::tests::soft_lines_split_a_long_hard_line ... ok
+test browse::forms::tests::d1_radios_tabs_menu_items_and_grid_cells_pass_keys_through_on_focus_only ... ok
+test browse::forms::tests::disabled_fields_do_not_pass_keys_through_and_read_only_entries_stay_fields ... ok
+test browse::cursor::tests::words_cross_lines_and_prev_word_goes_to_the_start_of_the_current_one ... ok
+test browse::forms::tests::editable_and_widget_roles_pass_keys_through_on_focus_and_activation ... ok
+test browse::cursor::tests::top_bottom_and_page_moves ... ok
+test browse::present::tests::a_heading_line_announces_its_level_before_the_text ... ok
+test browse::present::tests::a_link_inside_a_line_is_announced_where_it_starts ... ok
+test browse::present::tests::a_form_control_on_quick_nav_leads_with_its_name_and_a_combo_with_its_value ... ok
+test browse::present::tests::markers_speak_role_state_and_name ... ok
+test browse::present::tests::single_characters_have_names ... ok
+test browse::present::tests::entering_a_landmark_and_a_list_is_announced_on_the_first_line ... ok
+test browse::tests::a_better_reading_of_the_pending_focus_is_kept ... ok
+test browse::present::tests::quick_nav_to_a_list_or_landmark_says_what_it_is_then_one_line ... ok
+test browse::present::tests::quick_nav_describes_the_node_with_its_role_first ... ok
+test browse::tests::a_cold_unknown_focus_stays_loading_with_the_grabs_off ... ok
+test browse::tests::a_field_that_is_open_when_it_gets_the_focus_does_not_grab_escape ... ok
+test browse::tests::a_firefox_field_is_echoed_once_by_the_caret_layer ... ok
+test browse::tests::a_field_that_gets_the_focus_with_its_help_text_is_not_mistaken_for_a_dialog ... ok
+test browse::tests::a_gone_document_returns_to_inactive_and_unregisters_the_cursor ... ok
+test app_actor::tests::the_policy_hears_of_the_app_with_its_root_and_identity_before_the_first_focus ... ok
+test browse::tests::a_native_focus_whose_fetch_fails_is_retried_once_and_then_says_unknown ... ok
+test browse::tests::a_key_before_load_complete_cancels_the_auto_read ... ok
+test browse::tests::a_loaded_page_speaks_its_title_and_then_reads_itself ... ok
+test browse::tests::a_menu_opened_within_the_scroll_debounce_is_spoken ... ok
+test browse::tests::activation_on_a_field_enters_focus_mode_and_focuses_it ... ok
+test browse::tests::an_editable_loading_focus_is_already_focus_mode_and_says_so_once ... ok
+test browse::tests::a_page_that_loads_after_its_first_publish_starts_reading_at_load_complete ... ok
+test browse::tests::a_web_focus_whose_fetch_times_out_is_spoken_from_the_document_mirror ... ok
+test browse::tests::a_page_whose_load_complete_never_comes_reads_itself_after_a_moment ... ok
+test browse::tests::a_reading_that_reaches_the_end_stops_quietly ... ok
+test browse::tests::an_early_timer_keeps_the_loading_grace_armed ... ok
+test browse::tests::an_early_timer_keeps_the_focus_settle_deadline_armed ... ok
+test browse::tests::entering_a_document_announces_the_mode_and_placing_follows_the_focus ... ok
+test browse::tests::escape_leaves_auto_focus_mode_only ... ok
+test browse::tests::auto_read_can_be_switched_off_and_then_the_first_line_is_spoken_as_before ... ok
+test browse::tests::arrow_keys_read_lines_characters_and_words_without_ipc ... ok
+test browse::tests::browse_keys_on_a_vanished_document_hand_the_keyboard_back ... ok
+test browse::tests::a_new_document_in_the_focused_application_is_adopted_with_title_and_first_line ... ok
+test browse::tests::a_node_of_another_application_leaves_web_mode ... ok
+test browse::tests::coming_back_to_a_document_reads_its_title_and_the_line_where_the_cursor_was ... ok
+test browse::tests::leaving_and_losing_documents ... ok
+test browse::tests::a_late_first_line_is_dropped_after_a_key_or_a_stale_wait ... ok
+test browse::tests::edits_under_the_cursor_do_not_strand_it ... ok
+test browse::tests::comma_jumps_past_the_end_of_the_container_and_shift_comma_back_to_its_start ... ok
+test browse::tests::loading_waits_for_the_document_and_resolves_to_browse_or_focus ... ok
+test browse::tests::enter_on_a_link_clicks_it_and_on_a_field_enters_focus_mode ... ok
+test browse::tests::escape_belongs_to_the_page_while_the_field_has_a_popup_open ... ok
+test browse::tests::focus_in_the_browser_chrome_leaves_browse_mode_and_asks_for_the_document ... ok
+test browse::tests::focus_on_a_link_enters_browse_mode_with_the_word_on_the_focus_speech ... ok
+test browse::tests::focus_on_an_edit_field_enters_focus_mode_and_grabs_escape ... ok
+test browse::tests::role_application_is_left_only_by_the_toggle ... ok
+test browse::tests::tab_between_a_link_and_a_field_switches_modes_and_only_then_speaks_the_word ... ok
+test browse::tests::the_toggle_is_manual_focus_mode_and_sticky_until_toggled_again ... ok
+test builtin_ext::tests::a_spoofed_shell_name_gets_no_profile ... ok
+test builtin_ext::tests::only_a_unit_the_window_cannot_follow_turns_native_text_off ... ok
+test builtin_ext::tests::only_the_verified_shell_speaks_selection ... ok
+test builtin_ext::tests::only_the_verified_shell_watches_showing ... ok
+test browse::tests::say_all_in_browse_mode_reads_the_page_in_chunks_as_the_line_presenter_speaks_it ... ok
+test browse::tests::say_selection_refuses_cleanly_in_browse_mode ... ok
+test browse::tests::single_letter_navigation_toggles_and_releases_the_bare_keys ... ok
+test browse::tests::the_first_focus_on_a_document_starts_at_its_first_line ... ok
+test browse::tests::the_load_complete_of_another_document_does_not_start_the_read ... ok
+test browse::tests::quick_navigation_speaks_the_target_with_its_role_and_never_wraps ... ok
+test browse::tests::shift_arrows_select_and_unselect_and_a_plain_move_clears ... ok
+test browse::tests::the_toggle_switches_between_the_modes_and_speaks_them ... ok
+test browse::tests::the_virtual_cursor_follows_the_chunk_the_server_starts ... ok
+test browse::tests::quick_navigation_finds_articles_and_frames_and_names_them ... ok
+test commands::compile::tests::explicit_press_counts_are_compiled ... ok
+test browse::tests::the_first_line_of_a_page_that_builds_after_focus_is_spoken_when_it_arrives ... ok
+test commands::compile::tests::an_extension_default_never_shadows_a_binding_of_another_context ... ok
+test commands::compile::tests::desktop_keypad_review_keys_are_grabbed_for_num_lock_off_only ... ok
+test commands::compile::tests::caps_lock_is_dropped_when_it_switches_the_layout ... ok
+test commands::compile::tests::shift_tap_pause_is_disabled_by_shift_layout_toggles ... ok
+test commands::compile::tests::a_digit_typed_with_num_lock_on_reaches_the_application ... ok
+test commands::compile::tests::held_review_moves_repeat_and_one_shot_commands_do_not ... ok
+test commands::compile::tests::laptop_layouts_and_gorca_chords_grab_nothing_extra ... ok
+test commands::compile::tests::extension_defaults_merge_without_overriding_the_user_or_the_preset ... ok
+test commands::compile::tests::presets_bind_every_m1_chord_command ... ok
+test commands::compile::tests::the_orca_desktop_preset_grabs_its_bare_keypad_keys ... ok
+test commands::handlers::tests::key_descriptions_list_modifiers_in_a_fixed_order ... ok
+test commands::info::tests::basic_where_am_i_names_app_window_container_and_object ... ok
+test commands::info::tests::brief_verbosity_drops_the_application ... ok
+test commands::info::tests::detailed_adds_description_and_states ... ok
+test commands::info::tests::node_info_lists_identity_and_freshness ... ok
+test commands::info::tests::partial_chains_still_speak ... ok
+test commands::info::tests::time_and_date_follow_the_clock_format ... ok
+test commands::compile::tests::the_wire_form_of_a_keypad_chord_has_only_num_lock_off_pairs ... ok
+test commands::info::tests::window_title_finds_the_enclosing_window_or_dialog ... ok
+test commands::info::tests::third_press_spells_the_name ... ok
+test commands::spec::tests::context_masks ... ok
+test commands::spec::tests::every_command_has_a_consistent_spec ... ok
+test commands::spec::tests::m1_m3_and_m4a_commands_are_exactly_the_implemented_ones ... ok
+test commands::spec::tests::names_are_unique_dotted_lowercase ... ok
+test commands::compile::tests::every_preset_compiles_clean ... ok
+test commands::compile::tests::two_extensions_claiming_one_chord_first_wins ... ok
+test commands::tests::an_ambiguous_chord_is_never_run_but_the_user_is_told_to_press_again ... ok
+test commands::tests::a_stuck_modifier_is_named_with_the_one_tap_hint ... ok
+test commands::tests::a_late_reply_after_a_newer_key_is_dropped_and_a_timeout_speaks_the_partial_answer ... ok
+test commands::compile::tests::nvda_desktop_where_am_i_is_gorca_tab_and_planned_commands_are_inert ... ok
+test commands::tests::an_extension_command_is_queued_to_the_host_never_run_in_the_reader ... ok
+test commands::tests::an_extension_presentation_replaces_the_core_one ... ok
+test commands::tests::announcements_survive_focus_changes_and_command_answers_do_not ... ok
+test commands::tests::input_notices_are_announced_once ... ok
+test commands::tests::extension_speech_interrupts_for_answers_and_survives_focus_for_notices ... ok
+test commands::tests::overlay_type_is_re_exported_for_saving ... ok
+test commands::tests::learn_mode_toggles_the_grab_set_and_describes_keys ... ok
+test commands::tests::pass_next_key_empties_the_grab_set_and_ends_on_the_next_key_or_the_timeout ... ok
+test commands::tests::repeat_last_speaks_the_last_focus_speech_again_with_the_key_epoch ... ok
+test commands::tests::ring_changes_send_the_levels_before_the_confirmation_and_clamp ... ok
+test commands::compile::tests::user_bindings_unknown_names_and_wrong_contexts_are_diagnosed ... ok
+test commands::tests::speech_mode_cycle_speaks_before_muting_and_after_unmuting ... ok
+test commands::tests::caps_lock_drop_is_announced_once ... ok
+test commands::tests::settings_reload_save_and_their_results ... ok
+test commands::tests::stop_and_pause_have_no_speech_but_pause_toggles_the_lane ... ok
+test commands::tests::the_modifier_double_tap_is_described_in_learn_mode_only ... ok
+test commands::compile::tests::browse_grabs_cover_letters_shifted_digits_and_leave_escape_to_focus_mode ... ok
+test commands::tests::the_reader_acknowledges_keys_to_the_lane ... ok
+test commands::tests::toggles_confirm_and_change_the_effective_settings_without_saving ... ok
+test commands::tests::time_and_date ... ok
+test commands::tests::typed_character_echo_follows_the_setting ... ok
+test commands::tests::unknown_command_ids_are_ignored ... ok
+test commands::tests::where_am_i_on_a_miss_fetches_once_and_answers_on_the_reply ... ok
+test directory::tests::owners_are_processes_stable_across_reconnects_and_never_per_connection ... ok
+test commands::tests::without_focus_the_node_commands_say_so ... ok
+test doc_actor::live::tests::a_bucket_allows_a_burst_then_the_rate ... ok
+test directory::tests::lookup_routes_by_app_and_unknown_apps_are_gone ... ok
+test doc_actor::live::tests::a_change_after_the_load_is_spoken_once_the_burst_settles ... ok
+test doc_actor::live::tests::additions_are_the_new_lines_only ... ok
+test doc_actor::live::tests::atomic_says_the_whole_region_and_removals_only_when_relevant ... ok
+test commands::tests::where_am_i_uses_the_mirror_and_repeats_escalate ... ok
+test commands::compile::tests::container_keys_and_the_letter_subset_are_grabbed ... ok
+test commands::tests::brief_confirmations_say_only_the_value ... ok
+test doc_actor::live::tests::normalise_ignores_case_digits_and_spacing ... ok
+test commands::compile::tests::users_bind_extension_commands_by_name_and_typos_get_a_suggestion ... ok
+test doc_actor::tests::a_batch_the_mirror_rejects_asks_the_source_for_a_rebuild_and_keeps_the_last_good_state ... ok
+test doc_actor::tests::a_settled_batch_is_published_and_joined_before_the_reader_is_told ... ok
+test commands::tests::startup_publishes_the_grab_set_and_speaks_problems_once_per_distinct_set ... ok
+test doc_actor::tests::a_source_that_ends_retires_the_document_and_leaves_no_key_behind ... ok
+test commands::tests::a_file_reload_keeps_unrelated_runtime_changes_and_an_explicit_one_reverts ... ok
+test doc_actor::tests::the_join_replaces_and_removes_only_its_own_keys ... ok
+test doc_actor::translate::tests::a_batch_the_mirror_rejects_resyncs_the_maps ... ok
+test doc_actor::live::tests::a_flood_is_bounded_and_summarised ... ok
+test doc_actor::tests::shutdown_ends_the_actor_and_its_source ... ok
+test doc_actor::translate::tests::a_listed_child_without_an_upsert_is_a_placeholder_filled_later ... ok
+test doc_actor::translate::tests::break_assignment_follows_block_neighbours ... ok
+test doc_actor::translate::tests::a_reset_replaces_the_tree_in_the_same_arena ... ok
+test doc_actor::translate::tests::a_text_edit_and_an_inserted_sibling_are_applied_in_place ... ok
+test doc_actor::translate::tests::controls_without_text_get_a_marker_and_lose_it_with_a_label ... ok
+test doc_actor::translate::tests::nodes_moved_between_parents_keep_their_ids ... ok
+test doc_actor::translate::tests::first_batch_builds_the_tree_with_block_breaks_and_joins ... ok
+test doc_actor::translate::tests::parent_child_cycles_in_the_source_terminate ... ok
+test commands::compile::tests::browse_mode_keeps_a_keysym_that_another_layouts_unbound_key_also_types ... ok
+test commands::compile::tests::extension_alias_chords_never_shadow_core_chords ... ok
+test doc_actor::translate::tests::removal_reaps_the_subtree_and_forgets_its_keys ... ok
+test doc_registry::tests::a_node_in_no_document_is_reported_and_not_looked_up_twice ... ok
+test doc_actor::translate::tests::node_text_is_clipped_to_the_byte_cap ... ok
+test commands::compile::tests::russian_layout_grabs_the_cyrillic_keysyms_of_the_quick_nav_keys ... ok
+test doc_actor::translate::tests::moving_a_subtree_under_a_deep_node_cannot_pass_the_depth_cap ... ok
+test doc_registry::tests::an_app_that_goes_away_takes_its_documents_with_it ... ok
+test doc_actor::translate::tests::a_chain_grown_one_level_per_batch_stops_at_the_cap ... ok
+test doc_registry::tests::focus_in_a_document_builds_it_and_the_reader_is_told_when_it_is_useful ... ok
+test ext::tests::bindings_need_a_known_command_and_a_valid_chord ... ok
+test ext::tests::ids_are_above_the_core_range_and_resolve_back ... ok
+test ext::tests::names_are_validated ... ok
+test ext::tests::verdicts_compose_left_to_right ... ok
+test focus::tests::app_gone_orphans_only_its_own_focus ... ok
+test focus::tests::flapping_focus_restarts_the_settle_timer ... ok
+test focus::tests::focus_settles_then_presents_then_speaks ... ok
+test focus::tests::hung_focus_app_announces_without_changing_state ... ok
+test focus::tests::orphaned_recovers_on_the_next_focus ... ok
+test focus::tests::presented_for_a_different_node_is_ignored ... ok
+test focus::tests::removal_orphans_and_queries_the_active_window ... ok
+test focus::tests::settle_delay_is_zero_except_for_flapping_roles ... ok
+test health::tests::a_success_breaks_the_consecutive_run ... ok
+test health::tests::flood_then_drain_resyncs_the_dirty_set ... ok
+test health::tests::global_shed_floods_only_unfocused_top_talkers ... ok
+test health::tests::healthy_timeout_goes_slow_and_halves_prefetch ... ok
+test health::tests::hung_apps_admit_no_requests ... ok
+test health::tests::hung_probes_one_at_a_time_with_exponential_backoff ... ok
+test health::tests::owner_vanished_is_terminal_from_every_state ... ok
+test health::tests::slow_recovers_after_ten_quiet_seconds ... ok
+test health::tests::three_consecutive_timeouts_make_the_app_hung ... ok
+test mode::tests::auto_mode_switching_follows_focus_unless_sticky ... ok
+test mode::tests::every_real_transition_advances_the_epoch_and_sets_the_grab_set ... ok
+test mode::tests::grab_sets_are_minimal_and_mode_specific ... ok
+test mode::tests::input_help_toggles_from_anywhere_and_blocks_other_modes ... ok
+test mode::tests::leaving_review_returns_to_where_it_started ... ok
+test mode::tests::no_op_transitions_emit_nothing ... ok
+test mode::tests::pass_through_and_learn_mode_resume_browse ... ok
+test mode::tests::review_and_pass_through_round_trips ... ok
+test present::fair::m4b_review_probe::probe_p4_take_due_respects_the_global_ceiling ... ok
+test present::fair::tests::a_bucket_allows_its_burst_then_one_per_refill ... ok
+test present::fair::tests::a_flooding_owner_does_not_touch_a_quiet_one ... ok
+test commands::tests::every_implemented_command_does_something ... ok
+test present::fair::tests::kinds_have_separate_buckets ... ok
+test present::fair::tests::many_principals_together_hit_a_global_ceiling ... ok
+test present::fair::tests::idle_owners_are_reclaimed_and_cost_nothing ... ok
+test commands::compile::tests::extension_chords_never_take_over_core_multi_press ... ok
+test present::fair::tests::waiting_keeps_the_newest_and_is_bounded ... ok
+test present::fair::tests::waiting_notices_released_together_respect_the_global_ceiling ... ok
+test doc_registry::tests::an_app_without_a_document_yet_is_probed_again_with_backoff ... ok
+test present::log::tests::a_record_is_one_json_line_with_the_documented_fields ... ok
+test present::log::tests::password_text_is_never_written_only_its_length_and_a_keyed_hash ... ok
+test present::log::tests::the_file_is_private_and_a_link_is_never_followed ... ok
+test present::notification::tests::a_dialog_that_appears_is_read_as_a_notice_only_in_an_app_with_a_policy ... ok
+test present::notification::tests::a_flooding_app_spends_only_its_own_budget ... ok
+test present::notification::tests::a_level_bar_is_read_once_after_its_animation_stops ... ok
+test present::notification::tests::a_node_the_mirror_knows_to_be_no_notice_costs_no_round_trip ... ok
+test present::notification::tests::a_notice_speaks_role_name_and_text_without_interrupting_and_survives ... ok
+test present::notification::tests::a_quiet_app_is_not_starved_by_a_flooding_one_across_every_presenter ... ok
+test present::notification::tests::a_window_activation_flood_is_bounded_per_owner ... ok
+test present::notification::tests::an_announcement_never_interrupts_and_never_advances_the_epoch ... ok
+test present::notification::tests::an_assertive_announcement_survives_a_focus_change ... ok
+test present::notification::tests::an_unknown_node_is_read_once_and_reads_are_rate_limited ... ok
+test present::notification::tests::announcement_text_is_cleaned_and_bounded ... ok
+test browse::latency::the_focus_join_is_microseconds_even_in_debug ... ok
+test present::notification::tests::levels_of_apps_without_the_policy_are_ignored ... ok
+test present::notification::tests::many_connections_of_one_process_share_one_budget ... ok
+test present::notification::tests::creating_owners_does_not_reset_a_busy_owners_budget ... ok
+test present::notification::tests::many_short_announcements_are_bounded_by_count_and_the_waiting_slot_is_single ... ok
+test present::notification::tests::over_budget_keeps_only_the_newest_and_speaks_it_when_the_window_ends ... ok
+test present::notification::tests::the_same_announcement_twice_in_a_row_is_spoken_once ... ok
+test present::notification::tests::varying_text_node_role_or_politeness_does_not_escape_the_budget ... ok
+test present::notification::tests::the_budget_table_is_bounded ... ok
+test present::tests::key_echo_names_action_keys_and_skips_lone_modifiers ... ok
+test present::tests::message_has_message_priority ... ok
+test present::tests::name_role_and_states_in_order ... ok
+test present::tests::navigation_keys_are_not_echoed ... ok
+test present::tests::nothing_is_echoed_under_alt_control_or_super ... ok
+test present::tests::registry_falls_back_to_the_context_default_and_honours_role_overrides ... ok
+test present::tests::selected_items_do_not_say_selected ... ok
+test present::tests::shift_locks_and_altgr_still_echo ... ok
+test present::notification::tests::what_is_not_a_notice_or_says_nothing_is_not_spoken ... ok
+test present::tests::stale_nodes_are_tagged_may_refine_and_empty_names_are_skipped ... ok
+test present::tests::values_are_spoken_last ... ok
+test present::utterance::change_tests::a_flipped_state_is_spoken_both_ways ... ok
+test present::utterance::change_tests::a_web_document_is_not_called_unavailable_but_a_native_row_still_is ... ok
+test present::utterance::change_tests::a_web_document_without_sensitive_is_not_called_unavailable ... ok
+test present::utterance::change_tests::equal_snapshots_have_no_change_and_focus_state_is_ignored ... ok
+test present::utterance::change_tests::name_and_value_changes_are_spoken ... ok
+test present::utterance::change_tests::the_log_lists_every_decoded_state_by_its_atspi_name ... ok
+test present::window::m4b_rereview_probes::q1b_late_answer_never_repeats_the_focus ... ok
+test present::window::m4b_rereview_probes::q1_hold_miss_repeats_the_focus ... ok
+test present::window::m4b_rereview_probes::q3_user_switch_to_app_without_focus_is_only_a_notice ... ok
+test present::window::m4b_rereview_probes::q2_late_focus_without_hold_repeats_title_and_focus ... ok
+test present::window::m4b_rereview_probes::q3b_user_switch_after_input_interrupts ... ok
+test present::window::m4b_rereview_probes::q3c_active_window_is_the_users ... ok
+test present::window::m4b_rereview_probes::q4_eight_background_activations_evict_the_users_dialog_title ... ok
+test present::window::m4b_rereview_probes::q6_same_app_alone_timer_at_hold_release ... ok
+test present::window::m4b_rereview_probes::q5_focused_app_activation_flood_epoch_rate ... ok
+test present::window::m4b_review_probes::probe_p1_background_activation_does_not_silently_advance_epoch ... ok
+test present::window::m4b_review_probes::probe_p2_held_focus_survives_another_apps_alone_timer ... ok
+test present::window::m4b_review_probes::probe_p3_last_alt_tab_title_is_spoken ... ok
+test present::window::tests::a_background_activation_that_says_nothing_never_touches_the_epoch ... ok
+test present::window::tests::a_background_windows_title_is_a_polite_notice_not_a_context_change ... ok
+test present::window::tests::a_dialog_read_is_bounded ... ok
+test present::window::tests::a_dialog_opening_speaks_title_text_and_focus_as_one_utterance ... ok
+test present::window::tests::a_dialog_reads_its_labels_in_tree_order_and_not_its_controls ... ok
+test present::window::tests::a_duplicate_activation_is_one_activation ... ok
+test present::window::tests::a_flooding_apps_activations_do_not_displace_a_quiet_apps_pending_window ... ok
+test present::fair::tests::newcomers_beyond_a_table_of_busy_owners_share_hashed_buckets_not_one ... ok
+test present::window::tests::a_focus_in_another_app_waits_and_one_far_later_is_not_the_windows_focus ... ok
+test present::window::tests::a_focus_before_its_activation_is_not_cut_off_by_the_title ... ok
+test present::window::tests::a_focus_in_another_app_does_not_take_the_titles_lead ... ok
+test present::window::tests::a_focus_in_the_previous_window_of_the_app_is_not_this_activations_focus ... ok
+test present::window::tests::a_held_focus_survives_another_apps_alone_timer ... ok
+test present::window::tests::a_late_answer_is_dropped_once_the_user_moved_on ... ok
+test present::window::tests::a_plain_window_speaks_its_title_before_the_focus ... ok
+test present::window::tests::a_newer_focus_drops_the_held_one ... ok
+test present::window::tests::a_policy_can_keep_a_windows_activation_unannounced ... ok
+test present::window::tests::a_silent_window_of_the_focused_app_does_not_advance_the_epoch_either ... ok
+test present::window::tests::a_slow_window_read_does_not_hold_the_focus_beyond_the_bound ... ok
+test present::window::tests::a_window_the_mirror_lacks_is_read_and_the_focus_waits_for_the_answer ... ok
+test present::window::tests::a_window_without_a_focus_is_spoken_alone_when_its_time_is_up ... ok
+test present::window::tests::an_activation_after_its_focus_speaks_at_once_without_waiting ... ok
+test present::window::tests::a_window_with_no_focus_is_spoken_alone_and_interrupts ... ok
+test present::window::tests::an_activation_waits_for_its_focus_and_leads_it ... ok
+test present::window::tests::hidden_labels_and_the_focused_node_are_left_out ... ok
+test present::window::tests::a_policy_can_silence_or_reword_a_focus_but_only_for_apps_that_ask ... ok
+test present::window::tests::an_answer_that_arrives_first_leads_the_focus_utterance ... ok
+test doc_actor::translate::tests::parked_child_lists_are_bounded_by_total_ids ... ok
+test present::window::tests::only_dialogs_and_alerts_say_their_role_in_the_lead ... ok
+test present::window::tests::what_the_mirror_lacks_is_reported_as_nodes_to_expand ... ok
+test reader::tests::a_defunct_reply_is_not_spoken ... ok
+test reader::tests::a_cached_move_inside_the_protected_app_keeps_the_protection_until_the_reread_decides ... ok
+test present::window::tests::the_last_alt_tab_title_is_spoken_even_over_the_activation_budget ... ok
+test doc_registry::tests::a_page_load_in_an_app_that_just_lost_its_document_is_adopted ... ok
+test doc_actor::tests::activity_and_actions_reach_the_source_by_its_own_ids ... ok
+test reader::tests::a_failed_rv1_is_not_retried_while_the_app_holds_the_protection ... ok
+test reader::tests::a_failed_fetch_falls_back_to_a_stale_cache_entry ... ok
+test reader::tests::a_failed_rv1_is_retried_once_except_after_a_timeout ... ok
+test reader::tests::a_mirror_hit_is_spoken_first_tagged_may_refine_and_revalidated ... ok
+test reader::tests::a_focus_fetch_failure_over_a_prefetched_node_asks_the_rv1_except_after_a_timeout ... ok
+test present::window::tests::many_apps_activating_windows_never_advance_the_epoch_or_exceed_the_speech_ceiling ... ok
+test reader::tests::a_focused_state_reply_earns_protection_after_a_failed_rv1 ... ok
+test reader::tests::a_partial_node_missing_only_non_blocking_fields_is_spoken ... ok
+test reader::tests::a_reply_from_an_older_epoch_is_never_spoken ... ok
+test reader::tests::a_plain_key_press_is_echoed_with_the_epoch_of_the_press ... ok
+test reader::tests::a_focus_storm_on_cached_nodes_speaks_once ... ok
+test reader::tests::a_stale_name_is_fetched_but_a_stale_state_is_spoken_from_memory ... ok
+test reader::tests::a_revisit_in_a_quiet_app_is_revalidated ... ok
+test reader::tests::a_state_change_of_another_node_is_not_the_readers_business ... ok
+test reader::tests::a_revalidation_that_agrees_is_silent ... ok
+test reader::tests::a_state_change_of_the_focused_node_is_spoken ... ok
+test reader::tests::a_window_confirmed_after_the_focus_still_asks_the_rv1_when_protection_is_unearned ... ok
+test reader::tests::a_young_stale_presentation_is_refined_by_replacement ... ok
+test reader::tests::an_isolated_hit_is_not_delayed ... ok
+test reader::tests::cache_miss_fetches_then_speaks_on_the_reply ... ok
+test reader::tests::an_unfocused_state_reply_earns_nothing ... ok
+test reader::tests::cache_hit_focus_speaks_immediately_with_the_new_epoch ... ok
+test reader::tests::an_old_stale_presentation_gets_a_followup ... ok
+test reader::tests::content_confirmed_by_a_request_issued_after_the_focus_began_needs_no_revalidation ... ok
+test reader::tests::flapping_roles_wait_for_the_settle_timer ... ok
+test reader::tests::every_switcher_selection_is_spoken_and_alt_tab_is_not_echoed ... ok
+test reader::tests::drain_processes_a_burst_in_one_call ... ok
+test reader::tests::focus_on_a_removed_key_asks_once_and_a_live_reply_revives_it ... ok
+test reader::tests::inbox_is_biased_input_then_focus_then_replies_then_background ... ok
+test reader::tests::hung_focus_app_is_announced ... ok
+test reader::tests::mode_change_advances_the_epoch_and_sets_the_grab_set ... ok
+test reader::tests::key_presses_adopt_their_epoch_and_dispatch_commands ... ok
+test reader::tests::item_selection_leaves_focus_protection_alone ... ok
+test reader::tests::only_a_validated_focus_is_published_for_protection ... ok
+test reader::tests::a_selected_item_is_logged_with_selected_set ... ok
+test reader::tests::selection_speech_outranks_the_echo_of_the_key_that_caused_it ... ok
+test reader::tests::unknown_object_keeps_a_removed_focus_dead ... ok
+test reader::tests::unresolved_falls_back_to_the_cache_not_to_removal ... ok
+test review::build_tests::a_dead_application_gives_a_failed_build ... ok
+test reader::tests::the_revalidation_of_a_cached_focus_earns_the_protection ... ok
+test review::build_tests::actions_report_the_toolkit_refusal ... ok
+test review::build_tests::expanding_a_node_makes_its_child_list_known_and_brings_extents ... ok
+test review::build_tests::a_hung_node_costs_the_deadline_and_the_model_says_what_is_missing ... ok
+test review::build_tests::f5_an_unchanged_text_node_revalidates_as_the_same ... ok
+test review::build_tests::a_cold_build_fetches_what_is_missing_and_a_warm_build_fetches_nothing ... ok
+test review::build_tests::the_status_bar_is_found_with_one_collection_call ... ok
+test review::cluster::tests::a_control_absorbs_its_label_and_a_container_names_itself_first ... ok
+test reader::tests::the_presentation_log_records_hits_and_corrections ... ok
+test review::cluster::tests::a_staggered_layout_does_not_drift_into_one_line ... ok
+test review::cluster::tests::a_three_column_form_reads_row_by_row_left_to_right ... ok
+test review::build_tests::text_lines_are_asked_for_once_and_reused_for_clean_nodes ... ok
+test review::cluster::tests::a_wrapped_label_keeps_its_source_order_even_with_inconsistent_extents ... ok
+test review::cluster::tests::an_entry_says_its_name_its_role_and_what_is_typed ... ok
+test review::cluster::tests::a_zone_without_extents_gets_its_own_line_after_its_predecessor ... ok
+test review::cluster::tests::bogus_extents_are_treated_as_missing ... ok
+test review::cluster::tests::embedded_object_characters_split_a_text_line_into_zones ... ok
+test review::cluster::tests::more_than_half_without_extents_falls_back_to_tree_order ... ok
+test review::cluster::tests::caps_truncate_and_say_so ... ok
+test review::build_tests::revalidation_compares_extents_and_text_and_updates_the_mirror ... ok
+test review::collect::tests::a_complete_mirror_has_no_misses_and_prunes_hidden_subtrees ... ok
+test review::collect::tests::missing_children_collapse_into_one_expand_and_missing_extents_are_listed ... ok
+test review::collect::tests::the_node_cap_truncates ... ok
+test review::cursor::tests::a_fresh_cursor_has_the_requested_kind ... ok
+test review::flat::tests::reanchoring_finds_the_same_node_or_the_nearest_line ... ok
+test review::flat::tests::lines_read_in_visual_order_and_word_char_moves_cross_zones ... ok
+test review::flat::tests::the_ends_say_top_and_bottom_and_stay_put ... ok
+test review::segment::tests::at_finds_the_containing_or_following_unit ... ok
+test review::segment::tests::characters_are_grapheme_clusters_in_scalar_offsets ... ok
+test review::segment::tests::next_and_previous_skip_whitespace_and_stop_at_the_ends ... ok
+test review::segment::tests::spelling_names_spaces ... ok
+test review::segment::tests::words_are_runs_of_non_whitespace ... ok
+test review::terminal::tests::an_empty_screen_has_no_lines_and_no_focus_line ... ok
+test review::terminal::tests::rows_become_lines_in_order_with_the_caret_row_marked ... ok
+test review::terminal::tests::source_ranges_follow_the_screen_offsets ... ok
+test review::tests::a_changed_zone_on_the_target_line_waits_for_a_refresh_others_do_not ... ok
+test review::tests::a_cold_build_that_fails_says_so_and_leaves_review_usable ... ok
+test review::tests::a_failed_fetch_degrades_at_once ... ok
+test review::tests::a_fetch_that_never_answers_ends_in_a_degraded_step ... ok
+test review::build_tests::f7_a_deep_surface_is_built_completely ... ok
+test review::tests::a_miss_suspends_once_and_resumes_on_the_fetch_reply ... ok
+test review::tests::a_flood_makes_everything_stale_and_review_speaks_from_the_old_model ... ok
+test review::terminal::tests::a_huge_screen_is_cut_at_the_limits ... ok
+test review::tests::a_status_bar_missing_from_the_mirror_is_asked_for_once ... ok
+test review::tests::a_removed_navigator_continues_from_the_origin ... ok
+test review::tests::activate_acts_on_the_navigator ... ok
+test review::tests::commands_pressed_while_pending_queue_and_only_the_last_speaks ... ok
+test review::tests::f2_one_object_step_never_waits_longer_than_125_ms ... ok
+test review::tests::f2_the_queue_shares_the_budget_of_the_step_that_started_it ... ok
+test review::tests::f3_a_late_pending_operation_is_dropped_silently_when_a_new_key_arrives ... ok
+test review::tests::f3_a_result_for_a_superseded_epoch_is_dropped ... ok
+test review::tests::f3_the_review_deadline_is_armed_again_when_another_timer_fires_first ... ok
+test review::tests::f4_a_stale_line_is_corrected_after_the_revalidation_rebuild ... ok
+test review::tests::f4_no_correction_after_another_key ... ok
+test review::tests::flat_review_builds_once_and_then_steps_without_any_ipc ... ok
+test review::tests::mode_switch_toggles_between_object_and_screen ... ok
+test review::tests::move_focus_falls_back_to_selection_and_then_refuses_politely ... ok
+test review::tests::raw_review_shows_every_node_when_simple_review_is_off ... ok
+test browse::latency::hot_paths_stay_far_below_the_gates_on_a_10k_mirror_even_in_debug ... ok
+test review::tests::object_moves_over_the_mirror_skip_layout_and_speak_like_focus ... ok
+test review::tests::review_follows_focus_unless_told_not_to ... ok
+test review::tests::review_toggle_enters_and_leaves ... ok
+test review::tests::spelling_on_the_second_press ... ok
+test review::tests::the_app_going_away_leaves_review ... ok
+test review::tests::the_origin_in_browse_is_remembered ... ok
+test review::tests::the_status_bar_is_found_in_the_mirror_and_never_enters_review ... ok
+test review::tests::to_focus_leaves_review_and_speaks_the_focused_object ... ok
+test review::validity::tests::a_name_and_a_value_do_not_collide ... ok
+test review::validity::tests::the_hash_follows_exactly_the_fields_a_zone_uses ... ok
+test review::tests::unrelated_replies_are_ignored ... ok
+test runtime::tests::core_exposes_shared_state ... ok
+test runtime::tests::run_returns_immediately_if_already_cancelled ... ok
+test runtime::tests::run_returns_when_shutdown_is_cancelled ... ok
+test runtime::tests::slow_desktop_reads_can_never_use_up_the_review_slots ... ok
+test review::cluster::tests::the_model_builds_in_budget ... ok
+test review::tests::terminal_review_reads_the_held_screen_by_line_word_and_char_with_no_ipc ... ok
+test terminal::tests::a_hung_screen_read_does_not_stall_and_is_retried ... ok
+test terminal::tests::a_gone_terminal_node_is_untracked ... ok
+test terminal::tests::a_newer_key_makes_pending_output_stale_by_epoch ... ok
+test terminal::tests::a_typed_character_is_spoken_once_by_the_key_with_the_key_epoch ... ok
+test terminal::tests::an_answer_to_an_old_read_is_ignored ... ok
+test terminal::tests::command_output_is_read_once_after_the_settle_through_one_screen_read ... ok
+test terminal::tests::keys_are_classified_for_a_terminal ... ok
+test terminal::tests::echo_typed_characters_off_silences_the_typed_character_but_not_the_rest ... ok
+test terminal::tests::events_of_another_node_are_not_the_terminals ... ok
+test terminal::tests::focusing_a_terminal_reads_the_screen_and_speaks_the_cursor_line_after_the_focus_speech ... ok
+test terminal::tests::lost_events_make_the_extension_read_the_screen_again ... ok
+test terminal::tests::moving_focus_off_the_terminal_wipes_it_and_ignores_its_late_events ... ok
+test terminal::tests::nothing_is_spoken_while_review_owns_reading_but_the_screen_is_kept_current ... ok
+test text::formatting::tests::a_run_is_described_in_a_listeners_order ... ok
+test text::formatting::tests::colours_round_to_a_known_name ... ok
+test text::native::tests::a_unit_touching_the_window_edge_asks_for_more ... ok
+test text::native::tests::an_unknown_length_asks_for_it ... ok
+test text::native::tests::chars_and_words_come_from_the_window_with_no_fetch ... ok
+test text::native::tests::debug_never_prints_the_text ... ok
+test text::native::tests::invalidating_drops_the_text_and_bumps_the_revision ... ok
+test text::native::tests::lines_are_cached_until_an_edit ... ok
+test text::native::tests::same_line_needs_the_window ... ok
+test text::native::tests::single_line_entries_are_one_line ... ok
+test text::native::tests::splices_before_and_after_a_partial_window ... ok
+test text::native::tests::splices_track_the_text ... ok
+test text::native::tests::the_window_is_bounded ... ok
+test review::tests::r1_a_step_on_a_big_valid_model_is_fast_and_pure ... ok
+test text::say_all::tests::a_new_reading_asks_for_text_first ... ok
+test text::say_all::tests::a_report_settles_the_chunks_before_it ... ok
+test text::say_all::tests::a_stopped_chunk_is_forgotten ... ok
+test text::say_all::tests::an_empty_text_ends_at_once ... ok
+test text::say_all::tests::progress_pops_and_refills_and_the_end_finishes ... ok
+test text::say_all::tests::the_watchdog_ends_a_silent_reading ... ok
+test text::say_all::tests::three_chunks_go_at_once_only_the_first_interrupts ... ok
+test text::say_all::tests::whitespace_only_chunks_are_skipped_and_stop_follows_the_epoch ... ok
+test text::tests::a_backspace_reported_at_the_caret_is_spoken_once ... ok
+test text::tests::a_caret_event_ahead_of_its_insert_is_absorbed_too ... ok
+test text::tests::a_caret_event_that_beats_its_key_is_still_correlated ... ok
+test terminal::tests::say_current_line_and_word_read_the_held_screen_with_no_read ... ok
+test terminal::tests::password_prompt_characters_are_marked_sensitive_and_not_repeatable ... ok
+test text::tests::a_caret_into_the_next_paragraph_is_spoken_as_the_key_moved_it ... ok
+test text::tests::a_commit_reported_one_past_the_caret_is_spoken_once ... ok
+test text::tests::a_collapse_by_a_plain_move_is_not_announced ... ok
+test text::tests::a_caret_that_beats_its_key_while_the_previous_slot_is_open_is_the_new_keys ... ok
+test text::tests::a_delete_nobody_claims_is_dropped_silently ... ok
+test text::tests::a_contenteditable_paragraph_takes_over_the_caret ... ok
+test text::tests::a_delete_that_beats_its_key_is_still_spoken ... ok
+test text::tests::a_failed_character_fetch_says_nothing ... ok
+test text::tests::a_failed_selection_fetch_falls_back_to_the_caret_unit ... ok
+test text::tests::a_fast_burst_that_beats_its_keys_is_claimed_key_by_key ... ok
+test text::tests::a_gecko_field_is_tracked_in_the_apps_own_utf16_offsets ... ok
+test terminal::tests::the_settle_timer_fires_at_the_settle_time_after_the_last_event ... ok
+test text::tests::a_gecko_insert_two_seconds_late_is_still_the_typed_keys_echo ... ok
+test text::tests::a_held_arrow_speaks_each_position_with_its_own_epoch ... ok
+test text::tests::a_held_caret_in_an_open_slot_that_no_key_claims_is_spoken_as_unexplained ... ok
+test text::tests::a_hung_fetch_gives_up_at_its_deadline_and_a_line_falls_back_to_the_window ... ok
+test text::tests::a_key_press_stops_say_all_and_the_caret_is_already_where_it_stopped ... ok
+test text::tests::a_key_that_moves_nothing_speaks_the_unit_at_the_caret_after_the_edge_time ... ok
+test text::tests::a_key_that_trails_an_insert_spoken_in_an_older_epoch_echoes_itself ... ok
+test text::tests::a_key_that_trails_an_insert_spoken_in_its_own_epoch_stays_silent ... ok
+test text::tests::a_long_selection_is_counted_not_read ... ok
+test text::tests::a_lost_progress_report_cannot_keep_say_all_open ... ok
+test text::tests::a_mouse_selection_is_announced_from_the_selection_event ... ok
+test text::tests::a_password_field_is_spoken_like_any_other_and_marked_sensitive ... ok
+test text::tests::a_huge_line_is_cut_before_it_is_spoken ... ok
+test text::tests::a_plain_entry_ignores_events_of_other_nodes ... ok
+test text::tests::a_removed_node_or_a_gone_app_ends_tracking ... ok
+test text::tests::a_removed_paragraph_gives_the_caret_back_to_the_region ... ok
+test text::tests::a_scripted_insert_after_refused_keys_is_spoken ... ok
+test text::tests::a_reply_computed_before_an_edit_does_not_overwrite_the_window ... ok
+test text::tests::a_second_unexplained_insert_in_the_flood_gap_does_not_drop_the_first ... ok
+test text::tests::a_secret_window_is_dropped_with_the_focus ... ok
+test text::tests::a_selection_event_ahead_of_its_caret_event_still_speaks_the_selection ... ok
+test text::tests::a_single_line_entry_is_one_line_from_the_window ... ok
+test text::tests::a_silent_speech_lane_ends_say_all_without_touching_the_caret ... ok
+test text::tests::a_short_insert_nobody_claims_is_spoken_when_the_hold_ends ... ok
+test text::tests::a_space_and_the_end_of_text_have_names ... ok
+test text::tests::a_stale_expectation_does_not_eat_a_scripted_insert_two_seconds_later ... ok
+test text::say_all::tests::a_long_text_asks_for_more_before_the_buffer_runs_out ... ok
+test text::tests::a_typed_key_whose_insert_offset_is_far_off_is_still_spoken_once ... ok
+test text::tests::a_window_miss_fetches_once_and_then_speaks ... ok
+test text::tests::a_typed_letter_reported_one_offset_too_far_is_not_spoken_twice ... ok
+test text::tests::an_app_with_byte_text_offsets_is_not_tracked_and_keeps_the_generic_echo ... ok
+test text::tests::an_edit_does_not_cancel_a_presentation_in_flight ... ok
+test text::tests::an_entry_that_does_not_say_editable_still_echoes_once ... ok
+test text::tests::a_typed_key_the_page_dropped_does_not_double_the_next_one ... ok
+test text::tests::an_insert_that_beats_its_key_is_the_keys_echo ... ok
+test text::tests::an_insert_nobody_typed_is_spoken_but_a_flood_is_thinned ... ok
+test text::tests::an_unmatched_typed_key_does_not_absorb_a_later_unrelated_caret_move ... ok
+test text::tests::backspace_outside_a_text_field_keeps_the_generic_echo ... ok
+test text::tests::an_unexplained_caret_move_is_held_briefly_then_spoken_by_distance ... ok
+test text::tests::ctrl_backspace_speaks_the_deleted_word ... ok
+test text::tests::backspace_speaks_the_deleted_character_and_not_its_own_name ... ok
+test text::tests::delete_without_a_payload_reads_the_window_before_the_splice ... ok
+test text::tests::ctrl_right_speaks_the_word_and_home_the_character ... ok
+test text::tests::down_arrow_in_a_text_view_asks_the_toolkit_for_the_line_once ... ok
+test text::tests::fast_typing_coalesced_into_one_insert_is_not_spoken_again ... ok
+test text::tests::extending_a_long_selection_by_a_character_reads_that_character ... ok
+test text::tests::gecko_an_unexplained_move_over_one_emoji_is_a_character_not_a_line ... ok
+test text::tests::gecko_backspace_over_an_emoji_speaks_it ... ok
+test text::tests::gecko_arrows_over_an_emoji_speak_it_once_and_never_the_phantom ... ok
+test text::tests::gecko_selection_of_an_emoji_is_spoken_as_the_emoji ... ok
+test text::tests::gecko_word_units_keep_a_phantom_with_its_emoji ... ok
+test text::tests::info_formatting_asks_for_the_run_under_the_caret_and_speaks_it ... ok
+test text::tests::gecko_inserts_come_without_phantoms_and_the_window_adds_them ... ok
+test text::tests::info_formatting_behind_the_last_character_asks_about_the_one_before_it ... ok
+test text::tests::info_formatting_outside_a_text_field_says_so_and_a_refusal_is_spoken ... ok
+test text::tests::info_selection_speaks_the_last_selection ... ok
+test text::tests::inserted_text_can_be_switched_off ... ok
+test text::tests::modes_other_than_focus_leave_the_text_layer_idle ... ok
+test text::tests::lost_events_make_the_window_untrusted ... ok
+test text::tests::nothing_deleted_at_the_boundary_is_silent ... ok
+test text::tests::password_text_is_not_in_the_debug_output_of_anything_that_holds_it ... ok
+test text::tests::paste_is_spoken_as_the_inserted_text ... ok
+test text::tests::say_all_and_say_selection_refuse_outside_focus_mode ... ok
+test text::tests::right_arrow_speaks_the_character_from_the_window_with_no_fetch ... ok
+test text::tests::return_in_a_single_line_entry_is_the_generic_echo ... ok
+test text::tests::say_all_ends_at_the_end_of_the_text_and_leaves_the_caret_there ... ok
+test text::tests::say_all_gives_up_when_the_text_does_not_come ... ok
+test text::tests::scripted_insert_after_caret_does_not_swallow_a_real_move_without_the_quirk ... ok
+test text::tests::say_all_submits_three_chunks_at_once_and_only_the_first_interrupts ... ok
+test text::tests::select_all_says_all_selected_with_the_count ... ok
+test text::tests::space_and_return_have_names_when_typed ... ok
+test text::tests::shift_arrows_announce_selected_and_unselected_text ... ok
+test text::tests::tab_in_a_text_view_is_typed_once_and_in_an_entry_it_is_the_generic_echo ... ok
+test text::tests::text_commands_outside_a_text_field_say_so ... ok
+test text::tests::text_events_of_another_node_are_ignored ... ok
+test text::tests::text_commands_speak_the_unit_at_the_caret_and_spell_it ... ok
+test text::tests::text_that_matches_no_typed_key_forgets_the_expectations ... ok
+test text::tests::touching_unexplained_inserts_are_spoken_as_one_net_insert ... ok
+test text::tests::typed_characters_are_spoken_once_from_the_key_and_not_again_from_the_event ... ok
+test text::tests::typed_characters_can_be_switched_off_without_breaking_dedupe ... ok
+test text::tests::typed_words_speak_the_word_when_its_separator_arrives ... ok
+test text::tests::unrelated_text_change_does_not_steal_the_rich_editable ... ok
+test review::cluster::tests::fuzz_hostile_extents_keep_every_zone_exactly_once ... ok
+test text::tests::non_text_roles_are_not_tracked ... ok
+test doc_registry::tests::a_web_app_is_announced_and_warmed_once_when_ready ... ok
+test text::tests::hostile_event_streams_never_panic_and_stay_bounded ... ok
+test present::fair::tests::the_table_is_bounded_and_a_busy_owner_is_never_evicted ... ok
+test doc_actor::translate::tests::parked_lists_and_orphans_share_one_pending_budget ... ok
+test review::build_tests::nav_fetch_reports_gone_and_timeouts ... ok
+test doc_actor::translate::tests::a_hundred_thousand_deep_chain_is_cut_at_the_depth_cap_without_touching_the_stack ... ok
+test doc_actor::translate::tests::a_fan_out_beyond_the_child_cap_is_cut_and_counted ... ok
+test doc_registry::tests::builds_wait_for_the_warm_up_but_not_forever_and_a_late_warm_rebuilds ... ok
+test doc_actor::live::tests::a_hostile_flood_of_regions_and_long_text_stays_bounded ... ok
+test present::log::tests::a_full_queue_drops_and_never_blocks ... ok
+test doc_actor::translate::tests::one_list_of_new_subtrees_cannot_pass_the_node_cap ... ok
+
+test result: ok. 585 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 10.68s
+
+     Running tests/pipeline.rs (target/debug/deps/pipeline-a37f6e26d05cd0d4)
+
+running 7 tests
+test focus_is_spoken_with_name_role_and_states ... ok
+test a_vanished_app_is_cleaned_up ... ok
+test duplicate_focus_reports_are_one_utterance ... ok
+test a_dead_reader_lane_stops_the_core_with_an_error ... ok
+test a_focus_storm_speaks_only_the_last_focus ... ok
+test a_hung_app_never_stalls_the_reader_and_recovers ... ok
+test two_cached_focus_moves_on_a_slow_app_do_not_declare_it_hung ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.52s
+
+     Running unittests src/lib.rs (target/debug/deps/gorca_daemon-6935f52834813251)
+
+running 37 tests
+test cli::tests::defaults_are_auto_speech_and_no_impersonation ... ok
+test cli::tests::errors_are_specific ... ok
+test cli::tests::config_subcommands ... ok
+test cli::tests::environment_fills_only_what_flags_left_open ... ok
+test cli::tests::flags_and_paths ... ok
+test cli::tests::config_paths_and_platform_facts_come_from_flags_then_the_environment ... ok
+test cli::tests::peer_uids_are_explicit_and_repeatable ... ok
+test cli::tests::speech_modes_parse_with_equals_and_space ... ok
+test cli::tests::the_fill_policy_is_the_prefetch_unless_the_flag_asks_for_r0 ... ok
+test cli::tests::the_presentation_log_needs_the_bench_flag_and_a_plain_absolute_path ... ok
+test platform::tests::input_sources_parse ... ok
+test shell_policy::tests::every_core_role_maps_to_the_wit_number_of_its_name ... ok
+test platform::tests::gsettings_values_parse ... ok
+test platform::tests::complete_overrides_never_start_a_process ... ok
+test tests::notices_are_plain_sentences ... ok
+test shell_policy::tests::the_shell_window_claim_is_silenced_and_a_unit_slider_speaks_percent ... ok
+test tests::speech_plan_follows_the_flag ... ok
+test topology::tests::arm_a_has_no_lane_runtimes ... ok
+test topology::tests::arm_flags_match_the_table ... ok
+test topology::tests::arm_names_round_trip_and_default_is_single ... ok
+test topology::tests::json_strings_are_escaped ... ok
+test topology::tests::plan_keeps_workers_off_the_hot_cpus ... ok
+test topology::tests::priorities_stay_below_the_irq_threads_and_rtkit_default ... ok
+test topology::tests::lane_runtimes_run_placed_tasks_on_their_own_threads ... ok
+test topology::tests::a_missing_rtkit_does_not_stop_the_arm ... ok
+test tests::runtime_is_multi_threaded ... ok
+test platform::tests::a_build_in_flight_is_not_started_twice ... ok
+test platform::tests::layout_overrides_build_the_union_table ... ok
+test config_task::tests::no_path_means_defaults_without_io ... ok
+test config_task::tests::caps_lock_is_dropped_from_the_published_keys ... ok
+test config_task::tests::build_never_fails_and_reports_problems_with_line_numbers ... ok
+test config_task::tests::config_check_reports_problems_and_defaults_round_trip ... ok
+test config_task::tests::a_missing_file_means_defaults_and_a_late_file_is_picked_up ... ok
+test config_task::tests::save_writes_through_a_symlinked_settings_file_and_keeps_its_mode ... ok
+test config_task::tests::reverting_to_our_own_saved_text_is_reloaded ... ok
+test tests::run_survives_missing_services_and_stops_on_cancel ... ok
+test config_task::tests::startup_hot_reload_explicit_reload_and_save ... ok
+
+test result: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.18s
+
+     Running unittests src/main.rs (target/debug/deps/gorca-46f100271b2bbdfd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/b1_ic.rs (target/debug/deps/b1_ic-4394f9a998934c81)
+
+running 3 tests
+   Compiling serde_core v1.0.229
+   Compiling syn v2.0.119
+   Compiling serde v1.0.229
+   Compiling hashbrown v0.17.1
+   Compiling toml_parser v1.1.5+spec-1.1.0
+   Compiling smallvec v1.16.3
+   Compiling crossbeam-utils v0.8.23
+   Compiling rustix v1.1.5
+   Compiling fastrand v2.5.0
+   Compiling tokio v1.53.2
+   Compiling futures-lite v2.6.1
+   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-model)
+   Compiling indexmap v2.14.2
+   Compiling crossbeam-queue v0.3.14
+   Compiling toml_edit v0.25.17+spec-1.1.0
+   Compiling proc-macro-crate v3.5.0
+   Compiling uuid v1.28.0
+   Compiling serde_json v1.0.154
+   Compiling zvariant_utils v4.2.0
+   Compiling zcheapstr v1.1.0
+   Compiling tracing-attributes v0.1.31
+   Compiling enumflags2_derive v0.7.12
+   Compiling zvariant_derive v5.15.0
+   Compiling enumflags2 v0.7.12
+   Compiling zvariant v5.15.0
+   Compiling tracing v0.1.44
+   Compiling tokio-util v0.7.20
+   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-ingress)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-doc-source-api)
+   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-connector-api)
+   Compiling zbus_names v4.3.4
+   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-testkit)
+   Compiling zbus_macros v5.19.0
+   Compiling zbus v5.19.0
+   Compiling b1-fakeapp v0.0.0 (<repo>/.claude/worktrees/m8-review/tests/harness/b1/fakeapp)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.88s
+test the_policy_hears_of_a_new_app_before_it_does_anything ... ok
+test the_invalidation_suite_passes_against_the_real_daemon has been running for over 60 seconds
+test the_invalidation_suite_passes_with_the_candidate_policy has been running for over 60 seconds
+test the_invalidation_suite_passes_with_the_candidate_policy ... ok
+test the_invalidation_suite_passes_against_the_real_daemon ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 200.14s
+
+     Running tests/desktop.rs (target/debug/deps/desktop-8afa4e3e981a1d91)
+
+running 6 tests
+2026-10-16T06:49:46.092679Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
+2026-10-16T06:49:46.093617Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
+2026-10-16T06:49:46.093804Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-16T06:49:46.098796Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-16T06:49:46.154973Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-16T06:49:46.182203Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
+2026-10-16T06:49:46.182299Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
+2026-10-16T06:49:46.182494Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-16T06:49:46.221630Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-16T06:49:46.287420Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-16T06:49:46.290407Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
+2026-10-16T06:49:46.290477Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
+2026-10-16T06:49:46.290597Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-16T06:49:46.295233Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-16T06:49:46.322034Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
+2026-10-16T06:49:46.322120Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
+2026-10-16T06:49:46.322293Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-16T06:49:46.326942Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-16T06:49:46.327404Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-16T06:49:46.390105Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-16T06:49:46.470856Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
+2026-10-16T06:49:46.470941Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
+2026-10-16T06:49:46.471088Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-16T06:49:46.476156Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-16T06:49:46.494313Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
+2026-10-16T06:49:46.494393Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
+2026-10-16T06:49:46.494524Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-16T06:49:46.497092Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T06:49:46.500799Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-16T06:49:46.544621Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-16T06:49:46.576258Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-16T06:49:46.590939Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T06:49:46.692169Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T06:49:46.692333Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T06:49:46.724415Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T06:49:46.724577Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T06:49:46.816132Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T06:49:46.873367Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T06:49:46.878483Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-16T06:49:46.878788Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-16T06:49:46.878825Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0 }
+2026-10-16T06:49:46.884996Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 2, fetch_ok: 3, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 1, utterances: 3, reader_restarts: 0 }
+2026-10-16T06:49:46.885084Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 3, replaced: 1, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-16T06:49:46.885353Z  INFO gorca_daemon: gorca stopped
+2026-10-16T06:49:46.892670Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T06:49:47.194044Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T06:49:47.404403Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-16T06:49:47.404473Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0 }
+2026-10-16T06:49:47.404858Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-16T06:49:47.406741Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 2, fetch_ok: 3, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 1, utterances: 3, reader_restarts: 0 }
+2026-10-16T06:49:47.406793Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 3, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-16T06:49:47.408455Z  INFO gorca_daemon: gorca stopped
+2026-10-16T06:49:47.701443Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T06:49:47.732513Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T06:49:47.836345Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-16T06:49:47.838302Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-16T06:49:47.838380Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0 }
+2026-10-16T06:49:47.838948Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 1, fetch_ok: 1, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 0, utterances: 2, reader_restarts: 0 }
+2026-10-16T06:49:47.838995Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 2, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-16T06:49:47.846363Z  INFO gorca_daemon: gorca stopped
+2026-10-16T06:49:47.904182Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T06:49:47.904351Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T06:49:48.291901Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-16T06:49:48.291861Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-16T06:49:48.291956Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0 }
+2026-10-16T06:49:48.293730Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 3, fetch_ok: 3, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 1, utterances: 3, reader_restarts: 0 }
+2026-10-16T06:49:48.293835Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 3, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-16T06:49:48.298138Z  INFO gorca_daemon: gorca stopped
+2026-10-16T06:49:48.427532Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-16T06:49:48.427531Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-16T06:49:48.427635Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0 }
+2026-10-16T06:49:48.428243Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 4, fetch_ok: 5, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 1, utterances: 4, reader_restarts: 0 }
+2026-10-16T06:49:48.428287Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 4, replaced: 1, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-16T06:49:48.430144Z  INFO gorca_daemon: gorca stopped
+2026-10-16T06:49:48.448665Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-16T06:49:48.448702Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-16T06:49:48.448792Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0 }
+2026-10-16T06:49:48.449718Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 2, fetch_ok: 3, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 0, utterances: 3, reader_restarts: 0 }
+2026-10-16T06:49:48.449836Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 3, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-16T06:49:48.452351Z  INFO gorca_daemon: gorca stopped
+test a_dialog_opening_speaks_its_title_its_text_and_the_focused_button_in_that_order ... ok
+test a_plain_window_speaks_its_title_with_the_focus_and_a_window_without_focus_speaks_alone ... ok
+test the_shells_osd_level_is_announced_once_when_it_stops_changing ... ok
+test a_notification_banner_in_the_shell_is_read_and_waits_for_the_speech_in_progress ... ok
+test a_new_focus_is_not_held_back_by_a_queued_announcement ... ok
+test an_announcement_is_spoken_after_the_focus_speech_and_never_cuts_it_off ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.50s
+
+     Running tests/e2e.rs (target/debug/deps/e2e-4803d5560b5b46f8)
+
+running 9 tests
+test key_presses_are_echoed_through_the_orca_keyboard_monitor_name ... ok
+test voicego_down_falls_back_to_ssip_and_returns_when_it_is_back ... ok
+test speech_ssip_mode_never_touches_voicego ... ok
+test the_lanes_topology_speaks_and_stops_cleanly ... ok
+test a_fake_app_moving_focus_reaches_voicego_as_the_right_utterances ... ok
+test a_hung_app_leaves_the_reader_responsive ... ok
+test a_focus_storm_ends_with_only_the_last_focus_audible ... ok
+test alt_tab_in_the_switcher_speaks_windows_and_never_echoes_tab ... ok
+test every_selection_move_in_a_shell_style_switcher_is_spoken ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.49s
+
+     Running tests/signals.rs (target/debug/deps/signals-f1e25919187aa6be)
+
+running 3 tests
+test sigint_exits_cleanly ... ok
+test sigterm_exits_cleanly ... ok
+test sigusr1_is_ignored_and_the_daemon_keeps_running ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+   Doc-tests gorca_connector_atspi
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests gorca_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests gorca_daemon
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+test rc=0

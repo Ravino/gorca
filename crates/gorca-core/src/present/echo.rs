@@ -70,6 +70,7 @@ pub fn message(text: &str, id: UttId, epoch: Epoch) -> Utterance {
         prio: Prio::Message,
         may_refine: false,
         survives_focus_change: false,
+        ttl_secs: 0,
         refines: None,
     }
 }

@@ -317,6 +317,24 @@ impl FakeMutter {
         self.key_full(keycode, keysym, 0, state, released, time_ms)
     }
 
+    /// One Mutter autorepeat event of a key that is down.
+    pub fn key_repeat(
+        &mut self,
+        keycode: u16,
+        keysym: u32,
+        state: u32,
+        time_ms: u64,
+    ) -> Result<KeyReply> {
+        let r = self.proc.request(
+            "key",
+            &format!(
+                "\"keycode\":{keycode},\"keysym\":{keysym},\"unichar\":0,\"state\":{state},\"released\":false,\"time_ms\":{time_ms},\"repeat\":true"
+            ),
+            Duration::from_secs(5),
+        )?;
+        Ok(KeyReply::parse(&r))
+    }
+
     /// [`Self::key_ex`] with the Unicode scalar the key produces (typing).
     pub fn key_full(
         &mut self,

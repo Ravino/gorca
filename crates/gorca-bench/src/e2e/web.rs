@@ -283,6 +283,8 @@ impl Drop for Firefox {
         }
         let _ = Command::new("kill").args(["-KILL", "--", &group]).status();
         let _ = self.child.wait();
+        // Logs stay (`ff-*.log` is next to the profile, not in it).
+        let _ = std::fs::remove_dir_all(&self.profile);
         if let Some(mut rd) = self.rd.take() {
             drop(rd.stdin.take());
             let _ = rd.wait();

@@ -82,6 +82,14 @@ pub fn focus_need(n: &NodeSnapshot) -> PropMask {
     if n.name.as_deref().is_none_or(str::is_empty) {
         need |= PropMask::RELATIONS;
     }
+    // A field's help or error text is spoken after its value: asked for only once the role is
+    // known to be a field (the cold path stays as measured, B-1).
+    if matches!(
+        n.role,
+        Role::TextEntry | Role::PasswordEntry | Role::ComboBox | Role::SpinButton
+    ) {
+        need |= PropMask::DESCRIPTION;
+    }
     need
 }
 
@@ -91,16 +99,23 @@ fn apply_web_extra(
     word: Option<&'static str>,
     tail: &[crate::browse::present::Item],
 ) {
+    use crate::browse::present::Item;
+    let (lead, rest): (Vec<Item>, Vec<Item>) = tail
+        .iter()
+        .cloned()
+        .partition(|i| matches!(i, Item::Lead(_)));
+    let mut front: Vec<gorca_model::Segment> = Vec::new();
     if let Some(w) = word {
-        u.segments.insert(
-            0,
-            gorca_model::Segment {
-                text: Arc::from(w),
-                kind: gorca_model::SegmentKind::Text,
-            },
-        );
+        front.push(gorca_model::Segment {
+            text: Arc::from(w),
+            kind: gorca_model::SegmentKind::Text,
+        });
     }
-    u.segments.extend(crate::browse::present::segments(tail));
+    front.extend(crate::browse::present::segments(&lead));
+    for (at, seg) in front.into_iter().enumerate() {
+        u.segments.insert(at, seg);
+    }
+    u.segments.extend(crate::browse::present::segments(&rest));
 }
 
 impl Reader {
@@ -413,6 +428,22 @@ impl Reader {
                 });
             }
             gorca_model::Lookup::Miss => {
+                // A node of a mirrored web document: speak it from the mirror now, then confirm
+                // (RV-1); the cold fetch would cost a round trip into a possibly busy browser.
+                if let Some(snap) = self.web_focus_snapshot(node) {
+                    let v = NodeView {
+                        snap: Arc::new(snap),
+                        stale: PropMask::VALUE,
+                        aged: true,
+                    };
+                    self.present_cached(&v, PresentSource::Stale, true, epoch, fx);
+                    fx.push(ReaderEffect::Demand {
+                        node,
+                        why: DemandWhy::Focus,
+                        outcome: DemandOutcome::Miss,
+                    });
+                    return;
+                }
                 fx.push(Self::fetch_effect(
                     node,
                     FOCUS_FIELDS,
@@ -468,7 +499,7 @@ impl Reader {
             self.counters.revalidations += 1;
             fx.push(Self::fetch_effect(
                 v.snap.key,
-                FOCUS_FIELDS,
+                focus_need(&v.snap),
                 self.epoch.current(),
                 FetchKind::Revalidate,
             ));
@@ -538,6 +569,7 @@ impl Reader {
                 });
                 if silent {
                     // The policy says nothing for this node; the bookkeeping above stands.
+                } else if self.web_suppress_focus(snap.key) {
                 } else if hold {
                     self.window_hold(u, fx);
                 } else {

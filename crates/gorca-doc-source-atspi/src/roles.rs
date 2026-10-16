@@ -12,6 +12,7 @@ pub mod raw {
     pub const COLUMN_HEADER: u32 = 10;
     pub const COMBO_BOX: u32 = 11;
     pub const DIALOG: u32 = 16;
+    pub const EMBEDDED: u32 = 78;
     pub const FILLER: u32 = 20;
     pub const FRAME: u32 = 23;
     pub const ICON: u32 = 26;
@@ -81,16 +82,17 @@ pub fn map_role(r: u32) -> Role {
     use raw::{
         ALERT, APPLICATION, ARTICLE, BLOCK_QUOTE, CAPTION, CHECK_BOX, CHECK_MENU_ITEM,
         COLUMN_HEADER, COMBO_BOX, DIALOG, DOCUMENT_EMAIL, DOCUMENT_FRAME, DOCUMENT_PRESENTATION,
-        DOCUMENT_SPREADSHEET, DOCUMENT_TEXT, DOCUMENT_WEB, ENTRY, FILLER, FOOTER, FORM, FRAME,
-        GROUPING, HEADER, HEADING, ICON, IMAGE, LABEL, LANDMARK, LINK, LIST, LIST_BOX, LIST_ITEM,
-        LOG, MENU, MENU_BAR, MENU_ITEM, PAGE_TAB, PAGE_TAB_LIST, PANEL, PARAGRAPH, PASSWORD_TEXT,
-        POPUP_MENU, PROGRESS_BAR, PUSH_BUTTON, RADIO_BUTTON, RADIO_MENU_ITEM, ROW_HEADER, SECTION,
-        SEPARATOR, SLIDER, SPIN_BUTTON, STATIC, STATUS_BAR, SWITCH, TABLE, TABLE_CELL,
-        TABLE_COLUMN_HEADER, TABLE_ROW, TABLE_ROW_HEADER, TERMINAL, TEXT, TOGGLE_BUTTON, TOOL_BAR,
-        TREE, TREE_ITEM, TREE_TABLE, WINDOW,
+        DOCUMENT_SPREADSHEET, DOCUMENT_TEXT, DOCUMENT_WEB, EMBEDDED, ENTRY, FILLER, FOOTER, FORM,
+        FRAME, GROUPING, HEADER, HEADING, ICON, IMAGE, LABEL, LANDMARK, LINK, LIST, LIST_BOX,
+        LIST_ITEM, LOG, MENU, MENU_BAR, MENU_ITEM, PAGE_TAB, PAGE_TAB_LIST, PANEL, PARAGRAPH,
+        PASSWORD_TEXT, POPUP_MENU, PROGRESS_BAR, PUSH_BUTTON, RADIO_BUTTON, RADIO_MENU_ITEM,
+        ROW_HEADER, SECTION, SEPARATOR, SLIDER, SPIN_BUTTON, STATIC, STATUS_BAR, SWITCH, TABLE,
+        TABLE_CELL, TABLE_COLUMN_HEADER, TABLE_ROW, TABLE_ROW_HEADER, TERMINAL, TEXT,
+        TOGGLE_BUTTON, TOOL_BAR, TREE, TREE_ITEM, TREE_TABLE, WINDOW,
     };
     match r {
-        APPLICATION => Role::Application,
+        // Gecko exposes role=application and <object>/<embed> as ATK_ROLE_EMBEDDED.
+        APPLICATION | EMBEDDED => Role::Application,
         FRAME | WINDOW => Role::Window,
         DIALOG => Role::Dialog,
         ALERT => Role::Alert,
@@ -221,6 +223,7 @@ pub mod state_bit {
     pub const DEFUNCT: u8 = 6;
     pub const EDITABLE: u8 = 7;
     pub const ENABLED: u8 = 8;
+    pub const EXPANDABLE: u8 = 9;
     pub const EXPANDED: u8 = 10;
     pub const FOCUSABLE: u8 = 11;
     pub const FOCUSED: u8 = 12;
@@ -278,6 +281,10 @@ pub fn map_states(bits: u64) -> StateSet {
         if has(n) {
             s |= f;
         }
+    }
+    // Gecko never sets `collapsed`: an expandable node that is not expanded is collapsed.
+    if has(state_bit::EXPANDABLE) && !has(EXPANDED) {
+        s |= StateSet::COLLAPSED;
     }
     s
 }

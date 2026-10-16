@@ -99,6 +99,8 @@ pub fn build(text: Option<&str>, facts: &PlatformFacts, cause: LoadCause) -> Bui
     // Browse mode (M7): the browse keymap's chords, and Escape for auto focus mode (modes.md 2).
     let (quick_nav, _) = gorca_core::browse_grabs(&c.keymap, keysyms);
     let web_escape = gorca_core::escape_grabs(&c.keymap, keysyms);
+    let letters = gorca_core::letter_grabs(&c.keymap, keysyms);
+    let (tab_next, tab_prev) = gorca_core::tab_grabs(&c.keymap, keysyms);
     let dropped =
         gorca_core::grab_collisions(&c.keymap, gorca_input_api::ModeKind::Browse, keysyms);
     if !dropped.is_empty() {
@@ -120,6 +122,9 @@ pub fn build(text: Option<&str>, facts: &PlatformFacts, cause: LoadCause) -> Bui
             exact,
             quick_nav,
             web_escape,
+            letters,
+            tab_next,
+            tab_prev,
             ..ModeKeys::default()
         },
         caps_lock_dropped: c.caps_lock_dropped,

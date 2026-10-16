@@ -1,0 +1,67 @@
+801675198198934 said "M8 Focus and caret sync — Mozilla Firefox, M8 Focus and caret sync, document"
+801675231444814 said "browse mode, heading level 1, Focus and caret sync"
+801675486724016 said "Link three, link"
+801675781387985 said "M8 Focus and caret sync, document, heading level 1, Focus and caret sync"
+801676253837928 said "Focus and caret sync"
+801676560366374 said "link one, link"
+801676812284392 said "Second paragraph with, link, link two, ."
+801676950673904 said "Link three, link"
+801677103313948 said "focus mode, Sync field, edit"
+801677109466750 said "field text"
+801677357086018 said "browse mode, edit, field text"
+801677489999434 said "M8 Focus and caret sync, document, heading level 1, Focus and caret sync"
+801677960686290 said "Focus and caret sync"
+801678261105484 said "First paragraph with, link, link one, and tail words."
+801678331317296 said "Second paragraph with, link, link two, ."
+801678401587493 said "button, Plain button"
+801678471988688 said "Third paragraph, plain."
+801678542327378 said "edit, field text"
+801678612589371 said "Fourth paragraph after the field."
+801680363637119 said "heading level 1, Focus and caret sync"
+801680663890954 said "link, link one"
+801680795008492 said "l, selected"
+801681398743954 said "heading level 1, Focus and caret sync"
+801681699113267 said "Far paragraph at the bottom."
+801681830000091 said "heading level 1, Focus and caret sync"
+801682433129352 said "Focus and caret sync"
+801682733517043 said "First paragraph with, link, link one, and tail words."
+801682803801505 said "Second paragraph with, link, link two, ."
+801682996197146 said "link two, link"
+801683247526685 said "tab"
+801684175217845 said "button, Plain button"
+bus 4 /org/a11y/atspi/accessible/2
+bus 4 /org/a11y/atspi/accessible/49
+bus 4 /org/a11y/atspi/accessible/50
+bus 4 /org/a11y/atspi/accessible/49
+bus 4 /org/a11y/atspi/accessible/50
+bus 4 /org/a11y/atspi/accessible/50
+bus 4 /org/a11y/atspi/accessible/54
+bus 4 /org/a11y/atspi/accessible/49
+bus 4 /org/a11y/atspi/accessible/51
+bus 4 /org/a11y/atspi/accessible/49
+bus 2 /org/a11y/atspi/accessible/63
+bus 2 /org/a11y/atspi/accessible/69
+bus 2 /org/a11y/atspi/accessible/70
+bus 2 /org/a11y/atspi/accessible/75
+bus 2 /org/a11y/atspi/accessible/76
+bus 2 /org/a11y/atspi/accessible/77
+bus 2 /org/a11y/atspi/accessible/78
+bus 1 /org/a11y/atspi/accessible/63
+bus 1 /org/a11y/atspi/accessible/63
+bus 1 /org/a11y/atspi/accessible/86
+bus 1 /org/a11y/atspi/accessible/86
+bus 1 /org/a11y/atspi/accessible/63
+bus 1 /org/a11y/atspi/accessible/63
+bus 1 /org/a11y/atspi/accessible/90
+bus 1 /org/a11y/atspi/accessible/90
+bus 4 /org/a11y/atspi/accessible/97
+bus 4 /org/a11y/atspi/accessible/97
+bus 1 /org/a11y/atspi/accessible/86
+bus 1 /org/a11y/atspi/accessible/86
+bus 1 /org/a11y/atspi/accessible/84
+bus 1 /org/a11y/atspi/accessible/84
+bus 3 /org/a11y/atspi/accessible/84
+bus 1 /org/a11y/atspi/accessible/63
+bus 1 /org/a11y/atspi/accessible/63
+bus 1 /org/a11y/atspi/accessible/91
+bus 1 /org/a11y/atspi/accessible/91

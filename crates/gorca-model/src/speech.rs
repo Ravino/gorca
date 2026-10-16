@@ -43,6 +43,10 @@ pub struct Utterance {
     pub may_refine: bool,
     /// Policy escape from the E-2 check, for example say-all progress.
     pub survives_focus_change: bool,
+    /// Not worth speaking later than this after it was queued (live-region news, ADR-0003 13.2:
+    /// 5 s polite, 10 s assertive). Expired entries are dropped from the speech queue unspoken,
+    /// and rank below non-expiring ones of the same priority when the queue is full.
+    pub ttl_secs: u8,
     /// A correction of an earlier utterance (B-1 RV-1): the cache-served presentation `id` was
     /// wrong in a presented field. A refine replaces it; a follow-up only adds the change.
     pub refines: Option<UttId>,
@@ -60,6 +64,7 @@ impl std::fmt::Debug for Utterance {
             .field("prio", &self.prio)
             .field("may_refine", &self.may_refine)
             .field("survives_focus_change", &self.survives_focus_change)
+            .field("ttl_secs", &self.ttl_secs)
             .field("refines", &self.refines)
             .field("has_lang", &self.lang.is_some())
             .finish()
@@ -86,6 +91,7 @@ mod tests {
             prio: Prio::Text,
             may_refine: false,
             survives_focus_change: survives,
+            ttl_secs: 0,
             refines: None,
         }
     }
