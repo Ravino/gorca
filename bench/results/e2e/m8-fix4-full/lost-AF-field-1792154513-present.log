@@ -1,0 +1,3 @@
+{"redaction_key":"8299debdd59f8c396fc57b20abc54f4a"}
+{"t_ns":771041274491987,"utt_id":2,"epoch":1,"app_bus":":1.185","path":"/org/a11y/atspi/accessible/91","key":"1:1:43bece093de13549","source":"miss_reply","role":"link","states":["focused","showing","visible"],"name":"Scripted target link","value":null,"may_refine":false,"refines":null}
+{"t_ns":771042414474960,"utt_id":3,"epoch":2,"app_bus":":1.185","path":"/org/a11y/atspi/accessible/84","key":"1:1:43c24f093de44653","source":"hit","role":"document_web","states":["enabled","focusable","sensitive","showing","visible"],"name":"M8 Autofocus","value":null,"may_refine":true,"refines":null}
