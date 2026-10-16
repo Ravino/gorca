@@ -78,6 +78,42 @@ impl Toolkit {
     }
 }
 
+impl Toolkit {
+    /// Quirk row `blink-wake-call` (M9, `docs/reports/m9-baseline.md` section 2): Chromium builds
+    /// the accessibility tree of web content only after an AT used `GetAttributes` or
+    /// `GetRelationSet` on one of its objects (`AtkGetAttributes` / `AtkRefRelationSet` in
+    /// `ui/accessibility/platform/ax_platform_node_auralinux.cc`); `IsEnabled` alone leaves the
+    /// application with its window frames and no document. The connector sends one such call on
+    /// the application root when it first sees an application of this toolkit.
+    pub fn needs_wake_call(self) -> bool {
+        matches!(self, Toolkit::Chromium)
+    }
+
+    /// Quirk row `blink-static-leaves` (M9): Chromium exposes every text run as a `static` child
+    /// whose own `Text` repeats the text the parent's hypertext already holds (and the parent has
+    /// no U+FFFC for it), so a text-leaf rebuild that appends children after the parent's runs
+    /// reads every heading, link and label twice. Gecko keeps text only in the container.
+    pub fn text_leaf_children_repeat_parent_text(self) -> bool {
+        matches!(self, Toolkit::Chromium)
+    }
+
+    /// Quirk row `blink-name-from` (M9): the object attribute that says where an accessible name
+    /// came from (`contents`, `attribute`, `relatedElement`, ...). A name that came from content
+    /// repeats the text of the node and is not spoken separately. Gecko has no such attribute
+    /// (it marks author-provided names with `explicit-name=true`).
+    pub fn name_source_attribute(self) -> Option<&'static str> {
+        match self {
+            Toolkit::Chromium => Some("name-from"),
+            Toolkit::Firefox
+            | Toolkit::Gtk3
+            | Toolkit::Gtk4
+            | Toolkit::Qt
+            | Toolkit::Vte
+            | Toolkit::Other => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,5 +154,27 @@ mod tests {
         ] {
             assert_eq!(t.text_insert_slack(), 0);
         }
+    }
+
+    #[test]
+    fn blink_rows_belong_to_chromium_only() {
+        for t in [
+            Toolkit::Firefox,
+            Toolkit::Gtk3,
+            Toolkit::Gtk4,
+            Toolkit::Qt,
+            Toolkit::Vte,
+            Toolkit::Other,
+        ] {
+            assert!(!t.needs_wake_call());
+            assert!(!t.text_leaf_children_repeat_parent_text());
+            assert_eq!(t.name_source_attribute(), None);
+        }
+        assert!(Toolkit::Chromium.needs_wake_call());
+        assert!(Toolkit::Chromium.text_leaf_children_repeat_parent_text());
+        assert_eq!(Toolkit::Chromium.name_source_attribute(), Some("name-from"));
+        // Chrome and Electron classify as Chromium, so they get the rows.
+        assert!(Toolkit::classify("", "Google Chrome for Testing").needs_wake_call());
+        assert!(Toolkit::classify("Chromium", "slack").needs_wake_call());
     }
 }
