@@ -52,6 +52,7 @@ cannot touch the real session. It never signals anything it did not spawn.
 | C1h | M3: Right in a 1500-letter entry, the text window answers | `c1h_ms` (gate p99 3 ms), `c1h_ipc_calls` (gate 0), `lost` |
 | C1hs, E1s | C1h and E1 while an L3-50k storm runs on another application | `c1hs_ms` (gate 4 ms), `e1s_ms` (gate 4 ms), `lost` |
 | C2 | M3: Ctrl+Right held at 30 Hz for 3 s, 400 ms utterances | `stale_not_cancelled` (gate 0), `lost` = the last position was not spoken (gate 0), `c2_spoken` |
+| C3 | M3: Ctrl+Right/Left through "Привет, как дела твои?" with GTK landings (word end going right, ending at the end of the text; word start going left) | `c3_wrong` = moves that did not speak the word just reached (gate 0) |
 | E1 | M3: printable keys (Latin and Cyrillic), the app answers each with insert and caret events | `e1_ms` key emit to SPEAK (gate p99 3 ms), `lost`, `e2_double` |
 | E2 | M3: 10,000 randomised actions (letters, space, BackSpace, Ctrl+V paste, a keyless input-method commit); 1,000 with `--quick` | `e2_missing`, `e2_double`, `e2_keyname` (a BackSpace/Delete spoken by name), `e2_wrong` (all gate 0) |
 | E2f | M3: the first typed key after the focus reached an entry, 0, 10, 30, 100 and 300 ms after the focus speech (up to 400 trials) | `e2f_missing`, `e2f_double` (gate 0) |

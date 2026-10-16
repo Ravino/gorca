@@ -215,6 +215,7 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                 metric.as_str(),
                 "lost"
                     | "stale_not_cancelled"
+                    | "c3_wrong"
                     | "not_consumed"
                     | "app_lost"
                     | "app_doubled"

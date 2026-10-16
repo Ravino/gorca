@@ -14,6 +14,7 @@
 //! | C1h | Right in a long entry (window hit, no IPC) | `c1h_ms` (gate p99 3 ms), `lost`, `c1h_ipc_calls` (gate 0) |
 //! | C1hs, E1s | C1h and E1 under the L3-50k storm | `c1hs_ms`, `e1s_ms` (gate 4 ms) |
 //! | C2 | Ctrl+Right held at 30 Hz for 3 s, slow speech | `stale_not_cancelled` (gate 0), `lost` (the last position is always spoken) |
+//! | C3 | Ctrl+Right/Left through a Cyrillic sentence ending in punctuation, GTK landings (word end going right, word start going left) | `c3_wrong` (gate 0) |
 //! | E1 | printable keys | `e1_ms` key emit to SPEAK (gate p99 3 ms), `lost` |
 //! | E2 | randomised typing session (Latin, Cyrillic, BackSpace, paste, input-method commit) | `e2_missing`, `e2_double`, `e2_keyname`, `e2_wrong` (all gate 0) |
 //! | E2f | the first typed key after the focus reached an entry, 0-300 ms after the focus speech | `e2f_missing`, `e2f_double` (gate 0) |
@@ -521,6 +522,60 @@ pub fn c2(
         "C2: {n} autorepeated word moves at 30 Hz; {} reached the server, {stale} after a newer key",
         spoken.len()
     ));
+    Ok(())
+}
+
+/// C3: Ctrl+Right and Ctrl+Left through a Cyrillic sentence that ends in punctuation, with the
+/// caret landing the way GTK lands it: at the END of each word going right (so the last stop
+/// is the end of the text) and at the START going left. Every move must speak the word just
+/// reached, including the last one ("?" behind "твои") and the first when coming back.
+pub fn c3(
+    host: &HostEnv,
+    reader: &ReaderSpec,
+    flavor: Flavor,
+    _size: Size,
+    _seed: u64,
+    out: &mut RunOut,
+) -> Result<()> {
+    if !gate_open(host, "C3", out)? {
+        return Ok(());
+    }
+    let mut s = setup(host, reader, flavor, 20)?;
+    load_text(&mut s, NAME, "Привет, как дела твои?", 0)?;
+    focus_node(&mut s, NAME)?;
+    let right: [(usize, &str); 5] = [
+        (6, "Привет"),
+        (11, "как"),
+        (16, "дела"),
+        (21, "твои"),
+        (22, "?"),
+    ];
+    let left: [(usize, &str); 4] = [(17, "твои"), (12, "дела"), (8, "как"), (0, "Привет")];
+    let mut wrong = 0u64;
+    key_down(&mut s.rig, &mut s.ty, CTRL_L, 0, 0)?;
+    for (key, stops) in [(RIGHT, &right[..]), (LEFT, &left[..])] {
+        for (off, want) in stops {
+            let mark = s.rig.mock.mark();
+            key_down(&mut s.rig, &mut s.ty, key, 0, CONTROL)?;
+            app_ev(
+                &mut s.app,
+                "caret",
+                &format!("\"node\":{NAME},\"offset\":{off}"),
+            )?;
+            key_up(&mut s.rig, &mut s.ty, key, CONTROL)?;
+            std::thread::sleep(Duration::from_millis(250));
+            let spoken = texts(&s.rig.mock.since(mark));
+            if !spoken.iter().any(|(_, t)| t == want) {
+                wrong += 1;
+                out.notes.push(format!(
+                    "C3: offset {off} should speak {want:?}, the server got {:?}",
+                    spoken.iter().map(|(_, t)| t.as_str()).collect::<Vec<_>>()
+                ));
+            }
+        }
+    }
+    key_up(&mut s.rig, &mut s.ty, CTRL_L, 0)?;
+    out.x("c3_wrong", wrong as f64, "moves");
     Ok(())
 }
 
