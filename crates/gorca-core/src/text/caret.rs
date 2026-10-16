@@ -389,6 +389,8 @@ pub struct Tracked {
     pub since: Option<Instant>,
     pub kind: Kind,
     pub caret: Option<u32>,
+    /// Where the caret was before the word move being presented (CR-2 `Move{Word}`).
+    word_from: Option<u32>,
     /// The last fetched selection set with its texts.
     sel: Vec<(Range<u32>, Arc<str>)>,
     pub win: TextWindow,
@@ -434,6 +436,7 @@ impl Tracked {
             since: None,
             kind,
             caret: None,
+            word_from: None,
             sel: Vec::new(),
             win: TextWindow::new(),
             expect: ExpectRing::new(),
@@ -670,7 +673,11 @@ fn to_u32(n: usize) -> u32 {
 /// The text of `say` at `at`, from the window, or what must be fetched first.
 fn unit_text(t: &Tracked, say: Say, at: u32) -> Lookup<(How, String)> {
     let space = NativeText::new(&t.win, !t.kind.multiline);
-    match tc::present(&space, at, say) {
+    let presented = match say {
+        Say::Word => tc::present_word(&space, t.word_from, at),
+        Say::Char | Say::Line | Say::Paragraph => tc::present(&space, at, say),
+    };
+    match presented {
         Lookup::Need(n) => Lookup::Need(n),
         Lookup::Ready(Presented::Blank) => Lookup::Ready((How::Char, String::new())),
         Lookup::Ready(Presented::Text(r)) => {
@@ -1161,12 +1168,13 @@ impl CaretState {
     }
 
     fn on_say(self, say: Say, spell: Spell, epoch: Epoch, cx: &mut Ctx<'_>) -> CaretState {
-        let Some(t) = self.into_tracked() else {
+        let Some(mut t) = self.into_tracked() else {
             return CaretState::Off;
         };
         let Some(at) = t.caret else {
             return CaretState::Idle { t };
         };
+        t.word_from = None;
         let reason = Reason::CaretMove {
             say,
             correlated: true,
@@ -1520,9 +1528,13 @@ fn present_inner(
     refilled: bool,
     cx: &mut Ctx<'_>,
 ) -> CaretState {
+    if say == Say::Word && t.caret != Some(at) {
+        t.word_from = t.caret;
+    }
     t.caret = Some(at);
     match unit_text(&t, say, at) {
         Lookup::Ready((how, text)) => {
+            t.word_from = None;
             cx.stats.window_hits += 1;
             let s = t.one_spelled(how, text, spell, reason, epoch, Prio::Interrupt);
             cx.say(s);

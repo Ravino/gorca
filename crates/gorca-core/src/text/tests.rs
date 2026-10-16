@@ -2233,3 +2233,133 @@ fn a_gecko_insert_two_seconds_late_is_still_the_typed_keys_echo() {
     v.extend(spoken(&g.tick(400)));
     assert_eq!(v, ["e"]);
 }
+
+// ---- word navigation: GTK-style (end of word) and NVDA-style (start of word) landings ----
+
+fn word_walk(g: &mut Rig, key: u32, stops: &[u32]) -> Vec<String> {
+    let mut out = Vec::new();
+    for s in stops {
+        let _ = g.key(key, 0, Modifiers::CONTROL);
+        g.advance(30);
+        out.extend(spoken(&g.caret(*s)));
+        g.advance(30);
+    }
+    out
+}
+
+#[test]
+fn gtk_ctrl_right_speaks_the_word_just_reached_through_the_end_of_the_text() {
+    // GTK stops at the end of each word and then at the end of the text.
+    let mut g = rig();
+    g.entry("Привет, как дела твои?", 0);
+    let said = word_walk(&mut g, RIGHT, &[6, 11, 16, 21, 22]);
+    assert_eq!(said, ["Привет", "как", "дела", "твои", "?"]);
+}
+
+#[test]
+fn gtk_ctrl_left_speaks_each_word_back_to_the_start() {
+    let mut g = rig();
+    g.entry("Привет, как дела твои?", 22);
+    let said = word_walk(&mut g, LEFT, &[17, 12, 8, 0]);
+    assert_eq!(said, ["твои", "дела", "как", "Привет"]);
+}
+
+#[test]
+fn nvda_style_landing_at_the_word_start_speaks_the_word_at_the_caret() {
+    let mut g = rig();
+    g.entry("hello big world", 0);
+    let said = word_walk(&mut g, RIGHT, &[6, 10]);
+    assert_eq!(said, ["big", "world"]);
+}
+
+#[test]
+fn latin_words_followed_by_punctuation_are_spoken() {
+    let mut g = rig();
+    g.entry("one, two! three", 0);
+    let said = word_walk(&mut g, RIGHT, &[3, 8, 15]);
+    assert_eq!(said, ["one", "two", "three"]);
+}
+
+#[test]
+fn landing_at_the_end_after_a_trailing_space_says_blank() {
+    let mut g = rig();
+    g.entry("дела ", 0);
+    let said = word_walk(&mut g, RIGHT, &[5]);
+    assert_eq!(said, ["blank"], "NVDA: nothing under the caret at the end");
+}
+
+#[test]
+fn ctrl_right_across_the_end_of_a_line_in_a_text_view() {
+    let mut g = rig();
+    g.area("Привет мир\nкак дела", 0);
+    let said = word_walk(&mut g, RIGHT, &[6, 10, 14, 19]);
+    assert_eq!(said, ["Привет", "мир", "как", "дела"]);
+}
+
+#[test]
+fn ctrl_right_to_the_start_of_the_next_line_speaks_its_first_word() {
+    let mut g = rig();
+    g.area("Привет мир\nкак дела", 0);
+    let said = word_walk(&mut g, RIGHT, &[7, 11]);
+    assert_eq!(said, ["мир", "как"]);
+}
+
+// ---- character / line navigation at both edges and across line ends ----
+
+fn step(g: &mut Rig, key: u32, to: u32) -> Vec<String> {
+    let _ = g.key(key, 0, NONE);
+    g.advance(30);
+    let said = spoken(&g.caret(to));
+    g.advance(30);
+    said
+}
+
+#[test]
+fn right_arrow_walks_a_cyrillic_entry_to_the_end_and_back_to_offset_zero() {
+    let mut g = rig();
+    g.entry("Привет?", 0);
+    let mut said = Vec::new();
+    for to in 1..=7 {
+        said.extend(step(&mut g, RIGHT, to));
+    }
+    assert_eq!(said, ["р", "и", "в", "е", "т", "question", "blank"]);
+    let mut said = Vec::new();
+    for to in (0..=6).rev() {
+        said.extend(step(&mut g, LEFT, to));
+    }
+    assert_eq!(said, ["question", "т", "е", "в", "и", "р", "П"]);
+}
+
+#[test]
+fn keys_at_the_edges_that_move_nothing_still_speak_the_character() {
+    let mut g = rig();
+    g.entry("ab", 2);
+    let _ = g.key(RIGHT, 0, NONE);
+    g.advance(150);
+    let fx = g.tick(0);
+    assert_eq!(spoken(&fx), ["blank"], "Right at the end: boundary, blank");
+    let mut g = rig();
+    g.entry("ab", 0);
+    let _ = g.key(LEFT, 0, NONE);
+    g.advance(150);
+    assert_eq!(
+        spoken(&g.tick(0)),
+        ["a"],
+        "Left at offset 0: boundary, the first character"
+    );
+}
+
+#[test]
+fn right_arrow_across_a_line_end_speaks_blank_for_the_break_like_nvda_then_the_next_line() {
+    let mut g = rig();
+    g.area("ab\ncd", 1);
+    assert_eq!(
+        step(&mut g, RIGHT, 2),
+        ["blank"],
+        "the line break is blank (VB-2)"
+    );
+    assert_eq!(step(&mut g, RIGHT, 3), ["c"]);
+    assert_eq!(step(&mut g, RIGHT, 4), ["d"]);
+    assert_eq!(step(&mut g, RIGHT, 5), ["blank"]);
+    assert_eq!(step(&mut g, LEFT, 4), ["d"]);
+}
