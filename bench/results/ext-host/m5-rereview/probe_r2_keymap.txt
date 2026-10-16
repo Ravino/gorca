@@ -1,0 +1,77 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running unittests src/lib.rs (target/debug/deps/gorca_core-6168417290792d77)
+
+running 1 test
+PROBE spellings tried 183, shadowed 0:
+
+PROBE multipress tried 87, shadowed 66:
+Global gorca+ctrl+period (review.cur_word, max_press 3) press 2 <- ext `gorca+ctrl+period*2` in Browse
+Global gorca+ctrl+period (review.cur_word, max_press 3) press 2 <- ext `gorca+ctrl+period*2` in Focus
+Global gorca+ctrl+period (review.cur_word, max_press 3) press 2 <- ext `gorca+ctrl+period*2` in Review
+Global gorca+ctrl+period (review.cur_word, max_press 3) press 3 <- ext `gorca+ctrl+period*3` in Browse
+Global gorca+ctrl+period (review.cur_word, max_press 3) press 3 <- ext `gorca+ctrl+period*3` in Focus
+Global gorca+ctrl+period (review.cur_word, max_press 3) press 3 <- ext `gorca+ctrl+period*3` in Review
+Global gorca+end (info.status_bar, max_press 2) press 2 <- ext `gorca+end*2` in Browse
+Global gorca+end (info.status_bar, max_press 2) press 2 <- ext `gorca+end*2` in Focus
+Global gorca+end (info.status_bar, max_press 2) press 2 <- ext `gorca+end*2` in Review
+Global gorca+f12 (info.time_date, max_press 2) press 2 <- ext `gorca+f12*2` in Browse
+Global gorca+f12 (info.time_date, max_press 2) press 2 <- ext `gorca+f12*2` in Focus
+Global gorca+f12 (info.time_date, max_press 2) press 2 <- ext `gorca+f12*2` in Review
+Global gorca+kp_begin (object.current, max_press 2) press 2 <- ext `gorca+kp_begin*2` in Browse
+Global gorca+kp_begin (object.current, max_press 2) press 2 <- ext `gorca+kp_begin*2` in Focus
+Global gorca+kp_begin (object.current, max_press 2) press 2 <- ext `gorca+kp_begin*2` in Review
+Global gorca+kp_enter (info.window_title, max_press 3) press 3 <- ext `gorca+kp_enter*3` in Browse
+Global gorca+kp_enter (info.window_title, max_press 3) press 3 <- ext `gorca+kp_enter*3` in Focus
+Global gorca+kp_enter (info.window_title, max_press 3) press 3 <- ext `gorca+kp_enter*3` in Review
+Global gorca+l (info.current_line, max_press 3) press 2 <- ext `gorca+l*2` in Browse
+Global gorca+l (info.current_line, max_press 3) press 2 <- ext `gorca+l*2` in Focus
+Global gorca+l (info.current_line, max_press 3) press 2 <- ext `gorca+l*2` in Review
+Global gorca+l (info.current_line, max_press 3) press 3 <- ext `gorca+l*3` in Browse
+Global gorca+l (info.current_line, max_press 3) press 3 <- ext `gorca+l*3` in Focus
+Global gorca+l (info.current_line, max_press 3) press 3 <- ext `gorca+l*3` in Review
+Global gorca+period (review.cur_char, max_press 3) press 2 <- ext `gorca+period*2` in Browse
+Global gorca+period (review.cur_char, max_press 3) press 2 <- ext `gorca+period*2` in Focus
+Global gorca+period (review.cur_char, max_press 3) press 2 <- ext `gorca+period*2` in Review
+Global gorca+period (review.cur_char, max_press 3) press 3 <- ext `gorca+period*3` in Browse
+Global gorca+period (review.cur_char, max_press 3) press 3 <- ext `gorca+period*3` in Focus
+Global gorca+period (review.cur_char, max_press 3) press 3 <- ext `gorca+period*3` in Review
+Global gorca+q (gorca.quit, max_press 2) press 2 <- ext `gorca+q*2` in Browse
+Global gorca+q (gorca.quit, max_press 2) press 2 <- ext `gorca+q*2` in Focus
+Global gorca+q (gorca.quit, max_press 2) press 2 <- ext `gorca+q*2` in Review
+Global gorca+shift+end (info.status_bar, max_press 2) press 2 <- ext `gorca+shift+end*2` in Browse
+Global gorca+shift+end (info.status_bar, max_press 2) press 2 <- ext `gorca+shift+end*2` in Focus
+Global gorca+shift+end (info.status_bar, max_press 2) press 2 <- ext `gorca+shift+end*2` in Review
+Global gorca+shift+o (object.current, max_press 2) press 2 <- ext `gorca+shift+o*2` in Browse
+Global gorca+shift+o (object.current, max_press 2) press 2 <- ext `gorca+shift+o*2` in Focus
+Global gorca+shift+o (object.current, max_press 2) press 2 <- ext `gorca+shift+o*2` in Review
+Global gorca+shift+period (review.cur_line, max_press 3) press 2 <- ext `gorca+shift+period*2` in Browse
+Global gorca+shift+period (review.cur_line, max_press 3) press 2 <- ext `gorca+shift+period*2` in Focus
+Global gorca+shift+period (review.cur_line, max_press 3) press 2 <- ext `gorca+shift+period*2` in Review
+Global gorca+shift+period (review.cur_line, max_press 3) press 3 <- ext `gorca+shift+period*3` in Browse
+Global gorca+shift+period (review.cur_line, max_press 3) press 3 <- ext `gorca+shift+period*3` in Focus
+Global gorca+shift+period (review.cur_line, max_press 3) press 3 <- ext `gorca+shift+period*3` in Review
+Global gorca+t (info.time_date, max_press 2) press 2 <- ext `gorca+t*2` in Browse
+Global gorca+t (info.time_date, max_press 2) press 2 <- ext `gorca+t*2` in Focus
+Global gorca+t (info.time_date, max_press 2) press 2 <- ext `gorca+t*2` in Review
+Global gorca+t (info.window_title, max_press 3) press 2 <- ext `gorca+t*2` in Browse
+Global gorca+t (info.window_title, max_press 3) press 2 <- ext `gorca+t*2` in Focus
+Global gorca+t (info.window_title, max_press 3) press 2 <- ext `gorca+t*2` in Review
+Global gorca+t (info.window_title, max_press 3) press 3 <- ext `gorca+t*3` in Browse
+Global gorca+t (info.window_title, max_press 3) press 3 <- ext `gorca+t*3` in Focus
+Global gorca+t (info.window_title, max_press 3) press 3 <- ext `gorca+t*3` in Review
+Global gorca+tab (info.where_am_i, max_press 3) press 2 <- ext `gorca+tab*2` in Browse
+Global gorca+tab (info.where_am_i, max_press 3) press 2 <- ext `gorca+tab*2` in Focus
+Global gorca+tab (info.where_am_i, max_press 3) press 2 <- ext `gorca+tab*2` in Review
+Global gorca+tab (info.where_am_i, max_press 3) press 3 <- ext `gorca+tab*3` in Browse
+Global gorca+tab (info.where_am_i, max_press 3) press 3 <- ext `gorca+tab*3` in Focus
+Global gorca+tab (info.where_am_i, max_press 3) press 3 <- ext `gorca+tab*3` in Review
+Global gorca+up (info.current_line, max_press 3) press 2 <- ext `gorca+up*2` in Browse
+Global gorca+up (info.current_line, max_press 3) press 2 <- ext `gorca+up*2` in Focus
+Global gorca+up (info.current_line, max_press 3) press 2 <- ext `gorca+up*2` in Review
+Global gorca+up (info.current_line, max_press 3) press 3 <- ext `gorca+up*3` in Browse
+Global gorca+up (info.current_line, max_press 3) press 3 <- ext `gorca+up*3` in Focus
+Global gorca+up (info.current_line, max_press 3) press 3 <- ext `gorca+up*3` in Review
+test commands::compile::tests::review_probe_r2_spellings_and_presses ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 467 filtered out; finished in 0.10s
+

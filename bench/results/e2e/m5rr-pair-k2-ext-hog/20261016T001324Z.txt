@@ -1,0 +1,35 @@
+# e2e m5rr-pair-k2-ext-hog
+# utc=2026-10-16T00:13:24Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=31.87 35.53 29.56 5/2915 3064266
+# git_rev=d7878c8
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m5rr-pair-k2-ext-hog
+# reader=daemon:<repo>/.claude/worktrees/m5-review/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=31.87 35.53 29.56 3/2915 3064263
+# reader_env=GORCA_M1=1 GORCA_M1_STRICT=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=k2_ms: first SPEAK between a command key and the next one (1200 spoken for 1200 chords)
+# note1=k2_ms: first SPEAK between a command key and the next one (1196 spoken for 1200 chords)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+K2.k2_ms.n                 daemon/voicego         1199         1195         1200  3                  info   [samples]
+K2.k2_ms.p50               daemon/voicego        0.364        0.261        0.424  3                  info   [ms]
+K2.k2_ms.p95               daemon/voicego        3.619        2.900        4.287  3                  info   [ms]
+K2.k2_ms.p99               daemon/voicego        6.894        4.670        7.674  3 <=            5  FAIL   [ms]
+K2.k2_ms.p999              daemon/voicego         11.6        7.927         12.4  3                  info   [ms]
+K2.k2_ms.max               daemon/voicego         16.5        8.579         17.0  3                  info   [ms]
+K2.lost                    daemon/voicego            1            0            5  3 <=            0  FAIL  gated on the max over repeats [events]
+K2.not_consumed            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
