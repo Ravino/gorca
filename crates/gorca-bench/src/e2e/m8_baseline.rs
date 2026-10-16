@@ -8,10 +8,8 @@
 //! delete them. Source: `docs/reports/m8-baseline.md` (run `m8-baseline-raw2`, 2026-10-15).
 
 const NO_EMBEDDED: &str = "O finds no embedded object: role=application and <object> are not in the embedded category on this page (to investigate: Cat::EMBEDDED vs the role Firefox exposes)";
-const GRID_FOCUS: &str = "focus on an ARIA grid cell does not switch to focus mode: the pass-through predicate lacks interactive grid cells (NVDA: TABLECELL/TABLEROW in ALWAYS_SWITCH_TO_PASS_THROUGH_ROLES)";
 const LISTBOX_FOCUS: &str = "focus on a list box lands on its selected option (list item); list items do not switch to focus mode (NVDA: LISTITEM switches on focus, D-1)";
 const APP_FOCUS: &str = "focus on role=application does not switch to focus mode";
-const LINE_START_PREFIX: &str = "the role prefix at the start of a line is spoken again on a character, word or Home move that stays inside the same heading (LP-1 repeats it)";
 const ARIA_COMBO: &str = "a div with role=combobox and text content does not switch to focus mode here, while the one on forms.html (aria-controls) does: to investigate";
 const NO_RESTORE: &str = "position restore after an in-place re-render (ADR-0003 10.3) is not implemented: the cursor goes back to the first item";
 const RIG_KEYS: &str = "rig: a key typed into Firefox through the compositor lands on an unnamed browser 'panel', not in the page (probe m8-probe-tab, m8-probe-tab2); the page needs keyboard focus, which a click and AT-SPI GrabFocus did not give";
@@ -19,13 +17,8 @@ const RIG_KEYS: &str = "rig: a key typed into Firefox through the compositor lan
 /// Step ids per root cause.
 pub(super) const MARKS: &[(&[&str], &str)] = &[
     (&["QN.o.1", "QN.o.2"], NO_EMBEDDED),
-    (&["TB.grid.focus"], GRID_FOCUS),
     (&["FM.listbox"], LISTBOX_FOCUS),
     (&["FM.app", "FM.app.toggle"], APP_FOCUS),
-    (
-        &["RD.char.left", "RD.word.left", "RD.home"],
-        LINE_START_PREFIX,
-    ),
     (&["APP.combo"], ARIA_COMBO),
     (&["SP.restore"], NO_RESTORE),
     (&["FM.tab.real", "SY.tab", "SP.back"], RIG_KEYS),

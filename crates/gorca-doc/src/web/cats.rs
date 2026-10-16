@@ -57,6 +57,7 @@ impl Cat {
     pub const TEXT_RUN: Cat = Cat::bit(40);
 
     /// "Landmark" navigation unit: landmarks and regions (ADR-0003 section 12).
+    pub const EMBEDDED_OR_DIALOG: Cat = Cat(Cat::EMBEDDED.0 | Cat::DIALOG.0);
     pub const ANY_LANDMARK: Cat = Cat(Cat::LANDMARK.0 | Cat::REGION.0);
 
     pub const fn bit(n: u32) -> Cat {
@@ -217,6 +218,7 @@ pub fn cats_of(role: Role, level: u8, flags: NodeFlags) -> Cat {
             }
         }
         Role::Dialog => Cat::DIALOG,
+        Role::Application => Cat::EMBEDDED,
         Role::Alert => Cat::ALERT | Cat::LIVE_REGION,
         Role::Table => {
             if flags.contains(NodeFlags::LAYOUT) {
@@ -232,7 +234,6 @@ pub fn cats_of(role: Role, level: u8, flags: NodeFlags) -> Cat {
         Role::Paragraph => Cat::TEXT_BLOCK,
         Role::StaticText => Cat::TEXT_RUN,
         Role::Unknown
-        | Role::Application
         | Role::Window
         | Role::Panel
         | Role::Document

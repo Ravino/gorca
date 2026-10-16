@@ -306,7 +306,7 @@ fn fm() -> Vec<Step> {
         esc("FM.e5"),
         s("FM.cb", P0, "Check box focus: stays in browse mode, state spoken", Act::Focus(role::CHECK_BOX, "Gift wrap"), &["check box", "Gift wrap"]).extra(&["not checked"], "the unchecked state is not spoken on focus").not(&["focus mode"]),
         s("FM.btn", P0, "Button focus: stays in browse mode", Act::Focus(role::PUSH_BUTTON, "Save profile"), &["button", "Save profile"]).not(&["focus mode"]),
-        s("FM.radio", P1, "Radio focus: NVDA switches to focus mode (SWITCH_TO_PASS_THROUGH_ON_FOCUS_ROLES); ADR-0003 P(n) says browse", Act::Focus(role::RADIO_BUTTON, "Post"), &["radio button", "Post", "focus mode"]).xf("parity delta D-1: ADR-0003 11 lists radios as not passing through; NVDA does on focus"),
+        s("FM.radio", P1, "Radio focus: NVDA switches to focus mode (SWITCH_TO_PASS_THROUGH_ON_FOCUS_ROLES); ADR-0003 P(n) says browse", Act::Focus(role::RADIO_BUTTON, "Post"), &["radio button", "Post", "focus mode"]),
         esc("FM.e6"),
         s("FM.select", P0, "Combo box (select) focus: focus mode", Act::Focus(role::COMBO_BOX, "Size"), &["focus mode", "Size"]),
         esc("FM.e7"),
@@ -649,7 +649,8 @@ fn forge() -> Vec<Step> {
     vec![
         top("FG.top"),
         s("FG.h.1", P0, "1: repository heading", lvl(1), &["heading level 1", "gorca-dev"]),
-        s("FG.b.1", P0, "B: the first button, named by aria-label, with its state", n('b'), &["button"]).extra(&["Open global navigation menu", "collapsed"], "B skipped the menu button that has aria-expanded and landed on a later toggle button; state words are not spoken"),
+        top("FG.top1b"),
+        s("FG.b.1", P0, "B: the first button, named by aria-label, with its state", n('b'), &["button"]).extra(&["Open global navigation menu", "collapsed"], "the aria-label name and the collapsed state of the menu button"),
         s("FG.toggle", P1, "Toggle button focus: pressed state", Act::Focus(role::TOGGLE_BUTTON, "Watch"), &["Watch 12"]).extra(&["not pressed"], "the pressed state is not spoken"),
         top("FG.top2"),
         s("FG.t", P0, "T: the file table, named by its sr-only caption", n('t'), &["Folders and files"]).extra(&["table"], NO_ROLE_WORD),

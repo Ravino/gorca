@@ -347,13 +347,13 @@ const QUICKNAV: &[(CoreCmd, Dir, Cat, &str)] = &[
     (
         CoreCmd::QuicknavNextEmbedded,
         Dir::Next,
-        Cat::EMBEDDED,
+        Cat::EMBEDDED_OR_DIALOG,
         "embedded object",
     ),
     (
         CoreCmd::QuicknavPrevEmbedded,
         Dir::Prev,
-        Cat::EMBEDDED,
+        Cat::EMBEDDED_OR_DIALOG,
         "embedded object",
     ),
     (CoreCmd::QuicknavNextTable, Dir::Next, Cat::TABLE, "table"),
@@ -766,7 +766,11 @@ impl Reader {
             }
             let passes = forms::passes_through(role, states, Reason::Focus);
             let application = forms::is_application(role);
-            let last_before = b.last_off;
+            let last_before = match b.mode {
+                WebMode::Browse { doc: d, cur, .. } if d == doc => Some(cur.node),
+                WebMode::Focus { doc: d, node, .. } if d == doc => Some(node),
+                _ => None,
+            };
             self.web_activate(doc, fx);
             self.web_apply(
                 WebEv::FocusIn {
@@ -872,7 +876,7 @@ impl Reader {
 
     /// Focus entered a dialog (its name and role lead the focus speech, once): the dialog around
     /// `id` does not hold the cursor's previous place.
-    fn web_dialog_lead(&mut self, doc: DocId, id: DocNodeId, before: u32) {
+    fn web_dialog_lead(&mut self, doc: DocId, id: DocNodeId, before: Option<DocNodeId>) {
         let Some(b) = self.web.as_mut() else { return };
         let Some(h) = b.docs.get(doc) else { return };
         let lead = h.read.with(|d| {
@@ -881,9 +885,19 @@ impl Reader {
                 let n = cur?;
                 let v = d.node(n)?;
                 if v.cats.intersects(Cat::DIALOG) && !v.flags.contains(gorca_doc::web::NodeFlags::HIDDEN) {
-                    let holds = d
-                        .subtree_text_range(n)
-                        .is_some_and(|(s, e)| s <= before && before < e);
+                    // The previous place was inside this dialog (a node test: the flat offsets
+                    // shift when the dialog appears).
+                    let holds = before.is_some_and(|p| {
+                        let mut c = Some(p);
+                        for _ in 0..64 {
+                            match c {
+                                Some(x) if x == n => return true,
+                                Some(x) => c = d.parent(x),
+                                None => return false,
+                            }
+                        }
+                        false
+                    });
                     if holds {
                         return None;
                     }

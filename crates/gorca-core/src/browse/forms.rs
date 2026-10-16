@@ -32,22 +32,18 @@ pub fn passes_through(role: Role, states: StateSet, reason: Reason) -> bool {
             // a focus event on a radio button, tab, menu or list item, or on a focusable cell of
             // an interactive grid enters focus mode so the arrows drive the widget. Activation
             // (Enter in browse mode) keeps the browse rules.
+            let focusable = states.contains(StateSet::FOCUSABLE);
             let focus_widget = reason == Reason::Focus
-                && states.contains(StateSet::FOCUSABLE)
-                && matches!(
-                    role,
-                    Role::RadioButton
-                        | Role::Tab
-                        | Role::MenuItem
-                        | Role::ListItem
-                        | Role::Cell
-                        | Role::Row
-                        | Role::ColumnHeader
-                        | Role::RowHeader
-                );
+                && match role {
+                    // The node is the target of a focus event: these roles are widgets whatever
+                    // the state set says (roving tabindex items may lack `focusable`).
+                    Role::RadioButton | Role::Tab | Role::MenuItem => true,
+                    Role::ListItem => focusable || states.contains(StateSet::SELECTABLE),
+                    Role::Cell | Role::Row | Role::ColumnHeader | Role::RowHeader => focusable,
+                    _ => false,
+                };
             editable
                 || focus_widget
-
                 || match role {
                     Role::TextEntry
                     | Role::PasswordEntry

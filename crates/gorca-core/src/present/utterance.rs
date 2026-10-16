@@ -82,8 +82,34 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
             segments.push(seg(word, SegmentKind::State));
         }
     }
+    // A checkable control says its off state too ("check box not checked", "not pressed").
+    let off = match n.role {
+        Role::CheckBox | Role::RadioButton
+            if !n.states.contains(StateSet::CHECKED) && !skip.contains(StateSet::CHECKED) =>
+        {
+            Some("not checked")
+        }
+        Role::ToggleButton
+            if !n.states.intersects(StateSet::PRESSED | StateSet::CHECKED)
+                && !skip.contains(StateSet::PRESSED) =>
+        {
+            Some("not pressed")
+        }
+        _ => None,
+    };
+    if let Some(w) = off {
+        segments.push(seg(w, SegmentKind::State));
+    }
     if let Some(v) = value_text(n.value.as_ref()) {
         segments.push(seg(&v, SegmentKind::Value));
+    }
+    // A field's description is its help or error text (aria-describedby, aria-errormessage).
+    if matches!(
+        n.role,
+        Role::TextEntry | Role::PasswordEntry | Role::ComboBox | Role::SpinButton
+    ) && let Some(d) = n.description.as_deref().filter(|d| !d.is_empty())
+    {
+        segments.push(seg(d, SegmentKind::Text));
     }
     let may_refine = match n.fresh {
         Freshness::Fresh { .. } => false,
