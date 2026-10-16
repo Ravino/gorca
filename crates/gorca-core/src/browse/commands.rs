@@ -48,6 +48,8 @@ const CLICK_FOCUS_WINDOW: Duration = Duration::from_millis(800);
 /// Characters of a selected span that are read back.
 const SELECT_SPEAK_CAP: u32 = 300;
 /// A mode word waits this long for the utterance it belongs to.
+/// A document focus this soon after our own click or Enter is the click's own.
+const REFOCUS_SILENT_WINDOW: Duration = Duration::from_millis(2000);
 const WORD_TTL: Duration = Duration::from_millis(600);
 /// The line that follows a document's focus utterance waits for a cold fetch this long (M4).
 const TAIL_TTL: Duration = Duration::from_secs(2);
@@ -845,7 +847,12 @@ impl Reader {
             b.counters.join_hits += 1;
             // The browser re-focuses the document we are already browsing (after a same-page
             // link, a click): the cursor stays where it is and nothing is announced.
-            let browsing_here = matches!(b.mode, WebMode::Browse { doc: d, .. } if d == doc);
+            // Only when we caused it (a click or Enter a moment ago): a document that is focused
+            // again with no action of ours is a return to the page and is announced.
+            let browsing_here = matches!(b.mode, WebMode::Browse { doc: d, .. } if d == doc)
+                && b.activated.is_some_and(|t| {
+                    self.now.saturating_duration_since(t) <= REFOCUS_SILENT_WINDOW
+                });
             if browsing_here && h.read.with(|d| d.root() == Some(id)) {
                 b.suppress_focus = Some(node);
                 return;
