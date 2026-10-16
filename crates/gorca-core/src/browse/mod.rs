@@ -507,6 +507,11 @@ pub struct BrowseState {
     pub counters: BrowseCounters,
     /// Offset of the cursor in the flat text at the last move, to restore after an edit.
     pub last_off: u32,
+    /// The cursor's node vanished: until this instant (and while the offset is unchanged) a
+    /// re-render re-resolves the cursor at the saved offset.
+    /// Bare quick-navigation keys are grabbed (gorca+Shift+Space turns them off).
+    pub single_letter: bool,
+    pub restore_until: Option<(Instant, u32)>,
     /// Latest scroll request: sent after a pause so held keys do not flood the page (LP-6).
     pub scroll_due: Option<(Instant, DocId, DocNodeId)>,
     /// When the browser last reported `load-complete`, by document root (page auto-read): the
@@ -546,6 +551,8 @@ impl BrowseState {
             settings: BrowseSettings::default(),
             counters: BrowseCounters::default(),
             last_off: 0,
+            restore_until: None,
+            single_letter: true,
             scroll_due: None,
             loaded: HashMap::new(),
             auto_read: None,

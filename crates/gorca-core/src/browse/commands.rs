@@ -42,6 +42,8 @@ pub enum WebEffect {
 }
 
 /// A mode word waits this long for the utterance it belongs to.
+/// How long after the cursor's node vanished a re-render may still move the cursor back.
+const RESTORE_WINDOW: Duration = Duration::from_millis(1500);
 const WORD_TTL: Duration = Duration::from_millis(600);
 /// The line that follows a document's focus utterance waits for a cold fetch this long (M4).
 const TAIL_TTL: Duration = Duration::from_secs(2);
@@ -358,6 +360,32 @@ const QUICKNAV: &[(CoreCmd, Dir, Cat, &str)] = &[
     ),
     (CoreCmd::QuicknavNextTable, Dir::Next, Cat::TABLE, "table"),
     (CoreCmd::QuicknavPrevTable, Dir::Prev, Cat::TABLE, "table"),
+    (
+        CoreCmd::QuicknavNextAnnotation,
+        Dir::Next,
+        Cat::ANNOTATION,
+        "annotation",
+    ),
+    (
+        CoreCmd::QuicknavPrevAnnotation,
+        Dir::Prev,
+        Cat::ANNOTATION,
+        "annotation",
+    ),
+    (CoreCmd::QuicknavNextError, Dir::Next, Cat::ERROR, "error"),
+    (CoreCmd::QuicknavPrevError, Dir::Prev, Cat::ERROR, "error"),
+    (
+        CoreCmd::QuicknavNextParagraph,
+        Dir::Next,
+        Cat::TEXT_BLOCK,
+        "paragraph",
+    ),
+    (
+        CoreCmd::QuicknavPrevParagraph,
+        Dir::Prev,
+        Cat::TEXT_BLOCK,
+        "paragraph",
+    ),
     (CoreCmd::QuicknavNextFrame, Dir::Next, Cat::FRAME, "frame"),
     (CoreCmd::QuicknavPrevFrame, Dir::Prev, Cat::FRAME, "frame"),
     (
@@ -507,6 +535,13 @@ impl Reader {
     /// The grab set for the current mode, with Escape in focus-auto mode (modes.md section 2).
     pub(crate) fn current_grabs(&self) -> GrabSet {
         let mut set = self.mode.grab_set(&self.keys);
+        if matches!(self.mode, Mode::Browse { .. })
+            && self.web.as_ref().is_some_and(|w| !w.single_letter)
+        {
+            for c in &self.keys.letters {
+                set.chords.remove(c);
+            }
+        }
         if matches!(self.mode, Mode::Focus)
             && self
                 .web
@@ -1168,16 +1203,25 @@ impl Reader {
         match b.mode {
             WebMode::Loading { .. } => self.web_retry_loading(fx),
             WebMode::Browse { doc: d, cur, .. } if d == doc => {
-                // The mirror changed under the cursor: follow the node, or the flat offset.
+                // The mirror changed under the cursor: follow the node, or the flat offset. A
+                // re-render replaces nodes in several publishes: for a moment after the node
+                // was lost the offset is re-applied, so the cursor settles on the same place in
+                // the new content (position restore, ADR-0003 10.3).
                 let Some(h) = b.docs.get(doc) else { return };
                 let last = b.last_off;
+                let now = self.now;
+                let window = b.restore_until.is_some_and(|(t, off)| now < t && off == last);
                 let fixed = h.read.with(|d| {
-                    if d.is_attached(cur.node) {
+                    if d.is_attached(cur.node) && !window {
                         None
                     } else {
-                        cursor::cursor_at(d, last)
+                        cursor::cursor_at(d, last).filter(|c| c.node != cur.node)
                     }
                 });
+                let lost = h.read.with(|d| !d.is_attached(cur.node));
+                if lost {
+                    b.restore_until = Some((now + RESTORE_WINDOW, last));
+                }
                 if let Some(c) = fixed
                     && let WebMode::Browse { cur, .. } = &mut b.mode
                 {
@@ -1430,6 +1474,23 @@ impl Reader {
             self.web_table_move(mv, now, fx);
         } else if let Some(column) = super::tablenav::table_say(c) {
             self.web_table_say(column, fx);
+        } else if c == CoreCmd::BrowseSingleLetterToggle {
+            self.web_single_letter_toggle(fx);
+        } else if matches!(
+            c,
+            CoreCmd::BrowseContainerStart | CoreCmd::BrowseContainerEnd
+        ) {
+            self.web_container(c == CoreCmd::BrowseContainerEnd, now, fx);
+        } else if matches!(
+            c,
+            CoreCmd::QuicknavNextNotLinkBlock | CoreCmd::QuicknavPrevNotLinkBlock
+        ) {
+            let dir = if c == CoreCmd::QuicknavNextNotLinkBlock {
+                Dir::Next
+            } else {
+                Dir::Prev
+            };
+            self.web_not_link_block(dir, now, fx);
         } else if let Some((dir, cat, name)) = quicknav(c) {
             self.web_quicknav(dir, cat, name, now, fx);
         } else if let Some((_, mv)) = CURSOR.iter().find(|(cmd, _)| *cmd == c) {
@@ -1598,6 +1659,128 @@ impl Reader {
                 self.say(w, fx);
             }
             Outcome::Nothing => {}
+        }
+    }
+
+    /// gorca+Shift+Space: the bare quick-navigation keys go to the page, or come back.
+    fn web_single_letter_toggle(&mut self, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_mut() else { return };
+        b.single_letter = !b.single_letter;
+        let on = b.single_letter;
+        if matches!(self.mode, Mode::Browse { .. }) {
+            fx.push(ReaderEffect::SetGrabSet(self.current_grabs()));
+        }
+        self.say(
+            if on {
+                "single letter navigation on"
+            } else {
+                "single letter navigation off"
+            },
+            fx,
+        );
+    }
+
+    /// `,` / Shift+`,`: past the end of the container around the cursor, or to its start
+    /// (NVDA `script_movePastEndOfContainer`, `script_moveToStartOfContainer`).
+    fn web_container(&mut self, end: bool, now: Instant, fx: &mut ReaderEffects) {
+        let Some((doc, cur, _)) = self.browse_ctx(fx) else {
+            return;
+        };
+        let Some(b) = self.web.as_ref() else { return };
+        let Some(h) = b.docs.get(doc) else { return };
+        let max_line = b.settings.max_line;
+        let last = b.last_off;
+        enum Out {
+            NoContainer,
+            Bottom,
+            To(WebCursor, u32, Vec<Item>),
+        }
+        let out = h.read.with(|d| {
+            let from = cursor::offset_of(d, cur).unwrap_or_else(|| last.min(d.text_len()));
+            let Some(c) = up_to(d, cur.node, Cat::CONTAINER, 64) else {
+                return Out::NoContainer;
+            };
+            if end {
+                let Some((_, e)) = d.subtree_text_range(c) else {
+                    return Out::NoContainer;
+                };
+                match cursor::line(d, max_line, e.saturating_sub(1), Dir::Next) {
+                    Mv::Landed { off, speak, .. } => match cursor::cursor_at(d, off) {
+                        Some(cu) => Out::To(
+                            cu,
+                            off,
+                            present::describe_from(d, speak.start, speak.end, Some(from)),
+                        ),
+                        None => Out::NoContainer,
+                    },
+                    Mv::Edge(_) => Out::Bottom,
+                }
+            } else {
+                let Some(off) = cursor::content_start(d, c) else {
+                    return Out::NoContainer;
+                };
+                match cursor::cursor_at(d, off) {
+                    Some(cu) => Out::To(cu, off, present::describe_node_from(d, c, Some(from))),
+                    None => Out::NoContainer,
+                }
+            }
+        });
+        match out {
+            Out::To(cu, off, items) => {
+                self.web_set_cursor(doc, cu, off, now);
+                self.web_speak(&items, fx);
+                fx.push(ReaderEffect::ArmTimer(now + SCROLL_DEBOUNCE));
+            }
+            Out::NoContainer => self.say("Not in a container", fx),
+            Out::Bottom => self.say("bottom", fx),
+        }
+    }
+
+    /// N: skip past a block of links to the next text (NVDA "not link block").
+    fn web_not_link_block(&mut self, dir: Dir, now: Instant, fx: &mut ReaderEffects) {
+        let Some((doc, cur, _)) = self.browse_ctx(fx) else {
+            return;
+        };
+        let Some(b) = self.web.as_ref() else { return };
+        let Some(h) = b.docs.get(doc) else { return };
+        let max_line = b.settings.max_line;
+        let last = b.last_off;
+        let found = h.read.with(|d| {
+            let from = cursor::offset_of(d, cur).unwrap_or_else(|| last.min(d.text_len()));
+            let link_line = |r: &std::ops::Range<u32>| -> bool {
+                let at = |off: u32| {
+                    cursor::cursor_at(d, off).is_some_and(|c| up_to(d, c.node, Cat::LINK, 16).is_some())
+                };
+                r.end > r.start && at(r.start) && at(r.end.saturating_sub(1))
+            };
+            let mut at = from;
+            let mut seen_block = false;
+            for _ in 0..4096 {
+                match cursor::line(d, max_line, at, dir) {
+                    Mv::Landed { off, speak, .. } => {
+                        if link_line(&speak) {
+                            seen_block = true;
+                        } else if seen_block {
+                            let cu = cursor::cursor_at(d, off)?;
+                            return Some((
+                                cu,
+                                off,
+                                present::describe_from(d, speak.start, speak.end, Some(from)),
+                            ));
+                        }
+                        at = off;
+                    }
+                    Mv::Edge(_) => return None,
+                }
+            }
+            None
+        });
+        if let Some((cu, off, items)) = found {
+            self.web_set_cursor(doc, cu, off, now);
+            self.web_speak(&items, fx);
+            fx.push(ReaderEffect::ArmTimer(now + SCROLL_DEBOUNCE));
+        } else {
+            self.say("no more text after a block of links", fx);
         }
     }
 

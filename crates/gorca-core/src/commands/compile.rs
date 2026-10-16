@@ -245,6 +245,16 @@ pub fn browse_grabs(km: &CompiledKeymap, table: &KeysymTable) -> (Vec<Chord>, Ve
     (g.plain, g.exact)
 }
 
+/// The bare single-letter navigation chords: the quick-navigation and container commands, which
+/// `browse.single_letter_toggle` releases to the page.
+pub fn letter_grabs(km: &CompiledKeymap, table: &KeysymTable) -> Vec<Chord> {
+    let g = grabs_where(km, ModeKind::Browse, table, |b| {
+        let name = CoreCmd::from_id(b.cmd).map_or("", |c| c.name());
+        name.starts_with("quicknav.") || name.starts_with("browse.container_")
+    });
+    g.plain
+}
+
 /// The chords bound to `browse.escape`, for the auto-focus-mode grab set.
 pub fn escape_grabs(km: &CompiledKeymap, table: &KeysymTable) -> Vec<Chord> {
     let esc = CoreCmd::BrowseEscape.id();
@@ -470,6 +480,18 @@ mod tests {
                         // Neither source reader binds articles by default.
                         "quicknav.next.article",
                         "quicknav.prev.article",
+                        // NVDA-only browse keys: Orca has no virtual buffer (spec D-10).
+                        "quicknav.next.not_link_block",
+                        "quicknav.prev.not_link_block",
+                        "quicknav.next.annotation",
+                        "quicknav.prev.annotation",
+                        "quicknav.next.error",
+                        "quicknav.prev.error",
+                        "quicknav.next.paragraph",
+                        "quicknav.prev.paragraph",
+                        "browse.container_start",
+                        "browse.container_end",
+                        "browse.single_letter_toggle",
                         // Orca moves cell by cell and reads a row or a column; it has no
                         // first/last row or column and no say-all of a row.
                         "table.first_row",

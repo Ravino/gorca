@@ -55,9 +55,19 @@ impl Cat {
     pub const TEXT_BLOCK: Cat = Cat::bit(38);
     pub const LINE_HOST: Cat = Cat::bit(39);
     pub const TEXT_RUN: Cat = Cat::bit(40);
+    /// A node in an invalid state (`aria-invalid`, a spelling or grammar error): quick nav W.
+    pub const ERROR: Cat = Cat::bit(41);
 
     /// "Landmark" navigation unit: landmarks and regions (ADR-0003 section 12).
     pub const EMBEDDED_OR_DIALOG: Cat = Cat(Cat::EMBEDDED.0 | Cat::DIALOG.0);
+    /// What `,` and Shift+`,` jump out of: lists, tables, quotes, landmarks, dialogs, articles.
+    pub const CONTAINER: Cat = Cat(Cat::LIST.0
+        | Cat::TABLE.0
+        | Cat::BLOCKQUOTE.0
+        | Cat::LANDMARK.0
+        | Cat::REGION.0
+        | Cat::DIALOG.0
+        | Cat::ARTICLE.0);
     pub const ANY_LANDMARK: Cat = Cat(Cat::LANDMARK.0 | Cat::REGION.0);
 
     pub const fn bit(n: u32) -> Cat {
@@ -165,6 +175,10 @@ impl NodeFlags {
     /// A single space precedes this node's own text: it is a cell that follows another node in
     /// its row. Set by the translator like `BREAK_BEFORE`, never together with it.
     pub const CELL_SEP: NodeFlags = NodeFlags(1 << 15);
+    /// An annotation: inserted or deleted text, a comment (quick nav A).
+    pub const ANNOTATION: NodeFlags = NodeFlags(1 << 16);
+    /// The node is in an invalid state (quick nav W).
+    pub const ERROR: NodeFlags = NodeFlags(1 << 17);
 
     pub const fn contains(self, other: NodeFlags) -> bool {
         self.0 & other.0 == other.0
@@ -276,6 +290,12 @@ pub fn cats_of(role: Role, level: u8, flags: NodeFlags) -> Cat {
     }
     if flags.contains(NodeFlags::FRAME) {
         c = c | Cat::FRAME;
+    }
+    if flags.contains(NodeFlags::ANNOTATION) {
+        c = c | Cat::ANNOTATION;
+    }
+    if flags.contains(NodeFlags::ERROR) {
+        c = c | Cat::ERROR;
     }
     c
 }

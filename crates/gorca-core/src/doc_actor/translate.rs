@@ -211,6 +211,16 @@ pub fn derive_flags(n: &SrcNode, nested_doc: bool) -> (NodeFlags, u8) {
     {
         f = f | NodeFlags::LIVE;
     }
+    if matches!(tag, Some("ins" | "del"))
+        || ["comment", "suggestion", "insertion", "deletion"]
+            .iter()
+            .any(|t| has_token(xml, t))
+    {
+        f = f | NodeFlags::ANNOTATION;
+    }
+    if n.states.contains(StateSet::INVALID) {
+        f = f | NodeFlags::ERROR;
+    }
     if n.role == Role::DocumentWeb && nested_doc {
         f = f | NodeFlags::FRAME;
     }

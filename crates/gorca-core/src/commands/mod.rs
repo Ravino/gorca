@@ -15,7 +15,7 @@ mod state;
 mod table;
 
 pub use compile::{
-    Compiled, PlatformFacts, browse_grabs, chord_grabs, command_id, compile, escape_grabs,
+    Compiled, PlatformFacts, browse_grabs, chord_grabs, command_id, compile, escape_grabs, letter_grabs,
     gorca_modifiers, grab_collisions, lane_settings,
 };
 pub use handlers::PASS_TIMEOUT;

@@ -337,6 +337,17 @@ impl Reader {
             | CoreCmd::TableSayColumn
             | CoreCmd::TableSayAllRow
             | CoreCmd::TableSayAllColumn
+            | CoreCmd::BrowseContainerStart
+            | CoreCmd::BrowseContainerEnd
+            | CoreCmd::BrowseSingleLetterToggle
+            | CoreCmd::QuicknavNextNotLinkBlock
+            | CoreCmd::QuicknavPrevNotLinkBlock
+            | CoreCmd::QuicknavNextAnnotation
+            | CoreCmd::QuicknavPrevAnnotation
+            | CoreCmd::QuicknavNextError
+            | CoreCmd::QuicknavPrevError
+            | CoreCmd::QuicknavNextParagraph
+            | CoreCmd::QuicknavPrevParagraph
             | CoreCmd::QuicknavPrevArticle => self.browse_command(c, rep, now, fx),
             planned_cmds!() => {
                 // Declared but not implemented: the keymap never routes these (inert), so this
@@ -586,7 +597,8 @@ impl Reader {
             || self.keys.commands != l.mode_keys.commands
             || self.keys.exact != l.mode_keys.exact
             || self.keys.quick_nav != l.mode_keys.quick_nav
-            || self.keys.web_escape != l.mode_keys.web_escape;
+            || self.keys.web_escape != l.mode_keys.web_escape
+            || self.keys.letters != l.mode_keys.letters;
         self.cmd.republish();
         // The grab set follows the keymap (HR-1): re-sent only when the keys changed, and
         // always once at startup, which is when the source learns what to grab.

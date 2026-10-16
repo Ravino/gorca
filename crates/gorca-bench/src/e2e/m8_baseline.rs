@@ -7,20 +7,12 @@
 //! Rows starting with `rig:` are not gorca faults but limits of the test rig; fix the rig and
 //! delete them. Source: `docs/reports/m8-baseline.md` (run `m8-baseline-raw2`, 2026-10-15).
 
-const NO_EMBEDDED: &str = "O finds no embedded object: role=application and <object> are not in the embedded category on this page (to investigate: Cat::EMBEDDED vs the role Firefox exposes)";
-const LISTBOX_FOCUS: &str = "focus on a list box lands on its selected option (list item); list items do not switch to focus mode (NVDA: LISTITEM switches on focus, D-1)";
-const APP_FOCUS: &str = "focus on role=application does not switch to focus mode";
 const ARIA_COMBO: &str = "a div with role=combobox and text content does not switch to focus mode here, while the one on forms.html (aria-controls) does: to investigate";
-const NO_RESTORE: &str = "position restore after an in-place re-render (ADR-0003 10.3) is not implemented: the cursor goes back to the first item";
 const RIG_KEYS: &str = "rig: a key typed into Firefox through the compositor lands on an unnamed browser 'panel', not in the page (probe m8-probe-tab, m8-probe-tab2); the page needs keyboard focus, which a click and AT-SPI GrabFocus did not give";
 
 /// Step ids per root cause.
 pub(super) const MARKS: &[(&[&str], &str)] = &[
-    (&["QN.o.1", "QN.o.2"], NO_EMBEDDED),
-    (&["FM.listbox"], LISTBOX_FOCUS),
-    (&["FM.app", "FM.app.toggle"], APP_FOCUS),
     (&["APP.combo"], ARIA_COMBO),
-    (&["SP.restore"], NO_RESTORE),
     (&["FM.tab.real", "SY.tab", "SP.back"], RIG_KEYS),
 ];
 

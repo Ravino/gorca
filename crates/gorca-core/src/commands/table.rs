@@ -253,29 +253,18 @@ macro_rules! planned_cmds {
             | CoreCmd::ReviewCaretFollowsToggle
             | CoreCmd::ReviewAbove
             | CoreCmd::ReviewBelow
-            | CoreCmd::BrowseSingleLetterToggle
             | CoreCmd::BrowseElementsList
             | CoreCmd::BrowseFind
             | CoreCmd::BrowseFindNext
             | CoreCmd::BrowseFindPrev
             | CoreCmd::BrowseRefresh
             | CoreCmd::BrowseLiveRegionsToggle
-            | CoreCmd::BrowseContainerStart
-            | CoreCmd::BrowseContainerEnd
             | CoreCmd::QuicknavNextHeading7
             | CoreCmd::QuicknavPrevHeading7
             | CoreCmd::QuicknavNextHeading8
             | CoreCmd::QuicknavPrevHeading8
             | CoreCmd::QuicknavNextHeading9
             | CoreCmd::QuicknavPrevHeading9
-            | CoreCmd::QuicknavNextNotLinkBlock
-            | CoreCmd::QuicknavPrevNotLinkBlock
-            | CoreCmd::QuicknavNextAnnotation
-            | CoreCmd::QuicknavPrevAnnotation
-            | CoreCmd::QuicknavNextError
-            | CoreCmd::QuicknavPrevError
-            | CoreCmd::QuicknavNextParagraph
-            | CoreCmd::QuicknavPrevParagraph
             | CoreCmd::QuicknavNextClickable
             | CoreCmd::QuicknavPrevClickable
             | CoreCmd::QuicknavNextSlider
@@ -1440,7 +1429,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::BrowseSingleLetterToggle,
         name: "browse.single_letter_toggle",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -1520,7 +1509,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::BrowseContainerStart,
         name: "browse.container_start",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -1530,7 +1519,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::BrowseContainerEnd,
         name: "browse.container_end",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2170,7 +2159,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextNotLinkBlock,
         name: "quicknav.next.not_link_block",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2180,7 +2169,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevNotLinkBlock,
         name: "quicknav.prev.not_link_block",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2230,7 +2219,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextAnnotation,
         name: "quicknav.next.annotation",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2240,7 +2229,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevAnnotation,
         name: "quicknav.prev.annotation",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2250,7 +2239,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextError,
         name: "quicknav.next.error",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2260,7 +2249,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevError,
         name: "quicknav.prev.error",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2270,7 +2259,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavNextParagraph,
         name: "quicknav.next.paragraph",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,
@@ -2280,7 +2269,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevParagraph,
         name: "quicknav.prev.paragraph",
-        available: Availability::Planned(Milestone::M7),
+        available: Availability::Implemented,
         contexts: ContextMask::BROWSE_ONLY,
         max_press: 1,
         interrupts: true,

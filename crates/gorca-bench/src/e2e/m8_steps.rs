@@ -121,10 +121,6 @@ fn esc(id: &'static str) -> Step {
 
 // Reasons repeated across rows.
 const NO_FRAME_NAV: &str = "quicknav.next.frame (M) is Planned(M7): not implemented on main";
-const NO_NLB: &str = "quicknav.next.not_link_block (N) is Planned(M7): not implemented on main";
-const NO_ANN: &str = "quicknav.next.annotation (A) is Planned(M7): not implemented on main";
-const NO_ERR: &str = "quicknav.next.error (W) is Planned(M7): not implemented on main";
-const NO_PARA: &str = "quicknav.next.paragraph (P) is Planned(M7): not implemented on main";
 const NO_SEL: &str = "browse-mode selection (Shift+arrows, Ctrl+A) is Planned: not on main";
 const NAME_OMITTED: &str = "the accessible name of a labelled form control is not spoken on quick nav: the label is separate text outside the control's range and the presenter speaks the range only (LP-1, LP-4)";
 const NO_ROLE_WORD: &str = "the role word and count of a container are not spoken when the cursor lands on it (field diff, LP-2: M7b)";
@@ -222,21 +218,21 @@ fn qn() -> Vec<Step> {
         s("QN.t.3", P1, "T: no more tables", n('t'), &["no next table"]),
         // the keys gorca has not built yet
         top("QN.top19"),
-        s("QN.n.1", P1, "N: skip past a block of links", n('n'), &["Text after the link block"]).xf(NO_NLB),
-        s("QN.a.1", P2, "A: next annotation (inserted text)", n('a'), &["Inserted words"]).xf(NO_ANN),
-        s("QN.w.1", P2, "W: next error", n('w'), &["misspeled"]).xf(NO_ERR),
-        s("QN.p.1", P2, "P: next text paragraph", n('p'), &["Alpha link"]).xf(NO_PARA),
+        s("QN.n.1", P1, "N: skip past a block of links", n('n'), &["Text after the link block"]),
+        s("QN.a.1", P2, "A: next annotation (inserted text)", n('a'), &["Inserted words"]),
+        s("QN.w.1", P2, "W: next error", n('w'), &["misspeled"]),
+        s("QN.p.1", P2, "P: next text paragraph", n('p'), &["Alpha link"]),
         // containers (comma / Shift+comma)
         top("QN.top20"),
         pos("QN.list.enter", n('l')),
-        s("QN.comma.1", P1, "Comma: past the end of the list", n(','), &["First numbered"]).xf("browse.container_end is Planned(M7): not implemented on main"),
-        s("QN.comma.2", P1, "Shift+Comma: back to the start of the container", Act::Key(COMMA_SHIFT, SHIFT), &["First numbered"]).xf("browse.container_start is Planned(M7): not implemented on main"),
+        s("QN.comma.1", P1, "Comma: past the end of the list", n(','), &["First numbered"]),
+        s("QN.comma.2", P1, "Shift+Comma: back to the start of the container", Act::Key(COMMA_SHIFT, SHIFT), &["First numbered"]),
         top("QN.top21"),
-        s("QN.comma.3", P2, "Comma outside any container", n(','), &["Not in a container"]).xf("browse.container_end is Planned(M7): not implemented on main"),
+        s("QN.comma.3", P2, "Comma outside any container", n(','), &["Not in a container"]),
         // single-letter navigation toggle (NVDA+Shift+Space)
-        s("QN.sl.off", P1, "gorca+Shift+Space: single letter navigation off", Act::Chord(INSERT, SPACE, SHIFT), &["single letter navigation off"]).xf("browse.single_letter_toggle is Planned(M7): not implemented on main"),
-        s("QN.sl.key", P1, "H with it off reaches the page", n('h'), &[]).passes_through().xf("browse.single_letter_toggle is Planned(M7): not implemented on main"),
-        s("QN.sl.on", P1, "gorca+Shift+Space: back on", Act::Chord(INSERT, SPACE, SHIFT), &["single letter navigation on"]).xf("browse.single_letter_toggle is Planned(M7): not implemented on main"),
+        s("QN.sl.off", P1, "gorca+Shift+Space: single letter navigation off", Act::Chord(INSERT, SPACE, SHIFT), &["single letter navigation off"]),
+        s("QN.sl.key", P1, "H with it off reaches the page", n('h'), &[]).passes_through(),
+        s("QN.sl.on", P1, "gorca+Shift+Space: back on", Act::Chord(INSERT, SPACE, SHIFT), &["single letter navigation on"]),
     ]
 }
 
@@ -699,7 +695,11 @@ fn spa() -> Vec<Step> {
         s("SP.route2", P0, "Back to the first route", Act::Do(role::LINK, "Home route"), &["Home view"]).not(&["List view", "Extra"]).win(1500),
         top("SP.top2"),
         s("SP.items", P0, "I x3: the third list item", rep('i', 3), &["Row 3"]),
-        s("SP.rerender", P0, "The list is re-rendered with the same text: only the toast speaks", Act::Do(role::PUSH_BUTTON, "Re-render list"), &["List refreshed"]).not(&["Row 1", "Row 2"]).win(1200),
+        // The page re-renders the list 1200 ms after the click, so the cursor can be put in the
+        // list first: a click on the button would otherwise move focus (and the cursor) to it.
+        Step::setup("SP.rr.click", "press Re-render list; the page re-renders 1200 ms later", Act::Do(role::PUSH_BUTTON, "Re-render list")),
+        s("SP.items2", P0, "I x3 from the button: the third list item", rep('i', 3), &["Row 3"]),
+        s("SP.rerender", P0, "The list is re-rendered with the same text: only the toast speaks", Act::Wait(1500), &["List refreshed"]).not(&["Row 1", "Row 2"]).win(1800),
         s("SP.restore", P0, "Down: the cursor is still on Row 3 (position restore), so Row 4 is next", key0(DOWN), &["Row 4"]).not(&["Row 1"]),
         s("SP.back", P1, "Browser Back (Alt+Left) pops the route: the list view returns", Act::AppKeys(&[56, 105]), &["List view"]).win(1500),
     ]
