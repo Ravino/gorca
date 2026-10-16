@@ -25,7 +25,7 @@ use crate::SpeechIntent;
 use crate::focus::{FocusEffect, FocusMsg, FocusState, settle_delay};
 use crate::reader::{
     DUPLICATE_FOCUS_WINDOW, FetchKind, FocusLaneMsg, QueryReply, Reader, ReaderEffect,
-    ReaderEffects,
+    ReaderEffects, Reconfirm,
 };
 
 /// A correction replaces the earlier utterance only if less than this much time has passed
@@ -84,6 +84,7 @@ fn apply_web_extra(
 
 impl Reader {
     pub(crate) fn on_focus(&mut self, f: FocusLaneMsg, now: Instant, fx: &mut ReaderEffects) {
+        tracing::debug!(msg = ?f, "focus lane");
         match f {
             FocusLaneMsg::FocusChanged { node } => {
                 self.selection_node = None;
@@ -122,9 +123,11 @@ impl Reader {
             && now.saturating_duration_since(at) < DUPLICATE_FOCUS_WINDOW
         {
             self.duplicate_focus_dropped += 1;
+            self.reconfirm_focus(node, fx);
             return;
         }
         self.last_focus = Some((node, now));
+        self.reconfirm = Reconfirm::Idle;
         self.text_untrack();
         // Review follows the focus (ADR-0006 4.1) unless the user turned that off.
         self.review_focus_changed(fx);
@@ -151,6 +154,47 @@ impl Reader {
                 fx.push(ReaderEffect::ArmTimer(until));
             }
         }
+    }
+
+    /// Whether the application of `node` has not earned the protection yet (and `node` is a real
+    /// focus, not a switcher selection). The grace of the previous application does not count:
+    /// it ends, and only publishing makes the application current.
+    fn protection_unearned(&self, node: NodeKey) -> bool {
+        self.selection_node != Some(node)
+            && self
+                .focused_app
+                .as_ref()
+                .is_some_and(|f| f.get() != Some(node.app))
+    }
+
+    /// A repeated focus event for the node in focus. It is not presented again, but a toolkit
+    /// that announces the focus before the widget says `FOCUSED` (the real VTE) repeats it once
+    /// the state is true: read the state once, and `on_state_reply` earns the protection.
+    fn reconfirm_focus(&mut self, node: NodeKey, fx: &mut ReaderEffects) {
+        tracing::debug!(?node, state = ?self.reconfirm, unearned = self.protection_unearned(node), presented = ?self.presented.as_ref().map(|p| p.node), "repeated focus event");
+        if matches!(self.reconfirm, Reconfirm::Asked(n) | Reconfirm::Pending(n) if n == node)
+            || !self.protection_unearned(node)
+        {
+            return;
+        }
+        if self.presented.as_ref().is_some_and(|p| p.node == node) {
+            self.ask_state(node, fx);
+        } else {
+            // The first presentation is still on its way; `present_with` asks when it is done.
+            self.reconfirm = Reconfirm::Pending(node);
+        }
+    }
+
+    fn ask_state(&mut self, node: NodeKey, fx: &mut ReaderEffects) {
+        tracing::debug!(?node, "focus reconfirm: reading the state");
+        self.reconfirm = Reconfirm::Asked(node);
+        self.counters.focus_reconfirms += 1;
+        fx.push(Self::fetch_effect(
+            node,
+            PropMask::STATES | PropMask::VALUE | PropMask::NAME,
+            self.epoch.current(),
+            FetchKind::StateChange,
+        ));
     }
 
     pub(crate) fn apply_focus(&mut self, msg: FocusMsg, fx: &mut ReaderEffects) {
@@ -359,6 +403,7 @@ impl Reader {
         from_cache: bool,
         fx: &mut ReaderEffects,
     ) {
+        tracing::debug!(node = ?snap.key, states = ?snap.states, ?source, from_cache, "focus presented");
         let (next, effect) = self.focus.step(FocusMsg::Presented { node: snap.key });
         self.focus = next;
         match effect {
@@ -438,6 +483,11 @@ impl Reader {
                         // must not stay with whoever held it before (fail closed).
                         f.demote();
                     }
+                }
+                if self.reconfirm == Reconfirm::Pending(snap.key)
+                    && self.protection_unearned(snap.key)
+                {
+                    self.ask_state(snap.key, fx);
                 }
             }
             Some(
@@ -674,6 +724,7 @@ impl Reader {
     }
 
     fn on_state_reply(&mut self, r: &QueryReply, fx: &mut ReaderEffects) {
+        tracing::debug!(node = ?r.node, states = ?r.result.as_ref().map(|n| n.states), presented = ?self.presented.as_ref().map(|p| p.node), "state reply");
         let Some(p) = self.presented.clone() else {
             return;
         };

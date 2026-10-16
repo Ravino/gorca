@@ -76,6 +76,24 @@ pub enum FocusLaneMsg {
     },
 }
 
+/// What a repeated focus event for the node already in focus asks of the Reader (B-1 F-1, M6).
+///
+/// A toolkit can announce a focus before the widget reports `FOCUSED`: the first event is
+/// presented from a state that is not yet true, and the second event (a few ms later, inside
+/// `DUPLICATE_FOCUS_WINDOW`) carries the truth. The second event is not presented again, but it
+/// is the cue to read the state once more while the application holds no protection.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) enum Reconfirm {
+    /// No repeated event, or the protection is already earned.
+    #[default]
+    Idle,
+    /// A repeated event came while the first presentation was still on its way: read the state
+    /// when the node has been presented without `FOCUSED`.
+    Pending(NodeKey),
+    /// The state was asked for after a repeated event (once per focus change).
+    Asked(NodeKey),
+}
+
 /// Why the Reader asked for a node, so the reply is handled the right way when it comes back.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum FetchKind {
@@ -370,6 +388,8 @@ pub struct Reader {
     pub(crate) focus_retried: Option<NodeKey>,
     /// The focus whose failed RV-1 re-read was already retried once (a fresh deadline).
     pub(crate) revalidate_retried: Option<NodeKey>,
+    /// A repeated focus event after a presentation that could not show `FOCUSED` yet.
+    pub(crate) reconfirm: Reconfirm,
     /// The browse mode word and line spoken with the last focus utterance, so an RV-1 refine of
     /// that utterance repeats them instead of cutting them off.
     pub(crate) web_extra: Option<(
@@ -393,6 +413,8 @@ pub struct Reader {
 pub struct ReaderCounters {
     /// Presentations served from the mirror.
     pub cached_presentations: u64,
+    /// State reads asked for after a repeated focus event (the first presentation lacked `FOCUSED`).
+    pub focus_reconfirms: u64,
     /// RV-1 fetches issued.
     pub revalidations: u64,
     /// RV-1 replies that agreed with what was presented.
@@ -433,6 +455,7 @@ impl Reader {
             web: None,
             focus_retried: None,
             revalidate_retried: None,
+            reconfirm: Reconfirm::Idle,
             web_extra: None,
             text: TextState::new(),
             ext: None,
@@ -1496,6 +1519,107 @@ mod tests {
             now,
         );
         assert_eq!(published.get(), None);
+    }
+
+    /// M6 / B-1 F-1: a toolkit announces the focus before the widget says FOCUSED (the real
+    /// VTE), the fresh read shows no FOCUSED, and the repeated event inside the duplicate window
+    /// is the cue to read the state again: that reply earns the protection.
+    #[test]
+    fn a_repeated_focus_event_after_an_unfocused_read_asks_the_state_and_earns_protection() {
+        let mut f = fixture();
+        let published = Arc::new(FocusedApp::new());
+        f.reader.focused_app = Some(Arc::clone(&published));
+        let now = Instant::now();
+        let fx = focus_on(&mut f, 1, now);
+        assert_eq!(effects_of(&fx), ["fetch-focus", "demand"]);
+        f.reader.handle(
+            reply(&f, 1, FetchKind::Focus, snap(1, Role::Button, "Term")),
+            now,
+        );
+        assert_eq!(published.get(), None, "the first read did not show FOCUSED");
+        let fx = focus_on(&mut f, 1, now + Duration::from_millis(8));
+        assert_eq!(effects_of(&fx), ["fetch-s1"], "the repeated event asks");
+        assert_eq!(f.reader.duplicate_focus_dropped(), 1);
+        let fx = f.reader.handle(
+            reply(&f, 1, FetchKind::StateChange, focused_snap(1, "Term")),
+            now,
+        );
+        assert!(effects_of(&fx).is_empty(), "nothing is spoken for FOCUSED");
+        assert_eq!(published.get(), Some(app()), "earned by the state read");
+        // Asked once per focus change.
+        let fx = focus_on(&mut f, 1, now + Duration::from_millis(20));
+        assert!(effects_of(&fx).is_empty());
+    }
+
+    /// The repeated event can come while the first presentation is still on its way: the state
+    /// is read as soon as the node has been presented without FOCUSED.
+    #[test]
+    fn a_repeated_focus_event_before_the_first_presentation_asks_after_it() {
+        let mut f = fixture();
+        let published = Arc::new(FocusedApp::new());
+        f.reader.focused_app = Some(Arc::clone(&published));
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        let fx = focus_on(&mut f, 1, now + Duration::from_millis(3));
+        assert!(effects_of(&fx).is_empty(), "nothing yet to read it for");
+        let fx = f.reader.handle(
+            reply(&f, 1, FetchKind::Focus, snap(1, Role::Button, "Term")),
+            now,
+        );
+        assert!(
+            effects_of(&fx).contains(&"fetch-s1"),
+            "{:?}",
+            effects_of(&fx)
+        );
+        f.reader.handle(
+            reply(&f, 1, FetchKind::StateChange, focused_snap(1, "Term")),
+            now,
+        );
+        assert_eq!(published.get(), Some(app()));
+    }
+
+    /// A fresh read that shows FOCUSED needs no second read, and neither does an application that
+    /// is already current.
+    #[test]
+    fn a_repeated_focus_event_asks_nothing_when_the_protection_is_earned() {
+        let mut f = fixture();
+        let published = Arc::new(FocusedApp::new());
+        f.reader.focused_app = Some(Arc::clone(&published));
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        let fx = focus_on(&mut f, 1, now + Duration::from_millis(3));
+        assert!(effects_of(&fx).is_empty());
+        let fx = f
+            .reader
+            .handle(reply(&f, 1, FetchKind::Focus, focused_snap(1, "Term")), now);
+        assert!(!effects_of(&fx).contains(&"fetch-s1"));
+        assert_eq!(published.get(), Some(app()));
+        let fx = focus_on(&mut f, 1, now + Duration::from_millis(9));
+        assert!(effects_of(&fx).is_empty());
+    }
+
+    /// A repeated event never earns anything by itself: an application whose state keeps
+    /// answering without FOCUSED stays unprotected (fail closed), and is asked only once.
+    #[test]
+    fn a_repeated_focus_event_alone_earns_no_protection() {
+        let mut f = fixture();
+        let published = Arc::new(FocusedApp::new());
+        f.reader.focused_app = Some(Arc::clone(&published));
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        f.reader.handle(
+            reply(&f, 1, FetchKind::Focus, snap(1, Role::Button, "Term")),
+            now,
+        );
+        let fx = focus_on(&mut f, 1, now + Duration::from_millis(8));
+        assert_eq!(effects_of(&fx), ["fetch-s1"]);
+        f.reader.handle(
+            reply(&f, 1, FetchKind::StateChange, snap(1, Role::Button, "Term")),
+            now,
+        );
+        assert_eq!(published.get(), None);
+        let fx = focus_on(&mut f, 1, now + Duration::from_millis(30));
+        assert!(effects_of(&fx).is_empty(), "asked once per focus change");
     }
 
     #[test]

@@ -218,7 +218,11 @@ class App:
 
     def state_words(self, n):
         lo = hi = 0
-        for s in n.states:
+        states = n.states
+        hide = getattr(self, "hide_focused", None)
+        if hide and hide[0] == n.id and time.monotonic() < hide[1]:
+            states = states - {S_FOCUSED}
+        for s in states:
             if s < 32:
                 lo |= 1 << s
             else:
@@ -1274,6 +1278,58 @@ def build_terminal(app):
     app.add(frame.id, R_ENTRY, "other", text="", editable=True, states=(S_FOCUSABLE,))
 
 
+def focus_window(app, cmd):
+    """Alt+Tab into a window, the way a toolkit reports it: the window is activated and the node
+    takes the focus, in either order. Like the real VTE (GTK3), the Focus event can come before
+    the widget reports FOCUSED: `stale_ms` hides FOCUSED from GetState/GetStateSet for that long
+    after the Focus event, and `lag_ms` delays the `focused=1` StateChanged signal (the repeated
+    focus event of the reader) by that long after the Focus event; 0 = at once.
+
+    `order`: "activate_first" | "focus_first" (the Activate window event before / after the
+    focus signals)."""
+    n = app.node(cmd["node"])
+    frame = app.nodes[1]
+    lag = int(cmd.get("lag_ms", 0))
+    stale = int(cmd.get("stale_ms", 0))
+    order = cmd.get("order", "activate_first")
+    app.t_focus_ns = 0
+
+    def activate():
+        frame.states.add(S_ACTIVE)
+        app.ev_state(frame, S_ACTIVE, True)
+        app.emit(path_of(frame.id), EV_WIN, "Activate", "", 0, 0, dbus.Int32(0))
+
+    def focus():
+        old = app.nodes[app.focus_id] if app.focus_id is not None else None
+        if old is not None and old is not n:
+            old.states.discard(S_FOCUSED)
+            app.ev_state(old, S_FOCUSED, False)
+        app.focus_id = n.id
+        n.states.add(S_FOCUSED)
+        if stale:
+            app.hide_focused = (n.id, time.monotonic() + stale / 1000.0)
+        app.t_focus_ns = time.monotonic_ns()
+        if lag == 0:
+            app.ev_state(n, S_FOCUSED, True)
+        app.conn.flush()
+        app.emit(path_of(n.id), EV_FOCUS, "Focus", "", 0, 0, dbus.Int32(0))
+        if lag:
+            def late():
+                app.ev_state(n, S_FOCUSED, True)
+                app.conn.flush()
+                return False
+            GLib.timeout_add(lag, late)
+
+    if order == "activate_first":
+        activate()
+        focus()
+    else:
+        focus()
+        activate()
+    app.conn.flush()
+    return {"t_emit_ns": app.t_focus_ns}
+
+
 # ---- control channel -----------------------------------------------------------------------------
 def handle(app, cmd):
     c = cmd.get("cmd")
@@ -1282,6 +1338,8 @@ def handle(app, cmd):
         app.t_focus_ns = 0
         app.set_focus(n)
         return {"t_emit_ns": app.t_focus_ns}
+    elif c == "focus_window":
+        return focus_window(app, cmd)
     elif c == "select":
         n = app.node(cmd["node"])
         old = app.nodes[app.switcher_selected] if app.switcher_selected is not None else None

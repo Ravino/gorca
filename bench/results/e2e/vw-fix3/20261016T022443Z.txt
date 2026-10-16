@@ -1,0 +1,36 @@
+# e2e vw-fix3
+# utc=2026-10-16T02:24:43Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=12.25 12.38 13.90 2/3122 544127
+# git_rev=210e144
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=vw-fix3
+# reader=daemon:<repo>/.claude/worktrees/agent-a9787c6b3fb7f34ee/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=12.25 12.38 13.90 1/3122 544124
+# reader_env=GORCA_M1=1 GORCA_M6=1 GORCA_M6_STRICT=1 RUST_LOG=gorca_core=debug
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# note0=VW: output not spoken after focus_first, FOCUSED lag 8 ms, bounce true
+# note1=VW: output after Alt+Tab into the terminal before any key; lost per case [0, 0, 0, 0, 2, 0, 0] (order, FOCUSED lag, bounce: [("activate_first", 0, false), ("focus_first", 0, false), ("focus_first", 8, false), ("activate_first", 8, false), ("focus_first", 8, true), ("focus_first", 160, false), ("focus_first", 400, false)]); latency is frame emit to SPEAK as in V1
+
+metric                     bus                median          min          max  n op    threshold  res   note
+VW.vw_ms.n                 daemon/voicego           12           12           12  1                  info   [samples]
+VW.vw_ms.p50               daemon/voicego         31.5         31.5         31.5  1                  info   [ms]
+VW.vw_ms.p95               daemon/voicego         31.6         31.6         31.6  1                  info   [ms]
+VW.vw_ms.p99               daemon/voicego         32.3         32.3         32.3  1 <=           35  PASS   [ms]
+VW.vw_ms.p999              daemon/voicego         32.3         32.3         32.3  1                  info   [ms]
+VW.vw_ms.max               daemon/voicego         32.3         32.3         32.3  1                  info   [ms]
+VW.term_frames             daemon/voicego           15           15           15  1                  info   [frames]
+VW.vte_assert              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [calls]
+VW.vw_lost                 daemon/voicego            2            2            2  1 <=            0  FAIL  gated on the max over repeats [events]

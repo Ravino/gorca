@@ -181,7 +181,7 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     ("FSA3", "fsa3_stop_ms", "p99") => Some(SA3_STOP_P99_MS),
                     // M7b: browse say-all, first chunk after the key (browse design 15, SAB).
                     ("BSA1", "bsa1_ms", "p99") => Some(BSA_P99_MS),
-                    ("V1", "v1_ms", "p99") => Some(V1_P99_MS),
+                    ("V1", "v1_ms", "p99") | ("VW", "vw_ms", "p99") => Some(V1_P99_MS),
                     ("VT", "vt_ms", "p99") => Some(E1_P99_MS),
                     ("V3", "v3_stop_ms", "p99") => Some(V3_STOP_P99_MS),
                     ("VR", "vr_ms", "p99") => Some(R1_P99_MS),
@@ -279,6 +279,7 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "vr_lost"
                     | "vr_ipc_calls"
                     | "vf_failures"
+                    | "vw_lost"
                     | "vb_missing"
                     | "vb_double"
                     | "vb_stray_speaks"
@@ -298,6 +299,7 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "vv_yes_flood_unspoken"
                     | "vv_seq_flood_unspoken"
                     | "vv_screen_failures"
+                    | "vv_focus_failures"
                     | "vv_password_prompt_missing"
                     | "vv_password_echo_missing"
                     | "vv_password_echo_double"
