@@ -452,12 +452,19 @@ fn a_flood_of_host_calls_is_bounded_per_call_and_per_second() {
             0,
             "{b:?}: a flood within fuel is not a fault"
         );
-        // Hammering the hook does not lift the per-second speech budget.
+        // Hammering the hook does not lift the per-second speech budget: a burst of 10 plus the
+        // refill of 10 per second over the time the loop really took (the bucket refills in wall
+        // time, so a descheduled loop on a loaded host legitimately earns more).
+        let t = Instant::now();
         for _ in 0..20 {
             ae.on_event(&announce("spam"));
         }
         let total = sink.all().len();
-        assert!(total <= 12, "{b:?}: {total} messages in a burst");
+        let earned = (took + t.elapsed()).as_secs_f64() * 10.0;
+        assert!(
+            (total as f64) <= 12.0 + earned,
+            "{b:?}: {total} messages in a burst ({earned:.1} earned by the refill)"
+        );
     }
 }
 

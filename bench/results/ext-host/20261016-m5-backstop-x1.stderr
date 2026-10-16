@@ -1,0 +1,973 @@
+   Compiling syn v3.0.8
+   Compiling serde v1.0.229
+   Compiling indexmap v2.14.2
+   Compiling anyhow v1.0.104
+   Compiling rustix v1.1.5
+   Compiling regex-automata v0.4.18
+   Compiling linux-raw-sys v0.12.1
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.154
+   Compiling itoa v1.0.18
+   Compiling ext-test v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/extensions/ext-test)
+   Compiling wasmparser v0.258.3
+   Compiling memfd v0.6.6
+   Compiling regex v1.13.1
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling tokio-macros v2.7.2
+   Compiling async-trait v0.1.92
+   Compiling ext-vte v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/extensions/ext-vte)
+   Compiling tokio v1.53.2
+   Compiling thiserror v2.0.21
+   Compiling cobs v0.3.0
+   Compiling gorca-config v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/crates/gorca-config)
+   Compiling smallvec v1.16.3
+   Compiling wasmtime-internal-core v49.0.3
+   Compiling postcard v1.1.3
+   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/crates/gorca-model)
+   Compiling regalloc2 v0.15.2
+   Compiling gorca-text v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/crates/gorca-text)
+   Compiling cranelift-bitset v0.136.3
+   Compiling wasmtime-internal-jit-icache-coherence v49.0.3
+   Compiling cranelift-entity v0.136.3
+   Compiling pulley-interpreter v49.0.3
+   Compiling gorca-doc v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/crates/gorca-doc)
+   Compiling cranelift-bforest v0.136.3
+   Compiling wasm-encoder v0.258.3
+   Compiling wit-parser v0.258.3
+   Compiling tokio-util v0.7.20
+   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/crates/gorca-rt)
+   Compiling wasm-metadata v0.258.3
+   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/crates/gorca-ingress)
+   Compiling gorca-output-api v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/crates/gorca-output-api)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/crates/gorca-doc-source-api)
+   Compiling gorca-input-api v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/crates/gorca-input-api)
+   Compiling gorca-speech v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/crates/gorca-speech)
+   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/crates/gorca-connector-api)
+   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/crates/gorca-mirror)
+   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/crates/gorca-testkit)
+   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/crates/gorca-core)
+   Compiling wit-component v0.258.3
+   Compiling wasmtime-internal-wit-bindgen v49.0.3
+   Compiling cranelift-codegen v0.136.3
+   Compiling wasmprinter v0.258.3
+   Compiling wasmtime-internal-component-macro v49.0.3
+   Compiling wasmtime-environ v49.0.3
+   Compiling cranelift-frontend v0.136.3
+   Compiling wasmtime-internal-unwinder v49.0.3
+   Compiling cranelift-native v0.136.3
+   Compiling wasmtime-internal-cranelift v49.0.3
+   Compiling wasmtime v49.0.3
+   Compiling gorca-ext-host v0.0.0 (<repo>/.claude/worktrees/agent-a05f7786fd84a9875/crates/gorca-ext-host)
+    Finished `release` profile [optimized + debuginfo] target(s) in 4m 20s
+     Running `target/release/examples/x1 200000 target/ext-wasm/wasm32-wasip2/release/ext_test.wasm`
+wasm rss per instance: 28 KiB over 100 instances
+wasm storm 1t: faults 0 disabled 0 busy_skips 0 busy_suppressed 0
+wasm storm 4t: faults 0 disabled 0 busy_skips 0 busy_suppressed 0
+wasm storm 8t: faults 0 disabled 0 busy_skips 0 busy_suppressed 0
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+
+thread 'main' (19974) panicked at extensions/ext-test/src/lib.rs:56:5:
+ext-test: deliberate crash
+native storm 1t: faults 3 disabled 1 busy_skips 9 busy_suppressed 0
+native storm 4t: faults 6 disabled 1 busy_skips 18 busy_suppressed 0
+
+thread 'main' (19974) panicked at crates/gorca-ext-host/examples/x1.rs:296:48:
+attach
