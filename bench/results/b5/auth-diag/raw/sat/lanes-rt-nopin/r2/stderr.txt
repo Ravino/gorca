@@ -213,3 +213,5 @@
 2026-10-16T12:03:31.723626Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 1231, replaced: 16, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
 2026-10-16T12:03:31.724234Z  INFO gorca_daemon: gorca stopped
 -- round 1/1 K2s (load 28.78 28.45 28.70 19/3278 4061132)
+-- round 1/1 R1s (load 29.12 28.53 28.72 28/3309 4061616)
+== wrote bench/results/b5/auth-diag/raw/sat/lanes-rt-nopin/r2/20261016T120412Z.{json,txt}

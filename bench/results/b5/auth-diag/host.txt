@@ -17,3 +17,4 @@ quiet-host:
   idle C2_ACPI latency=127us disabled=1
   idle C3_ACPI latency=1048us disabled=1
   load: 9.05 17.66 28.77 3/3313 4045342
+loadavg_end=28.74 28.58 28.73 4/3264 4063093

@@ -1,0 +1,177 @@
+# e2e b5-single-sat-r1
+# utc=2026-10-16T12:36:46Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=36.63 25.27 17.26 44/3400 4108662
+# git_rev=e185a10
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=b5-single-sat-r1
+# reader=daemon:<repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/bench/b5/reader-cpu.sh
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=36.63 25.27 17.26 37/3401 4108659
+# reader_env=GORCA_CPU_OUT=<repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/bench/results/b5/auth-diag2/raw/sat/single/r1/cpu.txt GORCA_M1=1 GORCA_M4=1 GORCA_M4B=1 GORCA_TOPOLOGY_REPORT=<repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/bench/results/b5/auth-diag2/raw/sat/single/r1/rep.%p.json GORCA_RTKIT_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=<repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/target/release/gorca --impersonate-orca --topology=single
+# ext_dir=none
+# extensions=none
+# note0=K1: correlated by echoed character and time
+# note1=k2s_ms: first SPEAK between a command key and the next one (1198 spoken for 1200 chords)
+# note2=k2s_ms: 5 chords without a SPEAK in their window; reader counters: submitted 1231, spoken 1229, superseded 2, stale 0, inbox 0, received by the server 1229
+# note3=r1s_ms: first SPEAK between a numpad review key and the next one (1197 spoken for 1200 presses); the application calls during the series are RR-1 revalidations (every 2 s), never on the key path
+# note4=r1s_ms: 3 keys without their text; reader counters: submitted 1233, spoken 1230, superseded 3, stale 0, inbox 0, received by the server 1230
+# note5=k3_ms: first SPEAK between a command key and the next one (1521 spoken for 1200 chords)
+# note6=k3_ms: 0 chords without a SPEAK in their window; reader counters: submitted 2332, spoken 1552, superseded 5, stale 775, inbox 0, received by the server 1552
+# note7=A1 first mismatch: wanted `Delete item 55?, dialog, Item 55 will be lost., Confirm 55, button`, got `Delete item 55?, dialog, Confirm 55, button`
+# note8=A1: 150 fresh dialogs and 150 fresh plain windows after 6 warm-up ones; the focus follows the activation by 2 ms; a1_ms is the activation emit to the first SPEAK carrying the focus button (the title, role and dialog text lead it in one utterance)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+L1.l0_ms.n                 daemon/voicego         1200         1200         1200  1                  info   [samples]
+L1.l0_ms.p50               daemon/voicego        0.257        0.257        0.257  1                  info   [ms]
+L1.l0_ms.p95               daemon/voicego        2.164        2.164        2.164  1                  info   [ms]
+L1.l0_ms.p99               daemon/voicego        4.169        4.169        4.169  1                  info   [ms]
+L1.l0_ms.p999              daemon/voicego        5.505        5.505        5.505  1                  info   [ms]
+L1.l0_ms.max               daemon/voicego        5.982        5.982        5.982  1                  info   [ms]
+L1.l1_ms.n                 daemon/voicego         1178         1178         1178  1                  info   [samples]
+L1.l1_ms.p50               daemon/voicego        3.889        3.889        3.889  1                  info   [ms]
+L1.l1_ms.p95               daemon/voicego        7.665        7.665        7.665  1                  info   [ms]
+L1.l1_ms.p99               daemon/voicego         10.9         10.9         10.9  1 <=           15  PASS   [ms]
+L1.l1_ms.p999              daemon/voicego         17.8         17.8         17.8  1                  info   [ms]
+L1.l1_ms.max               daemon/voicego         19.9         19.9         19.9  1                  info   [ms]
+L1.l1g_ms.n                daemon/voicego         1178         1178         1178  1                  info   [samples]
+L1.l1g_ms.p50              daemon/voicego        3.072        3.072        3.072  1                  info   [ms]
+L1.l1g_ms.p95              daemon/voicego        6.705        6.705        6.705  1                  info   [ms]
+L1.l1g_ms.p99              daemon/voicego        9.957        9.957        9.957  1                  info  gorca side: bus arrival to SPEAK [ms]
+L1.l1g_ms.p999             daemon/voicego         14.7         14.7         14.7  1                  info   [ms]
+L1.l1g_ms.max              daemon/voicego         17.1         17.1         17.1  1                  info   [ms]
+L1.cpu_pct                 daemon/voicego            0            0            0  1                  info   [% of one core]
+L1.cpu_us_per_event        daemon/voicego            0            0            0  1                  info   [us/event]
+L1.idle_cpu_pct            daemon/voicego            0            0            0  1                  info   [% of one core]
+L1.lost                    daemon/voicego           22           22           22  1 <=            0  FAIL  gated on the max over repeats [events]
+L3-50k.l0_ms.n             daemon/voicego         1200         1200         1200  1                  info   [samples]
+L3-50k.l0_ms.p50           daemon/voicego        1.800        1.800        1.800  1                  info   [ms]
+L3-50k.l0_ms.p95           daemon/voicego         19.0         19.0         19.0  1                  info   [ms]
+L3-50k.l0_ms.p99           daemon/voicego        122.3        122.3        122.3  1                  info   [ms]
+L3-50k.l0_ms.p999          daemon/voicego        208.8        208.8        208.8  1                  info   [ms]
+L3-50k.l0_ms.max           daemon/voicego        223.8        223.8        223.8  1                  info   [ms]
+L3-50k.l1_ms.n             daemon/voicego          978          978          978  1                  info   [samples]
+L3-50k.l1_ms.p50           daemon/voicego        6.773        6.773        6.773  1                  info   [ms]
+L3-50k.l1_ms.p95           daemon/voicego         26.6         26.6         26.6  1                  info   [ms]
+L3-50k.l1_ms.p99           daemon/voicego         90.2         90.2         90.2  1 <=           15  FAIL   [ms]
+L3-50k.l1_ms.p999          daemon/voicego        230.5        230.5        230.5  1                  info   [ms]
+L3-50k.l1_ms.max           daemon/voicego        364.1        364.1        364.1  1                  info   [ms]
+L3-50k.l1g_ms.n            daemon/voicego          978          978          978  1                  info   [samples]
+L3-50k.l1g_ms.p50          daemon/voicego        4.931        4.931        4.931  1                  info   [ms]
+L3-50k.l1g_ms.p95          daemon/voicego         23.3         23.3         23.3  1                  info   [ms]
+L3-50k.l1g_ms.p99          daemon/voicego         88.0         88.0         88.0  1                  info  gorca side: bus arrival to SPEAK [ms]
+L3-50k.l1g_ms.p999         daemon/voicego        224.3        224.3        224.3  1                  info   [ms]
+L3-50k.l1g_ms.max          daemon/voicego        363.7        363.7        363.7  1                  info   [ms]
+L3-50k.cpu_pct             daemon/voicego            0            0            0  1                  info   [% of one core]
+L3-50k.cpu_us_per_event    daemon/voicego            0            0            0  1                  info   [us/event]
+L3-50k.lost                daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+L3-50k.storm_achieved_eps  daemon/voicego        42908        42908        42908  1 >=        45000  FAIL  must reach 90% of the target rate [ev/s]
+L3-50k.storm_max_lag_ms    daemon/voicego         2469         2469         2469  1                  info   [ms]
+L3-50k.storm_target_eps    daemon/voicego        50000        50000        50000  1                  info   [ev/s]
+L3-50k.superseded          daemon/voicego          222          222          222  1                  info   [events]
+L3-50k.superseded_max_run  daemon/voicego           19           19           19  1 <=           10  FAIL  consecutive focus probes overtaken by a newer one (ADR-0001 R-1) [events]
+L2-50k.l2_ms.n             daemon/voicego          400          400          400  1                  info   [samples]
+L2-50k.l2_ms.p50           daemon/voicego        2.101        2.101        2.101  1                  info   [ms]
+L2-50k.l2_ms.p95           daemon/voicego         24.4         24.4         24.4  1                  info   [ms]
+L2-50k.l2_ms.p99           daemon/voicego         74.0         74.0         74.0  1 <=            5  FAIL   [ms]
+L2-50k.l2_ms.p999          daemon/voicego        308.6        308.6        308.6  1                  info   [ms]
+L2-50k.l2_ms.max           daemon/voicego        308.6        308.6        308.6  1                  info   [ms]
+L2-50k.l2s_ms.n            daemon/voicego          400          400          400  1                  info   [samples]
+L2-50k.l2s_ms.p50          daemon/voicego        2.973        2.973        2.973  1                  info   [ms]
+L2-50k.l2s_ms.p95          daemon/voicego         26.0         26.0         26.0  1                  info   [ms]
+L2-50k.l2s_ms.p99          daemon/voicego         78.4         78.4         78.4  1                  info   [ms]
+L2-50k.l2s_ms.p999         daemon/voicego        308.6        308.6        308.6  1                  info   [ms]
+L2-50k.l2s_ms.max          daemon/voicego        308.6        308.6        308.6  1                  info   [ms]
+L2-50k.lost                daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+L2-50k.stale_not_cancelled daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [trials]
+L2-50k.storm_achieved_eps  daemon/voicego        49107        49107        49107  1 >=        45000  PASS  must reach 90% of the target rate [ev/s]
+L2-50k.storm_max_lag_ms    daemon/voicego        958.4        958.4        958.4  1                  info   [ms]
+L2-50k.storm_target_eps    daemon/voicego        50000        50000        50000  1                  info   [ev/s]
+K1-50k.k1_ms.n             daemon/voicego         1200         1200         1200  1                  info   [samples]
+K1-50k.k1_ms.p50           daemon/voicego        0.373        0.373        0.373  1                  info   [ms]
+K1-50k.k1_ms.p95           daemon/voicego        2.176        2.176        2.176  1                  info   [ms]
+K1-50k.k1_ms.p99           daemon/voicego        4.398        4.398        4.398  1 <=           15  PASS   [ms]
+K1-50k.k1_ms.p999          daemon/voicego        8.372        8.372        8.372  1                  info   [ms]
+K1-50k.k1_ms.max           daemon/voicego         10.3         10.3         10.3  1                  info   [ms]
+K1-50k.lost                daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+K1-50k.storm_achieved_eps  daemon/voicego        49993        49993        49993  1 >=        45000  PASS  must reach 90% of the target rate [ev/s]
+K1-50k.storm_max_lag_ms    daemon/voicego        768.1        768.1        768.1  1                  info   [ms]
+K1-50k.storm_target_eps    daemon/voicego        50000        50000        50000  1                  info   [ev/s]
+K2s.k2s_ms.n               daemon/voicego         1195         1195         1195  1                  info   [samples]
+K2s.k2s_ms.p50             daemon/voicego        0.271        0.271        0.271  1                  info   [ms]
+K2s.k2s_ms.p95             daemon/voicego        2.072        2.072        2.072  1                  info   [ms]
+K2s.k2s_ms.p99             daemon/voicego        4.091        4.091        4.091  1 <=            6  PASS   [ms]
+K2s.k2s_ms.p999            daemon/voicego        8.295        8.295        8.295  1                  info   [ms]
+K2s.k2s_ms.max             daemon/voicego         16.8         16.8         16.8  1                  info   [ms]
+K2s.late                   daemon/voicego            3            3            3  1                  info   [events]
+K2s.lost                   daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+K2s.not_consumed           daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+K2s.storm_achieved_eps     daemon/voicego        50000        50000        50000  1 >=        45000  PASS  must reach 90% of the target rate [ev/s]
+K2s.storm_target_eps       daemon/voicego        50000        50000        50000  1                  info   [ev/s]
+K2s.superseded             daemon/voicego            2            2            2  1                  info   [events]
+R1s.r1s_ms.n               daemon/voicego         1197         1197         1197  1                  info   [samples]
+R1s.r1s_ms.p50             daemon/voicego        0.409        0.409        0.409  1                  info   [ms]
+R1s.r1s_ms.p95             daemon/voicego        2.980        2.980        2.980  1                  info   [ms]
+R1s.r1s_ms.p99             daemon/voicego        6.896        6.896        6.896  1 <=            4  FAIL   [ms]
+R1s.r1s_ms.p999            daemon/voicego         22.5         22.5         22.5  1                  info   [ms]
+R1s.r1s_ms.max             daemon/voicego         22.9         22.9         22.9  1                  info   [ms]
+R1s.lost                   daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+R1s.missing_text           daemon/voicego            3            3            3  1                  info   [events]
+R1s.not_consumed           daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+R1s.r1_ipc_calls           daemon/voicego           56           56           56  1                  info   [calls]
+R1s.r1_late_keys           daemon/voicego            2            2            2  1                  info   [events]
+R1s.r2_cold_ms             daemon/voicego         24.4         24.4         24.4  1                  info   [ms]
+R1s.storm_achieved_eps     daemon/voicego        50000        50000        50000  1 >=        45000  PASS  must reach 90% of the target rate [ev/s]
+R1s.storm_target_eps       daemon/voicego        50000        50000        50000  1                  info   [ev/s]
+R1s.superseded             daemon/voicego            3            3            3  1                  info   [events]
+K3.k3_ms.n                 daemon/voicego         1200         1200         1200  1                  info   [samples]
+K3.k3_ms.p50               daemon/voicego        0.359        0.359        0.359  1                  info   [ms]
+K3.k3_ms.p95               daemon/voicego        4.097        4.097        4.097  1                  info   [ms]
+K3.k3_ms.p99               daemon/voicego        6.900        6.900        6.900  1 <=           15  PASS   [ms]
+K3.k3_ms.p999              daemon/voicego         10.5         10.5         10.5  1                  info   [ms]
+K3.k3_ms.max               daemon/voicego         12.4         12.4         12.4  1                  info   [ms]
+K3.late                    daemon/voicego            0            0            0  1                  info   [events]
+K3.lost                    daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+K3.not_consumed            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+K3.superseded              daemon/voicego            5            5            5  1                  info   [events]
+A1.a1_full_ms.n            daemon/voicego          298          298          298  1                  info   [samples]
+A1.a1_full_ms.p50          daemon/voicego        5.116        5.116        5.116  1                  info   [ms]
+A1.a1_full_ms.p95          daemon/voicego         13.8         13.8         13.8  1                  info   [ms]
+A1.a1_full_ms.p99          daemon/voicego         18.7         18.7         18.7  1                  info   [ms]
+A1.a1_full_ms.p999         daemon/voicego         27.5         27.5         27.5  1                  info   [ms]
+A1.a1_full_ms.max          daemon/voicego         27.5         27.5         27.5  1                  info   [ms]
+A1.a1_ms.n                 daemon/voicego          149          149          149  1                  info   [samples]
+A1.a1_ms.p50               daemon/voicego        7.037        7.037        7.037  1                  info   [ms]
+A1.a1_ms.p95               daemon/voicego         15.0         15.0         15.0  1                  info   [ms]
+A1.a1_ms.p99               daemon/voicego         18.3         18.3         18.3  1 <=           15  FAIL   [ms]
+A1.a1_ms.p999              daemon/voicego         27.5         27.5         27.5  1                  info   [ms]
+A1.a1_ms.max               daemon/voicego         27.5         27.5         27.5  1                  info   [ms]
+A1.a1f_ms.n                daemon/voicego          149          149          149  1                  info   [samples]
+A1.a1f_ms.p50              daemon/voicego        3.878        3.878        3.878  1                  info   [ms]
+A1.a1f_ms.p95              daemon/voicego         11.4         11.4         11.4  1                  info   [ms]
+A1.a1f_ms.p99              daemon/voicego         15.8         15.8         15.8  1                  info   [ms]
+A1.a1f_ms.p999             daemon/voicego         25.3         25.3         25.3  1                  info   [ms]
+A1.a1f_ms.max              daemon/voicego         25.3         25.3         25.3  1                  info   [ms]
+A1.a1w_ms.n                daemon/voicego          150          150          150  1                  info   [samples]
+A1.a1w_ms.p50              daemon/voicego        4.041        4.041        4.041  1                  info   [ms]
+A1.a1w_ms.p95              daemon/voicego        8.235        8.235        8.235  1                  info   [ms]
+A1.a1w_ms.p99              daemon/voicego         16.3         16.3         16.3  1 <=           15  FAIL   [ms]
+A1.a1w_ms.p999             daemon/voicego         20.6         20.6         20.6  1                  info   [ms]
+A1.a1w_ms.max              daemon/voicego         20.6         20.6         20.6  1                  info   [ms]
+A1.a1_split                daemon/voicego           16           16           16  1                  info   [events]
+A1.a1_wrong                daemon/voicego            1            1            1  1 <=            0  FAIL  gated on the max over repeats [events]
+A1.lost                    daemon/voicego            1            1            1  1 <=            0  FAIL  gated on the max over repeats [events]
+

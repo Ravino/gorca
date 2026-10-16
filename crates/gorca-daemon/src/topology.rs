@@ -54,8 +54,12 @@ const FALLBACK_NICE: i32 = -11;
 /// The topology arm.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub enum Arm {
-    /// (a) one multi-thread tokio runtime. The default: behaviour before the switch.
+    /// The default (B-5 judgement, docs/reports/b5-judgement.md): `lanes-rt` when rtkit grants
+    /// real-time scheduling, else `single`. Resolved once at startup by [`Arm::resolve`]; code
+    /// that sees an unresolved `Auto` (library use, tests) behaves as `single`.
     #[default]
+    Auto,
+    /// (a) one multi-thread tokio runtime: the behaviour before the switch.
     Single,
     /// (b) dedicated hot-lane threads, workers, bulk pool.
     Lanes,
@@ -68,11 +72,12 @@ pub enum Arm {
 }
 
 impl Arm {
-    pub const EXPECTED: &'static str = "single, lanes or lanes-rt";
+    pub const EXPECTED: &'static str = "auto, single, lanes or lanes-rt";
 
     #[must_use]
     pub fn parse(s: &str) -> Option<Self> {
         Some(match s {
+            "auto" => Self::Auto,
             "single" | "a" => Self::Single,
             "lanes" | "b" => Self::Lanes,
             "lanes-rt" | "c" => Self::LanesRt,
@@ -85,6 +90,7 @@ impl Arm {
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
+            Self::Auto => "auto",
             Self::Single => "single",
             Self::Lanes => "lanes",
             Self::LanesRt => "lanes-rt",
@@ -96,7 +102,24 @@ impl Arm {
     /// Hot lanes on their own threads, workers and bulk pool apart.
     #[must_use]
     pub fn lanes(self) -> bool {
-        self != Self::Single
+        !matches!(self, Self::Auto | Self::Single)
+    }
+
+    /// Resolve [`Arm::Auto`]: `lanes-rt` when rtkit is reachable and offers a real-time budget,
+    /// else `single` (the plain lanes were not better than `single` in the B-5 runs, so a refusal
+    /// must not leave the daemon on them). Any other arm is returned unchanged. Touches nothing
+    /// process-wide: it only asks rtkit for its limits.
+    #[must_use]
+    pub fn resolve(self, rtkit_address: Option<&str>) -> Self {
+        if self != Self::Auto {
+            return self;
+        }
+        match Rtkit::connect(rtkit_address, RTKIT_CONNECT) {
+            Ok(k) if k.limits().rttime_usec_max > 0 && k.limits().max_realtime_priority > 0 => {
+                Self::LanesRt
+            }
+            _ => Self::Single,
+        }
     }
 
     #[must_use]
@@ -690,6 +713,7 @@ mod tests {
     #[test]
     fn arm_names_round_trip_and_default_is_single() {
         for a in [
+            Arm::Auto,
             Arm::Single,
             Arm::Lanes,
             Arm::LanesRt,
@@ -698,7 +722,18 @@ mod tests {
         ] {
             assert_eq!(Arm::parse(a.name()), Some(a));
         }
-        assert_eq!(Arm::default(), Arm::Single);
+        assert_eq!(Arm::default(), Arm::Auto);
+        assert_eq!(Arm::parse("auto"), Some(Arm::Auto));
+        // Without rtkit (no bus at that address) auto falls back to the single runtime and an
+        // explicit arm is never changed.
+        assert_eq!(
+            Arm::Auto.resolve(Some("unix:path=/nonexistent/gorca-rtkit")),
+            Arm::Single
+        );
+        assert_eq!(
+            Arm::Lanes.resolve(Some("unix:path=/nonexistent/gorca-rtkit")),
+            Arm::Lanes
+        );
         assert_eq!(Arm::parse("c"), Some(Arm::LanesRt));
         assert_eq!(Arm::parse("nope"), None);
     }

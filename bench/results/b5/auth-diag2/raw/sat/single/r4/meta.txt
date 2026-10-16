@@ -1,0 +1,6 @@
+round=4 cond=sat arm=single exit=0
+load_before=33.33 35.19 35.42 5/3299 42830
+background_cpu_busy_pct=18
+load_with_hog=31.79 34.84 35.31 23/3381 43051
+load_after=32.01 33.63 34.75 5/3345 50122
+governor=performance 
