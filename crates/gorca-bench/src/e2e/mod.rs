@@ -31,6 +31,7 @@
     clippy::type_complexity
 )]
 
+pub mod account;
 pub mod apps;
 pub mod host;
 pub mod m1;

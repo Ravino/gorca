@@ -83,6 +83,8 @@ pub struct Rig {
     pub env: HostEnv,
     pub keys_ok: bool,
     pub flavor: Flavor,
+    /// The file that receives the reader's standard error, when the options asked for one.
+    pub reader_log: Option<PathBuf>,
 }
 
 impl Rig {
@@ -162,6 +164,7 @@ impl Rig {
             mutter,
             keys_ok,
             flavor: o.flavor,
+            reader_log: o.reader_stderr.clone(),
         };
         rig.warm_up()?;
         Ok(rig)
@@ -205,6 +208,12 @@ impl Rig {
         std::thread::sleep(Duration::from_millis(300));
         self.tap.clear();
         Ok(())
+    }
+
+    /// Stop the reader and account for every utterance it submitted (see [`super::account`]);
+    /// `None` for a reader that prints no counters. The reader is gone afterwards.
+    pub fn account_speech(&mut self) -> Option<super::account::Account> {
+        super::account::retire(&mut self.reader, self.reader_log.as_deref(), &self.mock)
     }
 
     pub fn socket(&self) -> &Path {
