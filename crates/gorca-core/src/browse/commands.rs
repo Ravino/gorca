@@ -969,6 +969,9 @@ impl Reader {
             self.web_dialog_lead(doc, id, last_before);
             self.web_listbox_lead(doc, id, last_before);
             self.web_refresh_popup(fx);
+            // The cursor jumped with the focus: Tab availability changed with it (R-5), and no
+            // scroll timer is armed to notice.
+            self.web_sync_tab_grabs(fx);
             return;
         }
         // IR-3: the join missed. Browse keys must never be grabbed while focus may be in a

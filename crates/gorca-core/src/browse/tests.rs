@@ -2156,12 +2156,11 @@ fn r5_tab_belongs_to_the_browser_after_a_focus_driven_move_and_inside_the_focuse
     assert!(r.reader.web_tab_targets().0, "from the heading Tab is ours");
     // The browser focuses the link (our Tab, or its own): the cursor came from a focus change.
     let fx = r.focus(1006);
-    let fx2 = settle(&mut r);
-    let fx: ReaderEffects = fx.into_iter().chain(fx2).collect();
     assert_eq!(r.reader.web_tab_targets(), (false, false));
-    if let Some(g) = last_grabs(&fx) {
-        assert_eq!(tab_pair(&g), (false, false));
-    }
+    // The grab set follows at once, not at the next scroll timer.
+    let g = last_grabs(&fx).expect("the focus move pushes the grab set");
+    assert_eq!(tab_pair(&g), (false, false));
+    let _ = settle(&mut r);
     // Any cursor move of our own ends it: the cursor is no longer on the focused node.
     r.key(CoreCmd::BrowseCursorNextLine);
     r.key(CoreCmd::BrowseCursorNextLine);
