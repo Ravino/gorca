@@ -70,3 +70,27 @@ check against the newest main, and the daemon `e2e`/`desktop`/`b1_ic` suites aft
 Run those before merging. Not examined: the other storm-suite timing failures listed in
 m6-focus-fix-review.md (ext-host hostile/fuzz, storm rate) were already addressed by
 test-load-robustness.md; nothing new was applied to them here.
+
+### Final gates (2026-10-16, after memory recovered; -j4, --test-threads=4)
+
+* Merged main (CLAUDE.md, env.sh only). `cargo fmt --check`, `cargo clippy --workspace
+  --all-targets -- -D warnings` (two lint fixes: `manual_assert` in `run_bounded`,
+  `cast_precision_loss` in the CPU test) and `cargo xtask deps` are clean.
+* gorca-daemon + gorca-connector-atspi + gorca-testkit: all pass, including `b1_ic` (3 tests,
+  incl. `the_policy_hears_of_a_new_app...`, 258 s), `e2e` 9, `desktop` 6, `harness_focus` 4,
+  once unloaded and once under 16 CPU-only busy loops. The only failures are the two
+  `shell_parity` tests (see below). No hang in any run.
+* `cargo test --workspace --no-fail-fast`, once, no hang: 42 failures, in two groups.
+  1. All of gorca-ext-host (backstop, core_path, ext, fuzz, hostile) and the two `shell_parity`
+     tests: they build a wasm component in a nested cargo and die with
+     `error[E0463]: can't find crate for 'core' ... the wasm32-wasip2 target may not be
+     installed`. `rustup target list --installed` in the shared `.toolchain` lists only
+     x86_64 although `lib/rustlib/wasm32-wasip2` exists: a toolchain-install problem on this
+     host, not the code under test. Unverified on main.
+  2. `gorca-dbus drain::raw::tests::cache_signals_map_to_events_and_foreign_refs_are_counted_malformed`
+     failed once (`left: 1 right: 2`, stats `pushed: 2, malformed: 1`) and passed 3 of 3 alone;
+     the crate is untouched by this change, so it looks like a race in the test. Not
+     investigated further.
+* The second load run covered only the packages above (not the whole workspace) with 16 busy
+  loops, which the coordinator then asked to be limited to 8; it was stopped (own process
+  group) after it finished.

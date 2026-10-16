@@ -283,7 +283,7 @@ fn losing_the_buses_does_not_make_the_connector_spin() {
         let hz = 100;
         let (c0, t0) = (cpu_ticks(), Instant::now());
         tokio::time::sleep(Duration::from_secs(4)).await;
-        let used = (cpu_ticks() - c0) as f64 / f64::from(hz);
+        let used = f64::from(u32::try_from(cpu_ticks() - c0).unwrap()) / f64::from(hz);
         let wall = t0.elapsed().as_secs_f64();
         // A spinning worker burns about one core (>= 0.9 of the wall time); an idle connector
         // a few percent. 0.5 separates them even on a starved host.

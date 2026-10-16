@@ -241,9 +241,10 @@ pub fn run_bounded<F: Future<Output = ()>>(workers: usize, deadline: Duration, b
         .unwrap_or_else(|e| panic!("cannot build the test runtime: {e}"));
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         rt.block_on(async {
-            if tokio::time::timeout(deadline, body).await.is_err() {
-                panic!("test body exceeded its {deadline:?} deadline");
-            }
+            assert!(
+                tokio::time::timeout(deadline, body).await.is_ok(),
+                "test body exceeded its {deadline:?} deadline"
+            );
         });
     }));
     rt.shutdown_timeout(Duration::from_secs(15));
