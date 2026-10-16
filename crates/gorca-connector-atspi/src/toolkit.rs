@@ -65,11 +65,15 @@ impl Toolkit {
     /// typed key's own insert in an input holding astral characters (found by FE2). The core
     /// folds that caret move into the edit when the slack is non-zero. Every other engine
     /// reports the real offset.
+    ///
+    /// Chromium (M9, found by FE2 on Chrome for Testing 153 with `gorca_text=debug`): in 24 of
+    /// 446 inserts into an `<input>` (5.4 %) the named offset is 1 or 2 past the caret event that
+    /// follows (`docs/reports/m9-baseline.md` section 4), and the doubled echoes of the failing
+    /// run are exactly those keys; the same one-key tolerance as Gecko absorbs them.
     pub fn text_insert_slack(self) -> u32 {
         match self {
-            Toolkit::Firefox => 2,
-            Toolkit::Chromium
-            | Toolkit::Gtk3
+            Toolkit::Firefox | Toolkit::Chromium => 2,
+            Toolkit::Gtk3
             | Toolkit::Gtk4
             | Toolkit::Qt
             | Toolkit::Vte
@@ -142,10 +146,10 @@ mod tests {
     }
 
     #[test]
-    fn only_gecko_has_the_insert_offset_quirk() {
+    fn only_the_browser_engines_have_the_insert_offset_quirk() {
         assert_eq!(Toolkit::Firefox.text_insert_slack(), 2);
+        assert_eq!(Toolkit::Chromium.text_insert_slack(), 2);
         for t in [
-            Toolkit::Chromium,
             Toolkit::Gtk3,
             Toolkit::Gtk4,
             Toolkit::Qt,

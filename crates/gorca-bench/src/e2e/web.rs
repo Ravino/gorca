@@ -1284,8 +1284,13 @@ pub fn w2b(
         let (mut w, _doc) = Web::start(host, reader, flavor, &[url], &title)?;
         // Let the attach-time cache warm-up settle (it runs in the background).
         std::thread::sleep(Duration::from_secs(4));
-        let mark = w.mark();
-        let t0 = super::mono::now_ns();
+        // Chromium focuses the document and the reader announces it as soon as the window is
+        // active, long before the 4 s above are over: the whole run is the trial (M9).
+        let (mark, t0) = if chromium_selected() {
+            (0, 0)
+        } else {
+            (w.mark(), super::mono::now_ns())
+        };
         let mut heard = None;
         for _ in 0..10 {
             if w.tap.count(FOCUS) == 0 {
@@ -1515,14 +1520,22 @@ pub fn w3(
     let b = file_url(&pages_dir(host).join("second.html"))?;
     let (mut w, doc_a) = Web::start(host, reader, flavor, &[a, b], "M7 Article")?;
     w.prime(&doc_a)?;
-    let r = w.ax.request(
-        "find_doc",
-        "\"title\":\"M7 Second\",\"timeout_ms\":20000",
-        Duration::from_secs(30),
-    )?;
-    let doc_b = DocRef {
-        path: json_str(&r, "path").context("second document not found")?,
-        name: "M7 Second".to_owned(),
+    // Chromium exposes no document for a background tab until the tab is shown (M9).
+    let doc_b = if chromium_selected() {
+        DocRef {
+            path: doc_a.path.clone(),
+            name: "M7 Second".to_owned(),
+        }
+    } else {
+        let r = w.ax.request(
+            "find_doc",
+            "\"title\":\"M7 Second\",\"timeout_ms\":20000",
+            Duration::from_secs(30),
+        )?;
+        DocRef {
+            path: json_str(&r, "path").context("second document not found")?,
+            name: "M7 Second".to_owned(),
+        }
     };
     let mut lat = Vec::new();
     let mut lost = 0u64;

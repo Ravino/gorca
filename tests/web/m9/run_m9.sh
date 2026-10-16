@@ -47,5 +47,7 @@ case "$KIND" in
     exec "$ROOT/tests/web/m7/run_m7.sh" --probe /usr/bin/python3 "$ROOT/tests/web/m9/probe_at.py" "$MODE" "$PAGE" "$TITLE" ;;
   probe-load)
     exec "$ROOT/tests/web/m7/run_m7.sh" --probe /usr/bin/python3 "$ROOT/tests/web/m9/probe_load.py" "$@" ;;
+  probe-typing)
+    exec "$ROOT/tests/web/m7/run_m7.sh" --probe /usr/bin/python3 "$ROOT/tests/web/m9/probe_typing.py" "$@" ;;
   *) echo "usage: $0 m7|m8|probe ..." >&2; exit 64 ;;
 esac
