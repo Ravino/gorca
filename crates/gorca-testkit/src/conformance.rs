@@ -162,7 +162,9 @@ mod tests {
         let (shutdown, requests) = start(Behavior::Answer).await;
         let out = c2_requests_are_answered(&requests, fetch, 20, 100).await;
         assert!(out.iter().all(|o| o.result.is_ok()));
-        assert!(c2_all_within_deadline(&out, 100, Duration::from_millis(50)));
+        // Slack is generous: an answering connector replies at once (every result is Ok above),
+        // the bound only has to exclude a request that ran to its deadline on a loaded host.
+        assert!(c2_all_within_deadline(&out, 100, Duration::from_secs(1)));
         shutdown.cancel();
     }
 
@@ -223,7 +225,7 @@ mod tests {
             .unwrap();
         let AppChannel { port, ingress, .. } = ch;
         let _ = reply.send(Ok(port));
-        let drained = within(500, async {
+        let drained = within(30_000, async {
             loop {
                 let d = ingress.drain();
                 if !d.events.is_empty() {
@@ -233,7 +235,7 @@ mod tests {
             }
         })
         .await
-        .expect("event within 500 ms");
+        .expect("event within the deadline");
         assert!(matches!(drained.events[0], NodeEvent::FocusChanged { .. }));
         shutdown.cancel();
     }

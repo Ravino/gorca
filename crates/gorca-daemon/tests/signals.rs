@@ -56,7 +56,9 @@ fn start() -> Daemon {
 
 impl Daemon {
     fn wait_for(&mut self, needle: &str) {
-        let end = Instant::now() + Duration::from_secs(10);
+        // Generous: the host this runs on is routinely at load 10 to 48; polled, so a quick
+        // start returns at once.
+        let end = Instant::now() + Duration::from_secs(60);
         while Instant::now() < end {
             if let Ok(line) = self.lines.recv_timeout(Duration::from_millis(100))
                 && line.contains(needle)

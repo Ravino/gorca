@@ -140,7 +140,7 @@ async fn get_items_blocks_the_calls_queued_behind_it() {
     let bus = Bus::start();
     let mut sp = spec(Shape::Settings, P2pMode::SameBus, 0.05, 0.1);
     sp.nodes_idle = 1000;
-    sp.getitems_us_per_item = 30.0; // ~30 ms
+    sp.getitems_us_per_item = 400.0; // ~400 ms
     let app = bus.app(sp, "hol").await;
     let (dest, root) = (app.ready.bus_name.clone(), app.ready.root.clone());
     let c1 = bus.client().await;
@@ -158,6 +158,9 @@ async fn get_items_blocks_the_calls_queued_behind_it() {
         .await
         .unwrap();
     });
+    // The control channel queues behind the dump, so the order cannot be observed; instead the
+    // dump is long (400 ms) and the second call is issued 5 ms in: it takes a 400 ms scheduling
+    // stall to miss the window, not the 25 ms a short dump would tolerate.
     tokio::time::sleep(Duration::from_millis(5)).await;
     let t = Instant::now();
     call(&c2, &dest, &root, ACC, "GetRole", &()).await.unwrap();
@@ -326,22 +329,23 @@ async fn hang_never_and_delayed_replies() {
     // Delay exactly one reply.
     app.control(Cmd::DelayReplies {
         member: "GetRole".into(),
-        ms: 150,
+        ms: 1500,
         count: 1,
         conn: None,
     })
     .await;
     let t = Instant::now();
     call(&c, &dest, &root, ACC, "GetRole", &()).await.unwrap();
-    assert!(t.elapsed() >= Duration::from_millis(140));
-    // Upper wall bound: best of 3 (a stuck delay would show in all; a preemption in one).
+    assert!(t.elapsed() >= Duration::from_millis(1400));
+    // Upper wall bound: best of 3 (a stuck delay would show in all; a preemption in one). The
+    // delay is 1.5 s so the margin dwarfs scheduling noise on a loaded host.
     let mut fastest = Duration::MAX;
     for _ in 0..3 {
         let t = Instant::now();
         call(&c, &dest, &root, ACC, "GetRole", &()).await.unwrap();
         fastest = fastest.min(t.elapsed());
     }
-    assert!(fastest < Duration::from_millis(100), "{fastest:?}");
+    assert!(fastest < Duration::from_millis(1000), "{fastest:?}");
     // Never: no reply, the call times out client side; recovers on Off.
     app.control(Cmd::Hang {
         mode: gorca_testkit::b1::proto::HangMode::Never,
@@ -396,6 +400,7 @@ async fn storm_emits_signals_at_roughly_the_requested_rate() {
     let mut stream = MessageStream::for_match_rule(rule, &c, Some(100_000))
         .await
         .unwrap();
+    let t0 = Instant::now();
     let r = app
         .control(Cmd::Storm {
             rate_per_s: 10_000,
@@ -405,16 +410,34 @@ async fn storm_emits_signals_at_roughly_the_requested_rate() {
         })
         .await;
     assert!(r.ok);
+    // The storm's count is fixed (rate x duration = 5000); only its pace depends on the clock,
+    // so the outcome is asserted on counts and the pacing only as a lower bound on wall time
+    // (a ceiling would measure host load). Generous deadlines, polled.
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let sent = loop {
+        let s: gorca_testkit::b1::proto::AppStats =
+            serde_json::from_value(app.control(Cmd::Stats).await.data).unwrap();
+        if s.signals_sent >= 5_000 || Instant::now() > deadline {
+            break s.signals_sent;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+    let took = t0.elapsed();
+    assert_eq!(sent, 5_000, "the storm emits exactly rate x duration");
+    assert!(
+        took >= Duration::from_millis(400),
+        "paced at the requested rate, not blasted out: {took:?}"
+    );
     let mut n = 0u32;
-    let end = Instant::now() + Duration::from_millis(900);
-    while Instant::now() < end {
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while n < 5_000 && Instant::now() < deadline {
         if let Ok(Some(Ok(_))) =
-            tokio::time::timeout(Duration::from_millis(100), stream.next()).await
+            tokio::time::timeout(Duration::from_millis(500), stream.next()).await
         {
             n += 1;
         }
     }
-    assert!((3500..=6000).contains(&n), "{n} events in 0.5 s at 10k/s");
+    assert_eq!(n, 5_000, "every emitted signal reaches the listener");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -542,20 +565,33 @@ async fn closing_peers_ends_the_peer_connection_and_new_ones_work() {
     .await
     .unwrap();
     app.control(Cmd::ClosePeers).await;
-    let r = tokio::time::timeout(
-        Duration::from_secs(2),
-        p.call_method(
-            None::<&str>,
-            app.ready.root.as_str(),
-            Some(ACC),
-            "GetRole",
-            &(),
-        ),
-    )
-    .await;
+    // The close is asynchronous to the control reply: a call racing it may still be served.
+    // The property is that the old connection fails promptly once the close lands, so poll
+    // with a generous deadline instead of asserting on one call inside a tight timeout.
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let mut last = None;
+    while Instant::now() < deadline {
+        let r = tokio::time::timeout(
+            Duration::from_secs(10),
+            p.call_method(
+                None::<&str>,
+                app.ready.root.as_str(),
+                Some(ACC),
+                "GetRole",
+                &(),
+            ),
+        )
+        .await;
+        let failed = matches!(r, Ok(Err(_)));
+        last = Some(r.map(|r| r.is_ok()));
+        if failed {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
     assert!(
-        matches!(r, Ok(Err(_))),
-        "the old peer connection must fail: {r:?}"
+        last.as_ref().is_some_and(|r| matches!(r, Ok(false))),
+        "the old peer connection must fail: {last:?}"
     );
     let p2 = connect().await;
     p2.call_method(

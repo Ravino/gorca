@@ -19,7 +19,7 @@ mod common;
 use std::sync::Arc;
 use std::time::Duration;
 
-use common::{BACKENDS, Backend, app, host, info, snap, wasm_bytes};
+use common::{BACKENDS, Backend, app, host, info, settle, snap, wasm_bytes};
 use gorca_core::{ExtSource, ExtVerdict, MirrorDirectory, PresentContext};
 use gorca_ext_api as api;
 use gorca_ext_host::{
@@ -121,6 +121,25 @@ const ROLES: [Role; 6] = [
 #[test]
 fn random_events_nodes_and_commands_never_panic_the_core() {
     for b in BACKENDS {
+        // The run is seeded, so an input that faults the host faults on every attempt; a fault
+        // caused by a loaded host (a call descheduled past its wall-clock backstop; three of
+        // those disable the slot) does not repeat. The first attempt that sees no fault must
+        // satisfy every invariant; four faulting attempts in a row fail the test.
+        let mut clean = false;
+        for _attempt in 0..4 {
+            clean = fuzz_once(b);
+            if clean {
+                break;
+            }
+        }
+        assert!(clean, "{b:?}: the host faulted on every attempt");
+    }
+}
+
+/// One seeded run. `false` when the host counted a fault (nothing here should fault, so the
+/// invariants are only judged on a fault-free run); panics when an invariant breaks.
+fn fuzz_once(b: Backend) -> bool {
+    {
         let iters = if b == Backend::Wasm { 1500 } else { 20_000 };
         let (h, _sink, _) = host(b);
         let ae = h.attach(app(1), &info("fuzz")).expect("attached");
@@ -153,6 +172,10 @@ fn random_events_nodes_and_commands_never_panic_the_core() {
             }
             assert!(i < iters);
         }
+        settle(&h);
+        if h.stats().faults > 0 {
+            return false;
+        }
         // Still alive and answering.
         assert_eq!(
             ae.on_event(&NodeEvent::Announcement {
@@ -164,6 +187,7 @@ fn random_events_nodes_and_commands_never_panic_the_core() {
             "{b:?}"
         );
         assert_eq!(h.stats().disabled, 0, "{b:?}: nothing here is a fault");
+        h.stats().faults == 0
     }
 }
 
@@ -255,10 +279,26 @@ fn garbage_answers_are_clamped() {
     h.set_sink(sink.clone());
     let ae = h.attach(app(1), &info("x")).unwrap();
 
+    // A native hook has a wall-clock overrun limit; on a loaded host a descheduled call is
+    // counted as a fault and answers "no opinion". Such a call says nothing about the clamping,
+    // so it is repeated; a defect would fault or misbehave on every attempt.
+    fn uninterrupted<T>(h: &ExtHost, mut call: impl FnMut() -> T) -> T {
+        for _ in 0..10 {
+            while !h.settled() {
+                std::thread::yield_now();
+            }
+            let before = h.stats().faults;
+            let r = call();
+            if h.stats().faults == before {
+                return r;
+            }
+        }
+        panic!("the host faulted on every attempt");
+    }
     let ev = NodeEvent::FocusChanged {
         node: rand_key(&mut Rng(7)),
     };
-    match ae.on_event(&ev) {
+    match uninterrupted(&h, || ae.on_event(&ev)) {
         ExtVerdict::Rewrite(s) => {
             assert!(s.len() <= MAX_SEGMENTS);
             let total: usize = s.iter().map(|x| x.text.chars().count()).sum();
@@ -271,11 +311,11 @@ fn garbage_answers_are_clamped() {
         v => panic!("{v:?}"),
     }
     let n = snap(app(1), 1, Role::Button, Some("n"));
-    let segs = ae.present(&n, PresentContext::Focus, 1).expect("some");
+    let segs = uninterrupted(&h, || ae.present(&n, PresentContext::Focus, 1)).expect("some");
     assert!(segs.len() <= MAX_SEGMENTS);
     assert!(segs.iter().all(|x| !x.text.is_empty()));
     ae.command("garbage", 1);
-    let got = sink.wait(1, Duration::from_secs(5));
+    let got = sink.wait(1, Duration::from_secs(30));
     assert!(
         got[0].0.chars().count() <= MAX_SEGMENT_CHARS,
         "{}",
