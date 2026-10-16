@@ -210,7 +210,7 @@ fn diff(old: &[String], new: &[String], props: &Props) -> Option<String> {
     (!text.trim().is_empty()).then_some(text)
 }
 
-/// Case, digits and spacing do not make a message new (GM 5.3).
+/// Case and spacing do not make a message new.
 fn normalise(text: &str) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     let mut last_space = true;
@@ -222,12 +222,10 @@ fn normalise(text: &str) -> u64 {
             last_space = true;
         } else {
             last_space = false;
-            if c.is_ascii_digit() {
-                '#'.hash(&mut h);
-            } else {
-                for l in c.to_lowercase() {
-                    l.hash(&mut h);
-                }
+            // Digits count: "Log entry 1" and "Log entry 2" are different news (ADR-0003 GM 5.3
+            // folded them; a counter, a log or a score must not be swallowed).
+            for l in c.to_lowercase() {
+                l.hash(&mut h);
             }
         }
     }
@@ -533,8 +531,8 @@ mod tests {
 
     #[test]
     fn normalise_ignores_case_digits_and_spacing() {
-        assert_eq!(normalise("Score  12"), normalise("score 99"));
-        assert_ne!(normalise("score 12"), normalise("sore 12"));
+        assert_eq!(normalise("Score  12"), normalise("score 12"));
+        assert_ne!(normalise("score 12"), normalise("score 13"));
     }
 
     #[test]
@@ -603,7 +601,7 @@ mod tests {
         let leaf = set_text(&mut d, r, "x");
         t.on_batch(&d, &[leaf], later + Duration::from_secs(1));
         let _ = t.tick(&d, later + Duration::from_millis(1100));
-        let leaf = set_text(&mut d, r, "Saved at step 9");
+        let leaf = set_text(&mut d, r, "Saved at step 1");
         t.on_batch(&d, &[leaf], later + Duration::from_secs(2));
         assert!(t.tick(&d, later + Duration::from_millis(2100)).is_empty());
     }

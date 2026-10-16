@@ -30,12 +30,15 @@ pub enum Item {
     Role(String),
     State(&'static str),
     Name(String),
+    /// Spoken before the focused control (a dialog entered with the focus): placed in front of
+    /// the focus utterance by the presenter, not after it.
+    Lead(String),
 }
 
 impl Item {
     pub fn kind(&self) -> SegmentKind {
         match self {
-            Item::Text(_) | Item::Name(_) => SegmentKind::Text,
+            Item::Text(_) | Item::Name(_) | Item::Lead(_) => SegmentKind::Text,
             Item::Role(_) => SegmentKind::Role,
             Item::State(_) => SegmentKind::State,
         }
@@ -43,7 +46,7 @@ impl Item {
 
     pub fn text(&self) -> &str {
         match self {
-            Item::Text(t) | Item::Role(t) | Item::Name(t) => t,
+            Item::Text(t) | Item::Role(t) | Item::Name(t) | Item::Lead(t) => t,
             Item::State(s) => s,
         }
     }

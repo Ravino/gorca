@@ -520,7 +520,16 @@ pub struct BrowseState {
     /// Live-region speech the Reader admits: a token bucket over all documents (fairness: a
     /// flooding page cannot make the reader talk without end, whatever its documents send).
     pub live_tokens: (f32, Option<Instant>),
+    /// The focus event of this node is the browser re-focusing the document we already browse
+    /// (a same-page link, a click): nothing is spoken for it and the cursor stays.
+    pub suppress_focus: Option<NodeKey>,
+    /// When we last clicked a link or button for the user (`DoDefault`): a caret event within
+    /// [`CARET_FOLLOW`] of it is the page answering our action (anchor jumps), not the user.
+    pub activated: Option<Instant>,
 }
+
+/// How long after our own activation a caret event moves the browse cursor.
+pub const CARET_FOLLOW: std::time::Duration = std::time::Duration::from_millis(700);
 
 impl BrowseState {
     pub fn new(docs: Arc<DocDirectory>, join: Arc<WebJoin>) -> Self {
@@ -542,6 +551,8 @@ impl BrowseState {
             auto_read: None,
             popup_open: false,
             live_tokens: (LIVE_BURST, None),
+            suppress_focus: None,
+            activated: None,
         }
     }
 }

@@ -424,6 +424,18 @@ fn outermost_match(d: &WebDoc, n: DocNodeId, c: Cat) -> DocNodeId {
     best
 }
 
+/// The modal dialog around `node` (`aria-modal`, the MODAL state), if any: the cursor keys
+/// stay inside it while the cursor is.
+fn modal_scope(d: &WebDoc, mut node: DocNodeId) -> Option<DocNodeId> {
+    for _ in 0..64 {
+        if states_of(d, node).contains(StateSet::MODAL) {
+            return Some(node);
+        }
+        node = d.parent(node)?;
+    }
+    None
+}
+
 fn title_of(d: &WebDoc) -> Option<String> {
     d.root()
         .and_then(|r| d.node(r))
@@ -512,6 +524,55 @@ impl Reader {
         if let Some(b) = self.web.as_mut() {
             b.pending_word = Some((w, now));
         }
+    }
+
+    /// The focus speech of `key` is swallowed once (the document re-focused under the cursor).
+    pub(crate) fn web_suppress_focus(&mut self, key: NodeKey) -> bool {
+        self.web
+            .as_mut()
+            .is_some_and(|b| b.suppress_focus.take() == Some(key))
+    }
+
+    /// A caret event while browsing: the page answering our own click (a same-page link to a
+    /// paragraph or a named anchor moves the DOM caret and scrolls, no focus event) moves the
+    /// cursor there and reads the line. Anything else is not ours (BM-2). True when it moved.
+    pub(crate) fn web_caret(&mut self, node: NodeKey, offset: u32, fx: &mut ReaderEffects) -> bool {
+        let now = self.now;
+        let Some(b) = self.web.as_mut() else {
+            return false;
+        };
+        let WebMode::Browse { doc, .. } = b.mode else {
+            return false;
+        };
+        if !b
+            .activated
+            .is_some_and(|t| now.saturating_duration_since(t) <= super::CARET_FOLLOW)
+        {
+            return false;
+        }
+        let Some((d_id, id)) = b.join.get(node) else {
+            return false;
+        };
+        if d_id != doc {
+            return false;
+        }
+        let Some(h) = b.docs.get(doc) else {
+            return false;
+        };
+        let max_line = b.settings.max_line;
+        let placed = h.read.with(|d| {
+            let start = cursor::content_start(d, id)?;
+            let end = d.subtree_text_range(id)?.1;
+            let off = start.saturating_add(offset).min(end.saturating_sub(1)).max(start);
+            Some((cursor::cursor_at(d, off)?, off, line_items(d, max_line, off)))
+        });
+        let Some((cur, off, items)) = placed else {
+            return false;
+        };
+        b.activated = None;
+        self.web_set_cursor(doc, cur, off, now);
+        self.web_speak(&items, fx);
+        true
     }
 
     /// The mode word waiting for an utterance, if still fresh (BM-5).
@@ -691,8 +752,16 @@ impl Reader {
             })
         {
             b.counters.join_hits += 1;
+            // The browser re-focuses the document we are already browsing (after a same-page
+            // link, a click): the cursor stays where it is and nothing is announced.
+            let browsing_here = matches!(b.mode, WebMode::Browse { doc: d, .. } if d == doc);
+            if browsing_here && h.read.with(|d| d.root() == Some(id)) {
+                b.suppress_focus = Some(node);
+                return;
+            }
             let passes = forms::passes_through(role, states, Reason::Focus);
             let application = forms::is_application(role);
+            let last_before = b.last_off;
             self.web_activate(doc, fx);
             self.web_apply(
                 WebEv::FocusIn {
@@ -707,7 +776,9 @@ impl Reader {
             if matches!(self.web_mode(), WebMode::Browse { .. }) {
                 self.web_place(doc, id);
                 self.web_root_entry(doc, id);
+                self.web_container_tail(doc, id);
             }
+            self.web_dialog_lead(doc, id, last_before);
             self.web_refresh_popup(fx);
             return;
         }
@@ -791,6 +862,79 @@ impl Reader {
         };
         if editable {
             self.web_retry_loading(fx);
+        }
+    }
+
+    /// Focus entered a dialog (its name and role lead the focus speech, once): the dialog around
+    /// `id` does not hold the cursor's previous place.
+    fn web_dialog_lead(&mut self, doc: DocId, id: DocNodeId, before: u32) {
+        let Some(b) = self.web.as_mut() else { return };
+        let Some(h) = b.docs.get(doc) else { return };
+        let lead = h.read.with(|d| {
+            let mut cur = Some(id);
+            for _ in 0..32 {
+                let n = cur?;
+                let v = d.node(n)?;
+                if v.cats.intersects(Cat::DIALOG) && !v.flags.contains(gorca_doc::web::NodeFlags::HIDDEN) {
+                    let holds = d
+                        .subtree_text_range(n)
+                        .is_some_and(|(s, e)| s <= before && before < e);
+                    if holds {
+                        return None;
+                    }
+                    let mut out = Vec::new();
+                    if let Some(name) = v.name.filter(|n| !n.is_empty()) {
+                        out.push(Item::Lead(name.to_owned()));
+                    }
+                    out.push(Item::Lead("dialog".to_owned()));
+                    return Some(out);
+                }
+                cur = d.parent(n);
+            }
+            None
+        });
+        if let Some(mut lead) = lead {
+            let now = self.now;
+            let rest = b.pending_tail.take().map(|(t, _)| t).unwrap_or_default();
+            lead.extend(rest);
+            b.pending_tail = Some((lead, now));
+        }
+    }
+
+    /// Focus moved to a container (a landmark, a `tabindex=-1` block: the target of a skip
+    /// link): the cursor is at its first text, and that line follows the focus speech, as NVDA
+    /// reads the line at the caret when focus lands on non-interactive content.
+    fn web_container_tail(&mut self, doc: DocId, id: DocNodeId) {
+        let Some(b) = self.web.as_mut() else { return };
+        let Some(h) = b.docs.get(doc) else { return };
+        let max_line = b.settings.max_line;
+        let now = self.now;
+        let items = h.read.with(|d| {
+            let v = d.node(id)?;
+            let plain = matches!(
+                v.role,
+                Role::Landmark
+                    | Role::Panel
+                    | Role::Unknown
+                    | Role::Paragraph
+                    | Role::List
+                    | Role::ListItem
+                    | Role::Table
+                    | Role::Cell
+                    | Role::Document
+            );
+            if !plain || d.root() == Some(id) {
+                return None;
+            }
+            let off = cursor::content_start(d, id)?;
+            let end = d.subtree_text_range(id)?.1;
+            if off >= end {
+                return None;
+            }
+            Some(line_items(d, max_line, off))
+        });
+        if let Some(items) = items.filter(|i| !i.is_empty()) {
+            b.pending_tail = Some((items, now));
         }
     }
 
@@ -1168,6 +1312,7 @@ impl Reader {
             && matches!(b.mode, WebMode::Browse { .. } | WebMode::Focus { .. });
         if !in_front {
             b.counters.live_muted += 1;
+            tracing::info!(target: "gorca_phase", phase = "live_muted", text = %msg.text, active = ?b.active, doc = doc.0);
             return;
         }
         let (tokens, last) = b.live_tokens;
@@ -1344,6 +1489,9 @@ impl Reader {
             self.web_apply(WebEv::Activate { node, passes }, fx, false);
             self.web_speak(&[], fx);
         } else {
+            if let Some(b) = self.web.as_mut() {
+                b.activated = Some(self.now);
+            }
             fx.push(ReaderEffect::Web(WebEffect::Act {
                 doc,
                 node,
@@ -1383,8 +1531,14 @@ impl Reader {
                 Move::Bottom => (cursor::last_line(d, max_line), Kind::Line),
                 Move::Page(dir) => (cursor::page(d, max_line, off, dir, page), Kind::Line),
             };
+            // A modal dialog is a wall for the cursor while it is inside (ADR-0003 11).
+            let wall = modal_scope(d, cur.node).and_then(|s| d.subtree_text_range(s));
             match mv {
                 Mv::Edge(e) => Outcome::Edge(e),
+                Mv::Landed { off, .. } if wall.is_some_and(|(a, b)| off < a || off >= b) => {
+                    let below = wall.is_some_and(|(_, b)| off >= b);
+                    Outcome::Edge(if below { Edge::Bottom } else { Edge::Top })
+                }
                 Mv::Landed { off, speak, blank } => {
                     let Some(cur) = cursor::cursor_at(d, off) else {
                         return Outcome::Nothing;
@@ -1442,10 +1596,14 @@ impl Reader {
         let last = b.last_off;
         let found = h.read.with(|d| {
             let from = Some(cursor::offset_of(d, cur).unwrap_or_else(|| last.min(d.text_len())));
-            let target = match dir {
-                Dir::Next => d.next(cur.node, cat),
+            // A modal dialog confines the keys while the cursor is inside it (ADR-0003 11).
+            let scope = modal_scope(d, cur.node);
+            let target = match (dir, scope) {
+                (Dir::Next, None) => d.next(cur.node, cat),
+                (Dir::Next, Some(s)) => d.next_in(cur.node, cat, s),
                 // Inside a match: step out of it, or "previous" would find the one we are in.
-                Dir::Prev => d.prev(outermost_match(d, cur.node, cat), cat),
+                (Dir::Prev, None) => d.prev(outermost_match(d, cur.node, cat), cat),
+                (Dir::Prev, Some(s)) => d.prev_in(outermost_match(d, cur.node, cat), cat, s),
             }?;
             let off = cursor::content_start(d, target)?;
             let cur = cursor::cursor_at(d, off)?;

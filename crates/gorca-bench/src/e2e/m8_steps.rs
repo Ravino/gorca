@@ -125,10 +125,8 @@ const NO_NLB: &str = "quicknav.next.not_link_block (N) is Planned(M7): not imple
 const NO_ANN: &str = "quicknav.next.annotation (A) is Planned(M7): not implemented on main";
 const NO_ERR: &str = "quicknav.next.error (W) is Planned(M7): not implemented on main";
 const NO_PARA: &str = "quicknav.next.paragraph (P) is Planned(M7): not implemented on main";
-const NO_LIVE: &str = "live regions (ADR-0003 13) are M7b: not on main";
 const NO_SEL: &str = "browse-mode selection (Shift+arrows, Ctrl+A) is Planned: not on main";
 const NO_CARET_ANCHOR: &str = "a same-page anchor with no focus moves the DOM caret, not focus: CaretMoved is ignored in Browse (ADR-0003 11); NVDA follows it through scrollingStart";
-const NO_MODAL: &str = "modal scope (ADR-0003 11 Modal) is M7b: not on main";
 const NAME_OMITTED: &str = "the accessible name of a labelled form control is not spoken on quick nav: the label is separate text outside the control's range and the presenter speaks the range only (LP-1, LP-4)";
 const NO_ROLE_WORD: &str = "the role word and count of a container are not spoken when the cursor lands on it (field diff, LP-2: M7b)";
 const NO_LANDMARK_NAME: &str = "a landmark hit is presented as the content at its start; its name and role word are not spoken (BM-3/LP-2 field diff: M7b)";
@@ -250,7 +248,7 @@ fn tb() -> Vec<Step> {
     vec![
         top("TB.top"),
         s("TB.t.1", P0, "T: next table, named by its caption", n('t'), &["Quarterly sales"]).extra(&["table", "4 columns", "4 rows"], NO_ROLE_WORD),
-        s("TB.into", P0, "Down x2: the caption, then the header row as one line (screen layout on, NVDA default)", Act::Repeat(DOWN, 0, 2), &["Region"]).extra(&["Q1", "Q2", "Q3"], "every table cell is its own line; NVDA reads a table row as one line with screen layout on"),
+        s("TB.into", P0, "Down: T lands on the caption line (the first line of the table, as in NVDA); the next line is the header row, one line (screen layout on, NVDA default)", Act::Repeat(DOWN, 0, 1), &["Region"]).extra(&["Q1", "Q2", "Q3"], "every table cell is its own line; NVDA reads a table row as one line with screen layout on"),
         s("TB.right.1", P0, "Ctrl+Alt+Right: next cell", ctrl_alt(RIGHT), &["Q1"]).gate(Gate::Key),
         s("TB.right.2", P0, "Ctrl+Alt+Right again", ctrl_alt(RIGHT), &["Q2"]),
         s("TB.down.1", P0, "Ctrl+Alt+Down: next row, the row header changes and is spoken", ctrl_alt(DOWN), &["North", "20"]).gate(Gate::Key),
@@ -271,7 +269,7 @@ fn tb() -> Vec<Step> {
         s("TB.notcell", P1, "Table keys outside a table", ctrl_alt(DOWN), &["Not in a table cell"]),
         // spans, layout tables, grids, sparse tables
         s("TB.t.2", P0, "T twice from the top: the span table", rep('t', 2), &["Span table"]).extra(&["table"], NO_ROLE_WORD),
-        s("TB.span.hdr", P2, "Down x2: the caption, then the first header row", Act::Repeat(DOWN, 0, 2), &["Item"]).extra(&["Price"], "every table cell is its own line"),
+        s("TB.span.hdr", P2, "Down: from the caption line to the first header row", Act::Repeat(DOWN, 0, 1), &["Item"]).extra(&["Price"], "every table cell is its own line"),
         s("TB.t.3", P0, "T: the layout table is skipped, the grid is next", n('t'), &["Seat"]).extra(&["Seat grid"], NO_ROLE_WORD).not(&["Layout cell"]),
         s("TB.t.4", P1, "T: sparse table", n('t'), &["Sparse table"]),
         s("TB.t.5", P1, "T: one-cell table", n('t'), &["One cell"]),
@@ -677,8 +675,8 @@ fn app() -> Vec<Step> {
         // alert dialog without aria-hidden on the app: modal scope must confine navigation
         s("APP.alert", P0, "The alert dialog opens: name and focus on Cancel", Act::Do(role::PUSH_BUTTON, "Empty trash"), &["Cancel"]).extra(&["Empty trash"], "the dialog's name is not spoken when focus enters it").win(1500),
         s("APP.alert.h", P0, "Shift+H: the dialog heading", p('h'), &["Empty trash"]),
-        s("APP.alert.h2", P0, "Shift+H again: confined to the dialog, nothing from the page behind it", p('h'), &["no previous heading"]).not(&["Inbox", "Mail app"]).xf(NO_MODAL),
-        s("APP.alert.k", P0, "Shift+K: links behind the dialog are not reachable", p('k'), &["no previous link"]).not(&["Inbox", "Quarterly report"]).xf(NO_MODAL),
+        s("APP.alert.h2", P0, "Shift+H again: confined to the dialog, nothing from the page behind it", p('h'), &["no previous heading"]).not(&["Inbox", "Mail app"]),
+        s("APP.alert.k", P0, "Shift+K: links behind the dialog are not reachable", p('k'), &["no previous link"]).not(&["Inbox", "Quarterly report"]),
         s("APP.alert.close", P0, "Cancel: focus returns to the opener", Act::Do(role::PUSH_BUTTON, "Cancel"), &["Empty trash"]).win(1500),
         top("APP.top2"),
         s("APP.tab", P1, "Focus on a tab: tabs switch to focus mode on focus", Act::Focus(role::PAGE_TAB, "Social"), &["tab", "Social"]).extra(&["focus mode"], "NVDA SWITCH_TO_PASS_THROUGH_ON_FOCUS_ROLES includes tabs (D-1)"),

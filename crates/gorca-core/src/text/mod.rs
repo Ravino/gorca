@@ -556,6 +556,9 @@ impl Reader {
         }
         match m {
             TextMsg::Caret { node, offset } => {
+                if self.web_caret(node, offset, fx) {
+                    return;
+                }
                 if self.text_active() && self.text_accepts(node, Some(offset), fx) {
                     self.text_step(In::Caret { offset }, fx);
                 }

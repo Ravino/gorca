@@ -70,16 +70,23 @@ fn apply_web_extra(
     word: Option<&'static str>,
     tail: &[crate::browse::present::Item],
 ) {
+    use crate::browse::present::Item;
+    let (lead, rest): (Vec<Item>, Vec<Item>) = tail
+        .iter()
+        .cloned()
+        .partition(|i| matches!(i, Item::Lead(_)));
+    let mut front: Vec<gorca_model::Segment> = Vec::new();
     if let Some(w) = word {
-        u.segments.insert(
-            0,
-            gorca_model::Segment {
-                text: Arc::from(w),
-                kind: gorca_model::SegmentKind::Text,
-            },
-        );
+        front.push(gorca_model::Segment {
+            text: Arc::from(w),
+            kind: gorca_model::SegmentKind::Text,
+        });
     }
-    u.segments.extend(crate::browse::present::segments(tail));
+    front.extend(crate::browse::present::segments(&lead));
+    for (at, seg) in front.into_iter().enumerate() {
+        u.segments.insert(at, seg);
+    }
+    u.segments.extend(crate::browse::present::segments(&rest));
 }
 
 impl Reader {
@@ -356,7 +363,9 @@ impl Reader {
                     at: self.now,
                     ctx,
                 });
-                fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+                if !self.web_suppress_focus(snap.key) {
+                    fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+                }
                 fx.push(ReaderEffect::FocusSettled { node: snap.key });
                 if self.selection_node != Some(snap.key) {
                     self.text_track(snap, fx);

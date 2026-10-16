@@ -348,6 +348,7 @@ impl Actor {
     fn live_tick(&mut self) {
         let msgs = self.live.tick(self.writer.doc(), Instant::now());
         for msg in msgs {
+            tracing::info!(target: "gorca_phase", phase = "live_msg", text = %msg.text, assertive = msg.assertive);
             self.notify(DocNotice::Live {
                 doc: self.spec_doc,
                 msg,
