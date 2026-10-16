@@ -120,7 +120,6 @@ fn esc(id: &'static str) -> Step {
 }
 
 // Reasons repeated across rows.
-const NO_FRAME_NAV: &str = "quicknav.next.frame (M) is Planned(M7): not implemented on main";
 const NAME_OMITTED: &str = "the accessible name of a labelled form control is not spoken on quick nav: the label is separate text outside the control's range and the presenter speaks the range only (LP-1, LP-4)";
 const NO_ROLE_WORD: &str = "the role word and count of a container are not spoken when the cursor lands on it (field diff, LP-2: M7b)";
 const NO_LANDMARK_NAME: &str = "a landmark hit is presented as the content at its start; its name and role word are not spoken (BM-3/LP-2 field diff: M7b)";
@@ -434,7 +433,7 @@ fn iframes() -> Vec<Step> {
         s("IF.esc", P1, "Escape in the frame: browse mode", key0(ESC), &["browse mode"]),
         top("IF.top4"),
         s("IF.m.1", P1, "M: next frame, named by its title", n('m'), &["frame", "Nested level one"]),
-        s("IF.m.2", P1, "M again", n('m'), &["Nested level two"]).xf(NO_FRAME_NAV),
+        s("IF.m.2", P1, "M again", n('m'), &["frame", "Level two frame"]),
         s("IF.end", P1, "Ctrl+End: the last line of the outer page after all frames", ctrl(END), &["Outer paragraph after the frames"]),
         s("IF.late", P2, "A frame reloads its content: no speech", Act::Do(role::PUSH_BUTTON, "Reload late frame"), &[]).not(&["After reload text"]).win(900),
         s("IF.late2", P2, "The page is still navigable", ctrl(HOME), &["Outer page heading"]),
