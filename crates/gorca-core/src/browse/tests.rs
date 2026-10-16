@@ -1841,3 +1841,189 @@ fn a_field_that_gets_the_focus_with_its_help_text_is_not_mistaken_for_a_dialog()
     let fx = r.focus(1014);
     assert!(!spoken(&fx).iter().any(|s| s.contains("dialog")));
 }
+
+// ---- review round 1: H-1 (D-2 Tab) and M-5 (native selection) ---------------------------------
+
+fn tab_chord() -> Chord {
+    Chord {
+        keysym: 0xff09,
+        modifiers: Modifiers::empty(),
+    }
+}
+
+fn shift_tab_chord() -> Chord {
+    Chord {
+        keysym: 0xfe20,
+        modifiers: Modifiers::SHIFT,
+    }
+}
+
+/// A rig whose document root is FOCUSABLE as Gecko reports it and whose keys know the Tab chords.
+fn tab_rig() -> Rig {
+    let mut r = rig();
+    let mut body = block(src(1, Role::DocumentWeb, Some(1001)));
+    body.name = Some(Arc::from("Test page"));
+    body.states |= StateSet::FOCUSABLE;
+    r.tr.apply(
+        &mut r.writer,
+        vec![DocDelta::Upsert(vec![body]), DocDelta::Settled { batch: 2 }],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.keys.quick_nav = vec![tab_chord(), shift_tab_chord()];
+    r.reader.keys.tab_next = vec![tab_chord()];
+    r.reader.keys.tab_prev = vec![shift_tab_chord()];
+    r
+}
+
+fn acts(fx: &ReaderEffects) -> Vec<(DocAction, DocNodeId)> {
+    effects_web(fx)
+        .iter()
+        .filter_map(|w| match w {
+            WebEffect::Act { node, act, .. } => Some((act.clone(), *node)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn last_grabs(fx: &ReaderEffects) -> Option<gorca_input_api::GrabSet> {
+    fx.iter().rev().find_map(|e| {
+        if let ReaderEffect::SetGrabSet(g) = e {
+            Some(g.clone())
+        } else {
+            None
+        }
+    })
+}
+
+/// Let the debounced cursor timers run (scroll, tab availability).
+fn settle(r: &mut Rig) -> ReaderEffects {
+    r.now += Duration::from_millis(300);
+    r.reader.handle(ReaderMsg::Timer, r.now)
+}
+
+#[test]
+fn reading_never_sets_a_page_caret_or_moves_focus() {
+    // H-1: the caret-follow substitute is gone: Down, K and the timers send only scrolls.
+    let mut r = tab_rig();
+    r.focus(1002);
+    let mut all = acts(&settle(&mut r));
+    for cmd in [
+        CoreCmd::BrowseCursorNextLine,
+        CoreCmd::QuicknavNextLink,
+        CoreCmd::BrowseCursorNextLine,
+        CoreCmd::BrowseCursorNextChar,
+    ] {
+        let fx = r.key(cmd);
+        all.extend(acts(&fx));
+        all.extend(acts(&settle(&mut r)));
+    }
+    assert!(!all.is_empty(), "the scrolls still go out");
+    assert!(
+        all.iter()
+            .all(|(a, _)| matches!(a, DocAction::ScrollIntoView)),
+        "reading only scrolls: {all:?}"
+    );
+}
+
+#[test]
+fn tab_focuses_the_next_focusable_after_the_cursor_and_shift_tab_the_previous() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    let link = r.join.get(nk(1006)).unwrap().1;
+    let edit = r.join.get(nk(1014)).unwrap().1;
+    // From the heading: the link comes first, never the document root.
+    let fx = r.key(CoreCmd::BrowseTabNext);
+    assert_eq!(acts(&fx), [(DocAction::Focus, link)]);
+    // The cursor moves with a plain read to the last line: the edit is next.
+    for _ in 0..3 {
+        r.key(CoreCmd::BrowseCursorNextLine);
+    }
+    let fx = r.key(CoreCmd::BrowseTabNext);
+    assert_eq!(acts(&fx), [(DocAction::Focus, edit)]);
+    // Shift+Tab from the same place goes back to the link, never to the document.
+    let fx = r.key(CoreCmd::BrowseTabPrev);
+    assert_eq!(acts(&fx), [(DocAction::Focus, link)]);
+}
+
+#[test]
+fn tab_is_grabbed_only_in_the_directions_that_have_a_target() {
+    let mut r = tab_rig();
+    let fx = r.focus(1002);
+    let g = last_grabs(&fx).expect("browse mode sets the grabs");
+    assert!(
+        g.contains(0xff09, Modifiers::empty()),
+        "a target after the heading"
+    );
+    assert!(
+        !g.contains(0xfe20, Modifiers::SHIFT),
+        "nothing focusable before the heading: Shift+Tab goes to the page"
+    );
+    // Past the last focusable (the edit): Tab is released, Shift+Tab comes back.
+    for _ in 0..6 {
+        r.key(CoreCmd::BrowseCursorNextLine);
+    }
+    let fx = settle(&mut r);
+    let g = last_grabs(&fx).expect("the grab set follows the cursor");
+    assert!(!g.contains(0xff09, Modifiers::empty()));
+    assert!(g.contains(0xfe20, Modifiers::SHIFT));
+    // A grab that went stale says so instead of staying silent.
+    let fx = r.key(CoreCmd::BrowseTabNext);
+    assert!(acts(&fx).is_empty());
+    assert_eq!(spoken(&fx), ["no next focusable element"]);
+}
+
+#[test]
+fn virtual_selection_never_touches_the_page_unless_native_mode_is_on() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    let mut seen = Vec::new();
+    for _ in 0..3 {
+        seen.extend(acts(&r.key(CoreCmd::BrowseSelectNextChar)));
+    }
+    seen.extend(acts(&r.key(CoreCmd::BrowseSelectAll)));
+    assert!(
+        !seen
+            .iter()
+            .any(|(a, _)| matches!(a, DocAction::SetSelection(_))),
+        "default: virtual only {seen:?}"
+    );
+    // gorca+Shift+F10 turns the mirror on; a range inside one text node is set.
+    let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
+    assert_eq!(spoken(&fx), ["native selection on"]);
+    r.key(CoreCmd::BrowseCursorTop);
+    let _ = r.key(CoreCmd::BrowseSelectNextChar);
+    let fx = r.key(CoreCmd::BrowseSelectNextChar);
+    assert!(
+        acts(&fx)
+            .iter()
+            .any(|(a, _)| matches!(a, DocAction::SetSelection(_))),
+        "{:?}",
+        acts(&fx)
+    );
+    // Extending over a node boundary (a range in two nodes) clears the page selection.
+    let mut later = Vec::new();
+    for _ in 0..20 {
+        later.extend(acts(&r.key(CoreCmd::BrowseSelectNextChar)));
+    }
+    assert!(
+        later
+            .iter()
+            .any(|(a, _)| matches!(a, DocAction::SetSelection(range) if range.is_empty())),
+        "a range over several nodes leaves no stale page selection: {later:?}"
+    );
+    // A plain move drops the range: nothing of ours stays selected (checked after the timer).
+    let fx = r.key(CoreCmd::BrowseCursorTop);
+    let mut moved = acts(&fx);
+    moved.extend(acts(&settle(&mut r)));
+    assert!(
+        !moved
+            .iter()
+            .any(|(a, _)| matches!(a, DocAction::SetSelection(range) if !range.is_empty())),
+        "{moved:?}"
+    );
+    let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
+    assert_eq!(spoken(&fx), ["native selection off"]);
+}
