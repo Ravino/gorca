@@ -148,3 +148,7 @@ tests/web/m8/run_m8.sh m8-perf --repeats 3 --no-fail --only M8-PF1,M8-FM   # lat
 tests/web/m8/run_m8.sh --list                                              # the 318 steps
 GORCA_M8_STEPS=QN.f,QN.e GORCA_M8_DUMP=1 tests/web/m8/run_m8.sh dbg --quick --only M8-QN
 ```
+
+## 9. Update after M8 implementation
+
+The 18 root causes of section 4 are tracked in `docs/reports/m8-gaps.md` (closed, partial, open); the implementation and the final runs are in `docs/reports/m8-impl.md`. Final: 308 PASS, 2 GAP, 8 XFAIL, 0 unmarked (`m8-final2-full`).

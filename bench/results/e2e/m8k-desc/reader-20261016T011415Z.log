@@ -1,0 +1,11 @@
+2026-10-16T01:14:20.483657Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T01:14:20.512557Z  INFO gorca_phase: phase="warm" wall_ms=28.796074 waited_ms=27.235243999999998 blocked_ms=1.937588 slept_ms=25.254337000000003 rounds=2 probes=19 sampled_nodes=3 tagged_nodes=3 ready=true
+2026-10-16T01:14:20.512975Z  INFO gorca_phase: phase="locate" wall_ms=0.342657
+2026-10-16T01:14:20.513005Z  INFO gorca_phase: phase="create" wall_ms=0.009245
+2026-10-16T01:14:20.518505Z  INFO gorca_phase: phase="fetch" total_ms=5.454423 warm_ms=0.0 frontier_ms=0.075898 get_tree_ms=2.15972 roles_ms=0.98095 states_ms=0.683075 text_ms=1.290903 assemble_ms=0.057171 heaviest_get_tree_ms=1.629 calls=206 tree_bytes=17770 nodes=78
+2026-10-16T01:14:20.519210Z  INFO gorca_phase: phase="translate" wall_ms=0.34120500000000004 nodes=140
+2026-10-16T01:14:20.772298Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T01:14:21.154478Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T01:14:21.155095Z  INFO gorca_phase: phase="dbg_desc" name=Some("Required") desc=None have=PropMask(NAME | VALUE | ROLE | STATES)
+2026-10-16T01:14:21.307794Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T01:14:21.308558Z  INFO gorca_phase: phase="dbg_desc" name=Some("Invalid") desc=None have=PropMask(NAME | VALUE | ROLE | STATES)
