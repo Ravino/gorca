@@ -14,6 +14,9 @@ interface types {
     status-bar, separator, label, static-text, terminal, landmark, alert,
   }
 
+  /// A numeric value as the application reports it (sliders, level bars).
+  record range { current: f64, min: f64, max: f64 }
+
   record node {
     key: node-key,
     role: role,
@@ -21,7 +24,9 @@ interface types {
     states: u64,
     name: option<string>,
     description: option<string>,
-    // TBD: value, attrs, relations, bounds as the host API grows.
+    /// The range value of a slider or level bar, if it has one.
+    range: option<range>,
+    // TBD: text value, attrs, relations, bounds as the host API grows.
   }
 
   enum budget { interactive, prefetch, background }

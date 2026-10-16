@@ -158,6 +158,7 @@ fn spoken(fx: &ReaderEffects) -> Vec<String> {
             | ReaderEffect::ReviewStatusBar { .. }
             | ReaderEffect::ReviewAct { .. }
             | ReaderEffect::Web(_)
+            | ReaderEffect::Desktop(_)
             | ReaderEffect::TextFetch { .. }
             | ReaderEffect::SayAllChunk { .. } => None,
         })
@@ -182,6 +183,7 @@ fn ctls(fx: &ReaderEffects) -> Vec<SpeechCtl> {
             | ReaderEffect::ReviewStatusBar { .. }
             | ReaderEffect::ReviewAct { .. }
             | ReaderEffect::Web(_)
+            | ReaderEffect::Desktop(_)
             | ReaderEffect::TextFetch { .. }
             | ReaderEffect::SayAllChunk { .. } => None,
         })

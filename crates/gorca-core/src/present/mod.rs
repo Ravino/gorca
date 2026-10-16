@@ -6,18 +6,30 @@
 //! > back through the Reader."
 
 mod echo;
+mod fair;
 mod flow;
 mod job;
 mod log;
+mod notification;
 mod utterance;
+mod window;
 
 pub use echo::{key_echo, key_echo_text, message};
 pub use flow::{FOCUS_FIELDS, Presented, RAPID_FOCUS, REFINE_WINDOW, STORM_HOLD, focus_need};
 pub use job::{PresentJob, PresentKind, SpeechIntent};
 pub use log::{NoLabels, NodeLabel, PresentLog, PresentRecord, PresentSource};
+pub(crate) use notification::NoticeCtx;
+pub use notification::{
+    announcement_utterance, clean_announcement, is_notice_role, notice_segments,
+};
 pub(crate) use utterance::{changed, present_change};
 pub use utterance::{flat_zone_text, log_states, value_text};
 pub use utterance::{present_focus, present_selected_item};
+pub(crate) use window::WindowCtx;
+pub use window::{
+    Content, DesktopEffect, WindowEffect, WindowInfo, WindowMsg, WindowState, dialog_content,
+    fetch_level, fetch_window, lead_segments, reads_content,
+};
 
 use gorca_model::{Epoch, NodeSnapshot, Role, UttId, Utterance};
 

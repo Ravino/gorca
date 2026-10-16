@@ -1,0 +1,1092 @@
+== private shell world ==
+load=21.44 15.95 16.01 7/3480 2204111
+DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/gorca-h.xr5bN7/run/bus
+AT_SPI_BUS_ADDRESS=unix:path=/tmp/gorca-h.xr5bN7/run/at-spi/bus,guid=e4d4df64e2a060d21bd2ccfe6ad143ed
+XDG_RUNTIME_DIR=/tmp/gorca-h.xr5bN7/run
+WAYLAND_DISPLAY=gorca-shell-2203935
+GORCA_SHELL_PID=2203939
+GORCA_SHELL_LOG=/tmp/gorca-h.xr5bN7/log/shell.log
+GORCA_HARNESS_DIR=/tmp/gorca-h.xr5bN7
+IDENTITY {"apps_on_a11y_bus": [{"bus": ":1.3", "path": "/org/a11y/atspi/accessible/root", "pid": 2203939, "name": "gnome-shell"}, {"bus": ":1.5", "path": "/org/a11y/atspi/accessible/root", "pid": 2204054, "name": "ibus-extension-gtk3"}], "expected_shell_pid": 2203939, "shell_bus": ":1.3", "root_role": ["application"], "root_name": "gnome-shell", "root_id": null, "app.ToolkitName": "clutter", "app.Version": "48.7", "app.AtspiVersion": "2.1", "app.Id": 0, "root_children": [[[":1.3", "/org/a11y/atspi/accessible/1"]]], "root_interfaces": [["org.a11y.atspi.Accessible", "org.a11y.atspi.Application", "org.a11y.atspi.Collection"]], "a11y_bus_credentials": {"ProcessID": 2203939, "UnixUserID": 1000, "UnixGroupIDs": [27, 29, 44, 46, 116, 117, 118, 119, 985, 992, 996, 1000], "LinuxSecurityLabel": [117, 110, 99, 111, 110, 102, 105, 110, 101, 100, 0], "ProcessFD": 0}, "session_bus_org.gnome.Shell_owner": [":1.8"], "session_bus_credentials": {"ProcessID": 2203939, "UnixUserID": 1000, "UnixGroupIDs": [27, 29, 44, 46, 116, 117, 118, 119, 985, 992, 996, 1000], "LinuxSecurityLabel": [117, 110, 99, 111, 110, 102, 105, 110, 101, 100, 0], "ProcessFD": 0}, "proc": {"pgrp": 2203836, "start_ticks": 75884167, "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-org.gnome.Terminal.slice/vte-spawn-746bc6a8-567f-419c-a886-6b9c093c2fa7.scope"}, "shell_pid_matches_session_owner": true}
+RD ()
+SETTLED (startup) after s: 7.8
+INITIAL STATE {"overview":true,"modalCount":1,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}
+SETTLED (overview hidden) after s: 5.8 state {"overview":false,"modalCount":0,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}
+EVAL (True, '"ok"')
+== S0_idle
+# S0_idle  (load 21.50; 768 events)  no trigger; idle noise
+trigger: null
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+  [   3000.1ms] MARK trigger returned
+event counts: Object.StateChanged[visible] x169; Object.PropertyChange[accessible-parent] x135; Object.ChildrenChanged[add] x135; Object.StateChanged[defunct] x87; Object.ChildrenChanged[remove] x81; Object.StateChanged[sensitive] x53; Object.StateChanged[enabled] x53; Object.PropertyChange[accessible-role] x44; Object.PropertyChange[accessible-name] x11
+  [   3673.9ms] #528 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.31441 toggle button:''
+  [   3674.0ms] #529 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31441 toggle button:''
+  [   3674.1ms] #530 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31441 toggle button:''
+  [   3674.1ms] #531 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=61 src=:1.31441 toggle button:''
+  [   3674.4ms] #532 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31442 panel:''
+  [   3674.5ms] #533 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1443"] src=:1.31442 panel:''
+  [   3674.5ms] #534 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1442"] src=:1.31443 panel:''
+  [   3674.6ms] #535 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31444 panel:''
+  [   3674.6ms] #536 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1442"] src=:1.31444 panel:''
+  [   3674.6ms] #537 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1444"] src=:1.31442 panel:''
+  [   3674.7ms] #538 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=60 src=:1.31445 text:'' text='System'
+  [   3674.7ms] #539 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31445 text:'' text='System'
+  [   3674.7ms] #540 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31446 label:'System'
+  [   3674.8ms] #541 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1442"] src=:1.31446 label:'System'
+  [   3674.8ms] #542 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1446"] src=:1.31442 panel:''
+  [   3675.1ms] #543 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31443 panel:''
+  [   3675.1ms] #544 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1441"] src=:1.31443 panel:''
+  [   3675.2ms] #545 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1443"] src=:1.31441 toggle button:''
+  [   3675.5ms] #546 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31447 panel:''
+  [   3675.6ms] #547 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31447 panel:''
+  [   3675.6ms] #548 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31447 panel:''
+  [   3675.7ms] #549 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.31448 button:''
+  [   3675.7ms] #550 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31448 button:''
+  [   3675.8ms] #551 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31448 button:''
+  [   3675.8ms] #552 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31448 button:''
+  [   3675.8ms] #553 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31449 panel:''
+  [   3675.9ms] #554 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31449 panel:''
+  [   3675.9ms] #555 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31450 panel:''
+  [   3676.0ms] #556 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31450 panel:''
+  [   3676.0ms] #557 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31450 panel:''
+  [   3676.1ms] #558 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.31451 button:''
+  [   3676.1ms] #559 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31451 button:''
+  [   3676.1ms] #560 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31451 button:''
+  [   3676.2ms] #561 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31451 button:''
+  [   3676.2ms] #562 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31452 panel:''
+  [   3676.3ms] #563 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31452 panel:''
+  [   3676.4ms] #564 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31449 panel:''
+  [   3676.4ms] #565 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31452 panel:''
+  [   3676.4ms] #566 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31453 panel:''
+  [   3676.5ms] #567 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31453 panel:''
+  ... 728 more
+tree diff: nodes 1300 -> 1362
+
+== N1_notification
+  (timeout waiting for banner shown)
+# N1_notification  (load 21.14; 314 events)  title+body, no actions, default expiry; waits for the banner to expire
+trigger: {"id": 1}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+  [      0.0ms] MARK Notify call
+  [     23.8ms] MARK Notify returned id=1
+  [  21704.8ms] MARK 6.5 s without user input: {"overview":false,"modalCount":0,"trayState":2,"banner":true,"queue":0,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}
+  [  21765.9ms] MARK user activity (Shift tap): the banner timeout can now run
+  [  22766.1ms] MARK trigger returned
+event counts: Object.StateChanged[visible] x62; Object.StateChanged[showing] x52; Object.PropertyChange[accessible-parent] x49; Object.ChildrenChanged[add] x49; Object.StateChanged[defunct] x27; Object.ChildrenChanged[remove] x26; Object.PropertyChange[accessible-role] x19; Object.StateChanged[sensitive] x12; Object.StateChanged[enabled] x12; Object.PropertyChange[accessible-name] x5; Object.StateChanged[focusable] x1
+  [     10.6ms] #1296 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31618 panel:''
+  [     10.8ms] #1297 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31618 panel:''
+  [     10.8ms] #1298 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31619 panel:''
+  [     10.8ms] #1299 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31619 panel:''
+  [     10.9ms] #1300 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=60 src=:1.31620 text:'' text='probe-app'
+  [     10.9ms] #1301 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31620 text:'' text='probe-app'
+  [     10.9ms] #1302 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="" src=:1.31621 label:'probe-app'
+  [     10.9ms] #1303 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31621 label:'probe-app'
+  [     11.0ms] #1304 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1622"] src=:1.31621 label:'probe-app'
+  [     11.0ms] #1305 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1621"] src=:1.31622 panel:''
+  [     11.0ms] #1306 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.31623 button:''
+  [     11.1ms] #1307 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31623 button:''
+  [     11.1ms] #1308 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31623 button:''
+  [     11.1ms] #1309 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31624 panel:''
+  [     11.1ms] #1310 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1623"] src=:1.31624 panel:''
+  [     11.1ms] #1311 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1624"] src=:1.31623 button:''
+  [     11.2ms] #1312 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31623 button:''
+  [     11.2ms] #1313 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1622"] src=:1.31623 button:''
+  [     11.2ms] #1314 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1623"] src=:1.31622 panel:''
+  [     11.2ms] #1315 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1619"] src=:1.31622 panel:''
+  [     11.2ms] #1316 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1622"] src=:1.31619 panel:''
+  [     11.3ms] #1317 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31618 panel:''
+  [     11.3ms] #1318 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1619"] src=:1.31618 panel:''
+  [     11.3ms] #1319 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1618"] src=:1.31619 panel:''
+  [     11.3ms] #1320 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31619 panel:''
+  [     11.4ms] #1321 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1625"] src=:1.31619 panel:''
+  [     11.4ms] #1322 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1619"] src=:1.31625 panel:''
+  [     11.5ms] #1323 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31625 panel:''
+  [     11.6ms] #1324 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/125"] src=:1.31625 panel:''
+  [     11.6ms] #1325 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1625"] src=:1.3125 panel:''
+  [     11.6ms] #1326 Object.StateChanged 'visible' d1=0 d2=0 any=0 src=:1.3126 panel:''
+  [     11.7ms] #1327 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.3127 button:'Clear all notifications'
+  [     11.7ms] #1328 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.3127 button:'Clear all notifications'
+  [     11.7ms] #1329 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.3127 button:'Clear all notifications'
+  [     12.4ms] #1330 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="probe-app" src=:1.31621 label:'probe-app'
+  [     12.5ms] #1331 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.31626 notification:''
+  [     12.5ms] #1332 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31626 notification:''
+  [     12.5ms] #1333 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31626 notification:''
+  [     12.6ms] #1334 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=99 src=:1.31626 notification:''
+  [     12.6ms] #1335 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31627 panel:''
+  ... 274 more
+tree diff: nodes 1362 -> 1394
+
+== N2_notification_actions
+  (timeout waiting for banner shown)
+# N2_notification_actions  (load 18.56; 341 events)  with default+named action
+trigger: {"id": 2}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+  [     42.2ms] MARK Notify returned id=2
+  [  16285.8ms] MARK user activity (Shift tap)
+  [  16285.8ms] MARK trigger returned
+event counts: Object.StateChanged[visible] x65; Object.PropertyChange[accessible-parent] x54; Object.ChildrenChanged[add] x54; Object.StateChanged[showing] x52; Object.StateChanged[defunct] x30; Object.ChildrenChanged[remove] x28; Object.PropertyChange[accessible-role] x23; Object.StateChanged[sensitive] x13; Object.StateChanged[enabled] x13; Object.PropertyChange[accessible-name] x8; Object.StateChanged[focusable] x1
+  [     10.6ms] #1610 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31678 panel:''
+  [     10.8ms] #1611 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31678 panel:''
+  [     10.8ms] #1612 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31679 panel:''
+  [     10.9ms] #1613 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31679 panel:''
+  [     10.9ms] #1614 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=60 src=:1.31680 text:'' text='probe-app'
+  [     10.9ms] #1615 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31680 text:'' text='probe-app'
+  [     11.2ms] #1616 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="" src=:1.31681 label:'probe-app'
+  [     11.3ms] #1617 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31681 label:'probe-app'
+  [     11.3ms] #1618 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1682"] src=:1.31681 label:'probe-app'
+  [     11.3ms] #1619 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1681"] src=:1.31682 panel:''
+  [     11.3ms] #1620 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.31683 button:''
+  [     11.4ms] #1621 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31683 button:''
+  [     11.4ms] #1622 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31683 button:''
+  [     11.6ms] #1623 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31684 panel:''
+  [     11.8ms] #1624 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1683"] src=:1.31684 panel:''
+  [     11.8ms] #1625 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1684"] src=:1.31683 button:''
+  [     11.9ms] #1626 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31683 button:''
+  [     12.0ms] #1627 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1682"] src=:1.31683 button:''
+  [     12.1ms] #1628 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1683"] src=:1.31682 panel:''
+  [     12.1ms] #1629 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1679"] src=:1.31682 panel:''
+  [     12.2ms] #1630 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1682"] src=:1.31679 panel:''
+  [     12.2ms] #1631 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31678 panel:''
+  [     12.2ms] #1632 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1679"] src=:1.31678 panel:''
+  [     12.2ms] #1633 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1678"] src=:1.31679 panel:''
+  [     12.9ms] #1634 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31679 panel:''
+  [     13.0ms] #1635 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1685"] src=:1.31679 panel:''
+  [     13.1ms] #1636 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1679"] src=:1.31685 panel:''
+  [     13.4ms] #1637 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31685 panel:''
+  [     13.5ms] #1638 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/125"] src=:1.31685 panel:''
+  [     13.5ms] #1639 Object.ChildrenChanged 'add' d1=2 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1685"] src=:1.3125 panel:''
+  [     15.4ms] #1640 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="probe-app" src=:1.31681 label:'probe-app'
+  [     15.7ms] #1641 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.31686 notification:''
+  [     15.8ms] #1642 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31686 notification:''
+  [     15.8ms] #1643 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31686 notification:''
+  [     15.8ms] #1644 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=99 src=:1.31686 notification:''
+  [     16.0ms] #1645 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31687 panel:''
+  [     16.1ms] #1646 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1686"] src=:1.31687 panel:''
+  [     16.1ms] #1647 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1687"] src=:1.31686 notification:''
+  [     16.4ms] #1648 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31688 panel:''
+  [     16.5ms] #1649 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1689"] src=:1.31688 panel:''
+  ... 301 more
+tree diff: nodes 1394 -> 1429
+  renamed: {"path": "259", "role": "label", "old": "Oct 16\u200212:22 AM", "new": "Oct 16\u200212:23 AM", "showing": true, "chain": "label:Oct 16\u200212:23 AM < panel:- < menu:- < panel:- < panel:- < panel:- < panel:- < panel:- < window:Main stage"}
+
+== N3_second_and_replace
+  (timeout waiting for second banner after the first expired)
+  (timeout waiting for second banner after CloseNotification)
+# N3_second_and_replace  (load 17.41; 738 events)  second notification while one shows; then replaces_id update; then close
+trigger: {"a": 3, "b": 4, "c": 4}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+  [    127.7ms] MARK first id=3
+  [    661.2ms] MARK banner visible in tree (poll)
+  [    802.8ms] MARK second id=4
+  [   1938.6ms] MARK state with the second queued: {"overview":false,"modalCount":0,"trayState":2,"banner":true,"queue":1,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}
+  [   1967.3ms] MARK replace of 4 -> id 4
+  [   3710.4ms] MARK user activity (Shift tap): the first banner may expire now, the queued one should follow
+  [  28865.8ms] MARK second banner followed the natural expiry: False; state {"overview":false,"modalCount":0,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}
+  [  28875.6ms] MARK fallback: CloseNotification(first)
+  [  43980.3ms] MARK second banner after CloseNotification: False; state {"overview":false,"modalCount":0,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}
+  [  45076.8ms] MARK CloseNotification(second)
+  [  45076.8ms] MARK trigger returned
+event counts: Object.StateChanged[visible] x118; Object.StateChanged[defunct] x116; Object.ChildrenChanged[remove] x114; Object.StateChanged[showing] x104; Object.PropertyChange[accessible-parent] x96; Object.ChildrenChanged[add] x96; Object.PropertyChange[accessible-role] x38; Object.StateChanged[sensitive] x22; Object.StateChanged[enabled] x22; Object.PropertyChange[accessible-name] x10; Object.StateChanged[focusable] x2
+  [     87.6ms] #1951 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31742 panel:''
+  [     87.8ms] #1952 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31742 panel:''
+  [     87.9ms] #1953 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31743 panel:''
+  [     87.9ms] #1954 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31743 panel:''
+  [     87.9ms] #1955 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=60 src=:1.31744 text:'' text='probe-app'
+  [     88.0ms] #1956 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31744 text:'' text='probe-app'
+  [     88.0ms] #1957 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="" src=:1.31745 label:'probe-app'
+  [     91.8ms] #1958 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31745 label:'probe-app'
+  [     91.9ms] #1959 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1746"] src=:1.31745 label:'probe-app'
+  [     91.9ms] #1960 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1745"] src=:1.31746 panel:''
+  [     91.9ms] #1961 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.31747 button:''
+  [     92.0ms] #1962 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31747 button:''
+  [     92.0ms] #1963 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31747 button:''
+  [     92.0ms] #1964 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31748 panel:''
+  [     92.0ms] #1965 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1747"] src=:1.31748 panel:''
+  [     92.0ms] #1966 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1748"] src=:1.31747 button:''
+  [     92.0ms] #1967 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31747 button:''
+  [     92.1ms] #1968 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1746"] src=:1.31747 button:''
+  [     92.1ms] #1969 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1747"] src=:1.31746 panel:''
+  [     92.1ms] #1970 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1743"] src=:1.31746 panel:''
+  [     92.1ms] #1971 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1746"] src=:1.31743 panel:''
+  [     92.1ms] #1972 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31742 panel:''
+  [     92.1ms] #1973 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1743"] src=:1.31742 panel:''
+  [     92.2ms] #1974 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1742"] src=:1.31743 panel:''
+  [     92.3ms] #1975 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31743 panel:''
+  [     92.3ms] #1976 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1749"] src=:1.31743 panel:''
+  [     92.3ms] #1977 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1743"] src=:1.31749 panel:''
+  [     92.3ms] #1978 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31749 panel:''
+  [     92.4ms] #1979 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/125"] src=:1.31749 panel:''
+  [     92.4ms] #1980 Object.ChildrenChanged 'add' d1=3 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1749"] src=:1.3125 panel:''
+  [     93.3ms] #1981 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="probe-app" src=:1.31745 label:'probe-app'
+  [     93.4ms] #1982 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.31750 notification:''
+  [     93.4ms] #1983 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31750 notification:''
+  [     93.5ms] #1984 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31750 notification:''
+  [     93.6ms] #1985 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=99 src=:1.31750 notification:''
+  [     93.6ms] #1986 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31751 panel:''
+  [     93.6ms] #1987 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1750"] src=:1.31751 panel:''
+  [     97.1ms] #1988 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1751"] src=:1.31750 notification:''
+  [     98.4ms] #1989 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31752 panel:''
+  [     98.5ms] #1990 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1753"] src=:1.31752 panel:''
+  ... 698 more
+tree diff: nodes 1429 -> 1429
+
+== N4_critical
+  (timeout waiting for banner shown)
+# N4_critical  (load 20.40; 231 events)  urgency=critical (does not expire)
+trigger: {"id": 5}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":2,\"banner\":true,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+  [     37.2ms] MARK id=5
+  [  16273.2ms] MARK user activity (Shift tap)
+  [  16273.2ms] MARK trigger returned
+event counts: Object.StateChanged[visible] x58; Object.PropertyChange[accessible-parent] x48; Object.ChildrenChanged[add] x48; Object.StateChanged[showing] x29; Object.PropertyChange[accessible-role] x18; Object.StateChanged[sensitive] x11; Object.StateChanged[enabled] x11; Object.PropertyChange[accessible-name] x6; Object.StateChanged[focusable] x1; Object.StateChanged[defunct] x1
+  [     15.4ms] #2689 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31858 panel:''
+  [     15.8ms] #2690 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31858 panel:''
+  [     15.9ms] #2691 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31859 panel:''
+  [     15.9ms] #2692 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31859 panel:''
+  [     16.0ms] #2693 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=60 src=:1.31860 text:'' text='probe-app'
+  [     16.0ms] #2694 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31860 text:'' text='probe-app'
+  [     16.1ms] #2695 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="" src=:1.31861 label:'probe-app'
+  [     16.1ms] #2696 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31861 label:'probe-app'
+  [     16.2ms] #2697 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1862"] src=:1.31861 label:'probe-app'
+  [     16.3ms] #2698 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1861"] src=:1.31862 panel:''
+  [     16.4ms] #2699 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.31863 button:''
+  [     16.4ms] #2700 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31863 button:''
+  [     16.5ms] #2701 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31863 button:''
+  [     16.5ms] #2702 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31864 panel:''
+  [     16.6ms] #2703 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1863"] src=:1.31864 panel:''
+  [     16.6ms] #2704 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1864"] src=:1.31863 button:''
+  [     16.7ms] #2705 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31863 button:''
+  [     16.7ms] #2706 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1862"] src=:1.31863 button:''
+  [     16.8ms] #2707 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1863"] src=:1.31862 panel:''
+  [     16.9ms] #2708 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1859"] src=:1.31862 panel:''
+  [     17.0ms] #2709 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1862"] src=:1.31859 panel:''
+  [     17.0ms] #2710 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31858 panel:''
+  [     17.1ms] #2711 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1859"] src=:1.31858 panel:''
+  [     17.2ms] #2712 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1858"] src=:1.31859 panel:''
+  [     17.2ms] #2713 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31859 panel:''
+  [     17.3ms] #2714 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1865"] src=:1.31859 panel:''
+  [     17.4ms] #2715 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1859"] src=:1.31865 panel:''
+  [     17.4ms] #2716 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31865 panel:''
+  [     17.5ms] #2717 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/125"] src=:1.31865 panel:''
+  [     17.6ms] #2718 Object.ChildrenChanged 'add' d1=3 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1865"] src=:1.3125 panel:''
+  [     17.6ms] #2719 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="probe-app" src=:1.31861 label:'probe-app'
+  [     17.7ms] #2720 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.31866 notification:''
+  [     17.7ms] #2721 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.31866 notification:''
+  [     17.8ms] #2722 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.31866 notification:''
+  [     17.8ms] #2723 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=99 src=:1.31866 notification:''
+  [     18.0ms] #2724 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31867 panel:''
+  [     18.1ms] #2725 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1866"] src=:1.31867 panel:''
+  [     18.1ms] #2726 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1867"] src=:1.31866 notification:''
+  [     18.1ms] #2727 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31868 panel:''
+  [     18.1ms] #2728 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1869"] src=:1.31868 panel:''
+  ... 191 more
+tree diff: nodes 1429 -> 1486
+  added_showing: {"path": "1890", "role": "notification", "name": "", "desc": "", "ifaces": ["Accessible", "Component", "Collection"], "states": ["enabled", "sensitive", "showing", "visible"], "chain": "notification:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-she
+  added_showing: {"path": "1910", "role": "text", "name": "", "desc": "", "ifaces": ["Accessible", "Action", "Component", "EditableText", "Text", "Collection"], "states": ["focusable", "showing", "visible"], "chain": "text:- < label:critical body < panel:- < panel:- < panel:- < panel:- < notification:- < panel:- < p
+  added_showing: {"path": "1897", "role": "push-button", "name": "", "desc": "", "ifaces": ["Accessible", "Component", "Collection"], "states": ["enabled", "focusable", "sensitive", "showing", "visible"], "chain": "push-button:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage <
+  added_showing: {"path": "1900", "role": "label", "name": "probe-app", "desc": "", "ifaces": ["Accessible", "Component", "Collection"], "states": ["focusable", "showing", "visible"], "chain": "label:probe-app < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage"}
+  added_showing: {"path": "1909", "role": "label", "name": "Critical title", "desc": "", "ifaces": ["Accessible", "Component", "Collection"], "states": ["focusable", "showing", "visible"], "chain": "label:Critical title < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage"
+  added_showing: {"path": "1901", "role": "text", "name": "", "desc": "", "ifaces": ["Accessible", "Action", "Component", "EditableText", "Text", "Collection"], "states": ["focusable", "showing", "visible"], "chain": "text:- < label:Just now < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:
+  added_showing: {"path": "1899", "role": "text", "name": "", "desc": "", "ifaces": ["Accessible", "Action", "Component", "EditableText", "Text", "Collection"], "states": ["focusable", "showing", "visible"], "chain": "text:- < label:probe-app < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel
+  added_showing: {"path": "1911", "role": "label", "name": "critical body", "desc": "", "ifaces": ["Accessible", "Component", "Collection"], "states": ["enabled", "focusable", "sensitive", "showing", "visible"], "chain": "label:critical body < panel:- < panel:- < panel:- < panel:- < notification:- < panel:- < panel:
+  added_showing: {"path": "1902", "role": "label", "name": "Just now", "desc": "", "ifaces": ["Accessible", "Component", "Collection"], "states": ["focusable", "showing", "visible"], "chain": "label:Just now < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage"}
+  added_showing: {"path": "1908", "role": "text", "name": "", "desc": "", "ifaces": ["Accessible", "Action", "Component", "EditableText", "Text", "Collection"], "states": ["focusable", "showing", "visible"], "chain": "text:- < label:Critical title < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < 
+  renamed: {"path": "259", "role": "label", "old": "Oct 16\u200212:23 AM", "new": "Oct 16\u200212:24 AM", "showing": true, "chain": "label:Oct 16\u200212:24 AM < panel:- < menu:- < panel:- < panel:- < panel:- < panel:- < panel:- < window:Main stage"}
+
+== O1_osd
+# O1_osd  (load 19.70; 51 events)  org.gnome.Shell.ShowOSD volume then update then brightness
+trigger: {"first_reply": "()"}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+  [      8.2ms] MARK ShowOSD(level .5) returned
+  [    868.8ms] MARK ShowOSD(level .75) returned (update while showing)
+  [   1674.4ms] MARK ShowOSD(brightness .3) returned (different osd, same window)
+  [   1674.4ms] MARK trigger returned
+event counts: Object.StateChanged[showing] x18; Object.PropertyChange[accessible-value] x15; Object.StateChanged[visible] x10; Object.PropertyChange[accessible-name] x2; Object.PropertyChange[accessible-parent] x2; Object.ChildrenChanged[add] x2; Object.ChildrenChanged[remove] x1; Object.StateChanged[defunct] x1
+  [      4.8ms] #3199 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31054 label:'Volume'
+  [      4.9ms] #3200 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="Volume" src=:1.31054 label:'Volume'
+  [      5.0ms] #3201 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31055 panel:''
+  [      5.0ms] #3202 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31123 level bar:'' value=0.5
+  [      5.1ms] #3203 Object.PropertyChange 'accessible-value' d1=0 d2=0 any=0 src=:1.31123 level bar:'' value=0.5
+  [      5.5ms] #3204 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31075 panel:''
+  [      5.6ms] #3205 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31074 panel:''
+  [      5.7ms] #3206 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31254 panel:''
+  [      5.7ms] #3207 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31918 panel:''
+  [      5.7ms] #3208 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31918 panel:''
+  [      5.7ms] #3209 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1254"] src=:1.31918 panel:''
+  [      5.8ms] #3210 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1918"] src=:1.31254 panel:''
+  [      5.8ms] #3211 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31055 panel:''
+  [      5.8ms] #3212 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31054 label:'Volume'
+  [      5.8ms] #3213 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31298 text:'' text='Volume'
+  [      6.4ms] #3214 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31123 level bar:'' value=0.5
+  [      6.6ms] #3215 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31075 panel:''
+  [    868.5ms] #3216 Object.PropertyChange 'accessible-value' d1=0 d2=0 any=0 src=:1.31123 level bar:'' value=0.5
+  [    885.4ms] #3217 Object.PropertyChange 'accessible-value' d1=0 d2=0 any=0 src=:1.31123 level bar:'' value=0.577775
+  [    902.0ms] #3218 Object.PropertyChange 'accessible-value' d1=0 d2=0 any=0 src=:1.31123 level bar:'' value=0.637775
+  [    918.8ms] #3219 Object.PropertyChange 'accessible-value' d1=0 d2=0 any=0 src=:1.31123 level bar:'' value=0.6875
+  [    935.9ms] #3220 Object.PropertyChange 'accessible-value' d1=0 d2=0 any=0 src=:1.31123 level bar:'' value=0.7227750000000001
+  [    952.0ms] #3221 Object.PropertyChange 'accessible-value' d1=0 d2=0 any=0 src=:1.31123 level bar:'' value=0.742775
+  [    968.8ms] #3222 Object.PropertyChange 'accessible-value' d1=0 d2=0 any=0 src=:1.31123 level bar:'' value=0.75
+  [   1673.6ms] #3223 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="Brightness" src=:1.31054 label:'Brightness'
+  [   1674.0ms] #3224 Object.PropertyChange 'accessible-value' d1=0 d2=0 any=0 src=:1.31123 level bar:'' value=0.75
+  [   1679.5ms] #3225 Object.StateChanged 'showing' d1=0 d2=0 any=0 src=:1.31918 <gone>:None
+  [   1679.6ms] #3226 Object.ChildrenChanged 'remove' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1918"] src=:1.31254 panel:''
+  [   1679.6ms] #3227 Object.StateChanged 'defunct' d1=1 d2=0 any=0 src=:1.31918 <gone>:None
+  [   1679.6ms] #3228 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31919 panel:''
+  [   1679.6ms] #3229 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31919 panel:''
+  [   1679.7ms] #3230 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1254"] src=:1.31919 panel:''
+  [   1679.8ms] #3231 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1919"] src=:1.31254 panel:''
+  [   1691.0ms] #3232 Object.PropertyChange 'accessible-value' d1=0 d2=0 any=0 src=:1.31123 level bar:'' value=0.6100049999999999
+  [   1708.3ms] #3233 Object.PropertyChange 'accessible-value' d1=0 d2=0 any=0 src=:1.31123 level bar:'' value=0.502005
+  [   1724.5ms] #3234 Object.PropertyChange 'accessible-value' d1=0 d2=0 any=0 src=:1.31123 level bar:'' value=0.4125
+  [   1741.0ms] #3235 Object.PropertyChange 'accessible-value' d1=0 d2=0 any=0 src=:1.31123 level bar:'' value=0.34900499999999995
+  [   1757.7ms] #3236 Object.PropertyChange 'accessible-value' d1=0 d2=0 any=0 src=:1.31123 level bar:'' value=0.31300500000000003
+  [   1774.7ms] #3237 Object.PropertyChange 'accessible-value' d1=0 d2=0 any=0 src=:1.31123 level bar:'' value=0.3
+  [   3275.9ms] #3238 Object.StateChanged 'showing' d1=0 d2=0 any=0 src=:1.31919 panel:''
+  ... 11 more
+tree diff: nodes 1362 -> 1363
+  renamed: {"path": "1054", "role": "label", "old": "", "new": "Brightness", "showing": false, "chain": "label:Brightness < panel:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell"}
+
+== O2_osd_nolevel
+# O2_osd_nolevel  (load 19.40; 28 events)  OSD without a level (mute)
+trigger: {}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+  [      5.1ms] MARK ShowOSD(no level) returned
+  [    678.3ms] MARK trigger returned
+event counts: Object.StateChanged[showing] x16; Object.StateChanged[visible] x7; Object.PropertyChange[accessible-name] x1; Object.ChildrenChanged[remove] x1; Object.StateChanged[defunct] x1; Object.PropertyChange[accessible-parent] x1; Object.ChildrenChanged[add] x1
+  [      4.0ms] #3250 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31054 label:'Muted'
+  [      4.2ms] #3251 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="Muted" src=:1.31054 label:'Muted'
+  [      4.2ms] #3252 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31055 panel:''
+  [      4.3ms] #3253 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31075 panel:''
+  [      4.3ms] #3254 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31074 panel:''
+  [      4.3ms] #3255 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31254 panel:''
+  [      4.3ms] #3256 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31919 <gone>:None
+  [      4.4ms] #3257 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31055 panel:''
+  [      4.4ms] #3258 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31054 label:'Muted'
+  [      4.4ms] #3259 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31298 text:'' text='Muted'
+  [      4.4ms] #3260 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31075 panel:''
+  [     10.6ms] #3261 Object.StateChanged 'showing' d1=0 d2=0 any=0 src=:1.31919 <gone>:None
+  [     10.7ms] #3262 Object.ChildrenChanged 'remove' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1919"] src=:1.31254 panel:''
+  [     10.8ms] #3263 Object.StateChanged 'defunct' d1=1 d2=0 any=0 src=:1.31919 <gone>:None
+  [     10.9ms] #3264 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31920 panel:''
+  [     11.0ms] #3265 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31920 panel:''
+  [     11.0ms] #3266 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1254"] src=:1.31920 panel:''
+  [     11.0ms] #3267 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1920"] src=:1.31254 panel:''
+  [   1606.2ms] #3268 Object.StateChanged 'showing' d1=0 d2=0 any=0 src=:1.31920 panel:''
+  [   1606.4ms] #3269 Object.StateChanged 'showing' d1=0 d2=0 any=0 src=:1.31254 panel:''
+  [   1606.4ms] #3270 Object.StateChanged 'showing' d1=0 d2=0 any=0 src=:1.31298 text:'' text='Muted'
+  [   1606.5ms] #3271 Object.StateChanged 'showing' d1=0 d2=0 any=0 src=:1.31054 label:'Muted'
+  [   1606.5ms] #3272 Object.StateChanged 'showing' d1=0 d2=0 any=0 src=:1.31055 panel:''
+  [   1606.5ms] #3273 Object.StateChanged 'showing' d1=0 d2=0 any=0 src=:1.31074 panel:''
+  [   1606.5ms] #3274 Object.StateChanged 'showing' d1=0 d2=0 any=0 src=:1.31075 panel:''
+  [   1606.6ms] #3275 Object.StateChanged 'visible' d1=0 d2=0 any=0 src=:1.31075 panel:''
+  [   1606.6ms] #3276 Object.StateChanged 'visible' d1=0 d2=0 any=0 src=:1.31054 label:'Muted'
+  [   1606.6ms] #3277 Object.StateChanged 'visible' d1=0 d2=0 any=0 src=:1.31055 panel:''
+tree diff: nodes 1363 -> 1363
+  renamed: {"path": "1054", "role": "label", "old": "Brightness", "new": "Muted", "showing": false, "chain": "label:Muted < panel:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell"}
+
+== V1_overview_eval
+# V1_overview_eval  (load 18.33; 375 events)  Overview open (2s) then close, via Eval
+trigger: {}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+  [     13.9ms] MARK overview.show() eval -> (True, '1')
+  [   2094.0ms] MARK overview.hide() eval -> (True, '1')
+  [   2094.0ms] MARK trigger returned
+event counts: Object.StateChanged[showing] x152; Object.StateChanged[visible] x55; Object.ChildrenChanged[remove] x41; Object.StateChanged[defunct] x41; Object.PropertyChange[accessible-parent] x37; Object.ChildrenChanged[add] x37; Object.StateChanged[sensitive] x4; Object.StateChanged[enabled] x4; Object.TextCaretMoved[] x2; Object.StateChanged[checked] x2
+  [      0.7ms] #3278 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3171 panel:''
+  [      0.9ms] #3279 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3254 panel:'Overview'
+  [      0.9ms] #3280 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3241 panel:''
+  [      0.9ms] #3281 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3184 panel:''
+  [      1.0ms] #3282 Object.TextCaretMoved '' d1=-1 d2=0 any=0 src=:1.3178 text:''
+  [      1.0ms] #3283 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3183 panel:''
+  [      1.0ms] #3284 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3178 text:''
+  [      1.0ms] #3285 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3180 label:'Type to search'
+  [      1.1ms] #3286 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3179 text:'' text='Type to search'
+  [      1.1ms] #3287 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3182 panel:''
+  [      1.1ms] #3288 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3181 panel:''
+  [      1.1ms] #3289 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3212 panel:''
+  [      1.2ms] #3290 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3186 panel:''
+  [      1.2ms] #3291 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3185 panel:''
+  [      1.2ms] #3292 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3211 panel:''
+  [      1.2ms] #3293 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3203 panel:''
+  [      1.3ms] #3294 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3194 panel:''
+  [      1.3ms] #3295 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3193 button:'Firefox ESR'
+  [      1.4ms] #3296 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3192 panel:''
+  [      1.4ms] #3297 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3191 panel:''
+  [      1.5ms] #3298 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3190 panel:''
+  [      1.5ms] #3299 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3189 panel:''
+  [      1.5ms] #3300 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3188 panel:''
+  [      1.6ms] #3301 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3187 panel:''
+  [      1.6ms] #3302 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3202 panel:''
+  [      1.6ms] #3303 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3201 button:'Files'
+  [      1.7ms] #3304 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3200 panel:''
+  [      1.7ms] #3305 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3199 panel:''
+  [      1.8ms] #3306 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3198 panel:''
+  [      1.8ms] #3307 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3197 panel:''
+  [      1.8ms] #3308 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3196 panel:''
+  [      1.9ms] #3309 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3195 panel:''
+  [      1.9ms] #3310 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3210 panel:''
+  [      2.0ms] #3311 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3209 toggle button:'Show Apps'
+  [      2.0ms] #3312 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3208 panel:''
+  [      2.0ms] #3313 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3207 panel:''
+  [      2.1ms] #3314 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3206 panel:''
+  [      2.1ms] #3315 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3205 panel:''
+  [      2.2ms] #3316 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3204 panel:''
+  [      2.2ms] #3317 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3226 panel:''
+  ... 335 more
+tree diff: nodes 1363 -> 1363
+
+== V2_overview_super_key
+# V2_overview_super_key  (load 17.58; 377 events)  Super key via RemoteDesktop
+trigger: {"overview_visible_after": [true, "true"]}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+  [     61.2ms] MARK Super tap
+  [   2177.9ms] MARK Super tap (close)
+  [   2178.8ms] MARK trigger returned
+event counts: Object.StateChanged[showing] x152; Object.StateChanged[visible] x55; Object.StateChanged[defunct] x43; Object.ChildrenChanged[remove] x41; Object.PropertyChange[accessible-parent] x37; Object.ChildrenChanged[add] x37; Object.StateChanged[sensitive] x4; Object.StateChanged[enabled] x4; Object.TextCaretMoved[] x2; Object.StateChanged[checked] x2
+  [     31.8ms] #3653 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3171 panel:''
+  [     31.9ms] #3654 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3254 panel:'Overview'
+  [     31.9ms] #3655 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3241 panel:''
+  [     32.0ms] #3656 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3184 panel:''
+  [     32.0ms] #3657 Object.TextCaretMoved '' d1=-1 d2=0 any=0 src=:1.3178 text:''
+  [     32.0ms] #3658 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3183 panel:''
+  [     32.0ms] #3659 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3178 text:''
+  [     32.1ms] #3660 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3180 label:'Type to search'
+  [     32.1ms] #3661 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3179 text:'' text='Type to search'
+  [     32.1ms] #3662 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3182 panel:''
+  [     32.2ms] #3663 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3181 panel:''
+  [     32.2ms] #3664 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3212 panel:''
+  [     32.2ms] #3665 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3186 panel:''
+  [     32.2ms] #3666 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3185 panel:''
+  [     32.3ms] #3667 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3211 panel:''
+  [     32.3ms] #3668 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3203 panel:''
+  [     32.3ms] #3669 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3194 panel:''
+  [     32.3ms] #3670 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3193 button:'Firefox ESR'
+  [     32.3ms] #3671 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3192 panel:''
+  [     32.3ms] #3672 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3191 panel:''
+  [     32.4ms] #3673 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3190 panel:''
+  [     32.4ms] #3674 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3189 panel:''
+  [     32.4ms] #3675 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3188 panel:''
+  [     32.4ms] #3676 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3187 panel:''
+  [     32.4ms] #3677 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3202 panel:''
+  [     32.5ms] #3678 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3201 button:'Files'
+  [     32.5ms] #3679 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3200 panel:''
+  [     32.5ms] #3680 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3199 panel:''
+  [     32.5ms] #3681 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3198 panel:''
+  [     32.5ms] #3682 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3197 panel:''
+  [     32.6ms] #3683 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3196 panel:''
+  [     32.6ms] #3684 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3195 panel:''
+  [     32.6ms] #3685 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3210 panel:''
+  [     32.6ms] #3686 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3209 toggle button:'Show Apps'
+  [     32.6ms] #3687 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3208 panel:''
+  [     32.7ms] #3688 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3207 panel:''
+  [     32.7ms] #3689 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3206 panel:''
+  [     32.7ms] #3690 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3205 panel:''
+  [     32.7ms] #3691 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3204 panel:''
+  [     32.7ms] #3692 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3226 panel:''
+  ... 337 more
+tree diff: nodes 1363 -> 1363
+
+== V3_overview_search
+# V3_overview_search  (load 15.81; 942 events)  type 'ged' into overview search; Down; Esc
+trigger: {"search_text": [true, "\"\""], "windows": "[]"}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+shell state after : "{\"overview\":true,\"modalCount\":1,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+  [     11.0ms] MARK overview.show()
+  [   2072.4ms] MARK typed key 34
+  [   2534.0ms] MARK typed key 18
+  [   2994.9ms] MARK typed key 32
+  [   3395.0ms] MARK typed 'ged'
+  [   5035.4ms] MARK Down (move through results)
+  [   5897.0ms] MARK Escape
+  [   5898.7ms] MARK trigger returned
+event counts: Object.StateChanged[showing] x450; Object.StateChanged[visible] x128; Object.PropertyChange[accessible-parent] x93; Object.ChildrenChanged[add] x93; Object.ChildrenChanged[remove] x64; Object.StateChanged[defunct] x55; Object.StateChanged[sensitive] x12; Object.StateChanged[enabled] x12; Object.PropertyChange[accessible-role] x11; Object.PropertyChange[accessible-name] x7; Object.TextCaretMoved[] x4; Object.StateChanged[focused] x3; Object.TextChanged[insert] x3; Object.StateChanged[active] x2; Object.StateChanged[selected] x2; Object.StateChanged[checked] x1; Window.Activate[] x1; Window.Deactivate[] x1
+  [      0.9ms] #4030 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3171 panel:''
+  [      1.0ms] #4031 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3254 panel:'Overview'
+  [      1.1ms] #4032 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3241 panel:''
+  [      1.1ms] #4033 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3184 panel:''
+  [      1.2ms] #4034 Object.TextCaretMoved '' d1=-1 d2=0 any=0 src=:1.3178 text:''
+  [      1.2ms] #4035 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3183 panel:''
+  [      1.2ms] #4036 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3178 text:''
+  [      1.3ms] #4037 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3180 label:'Type to search'
+  [      1.3ms] #4038 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3179 text:'' text='Type to search'
+  [      1.3ms] #4039 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3182 panel:''
+  [      1.4ms] #4040 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3181 panel:''
+  [      1.4ms] #4041 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3212 panel:''
+  [      1.4ms] #4042 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3186 panel:''
+  [      1.5ms] #4043 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3185 panel:''
+  [      1.6ms] #4044 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3211 panel:''
+  [      1.6ms] #4045 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3203 panel:''
+  [      1.7ms] #4046 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3194 panel:''
+  [      1.7ms] #4047 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3193 button:'Firefox ESR'
+  [      1.7ms] #4048 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3192 panel:''
+  [      1.8ms] #4049 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3191 panel:''
+  [      1.8ms] #4050 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3190 panel:''
+  [      1.9ms] #4051 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3189 panel:''
+  [      1.9ms] #4052 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3188 panel:''
+  [      1.9ms] #4053 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3187 panel:''
+  [      2.0ms] #4054 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3202 panel:''
+  [      2.0ms] #4055 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3201 button:'Files'
+  [      2.0ms] #4056 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3200 panel:''
+  [      2.1ms] #4057 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3199 panel:''
+  [      2.1ms] #4058 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3198 panel:''
+  [      2.1ms] #4059 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3197 panel:''
+  [      2.2ms] #4060 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3196 panel:''
+  [      2.2ms] #4061 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3195 panel:''
+  [      2.3ms] #4062 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3210 panel:''
+  [      2.3ms] #4063 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3209 toggle button:'Show Apps'
+  [      2.3ms] #4064 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3208 panel:''
+  [      2.4ms] #4065 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3207 panel:''
+  [      2.4ms] #4066 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3206 panel:''
+  [      2.5ms] #4067 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3205 panel:''
+  [      2.5ms] #4068 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3204 panel:''
+  [      2.6ms] #4069 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3226 panel:''
+  ... 902 more
+tree diff: nodes 1363 -> 1402
+  renamed: {"path": "636", "role": "label", "old": "", "new": "No results", "showing": false, "chain": "label:No results < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:- < window:Main stage"}
+  showing_changed: {"path": "258", "role": "panel", "name": "Top window group", "now_showing": false, "chain": "panel:Top window group < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shel
+  showing_changed: {"path": "193", "role": "push-button", "name": "Firefox ESR", "now_showing": true, "chain": "push-button:Firefox ESR < panel:- < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:-"}
+  showing_changed: {"path": "201", "role": "push-button", "name": "Files", "now_showing": true, "chain": "push-button:Files < panel:- < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:-"}
+  showing_changed: {"path": "209", "role": "toggle-button", "name": "Show Apps", "now_showing": true, "chain": "toggle-button:Show Apps < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:- < window:Main stage"}
+  showing_changed: {"path": "254", "role": "panel", "name": "Overview", "now_showing": true, "chain": "panel:Overview < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell"}
+  showing_changed: {"path": "255", "role": "panel", "name": "Window group", "now_showing": false, "chain": "panel:Window group < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell"}
+
+== V4_app_grid
+# V4_app_grid  (load 16.06; 559 events)  app grid via the Show Apps button
+trigger: {}
+shell state before: "{\"overview\":true,\"modalCount\":1,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+  [      0.6ms] MARK overview.show()
+  [   2003.6ms] MARK showAppsButton.checked -> (True, '1')
+  [   4620.8ms] MARK Escape
+  [   5623.7ms] MARK overview.hide()
+  [   5623.7ms] MARK trigger returned
+event counts: Object.StateChanged[showing] x322; Object.StateChanged[defunct] x59; Object.ChildrenChanged[remove] x58; Object.StateChanged[visible] x48; Object.PropertyChange[accessible-parent] x34; Object.ChildrenChanged[add] x34; Object.StateChanged[checked] x3; Object.PropertyChange[accessible-name] x1
+  [    332.3ms] #4972 Object.StateChanged 'defunct' d1=1 d2=0 any=0 src=:1.32099 <gone>:None
+  [   2003.0ms] #4973 Object.StateChanged 'checked' d1=1 d2=0 any=0 src=:1.3209 toggle button:'Show Apps'
+  [   2021.1ms] #4974 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32022 panel:''
+  [   2021.2ms] #4975 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32020 panel:''
+  [   2021.3ms] #4976 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32019 panel:''
+  [   2021.4ms] #4977 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32018 panel:''
+  [   2021.4ms] #4978 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32021 panel:''
+  [   2021.4ms] #4979 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32023 panel:''
+  [   2021.5ms] #4980 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32022 panel:''
+  [   2021.5ms] #4981 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32028 panel:''
+  [   2021.5ms] #4982 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32026 panel:''
+  [   2021.5ms] #4983 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32025 panel:''
+  [   2021.5ms] #4984 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32024 panel:''
+  [   2021.5ms] #4985 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32027 panel:''
+  [   2021.6ms] #4986 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32029 panel:''
+  [   2021.6ms] #4987 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32028 panel:''
+  [   2022.5ms] #4988 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3993 panel:''
+  [   2022.5ms] #4989 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3834 panel:''
+  [   2022.6ms] #4990 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3833 panel:''
+  [   2022.6ms] #4991 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3284 panel:''
+  [   2022.6ms] #4992 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3283 panel:''
+  [   2022.7ms] #4993 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3299 panel:''
+  [   2023.1ms] #4994 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3544 button:''
+  [   2023.3ms] #4995 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3609 panel:''
+  [   2023.4ms] #4996 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3608 panel:''
+  [   2023.4ms] #4997 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31115 button:''
+  [   2023.5ms] #4998 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31305 panel:''
+  [   2023.5ms] #4999 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31600 button:''
+  [   2023.6ms] #5000 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31601 panel:''
+  [   2023.6ms] #5001 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31603 panel:''
+  [   2023.6ms] #5002 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31602 panel:''
+  [   2023.6ms] #5003 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31604 panel:''
+  [   2023.7ms] #5004 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31606 label:'Settings'
+  [   2023.7ms] #5005 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31605 text:'' text='Settings'
+  [   2024.4ms] #5006 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32100 <gone>:None
+  [   2024.7ms] #5007 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32101 <gone>:None
+  [   2024.8ms] #5008 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32101 <gone>:None
+  [   2024.8ms] #5009 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2100"] src=:1.32101 <gone>:None
+  [   2024.8ms] #5010 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2101"] src=:1.32100 <gone>:None
+  [   2024.9ms] #5011 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32100 <gone>:None
+  ... 519 more
+tree diff: nodes 1402 -> 1378
+  renamed: {"path": "259", "role": "label", "old": "Oct 16\u200212:24 AM", "new": "Oct 16\u200212:25 AM", "showing": true, "chain": "label:Oct 16\u200212:25 AM < panel:- < menu:- < panel:- < panel:- < panel:- < panel:- < panel:- < window:Main stage"}
+  showing_changed: {"path": "258", "role": "panel", "name": "Top window group", "now_showing": true, "chain": "panel:Top window group < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+  showing_changed: {"path": "193", "role": "push-button", "name": "Firefox ESR", "now_showing": false, "chain": "push-button:Firefox ESR < panel:- < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:-"}
+  showing_changed: {"path": "201", "role": "push-button", "name": "Files", "now_showing": false, "chain": "push-button:Files < panel:- < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:-"}
+  showing_changed: {"path": "209", "role": "toggle-button", "name": "Show Apps", "now_showing": false, "chain": "toggle-button:Show Apps < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:- < window:Main stage"}
+  showing_changed: {"path": "254", "role": "panel", "name": "Overview", "now_showing": false, "chain": "panel:Overview < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell"}
+  showing_changed: {"path": "255", "role": "panel", "name": "Window group", "now_showing": true, "chain": "panel:Window group < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell"}
+
+== W1_windows_appear
+  (timeout waiting for two windows)
+WINDOWS None
+WINDOWS [{"t":"Probe Window One","app":"gtkwin.py","f":false},{"t":"Untitled Document 1 - gedit","app":"gedit","f":true}]
+# W1_windows_appear  (load 16.76; 1386 events)  spawn gtk3 window + gedit (client side events)
+trigger: {"windows": "[{\"t\":\"Probe Window One\",\"app\":\"gtkwin.py\",\"f\":false},{\"t\":\"Untitled Document 1 - gedit\",\"app\":\"gedit\",\"f\":true}]"}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":null,\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":\"Untitled Document 1 - gedit\",\"qsOpen\":false}"
+  [  91810.5ms] MARK two client windows up
+  [  91811.7ms] MARK trigger returned
+event counts: Object.StateChanged[defunct] x313; Object.PropertyChange[widget] x183; Object.BoundsChanged[] x141; Object.StateChanged[visible] x136; Object.PropertyChange[accessible-parent] x124; Object.ChildrenChanged[remove] x122; Object.ChildrenChanged[add] x121; Object.PropertyChange[accessible-role] x114; Object.StateChanged[sensitive] x41; Object.StateChanged[enabled] x41; Object.PropertyChange[accessible-name] x20; Object.StateChanged[showing] x8; Object.StateChanged[focused] x5; Object.PropertyChange[accessible-value] x5; Object.StateChanged[iconified] x4; Object.StateChanged[active] x3; Window.Activate[] x2; Object.StateChanged[checked] x1; Object.TextChanged[insert] x1; Window.Deactivate[] x1
+  [    104.1ms] #5531 Object.ChildrenChanged 'add' d1=2 d2=0 any=[":1.10", "/org/a11y/atspi/accessible/root"] src=:1.1root desktop frame:'main'
+  [    104.6ms] #5532 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="Wayland surface" src=:1.32134 <gone>:None
+  [    104.7ms] #5533 Object.StateChanged 'defunct' d1=0 d2=0 any=0 src=:1.101 panel:''
+  [    104.7ms] #5534 Object.PropertyChange 'widget' d1=0 d2=0 any=0 src=:1.101 panel:''
+  [    104.8ms] #5535 Object.StateChanged 'defunct' d1=0 d2=0 any=0 src=:1.102 filler:''
+  [    104.8ms] #5536 Object.PropertyChange 'widget' d1=0 d2=0 any=0 src=:1.102 filler:''
+  [    104.8ms] #5537 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=20 src=:1.102 filler:''
+  [    104.8ms] #5538 Object.StateChanged 'defunct' d1=0 d2=0 any=0 src=:1.103 filler:''
+  [    104.8ms] #5539 Object.PropertyChange 'widget' d1=0 d2=0 any=0 src=:1.103 filler:''
+  [    104.9ms] #5540 Object.StateChanged 'defunct' d1=1 d2=0 any=0 src=:1.32134 <gone>:None
+  [    104.9ms] #5541 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=20 src=:1.103 filler:''
+  [    104.9ms] #5542 Object.StateChanged 'defunct' d1=0 d2=0 any=0 src=:1.104 filler:''
+  [    104.9ms] #5543 Object.PropertyChange 'widget' d1=0 d2=0 any=0 src=:1.104 filler:''
+  [    105.0ms] #5544 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="Wayland surface" src=:1.32135 panel:'Wayland surface'
+  [    105.0ms] #5545 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=20 src=:1.104 filler:''
+  [    105.1ms] #5546 Object.StateChanged 'defunct' d1=0 d2=0 any=0 src=:1.105 text:''
+  [    105.1ms] #5547 Object.PropertyChange 'widget' d1=0 d2=0 any=0 src=:1.105 text:''
+  [    105.1ms] #5548 Object.StateChanged 'defunct' d1=0 d2=0 any=0 src=:1.106 button:'Probe button'
+  [    105.2ms] #5549 Object.PropertyChange 'widget' d1=0 d2=0 any=0 src=:1.106 button:'Probe button'
+  [    105.2ms] #5550 Object.StateChanged 'defunct' d1=0 d2=0 any=0 src=:1.107 separator:''
+  [    105.2ms] #5551 Object.PropertyChange 'widget' d1=0 d2=0 any=0 src=:1.107 separator:''
+  [    105.2ms] #5552 Object.StateChanged 'defunct' d1=0 d2=0 any=0 src=:1.108 label:'Probe Window One' text='Probe Window One'
+  [    105.2ms] #5553 Object.PropertyChange 'widget' d1=0 d2=0 any=0 src=:1.108 label:'Probe Window One' text='Probe Window One'
+  [    105.3ms] #5554 Object.StateChanged 'defunct' d1=0 d2=0 any=0 src=:1.109 label:''
+  [    105.3ms] #5555 Object.PropertyChange 'widget' d1=0 d2=0 any=0 src=:1.109 label:''
+  [    105.4ms] #5556 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="Wayland surface container" src=:1.32136 panel:'Wayland surface container'
+  [    105.5ms] #5557 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32136 panel:'Wayland surface container'
+  [    105.6ms] #5558 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="Wayland window" src=:1.32137 panel:'Wayland window'
+  [    105.7ms] #5559 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32135 panel:'Wayland surface'
+  [    105.7ms] #5560 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2136"] src=:1.32135 panel:'Wayland surface'
+  [    105.7ms] #5561 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2135"] src=:1.32136 panel:'Wayland surface container'
+  [    105.8ms] #5562 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/255"] src=:1.32137 panel:'Wayland window'
+  [    105.8ms] #5563 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2137"] src=:1.3255 panel:'Window group'
+  [    106.1ms] #5564 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32135 panel:'Wayland surface'
+  [    106.2ms] #5565 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32135 panel:'Wayland surface'
+  [    107.5ms] #5566 Object.StateChanged 'iconified' d1=0 d2=0 any=0 src=:1.1010 frame:'Probe Window One'
+  [    121.1ms] #5567 Object.BoundsChanged '' d1=0 d2=0 any=[26, 60, 500, 34] src=:1.105 text:''
+  [    121.3ms] #5568 Object.BoundsChanged '' d1=0 d2=0 any=[26, 60, 500, 300] src=:1.102 filler:''
+  [    121.3ms] #5569 Object.BoundsChanged '' d1=0 d2=0 any=[0, 0, 552, 389] src=:1.1010 frame:'Probe Window One'
+  [    125.2ms] #5570 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32137 panel:'Wayland window'
+  ... 1346 more
+tree diff: nodes 1378 -> 1405
+  added_showing: {"path": "2136", "role": "panel", "name": "Wayland surface container", "desc": "", "ifaces": ["Accessible", "Component", "Collection"], "states": ["focusable", "showing", "visible"], "chain": "panel:Wayland surface container < panel:Wayland window < panel:Window group < panel:- < window:Main stage <
+  added_showing: {"path": "2137", "role": "panel", "name": "Wayland window", "desc": "", "ifaces": ["Accessible", "Component", "Collection"], "states": ["focusable", "showing", "visible"], "chain": "panel:Wayland window < panel:Window group < panel:- < window:Main stage < application:gnome-shell < application:gnome-
+  added_showing: {"path": "2135", "role": "panel", "name": "Wayland surface", "desc": "", "ifaces": ["Accessible", "Component", "Collection"], "states": ["enabled", "focusable", "sensitive", "showing", "visible"], "chain": "panel:Wayland surface < panel:Wayland surface container < panel:Wayland window < panel:Window
+  added_showing: {"path": "2141", "role": "panel", "name": "Wayland window", "desc": "", "ifaces": ["Accessible", "Component", "Collection"], "states": ["focusable", "showing", "visible"], "chain": "panel:Wayland window < panel:Window group < panel:- < window:Main stage < application:gnome-shell < application:gnome-
+  added_showing: {"path": "2140", "role": "panel", "name": "Wayland surface container", "desc": "", "ifaces": ["Accessible", "Component", "Collection"], "states": ["focusable", "showing", "visible"], "chain": "panel:Wayland surface container < panel:Wayland window < panel:Window group < panel:- < window:Main stage <
+  added_showing: {"path": "2139", "role": "panel", "name": "Wayland surface", "desc": "", "ifaces": ["Accessible", "Component", "Collection"], "states": ["enabled", "focusable", "sensitive", "showing", "visible"], "chain": "panel:Wayland surface < panel:Wayland surface container < panel:Wayland window < panel:Window
+  renamed: {"path": "259", "role": "label", "old": "Oct 16\u200212:25 AM", "new": "Oct 16\u200212:26 AM", "showing": true, "chain": "label:Oct 16\u200212:26 AM < panel:- < menu:- < panel:- < panel:- < panel:- < panel:- < panel:- < window:Main stage"}
+  removed: {"path": "83", "role": "label", "name": "Terminal", "states": ["focusable", "visible"]}
+  removed: {"path": "80", "role": "push-button", "name": "Terminal", "states": ["enabled", "focusable", "sensitive", "visible"]}
+  removed: {"path": "67", "role": "push-button", "name": "Files", "states": ["enabled", "focusable", "sensitive", "visible"]}
+  removed: {"path": "70", "role": "label", "name": "Files", "states": ["focusable", "visible"]}
+  removed: {"path": "54", "role": "push-button", "name": "Settings", "states": ["enabled", "focusable", "sensitive", "visible"]}
+  removed: {"path": "57", "role": "label", "name": "Settings", "states": ["focusable", "visible"]}
+
+== T1_alt_tab
+# T1_alt_tab  (load 11.84; 224 events)  Alt+Tab app switcher with 2 apps
+trigger: {"windows": "[{\"t\":\"Probe Window One\",\"app\":\"gtkwin.py\",\"f\":false},{\"t\":\"Untitled Document 1 - gedit\",\"app\":\"gedit\",\"f\":true}]"}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":\"Untitled Document 1 - gedit\",\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":\"Untitled Document 1 - gedit\",\"qsOpen\":false}"
+  [      0.4ms] MARK Alt down
+  [    211.8ms] MARK Tab (switcher opens, selects 2nd app)
+  [   1841.5ms] MARK Tab again (cycles)
+  [   2842.4ms] MARK Alt up (commit)
+  [   2850.0ms] MARK trigger returned
+event counts: Object.StateChanged[showing] x52; Object.StateChanged[visible] x30; Object.ChildrenChanged[remove] x28; Object.StateChanged[defunct] x28; Object.PropertyChange[accessible-parent] x20; Object.ChildrenChanged[add] x20; Object.StateChanged[sensitive] x10; Object.StateChanged[enabled] x10; Object.StateChanged[focused] x7; Object.PropertyChange[accessible-role] x6; Object.StateChanged[active] x4; Object.StateChanged[selected] x3; Object.PropertyChange[accessible-name] x2; Window.Activate[] x2; Window.Deactivate[] x2
+  [    152.1ms] #6917 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32300 panel:''
+  [    152.3ms] #6918 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32300 panel:''
+  [    152.5ms] #6919 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/156"] src=:1.32300 panel:''
+  [    152.6ms] #6920 Object.ChildrenChanged 'add' d1=32 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2300"] src=:1.3156 panel:''
+  [    152.9ms] #6921 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32301 panel:''
+  [    153.0ms] #6922 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32301 panel:''
+  [    153.1ms] #6923 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32301 panel:''
+  [    153.2ms] #6924 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.32302 button:''
+  [    153.2ms] #6925 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32302 button:''
+  [    153.3ms] #6926 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32302 button:''
+  [    153.3ms] #6927 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32302 button:''
+  [    153.4ms] #6928 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32303 panel:''
+  [    153.5ms] #6929 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32303 panel:''
+  [    153.5ms] #6930 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32304 panel:''
+  [    153.6ms] #6931 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32304 panel:''
+  [    153.6ms] #6932 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32304 panel:''
+  [    153.7ms] #6933 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.32305 button:''
+  [    153.8ms] #6934 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32305 button:''
+  [    153.8ms] #6935 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32305 button:''
+  [    153.9ms] #6936 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32305 button:''
+  [    153.9ms] #6937 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32306 panel:''
+  [    154.0ms] #6938 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32306 panel:''
+  [    154.0ms] #6939 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32303 panel:''
+  [    154.0ms] #6940 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32306 panel:''
+  [    154.1ms] #6941 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32307 panel:''
+  [    154.1ms] #6942 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32307 panel:''
+  [    154.2ms] #6943 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32308 panel:''
+  [    154.2ms] #6944 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2307"] src=:1.32308 panel:''
+  [    154.3ms] #6945 Object.ChildrenChanged 'add' d1=2 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2308"] src=:1.32307 panel:''
+  [    154.4ms] #6946 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32307 panel:''
+  [    154.5ms] #6947 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2309"] src=:1.32307 panel:''
+  [    154.5ms] #6948 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2307"] src=:1.32309 panel:''
+  [    154.6ms] #6949 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32310 panel:''
+  [    154.6ms] #6950 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2309"] src=:1.32310 panel:''
+  [    154.7ms] #6951 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2310"] src=:1.32309 panel:''
+  [    154.7ms] #6952 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32311 panel:''
+  [    154.8ms] #6953 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2309"] src=:1.32311 panel:''
+  [    154.8ms] #6954 Object.ChildrenChanged 'add' d1=2 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2311"] src=:1.32309 panel:''
+  [    154.9ms] #6955 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32312 panel:''
+  [    154.9ms] #6956 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2313"] src=:1.32312 panel:''
+  ... 184 more
+tree diff: nodes 1405 -> 1405
+
+== T2_alt_grave
+# T2_alt_grave  (load 13.01; 352 events)  Alt+` same-app window switcher
+trigger: {"windows": "[{\"t\":\"Probe Window One\",\"app\":\"gtkwin.py\",\"f\":false},{\"t\":\"Untitled Document 1 - gedit\",\"app\":\"gedit\",\"f\":true}]"}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":\"Untitled Document 1 - gedit\",\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":\"Untitled Document 1 - gedit\",\"qsOpen\":false}"
+  [    211.7ms] MARK grave (window switcher)
+  [   1480.7ms] MARK Alt up
+  [   1489.4ms] MARK trigger returned
+event counts: Object.StateChanged[showing] x88; Object.StateChanged[visible] x48; Object.ChildrenChanged[remove] x45; Object.StateChanged[defunct] x45; Object.PropertyChange[accessible-parent] x30; Object.ChildrenChanged[add] x30; Object.StateChanged[sensitive] x18; Object.StateChanged[enabled] x18; Object.PropertyChange[accessible-role] x10; Object.StateChanged[focused] x7; Object.StateChanged[active] x4; Object.PropertyChange[accessible-name] x3; Window.Activate[] x2; Window.Deactivate[] x2; Object.StateChanged[expanded] x1; Object.StateChanged[selected] x1
+  [    153.0ms] #7141 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32328 panel:''
+  [    153.3ms] #7142 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32328 panel:''
+  [    153.3ms] #7143 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/156"] src=:1.32328 panel:''
+  [    153.4ms] #7144 Object.ChildrenChanged 'add' d1=32 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2328"] src=:1.3156 panel:''
+  [    153.9ms] #7145 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32329 panel:''
+  [    154.0ms] #7146 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32329 panel:''
+  [    154.0ms] #7147 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32329 panel:''
+  [    154.0ms] #7148 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.32330 button:''
+  [    154.0ms] #7149 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32330 button:''
+  [    154.1ms] #7150 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32330 button:''
+  [    154.1ms] #7151 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32330 button:''
+  [    154.1ms] #7152 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32331 panel:''
+  [    154.1ms] #7153 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32331 panel:''
+  [    154.1ms] #7154 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32332 panel:''
+  [    154.1ms] #7155 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32332 panel:''
+  [    154.2ms] #7156 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32332 panel:''
+  [    154.2ms] #7157 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.32333 button:''
+  [    154.2ms] #7158 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32333 button:''
+  [    154.2ms] #7159 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32333 button:''
+  [    154.2ms] #7160 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32333 button:''
+  [    154.3ms] #7161 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32334 panel:''
+  [    154.3ms] #7162 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32334 panel:''
+  [    154.3ms] #7163 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32331 panel:''
+  [    154.3ms] #7164 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32334 panel:''
+  [    154.3ms] #7165 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32335 panel:''
+  [    154.3ms] #7166 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32335 panel:''
+  [    154.4ms] #7167 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32336 panel:''
+  [    154.4ms] #7168 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2335"] src=:1.32336 panel:''
+  [    154.4ms] #7169 Object.ChildrenChanged 'add' d1=2 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2336"] src=:1.32335 panel:''
+  [    154.4ms] #7170 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32335 panel:''
+  [    154.4ms] #7171 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2337"] src=:1.32335 panel:''
+  [    154.5ms] #7172 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2335"] src=:1.32337 panel:''
+  [    154.5ms] #7173 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32338 panel:''
+  [    154.5ms] #7174 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2337"] src=:1.32338 panel:''
+  [    154.5ms] #7175 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2338"] src=:1.32337 panel:''
+  [    154.5ms] #7176 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32339 panel:''
+  [    154.6ms] #7177 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2337"] src=:1.32339 panel:''
+  [    154.6ms] #7178 Object.ChildrenChanged 'add' d1=2 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2339"] src=:1.32337 panel:''
+  [    154.7ms] #7179 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32340 panel:''
+  [    154.7ms] #7180 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2341"] src=:1.32340 panel:''
+  ... 312 more
+tree diff: nodes 1405 -> 1405
+
+== Q1_quick_settings
+# Q1_quick_settings  (load 14.21; 103 events)  quick settings menu open, Tab Tab, Esc
+trigger: {"menu_open_after": [true, "false"]}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":\"Untitled Document 1 - gedit\",\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":\"Untitled Document 1 - gedit\",\"qsOpen\":false}"
+  [     18.2ms] MARK quickSettings.menu.open -> (True, '1')
+  [   1640.4ms] MARK Tab
+  [   2202.4ms] MARK Tab
+  [   2763.9ms] MARK Escape
+  [   2765.4ms] MARK trigger returned
+event counts: Object.StateChanged[showing] x68; Object.StateChanged[visible] x8; Object.StateChanged[focused] x7; Object.PropertyChange[accessible-parent] x5; Object.ChildrenChanged[add] x5; Object.StateChanged[active] x4; Window.Activate[] x2; Window.Deactivate[] x2; Object.StateChanged[defunct] x2
+  [      0.6ms] #7493 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31053 panel:''
+  [      0.8ms] #7494 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3970 panel:''
+  [      0.8ms] #7495 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31406 panel:''
+  [      1.3ms] #7496 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3907 panel:''
+  [      1.3ms] #7497 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3906 panel:''
+  [      1.4ms] #7498 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3270 panel:''
+  [      1.4ms] #7499 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31244 button:''
+  [      1.5ms] #7500 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3767 panel:''
+  [      1.5ms] #7501 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31240 button:''
+  [      1.7ms] #7502 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3390 panel:''
+  [      1.8ms] #7503 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3971 panel:''
+  [      2.2ms] #7504 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32373 panel:''
+  [      2.3ms] #7505 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32373 panel:''
+  [      2.3ms] #7506 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/971"] src=:1.32373 panel:''
+  [      2.4ms] #7507 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2373"] src=:1.3971 panel:''
+  [      2.4ms] #7508 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3290 panel:''
+  [      2.4ms] #7509 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3774 label:'100%'
+  [      2.5ms] #7510 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3773 text:'' text='100%'
+  [      2.5ms] #7511 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31202 panel:''
+  [      2.6ms] #7512 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3766 button:'Take Screenshot'
+  [      2.6ms] #7513 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31162 panel:''
+  [      3.0ms] #7514 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32374 panel:''
+  [      3.0ms] #7515 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32374 panel:''
+  [      3.0ms] #7516 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1162"] src=:1.32374 panel:''
+  [      3.1ms] #7517 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2374"] src=:1.31162 panel:''
+  [      3.1ms] #7518 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3357 button:'Settings'
+  [      3.1ms] #7519 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3356 panel:''
+  [      3.4ms] #7520 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32375 panel:''
+  [      3.5ms] #7521 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32375 panel:''
+  [      3.6ms] #7522 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/356"] src=:1.32375 panel:''
+  [      3.7ms] #7523 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2375"] src=:1.3356 panel:''
+  [      9.8ms] #7524 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3510 button:'Power Off Menu'
+  [      9.9ms] #7525 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3509 panel:''
+  [     10.6ms] #7526 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.32376 panel:''
+  [     10.6ms] #7527 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32376 panel:''
+  [     10.6ms] #7528 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/509"] src=:1.32376 panel:''
+  [     10.6ms] #7529 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2376"] src=:1.3509 panel:''
+  [     10.8ms] #7530 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3705 toggle button:''
+  [     10.8ms] #7531 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3704 panel:''
+  [     10.8ms] #7532 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31405 panel:''
+  ... 63 more
+tree diff: nodes 1405 -> 1410
+
+== D1_run_dialog
+# D1_run_dialog  (load 14.84; 183 events)  Run dialog: Alt+F2 then Esc
+trigger: {}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":\"Untitled Document 1 - gedit\",\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":\"Untitled Document 1 - gedit\",\"qsOpen\":false}"
+  [    136.2ms] MARK Alt+F2
+  [   1713.3ms] MARK runDialog visible -> (True, 'true')
+  [   1774.4ms] MARK Escape
+  [   1774.4ms] MARK trigger returned
+event counts: Object.StateChanged[showing] x52; Object.StateChanged[visible] x33; Object.PropertyChange[accessible-parent] x24; Object.ChildrenChanged[add] x24; Object.PropertyChange[accessible-role] x9; Object.StateChanged[sensitive] x9; Object.StateChanged[enabled] x9; Object.StateChanged[focused] x9; Object.PropertyChange[accessible-name] x5; Object.StateChanged[active] x4; Window.Activate[] x2; Window.Deactivate[] x2; Object.StateChanged[editable] x1
+  [     32.4ms] #7596 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=16 src=:1.32380 dialog:''
+  [     32.6ms] #7597 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32380 dialog:''
+  [     32.6ms] #7598 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32380 dialog:''
+  [     32.7ms] #7599 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1163"] src=:1.32380 dialog:''
+  [     32.7ms] #7600 Object.ChildrenChanged 'add' d1=2 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2380"] src=:1.31163 panel:''
+  [     32.7ms] #7601 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32381 panel:''
+  [     32.7ms] #7602 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2382"] src=:1.32381 panel:''
+  [     32.8ms] #7603 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2381"] src=:1.32382 panel:''
+  [     32.8ms] #7604 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32382 panel:''
+  [     32.8ms] #7605 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2380"] src=:1.32382 panel:''
+  [     32.9ms] #7606 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2382"] src=:1.32380 dialog:''
+  [     32.9ms] #7607 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32383 panel:''
+  [     33.0ms] #7608 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32383 panel:''
+  [     33.0ms] #7609 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32384 panel:''
+  [     33.0ms] #7610 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2385"] src=:1.32384 panel:''
+  [     33.0ms] #7611 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2384"] src=:1.32385 panel:''
+  [     33.1ms] #7612 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32386 panel:''
+  [     33.1ms] #7613 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2385"] src=:1.32386 panel:''
+  [     33.1ms] #7614 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2386"] src=:1.32385 panel:''
+  [     33.1ms] #7615 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32385 panel:''
+  [     33.1ms] #7616 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2383"] src=:1.32385 panel:''
+  [     33.2ms] #7617 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2385"] src=:1.32383 panel:''
+  [     33.2ms] #7618 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32383 panel:''
+  [     33.2ms] #7619 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2381"] src=:1.32383 panel:''
+  [     33.2ms] #7620 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2383"] src=:1.32381 panel:''
+  [     33.2ms] #7621 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32387 panel:''
+  [     33.3ms] #7622 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32387 panel:''
+  [     33.3ms] #7623 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2380"] src=:1.32387 panel:''
+  [     33.3ms] #7624 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2387"] src=:1.32380 dialog:''
+  [     33.8ms] #7625 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32388 panel:''
+  [     33.8ms] #7626 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32388 panel:''
+  [     33.8ms] #7627 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32388 panel:''
+  [     33.9ms] #7628 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2381"] src=:1.32388 panel:''
+  [     33.9ms] #7629 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2388"] src=:1.32381 panel:''
+  [     34.4ms] #7630 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=60 src=:1.32389 text:'' text='Run a Command'
+  [     34.4ms] #7631 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32389 text:'' text='Run a Command'
+  [     34.4ms] #7632 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=60 src=:1.32390 text:''
+  [     34.5ms] #7633 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32390 text:''
+  [     34.5ms] #7634 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="Run a Command" src=:1.32391 label:'Run a Command'
+  [     34.6ms] #7635 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32391 label:'Run a Command'
+  ... 143 more
+tree diff: nodes 1410 -> 1440
+  renamed: {"path": "259", "role": "label", "old": "Oct 16\u200212:26 AM", "new": "Oct 16\u200212:27 AM", "showing": true, "chain": "label:Oct 16\u200212:27 AM < panel:- < menu:- < panel:- < panel:- < panel:- < panel:- < panel:- < window:Main stage"}
+
+== D2_end_session_dialog
+# D2_end_session_dialog  (load 14.85; 143 events)  real Shell ModalDialog via EndSessionDialog D-Bus
+trigger: {}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":\"Untitled Document 1 - gedit\",\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":\"*Untitled Document 1 - gedit\",\"qsOpen\":false}"
+  [    131.0ms] MARK EndSessionDialog.Open(logout) -> () 
+  [   2255.3ms] MARK Tab inside dialog
+  [   2917.1ms] MARK Escape
+  [   2917.1ms] MARK trigger returned
+event counts: Object.StateChanged[showing] x62; Object.BoundsChanged[] x17; Object.StateChanged[visible] x12; Object.StateChanged[focused] x9; Object.PropertyChange[accessible-name] x7; Object.PropertyChange[accessible-role] x4; Object.PropertyChange[accessible-parent] x4; Object.ChildrenChanged[add] x4; Object.StateChanged[active] x4; Object.VisibleDataChanged[] x3; Object.TextChanged[insert] x3; Object.PropertyChange[accessible-value] x3; Object.StateChanged[sensitive] x2; Object.StateChanged[enabled] x2; Window.Activate[] x2; Window.Deactivate[] x2; Object.TextChanged[delete] x2; Object.TextCaretMoved[] x1
+  [     12.7ms] #7779 Object.StateChanged 'visible' d1=0 d2=0 any=0 src=:1.31113 check box:''
+  [     12.9ms] #7780 Object.StateChanged 'visible' d1=0 d2=0 any=0 src=:1.31070 label:'Low battery power: please plug in before installing updates'
+  [     13.0ms] #7781 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.32410 button:'Cancel'
+  [     13.0ms] #7782 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32410 button:'Cancel'
+  [     13.0ms] #7783 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32410 button:'Cancel'
+  [     13.1ms] #7784 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=60 src=:1.32411 text:'' text='Cancel'
+  [     13.1ms] #7785 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32411 text:'' text='Cancel'
+  [     13.1ms] #7786 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2410"] src=:1.32411 text:'' text='Cancel'
+  [     13.1ms] #7787 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2411"] src=:1.32410 button:'Cancel'
+  [     13.2ms] #7788 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="Cancel" src=:1.32410 button:'Cancel'
+  [     13.7ms] #7789 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32410 button:'Cancel'
+  [     13.8ms] #7790 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/586"] src=:1.32410 button:'Cancel'
+  [     13.8ms] #7791 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2410"] src=:1.3586 panel:''
+  [     13.8ms] #7792 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=42 src=:1.32412 button:'Log Out'
+  [     13.8ms] #7793 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32412 button:'Log Out'
+  [     13.9ms] #7794 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32412 button:'Log Out'
+  [     13.9ms] #7795 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=60 src=:1.32413 text:'' text='Log Out'
+  [     14.0ms] #7796 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32413 text:'' text='Log Out'
+  [     14.0ms] #7797 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2412"] src=:1.32413 text:'' text='Log Out'
+  [     14.1ms] #7798 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2413"] src=:1.32412 button:'Log Out'
+  [     14.1ms] #7799 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="Log Out" src=:1.32412 button:'Log Out'
+  [     14.1ms] #7800 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32412 button:'Log Out'
+  [     14.2ms] #7801 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/586"] src=:1.32412 button:'Log Out'
+  [     14.2ms] #7802 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2412"] src=:1.3586 panel:''
+  [     14.2ms] #7803 Object.StateChanged 'focused' d1=0 d2=0 any=0 src=:1.31 window:'Main stage'
+  [     14.4ms] #7804 Object.StateChanged 'focused' d1=1 d2=0 any=0 src=:1.31041 dialog:''
+  [     14.4ms] #7805 Object.StateChanged 'active' d1=1 d2=0 any=0 src=:1.31 window:'Main stage'
+  [     14.4ms] #7806 Window.Activate '' d1=0 d2=0 any="Main stage" src=:1.31 window:'Main stage'
+  [     14.5ms] #7807 Object.StateChanged 'focused' d1=1 d2=0 any=0 src=:1.31 window:'Main stage'
+  [     14.6ms] #7808 Object.StateChanged 'focused' d1=0 d2=0 any=0 src=:1.31041 dialog:''
+  [     14.7ms] #7809 Object.StateChanged 'focused' d1=1 d2=0 any=0 src=:1.32410 button:'Cancel'
+  [     14.7ms] #7810 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.31040 panel:''
+  [     15.0ms] #7811 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31041 dialog:''
+  [     15.0ms] #7812 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31040 panel:''
+  [     15.7ms] #7813 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31205 panel:''
+  [     15.8ms] #7814 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31009 panel:''
+  [     15.8ms] #7815 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31008 panel:''
+  [     15.9ms] #7816 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31391 panel:''
+  [     15.9ms] #7817 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.3587 panel:''
+  [     16.0ms] #7818 Object.StateChanged 'showing' d1=1 d2=0 any=0 src=:1.31002 panel:''
+  ... 103 more
+tree diff: nodes 1440 -> 1444
+  added_showing: {"path": "2412", "role": "push-button", "name": "Log Out", "desc": "", "ifaces": ["Accessible", "Component", "Collection"], "states": ["enabled", "focusable", "sensitive", "showing", "visible"], "chain": "push-button:Log Out < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:- < pa
+  added_showing: {"path": "2413", "role": "text", "name": "", "desc": "", "ifaces": ["Accessible", "Action", "Component", "EditableText", "Text", "Collection"], "states": ["focusable", "showing", "visible"], "chain": "text:- < push-button:Log Out < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-
+  added_showing: {"path": "2410", "role": "push-button", "name": "Cancel", "desc": "", "ifaces": ["Accessible", "Component", "Collection"], "states": ["enabled", "focusable", "sensitive", "showing", "visible"], "chain": "push-button:Cancel < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:- < pane
+  added_showing: {"path": "2411", "role": "text", "name": "", "desc": "", "ifaces": ["Accessible", "Action", "Component", "EditableText", "Text", "Collection"], "states": ["focusable", "showing", "visible"], "chain": "text:- < push-button:Cancel < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-"
+  renamed: {"path": "738", "role": "label", "old": "", "new": "Log Out user", "showing": true, "chain": "label:Log Out user < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-"}
+  renamed: {"path": "546", "role": "label", "old": "", "new": "user will be logged out automatically in 0 seconds", "showing": true, "chain": "label:user will be logged out automatically in 0 seconds < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-"}
+  showing_changed: {"path": "738", "role": "label", "name": "Log Out user", "now_showing": true, "chain": "label:Log Out user < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-"}
+  showing_changed: {"path": "1041", "role": "dialog", "name": "", "now_showing": true, "chain": "dialog:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell"}
+  showing_changed: {"path": "546", "role": "label", "name": "user will be logged out automatically in 0 seconds", "now_showing": true, "chain": "label:user will be logged out automatically in 0 seconds < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-"}
+
+== D3_polkit_dialog
+# D3_polkit_dialog  (load 16.31; 839 events)  synthetic: Shell's real AuthenticationDialog, PolkitAgent.Session.initiate stubbed
+trigger: {"eval": [true, "\"shown\""]}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":\"*Untitled Document 1 - gedit\",\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":\"*Untitled Document 1 - gedit\",\"qsOpen\":false}"
+  [     30.0ms] MARK polkit _onInitiate -> (True, '"shown"')
+  [   2700.6ms] MARK Escape
+  [   2706.2ms] MARK trigger returned
+event counts: Object.StateChanged[showing] x156; Object.StateChanged[visible] x126; Object.StateChanged[defunct] x125; Object.ChildrenChanged[remove] x121; Object.PropertyChange[accessible-parent] x95; Object.ChildrenChanged[add] x95; Object.PropertyChange[accessible-role] x39; Object.PropertyChange[accessible-name] x21; Object.StateChanged[sensitive] x19; Object.StateChanged[enabled] x19; Object.StateChanged[focused] x13; Object.StateChanged[active] x4; Window.Activate[] x2; Window.Deactivate[] x2; Object.StateChanged[editable] x1; Object.StateChanged[focusable] x1
+  [      8.1ms] #7922 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=16 src=:1.32414 dialog:''
+  [      8.4ms] #7923 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32414 dialog:''
+  [      8.4ms] #7924 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32414 dialog:''
+  [      8.5ms] #7925 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/1163"] src=:1.32414 dialog:''
+  [      8.6ms] #7926 Object.ChildrenChanged 'add' d1=3 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2414"] src=:1.31163 panel:''
+  [      8.7ms] #7927 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32415 panel:''
+  [      8.7ms] #7928 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2416"] src=:1.32415 panel:''
+  [      8.8ms] #7929 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2415"] src=:1.32416 panel:''
+  [      8.8ms] #7930 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32416 panel:''
+  [      8.9ms] #7931 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2414"] src=:1.32416 panel:''
+  [      9.0ms] #7932 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2416"] src=:1.32414 dialog:''
+  [      9.1ms] #7933 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32417 panel:''
+  [      9.1ms] #7934 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32417 panel:''
+  [      9.2ms] #7935 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32418 panel:''
+  [      9.2ms] #7936 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2419"] src=:1.32418 panel:''
+  [      9.3ms] #7937 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2418"] src=:1.32419 panel:''
+  [      9.4ms] #7938 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32420 panel:''
+  [      9.4ms] #7939 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2419"] src=:1.32420 panel:''
+  [      9.5ms] #7940 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2420"] src=:1.32419 panel:''
+  [      9.6ms] #7941 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32419 panel:''
+  [      9.6ms] #7942 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2417"] src=:1.32419 panel:''
+  [      9.7ms] #7943 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2419"] src=:1.32417 panel:''
+  [      9.8ms] #7944 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32417 panel:''
+  [      9.8ms] #7945 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2415"] src=:1.32417 panel:''
+  [      9.9ms] #7946 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2417"] src=:1.32415 panel:''
+  [      9.9ms] #7947 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32421 panel:''
+  [     10.0ms] #7948 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32421 panel:''
+  [     10.1ms] #7949 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2414"] src=:1.32421 panel:''
+  [     10.1ms] #7950 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2421"] src=:1.32414 dialog:''
+  [     10.2ms] #7951 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32422 panel:''
+  [     10.2ms] #7952 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32422 panel:''
+  [     10.3ms] #7953 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32422 panel:''
+  [     10.3ms] #7954 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2415"] src=:1.32422 panel:''
+  [     10.4ms] #7955 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2422"] src=:1.32415 panel:''
+  [     10.5ms] #7956 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=60 src=:1.32423 text:'' text='Authentication Required'
+  [     10.6ms] #7957 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32423 text:'' text='Authentication Required'
+  [     10.6ms] #7958 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=60 src=:1.32424 text:'' text='Authentication is needed to run /usr/bin/probe as the super user'
+  [     10.7ms] #7959 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32424 text:'' text='Authentication is needed to run /usr/bin/probe as the super user'
+  [     10.7ms] #7960 Object.PropertyChange 'accessible-name' d1=0 d2=0 any="Authentication Required" src=:1.32425 label:'Authentication Required'
+  [     10.8ms] #7961 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32425 label:'Authentication Required'
+  ... 799 more
+tree diff: nodes 1444 -> 1444
+  removed: {"path": "1039", "role": "label", "name": "English (US)", "states": ["focusable", "visible"]}
+  removed: {"path": "995", "role": "label", "name": "en", "states": ["focusable", "visible"]}
+  removed: {"path": "1082", "role": "label", "name": "en", "states": []}
+
+== L1_lock_screen
+# L1_lock_screen  (load 15.40; 4831 events)  real ScreenShield built by hand (canLock() is false here), SetLockedHint neutered; host hint must not change
+trigger: {"locked_hint_before": "b false", "locked_hint_after": "b false"}
+shell state before: "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":\"*Untitled Document 1 - gedit\",\"qsOpen\":false}"
+shell state after : "{\"overview\":false,\"modalCount\":0,\"trayState\":0,\"banner\":false,\"queue\":0,\"mode\":\"user\",\"keyFocus\":null,\"focusWindow\":\"*Untitled Document 1 - gedit\",\"qsOpen\":false}"
+  [      6.9ms] MARK host session LockedHint before (read only): b false
+  [     10.0ms] MARK create ScreenShield -> (True, '"importing"')
+  [    518.9ms] MARK SetLockedHintAsync neutered -> (True, '"patched"') (ready=True)
+  [   1122.4ms] MARK ScreenShield.lock(true) -> (True, '"lock called"')
+  [   4123.6ms] MARK state: {"overview":false,"modalCount":2,"trayState":0,"banner":false,"queue":0,"mode":"unlock-dialog","keyFocus":"UnlockDialog","focusWindow":"*Untitled Document 1 - gedit","qsOpen":false}
+  [   4267.2ms] MARK Space (wake the shield: shows the unlock prompt)
+  [   7271.6ms] MARK state: {"overview":false,"modalCount":2,"trayState":0,"banner":false,"queue":0,"mode":"unlock-dialog","keyFocus":"AuthPrompt","focusWindow":"*Untitled Document 1 - gedit","qsOpen":false}
+  [   7516.4ms] MARK Escape
+  [   9553.4ms] MARK ScreenShield.deactivate(true)
+  [  11554.7ms] MARK state: {"overview":false,"modalCount":0,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":null,"focusWindow":"*Untitled Document 1 - gedit","qsOpen":false}
+  [  11567.0ms] MARK trigger returned
+event counts: Object.StateChanged[visible] x691; Object.StateChanged[showing] x664; Object.ChildrenChanged[remove] x601; Object.StateChanged[defunct] x578; Object.PropertyChange[accessible-parent] x557; Object.ChildrenChanged[add] x557; Object.PropertyChange[accessible-role] x396; Object.StateChanged[sensitive] x260; Object.StateChanged[enabled] x260; Object.PropertyChange[accessible-name] x206; Object.StateChanged[focused] x25; Object.TextCaretMoved[] x10; Object.StateChanged[active] x8; Window.Activate[] x4; Window.Deactivate[] x4; Object.Announcement[] x4; Object.StateChanged[selected] x3; Object.StateChanged[editable] x2; Object.StateChanged[focusable] x1
+  [     10.4ms] #8761 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32539 panel:''
+  [     10.4ms] #8762 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32539 panel:''
+  [     10.5ms] #8763 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32540 panel:''
+  [     10.5ms] #8764 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32540 panel:''
+  [     10.5ms] #8765 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/372"] src=:1.32539 panel:''
+  [     10.5ms] #8766 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2539"] src=:1.3372 panel:''
+  [     10.6ms] #8767 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32540 panel:''
+  [     10.6ms] #8768 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/372"] src=:1.32540 panel:''
+  [     10.6ms] #8769 Object.ChildrenChanged 'add' d1=1 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2540"] src=:1.3372 panel:''
+  [     14.1ms] #8770 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32541 panel:''
+  [     14.2ms] #8771 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32541 panel:''
+  [     14.2ms] #8772 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/156"] src=:1.32541 panel:''
+  [     14.2ms] #8773 Object.ChildrenChanged 'add' d1=33 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2541"] src=:1.3156 panel:''
+  [     15.2ms] #8774 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32542 panel:''
+  [     15.2ms] #8775 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32542 panel:''
+  [     15.2ms] #8776 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/156"] src=:1.32542 panel:''
+  [     15.2ms] #8777 Object.ChildrenChanged 'add' d1=34 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2542"] src=:1.3156 panel:''
+  [   1081.3ms] #8778 Object.StateChanged 'focused' d1=0 d2=0 any=0 src=:1.31 window:'Main stage'
+  [   1081.6ms] #8779 Object.StateChanged 'focused' d1=1 d2=0 any=0 src=:1.3156 panel:''
+  [   1084.9ms] #8780 Object.StateChanged 'active' d1=1 d2=0 any=0 src=:1.31 window:'Main stage'
+  [   1084.9ms] #8781 Window.Activate '' d1=0 d2=0 any="Main stage" src=:1.31 window:'Main stage'
+  [   1084.9ms] #8782 Object.StateChanged 'focused' d1=1 d2=0 any=0 src=:1.31 window:'Main stage'
+  [   1085.3ms] #8783 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=68 src=:1.32543 window:''
+  [   1085.3ms] #8784 Object.StateChanged 'sensitive' d1=1 d2=0 any=0 src=:1.32543 window:''
+  [   1085.3ms] #8785 Object.StateChanged 'enabled' d1=1 d2=0 any=0 src=:1.32543 window:''
+  [   1085.3ms] #8786 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2540"] src=:1.32543 window:''
+  [   1085.4ms] #8787 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2543"] src=:1.32540 panel:''
+  [   1092.0ms] #8788 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32544 panel:''
+  [   1092.0ms] #8789 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2543"] src=:1.32544 panel:''
+  [   1092.0ms] #8790 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2544"] src=:1.32543 window:''
+  [   1092.3ms] #8791 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32545 panel:''
+  [   1092.4ms] #8792 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2546"] src=:1.32545 panel:''
+  [   1092.4ms] #8793 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2545"] src=:1.32546 panel:''
+  [   1092.4ms] #8794 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32546 panel:''
+  [   1092.4ms] #8795 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2544"] src=:1.32546 panel:''
+  [   1092.5ms] #8796 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2546"] src=:1.32544 panel:''
+  [   1092.7ms] #8797 Object.PropertyChange 'accessible-parent' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2548"] src=:1.32547 panel:''
+  [   1092.7ms] #8798 Object.ChildrenChanged 'add' d1=0 d2=0 any=[":1.3", "/org/a11y/atspi/accessible/2547"] src=:1.32548 panel:''
+  [   1092.8ms] #8799 Object.PropertyChange 'accessible-role' d1=0 d2=0 any=60 src=:1.32549 text:'' text='12∶27 AM'
+  [   1092.8ms] #8800 Object.StateChanged 'visible' d1=1 d2=0 any=0 src=:1.32549 text:'' text='12∶27 AM'
+  ... 4791 more
+tree diff: nodes 1444 -> 1450
+  removed: {"path": "277", "role": "push-button", "name": "04", "states": ["enabled", "focusable", "sensitive", "visible"]}
+  removed: {"path": "350", "role": "push-button", "name": "25", "states": ["enabled", "focusable", "sensitive", "visible"]}
+  removed: {"path": "386", "role": "push-button", "name": "19", "states": ["enabled", "focusable", "sensitive", "visible"]}
+  removed: {"path": "2534", "role": "label", "name": "en", "states": []}
+  removed: {"path": "431", "role": "push-button", "name": "04", "states": ["enabled", "focusable", "sensitive", "visible"]}
+  removed: {"path": "451", "role": "push-button", "name": "29", "states": ["enabled", "focusable", "sensitive", "visible"]}
+  removed: {"path": "454", "role": "push-button", "name": "13", "states": ["enabled", "focusable", "sensitive", "visible"]}
+  removed: {"path": "473", "role": "push-button", "name": "05", "states": ["enabled", "focusable", "sensitive", "visible"]}
+  removed: {"path": "2530", "role": "label", "name": "English (US)", "states": ["focusable", "visible"]}
+  removed: {"path": "610", "role": "push-button", "name": "16", "states": ["enabled", "focusable", "selected", "sensitive", "visible"]}
+  removed: {"path": "632", "role": "push-button", "name": "06", "states": ["enabled", "focusable", "sensitive", "visible"]}
+  removed: {"path": "747", "role": "push-button", "name": "09", "states": ["enabled", "focusable", "sensitive", "visible"]}
+

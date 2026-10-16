@@ -64,6 +64,10 @@ pub enum FocusLaneMsg {
     NodeRemoved(NodeKey),
     AppGone(AppId),
     AppHung(AppId),
+    /// `window:activate` of a top-level (M4b): its title leads the focus speech that follows.
+    WindowActivated {
+        window: NodeKey,
+    },
     /// The state or value of the focused node changed (B-1 S1, PW-12): the Reader fetches it
     /// and speaks the change.
     StateChanged {
@@ -97,9 +101,20 @@ pub struct QueryReply {
 #[derive(Clone, Debug)]
 pub enum BackgroundMsg {
     Announcement {
+        app: AppId,
         text: Arc<str>,
         politeness: Politeness,
     },
+    /// The answer to a window read (M4b): the title and a dialog's text the mirror lacked.
+    Window(crate::present::WindowInfo),
+    /// A node of `app` became visible (`state-changed:showing`, M4b): it may be a notification.
+    Showing { node: NodeKey },
+    /// The value of a node that does not hold focus changed (the Shell's OSD level bar).
+    LevelChanged { node: NodeKey },
+    /// The answer to a level read: the level bar and the label next to it (`texts[0]`).
+    LevelRead { info: crate::present::WindowInfo },
+    /// The answer to a notice read: the node (a banner) and the text inside it.
+    Notice { info: crate::present::WindowInfo },
     /// A background event was dropped for this app; its mirror may be stale.
     ResyncNeeded(AppId),
 }
@@ -177,6 +192,8 @@ pub enum ReaderEffect {
     },
     /// Browse mode: find a document, wake or sleep it, act on one of its nodes.
     Web(WebEffect),
+    /// Desktop presenters that need an application round trip (windows, notifications, M4b).
+    Desktop(crate::present::DesktopEffect),
     /// A chunk of a say-all reading (ADR-0007 SA-2): `first` interrupts like any utterance, the
     /// others are queued behind it and report their progress.
     SayAllChunk {
@@ -359,6 +376,11 @@ pub struct Reader {
     )>,
     /// The caret machine, the text window and say-all (ADR-0007).
     pub(crate) text: TextState,
+    /// Window activation, dialog text and notifications (M4b).
+    pub(crate) win: crate::present::WindowCtx,
+    pub(crate) notice: crate::present::NoticeCtx,
+    /// The installed application policy (ADR-0008 W3), if any.
+    pub(crate) app_policy: Option<Arc<dyn crate::builtin_ext::AppPolicy>>,
 }
 
 /// Revalidation and correction counters (B-1 M-6).
@@ -408,7 +430,17 @@ impl Reader {
             revalidate_retried: None,
             web_extra: None,
             text: TextState::new(),
+            win: crate::present::WindowCtx::new(),
+            notice: crate::present::NoticeCtx::new(),
+            app_policy: None,
         }
+    }
+
+    /// Present the applications whose profile asks for it through `policy`.
+    #[must_use]
+    pub fn with_app_policy(mut self, policy: Arc<dyn crate::builtin_ext::AppPolicy>) -> Self {
+        self.app_policy = Some(policy);
+        self
     }
 
     /// Record every node presentation in `log` (PW-10).
@@ -528,7 +560,17 @@ impl Reader {
             ReaderMsg::Focus(f) => self.on_focus(f, now, &mut fx),
             ReaderMsg::Reply(r) => self.on_reply(r, &mut fx),
             ReaderMsg::Background(b) => match b {
-                BackgroundMsg::Announcement { .. } | BackgroundMsg::ResyncNeeded(_) => {
+                BackgroundMsg::Window(info) => self.on_window_info(&info, &mut fx),
+                BackgroundMsg::Announcement {
+                    app,
+                    text,
+                    politeness,
+                } => self.on_announcement(app, &text, politeness, &mut fx),
+                BackgroundMsg::Showing { node } => self.on_showing(node, &mut fx),
+                BackgroundMsg::LevelChanged { node } => self.on_level_changed(node, &mut fx),
+                BackgroundMsg::LevelRead { info } => self.on_level_read(&info, &mut fx),
+                BackgroundMsg::Notice { info } => self.on_notice(&info, &mut fx),
+                BackgroundMsg::ResyncNeeded(_) => {
                     // TBD: live-region policy lives in gorca-doc; resync scheduling in the app actor.
                 }
             },
@@ -549,6 +591,9 @@ impl Reader {
                 self.review_timer(now, &mut fx);
                 self.web_timer(now, &mut fx);
                 self.text_timer(&mut fx);
+                self.window_timer(&mut fx);
+                self.notice_timer(&mut fx);
+                self.level_timer(&mut fx);
             }
         }
         self.text_after(&mut fx);
@@ -651,6 +696,7 @@ mod tests {
                 | ReaderEffect::ReviewStatusBar { .. }
                 | ReaderEffect::ReviewAct { .. }
                 | ReaderEffect::Web(_)
+                | ReaderEffect::Desktop(_)
                 | ReaderEffect::TextFetch { .. }
                 | ReaderEffect::SayAllChunk { .. } => None,
             })
@@ -1542,6 +1588,7 @@ mod tests {
                 ReaderEffect::ReviewStatusBar { .. } => "review-status-bar",
                 ReaderEffect::ReviewAct { .. } => "review-act",
                 ReaderEffect::Web(_) => "web",
+                ReaderEffect::Desktop(_) => "desktop",
                 ReaderEffect::TextFetch { .. } => "text-fetch",
                 ReaderEffect::SayAllChunk { .. } => "say-all-chunk",
             })
@@ -1566,6 +1613,7 @@ mod tests {
                 | ReaderEffect::ReviewStatusBar { .. }
                 | ReaderEffect::ReviewAct { .. }
                 | ReaderEffect::Web(_)
+                | ReaderEffect::Desktop(_)
                 | ReaderEffect::TextFetch { .. }
                 | ReaderEffect::SayAllChunk { .. } => None,
             })

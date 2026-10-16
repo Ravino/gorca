@@ -18,7 +18,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use gorca_connector_api::{AppPort, AppRegistrar, RegistrarError, ScopeKey};
-use gorca_dbus::drain::{AppRoute, RouteDecision, Router, SignalView, map_signal, needs_path};
+use gorca_dbus::drain::{
+    AppRoute, RouteDecision, Router, SignalView, map_signal, needs_hint_path, needs_path,
+};
 use gorca_model::{AppId, AppInfo, ConnectorKind, NodeEvent, NodeKey};
 use gorca_rt::{BoxFuture, CancellationToken, Clock, Deadline, FocusedApp, mpsc};
 
@@ -661,12 +663,13 @@ impl AtspiRouter {
             Some(Owner::Unknown(_)) | None => None,
         };
         let owner = owner.unwrap_or(Owner::Unknown(app));
+        let verified_shell = self.state().is_shell(group, info.start);
         let route = AppRoute {
             app,
             tx: port.ingress_sender(),
+            hints: verified_shell,
         };
         let gone = CancellationToken::new();
-        let verified_shell = self.state().is_shell(group, info.start);
         let new = NewApp {
             port,
             bus_name: Arc::clone(sender),
@@ -760,6 +763,9 @@ impl AtspiRouter {
             Some((v, e))
         });
         self.paths.bind_app(app, owner);
+        if verified_shell {
+            self.paths.allow_hints(app);
+        }
         // Replay what arrived while the registration ran, in arrival order, before any later
         // event can be routed (the lock is held).
         let pending = st.pending.remove(&**sender).unwrap_or_default();
@@ -783,6 +789,8 @@ impl AtspiRouter {
             for ev in mapped.drain(..) {
                 if let Some(node) = needs_path(&ev) {
                     self.paths.insert(node, &p.path);
+                } else if let Some(node) = needs_hint_path(&ev) {
+                    self.paths.insert_hint(node, &p.path);
                 }
                 route.tx.push(ev);
                 replayed += 1;
@@ -923,6 +931,8 @@ impl Router for AtspiRouter {
                 for ev in mapped.drain(..) {
                     if let Some(node) = needs_path(&ev) {
                         self.paths.insert(node, signal.path);
+                    } else if let Some(node) = needs_hint_path(&ev) {
+                        self.paths.insert_hint(node, signal.path);
                     }
                     route.tx.push(ev);
                 }
@@ -983,6 +993,10 @@ impl Router for AtspiRouter {
 
     fn focus_seen(&self, _app: AppId, node: NodeKey, path: &str) {
         self.paths.insert(node, path);
+    }
+
+    fn hint_seen(&self, _app: AppId, node: NodeKey, path: &str) {
+        self.paths.insert_hint(node, path);
     }
 }
 

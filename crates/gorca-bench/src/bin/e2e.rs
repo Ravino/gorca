@@ -52,6 +52,9 @@ const V2_CPU_PCT: f64 = 60.0;
 const V2_SIOCINQ_KIB: f64 = 1024.0;
 /// R1 under the L3-50k storm: R1's ceiling plus the 1 ms allowed by ADR-0006 18.
 const R1S_P99_MS: f64 = 4.0;
+/// M4b gate A1 (phase-2.md M4): window or dialog activation to the speech of title and focus,
+/// p99 15 ms gorca-side. N1 holds a newer focus to the same bound while a notification is queued.
+const A1_P99_MS: f64 = 15.0;
 /// M7a gates (browse-mode design 15): ceilings in ms; W2b is wall time.
 const W1_P99_MS: f64 = 5.0;
 const FM1_P99_MS: f64 = 15.0;
@@ -151,6 +154,9 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     ("K3", "k3_ms", "p99") => Some(K3_P99_MS),
                     ("R1", "r1_ms", "p99") => Some(R1_P99_MS),
                     ("R1s", "r1s_ms", "p99") => Some(R1S_P99_MS),
+                    ("A1", "a1_ms" | "a1w_ms", "p99") | ("N1", "n1_focus_ms", "p99") => {
+                        Some(A1_P99_MS)
+                    }
                     ("W1", "w1_ms", "p99")
                     | ("BR1", "br1_ms" | "br1c_ms" | "br1w_ms", "p99")
                     | ("FM2", "fm2_ms", "p99") => Some(W1_P99_MS),
@@ -299,6 +305,9 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "vv_password_plaintext_in_logs"
                     | "vv_password_log_empty"
                     | "vv_server_aborts"
+                    | "a1_wrong"
+                    | "n1_interrupted"
+                    | "n1_text_wrong"
             ) {
                 // Worst repeat, not the median: one lost focus in three runs is a failure.
                 row = row.at_most_in_every_run(0.0);

@@ -1,0 +1,421 @@
+## D1_run_dialog load 14.84 events 183
+        32.7ms #7600   :1.3/1163      ChildrenChanged[add] child=dialog parent=1163
+        37.6ms #7697   :1.3/2400      StateChanged[showing]=1 menu-item
+        37.6ms #7699   :1.3/2402      StateChanged[showing]=1 text
+        38.1ms #7707   :1.3/2402      StateChanged[showing]=0 text
+        38.1ms #7709   :1.3/2400      StateChanged[showing]=0 menu-item
+        38.7ms #7726   :1.3/1         StateChanged[focused]=0 window
+        38.8ms #7727   :1.3/2380      StateChanged[focused]=1 dialog
+        38.9ms #7728   :1.3/1         StateChanged[active]=1 window
+        38.9ms #7729   :1.3/1         Window.Activate any=Main stage
+        38.9ms #7730   :1.3/1         StateChanged[focused]=1 window
+        39.0ms #7731   :1.3/2380      StateChanged[focused]=0 dialog
+        39.0ms #7732   :1.3/2394      StateChanged[focused]=1 text
+        39.4ms #7734   :1.3/2380      StateChanged[showing]=1 dialog
+        41.6ms #7751   :1.9/167       Window.Deactivate any=Untitled Document 1 - gedit
+        41.7ms #7752   :1.9/156       StateChanged[focused]=0 text
+      1764.6ms #7755   :1.3/1         StateChanged[active]=0 window
+      1764.6ms #7756   :1.3/1         Window.Deactivate any=Main stage
+      1768.2ms #7757   :1.9/167       Window.Activate any=Untitled Document 1 - gedit
+      1864.4ms #7776   :1.3/2380      StateChanged[showing]=0 dialog
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+   -- peak 'run_dialog_open' (state {"overview":false,"modalCount":1,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":"Clutter_Text","focusWindow":"Untitled Document 1 - gedit","qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      text           name='' text='Run a Command' chain=text:- < label:Run a Command < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:-
+      label          name='Run a Command' text=None chain=label:Run a Command < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-
+      dialog         name='' text=None chain=dialog:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+      label          name='Press ESC to close' text=None chain=label:Press ESC to close < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-
+      text           name='' text='Press ESC to close' chain=text:- < label:Press ESC to close < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:-
+## D2_end_session_dialog load 14.85 events 143
+        14.2ms #7803   :1.3/1         StateChanged[focused]=0 window
+        14.4ms #7804   :1.3/1041      StateChanged[focused]=1 dialog
+        14.4ms #7805   :1.3/1         StateChanged[active]=1 window
+        14.4ms #7806   :1.3/1         Window.Activate any=Main stage
+        14.5ms #7807   :1.3/1         StateChanged[focused]=1 window
+        14.6ms #7808   :1.3/1041      StateChanged[focused]=0 dialog
+        15.0ms #7811   :1.3/1041      StateChanged[showing]=1 dialog
+        16.3ms #7822   :1.3/1013      StateChanged[showing]=1 text
+        27.6ms #7856   :1.3/1013      StateChanged[showing]=0 text
+        29.3ms #7880   :1.9/167       Window.Deactivate any=Untitled Document 1 - gedit
+        29.6ms #7881   :1.9/156       StateChanged[focused]=0 text
+      1749.0ms #7884   :1.3/1         StateChanged[active]=0 window
+      1749.0ms #7885   :1.3/1         Window.Deactivate any=Main stage
+      1749.5ms #7886   :1.9/167       Window.Activate any=Untitled Document 1 - gedit
+      1749.6ms #7887   :1.9/156       StateChanged[focused]=1 text
+      2204.2ms #7892   :1.9/29        TextChanged[delete] label
+      2204.3ms #7893   :1.9/29        TextChanged[insert] label
+      2204.5ms #7900   :1.9/156       TextChanged[insert] text
+      2205.3ms #7906   :1.9/1         PropertyChange[accessible-value] split-pane
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+      push-button    name='Log Out' text=None chain=push-button:Log Out < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:- < panel:-
+      text           name='' text='Log Out' chain=text:- < push-button:Log Out < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-
+      push-button    name='Cancel' text=None chain=push-button:Cancel < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:- < panel:-
+      text           name='' text='Cancel' chain=text:- < push-button:Cancel < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-
+      label          name='Log Out user' text=None chain=label:Log Out user < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-
+      dialog         name='' text=None chain=dialog:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+      label          name='user will be logged out automatically in 0 seconds' text=None chain=label:user will be logged out automatically in 0 seconds < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-
+   -- peak 'end_session_dialog_open' (state {"overview":false,"modalCount":0,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":null,"focusWindow":"Untitled Document 1 - gedit","qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      push-button    name='Log Out' text=None chain=push-button:Log Out < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:- < panel:-
+      text           name='' text='Log Out' chain=text:- < push-button:Log Out < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-
+      push-button    name='Cancel' text=None chain=push-button:Cancel < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:- < panel:-
+      text           name='' text='Cancel' chain=text:- < push-button:Cancel < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-
+      label          name='Log Out user' text=None chain=label:Log Out user < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-
+      dialog         name='' text=None chain=dialog:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+      label          name='user will be logged out automatically in 0 seconds' text=None chain=label:user will be logged out automatically in 0 seconds < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-
+## D3_polkit_dialog load 16.31 events 839
+         8.6ms #7926   :1.3/1163      ChildrenChanged[add] child=dialog parent=1163
+        17.0ms #8065   :1.3/2444      StateChanged[showing]=1 menu-item
+        17.0ms #8067   :1.3/2446      StateChanged[showing]=1 text
+        17.6ms #8078   :1.3/2446      StateChanged[showing]=0 text
+        17.7ms #8080   :1.3/2444      StateChanged[showing]=0 menu-item
+        26.1ms #8157   :1.3/1         StateChanged[focused]=0 window
+        26.1ms #8158   :1.3/2414      StateChanged[focused]=1 dialog
+        26.1ms #8159   :1.3/1         StateChanged[active]=1 window
+        26.2ms #8160   :1.3/1         Window.Activate any=Main stage
+        26.2ms #8161   :1.3/1         StateChanged[focused]=1 window
+        26.2ms #8162   :1.3/2414      StateChanged[focused]=0 dialog
+        26.2ms #8165   :1.3/2414      StateChanged[showing]=1 dialog
+        28.1ms #8201   :1.3/2437      StateChanged[showing]=1 password-text
+        29.5ms #8223   :1.3/2437      StateChanged[focused]=1 password-text
+        33.9ms #8275   :1.9/167       Window.Deactivate any=*Untitled Document 1 - gedit
+        34.0ms #8276   :1.9/156       StateChanged[focused]=0 text
+      2691.7ms #8399   :1.3/2437      StateChanged[focused]=0 password-text
+      2692.7ms #8407   :1.3/1         StateChanged[active]=0 window
+      2692.8ms #8408   :1.3/1         Window.Deactivate any=Main stage
+      2706.5ms #8453   :1.9/167       Window.Activate any=*Untitled Document 1 - gedit
+      2706.6ms #8454   :1.9/156       StateChanged[focused]=1 text
+      2800.7ms #8568   :1.3/2437      StateChanged[showing]=0 password-text
+      2802.8ms #8592   :1.3/2414      StateChanged[showing]=0 dialog
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+   -- peak 'polkit_dialog_open' (state {"overview":false,"modalCount":1,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":"Clutter_Text","focusWindow":"*Untitled Document 1 - gedit","qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      push-button    name='Cancel' text=None chain=push-button:Cancel < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:- < panel:-
+      label          name='Authentication is needed to run /usr/bin/probe as the super user' text=None chain=label:Authentication is needed to run /usr/bin/probe as the super user < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-
+      label          name='' text=None chain=label:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:-
+      password-text  name='' text=None chain=password-text:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:-
+      label          name='Authentication Required' text=None chain=label:Authentication Required < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-
+      dialog         name='' text=None chain=dialog:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+      text           name='' text='user' chain=text:- < label:user < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:-
+      text           name='' text='Authentication Required' chain=text:- < label:Authentication Required < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:-
+      label          name='user' text=None chain=label:user < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:-
+      text           name='' text='Cancel' chain=text:- < push-button:Cancel < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-
+      text           name='' text='Caps lock is on' chain=text:- < label:Caps lock is on < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:-
+      text           name='' text='Authenticate' chain=text:- < push-button:Authenticate < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:-
+      push-button    name='Authenticate' text=None chain=push-button:Authenticate < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:- < panel:- < panel:-
+      label          name='Caps lock is on' text=None chain=label:Caps lock is on < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:-
+      text           name='' text='Authentication is needed to run /usr/bin/probe as the super user' chain=text:- < label:Authentication is needed to run /usr/bin/probe as the super user < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < dialog:-
+## L1_lock_screen load 15.40 events 4831
+      1081.3ms #8778   :1.3/1         StateChanged[focused]=0 window
+      1084.9ms #8780   :1.3/1         StateChanged[active]=1 window
+      1084.9ms #8781   :1.3/1         Window.Activate any=Main stage
+      1084.9ms #8782   :1.3/1         StateChanged[focused]=1 window
+      1085.4ms #8787   :1.3/2540      ChildrenChanged[add] child=window parent=2540
+      1097.5ms #8873   :1.3/2543      StateChanged[showing]=1 window
+      1098.3ms #8881   :1.3/2549      StateChanged[showing]=1 text
+      1099.8ms #8899   :1.3/170       StateChanged[showing]=0 toggle-button
+      1100.0ms #8909   :1.3/177       StateChanged[showing]=0 menu
+      1100.1ms #8912   :1.3/293       StateChanged[showing]=0 text
+      1100.9ms #8956   :1.3/177       StateChanged[showing]=1 menu
+      1123.2ms #9737   :1.9/167       Window.Deactivate any=*Untitled Document 1 - gedit
+      1123.3ms #9738   :1.9/156       StateChanged[focused]=0 text
+      4204.7ms #9854   :1.3/2675      StateChanged[showing]=1 menu-item
+      4205.1ms #9866   :1.3/2675      StateChanged[showing]=0 menu-item
+      4211.7ms #10082  :1.3/2683      StateChanged[focused]=1 password-text
+      4224.0ms #10161  :1.3/2683      StateChanged[showing]=1 password-text
+      4233.2ms #10178  :1.3/2653      Announcement d1=2 any=Authentication error
+      4234.6ms #10183  :1.3/2683      StateChanged[focused]=0 password-text
+      4234.9ms #10184  :1.3/1         StateChanged[active]=0 window
+      4234.9ms #10185  :1.3/1         Window.Deactivate any=Main stage
+      5203.8ms #10411  :1.3/2683      StateChanged[showing]=0 password-text
+      9526.8ms #11341  :1.3/170       StateChanged[showing]=1 toggle-button
+      9563.4ms #12151  :1.9/167       Window.Activate any=*Untitled Document 1 - gedit
+      9563.4ms #12152  :1.9/156       StateChanged[focused]=1 text
+      9818.9ms #13585  :1.3/2543      StateChanged[showing]=0 window
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+   -- peak 'lock_shield' (state {"overview":false,"modalCount":2,"trayState":0,"banner":false,"queue":0,"mode":"unlock-dialog","keyFocus":"UnlockDialog","focusWindow":"*Untitled Document 1 - gedit","qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      label          name='Friday October 16' text=None chain=label:Friday October 16 < panel:- < panel:- < panel:- < window:- < panel:- < panel:- < panel:- < window:Main stage
+      text           name='' text='12∶27 AM' chain=text:- < label:12∶27 AM < panel:- < panel:- < panel:- < window:- < panel:- < panel:- < panel:-
+      label          name='Click or press a key to unlock' text=None chain=label:Click or press a key to unlock < panel:- < panel:- < panel:- < window:- < panel:- < panel:- < panel:- < window:Main stage
+      label          name='12∶27 AM' text=None chain=label:12∶27 AM < panel:- < panel:- < panel:- < window:- < panel:- < panel:- < panel:- < window:Main stage
+      text           name='' text='Friday October 16' chain=text:- < label:Friday October 16 < panel:- < panel:- < panel:- < window:- < panel:- < panel:- < panel:-
+      text           name='' text='Click or press a key to unlock' chain=text:- < label:Click or press a key to unlock < panel:- < panel:- < panel:- < window:- < panel:- < panel:- < panel:-
+      window         name='' text=None chain=window:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+   -- peak 'lock_prompt' (state {"overview":false,"modalCount":2,"trayState":0,"banner":false,"queue":0,"mode":"unlock-dialog","keyFocus":"AuthPrompt","focusWindow":"*Untitled Document 1 - gedit","qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      push-button    name='Cancel' text=None chain=push-button:Cancel < panel:- < panel:- < panel:- < panel:- < panel:- < window:- < panel:- < panel:-
+      password-text  name='' text=None chain=password-text:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < window:- < panel:-
+      label          name='Caps lock is on' text=None chain=label:Caps lock is on < panel:- < panel:- < panel:- < panel:- < window:- < panel:- < panel:- < panel:-
+      label          name='user' text=None chain=label:user < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < window:-
+      text           name='' text='user' chain=text:- < label:user < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:-
+      text           name='' text='Authentication error' chain=text:- < label:Authentication error < panel:- < panel:- < panel:- < panel:- < window:- < panel:- < panel:-
+      text           name='' text='Caps lock is on' chain=text:- < label:Caps lock is on < panel:- < panel:- < panel:- < panel:- < window:- < panel:- < panel:-
+      label          name='Authentication error' text=None chain=label:Authentication error < panel:- < panel:- < panel:- < panel:- < window:- < panel:- < panel:- < panel:-
+      window         name='' text=None chain=window:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+## N1_notification load 21.14 events 314
+        15.6ms #1406   :1.3/1649      ChildrenChanged[add] child=notification parent=1649
+        21.9ms #1492   :1.3/153       ChildrenChanged[add] child=notification parent=153
+        22.1ms #1495   :1.3/1650      StateChanged[showing]=1 notification
+        22.6ms #1505   :1.3/1659      StateChanged[showing]=1 text
+     23909.7ms #1541   :1.3/1659      StateChanged[showing]=0 text
+     23911.3ms #1603   :1.3/1650      StateChanged[showing]=0 notification
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+   -- peak 'banner_shown' (state {"overview":false,"modalCount":0,"trayState":2,"banner":true,"queue":0,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      label          name='Probe title' text=None chain=label:Probe title < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      label          name='Just now' text=None chain=label:Just now < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      text           name='' text='Just now' chain=text:- < label:Just now < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      text           name='' text='Probe title' chain=text:- < label:Probe title < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      push-button    name='' text=None chain=push-button:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell
+      text           name='' text='probe-app' chain=text:- < label:probe-app < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      text           name='' text='Probe body text of the first notification' chain=text:- < label:Probe body text of the first notification < panel:- < panel:- < panel:- < panel:- < notification:- < panel:- < panel:-
+      notification   name='' text=None chain=notification:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+      label          name='probe-app' text=None chain=label:probe-app < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      label          name='Probe body text of the first notification' text=None chain=label:Probe body text of the first notification < panel:- < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+## N2_notification_actions load 18.56 events 341
+        25.9ms #1730   :1.3/1712      ChildrenChanged[add] child=notification parent=1712
+        35.9ms #1830   :1.3/153       ChildrenChanged[add] child=notification parent=153
+        37.0ms #1833   :1.3/1713      StateChanged[showing]=1 notification
+        37.5ms #1843   :1.3/1722      StateChanged[showing]=1 text
+     18429.1ms #1875   :1.3/1722      StateChanged[showing]=0 text
+     18430.2ms #1943   :1.3/1713      StateChanged[showing]=0 notification
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+   -- peak 'banner_shown' (state {"overview":false,"modalCount":0,"trayState":2,"banner":true,"queue":0,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      text           name='' text='Body with actions' chain=text:- < label:Body with actions < panel:- < panel:- < panel:- < panel:- < notification:- < panel:- < panel:-
+      push-button    name='' text=None chain=push-button:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell
+      label          name='Action title' text=None chain=label:Action title < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      label          name='probe-app' text=None chain=label:probe-app < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      label          name='Just now' text=None chain=label:Just now < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      notification   name='' text=None chain=notification:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+      text           name='' text='probe-app' chain=text:- < label:probe-app < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      label          name='Body with actions' text=None chain=label:Body with actions < panel:- < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      text           name='' text='Just now' chain=text:- < label:Just now < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      text           name='' text='Action title' chain=text:- < label:Action title < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+## N3_second_and_replace load 17.41 events 738
+       104.9ms #2057   :1.3/1773      ChildrenChanged[add] child=notification parent=1773
+       118.6ms #2143   :1.3/153       ChildrenChanged[add] child=notification parent=153
+       118.9ms #2146   :1.3/1774      StateChanged[showing]=1 notification
+       119.6ms #2156   :1.3/1783      StateChanged[showing]=1 text
+       798.8ms #2286   :1.3/1830      ChildrenChanged[add] child=notification parent=1830
+      4538.4ms #2296   :1.3/1783      StateChanged[showing]=0 text
+      4540.2ms #2358   :1.3/1774      StateChanged[showing]=0 notification
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+   -- peak 'first_banner_shown' (state {"overview":false,"modalCount":0,"trayState":2,"banner":true,"queue":0,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      text           name='' text='first body' chain=text:- < label:first body < panel:- < panel:- < panel:- < panel:- < notification:- < panel:- < panel:-
+      label          name='First showing' text=None chain=label:First showing < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      label          name='probe-app' text=None chain=label:probe-app < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      push-button    name='' text=None chain=push-button:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell
+      text           name='' text='First showing' chain=text:- < label:First showing < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      label          name='Just now' text=None chain=label:Just now < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      text           name='' text='Just now' chain=text:- < label:Just now < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      label          name='first body' text=None chain=label:first body < panel:- < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      notification   name='' text=None chain=notification:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+      text           name='' text='probe-app' chain=text:- < label:probe-app < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+   -- peak 'second_queued' (state {"overview":false,"modalCount":0,"trayState":2,"banner":true,"queue":1,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      text           name='' text='first body' chain=text:- < label:first body < panel:- < panel:- < panel:- < panel:- < notification:- < panel:- < panel:-
+      label          name='First showing' text=None chain=label:First showing < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      label          name='probe-app' text=None chain=label:probe-app < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      push-button    name='' text=None chain=push-button:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell
+      text           name='' text='First showing' chain=text:- < label:First showing < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      label          name='Just now' text=None chain=label:Just now < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      text           name='' text='Just now' chain=text:- < label:Just now < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      label          name='first body' text=None chain=label:first body < panel:- < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      notification   name='' text=None chain=notification:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+      text           name='' text='probe-app' chain=text:- < label:probe-app < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+   -- peak 'after_replace' (state {"overview":false,"modalCount":0,"trayState":2,"banner":true,"queue":1,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      text           name='' text='first body' chain=text:- < label:first body < panel:- < panel:- < panel:- < panel:- < notification:- < panel:- < panel:-
+      label          name='First showing' text=None chain=label:First showing < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      label          name='probe-app' text=None chain=label:probe-app < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      push-button    name='' text=None chain=push-button:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell
+      text           name='' text='First showing' chain=text:- < label:First showing < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      label          name='Just now' text=None chain=label:Just now < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      text           name='' text='Just now' chain=text:- < label:Just now < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      label          name='first body' text=None chain=label:first body < panel:- < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      notification   name='' text=None chain=notification:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+      text           name='' text='probe-app' chain=text:- < label:probe-app < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+   -- peak 'second_banner_shown' (state {"overview":false,"modalCount":0,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+## N4_critical load 20.40 events 231
+        30.0ms #2795   :1.3/1889      ChildrenChanged[add] child=notification parent=1889
+        33.3ms #2881   :1.3/153       ChildrenChanged[add] child=notification parent=153
+        33.8ms #2884   :1.3/1890      StateChanged[showing]=1 notification
+        34.0ms #2894   :1.3/1899      StateChanged[showing]=1 text
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+      notification   name='' text=None chain=notification:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+      text           name='' text='critical body' chain=text:- < label:critical body < panel:- < panel:- < panel:- < panel:- < notification:- < panel:- < panel:-
+      push-button    name='' text=None chain=push-button:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell
+      label          name='probe-app' text=None chain=label:probe-app < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      label          name='Critical title' text=None chain=label:Critical title < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      text           name='' text='Just now' chain=text:- < label:Just now < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      text           name='' text='probe-app' chain=text:- < label:probe-app < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      label          name='critical body' text=None chain=label:critical body < panel:- < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      label          name='Just now' text=None chain=label:Just now < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      text           name='' text='Critical title' chain=text:- < label:Critical title < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+   -- peak 'banner_shown' (state {"overview":false,"modalCount":0,"trayState":2,"banner":true,"queue":0,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      notification   name='' text=None chain=notification:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+      text           name='' text='critical body' chain=text:- < label:critical body < panel:- < panel:- < panel:- < panel:- < notification:- < panel:- < panel:-
+      push-button    name='' text=None chain=push-button:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell
+      label          name='probe-app' text=None chain=label:probe-app < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      label          name='Critical title' text=None chain=label:Critical title < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      text           name='' text='Just now' chain=text:- < label:Just now < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      text           name='' text='probe-app' chain=text:- < label:probe-app < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      label          name='critical body' text=None chain=label:critical body < panel:- < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+      label          name='Just now' text=None chain=label:Just now < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:- < window:Main stage
+      text           name='' text='Critical title' chain=text:- < label:Critical title < panel:- < panel:- < panel:- < notification:- < panel:- < panel:- < panel:-
+## O1_osd load 19.70 events 51
+         5.1ms #3203   :1.3/1123      PropertyChange[accessible-value] level-bar
+         5.8ms #3213   :1.3/1298      StateChanged[showing]=1 text
+         6.4ms #3214   :1.3/1123      StateChanged[showing]=1 level-bar
+      3276.1ms #3240   :1.3/1298      StateChanged[showing]=0 text
+      3276.1ms #3242   :1.3/1123      StateChanged[showing]=0 level-bar
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+   -- peak 'osd_volume_shown' (state {"overview":false,"modalCount":0,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      label          name='Volume' text=None chain=label:Volume < panel:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell
+## O2_osd_nolevel load 19.40 events 28
+         4.4ms #3259   :1.3/1298      StateChanged[showing]=1 text
+      1606.4ms #3270   :1.3/1298      StateChanged[showing]=0 text
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+   -- peak 'osd_nolevel_shown' (state {"overview":false,"modalCount":0,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      label          name='Muted' text=None chain=label:Muted < panel:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell
+## Q1_quick_settings load 14.21 events 103
+         2.5ms #7510   :1.3/773       StateChanged[showing]=1 text
+        10.8ms #7530   :1.3/705       StateChanged[showing]=1 toggle-button
+        16.3ms #7543   :1.3/1         StateChanged[focused]=0 window
+        17.9ms #7545   :1.3/1         StateChanged[active]=1 window
+        17.9ms #7546   :1.3/1         Window.Activate any=Main stage
+        18.0ms #7547   :1.3/1         StateChanged[focused]=1 window
+        24.1ms #7548   :1.9/167       Window.Deactivate any=Untitled Document 1 - gedit
+        24.3ms #7549   :1.9/156       StateChanged[focused]=0 text
+      2709.8ms #7554   :1.3/1         StateChanged[active]=0 window
+      2709.9ms #7555   :1.3/1         Window.Deactivate any=Main stage
+      2713.0ms #7556   :1.9/167       Window.Activate any=Untitled Document 1 - gedit
+      2713.2ms #7557   :1.9/156       StateChanged[focused]=1 text
+      2854.1ms #7563   :1.3/773       StateChanged[showing]=0 text
+      2854.5ms #7586   :1.3/705       StateChanged[showing]=0 toggle-button
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+   -- peak 'qs_open' (state {"overview":false,"modalCount":1,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":"St_Widget","focusWindow":"Untitled Document 1 - gedit","qsOpen":true}): nodes newly showing vs scenario start (name/text a reader can read):
+      label          name='Dark Style' text=None chain=label:Dark Style < panel:- < panel:- < toggle-button:- < panel:- < panel:- < panel:- < panel:- < panel:-
+      push-button    name='Take Screenshot' text=None chain=push-button:Take Screenshot < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:-
+      push-button    name='Power Off Menu' text=None chain=push-button:Power Off Menu < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:-
+      push-button    name='Settings' text=None chain=push-button:Settings < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:-
+      label          name='100%' text=None chain=label:100% < panel:- < panel:- < push-button:- < panel:- < push-button:- < panel:- < panel:- < panel:-
+## S0_idle load 21.50 events 768
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+## T1_alt_tab load 11.84 events 224
+       157.5ms #6999   :1.3/1         StateChanged[focused]=0 window
+       157.6ms #7001   :1.3/1         StateChanged[active]=1 window
+       157.6ms #7002   :1.3/1         Window.Activate any=Main stage
+       157.7ms #7003   :1.3/1         StateChanged[focused]=1 window
+       158.7ms #7021   :1.3/2314      StateChanged[showing]=1 text
+       162.7ms #7047   :1.9/167       Window.Deactivate any=Untitled Document 1 - gedit
+       162.7ms #7048   :1.9/156       StateChanged[focused]=0 text
+      2846.0ms #7053   :1.3/1         StateChanged[active]=0 window
+      2846.0ms #7054   :1.3/1         Window.Deactivate any=Main stage
+      2850.2ms #7055   :1.9/167       Window.Activate any=Untitled Document 1 - gedit
+      2850.3ms #7056   :1.9/156       StateChanged[focused]=1 text
+      2943.7ms #7086   :1.3/2314      StateChanged[showing]=0 text
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+   -- peak 'switcher_open' (state {"overview":false,"modalCount":1,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":"AppSwitcherPopup","focusWindow":"Untitled Document 1 - gedit","qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      push-button    name='' text=None chain=push-button:- < panel:- < panel:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell
+      text           name='' text='gedit' chain=text:- < label:gedit < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:- < panel:-
+      label          name='gedit' text=None chain=label:gedit < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:- < panel:- < window:Main stage
+      text           name='' text='gtkwin.py' chain=text:- < label:gtkwin.py < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:- < panel:-
+      label          name='gtkwin.py' text=None chain=label:gtkwin.py < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:- < panel:- < window:Main stage
+## T2_alt_grave load 13.01 events 352
+       155.6ms #7223   :1.3/1         StateChanged[focused]=0 window
+       155.9ms #7225   :1.3/1         StateChanged[active]=1 window
+       155.9ms #7226   :1.3/1         Window.Activate any=Main stage
+       155.9ms #7227   :1.3/1         StateChanged[focused]=1 window
+       156.3ms #7245   :1.3/2342      StateChanged[showing]=1 text
+       168.1ms #7349   :1.9/167       Window.Deactivate any=Untitled Document 1 - gedit
+       168.1ms #7350   :1.9/156       StateChanged[focused]=0 text
+      1486.0ms #7353   :1.3/1         StateChanged[active]=0 window
+      1486.1ms #7354   :1.3/1         Window.Deactivate any=Main stage
+      1489.5ms #7355   :1.9/167       Window.Activate any=Untitled Document 1 - gedit
+      1489.9ms #7356   :1.9/156       StateChanged[focused]=1 text
+      1582.0ms #7386   :1.3/2342      StateChanged[showing]=0 text
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+   -- peak 'window_switcher_open' (state {"overview":false,"modalCount":1,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":"AppSwitcherPopup","focusWindow":"Untitled Document 1 - gedit","qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      label          name='Untitled Document 1 - gedit' text=None chain=label:Untitled Document 1 - gedit < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:- < panel:- < window:Main stage
+      push-button    name='' text=None chain=push-button:- < panel:- < panel:- < panel:- < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell
+      label          name='gedit' text=None chain=label:gedit < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:- < panel:- < window:Main stage
+      label          name='gtkwin.py' text=None chain=label:gtkwin.py < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:- < panel:- < window:Main stage
+      text           name='' text='gtkwin.py' chain=text:- < label:gtkwin.py < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:- < panel:-
+      text           name='' text='gedit' chain=text:- < label:gedit < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:- < panel:-
+      text           name='' text='Untitled Document 1 - gedit' chain=text:- < label:Untitled Document 1 - gedit < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:- < panel:-
+## V1_overview_eval load 18.33 events 375
+         1.0ms #3284   :1.3/178       StateChanged[showing]=1 text
+         2.0ms #3311   :1.3/209       StateChanged[showing]=1 toggle-button
+        11.1ms #3435   :1.3/170       StateChanged[checked]=1 toggle-button
+      2093.9ms #3502   :1.3/170       StateChanged[checked]=0 toggle-button
+      2344.7ms #3505   :1.3/178       StateChanged[showing]=0 text
+      2345.2ms #3536   :1.3/209       StateChanged[showing]=0 toggle-button
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+   -- peak 'overview_shown' (state {"overview":true,"modalCount":1,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      push-button    name='Firefox ESR' text=None chain=push-button:Firefox ESR < panel:- < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:-
+      push-button    name='Files' text=None chain=push-button:Files < panel:- < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:-
+      toggle-button  name='Show Apps' text=None chain=toggle-button:Show Apps < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:- < window:Main stage
+      panel          name='Overview' text=None chain=panel:Overview < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+## V2_overview_super_key load 17.58 events 377
+        32.0ms #3659   :1.3/178       StateChanged[showing]=1 text
+        32.6ms #3686   :1.3/209       StateChanged[showing]=1 toggle-button
+        37.7ms #3810   :1.3/170       StateChanged[checked]=1 toggle-button
+      2149.3ms #3877   :1.3/170       StateChanged[checked]=0 toggle-button
+      2400.1ms #3880   :1.3/178       StateChanged[showing]=0 text
+      2400.7ms #3911   :1.3/209       StateChanged[showing]=0 toggle-button
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+   -- peak 'overview_shown' (state {"overview":true,"modalCount":1,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      push-button    name='Firefox ESR' text=None chain=push-button:Firefox ESR < panel:- < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:-
+      push-button    name='Files' text=None chain=push-button:Files < panel:- < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:-
+      toggle-button  name='Show Apps' text=None chain=toggle-button:Show Apps < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:- < window:Main stage
+      panel          name='Overview' text=None chain=panel:Overview < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+## V3_overview_search load 15.81 events 942
+         1.2ms #4036   :1.3/178       StateChanged[showing]=1 text
+         2.3ms #4063   :1.3/209       StateChanged[showing]=1 toggle-button
+         9.0ms #4187   :1.3/170       StateChanged[checked]=1 toggle-button
+      2014.1ms #4238   :1.3/178       StateChanged[focused]=1 text
+      2020.4ms #4239   :1.3/1         StateChanged[active]=1 window
+      2020.4ms #4240   :1.3/1         Window.Activate any=Main stage
+      2020.5ms #4241   :1.3/1         StateChanged[focused]=1 window
+      2031.8ms #4268   :1.3/179       StateChanged[showing]=0 text
+      2037.6ms #4271   :1.3/178       TextChanged[insert] text
+      5836.9ms #4784   :1.3/178       StateChanged[focused]=0 text
+      5839.4ms #4793   :1.3/1         StateChanged[active]=0 window
+      5839.4ms #4794   :1.3/1         Window.Deactivate any=Main stage
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+      push-button    name='Firefox ESR' text=None chain=push-button:Firefox ESR < panel:- < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:-
+      push-button    name='Files' text=None chain=push-button:Files < panel:- < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:-
+      toggle-button  name='Show Apps' text=None chain=toggle-button:Show Apps < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:- < window:Main stage
+      panel          name='Overview' text=None chain=panel:Overview < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+   -- peak 'search_results' (state {"overview":true,"modalCount":1,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":"Clutter_Text","focusWindow":null,"qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      push-button    name='' text=None chain=push-button:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:- < panel:-
+      label          name='gedit' text=None chain=label:gedit < panel:- < panel:- < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:-
+      text           name='' text='gedit' chain=text:- < label:gedit < panel:- < panel:- < panel:- < push-button:- < panel:- < panel:- < panel:-
+      push-button    name='Firefox ESR' text=None chain=push-button:Firefox ESR < panel:- < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:-
+      push-button    name='Files' text=None chain=push-button:Files < panel:- < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:-
+      toggle-button  name='Show Apps' text=None chain=toggle-button:Show Apps < panel:- < panel:- < panel:- < panel:- < panel:Overview < panel:- < panel:- < window:Main stage
+      panel          name='Overview' text=None chain=panel:Overview < panel:- < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+## V4_app_grid load 16.06 events 559
+      2003.0ms #4973   :1.3/209       StateChanged[checked]=1 toggle-button
+      2023.7ms #5005   :1.3/1605      StateChanged[showing]=1 text
+      2024.9ms #5014   :1.3/1441      StateChanged[showing]=1 toggle-button
+      4560.2ms #5255   :1.3/209       StateChanged[checked]=0 toggle-button
+      5640.7ms #5311   :1.3/1605      StateChanged[showing]=0 text
+      5641.1ms #5329   :1.3/1441      StateChanged[showing]=0 toggle-button
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+      panel          name='Top window group' text=None chain=panel:Top window group < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+      panel          name='Window group' text=None chain=panel:Window group < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+   -- peak 'app_grid' (state {"overview":true,"modalCount":1,"trayState":0,"banner":false,"queue":0,"mode":"user","keyFocus":null,"focusWindow":null,"qsOpen":false}): nodes newly showing vs scenario start (name/text a reader can read):
+      label          name='Terminal' text=None chain=label:Terminal < panel:- < panel:- < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:-
+      label          name='Keyboard Layout' text=None chain=label:Keyboard Layout < panel:- < panel:- < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:-
+      label          name='Vim' text=None chain=label:Vim < panel:- < panel:- < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:-
+      label          name='gedit' text=None chain=label:gedit < panel:- < panel:- < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:-
+      label          name='Settings' text=None chain=label:Settings < panel:- < panel:- < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:-
+      label          name='Accerciser' text=None chain=label:Accerciser < panel:- < panel:- < panel:- < push-button:- < panel:- < panel:- < panel:- < panel:-
+      label          name='System' text=None chain=label:System < panel:- < panel:- < toggle-button:- < panel:- < panel:- < panel:- < panel:- < panel:-
+## W1_windows_appear load 16.76 events 1386
+       127.1ms #5574   :1.10/10       Window.Activate any=Probe Window One
+       127.2ms #5575   :1.10/5        StateChanged[focused]=1 text
+       199.9ms #5977   :1.9/156       TextChanged[insert] text
+       200.7ms #6004   :1.9/1         PropertyChange[accessible-value] split-pane
+       209.1ms #6034   :1.9/167       Window.Activate any=Untitled Document 1 - gedit
+       209.1ms #6035   :1.10/10       Window.Deactivate any=Probe Window One
+       209.3ms #6039   :1.10/5        StateChanged[focused]=0 text
+   -- peak 'END' (state None): nodes newly showing vs scenario start (name/text a reader can read):
+      panel          name='Wayland surface container' text=None chain=panel:Wayland surface container < panel:Wayland window < panel:Window group < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+      panel          name='Wayland window' text=None chain=panel:Wayland window < panel:Window group < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell < application:gnome-shell
+      panel          name='Wayland surface' text=None chain=panel:Wayland surface < panel:Wayland surface container < panel:Wayland window < panel:Window group < panel:- < window:Main stage < application:gnome-shell < application:gnome-shell < application:gnome-shell

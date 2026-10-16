@@ -560,6 +560,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ext-gnome-shell"
+version = "0.0.0"
+dependencies = [
+ "gorca-ext-api",
+]
+
+[[package]]
 name = "ext-vte"
 version = "0.0.0"
 dependencies = [
@@ -825,6 +832,7 @@ name = "gorca-daemon"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "ext-gnome-shell",
  "futures-lite",
  "gorca-config",
  "gorca-connector-api",

@@ -27,7 +27,7 @@ use gorca_model::AppId;
 
 pub use map::{
     CACHE_IFACE, MAX_ANNOUNCEMENT_BYTES, Malformed, SignalView, local_id, map_cache_signal,
-    map_signal, needs_path,
+    map_signal, needs_hint_path, needs_path,
 };
 
 /// Largest per-connection sender cache; beyond it the cache is dropped and rebuilt (hostile
@@ -51,6 +51,9 @@ pub enum RouteDecision {
 pub struct AppRoute {
     pub app: AppId,
     pub tx: IngressSender,
+    /// `showing` and value hint events of this app record node paths (the verified Shell); for
+    /// every other app the drain skips the path-table lock for them (L-3).
+    pub hints: bool,
 }
 
 /// Creates the per-app ingresses of one process. Every ingress made here is charged to the one
@@ -122,6 +125,11 @@ pub trait Router: Send + Sync + 'static {
     /// ([`local_id`]): a connector that must call the object later records the reverse mapping
     /// here. Rare and must be O(1) and non-blocking; the default does nothing.
     fn focus_seen(&self, _app: AppId, _node: gorca_model::NodeKey, _path: &str) {}
+
+    /// Like [`Router::focus_seen`] for the hint events of [`needs_hint_path`] (a node that became
+    /// visible, a value that changed). Frequent: an implementation records them only for the
+    /// applications that need them. The default does nothing.
+    fn hint_seen(&self, _app: AppId, _node: gorca_model::NodeKey, _path: &str) {}
 }
 
 #[derive(Clone, Debug)]

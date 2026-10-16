@@ -342,6 +342,20 @@ impl Credentials for BusCredentials {
     }
 }
 
+/// The `(pid, process start time)` of the current owner of `org.gnome.Shell`, if it can be told.
+async fn resolve_shell(
+    session: &Connection,
+    creds: &BusCredentials,
+    clock: &Clock,
+) -> Option<(u32, u64)> {
+    let owner = name_owner(session, clock, "org.gnome.Shell").await?;
+    let pid = creds.pid_of(&owner).await?;
+    crate::proc::read_proc_info_async(pid)
+        .await
+        .start
+        .map(|st| (pid, st))
+}
+
 /// Keeps the router's one protected process equal to the **current** owner of
 /// `org.gnome.Shell` on the session bus, as `(pid, process start time)`. The owner is re-resolved
 /// whenever the name changes hands (`NameOwnerChanged`, with a slow poll as a safety net), and the
@@ -371,16 +385,7 @@ async fn watch_shell(session: Connection, router: Arc<AtspiRouter>, clock: Clock
     };
     let mut protected: Option<(u32, u64)> = None;
     loop {
-        let process = match name_owner(&session, &clock, "org.gnome.Shell").await {
-            Some(owner) => match creds.pid_of(&owner).await {
-                Some(pid) => crate::proc::read_proc_info_async(pid)
-                    .await
-                    .start
-                    .map(|st| (pid, st)),
-                None => None,
-            },
-            None => None,
-        };
+        let process = resolve_shell(&session, &creds, &clock).await;
         if process != protected {
             tracing::debug!(?process, "the shell process changed");
             protected = process;
@@ -647,6 +652,16 @@ async fn run(
         reconcile_loop(conn.clone(), Arc::clone(&router), clock.clone()),
     );
     if let Some(sc) = shell_conn {
+        // Known before the first application is announced: the Shell's identity is decided when
+        // it registers, so a Shell found by the first discovery must already be recognisable
+        // (a race here left it unverified, and without its extension, under load).
+        let creds = BusCredentials {
+            conn: sc.clone(),
+            clock: clock.clone(),
+        };
+        if let Some(p) = resolve_shell(&sc, &creds, &clock).await {
+            router.set_protected_process(Some(p));
+        }
         tasks.spawn(
             "shell-watch",
             watch_shell(sc, Arc::clone(&router), clock.clone()),

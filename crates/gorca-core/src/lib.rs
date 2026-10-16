@@ -51,6 +51,7 @@ pub use browse::{
     BrowseCounters, BrowseSettings, FocusCause, ModeWord, Scope, WebEv, WebFx, WebMode,
 };
 pub use builtin_ext::AppProfile;
+pub use builtin_ext::{AppPolicy, PolicyFacts, PolicyMoment, PolicyVerdict};
 pub use commands::{
     Availability, CmdSpec, CommandTable, Compiled, ConfigRequest, ContextMask, ControlMsg, CoreCmd,
     InputNotice, LoadCause, LoadedSettings, LocalTime, Milestone, PASS_TIMEOUT, PlatformFacts,
@@ -58,7 +59,7 @@ pub use commands::{
     chord_grabs, command_id, compile, escape_grabs, gorca_modifiers, grab_collisions,
     lane_settings,
 };
-pub use directory::MirrorDirectory;
+pub use directory::{MirrorDirectory, Owner};
 pub use doc_actor::{
     DocActorSpec, DocCounters, DocCtl, DocDirectory, DocHandle, DocNotice, WebJoin,
     prepare as prepare_doc_actor,
@@ -72,6 +73,11 @@ pub use health::{
 pub use mode::{BaseMode, Mode, ModeEffect, ModeKeys, ModeMsg, PassScope, WebCursor};
 pub use present::log_states as snapshot_state_names;
 pub use present::value_text;
+pub use present::{
+    Content, DesktopEffect, WindowEffect, WindowInfo, WindowMsg, WindowState,
+    announcement_utterance, clean_announcement, dialog_content, fetch_level, fetch_window,
+    is_notice_role, lead_segments, notice_segments, reads_content,
+};
 pub use present::{
     FOCUS_FIELDS, NoLabels, NodeLabel, PresentContext, PresentJob, PresentKind, PresentLog,
     PresentRecord, PresentSource, Presented, Presenter, PresenterRegistry, RAPID_FOCUS,

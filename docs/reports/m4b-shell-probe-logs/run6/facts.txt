@@ -1,0 +1,15 @@
+relations: [(('text', "[[18, ['180']]]"), 19), (('button', "[[2, ['2053']]]"), 17), (('button', "[[2, ['2085']]]"), 14), (('button', "[[2, ['2061']]]"), 11), (('button', "[[2, ['2069']]]"), 11), (('button', "[[2, ['2077']]]"), 11), (('label', "[[17, ['178']]]"), 10), (('label', "[[1, ['2047']]]"), 10), (('text', "[[2, ['2391']]]"), 9), (('menu item', "[[2, ['2403']]]"), 9), (('menu item', "[[2, ['2407']]]"), 9), (('label', "[[1, ['264']]]"), 9)]
+descriptions: [(('button', 'Save the current file'), 5), (('button', 'Open a file'), 5), (('button', 'Create a new document'), 4), (('toggle button', 'Open a recently used file'), 4), (('button', 'Leave Fullscreen'), 2), (('button', 'Hide panel'), 2), (('label', "['ERR', 'GDBus.Error:org.freedesktop.DBus.Error.UnknownObjec"), 1)]
+attributes: [('{"toolkit": "gtk"}', 629), ('{"toolkit": "gtk", "window-type": "normal"}', 58)]
+value iface: [(('split pane', 0.0, 2147483647.0), 22), (('level bar', 0.0, 1.0), 19), (('scroll bar', 0.0, 0.0), 18)]
+enrich lag ms p50/p90/p99/max: 608.0 3565.0 5495.3 6085.2
+enrich cost per event ms p50/p90/max: 3.1 8.0 136.7
+ifaces notification {'Accessible': 77, 'Component': 77, 'Collection': 77}
+ifaces dialog {'Accessible': 26, 'Component': 26, 'Collection': 26}
+ifaces level bar {'Accessible': 19, 'Component': 19, 'Value': 19, 'Collection': 19}
+ifaces label {'Accessible': 501, 'Component': 501, 'Collection': 501, 'Text': 31, 'Hypertext': 31}
+ifaces push button {}
+ifaces window {'Accessible': 71, 'Component': 71, 'Collection': 71}
+ifaces menu {'Accessible': 18, 'Component': 18, 'Collection': 18, 'Selection': 6}
+ifaces text {'Accessible': 725, 'Action': 696, 'Component': 725, 'EditableText': 725, 'Text': 725, 'Collection': 725}
+ifaces password text {'Accessible': 23, 'Action': 23, 'Component': 23, 'EditableText': 23, 'Text': 23, 'Collection': 23}

@@ -14,7 +14,7 @@
 //! `resync_needed`; that is a stated deviation from "drop oldest".
 
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use gorca_connector_api::{AppControl, BackendError, BackendReply};
 use gorca_ingress::{DirtySet, IngressReceiver};
@@ -201,6 +201,38 @@ pub struct AppActor {
     text_unprotected: u64,
     /// Where the app's text capability is published for the Reader.
     directory: Option<Arc<crate::directory::MirrorDirectory>>,
+    /// Bounds the `showing` events forwarded to the Reader (M4b).
+    showing_budget: ShowingBudget,
+    level_budget: ShowingBudget,
+}
+
+/// `showing` events forwarded per [`SHOWING_WINDOW`]: a banner is one event, an overview maps
+/// hundreds.
+const SHOWING_BURST: u32 = 64;
+const SHOWING_WINDOW: Duration = Duration::from_millis(250);
+
+#[derive(Debug, Default)]
+struct ShowingBudget {
+    since: Option<Instant>,
+    used: u32,
+}
+
+impl ShowingBudget {
+    fn take(&mut self, now: Instant) -> bool {
+        match self.since {
+            Some(at) if now.saturating_duration_since(at) < SHOWING_WINDOW => {}
+            Some(_) | None => {
+                self.since = Some(now);
+                self.used = 0;
+            }
+        }
+        if self.used < SHOWING_BURST {
+            self.used += 1;
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl AppActor {
@@ -237,6 +269,8 @@ impl AppActor {
             fill_closed: false,
             focus: None,
             shell: false,
+            showing_budget: ShowingBudget::default(),
+            level_budget: ShowingBudget::default(),
             focused: None,
             web: None,
             text: None,
@@ -726,6 +760,8 @@ impl AppActor {
                     if let Some(d) = &self.directory {
                         d.set_text_unit(self.app, self.profile.text_unit);
                         d.set_text_insert_slack(self.app, self.profile.text_insert_slack);
+                        d.set_pid(self.app, info.pid);
+                        d.set_policy(self.app, self.profile.policy);
                     }
                     self.driver.set_class(AppClass::from_info(&info));
                     self.driver.set_dump_complete(info.dump_complete);
@@ -876,6 +912,7 @@ impl AppActor {
             } => {
                 self.forward_background(
                     BackgroundMsg::Announcement {
+                        app: self.app,
                         text: Arc::clone(text),
                         politeness: *politeness,
                     },
@@ -884,6 +921,12 @@ impl AppActor {
             }
             // S1: a state or value change of the focused node is spoken (PW-12).
             NodeEvent::PropertiesChanged { node, mask } => {
+                if mask.contains(PropMask::SHOWING_NOW) {
+                    self.route_showing(*node, route);
+                }
+                if mask.contains(PropMask::VALUE) && self.focus != Some(*node) {
+                    self.route_level(*node, route);
+                }
                 if self.focus == Some(*node)
                     && mask.intersects(PropMask::STATES | PropMask::VALUE)
                     && !s1_sent.contains(node)
@@ -921,11 +964,63 @@ impl AppActor {
             NodeEvent::SelectionChanged { node } => {
                 self.route_text(TextMsg::Selection { node: *node }, route);
             }
+            // A window became the active one: its title leads the focus speech (M4b). Best
+            // effort: a full focus lane loses the title, never the focus.
+            NodeEvent::WindowEvent {
+                node,
+                kind: WindowKind::Activate,
+            } => {
+                if self.send_focus(FocusLaneMsg::WindowActivated { window: *node }) {
+                    route.forwarded_to_focus_lane += 1;
+                }
+            }
             // Events that only dirty the mirror, which `invalidate_for` already did.
             NodeEvent::ActiveDescendantChanged { .. }
             | NodeEvent::ChildrenChanged { .. }
             | NodeEvent::WindowEvent { .. }
             | NodeEvent::DocumentEvent { .. } => {}
+        }
+    }
+
+    /// A node became visible (M4b): the Reader reads it when it may be a notice. A node the
+    /// mirror knows to be anything but an alert is dropped here, at no cost; the rest is bounded
+    /// (a Shell overview maps hundreds of actors at once) and dropped silently when over budget,
+    /// which is not a lost event and never asks for a resync.
+    fn route_showing(&mut self, node: NodeKey, route: &mut AppRoute) {
+        let known = self.read.view(node).hit();
+        let alert = known
+            .as_ref()
+            .is_some_and(|v| crate::present::is_notice_role(v.snap.role));
+        if !(alert || (known.is_none() && self.profile.watch_showing)) {
+            return;
+        }
+        if self.showing_budget.take(Instant::now()) {
+            self.forward_background_lossy(BackgroundMsg::Showing { node }, route);
+        }
+    }
+
+    /// The value of a node that does not hold focus changed (M4b): when it may be a level bar
+    /// the Reader reads it back, once it stops changing. Only the verified Shell is watched; a
+    /// node the mirror knows to be anything but a level or slider costs nothing.
+    fn route_level(&mut self, node: NodeKey, route: &mut AppRoute) {
+        if !self.profile.watch_showing {
+            return;
+        }
+        let level = self.read.view(node).hit().is_none_or(|v| {
+            matches!(
+                v.snap.role,
+                gorca_model::Role::ProgressBar | gorca_model::Role::Slider
+            )
+        });
+        if level && self.level_budget.take(Instant::now()) {
+            self.forward_background_lossy(BackgroundMsg::LevelChanged { node }, route);
+        }
+    }
+
+    /// Like [`Self::forward_background`] for a message whose loss costs nothing.
+    fn forward_background_lossy(&mut self, msg: BackgroundMsg, route: &mut AppRoute) {
+        if self.links.background.try_send(msg).is_ok() {
+            route.forwarded_to_background += 1;
         }
     }
 

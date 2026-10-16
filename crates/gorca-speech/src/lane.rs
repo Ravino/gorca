@@ -202,8 +202,10 @@ impl SpeechHandle {
             s.dropped(u.id);
             return;
         }
-        let interrupts =
-            u.prio == Prio::Interrupt || u.epoch.0 > s.inflight_epoch.load(Ordering::Acquire);
+        // A notification never takes the single interrupting slot (M4b): it would replace a
+        // focus utterance the lane has not picked up yet. It queues behind it.
+        let interrupts = u.prio != Prio::Notification
+            && (u.prio == Prio::Interrupt || u.epoch.0 > s.inflight_epoch.load(Ordering::Acquire));
         if interrupts {
             let mut slot = lock(&s.slot);
             match slot.take() {
@@ -423,6 +425,7 @@ impl Lane {
                 | SpeechState::Paused { .. }
                 | SpeechState::Disconnected { .. } => None,
             };
+            let tick_at = tick_at.or_else(|| self.queue.next_wake(Instant::now()));
             let sleep = match tick_at {
                 Some(d) => d.saturating_duration_since(Instant::now()).min(poll),
                 None => poll,
@@ -503,6 +506,9 @@ impl Lane {
             });
         }
         if matches!(self.queue.state(), SpeechState::Replacing { .. }) {
+            self.feed(SpeechMsg::Tick);
+        } else if matches!(self.queue.state(), SpeechState::Idle) && self.queue.queued() > 0 {
+            // Something waited (a notification in its grace): start it if it may start now.
             self.feed(SpeechMsg::Tick);
         }
         // Utterances that were never handed on and are not tracked any more must not pile up.
@@ -1164,6 +1170,27 @@ mod tests {
         h.submit(utt(2, e.0, Prio::Interrupt, "two"));
         // No Started and no Ended(1) ever arrives.
         assert!(eventually(WAIT, || h.stats().replace_slow == 1).await);
+    }
+
+    #[tokio::test]
+    async fn a_notification_never_replaces_a_pending_focus_utterance() {
+        // Disconnected: both stay with the lane (focus in the slot, the notification in the
+        // FIFO) until the server is back; the focus must be spoken first and not be replaced.
+        let (h, ctl, epoch, _t) = start(true, ClientHealth::Down);
+        let e = epoch.advance();
+        h.submit(utt(1, e.0, Prio::Interrupt, "focus"));
+        h.submit(utt(2, e.0, Prio::Notification, "note"));
+        assert_eq!(h.stats().superseded, 0, "the notification took no slot");
+        ctl.set_health(ClientHealth::Ready);
+        assert!(eventually(WAIT, || speaks(&ctl) == [1]).await);
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        assert_eq!(
+            speaks(&ctl),
+            [1],
+            "the notification waits for the focus speech"
+        );
+        ctl.send(SpeechEvent::Ended(UttId(1)));
+        assert!(eventually(WAIT, || speaks(&ctl) == [1, 2]).await);
     }
 
     #[tokio::test]

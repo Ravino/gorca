@@ -1,0 +1,13 @@
+{
+  "meta": {"utc": "2026-10-16T00:48:21Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "21.27 25.82 30.04 2/3182 3512155", "git_rev": "46062fc", "git_dirty": "false", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "label": "m4b-review-ab-k-m4b", "reader": "daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/bin/rv-gorca-m4b", "backend": "voicego", "repeats": "3", "samples_per_series": "1200", "l2_trials": "400", "quick": "false", "loadavg_end": "21.27 25.82 30.04 2/3182 3512152", "reader_env": "GORCA_M1=1 GORCA_M1_STRICT=1", "gates": "L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats", "note0": "k2_ms: first SPEAK between a command key and the next one (1200 spoken for 1200 chords)"},
+  "rows": [
+    {"id": "K2.k2_ms.n", "scenario": "K2", "bus": "daemon/voicego", "value": 1200, "min": 1200, "max": 1200, "runs": 3, "unit": "samples", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "K2.k2_ms.p50", "scenario": "K2", "bus": "daemon/voicego", "value": 0.247884, "min": 0.14402, "max": 0.279402, "runs": 3, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "K2.k2_ms.p95", "scenario": "K2", "bus": "daemon/voicego", "value": 1.778912, "min": 0.276406, "max": 2.996261, "runs": 3, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "K2.k2_ms.p99", "scenario": "K2", "bus": "daemon/voicego", "value": 3.7448, "min": 0.347562, "max": 5.043208, "runs": 3, "unit": "ms", "op": "<=", "threshold": 5, "verdict": "PASS", "note": ""},
+    {"id": "K2.k2_ms.p999", "scenario": "K2", "bus": "daemon/voicego", "value": 8.281695, "min": 0.625868, "max": 9.087209, "runs": 3, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "K2.k2_ms.max", "scenario": "K2", "bus": "daemon/voicego", "value": 10.057506, "min": 0.665239, "max": 13.076771, "runs": 3, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "K2.lost", "scenario": "K2", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 3, "unit": "events", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "K2.not_consumed", "scenario": "K2", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 3, "unit": "events", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"}
+  ]
+}

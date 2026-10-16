@@ -40,6 +40,7 @@ IF_ACC, IF_COMP, IF_TEXT, IF_EDIT, IF_ACT, IF_APP, IF_CACHE = (
     I + "Accessible", I + "Component", I + "Text", I + "EditableText", I + "Action",
     I + "Application", I + "Cache")
 IF_COLL, IF_SEL = I + "Collection", I + "Selection"
+IF_VALUE = I + "Value"
 IF_PROPS = "org.freedesktop.DBus.Properties"
 EV_OBJ, EV_WIN, EV_FOCUS = I + "Event.Object", I + "Event.Window", I + "Event.Focus"
 
@@ -52,7 +53,8 @@ ROLE_BY_NAME = {"application": R_APP, "frame": R_FRAME, "window": 69, "dialog": 
                 "button": R_BUTTON, "entry": R_ENTRY, "text": R_TEXT, "check box": R_CHECK,
                 "list": 31, "list item": R_LIST_ITEM, "status bar": 54, "menu": 33,
                 "menu item": 35, "static": 116, "paragraph": 73, "heading": 83, "section": 85,
-                "terminal": R_TERMINAL}
+                "terminal": R_TERMINAL, "notification": 101, "info bar": 102, "level bar": 103,
+                "slider": 51, "toggle button": 62, "tool tip": 64}
 ROLE_NAMES = {R_APP: "application", R_FRAME: "frame", R_PANEL: "panel", R_LABEL: "label",
               R_BUTTON: "push button", R_ENTRY: "entry", R_TERMINAL: "terminal", R_TEXT: "text",
               R_CHECK: "check box", R_LIST_ITEM: "list item"}
@@ -79,10 +81,10 @@ def path_of(nid):
 
 class Node:
     __slots__ = ("id", "parent", "children", "role", "name", "desc", "states", "text", "caret",
-                 "actions", "editable", "extents", "no_text_extents", "hang", "sel")
+                 "actions", "editable", "extents", "no_text_extents", "hang", "sel", "value")
 
     def __init__(self, nid, parent, role, name, text=None, editable=False, actions=(), states=(),
-                 extents=None, no_text_extents=False):
+                 extents=None, no_text_extents=False, value=None):
         self.id = nid
         self.parent = parent
         self.children = []
@@ -98,6 +100,7 @@ class Node:
         self.no_text_extents = no_text_extents                # GTK4 editables: F-3
         self.hang = False                                     # never answer any call (OB-4)
         self.sel = []                                         # selected ranges [(start, end)], M3
+        self.value = tuple(value) if value else None          # (current, min, max): Value interface, M4b
 
 
 class ApiError(Exception):
@@ -204,6 +207,8 @@ class App:
             r.append(IF_EDIT)
         if n.actions:
             r.append(IF_ACT)
+        if n.value is not None:
+            r.append(IF_VALUE)
         if self.review and n.children:
             r.extend((IF_COLL, IF_SEL))
         return r
@@ -825,6 +830,10 @@ def _prop_table(app, n):
         p[(IF_TEXT, "CaretOffset")] = dbus.Int32(caret)
     if n.actions:
         p[(IF_ACT, "NActions")] = dbus.Int32(len(n.actions))
+    if n.value is not None:
+        p[(IF_VALUE, "CurrentValue")] = dbus.Double(n.value[0])
+        p[(IF_VALUE, "MinimumValue")] = dbus.Double(n.value[1])
+        p[(IF_VALUE, "MaximumValue")] = dbus.Double(n.value[2])
     if n.id == 0:
         p[(IF_APP, "ToolkitName")] = dbus.String("gorca-fakeapp")
         p[(IF_APP, "Version")] = dbus.String("0")
@@ -1215,13 +1224,20 @@ def _build_below(app, parent, spec):
     text = spec.get("text")
     n = app.add(parent.id, _role_of(spec.get("role", "panel")), spec.get("name", ""), text=text,
                 editable=editable, actions=tuple(spec.get("actions", ())), states=states,
-                extents=spec.get("extents"),
+                extents=spec.get("extents"), value=spec.get("value"),
                 no_text_extents=bool(spec.get("no_text_extents", editable and app.coord == "window")))
     if spec.get("hang"):
         n.hang = True
     for child in spec.get("children", ()):
         _build_below(app, n, child)
     return n
+
+
+def _walk(app, n):
+    """`n` and its descendants, parents first."""
+    yield n
+    for c in n.children:
+        yield from _walk(app, app.nodes[c])
 
 
 def build_tree_cmd(app, cmd):
@@ -1281,6 +1297,52 @@ def handle(app, cmd):
         app.conn.flush()
         return {"t_emit_ns": app.t_focus_ns}
         return {"t_emit_ns": app.t_focus_ns}
+    elif c == "activate":
+        # M4b: a window becomes the active one, and (after `gap_ms`, GTK sends it a few
+        # milliseconds later) its focus widget takes focus. Returns both emit times.
+        w = app.node(cmd["node"])
+        w.states.add(S_ACTIVE)
+        t_act = time.monotonic_ns()
+        app.emit(path_of(w.id), EV_WIN, "Activate", "", 0, 0, dbus.Int32(0))
+        app.conn.flush()
+        res = {"t_act_ns": t_act}
+        if "focus" in cmd:
+            gap = float(cmd.get("gap_ms", 2))
+            if gap > 0:
+                time.sleep(gap / 1000.0)
+            app.t_focus_ns = 0
+            app.set_focus(app.node(cmd["focus"]))
+            res["t_focus_ns"] = app.t_focus_ns
+        return res
+    elif c == "popup":
+        # M4b: a subtree appears under `parent` (a notification banner, an OSD) and its root
+        # reports `showing`, which is all St sets when an actor is mapped.
+        parent = app.node(cmd.get("parent", 0))
+        n = _build_below(app, parent, cmd["tree"])
+        for x in _walk(app, n):
+            app.ev_cache("AddAccessible", x)
+        app.ev_children(parent, "add", len(parent.children) - 1, n)
+        t = time.monotonic_ns()
+        app.ev_state(n, S_SHOWING, True)
+        app.conn.flush()
+        return {"t_emit_ns": t, "id": n.id, "path": path_of(n.id)}
+    elif c == "set_value":
+        # M4b: a Value interface changes (the OSD level bar animates); `accessible-value` is
+        # signalled like a toolkit does.
+        n = app.node(cmd["node"])
+        n.value = (float(cmd["value"]), n.value[1], n.value[2])
+        t = time.monotonic_ns()
+        app.emit(path_of(n.id), EV_OBJ, "PropertyChange", "accessible-value", 0, 0, dbus.Int32(0))
+        app.conn.flush()
+        return {"t_emit_ns": t}
+    elif c == "announce":
+        # Object:Announcement: `d1` is the politeness (1 polite, 2 assertive), any_data the text.
+        n = app.node(cmd.get("node", 0))
+        t = time.monotonic_ns()
+        app.emit(path_of(n.id), EV_OBJ, "Announcement", "", int(cmd.get("politeness", 1)), 0,
+                 dbus.String(cmd["text"]))
+        app.conn.flush()
+        return {"t_emit_ns": t}
     elif c == "type":
         n = app.node(cmd["node"])
         app.first_emit_ns = 0

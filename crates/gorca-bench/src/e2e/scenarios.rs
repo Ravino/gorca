@@ -91,6 +91,10 @@ pub enum Scn {
     Vf,
     Vb,
     Vv,
+    /// M4b: window and dialog activation speech.
+    A1,
+    /// M4b: notifications never interrupt focus speech.
+    N1,
 }
 
 impl Scn {
@@ -149,6 +153,8 @@ impl Scn {
             Self::Vf => "VF".into(),
             Self::Vb => "VB".into(),
             Self::Vv => "VV".into(),
+            Self::A1 => "A1".into(),
+            Self::N1 => "N1".into(),
         }
     }
 
@@ -207,6 +213,8 @@ impl Scn {
             "VF" => Self::Vf,
             "VB" => Self::Vb,
             "VV" => Self::Vv,
+            "A1" => Self::A1,
+            "N1" => Self::N1,
             other => {
                 return super::webtext::IDS
                     .iter()
@@ -221,7 +229,8 @@ impl Scn {
             "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K2s", "K3",
             "K4", "K4r", "K4h", "R1", "R1s", "RS", "B0", "W1", "BR1", "BR2", "W2", "W2b", "W3",
             "FM1", "FM2", "C1", "C1h", "C2", "E1", "E2", "E2f", "S2", "SA1", "SA2", "SA3", "SA3a",
-            "PW", "C1hs", "E1s", "V1", "VT", "VH", "V2", "V3", "VP", "VR", "VF", "VB", "VV",
+            "PW", "C1hs", "E1s", "V1", "VT", "VH", "V2", "V3", "VP", "VR", "VF", "VB", "VV", "PW",
+            "C1hs", "E1s", "A1", "N1",
         ]
         .iter()
         .chain(super::webtext::IDS)
@@ -563,6 +572,8 @@ pub fn run(
         Scn::Vf => super::m6::vf(host, reader, flavor, size, seed, &mut out)?,
         Scn::Vb => super::m6::vb(host, reader, flavor, size, seed, &mut out)?,
         Scn::Vv => super::m6::vv(host, reader, flavor, size, seed, &mut out)?,
+        Scn::A1 => super::m4b::a1(host, reader, flavor, size, seed, &mut out)?,
+        Scn::N1 => super::m4b::n1(host, reader, flavor, size, seed, &mut out)?,
     }
     Ok(out)
 }

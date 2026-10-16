@@ -43,13 +43,22 @@ pub struct Segment {
 /// Role names as in the WIT `role` enum. The numeric mapping is part of the generated bindings.
 pub type Role = u8;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+/// A numeric value as the application reports it (WIT `range`).
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct Range {
+    pub current: f64,
+    pub min: f64,
+    pub max: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Node {
     pub key: NodeKey,
     pub role: Role,
     pub states: u64,
     pub name: Option<String>,
     pub description: Option<String>,
+    pub range: Option<Range>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

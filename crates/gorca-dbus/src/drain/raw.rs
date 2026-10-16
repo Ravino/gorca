@@ -20,7 +20,7 @@ use smallvec::SmallVec;
 use super::wire::{self, ERROR, Frame, MAX_MESSAGE_BYTES, METHOD_RETURN, SIGNAL};
 use super::{
     AppRoute, CACHE_IFACE, DrainConfig, DrainEnd, DrainError, DrainHandle, DrainShared, MAX_ROUTES,
-    RouteDecision, Router, SignalView, map_cache_signal, map_signal, needs_path,
+    RouteDecision, Router, SignalView, map_cache_signal, map_signal, needs_hint_path, needs_path,
 };
 use crate::{set_recv_buffer, socket_backlog};
 
@@ -599,6 +599,10 @@ impl<'a> Conn<'a> {
         for ev in self.mapped.drain(..) {
             if let Some(node) = needs_path(&ev) {
                 self.router.focus_seen(route.app, node, path);
+            } else if route.hints
+                && let Some(node) = needs_hint_path(&ev)
+            {
+                self.router.hint_seen(route.app, node, path);
             }
             route.tx.push(ev);
             self.batch.pushed += 1;
@@ -873,6 +877,7 @@ mod tests {
                     serial: 1,
                 },
                 tx,
+                hints: false,
             },
         });
         let mut cfg = DrainConfig::new(format!("unix:path={}", path.display()));
@@ -954,6 +959,7 @@ mod tests {
                     serial: 1,
                 },
                 tx,
+                hints: false,
             },
         });
         let mut cfg = DrainConfig::new(format!("unix:path={}", path.display()));
@@ -1040,6 +1046,7 @@ mod tests {
                     serial: 1,
                 },
                 tx,
+                hints: false,
             },
         });
         let mut cfg = DrainConfig::new(format!("unix:path={}", path.display()));
@@ -1076,6 +1083,7 @@ mod tests {
                     serial: 1,
                 },
                 tx,
+                hints: false,
             },
         });
         let mut cfg = DrainConfig::new(format!("unix:path={}", path.display()));
@@ -1134,10 +1142,12 @@ mod tests {
             first: AppRoute {
                 app: app(1),
                 tx: tx1,
+                hints: false,
             },
             second: AppRoute {
                 app: app(2),
                 tx: tx2,
+                hints: false,
             },
         });
         let mut cfg = DrainConfig::new(format!("unix:path={}", path.display()));
