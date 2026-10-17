@@ -102,6 +102,9 @@ pub struct ModeKeys {
     pub tab_next: Vec<Chord>,
     /// The chord(s) of `browse.tab_prev`, same rule for a target before the cursor.
     pub tab_prev: Vec<Chord>,
+    /// The chord(s) of `browse.copy`: grabbed (a subset of `quick_nav`) only while a virtual
+    /// selection exists, otherwise Ctrl+C reaches the page.
+    pub copy: Vec<Chord>,
     /// The chord(s) that leave pass-through.
     pub pass_through_exit: Vec<Chord>,
     /// The chord(s) bound to `browse.escape`: grabbed only in auto focus mode (modes.md 2).
@@ -344,6 +347,7 @@ mod tests {
             letters: Vec::new(),
             tab_next: Vec::new(),
             tab_prev: Vec::new(),
+            copy: Vec::new(),
         }
     }
 

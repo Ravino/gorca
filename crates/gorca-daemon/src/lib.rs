@@ -455,6 +455,9 @@ async fn run_inner(
                 speech_for_keys.clone(),
             );
         }
+        if let Some(requests) = core.take_clipboard_requests() {
+            wire::wire_clipboard(&mut tasks, &opts, &shutdown, requests);
+        }
         let (grabs, grab_control) = (core.grab_requests(), core.grab_sender());
         tasks.placed_on(lanes.input(), |t| {
             wire::wire_input(

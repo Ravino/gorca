@@ -14,12 +14,14 @@ gorca-input-api = { workspace = true }
 zbus = { workspace = true }
 gorca-dbus = { workspace = true }
 futures-lite = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util"] }
 tracing = { workspace = true }
 thiserror = { workspace = true }
+serde = { workspace = true }
 
 [lints]
 workspace = true
 
 [dev-dependencies]
+tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }

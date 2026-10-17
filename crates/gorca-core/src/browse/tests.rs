@@ -1967,7 +1967,18 @@ fn acts(fx: &ReaderEffects) -> Vec<(DocAction, DocNodeId)> {
         .iter()
         .filter_map(|w| match w {
             WebEffect::Act { node, act, .. } => Some((act.clone(), *node)),
-            WebEffect::Ensure { .. } | WebEffect::Activity { .. } => None,
+            WebEffect::Ensure { .. } | WebEffect::Activity { .. } | WebEffect::Copy(_) => None,
+        })
+        .collect()
+}
+
+/// The texts browse mode asked the daemon to put on the clipboard.
+fn copies(fx: &ReaderEffects) -> Vec<String> {
+    effects_web(fx)
+        .iter()
+        .filter_map(|w| match w {
+            WebEffect::Copy(t) => Some(t.0.clone()),
+            WebEffect::Ensure { .. } | WebEffect::Activity { .. } | WebEffect::Act { .. } => None,
         })
         .collect()
 }
@@ -2112,6 +2123,75 @@ fn virtual_selection_never_touches_the_page_unless_native_mode_is_on() {
     );
     let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
     assert_eq!(spoken(&fx), ["native selection off"]);
+}
+
+fn ctrl_c() -> gorca_input_api::Chord {
+    gorca_input_api::Chord {
+        keysym: 0x63,
+        modifiers: Modifiers::CONTROL,
+    }
+}
+
+/// NVDA parity: Ctrl+C in browse mode copies the virtual selection and says so. The chord is
+/// grabbed only while a selection exists, so the page keeps its own Ctrl+C otherwise.
+#[test]
+fn ctrl_c_copies_the_virtual_selection_and_is_grabbed_only_while_one_exists() {
+    let mut r = tab_rig();
+    r.reader.keys.quick_nav.push(ctrl_c());
+    r.reader.keys.copy = vec![ctrl_c()];
+    r.focus(1002);
+    let fx = settle(&mut r);
+    if let Some(g) = last_grabs(&fx) {
+        assert!(
+            !g.contains(0x63, Modifiers::CONTROL),
+            "no selection: no grab"
+        );
+    }
+    // Nothing selected: the command says so and copies nothing.
+    let fx = r.key(CoreCmd::BrowseCopy);
+    assert!(copies(&fx).is_empty());
+    assert_eq!(spoken(&fx), ["nothing selected"]);
+    // Select, let the cursor settle: Ctrl+C is ours now.
+    for _ in 0..3 {
+        r.key(CoreCmd::BrowseSelectNextChar);
+    }
+    let fx = settle(&mut r);
+    let g = last_grabs(&fx).expect("the grab set follows the selection");
+    assert!(g.contains(0x63, Modifiers::CONTROL));
+    let fx = r.key(CoreCmd::BrowseCopy);
+    let got = copies(&fx);
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert!(!got[0].is_empty());
+    assert_eq!(spoken(&fx), ["copied to clipboard"]);
+    // A plain move drops the selection and gives Ctrl+C back to the page.
+    r.key(CoreCmd::BrowseCursorNextLine);
+    let fx = settle(&mut r);
+    let g = last_grabs(&fx).expect("the grab set follows the selection");
+    assert!(!g.contains(0x63, Modifiers::CONTROL));
+}
+
+/// Select all copies the whole document text, last character included.
+#[test]
+fn select_all_then_copy_takes_the_whole_text() {
+    let mut r = tab_rig();
+    r.reader.keys.copy = vec![ctrl_c()];
+    r.focus(1002);
+    settle(&mut r);
+    r.key(CoreCmd::BrowseSelectAll);
+    let fx = r.key(CoreCmd::BrowseCopy);
+    let got = copies(&fx);
+    assert_eq!(got.len(), 1);
+    let doc_text = r
+        .reader
+        .web
+        .as_ref()
+        .and_then(|b| {
+            b.docs
+                .get(DocId(1))
+                .map(|h| h.read.with(|d| d.text_in(0, d.text_len())))
+        })
+        .expect("document text");
+    assert_eq!(got[0], doc_text);
 }
 
 // ---- review round 1: M-4 live speech expires and spends the owner's budget ---------------------

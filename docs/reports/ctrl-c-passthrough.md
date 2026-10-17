@@ -64,3 +64,38 @@ levels), and that Control_L/Control_R are never gorca modifiers.
 `tests/shell/run_shell.sh` world, `tests/web/m7/rd.py` RemoteDesktop key injection (evdev 29+30,
 29+46), release gorca binary `<repo>/target/release/gorca --impersonate-orca` in the private world
 only.
+
+## Update: browse-mode copy implemented (user clarified: fails only in Firefox)
+
+The user selects with the virtual cursor in Firefox, so the cause is the browse-mode gap above.
+Fix, NVDA parity (`script_copyToClipboard`): Ctrl+C in browse mode copies the virtual selection to the
+system clipboard and says "copied to clipboard".
+
+* New command `browse.copy`, bound to `ctrl+c` in the browse table of both NVDA presets (Orca presets
+  have no browse selection). The chord is grabbed **only while a virtual selection exists**
+  (`ModeKeys.copy`, `copy_grabs`, `current_grabs`, synced when the cursor settles like the Tab grab);
+  without a selection Ctrl+C reaches the page untouched. Focus mode, review mode and every other
+  application never grab it (regression test above, with `browse.copy` as the single exception).
+* `ReaderEffect::Web(WebEffect::Copy(ClipText))` -> bounded channel (`Core::take_clipboard_requests`)
+  -> daemon task `wire_clipboard` -> `gorca_input_mutter::clipboard::run`. `ClipText` hides its text in
+  `Debug`; copied text is never logged. The Reader never waits: speech confirms at once.
+* Clipboard backend: a Mutter `org.gnome.Mutter.RemoteDesktop` session with `EnableClipboard`
+  (mime types text/plain;charset=utf-8, text/plain, UTF8_STRING) then `Start`; Mutter emits
+  `SelectionTransfer(mime, serial)` on paste, we answer `SelectionWrite(serial)` -> pipe fd ->
+  `SelectionWriteDone`. No portal prompt (same as key injection). The session lives only while our text
+  is the clipboard: a newer copy replaces it, `SelectionOwnerChanged(session-is-owner=false)` or
+  `Closed` ends it. Every D-Bus call and the pipe write have a 2 s deadline.
+  Interface contract: `refs/mutter/data/dbus-interfaces/org.gnome.Mutter.RemoteDesktop.xml`.
+* select-all now stores a half-open range `(0, len)` so the last character is copied.
+
+Verified on real Mutter 48.7 (private shell, `examples/clip_probe` + GTK4 entry + RemoteDesktop Ctrl+V):
+pasted text equals the copied text, repeated pastes served by the same session
+(`pastedrive.sh` in the scratchpad `cc/`). Occasional lost injected Ctrl presses in that rig are the
+rig's, not the owner's (a re-run pastes). Not run: a Firefox end-to-end (m8 rig is heavy and the host
+was loaded); `RD.copy.say` in the m8 corpus still reads the clipboard with `gorca+C`, which is not
+implemented, so its xfail stands. Unit tests: `browse::tests::ctrl_c_copies_the_virtual_selection_and_is_grabbed_only_while_one_exists`,
+`select_all_then_copy_takes_the_whole_text`.
+
+Open: the session is created at copy time; if Mutter's RemoteDesktop service is denied on the user's
+setup the copy logs a warning (`clipboard: copy failed`) but still says "copied". Failure feedback to
+the Reader is a follow-up.

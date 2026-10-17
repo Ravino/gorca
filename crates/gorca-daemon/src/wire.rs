@@ -94,6 +94,25 @@ pub(crate) fn wire_config(
     tasks.spawn("config", task.run(shutdown.clone()));
 }
 
+/// The system clipboard owner for browse-mode copy: a Mutter RemoteDesktop session that holds
+/// the selection while our text is the clipboard. Without a session bus the requests are
+/// drained and dropped with one log line, never queued without bound.
+pub(crate) fn wire_clipboard(
+    tasks: &mut TaskSet,
+    opts: &Options,
+    shutdown: &CancellationToken,
+    requests: mpsc::Receiver<String>,
+) {
+    let Some(address) = opts.session_address.clone() else {
+        tracing::info!("clipboard: no session bus address; copy from browse mode stays off");
+        return;
+    };
+    let shutdown = shutdown.clone();
+    tasks.spawn("clipboard", async move {
+        gorca_input_mutter::clipboard::run(address, requests, shutdown).await;
+    });
+}
+
 /// Keyboard monitoring: the Mutter key source, the input lane's pump into the Reader, and the
 /// notices to the user. Stays off unless the daemon impersonates Orca (ID-1) and knows the
 /// session bus.

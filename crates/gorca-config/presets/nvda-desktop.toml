@@ -181,6 +181,7 @@
 "shift+prior" = "browse.select_page_up"
 "shift+next" = "browse.select_page_down"
 "ctrl+a" = "browse.select_all"
+"ctrl+c" = "browse.copy"
 "tab" = "browse.tab_next"
 "shift+tab" = "browse.tab_prev"
 "escape" = "browse.escape"

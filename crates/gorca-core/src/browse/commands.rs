@@ -43,6 +43,21 @@ pub enum WebEffect {
         node: DocNodeId,
         act: DocAction,
     },
+    /// Put this text on the system clipboard (browse-mode copy, NVDA parity). The daemon owns
+    /// the clipboard; the Reader never waits for it.
+    Copy(ClipText),
+}
+
+/// Text bound for the clipboard. Its `Debug` hides the text: copied text is never logged.
+#[derive(Clone, Eq, PartialEq)]
+pub struct ClipText(pub String);
+
+impl std::fmt::Debug for ClipText {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClipText")
+            .field("bytes", &self.0.len())
+            .finish()
+    }
 }
 
 /// How long after the cursor's node vanished a re-render may still move the cursor back.
@@ -701,6 +716,16 @@ impl Reader {
             }
             if !prev {
                 for c in &self.keys.tab_prev {
+                    set.chords.remove(c);
+                }
+            }
+            // browse.copy: Ctrl+C is ours only while there is a virtual selection to copy.
+            let has_sel = self.web.as_ref().is_some_and(|w| w.sel.is_some());
+            if let Some(w) = self.web.as_ref() {
+                w.copy_grab.set(has_sel);
+            }
+            if !has_sel {
+                for c in &self.keys.copy {
                     set.chords.remove(c);
                 }
             }
@@ -2018,6 +2043,8 @@ impl Reader {
             self.web_tab(Dir::Prev, fx);
         } else if c == CoreCmd::BrowseNativeSelectionToggle {
             self.web_native_selection_toggle(fx);
+        } else if c == CoreCmd::BrowseCopy {
+            self.web_copy(fx);
         } else if c == CoreCmd::BrowseSingleLetterToggle {
             self.web_single_letter_toggle(fx);
         } else if matches!(
@@ -2293,7 +2320,8 @@ impl Reader {
         };
         self.web_set_cursor(doc, cu, last, now);
         if let Some(b) = self.web.as_mut() {
-            b.sel = Some((0, last));
+            // Half open like every other range: the last character is inside it.
+            b.sel = Some((0, last.saturating_add(1)));
         }
         self.web_speak(
             &[
@@ -2418,16 +2446,45 @@ impl Reader {
         })
     }
 
-    /// Offer Tab to the key grab only in the directions that have a target; one grab-set update
-    /// when that changes (the cursor settled, 150 ms after the last move).
+    /// Offer Tab to the key grab only in the directions that have a target, and Ctrl+C only
+    /// while a virtual selection exists; one grab-set update when either changes (the cursor
+    /// settled, 150 ms after the last move).
     fn web_sync_tab_grabs(&mut self, fx: &mut ReaderEffects) {
         if !matches!(self.mode, Mode::Browse { .. }) {
             return;
         }
         let now_avail = self.web_tab_targets();
         let Some(b) = self.web.as_ref() else { return };
-        if b.tab_grab.get() != now_avail {
+        if b.tab_grab.get() != now_avail || b.copy_grab.get() != b.sel.is_some() {
             fx.push(ReaderEffect::SetGrabSet(self.current_grabs()));
+        }
+    }
+
+    /// Ctrl+C in browse mode (NVDA `script_copyToClipboard`): the virtual selection is not the
+    /// page's, so the page's own copy would find nothing. The text goes to the clipboard through
+    /// the daemon; the confirmation is spoken at once, the transfer never blocks the Reader.
+    fn web_copy(&mut self, fx: &mut ReaderEffects) {
+        /// Longest copy, in characters: a whole huge page is bounded, not refused.
+        const COPY_CAP: u32 = 4_000_000;
+        let Some((doc, _, _)) = self.browse_ctx(fx) else {
+            return;
+        };
+        let Some(b) = self.web.as_ref() else { return };
+        let range = b.sel.map(|(a, e)| (a.min(e), a.max(e)));
+        let text = range.and_then(|(lo, hi)| {
+            let h = b.docs.get(doc)?;
+            let text = h.read.with(|d| {
+                let hi = hi.min(d.text_len()).min(lo.saturating_add(COPY_CAP));
+                d.text_in(lo, hi)
+            });
+            (!text.is_empty()).then_some(text)
+        });
+        match text {
+            Some(text) => {
+                fx.push(ReaderEffect::Web(WebEffect::Copy(ClipText(text))));
+                self.say(t(M::WebCopied), fx);
+            }
+            None => self.say(t(M::WebCopyNoSelection), fx),
         }
     }
 

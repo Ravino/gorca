@@ -558,6 +558,9 @@ pub struct BrowseState {
     /// only while the mirror has a focusable target in that direction. Written by
     /// `current_grabs`, the one place every pushed set is built, so it cannot go stale (R-2).
     pub tab_grab: std::cell::Cell<(bool, bool)>,
+    /// Whether the last built grab set held Ctrl+C (`browse.copy`): only while `sel` is set, so
+    /// the page keeps its own copy otherwise.
+    pub copy_grab: std::cell::Cell<bool>,
     /// The web node that has system focus, and whether the browse cursor was last put there by a
     /// focus change (NVDA `_lastCaretMoveWasFocus`, #5227). While the cursor is on or inside the
     /// focused node, or came from a focus change, Tab belongs to the browser (R-5).
@@ -609,6 +612,7 @@ impl BrowseState {
             click_target: None,
             sel: None,
             tab_grab: std::cell::Cell::new((true, true)),
+            copy_grab: std::cell::Cell::new(true),
             focus_node: None,
             cursor_from: CursorFrom::Own,
             native_selection: false,

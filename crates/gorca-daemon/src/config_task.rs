@@ -101,6 +101,7 @@ pub fn build(text: Option<&str>, facts: &PlatformFacts, cause: LoadCause) -> Bui
     let web_escape = gorca_core::escape_grabs(&c.keymap, keysyms);
     let letters = gorca_core::letter_grabs(&c.keymap, keysyms);
     let (tab_next, tab_prev) = gorca_core::tab_grabs(&c.keymap, keysyms);
+    let copy = gorca_core::copy_grabs(&c.keymap, keysyms);
     let dropped =
         gorca_core::grab_collisions(&c.keymap, gorca_input_api::ModeKind::Browse, keysyms);
     if !dropped.is_empty() {
@@ -125,6 +126,7 @@ pub fn build(text: Option<&str>, facts: &PlatformFacts, cause: LoadCause) -> Bui
             letters,
             tab_next,
             tab_prev,
+            copy,
             ..ModeKeys::default()
         },
         caps_lock_dropped: c.caps_lock_dropped,

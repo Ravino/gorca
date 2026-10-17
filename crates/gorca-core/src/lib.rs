@@ -51,7 +51,7 @@ mod text;
 pub use app_actor::{
     AppActor, AppRoute, FILL_QUEUE, FillMsg, ReaderLinks, TextLink, WebLink, health_view,
 };
-pub use browse::commands::WebEffect;
+pub use browse::commands::{ClipText, WebEffect};
 pub use browse::{
     BrowseCounters, BrowseSettings, FocusCause, ModeWord, Scope, WebEv, WebFx, WebMode,
 };
@@ -61,8 +61,8 @@ pub use commands::{
     Availability, CapitalLevels, CmdSpec, CommandTable, Compiled, ConfigRequest, ContextMask,
     ControlMsg, CoreCmd, InputNotice, LoadCause, LoadedSettings, LocalTime, Milestone,
     PASS_TIMEOUT, PlatformFacts, SaveResult, SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels,
-    WallClock, browse_grabs, chord_grabs, command_id, compile, compile_with, escape_grabs,
-    gorca_modifiers, grab_collisions, lane_settings, letter_grabs, tab_grabs,
+    WallClock, browse_grabs, chord_grabs, command_id, compile, compile_with, copy_grabs,
+    escape_grabs, gorca_modifiers, grab_collisions, lane_settings, letter_grabs, tab_grabs,
 };
 pub use directory::{MirrorDirectory, Owner};
 pub use doc_actor::{
