@@ -5,3 +5,9 @@
    exit 1
 == 12:26:12 seq-cr end head 82329a7e dirty=0 load 13.63 14.31 13.54 7/3434 1861996 avail_GiB 12
 == 12:26:12 seq-ff start head 82329a7e dirty=0 load 13.63 14.31 13.54 7/3434 1862021 avail_GiB 12
+   exit 1
+== 12:43:53 seq-ff end head 568474e0 dirty=0 load 11.90 14.53 14.44 1/2656 1976617 avail_GiB 14
+== 12:43:53 strict start head 568474e0 dirty=0 load 11.90 14.53 14.44 1/2656 1976642 avail_GiB 14
+   exit 0
+== 12:56:52 strict end head 568474e0 dirty=0 load 5.61 8.43 11.58 1/2173 1997238 avail_GiB 15
+== 12:56:52 cr-m7 start head 568474e0 dirty=0 load 5.61 8.43 11.58 7/2173 1997263 avail_GiB 15

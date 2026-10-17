@@ -1,0 +1,52 @@
+== host: load 5.61 8.43 11.58 1/2173 1997279 ==
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.20s
+private compositor: /tmp/gorca-m7c.dIO9by/x/gorca-m7-1997267
+== reader <repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca built from 568474e0, tree at 568474e0
+== e2e m9r4-cr-m7: reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca backend=voicego repeats=3 load=5.64 8.39 11.55 4/2339 1997574
+-- round 1/3 B0 (load 5.64 8.39 11.55 2/2339 1997574)
+kill: (-1997632): No such process
+-- round 1/3 W1 (load 5.61 8.29 11.48 2/2365 1997969)
+kill: (-1998027): No such process
+-- round 1/3 BR1 (load 4.47 7.52 11.02 1/2313 1998553)
+kill: (-1998610): No such process
+-- round 1/3 BR2 (load 5.81 6.87 10.17 2/2307 1999722)
+kill: (-1999780): No such process
+-- round 1/3 W2 (load 6.37 6.96 10.17 1/2305 2000013)
+kill: (-2000070): No such process
+-- round 1/3 W2b (load 6.37 6.96 10.17 1/2306 2000262)
+kill: (-2000319): No such process
+kill: (-2000623): No such process
+kill: (-2000924): No such process
+kill: (-2001213): No such process
+kill: (-2001612): No such process
+kill: (-2001907): No such process
+-- round 1/3 W3 (load 7.43 7.14 10.06 4/2342 2002145)
+kill: (-2002203): No such process
+-- round 1/3 FM1 (load 6.97 7.05 10.00 2/2321 2002453)
+kill: (-2002511): No such process
+-- round 1/3 FM2 (load 7.63 7.22 9.96 1/2324 2003000)
+kill: (-2003057): No such process
+-- round 2/3 W1 (load 7.99 7.35 9.89 1/2317 2003549)
+kill: (-2003608): No such process
+-- round 2/3 BR1 (load 5.57 6.75 9.52 3/2334 2004205)
+kill: (-2004262): No such process
+-- round 2/3 BR2 (load 5.94 6.23 8.83 1/2308 2005370)
+kill: (-2005427): No such process
+-- round 2/3 W2 (load 5.58 6.14 8.78 1/2294 2005653)
+kill: (-2005710): No such process
+-- round 2/3 W2b (load 5.58 6.14 8.78 1/2295 2005915)
+kill: (-2005972): No such process
+kill: (-2006272): No such process
+kill: (-2006646): No such process
+kill: (-2006927): No such process
+kill: (-2007215): No such process
+kill: (-2007510): No such process
+-- round 2/3 W3 (load 6.50 6.22 8.67 1/2295 2007746)
+kill: (-2007803): No such process
+-- round 2/3 FM1 (load 5.99 6.12 8.60 1/2293 2008051)
+kill: (-2008108): No such process
+-- round 2/3 FM2 (load 5.44 5.99 8.49 2/2601 2009199)
+kill: (-2009256): No such process
+-- round 2/3 B0 (load 7.43 6.43 8.53 3/2598 2010011)
+kill: (-2010068): No such process
+-- round 3/3 BR1 (load 7.64 6.52 8.54 1/2597 2010305)

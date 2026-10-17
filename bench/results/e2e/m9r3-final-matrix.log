@@ -15,3 +15,5 @@
    exit 1
 == 12:05:02 m9r3-final-ff-typing end head 82329a7e dirty=4 load 12.73 14.22 12.03 2/2523 1739082 mem_avail_GiB 15.5
 == 12:05:02 m9r3-final-ff-m8 start head 82329a7e dirty=4 load 12.73 14.22 12.03 1/2523 1739105 mem_avail_GiB 15.5
+   exit 1
+== 12:32:59 m9r3-final-ff-m8 end head 568474e0 dirty=6 load 11.50 12.88 13.22 3/2963 1908096 mem_avail_GiB 14.9
