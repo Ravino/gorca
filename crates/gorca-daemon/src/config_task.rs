@@ -137,6 +137,14 @@ pub fn build(text: Option<&str>, facts: &PlatformFacts, cause: LoadCause) -> Bui
     }
 }
 
+/// An empty `speech.language` becomes the language of the environment, so the Reader picks
+/// the symbol table (names of punctuation) of the language the voice speaks.
+fn fill_language(b: &mut Built, env_language: &str) {
+    if b.loaded.settings.speech.language.trim().is_empty() && !env_language.is_empty() {
+        env_language.clone_into(&mut Arc::make_mut(&mut b.loaded).settings.speech.language);
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 enum ReadError {
     #[error("the settings file could not be read: {0}")]
@@ -358,6 +366,7 @@ impl ConfigTask {
             return;
         }
         let mut b = build(text.as_deref(), &st.facts, cause);
+        fill_language(&mut b, &self.env_language);
         let startup = cause == LoadCause::Startup;
         if (read_err.is_some() || !b.file_ok)
             && !startup
@@ -439,7 +448,8 @@ impl ConfigTask {
             return;
         }
         st.last_hash = fnv1a(new_text.as_bytes());
-        let b = build(Some(&new_text), &st.facts, LoadCause::Saved);
+        let mut b = build(Some(&new_text), &st.facts, LoadCause::Saved);
+        fill_language(&mut b, &self.env_language);
         if b.file_ok {
             st.last_good = Some(Arc::clone(&b.loaded));
         }
@@ -605,6 +615,20 @@ mod tests {
 
     fn facts() -> PlatformFacts {
         PlatformFacts::default()
+    }
+
+    #[test]
+    fn an_empty_language_is_filled_from_the_environment() {
+        let mut b = build(None, &facts(), LoadCause::Startup);
+        fill_language(&mut b, "ru");
+        assert_eq!(b.loaded.settings.speech.language, "ru");
+        let mut b = build(
+            Some("[speech]\nlanguage=\"de\"\n"),
+            &facts(),
+            LoadCause::Startup,
+        );
+        fill_language(&mut b, "ru");
+        assert_eq!(b.loaded.settings.speech.language, "de");
     }
 
     #[test]

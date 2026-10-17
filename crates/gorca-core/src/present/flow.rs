@@ -128,6 +128,7 @@ fn apply_web_extra(
     u: &mut gorca_model::Utterance,
     word: Option<&'static str>,
     tail: &[crate::browse::present::Item],
+    o: gorca_speech::VerbalizeOpts,
 ) {
     use crate::browse::present::Item;
     let (lead, rest): (Vec<Item>, Vec<Item>) = tail
@@ -141,11 +142,12 @@ fn apply_web_extra(
             kind: gorca_model::SegmentKind::Text,
         });
     }
-    front.extend(crate::browse::present::segments(&lead));
+    front.extend(crate::browse::present::segments(&lead, o));
     for (at, seg) in front.into_iter().enumerate() {
         u.segments.insert(at, seg);
     }
-    u.segments.extend(crate::browse::present::segments(&rest));
+    u.segments
+        .extend(crate::browse::present::segments(&rest, o));
 }
 
 impl Reader {
@@ -584,7 +586,7 @@ impl Reader {
                 self.web_learn_focus(snap, fx);
                 let word = self.web_take_word();
                 let tail = self.web_take_tail();
-                apply_web_extra(&mut u, word, &tail);
+                apply_web_extra(&mut u, word, &tail, self.verbalize_opts());
                 self.web_extra = (word.is_some() || !tail.is_empty()).then_some((id, word, tail));
                 // The context asserts `selected`, which the spoken text omits, so the log must
                 // not carry a cached snapshot from before the event.
@@ -945,7 +947,7 @@ impl Reader {
                     u.refines = Some(p.utt);
                     if let Some((_, word, tail)) = self.web_extra.as_ref().filter(|e| e.0 == p.utt)
                     {
-                        apply_web_extra(&mut u, *word, tail);
+                        apply_web_extra(&mut u, *word, tail, self.verbalize_opts());
                     }
                     self.counters.refined += 1;
                     (u, PresentSource::Refine)

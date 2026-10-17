@@ -68,7 +68,7 @@ pub fn key_echo(text: &str, id: UttId, epoch: Epoch) -> Utterance {
 /// A plain spoken message (for example "application not responding").
 pub fn message(text: &str, id: UttId, epoch: Epoch) -> Utterance {
     let mut segments = SmallVec::new();
-    segments.push(seg(text, SegmentKind::Text));
+    segments.push(seg(text, SegmentKind::Said));
     Utterance {
         id,
         segments,
