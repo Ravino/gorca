@@ -95,3 +95,57 @@ fn a_failed_baseline_read_is_retried_before_the_first_command_output() {
         typed(KeyKind::Enter),
     ]);
 }
+
+/// ADR-0018: output that scrolls the terminal screen while the user reviews a line by word. The
+/// cursor stays on the line and goes on from its offset (it used to start again at the first
+/// word of the row).
+#[test]
+fn review_by_word_goes_on_while_the_terminal_scrolls() {
+    let mut steps = vec![focus(TERM)];
+    for k in [
+        KeyKind::Letter('l'),
+        KeyKind::Letter('s'),
+        KeyKind::Space,
+        KeyKind::Punct('-'),
+        KeyKind::Letter('l'),
+        KeyKind::Enter,
+    ] {
+        steps.push(typed(k));
+    }
+    steps.extend([
+        st(Op::Cmd(CoreCmd::ReviewToggle, 1)),
+        st(Op::Cmd(CoreCmd::ReviewPrevLine, 1)),
+        st(Op::Cmd(CoreCmd::ReviewPrevLine, 1)),
+        st(Op::Cmd(CoreCmd::ReviewNextWord, 1)),
+        st(Op::TermScroll),
+        st(Op::Cmd(CoreCmd::ReviewNextWord, 1)),
+        st(Op::TermScroll),
+        st(Op::Cmd(CoreCmd::ReviewNextWord, 1)),
+        st(Op::LoseEvents(true)),
+        st(Op::Cmd(CoreCmd::ReviewNextChar, 1)),
+        st(Op::Cmd(CoreCmd::ReviewNextWord, 1)),
+    ]);
+    expect_clean(&steps);
+}
+
+/// The same with a line that stays on the screen while it shifts up: the offset is carried.
+#[test]
+fn review_by_character_goes_on_while_the_line_shifts_up() {
+    let mut steps = vec![focus(TERM)];
+    for _ in 0..3 {
+        steps.push(typed(KeyKind::Enter));
+    }
+    steps.push(st(Op::Cmd(CoreCmd::ReviewToggle, 1)));
+    for _ in 0..3 {
+        steps.push(st(Op::Cmd(CoreCmd::ReviewPrevLine, 1)));
+    }
+    steps.extend([
+        st(Op::Cmd(CoreCmd::ReviewNextChar, 1)),
+        st(Op::TermScroll),
+        st(Op::Cmd(CoreCmd::ReviewNextChar, 1)),
+        st(Op::TermScroll),
+        st(Op::Cmd(CoreCmd::ReviewNextChar, 1)),
+        st(Op::Cmd(CoreCmd::ReviewNextChar, 1)),
+    ]);
+    expect_clean(&steps);
+}

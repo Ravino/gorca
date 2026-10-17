@@ -146,7 +146,10 @@ fn anchor_row(a: &ZoneAnchor) -> usize {
 /// rows of `new`, with the number of rows it explains. Ties go to the smallest |d|, then to the
 /// scroll direction output makes (up, d < 0).
 fn best_shift(old: &[u64], new: &[u64], blank: u64) -> (i64, usize) {
-    let (o, n) = (&old[..old.len().min(SHIFT_ROWS)], &new[..new.len().min(SHIFT_ROWS)]);
+    let (o, n) = (
+        &old[..old.len().min(SHIFT_ROWS)],
+        &new[..new.len().min(SHIFT_ROWS)],
+    );
     let mut best = (0i64, 0usize);
     let span = i64::try_from(o.len().max(n.len())).unwrap_or(0);
     for k in 0..=span {
@@ -192,8 +195,18 @@ pub fn carry_terminal(
     let row = anchor_row(a);
     let new_h: Vec<u64> = new.lines.iter().map(|l| hash_line(&l.text)).collect();
     let (d, score) = old.map_or((0, 0), |o| {
+        let blank = hash_line("");
+        // The caret rows are left out of the estimate: a prompt stays where it is while output
+        // scrolls above it, so it would vote for "no scroll".
+        let mask = |m: &LineModel, h: &[u64]| -> Vec<u64> {
+            let mut v = h.to_vec();
+            if let Some(f) = m.focus_line.and_then(|f| v.get_mut(f as usize)) {
+                *f = blank;
+            }
+            v
+        };
         let old_h: Vec<u64> = o.lines.iter().map(|l| hash_line(&l.text)).collect();
-        best_shift(&old_h, &new_h, hash_line(""))
+        best_shift(&mask(o, &old_h), &mask(new, &new_h), blank)
     });
     let target = i64::try_from(row).unwrap_or(0) + d;
     let at = |j: usize| {
@@ -610,7 +623,11 @@ mod tests {
         let new = screen("x1\nprogress 100% done\nx3");
         assert_eq!(at(carried(&old, &new, 1, 5)), (1, 5));
         let new = screen("x1\nok\nx3");
-        assert_eq!(at(carried(&old, &new, 1, 9)), (1, 1), "clamped to the new length");
+        assert_eq!(
+            at(carried(&old, &new, 1, 9)),
+            (1, 1),
+            "clamped to the new length"
+        );
     }
 
     #[test]

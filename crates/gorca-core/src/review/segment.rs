@@ -183,7 +183,10 @@ mod tests {
         );
         let t = "  a/b";
         assert_eq!(
-            u.units(t, Unit::Word).iter().map(|r| slice(t, r)).collect::<Vec<_>>(),
+            u.units(t, Unit::Word)
+                .iter()
+                .map(|r| slice(t, r))
+                .collect::<Vec<_>>(),
             ["a", "/", "b"].map(String::from),
             "leading spaces are not a word to stop on"
         );

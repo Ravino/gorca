@@ -16,15 +16,15 @@ use smallvec::SmallVec;
 
 use super::build::{NavFetchError, ProbeItem, RrVerdict};
 use super::cursor::{BuildId, FlatPos, ModelId, NavReqId, ReviewCursor, ReviewFrom, ReviewKind};
-use super::cursor::{ReviewOrigin, ReviewPos};
+use super::cursor::{ReviewOrigin, ReviewPos, hash_line};
 use super::flat::{
     Carried, FlatMove, anchor_at_node, carry_terminal, flat_step, line_text, nearest_line, pos_at,
     reanchor,
 };
 use super::model::{Completeness, LineModel, LineSource};
-use super::terminal::held_model;
 use super::objnav::{NavMove, NavOp, StepResult, step, step_degraded};
 use super::segment::{Dir, SimpleUnits, TermUnits, TextUnits, Unit, slice};
+use super::terminal::held_model;
 use super::validity::{Validity, validity};
 use super::{BuildRequest, OpState, ReviewMsg, RrCheck};
 use crate::SpeechIntent;
@@ -1361,7 +1361,18 @@ impl Reader {
     ) {
         let held = self.review.held.clone().filter(|h| h.id == p.model);
         let old = before.filter(|o| o.id == p.model);
-        let moved = match (&held, carry_terminal(old, model, &p.anchor, p.offset)) {
+        // A held line comes back only if its text is on the screen again.
+        let back = held.is_none()
+            || model
+                .lines
+                .iter()
+                .any(|l| hash_line(&l.text) == p.anchor.line_hash);
+        let carried = if back {
+            carry_terminal(old, model, &p.anchor, p.offset)
+        } else {
+            Some(Carried::Gone)
+        };
+        let moved = match (&held, carried) {
             (_, None) => Some(None),
             (_, Some(Carried::At(np))) => {
                 self.review.held = None;
@@ -1390,6 +1401,33 @@ impl Reader {
                 pos: ReviewPos::Screen(np),
             });
         }
+    }
+
+    /// Test probe of the state model: the line a terminal review cursor is on, the offset in
+    /// it, and whether that exact text is a row of the current screen model.
+    #[cfg(test)]
+    pub(crate) fn review_probe(&self) -> Option<(String, u32, bool)> {
+        let ReviewPos::Screen(Some(p)) = self.cursor()?.pos else {
+            return None;
+        };
+        let cur = self.review.cur.as_ref()?;
+        let m = [Some(cur), self.review.held.as_ref()]
+            .into_iter()
+            .flatten()
+            .find(|m| m.id == p.model)?;
+        if m.source != LineSource::Terminal {
+            return None;
+        }
+        let text = m.lines.get(p.line as usize)?.text.to_string();
+        let on_screen =
+            cur.source == LineSource::Terminal && cur.lines.iter().any(|l| *l.text == *text);
+        Some((text, p.offset, on_screen))
+    }
+
+    /// Test probe: is a review step suspended on a terminal's screen read?
+    #[cfg(test)]
+    pub(crate) fn review_waits_for_terminal(&self) -> bool {
+        matches!(&self.review.op, OpState::Pending(p) if p.what == What::Term)
     }
 
     /// `text` spelled letter by letter, every character named in the current language.

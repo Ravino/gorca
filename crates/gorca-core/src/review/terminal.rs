@@ -147,8 +147,8 @@ impl Reader {
             // The same screen generation, or a new one with the same text (a caret-only change,
             // an event that changed nothing): the model stands. The caret row matters only to a
             // cursor that is not anchored yet.
-            let same_text = m.built_rev == snap.generation
-                || self.review.term_text == Some((m.id, text_hash));
+            let same_text =
+                m.built_rev == snap.generation || self.review.term_text == Some((m.id, text_hash));
             let anchored = matches!(
                 self.cursor().map(|c| c.pos),
                 Some(ReviewPos::Screen(Some(_)))

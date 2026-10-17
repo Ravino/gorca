@@ -1287,7 +1287,8 @@ impl Fx {
 }
 
 #[test]
-fn review_of_a_terminal_whose_events_were_lost_speaks_the_held_screen_and_corrects_after_the_read() {
+fn review_of_a_terminal_whose_events_were_lost_speaks_the_held_screen_and_corrects_after_the_read()
+{
     let dropped = Arc::new(std::sync::atomic::AtomicU64::new(0));
     let mut f = term_fixture(Some(Arc::clone(&dropped)), None);
     f.focus_terminal("old 1\nold 2\n$ ");
@@ -1318,7 +1319,10 @@ fn review_of_a_terminal_that_is_not_the_protected_application_reads_the_screen_a
     let mut fx = f.run(CoreCmd::ReviewCurLine);
     assert_eq!(said(&fx), ["$"], "spoken at once, no wait");
     let fx = f.settle_and_answer(&mut fx, "new 8\nnew 9\n$ ");
-    assert!(said(&fx).is_empty(), "the line did not change: no correction");
+    assert!(
+        said(&fx).is_empty(),
+        "the line did not change: no correction"
+    );
     let mut fx = f.run(CoreCmd::ReviewPrevLine);
     assert_eq!(said(&fx), ["new 9"]);
     let fx = f.settle_and_answer(&mut fx, "newer 9\nnewer 10\n$ ");
@@ -1407,7 +1411,11 @@ fn live_review_a_word_move_continues_in_the_line_while_output_scrolls_the_screen
     assert_eq!(said(&fx), ["charlie"]);
     f.terminal_output("out 1\nout 2\nout 3");
     let fx = f.run(CoreCmd::ReviewNextWord);
-    assert_eq!(said(&fx), ["delta"], "scrolled away: its text is still read");
+    assert_eq!(
+        said(&fx),
+        ["delta"],
+        "scrolled away: its text is still read"
+    );
 }
 
 #[test]
@@ -1461,4 +1469,3 @@ fn live_review_a_flood_does_not_make_a_review_key_wait() {
         "no suspended step"
     );
 }
-
