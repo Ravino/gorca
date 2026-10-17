@@ -11,6 +11,14 @@ ADR-0004, ADR-0008 §3.2, ADR-0016 plan (`docs/plan/phase-3-features.md` §3.8),
 Parallel work this report must be reconciled with: `docs/reports/aria-coverage-audit.md` (web-a11y
 engineer, coverage per role/state) and the math researcher's test-coverage design.
 
+**Superseded in part by ADR-0022 r2 (2026-10-18)** after the review
+(`docs/reports/adr-0022-review.md`) and the fusion model (`docs/reports/semantic-fusion-math.md`).
+Where this report and the ADR differ, the ADR wins. In particular: provenance leaves `Semantics`
+(ADR §2.6); normalisers deliver source records and one `FUSE` stage per node writer produces the
+effective `SemEntry` (ADR §2.2, SM-8); patches are fusion layers, not commit-time edits (ADR §2.9);
+the §4.6 deletion list is extended to the full producer inventory (ADR §1.1); the §7.2 milestone
+table is replaced by ADR §2.10–§2.11 and `docs/plan/phase-3.md` §M22; QA-1..3 are answered.
+
 ---
 
 ## 1. What exists today, and why the role=button bug is structural
@@ -154,7 +162,7 @@ pub struct Semantics {
     pub orientation: Orientation, pub sort: Sort,
     pub live: Option<Live>,
     pub text: Option<Arc<SemText>>,
-    pub provenance: Provenance,          // Connector | Quirk(id) | Patch(addon id) — debug/log only
+    // r2: no provenance field here (88 B measured with it); ProvTag lives in SemEntry (ADR §2.1, §2.6)
 }
 ```
 
@@ -453,7 +461,7 @@ Cost: ~2–3 days rust-engineer + web-a11y-engineer; reviewer pass.
 
 | Slice | Content | Depends on | Must land before |
 |---|---|---|---|
-| **M22a** model + normalisers | `gorca-model::sem`, `gorca-sem-atspi` (web + GTK4 rows), mirror/snapshot carry `Semantics`, SM-1..7, mapping golden tests; AccessKit table spec for M19 | — | **M18a WIT 0.9 node record** (ADR-0019 C-1) |
+| **M22a** model + normalisers | `gorca-model::sem`, `gorca-sem-atspi` (web + GTK4 rows), mirror/snapshot carry `Semantics`, SM-1..7, mapping golden tests; AccessKit table spec for M19 | — | **M18a WIT 0.9 node record** (ADR-0019 C-1) — *r2: kept as a hard dependency by owner decision, see ADR §2.10* |
 | **M22b** pipeline | `gorca-present` compose/render, rule table, migrate focus/browse/quick-nav/say-all/change, delete §4.6 | M22a | M10 braille, M15 elements list, M21 review |
 | **M22c** changes + context | ST-1..6, ContextTracker for focus/browse, busy suppression, rate limits | M22b | — |
 | **M22d** verbosity + native parity | ReportFlags gating, presets, GTK4 posinset/setsize/level/placeholder/shortcuts in native focus; Qt/LibreOffice rows later | M22b, M14a | — |
