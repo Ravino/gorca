@@ -190,3 +190,45 @@ fn a_terminal_whose_baseline_read_failed_is_tracked_again_by_the_next_key() {
         quick(Op::Type(KeyKind::Backspace, Modifiers::empty())),
     ]);
 }
+
+/// Found by the 50k run (seed 812856, shrunk): the first key retries the failed baseline read
+/// while reads still fail; the next key, with reads back, must retry again, not wait out the
+/// interval of the attempt that failed.
+#[test]
+fn a_failed_retry_of_the_baseline_does_not_hold_back_the_next_key() {
+    expect_clean(&[
+        quick(Op::FailFetches(true)),
+        quick(Op::Focus {
+            node: TERM,
+            prelude: None,
+            dups: 0,
+        }),
+        quick(Op::Type(KeyKind::Enter, Modifiers::empty())),
+        quick(Op::FailFetches(false)),
+        quick(Op::Type(KeyKind::Backspace, Modifiers::empty())),
+    ]);
+}
+
+fn after(dt: u64, op: Op) -> Step {
+    Step { dt, op }
+}
+
+/// Found by the 50k run (seed 47624, shrunk) while the key-time re-read was in development: keys
+/// that re-read a baseline-less terminal while every read fails must not leave the extension
+/// re-arming a timer that is already due (a timer storm).
+#[test]
+fn re_reading_a_baseline_less_terminal_while_reads_fail_arms_no_timer_storm() {
+    expect_clean(&[
+        quick(Op::Focus {
+            node: TERM,
+            prelude: None,
+            dups: 0,
+        }),
+        quick(Op::Cmd(CoreCmd::ReviewCurLine, 1)),
+        quick(Op::FailFetches(true)),
+        quick(Op::Type(KeyKind::Backspace, Modifiers::empty())),
+        quick(Op::Type(KeyKind::Down, Modifiers::empty())),
+        after(2600, Op::FailFetches(false)),
+        after(2600, Op::Type(KeyKind::Letter('z'), Modifiers::CONTROL)),
+    ]);
+}

@@ -54,9 +54,6 @@ pub struct TermState {
     next_serial: u64,
     /// The last on-demand re-tracking on a key (see `Reader::focus_audit_on_key`).
     retrack_at: Option<(NodeKey, Instant)>,
-    /// Consecutive keys' re-reads of a terminal whose baseline read kept failing; it backs the
-    /// interval off (`RETRACK_INTERVAL << n`, capped) and resets on the first answered read.
-    cold_retracks: u8,
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -430,10 +427,13 @@ impl Reader {
         {
             return false;
         }
-        let interval = RETRACK_INTERVAL * (1 << self.text.term.cold_retracks.min(3));
-        if let Some((n, at)) = self.text.term.retrack_at
+        // A baseline-less terminal is not rate limited by time: its re-read is bounded by the
+        // read in flight (one at a time, each with its own deadline), and the policy's own
+        // backed-off retries cover the keyless case.
+        if !cold
+            && let Some((n, at)) = self.text.term.retrack_at
             && n == p.node
-            && self.now.saturating_duration_since(at) < interval
+            && self.now.saturating_duration_since(at) < RETRACK_INTERVAL
         {
             return false;
         }
@@ -450,9 +450,6 @@ impl Reader {
             };
             self.text.term.retrack_at = Some((node, self.now));
             self.text.term.reads.retracked_on_key += 1;
-            if cold {
-                self.text.term.cold_retracks = self.text.term.cold_retracks.saturating_add(1);
-            }
             tracing::debug!(target: "gorca_terminal", ?node, cold, "terminal without its policy or baseline: tracking it again");
             // A secret prompt seen by the stand-in still holds: the new session starts from a
             // fresh read and must not speak a password prompt aloud meanwhile.
@@ -618,7 +615,6 @@ impl Reader {
             Ok(Reply::Window(w)) => {
                 t.read_ok = true;
                 t.read_failed = false;
-                self.text.term.cold_retracks = 0;
                 self.text.term.reads.answered += 1;
                 // The core's own check, whatever the extension makes of the same screen.
                 if caret_row_is_secret_prompt(&w.text, w.caret) {
