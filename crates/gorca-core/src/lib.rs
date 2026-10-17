@@ -68,7 +68,7 @@ pub use doc_actor::{
 pub use doc_registry::{BUILD_HOLD, HubCfg, HubMsg, HubTx, WarmState, hub_channel, run_hub};
 pub use ext::{
     AppExt, EXT_CMD_BASE, ExtCmdError, ExtCmdSpec, ExtCommands, ExtSink, ExtSource, ExtVerdict,
-    segments_text,
+    TermProvider, TermSession, segments_text,
 };
 pub use focus::{FOCUS_FLAP_DELAY, FocusEffect, FocusMsg, FocusState, settle_delay};
 pub use health::{
@@ -101,5 +101,5 @@ pub use review::{
 pub use runtime::{
     Core, CoreConfig, CoreError, CoreStats, CoreStatsSnapshot, NullSpeech, SpeechOut,
 };
-pub use terminal::{TermReads, classify_term_key};
+pub use terminal::{TermReads, raw_key};
 pub use text::{TextCounters, TextMsg, TextOp, TextReqId};

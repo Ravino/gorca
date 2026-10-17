@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use gorca_core::{ExtSink, MirrorDirectory};
 use gorca_ext_api as api;
-use gorca_ext_api::{LIMIT_COMMAND_MS, LIMIT_HOOK_MS};
+use gorca_ext_api::{LIMIT_COMMAND_MS, LIMIT_HOOK_MS, LIMIT_TERMINAL_MS};
 use gorca_model::{AppId, Lookup};
 
 use crate::convert::{key_from_ext, node_to_ext};
@@ -25,6 +25,8 @@ pub enum HookKind {
     NavUnits,
     NavMatch,
     Command,
+    /// The terminal policy (`step`, `snapshot`, `counters`, `configure`), inline on the Reader.
+    Terminal,
 }
 
 impl HookKind {
@@ -37,6 +39,7 @@ impl HookKind {
             | HookKind::NavUnits
             | HookKind::NavMatch => Duration::from_millis(u64::from(LIMIT_HOOK_MS)),
             HookKind::Command => Duration::from_millis(u64::from(LIMIT_COMMAND_MS)),
+            HookKind::Terminal => Duration::from_millis(u64::from(LIMIT_TERMINAL_MS)),
         }
     }
 }
@@ -81,6 +84,18 @@ pub trait HookInstance: Send {
     fn nav_units(&mut self) -> Result<Vec<api::NavUnit>, Fault>;
     fn nav_match(&mut self, unit: u32, n: &api::Node) -> Result<bool, Fault>;
     fn command(&mut self, id: u32) -> Result<api::CommandResult, Fault>;
+    /// `terminal.configure`: replace the settings of the policy.
+    fn term_configure(&mut self, cfg: &api::terminal::TermConfig) -> Result<(), Fault>;
+    /// `terminal.step`: one input at `now`; no actions when the extension is not a terminal policy.
+    fn term_step(
+        &mut self,
+        now: u64,
+        input: api::terminal::TermInput,
+    ) -> Result<Vec<api::terminal::TermAction>, Fault>;
+    /// `terminal.snapshot`: the screen as last known.
+    fn term_snapshot(&mut self) -> Result<Option<api::terminal::TermSnapshot>, Fault>;
+    /// `terminal.counters`.
+    fn term_counters(&mut self) -> Result<api::terminal::TermCounters, Fault>;
 }
 
 /// Counters, readable from any thread.

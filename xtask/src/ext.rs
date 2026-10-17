@@ -19,8 +19,8 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
-/// The extensions shipped as components. `ext-vte` is not here until its port lands.
-const SHIPPED: &[&str] = &["ext-gnome-shell"];
+/// The extensions shipped as components.
+const SHIPPED: &[&str] = &["ext-gnome-shell", "ext-vte"];
 
 pub fn run(args: impl Iterator<Item = String>) -> Result<bool> {
     let mut dest: Option<PathBuf> = None;

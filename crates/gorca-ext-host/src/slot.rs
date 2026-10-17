@@ -190,6 +190,9 @@ pub struct Slot {
     inner: Mutex<SlotInner>,
     disabled: AtomicBool,
     rebuilding: AtomicBool,
+    /// Counts the instances this slot has had (1 for the first): a caller whose per-instance
+    /// state lives in the instance (the terminal policy) sees a rebuild as a changed number.
+    generation: AtomicU64,
     pending_commands: AtomicU32,
     /// Last decision per event kind (a verdict class), used when the slot is busy.
     decisions: [AtomicU8; EVENT_KINDS],
@@ -242,6 +245,7 @@ impl Slot {
             }),
             disabled: AtomicBool::new(false),
             rebuilding: AtomicBool::new(false),
+            generation: AtomicU64::new(1),
             pending_commands: AtomicU32::new(0),
             decisions: std::array::from_fn(|_| AtomicU8::new(Decision::Pass as u8)),
             busy_logged_ms: AtomicU64::new(0),
@@ -250,6 +254,12 @@ impl Slot {
             stats,
             sink,
         }))
+    }
+
+    /// Which instance this slot runs now (see the field). Read inside a call, it is the number of
+    /// the instance that call runs on: instances are only replaced under the slot's lock.
+    pub fn generation(&self) -> u64 {
+        self.generation.load(Ordering::Acquire)
     }
 
     /// Speech budget of this slot (see `InstShared::allow_speech`).
@@ -483,6 +493,7 @@ impl Slot {
         match self.ext.create(&self.shared) {
             Ok(i) => {
                 inner.inst = Some(i);
+                self.generation.fetch_add(1, Ordering::AcqRel);
                 self.stats.rebuilds.fetch_add(1, Ordering::Relaxed);
                 if let Some(t0) = inner.faulted_at.take() {
                     let ns = u64::try_from(t0.elapsed().as_nanos()).unwrap_or(u64::MAX);

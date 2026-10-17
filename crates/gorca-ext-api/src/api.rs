@@ -296,6 +296,11 @@ pub trait Hooks {
     fn command(&mut self, _id: u32) -> CommandResult {
         CommandResult::NotHandled
     }
+    /// The terminal policy, if this extension is one (WIT interface `terminal`). `None` by
+    /// default: `step` then answers no actions, `snapshot` nothing.
+    fn terminal(&mut self) -> Option<&mut dyn crate::terminal::TerminalHooks> {
+        None
+    }
 }
 
 #[cfg(test)]

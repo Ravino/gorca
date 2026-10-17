@@ -24,6 +24,7 @@ use std::fmt;
 use std::sync::{Arc, OnceLock};
 
 use gorca_config::{ChordSpec, ContextName};
+use gorca_ext_api::terminal::{Ms, TermAction, TermConfig, TermCounters, TermInput, TermSnapshot};
 use gorca_input_api::CmdId;
 use gorca_model::{AppId, AppInfo, NodeEvent, NodeSnapshot, Segment};
 
@@ -78,6 +79,36 @@ pub trait AppExt: Send + Sync + fmt::Debug {
     /// Queue `command(local)` of extension `ext`. Returns at once; the answer is spoken through
     /// the [`ExtSink`].
     fn command(&self, ext: &str, local: u32);
+    /// Open a terminal policy session for a terminal of this application (ADR-0001 T-2): the
+    /// first extension that exports the `terminal` interface. `None` when no extension of this
+    /// application is a terminal policy (or it is disabled): the Reader then tracks no screen.
+    /// The default answers `None`.
+    fn terminal(&self, _cfg: &TermConfig) -> Option<Box<dyn TermSession>> {
+        None
+    }
+}
+
+/// One terminal's policy state machine as the Reader drives it (WIT interface `terminal`, Rust
+/// mirror `gorca_ext_api::terminal`). Either an extension-host slot (the WASM component, with
+/// its fault policy) or a native build the daemon linked in. A fault is invisible to the Reader:
+/// the session re-baselines itself (the screen is read again) and answers nothing meanwhile.
+pub trait TermSession: Send + fmt::Debug {
+    /// One input at `now` (monotonic milliseconds); actions are appended to `out`.
+    fn step(&mut self, now: Ms, input: TermInput, out: &mut Vec<TermAction>);
+    fn counters(&self) -> TermCounters;
+    /// Did the policy answer the last input? `false` after a fault, a busy or disabled slot: the
+    /// Reader then treats typed keys as possibly secret (fail closed) until it answers again.
+    fn alive(&self) -> bool {
+        true
+    }
+    /// The screen as last known, for review and the "say current" commands.
+    fn snapshot(&self) -> Option<TermSnapshot>;
+}
+
+/// Makes terminal sessions without an extension host: the daemon's native build of `ext-vte`
+/// (`--terminal-policy=native`, or the fallback when the component is not installed).
+pub trait TermProvider: Send + Sync + fmt::Debug {
+    fn open(&self, cfg: &TermConfig) -> Box<dyn TermSession>;
 }
 
 /// Where extension speech goes (the Reader's background lane).

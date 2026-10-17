@@ -690,6 +690,22 @@ impl AppExt for AppExts {
         None
     }
 
+    fn terminal(
+        &self,
+        cfg: &api::terminal::TermConfig,
+    ) -> Option<Box<dyn gorca_core::TermSession>> {
+        // The first extension of this application that declares the `terminal` interface and is
+        // still alive. A disabled slot is no policy at all (the Reader falls back to the core).
+        let slot = self.slots.iter().find(|s| {
+            s.manifest().hooks.contains(HookSet::TERMINAL)
+                && s.health() == crate::health::InstanceHealth::Active
+        })?;
+        Some(Box::new(crate::term::HostTermSession::new(
+            Arc::clone(slot),
+            cfg.clone(),
+        )))
+    }
+
     fn command(&self, ext: &str, local: u32) {
         let Some(slot) = self
             .slots
