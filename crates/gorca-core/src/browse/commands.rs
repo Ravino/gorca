@@ -1333,19 +1333,26 @@ impl Reader {
 
     /// Focus moved into another document (a tab or window switch) onto a node inside it: the
     /// page title leads the focus speech. Focus on the document itself speaks its own name.
-    fn web_document_lead(&mut self, doc: DocId, id: DocNodeId) {
-        let Some(b) = self.web.as_mut() else { return };
-        let Some(h) = b.docs.get(doc) else { return };
+    fn web_document_lead(&mut self, doc: DocId, id: DocNodeId) -> bool {
+        let Some(b) = self.web.as_mut() else {
+            return false;
+        };
+        let Some(h) = b.docs.get(doc) else {
+            return false;
+        };
         let title = h.read.with(|d| {
             if d.root() == Some(id) || is_document(d, id) {
                 return None;
             }
             title_of(d)
         });
-        let Some(title) = title else { return };
+        let Some(title) = title else {
+            return false;
+        };
         let mut lead = vec![Item::Lead(title)];
         lead.extend(b.pending_tail.take().map(|(t, _)| t).unwrap_or_default());
         b.pending_tail = Some((lead, self.now));
+        true
     }
 
     /// Focus entered a dialog (its name and role lead the focus speech, once): the dialog around
@@ -1643,20 +1650,19 @@ impl Reader {
                     self.web_place_first_line(doc);
                 }
                 // The focus utterance went out before the page was known, without its title:
-                // say title and focused node again in one piece (the mode word rides on it).
+                // say the mode word, the title and the focus again in one piece, worded as the
+                // focus presenter words it (it replaces the first, short utterance).
                 let titled = match focus_node {
                     Some((n, _)) if switched && n != root => self.web.as_ref().and_then(|b| {
                         b.docs.get(doc)?.read.with(|d| {
-                            let mut items = vec![Item::Lead(title_of(d)?)];
-                            items.extend(present::describe_node(d, n));
-                            Some(items)
+                            Some((title_of(d)?, present::describe_node(d, n)))
                         })
                     }),
                     Some(_) | None => None,
                 };
                 let spoke = match titled {
-                    Some(items) => {
-                        self.web_speak(&items, fx);
+                    Some((title, items)) => {
+                        self.web_speak_cold_focus(focus, title, &items, fx);
                         true
                     }
                     None => self.web_speak_entry(doc, at_top || at_root, at_top, fx),
@@ -1727,6 +1733,43 @@ impl Reader {
         let spoke = !items.is_empty() || self.web_has_word();
         self.web_speak(&items, fx);
         spoke
+    }
+
+    /// The first visit of a tab: the focus presented before the page was mirrored is spoken
+    /// again with the mode word and the page title in front, in the focus presenter's wording
+    /// (`items`, the mirror's wording, only when that presentation is gone).
+    fn web_speak_cold_focus(
+        &mut self,
+        focus: NodeKey,
+        title: String,
+        items: &[Item],
+        fx: &mut ReaderEffects,
+    ) {
+        let presented = self.presented.clone().filter(|p| p.node == focus);
+        let Some(p) = presented else {
+            let mut all = vec![Item::Lead(title)];
+            all.extend(items.iter().cloned());
+            self.web_speak(&all, fx);
+            return;
+        };
+        let word = self.web_take_word();
+        let id = self.utt_id();
+        let mut u = self
+            .presenters
+            .present(crate::PresentContext::Focus, &p.snap, id, self.epoch.current());
+        u.prio = Prio::Interrupt;
+        u.may_refine = true;
+        let front = word.into_iter().map(Arc::<str>::from).chain([Arc::from(title)]);
+        for (at, text) in front.enumerate() {
+            u.segments.insert(
+                at,
+                Segment {
+                    text,
+                    kind: SegmentKind::Text,
+                },
+            );
+        }
+        fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
     }
 
     /// Is a mode word waiting for the next utterance?
@@ -1834,6 +1877,7 @@ impl Reader {
         let Some(h) = b.docs.get(doc) else { return };
         let (role, states) = h.read.with(|d| role_states(d, id));
         let passes = forms::passes_through(role, states, Reason::Focus);
+        let switched = b.active != Some(doc);
         self.web_activate(doc, fx);
         self.web_apply(
             WebEv::FocusIn {
@@ -1850,7 +1894,9 @@ impl Reader {
         }
         let dialog = self.web_dialog_lead(doc, id, None);
         let listbox = self.web_listbox_lead(doc, id, None);
-        if !inline && (dialog || listbox) {
+        // A tab whose document exists but whose focused node joined late: its title leads too.
+        let titled = switched && self.web_document_lead(doc, id);
+        if !inline && (dialog || listbox || titled) {
             // The focus was already spoken without its lead: say the lead now; whatever else
             // waits for the next utterance (the first line of a document) stays.
             let tail = self.web_take_tail();

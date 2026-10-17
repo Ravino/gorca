@@ -2493,7 +2493,7 @@ fn the_first_visit_of_a_tab_resolves_with_its_title_and_the_focused_node_in_one_
     let said = spoken(&fx);
     assert_eq!(said.len(), 1, "{said:?}");
     assert!(said[0].contains("Second page"), "{said:?}");
-    assert!(said[0].contains("the docs"), "{said:?}");
+    assert!(said[0].contains("the docs link"), "{said:?}");
 }
 
 fn child_of(parent: u64, mut n: NodeSnapshot) -> Arc<NodeSnapshot> {

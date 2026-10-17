@@ -2729,3 +2729,42 @@ fn lone_modifiers_do_not_end_review_and_generic_echo_is_localised() {
     assert_eq!(spoken(&h.typed(' ')), ["пробел"]);
     assert_eq!(spoken(&h.typed('!')).len(), 1);
 }
+
+// A typed key that replaces a selection: Gecko sends a delete and a caret move and no insert.
+// The key's expectation must not outlive that, or the next key's insert is spoken as text.
+fn replace_selection_then_type(role: Role, gap_ms: u64, gecko: bool) -> Vec<String> {
+    let mut g = rig();
+    if gecko {
+        g.r.dir.set_text_insert_slack(node().app, 2);
+    }
+    g.track(
+        role,
+        StateSet::EDITABLE | StateSet::FOCUSED,
+        "http://host/a",
+        13,
+    );
+    let mut said = Vec::new();
+    said.extend(spoken(&g.typed('1')));
+    g.advance(5);
+    said.extend(spoken(&g.delete(0, Some("http://host/a"), 13)));
+    said.extend(spoken(&g.caret(1)));
+    g.advance(gap_ms);
+    said.extend(spoken(&g.tick(0)));
+    said.extend(spoken(&g.typed('2')));
+    g.advance(5);
+    said.extend(spoken(&g.insert(1, "2")));
+    said.extend(spoken(&g.caret(2)));
+    said.extend(spoken(&g.tick(300)));
+    said
+}
+
+#[test]
+fn a_key_that_replaced_a_selection_leaves_no_expectation_for_the_next_insert() {
+    for role in [Role::TextEntry, Role::ComboBox] {
+        for (gap, gecko) in [(2200, true), (300, true), (2200, false)] {
+            let said = replace_selection_then_type(role, gap, gecko);
+            let twos = said.iter().filter(|s| s.as_str() == "2").count();
+            assert_eq!(twos, 1, "{role:?} gap {gap} gecko {gecko}: {said:?}");
+        }
+    }
+}
