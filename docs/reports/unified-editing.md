@@ -113,3 +113,16 @@ the shared vectors `terminal::WORD_MOTION_VECTORS` (`gorca-text` dev-depends on 
   the edge timer for `MOTION_MS` (250 ms) and answers a late caret event with the unit it moved onto (regression test
   `a_late_caret_event_after_the_edge_timer_still_speaks_the_unit_it_moved_onto`).
 * SDK dependency: `gorca-ext-api` no longer depends on `gorca-text`/`gorca-model`; xtask rule 5 and its test are as on main.
+
+### Gates after the second merge (labels `fv-*`, host load 14-20 from other agents' e2e runs)
+
+fmt, clippy `--all-targets -D warnings`, `cargo xtask deps` and `strings`, `cargo xtask build-ext` ok;
+`cargo test --workspace --no-fail-fast`: 2195 passed, 0 failed, 17 ignored.
+ED matrix (3 repeats): gated native targets and terminal: all `ed_gate_failures` 0 except ED-G3E 0/0/1 (one repeat:
+Ctrl+A spoke `all selected, 16 characters` and then `ello, brave worl`, a late selection event; kept, not analysed
+further). Web targets (report-only): FFIN/FFTA/CHIN/CHTA clean apart from typist letter drops and one silent Shift+Home;
+FFCE/CHCE fail the known-failing BackSpace-selection step. M3: 24 PASS, E2 `e2_missing` max 13 / `e2_wrong` max 1 in one
+repeat (median 0; known E2 load flake). VV (real gnome-terminal): 24 PASS, 0 FAIL. VT: first run failed
+(`vt_extra` max 2, `vt_missing` max 2 in one repeat, load 20; the same shape failed before this change at load 15),
+rerun `fv-vt2`: 0/0/0 PASS. Not shown: whether the late-caret replacement adds an extra utterance under extreme load
+(one extra speech replaces the old one at the speech lane, but `vt_extra` counts it).
