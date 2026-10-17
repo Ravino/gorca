@@ -60,8 +60,7 @@ impl Reader {
                     && (!key_echo_is_action(&text) || self.cmd.effective.echo.command_keys)
                 {
                     let id = self.utt_id();
-                    let said =
-                        key_echo_spoken(&text, &self.text.verbalizer, self.verbalize_opts());
+                    let said = key_echo_spoken(&text, &self.text.verbalizer, self.verbalize_opts());
                     let u = key_echo(&said, id, intent.epoch);
                     fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
                 }

@@ -2501,6 +2501,7 @@ fn a_description_is_symbol_processed_once_and_still_follows_the_pause() {
     assert_eq!(again.segments, said.segments);
     let v = gorca_speech::Verbalizer.verbalize(&said);
     assert_eq!(&*v.text, "Search, edit. C plus plus 50 percent");
+}
 
 // ---- review must not leave the typing echo altered --------------------------------------
 
