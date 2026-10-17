@@ -22,3 +22,6 @@ Key is `gorca+p` (Insert+P / CapsLock+P) in both NVDA presets (`crates/gorca-con
 
 ## Tests
 `gorca-speech` verbalize/symbols (levels, Russian sentence "Привет, как дела твои?" by word and char at every level, terminal line `ls -la | grep "x"`, say-all paragraph, repeats, numbers), core text/terminal/commands/browse tests, SSIP/voicego `PUNCTUATION none` assertions, config-task language fill.
+
+## Gates
+fmt, clippy --workspace --all-targets -D warnings, cargo test --workspace, cargo xtask deps: all pass. Strict e2e (release, `--impersonate-orca`, 1 repeat, quiet-ish host): K2/K2s/K3 p99 0.7/0.7/1.8 ms (gates 6/6/15), R1/R1s p99 0.46/0.34 ms (gates 3/4); results in bench/results/e2e/punct-k and punct-r1. Only one repeat was run.
