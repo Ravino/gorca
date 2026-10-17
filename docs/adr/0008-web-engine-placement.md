@@ -319,3 +319,12 @@ M5 shipped the host as designed in section 3.3, with these deliberate difference
   implements them. The core still never links the host or wasmtime (rules 1, 3; new xtask rule 9).
 - **No `wasmtime-wasi`.** Pure WASI clock/random imports are linked by the host; the rest traps.
 - Q-E3 (memory per instance) is measured in `docs/reports/m5-impl.md`.
+
+## 10. Amendment 2 (2026-10-17, ext-vte port)
+
+`ext-vte` follows the `ext-gnome-shell` precedent of amendment 1: a component by default, the same source built natively as the exclusive fallback (`--terminal-policy=native`).
+
+- **WIT 0.2.0** adds the `terminal` export (`configure`, `step`, `snapshot`, `counters`; the interface existed since M6 but was not in the world), `raw-key` and `term-input::raw`. The web hooks of section 6.1 move to 0.3.
+- **No hook-shape bake-off.** This ADR said one is warranted only if `ext-vte` missed V1/V2: the measured WASM V1 p99 is 32.8 to 33.4 ms (gate 35) and V2 reader CPU 1.6 to 2.2 % (gate 60), indistinguishable from native under the same load (docs/reports/ext-vte-wasm.md). The per-input host cost is 0.4 us and the largest screen step 0.46 ms.
+- **The extension is a pure function** (`step(now, input) -> actions`), so `host::fetch`/`text` stay unsupported: the screen is an action (`fetch-screen`) the core executes and answers as data.
+- **Product rules stay in the extension, safety rules stay in the core**: readline bindings are the extension's, but the "never log or lose the sensitive marking of a password" rule is enforced by the core independently of the extension (fail closed).
