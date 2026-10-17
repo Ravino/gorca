@@ -106,8 +106,9 @@ hist_pat='/home/[a-z][a-z0-9_]*\.[a-z]|<repo>|/tmp/claude-[0-9]'
 n=$(git log --all -G"$hist_pat" --oneline | wc -l)
 check "no host paths (/home/<login>., <repo>, session scratch dirs) in any file content (history)" "$n" "$(git log --all -G"$hist_pat" --oneline | head -3)"
 
-n=$(git grep -IlE 'evgeniy\.nekrasov|evgeniy[^@.]' HEAD -- . ':!docs/decisions.md' ':!docs/reports/public-push-prep.md' ':!CONTRIBUTING.md' ':!tools/release/public-export.sh' | wc -l)
-check "no login name in the tip tree (outside the decision log)" "$n" "$(git grep -IlE 'evgeniy\.nekrasov|evgeniy[^@.]' HEAD -- . ':!docs/decisions.md' ':!docs/reports/public-push-prep.md' ':!CONTRIBUTING.md' ':!tools/release/public-export.sh' | head)"
+login_hits=$(git grep -IlE 'evgeniy\.nekrasov|evgeniy[^@.]' HEAD -- . ':!docs/decisions.md' ':!docs/reports/public-push-prep.md' ':!CONTRIBUTING.md' ':!tools/release/public-export.sh' || true)
+n=$(printf '%s' "$login_hits" | grep -c . || true)
+check "no login name in the tip tree (outside the decision log)" "$n" "$login_hits"
 
 n=$(git log --all --format=%B | grep -ciE '^co-authored-by|generated with|claude code' || true)
 check "no AI attribution in commit messages" "$n"
