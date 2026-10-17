@@ -173,9 +173,9 @@ fn sleep(ms: u64) {
 }
 
 /// One scenario's Firefox with its document.
-struct Ft {
-    w: Web,
-    doc: DocRef,
+pub(super) struct Ft {
+    pub(super) w: Web,
+    pub(super) doc: DocRef,
     /// The window has been woken by a key: Firefox's first keyboard input moves the focus
     /// through a panel once, which a field focused before it would lose.
     woken: bool,
@@ -198,6 +198,20 @@ impl Ft {
             doc,
             woken: false,
         })
+    }
+
+    /// The editing matrix (`edit.rs`): `tests/web/m3b/pages/edit.html` with the field named
+    /// `label` focused in focus mode.
+    pub(super) fn open_edit(
+        host: &HostEnv,
+        reader: &ReaderSpec,
+        flavor: Flavor,
+        label: &str,
+        role: &str,
+    ) -> Result<Self> {
+        let mut f = Self::open(host, reader, flavor, "edit.html", "Edit Matrix", CFG_QUIET)?;
+        f.enter_role(role, label)?;
+        Ok(f)
     }
 
     /// The entry named `label`, focused: "focus mode" was heard and the text window had time to
@@ -248,7 +262,7 @@ impl Ft {
 
     /// A key for gorca (the emulated Mutter, with the modifier keys around it) and, unless gorca
     /// swallowed it, for the page. Returns the emit time of the press and whether gorca took it.
-    fn key(&mut self, key: K, uni: u32, state: u32) -> Result<(u64, bool)> {
+    pub(super) fn key(&mut self, key: K, uni: u32, state: u32) -> Result<(u64, bool)> {
         if self.w.unsettled {
             self.w.settle_grabs()?;
         }
@@ -308,7 +322,7 @@ impl Ft {
     }
 
     /// Every spoken text since `mark`, with its arrival time.
-    fn heard(&self, mark: usize) -> Vec<(u64, String)> {
+    pub(super) fn heard(&self, mark: usize) -> Vec<(u64, String)> {
         speaks_since(&self.w, mark)
     }
 

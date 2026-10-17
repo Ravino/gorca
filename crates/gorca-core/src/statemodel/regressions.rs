@@ -97,6 +97,51 @@ fn a_failed_baseline_read_is_retried_before_the_first_command_output() {
     ]);
 }
 
+/// GTK4 text widgets send no caret event for typed text and a selection event behind every caret
+/// move. The tracked caret must follow the typing, or Left after a word looks like a move the
+/// wrong way and is read as a line; and the selection event must not drop the fetch of a move.
+#[test]
+fn gtk4_typing_then_arrows_are_answered_with_the_character() {
+    expect_clean(&[
+        st(Op::Gtk4(true)),
+        focus(ENTRY),
+        typed(KeyKind::Letter('a')),
+        typed(KeyKind::Letter('b')),
+        typed(KeyKind::Letter('k')),
+        typed(KeyKind::Letter('z')),
+        typed(KeyKind::Left),
+        typed(KeyKind::Left),
+        typed(KeyKind::Right),
+        typed(KeyKind::Home),
+        typed(KeyKind::End),
+        typed(KeyKind::Backspace),
+        typed(KeyKind::Left),
+    ]);
+    expect_clean(&[
+        st(Op::Gtk4(true)),
+        focus(AREA),
+        typed(KeyKind::Letter('q')),
+        typed(KeyKind::Enter),
+        typed(KeyKind::Letter('z')),
+        typed(KeyKind::Left),
+        typed(KeyKind::Left),
+        typed(KeyKind::Right),
+    ]);
+}
+
+/// A caret key that moves nothing (Left at the start, Right at the end) is not silent.
+#[test]
+fn a_caret_key_at_an_edge_speaks_the_unit_at_the_caret() {
+    expect_clean(&[
+        focus(ENTRY),
+        typed(KeyKind::Letter('a')),
+        typed(KeyKind::Home),
+        typed(KeyKind::Left),
+        typed(KeyKind::End),
+        typed(KeyKind::Right),
+    ]);
+}
+
 /// ADR-0018: output that scrolls the terminal screen while the user reviews a line by word. The
 /// cursor stays on the line and goes on from its offset (it used to start again at the first
 /// word of the row).

@@ -1,0 +1,34 @@
+type	h | e | l | l | o | comma | space | b | r | a | v | e | space | w | o | r | l | d
+Left	blank
+Right	blank
+Home	e
+Left at start	e
+End	blank
+Right at end	blank
+Ctrl+Left 1	world
+Ctrl+Left 2	brve
+Ctrl+Left 3	brve
+Ctrl+Left 4 at start	ello
+Ctrl+Right 1	ello
+Ctrl+Right 2	brve
+Ctrl+Right 3	brve
+Ctrl+Right 4 at end	brve
+BackSpace	e
+Delete at end	space
+Home 2	e
+Delete	e
+Shift+Right	l selected
+Shift+Right 2	l selected
+Shift+Left	l unselected
+Shift+Left 2	l unselected
+Ctrl+Shift+Right	llo, selected
+Ctrl+Shift+Left	llo, unselected
+Shift+End	all selected, 13 characters
+Shift+Home	llo, brvworld unselected
+Ctrl+A	all selected, 13 characters
+Right collapses	blank
+End 2	blank
+Ctrl+BackSpace	brvworld
+Ctrl+Delete at end	
+Home 3	l
+Ctrl+Delete	llo,

@@ -272,6 +272,7 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "vt_double"
                     | "vt_extra"
                     | "vh_failures"
+                    | "ed_gate_failures"
                     | "v3_stale"
                     | "v3_prompt_missing"
                     | "v3_no_stop"

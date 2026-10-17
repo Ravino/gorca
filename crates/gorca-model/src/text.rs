@@ -41,6 +41,29 @@ impl TextUnit {
     }
 }
 
+/// Where a word-wise caret move (Ctrl+Right) ends relative to the word it passed.
+///
+/// Measured in the editing matrix (docs/reports/unified-editing.md): every Linux toolkit stops at
+/// the END of the word it passes (GTK/Pango, GtkSourceView, Gecko, Blink, readline), where the
+/// word just passed is the one that ends at the caret. Windows-style toolkits stop at the START
+/// of the next word, where the word at the caret is the one just reached.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub enum WordLanding {
+    /// The caret ends behind the passed word.
+    #[default]
+    End,
+    /// The caret ends in front of the next word.
+    Start,
+}
+
+/// Per-toolkit facts the shared editing presenter needs (ADR-0008: connector data, never a
+/// toolkit name tested in the core). One row per toolkit class, selected by the connector.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub struct EditQuirks {
+    /// Where Ctrl+Right lands (see [`WordLanding`]).
+    pub word_landing: WordLanding,
+}
+
 /// Core text queries. Text is not part of the node snapshot.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TextQuery {

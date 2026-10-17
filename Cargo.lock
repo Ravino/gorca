@@ -1479,6 +1479,7 @@ dependencies = [
 name = "gorca-text"
 version = "0.0.0"
 dependencies = [
+ "gorca-ext-api",
  "gorca-model",
  "smallvec",
  "unicode-segmentation",

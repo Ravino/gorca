@@ -1,0 +1,26 @@
+select all	
+clear	
+type line 1	o | n | e | space | t | w | o
+Enter	new line | blank
+type paragraph	a | l | p | h | a | space | b | r | a | v | o | space | c | h | a | r | l | i | e | space | d | e | l | t | a | space | e | c | h | o | space | f | o | x | t | r | o | t | space | g | o | l | f | space | h | o | t | e | l | space | i | n | d | i | a | space | j | u | l | i | e | t | space | k | i | l | o | space | l | i | m | a | space | m | i | k | e | space | n | o | v | e | m | b | e | r | space | o | s | c | a | r | space | p | a | p | a | space | q | u | e | b | e | c
+Enter 2	new line | blank
+type last	l | a | s | t | space | l | i | n | e
+Up	oscar papa quebec
+Up 2	hotel india juliet kilo lima mike november
+Up 3	alpha bravo charlie delta echo foxtrot golf
+Down	hotel india juliet kilo lima mike november
+Ctrl+Up	alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec
+Ctrl+Up 2	blank
+Ctrl+Down	alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec
+Ctrl+Home	one two
+Ctrl+End	last line
+PageUp	one two
+PageDown	last line
+Ctrl+Home 2	one two
+Shift+Down	alpha bravo charlie delta echo foxtrot golf
+Shift+Down 2	hotel india juliet kilo lima mike november
+Shift+Up	alpha bravo charlie delta echo foxtrot golf
+Ctrl+Shift+Down	hotel india juliet kilo lima mike november
+Ctrl+Shift+End	last line
+BackSpace selection	blank
+Ctrl+Z	

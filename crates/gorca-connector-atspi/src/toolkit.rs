@@ -2,7 +2,7 @@
 //! Toolkit normalisation keys (ADR-0001 section 5.6). Quirks that more than one consumer needs
 //! live in tables keyed by `AppInfo.toolkit`, never in ad-hoc code.
 
-use gorca_model::{TextUnit, WebEngine};
+use gorca_model::{EditQuirks, TextUnit, WebEngine, WordLanding};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Toolkit {
@@ -91,6 +91,32 @@ impl Toolkit {
 }
 
 impl Toolkit {
+    /// Quirk row `edit-presenter` (docs/reports/unified-editing.md): what the shared editing
+    /// presenter needs to know about this toolkit's caret keys.
+    ///
+    /// `word_landing` was measured with the editing matrix (`bench/e2e`, ED-* scenarios, "hello,
+    /// brave world", Ctrl+Right from the start): GTK3/GTK4 (Pango) stop at the end of each word
+    /// (5, 12, 18); GtkSourceView (gedit, Text Editor) and Chromium also stop between a word and
+    /// its comma (5, 6, 12, 18); Gecko lands behind the comma (6, 12, 18); readline in VTE
+    /// (Alt+f) stops at the end of each word. All of them land at the END of the word they pass.
+    /// Qt and unknown toolkits are assumed to behave like the rest of the Linux desktop; a
+    /// Windows-style toolkit (a future AccessKit/Newton row) says `Start`.
+    pub fn edit_quirks(self) -> EditQuirks {
+        match self {
+            Toolkit::Gtk3
+            | Toolkit::Gtk4
+            | Toolkit::Firefox
+            | Toolkit::Chromium
+            | Toolkit::Vte
+            | Toolkit::Qt
+            | Toolkit::Other => EditQuirks {
+                word_landing: WordLanding::End,
+            },
+        }
+    }
+}
+
+impl Toolkit {
     /// The web engine behind this toolkit (`AppInfo::web_engine`): picks the document source
     /// and its quirks. Chromium's `ToolkitName` is the same for Chrome, Edge, Brave and every
     /// Electron app, so the name sniffing in [`Toolkit::classify`] is only the fallback.
@@ -171,6 +197,21 @@ mod tests {
             Toolkit::classify("gtk", "gnome-terminal-server"),
             Toolkit::Vte
         );
+    }
+
+    #[test]
+    fn every_linux_toolkit_lands_at_the_end_of_the_word_it_passes() {
+        for t in [
+            Toolkit::Gtk3,
+            Toolkit::Gtk4,
+            Toolkit::Firefox,
+            Toolkit::Chromium,
+            Toolkit::Vte,
+            Toolkit::Qt,
+            Toolkit::Other,
+        ] {
+            assert_eq!(t.edit_quirks().word_landing, WordLanding::End, "{t:?}");
+        }
     }
 
     #[test]

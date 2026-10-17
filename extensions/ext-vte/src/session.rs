@@ -17,7 +17,7 @@ use gorca_ext_api::terminal::{
     TerminalHooks, Unit, Urgency,
 };
 
-use gorca_ext_api::terminal::word_at;
+use gorca_ext_api::terminal::{word_at, word_motion};
 
 use crate::prompt::Prompt;
 use crate::screen::{Diff, DiffBuf, Screen, diff, diff_with};
@@ -59,6 +59,13 @@ const LATE_SCAN: usize = 4;
 /// long was a motion that moved nothing (Left at the start of the line).
 const MOTION_MS: Ms = 250;
 const MOTIONS_MAX: usize = 8;
+/// A motion key that provably cannot move the caret (Left at the start of the command, Right at
+/// its end) speaks the unit at the caret after this long: like every other editor (ADR-0007 CR-3).
+const EDGE_MS: Ms = 100;
+/// Any other motion key whose caret event has not come after this long (a slow link, or a move
+/// that was lost) speaks the unit at the caret; before that the caret event may still answer it,
+/// and speaking at once would read the OLD position first.
+const EDGE_SLOW_MS: Ms = 240;
 /// A caret event this soon after a text change belongs to it.
 const EDIT_CARET_MS: Ms = 2;
 /// Fetch retries before the session waits for the next event.
@@ -75,6 +82,13 @@ const VERTICAL_MS: Ms = 250;
 const VERTICAL_MAX: u8 = 8;
 /// Rows above the cursor row searched for the start of a wrapped command.
 const WRAP_ROWS_MAX: usize = 32;
+
+/// Which way a motion key moves the caret.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum Dir {
+    Back,
+    Forward,
+}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum Phase {
@@ -153,7 +167,7 @@ pub struct Session {
     last_edit_at: Option<Ms>,
     /// Motion keys whose caret events have not been read yet, oldest first (two arrow keys can
     /// be pressed before the first one's caret event arrives).
-    motions: VecDeque<(Unit, Ms)>,
+    motions: VecDeque<(Unit, Ms, Dir)>,
     /// A password prompt is active: typed characters are secret.
     secret: bool,
     /// Ctrl+C was pressed at this time: output that is still flowing is not read; the first
@@ -336,7 +350,18 @@ impl Session {
             && matches!(self.phase, Phase::Idle)
             && self.expect == Expect::Vertical)
             .then(|| self.expect_at.saturating_add(VERTICAL_MS));
-        [phase, gate, late, vertical].into_iter().flatten().min()
+        let edge = (matches!(self.phase, Phase::Idle | Phase::Settling { .. })
+            && self.edge_ready())
+        .then(|| {
+            self.motions
+                .front()
+                .map(|&(_, at, dir)| at.saturating_add(self.edge_after(dir)))
+        })
+        .flatten();
+        [phase, gate, late, vertical, edge]
+            .into_iter()
+            .flatten()
+            .min()
     }
 
     fn arm(&mut self, now: Ms, out: &mut Vec<TermAction>) {
@@ -384,6 +409,55 @@ impl Session {
         }
         self.flush_late(now, out);
         self.flush_vertical(now, out);
+        self.flush_edge(now, out);
+    }
+
+    /// Is there a screen the caret can be read on?
+    /// How long a motion key waits for its caret event before the timer speaks for it: the short
+    /// time when the key cannot move the caret (the caret is at the start of the command for a
+    /// backward motion, behind the last character for a forward one), else the long one.
+    fn edge_after(&self, dir: Dir) -> Ms {
+        if self.cannot_move(dir) {
+            EDGE_MS
+        } else {
+            EDGE_SLOW_MS
+        }
+    }
+
+    /// Is the caret provably at the end of the input in the direction `dir`?
+    fn cannot_move(&self, dir: Dir) -> bool {
+        if !self.edge_ready() {
+            return false;
+        }
+        let (row, col) = self.live.locate(self.caret);
+        let line = self.live.line(row);
+        match dir {
+            Dir::Back => self.prompt.end(line).is_some_and(|pe| col <= pe),
+            Dir::Forward => {
+                col as usize >= line.trim_end().chars().count()
+                    && (row + 1..self.live.line_count())
+                        .all(|r| self.live.line(r).trim().is_empty())
+            }
+        }
+    }
+
+    fn edge_ready(&self) -> bool {
+        self.live_ok && !self.live.is_empty()
+    }
+
+    /// A motion key whose caret event never came moved nothing: speak the unit at the caret.
+    fn flush_edge(&mut self, now: Ms, out: &mut Vec<TermAction>) {
+        if !self.edge_ready() {
+            return;
+        }
+        while let Some(&(unit, at, dir)) = self.motions.front() {
+            if now < at.saturating_add(self.edge_after(dir)) {
+                break;
+            }
+            self.motions.pop_front();
+            let (row, col) = self.live.locate(self.caret);
+            self.say_at(&self.live, row, col, unit, None, out);
+        }
     }
 
     /// A history key that changed nothing on the screen: read the line it left, so that a
@@ -646,12 +720,22 @@ impl Session {
             TermKey::CharLeft | TermKey::CharRight | TermKey::LineStart | TermKey::LineEnd => {
                 out.push(TermAction::ClaimKey);
                 self.expect = Expect::Motion(Unit::Char);
-                self.push_motion(now, Unit::Char);
+                let dir = if matches!(key, TermKey::CharLeft | TermKey::LineStart) {
+                    Dir::Back
+                } else {
+                    Dir::Forward
+                };
+                self.push_motion(now, Unit::Char, dir);
             }
             TermKey::WordLeft | TermKey::WordRight => {
                 out.push(TermAction::ClaimKey);
                 self.expect = Expect::Motion(Unit::Word);
-                self.push_motion(now, Unit::Word);
+                let dir = if matches!(key, TermKey::WordLeft) {
+                    Dir::Back
+                } else {
+                    Dir::Forward
+                };
+                self.push_motion(now, Unit::Word, dir);
             }
             TermKey::LineUp | TermKey::LineDown => {
                 out.push(TermAction::ClaimKey);
@@ -766,6 +850,7 @@ impl Session {
 
     fn on_caret(&mut self, now: Ms, off: u32, out: &mut Vec<TermAction>) {
         let moved = off != self.caret;
+        let prev = self.caret;
         self.caret = off;
         // A caret event in the same frame as a text change is that change's (VTE sends the text
         // first): it is not an answer to a motion key.
@@ -809,9 +894,17 @@ impl Session {
             }
         }
         let (row, col) = self.live.locate(off);
-        if let Some((unit, _)) = self.motions.pop_front() {
+        if let Some((unit, _, _)) = self.motions.pop_front() {
             self.caret_keyed = !self.motions.is_empty();
-            self.say_at(&self.live, row, col, unit, out);
+            let (prow, pcol) = self.live.locate(prev);
+            self.say_at(
+                &self.live,
+                row,
+                col,
+                unit,
+                (prow == row).then_some(pcol),
+                out,
+            );
             self.last_row = row;
             return;
         }
@@ -1014,8 +1107,8 @@ impl Session {
         // the caret is now. (One whose event has not come yet is read when it does.)
         if (!spoke || self.held_now) && self.caret_keyed {
             self.prune_motions(now);
-            if let Some((unit, _)) = self.motions.pop_front() {
-                self.say_at(&new, cl, col, unit, out);
+            if let Some((unit, _, _)) = self.motions.pop_front() {
+                self.say_at(&new, cl, col, unit, None, out);
                 self.expect = Expect::None;
             }
             match exp {
@@ -1210,28 +1303,45 @@ impl Session {
         self.erased.push_back((c, now));
     }
 
-    fn push_motion(&mut self, now: Ms, unit: Unit) {
+    fn push_motion(&mut self, now: Ms, unit: Unit, dir: Dir) {
         self.prune_motions(now);
         if self.motions.len() >= MOTIONS_MAX {
             self.motions.pop_front();
         }
-        self.motions.push_back((unit, now));
+        self.motions.push_back((unit, now, dir));
     }
 
     fn prune_motions(&mut self, now: Ms) {
         while self
             .motions
             .front()
-            .is_some_and(|&(_, at)| now.saturating_sub(at) > MOTION_MS)
+            .is_some_and(|&(_, at, _)| now.saturating_sub(at) > MOTION_MS)
         {
             self.motions.pop_front();
         }
     }
 
-    fn say_at(&self, s: &Screen, row: usize, col: u32, unit: Unit, out: &mut Vec<TermAction>) {
+    /// Speak what a motion key moved the caret over, with the presenter every editor shares:
+    /// a character is the one at the caret, a word is the word just passed or the one at the
+    /// caret (`from` is the column before the move, when it was on this row).
+    fn say_at(
+        &self,
+        s: &Screen,
+        row: usize,
+        col: u32,
+        unit: Unit,
+        from: Option<u32>,
+        out: &mut Vec<TermAction>,
+    ) {
         let line = s.line(row);
         let text = match unit {
-            Unit::Word | Unit::Line | Unit::Text => word_at(line, col),
+            Unit::Word => {
+                let chars: Vec<char> = line.trim_end().chars().collect();
+                word_motion(&chars, from, col)
+                    .map(|r| chars[r].iter().collect::<String>().trim().to_owned())
+                    .filter(|w| !w.is_empty())
+            }
+            Unit::Line | Unit::Text => word_at(line, col),
             Unit::Char => line.chars().nth(col as usize).map(String::from),
         };
         match (text, unit) {

@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use arc_swap::ArcSwap;
 use gorca_mirror::{MirrorHandle, MirrorRead};
-use gorca_model::{AppId, Lookup, NodeKey, NodeSnapshot, NodeView, TextUnit};
+use gorca_model::{AppId, EditQuirks, Lookup, NodeKey, NodeSnapshot, NodeView, TextUnit};
 
 /// Who is behind an application connection, for budgets that a misbehaving local app must not
 /// escape by reconnecting, taking a new bus name or opening more connections: the process id the
@@ -31,6 +31,8 @@ pub struct MirrorDirectory {
     unfollowed_text: ArcSwap<HashSet<AppId>>,
     /// Per-app insert-offset slack (connector quirk data); apps without the quirk are absent.
     insert_slack: ArcSwap<HashMap<AppId, u32>>,
+    /// Per-app editing-presenter facts (connector quirk data); apps without a row are absent.
+    edit_quirks: ArcSwap<HashMap<AppId, EditQuirks>>,
     /// Per-app end of the "tree creation" window (connector quirk `page_events_settle_ms`):
     /// a document that appears before it was built for the reader's wake-up call, not loaded by
     /// the user's navigation.
@@ -66,6 +68,28 @@ impl MirrorDirectory {
             }
             next
         });
+    }
+
+    /// Record the app's editing-presenter facts (connector quirk table, ADR-0008).
+    pub fn set_edit_quirks(&self, app: AppId, q: EditQuirks) {
+        self.edit_quirks.rcu(|cur| {
+            let mut next = HashMap::clone(cur);
+            if q == EditQuirks::default() {
+                next.remove(&app);
+            } else {
+                next.insert(app, q);
+            }
+            next
+        });
+    }
+
+    /// The app's editing-presenter facts: the defaults unless its connector declared a row.
+    pub fn edit_quirks(&self, app: AppId) -> EditQuirks {
+        self.edit_quirks
+            .load()
+            .get(&app)
+            .copied()
+            .unwrap_or_default()
     }
 
     /// Record the app's insert-offset slack (connector quirk `gecko-insert-offset`).
@@ -154,6 +178,7 @@ impl MirrorDirectory {
             self.set_text_unit(app, TextUnit::Scalar);
         }
         self.set_text_insert_slack(app, 0);
+        self.set_edit_quirks(app, EditQuirks::default());
         self.settle_until.rcu(|cur| {
             let mut next = HashMap::clone(cur);
             next.remove(&app);

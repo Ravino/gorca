@@ -186,6 +186,9 @@ pub struct AppInfo {
     /// accepts any other insert reported up to this many units after the caret. Data from the
     /// connector's per-engine quirk table (ADR-0008), never derived in the core from a name.
     pub text_insert_slack: u32,
+    /// Facts the shared editing presenter needs about this application's toolkit (word landing).
+    /// Connector quirk table data (ADR-0008).
+    pub edit_quirks: crate::EditQuirks,
     /// Connector quirk (0: none): `document:load-complete` that arrives within this many
     /// milliseconds of the application's appearance announces the creation of the tree (the
     /// application built it for the wake-up call), not a page load that happened while the

@@ -2731,6 +2731,111 @@ fn lone_modifiers_do_not_end_review_and_generic_echo_is_localised() {
     assert_eq!(spoken(&h.typed('!')).len(), 1);
 }
 
+// ---- unified editing (docs/reports/unified-editing.md) ---------------------------------------
+
+#[test]
+fn gtk4_selection_event_with_a_plain_move_does_not_drop_the_line_fetch() {
+    // GTK4 signals `text-selection-changed` right behind every caret move. The line fetch of a
+    // Down key is in flight when it arrives; before the fix the machine fell back to Idle and the
+    // reply was dropped (Up, Down, PageUp, Ctrl+Home were silent in GTK4 text views).
+    let mut g = rig();
+    g.area("ab\ncd\nef", 0);
+    let _ = g.key(DOWN, 0, NONE);
+    let fx = g.caret(3);
+    let f = fetches(&fx);
+    assert_eq!(f.len(), 1);
+    let fx = g.selection_event();
+    assert!(spoken(&fx).is_empty() && fetches(&fx).is_empty());
+    let fx = g.reply(
+        f[0].0,
+        Reply::Unit(TextUnitAt {
+            range: 3..6,
+            text: Arc::from("cd\n"),
+        }),
+    );
+    assert_eq!(spoken(&fx), ["cd"]);
+}
+
+#[test]
+fn typing_without_caret_events_still_correlates_the_next_arrow_key() {
+    // GTK4 text views send no caret event for typed text. The tracked caret follows the typed
+    // text, so Left (caret event 1) is a move of this key, not "the wrong way" and a late line.
+    let mut g = rig();
+    g.area("", 0);
+    for (i, c) in "ab".chars().enumerate() {
+        let _ = g.typed(c);
+        let _ = g.insert(u32::try_from(i).unwrap_or(0), &c.to_string());
+    }
+    let _ = g.tick(300);
+    let _ = g.key(LEFT, 0, NONE);
+    let fx = g.caret(1);
+    assert_eq!(spoken(&fx), ["b"], "the character the caret moved over");
+    assert_eq!(g.r.text_counters().caret_uncorrelated, 0);
+}
+
+#[test]
+fn backspace_without_caret_events_keeps_the_tracked_caret() {
+    let mut g = rig();
+    g.area("abc", 3);
+    let _ = g.key(BACKSPACE, 0, NONE);
+    let fx = g.delete(2, Some("c"), 1);
+    assert_eq!(spoken(&fx), ["c"]);
+    let _ = g.key(LEFT, 0, NONE);
+    let fx = g.caret(1);
+    assert_eq!(spoken(&fx), ["b"]);
+    assert_eq!(g.r.text_counters().caret_uncorrelated, 0);
+}
+
+#[test]
+fn return_in_a_contenteditable_says_new_line_once_not_the_blank_block_too() {
+    // The browser answers Return with a new paragraph and puts the caret at its start (offset 0 of
+    // another node): that caret event is the new line, which the key already spoke.
+    let mut g = gecko_rig();
+    let (p, q) = (leaf(96), leaf(97));
+    g.rich(p, "One two");
+    g.advance(1000);
+    let fx = g.key(0xff0d, 13, NONE);
+    assert_eq!(spoken(&fx), ["new line"]);
+    g.advance(3);
+    let fx = g.caret_on(q, 0);
+    assert!(spoken(&fx).is_empty(), "{fx:?}");
+    let fx = g.tick(20);
+    assert!(spoken(&fx).is_empty(), "no uncorrelated line read: {fx:?}");
+    // A caret event at the start of another block long after Return is a real move.
+    g.advance(1000);
+    let _ = g.key(UP, 0, NONE);
+    let fx = g.caret_on(p, 0);
+    assert!(spoken(&fx).is_empty() || spoken(&fx).len() == 1);
+}
+
+#[test]
+fn auto_indent_after_return_says_how_deep_the_new_line_is() {
+    let mut g = rig();
+    g.area("    indented", 12);
+    let fx = g.key(0xff0d, 13, NONE);
+    assert_eq!(spoken(&fx), ["new line"]);
+    // The editor answers with the line break and four blanks: the break is the key's.
+    assert!(spoken(&g.insert(12, "\n    ")).is_empty());
+    assert!(spoken(&g.caret(17)).is_empty());
+    assert_eq!(spoken(&g.tick(10)), ["4 spaces"]);
+    // A tab indent.
+    g.advance(500);
+    let _ = g.key(0xff0d, 13, NONE);
+    let _ = g.insert(17, "\n\t");
+    assert_eq!(spoken(&g.tick(10)), ["1 tab"]);
+}
+
+#[test]
+fn indent_phrases() {
+    use super::caret::indent_phrase;
+    assert_eq!(indent_phrase("  ").as_deref(), Some("2 spaces"));
+    assert_eq!(indent_phrase(" ").as_deref(), Some("1 space"));
+    assert_eq!(indent_phrase("\t\t").as_deref(), Some("2 tabs"));
+    assert_eq!(indent_phrase("\t  ").as_deref(), Some("2 spaces, 1 tab"));
+    assert_eq!(indent_phrase("x "), None);
+    assert_eq!(indent_phrase(""), None);
+}
+
 // A typed key that replaces a selection: Gecko sends a delete and a caret move and no insert.
 // The key's expectation must not outlive that, or the next key's insert is spoken as text.
 fn replace_selection_then_type(role: Role, gap_ms: u64, gecko: bool) -> Vec<String> {

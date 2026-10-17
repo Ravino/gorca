@@ -85,6 +85,8 @@ pub enum Scn {
     E1s,
     /// M3b and M7b scenarios against a private Firefox (`webtext.rs`).
     Wt(&'static str),
+    /// The editing matrix (`edit.rs`), one id per target.
+    Ed(&'static str),
     V1,
     Vt,
     Vh,
@@ -155,7 +157,7 @@ impl Scn {
             Self::L2Storm => "L2-50k".into(),
             Self::K1Storm => "K1-50k".into(),
             Self::E1s => "E1s".into(),
-            Self::Wt(id) => (*id).into(),
+            Self::Wt(id) | Self::Ed(id) => (*id).into(),
             Self::V1 => "V1".into(),
             Self::Vt => "VT".into(),
             Self::Vh => "VH".into(),
@@ -239,6 +241,9 @@ impl Scn {
             "A1" => Self::A1,
             "N1" => Self::N1,
             other => {
+                if let Some(i) = super::edit::IDS.iter().find(|i| **i == other) {
+                    return Some(Self::Ed(i));
+                }
                 if other == "RU-typ" {
                     return Some(Self::Ru(u32::MAX));
                 }
@@ -263,6 +268,7 @@ impl Scn {
         ]
         .iter()
         .chain(super::webtext::IDS)
+        .chain(super::edit::IDS)
         .filter_map(|s| Self::parse(s))
         .collect()
     }
@@ -594,6 +600,7 @@ pub fn run(
         Scn::C1hs => super::m3::c1hs(host, reader, flavor, size, seed, &mut out)?,
         Scn::E1s => super::m3::e1s(host, reader, flavor, size, seed, &mut out)?,
         Scn::Wt(id) => super::webtext::run(id, host, reader, flavor, size, seed, &mut out)?,
+        Scn::Ed(id) => super::edit::run(id, host, reader, flavor, size, &mut out)?,
         Scn::V1 => super::m6::v1(host, reader, flavor, size, seed, &mut out)?,
         Scn::Vt => super::m6::vt(host, reader, flavor, size, seed, &mut out)?,
         Scn::Vh => super::m6::vh(host, reader, flavor, size, seed, &mut out)?,

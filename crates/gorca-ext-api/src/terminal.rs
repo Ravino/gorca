@@ -350,6 +350,148 @@ pub trait TerminalHooks {
     fn snapshot(&self) -> Option<TermSnapshot>;
 }
 
+// ---- the word a readline word motion speaks -----------------------------------------------------
+
+/// What a word motion (Ctrl+Left / Ctrl+Right in readline) speaks on `line` (one screen row,
+/// trailing blanks trimmed), given the caret `from` before the move (when it was on this row) and
+/// `at` after it: the word just passed when a forward move ended at the end of a word (the span
+/// walked back to its last word with a letter or a digit), otherwise the word starting at the
+/// caret; `None` means `blank` (the caret is behind the last character). The returned range is in
+/// scalars of `line` and may carry trailing blanks: the caller trims them.
+///
+/// This is the same model the editing presenter (`gorca-text`, `caret::present_word` with
+/// `WordLanding::End`) applies to every other editor, in slice form so that an extension (which
+/// links only this crate) needs nothing else. `WORD_MOTION_VECTORS` is run by both crates, so the
+/// two cannot drift apart.
+pub fn word_motion(line: &[char], from: Option<u32>, at: u32) -> Option<std::ops::Range<usize>> {
+    let at = at as usize;
+    if let Some(f) = from.map(|f| f as usize).filter(|f| *f < at)
+        && at > 0
+        && let Some(r) = word_passed(line, f, at)
+    {
+        return Some(r);
+    }
+    (at < line.len()).then(|| word_range(line, at))
+}
+
+/// The word passed by a forward move from `from` to `at`, if the move ended at the end of one.
+fn word_passed(line: &[char], from: usize, at: usize) -> Option<std::ops::Range<usize>> {
+    let mut end = at;
+    let mut first = true;
+    loop {
+        if end == 0 || end > line.len() {
+            return None;
+        }
+        let w = word_range(line, end - 1);
+        let kept = line[w.clone()]
+            .iter()
+            .collect::<String>()
+            .trim_end_matches(char::is_whitespace)
+            .chars()
+            .count();
+        let stop = w.start + kept;
+        // Only the first word has to END where the caret is; behind it the span is walked back.
+        if first && (kept == 0 || stop != at) {
+            return None;
+        }
+        first = false;
+        let lettered = line[w.start..stop].iter().any(|c| c.is_alphanumeric());
+        if lettered || w.start <= from || w.start == 0 {
+            return Some(w.start..stop);
+        }
+        end = w.start;
+    }
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+enum Class {
+    Space,
+    Word,
+    Punct,
+}
+
+fn is_mark(c: char) -> bool {
+    matches!(c as u32, 0x0300..=0x036F | 0x1AB0..=0x1AFF | 0x1DC0..=0x1DFF | 0x20D0..=0x20FF | 0xFE20..=0xFE2F)
+}
+
+fn class(c: char) -> Class {
+    if c.is_whitespace() {
+        Class::Space
+    } else if c.is_alphanumeric() || c == '_' || is_mark(c) {
+        Class::Word
+    } else {
+        Class::Punct
+    }
+}
+
+/// The word containing `s[i]`: a run of letters and digits, or one punctuation character, with
+/// its trailing blanks; leading blanks belong to the word before them.
+fn word_range(s: &[char], i: usize) -> std::ops::Range<usize> {
+    if s.is_empty() {
+        return 0..0;
+    }
+    let i = i.min(s.len() - 1);
+    let run_start = |p: usize| {
+        let cl = class(s[p]);
+        let mut q = p;
+        if cl != Class::Punct {
+            while q > 0 && class(s[q - 1]) == cl {
+                q -= 1;
+            }
+        }
+        q
+    };
+    let run_end = |p: usize| {
+        let cl = class(s[p]);
+        if cl == Class::Punct {
+            return p + 1;
+        }
+        let mut e = p;
+        while e < s.len() && class(s[e]) == cl {
+            e += 1;
+        }
+        e
+    };
+    match class(s[i]) {
+        Class::Space => {
+            let a = run_start(i);
+            let b = run_end(i);
+            if a > 0 { run_start(a - 1)..b } else { a..b }
+        }
+        Class::Word | Class::Punct => {
+            let a = run_start(i);
+            let mut b = run_end(i);
+            while b < s.len() && class(s[b]) == Class::Space {
+                b += 1;
+            }
+            a..b
+        }
+    }
+}
+
+/// Shared test vectors of the word model: `(line, caret before, caret after, spoken)`, where an
+/// empty `spoken` is `blank`. Run by this crate and, as a dev-dependency check, by `gorca-text`
+/// against `present_word`, which must agree.
+#[doc(hidden)]
+pub const WORD_MOTION_VECTORS: &[(&str, Option<u32>, u32, &str)] = &[
+    ("hello, brave world", Some(0), 5, "hello"),
+    ("hello, brave world", Some(0), 6, "hello"),
+    ("hello, brave world", Some(5), 6, ","),
+    ("hello, brave world", Some(5), 12, "brave"),
+    ("hello, brave world", Some(12), 18, "world"),
+    ("hello, brave world", Some(18), 18, ""),
+    ("hello, brave world", Some(18), 12, "brave"),
+    ("hello, brave world", Some(12), 7, "brave"),
+    ("hello, brave world", None, 0, "hello"),
+    ("/usr/local/bin", Some(0), 4, "usr"),
+    ("/usr/local/bin", Some(4), 10, "local"),
+    ("/usr/local/bin", Some(10), 14, "bin"),
+    ("foo,bar baz", Some(0), 4, "foo"),
+    ("echo hello, world", Some(5), 10, "hello"),
+    ("ls -l", Some(0), 2, "ls"),
+    ("", None, 0, ""),
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -372,5 +514,16 @@ mod tests {
         let c = TermConfig::default();
         assert_eq!(c.settle_ms, 30);
         assert!(c.prompt_markers.iter().any(|m| m == "$ "));
+    }
+
+    #[test]
+    fn word_motion_vectors() {
+        for &(text, from, at, want) in WORD_MOTION_VECTORS {
+            let chars: Vec<char> = text.chars().collect();
+            let got = word_motion(&chars, from, at)
+                .map(|r| chars[r].iter().collect::<String>().trim().to_owned())
+                .unwrap_or_default();
+            assert_eq!(got, want, "{text:?} {from:?} -> {at}");
+        }
     }
 }

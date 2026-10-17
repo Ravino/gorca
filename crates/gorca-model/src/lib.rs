@@ -39,6 +39,6 @@ pub use redact::RedactKey;
 pub use role::Role;
 pub use speech::{Prio, Segment, SegmentKind, Utterance};
 pub use text::{
-    MAX_SELECTION_TEXT, ScriptPosition, TextFormat, TextGranularity, TextLine, TextLines,
-    TextQuery, TextSelections, TextUnit, TextUnitAt, TextWindowFill,
+    EditQuirks, MAX_SELECTION_TEXT, ScriptPosition, TextFormat, TextGranularity, TextLine,
+    TextLines, TextQuery, TextSelections, TextUnit, TextUnitAt, TextWindowFill, WordLanding,
 };
