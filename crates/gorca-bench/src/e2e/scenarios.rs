@@ -95,6 +95,8 @@ pub enum Scn {
     Vv,
     /// M6: flat review of a terminal that keeps printing, across Alt+Tab.
     Vs,
+    /// M6: a long real-terminal session must never degrade (untracked terminal).
+    Vd,
     /// M4b: window and dialog activation speech.
     A1,
     /// M4b: notifications never interrupt focus speech.
@@ -160,6 +162,7 @@ impl Scn {
             Self::Vw => "VW".into(),
             Self::Vv => "VV".into(),
             Self::Vs => "VS".into(),
+            Self::Vd => "VD".into(),
             Self::A1 => "A1".into(),
             Self::N1 => "N1".into(),
         }
@@ -223,6 +226,7 @@ impl Scn {
             "VW" => Self::Vw,
             "VV" => Self::Vv,
             "VS" => Self::Vs,
+            "VD" => Self::Vd,
             "A1" => Self::A1,
             "N1" => Self::N1,
             other => {
@@ -240,7 +244,7 @@ impl Scn {
             "K4", "K4r", "K4h", "R1", "R1s", "RS", "B0", "W1", "BR1", "BR2", "W2", "W2b", "W3",
             "FM1", "FM2", "C1", "C1h", "C2", "C3", "E1", "E2", "E2f", "S2", "SA1", "SA2", "SA3",
             "SA3a", "PW", "C1hs", "E1s", "V1", "VT", "VH", "V2", "V3", "VP", "VR", "VF", "VB",
-            "VW", "VV", "VS", "A1", "N1",
+            "VW", "VV", "VS", "VD", "A1", "N1",
         ]
         .iter()
         .chain(super::webtext::IDS)
@@ -585,6 +589,7 @@ pub fn run(
         Scn::Vw => super::m6::vw(host, reader, flavor, size, seed, &mut out)?,
         Scn::Vv => super::m6::vv(host, reader, flavor, size, seed, &mut out)?,
         Scn::Vs => super::m6::vs(host, reader, flavor, size, seed, &mut out)?,
+        Scn::Vd => super::m6::vd(host, reader, flavor, size, seed, &mut out)?,
         Scn::A1 => super::m4b::a1(host, reader, flavor, size, seed, &mut out)?,
         Scn::N1 => super::m4b::n1(host, reader, flavor, size, seed, &mut out)?,
     }

@@ -287,9 +287,10 @@ impl Reader {
 
     /// The focus presentation of a terminal finished: track it and read its screen.
     pub(crate) fn term_track(&mut self, snap: &NodeSnapshot, fx: &mut ReaderEffects) {
-        self.term_untrack();
+        self.term_untrack("retrack");
         let cfg = self.term_config();
         self.text.term.next_serial += 1;
+        tracing::debug!(target: "gorca_terminal", node = ?snap.key, serial = self.text.term.next_serial, "terminal tracked");
         self.text.term.tracked = Some(Tracked {
             node: snap.key,
             serial: self.text.term.next_serial,
@@ -301,8 +302,9 @@ impl Reader {
     }
 
     /// Focus moved on, or the terminal is gone: wipe what the extension knows (secrets included).
-    pub(crate) fn term_untrack(&mut self) {
+    pub(crate) fn term_untrack(&mut self, why: &'static str) {
         if let Some(mut t) = self.text.term.tracked.take() {
+            tracing::debug!(target: "gorca_terminal", node = ?t.node, serial = t.serial, why, "terminal untracked");
             let mut sink = Vec::new();
             t.ext.step(0, TermInput::Blur, &mut sink);
             self.text.term.retired = add(self.text.term.retired, t.ext.counters());
@@ -322,7 +324,7 @@ impl Reader {
             .as_ref()
             .is_some_and(|t| node == Some(t.node) || app == Some(t.node.app));
         if hit {
-            self.term_untrack();
+            self.term_untrack("node or app gone");
         }
     }
 

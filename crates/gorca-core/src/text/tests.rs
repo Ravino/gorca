@@ -932,7 +932,7 @@ fn a_secret_window_is_dropped_with_the_focus() {
     let mut g = rig();
     g.track(Role::PasswordEntry, StateSet::EDITABLE, "hunter2", 7);
     assert!(g.r.text.caret.tracked().is_some());
-    g.r.text_untrack();
+    g.r.text_untrack("test");
     assert!(g.r.text.caret.is_off());
 }
 

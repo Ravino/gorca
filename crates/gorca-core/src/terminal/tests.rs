@@ -450,7 +450,7 @@ fn password_prompt_characters_are_marked_sensitive_and_not_repeatable() {
 fn moving_focus_off_the_terminal_wipes_it_and_ignores_its_late_events() {
     let mut g = rig();
     g.focus("$ ", 2);
-    g.r.text_untrack();
+    g.r.text_untrack("test");
     assert!(!g.r.term_tracked());
     let fx = g.insert(2, "x");
     assert!(spoken(&fx).is_empty());

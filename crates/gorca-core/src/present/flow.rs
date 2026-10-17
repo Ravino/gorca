@@ -197,7 +197,7 @@ impl Reader {
         self.last_focus = Some((node, now));
         self.reconfirm = Reconfirm::Idle;
         self.timeout_charged = false;
-        self.text_untrack();
+        self.text_untrack("focus event");
         // Review follows the focus (ADR-0006 4.1) unless the user turned that off.
         self.review_focus_changed(fx);
         // The trigger gets its own sequence point: only a request issued after it can have

@@ -2992,3 +2992,279 @@ mod tests {
         assert_eq!(p99_u64(&[1, 2, 3, 100]), 3);
     }
 }
+
+// ---- VD: the terminal must not degrade over a long session -------------------------------------
+
+const ALT_L: K = K {
+    code: 64,
+    sym: 0xffe9,
+};
+const ALT: u32 = 8;
+const PAGE_DOWN: K = K {
+    code: 117,
+    sym: 0xff56,
+};
+
+/// Key names the generic echo speaks for a key the terminal layer must own (Tab, BackSpace, Enter
+/// in a tracked terminal are never spoken as names: a name means the terminal is not tracked).
+fn key_name_spoken(got: &[String]) -> Option<&str> {
+    got.iter().map(String::as_str).find(|s| {
+        ["tab", "backspace", "enter", "return"]
+            .contains(&s.to_ascii_lowercase().as_str())
+    })
+}
+
+impl Check {
+    /// A VD step: `ok` and no key name among what was said.
+    fn vd(&mut self, name: &str, ok: bool, got: &[String]) {
+        let leak = key_name_spoken(got).is_some();
+        let label = if leak {
+            format!("{name} (a key NAME was spoken)")
+        } else {
+            name.to_owned()
+        };
+        self.expect(&label, ok && !leak, got);
+    }
+}
+
+/// One cycle of ordinary bash use. Every step must read what it did and none may speak a key name.
+fn vd_cycle(v: &mut V, c: &mut Check, tag: &str) -> Result<()> {
+    let typed = format!("echo {tag}");
+    let got = v.said_during(300, |v| v.type_text(&typed).map(|_| ()))?;
+    c.vd(
+        &format!("{tag} typing is read"),
+        got.len() + 2 >= typed.len(),
+        &got,
+    );
+    let got = v.said_during(900, |v| v.press(ENTER, 13, 0, &[28]).map(|_| ()))?;
+    c.vd(&format!("{tag} Enter: the output"), heard(&got, tag), &got);
+    std::thread::sleep(Duration::from_millis(600));
+    let got = v.said_during(500, |v| v.press(UP, 0, 0, &[103]).map(|_| ()))?;
+    c.vd(&format!("{tag} Up: history"), heard(&got, &typed), &got);
+    let got = v.said_during(500, |v| v.press(DOWN, 0, 0, &[108]).map(|_| ()))?;
+    c.vd(&format!("{tag} Down: empty line"), !got.is_empty(), &got);
+    let got = v.said_during(300, |v| v.type_text("ec").map(|_| ()))?;
+    c.vd(&format!("{tag} typing ec"), !got.is_empty(), &got);
+    let got = v.said_during(500, |v| v.press(TAB, 9, 0, &[15]).map(|_| ()))?;
+    c.vd(&format!("{tag} Tab completes"), heard(&got, "echo"), &got);
+    let got = v.said_during(500, |v| v.press(BACKSPACE, 8, 0, &[14]).map(|_| ()))?;
+    c.vd(&format!("{tag} BackSpace"), !got.is_empty(), &got);
+    let got = v.said_during(500, |v| {
+        v.chord(&[CTRL_L], KEY_U, 21, CONTROL, &[29, 22])
+            .map(|_| ())
+    })?;
+    c.vd(&format!("{tag} Ctrl+U"), !got.is_empty(), &got);
+    // Several candidates: the common prefix completes, the second Tab pair lists them.
+    let got = v.said_during(300, |v| v.type_text("ls /usr/bin/gnome-s").map(|_| ()))?;
+    c.vd(&format!("{tag} typing a path"), !got.is_empty(), &got);
+    let got = v.said_during(600, |v| v.press(TAB, 9, 0, &[15]).map(|_| ()))?;
+    c.vd(&format!("{tag} Tab: the prefix"), heard(&got, "ession"), &got);
+    let got = v.said_during(1500, |v| {
+        v.press(TAB, 9, 0, &[15])?;
+        std::thread::sleep(Duration::from_millis(150));
+        v.press(TAB, 9, 0, &[15]).map(|_| ())
+    })?;
+    c.vd(
+        &format!("{tag} Tab Tab: the candidates"),
+        heard(&got, "gnome-session-quit") || heard(&got, "gnome-session-inhibit"),
+        &got,
+    );
+    let got = v.said_during(500, |v| {
+        v.chord(&[CTRL_L], KEY_U, 21, CONTROL, &[29, 22])
+            .map(|_| ())
+    })?;
+    c.vd(&format!("{tag} Ctrl+U again"), !got.is_empty(), &got);
+    Ok(())
+}
+
+/// The disturbance `n` of a VD round. The terminal keeps the keyboard focus through all of them.
+fn vd_perturb(v: &mut V, n: usize, cbus: &str) -> Result<&'static str> {
+    use std::process::Command;
+    let alt_tab = |v: &mut V| v.chord(&[ALT_L], TAB, 9, ALT, &[56, 15]).map(|_| ());
+    Ok(match n % 8 {
+        0 => {
+            std::thread::sleep(Duration::from_secs(20));
+            "idle 20 s"
+        }
+        1 => {
+            v.term
+                .open_second_app("exec bash --norc -i")
+                .context("second app")?;
+            std::thread::sleep(Duration::from_secs(3));
+            alt_tab(v)?;
+            std::thread::sleep(Duration::from_millis(1500));
+            alt_tab(v)?;
+            std::thread::sleep(Duration::from_millis(1500));
+            "second app window, Alt+Tab back"
+        }
+        2 => {
+            v.term.open_tab("exec bash --norc -i")?;
+            std::thread::sleep(Duration::from_secs(3));
+            v.chord(&[CTRL_L], PAGE_UP, 0, CONTROL, &[29, 104])?;
+            std::thread::sleep(Duration::from_millis(1200));
+            v.chord(&[CTRL_L], PAGE_DOWN, 0, CONTROL, &[29, 109])?;
+            std::thread::sleep(Duration::from_millis(1200));
+            v.chord(&[CTRL_L], PAGE_UP, 0, CONTROL, &[29, 104])?;
+            std::thread::sleep(Duration::from_millis(1200));
+            "tab switch"
+        }
+        3 => {
+            for i in 0..3 {
+                let _ = Command::new("notify-send")
+                    .args(["gorca soak", &format!("notification {i}")])
+                    .env("DBUS_SESSION_BUS_ADDRESS", cbus)
+                    .status();
+                std::thread::sleep(Duration::from_millis(900));
+            }
+            std::thread::sleep(Duration::from_secs(5));
+            "notifications"
+        }
+        4 => {
+            // Ctrl+G rings the readline bell; so does a Tab with nothing to add.
+            v.chord(&[CTRL_L], letter_key('g'), 7, CONTROL, &[29, 34])?;
+            std::thread::sleep(Duration::from_millis(800));
+            v.type_text("ls /usr/bin/gnome-")?;
+            v.press(TAB, 9, 0, &[15])?;
+            std::thread::sleep(Duration::from_millis(800));
+            v.chord(&[CTRL_L], KEY_U, 21, CONTROL, &[29, 22])?;
+            std::thread::sleep(Duration::from_millis(500));
+            "bell"
+        }
+        5 => {
+            v.term.rd_line("key 125");
+            std::thread::sleep(Duration::from_millis(1500));
+            v.term.rd_line("key 1");
+            std::thread::sleep(Duration::from_millis(1500));
+            "overview and back"
+        }
+        6 => {
+            alt_tab(v)?;
+            std::thread::sleep(Duration::from_millis(1200));
+            alt_tab(v)?;
+            std::thread::sleep(Duration::from_millis(1200));
+            alt_tab(v)?;
+            std::thread::sleep(Duration::from_millis(300));
+            alt_tab(v)?;
+            std::thread::sleep(Duration::from_millis(1500));
+            "Alt+Tab storm"
+        }
+        _ => {
+            std::thread::sleep(Duration::from_secs(60));
+            "idle 60 s"
+        }
+    })
+}
+
+/// VD (real terminal, `GORCA_M6_REAL=1`, `tests/term/run_real_vte.sh`): a long session of ordinary
+/// bash use (typing, Enter, history, Tab completion with several candidates, BackSpace) between
+/// disturbances (idle, another application's window and Alt+Tab, tab switches, notifications, the
+/// bell, the overview). After every disturbance a full cycle must read what it did, and the
+/// generic key echo must never speak Tab, BackSpace or Enter by name: that is the signature of a
+/// terminal that is no longer tracked. `GORCA_VD_ROUNDS` (default 8) sets the length.
+pub fn vd(
+    host: &HostEnv,
+    reader: &ReaderSpec,
+    flavor: Flavor,
+    _size: Size,
+    _seed: u64,
+    out: &mut RunOut,
+) -> Result<()> {
+    if !gate_open(host, "VD", out)? {
+        return Ok(());
+    }
+    if !(flag(host, "GORCA_M6_REAL") && std::env::var_os("GORCA_VTE_WAYLAND").is_some()) {
+        if flag(host, "GORCA_M6_STRICT") {
+            bail!("VD: GORCA_M6_REAL=1 and the private compositor are required");
+        }
+        out.notes
+            .push("VD SKIPPED: needs GORCA_M6_REAL=1 and tests/term/run_real_vte.sh".to_owned());
+        out.x("skipped", 1.0, "flag");
+        return Ok(());
+    }
+    let root = std::env::var("GORCA_HARNESS_DIR").context("GORCA_HARNESS_DIR not set")?;
+    let cbus = std::env::var("GORCA_VTE_CBUS").context("GORCA_VTE_CBUS not set")?;
+    let err_path = std::path::Path::new(&root).join("vd-reader.stderr");
+    let mut h = m1_env(host);
+    h.reader_env.retain(|(k, _)| k != "RUST_LOG");
+    h.reader_env
+        .push(("RUST_LOG".to_owned(), "debug".to_owned()));
+    let mut o = super::scenarios::base_opts(reader, flavor);
+    o.keys = true;
+    o.reader_stderr = Some(err_path.clone());
+    let rig = Rig::start(&h, &o)?;
+    if !rig.keys_ok {
+        bail!("the reader did not register with the emulated keyboard monitor (no SetKeyGrabs)");
+    }
+    rig.mock
+        .configure(Duration::from_millis(1), Duration::from_millis(5));
+    let term = RealTerm::start(host)?;
+    let mut v = V {
+        rig,
+        term,
+        ty: Typist::new(),
+    };
+    std::thread::sleep(Duration::from_secs(4));
+    v.term.rd_line("click");
+    std::thread::sleep(Duration::from_secs(1));
+    v.press(
+        K {
+            code: 110,
+            sym: 0xff50,
+        },
+        0,
+        0,
+        &[102],
+    )?;
+    std::thread::sleep(Duration::from_millis(1500));
+    if v.rig.mock.since(0).is_empty() {
+        bail!("the reader never spoke: the terminal did not come up");
+    }
+    let mut c = Check {
+        failures: 0,
+        notes: Vec::new(),
+    };
+    let rounds: usize = std::env::var("GORCA_VD_ROUNDS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(8);
+    vd_cycle(&mut v, &mut c, "base0")?;
+    out.x("vd_base_failures", c.failures as f64, "steps");
+    let mut per_round = Vec::new();
+    for r in 0..rounds {
+        let before = c.failures;
+        let what = vd_perturb(&mut v, r, &cbus)?;
+        vd_cycle(&mut v, &mut c, &format!("r{r}"))?;
+        let bad = c.failures - before;
+        per_round.push(bad);
+        out.notes
+            .push(format!("VD round {r} ({what}): {bad} failing steps"));
+        if bad > 0 && flag(host, "GORCA_VD_RECOVER") {
+            // Does Alt+Tab away and back repair it, as the user sees?
+            v.chord(&[ALT_L], TAB, 9, ALT, &[56, 15]).ok();
+            std::thread::sleep(Duration::from_millis(1500));
+            v.chord(&[ALT_L], TAB, 9, ALT, &[56, 15]).ok();
+            std::thread::sleep(Duration::from_millis(1500));
+            let b2 = c.failures;
+            vd_cycle(&mut v, &mut c, &format!("r{r}re"))?;
+            out.notes.push(format!(
+                "VD round {r}: after Alt+Tab away and back {} failing steps",
+                c.failures - b2
+            ));
+        }
+    }
+    out.x("vd_failures", c.failures as f64, "steps");
+    out.x(
+        "vd_bad_rounds",
+        per_round.iter().filter(|b| **b > 0).count() as f64,
+        "rounds",
+    );
+    out.notes.extend(std::mem::take(&mut c.notes));
+    if let Some(dir) = std::env::var_os("GORCA_VV_KEEP_DIR") {
+        let dir = std::path::PathBuf::from(dir);
+        let _ = std::fs::create_dir_all(&dir);
+        if let Some(name) = err_path.file_name() {
+            let _ = std::fs::copy(&err_path, dir.join(name));
+        }
+    }
+    Ok(())
+}

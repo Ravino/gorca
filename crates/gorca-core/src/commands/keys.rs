@@ -7,7 +7,7 @@ use gorca_input_api::{KeyClass, KeyIntent};
 
 use crate::SpeechIntent;
 use crate::mode::Mode;
-use crate::present::{key_echo, key_echo_text};
+use crate::present::{key_echo, key_echo_is_action, key_echo_text};
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 
 impl Reader {
@@ -55,6 +55,7 @@ impl Reader {
                         intent.event.keysym,
                         intent.event.modifiers,
                     )
+                    && (!key_echo_is_action(&text) || self.cmd.effective.echo.command_keys)
                 {
                     let id = self.utt_id();
                     let u = key_echo(&text, id, intent.epoch);
