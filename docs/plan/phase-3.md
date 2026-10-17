@@ -63,6 +63,7 @@ Explicitly deferred out of Phase 2 and therefore candidates here:
 | ADR-0002 perception beyond scaffolding | phase-2 Q6 | stretch **MP** (phases 1–2 only) |
 | Unified editing navigation (user request 2026-10-17): one caret/word/character/line model and speech, as in the terminal, for GTK entries/textviews, gedit, GNOME Text Editor, web editables and the terminal | shared presenter + per-toolkit quirk data; e2e matrix per toolkit | M11 (wave 1) |
 | Verbosity levels and profiles: NVDA-style detail toggles per role/state, per-app profiles | settings + command toggles | M13/M14 |
+| NVDA-derived features (user request 2026-10-17): lock key announcements (Caps/Num/Scroll Lock), input help (gorca+1), speech history and copy last utterance, formatting info (gorca+F), indentation reporting by speech/tone, sleep mode per app, per-app configuration profiles, spell phonetically (double press), date/time and battery/status commands, review-cursor follow toggles | commands + settings; e2e per command | M13/M14 (lock keys may land earlier) |
 | Text editors: gedit and GNOME Text Editor (baseline app scope, user request 2026-10-16) | e2e scenarios for editing, word/line/paragraph navigation, selection, find/replace, tabs; user checklist | M11 (wave 1) |
 | LibreOffice and other apps | CLAUDE.md "later" | Phase 4 (§10) |
 
