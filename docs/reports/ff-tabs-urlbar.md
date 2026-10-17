@@ -34,3 +34,11 @@ Open / unverified:
 - The first digit typed over the select-all URL leaves the next typed char double-echoed ("2","2"), deterministic in UB1 (typed claim vs. Gecko replace-selection events with no insert). Text/caret area, not touched.
 - Suggestion rows: "list item" then a separate "selected" utterance sometimes; no "N of M" or suggestion count.
 - Re-spoken cold-tab focus uses `describe_node` wording (role first: "link Link Gamma") unlike the focus presenter.
+
+## Review fixes (2026-10-17)
+- F1: `Tracked.replaced` (caret.rs): an unexplained delete with a fresh typed key sets it; the caret event that follows (no insert) consumes that key's expectation; an insert clears it. Regression test `a_key_that_replaced_a_selection_leaves_no_expectation_for_the_next_insert` (entry and combo, Gecko slack at 300/2200 ms and without). UB1 x3: "2" spoken once.
+- F2: cold tab entry re-speaks via the focus presenter (word, title, "Link Gamma, link"), same wording as the first utterance. It is still two utterances (the first, short one goes out before the page is known; delaying it would break the focus-latency gate).
+- F3: `web_retry_loading` now leads with the title (`web_document_lead`), no dedicated test.
+- TB1 x3: 0 failures; UB1 x3: 0 failures.
+- Known, pre-existing: after a document-root focus, its pending first-line tail can leak onto the next focus ("... Link Gamma, link, heading level 1, Heading Alpha").
+- Gate note: `cargo clippy -D warnings` fails on main's `gorca-bench/src/e2e/ru.rs` (74, 109, 183), not on this branch's code.
