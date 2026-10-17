@@ -61,6 +61,8 @@ Explicitly deferred out of Phase 2 and therefore candidates here:
 | voicego deep improvement | decision 2026-10-14 ("separate effort after Phase 2") | track **V** |
 | Upstreaming (Mutter 48.7 stuck modifier, at-spi2-core, Chromium `IsEnabled`) | decisions 2026-10-14, ADR-0001 §5.5 | track **U** |
 | ADR-0002 perception beyond scaffolding | phase-2 Q6 | stretch **MP** (phases 1–2 only) |
+| Unified editing navigation (user request 2026-10-17): one caret/word/character/line model and speech, as in the terminal, for GTK entries/textviews, gedit, GNOME Text Editor, web editables and the terminal | shared presenter + per-toolkit quirk data; e2e matrix per toolkit | M11 (wave 1) |
+| Verbosity levels and profiles: NVDA-style detail toggles per role/state, per-app profiles | settings + command toggles | M13/M14 |
 | Text editors: gedit and GNOME Text Editor (baseline app scope, user request 2026-10-16) | e2e scenarios for editing, word/line/paragraph navigation, selection, find/replace, tabs; user checklist | M11 (wave 1) |
 | LibreOffice and other apps | CLAUDE.md "later" | Phase 4 (§10) |
 
