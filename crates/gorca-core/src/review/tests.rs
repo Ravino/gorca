@@ -1300,12 +1300,12 @@ fn review_of_a_terminal_whose_events_were_lost_speaks_the_held_screen_and_correc
     dropped.fetch_add(3, std::sync::atomic::Ordering::Relaxed);
     let mut fx = f.run(CoreCmd::ReviewPrevLine);
     assert_eq!(said(&fx), ["old 2"], "spoken at once from the held screen");
-    let fx = f.settle_and_answer(&mut fx, "new 8\nnew 9\n$ ");
+    let fx = f.settle_and_answer(&mut fx, "old 1\nnew 9\n$ ");
     assert_eq!(said(&fx), ["new 9"], "corrected, once");
     assert_eq!(f.reader.terminal_reads().review_syncs, 1);
     // Trusted again: the next step reads the held screen with no wait.
     let fx = f.run(CoreCmd::ReviewPrevLine);
-    assert_eq!(said(&fx), ["new 8"]);
+    assert_eq!(said(&fx), ["old 1"]);
     assert!(screen_read(&fx).is_none());
 }
 
@@ -1325,7 +1325,7 @@ fn review_of_a_terminal_that_is_not_the_protected_application_reads_the_screen_a
     );
     let mut fx = f.run(CoreCmd::ReviewPrevLine);
     assert_eq!(said(&fx), ["new 9"]);
-    let fx = f.settle_and_answer(&mut fx, "newer 9\nnewer 10\n$ ");
+    let fx = f.settle_and_answer(&mut fx, "new 8\nnewer 10\n$ ");
     assert_eq!(
         said(&fx),
         ["newer 10"],
@@ -1467,5 +1467,71 @@ fn live_review_a_flood_does_not_make_a_review_key_wait() {
     assert!(
         !matches!(f.reader.review.op, super::OpState::Pending(_)),
         "no suspended step"
+    );
+}
+
+#[test]
+fn live_review_a_screen_replaced_as_a_whole_keeps_the_line_the_user_is_on() {
+    // A flood outran the extension: nothing of the old screen is on the new one. The line is
+    // held, not replaced by whatever is on the same row.
+    let dropped = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let mut f = term_fixture(Some(Arc::clone(&dropped)), None);
+    f.focus_terminal("old 1\nalpha bravo\n$ ");
+    f.run(CoreCmd::ReviewCurLine);
+    f.run(CoreCmd::ReviewPrevLine);
+    dropped.fetch_add(3, std::sync::atomic::Ordering::Relaxed);
+    let mut fx = f.run(CoreCmd::ReviewNextWord);
+    assert_eq!(said(&fx), ["bravo"]);
+    let fx = f.settle_and_answer(&mut fx, "n1\nn2\n$ ");
+    assert!(said(&fx).is_empty(), "no correction: {:?}", said(&fx));
+    let fx = f.run(CoreCmd::ReviewPrevChar);
+    assert_eq!(said(&fx), ["space"]);
+}
+
+#[test]
+fn live_review_identical_lines_never_move_the_cursor_on_a_guess() {
+    // A flood of the same line: the scroll cannot be told from the content; the cursor holds.
+    let mut f = term_fixture(None, None);
+    f.focus_terminal("ok\nok\nok\nok\nend here");
+    f.run(CoreCmd::ReviewCurLine);
+    f.run(CoreCmd::ReviewPrevLine);
+    let fx = f.run(CoreCmd::ReviewPrevLine);
+    assert_eq!(said(&fx), ["ok"]);
+    f.terminal_output("ok\nok\nok\nok\nok");
+    let fx = f.run(CoreCmd::ReviewNextChar);
+    assert_eq!(said(&fx), ["k"]);
+    let fx = f.run(CoreCmd::ReviewNextLine);
+    assert!(said(&fx)[0].starts_with("scrolled,") || said(&fx)[0] == "ok");
+}
+
+#[test]
+fn live_review_the_rows_the_terminal_reports_scrolled_move_the_cursor_exactly() {
+    // A flood of one line: the content cannot tell which "ok" the cursor was on, the delete
+    // events at the top of the screen can.
+    let mut f = term_fixture(None, None);
+    f.focus_terminal("ok\nok\nok\nok\nend");
+    f.run(CoreCmd::ReviewCurLine);
+    f.run(CoreCmd::ReviewPrevLine);
+    f.run(CoreCmd::ReviewNextChar);
+    let row = |f: &Fx| match f.reader.cursor().map(|c| c.pos) {
+        Some(super::cursor::ReviewPos::Screen(Some(p))) => (p.line, p.offset),
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(row(&f), (3, 1));
+    let mut fx = ReaderEffects::default();
+    for _ in 0..2 {
+        let d = gorca_model::TextDelta::Delete {
+            offset: 0,
+            len: 3,
+            text: None,
+        };
+        f.reader.term_edit(d, &mut fx);
+    }
+    let fx = f.run(CoreCmd::ReviewPrevChar);
+    assert_eq!(said(&fx), ["o"]);
+    assert_eq!(
+        row(&f),
+        (1, 0),
+        "two rows up, offset carried then moved back"
     );
 }

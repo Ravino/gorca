@@ -92,7 +92,7 @@ pub fn anchor_at_node(model: &LineModel, node: NodeKey) -> Option<FlatPos> {
 pub fn reanchor(model: &LineModel, a: ZoneAnchor) -> Option<FlatPos> {
     if model.source == LineSource::Terminal {
         // No old model to compare with: the content first (ADR-0018), else the same row.
-        return match carry_terminal(None, model, &a, 0) {
+        return match carry_terminal(None, model, &a, 0, None) {
             Some(Carried::At(p)) => Some(p),
             Some(Carried::Gone) | None => nearest_line(model, a.y_mid),
         };
@@ -145,18 +145,17 @@ fn anchor_row(a: &ZoneAnchor) -> usize {
 /// The signed row shift (new row = old row + d) that makes most non-blank rows of `old` equal to
 /// rows of `new`, with the number of rows it explains. Ties go to the smallest |d|, then to the
 /// scroll direction output makes (up, d < 0).
-fn best_shift(old: &[u64], new: &[u64], blank: u64) -> (i64, usize) {
+fn best_shift(old: &[u64], new: &[u64], blank: u64) -> (i64, usize, bool) {
     let (o, n) = (
         &old[..old.len().min(SHIFT_ROWS)],
         &new[..new.len().min(SHIFT_ROWS)],
     );
     let mut best = (0i64, 0usize);
+    let mut ties = 0usize;
     let span = i64::try_from(o.len().max(n.len())).unwrap_or(0);
     for k in 0..=span {
-        for d in [-k, k] {
-            if k == 0 && d != 0 {
-                continue;
-            }
+        let both = [-k, k];
+        for &d in if k == 0 { &both[1..] } else { &both[..] } {
             let score = o
                 .iter()
                 .enumerate()
@@ -171,43 +170,54 @@ fn best_shift(old: &[u64], new: &[u64], blank: u64) -> (i64, usize) {
                 .count();
             if score > best.1 {
                 best = (d, score);
+                ties = 0;
+            } else if score == best.1 && score > 0 {
+                ties += 1;
             }
         }
     }
-    (best.0, best.1)
+    (best.0, best.1, ties > 0)
 }
 
-/// Carry a terminal position over to a rebuilt screen. The line is followed by its content: the
-/// scroll between the screens is estimated from the rows they share (`old` is the screen the
-/// position was made on, when still known), the line is found at its shifted row or, failing
-/// that, anywhere on the screen; a line rewritten in place (progress bar, prompt) keeps its
-/// shifted row; a line that left the screen is `Gone`. Without `old` the row is the best guess
-/// and nothing is ever `Gone`. `None` when the new screen is empty.
+/// Carry a terminal position over to a rebuilt screen (ADR-0018). `scroll` is the number of rows
+/// the screen scrolled up since `anchor` was made, when the terminal's own edit events said so
+/// (exact: VTE reports the rows that left the top); the line is then at its shifted row, or
+/// gone. Without it the scroll is estimated from the rows the two screens share (`old` is the
+/// screen the position was made on, when still known). The cursor never moves on an ambiguous
+/// match: when several shifts explain the screens equally, or the content occurs on several
+/// rows, the line is `Gone` (held, and read from its own text) unless it occurs exactly once. A
+/// line rewritten in place (progress bar, prompt) keeps its shifted row. Without `old` the row
+/// is the best guess and nothing is ever `Gone` by estimate. `None` when the new screen is empty.
 pub fn carry_terminal(
     old: Option<&LineModel>,
     new: &LineModel,
     a: &ZoneAnchor,
     offset: u32,
+    scroll: Option<u32>,
 ) -> Option<Carried> {
     if new.lines.is_empty() {
         return None;
     }
     let row = anchor_row(a);
     let new_h: Vec<u64> = new.lines.iter().map(|l| hash_line(&l.text)).collect();
-    let (d, score) = old.map_or((0, 0), |o| {
-        let blank = hash_line("");
-        // The caret rows are left out of the estimate: a prompt stays where it is while output
-        // scrolls above it, so it would vote for "no scroll".
-        let mask = |m: &LineModel, h: &[u64]| -> Vec<u64> {
-            let mut v = h.to_vec();
-            if let Some(f) = m.focus_line.and_then(|f| v.get_mut(f as usize)) {
-                *f = blank;
-            }
-            v
-        };
-        let old_h: Vec<u64> = o.lines.iter().map(|l| hash_line(&l.text)).collect();
-        best_shift(&mask(o, &old_h), &mask(new, &new_h), blank)
-    });
+    let exact = scroll.is_some();
+    let (d, score, ambiguous) = match scroll {
+        Some(q) => (-i64::from(q), usize::MAX, false),
+        None => old.map_or((0, 0, false), |o| {
+            let blank = hash_line("");
+            // The caret rows are left out of the estimate: a prompt stays where it is while
+            // output scrolls above it, so it would vote for "no scroll".
+            let mask = |m: &LineModel, h: &[u64]| -> Vec<u64> {
+                let mut v = h.to_vec();
+                if let Some(f) = m.focus_line.and_then(|f| v.get_mut(f as usize)) {
+                    *f = blank;
+                }
+                v
+            };
+            let old_h: Vec<u64> = o.lines.iter().map(|l| hash_line(&l.text)).collect();
+            best_shift(&mask(o, &old_h), &mask(new, &new_h), blank)
+        }),
+    };
     let target = i64::try_from(row).unwrap_or(0) + d;
     let at = |j: usize| {
         u32::try_from(j)
@@ -216,21 +226,39 @@ pub fn carry_terminal(
             .map(Carried::At)
     };
     let shifted = usize::try_from(target).ok().filter(|t| *t < new_h.len());
+    if exact {
+        // The terminal said how far it scrolled: same row shifted, whatever it holds now.
+        return shifted.map_or(Some(Carried::Gone), at);
+    }
+    let occ: Vec<usize> = new_h
+        .iter()
+        .enumerate()
+        .filter(|(_, h)| **h == a.line_hash)
+        .map(|(j, _)| j)
+        .collect();
+    if ambiguous && old.is_some() {
+        return match occ.as_slice() {
+            [only] => at(*only),
+            _ => Some(Carried::Gone),
+        };
+    }
     if let Some(t) = shifted
         && new_h[t] == a.line_hash
     {
         return at(t);
     }
-    // The same content somewhere else: the nearest to where the shift puts it.
     let want = target.clamp(0, i64::try_from(new_h.len() - 1).unwrap_or(0));
-    let same = new_h
-        .iter()
-        .enumerate()
-        .filter(|(_, h)| **h == a.line_hash)
-        .min_by_key(|(j, _)| (i64::try_from(*j).unwrap_or(0) - want).abs())
-        .map(|(j, _)| j);
-    if let Some(j) = same {
-        return at(j);
+    match occ.as_slice() {
+        [] => {}
+        [only] => return at(*only),
+        _ if old.is_some() => return Some(Carried::Gone),
+        many => {
+            let j = many
+                .iter()
+                .copied()
+                .min_by_key(|j| (i64::try_from(*j).unwrap_or(0) - want).abs())?;
+            return at(j);
+        }
     }
     match (old.is_some(), shifted) {
         // Continuity but the row is off the screen: scrolled away.
@@ -597,7 +625,7 @@ mod tests {
 
     fn carried(old: &LineModel, new: &LineModel, line: u32, offset: u32) -> Option<Carried> {
         let p = pos_at(old, line, 0, offset)?;
-        carry_terminal(Some(old), new, &p.anchor, p.offset)
+        carry_terminal(Some(old), new, &p.anchor, p.offset, None)
     }
 
     fn at(c: Option<Carried>) -> (u32, u32) {
@@ -646,21 +674,32 @@ mod tests {
         assert_eq!(carried(&old, &new, 1, 0), Some(Carried::Gone));
         let p = pos_at(&old, 1, 0, 0).unwrap();
         assert_eq!(
-            at(carry_terminal(None, &new, &p.anchor, 0).into()),
+            at(carry_terminal(None, &new, &p.anchor, 0, None)),
             (1, 0),
             "no old screen: the row"
         );
-        assert!(carry_terminal(Some(&old), &screen(""), &p.anchor, 0).is_none());
+        assert!(carry_terminal(Some(&old), &screen(""), &p.anchor, 0, None).is_none());
     }
 
     #[test]
     fn the_shift_estimate_is_bounded_on_a_huge_screen() {
-        let text: String = (0..3000).map(|i| format!("line {i}\n")).collect();
+        let text: String = (0..3000).fold(String::new(), |a, i| a + &format!("line {i}\n"));
         let old = screen(&text);
-        let shifted: String = (1..3001).map(|i| format!("line {i}\n")).collect();
+        let shifted: String = (1..3001).fold(String::new(), |a, i| a + &format!("line {i}\n"));
         let new = screen(&shifted);
         let t = Instant::now();
         let _ = carried(&old, &new, 700, 0);
         assert!(t.elapsed() < std::time::Duration::from_millis(500));
+    }
+    #[test]
+    fn an_exact_scroll_from_the_terminal_beats_the_content() {
+        // A flood of one line: the content cannot say where the cursor went, the events can.
+        let old = screen("ok\nok\nok\nok\nok");
+        let new = screen("ok\nok\nok\nok\nok");
+        let p = pos_at(&old, 3, 0, 1).unwrap();
+        let c = carry_terminal(Some(&old), &new, &p.anchor, p.offset, Some(2));
+        assert_eq!(at(c), (1, 1));
+        let c = carry_terminal(Some(&old), &new, &p.anchor, p.offset, Some(4));
+        assert_eq!(c, Some(Carried::Gone), "scrolled off the top");
     }
 }

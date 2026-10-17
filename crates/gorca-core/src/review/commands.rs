@@ -897,7 +897,7 @@ impl Reader {
                 return Some(p);
             }
             if m.source == LineSource::Terminal {
-                if let Some(Carried::At(q)) = carry_terminal(None, m, &p.anchor, p.offset) {
+                if let Some(Carried::At(q)) = carry_terminal(None, m, &p.anchor, p.offset, None) {
                     return Some(q);
                 }
             } else if let Some(q) =
@@ -1113,7 +1113,17 @@ impl Reader {
                 let o = flat_step(screen, &top, mv, &TermUnits);
                 (o.pos, o.said, false)
             }
-            _ => (top, line_text(screen, 0), true),
+            FlatMove::PrevLine
+            | FlatMove::CurLine
+            | FlatMove::NextLine
+            | FlatMove::PrevWord
+            | FlatMove::CurWord
+            | FlatMove::NextWord
+            | FlatMove::PrevChar
+            | FlatMove::CurChar
+            | FlatMove::NextChar
+            | FlatMove::StartOfLine
+            | FlatMove::EndOfLine => (top, line_text(screen, 0), true),
         };
         let line = self.review_voice(FlatMove::CurLine, false, rep, &said);
         let text = if scrolled {
@@ -1284,7 +1294,7 @@ impl Reader {
             return;
         }
         let found = if model.source == LineSource::Terminal {
-            match carry_terminal(None, model, &chk.anchor, 0) {
+            match carry_terminal(None, model, &chk.anchor, 0, None) {
                 Some(Carried::At(p)) => Some(p),
                 Some(Carried::Gone) | None => None,
             }
@@ -1315,6 +1325,10 @@ impl Reader {
             .is_some_and(|c| c.surface == model.surface);
         // The screen the cursor was made on, for the scroll estimate of a terminal.
         let before = self.review.cur.clone().filter(|_| same_surface);
+        let hint = self.review.scroll.rows_for(model.built_rev);
+        if model.source == LineSource::Terminal {
+            self.review.scroll = super::ScrollHint::fresh(model.built_rev >> 32);
+        }
         if same_surface {
             // A refresh of the current surface replaces it.
         } else {
@@ -1323,7 +1337,9 @@ impl Reader {
         }
         self.review.cur = Some(Arc::clone(model));
         self.review.checked_rev = 0;
-        self.correct_spoken_line(model, fx);
+        if model.source != LineSource::Terminal {
+            self.correct_spoken_line(model, fx);
+        }
         self.review.validated_at = Some(now);
         if model.completeness == Completeness::GeometryFallback
             && !self.review.told_fallback.contains(&model.surface)
@@ -1338,7 +1354,11 @@ impl Reader {
             && p.model != model.id
         {
             if model.source == LineSource::Terminal {
-                self.carry_terminal_cursor(&cur, p, before.as_deref(), model, now);
+                self.carry_terminal_cursor(&cur, p, before.as_deref(), model, hint, now);
+                // A line that left the screen is read from its held text: nothing to correct.
+                if self.review.held.is_none() {
+                    self.correct_spoken_line(model, fx);
+                }
                 return;
             }
             let np = reanchor(model, p.anchor).or_else(|| nearest_line(model, p.anchor.y_mid));
@@ -1357,6 +1377,7 @@ impl Reader {
         p: FlatPos,
         before: Option<&LineModel>,
         model: &Arc<LineModel>,
+        hint: Option<u32>,
         now: Instant,
     ) {
         let held = self.review.held.clone().filter(|h| h.id == p.model);
@@ -1368,7 +1389,7 @@ impl Reader {
                 .iter()
                 .any(|l| hash_line(&l.text) == p.anchor.line_hash);
         let carried = if back {
-            carry_terminal(old, model, &p.anchor, p.offset)
+            carry_terminal(old, model, &p.anchor, p.offset, hint)
         } else {
             Some(Carried::Gone)
         };

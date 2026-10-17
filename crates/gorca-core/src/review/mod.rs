@@ -123,6 +123,35 @@ pub struct ReviewState {
     /// The line a terminal cursor is on after it scrolled off the screen, as a one-line model
     /// (ADR-0018): word and character moves go on reading it.
     pub(crate) held: Option<Arc<LineModel>>,
+    /// Rows the terminal screen scrolled since `cur` was built, from its edit events.
+    pub(crate) scroll: ScrollHint,
+}
+
+/// How far the terminal screen scrolled up since the current model was built, counted from the
+/// edit events (VTE reports the rows that leave the top as a delete at offset 0, so the count is
+/// exact). `exact` drops when an event was lost, the screen was replaced as a whole or the
+/// tracking changed: the scroll is then estimated from the content (ADR-0018).
+#[derive(Copy, Clone, Debug)]
+pub(crate) struct ScrollHint {
+    pub rows: u32,
+    pub exact: bool,
+    /// The tracking (`generation >> 32`) the count belongs to.
+    pub serial: u64,
+}
+
+impl ScrollHint {
+    pub(crate) fn fresh(serial: u64) -> Self {
+        Self {
+            rows: 0,
+            exact: true,
+            serial,
+        }
+    }
+
+    /// The exact scroll for a model of tracking `built_rev`, if it is known.
+    pub(crate) fn rows_for(&self, built_rev: u64) -> Option<u32> {
+        (self.exact && self.serial == built_rev >> 32).then_some(self.rows)
+    }
 }
 
 /// The line a revalidation may have to correct (ADR-0006 RR-1, F-4).
@@ -167,6 +196,7 @@ impl ReviewState {
             rr_check: None,
             term_text: None,
             held: None,
+            scroll: ScrollHint::fresh(0),
         }
     }
 
