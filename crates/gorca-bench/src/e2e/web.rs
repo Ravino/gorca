@@ -308,6 +308,8 @@ struct Seen {
     t_ns: u64,
     /// The first integer of the event (a caret event's offset).
     d1: i32,
+    /// The event's own name (`member:detail`), for the trace of `GORCA_TAP_TRACE=1`.
+    what: String,
 }
 
 pub(super) const FOCUS: u8 = 1;
@@ -315,6 +317,8 @@ pub(super) const LOAD: u8 = 2;
 pub(super) const CARET: u8 = 3;
 pub(super) const TEXT: u8 = 4;
 pub(super) const SEL: u8 = 5;
+/// Trace-only kinds (recorded when `GORCA_TAP_TRACE=1`): window events, property changes, other states.
+const TRACE: u8 = 6;
 
 #[derive(Debug)]
 pub(super) struct EventTap {
@@ -344,6 +348,17 @@ impl EventTap {
             "type='signal',interface='org.a11y.atspi.Event.Object',member='TextSelectionChanged'",
         ] {
             c.add_match(rule, Duration::from_secs(5))?;
+        }
+        let trace = std::env::var("GORCA_TAP_TRACE").is_ok_and(|v| v == "1");
+        if trace {
+            for rule in [
+                "type='signal',interface='org.a11y.atspi.Event.Window'",
+                "type='signal',interface='org.a11y.atspi.Event.Object',member='PropertyChange'",
+                "type='signal',interface='org.a11y.atspi.Event.Object',member='ChildrenChanged'",
+                "type='signal',interface='org.a11y.atspi.Event.Object',member='SelectionChanged'",
+            ] {
+                c.add_match(rule, Duration::from_secs(5))?;
+            }
         }
         c.stream.set_read_timeout(Some(Duration::from_millis(20)))?;
         let stop = Arc::new(AtomicBool::new(false));
@@ -388,6 +403,7 @@ impl EventTap {
                                             Some("org.a11y.atspi.Event.Object"),
                                             "TextSelectionChanged",
                                         ) => SEL,
+                                        _ if trace => TRACE,
                                         _ => 0,
                                     };
                                     if kind != 0 {
@@ -398,6 +414,10 @@ impl EventTap {
                                                 path: p.to_owned(),
                                                 t_ns: t,
                                                 d1: event_head(m.body).map_or(-1, |(_, d)| d),
+                                                what: format!(
+                                                    "{member}:{}",
+                                                    event_head(m.body).map_or("", |(d, _)| d)
+                                                ),
                                             },
                                         );
                                     }
@@ -455,7 +475,40 @@ impl EventTap {
         let skip = seen.len().saturating_sub(n);
         seen.iter()
             .skip(skip)
-            .map(|e| format!("{} {}", e.kind, e.path))
+            .map(|e| format!("{} {} {}", e.kind, e.path, e.what))
+            .collect()
+    }
+
+    /// The path of the last event of `kind`.
+    pub(super) fn last_path(&self, kind: u8) -> Option<String> {
+        let seen = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
+        seen.iter()
+            .rev()
+            .find(|e| e.kind == kind)
+            .map(|e| e.path.clone())
+    }
+
+    /// How many events were seen so far (a mark for [`EventTap::since`]).
+    pub(super) fn len(&self) -> usize {
+        self.seen
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .len()
+    }
+
+    /// The events after mark `from`, as "kind path member:detail" strings.
+    pub(super) fn since(&self, from: usize) -> Vec<String> {
+        let seen = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
+        seen.iter()
+            .skip(from)
+            .map(|e| {
+                format!(
+                    "{} {} {}",
+                    e.kind,
+                    e.path.rsplit('/').next().unwrap_or(""),
+                    e.what
+                )
+            })
             .collect()
     }
 

@@ -1,0 +1,55 @@
+diff --git a/crates/gorca-core/src/text/tests.rs b/crates/gorca-core/src/text/tests.rs
+index 545591dd..c9acd9dc 100644
+--- a/crates/gorca-core/src/text/tests.rs
++++ b/crates/gorca-core/src/text/tests.rs
+@@ -2729,3 +2729,50 @@ fn lone_modifiers_do_not_end_review_and_generic_echo_is_localised() {
+     assert_eq!(spoken(&h.typed(' ')), ["пробел"]);
+     assert_eq!(spoken(&h.typed('!')).len(), 1);
+ }
++
++// ---- review probes (not for merge) ----
++fn probe_replace_selection(role: Role, gap_ms: u64, gecko: bool) -> Vec<Vec<String>> {
++    let mut g = rig();
++    if gecko {
++        g.r.dir.set_text_insert_slack(node().app, 2);
++    }
++    g.track(role, StateSet::EDITABLE | StateSet::FOCUSED, "http://host/a", 13);
++    let mut out = Vec::new();
++    // '1' typed over a select-all: Gecko deletes the selection and moves the caret, no insert.
++    out.push(spoken(&g.typed('1')));
++    g.advance(5);
++    out.push(spoken(&g.delete(0, Some("http://host/a"), 13)));
++    out.push(spoken(&g.caret(1)));
++    g.advance(gap_ms);
++    out.push(spoken(&g.tick(0)));
++    out.push(spoken(&g.typed('2')));
++    g.advance(5);
++    out.push(spoken(&g.insert(1, "2")));
++    out.push(spoken(&g.caret(2)));
++    out.push(spoken(&g.tick(300)));
++    out
++}
++
++#[test]
++fn probe_ffu_replace_selection_entry_slow() {
++    let r = probe_replace_selection(Role::TextEntry, 2200, true);
++    eprintln!("ENTRY slow {r:?}");
++}
++
++#[test]
++fn probe_ffu_replace_selection_entry_fast() {
++    let r = probe_replace_selection(Role::TextEntry, 300, true);
++    eprintln!("ENTRY fast {r:?}");
++}
++
++#[test]
++fn probe_ffu_replace_selection_combo_slow() {
++    let r = probe_replace_selection(Role::ComboBox, 2200, true);
++    eprintln!("COMBO slow {r:?}");
++}
++
++#[test]
++fn probe_ffu_replace_selection_entry_slow_nonquirk() {
++    let r = probe_replace_selection(Role::TextEntry, 2200, false);
++    eprintln!("ENTRY slow noquirk {r:?}");
++}

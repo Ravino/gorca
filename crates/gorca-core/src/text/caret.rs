@@ -417,6 +417,10 @@ pub struct Tracked {
     /// An insert that was spoken as unexplained text, for a late key that explains it.
     flushed_ins: Option<HeldIns>,
     held_del: Option<HeldDel>,
+    /// A delete that no erase key explains arrived while a typed key was waiting for its
+    /// insert: the key may have replaced a selection (Gecko reports a delete and a caret move
+    /// and no insert at all). The caret event that follows settles the key's expectation.
+    replaced: Option<Instant>,
     /// The window revision each outstanding request was issued under.
     revs: SmallVec<[(TextReqId, u64); 8]>,
 }
@@ -460,6 +464,7 @@ impl Tracked {
             held_ins: None,
             flushed_ins: None,
             held_del: None,
+            replaced: None,
             revs: SmallVec::new(),
         }
     }
@@ -1011,6 +1016,12 @@ impl CaretState {
             }
             CaretState::Fetching { t, .. } => CaretState::Idle { t }.on_caret(off, cx),
             CaretState::Idle { mut t } => {
+                // The typed key replaced a selection: its delete and this caret move are all
+                // there will be, so its expectation must not wait for an insert (it would
+                // make a later key's insert "unexplained" and be spoken twice).
+                if t.replaced.take().is_some_and(|at| cx.now <= at + ABSORB) {
+                    let _ = t.expect.forget(1, cx.now_ms);
+                }
                 if t.is_own_move(off, cx.now) || t.absorbs(off, cx.now) {
                     t.caret = Some(off);
                     cx.stats.caret_absorbed += 1;
@@ -1830,6 +1841,7 @@ fn insert(
     if cx.insert_slack == 0 && caret_before == Some(offset) {
         t.caret = Some(offset.saturating_add(len));
     }
+    t.replaced = None;
     let paste = matches!(slot, Some((TextKey::Clipboard(ClipOp::Paste), ..)));
     let source = if paste {
         InsertSource::Paste
@@ -2190,6 +2202,9 @@ fn delete(
                 text: d,
                 at: cx.now,
             });
+            if t.expect.newest_age_ms(cx.now_ms).is_some_and(|age| age <= ABSORB_MS) {
+                t.replaced = Some(cx.now);
+            }
         }
         return false;
     };

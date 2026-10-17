@@ -1,0 +1,55 @@
+2026-10-17T17:47:57.430781Z  INFO gorca_daemon: terminal policy: ext-vte native build
+2026-10-17T17:47:57.430801Z  INFO gorca_daemon: shell policy: ext-gnome-shell native build
+2026-10-17T17:47:57.430979Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
+2026-10-17T17:47:57.431557Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-17T17:47:57.431947Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-17T17:47:57.433896Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-17T17:47:57.448515Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.449342Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.449371Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.461634Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.473943Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.486317Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.498686Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.510854Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.523092Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.535312Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.535324Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.547605Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.547622Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.559800Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.572071Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.572096Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.584398Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.596582Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.608811Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.608823Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.621030Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.621052Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.633411Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.645614Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.657812Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.657829Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.670129Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.670149Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.682332Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.694636Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.706886Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.719081Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.731355Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.743526Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.755915Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.768223Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.768229Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.780449Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.780459Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.792807Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.792849Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:47:57.805247Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T17:48:25.813367Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-17T17:48:25.813408Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 0, fetch_failed: 0, fetch_timeout: 0, window_hits: 0, window_dirty: 0, caret_correlated: 0, caret_held_correlated: 0, caret_absorbed: 0, caret_late: 0, caret_edge: 0, caret_uncorrelated: 0, typed_echoed: 0, keys_seen: 0, keys_typed: 0, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 0, text_flood_coalesced: 0, selection_spoken: 0, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-17T17:48:25.813430Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0, review_syncs: 0, retracked_on_key: 0 }
+2026-10-17T17:48:25.813455Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-17T17:48:25.813666Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 2, focus_requests: 42, fetch_ok: 61, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 30, utterances: 731, reader_restarts: 0 }
+2026-10-17T17:48:25.813675Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 731, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-17T17:48:25.814320Z  INFO gorca_daemon: gorca stopped
