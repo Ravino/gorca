@@ -71,7 +71,7 @@ fn typing_into_the_focused_entry_leaves_review() {
 /// aloud, claims no keys). The slot recovers, but `focus_audit_on_key` only re-tracks an
 /// *untracked* terminal: the terminal stays degraded until the next focus event.
 #[test]
-#[ignore = "known bug: a terminal tracked while its policy slot was busy is never upgraded by a key"]
+
 fn a_terminal_tracked_while_the_policy_was_busy_is_upgraded_by_a_key() {
     expect_clean(&[
         st(Op::WasmDeployment),
@@ -86,7 +86,7 @@ fn a_terminal_tracked_while_the_policy_was_busy_is_upgraded_by_a_key() {
 /// is scheduled while it is idle: the first successful read after the user presses Enter becomes
 /// the baseline, so that command's output is swallowed (and the extension has no snapshot).
 #[test]
-#[ignore = "known bug: the terminal baseline read is not retried while the terminal is idle"]
+
 fn a_failed_baseline_read_is_retried_before_the_first_command_output() {
     expect_clean(&[
         st(Op::FailFetches(true)),

@@ -730,12 +730,7 @@ fn env_u64(name: &str, default: u64) -> u64 {
 /// Invariant ids that are known to fail on the current tree: each has an `#[ignore]`d regression
 /// test in `regressions.rs` and a note in `docs/reports/reader-state-proptest.md`. Setting
 /// `GORCA_STATE_STRICT=1` removes the allowance.
-const KNOWN: &[&str] = &[
-    "review-kept",
-    "term-degraded",
-    "term-baseline",
-    "term-silent-after-review",
-];
+const KNOWN: &[&str] = &["review-kept", "term-silent-after-review"];
 
 thread_local! {
     /// While set, the checks of the `KNOWN` invariants are switched off (so that they do not
