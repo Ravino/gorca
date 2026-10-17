@@ -1021,6 +1021,15 @@ impl Reader {
                 | WebMode::Browse { .. }
                 | WebMode::Focus { .. } => None,
             };
+            // The focus moved into another document than the one we were in (a tab switch, a
+            // window switch, or a return from the browser chrome to a different page) and lands
+            // on something inside it: the page's title leads, as when the document itself is
+            // focused. A document that is still loading announces itself on adoption.
+            let switched = self.web.as_ref().is_some_and(|b| {
+                b.active != Some(doc)
+                    && b.suppress_focus != Some(node)
+                    && !matches!(b.mode, WebMode::Loading { .. })
+            });
             self.web_activate(doc, fx);
             self.web_apply(
                 WebEv::FocusIn {
@@ -1055,6 +1064,9 @@ impl Reader {
             }
             self.web_dialog_lead(doc, id, last_before);
             self.web_listbox_lead(doc, id, last_before);
+            if switched {
+                self.web_document_lead(doc, id);
+            }
             self.web_refresh_popup(fx);
             // The cursor jumped with the focus: Tab availability changed with it (R-5), and no
             // scroll timer is armed to notice.
@@ -1064,6 +1076,17 @@ impl Reader {
         // IR-3: the join missed. Browse keys must never be grabbed while focus may be in a
         // field we have not mirrored, so this is `Loading` (grabs off) until it is resolved.
         if b.web_apps.contains(&node.app) {
+            // The browser's own interface (address bar, its suggestion list, tab strip, menus):
+            // the whole ancestor chain is known and holds no document, so the focus is not in
+            // web content and must neither wait for a document nor say a mode word.
+            if self.outside_every_document(node) {
+                if let Some(b) = self.web.as_mut() {
+                    b.focus_node = None;
+                }
+                self.web_apply(WebEv::FocusAway, fx, false);
+                return;
+            }
+            let Some(b) = self.web.as_mut() else { return };
             b.counters.join_misses += 1;
             let (editable, known) = match self.dir.lookup(node) {
                 Lookup::Hit(snap) => (
@@ -1091,6 +1114,26 @@ impl Reader {
             }
             self.web_apply(WebEv::FocusAway, fx, false);
         }
+    }
+
+    /// True when every ancestor of `node` up to the top is in the directory and none is a
+    /// document: the node is in an application's own interface, not in web content. Any gap in
+    /// the chain gives false (unknown), so a cold web node keeps the Loading path.
+    fn outside_every_document(&self, node: NodeKey) -> bool {
+        let mut cur = node;
+        for _ in 0..32 {
+            let Some(sn) = self.dir.lookup(cur).hit() else {
+                return false;
+            };
+            if matches!(sn.role, Role::DocumentWeb | Role::Document) {
+                return false;
+            }
+            match sn.parent {
+                Some(p) => cur = p,
+                None => return sn.role == Role::Application,
+            }
+        }
+        false
     }
 
     /// M8b: the snapshot of a web node with what only the document mirror knows (the attribute
@@ -1286,6 +1329,30 @@ impl Reader {
         if editable {
             self.web_retry_loading(true, fx);
         }
+    }
+
+    /// Focus moved into another document (a tab or window switch) onto a node inside it: the
+    /// page title leads the focus speech. Focus on the document itself speaks its own name.
+    fn web_document_lead(&mut self, doc: DocId, id: DocNodeId) -> bool {
+        let Some(b) = self.web.as_mut() else {
+            return false;
+        };
+        let Some(h) = b.docs.get(doc) else {
+            return false;
+        };
+        let title = h.read.with(|d| {
+            if d.root() == Some(id) || is_document(d, id) {
+                return None;
+            }
+            title_of(d)
+        });
+        let Some(title) = title else {
+            return false;
+        };
+        let mut lead = vec![Item::Lead(title)];
+        lead.extend(b.pending_tail.take().map(|(t, _)| t).unwrap_or_default());
+        b.pending_tail = Some((lead, self.now));
+        true
     }
 
     /// Focus entered a dialog (its name and role lead the focus speech, once): the dialog around
@@ -1559,6 +1626,9 @@ impl Reader {
                     let (role, states) = h.read.with(|d| role_states(d, id));
                     (id, forms::passes_through(role, states, Reason::Focus))
                 });
+                // A document the focus was not in before (the first visit of a tab): the page
+                // title leads when the focus sits inside it rather than on its root.
+                let switched = b.active != Some(doc);
                 self.web_activate(doc, fx);
                 self.web_apply(
                     WebEv::FirstUseful {
@@ -1579,7 +1649,24 @@ impl Reader {
                     // window activates, with no focus event of ours to place the cursor).
                     self.web_place_first_line(doc);
                 }
-                let spoke = self.web_speak_entry(doc, at_top || at_root, at_top, fx);
+                // The focus utterance went out before the page was known, without its title:
+                // say the mode word, the title and the focus again in one piece, worded as the
+                // focus presenter words it (it replaces the first, short utterance).
+                let titled = match focus_node {
+                    Some((n, _)) if switched && n != root => self.web.as_ref().and_then(|b| {
+                        b.docs.get(doc)?.read.with(|d| {
+                            Some((title_of(d)?, present::describe_node(d, n)))
+                        })
+                    }),
+                    Some(_) | None => None,
+                };
+                let spoke = match titled {
+                    Some((title, items)) => {
+                        self.web_speak_cold_focus(focus, title, &items, fx);
+                        true
+                    }
+                    None => self.web_speak_entry(doc, at_top || at_root, at_top, fx),
+                };
                 if (at_top || at_root) && !self.dir.is_settling(app, self.now) {
                     self.web_auto_read(doc, spoke, fx);
                 }
@@ -1646,6 +1733,43 @@ impl Reader {
         let spoke = !items.is_empty() || self.web_has_word();
         self.web_speak(&items, fx);
         spoke
+    }
+
+    /// The first visit of a tab: the focus presented before the page was mirrored is spoken
+    /// again with the mode word and the page title in front, in the focus presenter's wording
+    /// (`items`, the mirror's wording, only when that presentation is gone).
+    fn web_speak_cold_focus(
+        &mut self,
+        focus: NodeKey,
+        title: String,
+        items: &[Item],
+        fx: &mut ReaderEffects,
+    ) {
+        let presented = self.presented.clone().filter(|p| p.node == focus);
+        let Some(p) = presented else {
+            let mut all = vec![Item::Lead(title)];
+            all.extend(items.iter().cloned());
+            self.web_speak(&all, fx);
+            return;
+        };
+        let word = self.web_take_word();
+        let id = self.utt_id();
+        let mut u = self
+            .presenters
+            .present(crate::PresentContext::Focus, &p.snap, id, self.epoch.current());
+        u.prio = Prio::Interrupt;
+        u.may_refine = true;
+        let front = word.into_iter().map(Arc::<str>::from).chain([Arc::from(title)]);
+        for (at, text) in front.enumerate() {
+            u.segments.insert(
+                at,
+                Segment {
+                    text,
+                    kind: SegmentKind::Text,
+                },
+            );
+        }
+        fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
     }
 
     /// Is a mode word waiting for the next utterance?
@@ -1753,6 +1877,7 @@ impl Reader {
         let Some(h) = b.docs.get(doc) else { return };
         let (role, states) = h.read.with(|d| role_states(d, id));
         let passes = forms::passes_through(role, states, Reason::Focus);
+        let switched = b.active != Some(doc);
         self.web_activate(doc, fx);
         self.web_apply(
             WebEv::FocusIn {
@@ -1769,7 +1894,9 @@ impl Reader {
         }
         let dialog = self.web_dialog_lead(doc, id, None);
         let listbox = self.web_listbox_lead(doc, id, None);
-        if !inline && (dialog || listbox) {
+        // A tab whose document exists but whose focused node joined late: its title leads too.
+        let titled = switched && self.web_document_lead(doc, id);
+        if !inline && (dialog || listbox || titled) {
             // The focus was already spoken without its lead: say the lead now; whatever else
             // waits for the next utterance (the first line of a document) stays.
             let tail = self.web_take_tail();

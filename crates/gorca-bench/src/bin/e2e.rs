@@ -265,6 +265,8 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "bar_failures"
                     | "bl_failures"
                     | "fr_failures"
+                    | "tb_failures"
+                    | "ub_failures"
                     | "vt_missing"
                     | "vt_double"
                     | "vt_extra"

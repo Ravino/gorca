@@ -247,7 +247,10 @@ fn trackable(snap: &NodeSnapshot) -> Option<Kind> {
     let editable = snap.states.contains(StateSet::EDITABLE);
     let text_role = match snap.role {
         Role::TextEntry | Role::PasswordEntry => true,
-        Role::Document | Role::DocumentWeb | Role::Paragraph | Role::Unknown => editable,
+        // An editable combo box is a text field with a popup (Firefox's address bar is one).
+        Role::Document | Role::DocumentWeb | Role::Paragraph | Role::Unknown | Role::ComboBox => {
+            editable
+        }
         Role::Application
         | Role::Window
         | Role::Dialog
@@ -266,7 +269,6 @@ fn trackable(snap: &NodeSnapshot) -> Option<Kind> {
         | Role::ToggleButton
         | Role::CheckBox
         | Role::RadioButton
-        | Role::ComboBox
         | Role::SpinButton
         | Role::Slider
         | Role::ProgressBar
