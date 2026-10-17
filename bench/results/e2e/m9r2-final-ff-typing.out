@@ -1,0 +1,28 @@
+== host: load 17.65 11.67 8.75 2/2114 1036528 ==
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.17s
+private compositor: /tmp/gorca-m7c.XdUUu5/x/gorca-m7-1036522
+== reader <repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca built from a64b618, tree at a64b618
+== e2e m9r2-final-ff-typing: reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca backend=voicego repeats=3 load=16.72 11.58 8.74 2/2283 1036895
+-- round 1/3 FC1h (load 16.72 11.58 8.74 2/2283 1036895)
+kill: (-1036953): No such process
+-- round 1/3 FC1 (load 10.65 10.63 8.64 8/2318 1045355)
+kill: (-1045455): No such process
+-- round 1/3 FE1 (load 9.27 10.33 8.63 1/2299 1048995)
+kill: (-1049053): No such process
+-- round 1/3 FCE2 (load 7.66 9.56 8.51 1/2268 1053698)
+kill: (-1053759): No such process
+-- round 1/3 FE2 (load 6.49 8.69 8.29 2/2278 1055950)
+kill: (-1056009): No such process
+-- round 1/3 FS2 (load 9.86 10.66 9.24 2/2194 1066809)
+kill: (-1066870): No such process
+-- round 1/3 FSA1 (load 6.69 8.97 8.78 2/2203 1068793)
+kill: (-1068853): No such process
+-- round 1/3 FSA3 (load 5.13 8.31 8.56 1/2203 1069726)
+kill: (-1069787): No such process
+-- round 1/3 FCE1 (load 4.06 7.73 8.36 2/2210 1070549)
+kill: (-1070606): No such process
+-- round 1/3 FT1 (load 3.88 7.45 8.26 1/2203 1071178)
+kill: (-1071236): No such process
+-- round 1/3 FP1 (load 3.48 7.18 8.15 1/2209 1071805)
+kill: (-1071864): No such process
+-- round 1/3 BSA1 (load 4.18 7.16 8.13 2/2214 1072445)

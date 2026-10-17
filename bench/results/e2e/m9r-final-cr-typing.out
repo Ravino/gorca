@@ -1,0 +1,246 @@
+== host: load 5.67 8.77 12.55 1/2183 701554 ==
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.22s
+private compositor: /tmp/gorca-m7c.Y3lNSl/x/gorca-m7-701542
+== reader <repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca built from 4555f3c, tree at 4555f3c
+== e2e m9r-final-cr-typing: reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca backend=voicego repeats=3 load=5.67 8.77 12.55 2/2346 701893
+-- round 1/3 FC1h (load 5.67 8.77 12.55 4/2346 701893)
+kill: (-701951): No such process
+-- round 1/3 FC1 (load 7.94 8.56 12.13 1/2333 703419)
+kill: (-703495): No such process
+-- round 1/3 FE1 (load 8.05 8.46 11.93 1/2334 704405)
+kill: (-704464): No such process
+-- round 1/3 FCE2 (load 10.02 9.01 11.83 3/2324 706369)
+kill: (-706429): No such process
+-- round 1/3 FE2 (load 9.35 8.84 11.53 1/2324 707787)
+kill: (-707844): No such process
+-- round 1/3 FS2 (load 8.34 8.23 10.80 1/2306 711118)
+kill: (-711178): No such process
+-- round 1/3 FSA1 (load 7.20 8.02 10.43 1/2314 713873)
+kill: (-713931): No such process
+-- round 1/3 FSA3 (load 8.02 8.13 10.38 1/2317 715081)
+kill: (-715138): No such process
+-- round 1/3 FCE1 (load 9.65 8.54 10.44 1/2320 716118)
+kill: (-716176): No such process
+-- round 1/3 FT1 (load 10.35 8.79 10.49 2/2256 716715)
+kill: (-716775): No such process
+-- round 1/3 FP1 (load 11.05 9.01 10.53 4/2272 717849)
+kill: (-717910): No such process
+-- round 1/3 BSA1 (load 10.25 8.93 10.48 1/2262 718685)
+kill: (-718748): No such process
+-- round 1/3 BAR1 (load 8.85 8.79 10.35 1/2461 720112)
+kill: (-720170): No such process
+-- round 1/3 BL1 (load 7.97 8.60 10.27 1/2461 720557)
+kill: (-720615): No such process
+-- round 1/3 FR1 (load 8.37 8.68 10.29 1/2464 721037)
+kill: (-721098): No such process
+-- round 2/3 FC1 (load 9.01 8.80 10.31 1/2474 721487)
+kill: (-721546): No such process
+-- round 2/3 FE1 (load 12.03 9.61 10.51 2/2479 722758)
+kill: (-722817): No such process
+-- round 2/3 FCE2 (load 7.91 8.99 10.23 2/2473 724363)
+kill: (-724424): No such process
+-- round 2/3 FE2 (load 9.41 9.39 10.28 1/2469 726457)
+kill: (-726514): No such process
+-- round 2/3 FS2 (load 11.26 9.74 10.23 9/2325 734918)
+kill: (-735026): No such process
+-- round 2/3 FSA1 (load 15.53 12.45 11.20 10/2311 758899)
+kill: (-758957): No such process
+-- round 2/3 FSA3 (load 12.57 11.99 11.09 7/2349 761492)
+-- round 2/3 FCE1 (load 19.42 13.58 11.64 12/2446 765740)
+kill: (-765802): No such process
+-- round 2/3 FT1 (load 23.70 14.85 12.09 2/2427 766356)
+kill: (-766415): No such process
+-- round 2/3 FP1 (load 24.49 15.45 12.33 8/2444 767966)
+kill: (-768029): No such process
+-- round 2/3 BSA1 (load 20.46 15.00 12.23 4/2342 768909)
+kill: (-768969): No such process
+-- round 2/3 BAR1 (load 15.11 14.30 12.15 1/2336 774219)
+kill: (-774276): No such process
+-- round 2/3 BL1 (load 14.56 14.21 12.14 2/2317 774971)
+kill: (-775037): No such process
+-- round 2/3 FR1 (load 13.56 14.00 12.08 2/2321 776009)
+kill: (-776068): No such process
+-- round 2/3 FC1h (load 12.31 13.72 12.01 3/2420 777712)
+kill: (-777773): No such process
+-- round 3/3 FE1 (load 8.94 12.33 11.66 1/2381 783693)
+kill: (-783750): No such process
+-- round 3/3 FCE2 (load 8.59 11.38 11.38 1/2382 788195)
+kill: (-788253): No such process
+-- round 3/3 FE2 (load 13.22 11.60 11.43 20/2291 792720)
+kill: (-792779): No such process
+-- round 3/3 FS2 (load 7.26 10.53 11.12 3/2254 798942)
+kill: (-799000): No such process
+-- round 3/3 FSA1 (load 6.81 9.23 10.56 2/2271 801158)
+kill: (-801215): No such process
+-- round 3/3 FSA3 (load 7.00 8.97 10.43 1/2283 801980)
+kill: (-802040): No such process
+-- round 3/3 FCE1 (load 6.73 8.75 10.31 2/2276 802652)
+kill: (-802710): No such process
+-- round 3/3 FT1 (load 6.68 8.63 10.23 1/2279 803133)
+kill: (-803190): No such process
+-- round 3/3 FP1 (load 6.70 8.53 10.18 1/2283 803607)
+kill: (-803664): No such process
+-- round 3/3 BSA1 (load 7.55 8.63 10.18 1/2279 804060)
+kill: (-804117): No such process
+-- round 3/3 BAR1 (load 7.46 8.39 10.02 1/2279 805089)
+kill: (-805147): No such process
+-- round 3/3 BL1 (load 7.01 8.27 9.96 1/2273 805476)
+kill: (-805533): No such process
+-- round 3/3 FR1 (load 6.93 8.23 9.94 4/2274 805800)
+kill: (-805858): No such process
+-- round 3/3 FC1h (load 6.10 8.01 9.85 2/2284 806246)
+kill: (-806303): No such process
+-- round 3/3 FC1 (load 5.79 7.55 9.53 3/2259 807762)
+kill: (-807821): No such process
+# e2e m9r-final-cr-typing
+# utc=2026-10-17T07:28:28Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=6.70 7.50 9.42 1/2244 808656
+# git_rev=4555f3c
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx45
+# topology_expected=-
+# label=m9r-final-cr-typing
+# reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=6.70 7.50 9.42 1/2244 808653
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info GORCA_TOPOLOGY_REPORT=bench/results/e2e/m9r-final-cr-typing/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=FC1h: 12 of 480 keys moved no caret in the page (not scored)
+# note1=FC1h stray speech "😀" at +101.3 ms after key #324
+# note2=FC1h stray speech "😀" at +106.3 ms after key #324
+# note3=FC1h stray speech "c" at +124.3 ms after key #324
+# note4=FC1h stray speech "c" at +21.7 ms after key #325
+# note5=FC1h stray speech "a😀b😀😀c" at +38.4 ms after key #325
+# note6=FE2 #133 Letter('t'): the page caret is 8, the model 9 (not scored, model reset to the page); recent: Letter('g') at caret 5 of 64 | Letter('g') at caret 6 of 65 | Right at caret 7 of 66 | Letter('t') at caret 8 of 66
+# note7=FE2 first actions: Right at caret 0 of 0 | Letter('f') at caret 0 of 0 | Left at caret 1 of 1 | Left at caret 0 of 1 | Left at caret 0 of 1 | Back at caret 0 of 1 | Left at caret 0 of 1 | Right at caret 0 of 1 | Space at caret 1 of 1 | Letter('o') at caret 2 of 2 | End at caret 3 of 3 | Letter('w') at caret 3 of 3 | Back at caret 4 of 4 | Letter('v') at caret 3 of 3
+# note8=BAR1 FAIL a page that was already open read itself: [(837062725493474, "M7b Long article - Google Chrome for Testing, M7b Long article, document"), (837062764241990, "browse mode"), (837062772088431, "heading level 1, The long article"), (837062780152662, "heading level 2, Part 1"), (837062788071582, "Paragraph 1 starts here."), (837062796058091, "It has a, link, link number 1, and a second sentence."), (837062804093474, "The third sentence ends it."), (837062812143914, "Paragraph 2 starts here."), (837062820106761, "It has a, link, link number 2, and a second sentence."), (837062832177365, "The third sentence ends it."), (837062840122808, "Paragraph 3 starts here."), (837062848102209, "It has a, link, link number 3, and a second sentence."), (837062856151406, "The third sentence ends it."), (837062864111562, "Paragraph 4 starts here."), (837062872079221, "It has a, link, link number 4, and a second sentence."), (837062880076437, "The third sentence ends it."), (837062888068333, "Paragraph 5 starts here."), (837062896090139, "It has a, link, link number 5, and a second sentence."), (837062904057802, "The third sentence ends it."), (837062912067232, "Paragraph 6 starts here."), (837062924107656, "It has a, link, link number 6, and a second sentence."), (837062932134602, "The third sentence ends it."), (837062940086750, "Paragraph 7 starts here."), (837062948083716, "It has a, link, link number 7, and a second sentence."), (837062956082427, "The third sentence ends it."), (837062968079771, "Paragraph 8 starts here."), (837062980090686, "It has a, link, link number 8, and a second sentence."), (837062992108518, "The third sentence ends it."), (837063004084982, "Paragraph 9 starts here."), (837063012084183, "It has a, link, link number 9, and a second sentence."), (837063024113659, "The third sentence ends it."), (837063036100638, "Paragraph 10 starts here."), (837063044111659, "It has a, link, link number 10, and a second sentence."), (837063052108404, "The third sentence ends it."), (837063060095192, "heading level 2, Part 2"), (837063068142294, "Paragraph 11 starts here."), (837063076091698, "It has a, link, link number 11, and a second sentence."), (837063084082331, "The third sentence ends it."), (837063092073225, "Paragraph 12 starts here."), (837063100093047, "It has a, link, link number 12, and a second sentence."), (837063108135893, "The third sentence ends it."), (837063116108820, "Paragraph 13 starts here."), (837063124068622, "It has a, link, link number 13, and a second sentence."), (837063132087554, "The third sentence ends it."), (837063140162908, "Paragraph 14 starts here."), (837063148075671, "It has a, link, link number 14, and a second sentence."), (837063156080184, "The third sentence ends it."), (837063168068016, "Paragraph 15 starts here."), (837063176101185, "It has a, link, link number 15, and a second sentence."), (837063184098922, "The third sentence ends it."), (837063192105428, "Paragraph 16 starts here."), (837063200104554, "It has a, link, link number 16, and a second sentence."), (837063208093504, "The third sentence ends it."), (837063216121677, "Paragraph 17 starts here."), (837063224095498, "It has a, link, link number 17, and a second sentence."), (837063232133760, "The third sentence ends it."), (837063240116715, "Paragraph 18 starts here."), (837063248100650, "It has a, link, link number 18, and a second sentence."), (837063256094835, "The third sentence ends it."), (837063264084546, "Paragraph 19 starts here."), (837063272099157, "It has a, link, link number 19, and a second sentence."), (837063280111272, "The third sentence ends it."), (837063288063032, "Paragraph 20 starts here."), (837063300067644, "It has a, link, link number 20, and a second sentence."), (837063308097103, "The third sentence ends it."), (837063316068617, "heading level 2, Part 3"), (837063324070330, "Paragraph 21 starts here."), (837063336083450, "It has a, link, link number 21, and a second sentence."), (837063344112418, "The third sentence ends it."), (837063352116807, "Paragraph 22 starts here."), (837063360103343, "It has a, link, link number 22, and a second sentence."), (837063368077867, "The third sentence ends it."), (837063376080494, "Paragraph 23 starts here."), (837063384080195, "It has a, link, link number 23, and a second sentence."), (837063392177997, "The third sentence ends it."), (837063400104653, "Paragraph 24 starts here."), (837063408073564, "It has a, link, link number 24, and a second sentence."), (837063416085892, "The third sentence ends it."), (837063424083633, "Paragraph 25 starts here."), (837063432104352, "It has a, link, link number 25, and a second sentence."), (837063440083014, "The third sentence ends it."), (837063448065275, "Paragraph 26 starts here."), (837063456087696, "It has a, link, link number 26, and a second sentence."), (837063464070420, "The third sentence ends it."), (837063472086449, "Paragraph 27 starts here."), (837063480077177, "It has a, link, link number 27, and a second sentence."), (837063488084374, "The third sentence ends it."), (837063496114816, "Paragraph 28 starts here."), (837063504124694, "It has a, link, link number 28, and a second sentence."), (837063512101890, "The third sentence ends it."), (837063520089287, "Paragraph 29 starts here."), (837063528110073, "It has a, link, link number 29, and a second sentence."), (837063536098272, "The third sentence ends it."), (837063544079746, "Paragraph 30 starts here."), (837063556164412, "It has a, link, link number 30, and a second sentence."), (837063564108697, "The third sentence ends it."), (837063572127940, "heading level 2, Part 4"), (837063580099340, "Paragraph 31 starts here."), (837063588082060, "It has a, link, link number 31, and a second sentence."), (837063596089703, "The third sentence ends it."), (837063604129989, "Paragraph 32 starts here."), (837063612090317, "It has a, link, link number 32, and a second sentence."), (837063620177637, "The third sentence ends it."), (837063628098418, "Paragraph 33 starts here."), (837063636087514, "It has a, link, link number 33, and a second sentence."), (837063644094492, "The third sentence ends it."), (837063652075127, "Paragraph 34 starts here."), (837063660083247, "It has a, link, link number 34, and a second sentence."), (837063668102413, "The third sentence ends it."), (837063676077208, "Paragraph 35 starts here."), (837063684108173, "It has a, link, link number 35, and a second sentence."), (837063692107697, "The third sentence ends it."), (837063700069863, "Paragraph 36 starts here."), (837063708118433, "It has a, link, link number 36, and a second sentence."), (837063716080377, "The third sentence ends it."), (837063724097377, "Paragraph 37 starts here."), (837063732089284, "It has a, link, link number 37, and a second sentence."), (837063740073181, "The third sentence ends it."), (837063752130784, "Paragraph 38 starts here."), (837063760128271, "It has a, link, link number 38, and a second sentence."), (837063772099467, "The third sentence ends it."), (837063784077710, "Paragraph 39 starts here."), (837063796085139, "It has a, link, link number 39, and a second sentence."), (837063808107609, "The third sentence ends it."), (837063816112295, "Paragraph 40 starts here."), (837063828110089, "It has a, link, link number 40, and a second sentence."), (837063836082983, "The third sentence ends it."), (837063844099971, "link, Back to the top")]
+# note9=FE2 first actions: Back at caret 0 of 0 | Letter('d') at caret 0 of 0 | Letter('c') at caret 1 of 1 | Right at caret 2 of 2 | Cyr at caret 2 of 2 | Letter('d') at caret 3 of 3 | Letter('q') at caret 4 of 4 | Letter('b') at caret 5 of 5 | Emoji at caret 6 of 6 | Back at caret 7 of 7 | Back at caret 6 of 6 | Letter('h') at caret 5 of 5 | Letter('n') at caret 6 of 6 | Letter('u') at caret 7 of 7
+# note10=FS2: 3 of 492 keys moved no caret in the page (not scored)
+# note11=BAR1 FAIL a page that was already open read itself: [(837747000491446, "M7b Long article - Google Chrome for Testing, M7b Long article, document"), (837747039030366, "browse mode"), (837747048148803, "heading level 1, The long article"), (837747056117287, "heading level 2, Part 1"), (837747064117330, "Paragraph 1 starts here."), (837747076077510, "It has a, link, link number 1, and a second sentence."), (837747088098908, "The third sentence ends it."), (837747096069748, "Paragraph 2 starts here."), (837747104083662, "It has a, link, link number 2, and a second sentence."), (837747112128848, "The third sentence ends it."), (837747124088773, "Paragraph 3 starts here."), (837747136096225, "It has a, link, link number 3, and a second sentence."), (837747148055409, "The third sentence ends it."), (837747156064759, "Paragraph 4 starts here."), (837747164071194, "It has a, link, link number 4, and a second sentence."), (837747176123849, "The third sentence ends it."), (837747188118894, "Paragraph 5 starts here."), (837747196094111, "It has a, link, link number 5, and a second sentence."), (837747204116746, "The third sentence ends it."), (837747212095523, "Paragraph 6 starts here."), (837747224193137, "It has a, link, link number 6, and a second sentence."), (837747232061347, "The third sentence ends it."), (837747240093055, "Paragraph 7 starts here."), (837747248084545, "It has a, link, link number 7, and a second sentence."), (837747256100825, "The third sentence ends it."), (837747268091732, "Paragraph 8 starts here."), (837747276109195, "It has a, link, link number 8, and a second sentence."), (837747284125046, "The third sentence ends it."), (837747292077516, "Paragraph 9 starts here."), (837747300100604, "It has a, link, link number 9, and a second sentence."), (837747308129965, "The third sentence ends it."), (837747316597576, "Paragraph 10 starts here."), (837747324120646, "It has a, link, link number 10, and a second sentence."), (837747336144472, "The third sentence ends it."), (837747344098484, "heading level 2, Part 2"), (837747352082976, "Paragraph 11 starts here."), (837747360171206, "It has a, link, link number 11, and a second sentence."), (837747372126140, "The third sentence ends it."), (837747384108083, "Paragraph 12 starts here."), (837747392121819, "It has a, link, link number 12, and a second sentence."), (837747404127860, "The third sentence ends it."), (837747416108576, "Paragraph 13 starts here."), (837747424124634, "It has a, link, link number 13, and a second sentence."), (837747432096451, "The third sentence ends it."), (837747440072152, "Paragraph 14 starts here."), (837747448084993, "It has a, link, link number 14, and a second sentence."), (837747456101438, "The third sentence ends it."), (837747464088823, "Paragraph 15 starts here."), (837747472082976, "It has a, link, link number 15, and a second sentence."), (837747480123675, "The third sentence ends it."), (837747488113159, "Paragraph 16 starts here."), (837747496179590, "It has a, link, link number 16, and a second sentence."), (837747504159303, "The third sentence ends it."), (837747512111660, "Paragraph 17 starts here."), (837747524070826, "It has a, link, link number 17, and a second sentence."), (837747536076606, "The third sentence ends it."), (837747548071846, "Paragraph 18 starts here."), (837747556108627, "It has a, link, link number 18, and a second sentence."), (837747568109896, "The third sentence ends it."), (837747580127587, "Paragraph 19 starts here."), (837747588089917, "It has a, link, link number 19, and a second sentence."), (837747596125893, "The third sentence ends it."), (837747604074544, "Paragraph 20 starts here."), (837747612095498, "It has a, link, link number 20, and a second sentence."), (837747620083497, "The third sentence ends it."), (837747628114719, "heading level 2, Part 3"), (837747636095496, "Paragraph 21 starts here."), (837747644079459, "It has a, link, link number 21, and a second sentence."), (837747652079161, "The third sentence ends it."), (837747660089417, "Paragraph 22 starts here."), (837747668069698, "It has a, link, link number 22, and a second sentence."), (837747676063662, "The third sentence ends it."), (837747684066406, "Paragraph 23 starts here."), (837747696076297, "It has a, link, link number 23, and a second sentence."), (837747704075763, "The third sentence ends it."), (837747716074953, "Paragraph 24 starts here."), (837747728073263, "It has a, link, link number 24, and a second sentence."), (837747740061068, "The third sentence ends it."), (837747752070715, "Paragraph 25 starts here."), (837747760105990, "It has a, link, link number 25, and a second sentence."), (837747772128809, "The third sentence ends it."), (837747780095127, "Paragraph 26 starts here."), (837747792105047, "It has a, link, link number 26, and a second sentence."), (837747800079150, "The third sentence ends it."), (837747812111698, "Paragraph 27 starts here."), (837747824155873, "It has a, link, link number 27, and a second sentence."), (837747836093815, "The third sentence ends it."), (837747848081968, "Paragraph 28 starts here."), (837747860083113, "It has a, link, link number 28, and a second sentence."), (837747872116176, "The third sentence ends it."), (837747884075045, "Paragraph 29 starts here."), (837747892067392, "It has a, link, link number 29, and a second sentence."), (837747904143316, "The third sentence ends it."), (837747916080733, "Paragraph 30 starts here."), (837747924089406, "It has a, link, link number 30, and a second sentence."), (837747936098769, "The third sentence ends it."), (837747944080165, "heading level 2, Part 4"), (837747956074335, "Paragraph 31 starts here."), (837747964083710, "It has a, link, link number 31, and a second sentence."), (837747972091508, "The third sentence ends it."), (837747984091098, "Paragraph 32 starts here."), (837747996101175, "It has a, link, link number 32, and a second sentence."), (837748004096898, "The third sentence ends it."), (837748012111435, "Paragraph 33 starts here."), (837748020096886, "It has a, link, link number 33, and a second sentence."), (837748028065360, "The third sentence ends it."), (837748040090800, "Paragraph 34 starts here."), (837748048098168, "It has a, link, link number 34, and a second sentence."), (837748056161088, "The third sentence ends it."), (837748068090271, "Paragraph 35 starts here."), (837748076098434, "It has a, link, link number 35, and a second sentence."), (837748084133510, "The third sentence ends it."), (837748092094321, "Paragraph 36 starts here."), (837748104180173, "It has a, link, link number 36, and a second sentence."), (837748112082863, "The third sentence ends it."), (837748120105804, "Paragraph 37 starts here."), (837748128075740, "It has a, link, link number 37, and a second sentence."), (837748136088315, "The third sentence ends it."), (837748144082561, "Paragraph 38 starts here."), (837748152078960, "It has a, link, link number 38, and a second sentence."), (837748160080001, "The third sentence ends it."), (837748168119512, "Paragraph 39 starts here."), (837748176090953, "It has a, link, link number 39, and a second sentence."), (837748188075225, "The third sentence ends it."), (837748200073793, "Paragraph 40 starts here."), (837748208085068, "It has a, link, link number 40, and a second sentence."), (837748220100787, "The third sentence ends it."), (837748228093042, "link, Back to the top")]
+# note12=FE2 #96 Back: the page caret is 4, the model 3 (not scored, model reset to the page); recent: Back at caret 7 of 56 | Back at caret 6 of 55 | Back at caret 5 of 54 | Back at caret 4 of 53
+# note13=FE2 #127 Letter('z'): the page caret is 66, the model 67 (not scored, model reset to the page); recent: Letter('v') at caret 66 of 66 | Back at caret 67 of 67 | Right at caret 66 of 66 | Letter('z') at caret 66 of 66
+# note14=FE2 #142 Space: the page caret is 75, the model 76 (not scored, model reset to the page); recent: Right at caret 72 of 74 | Space at caret 73 of 74 | Letter('p') at caret 74 of 75 | Space at caret 75 of 76
+# note15=FE2 #149 Back: the page caret is 77, the model 76 (not scored, model reset to the page); recent: Letter('l') at caret 76 of 77 | Letter('p') at caret 77 of 78 | Back at caret 78 of 79 | Back at caret 77 of 78
+# note16=FE2 #153 Back: the page caret is 78, the model 77 (not scored, model reset to the page); recent: Letter('l') at caret 77 of 78 | Back at caret 78 of 79 | Letter('a') at caret 77 of 78 | Back at caret 78 of 79
+# note17=FE2 #158 Home: the page caret is 80, the model 0 (not scored, model reset to the page); recent: Letter('m') at caret 79 of 79 | End at caret 80 of 80 | Right at caret 80 of 80 | Home at caret 80 of 80
+# note18=FE2 first actions: Home at caret 0 of 0 | Left at caret 0 of 0 | Space at caret 0 of 0 | Space at caret 1 of 1 | Letter('n') at caret 2 of 2 | Letter('u') at caret 3 of 3 | Right at caret 4 of 4 | Letter('f') at caret 4 of 4 | Emoji at caret 5 of 5 | Cyr at caret 6 of 6 | Letter('t') at caret 7 of 7 | Letter('g') at caret 8 of 8 | Letter('g') at caret 9 of 9 | Home at caret 10 of 10
+# note19=BAR1 FAIL a page that was already open read itself: [(838488295914221, "M7b Long article - Google Chrome for Testing, M7b Long article, document"), (838488345591454, "browse mode"), (838488352094999, "heading level 1, The long article"), (838488364145749, "heading level 2, Part 1"), (838488372083283, "Paragraph 1 starts here."), (838488380089219, "It has a, link, link number 1, and a second sentence."), (838488388104084, "The third sentence ends it."), (838488396109413, "Paragraph 2 starts here."), (838488404112177, "It has a, link, link number 2, and a second sentence."), (838488412121784, "The third sentence ends it."), (838488424077202, "Paragraph 3 starts here."), (838488432108923, "It has a, link, link number 3, and a second sentence."), (838488440087590, "The third sentence ends it."), (838488448072199, "Paragraph 4 starts here."), (838488456098955, "It has a, link, link number 4, and a second sentence."), (838488464113017, "The third sentence ends it."), (838488472090900, "Paragraph 5 starts here."), (838488480139307, "It has a, link, link number 5, and a second sentence."), (838488492101101, "The third sentence ends it."), (838488500097732, "Paragraph 6 starts here."), (838488508082541, "It has a, link, link number 6, and a second sentence."), (838488520104938, "The third sentence ends it."), (838488528107898, "Paragraph 7 starts here."), (838488536054688, "It has a, link, link number 7, and a second sentence."), (838488548156989, "The third sentence ends it."), (838488556132170, "Paragraph 8 starts here."), (838488564146005, "It has a, link, link number 8, and a second sentence."), (838488572143354, "The third sentence ends it."), (838488580120861, "Paragraph 9 starts here."), (838488588102768, "It has a, link, link number 9, and a second sentence."), (838488596134327, "The third sentence ends it."), (838488604144436, "Paragraph 10 starts here."), (838488612076668, "It has a, link, link number 10, and a second sentence."), (838488620120011, "The third sentence ends it."), (838488632097842, "heading level 2, Part 2"), (838488640087429, "Paragraph 11 starts here."), (838488648111771, "It has a, link, link number 11, and a second sentence."), (838488660067456, "The third sentence ends it."), (838488672093704, "Paragraph 12 starts here."), (838488680079751, "It has a, link, link number 12, and a second sentence."), (838488692070681, "The third sentence ends it."), (838488704120510, "Paragraph 13 starts here."), (838488716087347, "It has a, link, link number 13, and a second sentence."), (838488728130600, "The third sentence ends it."), (838488736071944, "Paragraph 14 starts here."), (838488748109196, "It has a, link, link number 14, and a second sentence."), (838488756088459, "The third sentence ends it."), (838488768091652, "Paragraph 15 starts here."), (838488780185333, "It has a, link, link number 15, and a second sentence."), (838488792117561, "The third sentence ends it."), (838488804104510, "Paragraph 16 starts here."), (838488816088624, "It has a, link, link number 16, and a second sentence."), (838488828108414, "The third sentence ends it."), (838488840120057, "Paragraph 17 starts here."), (838488852104790, "It has a, link, link number 17, and a second sentence."), (838488864095337, "The third sentence ends it."), (838488872111345, "Paragraph 18 starts here."), (838488884094489, "It has a, link, link number 18, and a second sentence."), (838488892076970, "The third sentence ends it."), (838488904103573, "Paragraph 19 starts here."), (838488916090602, "It has a, link, link number 19, and a second sentence."), (838488928076470, "The third sentence ends it."), (838488940095395, "Paragraph 20 starts here."), (838488952071025, "It has a, link, link number 20, and a second sentence."), (838488964099749, "The third sentence ends it."), (838488972090101, "heading level 2, Part 3"), (838488980097986, "Paragraph 21 starts here."), (838488992093240, "It has a, link, link number 21, and a second sentence."), (838489004125606, "The third sentence ends it."), (838489012106762, "Paragraph 22 starts here."), (838489024080610, "It has a, link, link number 22, and a second sentence."), (838489036099443, "The third sentence ends it."), (838489044104577, "Paragraph 23 starts here."), (838489056092039, "It has a, link, link number 23, and a second sentence."), (838489068091336, "The third sentence ends it."), (838489076105265, "Paragraph 24 starts here."), (838489084088155, "It has a, link, link number 24, and a second sentence."), (838489096097984, "The third sentence ends it."), (838489108113901, "Paragraph 25 starts here."), (838489120108460, "It has a, link, link number 25, and a second sentence."), (838489128096363, "The third sentence ends it."), (838489136073086, "Paragraph 26 starts here."), (838489148168960, "It has a, link, link number 26, and a second sentence."), (838489156082647, "The third sentence ends it."), (838489168096400, "Paragraph 27 starts here."), (838489176188667, "It has a, link, link number 27, and a second sentence."), (838489188119569, "The third sentence ends it."), (838489200098427, "Paragraph 28 starts here."), (838489212114086, "It has a, link, link number 28, and a second sentence."), (838489224095931, "The third sentence ends it."), (838489232081234, "Paragraph 29 starts here."), (838489240095781, "It has a, link, link number 29, and a second sentence."), (838489252074918, "The third sentence ends it."), (838489264076798, "Paragraph 30 starts here."), (838489276088590, "It has a, link, link number 30, and a second sentence."), (838489288087987, "The third sentence ends it."), (838489296083958, "heading level 2, Part 4"), (838489304104260, "Paragraph 31 starts here."), (838489312065098, "It has a, link, link number 31, and a second sentence."), (838489324092392, "The third sentence ends it."), (838489336093766, "Paragraph 32 starts here."), (838489348079942, "It has a, link, link number 32, and a second sentence."), (838489356094229, "The third sentence ends it."), (838489368088318, "Paragraph 33 starts here."), (838489380083745, "It has a, link, link number 33, and a second sentence."), (838489388075945, "The third sentence ends it."), (838489396087441, "Paragraph 34 starts here."), (838489408083488, "It has a, link, link number 34, and a second sentence."), (838489416100044, "The third sentence ends it."), (838489428085577, "Paragraph 35 starts here."), (838489440090319, "It has a, link, link number 35, and a second sentence."), (838489452082181, "The third sentence ends it."), (838489460084641, "Paragraph 36 starts here."), (838489468183129, "It has a, link, link number 36, and a second sentence."), (838489476084069, "The third sentence ends it."), (838489484127069, "Paragraph 37 starts here."), (838489492082825, "It has a, link, link number 37, and a second sentence."), (838489500083576, "The third sentence ends it."), (838489508075609, "Paragraph 38 starts here."), (838489516096929, "It has a, link, link number 38, and a second sentence."), (838489524081428, "The third sentence ends it."), (838489532116865, "Paragraph 39 starts here."), (838489540169339, "It has a, link, link number 39, and a second sentence."), (838489548093853, "The third sentence ends it."), (838489556096870, "Paragraph 40 starts here."), (838489564071317, "It has a, link, link number 40, and a second sentence."), (838489576079568, "The third sentence ends it."), (838489584124417, "link, Back to the top")]
+
+metric                     bus                median          min          max  n op    threshold  res   note
+FC1h.fc1h_ms.n             daemon/voicego          480          468          480  3                  info   [samples]
+FC1h.fc1h_ms.p50           daemon/voicego        0.116        0.113        0.120  3                  info   [ms]
+FC1h.fc1h_ms.p95           daemon/voicego        0.157        0.154        0.160  3                  info   [ms]
+FC1h.fc1h_ms.p99           daemon/voicego        0.178        0.175        0.179  3 <=            3  PASS   [ms]
+FC1h.fc1h_ms.p999          daemon/voicego        0.259        0.195         39.4  3                  info   [ms]
+FC1h.fc1h_ms.max           daemon/voicego        0.259        0.195         39.4  3                  info   [ms]
+FC1h.fc_double             daemon/voicego            0            0            3  3 <=            0  FAIL  gated on the max over repeats [keys]
+FC1h.fc_extra              daemon/voicego            0            0            4  3 <=            0  FAIL  gated on the max over repeats [speeches]
+FC1h.fc_late               daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+FC1h.fc_swallowed          daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FC1h.lost                  daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FC1h.page_dropped          daemon/voicego            0            0           12  3 <=            2  FAIL  Keys the page dropped (FC1h, FS2; not scored, speech after them judged) [keys]
+FC1.fc1_ms.n               daemon/voicego          250          250          250  3                  info   [samples]
+FC1.fc1_ms.p50             daemon/voicego        2.491        2.387        2.733  3                  info   [ms]
+FC1.fc1_ms.p95             daemon/voicego        4.417        4.324        7.865  3                  info   [ms]
+FC1.fc1_ms.p99             daemon/voicego        7.354        6.854        8.811  3 <=           15  PASS   [ms]
+FC1.fc1_ms.p999            daemon/voicego        8.313        7.857        9.027  3                  info   [ms]
+FC1.fc1_ms.max             daemon/voicego        8.313        7.857        9.027  3                  info   [ms]
+FC1.fc_double              daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FC1.fc_extra               daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+FC1.fc_late                daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+FC1.lost                   daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FE1.fe1_ms.n               daemon/voicego          600          600          600  3                  info   [samples]
+FE1.fe1_ms.p50             daemon/voicego        0.277        0.271        0.298  3                  info   [ms]
+FE1.fe1_ms.p95             daemon/voicego        0.412        0.366        0.415  3                  info   [ms]
+FE1.fe1_ms.p99             daemon/voicego        0.441        0.397        0.528  3 <=            3  PASS   [ms]
+FE1.fe1_ms.p999            daemon/voicego        0.463        0.431        0.573  3                  info   [ms]
+FE1.fe1_ms.max             daemon/voicego        0.511        0.502        0.587  3                  info   [ms]
+FE1.fc_double              daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FE1.fc_extra               daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+FE1.fc_late                daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+FE1.lost                   daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FCE2.fce2_ms.n             daemon/voicego          600          600          600  3                  info   [samples]
+FCE2.fce2_ms.p50           daemon/voicego        0.274        0.257        0.288  3                  info   [ms]
+FCE2.fce2_ms.p95           daemon/voicego        0.388        0.358        0.514  3                  info   [ms]
+FCE2.fce2_ms.p99           daemon/voicego        0.497        0.384        1.704  3 <=            3  PASS   [ms]
+FCE2.fce2_ms.p999          daemon/voicego        0.585        0.451        4.950  3                  info   [ms]
+FCE2.fce2_ms.max           daemon/voicego        0.878        0.616        7.389  3                  info   [ms]
+FCE2.fc_double             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FCE2.fc_extra              daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+FCE2.fc_late               daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+FCE2.lost                  daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FE2.e2_double              daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_keyname             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_missing             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_resync              daemon/voicego            1            0            6  3 <=            3  FAIL  FE2 actions the page did not apply (not scored) [actions]
+FE2.e2_swallowed           daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FE2.e2_wrong               daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [actions]
+FE2.ft_failures            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [checks]
+FS2.fs2_ms.n               daemon/voicego          468          466          468  3                  info   [samples]
+FS2.fs2_ms.p50             daemon/voicego        0.596        0.590        0.768  3                  info   [ms]
+FS2.fs2_ms.p95             daemon/voicego        1.038        0.935        1.356  3                  info   [ms]
+FS2.fs2_ms.p99             daemon/voicego        1.301        1.142        2.681  3 <=           15  PASS   [ms]
+FS2.fs2_ms.p999            daemon/voicego        1.669        1.404        3.992  3                  info   [ms]
+FS2.fs2_ms.max             daemon/voicego        1.669        1.404        3.992  3                  info   [ms]
+FS2.fc_extra               daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+FS2.fc_late                daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+FS2.lost                   daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FS2.page_dropped           daemon/voicego            0            0            3  3 <=            2  FAIL  Keys the page dropped (FC1h, FS2; not scored, speech after them judged) [keys]
+FSA1.fsa1_ms.n             daemon/voicego           30           30           30  3                  info   [samples]
+FSA1.fsa1_ms.p50           daemon/voicego        0.833        0.828        0.945  3                  info   [ms]
+FSA1.fsa1_ms.p95           daemon/voicego        1.191        0.972        1.221  3                  info   [ms]
+FSA1.fsa1_ms.p99           daemon/voicego        1.267        1.026        1.709  3 <=           15  PASS   [ms]
+FSA1.fsa1_ms.p999          daemon/voicego        1.267        1.026        1.709  3                  info   [ms]
+FSA1.fsa1_ms.max           daemon/voicego        1.267        1.026        1.709  3                  info   [ms]
+FSA1.lost                  daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+FSA3.fsa3_stop_ms.n        daemon/voicego            8            8            8  3                  info   [samples]
+FSA3.fsa3_stop_ms.p50      daemon/voicego        0.315        0.250        0.365  3                  info   [ms]
+FSA3.fsa3_stop_ms.p95      daemon/voicego        0.400        0.289        0.621  3                  info   [ms]
+FSA3.fsa3_stop_ms.p99      daemon/voicego        0.400        0.289        0.621  3 <=            2  PASS   [ms]
+FSA3.fsa3_stop_ms.p999     daemon/voicego        0.400        0.289        0.621  3                  info   [ms]
+FSA3.fsa3_stop_ms.max      daemon/voicego        0.400        0.289        0.621  3                  info   [ms]
+FSA3.lost                  daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+FSA3.sa3_caret_wrong       daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+FSA3.sa3_not_silenced      daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+FCE1.fce1_ms.n             daemon/voicego           17           17           17  3                  info   [samples]
+FCE1.fce1_ms.p50           daemon/voicego        0.121        0.101        0.122  3                  info   [ms]
+FCE1.fce1_ms.p95           daemon/voicego        0.634        0.595        0.691  3                  info   [ms]
+FCE1.fce1_ms.p99           daemon/voicego        0.950        0.819        1.326  3                  info   [ms]
+FCE1.fce1_ms.p999          daemon/voicego        0.950        0.819        1.326  3                  info   [ms]
+FCE1.fce1_ms.max           daemon/voicego        0.950        0.819        1.326  3                  info   [ms]
+FCE1.fc_double             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FCE1.fc_extra              daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+FCE1.fc_late               daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+FCE1.ft_failures           daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [checks]
+FCE1.lost                  daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FT1.ft_failures            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [checks]
+FP1.ft_failures            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [checks]
+BSA1.bsa1_ms.n             daemon/voicego           12           12           12  3                  info   [samples]
+BSA1.bsa1_ms.p50           daemon/voicego        0.263        0.211        0.266  3                  info   [ms]
+BSA1.bsa1_ms.p95           daemon/voicego        0.303        0.278        0.311  3                  info   [ms]
+BSA1.bsa1_ms.p99           daemon/voicego        0.312        0.295        0.327  3 <=            5  PASS   [ms]
+BSA1.bsa1_ms.p999          daemon/voicego        0.312        0.295        0.327  3                  info   [ms]
+BSA1.bsa1_ms.max           daemon/voicego        0.312        0.295        0.327  3                  info   [ms]
+BSA1.bsa_failures          daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [checks]
+BAR1.bar_failures          daemon/voicego            1            1            1  3 <=            0  FAIL  gated on the max over repeats [checks]
+BAR1.bar_start_ms          daemon/voicego        412.4        408.4        424.8  3                  info   [ms]
+BL1.bl_failures            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [checks]
+FR1.fr_failures            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [checks]
+
+== wrote bench/results/e2e/m9r-final-cr-typing/20261017T072828Z.{json,txt}
+== 6 gate(s) FAILED
