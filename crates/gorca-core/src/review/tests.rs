@@ -135,7 +135,8 @@ fn fixture() -> Fx {
     let dir = Arc::new(MirrorDirectory::new());
     let (writer, handle) = mirror();
     dir.insert(app(), &handle);
-    let reader = Reader::new(Arc::clone(&epoch), dir, ModeKeys::default());
+    let reader = Reader::new(Arc::clone(&epoch), dir, ModeKeys::default())
+        .with_term_provider(Arc::new(crate::terminal::tests::NativeTerm));
     Fx {
         reader,
         writer,
@@ -1209,7 +1210,8 @@ fn term_fixture(
     let dir = Arc::new(MirrorDirectory::new());
     let (writer, handle) = mirror();
     dir.insert(app(), &handle);
-    let mut reader = Reader::new(Arc::clone(&epoch), dir, ModeKeys::default());
+    let mut reader = Reader::new(Arc::clone(&epoch), dir, ModeKeys::default())
+        .with_term_provider(Arc::new(crate::terminal::tests::NativeTerm));
     if let Some(d) = dropped {
         reader = reader.with_text_dropped(d);
     }

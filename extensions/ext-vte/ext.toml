@@ -1,0 +1,32 @@
+# Manifest of the terminal extension (format: docs/design/extensions.md).
+# The same source is built as a wasm32-wasip2 component (default, shipped as ext_vte.wasm next to
+# this file by `cargo xtask build-ext`) and natively (the daemon's fallback, --terminal-policy=native).
+name = "ext-vte"
+backend = "wasm"
+module = "ext_vte.wasm"
+# The terminal policy (ADR-0001 T-2): the core's terminal arm drives the `terminal` interface
+# (`step`, `snapshot`, `counters`, `configure`); it asks no other hook.
+hooks = ["terminal"]
+# No host calls: the screen is read by the core and handed in as data, speech is returned as
+# actions, so the component needs no capability at all.
+capabilities = []
+
+[matcher]
+# VTE-based terminals. The core never asks what application a terminal is; the manifest does.
+app_name = [
+  "gnome-terminal*",
+  "org.gnome.Terminal*",
+  "gnome-console*",
+  "org.gnome.Console*",
+  "kgx",
+  "ptyxis*",
+  "org.gnome.Ptyxis*",
+  "tilix*",
+  "xfce4-terminal*",
+  "mate-terminal*",
+  "terminator*",
+  "lxterminal*",
+  "guake*",
+  "roxterm*",
+  "sakura*",
+]

@@ -32,11 +32,13 @@ mod platform;
 mod probe;
 mod rtkit;
 mod shell_policy;
+mod terminal_policy;
 mod topology;
 mod wire;
 
 pub use probe::{DaemonProbe, ProbeRead};
 pub use shell_policy::ShellPolicy as NativeShellPolicy;
+pub use terminal_policy::NativeTerminal as NativeTerminalPolicy;
 pub use topology::{Arm, LaneRuntimes, build_runtime_for, bulk_pool, finish as finish_topology};
 
 use std::io::IsTerminal;
@@ -380,7 +382,16 @@ async fn run_inner(
         core = core.with_fill_policy(p);
     }
     // Extensions first: their commands must be known before the settings are compiled.
-    let (mut core, shell_in_host) = wire::wire_ext(core, &opts).await;
+    let (mut core, shell_in_host, terminal_in_host) = wire::wire_ext(core, &opts).await;
+    // The terminal policy (ADR-0008 amendment 1): the `ext-vte` WASM component when the extension
+    // host loaded it, else the native build of the same source behind the core's `TermProvider`.
+    // They are exclusive, so the gates exercise the one the log line names.
+    if terminal_in_host {
+        tracing::info!("terminal policy: ext-vte WASM component");
+    } else {
+        tracing::info!("terminal policy: ext-vte native build");
+        core = core.with_term_provider(Arc::new(terminal_policy::NativeTerminal::default()));
+    }
     // The Shell's presentation policy (ADR-0008 amendment 1): the `ext-gnome-shell` WASM component
     // when the extension host loaded it, else the native build of the same source behind the
     // core's `AppPolicy` seam.

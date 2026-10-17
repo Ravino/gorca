@@ -89,11 +89,11 @@ so the core keeps speaking.
 
 ## 4. The sandbox
 
-`wit/gorca-ext.wit` (package `gorca:ext@0.1.0`): `host` (`get-node`, `fetch`, `text`, `speak`,
+`wit/gorca-ext.wit` (package `gorca:ext@0.2.0`): `host` (`get-node`, `fetch`, `text`, `speak`,
 `get-setting`, `set-setting`, `log`) and `hooks` (`on-event`, `present`, `policy`, `nav-units`,
-`nav-match`, `command`). Capabilities in the manifest gate `speak`, `settings` and `fetch:*`; an undeclared one is
+`nav-match`, `command`) and `terminal` (`configure`, `step`, `snapshot`, `counters`; 0.2.0). Capabilities in the manifest gate `speak`, `settings` and `fetch:*`; an undeclared one is
 denied (`fetch` and `text` return `denied`, or `not-supported` when declared: they need an asynchronous
-prefetch path that M6 adds for `ext-vte`).
+prefetch path that no extension needs yet: `ext-vte` never fetches, the core reads the screen and hands it to `terminal.step` as data).
 
 `get-node` reads the mirror of the extension's *own* application only; another application's keys
 resolve to nothing. Password-field names are withheld.
@@ -110,7 +110,7 @@ actor's runtime and grant ambient capability.
 name = "ext-vte"                      # [a-z0-9_-]; commands become ext.ext_vte.<command>
 backend = "wasm"                      # or "native"
 module = "ext_vte.wasm"               # relative; wasm only
-hooks = ["on-event", "present", "policy", "nav-units", "command"]
+hooks = ["on-event", "present", "policy", "terminal", "nav-units", "command"]
 capabilities = ["speak", "settings", "fetch:prefetch", "fetch:background"]
 
 [matcher]                             # glob lists; omitted = any
@@ -194,8 +194,10 @@ statics; do not rely on random numbers being unpredictable.
 
 ## 8. Porting guide: `ext-vte` and `ext-gnome-shell`
 
-Both are native code today (`ext-vte` is a skeleton; the Shell switcher policy is the
-`AppProfile::speak_selection` switch in `gorca-core/src/builtin_ext.rs`). Porting is mechanical:
+Both are ported: the Shell rule table runs behind the `policy` hook and the terminal policy behind the
+`terminal` interface, each as a component by default and as the native build of the same source (the
+exclusive fallback, `--shell-policy=native` / `--terminal-policy=native`). The Shell switcher routing is
+still the `AppProfile::speak_selection` switch in `gorca-core/src/builtin_ext.rs`. Porting is mechanical:
 
 1. **Crate shape.** `extensions/ext-<name>/Cargo.toml`: add `[lib] crate-type = ["cdylib", "rlib"]`; the
    only workspace dependency stays `gorca-ext-api`. Implement `Hooks` (the existing `ext-vte`
@@ -203,9 +205,9 @@ Both are native code today (`ext-vte` is a skeleton; the Shell switcher policy i
    `export_extension!(YourType);` (the type needs `Default`).
 2. **Manifest.** Copy `extensions/ext-test/ext.toml`. `ext-gnome-shell` (ported, see
    `extensions/ext-gnome-shell/ext.toml`): `verified_shell = true`, hooks `["policy"]`, no
-   capabilities. `ext-vte`: `toolkit` or
-   `app_name` for GNOME Terminal (`gnome-terminal*`), hooks `["on-event", "present", "command"]`, its
-   review/prompt commands as `[[keymap]]` entries.
+   capabilities. `ext-vte` (ported, see `extensions/ext-vte/ext.toml`): `app_name` globs of the VTE
+   terminals (`gnome-terminal*`, `ptyxis*`, `kgx`, ...), hooks `["terminal"]`, no capabilities (the
+   core reads the screen and hands it over as data; speech comes back as actions).
 3. **Event shape.** Hooks get the WIT subset (`gorca_ext_api::Event`): `FocusChanged`,
    `PropertiesChanged(node, mask)` (mask bits in `gorca_ext_api::prop`; `SELECTED_NOW` is the Shell's
    Alt+Tab signal), `ChildrenChanged`, `TextChanged`, `CaretMoved(node, offset)`, `SelectionChanged`,
@@ -232,9 +234,22 @@ Both are native code today (`ext-vte` is a skeleton; the Shell switcher policy i
    `crates/gorca-ext-host/tests/common/mod.rs` (copy `host(Backend)` and point it at the new
    manifest and factory). Run `cargo run --release -p gorca-ext-host --example x1` for the X1 rows,
    and the e2e gates with `--ext-dir`.
-8. **Fetching.** `host::fetch` and `host::text` return `NotSupported` (declared) or `Denied` today.
-   `ext-vte` needs a prefetch path: add it in `InstShared` (`fetch_error` is the single place), as an
-   asynchronous mirror prefetch the next hook reads through `get_node` (keeps the no-blocking rule).
+8. **Fetching.** `host::fetch` and `host::text` return `NotSupported` (declared) or `Denied` today. `ext-vte`
+   turned out not to need them: the `terminal` interface is a pure function (`step(now, input) ->
+   actions`), the extension answers `fetch-screen` as an *action* and the core's terminal arm reads the
+   screen under a deadline and feeds it back as `screen(text, caret)`. An extension that really needs a
+   node's text adds a prefetch path in `InstShared` (`fetch_error` is the single place), as an asynchronous
+   mirror prefetch the next hook reads through `get_node` (keeps the no-blocking rule).
+   **The `terminal` interface (0.2.0).** One extension per application serves the terminals the Reader
+   tracks (`AppExt::terminal(cfg) -> TermSession`, core trait `TermSession`; a native build plugs into the
+   same seam as `TermProvider`). The session lives in the Reader and owns nothing of the extension's state:
+   the state is in the instance, so after a fault (a new instance generation, or a lost call) the session
+   configures the new instance and sends `focus` before the next input, which reads the screen again.
+   Until then it answers nothing and the generic key echo speaks. Keys go in unclassified (`raw-key`:
+   keysym, scalar, modifiers, physical letter); readline and emacs bindings are the extension's. The
+   `Debug` output of every input type is redacted (a key or a screen can be a password). The hook has its
+   own CPU limit (`LIMIT_TERMINAL_MS`), a 1 MiB result lift and 8 MiB of memory growth per call, because a
+   screen of up to 256 KiB is copied, indexed and diffed.
 9. **Do not** add app names to the core, depend on any gorca crate but `gorca-ext-api`, or call the
    connector. Whatever two extensions both need moves into the core or the connector (ADR-0001 10).
 
@@ -242,8 +257,11 @@ Both are native code today (`ext-vte` is a skeleton; the Shell switcher policy i
 
 - `document_role` matching needs a role at `attach`; the host passes `None` until M7 wires documents,
   so a manifest that requires one matches nothing.
-- Native extensions are linked in by the daemon (only the native build of `ext-gnome-shell`, as the
-  fallback when its component is not installed); a directory only loads components.
+- Native extensions are linked in by the daemon (the native builds of `ext-gnome-shell` and `ext-vte`, as
+  the fallback when the component is not installed); a directory only loads components. The native
+  terminal policy is called under `catch_unwind` (three panics switch it off) but cannot be pre-empted.
+- The terminal policy serves the terminals whose application name the manifest lists; a VTE terminal
+  that is not listed is not tracked (no screen diff, the generic text path only).
 - `nav-units` and `nav-match` exist in the WIT and the host but no core caller runs them yet (ADR-0003
   section 15, M7).
 - The Reader runs `present` inline: a looping `present` costs up to its fuel limit (about 1 to 4 ms)

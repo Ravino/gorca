@@ -1,0 +1,92 @@
+== vte-fake-native-1 native fake 20:16:19 load 24.71 18.31 16.50 42/2340 1817073
+psi: some avg10=0.99 avg60=0.52 avg300=1.20 total=2854504793
+rc=1 vte-fake-native-1
+psi after: some avg10=0.13 avg60=0.17 avg300=0.54 total=2862241898 load 11.67 15.75 17.25 2/2727 1891876
+== vte-strict-native-1 native strict 20:30:21 load 11.67 15.75 17.25 3/2727 1891879
+psi: some avg10=0.13 avg60=0.17 avg300=0.54 total=2862241898
+rc=0 vte-strict-native-1
+psi after: some avg10=0.14 avg60=0.13 avg300=0.27 total=2862926521 load 16.81 14.81 16.35 1/2934 1904693
+== vte-fake-wasm-1 wasm fake 20:34:56 load 16.81 14.81 16.35 2/2934 1904696
+psi: some avg10=0.14 avg60=0.13 avg300=0.27 total=2862926521
+rc=1 vte-fake-wasm-1
+psi after: some avg10=0.13 avg60=0.42 avg300=0.38 total=2866987620 load 10.97 12.94 14.52 2/2877 1961549
+== vte-strict-wasm-1 wasm strict 20:48:51 load 10.97 12.94 14.52 2/2877 1961552
+psi: some avg10=0.13 avg60=0.42 avg300=0.38 total=2866987620
+rc=0 vte-strict-wasm-1
+psi after: some avg10=0.00 avg60=0.03 avg300=0.24 total=2867932991 load 15.03 12.76 13.93 1/2852 1970920
+== vte-fake-wasm-2 wasm fake 20:53:24 load 15.03 12.76 13.93 1/2852 1970923
+psi: some avg10=0.00 avg60=0.03 avg300=0.24 total=2867932991
+rc=1 vte-fake-wasm-2
+psi after: some avg10=0.36 avg60=0.06 avg300=0.08 total=2871122969 load 23.05 18.18 15.48 3/2889 2063161
+== vte-strict-wasm-2 wasm strict 21:07:26 load 23.05 18.18 15.48 3/2889 2063164
+psi: some avg10=0.36 avg60=0.06 avg300=0.08 total=2871122969
+rc=0 vte-strict-wasm-2
+psi after: some avg10=0.08 avg60=0.11 avg300=0.28 total=2873289485 load 10.47 15.39 15.24 2/2867 2089232
+== vte-fake-native-2 native fake 21:12:05 load 10.47 15.39 15.24 1/2867 2089235
+psi: some avg10=0.08 avg60=0.11 avg300=0.28 total=2873289485
+rc=1 vte-fake-native-2
+psi after: some avg10=0.00 avg60=0.21 avg300=0.28 total=2876782552 load 12.40 11.80 12.97 2/2602 2152906
+== vte-strict-native-2 native strict 21:25:55 load 12.40 11.80 12.97 1/2602 2152909
+psi: some avg10=0.00 avg60=0.21 avg300=0.28 total=2876782552
+rc=0 vte-strict-native-2
+psi after: some avg10=0.00 avg60=0.01 avg300=0.13 total=2877150819 load 8.40 9.66 11.76 2/2581 2172630
+== vte-fake-native-3 native fake 21:30:27 load 8.40 9.66 11.76 2/2581 2172633
+psi: some avg10=0.00 avg60=0.01 avg300=0.13 total=2877150819
+rc=1 vte-fake-native-3
+psi after: some avg10=0.10 avg60=0.34 avg300=0.37 total=2880238898 load 8.40 9.44 10.62 3/2531 2202566
+== vte-strict-native-3 native strict 21:44:17 load 8.40 9.44 10.62 2/2531 2202570
+psi: some avg10=0.10 avg60=0.34 avg300=0.37 total=2880238898
+rc=0 vte-strict-native-3
+psi after: some avg10=0.02 avg60=0.33 avg300=0.39 total=2881884292 load 10.47 10.11 10.63 1/2828 2213282
+== vte-fake-wasm-3 wasm fake 21:48:50 load 10.47 10.11 10.63 3/2828 2213285
+psi: some avg10=0.02 avg60=0.33 avg300=0.39 total=2881884292
+rc=0 vte-fake-wasm-3
+psi after: some avg10=0.00 avg60=0.00 avg300=0.12 total=2885213880 load 10.17 10.57 10.45 1/3030 2241005
+== vte-strict-wasm-3 wasm strict 22:02:42 load 10.17 10.57 10.45 1/3030 2241008
+psi: some avg10=0.00 avg60=0.00 avg300=0.12 total=2885213880
+rc=0 vte-strict-wasm-3
+psi after: some avg10=0.00 avg60=0.00 avg300=0.03 total=2885245688 load 10.67 10.33 10.39 6/2915 2255289
+== vte-v1ab-native-1 native fake 22:07:53 load 10.70 10.41 10.41 6/2826 2257145
+psi: some avg10=0.00 avg60=0.00 avg300=0.02 total=2885250833
+rc=1 vte-v1ab-native-1
+psi after: some avg10=0.00 avg60=0.00 avg300=0.09 total=2887820136 load 16.61 12.19 11.17 21/2886 2321464
+== vte-v1ab-wasm-1 wasm fake 22:21:47 load 16.61 12.19 11.17 24/2884 2321467
+psi: some avg10=0.00 avg60=0.00 avg300=0.09 total=2887820136
+rc=0 vte-v1ab-wasm-1
+psi after: some avg10=0.01 avg60=0.09 avg300=0.17 total=2890585303 load 9.38 10.19 10.91 2/2862 2367142
+== vte-v1ab-wasm-2 wasm fake 22:36:43 load 9.38 10.19 10.91 2/2862 2367145
+psi: some avg10=0.01 avg60=0.09 avg300=0.17 total=2890585303
+rc=0 vte-v1ab-wasm-2
+psi after: some avg10=0.01 avg60=0.05 avg300=0.13 total=2893917605 load 9.41 10.00 10.18 3/2644 2388263
+== vte-v1ab-native-2 native fake 22:50:35 load 9.41 10.00 10.18 4/2644 2388266
+psi: some avg10=0.01 avg60=0.05 avg300=0.13 total=2893917605
+rc=0 vte-v1ab-native-2
+psi after: some avg10=0.00 avg60=0.01 avg300=0.00 total=2894823844 load 10.97 10.35 10.09 1/2434 2406891
+== vte-v1ab-native-3 native fake 23:04:25 load 10.97 10.35 10.09 2/2434 2406894
+psi: some avg10=0.00 avg60=0.01 avg300=0.00 total=2894823844
+rc=1 vte-v1ab-native-3
+psi after: some avg10=0.94 avg60=0.46 avg300=0.17 total=2896849553 load 23.25 14.54 11.58 16/3176 2455074
+== vte-v1ab-wasm-3 wasm fake 23:18:17 load 23.25 14.54 11.58 12/3176 2455077
+psi: some avg10=0.94 avg60=0.46 avg300=0.17 total=2896849553
+rc=1 vte-v1ab-wasm-3
+psi after: some avg10=0.55 avg60=1.44 avg300=1.11 total=2906473956 load 18.41 15.55 13.91 10/2986 2532535
+== vte-v1ab-wasm-4 wasm fake 23:32:11 load 18.41 15.55 13.91 10/2988 2532541
+psi: some avg10=0.55 avg60=1.44 avg300=1.11 total=2906473956
+rc=1 vte-v1ab-wasm-4
+psi after: some avg10=1.03 avg60=0.48 avg300=0.69 total=2916619125 load 14.10 15.10 15.30 2/2753 2646154
+== vte-v1ab-native-4 native fake 23:46:52 load 14.10 15.10 15.30 3/2753 2646157
+psi: some avg10=1.03 avg60=0.48 avg300=0.69 total=2916619125
+rc=1 vte-v1ab-native-4
+psi after: some avg10=0.00 avg60=0.77 avg300=0.75 total=2922589437 load 14.21 15.35 15.16 2/2526 2747576
+== vte-vv-native-1 00:12:53 load 11.88 16.11 16.60 3/2870 2831330 psi some avg10=0.02 avg60=0.18 avg300=0.37 total=2927998610
+rc=1 vte-vv-native-1
+== vte-vv-wasm-1 00:14:59 load 16.02 15.47 16.25 2/2460 2835988 psi some avg10=0.47 avg60=1.05 avg300=0.63 total=2929712122
+rc=0 vte-vv-wasm-1
+== vte-vv-wasm-2 00:17:06 load 14.59 14.87 15.91 9/2977 2844634 psi some avg10=1.91 avg60=0.93 avg300=0.71 total=2931247120
+rc=0 vte-vv-wasm-2
+== vte-vv-native-2 00:19:13 load 14.48 15.16 15.90 4/2927 2851765 psi some avg10=3.57 avg60=2.02 avg300=1.32 total=2934951064
+rc=0 vte-vv-native-2
+== vte-vv-native-3 00:21:20 load 12.53 13.93 15.33 2/2830 2856211 psi some avg10=0.46 avg60=0.64 avg300=1.00 total=2935841226
+rc=0 vte-vv-native-3
+== vte-vv-wasm-3 00:23:28 load 11.12 12.74 14.70 1/2797 2862792 psi some avg10=0.00 avg60=0.25 avg300=0.78 total=2936688724
+rc=0 vte-vv-wasm-3

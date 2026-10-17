@@ -92,4 +92,38 @@ impl HookInstance for NativeInstance {
     fn command(&mut self, id: u32) -> Result<api::CommandResult, Fault> {
         self.run(HookKind::Command, |e| e.command(id))
     }
+
+    fn term_configure(&mut self, cfg: &api::terminal::TermConfig) -> Result<(), Fault> {
+        self.run(HookKind::Terminal, |e| {
+            if let Some(t) = e.terminal() {
+                t.configure(cfg);
+            }
+        })
+    }
+
+    fn term_step(
+        &mut self,
+        now: u64,
+        input: api::terminal::TermInput,
+    ) -> Result<Vec<api::terminal::TermAction>, Fault> {
+        self.run(HookKind::Terminal, |e| {
+            let mut out = Vec::new();
+            if let Some(t) = e.terminal() {
+                t.step(now, input, &mut out);
+            }
+            out
+        })
+    }
+
+    fn term_snapshot(&mut self) -> Result<Option<api::terminal::TermSnapshot>, Fault> {
+        self.run(HookKind::Terminal, |e| {
+            e.terminal().and_then(|t| t.snapshot())
+        })
+    }
+
+    fn term_counters(&mut self) -> Result<api::terminal::TermCounters, Fault> {
+        self.run(HookKind::Terminal, |e| {
+            e.terminal().map(|t| t.counters()).unwrap_or_default()
+        })
+    }
 }

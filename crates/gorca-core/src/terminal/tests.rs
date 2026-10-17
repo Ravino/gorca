@@ -14,13 +14,42 @@ use gorca_model::{
 };
 use gorca_rt::EpochCell;
 
-use super::classify_term_key;
+use gorca_ext_api::terminal::{
+    Ms, TermAction, TermConfig, TermCounters, TermInput, TermSnapshot, TerminalHooks,
+};
+
+use super::raw_key;
 use crate::directory::MirrorDirectory;
 use crate::mode::ModeKeys;
 use crate::reader::{Reader, ReaderEffect, ReaderEffects, ReaderMsg};
 use crate::text::caret::Reply;
 use crate::text::{TextMsg, TextOp, TextReqId};
-use gorca_ext_api::terminal::TermKey;
+
+/// The native build of `ext-vte` behind the core's seam (what the daemon installs with
+/// `--terminal-policy=native`).
+#[derive(Debug)]
+pub(crate) struct NativeTerm;
+
+#[derive(Debug)]
+struct NativeSess(ext_vte::VteExtension);
+
+impl crate::TermSession for NativeSess {
+    fn step(&mut self, now: Ms, input: TermInput, out: &mut Vec<TermAction>) {
+        self.0.step(now, input, out);
+    }
+    fn counters(&self) -> TermCounters {
+        self.0.counters()
+    }
+    fn snapshot(&self) -> Option<TermSnapshot> {
+        self.0.snapshot()
+    }
+}
+
+impl crate::TermProvider for NativeTerm {
+    fn open(&self, cfg: &TermConfig) -> Box<dyn crate::TermSession> {
+        Box::new(NativeSess(ext_vte::VteExtension::new(cfg)))
+    }
+}
 
 fn node() -> NodeKey {
     NodeKey {
@@ -65,6 +94,7 @@ fn rig() -> Rig {
     let dir = Arc::new(MirrorDirectory::new());
     let dropped = Arc::new(AtomicU64::new(0));
     let r = Reader::new(Arc::clone(&epoch), dir, ModeKeys::default())
+        .with_term_provider(Arc::new(NativeTerm))
         .with_text_dropped(Arc::clone(&dropped));
     Rig {
         r,
@@ -238,66 +268,34 @@ fn ev(code: u16, keysym: u32, unichar: u32, mods: Modifiers) -> KeyEvent {
     }
 }
 
+/// The core hands the key over unclassified (which key is a readline motion is the extension's
+/// policy, `ext-vte`'s `keys` tests): only the facts of the press.
 #[test]
-fn keys_are_classified_for_a_terminal() {
+fn a_key_reaches_the_extension_unclassified_with_its_physical_letter() {
     let code = |n: &str| static_keycode(n).unwrap_or(0);
+    let k = raw_key(&ev(code("c"), 'c' as u32, 3, Modifiers::CONTROL));
     assert_eq!(
-        classify_term_key(&ev(0, 'a' as u32, 'a' as u32, NONE)),
-        TermKey::Typed('a')
+        (k.phys, k.ctrl, k.alt, k.shift, k.logo),
+        (b'c', true, false, false, false)
     );
+    assert!(!k.types_a_character());
+    let k = raw_key(&ev(0, 'A' as u32, 'A' as u32, Modifiers::SHIFT));
     assert_eq!(
-        classify_term_key(&ev(0, 0x20, 0x20, NONE)),
-        TermKey::Typed(' ')
+        (k.phys, k.shift, k.keysym, k.unichar),
+        (0, true, 'A' as u32, 'A' as u32)
     );
-    assert_eq!(classify_term_key(&ev(0, 0xff0d, 13, NONE)), TermKey::Enter);
+    assert!(k.types_a_character());
+    // Num Lock is not a modifier of the key; Super is.
+    let k = raw_key(&ev(0, 0xff51, 0, Modifiers::MOD2));
     assert_eq!(
-        classify_term_key(&ev(0, 0xff08, 8, NONE)),
-        TermKey::Backspace
+        (k.ctrl, k.alt, k.shift, k.logo),
+        (false, false, false, false)
     );
-    assert_eq!(classify_term_key(&ev(0, 0xff09, 9, NONE)), TermKey::Tab);
-    assert_eq!(classify_term_key(&ev(0, 0xff52, 0, NONE)), TermKey::LineUp);
-    assert_eq!(
-        classify_term_key(&ev(0, 0xff51, 0, NONE)),
-        TermKey::CharLeft
-    );
-    assert_eq!(
-        classify_term_key(&ev(0, 0xff51, 0, Modifiers::CONTROL)),
-        TermKey::WordLeft
-    );
-    assert_eq!(
-        classify_term_key(&ev(code("c"), 'c' as u32, 3, Modifiers::CONTROL)),
-        TermKey::Interrupt
-    );
-    assert_eq!(
-        classify_term_key(&ev(code("a"), 'a' as u32, 1, Modifiers::CONTROL)),
-        TermKey::LineStart
-    );
-    assert_eq!(
-        classify_term_key(&ev(code("e"), 'e' as u32, 5, Modifiers::CONTROL)),
-        TermKey::LineEnd
-    );
-    assert_eq!(
-        classify_term_key(&ev(code("b"), 'b' as u32, 0, Modifiers::MOD1)),
-        TermKey::WordLeft
-    );
-    // Shift keeps the character; a lone modifier, Escape and F-keys are not characters.
-    assert_eq!(
-        classify_term_key(&ev(0, 'A' as u32, 'A' as u32, Modifiers::SHIFT)),
-        TermKey::Typed('A')
-    );
-    assert_eq!(classify_term_key(&ev(0, 0xffe1, 0, NONE)), TermKey::Other);
-    assert_eq!(classify_term_key(&ev(0, 0xff1b, 27, NONE)), TermKey::Other);
-    assert_eq!(classify_term_key(&ev(0, 0xffbe, 0, NONE)), TermKey::Other);
-    // Super and Ctrl+Alt belong to the desktop.
-    assert_eq!(
-        classify_term_key(&ev(0, 'x' as u32, 'x' as u32, Modifiers::MOD4)),
-        TermKey::Other
-    );
-    // Num Lock does not change the meaning of a key.
-    assert_eq!(
-        classify_term_key(&ev(0, 0xff51, 0, Modifiers::MOD2)),
-        TermKey::CharLeft
-    );
+    assert!(raw_key(&ev(0, 'x' as u32, 'x' as u32, Modifiers::MOD4)).logo);
+    // Enter types no character.
+    assert!(!raw_key(&ev(0, 0xff0d, 13, NONE)).types_a_character());
+    // A key never shows its character in debug output.
+    assert!(!format!("{:?}", raw_key(&ev(0, 'q' as u32, 'q' as u32, NONE))).contains('q'));
 }
 
 #[test]
@@ -444,6 +442,167 @@ fn password_prompt_characters_are_marked_sensitive_and_not_repeatable() {
     let fx = g.typed('h');
     assert_eq!(spoken(&fx), ["h"]);
     assert_eq!(g.r.text.sensitive_utt, Some(utterances(&fx)[0].id));
+}
+
+/// A session that stops answering when `dead` is set (a trapped, busy or disabled extension).
+#[derive(Debug)]
+struct Mortal {
+    inner: NativeSess,
+    dead: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl crate::TermSession for Mortal {
+    fn alive(&self) -> bool {
+        !self.dead.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    fn step(&mut self, now: Ms, input: TermInput, out: &mut Vec<TermAction>) {
+        if self.dead.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+        self.inner.step(now, input, out);
+    }
+    fn counters(&self) -> TermCounters {
+        self.inner.counters()
+    }
+    fn snapshot(&self) -> Option<TermSnapshot> {
+        self.inner.snapshot()
+    }
+}
+
+#[derive(Debug)]
+struct MortalTerm(Arc<std::sync::atomic::AtomicBool>);
+
+impl crate::TermProvider for MortalTerm {
+    fn open(&self, cfg: &TermConfig) -> Box<dyn crate::TermSession> {
+        Box::new(Mortal {
+            inner: NativeSess(ext_vte::VteExtension::new(cfg)),
+            dead: Arc::clone(&self.0),
+        })
+    }
+}
+
+fn mortal_rig() -> (Rig, Arc<std::sync::atomic::AtomicBool>) {
+    let dead = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mut g = rig();
+    g.r =
+        g.r.with_term_provider(Arc::new(MortalTerm(Arc::clone(&dead))));
+    (g, dead)
+}
+
+fn every_utterance_is_sensitive(g: &Rig, fx: &ReaderEffects) -> bool {
+    utterances(fx)
+        .iter()
+        .all(|u| g.r.text.sensitive_utt == Some(u.id))
+}
+
+#[test]
+fn a_policy_that_dies_during_a_password_prompt_keeps_every_typed_key_sensitive() {
+    use std::sync::atomic::Ordering;
+    let (mut g, dead) = mortal_rig();
+    let prompt = "$ sudo ls\n[sudo] password for me: ";
+    g.focus(prompt, u32::try_from(prompt.chars().count()).unwrap_or(0));
+    // Alive: the first key is sensitive.
+    let fx = g.typed('h');
+    assert_eq!(spoken(&fx), ["h"]);
+    assert!(every_utterance_is_sensitive(&g, &fx));
+    // The extension traps / is busy / is disabled from now on: it answers nothing. The core
+    // still claims and speaks the key, marked sensitive, and never leaves it to the generic echo.
+    dead.store(true, Ordering::Relaxed);
+    for c in ['q', 'Z', '7'] {
+        let keyfx = g.typed(c);
+        assert_eq!(spoken(&keyfx), [c.to_string()], "{c}");
+        assert!(every_utterance_is_sensitive(&g, &keyfx), "{c}: sensitive");
+    }
+    // Enter ends the prompt: the hold goes with it.
+    let _ = g.key(0xff0d, 13, NONE);
+    assert!(!g.r.text.term.secret_hold);
+}
+
+#[test]
+fn the_core_sees_a_password_prompt_even_when_the_policy_never_answers() {
+    // Dead from the start: the extension never reports the prompt; the core's own check of the
+    // screen it read does.
+    let (mut g, dead) = mortal_rig();
+    dead.store(true, std::sync::atomic::Ordering::Relaxed);
+    let prompt = "Enter passphrase for key '/home/me/.ssh/id': ";
+    g.focus(prompt, u32::try_from(prompt.chars().count()).unwrap_or(0));
+    assert!(g.r.text.term.secret_hold);
+    let fx = g.typed('x');
+    assert_eq!(spoken(&fx), ["x"]);
+    assert!(every_utterance_is_sensitive(&g, &fx));
+    // An ordinary prompt does not hold.
+    let (mut g2, dead2) = mortal_rig();
+    dead2.store(true, std::sync::atomic::Ordering::Relaxed);
+    g2.focus("me@box:~$ ", 10);
+    assert!(!g2.r.text.term.secret_hold);
+}
+
+#[test]
+fn the_secret_prompt_table_of_the_core() {
+    for yes in [
+        "[sudo] password for me:",
+        "Password:",
+        "Enter PIN:",
+        "[sudo] \u{43f}\u{430}\u{440}\u{43e}\u{43b}\u{44c} \u{434}\u{43b}\u{44f} me:",
+        "Verification code: ",
+        "Contrase\u{f1}a:",
+    ] {
+        assert!(super::is_secret_prompt(yes), "{yes}");
+    }
+    for no in [
+        "me@box:~$ ",
+        "ping: unknown host",
+        "password reset done",
+        "pinned:x y",
+        "ls",
+    ] {
+        assert!(!super::is_secret_prompt(no), "{no}");
+    }
+}
+
+#[test]
+fn a_terminal_whose_policy_was_disabled_is_still_watched_for_secret_prompts() {
+    #[derive(Debug)]
+    struct NoTerm;
+    impl crate::AppExt for NoTerm {
+        fn on_event(&self, _: &gorca_model::NodeEvent) -> crate::ExtVerdict {
+            crate::ExtVerdict::Pass
+        }
+        fn present(
+            &self,
+            _: &NodeSnapshot,
+            _: crate::present::PresentContext,
+            _: u64,
+        ) -> Option<Vec<gorca_model::Segment>> {
+            None
+        }
+        fn command(&self, _: &str, _: u32) {}
+    }
+    #[derive(Debug)]
+    struct Src;
+    impl crate::ExtSource for Src {
+        fn attach(&self, _: AppId, _: &gorca_model::AppInfo) -> Option<Arc<dyn crate::AppExt>> {
+            None
+        }
+        fn detach(&self, _: AppId) {}
+        fn for_app(&self, _: AppId) -> Option<Arc<dyn crate::AppExt>> {
+            Some(Arc::new(NoTerm))
+        }
+        fn set_sink(&self, _: Arc<dyn crate::ExtSink>) {}
+    }
+    let mut g = rig();
+    g.r = Reader::new(
+        Arc::clone(&g.epoch),
+        Arc::new(MirrorDirectory::new()),
+        ModeKeys::default(),
+    )
+    .with_ext(Arc::new(Src));
+    let prompt = "Password: ";
+    g.focus(prompt, 10);
+    assert!(g.r.term_tracked());
+    let fx = g.typed('k');
+    assert_eq!(spoken(&fx), ["k"]);
+    assert!(every_utterance_is_sensitive(&g, &fx));
 }
 
 #[test]

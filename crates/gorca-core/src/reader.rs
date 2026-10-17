@@ -438,6 +438,8 @@ pub struct Reader {
     pub(crate) notice: crate::present::NoticeCtx,
     /// The installed application policy (ADR-0008 W3), if any.
     pub(crate) app_policy: Option<Arc<dyn crate::builtin_ext::AppPolicy>>,
+    /// The native terminal policy, used when no extension of the application is one.
+    pub(crate) term_provider: Option<Arc<dyn crate::TermProvider>>,
 }
 
 /// Revalidation and correction counters (B-1 M-6).
@@ -502,7 +504,15 @@ impl Reader {
             win: crate::present::WindowCtx::new(),
             notice: crate::present::NoticeCtx::new(),
             app_policy: None,
+            term_provider: None,
         }
+    }
+
+    /// Terminals without an extension of their own are tracked with `provider`'s sessions.
+    #[must_use]
+    pub fn with_term_provider(mut self, provider: Arc<dyn crate::TermProvider>) -> Self {
+        self.term_provider = Some(provider);
+        self
     }
 
     /// Route `present` hooks and extension commands through `src` (ADR-0001 section 10).

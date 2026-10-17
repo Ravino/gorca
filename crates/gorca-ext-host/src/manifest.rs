@@ -23,6 +23,7 @@ bitflags! {
         const NAV_UNITS = 1 << 2;
         const COMMAND   = 1 << 3;
         const POLICY    = 1 << 4;
+        const TERMINAL  = 1 << 5;
     }
 }
 

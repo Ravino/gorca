@@ -1,0 +1,8 @@
+wasm screen_24x80: faults 0 busy_skips 0 hook_calls 6062
+wasm screen_60x240: faults 0 busy_skips 0 hook_calls 1262
+wasm screen_300x120_cyr: faults 0 busy_skips 0 hook_calls 212
+wasm: faults 0 busy_skips 0 hook_calls 88002
+native-host screen_24x80: faults 0 busy_skips 0 hook_calls 6062
+native-host screen_60x240: faults 0 busy_skips 0 hook_calls 1262
+native-host screen_300x120_cyr: faults 0 busy_skips 0 hook_calls 212
+native-host: faults 0 busy_skips 0 hook_calls 88002

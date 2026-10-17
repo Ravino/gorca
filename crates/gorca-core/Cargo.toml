@@ -17,7 +17,6 @@ gorca-doc-source-api = { workspace = true }
 gorca-doc = { workspace = true }
 gorca-text = { workspace = true }
 gorca-ext-api = { workspace = true }
-ext-vte = { workspace = true }
 scc = { workspace = true }
 gorca-output-api = { workspace = true }
 gorca-input-api = { workspace = true }
@@ -36,5 +35,6 @@ workspace = true
 
 [dev-dependencies]
 serde_json = "1"
+ext-vte = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 gorca-testkit = { workspace = true }

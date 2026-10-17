@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use ext_vte::Screen;
+use gorca_ext_api::terminal::Rows;
 use gorca_ext_api::terminal::TermSnapshot;
 use gorca_model::{AppId, NodeKey, Rect};
 use smallvec::SmallVec;
@@ -32,7 +32,7 @@ pub fn terminal_model(
     limits: &ReviewLimits,
     now: Instant,
 ) -> LineModel {
-    let screen = Screen::new(&snap.text);
+    let screen = Rows::new(&snap.text);
     let (caret_row, _) = screen.locate(snap.caret);
     let mut rows = screen.line_count();
     let mut completeness = Completeness::Complete;

@@ -18,11 +18,17 @@
 //! | command 1 | speaks `ext hello` |
 //! | command 4 | counts calls in the settings KV, speaks the count |
 //! | command 5 | speaks through the `host` import (`host::speak`) |
+//! | terminal: a typed `P` / `S` / `M` | panic / loop / allocate 256 MiB |
+//! | terminal: `Focus` | asks for the screen; the snapshot then reads `steps=N focuses=F configs=C` (what the instance has been told since it was built) |
+//! | terminal: any other typed key | claimed and said |
 //!
 //! Depends only on `gorca-ext-api`; the same source builds natively and as a component.
 
 #![allow(clippy::panic)]
 
+use gorca_ext_api::terminal::{
+    Ms, TermAction, TermConfig, TermCounters, TermInput, TermSnapshot, TerminalHooks, Unit, Urgency,
+};
 use gorca_ext_api::{
     CommandResult, Event, EventVerdict, Hooks, Node, PolicyFacts, PolicyVerdict, PresentCtx, Prio,
     Segment, export_extension, host,
@@ -32,6 +38,72 @@ use gorca_ext_api::{
 pub struct TestExtension {
     events: u64,
     calls: u64,
+    term: TestTerm,
+}
+
+/// A terminal policy that remembers what it was told, so a test sees a rebuilt instance.
+#[derive(Debug, Default)]
+struct TestTerm {
+    steps: u64,
+    focuses: u64,
+    configs: u64,
+    caret: u32,
+}
+
+impl TerminalHooks for TestTerm {
+    fn configure(&mut self, _cfg: &TermConfig) {
+        self.configs += 1;
+    }
+
+    fn step(&mut self, _now: Ms, input: TermInput, out: &mut Vec<TermAction>) {
+        self.steps += 1;
+        let typed = match &input {
+            TermInput::Raw(k) if k.types_a_character() => char::from_u32(k.unichar),
+            TermInput::Key(gorca_ext_api::terminal::TermKey::Typed(c)) => Some(*c),
+            _ => None,
+        };
+        match input {
+            TermInput::Focus => {
+                self.focuses += 1;
+                out.push(TermAction::FetchScreen);
+            }
+            TermInput::Caret(o) => self.caret = o,
+            _ => {}
+        }
+        match typed {
+            Some('P') => crash(),
+            Some('S') => spin(),
+            Some('M') => oom(),
+            Some(c) => {
+                out.push(TermAction::ClaimKey);
+                out.push(TermAction::Say {
+                    text: c.to_string(),
+                    unit: Unit::Char,
+                    urgency: Urgency::Key,
+                    sensitive: false,
+                });
+            }
+            None => {}
+        }
+    }
+
+    fn counters(&self) -> TermCounters {
+        TermCounters {
+            fetches: self.focuses,
+            ..TermCounters::default()
+        }
+    }
+
+    fn snapshot(&self) -> Option<TermSnapshot> {
+        Some(TermSnapshot {
+            text: format!(
+                "steps={} focuses={} configs={}",
+                self.steps, self.focuses, self.configs
+            ),
+            caret: self.caret,
+            generation: self.steps,
+        })
+    }
 }
 
 /// Burn CPU until the host interrupts (or forever, natively).
@@ -78,6 +150,10 @@ fn oom() {
 }
 
 impl Hooks for TestExtension {
+    fn terminal(&mut self) -> Option<&mut dyn TerminalHooks> {
+        Some(&mut self.term)
+    }
+
     fn on_event(&mut self, ev: &Event) -> EventVerdict {
         self.events += 1;
         let Event::Announcement(text) = ev else {

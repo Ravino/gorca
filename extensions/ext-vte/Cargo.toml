@@ -1,11 +1,16 @@
 [package]
 name = "ext-vte"
-description = "Extension skeleton: terminal (VTE) policy, T-2. Depends only on gorca-ext-api."
+description = "Extension: terminal (VTE) policy, T-2. Depends only on gorca-ext-api."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+
+[lib]
+# `rlib` for the native build (the daemon's fallback, tests), `cdylib` for the wasm32-wasip2
+# component (ADR-0008 amendment 1: one source, two builds).
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 gorca-ext-api = { workspace = true }
