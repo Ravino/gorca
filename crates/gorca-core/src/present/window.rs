@@ -433,6 +433,9 @@ pub enum DesktopEffect {
     /// A level bar stopped changing (the Shell's OSD): read it and the label beside it. The answer
     /// comes back as `BackgroundMsg::LevelRead`.
     Level { node: NodeKey },
+    /// `info.battery`: read the power source (UPower) under its own deadline. The answer comes
+    /// back as `BackgroundMsg::Battery`.
+    Battery { epoch: Epoch },
 }
 
 /// What a window read found. `snap` is `None` when the window could not be read at all.

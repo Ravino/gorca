@@ -474,6 +474,22 @@ impl Reader {
         let id = self.utt_id();
         let mut u = message(&text, id, s.epoch);
         u.prio = s.prio;
+        // A single character (typed, a character move, an erasure): a capital gets its pitch.
+        if let [p] = s.pieces.as_slice()
+            && p.how == Some(How::Char)
+            && p.spell == Spell::No
+        {
+            self.mark_capital(&mut u);
+        }
+        // Typing echo is not kept in the speech history.
+        if matches!(
+            s.reason,
+            gorca_text::echo::Reason::Typed
+                | gorca_text::echo::Reason::TypedWord
+                | gorca_text::echo::Reason::Erased
+        ) {
+            self.cmd.quick.echo_ids.push(id);
+        }
         if s.sensitive {
             self.text.sensitive_utt = Some(id);
         }

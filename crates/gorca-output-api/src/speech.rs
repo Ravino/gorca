@@ -9,7 +9,24 @@ use gorca_rt::mpsc;
 pub struct Verbalized {
     pub text: Arc<str>,
     pub lang: Option<Arc<str>>,
+    /// Temporary pitch change for this utterance only, on the wire scale (-100..100), added to
+    /// the voice's pitch (a capital letter, `speech.caps = "pitch"`). 0 leaves the voice alone.
+    pub pitch_delta: i8,
 }
+
+impl Verbalized {
+    /// Plain text with no pitch change.
+    pub fn plain(text: Arc<str>, lang: Option<Arc<str>>) -> Self {
+        Self {
+            text,
+            lang,
+            pitch_delta: 0,
+        }
+    }
+}
+
+/// The pitch change of a spoken capital (NVDA `capPitchChange` is 30).
+pub const CAPITAL_PITCH_DELTA: i8 = 30;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum VoiceRef {

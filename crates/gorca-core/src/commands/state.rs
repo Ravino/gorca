@@ -231,6 +231,8 @@ pub(crate) struct CmdState {
     pub told_unavailable: bool,
     /// Ambiguous command chords answered with "again" (never executed).
     pub ambiguous_cues: u64,
+    /// F0 quick wins: lock keys, speech history, sleep mode.
+    pub quick: crate::quick::QuickState,
 }
 
 impl CmdState {
@@ -266,6 +268,7 @@ impl CmdState {
             told_caps: false,
             told_unavailable: false,
             ambiguous_cues: 0,
+            quick: crate::quick::QuickState::default(),
         }
     }
 

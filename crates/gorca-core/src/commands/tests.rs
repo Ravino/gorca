@@ -13,6 +13,8 @@ use gorca_model::{
 use gorca_rt::EpochCell;
 
 use super::*;
+
+mod quick;
 use crate::directory::MirrorDirectory;
 use crate::mode::{BaseMode, Mode, ModeKeys};
 use crate::reader::{QueryReply, Reader, ReaderEffect, ReaderEffects, ReaderMsg};

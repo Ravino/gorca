@@ -1175,6 +1175,27 @@ fn spawn_desktop(set: &mut JoinSet<()>, shared: &Arc<Shared>, d: crate::present:
     use crate::present::{DesktopEffect, fetch_level, fetch_window};
     use crate::reader::BackgroundMsg;
     let app = match &d {
+        DesktopEffect::Battery { epoch } => {
+            // No application is involved: one read of the power source under its deadline.
+            if !desktop_has_room(set) {
+                return;
+            }
+            let epoch = *epoch;
+            let tx = shared.senders.background.clone();
+            set.spawn(async move {
+                let info = match crate::quick::power_source() {
+                    Some(src) => tokio::time::timeout(crate::quick::BATTERY_DEADLINE, src.read())
+                        .await
+                        .ok()
+                        .flatten(),
+                    None => None,
+                };
+                if tx.try_send(BackgroundMsg::Battery { info, epoch }).is_err() {
+                    tracing::warn!("reader background queue full; dropped a battery result");
+                }
+            });
+            return;
+        }
         DesktopEffect::Window { window } => window.app,
         DesktopEffect::Notice { node, .. } | DesktopEffect::Level { node } => node.app,
     };
@@ -1208,6 +1229,7 @@ fn spawn_desktop(set: &mut JoinSet<()>, shared: &Arc<Shared>, d: crate::present:
             DesktopEffect::Notice { node, .. } => BackgroundMsg::Notice {
                 info: fetch_window(&io, node).await,
             },
+            DesktopEffect::Battery { .. } => return,
         };
         if tx.try_send(msg).is_err() {
             tracing::warn!("reader background queue full; dropped a desktop result");

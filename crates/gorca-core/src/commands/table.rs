@@ -249,6 +249,8 @@ pub enum CoreCmd {
     BrowseTabNext,
     BrowseTabPrev,
     BrowseNativeSelectionToggle,
+    SpeechHistoryPrev,
+    SpeechHistoryNext,
 }
 
 /// Pattern matching every command that is declared but not implemented yet.
@@ -256,12 +258,10 @@ macro_rules! planned_cmds {
     () => {
         CoreCmd::SpeechCopyLast
             | CoreCmd::InfoReadWindow
-            | CoreCmd::InfoBattery
             | CoreCmd::InfoFocusShortcut
             | CoreCmd::InfoClipboard
             | CoreCmd::InfoLinkDestination
             | CoreCmd::InfoDetails
-            | CoreCmd::InputSleepToggle
             | CoreCmd::GorcaQuit
             | CoreCmd::ReviewPrevPage
             | CoreCmd::ReviewNextPage
@@ -318,7 +318,7 @@ macro_rules! planned_cmds {
 pub(crate) use planned_cmds;
 
 /// Number of commands.
-pub const COUNT: usize = 239;
+pub const COUNT: usize = 241;
 
 impl CoreCmd {
     /// Every command, in discriminant order.
@@ -562,6 +562,8 @@ impl CoreCmd {
         CoreCmd::BrowseTabNext,
         CoreCmd::BrowseTabPrev,
         CoreCmd::BrowseNativeSelectionToggle,
+        CoreCmd::SpeechHistoryPrev,
+        CoreCmd::SpeechHistoryNext,
     ];
 }
 
@@ -829,7 +831,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::InfoBattery,
         name: "info.battery",
-        available: Availability::Planned(Milestone::M4),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -939,7 +941,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
     CmdSpec {
         cmd: CoreCmd::InputSleepToggle,
         name: "input.sleep_toggle",
-        available: Availability::Planned(Milestone::M6),
+        available: Availability::Implemented,
         contexts: ContextMask::ANY,
         max_press: 1,
         interrupts: true,
@@ -2955,5 +2957,25 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: "toggle native selection mode",
+    },
+    CmdSpec {
+        cmd: CoreCmd::SpeechHistoryPrev,
+        name: "speech.history_prev",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "read the previous spoken text from the speech history",
+    },
+    CmdSpec {
+        cmd: CoreCmd::SpeechHistoryNext,
+        name: "speech.history_next",
+        available: Availability::Implemented,
+        contexts: ContextMask::ANY,
+        max_press: 1,
+        interrupts: true,
+        input_help_bypass: false,
+        help: "read the next spoken text from the speech history",
     },
 ];

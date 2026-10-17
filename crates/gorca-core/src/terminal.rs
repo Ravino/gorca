@@ -685,6 +685,11 @@ impl Reader {
         });
     }
 
+    /// Is a terminal secret prompt holding (everything spoken is sensitive)?
+    pub(crate) fn term_secret_held(&self) -> bool {
+        self.text.term.secret_hold
+    }
+
     fn term_utterance(
         &mut self,
         text: &str,
@@ -713,6 +718,9 @@ impl Reader {
         };
         let mut u = message(&said, id, epoch);
         u.prio = prio;
+        if unit == Unit::Char {
+            self.mark_capital(&mut u);
+        }
         if sensitive {
             self.text.sensitive_utt = Some(id);
         }

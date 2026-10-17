@@ -29,6 +29,7 @@ mod cli;
 mod config_task;
 mod input;
 mod platform;
+mod power;
 mod probe;
 mod rtkit;
 mod shell_policy;
@@ -361,6 +362,8 @@ async fn run_inner(
             gorca_config::Backend::Ssip => SpeechMode::Ssip,
         };
     }
+    // `info.battery`: UPower over the system bus, read-only, under a 250 ms deadline.
+    gorca_core::install_power_source(std::sync::Arc::new(power::UPower));
     let mut tasks = TaskSet::new(shutdown.clone());
     let mut core = Core::new(CoreConfig {
         shutdown_grace: SHUTDOWN_GRACE,

@@ -20,6 +20,6 @@ pub mod track;
 
 pub use braille::{BrailleBackend, BrailleCaps, BrailleError, BrailleRegion};
 pub use speech::{
-    ClientHealth, SpeechCaps, SpeechClient, SpeechCmd, SpeechErr, SpeechEvent, SubmitError,
-    Verbalized, VoiceParams, VoiceRef, VoiceSetup,
+    CAPITAL_PITCH_DELTA, ClientHealth, SpeechCaps, SpeechClient, SpeechCmd, SpeechErr, SpeechEvent,
+    SubmitError, Verbalized, VoiceParams, VoiceRef, VoiceSetup,
 };

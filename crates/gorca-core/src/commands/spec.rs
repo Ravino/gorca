@@ -253,7 +253,7 @@ mod tests {
         assert!(impl_names.contains(&"text.say_all"));
         assert!(impl_names.contains(&"info.selection"));
         assert!(impl_names.contains(&"info.formatting"));
-        assert_eq!(impl_names.len(), 180);
+        assert_eq!(impl_names.len(), 184);
     }
 
     #[test]
