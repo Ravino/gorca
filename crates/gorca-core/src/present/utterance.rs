@@ -668,7 +668,7 @@ mod change_tests {
         let desk = snap("Wi-Fi", StateSet::CHECKED, None);
         assert_eq!(
             texts(&present_focus(&desk, UttId(1), Epoch(1))),
-            ["Wi-Fi", "checked"]
+            ["Wi-Fi", "check box", "checked"]
         );
     }
 

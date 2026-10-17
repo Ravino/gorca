@@ -920,9 +920,9 @@ pub fn scenarios() -> Vec<Scenario> {
         sc("M8-FORGE", "real-world: code forge repository page", "forge.html", "M8 Forge repository", Body::Steps(forge)),
         sc("M8-APP", "real-world: web app with dialogs", "webapp.html", "M8 Web app dialogs", Body::Steps(app)),
         sc("M8-SPA", "dynamic SPA updates", "spa.html", "M8 SPA", Body::Steps(spa)),
-        sc("M8B-WG", "ARIA widgets: names, roles, states", "../../m8b/pages/widgets.html", "M8b Widgets", Body::Steps(wg)),
-        sc("M8B-FB", "ARIA forms: invalid, described, required, read only", "../../m8b/pages/forms.html", "M8b Forms", Body::Steps(fb)),
-        sc("M8B-HO", "hostile ARIA: cycles, fan-out, megabyte strings", "../../m8b/pages/hostile.html", "M8b Hostile", Body::Steps(ho)),
+        sc("M8-BWG", "ARIA widgets: names, roles, states", "../../m8b/pages/widgets.html", "M8b Widgets", Body::Steps(wg)),
+        sc("M8-BFB", "ARIA forms: invalid, described, required, read only", "../../m8b/pages/forms.html", "M8b Forms", Body::Steps(fb)),
+        sc("M8-BHO", "hostile ARIA: cycles, fan-out, megabyte strings", "../../m8b/pages/hostile.html", "M8b Hostile", Body::Steps(ho)),
         Scenario {
             id: "M8-PF1",
             area: "W1 at 100k nodes: H / Shift+H p99 5 ms",
