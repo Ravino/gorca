@@ -502,6 +502,16 @@ impl Reader {
 
     /// Count the rows an edit scrolled off the top of the screen, for review's anchor (ADR-0018).
     fn term_note_scroll(&mut self, delta: &TextDelta) {
+        // Only a delete at the top of the screen can be a scroll: no snapshot (a call into the
+        // extension) for anything else.
+        match delta {
+            TextDelta::Delete { offset: 0, .. } => {}
+            TextDelta::Replaced { .. } => {
+                self.review.scroll.exact = false;
+                return;
+            }
+            TextDelta::Insert { .. } | TextDelta::Delete { .. } => return,
+        }
         let snap = self
             .text
             .term

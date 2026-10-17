@@ -1293,10 +1293,12 @@ impl Reader {
         if chk.anchor.node.app != model.app {
             return;
         }
+        // A terminal is corrected from where its cursor went (`carry_terminal_cursor`), so the
+        // line spoken and the cursor never disagree.
         let found = if model.source == LineSource::Terminal {
-            match carry_terminal(None, model, &chk.anchor, 0, None) {
-                Some(Carried::At(p)) => Some(p),
-                Some(Carried::Gone) | None => None,
+            match self.cursor().map(|c| c.pos) {
+                Some(ReviewPos::Screen(Some(p))) if p.model == model.id => Some(p),
+                Some(ReviewPos::Screen(_) | ReviewPos::Object { .. }) | None => None,
             }
         } else {
             reanchor(model, chk.anchor).or_else(|| nearest_line(model, chk.anchor.y_mid))
@@ -1307,7 +1309,8 @@ impl Reader {
         let now_text = line_text(model, p.line);
         if now_text.as_str() != &*chk.text {
             self.review.counters.review_corrections += 1;
-            self.say(&now_text, fx);
+            let said = self.review_voice(FlatMove::CurLine, false, 1, &now_text);
+            self.say(&said, fx);
         }
     }
 
@@ -1358,6 +1361,8 @@ impl Reader {
                 // A line that left the screen is read from its held text: nothing to correct.
                 if self.review.held.is_none() {
                     self.correct_spoken_line(model, fx);
+                } else {
+                    self.review.rr_check = None;
                 }
                 return;
             }
@@ -1393,6 +1398,17 @@ impl Reader {
         } else {
             Some(Carried::Gone)
         };
+        // A line spoken from a screen that may have been stale, and a re-read that shares nothing
+        // with it: the screen changed under the user. The row is kept and its new line corrected.
+        let carried = match carried {
+            Some(Carried::Replaced) if self.review.rr_check.is_some() => {
+                nearest_line(model, p.anchor.y_mid)
+                    .and_then(|np| pos_at(model, np.line, 0, p.offset))
+                    .map(Carried::At)
+            }
+            Some(Carried::Replaced) => Some(Carried::Gone),
+            other => other,
+        };
         let moved = match (&held, carried) {
             (_, None) => Some(None),
             (_, Some(Carried::At(np))) => {
@@ -1400,8 +1416,8 @@ impl Reader {
                 Some(Some(np))
             }
             // Still not on the screen: the cursor stays on the held line.
-            (Some(_), Some(Carried::Gone)) => None,
-            (None, Some(Carried::Gone)) => {
+            (Some(_), Some(Carried::Gone | Carried::Replaced)) => None,
+            (None, Some(Carried::Gone | Carried::Replaced)) => {
                 let text = old
                     .and_then(|o| o.lines.get(p.line as usize))
                     .map(|l| Arc::clone(&l.text));

@@ -94,7 +94,7 @@ pub fn reanchor(model: &LineModel, a: ZoneAnchor) -> Option<FlatPos> {
         // No old model to compare with: the content first (ADR-0018), else the same row.
         return match carry_terminal(None, model, &a, 0, None) {
             Some(Carried::At(p)) => Some(p),
-            Some(Carried::Gone) | None => nearest_line(model, a.y_mid),
+            Some(Carried::Gone | Carried::Replaced) | None => nearest_line(model, a.y_mid),
         };
     }
     let zs = model.by_node.get(&a.node)?;
@@ -132,6 +132,8 @@ pub enum Carried {
     At(FlatPos),
     /// The line scrolled off the screen: nothing on the new screen is it any more.
     Gone,
+    /// The new screen shares no line with the old one (a flood or a clear replaced it).
+    Replaced,
 }
 
 /// Most rows the shift estimate looks at; a bigger screen is compared on its first rows.
@@ -145,6 +147,31 @@ fn anchor_row(a: &ZoneAnchor) -> usize {
 /// The signed row shift (new row = old row + d) that makes most non-blank rows of `old` equal to
 /// rows of `new`, with the number of rows it explains. Ties go to the smallest |d|, then to the
 /// scroll direction output makes (up, d < 0).
+/// Rows of `o` that equal the row `d` further down in `n` (blank rows never count).
+fn shift_score(o: &[u64], n: &[u64], blank: u64, d: i64) -> usize {
+    o.iter()
+        .enumerate()
+        .filter(|(i, h)| {
+            **h != blank
+                && i64::try_from(*i)
+                    .ok()
+                    .and_then(|i| usize::try_from(i + d).ok())
+                    .and_then(|j| n.get(j))
+                    == Some(*h)
+        })
+        .count()
+}
+
+/// The hashes of the rows of `m`, the caret row blanked: a prompt stays where it is while output
+/// scrolls above it, so it would vote for "no scroll".
+fn masked_hashes(m: &LineModel, blank: u64) -> Vec<u64> {
+    let mut v: Vec<u64> = m.lines.iter().map(|l| hash_line(&l.text)).collect();
+    if let Some(f) = m.focus_line.and_then(|f| v.get_mut(f as usize)) {
+        *f = blank;
+    }
+    v
+}
+
 fn best_shift(old: &[u64], new: &[u64], blank: u64) -> (i64, usize, bool) {
     let (o, n) = (
         &old[..old.len().min(SHIFT_ROWS)],
@@ -156,18 +183,7 @@ fn best_shift(old: &[u64], new: &[u64], blank: u64) -> (i64, usize, bool) {
     for k in 0..=span {
         let both = [-k, k];
         for &d in if k == 0 { &both[1..] } else { &both[..] } {
-            let score = o
-                .iter()
-                .enumerate()
-                .filter(|(i, h)| {
-                    **h != blank
-                        && i64::try_from(*i)
-                            .ok()
-                            .and_then(|i| usize::try_from(i + d).ok())
-                            .and_then(|j| n.get(j))
-                            == Some(*h)
-                })
-                .count();
+            let score = shift_score(o, n, blank, d);
             if score > best.1 {
                 best = (d, score);
                 ties = 0;
@@ -200,22 +216,29 @@ pub fn carry_terminal(
     }
     let row = anchor_row(a);
     let new_h: Vec<u64> = new.lines.iter().map(|l| hash_line(&l.text)).collect();
+    let blank = hash_line("");
+    // A delete at the top of the screen is not always a scroll (a redraw of the top rows, tmux,
+    // Ctrl+L): the count is used only when the content agrees with it.
+    let scroll = scroll.filter(|q| {
+        let d = -i64::from(*q);
+        old.is_some_and(|o| {
+            usize::try_from(i64::try_from(row).unwrap_or(0) + d)
+                .ok()
+                .and_then(|t| new_h.get(t))
+                == Some(&a.line_hash)
+                || shift_score(
+                    &masked_hashes(o, blank),
+                    &masked_hashes(new, blank),
+                    blank,
+                    d,
+                ) > 0
+        })
+    });
     let exact = scroll.is_some();
     let (d, score, ambiguous) = match scroll {
         Some(q) => (-i64::from(q), usize::MAX, false),
         None => old.map_or((0, 0, false), |o| {
-            let blank = hash_line("");
-            // The caret rows are left out of the estimate: a prompt stays where it is while
-            // output scrolls above it, so it would vote for "no scroll".
-            let mask = |m: &LineModel, h: &[u64]| -> Vec<u64> {
-                let mut v = h.to_vec();
-                if let Some(f) = m.focus_line.and_then(|f| v.get_mut(f as usize)) {
-                    *f = blank;
-                }
-                v
-            };
-            let old_h: Vec<u64> = o.lines.iter().map(|l| hash_line(&l.text)).collect();
-            best_shift(&mask(o, &old_h), &mask(new, &new_h), blank)
+            best_shift(&masked_hashes(o, blank), &masked_hashes(new, blank), blank)
         }),
     };
     let target = i64::try_from(row).unwrap_or(0) + d;
@@ -264,7 +287,7 @@ pub fn carry_terminal(
         // Continuity but the row is off the screen: scrolled away.
         (true, None) if score > 0 => Some(Carried::Gone),
         // Nothing in common at all with a known screen: a flood or a clear replaced it.
-        (true, _) if score == 0 => Some(Carried::Gone),
+        (true, _) if score == 0 => Some(Carried::Replaced),
         // Rewritten in place at its shifted row.
         (_, Some(t)) => at(t),
         (_, None) => at(usize::try_from(want).unwrap_or(0)),
@@ -671,7 +694,7 @@ mod tests {
     fn a_screen_with_nothing_in_common_loses_the_line_but_a_missing_old_screen_never_does() {
         let old = screen("one\ntwo\nthree");
         let new = screen("four\nfive\nsix");
-        assert_eq!(carried(&old, &new, 1, 0), Some(Carried::Gone));
+        assert_eq!(carried(&old, &new, 1, 0), Some(Carried::Replaced));
         let p = pos_at(&old, 1, 0, 0).unwrap();
         assert_eq!(
             at(carry_terminal(None, &new, &p.anchor, 0, None)),
@@ -699,7 +722,40 @@ mod tests {
         let p = pos_at(&old, 3, 0, 1).unwrap();
         let c = carry_terminal(Some(&old), &new, &p.anchor, p.offset, Some(2));
         assert_eq!(at(c), (1, 1));
-        let c = carry_terminal(Some(&old), &new, &p.anchor, p.offset, Some(4));
-        assert_eq!(c, Some(Carried::Gone), "scrolled off the top");
+        // Distinct rows: a count the content backs is used, and can put the line off the top.
+        let old = screen("a\nb\nc\nd\n$ ");
+        let new = screen("z\nc\nd\ne\nf");
+        let p = pos_at(&old, 3, 0, 0).unwrap();
+        assert_eq!(
+            at(carry_terminal(Some(&old), &new, &p.anchor, 0, Some(1))),
+            (2, 0)
+        );
+        let p = pos_at(&old, 0, 0, 0).unwrap();
+        assert_eq!(
+            carry_terminal(Some(&old), &new, &p.anchor, 0, Some(1)),
+            Some(Carried::Gone),
+            "scrolled off the top"
+        );
+    }
+
+    #[test]
+    fn a_scroll_count_the_content_contradicts_is_not_trusted() {
+        // A redraw of the top rows deletes at offset 0 too: "ccc" has not moved.
+        let old = screen("aaa\nbbb\nccc\nddd\n$ ");
+        let new = screen("xxx\nyyy\nccc\nddd\n$ ");
+        let p = pos_at(&old, 2, 0, 1).unwrap();
+        let c = carry_terminal(Some(&old), &new, &p.anchor, p.offset, Some(2));
+        assert_eq!(at(c), (2, 1));
+    }
+
+    #[test]
+    fn a_screen_sharing_nothing_is_replaced_not_scrolled() {
+        let old = screen("one\ntwo\nthree");
+        let new = screen("four\nfive\nsix");
+        let p = pos_at(&old, 1, 0, 0).unwrap();
+        assert_eq!(
+            carry_terminal(Some(&old), &new, &p.anchor, 0, None),
+            Some(Carried::Replaced)
+        );
     }
 }

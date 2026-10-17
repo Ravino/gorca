@@ -39,3 +39,21 @@ Date: 2026-10-17. Role: rust-engineer. Design: `terminal-live-review.md`, `termi
 - Exact scroll counting trusts a delete at offset 0 to be a scroll; a user-visible clear that deletes
   the whole screen marks the hint inexact.
 - No latency measurement of the review key (rebuild + shift estimate is O(rows^2) worst case, bounded).
+
+## Review fixes (verify report: terminal-review-anchor-verify.md)
+
+- H1: a re-read that shares no line with the stale screen is `Carried::Replaced`. If the line was
+  spoken first from an untrusted screen the row is kept and the new line is corrected; otherwise
+  the line is held. The two original-input unit tests are restored (events lost, "old 2" then "new 9").
+- H2: the correction is taken from the cursor's carried position and spoken with `review_voice`.
+- M1: a delete-at-0 count is used only when the content agrees (anchor hash at the shifted row, or
+  some row matches at that shift); else the estimate runs. Ingress still merges delete+insert into
+  `Replaced`, so the exact path engages only when the pair splits across drains; with the content
+  check both paths give the same result except on identical-line floods (timing-dependent there).
+- M2: no snapshot call for inserts or deletes away from offset 0.
+- Word stops: terminal `--color=auto` now has five stops (`-`, `-`, `color`, `=`, `auto`); to confirm
+  with the user.
+- 50k statemodel sequences: review-* invariants clean. Two rare `term-degraded`/`term-baseline`
+  failures appear (seeds 37737, 47158); neither involves review mode, not checked against main.
+- Not done: L1 (stricter "line above later"), L2 (state model op for Delete+Insert), M3 (grid surfaces).
+- Re-run VS (vs_stale/silent/drift 0) and VV quick: all gates pass.
