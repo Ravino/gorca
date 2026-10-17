@@ -389,8 +389,8 @@ async fn run_inner(
         core = core.with_fill_policy(p);
     }
     // Extensions first: their commands must be known before the settings are compiled.
-    // The first-party extensions' message catalogs: registered up front, replaced by the files
-    // next to a WASM component when the host loads one.
+    // The first-party extensions' message catalogs: registered up front from the embedded copies.
+    // They are built-in namespaces: the files next to a WASM component never replace them.
     ext_gnome_shell::register_catalogs();
     ext_vte::register_catalogs();
     let (mut core, shell_in_host, terminal_in_host) = wire::wire_ext(core, &opts).await;

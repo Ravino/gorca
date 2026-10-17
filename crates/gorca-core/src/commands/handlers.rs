@@ -593,7 +593,9 @@ impl Reader {
         let key = key_description(intent);
         let ext_help = cmd
             .and_then(|c| crate::ExtCommands::installed().and_then(|e| e.get(c)))
-            .map(|s| gorca_i18n::ext::resolve(&s.help, gorca_i18n::language()).into_owned());
+            .map(|s| {
+                gorca_i18n::ext::resolve_for(&s.help, gorca_i18n::language(), &s.ext).into_owned()
+            });
         let help = match cmd.and_then(CoreCmd::from_id) {
             None if ext_help.is_some() => ext_help.unwrap_or_default(),
             Some(c) => {

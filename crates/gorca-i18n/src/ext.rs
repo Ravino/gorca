@@ -273,7 +273,7 @@ fn resolve_in<'a>(text: &'a str, lang: Lang, only: Option<&str>) -> Cow<'a, str>
     let mut parts = rest.split(SEP);
     let head = parts.next().unwrap_or("");
     let Some((ns, key)) = head.split_once(':') else {
-        return Cow::Owned(head.to_owned());
+        return Cow::Owned(sanitize(head).into_owned());
     };
     if only.is_some_and(|o| o != ns) {
         return Cow::Borrowed("");
@@ -283,7 +283,7 @@ fn resolve_in<'a>(text: &'a str, lang: Lang, only: Option<&str>) -> Cow<'a, str>
         .filter_map(|p| p.split_once('='))
         .map(|(n, v)| (n, Arg::Str(v)))
         .collect();
-    Cow::Owned(format(ns, key, lang, &args).unwrap_or_else(|| key.to_owned()))
+    Cow::Owned(format(ns, key, lang, &args).unwrap_or_else(|| sanitize(key).into_owned()))
 }
 
 #[cfg(test)]
@@ -392,6 +392,23 @@ mod tests {
         assert_eq!(resolve_for(&r, Lang::En, "scope-a"), "from a");
         assert_eq!(resolve_for(&r, Lang::En, "scope-b"), "");
         assert_eq!(resolve_for("plain text", Lang::En, "scope-b"), "plain text");
+    }
+
+    #[test]
+    fn the_fallbacks_never_return_a_reference() {
+        register("own-ns", Lang::En, "a = x\n");
+        register("victim-ns", Lang::En, "secret = hidden\n");
+        let victim = encode("victim-ns", "secret", &[]);
+        // No `ns:key` head: the head is returned as text.
+        let probe = format!("{START}{victim}");
+        let out = resolve_for(&probe, Lang::En, "own-ns").into_owned();
+        assert!(!is_reference(&out), "{out:?}");
+        assert_eq!(resolve(&out, Lang::En), out);
+        // Unknown key of the own namespace: the key is returned as text.
+        let probe = format!("{START}own-ns:{victim}");
+        let out = resolve_for(&probe, Lang::En, "own-ns").into_owned();
+        assert!(!is_reference(&out), "{out:?}");
+        assert!(!resolve(&out, Lang::En).contains("hidden"));
     }
 
     #[test]

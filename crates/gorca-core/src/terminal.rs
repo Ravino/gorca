@@ -651,7 +651,12 @@ impl Reader {
                     sensitive,
                 } => {
                     if speak && !(silent_typed && unit == Unit::Char && urgency == Urgency::Key) {
+                        let was_ref = gorca_i18n::ext::is_reference(&text);
                         let text = gorca_i18n::ext::resolve(&text, gorca_i18n::language());
+                        if was_ref && text.is_empty() {
+                            // A reference that resolved to nothing is silent, not "blank".
+                            continue;
+                        }
                         let u = self.term_utterance(&text, unit, urgency, sensitive);
                         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
                     }
