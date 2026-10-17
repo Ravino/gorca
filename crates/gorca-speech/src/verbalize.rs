@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use gorca_model::{SegmentKind, Utterance};
-use gorca_output_api::{CAPITAL_PITCH_DELTA, Verbalized};
+use gorca_output_api::{CAPITAL_PITCH_DELTA, Cue, Verbalized};
 
 use crate::symbols::Lang;
 use crate::symbols::Table;
@@ -17,16 +17,62 @@ pub enum Punct {
     All,
 }
 
-/// How a capital letter is announced when a single character is spoken.
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
-pub enum Caps {
-    /// A higher pitch for a capital spoken alone: the Reader marks the utterance
-    /// (`SegmentKind::Capital`) and the speech client raises the pitch for it.
-    #[default]
-    Pitch,
+/// How a capital letter is announced when a single character is spoken: any combination of
+/// the three, as in the `speech.caps` setting.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+// Three independent switches, like the setting they come from.
+#[allow(clippy::struct_excessive_bools)]
+pub struct Caps {
+    /// A changed pitch: the Reader marks the utterance (`SegmentKind::Capital`) and the lane
+    /// gives it a `pitch_delta`.
+    pub pitch: bool,
+    /// A sound icon before the letter, the same mark, played when the server can.
+    pub sound: bool,
     /// The word "cap" before the letter.
-    Say,
-    Off,
+    pub word: bool,
+}
+
+impl Default for Caps {
+    fn default() -> Self {
+        Caps::PITCH
+    }
+}
+
+impl Caps {
+    pub const PITCH: Caps = Caps {
+        pitch: true,
+        sound: false,
+        word: false,
+    };
+    pub const OFF: Caps = Caps {
+        pitch: false,
+        sound: false,
+        word: false,
+    };
+
+    /// The speech client has something to do for a capital (pitch or sound).
+    pub fn marks(self) -> bool {
+        self.pitch || self.sound
+    }
+}
+
+/// What the speech lane does for a `SegmentKind::Capital` utterance (the effects that are not
+/// text): set from the settings, applied by the verbalizer.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct CapitalFx {
+    /// Wire-scale pitch change, 0 for none.
+    pub pitch_delta: i8,
+    /// A sound icon is wanted.
+    pub cue: bool,
+}
+
+impl Default for CapitalFx {
+    fn default() -> Self {
+        Self {
+            pitch_delta: CAPITAL_PITCH_DELTA,
+            cue: false,
+        }
+    }
 }
 
 /// How a unit of text is spoken.
@@ -114,7 +160,7 @@ fn phonetic_word(c: char, lang: gorca_i18n::Lang) -> Option<&'static str> {
 }
 
 impl Verbalizer {
-    pub fn verbalize(&self, u: &Utterance) -> Verbalized {
+    pub fn verbalize(&self, u: &Utterance, fx: CapitalFx) -> Verbalized {
         let mut text = String::new();
         for seg in &u.segments {
             if seg.text.is_empty() {
@@ -130,12 +176,13 @@ impl Verbalizer {
             }
             text.push_str(&seg.text);
         }
-        // A capital spoken alone gets a temporary pitch change (`speech.caps = "pitch"`).
+        // A capital spoken alone: the pitch change and the sound the settings ask for.
         let capital = u.segments.iter().any(|s| s.kind == SegmentKind::Capital);
         Verbalized {
             text: Arc::from(text),
             lang: u.lang.clone(),
-            pitch_delta: if capital { CAPITAL_PITCH_DELTA } else { 0 },
+            pitch_delta: if capital { fx.pitch_delta } else { 0 },
+            cue: (capital && fx.cue).then_some(Cue::Capital),
         }
     }
 
@@ -163,7 +210,7 @@ impl Verbalizer {
         if let Some(name) = t.char_name(c) {
             return name.to_owned();
         }
-        if c.is_uppercase() && o.caps == Caps::Say {
+        if c.is_uppercase() && o.caps.word {
             return format!("{} {s}", t.cap());
         }
         s.to_owned()
@@ -216,7 +263,7 @@ impl Verbalizer {
                 let mut buf = [0u8; 4];
                 Self::one_char(c.encode_utf8(&mut buf), *o)
             };
-            if c.is_uppercase() && o.caps == Caps::Say && word.is_some() {
+            if c.is_uppercase() && o.caps.word && word.is_some() {
                 parts.push(format!("{} {part}", t.cap()));
             } else {
                 parts.push(part);
@@ -256,7 +303,10 @@ mod tests {
             ttl_secs: 0,
             refines: None,
         };
-        assert_eq!(&*Verbalizer.verbalize(&u).text, "Name, edit. Help, . Dot");
+        assert_eq!(
+            &*Verbalizer.verbalize(&u, CapitalFx::default()).text,
+            "Name, edit. Help, . Dot"
+        );
     }
 
     #[test]
@@ -280,7 +330,7 @@ mod tests {
             ttl_secs: 0,
             refines: None,
         };
-        let v = Verbalizer.verbalize(&u);
+        let v = Verbalizer.verbalize(&u, CapitalFx::default());
         assert_eq!(&*v.text, "OK, button");
         assert_eq!(v.lang.as_deref(), Some("en"));
     }
@@ -288,7 +338,7 @@ mod tests {
     fn opts(punct: Punct) -> VerbalizeOpts {
         VerbalizeOpts {
             punct,
-            caps: Caps::Pitch,
+            caps: Caps::PITCH,
             lang: Lang::En,
         }
     }
@@ -320,12 +370,52 @@ mod tests {
         let v = Verbalizer;
         let say = VerbalizeOpts {
             punct: Punct::Some,
-            caps: Caps::Say,
+            caps: Caps {
+                word: true,
+                ..Caps::OFF
+            },
             lang: Lang::En,
         };
         assert_eq!(v.unit("A", How::Char, &say), "cap A");
         assert_eq!(v.unit("a", How::Char, &say), "a");
         assert_eq!(v.unit("A", How::Char, &opts(Punct::Some)), "A");
+    }
+
+    fn capital_utt() -> Utterance {
+        Utterance {
+            id: UttId(1),
+            segments: smallvec![Segment {
+                text: Arc::from("A"),
+                kind: SegmentKind::Capital,
+            }],
+            lang: None,
+            epoch: Epoch(1),
+            prio: Prio::Text,
+            may_refine: false,
+            survives_focus_change: false,
+            ttl_secs: 0,
+            refines: None,
+        }
+    }
+
+    #[test]
+    fn a_capital_gets_the_configured_pitch_and_cue_and_nothing_else_does() {
+        let fx = CapitalFx {
+            pitch_delta: 12,
+            cue: true,
+        };
+        let v = Verbalizer.verbalize(&capital_utt(), fx);
+        assert_eq!((v.pitch_delta, v.cue), (12, Some(Cue::Capital)));
+        let off = CapitalFx {
+            pitch_delta: 0,
+            cue: false,
+        };
+        let v = Verbalizer.verbalize(&capital_utt(), off);
+        assert_eq!((v.pitch_delta, v.cue), (0, None));
+        let mut said = capital_utt();
+        said.segments[0].kind = SegmentKind::Said;
+        let v = Verbalizer.verbalize(&said, fx);
+        assert_eq!((v.pitch_delta, v.cue), (0, None));
     }
 
     #[test]
