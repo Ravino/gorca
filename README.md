@@ -1,5 +1,7 @@
 # gorca
 
+Русская версия: [README.ru.md](README.ru.md)
+
 *GO, Read, CArry on.*
 
 gorca (Gorca Orchestrates Real-time Concurrent Accessibility) is a screen reader for Linux, written in Rust. It targets the GNOME desktop on Wayland and is
@@ -10,7 +12,7 @@ machines and is designed to stay responsive when the desktop or an application m
 developed and tested on a single Debian 13 machine. Expect rough edges, no packages, and settings
 and interfaces that can still change. Braille is not implemented yet.
 
-### About the name
+## About the name
 
 The name is a recursive backronym: Gorca Orchestrates Real-time Concurrent Accessibility. The tagline
 "GO, Read, CArry on" is the playful reading of the same letters.
@@ -61,12 +63,18 @@ Phase 1 (focus reader, speech, event ingress, test harness) and most of Phase 2 
   working yet), language, output module and voice selection.
 - Localisation: every spoken string comes from a message catalogue (English and Russian,
   ADR-0010), also for extensions.
-- Terminal review follows its line by content while output streams (ADR-0018).
+- Terminal review follows its line by content while output streams (ADR-0018), and a terminal
+  whose tracking degraded is tracked again at the next key.
+- Copy: in browse mode the page selection is mirrored so that Ctrl+C copies it; a wider copy
+  model is planned (ADR-0021).
+- Web semantics: icon-only buttons are reachable in browse mode, mixed (half-checked) checkboxes
+  are spoken, and Firefox focus names and flat review follow the browser's accessible name.
 - Extensions: a WebAssembly extension host (wasmtime). The GNOME Shell and terminal policies ship
   as extensions.
 
 Planned, not done: braille, the Newton connector, an extension (add-on) platform with
-third-party add-ons and a store (ADR-0019, proposed), a settings GUI, packaging. See `docs/plan/phase-2.md` and
+third-party add-ons and a store (ADR-0019, proposed), a typed semantic model and one
+presentation pipeline (ADR-0022, proposed), a settings GUI, packaging. See `docs/plan/phase-2.md` and
 `docs/plan/phase-3.md` for what is planned, and `CHANGELOG.md` for the detail.
 
 ## Architecture
@@ -145,8 +153,9 @@ target/release/gorca --help
   technology detection expect. To go back, stop gorca and start Orca.
 - gorca does not set `org.a11y.Status.ScreenReaderEnabled`, because GNOME starts Orca when that
   key is set. It sets `IsEnabled` only.
-- `contrib/systemd/gorca.service` is a development unit with absolute paths from the author's
-  machine; edit them before use. `tools/gorca-toggle.sh` and `tools/install-dev.sh` toggle it with
+- `contrib/systemd/gorca.service` is a development unit; it expects the binary in
+  `~/.local/bin/gorca` and the extensions in `~/.local/lib/gorca/extensions`, so adjust it to your
+  install. `tools/gorca-toggle.sh` and `tools/install-dev.sh` toggle it with
   Super+Alt+G.
 - A small GNOME Shell helper extension is in `contrib/gnome-shell-extension/` (see its README).
 

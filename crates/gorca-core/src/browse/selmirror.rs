@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Mirroring the virtual browse selection into the page (NVDA copies its own buffer; gorca lets
 //! the browser copy, which keeps the formatting and needs no clipboard of ours).
 //!

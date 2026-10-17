@@ -14,7 +14,7 @@
 # topology_arms=lanes-rtx1
 # topology_expected=-
 # label=retrack-VT
-# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/rt/gorca
+# reader=daemon:/tmp/scratch/rt/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=150

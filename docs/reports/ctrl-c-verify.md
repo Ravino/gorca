@@ -148,7 +148,7 @@ document. Firefox resolves offset 0 to the first text leaf and, in `TextLeafRang
 gorca follows the focus.
 
 Measured in a private headless shell (rig copy in
-`/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/selprobe`, page = skip
+`/tmp/scratch/selprobe`, page = skip
 link, h1, two paragraphs, button, paragraph; Firefox; debug gorca at 435d8a13):
 * with selection: `Shift+End` on p2 -> "Echo foxtrot golf hotel., selected"; `Down` -> "button, Press
   me" and 160 ms later **"Skip to content, link"** (focus jumped to the top of the page);
@@ -212,7 +212,7 @@ span's first leaf when it is focusable (`refs/firefox/accessible/base/TextLeafRa
 A selection that starts outside a link and grows into it therefore focuses the link.
 
 Measured (private shell, debug gorca at ad3d4044, rig in
-`/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/selprobe`, page
+`/tmp/scratch/selprobe`, page
 `<ul><li><a>First link text here</a> after one</li>...`): from the list item start, Shift+Right x6.
 Firefox speaks `'F, selected'` and then, 63 ms later, **`'First link text here, link'`** (a focus
 event, the same signature as the round-2 skip-link bug). Chromium, same keys: no focus utterance.

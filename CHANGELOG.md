@@ -51,9 +51,12 @@ Phase 2 (daily-driver reader)
 - Chromium and Chrome support (M9): the same browse mode and quick navigation as Firefox, per-engine
   quirk rows, accessibility tree woken by gorca itself, off-screen frames woken on scroll.
 - Message catalogue (`gorca-i18n`, M12a): every spoken string localised, English and Russian.
-- Firefox tab and address bar announcements.
+- Firefox tab and address bar announcements; Firefox focus names and flat review follow the
+  accessible name.
+- Web semantics: icon-only buttons reachable in browse mode, mixed (half-checked) checkboxes.
+- Browse-mode selection model: the page selection is mirrored so that Ctrl+C copies it.
 - Resource-usage measurements (`docs/reports/resource-usage.md`) and an add-on platform design
-  (ADR-0019, proposed).
+  (ADR-0019, proposed); ADR-0021 (copy) and ADR-0022 (semantic model) are planned.
 - `CONTRIBUTING.md` (DCO), `LICENSE-EXCEPTION` and licence files.
 - Runtime topology with real-time scheduling through rtkit and core pinning, selected
   automatically (`--topology`), chosen in a bake-off.
@@ -78,6 +81,8 @@ Phase 2 (daily-driver reader)
   fixed upstream in the separate voicego project.
 - Alt+Tab and Ctrl+Alt+Tab no longer say "unknown" when the Shell floods events; nameless
   buttons are named from their label relation.
+- A terminal whose tracking stayed degraded is tracked again at the next key.
+- Ctrl+C not copying the page selection in browse mode.
 - Terminal flat review jumping to the line start while output streams: the cursor now follows its
   line by content.
 - Stale terminal screen in flat review; terminal output not spoken until the first key after a
