@@ -1038,33 +1038,56 @@ fn fls() -> Vec<Step> {
 
 /// Custom ARIA buttons (div/span role=button with an aria-label and only an icon inside): Tab, B
 /// and the plain arrow keys must each say the label once, with the role once (field report
-/// 2026-10-18).
+/// 2026-10-18). `telegram2.html` has one control per row; the labels are the NATO words.
+/// A step's tokens built at run time: the label and the role word (the table lives for the run).
+fn leak(name: &'static str) -> &'static [&'static str] {
+    Box::leak(vec![name, "button"].into_boxed_slice())
+}
+
 fn tg2() -> Vec<Step> {
+    // Down and B visit these in order (Lima inner is inside the Kilo wrapper's line; the wrapper's
+    // line says both).
+    const NAMES: [&str; 13] = ["Alpha svg", "Bravo hidden svg", "Charlie empty img", "Delta css glyph", "Echo glyph text", "Foxtrot canvas", "Golf empty div", "Hotel svg title", "India native hidden svg", "Juliet no tabindex", "Kilo wrapper", "Mike time label", "Send message"];
+    // Tab skips Juliet (no tabindex) and stops twice in the Kilo row.
+    const TAB_NAMES: [&str; 13] = ["Alpha svg", "Bravo hidden svg", "Charlie empty img", "Delta css glyph", "Echo glyph text", "Foxtrot canvas", "Golf empty div", "Hotel svg title", "India native hidden svg", "Kilo wrapper", "Lima inner", "Mike time label", "Send message"];
+    const TAB: [&str; 13] = ["T2.tab.1", "T2.tab.2", "T2.tab.3", "T2.tab.4", "T2.tab.5", "T2.tab.6", "T2.tab.7", "T2.tab.8", "T2.tab.9", "T2.tab.10", "T2.tab.11", "T2.tab.12", "T2.tab.13"];
+    const DN: [&str; 13] = ["T2.d.1", "T2.d.2", "T2.d.3", "T2.d.4", "T2.d.5", "T2.d.6", "T2.d.7", "T2.d.8", "T2.d.9", "T2.d.10", "T2.d.11", "T2.d.12", "T2.d.13"];
+    const QB: [&str; 13] = ["T2.b.1", "T2.b.2", "T2.b.3", "T2.b.4", "T2.b.5", "T2.b.6", "T2.b.7", "T2.b.8", "T2.b.9", "T2.b.10", "T2.b.11", "T2.b.12", "T2.b.13"];
     let mut v = vec![top("T2.top0"), pos("T2.tab.0", Act::AppKeys(&[15]))];
-    for (i, id) in ["T2.tab.1", "T2.tab.2", "T2.tab.3", "T2.tab.4", "T2.tab.5", "T2.tab.6", "T2.tab.7", "T2.tab.8", "T2.tab.9", "T2.tab.10", "T2.tab.11", "T2.tab.12", "T2.tab.13", "T2.tab.14", "T2.tab.15", "T2.tab.16", "T2.tab.17", "T2.tab.18", "T2.tab.19", "T2.tab.20", "T2.tab.21", "T2.tab.22", "T2.tab.23", "T2.tab.24", "T2.tab.25", "T2.tab.26", "T2.tab.27"].into_iter().enumerate() {
-        v.push(s(id, P1, "Tab onto the next custom button", Act::AppKeys(&[15]), &["@@"]).win(1500));
-        let _ = i;
+    for (id, name) in TAB.into_iter().zip(TAB_NAMES) {
+        v.push(s(id, P1, "Tab onto the control: the label, the role once", Act::AppKeys(&[15]), leak(name)).once(&["button"]).win(2000));
     }
     v.push(top("T2.top"));
-    for id in ["T2.d.1", "T2.d.2", "T2.d.3", "T2.d.4", "T2.d.5", "T2.d.6", "T2.d.7", "T2.d.8", "T2.d.9", "T2.d.10", "T2.d.11", "T2.d.12", "T2.d.13", "T2.d.14", "T2.d.15", "T2.d.16", "T2.d.17", "T2.d.18", "T2.d.19", "T2.d.20", "T2.d.21", "T2.d.22", "T2.d.23", "T2.d.24", "T2.d.25", "T2.d.26", "T2.d.27", "T2.d.28", "T2.d.29", "T2.d.30", "T2.d.31", "T2.d.32", "T2.d.33", "T2.d.34", "T2.d.35", "T2.d.36", "T2.d.37", "T2.d.38", "T2.d.39", "T2.d.40", "T2.d.41", "T2.d.42", "T2.d.43"] {
-        v.push(s(id, P1, "Down: the next line", Act::Key(DOWN, 0), &["@@"]).win(1500));
+    for (id, name) in DN.into_iter().zip(NAMES) {
+        // The wrapper row holds two buttons (outer and inner): two role words are right there.
+        let once: &'static [&'static str] = if name == "Kilo wrapper" { &[] } else { &["button"] };
+        v.push(s(id, P1, "Down: the control's line says its label, the role once", Act::Key(DOWN, 0), leak(name)).once(once).win(2000));
     }
+    // The inline run of three icon buttons is one line, said whole.
+    v.push(s("T2.d.run", P1, "Down: a line of three icon buttons says all three", Act::Key(DOWN, 0), &["Run one", "Run two", "Run three"]).win(2000));
     v.push(top("T2.top2"));
-    for id in ["T2.b.1", "T2.b.2", "T2.b.3", "T2.b.4", "T2.b.5", "T2.b.6", "T2.b.7", "T2.b.8", "T2.b.9", "T2.b.10", "T2.b.11", "T2.b.12", "T2.b.13", "T2.b.14", "T2.b.15", "T2.b.16", "T2.b.17", "T2.b.18", "T2.b.19", "T2.b.20", "T2.b.21", "T2.b.22"] {
-        v.push(s(id, P1, "B: the next button", n('b'), &["@@"]).win(1500));
+    for (id, name) in QB.into_iter().zip(NAMES) {
+        v.push(s(id, P1, "B: the control, the label, the role once", n('b'), leak(name)).win(2000));
     }
     v
 }
 
-/// The same custom buttons mounted by a script after load (a framework render).
+/// The same kind of custom buttons mounted by a script after load, one label set late and one
+/// node replaced by a re-render: Tab and Down say the label, the role once.
 fn tg3() -> Vec<Step> {
+    const TAB_NAMES: [&str; 5] = ["Dyn replaced", "Dyn attach", "Dyn late label", "Dyn wrapper", "Dyn inner"];
+    const TAB: [&str; 5] = ["T3.tab.1", "T3.tab.2", "T3.tab.3", "T3.tab.4", "T3.tab.5"];
+    const DN_NAMES: [&str; 5] = ["Dyn replaced", "Dyn attach", "Dyn late label", "Message text between", "Dyn wrapper"];
+    const DN: [&str; 5] = ["T3.d.1", "T3.d.2", "T3.d.3", "T3.d.4", "T3.d.5"];
     let mut v = vec![Step::setup("T3.wait", "let the page mount its chat", Act::Wait(2500)), top("T3.top0"), pos("T3.tab.0", Act::AppKeys(&[15]))];
-    for id in ["T3.tab.1", "T3.tab.2", "T3.tab.3", "T3.tab.4", "T3.tab.5"] {
-        v.push(s(id, P1, "Tab onto the next custom button", Act::AppKeys(&[15]), &["@@"]).win(1500));
+    for (id, name) in TAB.into_iter().zip(TAB_NAMES) {
+        v.push(s(id, P1, "Tab onto the next custom button: label, role once", Act::AppKeys(&[15]), leak(name)).once(&["button"]).win(2000));
     }
     v.push(top("T3.top"));
-    for id in ["T3.d.1", "T3.d.2", "T3.d.3", "T3.d.4", "T3.d.5", "T3.d.6", "T3.d.7", "T3.d.8", "T3.d.9"] {
-        v.push(s(id, P1, "Down: the next line", Act::Key(DOWN, 0), &["@@"]).win(1500));
+    for (id, name) in DN.into_iter().zip(DN_NAMES) {
+        let once: &'static [&'static str] = if name == "Dyn wrapper" || name == "Message text between" { &[] } else { &["button"] };
+        let say: &'static [&'static str] = if name == "Message text between" { &["Message text between"] } else { leak(name) };
+        v.push(s(id, P1, "Down: the next line says its label, role once", Act::Key(DOWN, 0), say).once(once).win(2000));
     }
     v
 }

@@ -60,3 +60,26 @@ this fix makes geometry flat review work, it does not add the document line sour
 fmt, clippy `--workspace --all-targets -D warnings` clean, `cargo test --workspace`: all pass except
 `gorca-daemon/tests/shell_parity.rs` (2 tests; `wasm32-wasip2` target not installed: environmental).
 `cargo xtask strings` ok. See also the M8 regression run `reg1` under `bench/results/e2e/`.
+
+## 3. Custom ARIA buttons (2026-10-18), P2-ARIA-0
+
+Fixtures: `tests/web/m8/pages/telegram2.html` (13 icon shapes, one per row, plus an inline run),
+`telegram3.html` (mounted after load). Scenarios `M8-TG2` (Tab, Down, B per shape: label present, role
+word exactly once: `Step::once`), `M8-TG3`, `M8-TG4` (exploratory char/word moves). Run on Firefox with
+`run_m8.sh`, on Chromium with `tests/web/m9/run_m9.sh m8`.
+
+Reproduced (Firefox): a `role=button` whose only child is a `<canvas>` (a block with no text) is skipped
+by Down. Its subtree contributes a line break only, so `translate::markers` saw "descendants > 0" and
+gave the button no U+FFFC anchor; the line is blank and arrows skip it. Fix (MI-1): descendants count
+only if they hold non-white-space text, and candidates are processed deepest first with each change
+applied at once (a button's anchor depends on whether its icon child already has one). Unit test
+`a_button_holding_only_a_textless_block_keeps_an_anchor`.
+
+Not reproduced: Chromium passes all 40 steps before and after the fix. The doubled role on Tab did not
+reproduce in either browser for 13 shapes (also with labels set after the focus, nested role=button,
+wrapper plus inner button, mounted after load). The only doubled "button" found is a label that itself
+contains the word ("Send button" says "Send button, button"), which NVDA also does; left unchanged.
+So PR-1 has a test (`once`) but no code change. Left/Right char moves over adjacent icon buttons pass
+a silent white-space stop between buttons (cosmetic).
+
+G1: AT-SPI `INDETERMINATE` (state 32) now maps to `MIXED` in the document source (`roles.rs`).

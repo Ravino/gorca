@@ -74,3 +74,29 @@ Nerd-font terminal content is unaffected; only all-glyph names/browse items are 
   `mOnScreenAccessibles` lacks SHOWING, which explains the containers; the dev claim holds.
 - `visibility:hidden` maps to INVISIBLE (no VISIBLE) and stays pruned.
 - The formatting-only hunks (commands.rs title lead, caret.rs, m1.rs) are rustfmt output.
+
+## Round 2 (6b2d2c23; fixes in f73c7290, main merged at 77d45fc7) — 2026-10-18
+
+Verdict: **MERGE**, with one follow-up (R2-1).
+
+Gates were run once on 6b2d2c23 with 4 jobs and 4 test threads; incremental files were cleared afterwards.
+- `cargo fmt --check`: clean.
+- clippy with `-D warnings`: clean.
+- `cargo test --workspace`: 2213 passed, 0 failed. shell_parity now passes 2/2 (`.toolchain` is a symlink and is not tracked).
+- `xtask strings`: ok.
+- `git merge-tree` against current main 06ada4e9: no conflicts (77d45fc7 already contains it).
+
+Each finding, checked against the code:
+- **H-1: fixed.** `collect.rs:173-192`: a web node that is not SHOWING is entered only when its bounds overlap the document's rectangle. When its bounds are unknown, the walker asks for them (`Miss::Bounds`) and does not go deeper. The unit test covers my probe case (5000 paragraphs above the viewport, then the on-screen heading): the result has 3 nodes, the heading is reached, and nothing is truncated.
+- **L-1: fixed for text lines.** Each text node gets its document's rectangle in `text_clips`, and `lines_of` uses it. Off-screen controls are now pruned by H-1.
+- **L-2: fixed.** `commands.rs:1183`: the name fill now skips ComboBox and any node that has a value.
+- **L-3: fixed.** `flow.rs:1059-1070`: a name-only change is followed only when the node was first spoken without a name, or when its app is in `web_apps`.
+  - `web_apps` comes only from `DocNotice::WebApp`. That notice is sent only when `is_gecko(info) || is_blink(info)` (`doc-source-atspi/factory.rs:255`).
+  - VTE/GNOME Terminal is GTK, so it is not a web app. A title change can be echoed only if the terminal's first focus had a blank name.
+  - Nit: also require `needs_name(role)` in that branch.
+- **L-4: fixed.** `gorca_model::text::{is_icon_glyph, is_object_marker}` are now shared by browse, `name_is_blank` and `subtree_label`.
+- **Paging up to 8192 children: bounded, does not block.**
+  - At most 32 pages, read one after another. Each call carries its budget-class deadline, an error or an empty page stops the loop, and it runs in an async build task, not on an actor.
+  - Each page fetches bounds (`want` includes BOUNDS when expanding for a miss), so off-screen children are pruned without extra calls.
+  - **R2-1 (medium, follow-up):** the soft build budget is checked only between rounds, while the paging loop ignores it. On a slow but responsive app, one round can take 32 × 120 ms ≈ 3.8 s (Interactive class) or 32 × 2 s (Background class). Fix: give `expand` the build's start time and budget, and stop paging once the budget has run out.
+  - Residual (low): an off-screen container with zero-size bounds, such as a wrapper of absolutely positioned children, now prunes its on-screen children if they lack SHOWING.
