@@ -23,3 +23,9 @@
    exit 0
 == 14:39:34 ff-m7 end head bfbb3295 dirty=0 load 8.52 8.21 7.75 3/2025 2191427 avail_GiB 15
 == 14:39:34 ff-typing start head bfbb3295 dirty=0 load 8.52 8.21 7.75 2/2025 2191452 avail_GiB 15
+   exit 1
+== 15:19:42 ff-typing end head 942af2fc dirty=0 load 9.41 12.36 12.40 1/2249 2310153 avail_GiB 15
+== 15:19:42 ff-m8 start head 942af2fc dirty=0 load 9.41 12.36 12.40 4/2249 2310178 avail_GiB 15
+   exit 0
+== 15:47:46 ff-m8 end head 0383414e dirty=0 load 11.85 16.07 15.11 3/2191 2466409 avail_GiB 15
+== 15:47:46 done head 0383414e dirty=0 load 11.85 16.07 15.11 1/2191 2466434 avail_GiB 15
