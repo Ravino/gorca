@@ -86,6 +86,11 @@ struct Tracked {
     /// policy's own retries gave up or are still waiting, and a key re-reads at once.
     read_ok: bool,
     read_failed: bool,
+    /// The deadlines (`ArmTimer`, in the extension's milliseconds) this tracking armed and that
+    /// have not fired. A tick belongs to a session only when one of them is due: the deadlines of
+    /// a session that was replaced keep firing in the runtime and must not tick (and re-arm) its
+    /// successor, or every re-tracking would start another chain of timers.
+    due: Vec<Ms>,
 }
 
 fn add(a: TermCounters, b: TermCounters) -> TermCounters {
@@ -236,6 +241,12 @@ impl Reader {
         self.text.term.tracked.is_some()
     }
 
+    /// Test probe: how many trackings have been started.
+    #[cfg(test)]
+    pub(crate) fn term_trackings(&self) -> u64 {
+        self.text.term.next_serial
+    }
+
     pub(crate) fn term_is(&self, node: NodeKey) -> bool {
         self.text
             .term
@@ -368,6 +379,7 @@ impl Reader {
             key_epoch: self.epoch.current(),
             read_ok: false,
             read_failed: false,
+            due: Vec::new(),
         });
         self.term_step(TermInput::Focus, fx);
         // The core reads the screen itself when the policy did not ask (it is down): its own
@@ -482,18 +494,25 @@ impl Reader {
     /// with `node` still the tracked terminal: keep its session, with what the last key made it
     /// expect, and have it read the screen again (what happened meanwhile is a plain change, not
     /// a new baseline that would speak the line over a history recall). False when the terminal
-    /// is not tracked, or only by the stand-in: the caller tracks it afresh.
+    /// is not tracked, or only by the stand-in: the caller tracks it afresh. A tracking that has
+    /// no baseline yet is left alone (see below).
     pub(crate) fn term_resume(&mut self, node: NodeKey, fx: &mut ReaderEffects) -> bool {
-        let live = self
+        let Some(t) = self
             .text
             .term
             .tracked
             .as_ref()
-            .is_some_and(|t| t.node == node && !t.sess.degraded() && t.read_ok);
-        if live {
+            .filter(|t| t.node == node && !t.sess.degraded())
+        else {
+            return false;
+        };
+        // A session without a baseline has a read in flight or is retried by the policy and by
+        // the next key (`term_retrack_on_key`): it is never started a second time here, which
+        // would orphan the read in flight.
+        if t.read_ok {
             self.term_events_lost(fx);
         }
-        live
+        true
     }
 
     /// Focus moved on, or the terminal is gone: wipe what the extension knows (secrets included).
@@ -701,7 +720,13 @@ impl Reader {
     }
 
     pub(crate) fn term_timer(&mut self, fx: &mut ReaderEffects) {
-        if self.term_tracked() {
+        let now = self.term_ms();
+        let Some(t) = &mut self.text.term.tracked else {
+            return;
+        };
+        let before = t.due.len();
+        t.due.retain(|d| *d > now);
+        if t.due.len() < before {
             self.term_step(TermInput::Tick, fx);
         }
     }
@@ -759,6 +784,11 @@ impl Reader {
                 }
                 TermAction::FetchScreen => self.term_fetch(fx),
                 TermAction::ArmTimer(ms) => {
+                    if let Some(t) = &mut self.text.term.tracked
+                        && !t.due.contains(&ms)
+                    {
+                        t.due.push(ms);
+                    }
                     fx.push(ReaderEffect::ArmTimer(
                         self.text.origin + Duration::from_millis(ms),
                     ));

@@ -73,3 +73,25 @@ the re-read because `read_ok` is set by any answered read.
   binaries (`retrack-VD-main`), show the same single failing step in round 2 (tab switch): the typed
   `echo 5` arrives garbled ("5 5 5 echo") at the shell, a rig key-ordering artifact that is identical on
   main; every other round and the baseline are clean.
+
+## Review fixes (terminal-retrack-verify.md)
+- M1 timer storm (seed 9100776, regression `re_tracking_on_every_key_while_reads_fail_starts_no_timer_chains`):
+  (a) the statemodel keeps timers as a set like `runtime.rs` (N1); (b) in the real code a tick now belongs to
+  a session only if one of the deadlines THAT tracking armed is due (`Tracked.due`, drained in `term_timer`),
+  so the deadlines of replaced sessions can no longer tick, and re-arm, their successor. The regression passes
+  with (b) alone (checked with the sim dedup switched off).
+- M2 double re-track: `term_resume` now leaves any live non-stand-in session alone (re-reads only when it has
+  a baseline), so a key leaving review on a cold terminal starts exactly one tracking
+  (`a_key_leaving_review_on_a_cold_terminal_starts_one_tracking`; fails with 2 trackings when reverted).
+- L1 review-drift oracle: the old line's presence and its row are read from the WORLD buffer (previous and
+  current rows), not `review.cur`. If the line is gone the cursor must be on the row it had (rewrite in place)
+  or stay held; otherwise drift is reported. The 2021185 regression still passes under it.
+- Harness bookkeeping: `OpenDialog` and a refocusing `CloseDialog` are focus events, so they now reset
+  `failed_reads` and the fresh-focus grace (`last_focus`) like `Op::Focus`; this removed the `not-tracked`
+  hits (seeds 5014211, 6002957) that were an oracle gap (a key 1 ms after a dialog focus whose presentation
+  was still being retried), verified with realistic gaps (the key re-presents the focus).
+- Known pre-existing issue (not fixed, from the review, RP4): events lost + the reviewed line replaced by a
+  full screen re-read -> the stale char is spoken first, no correction is spoken, and the next move jumps
+  silently to the prompt line. Needs an ADR-0018 follow-up and a statemodel check ("a speak-first line
+  replaced by the re-read is corrected or announced").
+- Gates: strict 50k x 40 seeds 1, 4000000 clean; strict 20k x 150 seeds 9100000, 5000000, 6000000 clean.

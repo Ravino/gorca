@@ -317,6 +317,19 @@ fn settled(s: &Sim) -> Option<u64> {
     }
 }
 
+/// The world terminal's rows, trailing blanks cut.
+fn world_rows(s: &Sim) -> Vec<String> {
+    s.w.bufs
+        .get(&TERM)
+        .map(|b| {
+            b.string()
+                .lines()
+                .map(|l| l.trim_end().to_owned())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn tracking_ok(s: &Sim, n: u64) -> Result<(), String> {
     let text = s.r.text.caret.tracked().map(|t| t.root);
     let term = s.r.term_is(key(n));
@@ -383,8 +396,17 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
     let mut last_key = 0u64;
     let mut key_gap = u64::MAX;
     let mut last_focus = 0u64;
+    // The terminal's rows in the world before the last change and now (trailing blanks cut): the
+    // oracle for review-drift, independent of the Reader's own models.
+    let mut screens: (Vec<String>, Vec<String>) = (Vec::new(), world_rows(&Sim::new(native)));
     for (i, st) in steps.iter().enumerate() {
         let fail = |id: &'static str, msg: String| Some(Violation { id, at: i, msg });
+        {
+            let now_rows = world_rows(&s);
+            if now_rows != screens.1 {
+                screens.0 = std::mem::replace(&mut screens.1, now_rows);
+            }
+        }
         // A violation ends the run, except when tracing: then it is printed and the run goes on.
         macro_rules! bail {
             ($id:expr, $msg:expr $(,)?) => {{
@@ -435,10 +457,17 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
             }
             Op::Remove(n) => s.remove(n),
             Op::OpenDialog => {
+                // The dialog's entry gets a focus event: the grace of a fresh focus applies.
+                s.failed_reads = false;
+                last_focus = s.at;
                 s.open_dialog();
                 s.settle(150);
             }
             Op::CloseDialog { refocus, to } => {
+                if refocus {
+                    s.failed_reads = false;
+                    last_focus = s.at;
+                }
                 s.close_dialog(refocus, to);
                 s.settle(150);
             }
@@ -704,14 +733,24 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
                         // The unit this move has to land on while the line has room for it.
                         let room = TermUnits.next(t0, *o0, unit, dir);
                         // review-drift: the line is (still) on the screen, the move had room in
-                        // it, yet the cursor is on another line. A line the screen no longer has
-                        // (output replaced it) has nothing to stay on: the cursor goes to the
-                        // nearest line of the new screen.
-                        if t1 != *t0
-                            && on_screen
-                            && room.is_some()
-                            && s.r.review_screen_has_line(t0)
-                        {
+                        // it, yet the cursor is on another line. A line the world no longer has
+                        // was rewritten or replaced: the cursor may then be on the row the old
+                        // line had (ADR-0018 decision 1, a clamp to the rewritten line), and
+                        // nowhere else. Both are read from the world's rows, not from the
+                        // Reader's model.
+                        let t0_trim = t0.trim_end();
+                        let gone = !screens.1.iter().any(|l| l == t0_trim);
+                        let carried = screens
+                            .0
+                            .iter()
+                            .position(|l| l == t0_trim)
+                            .and_then(|r| screens.1.get(r));
+                        let drifted = if gone {
+                            carried.is_some_and(|l| l != t1.trim_end())
+                        } else {
+                            true
+                        };
+                        if t1 != *t0 && on_screen && room.is_some() && drifted {
                             bail!(
                                 "review-drift",
                                 format!("{c:?} at {o0} of {t0:?} ended on {t1:?} at {o1}")

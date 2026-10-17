@@ -272,3 +272,63 @@ fn history_recall_after_review_is_spoken() {
         quick(Op::Type(KeyKind::Up, Modifiers::empty())),
     ]);
 }
+
+/// Found by the strict 20k x 150 run (seed 9100776, shrunk): every key re-tracks the terminal
+/// while all reads fail, and the deadlines of the replaced sessions kept ticking their successor,
+/// which re-armed its own on every tick (44 parallel timer chains in the model).
+#[test]
+fn re_tracking_on_every_key_while_reads_fail_starts_no_timer_chains() {
+    use KeyKind::{End, Letter, Punct, Space, Tab};
+    let t = |k: KeyKind, m: Modifiers| quick(Op::Type(k, m));
+    let n = Modifiers::empty();
+    let c = |c: CoreCmd, r: u8| quick(Op::Cmd(c, r));
+    expect_clean(&[
+        quick(Op::HoldReplies(true)),
+        quick(Op::Remove(1)),
+        quick(Op::FailFetches(true)),
+        quick(Op::Focus {
+            node: TERM,
+            prelude: None,
+            dups: 0,
+        }),
+        c(CoreCmd::ObjectNext, 1),
+        t(Letter('q'), n),
+        c(CoreCmd::ReviewTop, 1),
+        t(Tab, n),
+        t(Punct('!'), n),
+        c(CoreCmd::ReviewStartOfLine, 1),
+        c(CoreCmd::ReviewEndOfLine, 1),
+        c(CoreCmd::ReviewEndOfLine, 1),
+        t(Letter('k'), n),
+        c(CoreCmd::ReviewTop, 2),
+        c(CoreCmd::ReviewPrevChar, 2),
+        c(CoreCmd::ReviewToFocus, 1),
+        t(Letter('q'), n),
+        c(CoreCmd::ObjectNext, 1),
+        t(Letter('b'), n),
+        c(CoreCmd::ReviewPrevWord, 2),
+        t(Letter('z'), Modifiers::SHIFT),
+        t(Letter('b'), n),
+        t(Space, Modifiers::SHIFT),
+        c(CoreCmd::ReviewPrevWord, 1),
+        t(Space, Modifiers::SHIFT),
+        after(2600, Op::Type(End, n)),
+    ]);
+}
+
+/// One key that leaves review on a terminal without a baseline starts exactly one tracking (and so one baseline read): the key
+/// path re-tracks it, and `text_mode_changed` must not track it a second time (that would drop
+/// the read in flight).
+#[test]
+fn a_key_leaving_review_on_a_cold_terminal_starts_one_tracking() {
+    let mut s = Sim::new(true);
+    s.fail_fetches = Some(gorca_connector_api::BackendError::Busy);
+    s.focus_to(TERM, true, 0);
+    s.settle(3000);
+    s.command(CoreCmd::ReviewCurLine, 1);
+    s.settle(3000);
+    let started = s.r.term_trackings();
+    s.type_key(KeyKind::Letter('x'), Modifiers::empty());
+    let now = s.r.term_trackings();
+    assert_eq!(now - started, 1, "trackings started by one key");
+}
