@@ -918,8 +918,8 @@ pub fn vh(
         feed(&mut t.app, &format!("^C\r\n{PROMPT}"))?;
         Ok(())
     })?;
-    // bash echoes ^C after what is typed, then prints a new prompt; the verbalizer names the caret.
-    c.step("Ctrl+C at the prompt", &["~caret C"], &got);
+    // bash echoes ^C after what is typed, then prints a new prompt; at the default punctuation level the caret is not named.
+    c.step("Ctrl+C at the prompt", &["~C"], &got);
     std::thread::sleep(Duration::from_millis(1200));
     // A directory listing of twenty lines is read once, in order.
     let mut listing = String::from("\r\n");

@@ -47,4 +47,17 @@ Bug 2 shows up as one swallowed first output, not a persistent silence.
 - `GORCA_STATE_STRICT=1 GORCA_STATE_CASES=20000 cargo test -p gorca-core --release statemodel::random`:
   only `review-kept` remains (separate fix, commit 4652684 on another branch); no term-* ids.
 - Gates: cargo fmt, clippy -D warnings, `cargo test --workspace`, `cargo xtask deps`: see the commit.
-- E2E results: see the section below.
+- After merging main (review-echo and history-recall fixes): `GORCA_STATE_STRICT=1 GORCA_STATE_CASES=20000
+  cargo test -p gorca-core --release statemodel` passes (6 tests, no violation ids); fmt, clippy -D warnings,
+  `cargo test --workspace`, `cargo xtask deps` clean.
+- E2E (`bench/acceptance/phase2.sh --only m1,m6 --repeats 3`, `bench/results/acceptance/phase2-20261017T074540Z`):
+  M1 strict (K2, K2s, K3, K4, K4h, R1, R1s, RS) ok in both runs (before and after the merge, 842 s / 833 s);
+  VV on the real gnome-terminal ok (369 s). The first M6 run, before the merge, failed VV screen/prompt
+  gates (`phase2-20261017T062747Z`, kept); they pass with main's history-recall fixes merged.
+- M6 fake: all gates pass except `VH.vh_failures` = 1, a stale expectation, not a regression: Ctrl+C at the
+  prompt expected "caret C" but the symbol tables (default level) no longer name `^`. The expectation in
+  `crates/gorca-bench/src/e2e/m6.rs` now accepts "C"; VH alone, 3 repeats: 0 failures.
+- VD on the real terminal (3 repeats, info only): 7 of 8 rounds clean; round 2 (tab switch) shows one failing
+  step each repeat: the command line heard "bash: 5 5 5 echo: command not found", i.e. the rig's tab-switch
+  keys reached readline as digit arguments. The output was spoken, so neither stuck state is involved; not
+  A/B-tested against main.
