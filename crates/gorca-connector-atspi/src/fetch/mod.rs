@@ -429,19 +429,21 @@ async fn settle_window_ms(toolkit: &str, app_name: &str, identity: Option<(u32, 
     let Some((_, start)) = identity else {
         return ms;
     };
-    // Only an application that started while we were running: one that was already there when
-    // the reader started (even a moment before) shows a page the user opened earlier.
-    let after_us = crate::proc::own_start_ticks().is_some_and(|own| start >= own);
-    if !after_us {
-        return ms;
-    }
+    let own = crate::proc::own_start_ticks();
     match crate::proc::age_ms_async(start).await {
-        Some(age) if age < u64::from(ms) => {
+        Some(age) if is_fresh_launch(start, own, age, ms) => {
             tracing::debug!(age, "freshly launched application: no tree-creation window");
             0
         }
         Some(_) | None => ms,
     }
+}
+
+/// An application that started while we were running (an application that was already there
+/// when the reader started, even a moment before, shows a page the user opened earlier) and
+/// less than `window_ms` ago.
+fn is_fresh_launch(start: u64, own_start: Option<u64>, age_ms: u64, window_ms: u32) -> bool {
+    own_start.is_some_and(|own| start >= own) && age_ms < u64::from(window_ms)
 }
 
 /// Admission by class (section 7, MA-8): Interactive may take any free slot; Prefetch and
@@ -646,26 +648,23 @@ mod admission_tests {
 
 #[cfg(test)]
 mod settle_window_tests {
-    use super::settle_window_ms;
+    use super::is_fresh_launch;
 
-    #[tokio::test]
-    async fn only_an_app_that_started_after_the_reader_and_moments_ago_has_no_window() {
-        let own = crate::proc::own_start_ticks().expect("own start time");
-        // Started at the same tick as the reader (so just now): a fresh launch.
-        assert_eq!(
-            settle_window_ms("Chromium", "chrome", Some((1, own))).await,
-            0
+    #[test]
+    fn only_an_app_that_started_after_the_reader_and_moments_ago_has_no_window() {
+        assert!(is_fresh_launch(500, Some(400), 1000, 3000));
+        assert!(
+            is_fresh_launch(400, Some(400), 0, 3000),
+            "same tick counts as after"
         );
-        // Started before the reader: a page the user opened earlier keeps the window.
-        assert_eq!(
-            settle_window_ms("Chromium", "chrome", Some((1, own - 1))).await,
-            3000
+        assert!(
+            !is_fresh_launch(399, Some(400), 1000, 3000),
+            "older than the reader"
         );
-        // Identity unknown: keep the window. Not a Blink app: no window at all.
-        assert_eq!(settle_window_ms("Chromium", "chrome", None).await, 3000);
-        assert_eq!(
-            settle_window_ms("Gecko", "firefox", Some((1, own))).await,
-            0
+        assert!(
+            !is_fresh_launch(500, Some(400), 3000, 3000),
+            "outside the window"
         );
+        assert!(!is_fresh_launch(500, None, 10, 3000), "own start unknown");
     }
 }
