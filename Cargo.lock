@@ -1192,6 +1192,7 @@ dependencies = [
  "gorca-doc-source-atspi",
  "gorca-ext-api",
  "gorca-ext-host",
+ "gorca-i18n",
  "gorca-input-api",
  "gorca-input-mutter",
  "gorca-input-xkb",
@@ -1276,6 +1277,7 @@ dependencies = [
 name = "gorca-ext-api"
 version = "0.0.0"
 dependencies = [
+ "gorca-i18n",
  "wit-bindgen",
  "wit-parser 0.261.0",
 ]
@@ -1291,6 +1293,7 @@ dependencies = [
  "gorca-config",
  "gorca-core",
  "gorca-ext-api",
+ "gorca-i18n",
  "gorca-input-api",
  "gorca-model",
  "gorca-rt",

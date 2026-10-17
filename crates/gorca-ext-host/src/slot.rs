@@ -78,9 +78,9 @@ impl LoadedExt {
             "extension disabled for every application after repeated failures"
         );
         if let Some(s) = sink.get() {
-            s.notice(format!(
-                "Extension {} disabled",
-                self.manifest.name.replace(['-', '_'], " ")
+            s.notice(gorca_i18n::msg!(
+                ExtDisabled,
+                name = self.manifest.name.replace(['-', '_'], " ").as_str()
             ));
         }
         true
@@ -527,10 +527,10 @@ impl Slot {
         );
         // The user is told once.
         if let Some(sink) = self.sink.get() {
-            sink.notice(format!(
-                "Extension {} disabled for {}",
-                self.name().replace(['-', '_'], " "),
-                self.app_label
+            sink.notice(gorca_i18n::msg!(
+                ExtDisabledFor,
+                name = self.name().replace(['-', '_'], " ").as_str(),
+                app = &*self.app_label
             ));
         }
     }

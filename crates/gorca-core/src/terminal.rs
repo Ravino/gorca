@@ -14,6 +14,7 @@
 //! of one terminal widget live in connector data (`Toolkit::text_unit`, the `Screen` query that
 //! avoids VTE's unreliable character count).
 
+use gorca_i18n::{MsgId as M, t};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -579,7 +580,7 @@ impl Reader {
         let node = self.text.term.tracked.as_ref().map(|t| t.node);
         let snap = node.and_then(|n| self.term_snapshot(n));
         let (Some(snap), true) = (snap, self.text_active()) else {
-            self.say("not in a text field", fx);
+            self.say(t(M::TextNotInField), fx);
             return;
         };
         let (unit, how) = match say {
@@ -648,6 +649,7 @@ impl Reader {
                     sensitive,
                 } => {
                     if speak && !(silent_typed && unit == Unit::Char && urgency == Urgency::Key) {
+                        let text = gorca_i18n::ext::resolve(&text, gorca_i18n::language());
                         let u = self.term_utterance(&text, unit, urgency, sensitive);
                         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
                     }

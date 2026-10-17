@@ -174,7 +174,10 @@ pub fn segments_from_iter(segs: impl IntoIterator<Item = api::Segment>) -> Vec<S
         if s.text.is_empty() {
             continue;
         }
-        let text = clip(&s.text, MAX_SEGMENT_CHARS.min(budget));
+        // A message reference of the extension's catalog is resolved in the UI language here,
+        // the one place extension text enters the presentation.
+        let said = gorca_i18n::ext::resolve(&s.text, gorca_i18n::language());
+        let text = clip(&said, MAX_SEGMENT_CHARS.min(budget));
         budget = budget.saturating_sub(text.chars().count());
         out.push(Segment {
             text: text.into(),

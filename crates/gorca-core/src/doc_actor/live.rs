@@ -506,8 +506,8 @@ impl LiveTracker {
             }
             if total > 0 {
                 let text = match name {
-                    Some(n) => format!("{total} updates in {n}"),
-                    None => format!("{total} updates"),
+                    Some(n) => gorca_i18n::msg!(LiveUpdatesIn, total = total, name = n.as_str()),
+                    None => gorca_i18n::msg!(LiveUpdates, total = total),
                 };
                 out.push(LiveMsg {
                     text: Arc::from(text.as_str()),

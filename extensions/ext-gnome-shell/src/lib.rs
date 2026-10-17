@@ -16,8 +16,26 @@
 //! of the window after the switcher), `refs/gnome-shell/js/ui/barLevel.js` and `slider.js`
 //! (levels run 0..1), `refs/gnome-shell/js/ui/osdWindow.js` (the OSD is a level bar).
 
+use gorca_ext_api::i18n;
 use gorca_ext_api::{Hooks, PolicyFacts, PolicyMoment, PolicyVerdict, export_extension};
 pub use gorca_ext_api::{Range, Segment, SegmentKind};
+
+/// The extension name: the namespace of its message catalog.
+pub const NAME: &str = "ext-gnome-shell";
+/// The English and Russian message catalogs (`i18n/<lang>.msg`), embedded for the native build.
+pub const CATALOG_EN: &str = include_str!("../i18n/en.msg");
+pub const CATALOG_RU: &str = include_str!("../i18n/ru.msg");
+
+/// Register the embedded catalogs (the native build; the WASM component's files are loaded by
+/// the extension host from `i18n/` next to `ext.toml`).
+pub fn register_catalogs() {
+    i18n::register(NAME, i18n::Lang::En, CATALOG_EN);
+    i18n::register(NAME, i18n::Lang::Ru, CATALOG_RU);
+}
+
+fn percent_msg(r: Range) -> String {
+    i18n::msg(NAME, "percent", &[("n", &percent(r).to_string())])
+}
 
 /// Role numbers of the WIT `role` enum (`gorca-ext-api/wit/gorca-ext.wit`); a test keeps them in
 /// step with the file.
@@ -193,19 +211,26 @@ pub fn decide(f: &Facts<'_>) -> Verdict {
         Then::Silence => Verdict::Silence,
         Then::ReadAsNotice => Verdict::Notice,
         Then::PercentValue => match f.range {
-            Some(r) => Verdict::Value(format!("{} percent", percent(r))),
+            Some(r) => Verdict::Value(percent_msg(r)),
             None => Verdict::Default,
         },
         Then::SayLevel => match f.range {
             Some(r) => {
-                let name = f.name.filter(|n| !n.trim().is_empty()).unwrap_or("level");
+                let default_name;
+                let name = match f.name.filter(|n| !n.trim().is_empty()) {
+                    Some(n) => n,
+                    None => {
+                        default_name = i18n::msg(NAME, "level", &[]);
+                        &default_name
+                    }
+                };
                 Verdict::Say(vec![
                     Segment {
                         text: name.to_owned(),
                         kind: SegmentKind::Text,
                     },
                     Segment {
-                        text: format!("{} percent", percent(r)),
+                        text: percent_msg(r),
                         kind: SegmentKind::Value,
                     },
                 ])
@@ -250,6 +275,20 @@ export_extension!(ShellExtension);
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn percent_ref(n: i64) -> String {
+        i18n::msg(NAME, "percent", &[("n", &n.to_string())])
+    }
+
+    fn en(t: &str) -> String {
+        register_catalogs();
+        i18n::resolve(t, i18n::Lang::En).into_owned()
+    }
+
+    fn ru(t: &str) -> String {
+        register_catalogs();
+        i18n::resolve(t, i18n::Lang::Ru).into_owned()
+    }
 
     fn facts(moment: Moment, role: u8, range: Option<Range>) -> Facts<'static> {
         Facts {
@@ -316,7 +355,7 @@ mod tests {
     #[test]
     fn a_unit_slider_is_spoken_as_a_percentage() {
         let v = decide(&facts(Moment::Focus, role::SLIDER, unit(0.5)));
-        assert_eq!(v, Verdict::Value("50 percent".to_owned()));
+        assert_eq!(v, Verdict::Value(percent_ref(50)));
         // A 0..100 slider (GTK) is left to the core.
         let gtk = Some(range(50.0, 0.0, 100.0));
         assert_eq!(
@@ -331,11 +370,14 @@ mod tests {
             Verdict::Value(s) => s,
             other => panic!("{other:?}"),
         };
-        assert_eq!(p(0.0), "0 percent");
-        assert_eq!(p(0.334), "33 percent");
-        assert_eq!(p(1.0), "100 percent");
-        assert_eq!(p(1.7), "100 percent");
-        assert_eq!(p(-0.2), "0 percent");
+        assert_eq!(en(&p(0.0)), "0 percent");
+        assert_eq!(en(&p(0.334)), "33 percent");
+        assert_eq!(en(&p(1.0)), "100 percent");
+        assert_eq!(en(&p(1.7)), "100 percent");
+        assert_eq!(en(&p(-0.2)), "0 percent");
+        assert_eq!(ru(&p(1.0)), "100 процентов");
+        assert_eq!(ru(&p(0.01)), "1 процент");
+        assert_eq!(ru(&p(0.02)), "2 процента");
     }
 
     #[test]
@@ -343,14 +385,15 @@ mod tests {
         let v = decide(&facts(Moment::Value, role::PROGRESS_BAR, unit(0.25)));
         let Verdict::Say(s) = v else { panic!("{v:?}") };
         assert_eq!(s[0].text, "Volume");
-        assert_eq!(s[1].text, "25 percent");
+        assert_eq!(en(&s[1].text), "25 percent");
         assert_eq!(s[1].kind, SegmentKind::Value);
         let mut nameless = facts(Moment::Value, role::PROGRESS_BAR, unit(1.0));
         nameless.name = Some("  ");
         let Verdict::Say(s) = decide(&nameless) else {
             panic!("say")
         };
-        assert_eq!(s[0].text, "level");
+        assert_eq!(en(&s[0].text), "level");
+        assert_eq!(ru(&s[0].text), "уровень");
     }
 
     #[test]
@@ -426,7 +469,7 @@ mod tests {
                 Some("Volume"),
                 unit(0.5)
             )),
-            PolicyVerdict::Value("50 percent".to_owned())
+            PolicyVerdict::Value(percent_ref(50))
         );
         let PolicyVerdict::Say(s) = e.policy(&pf(
             PolicyMoment::Value,
@@ -437,6 +480,6 @@ mod tests {
             panic!("say")
         };
         assert_eq!(s[0].text, "Volume");
-        assert_eq!(s[1].text, "25 percent");
+        assert_eq!(en(&s[1].text), "25 percent");
     }
 }

@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 gorca-ext-api = { workspace = true }
 gorca-model = { workspace = true }
+gorca-i18n = { workspace = true }
 gorca-rt = { workspace = true }
 gorca-core = { workspace = true }
 gorca-config = { workspace = true }

@@ -159,6 +159,9 @@ impl ExtHostBuilder {
             let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
             let manifest = Manifest::parse(&text).map_err(|e| e.to_string())?;
             report.name = Some(manifest.name.clone());
+            if !self.skip.contains(&manifest.name) {
+                load_catalogs(path.parent().unwrap_or(Path::new(".")), &manifest.name);
+            }
             if self.skip.contains(&manifest.name) {
                 tracing::info!(ext = %manifest.name, "extension skipped by configuration");
                 return Ok(());
@@ -366,7 +369,7 @@ impl ExtHost {
                     name: name.clone(),
                     ext: m.name.clone(),
                     local: k.local_id,
-                    help: k.help.clone(),
+                    help: help_text(&m.name, &k.help),
                     contexts: ContextMask::of(&k.contexts),
                     max_press: k.max_press,
                     interrupts: k.interrupts,
@@ -674,6 +677,7 @@ impl AppExt for AppExts {
                 api::PolicyVerdict::Silence => return Some(PolicyVerdict::Silence),
                 api::PolicyVerdict::Notice => return Some(PolicyVerdict::Notice),
                 api::PolicyVerdict::Value(t) => {
+                    let t = gorca_i18n::ext::resolve(&t, gorca_i18n::language());
                     let t: String = t.chars().take(MAX_SEGMENT_CHARS).collect();
                     if !t.is_empty() {
                         return Some(PolicyVerdict::Value(t));
@@ -756,5 +760,45 @@ mod busy_tests {
         ] {
             assert_eq!(repeats_when_busy(event_kind(&e)), repeats, "{e:?}");
         }
+    }
+}
+
+/// The largest catalog file read from an extension directory.
+const MAX_CATALOG_BYTES: u64 = 256 * 1024;
+
+/// Register the extension's message catalogs: `<dir>/i18n/<lang>.msg` for every language the
+/// core has a catalog for. A missing or broken file is skipped (the extension then speaks its
+/// English text, or the key), never an error.
+fn load_catalogs(dir: &Path, ns: &str) {
+    for lang in gorca_i18n::Lang::ALL {
+        let path = dir.join("i18n").join(format!("{}.msg", lang.code()));
+        let Ok(meta) = std::fs::metadata(&path) else {
+            continue;
+        };
+        if meta.len() > MAX_CATALOG_BYTES {
+            tracing::warn!(path = %path.display(), "extension catalog too large; skipped");
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        for e in gorca_i18n::ext::register(ns, lang, &text) {
+            tracing::warn!(path = %path.display(), "extension catalog: {e}");
+        }
+    }
+}
+
+/// The learn-mode description of an extension command: a catalog key of the extension
+/// (lower-case kebab) becomes a message reference resolved in the UI language; any other text is
+/// a literal (accepted until WIT 1.0, ADR-0010).
+fn help_text(ns: &str, help: &str) -> String {
+    let key = !help.is_empty()
+        && help
+            .split('-')
+            .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()));
+    if key {
+        gorca_i18n::ext::encode(ns, help, &[])
+    } else {
+        help.to_owned()
     }
 }

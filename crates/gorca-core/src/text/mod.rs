@@ -15,6 +15,7 @@ pub mod formatting;
 pub mod native;
 pub mod say_all;
 
+use gorca_i18n::{MsgId as M, msg, t};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
@@ -843,7 +844,7 @@ impl Reader {
             return;
         }
         if self.text.caret.is_off() || !self.text_active() {
-            self.say("not in a text field", fx);
+            self.say(t(M::TextNotInField), fx);
             return;
         }
         self.text_step(In::Say { say, spell, epoch }, fx);
@@ -857,7 +858,7 @@ impl Reader {
         if self.text_active() {
             return true;
         }
-        self.say("not available in this mode", fx);
+        self.say(t(M::TextNotAvailableMode), fx);
         false
     }
 
@@ -867,7 +868,7 @@ impl Reader {
             return;
         }
         let Some(t) = self.text.caret.tracked() else {
-            self.say("not in a text field", fx);
+            self.say(t(M::TextNotInField), fx);
             return;
         };
         let at = t.caret.unwrap_or(0);
@@ -899,22 +900,22 @@ impl Reader {
             Ok(Reply::Format(f)) => {
                 let d = formatting::describe(&f);
                 if d.is_empty() {
-                    "no formatting information".to_owned()
+                    t(M::TextNoFormatting).to_owned()
                 } else {
                     d
                 }
             }
             Ok(Reply::Window(_) | Reply::Unit(_) | Reply::Selections(_) | Reply::Done) => {
-                "no formatting information".to_owned()
+                t(M::TextNoFormatting).to_owned()
             }
-            Err(BackendError::NotSupported) => "formatting not available here".to_owned(),
+            Err(BackendError::NotSupported) => t(M::TextFormattingUnavailable).to_owned(),
             Err(
                 BackendError::Timeout
                 | BackendError::Gone
                 | BackendError::Busy
                 | BackendError::Protocol(_)
                 | BackendError::Unresolved,
-            ) => "no formatting information".to_owned(),
+            ) => t(M::TextNoFormatting).to_owned(),
         };
         let id = self.utt_id();
         let mut u = message(&text, id, epoch);
@@ -927,7 +928,7 @@ impl Reader {
             return;
         }
         let Some(t) = self.text.caret.tracked() else {
-            self.say("not in a text field", fx);
+            self.say(t(M::TextNotInField), fx);
             return;
         };
         let secret = t.kind.secret;
@@ -935,12 +936,12 @@ impl Reader {
         let pieces = match sel {
             None => vec![caret::Piece {
                 how: None,
-                text: "no selection".to_owned(),
+                text: gorca_i18n::t(M::TextNoSelection).to_owned(),
                 spell: Spell::No,
             }],
             Some((text, n)) if text.is_empty() => vec![caret::Piece {
                 how: None,
-                text: format!("{n} characters selected"),
+                text: msg!(TextCharsSelected, n = n),
                 spell: Spell::No,
             }],
             Some((text, _)) => vec![caret::Piece {
@@ -971,7 +972,7 @@ impl Reader {
             return;
         }
         let Some(t) = self.text.caret.tracked() else {
-            self.say("not in a text field", fx);
+            self.say(t(M::TextNotInField), fx);
             return;
         };
         let from = t.caret.unwrap_or(0);
