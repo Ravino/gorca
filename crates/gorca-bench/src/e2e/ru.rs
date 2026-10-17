@@ -7,6 +7,7 @@
 //! A sampler thread reads `/proc/<pid>` of the reader every 200 ms. If `RU_OUT` is passed through
 //! (`GORCA_PASSTHROUGH=RU_OUT`) the raw samples go to `$RU_OUT/<id>-<pid>.csv`.
 
+use std::fmt::Write as _;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -71,7 +72,7 @@ fn cpu_pct(s: &[Sample], a: f64, b: f64) -> f64 {
     }
 }
 
-fn window<'a>(s: &'a [Sample], a: f64, b: f64) -> Vec<&'a Sample> {
+fn window(s: &[Sample], a: f64, b: f64) -> Vec<&Sample> {
     s.iter().filter(|x| x.t >= a && x.t <= b).collect()
 }
 
@@ -89,7 +90,11 @@ pub fn ru(
     out: &mut RunOut,
 ) -> Result<()> {
     let typ = rate == u32::MAX;
-    let id = if typ { "RU-typ".to_owned() } else { format!("RU-{rate}") };
+    let id = if typ {
+        "RU-typ".to_owned()
+    } else {
+        format!("RU-{rate}")
+    };
     let mut rig = m1_rig(host, reader, flavor)?;
     let pid = rig.reader.pid;
     std::thread::sleep(Duration::from_secs(2)); // startup settles
@@ -102,10 +107,10 @@ pub fn ru(
             .name("ru-sampler".to_owned())
             .spawn(move || {
                 while !stop.load(Ordering::Acquire) {
-                    if let Some(s) = read_sample(pid, t0) {
-                        if let Ok(mut g) = samples.lock() {
-                            g.push(s);
-                        }
+                    if let Some(s) = read_sample(pid, t0)
+                        && let Ok(mut g) = samples.lock()
+                    {
+                        g.push(s);
                     }
                     std::thread::sleep(Duration::from_millis(SAMPLE_MS));
                 }
@@ -176,10 +181,11 @@ pub fn ru(
     if let Ok(dir) = std::env::var("RU_OUT") {
         let mut csv = String::from("t_s,cpu_s,rss_kb,pss_kb,hwm_kb,threads\n");
         for x in &s {
-            csv.push_str(&format!(
-                "{:.3},{:.2},{},{},{},{}\n",
+            let _ = writeln!(
+                csv,
+                "{:.3},{:.2},{},{},{},{}",
                 x.t, x.cpu_s, x.rss_kb, x.pss_kb, x.hwm_kb, x.threads
-            ));
+            );
         }
         let _ = std::fs::write(format!("{dir}/{id}-{pid}.csv"), csv);
         if let Some(log) = rig.reader_log.as_deref() {
@@ -193,9 +199,21 @@ pub fn ru(
     let steady = window(&s, t_steady0, t_steady1);
     let mib = |kb: f64| kb / 1024.0;
     out.x("idle_cpu_pct", idle_cpu, "% of one core");
-    out.x("pre_rss_mib", mib(mean(pre.iter().map(|x| x.rss_kb))), "MiB");
-    out.x("pre_pss_mib", mib(mean(pre.iter().map(|x| x.pss_kb))), "MiB");
-    out.x("steady_cpu_pct", cpu_pct(&s, t_steady0, t_steady1), "% of one core");
+    out.x(
+        "pre_rss_mib",
+        mib(mean(pre.iter().map(|x| x.rss_kb))),
+        "MiB",
+    );
+    out.x(
+        "pre_pss_mib",
+        mib(mean(pre.iter().map(|x| x.pss_kb))),
+        "MiB",
+    );
+    out.x(
+        "steady_cpu_pct",
+        cpu_pct(&s, t_steady0, t_steady1),
+        "% of one core",
+    );
     // 1 s windows over the steady phase: spread of the CPU figure.
     let mut wins = Vec::new();
     let mut a = t_steady0;
@@ -206,8 +224,16 @@ pub fn ru(
     if !wins.is_empty() {
         out.s("cpu_pct_1s_windows", wins);
     }
-    out.x("steady_rss_avg_mib", mib(mean(steady.iter().map(|x| x.rss_kb))), "MiB");
-    out.x("steady_pss_avg_mib", mib(mean(steady.iter().map(|x| x.pss_kb))), "MiB");
+    out.x(
+        "steady_rss_avg_mib",
+        mib(mean(steady.iter().map(|x| x.rss_kb))),
+        "MiB",
+    );
+    out.x(
+        "steady_pss_avg_mib",
+        mib(mean(steady.iter().map(|x| x.pss_kb))),
+        "MiB",
+    );
     out.x(
         "peak_rss_hwm_mib",
         mib(s.iter().map(|x| x.hwm_kb).fold(0.0, f64::max)),
@@ -218,7 +244,11 @@ pub fn ru(
         mib(s.iter().map(|x| x.pss_kb).fold(0.0, f64::max)),
         "MiB",
     );
-    out.x("threads_max", s.iter().map(|x| x.threads).fold(0.0, f64::max), "threads");
+    out.x(
+        "threads_max",
+        s.iter().map(|x| x.threads).fold(0.0, f64::max),
+        "threads",
+    );
     out.x("storm_achieved_eps", achieved, "ev/s");
     out.x("storm_max_lag_ms", max_lag_ms, "ms");
     // Recovery: first 1 s window after the storm below max(2 x idle, idle + 0.5 %).
@@ -232,7 +262,11 @@ pub fn ru(
         }
         b += 0.2;
     }
-    out.x("recovery_cpu_s", if rate == 0 { 0.0 } else { rec }, "s (cap 12)");
+    out.x(
+        "recovery_cpu_s",
+        if rate == 0 { 0.0 } else { rec },
+        "s (cap 12)",
+    );
     let end = window(&s, t_stop + RECOVER_S - 2.0, t_stop + RECOVER_S + 1.0);
     out.x(
         "after_rss_mib",
