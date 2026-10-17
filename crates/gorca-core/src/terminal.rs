@@ -54,6 +54,9 @@ pub struct TermState {
     next_serial: u64,
     /// The last on-demand re-tracking on a key (see `Reader::focus_audit_on_key`).
     retrack_at: Option<(NodeKey, Instant)>,
+    /// Consecutive keys' re-reads of a terminal whose baseline read kept failing; it backs the
+    /// interval off (`RETRACK_INTERVAL << n`, capped) and resets on the first answered read.
+    cold_retracks: u8,
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -81,6 +84,11 @@ struct Tracked {
     fetch: Option<TextReqId>,
     /// The epoch of the last key that reached the terminal: speech it causes carries it.
     key_epoch: Epoch,
+    /// A screen read of this tracking was answered / the last one failed. A tracking with no
+    /// answered read, whose last read failed and that has none in flight, has no baseline: the
+    /// policy's own retries gave up or are still waiting, and a key re-reads at once.
+    read_ok: bool,
+    read_failed: bool,
 }
 
 fn add(a: TermCounters, b: TermCounters) -> TermCounters {
@@ -361,6 +369,8 @@ impl Reader {
             sess,
             fetch: None,
             key_epoch: self.epoch.current(),
+            read_ok: false,
+            read_failed: false,
         });
         self.term_step(TermInput::Focus, fx);
         // The core reads the screen itself when the policy did not ask (it is down): its own
@@ -394,7 +404,16 @@ impl Reader {
             .tracked
             .as_ref()
             .is_some_and(|t| t.sess.degraded());
-        if self.term_tracked() && !degraded {
+        // Tracked with a real policy that has no baseline: every screen read failed (the
+        // application was busy) and the policy's own retries are used up or still waiting.
+        let cold = self.text.term.tracked.as_ref().is_some_and(|t| {
+            !degraded
+                && t.read_failed
+                && !t.read_ok
+                && t.fetch.is_none()
+                && t.sess.snapshot().is_none()
+        });
+        if self.term_tracked() && !degraded && !cold {
             return false;
         }
         let Some(p) = &self.presented else {
@@ -411,14 +430,15 @@ impl Reader {
         {
             return false;
         }
+        let interval = RETRACK_INTERVAL * (1 << self.text.term.cold_retracks.min(3));
         if let Some((n, at)) = self.text.term.retrack_at
             && n == p.node
-            && self.now.saturating_duration_since(at) < RETRACK_INTERVAL
+            && self.now.saturating_duration_since(at) < interval
         {
             return false;
         }
         let (node, snap) = (p.node, Arc::clone(&p.snap));
-        if degraded {
+        if degraded || cold {
             // Only a tracking for the focused terminal itself, and only when the policy is back:
             // otherwise the stand-in stays (it keeps the secret watch) and nothing restarts.
             if !self.term_is(node) {
@@ -430,7 +450,10 @@ impl Reader {
             };
             self.text.term.retrack_at = Some((node, self.now));
             self.text.term.reads.retracked_on_key += 1;
-            tracing::debug!(target: "gorca_terminal", ?node, "terminal tracked without its policy: upgrading");
+            if cold {
+                self.text.term.cold_retracks = self.text.term.cold_retracks.saturating_add(1);
+            }
+            tracing::debug!(target: "gorca_terminal", ?node, cold, "terminal without its policy or baseline: tracking it again");
             // A secret prompt seen by the stand-in still holds: the new session starts from a
             // fresh read and must not speak a password prompt aloud meanwhile.
             let hold = self.text.term.secret_hold;
@@ -441,10 +464,17 @@ impl Reader {
         }
         tracing::debug!(target: "gorca_terminal", ?node, "focused terminal untracked at a key: tracking it again");
         self.term_track(&snap, fx);
-        // Only a tracking that started uses up the interval: an attempt that found no policy
-        // (slot absent or busy) must not hold back the next key's, the policy may be back.
+        // Only a tracking with a real policy uses up the interval: an attempt that found none
+        // (slot absent or busy) or fell back to the stand-in must not hold back the next key's,
+        // the policy may be back (the stand-in is upgraded at that key).
         let started = self.term_tracked();
-        if started {
+        let real = self
+            .text
+            .term
+            .tracked
+            .as_ref()
+            .is_some_and(|t| !t.sess.degraded());
+        if started && real {
             self.text.term.retrack_at = Some((node, self.now));
         }
         self.text.term.reads.retracked_on_key += 1;
@@ -586,6 +616,9 @@ impl Reader {
         t.fetch = None;
         let input = match result {
             Ok(Reply::Window(w)) => {
+                t.read_ok = true;
+                t.read_failed = false;
+                self.text.term.cold_retracks = 0;
                 self.text.term.reads.answered += 1;
                 // The core's own check, whatever the extension makes of the same screen.
                 if caret_row_is_secret_prompt(&w.text, w.caret) {
@@ -599,6 +632,7 @@ impl Reader {
             }
             Ok(Reply::Unit(_) | Reply::Selections(_) | Reply::Format(_) | Reply::Done)
             | Err(()) => {
+                t.read_failed = true;
                 self.text.term.reads.failed += 1;
                 TermInput::ScreenFailed
             }

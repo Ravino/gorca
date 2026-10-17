@@ -149,3 +149,44 @@ fn review_by_character_goes_on_while_the_line_shifts_up() {
     ]);
     expect_clean(&steps);
 }
+
+fn quick(op: Op) -> Step {
+    Step { dt: 1, op }
+}
+
+/// Found by the 50k run (seed 37737, shrunk): the policy slot is absent at the focus (the
+/// stand-in tracks the terminal), busy at the first key (the upgrade finds no session), healthy
+/// at the second key. That key must upgrade the stand-in to the real policy.
+#[test]
+fn a_degraded_terminal_is_upgraded_by_the_first_key_after_the_slot_recovers() {
+    expect_clean(&[
+        quick(Op::WasmDeployment),
+        quick(Op::Ext(ExtState::Absent)),
+        quick(Op::Focus {
+            node: TERM,
+            prelude: None,
+            dups: 2,
+        }),
+        quick(Op::Ext(ExtState::Busy)),
+        quick(Op::Type(KeyKind::Space, Modifiers::empty())),
+        quick(Op::Ext(ExtState::Healthy)),
+        quick(Op::Type(KeyKind::Space, Modifiers::empty())),
+    ]);
+}
+
+/// Found by the 50k run (seed 47158, shrunk): the baseline read of the terminal fails, the
+/// dialog closes and focus returns, reads work again, then the user types. The terminal must
+/// have been tracked again with a baseline by that key.
+#[test]
+fn a_terminal_whose_baseline_read_failed_is_tracked_again_by_the_next_key() {
+    expect_clean(&[
+        quick(Op::FailFetches(true)),
+        quick(Op::CloseDialog {
+            refocus: true,
+            to: TERM,
+        }),
+        quick(Op::TermScroll),
+        quick(Op::FailFetches(false)),
+        quick(Op::Type(KeyKind::Backspace, Modifiers::empty())),
+    ]);
+}
