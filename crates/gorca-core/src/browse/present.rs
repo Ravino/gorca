@@ -842,4 +842,36 @@ mod tests {
         let c = d.first_of(gorca_doc::web::Cat::COMBOBOX).unwrap();
         assert_eq!(say(&describe_node(&d, c)), "Country combo box Albania");
     }
+
+    #[test]
+    fn web_text_is_spoken_with_the_symbol_names_of_the_language_and_level() {
+        use gorca_speech::{Caps, Lang, Punct};
+        let o = |punct, lang| VerbalizeOpts {
+            punct,
+            caps: Caps::Pitch,
+            lang,
+        };
+        let items = [
+            Item::Role("link".to_owned()),
+            Item::Text("Цена: 5 ₽ (скидка)!".to_owned()),
+        ];
+        let said = |o| {
+            segments(&items, o)
+                .iter()
+                .map(|s| s.text.to_string())
+                .collect::<Vec<_>>()
+                .join(" | ")
+        };
+        assert_eq!(
+            said(o(Punct::Some, Lang::Ru)),
+            "link | Цена: 5 рубль (скидка)!"
+        );
+        assert!(said(o(Punct::All, Lang::Ru)).contains("восклицательный знак!"));
+        // A character read alone is named at any level, in the language.
+        let c = [Item::Char("(".to_owned())];
+        assert_eq!(
+            segments(&c, o(Punct::None, Lang::Ru))[0].text.as_ref(),
+            "левая круглая"
+        );
+    }
 }
