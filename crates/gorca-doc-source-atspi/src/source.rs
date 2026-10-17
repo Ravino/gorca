@@ -1551,6 +1551,16 @@ impl AtspiDocSource {
     /// `Text.GetNSelections` and `RemoveSelection` of every range but the first: the browser
     /// keeps its ranges for the whole document, so stale extras of an earlier mirror go.
     async fn drop_extra_ranges(&self, path: &str, deadline: Deadline) -> Result<(), SourceError> {
+        self.remove_ranges(path, 1, deadline).await
+    }
+
+    /// `RemoveSelection` of every range from the last down to index `keep` (0 removes all).
+    async fn remove_ranges(
+        &self,
+        path: &str,
+        keep: u32,
+        deadline: Deadline,
+    ) -> Result<(), SourceError> {
         let lane = self.app.next_lane();
         let m = self
             .app
@@ -1560,7 +1570,7 @@ impl AtspiDocSource {
         let n = wire::parse_u32(m.body().data().bytes())
             .unwrap_or(0)
             .min(64);
-        for i in (1..n).rev() {
+        for i in (keep..n).rev() {
             let i = i32::try_from(i).unwrap_or(1);
             self.app
                 .call(
@@ -1652,12 +1662,11 @@ impl AtspiDocSource {
         }
     }
 
+    /// Remove every range of the document. Never `SetSelection(0, 0, 0)`: Firefox resolves
+    /// offset 0 to the first text leaf and focuses its container when that is focusable (a skip
+    /// link), `RemoveSelection` only edits the DOM selection.
     async fn clear_selection(&self, path: &str, deadline: Deadline) -> Result<(), SourceError> {
-        self.drop_extra_ranges(path, deadline).await?;
-        let zero = 0..0;
-        self.range_call(path, true, &zero, deadline)
-            .await
-            .map(|_| ())
+        self.remove_ranges(path, 0, deadline).await
     }
 
     /// IR-4: a heuristic join is confirmed when the object still exists with the same role.

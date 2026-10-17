@@ -18,7 +18,7 @@ use crate::WebEffect;
 use crate::commands::CoreCmd;
 use crate::directory::MirrorDirectory;
 use crate::doc_actor::translate::Translator;
-use crate::doc_actor::{DocCtl, DocHandle, DocNotice};
+use crate::doc_actor::{DocCtl, DocHandle, DocNotice, SelOutcome};
 use crate::mode::{Mode, ModeKeys};
 use crate::reader::{Reader, ReaderEffect, ReaderEffects, ReaderMsg};
 use gorca_model::DocAction;
@@ -1966,7 +1966,9 @@ fn acts(fx: &ReaderEffects) -> Vec<(DocAction, DocNodeId)> {
     effects_web(fx)
         .iter()
         .filter_map(|w| match w {
-            WebEffect::Act { node, act, .. } => Some((act.clone(), *node)),
+            WebEffect::Act { node, act, .. } | WebEffect::Select { node, act, .. } => {
+                Some((act.clone(), *node))
+            }
             WebEffect::Ensure { .. } | WebEffect::Activity { .. } => None,
         })
         .collect()
@@ -2101,14 +2103,78 @@ fn the_page_selection_follows_the_virtual_one_so_the_browsers_ctrl_c_copies_it()
     // A plain move drops the virtual range, so the page's selection is cleared.
     r.key(CoreCmd::BrowseCursorNextLine);
     assert!(cleared(&settle(&mut r)), "no stale page selection");
-    // gorca+Shift+F10 stops the mirror.
+    // gorca+Shift+F10 switches to the virtual selection: the page is left alone.
     let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
-    assert_eq!(spoken(&fx), ["native selection off"]);
+    assert_eq!(spoken(&fx), ["virtual selection"]);
     r.key(CoreCmd::BrowseCursorTop);
     r.key(CoreCmd::BrowseSelectNextChar);
     assert!(selections(&settle(&mut r)).is_empty());
+    // Back to the page selection: the document is probed first, and "page selection" is said
+    // only when the probe succeeds (S-4).
     let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
-    assert_eq!(spoken(&fx), ["native selection on"]);
+    assert!(
+        spoken(&fx).is_empty(),
+        "nothing is claimed before the probe answers"
+    );
+    let req = last_select_req(&fx).expect("a probe");
+    let fx = r
+        .reader
+        .handle(selection_done(req, SelOutcome::Done), r.now);
+    assert_eq!(spoken(&fx), ["page selection"]);
+}
+
+fn last_select_req(fx: &ReaderEffects) -> Option<u32> {
+    effects_web(fx).into_iter().rev().find_map(|w| match w {
+        WebEffect::Select { req, .. } => Some(req),
+        WebEffect::Ensure { .. } | WebEffect::Activity { .. } | WebEffect::Act { .. } => None,
+    })
+}
+
+fn selection_done(req: u32, outcome: SelOutcome) -> ReaderMsg {
+    ReaderMsg::Doc(DocNotice::SelectionDone {
+        doc: DocId(1),
+        req,
+        outcome,
+    })
+}
+
+#[test]
+fn a_document_that_cannot_select_keeps_the_virtual_selection_and_says_so() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    r.key(CoreCmd::BrowseNativeSelectionToggle);
+    let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
+    let req = last_select_req(&fx).expect("a probe");
+    let fx = r
+        .reader
+        .handle(selection_done(req, SelOutcome::NotSupported), r.now);
+    assert_eq!(spoken(&fx), ["page selection not available here"]);
+    // Still virtual: a selection writes nothing to the page.
+    r.key(CoreCmd::BrowseCursorTop);
+    r.key(CoreCmd::BrowseSelectNextChar);
+    assert!(selections(&settle(&mut r)).is_empty());
+}
+
+#[test]
+fn a_mirror_that_fails_is_known_and_a_stale_answer_is_ignored() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    r.key(CoreCmd::BrowseCursorTop);
+    r.key(CoreCmd::BrowseSelectNextChar);
+    let fx = settle(&mut r);
+    let req = last_select_req(&fx).expect("a mirror request");
+    // An answer for an older request changes nothing.
+    let stale = r.reader.handle(
+        selection_done(req.wrapping_sub(1), SelOutcome::Failed),
+        r.now,
+    );
+    assert!(spoken(&stale).is_empty());
+    let fx = r
+        .reader
+        .handle(selection_done(req, SelOutcome::Failed), r.now);
+    assert_eq!(spoken(&fx), ["page selection not set"]);
 }
 
 #[test]
@@ -2224,6 +2290,15 @@ fn a_range_that_ends_at_a_link_says_so_and_a_space_before_it_can_be_left_out() {
     // child follows and that the last character is white space; the source decides.
     let p = plan_of(&r, "Read ", 0, "Read ", 5);
     assert_eq!(ranges(&p), vec![0..5]);
+    // A caller that must not start in the first leaf's container plans again from its end.
+    let at = r.docs.get(DocId(1)).expect("document").read.with(|d| {
+        let id = d
+            .preorder()
+            .find(|id| d.node(*id).is_some_and(|v| v.text == Some("Read ")))
+            .expect("run");
+        d.offset_of(id).expect("offset")
+    });
+    assert_eq!(p.first_end, at + 5);
     assert!(p.spans[0].child_follows && p.spans[0].trim_ws && !p.spans[0].end_on_child);
 }
 

@@ -564,15 +564,42 @@ pub struct BrowseState {
     /// focused node, or came from a focus change, Tab belongs to the browser (R-5).
     pub focus_node: Option<(DocId, DocNodeId)>,
     pub cursor_from: CursorFrom,
-    /// Native selection mode (gorca+Shift+F10, D-3): the page's own selection follows the
-    /// virtual one. Off by default; the virtual selection never touches the page.
-    pub native_selection: bool,
+    /// Which selection Ctrl+C copies (gorca+Shift+F10, ADR-0021): `Native` mirrors the virtual
+    /// selection into the page, `Virtual` leaves the page alone. `Native` is the default.
+    pub model: SelectionModel,
+    /// Where the page selection stands (one request in flight at most).
+    pub sync: NativeSync,
+    /// Counter of selection requests; a result for an older one is ignored.
+    pub sel_req: u32,
     /// When the page selection is next brought up to date with `sel` (debounced).
     pub sel_due: Option<Instant>,
     /// The text node whose page selection we set last: it is cleared when the virtual range
     /// moves elsewhere or goes away, so the page never keeps a stale selection.
     pub native_sel_node: Option<(DocId, DocNodeId)>,
     pub click_target: Option<(DocNodeId, Instant)>,
+}
+
+/// Which selection Ctrl+C copies in browse mode (ADR-0021).
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum SelectionModel {
+    /// The page's own selection follows the virtual one; the browser copies.
+    Native,
+    /// The virtual selection stays gorca's; the page is never written.
+    Virtual,
+}
+
+/// The state of the request that sets (or probes) the page selection.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum NativeSync {
+    Idle,
+    /// A selection was sent; its result decides whether "page selection not set" is said.
+    Pending {
+        req: u32,
+    },
+    /// The switch to `Native` was asked and the document is being probed for support.
+    Probing {
+        req: u32,
+    },
 }
 
 /// How long polite live-region news may wait in the speech queue (ADR-0003 13.2).
@@ -614,7 +641,9 @@ impl BrowseState {
             tab_grab: std::cell::Cell::new((true, true)),
             focus_node: None,
             cursor_from: CursorFrom::Own,
-            native_selection: true,
+            model: SelectionModel::Native,
+            sync: NativeSync::Idle,
+            sel_req: 0,
             sel_due: None,
             native_sel_node: None,
             lead_dialog: None,

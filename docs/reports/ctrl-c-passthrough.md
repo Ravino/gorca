@@ -146,3 +146,28 @@ an `<input>` as the next sibling is ignored by Blink; `(0,6)` and `(0,4)` work).
 * Chromium: the Ctrl+A-before-a-field case above.
 * The mirror needs the page to be the browser's active document; background tabs are not
   selected.
+
+## Update 3: review round 2 and S0 (2026-10-17)
+
+* R2-1 fixed: `ClearSelection` removes every range with `Text.RemoveSelection` (never
+  `SetSelection(0,0,0)`, which made Firefox focus a leading skip link). `tests/web/selcopy` has a
+  skip link and row F1 (focused element unchanged after select + plain move); with the old clear F1
+  fails (`('link', 'Skip to content')`), with the fix it passes in Firefox and Chromium.
+* R2-2 fixed: a selection whose first leaf sits in a focusable container (a link, or the document
+  for text directly in `<body>`) is mirrored only when that container already has focus. Row F2
+  (bare body text selected while a link has focus) fails without the rule and passes with it.
+  Ctrl+A skips leading text in focusable containers (a skip link), so on such a page the copy starts
+  at the next text; every other selection starting there is not mirrored.
+* S-1: `DocCtl::Select` returns `DocNotice::SelectionDone { req, outcome }` (Done, NotSupported,
+  Failed); an action over the in-flight limit, an unaddressable node or a full control queue answer
+  Failed instead of vanishing (a dropped Focus now says `FocusFailed`). A failed or skipped mirror
+  says "page selection not set" (queued behind the selection speech, not cutting it).
+* S-4: switching to the page selection sends a probe (`ClearSelection` with a request id) and says
+  "page selection" only on `Done`; `NotSupported` or `Failed` says "page selection not available here"
+  and stays virtual.
+* S0: `SelectionModel::{Native, Virtual}` + `NativeSync::{Idle, Pending, Probing}` replace the bool;
+  gorca+Shift+F10 announces "page selection" / "virtual selection" (en, ru). Virtual means no
+  mirroring; no clipboard writer exists. Rows S1-S4 of `selcopy` cover the announcements, that
+  Virtual copies nothing new, and that Native copies again after the probe.
+* Not done: S1 (Chromium `Document.SetTextSelections`, would fix Ctrl+A before an `<input>`; Chromium
+  rows stay 7/9 with E6 an XFAIL) and moving the Firefox focus rule out of core into the source.

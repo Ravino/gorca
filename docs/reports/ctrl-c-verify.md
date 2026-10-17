@@ -127,3 +127,69 @@ CARGO_BUILD_JOBS=4, RUST_TEST_THREADS=4, branch worktree target.
 * `cargo test --workspace`: all `test result: ok`, 0 failed.
 * `cargo run -p xtask -- strings`: ok (318 literals, 102 allowed).
 * Not run: Firefox end-to-end, private 48.7 shell indicator check (F-1), no-`Start` variant.
+
+---
+
+# Round 2: selection mirror rework (head 435d8a13)
+
+## Verdict: MERGE AFTER FIXES (one must-fix, measured)
+
+RemoteDesktop/clipboard code is gone (`clipboard.rs`, `clip_probe`, `browse.copy`, catalogue
+strings, `Copy` effect, daemon wiring, extra deps; remaining `RemoteDesktop` mentions are the
+pre-existing test rigs and `gorca-input-inject` docs). Ctrl+C is never grabbed. F-1..F-4 and F-6/F-7
+are resolved by design or fixed.
+
+## R2-1 (high, must-fix, reproduced) Clearing the page selection moves focus to the first link of the page
+`gorca-doc-source-atspi/src/source.rs` `clear_selection` calls `Text.SetSelection(0, 0, 0)` on the
+document. Firefox resolves offset 0 to the first text leaf and, in `TextLeafRange::SetSelection`
+(`refs/firefox/accessible/base/TextLeafRange.cpp:2430-2465`, `aSetFocus` defaults to true), calls
+`TakeFocus()` on that leaf's parent when it is focusable. On any page that starts with a skip link
+("Skip to content", very common) every plain browse move after a selection focuses the skip link;
+gorca follows the focus.
+
+Measured in a private headless shell (rig copy in
+`/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/selprobe`, page = skip
+link, h1, two paragraphs, button, paragraph; Firefox; debug gorca at 435d8a13):
+* with selection: `Shift+End` on p2 -> "Echo foxtrot golf hotel., selected"; `Down` -> "button, Press
+  me" and 160 ms later **"Skip to content, link"** (focus jumped to the top of the page);
+* control, same keys with plain `End`: "button, Press me", nothing after.
+
+Fix: clear with `Text.RemoveSelection(i)` for every range, i = n-1..0, on the document
+(`HyperTextAccessible::RemoveFromSelection`, `generic/HyperTextAccessible.cpp:667`, removes the DOM
+range and never focuses); keep `SetSelection(0,0,0)` out of the clear path. Add a skip link at the
+top of `tests/web/selcopy/page.html` and assert no focus change after select + plain move.
+
+## R2-2 (medium) A selection that starts in text directly under the document focuses the document
+`web_mirror_selection` exempts `start_container == root` from the focusable guard, but the document
+accessible is focusable, so `SetSelection` there calls `DocAccessible::TakeFocus` and blurs whatever
+element has focus (page blur/focusout handlers run). Rare (bare text in `<body>`), unmeasured. Fix:
+use the snap/first span on a non-focusable inner container, or skip mirroring when focus is on an
+element and the start container is the document.
+
+## R2-3 (medium, design) On by default fires page `selectionchange` on every selecting burst
+Every debounced selection (40 ms after the last Shift+key) is a real DOM selection: page
+`selectionchange`/`mouseup`-less selection handlers run (share-selection popups, translation
+bubbles, editors that track selection). No scroll: `AddRangeAndSelectFramesAndNotifyListeners`
+does not scroll, only `TakeFocus` would. NVDA ships native selection mode off by default; gorca
+turning it on by default is a product call. Keep on (Ctrl+C just works) but document the toggle,
+and record the decision in `docs/decisions.md`.
+
+## R2-4 (low) The user's own mouse selection is cleared by a later browse move
+`native_sel_node` stays `Some` after the mirror; if the user then selects with the mouse, the next
+plain browse move clears it. Acceptable; note it.
+
+## Key path and never-block
+* Reader cost per key: one `Option<Instant>` write and an `ArmTimer`; the plain-move clear is one
+  `WebEffect::Act` only when a mirror was set (`web_native_clear` takes `native_sel_node`). Nothing
+  awaited by the Reader.
+* Source: `GetNSelections`, up to 63 `RemoveSelection`, one call per span (spans bounded by tree
+  depth), all under the one action deadline; no `unwrap` (`unwrap_or` on parse).
+* Mirror runs only in browse mode; a timer that fires after a switch to focus mode returns early,
+  so the focus-mode caret is untouched.
+
+## Chromium Ctrl+A before an `<input>` (7/9)
+Acceptable as a known issue: Blink keeps one exclusive range and the input boundary cuts it; it fails
+safe (less text, never focus moves). Track it in the report's open list.
+
+## Gates (round 2)
+4 threads. `cargo fmt --check` clean; `cargo clippy --workspace --all-targets -D warnings` clean; `cargo test --workspace` 2182 passed, 0 failed; `xtask strings` ok (318 literals, 102 allowed). Leftover grep for RemoteDesktop/SelectionWrite/EnableClipboard in core, daemon, input-mutter, doc-source-atspi: none.

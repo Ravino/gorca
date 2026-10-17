@@ -29,6 +29,9 @@ pub struct Plan {
     pub snap: SelSpan<DocNodeId>,
     /// The container of the first leaf: when the engine focuses it, the selection steals focus.
     pub start_container: DocNodeId,
+    /// Flat offset where the selected part of the first leaf ends: a caller that must not start
+    /// in that leaf's container plans again from here.
+    pub first_end: u32,
 }
 
 fn is_leaf(d: &WebDoc, id: DocNodeId) -> bool {
@@ -123,6 +126,8 @@ struct Hit {
     from: u32,
     to: u32,
     scalars: u32,
+    /// Flat offset just after the selected part of the leaf.
+    end_flat: u32,
 }
 
 fn leaves(d: &WebDoc, lo: u32, hi: u32) -> Option<(Hit, Hit)> {
@@ -162,6 +167,7 @@ fn leaves(d: &WebDoc, lo: u32, hi: u32) -> Option<(Hit, Hit)> {
                 from,
                 to,
                 scalars: n,
+                end_flat: ts + to,
             });
         }
         last = Some(Hit {
@@ -169,6 +175,7 @@ fn leaves(d: &WebDoc, lo: u32, hi: u32) -> Option<(Hit, Hit)> {
             from,
             to,
             scalars: n,
+            end_flat: ts + to,
         });
     }
     Some((first?, last?))
@@ -194,6 +201,7 @@ pub fn plan(d: &WebDoc, lo: u32, hi: u32) -> Option<Plan> {
             spans: vec![sp.clone()],
             snap: sp,
             start_container: f_par,
+            first_end: f.end_flat,
         });
     }
 
@@ -233,6 +241,7 @@ pub fn plan(d: &WebDoc, lo: u32, hi: u32) -> Option<Plan> {
         spans,
         snap,
         start_container: f_par,
+        first_end: f.end_flat,
     })
 }
 
