@@ -1,0 +1,46 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>ARIA probe</title></head><body>
+<main aria-label="Main">
+<h1>Probe</h1>
+<div role="button" tabindex="0" id="ib1" aria-label="Close dialog"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M0 0L16 16"/></svg></div>
+<div role="button" tabindex="0" id="ib2" aria-label="Menu"><span class="icon" style="display:inline-block;width:16px;height:16px"></span></div>
+<button id="ib3" aria-label="Search"><img src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt=""></button>
+<div role="button" tabindex="0" id="ib4" aria-label="Like" aria-pressed="false"><i style="display:inline-block;width:12px;height:12px"></i></div>
+<button aria-expanded="false" aria-controls="p1" aria-haspopup="menu" id="eb">Actions</button>
+<div id="p1" hidden>panel</div>
+<div role="checkbox" aria-checked="mixed" tabindex="0" aria-label="Select all"></div>
+<div role="switch" aria-checked="true" tabindex="0" aria-label="Wi-Fi"></div>
+<div role="radiogroup" aria-label="Size"><div role="radio" aria-checked="true" tabindex="0">S</div><div role="radio" aria-checked="false" tabindex="-1">M</div></div>
+<div role="tablist" aria-label="Views"><button role="tab" aria-selected="true" aria-controls="t1" tabindex="0">One</button><button role="tab" aria-selected="false" tabindex="-1">Two</button></div>
+<div role="tabpanel" id="t1" aria-label="One panel">Panel text</div>
+<ul role="listbox" aria-label="Fruit" aria-multiselectable="true" tabindex="0"><li role="option" aria-selected="true" aria-posinset="1" aria-setsize="3">Apple</li><li role="option" aria-selected="false" aria-posinset="2" aria-setsize="3">Pear</li><li role="option" aria-disabled="true">Plum</li></ul>
+<div role="tree" aria-label="Files"><div role="treeitem" aria-expanded="true" aria-level="1" aria-posinset="1" aria-setsize="2" tabindex="0">src<div role="group"><div role="treeitem" aria-level="2" aria-posinset="1" aria-setsize="1" aria-selected="true">main.rs</div></div></div><div role="treeitem" aria-expanded="false" aria-level="1" aria-posinset="2" aria-setsize="2">docs</div></div>
+<div role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-controls="lb" aria-autocomplete="list" tabindex="0" aria-label="Country">Fr</div>
+<div role="grid" aria-label="Grid" aria-rowcount="10" aria-colcount="3"><div role="row" aria-rowindex="1"><div role="columnheader" aria-sort="ascending">Name</div><div role="columnheader">Qty</div></div><div role="row" aria-rowindex="2" aria-selected="true"><div role="rowheader">Ann</div><div role="gridcell" tabindex="0" aria-selected="true">3</div></div></div>
+<div role="menubar"><div role="menuitem" aria-haspopup="true" aria-expanded="false" tabindex="0">File</div></div>
+<div role="slider" tabindex="0" aria-valuenow="3" aria-valuemin="0" aria-valuemax="10" aria-valuetext="three of ten" aria-label="Level" aria-orientation="horizontal"></div>
+<div role="progressbar" aria-valuenow="40" aria-label="Upload"></div>
+<div role="meter" aria-valuenow="2" aria-valuemin="0" aria-valuemax="5" aria-label="Disk"></div>
+<input id="in1" aria-label="Email" required aria-required="true" aria-invalid="true" aria-errormessage="err1" aria-describedby="d1"><span id="err1">Bad email</span><span id="d1">We never share it</span>
+<input aria-label="Locked" readonly aria-readonly="true" value="x">
+<div role="textbox" aria-multiline="true" contenteditable aria-label="Notes" aria-placeholder="Type">hi</div>
+<div role="status" aria-live="polite">ready</div><div role="alert">oops</div><div role="log" aria-label="Chat">m1</div><div role="timer">0:01</div>
+<div role="dialog" aria-modal="false" aria-label="Cookies" aria-describedby="d2"><p id="d2">We use cookies</p></div>
+<section aria-busy="true" aria-label="Loading area">…</section>
+<a href="#" aria-current="page" id="lk">Home</a>
+<div role="button" aria-roledescription="carousel slide" tabindex="0" aria-label="Slide 1 of 3">x</div>
+<div role="button" tabindex="0" aria-disabled="true" aria-label="Off">Off</div>
+<span role="img" aria-label="Chart" aria-details="det">pic</span><div id="det">Details here</div>
+<div role="article" aria-label="Post"><h2>t</h2></div>
+<div role="feed" aria-label="Feed"><article aria-posinset="1" aria-setsize="-1">a</article></div>
+<div role="toolbar" aria-label="Fmt" aria-orientation="horizontal"><button>B</button></div>
+<div role="separator" tabindex="0" aria-valuenow="50">sep</div>
+<p><span role="mark">hl</span> <del>old</del> <ins>new</ins> <span role="comment">c</span></p>
+<table role="treegrid" aria-label="TG"><tr role="row" aria-level="1" aria-expanded="true"><td role="gridcell">a</td></tr></table>
+<details><summary>More</summary>body</details>
+<div role="searchbox" aria-label="Find" tabindex="0"></div>
+<div role="spinbutton" tabindex="0" aria-valuenow="2" aria-label="Count"></div>
+<div role="note">n</div><div role="definition">d</div><div role="term">t</div>
+<div role="math" aria-label="x squared">x2</div>
+<div role="directory">dir</div><div role="tooltip">tip</div>
+<div role="cell" aria-colspan="2">w</div>
+</main></body></html>
