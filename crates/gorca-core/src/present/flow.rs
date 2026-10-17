@@ -65,7 +65,8 @@ pub(crate) fn name_is_blank(name: Option<&str>) -> bool {
         n.chars().all(|c| {
             c.is_whitespace()
                 || c.is_control()
-                || matches!(c, '\u{FFFC}' | '\u{E000}'..='\u{F8FF}' | '\u{F0000}'..='\u{FFFFD}' | '\u{100000}'..='\u{10FFFD}')
+                || gorca_model::text::is_object_marker(c)
+                || gorca_model::text::is_icon_glyph(c)
         })
     })
 }
@@ -1053,12 +1054,20 @@ impl Reader {
             return;
         }
         // A name-only change is news only right after the focus (see `NAME_FOLLOW_WINDOW`).
-        if !mask.intersects(PropMask::STATES | PropMask::VALUE)
-            && !self.last_focus.is_some_and(|(n, at)| {
+        // Outside web documents only a node spoken without a name follows: a title-like name
+        // that changes after commands (a terminal) must not be echoed.
+        if !mask.intersects(PropMask::STATES | PropMask::VALUE) {
+            let soon = self.last_focus.is_some_and(|(n, at)| {
                 n == node && self.now.saturating_duration_since(at) < NAME_FOLLOW_WINDOW
-            })
-        {
-            return;
+            });
+            let eligible = name_is_blank(p.snap.name.as_deref())
+                || self
+                    .web
+                    .as_ref()
+                    .is_some_and(|b| b.web_apps.contains(&node.app));
+            if !soon || !eligible {
+                return;
+            }
         }
         fx.push(ReaderEffect::Demand {
             node,

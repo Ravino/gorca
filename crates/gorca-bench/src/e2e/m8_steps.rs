@@ -1025,6 +1025,17 @@ fn fl() -> Vec<Step> {
     ]
 }
 
+/// Flat review on a page far longer than the walk's node cap, scrolled to its end: the lines on the
+/// screen are the last ones, not the chrome (review H-1).
+fn fls() -> Vec<Step> {
+    vec![
+        top("FLS.top"),
+        pos("FLS.cur", Act::Key(KP_UP, 0)),
+        Step::setup("FLS.wait", "the model build carries on past its first deadline", Act::Wait(2500)),
+        s("FLS.bottom", P1, "Review bottom: the last lines on screen, not the chrome", Act::Key(KP_PRIOR, SHIFT), &["Final heading marker"]).win(3000),
+    ]
+}
+
 /// Every scenario, in run order.
 pub fn scenarios() -> Vec<Scenario> {
     let sc = |id, area, page, title, body| Scenario { id, area, page, title, body, xfail: None };
@@ -1052,6 +1063,7 @@ pub fn scenarios() -> Vec<Scenario> {
         sc("M8-BHO", "hostile ARIA: cycles, fan-out, megabyte strings", "../../m8b/pages/hostile.html", "M8b Hostile", Body::Steps(ho)),
         sc("M8-TG", "Telegram voice message: Tab and B name the same button", "telegram.html", "M8 Telegram voice message", Body::Steps(tg)),
         sc("M8-FL", "flat review over a web page", "news.html", "M8 News article", Body::Steps(fl)),
+        sc("M8-FLS", "flat review on a long scrolled page", "longscroll.html", "M8 Long scrolled page", Body::Steps(fls)),
         sc("M8-RDESC", "review: description flood", "../../m8b/review/r_desc.html", "M8b Review Desc", Body::Steps(rv_desc)),
         sc("M8-RNAME", "review: name flood", "../../m8b/review/r_name.html", "M8b Review Name", Body::Steps(rv_name)),
         sc("M8-RINV", "review: invalid flood", "../../m8b/review/r_invalid.html", "M8b Review Invalid", Body::Steps(rv_inv)),

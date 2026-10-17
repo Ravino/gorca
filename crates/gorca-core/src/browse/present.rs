@@ -564,7 +564,7 @@ pub fn segments(items: &[Item], o: VerbalizeOpts) -> SmallVec<[Segment; 4]> {
         .filter_map(|i| {
             let t = i.text().trim();
             // An icon font's glyph (private use) draws a symbol and speaks as noise.
-            if t.is_empty() || t.chars().all(|c| matches!(c, '\u{E000}'..='\u{F8FF}')) {
+            if t.is_empty() || t.chars().all(gorca_model::text::is_icon_glyph) {
                 return None;
             }
             let text = match i {

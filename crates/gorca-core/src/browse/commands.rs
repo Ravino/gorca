@@ -624,6 +624,12 @@ fn subtree_label(d: &WebDoc, id: DocNodeId) -> Option<String> {
     }
     let mut raw = String::new();
     d.read_text(a, b.min(a.saturating_add(CAP)), &mut raw);
+    let raw: String = raw
+        .chars()
+        .filter(|c| {
+            !gorca_model::text::is_icon_glyph(*c) && !gorca_model::text::is_object_marker(*c)
+        })
+        .collect();
     let label = raw.split_whitespace().collect::<Vec<_>>().join(" ");
     (!crate::present::name_is_blank(Some(&label))).then_some(label)
 }
@@ -1173,7 +1179,10 @@ impl Reader {
                 // Name parity with browse mode: a control the engine left without a name (or
                 // named by an icon glyph) takes the text the document holds for it, which is
                 // what a quick-nav move onto it reads.
+                // A combo box or any control with a value would say its value as its name.
                 let fill = (crate::present::needs_name(snap.role)
+                    && snap.role != Role::ComboBox
+                    && snap.value.is_none()
                     && crate::present::name_is_blank(snap.name.as_deref()))
                 .then(|| subtree_label(d, id))
                 .flatten();

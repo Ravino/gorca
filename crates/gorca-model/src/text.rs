@@ -264,6 +264,17 @@ pub fn clamp_range(range: Range<u32>, last_known_len: u32) -> Range<u32> {
     start..end
 }
 
+/// True for a code point an icon font draws a symbol with (a private-use area): it speaks as
+/// nothing, so text made only of these (and of [`is_object_marker`]) says nothing.
+pub fn is_icon_glyph(c: char) -> bool {
+    matches!(c, '\u{E000}'..='\u{F8FF}' | '\u{F0000}'..='\u{FFFFD}' | '\u{100000}'..='\u{10FFFD}')
+}
+
+/// True for the embedded-object replacement character (one per non-text child in AT-SPI text).
+pub fn is_object_marker(c: char) -> bool {
+    c == '\u{FFFC}'
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

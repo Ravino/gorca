@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8 Long scrolled page</title></head>
+<body>
+<h1>Long page start</h1>
+<main id="m"></main>
+<script>
+  // 1500 paragraphs, several screens, then a final heading.
+  const m = document.getElementById('m');
+  for (let i = 0; i < 1500; i++) {
+    const p = document.createElement('p');
+    p.textContent = 'Filler paragraph number ' + i;
+    m.appendChild(p);
+  }
+  const h = document.createElement('h2');
+  h.textContent = 'Final heading marker';
+  m.appendChild(h);
+  const e = document.createElement('p');
+  e.textContent = 'The very last line';
+  m.appendChild(e);
+  // The page opens scrolled to its end, as after reading a long article.
+  e.scrollIntoView({block: "end"});
+</script>
+</body>
+</html>

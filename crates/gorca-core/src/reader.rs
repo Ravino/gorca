@@ -1625,6 +1625,31 @@ mod tests {
         );
     }
 
+    /// A node spoken with a name outside a web document (a terminal whose name follows its title)
+    /// is not followed when the name changes.
+    #[test]
+    fn a_named_native_node_does_not_follow_name_changes() {
+        let mut f = fixture();
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        f.reader.handle(
+            reply(&f, 1, FetchKind::Focus, snap(1, Role::Button, "Terminal")),
+            now,
+        );
+        let fx = f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::StateChanged {
+                node: key(1),
+                mask: PropMask::NAME,
+            }),
+            now + Duration::from_millis(300),
+        );
+        assert!(
+            !effects_of(&fx).contains(&"fetch-s1"),
+            "{:?}",
+            effects_of(&fx)
+        );
+    }
+
     /// A focus whose only name is an icon glyph is spoken as the bare role, not as the glyph.
     #[test]
     fn an_icon_glyph_name_is_not_spoken() {

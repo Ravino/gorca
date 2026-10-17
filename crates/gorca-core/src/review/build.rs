@@ -38,6 +38,8 @@ const APPLY_ACK: Duration = Duration::from_millis(50);
 /// Collect-and-fetch rounds of one build: one tree level per round, so this is the depth reached
 /// (the soft deadline normally ends a build first, and its continuations carry on).
 const MAX_ROUNDS: usize = 64;
+/// Most children of one node a review build reads (pages of [`CHILD_PAGE`]).
+const MAX_CHILDREN: usize = 8192;
 /// Ancestors fetched for a parent miss.
 const ANCESTRY_DEPTH: u8 = 16;
 
@@ -216,14 +218,50 @@ pub async fn expand(
             return Err(NavFetchError::from(&e));
         }
     };
+    // More than one page of children (a long list, a web page's main element): the next pages
+    // follow one after the other, up to `MAX_CHILDREN`, so the node is not expanded again and
+    // again with the same first page.
+    let mut kids = kids;
+    let total = match parent.children {
+        ChildList::Count(n) => usize::try_from(n).ok(),
+        ChildList::Known(_) | ChildList::Unknown => None,
+    };
+    let page = CHILD_PAGE as usize;
+    let mut last_page_len = kids.nodes.len();
+    while last_page_len == page
+        && kids.nodes.len() < MAX_CHILDREN
+        && total.is_none_or(|t| kids.nodes.len() < t)
+    {
+        let start = u32::try_from(kids.nodes.len()).unwrap_or(u32::MAX);
+        let more = io
+            .call(
+                class,
+                BackendOp::ChildSnapshots {
+                    node,
+                    range: start..start.saturating_add(CHILD_PAGE),
+                    want,
+                },
+            )
+            .await
+            .and_then(subtree);
+        match more {
+            Ok(b) if !b.nodes.is_empty() => {
+                last_page_len = b.nodes.len();
+                kids.truncated = b.truncated;
+                kids.nodes.extend(b.nodes);
+            }
+            Ok(_) | Err(_) => break,
+        }
+    }
     // A known count settles it (a strategy may flag `truncated` when it reads past the last
-    // child); without one, an unflagged short page is the whole list.
+    // child); without one, an unflagged short last page is the whole list.
     let complete = match parent.children {
         ChildList::Count(n) => {
-            usize::try_from(n).is_ok_and(|n| n <= CHILD_PAGE as usize && n == kids.nodes.len())
+            usize::try_from(n).is_ok_and(|n| n == kids.nodes.len())
+                || kids.nodes.len() >= MAX_CHILDREN
         }
         ChildList::Known(_) => false,
-        ChildList::Unknown => !kids.truncated && kids.nodes.len() < CHILD_PAGE as usize,
+        ChildList::Unknown => !kids.truncated && last_page_len < page,
     };
     tracing::debug!(
         ?node,
@@ -468,7 +506,12 @@ pub async fn build_model(io: &ReviewIo, spec: BuildSpec) -> Result<Arc<LineModel
         let jobs = ask
             .iter()
             .map(|k| {
-                Box::pin(lines_of(io.clone(), *k, clip, spec.class))
+                Box::pin(lines_of(
+                    io.clone(),
+                    *k,
+                    collected.text_clips.get(k).copied().unwrap_or(clip),
+                    spec.class,
+                ))
                     as std::pin::Pin<
                         Box<
                             dyn std::future::Future<Output = (NodeKey, Option<Arc<[TextLine]>>)>
