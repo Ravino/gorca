@@ -51,3 +51,36 @@ Baseline for comparison: before M9, 172/183 steps and no document at all with th
 
 ## 4. Process facts
 Build and test: `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace` and `cargo xtask deps` were green before the M8 merge; after it `cargo test -p gorca-core -p gorca-doc-source-atspi -p gorca-dbus -p gorca-connector-atspi` and clippy were green, the full workspace test is re-run at the final head (see the head SHA in the brief). Aborted matrices are kept: `m9-final-matrix-aborted*.log`, results at heads `e44b51d` and `83e4992`.
+
+## 5. Review fixes (round 1, `docs/reports/m9-review.md`)
+
+Code head of the fixes: see section 5.3. All fixes are data-driven (no engine names in the core).
+
+- **H-1 (text layer, FCE1 key loss)**. Root causes, both fixed: (a) `text_mode_changed` sent `In::Dirty` in the same
+  turn as the new tracking (`tracked_this_turn`), so the window prefetch, which carries whether the root hosts
+  paragraphs (`hosts`), was always stale and discarded; a tracking started in the turn now keeps its reply.
+  (b) A caret event of a paragraph that came before the focus (Chromium, separate lanes) was dropped in browse mode,
+  and one that came while the root's window was still in flight was refused (`hosts` unknown). Both are kept
+  (`early_caret`, valid 1.5 s, latest wins) and replayed when the fill says the root hosts paragraphs, as if the
+  browser had sent them after the focus. This also removed a Firefox-only artefact the first fix exposed: Right
+  keys that reached a stalled page spoke the embedded object ("object") through the root's Boundary logic, because
+  the tracked node stayed the root. Tests: `text::tests::probe_m9r::*` (4).
+- **H-2**: main merged; `page_events_settle_ms` added to the two terminal fixtures; one `description: false` in
+  `present/flow.rs`; `decisions.md` keeps both sides.
+- **M-1/M-2 (frame wake, `crates/gorca-doc-source-atspi/src/wake.rs`)**: a reference node in view (any role, real
+  `SHOWING` state asked from the app) is measured with `Component.GetExtents` before the first scroll; the end is
+  `ScrollToPoint` of that node to the measured position (checked, one retry), so the original offset returns
+  exactly. Between steps the reference must still sit where our scroll put it, otherwise the task stops and restores
+  nothing (the user scrolled). No node in view: frames stay asleep. The task ends with the document (`shutdown`).
+  Residual risk: a layout shift above the reference during the wake reads as a user scroll (page left at the frame);
+  not measured on real pages. Tests: `frame_wake::*` in `tests/fake_peer.rs` (4).
+- **L-1**: a nested document taking focus in browse mode is still swallowed (Chromium focuses the frame document and
+  then the link inside), but after 250 ms with nothing newer it is announced like any focus, so a Firefox Tab stop on
+  a frame speaks its title and role. Tests: `browse::tests::a_frame_document_*`, `a_tab_stop_on_a_frame_document_*`.
+- **L-2**: `AppInfo::page_events_settle_ms` is 0 for an application that was itself started less than the window
+  before it appeared (process start from the registration identity and `/proc/uptime`), so the page Chrome opens
+  during its first 3 s is auto-read. A browser that was already running keeps the window.
+- **L-4**: new `AppInfo::web_engine` (`gorca_model::WebEngine`, filled from `Toolkit::web_engine()`); the factory's
+  `is_gecko/is_blink` read it instead of sniffing names. `Toolkit::classify` matches Chromium's `ToolkitName` first
+  (the same for Chrome, Edge, Brave and Electron) and then names (chrom, electron, brave, msedge, vivaldi).
+- L-3 stays: the checklist row Alt+Down on the Combo field is still manual.
