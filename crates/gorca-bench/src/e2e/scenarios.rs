@@ -103,6 +103,8 @@ pub enum Scn {
     A1,
     /// M4b: notifications never interrupt focus speech.
     N1,
+    /// Resource usage: whole-daemon CPU and memory under an event rate (`RU-<events/s>`, `RU-typ`).
+    Ru(u32),
 }
 
 impl Scn {
@@ -168,6 +170,8 @@ impl Scn {
             Self::Vd => "VD".into(),
             Self::A1 => "A1".into(),
             Self::N1 => "N1".into(),
+            Self::Ru(r) if *r == u32::MAX => "RU-typ".into(),
+            Self::Ru(r) => format!("RU-{r}"),
         }
     }
 
@@ -234,6 +238,12 @@ impl Scn {
             "A1" => Self::A1,
             "N1" => Self::N1,
             other => {
+                if other == "RU-typ" {
+                    return Some(Self::Ru(u32::MAX));
+                }
+                if let Some(r) = other.strip_prefix("RU-").and_then(|r| r.parse().ok()) {
+                    return Some(Self::Ru(r));
+                }
                 return super::webtext::IDS
                     .iter()
                     .find(|i| **i == other)
@@ -556,6 +566,7 @@ pub fn run(
         Scn::R1 => super::m4::r1(host, reader, flavor, size, seed, &mut out)?,
         Scn::R1s => super::m4::r1s(host, reader, flavor, size, seed, &mut out)?,
         Scn::RS => super::m4::rs(host, reader, flavor, size, seed, &mut out)?,
+        Scn::Ru(r) => super::ru::ru(host, reader, flavor, *r, seed, &mut out)?,
         Scn::B0 => super::web::b0(host, reader, flavor, &mut out)?,
         Scn::W1 => super::web::w1(host, reader, flavor, size, &mut out)?,
         Scn::Br1 => super::web::br1(host, reader, flavor, size, &mut out)?,

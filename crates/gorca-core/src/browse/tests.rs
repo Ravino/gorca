@@ -613,7 +613,8 @@ fn focus_on_a_link_enters_browse_mode_with_the_word_on_the_focus_speech() {
     let fx = r.focus(1006);
     assert!(matches!(r.mode(), WebMode::Browse { .. }));
     assert!(matches!(r.reader.mode(), Mode::Browse { .. }));
-    assert_eq!(spoken(&fx), ["browse mode the docs link"]);
+    // The first document the focus enters leads with its title.
+    assert_eq!(spoken(&fx), ["browse mode Test page the docs link"]);
     assert!(
         effects_web(&fx)
             .iter()
@@ -637,7 +638,7 @@ fn focus_on_an_edit_field_enters_focus_mode_and_grabs_escape() {
         }
     ));
     assert_eq!(r.reader.mode(), Mode::Focus);
-    assert_eq!(spoken(&fx), ["focus mode Name edit"]);
+    assert_eq!(spoken(&fx), ["focus mode Test page Name edit"]);
     let grabs: Vec<_> = fx
         .iter()
         .filter_map(|e| {
@@ -2812,5 +2813,185 @@ fn a_key_in_a_browsing_page_resolves_nothing() {
     assert_eq!(
         r.reader.web.as_ref().map(|b| b.counters.key_resyncs),
         Some(0)
+    );
+}
+
+// ---- tab switches: the page title leads when the focus enters another document ------------------
+
+/// A second copy of the test page (local ids + 2000, titled `title`), registered as document 2.
+fn add_second_doc(r: &mut Rig, title: &str) {
+    let joins = add_second_doc_unjoined(r, title);
+    join_second_doc(r, joins);
+}
+
+fn join_second_doc(r: &mut Rig, joins: Vec<(LocalId, DocNodeId)>) {
+    for (l, id) in joins {
+        r.join.set(
+            NodeKey {
+                app: app(),
+                local: l,
+            },
+            (DocId(2), id),
+        );
+    }
+}
+
+/// The second document, published but not yet joined to the nodes of the focus events.
+fn add_second_doc_unjoined(r: &mut Rig, title: &str) -> Vec<(LocalId, DocNodeId)> {
+    let mut deltas = page();
+    for d in &mut deltas {
+        if let DocDelta::Upsert(nodes) = d {
+            for n in nodes.iter_mut() {
+                n.local = n.local.map(|l| LocalId(l.0 + 2000));
+                if n.id == SrcNodeId(1) {
+                    n.name = Some(Arc::from(title));
+                }
+            }
+        }
+    }
+    let (mut writer, read) = channel(9);
+    let mut tr = Translator::new();
+    let out = tr.apply(&mut writer, deltas).unwrap();
+    writer.publish();
+    let joins = out.join_add;
+    let (ctl_tx, _ctl) = mpsc::channel(16);
+    let (ev_tx, _ev) = mpsc::channel(16);
+    r.docs.insert(DocHandle {
+        doc: DocId(2),
+        app: app(),
+        root: nk(3001),
+        read,
+        ctl: ctl_tx,
+        events: ev_tx,
+    });
+    std::mem::forget(writer);
+    r.mirror.apply(
+        SnapshotBatch {
+            nodes: vec![
+                snap(3006, Role::Link, "the docs", StateSet::FOCUSABLE),
+                snap(3002, Role::Heading, "Welcome", StateSet::empty()),
+                snap(3001, Role::DocumentWeb, title, StateSet::FOCUSABLE),
+            ],
+            ..Default::default()
+        },
+        ApplyOrigin::Push,
+    );
+    joins
+}
+
+#[test]
+fn a_tab_switch_onto_a_link_leads_with_the_new_page_title_once() {
+    let mut r = rig();
+    add_second_doc(&mut r, "Second page");
+    r.focus(1006);
+    let fx = r.focus(1002);
+    assert_eq!(spoken(&fx), ["Welcome heading"], "same document: no title");
+    // The browser focuses the link the other tab had focused (no event for the document).
+    let fx = r.focus(3006);
+    assert_eq!(spoken(&fx), ["Second page the docs link"]);
+    let fx = r.focus(3002);
+    assert_eq!(
+        spoken(&fx),
+        ["Welcome heading"],
+        "the title leads only once"
+    );
+    // And back, with the chrome in between: the first page is announced again.
+    r.focus(2000);
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::NoDocument { focus: nk(2000) }),
+        r.now,
+    );
+    let fx = r.focus(1006);
+    assert_eq!(spoken(&fx), ["browse mode Test page the docs link"]);
+}
+
+#[test]
+fn leaving_to_the_chrome_and_returning_to_the_same_page_does_not_repeat_its_title() {
+    let mut r = rig();
+    r.focus(1006);
+    r.focus(2000);
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::NoDocument { focus: nk(2000) }),
+        r.now,
+    );
+    let fx = r.focus(1006);
+    assert!(
+        !spoken(&fx).iter().any(|s| s.contains("Test page")),
+        "{:?}",
+        spoken(&fx)
+    );
+}
+
+#[test]
+fn the_first_visit_of_a_tab_resolves_with_its_title_and_the_focused_node_in_one_piece() {
+    let mut r = rig();
+    r.focus(1006);
+    let joins = add_second_doc_unjoined(&mut r, "Second page");
+    // The browser focuses a link in a tab whose document we have not built yet.
+    let fx = r.focus(3006);
+    assert!(matches!(r.mode(), WebMode::Loading { .. }));
+    assert!(!spoken(&fx).iter().any(|s| s.contains("Second page")));
+    join_second_doc(&mut r, joins);
+    let fx = r.reader.handle(
+        ReaderMsg::Doc(DocNotice::FirstUseful {
+            doc: DocId(2),
+            app: app(),
+        }),
+        r.now,
+    );
+    assert!(matches!(r.mode(), WebMode::Browse { .. }));
+    let said = spoken(&fx);
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(said[0].contains("Second page"), "{said:?}");
+    assert!(said[0].contains("the docs link"), "{said:?}");
+}
+
+fn child_of(parent: u64, mut n: NodeSnapshot) -> Arc<NodeSnapshot> {
+    n.parent = Some(nk(parent));
+    Arc::new(n)
+}
+
+#[test]
+fn a_focus_in_the_browsers_own_interface_neither_waits_for_a_document_nor_says_a_mode_word() {
+    let mut r = rig();
+    // Application > window > toolbar > editable combo box (the address bar), all in the cache.
+    r.mirror.apply(
+        SnapshotBatch {
+            nodes: vec![
+                (*snap(5000, Role::Application, "Firefox", StateSet::empty()))
+                    .clone()
+                    .into(),
+                child_of(
+                    5000,
+                    (*snap(5001, Role::Window, "Firefox", StateSet::empty())).clone(),
+                ),
+                child_of(
+                    5001,
+                    (*snap(5002, Role::Toolbar, "", StateSet::empty())).clone(),
+                ),
+                child_of(
+                    5002,
+                    (*snap(
+                        5003,
+                        Role::ComboBox,
+                        "Search or enter address",
+                        StateSet::EDITABLE | StateSet::FOCUSABLE,
+                    ))
+                    .clone(),
+                ),
+            ],
+            ..Default::default()
+        },
+        ApplyOrigin::Push,
+    );
+    r.focus(1006); // browsing a page first
+    let fx = r.focus(5003);
+    assert_eq!(r.mode(), WebMode::Inactive);
+    assert!(
+        !spoken(&fx)
+            .iter()
+            .any(|s| s.contains("focus mode") || s.contains("browse mode")),
+        "{:?}",
+        spoken(&fx)
     );
 }
