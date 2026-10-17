@@ -308,6 +308,12 @@ async fn read_node_raw(app: &AppConn, path: &str, dl: Deadline) -> Option<ReadTu
         .ok()
         .and_then(|m| wire::parse_string_map(m.body().data().bytes()).ok())
         .unwrap_or_default();
+    for (_, v) in &mut attrs {
+        gorca_doc_source_api::limits::clip_text(
+            v,
+            gorca_doc_source_api::limits::MAX_ATTR_VALUE_BYTES,
+        );
+    }
     if let Some(d) = desc {
         attrs.push(("description".to_owned(), d.to_string()));
     }

@@ -1037,7 +1037,7 @@ impl Reader {
                 {
                     c.name = Some(Arc::from(n));
                 }
-                c.attrs = m.attrs.clone();
+                c.attrs.clone_from(&m.attrs);
                 if c.description.is_none() {
                     c.description.clone_from(&m.description);
                 }

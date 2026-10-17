@@ -358,12 +358,7 @@ fn enter_items(v: &NodeView<'_>, out: &mut Vec<Item>) {
     let st = v.meta.map_or(StateSet::empty(), |m| m.states);
     // A control that carries its own text is followed by that text; its states come first. A
     // link or a heading says only whether it is expanded and which one is current.
-    if !matches!(v.role, Role::Link | Role::Heading) {
-        push_states(v, out);
-        if let Some(e) = aria::error_text(&node_of(v)) {
-            out.push(Item::Info(e.to_owned()));
-        }
-    } else {
+    if matches!(v.role, Role::Link | Role::Heading) {
         if st.contains(StateSet::EXPANDED) {
             out.push(Item::State("expanded"));
         } else if st.contains(StateSet::COLLAPSED) {
@@ -371,6 +366,11 @@ fn enter_items(v: &NodeView<'_>, out: &mut Vec<Item>) {
         }
         if let Some(c) = aria::current_word(&node_of(v)) {
             out.push(Item::State(c));
+        }
+    } else {
+        push_states(v, out);
+        if let Some(e) = aria::error_text(&node_of(v)) {
+            out.push(Item::Info(e.to_owned()));
         }
     }
 }

@@ -607,6 +607,71 @@ mod change_tests {
         assert_eq!(change_words(&on, &off), ["not checked"]);
     }
 
+    fn web_snap(name: &str, role: Role, states: StateSet, attrs: &[(u16, &str)]) -> NodeSnapshot {
+        let mut n = snap(name, states, None);
+        n.role = role;
+        n.attrs = attrs
+            .iter()
+            .map(|(k, v)| (gorca_model::AttrKey(*k), Arc::<str>::from(*v)))
+            .collect();
+        n
+    }
+
+    #[test]
+    fn web_focus_speech_has_nvda_roles_states_description_and_error() {
+        use gorca_doc_source_api::web_attrs as w;
+        let tag = (w::TAG.0, "button");
+        // A switch is "switch, on", never "toggle button, checked".
+        let sw = web_snap(
+            "Notifications",
+            Role::ToggleButton,
+            StateSet::CHECKED,
+            &[tag, (w::XML_ROLES.0, "switch")],
+        );
+        assert_eq!(
+            texts(&present_focus(&sw, UttId(1), Epoch(1))),
+            ["Notifications", "switch", "on"]
+        );
+        // Description after a pause marker, error text last.
+        let mut f = web_snap(
+            "Email",
+            Role::TextEntry,
+            StateSet::INVALID | StateSet::REQUIRED,
+            &[(w::TAG.0, "input"), (w::ERROR_TEXT.0, "Enter an address")],
+        );
+        f.description = Some(Arc::from("Work address"));
+        assert_eq!(
+            texts(&present_focus(&f, UttId(1), Epoch(1))),
+            [
+                "Email",
+                "edit",
+                "required",
+                "invalid entry",
+                ". Work address",
+                "Enter an address"
+            ]
+        );
+        // The pause is the only thing that setting removes.
+        let mut u = present_focus(&f, UttId(1), Epoch(1));
+        crate::aria::strip_pause(&mut u);
+        assert!(texts(&u).contains(&"Work address".to_owned()));
+        // A flipped switch is announced on / off.
+        let off = web_snap(
+            "Notifications",
+            Role::ToggleButton,
+            StateSet::empty(),
+            &[tag, (w::XML_ROLES.0, "switch")],
+        );
+        assert_eq!(change_words(&sw, &off), ["off"]);
+        assert_eq!(change_words(&off, &sw), ["on"]);
+        // Desktop nodes (no web attributes) keep the old words.
+        let desk = snap("Wi-Fi", StateSet::CHECKED, None);
+        assert_eq!(
+            texts(&present_focus(&desk, UttId(1), Epoch(1))),
+            ["Wi-Fi", "checked"]
+        );
+    }
+
     #[test]
     fn equal_snapshots_have_no_change_and_focus_state_is_ignored() {
         let a = snap("Wi-Fi", StateSet::CHECKED, None);

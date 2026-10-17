@@ -393,8 +393,7 @@ async fn complete(
                 .collect();
             if !want.is_empty() {
                 let paths: Vec<String> = want.iter().map(|i| targets[*i].clone()).collect();
-                let res =
-                    crate::extras::error_texts(conn, paths, Duration::from_millis(1500)).await;
+                let res = crate::extras::error_texts(conn, paths, deadline).await;
                 tm.calls += want.len() as u64 * 2;
                 for (i, t) in want.into_iter().zip(res) {
                     if let Some(t) = t {

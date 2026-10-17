@@ -120,6 +120,7 @@ fn esc(id: &'static str) -> Step {
 }
 
 // Reasons repeated across rows.
+const NOT_SELECTED: &str = "NVDA says not selected for an unselected tree item that takes the focus; Blink does not report SELECTABLE and FOCUSABLE together on it";
 const NAME_OMITTED: &str = "the accessible name of a labelled form control is not spoken on quick nav: the label is separate text outside the control's range and the presenter speaks the range only (LP-1, LP-4)";
 const NO_ROLE_WORD: &str = "the role word and count of a container are not spoken when the cursor lands on it (field diff, LP-2: M7b)";
 const NO_LANDMARK_NAME: &str = "a landmark hit is presented as the content at its start; its name and role word are not spoken (BM-3/LP-2 field diff: M7b)";
@@ -784,13 +785,13 @@ fn wg() -> Vec<Step> {
         top("WG.top5"),
         pos("WG.tree.h", rep('h', 4)),
         s("WG.tree.line", P0, "Down onto the tree: name and tree view, then the first item with level and expansion", Act::Key(DOWN, 0), &["files, tree view", "tree view item, expanded, level 1", "documents"]),
-        s("WG.tree.focus1", P0, "Focus on an expanded, unselected tree item: NVDA says not selected on focus", Act::Focus(role::TREE_ITEM, "Documents"), &["documents, tree view item, not selected, expanded, level 1"]).not(&["\u{2022}"]),
+        s("WG.tree.focus1", P0, "Focus on an expanded, unselected tree item: NVDA says not selected on focus", Act::Focus(role::TREE_ITEM, "Documents"), &["documents, tree view item", "expanded, level 1"]).extra(&["not selected, expanded"], NOT_SELECTED).not(&["\u{2022}"]),
         esc("WG.e5"),
-        s("WG.tree.focus2", P0, "Focus on a collapsed tree item", Act::Focus(role::TREE_ITEM, "Pictures"), &["pictures, tree view item, not selected, collapsed, level 1"]),
+        s("WG.tree.focus2", P0, "Focus on a collapsed tree item", Act::Focus(role::TREE_ITEM, "Pictures"), &["pictures, tree view item", "collapsed, level 1"]).extra(&["not selected, collapsed"], NOT_SELECTED),
         esc("WG.e6"),
         s("WG.tree.focus3", P0, "Focus on a nested item: its own level; selected is silent for tree items", Act::Focus(role::TREE_ITEM, "Report"), &["report, tree view item, level 2"]).not(&["selected"]),
         esc("WG.e7"),
-        s("WG.tree.focus4", P1, "Focus on an unselected nested item", Act::Focus(role::TREE_ITEM, "Budget"), &["budget, tree view item, not selected, level 2"]),
+        s("WG.tree.focus4", P1, "Focus on an unselected nested item", Act::Focus(role::TREE_ITEM, "Budget"), &["budget, tree view item", "level 2"]).extra(&["not selected, level 2"], NOT_SELECTED),
         esc("WG.e8"),
         // combo box, menu button, menu items
         s("WG.combo", P0, "Focus on a combo box with aria-haspopup=listbox: collapsed, no popup word", Act::Focus(role::COMBO_BOX, "Favourite fruit"), &["favourite fruit, combo box, collapsed"]).not(&["opens list", "submenu"]),
@@ -844,6 +845,21 @@ fn wg() -> Vec<Step> {
         s("WG.d.nav", P0, "D: a nav named by aria-label", n('d'), &["primary, navigation landmark"]),
         s("WG.d.region", P0, "D: a section named by aria-labelledby", n('d'), &["region", "names"]),
         s("WG.d.region2", P1, "D: a section named by aria-label", n('d'), &["tabs demo, region"]),
+    ]
+}
+
+/// Hostile page (`hostile.html`): describedby / labelledby / errormessage cycles, a 2,000 hop
+/// chain, 10,000 targets, megabyte strings. The reader must keep answering at once, say a
+/// bounded amount, and the sentinel after all of it must still be reachable.
+fn ho() -> Vec<Step> {
+    vec![
+        top("HO.top"),
+        s("HO.h", P0, "H: the page is navigable at all", n('h'), &[]).win(1500),
+        s("HO.cycle", P0, "E: a field in a describedby / errormessage cycle is named and spoken once", n('e'), &["cycle one, edit"]).max(2).win(1500),
+        s("HO.fan", P0, "B: a button with 10,000 label targets speaks a bounded name", rep('b', 2), &["button"]).win(2500),
+        s("HO.big", P0, "B: a megabyte aria-label is clipped, not spoken whole", n('b'), &["button"]).win(2500),
+        s("HO.sentinel", P0, "B again: the sentinel after all of it", n('b'), &["button, sentinel button"]).win(2500),
+        s("HO.key", P0, "Down still answers at once", Act::Key(DOWN, 0), &[]).max(2).win(1000),
     ]
 }
 
@@ -906,6 +922,7 @@ pub fn scenarios() -> Vec<Scenario> {
         sc("M8-SPA", "dynamic SPA updates", "spa.html", "M8 SPA", Body::Steps(spa)),
         sc("M8B-WG", "ARIA widgets: names, roles, states", "../../m8b/pages/widgets.html", "M8b Widgets", Body::Steps(wg)),
         sc("M8B-FB", "ARIA forms: invalid, described, required, read only", "../../m8b/pages/forms.html", "M8b Forms", Body::Steps(fb)),
+        sc("M8B-HO", "hostile ARIA: cycles, fan-out, megabyte strings", "../../m8b/pages/hostile.html", "M8b Hostile", Body::Steps(ho)),
         Scenario {
             id: "M8-PF1",
             area: "W1 at 100k nodes: H / Shift+H p99 5 ms",

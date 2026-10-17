@@ -8,8 +8,8 @@
 //!   it only as a relation (`error-message`), never in `Description`.
 
 use std::sync::Arc;
-use std::time::Instant;
 
+use gorca_doc_source_api::limits;
 use gorca_model::{Role, StateSet};
 use gorca_rt::Deadline;
 
@@ -54,8 +54,7 @@ impl WebQuirks {
 
     /// Normalise the name of a node (`authored`: the author gave the name, so it is kept).
     pub fn name(self, role: Role, authored: bool, name: Option<Arc<str>>) -> Option<Arc<str>> {
-        if !self.strip_list_marker || authored || !matches!(role, Role::ListItem | Role::TreeItem)
-        {
+        if !self.strip_list_marker || authored || !matches!(role, Role::ListItem | Role::TreeItem) {
             return name;
         }
         let n = name?;
@@ -84,7 +83,15 @@ impl WebQuirks {
 
 /// `s` without a leading list marker: a bullet and a space, or digits, a dot and a space.
 pub fn without_list_marker(s: &str) -> &str {
-    for m in ["\u{2022} ", "\u{25e6} ", "\u{25aa} ", "\u{2023} ", "\u{25a0} ", "\u{25a1} ", "\u{2013} "] {
+    for m in [
+        "\u{2022} ",
+        "\u{25e6} ",
+        "\u{25aa} ",
+        "\u{2023} ",
+        "\u{25a0} ",
+        "\u{25a1} ",
+        "\u{2013} ",
+    ] {
         if let Some(r) = s.strip_prefix(m) {
             return r.trim_start();
         }
@@ -115,8 +122,9 @@ pub fn takes_error_text(role: Role) -> bool {
     )
 }
 
-/// Longest error message text kept (a page can point `aria-errormessage` at a whole article).
-const ERROR_TEXT_CAP: usize = 400;
+/// Most characters requested from an error message target (a page can point `aria-errormessage`
+/// at a whole article).
+const ERROR_TEXT_CHARS: i32 = 400;
 
 /// The text of the `aria-errormessage` target of `path`, if it has one: the relation target's
 /// `Text`, else its name. `None` when there is no such relation or no text.
@@ -142,15 +150,25 @@ pub async fn error_text(conn: &AppConn, path: &str, deadline: Deadline) -> Optio
         tokio::time::sleep(std::time::Duration::from_millis(150)).await;
     }
     let target = target.as_deref()?;
-    let text = match conn
+    // The end offset is bounded in the request (and never past the end of the text, which Gecko
+    // refuses), so a huge target cannot make a huge reply.
+    let count = match conn
         .call(
             lane + 1,
             deadline,
             target,
-            TEXT,
-            "GetText",
-            &(0i32, -1i32),
+            PROPERTIES,
+            "Get",
+            &(TEXT, "CharacterCount"),
         )
+        .await
+    {
+        Ok(m) => wire::parse_variant_i32(m.body().data().bytes()).unwrap_or(0),
+        Err(_) => 0,
+    };
+    let end = count.clamp(0, ERROR_TEXT_CHARS);
+    let text = match conn
+        .call(lane + 1, deadline, target, TEXT, "GetText", &(0i32, end))
         .await
     {
         Ok(m) => wire::parse_string(m.body().data().bytes())
@@ -159,38 +177,38 @@ pub async fn error_text(conn: &AppConn, path: &str, deadline: Deadline) -> Optio
             .filter(|s| !s.is_empty()),
         Err(_) => None,
     };
-    let text = match text {
-        Some(t) => Some(t),
-        None => {
-            let m = conn
-                .call(
-                    lane + 2,
-                    deadline,
-                    target,
-                    PROPERTIES,
-                    "Get",
-                    &(ACCESSIBLE, "Name"),
-                )
-                .await
-                .ok()?;
-            wire::parse_variant_string(m.body().data().bytes())
-                .ok()
-                .map(|s| s.trim().to_owned())
-                .filter(|s| !s.is_empty())
-        }
-    }?;
-    let text: String = text.replace('\u{FFFC}', "").replace('\n', " ").chars().take(ERROR_TEXT_CAP).collect();
-    let text = text.trim();
+    let text = if let Some(t) = text {
+        t
+    } else {
+        let m = conn
+            .call(
+                lane + 2,
+                deadline,
+                target,
+                PROPERTIES,
+                "Get",
+                &(ACCESSIBLE, "Name"),
+            )
+            .await
+            .ok()?;
+        wire::parse_variant_string(m.body().data().bytes())
+            .ok()
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty())?
+    };
+    let text = text.replace('\u{FFFC}', "").replace('\n', " ");
+    let text = limits::clip_str(text.trim(), limits::MAX_DESCRIPTION_BYTES);
     (!text.is_empty()).then(|| Arc::from(text))
 }
 
-/// `error_text` for many nodes, concurrently, within one deadline. Results are in input order.
+/// `error_text` for many nodes, concurrently, inside the caller's deadline (the fetch's own:
+/// the extra reads never outlive it). Results are in input order. The caller bounds how many
+/// paths it passes; each node costs at most four calls.
 pub async fn error_texts(
     conn: &Arc<AppConn>,
     paths: Vec<String>,
-    budget: std::time::Duration,
+    deadline: Deadline,
 ) -> Vec<Option<Arc<str>>> {
-    let deadline = Deadline(Instant::now() + budget);
     let mut set = tokio::task::JoinSet::new();
     for (i, p) in paths.into_iter().enumerate() {
         let conn = Arc::clone(conn);
@@ -222,6 +240,7 @@ pub async fn description(conn: &AppConn, path: &str, deadline: Deadline) -> Opti
         .ok()?;
     wire::parse_variant_string(m.body().data().bytes())
         .ok()
+        .map(|s| limits::clip_str(s, limits::MAX_DESCRIPTION_BYTES))
         .filter(|s| !s.is_empty())
         .map(Arc::from)
 }
@@ -263,7 +282,8 @@ mod tests {
         let g = WebQuirks::GECKO;
         let n = |s: &str| Some(Arc::<str>::from(s));
         assert_eq!(
-            g.name(Role::TreeItem, false, n("\u{2022} Documents")).as_deref(),
+            g.name(Role::TreeItem, false, n("\u{2022} Documents"))
+                .as_deref(),
             Some("Documents")
         );
         assert_eq!(
@@ -272,12 +292,25 @@ mod tests {
         );
         // An authored name is kept, and so is a name that only starts with a number.
         assert_eq!(
-            g.name(Role::ListItem, true, n("\u{2022} Documents")).as_deref(),
+            g.name(Role::ListItem, true, n("\u{2022} Documents"))
+                .as_deref(),
             Some("\u{2022} Documents")
         );
-        assert_eq!(g.name(Role::ListItem, false, n("2024 plan")).as_deref(), Some("2024 plan"));
-        assert_eq!(g.name(Role::Link, false, n("\u{2022} Documents")).as_deref(), Some("\u{2022} Documents"));
-        assert_eq!(WebQuirks::BLINK.name(Role::TreeItem, false, n("1. A")).as_deref(), Some("1. A"));
+        assert_eq!(
+            g.name(Role::ListItem, false, n("2024 plan")).as_deref(),
+            Some("2024 plan")
+        );
+        assert_eq!(
+            g.name(Role::Link, false, n("\u{2022} Documents"))
+                .as_deref(),
+            Some("\u{2022} Documents")
+        );
+        assert_eq!(
+            WebQuirks::BLINK
+                .name(Role::TreeItem, false, n("1. A"))
+                .as_deref(),
+            Some("1. A")
+        );
     }
 
     #[test]

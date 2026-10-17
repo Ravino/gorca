@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8b Hostile</title></head>
+<body>
+<h1>M8b hostile ARIA</h1>
+<p>Everything below is built by script: cycles, fan-out and megabyte strings that must never
+stall or flood the reader.</p>
+<div id="host"></div>
+<button id="sentinel">Sentinel button</button>
+<script>
+const host = document.getElementById('host');
+function el(tag, attrs, text) {
+  const e = document.createElement(tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text) e.textContent = text;
+  host.appendChild(e);
+  return e;
+}
+// 1. a cycle of aria-describedby / aria-labelledby / aria-errormessage between three fields
+el('input', {id: 'c1', type: 'text', 'aria-label': 'Cycle one', 'aria-describedby': 'c2', 'aria-labelledby': 'c2', 'aria-errormessage': 'c3', 'aria-invalid': 'true'});
+el('input', {id: 'c2', type: 'text', 'aria-describedby': 'c3', 'aria-labelledby': 'c3', 'aria-errormessage': 'c1', 'aria-invalid': 'true'});
+el('input', {id: 'c3', type: 'text', 'aria-describedby': 'c1', 'aria-labelledby': 'c1', 'aria-errormessage': 'c2', 'aria-invalid': 'true'});
+// 2. a chain of 2,000 describedby hops
+for (let i = 0; i < 2000; i++) el('span', {id: 'd' + i, 'aria-describedby': 'd' + (i + 1)}, 'hop ' + i);
+el('button', {id: 'chain', 'aria-describedby': 'd0'}, 'Chain button');
+// 3. one control labelled by 10,000 targets and described by the same 10,000
+let ids = [];
+for (let i = 0; i < 10000; i++) { el('span', {id: 'm' + i}, 'w' + i + ' '); ids.push('m' + i); }
+el('button', {id: 'fan', 'aria-labelledby': ids.join(' '), 'aria-describedby': ids.join(' ')}, 'Fan button');
+// 4. a megabyte aria-label, aria-description and title
+const mb = 'A'.repeat(1 << 20);
+el('button', {id: 'big', 'aria-label': mb, 'aria-description': mb, title: mb}, 'Big button');
+// 5. a hundred invalid fields pointing at one megabyte error message
+const err = el('div', {id: 'bigerr'}, mb);
+for (let i = 0; i < 100; i++) el('input', {type: 'text', 'aria-label': 'Invalid ' + i, 'aria-invalid': 'true', 'aria-errormessage': 'bigerr'});
+</script>
+</body>
+</html>
