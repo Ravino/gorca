@@ -100,6 +100,16 @@ pub fn age_ms_at(start_ticks: u64, uptime: &str) -> Option<u64> {
     now_ms.checked_sub(start_ticks.saturating_mul(1000 / USER_HZ))
 }
 
+/// Start time of this process in clock ticks since boot (read once).
+pub fn own_start_ticks() -> Option<u64> {
+    static START: std::sync::OnceLock<Option<u64>> = std::sync::OnceLock::new();
+    *START.get_or_init(|| {
+        std::fs::read_to_string("/proc/self/stat")
+            .ok()
+            .and_then(|s| parse_stat(&s).start)
+    })
+}
+
 /// [`age_ms`] off the async executor (a short `/proc` read under a deadline).
 pub async fn age_ms_async(start_ticks: u64) -> Option<u64> {
     let job = tokio::task::spawn_blocking(move || age_ms(start_ticks));

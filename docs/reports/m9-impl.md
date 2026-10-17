@@ -77,9 +77,11 @@ Code head of the fixes: see section 5.3. All fixes are data-driven (no engine na
 - **L-1**: a nested document taking focus in browse mode is still swallowed (Chromium focuses the frame document and
   then the link inside), but after 250 ms with nothing newer it is announced like any focus, so a Firefox Tab stop on
   a frame speaks its title and role. Tests: `browse::tests::a_frame_document_*`, `a_tab_stop_on_a_frame_document_*`.
-- **L-2**: `AppInfo::page_events_settle_ms` is 0 for an application that was itself started less than the window
-  before it appeared (process start from the registration identity and `/proc/uptime`), so the page Chrome opens
-  during its first 3 s is auto-read. A browser that was already running keeps the window.
+- **L-2**: `AppInfo::page_events_settle_ms` is 0 for an application that was started after the reader did and less than
+  the window before it appeared (process start from the registration identity, `/proc/uptime` and the reader's own start),
+  so the page Chrome opens during its first 3 s is auto-read. A browser that was already running when the reader started
+  keeps the window (first version without the reader-start condition broke BAR1 "a page that was already open must not
+  read itself", 3 of 3: `bench/results/e2e/m9r-final-cr-typing`, kept).
 - **L-4**: new `AppInfo::web_engine` (`gorca_model::WebEngine`, filled from `Toolkit::web_engine()`); the factory's
   `is_gecko/is_blink` read it instead of sniffing names. `Toolkit::classify` matches Chromium's `ToolkitName` first
   (the same for Chrome, Edge, Brave and Electron) and then names (chrom, electron, brave, msedge, vivaldi).

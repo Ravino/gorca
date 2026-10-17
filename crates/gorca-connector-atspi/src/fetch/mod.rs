@@ -413,9 +413,10 @@ fn announce_info(
 }
 
 /// The quirk row `blink-tree-load-complete` for an application that just appeared, except that
-/// an application started moments ago (inside the window itself) has no tree built for our
-/// wake-up call from an earlier page: the first page it opens is the user's, and its
-/// `load-complete` is a real load that gets the auto-read (M9 review L-2).
+/// an application that was started by the user while the reader ran, moments ago (inside the
+/// window itself), has no tree built for our wake-up call from an earlier page: the first page
+/// it opens is the user's, and its `load-complete` is a real load that gets the auto-read (M9
+/// review L-2).
 async fn settle_window_ms(toolkit: &str, app_name: &str, identity: Option<(u32, u64)>) -> u32 {
     let ms = Toolkit::classify(toolkit, app_name).page_events_settle_ms();
     if ms == 0 {
@@ -424,6 +425,12 @@ async fn settle_window_ms(toolkit: &str, app_name: &str, identity: Option<(u32, 
     let Some((_, start)) = identity else {
         return ms;
     };
+    // Only an application that started while we were running: one that was already there when
+    // the reader started (even a moment before) shows a page the user opened earlier.
+    let after_us = crate::proc::own_start_ticks().is_some_and(|own| start >= own);
+    if !after_us {
+        return ms;
+    }
     match crate::proc::age_ms_async(start).await {
         Some(age) if age < u64::from(ms) => {
             tracing::debug!(age, "freshly launched application: no tree-creation window");
@@ -630,5 +637,31 @@ mod admission_tests {
             "Prefetch is not Background"
         );
         assert!(class_admitted(C::Interactive, 1, BACKGROUND_MAX));
+    }
+}
+
+#[cfg(test)]
+mod settle_window_tests {
+    use super::settle_window_ms;
+
+    #[tokio::test]
+    async fn only_an_app_that_started_after_the_reader_and_moments_ago_has_no_window() {
+        let own = crate::proc::own_start_ticks().expect("own start time");
+        // Started at the same tick as the reader (so just now): a fresh launch.
+        assert_eq!(
+            settle_window_ms("Chromium", "chrome", Some((1, own))).await,
+            0
+        );
+        // Started before the reader: a page the user opened earlier keeps the window.
+        assert_eq!(
+            settle_window_ms("Chromium", "chrome", Some((1, own - 1))).await,
+            3000
+        );
+        // Identity unknown: keep the window. Not a Blink app: no window at all.
+        assert_eq!(settle_window_ms("Chromium", "chrome", None).await, 3000);
+        assert_eq!(
+            settle_window_ms("Gecko", "firefox", Some((1, own))).await,
+            0
+        );
     }
 }
