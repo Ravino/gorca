@@ -4,21 +4,22 @@
 //! typed-character suppression, history reading, password prompts); this module is its host.
 //! It owns what the extension must not: the clock, the screen reads (`TextOp::Screen`, run by
 //! the runtime under a deadline), the speech (verbalised, stamped with an epoch) and the keys.
-//! The extension is built natively and linked in today ([`ext_vte::VteExtension`]); the host
-//! talks to it only through `gorca_ext_api::terminal::TerminalHooks`, so the M5 extension host
-//! can swap in the WASM build of the same crate.
+//! The extension is reached only through the [`TermSession`] seam: the extension host's slot
+//! (the WASM component, `AppExt::terminal`) or the native build the daemon linked in
+//! ([`crate::TermProvider`]). The core imports no extension crate.
 //!
 //! The core never asks what application a terminal is: a node with role `Terminal` is one
-//! (WE-1). Quirks of one terminal widget live in connector data (`Toolkit::text_unit`, the
-//! `Screen` query that avoids VTE's unreliable character count).
+//! (WE-1) and the manifest of the extension decides whose terminals it serves. Keys go to the
+//! extension unclassified ([`RawKey`]): which key is a readline motion is shell policy. Quirks
+//! of one terminal widget live in connector data (`Toolkit::text_unit`, the `Screen` query that
+//! avoids VTE's unreliable character count).
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use ext_vte::VteExtension;
 use gorca_ext_api::terminal::{
-    Ms, TermAction, TermConfig, TermCounters, TermEdit, TermInput, TermKey, TermSnapshot,
-    TerminalHooks, Unit, Urgency,
+    Ms, RawKey, TermAction, TermConfig, TermCounters, TermEdit, TermInput, TermSnapshot, Unit,
+    Urgency,
 };
 use gorca_input_api::{KeyEvent, KeyIntent, Modifiers, static_keycode};
 use gorca_model::{Epoch, NodeKey, NodeSnapshot, Prio, Role, TextDelta, Utterance};
@@ -26,10 +27,14 @@ use gorca_rt::BudgetClass;
 use gorca_speech::How;
 
 use crate::SpeechIntent;
+use crate::TermSession;
 use crate::present::message;
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 use crate::text::caret::Reply;
 use crate::text::{TextOp, TextReqId};
+
+/// The shortest time between two on-demand re-trackings of one terminal.
+const RETRACK_INTERVAL: Duration = Duration::from_millis(500);
 
 /// The Reader's terminal state: at most one tracked terminal, the focused one.
 #[derive(Debug, Default)]
@@ -39,8 +44,15 @@ pub struct TermState {
     retired: TermCounters,
     /// Screen reads started, answered and lost, for the e2e gates.
     pub reads: TermReads,
+    /// Fail closed (VP): a secret prompt was seen, by the extension or by the core's own keyword
+    /// check of the screen it read, and no Enter or cancel has ended it. While it holds, everything
+    /// spoken for the terminal is marked sensitive, and a typed key the extension did not answer
+    /// (fault, busy, disabled) is claimed and spoken by the core, marked sensitive.
+    secret_hold: bool,
     /// Numbers the trackings: a screen generation is only comparable within one tracking.
     next_serial: u64,
+    /// The last on-demand re-tracking on a key (see `Reader::focus_audit_on_key`).
+    retrack_at: Option<(NodeKey, Instant)>,
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -53,15 +65,17 @@ pub struct TermReads {
     /// Review steps that waited for a fresh screen read (events lost, focus not protected, or the
     /// terminal not tracked).
     pub review_syncs: u64,
+    /// Trackings restarted by a key press in the focused terminal that had lost its tracking.
+    pub retracked_on_key: u64,
 }
 
 #[derive(Debug)]
 struct Tracked {
     node: NodeKey,
-    /// Which tracking this is (every `term_track` makes a new extension whose generation counts
-    /// from zero).
+    /// Which tracking this is (every `term_track` makes a new session whose generation counts
+    /// from its own origin).
     serial: u64,
-    ext: VteExtension,
+    sess: Box<dyn TermSession>,
     /// The screen read in flight.
     fetch: Option<TextReqId>,
     /// The epoch of the last key that reached the terminal: speech it causes carries it.
@@ -85,89 +99,110 @@ fn add(a: TermCounters, b: TermCounters) -> TermCounters {
     }
 }
 
-/// Classify a key press that reaches the terminal (physical keys for the Control and Alt
-/// shortcuts, so they work in every layout, as `gorca_input_api::classify_text_key` does).
-pub fn classify_term_key(ev: &KeyEvent) -> TermKey {
-    const HOME: u32 = 0xff50;
-    const LEFT: u32 = 0xff51;
-    const UP: u32 = 0xff52;
-    const RIGHT: u32 = 0xff53;
-    const DOWN: u32 = 0xff54;
-    const END: u32 = 0xff57;
-    const BACKSPACE: u32 = 0xff08;
-    const DELETE: u32 = 0xffff;
-    const RETURN: u32 = 0xff0d;
-    const KP_ENTER: u32 = 0xff8d;
-    const TAB: u32 = 0xff09;
-    const KP_HOME: u32 = 0xff95;
-    const KP_LEFT: u32 = 0xff96;
-    const KP_UP: u32 = 0xff97;
-    const KP_RIGHT: u32 = 0xff98;
-    const KP_DOWN: u32 = 0xff99;
-    const KP_END: u32 = 0xff9c;
-
+/// The key as the extension sees it: keysym, typed scalar, modifiers (locks removed) and the
+/// lowercase letter of the physical key, so the Control and Alt shortcuts work in every layout
+/// (as `gorca_input_api::classify_text_key` does). No shell knowledge lives here.
+pub fn raw_key(ev: &KeyEvent) -> RawKey {
     let m = ev.modifiers.without_locks();
-    if m.intersects(Modifiers::MOD4) {
-        return TermKey::Other;
-    }
-    let ctrl = m.contains(Modifiers::CONTROL);
-    let alt = m.contains(Modifiers::MOD1);
-    let ks = match ev.keysym {
-        KP_HOME => HOME,
-        KP_LEFT => LEFT,
-        KP_UP => UP,
-        KP_RIGHT => RIGHT,
-        KP_DOWN => DOWN,
-        KP_END => END,
-        other => other,
-    };
-    let is = |name: &str| static_keycode(name) == Some(ev.keycode);
-    match (ctrl, alt) {
-        (true, true) => TermKey::Other,
-        (true, false) => match ks {
-            LEFT => TermKey::WordLeft,
-            RIGHT => TermKey::WordRight,
-            _ if is("c") && !m.contains(Modifiers::SHIFT) => TermKey::Interrupt,
-            _ if is("a") => TermKey::LineStart,
-            _ if is("e") => TermKey::LineEnd,
-            _ if is("b") => TermKey::CharLeft,
-            _ if is("f") => TermKey::CharRight,
-            _ if is("p") => TermKey::LineUp,
-            _ if is("n") => TermKey::LineDown,
-            _ => TermKey::Other,
-        },
-        (false, true) => match ks {
-            LEFT => TermKey::WordLeft,
-            RIGHT => TermKey::WordRight,
-            _ if is("b") => TermKey::WordLeft,
-            _ if is("f") => TermKey::WordRight,
-            _ => TermKey::Other,
-        },
-        (false, false) => match ks {
-            LEFT => TermKey::CharLeft,
-            RIGHT => TermKey::CharRight,
-            UP => TermKey::LineUp,
-            DOWN => TermKey::LineDown,
-            HOME => TermKey::LineStart,
-            END => TermKey::LineEnd,
-            BACKSPACE => TermKey::Backspace,
-            DELETE => TermKey::Delete,
-            RETURN | KP_ENTER => TermKey::Enter,
-            TAB => TermKey::Tab,
-            _ => match char::from_u32(ev.unichar) {
-                Some(c) if ev.unichar != 0 && !c.is_control() => TermKey::Typed(c),
-                Some(_) | None => TermKey::Other,
-            },
-        },
+    let phys = (b'a'..=b'z')
+        .find(|c| {
+            let name = [*c];
+            std::str::from_utf8(&name)
+                .ok()
+                .and_then(static_keycode)
+                .is_some_and(|code| code == ev.keycode)
+        })
+        .unwrap_or(0);
+    RawKey {
+        keysym: ev.keysym,
+        unichar: ev.unichar,
+        phys,
+        shift: m.contains(Modifiers::SHIFT),
+        ctrl: m.contains(Modifiers::CONTROL),
+        alt: m.contains(Modifiers::MOD1),
+        logo: m.intersects(Modifiers::MOD4),
     }
 }
 
-/// A one-line description of an input for the debug log: kinds and offsets, never text.
+/// The terminal session of last resort: no policy, so it says nothing and claims nothing, but it
+/// keeps reading the screen (on focus and, rate limited, after changes) so that the core's own
+/// secret-prompt check (`TermState::secret_hold`) still sees a password prompt.
+#[derive(Debug, Default)]
+struct WatchOnly {
+    armed: bool,
+}
+
+impl TermSession for WatchOnly {
+    fn step(&mut self, now: Ms, input: TermInput, out: &mut Vec<TermAction>) {
+        match input {
+            TermInput::Focus => out.push(TermAction::FetchScreen),
+            TermInput::Edit(_) | TermInput::Caret(_) if !self.armed => {
+                self.armed = true;
+                out.push(TermAction::ArmTimer(now + 150));
+            }
+            TermInput::Tick if self.armed => {
+                self.armed = false;
+                out.push(TermAction::FetchScreen);
+            }
+            TermInput::Key(_)
+            | TermInput::Raw(_)
+            | TermInput::Edit(_)
+            | TermInput::Caret(_)
+            | TermInput::Screen { .. }
+            | TermInput::ScreenFailed
+            | TermInput::Tick
+            | TermInput::Blur => {}
+        }
+    }
+    fn counters(&self) -> TermCounters {
+        TermCounters::default()
+    }
+    fn snapshot(&self) -> Option<TermSnapshot> {
+        None
+    }
+}
+
+/// Words of a password prompt, matched as substrings of the lowercased line (the core's own
+/// fail-closed table: broader than the extension's expression, it only ever over-marks).
+const SECRET_SUBSTR: &[&str] = &[
+    "pass",
+    "secret",
+    "token",
+    "credential",
+    "verification code",
+    "contrase\u{f1}a",
+    "senha",
+    "\u{43f}\u{430}\u{440}\u{43e}\u{43b}",
+    "\u{441}\u{435}\u{43a}\u{440}\u{435}\u{442}",
+    "\u{43a}\u{43e}\u{434}\u{43e}\u{432}\u{430}\u{44f} \u{444}\u{440}\u{430}\u{437}\u{430}",
+    "\u{43a}\u{43e}\u{434} \u{43f}\u{43e}\u{434}\u{442}\u{432}\u{435}\u{440}\u{436}\u{434}\u{435}\u{43d}\u{438}\u{44f}",
+    "\u{43f}\u{438}\u{43d}-\u{43a}\u{43e}\u{434}",
+    "\u{43f}\u{438}\u{43d}\u{43a}\u{43e}\u{434}",
+];
+
+/// Does `line` read like a prompt for a secret: a keyword and a trailing colon or question mark?
+fn is_secret_prompt(line: &str) -> bool {
+    let l = line.trim_end().to_lowercase();
+    if !l.ends_with([':', '?', '\u{ff1a}', '\u{ff1f}']) {
+        return false;
+    }
+    SECRET_SUBSTR.iter().any(|w| l.contains(w))
+        || l.split(|c: char| !c.is_alphanumeric())
+            .any(|w| w == "pin" || w == "otp")
+}
+
+/// Is the screen row under the caret a secret prompt?
+fn caret_row_is_secret_prompt(screen: &str, caret: Option<u32>) -> bool {
+    let rows = gorca_ext_api::terminal::Rows::new(screen);
+    let (row, _) = rows.locate(caret.unwrap_or(0));
+    is_secret_prompt(rows.line(row))
+}
+
+/// A one-line description of an input for the debug log: kinds and offsets, never text. A key is
+/// never named: it may be a password character.
 fn input_kind(i: &TermInput) -> String {
     match i {
-        // Typed characters are not named: they may be a password.
-        TermInput::Key(TermKey::Typed(_)) => "key typed".to_owned(),
-        TermInput::Key(k) => format!("key {k:?}"),
+        TermInput::Key(_) | TermInput::Raw(_) => "key".to_owned(),
         TermInput::Edit(TermEdit::Insert { offset, len, text }) => {
             format!("insert at {offset} len {len} payload {}", text.is_some())
         }
@@ -207,7 +242,7 @@ impl Reader {
             .term
             .tracked
             .as_ref()
-            .map_or_else(TermCounters::default, |t| t.ext.counters());
+            .map_or_else(TermCounters::default, |t| t.sess.counters());
         add(self.text.term.retired, live)
     }
 
@@ -218,7 +253,7 @@ impl Reader {
     /// The extension's current idea of the focused terminal's screen, for review.
     pub(crate) fn term_snapshot(&self, node: NodeKey) -> Option<TermSnapshot> {
         let t = self.text.term.tracked.as_ref().filter(|t| t.node == node)?;
-        let mut s = t.ext.snapshot()?;
+        let mut s = t.sess.snapshot()?;
         // Unique over the whole run: a model built from an earlier tracking of the same terminal
         // (Alt+Tab away and back) must never look current because the counts happen to agree.
         s.generation = (t.serial << 32) | (s.generation & 0xffff_ffff);
@@ -287,25 +322,90 @@ impl Reader {
 
     /// The focus presentation of a terminal finished: track it and read its screen.
     pub(crate) fn term_track(&mut self, snap: &NodeSnapshot, fx: &mut ReaderEffects) {
-        self.term_untrack();
+        self.term_untrack("retrack");
         let cfg = self.term_config();
+        // The extension host's terminal policy for this application (the WASM component), else
+        // the native build the daemon installed; neither: this terminal is not tracked.
+        let app_ext = self.ext.as_ref().and_then(|src| src.for_app(snap.key.app));
+        let sess = app_ext
+            .as_ref()
+            .and_then(|a| a.terminal(&cfg))
+            .or_else(|| self.term_provider.as_ref().map(|p| p.open(&cfg)))
+            // An application with extensions whose terminal policy is gone (disabled after
+            // repeated faults) is still watched for secret prompts, by the core alone: fail closed.
+            .or_else(|| app_ext.map(|_| Box::new(WatchOnly::default()) as Box<dyn TermSession>));
+        let Some(sess) = sess else {
+            return;
+        };
         self.text.term.next_serial += 1;
+        tracing::debug!(target: "gorca_terminal", node = ?snap.key, serial = self.text.term.next_serial, "terminal tracked");
         self.text.term.tracked = Some(Tracked {
             node: snap.key,
             serial: self.text.term.next_serial,
-            ext: VteExtension::new(&cfg),
+            sess,
             fetch: None,
             key_epoch: self.epoch.current(),
         });
         self.term_step(TermInput::Focus, fx);
+        // The core reads the screen itself when the policy did not ask (it is down): its own
+        // secret-prompt check needs it.
+        if self
+            .text
+            .term
+            .tracked
+            .as_ref()
+            .is_some_and(|t| t.fetch.is_none())
+        {
+            self.term_fetch(fx);
+        }
+    }
+
+    /// A key press found the focused terminal untracked: its tracking was lost without a focus
+    /// change (the first focus came before its extension attached, the policy slot was busy or
+    /// down at that moment, a node-removed event, a mode that was not `Focus` when it settled).
+    /// A terminal that holds the focus is tracked again, from the presented snapshot, at most
+    /// once per `RETRACK_INTERVAL`. Returns true when it started. Never a guess about focus:
+    /// the focus state must still be on the presented terminal.
+    pub(crate) fn term_retrack_on_key(&mut self, fx: &mut ReaderEffects) -> bool {
+        if self.term_tracked() || !self.text_active() {
+            return false;
+        }
+        let Some(p) = &self.presented else {
+            return false;
+        };
+        let focused_here = matches!(
+            self.focus,
+            crate::focus::FocusState::Focused { node, .. } if node == p.node
+        );
+        if p.snap.role != Role::Terminal
+            || !focused_here
+            || self.selection_node == Some(p.node)
+            || !self.dir.text_window_follows(p.node.app)
+        {
+            return false;
+        }
+        if let Some((n, at)) = self.text.term.retrack_at
+            && n == p.node
+            && self.now.saturating_duration_since(at) < RETRACK_INTERVAL
+        {
+            return false;
+        }
+        let (node, snap) = (p.node, Arc::clone(&p.snap));
+        self.text.term.retrack_at = Some((node, self.now));
+        self.text.term.reads.retracked_on_key += 1;
+        tracing::debug!(target: "gorca_terminal", ?node, "focused terminal untracked at a key: tracking it again");
+        self.term_track(&snap, fx);
+        self.term_tracked()
     }
 
     /// Focus moved on, or the terminal is gone: wipe what the extension knows (secrets included).
-    pub(crate) fn term_untrack(&mut self) {
+    pub(crate) fn term_untrack(&mut self, why: &'static str) {
+        self.text.term.secret_hold = false;
         if let Some(mut t) = self.text.term.tracked.take() {
+            tracing::debug!(target: "gorca_terminal", node = ?t.node, serial = t.serial, why, "terminal untracked");
             let mut sink = Vec::new();
-            t.ext.step(0, TermInput::Blur, &mut sink);
-            self.text.term.retired = add(self.text.term.retired, t.ext.counters());
+            t.sess.step(0, TermInput::Blur, &mut sink);
+            self.text.term.retired = add(self.text.term.retired, t.sess.counters());
         }
     }
 
@@ -322,7 +422,7 @@ impl Reader {
             .as_ref()
             .is_some_and(|t| node == Some(t.node) || app == Some(t.node.app));
         if hit {
-            self.term_untrack();
+            self.term_untrack("node or app gone");
         }
     }
 
@@ -339,9 +439,8 @@ impl Reader {
             let node = t.node;
             self.reconfirm_on_key(node, fx);
         }
-        let key = classify_term_key(&intent.event);
         self.text.stats.keys_seen += 1;
-        self.term_step(TermInput::Key(key), fx)
+        self.term_step(TermInput::Raw(raw_key(&intent.event)), fx)
     }
 
     pub(crate) fn term_caret(&mut self, offset: u32, fx: &mut ReaderEffects) {
@@ -386,6 +485,10 @@ impl Reader {
         let input = match result {
             Ok(Reply::Window(w)) => {
                 self.text.term.reads.answered += 1;
+                // The core's own check, whatever the extension makes of the same screen.
+                if caret_row_is_secret_prompt(&w.text, w.caret) {
+                    self.text.term.secret_hold = true;
+                }
                 TermInput::Screen {
                     text: w.text.to_string(),
                     caret: w.caret,
@@ -432,7 +535,8 @@ impl Reader {
             Say::Word => (Unit::Word, How::Word),
             Say::Line | Say::Paragraph => (Unit::Line, How::Line),
         };
-        let text = ext_vte::unit_at(&snap.text, snap.caret, unit).unwrap_or_default();
+        let text =
+            gorca_ext_api::terminal::unit_at(&snap.text, snap.caret, unit).unwrap_or_default();
         let piece = crate::text::caret::Piece {
             how: Some(how),
             text,
@@ -454,7 +558,12 @@ impl Reader {
     /// One input through the extension; its actions become effects. True when it claimed a key.
     fn term_step(&mut self, input: TermInput, fx: &mut ReaderEffects) -> bool {
         let now = self.term_ms();
-        let is_typed = matches!(input, TermInput::Key(TermKey::Typed(_)));
+        let is_typed = matches!(&input, TermInput::Raw(k) if k.types_a_character());
+        let key = if let TermInput::Raw(k) = &input {
+            Some(*k)
+        } else {
+            None
+        };
         if tracing::enabled!(tracing::Level::DEBUG) {
             // What came in, without any text: kinds and offsets only.
             tracing::debug!(now, input = %input_kind(&input), "terminal input");
@@ -464,8 +573,9 @@ impl Reader {
             let Some(t) = &mut self.text.term.tracked else {
                 return false;
             };
-            t.ext.step(now, input, &mut acts);
+            t.sess.step(now, input, &mut acts);
         }
+        self.term_hold_secret(key.as_ref(), &mut acts);
         let mut claimed = false;
         let speak = self.text_active();
         // `echo.typed_characters` (and its toggle) governs the character a key types here as it
@@ -499,6 +609,63 @@ impl Reader {
             }
         }
         claimed
+    }
+
+    /// The fail-closed rule for secrets (see `TermState::secret_hold`), applied to what the
+    /// extension answered: its own sensitive marking starts the hold, the hold marks every
+    /// `Say`, a typed key it left unanswered is claimed and spoken here (marked sensitive), and
+    /// Enter, Ctrl+C and Ctrl+D end the hold. Nothing here depends on the extension being alive.
+    fn term_hold_secret(&mut self, key: Option<&RawKey>, acts: &mut Vec<TermAction>) {
+        let down = !self
+            .text
+            .term
+            .tracked
+            .as_ref()
+            .is_none_or(|t| t.sess.alive());
+        let term = &mut self.text.term;
+        if acts.iter().any(|a| {
+            matches!(
+                a,
+                TermAction::Say {
+                    sensitive: true,
+                    ..
+                }
+            )
+        }) {
+            term.secret_hold = true;
+        }
+        // A policy that cannot answer cannot say whether this is a password: assume it is.
+        if term.secret_hold || down {
+            for a in acts.iter_mut() {
+                if let TermAction::Say { sensitive, .. } = a {
+                    *sensitive = true;
+                }
+            }
+            if let Some(k) = key
+                && k.types_a_character()
+                && !acts
+                    .iter()
+                    .any(|a| matches!(a, TermAction::Say { .. } | TermAction::ClaimKey))
+                && let Some(c) = char::from_u32(k.unichar)
+            {
+                acts.push(TermAction::ClaimKey);
+                acts.push(TermAction::Say {
+                    text: c.to_string(),
+                    unit: Unit::Char,
+                    urgency: Urgency::Key,
+                    sensitive: true,
+                });
+            }
+        }
+        if let Some(k) = key {
+            const RETURN: u32 = 0xff0d;
+            const KP_ENTER: u32 = 0xff8d;
+            let ends = matches!(k.keysym, RETURN | KP_ENTER)
+                || (k.ctrl && !k.alt && matches!(k.phys, b'c' | b'd'));
+            if ends {
+                term.secret_hold = false;
+            }
+        }
     }
 
     fn term_fetch(&mut self, fx: &mut ReaderEffects) {
@@ -554,4 +721,4 @@ impl Reader {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

@@ -13,10 +13,9 @@ use std::sync::Arc;
 use gorca_doc::web::{Cat, NodeFlags, NodeView, WebDoc};
 use gorca_doc_source_api::web_attrs;
 use gorca_model::{DocNodeId, Role, Segment, SegmentKind, StateSet};
+use gorca_speech::{How, VerbalizeOpts, Verbalizer};
 use smallvec::SmallVec;
 
-/// A scalar of text that stands for a control with no text (FT-6).
-pub const MARKER: char = '\u{FFFC}';
 /// Quick navigation speaks at most this many scalars of the target (LP-4).
 pub const QUICK_NAV_CAP: u32 = 400;
 /// A line is cut here when it is spoken (LP-3 guard bound).
@@ -33,12 +32,14 @@ pub enum Item {
     /// Spoken before the focused control (a dialog entered with the focus): placed in front of
     /// the focus utterance by the presenter, not after it.
     Lead(String),
+    /// One character read on its own: spoken by name whatever the punctuation level.
+    Char(String),
 }
 
 impl Item {
     pub fn kind(&self) -> SegmentKind {
         match self {
-            Item::Text(_) | Item::Name(_) | Item::Lead(_) => SegmentKind::Text,
+            Item::Text(_) | Item::Name(_) | Item::Lead(_) | Item::Char(_) => SegmentKind::Text,
             Item::Role(_) => SegmentKind::Role,
             Item::State(_) => SegmentKind::State,
         }
@@ -46,7 +47,7 @@ impl Item {
 
     pub fn text(&self) -> &str {
         match self {
-            Item::Text(t) | Item::Role(t) | Item::Name(t) | Item::Lead(t) => t,
+            Item::Text(t) | Item::Role(t) | Item::Name(t) | Item::Lead(t) | Item::Char(t) => t,
             Item::State(s) => s,
         }
     }
@@ -300,7 +301,7 @@ fn name_spoken(items: &[Item], name: &str) -> bool {
     let name = name.trim().to_lowercase();
     items.iter().any(|i| match i {
         Item::Text(t) | Item::Name(t) => t.to_lowercase().contains(&name),
-        Item::Role(_) | Item::State(_) | Item::Lead(_) => false,
+        Item::Role(_) | Item::State(_) | Item::Lead(_) | Item::Char(_) => false,
     })
 }
 
@@ -492,28 +493,35 @@ pub fn describe_from(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Vec<Ite
     out
 }
 
-/// Group items into utterance segments.
-pub fn segments(items: &[Item]) -> SmallVec<[Segment; 4]> {
+/// Group items into utterance segments. Text is verbalised with the punctuation level and the
+/// symbol table of `o` (a character read alone is always named), so web content speaks its
+/// symbols like any other text (VB-1/VB-2).
+pub fn segments(items: &[Item], o: VerbalizeOpts) -> SmallVec<[Segment; 4]> {
+    let v = Verbalizer;
     items
         .iter()
-        .map(|i| (i.text().trim(), i.kind()))
-        .filter(|(t, _)| !t.is_empty())
-        .map(|(t, kind)| Segment {
-            text: Arc::from(t),
-            kind,
+        .filter_map(|i| {
+            let t = i.text().trim();
+            if t.is_empty() {
+                return None;
+            }
+            let text = match i {
+                Item::Char(_) => v.unit(t, How::Char, &o),
+                Item::Text(_) | Item::Name(_) | Item::Lead(_) => v.unit(t, How::Text, &o),
+                Item::Role(_) | Item::State(_) => t.to_owned(),
+            };
+            (!text.is_empty()).then(|| Segment {
+                text: Arc::from(text),
+                kind: match i.kind() {
+                    SegmentKind::Text => SegmentKind::Said,
+                    other @ (SegmentKind::Role
+                    | SegmentKind::State
+                    | SegmentKind::Value
+                    | SegmentKind::Said) => other,
+                },
+            })
         })
         .collect()
-}
-
-/// What a single character is called when it is spoken alone.
-pub fn char_name(c: char) -> String {
-    match c {
-        ' ' | '\u{00A0}' => "space".to_owned(),
-        '\t' => "tab".to_owned(),
-        '\n' | '\r' => "blank".to_owned(),
-        MARKER => "object".to_owned(),
-        c => c.to_string(),
-    }
 }
 
 /// The items for a quick-nav target: its own text range with its role announced first (LP-4).
@@ -615,7 +623,7 @@ fn dedupe_names(items: &mut Vec<Item>) {
         .iter()
         .filter_map(|i| match i {
             Item::Text(t) => Some(t.to_lowercase()),
-            Item::Role(_) | Item::State(_) | Item::Name(_) | Item::Lead(_) => None,
+            Item::Role(_) | Item::State(_) | Item::Name(_) | Item::Lead(_) | Item::Char(_) => None,
         })
         .collect();
     items.retain(|i| match i {
@@ -623,7 +631,7 @@ fn dedupe_names(items: &mut Vec<Item>) {
             let n = n.trim().to_lowercase();
             n.is_empty() || !texts.iter().any(|t| t.contains(&n))
         }
-        Item::Text(_) | Item::Role(_) | Item::State(_) | Item::Lead(_) => true,
+        Item::Text(_) | Item::Role(_) | Item::State(_) | Item::Lead(_) | Item::Char(_) => true,
     });
 }
 
@@ -851,9 +859,34 @@ mod tests {
     }
 
     #[test]
-    fn single_characters_have_names() {
-        assert_eq!(char_name(' '), "space");
-        assert_eq!(char_name('\n'), "blank");
-        assert_eq!(char_name('x'), "x");
+    fn web_text_is_spoken_with_the_symbol_names_of_the_language_and_level() {
+        use gorca_speech::{Caps, Lang, Punct};
+        let o = |punct, lang| VerbalizeOpts {
+            punct,
+            caps: Caps::Pitch,
+            lang,
+        };
+        let items = [
+            Item::Role("link".to_owned()),
+            Item::Text("Цена: 5 ₽ (скидка)!".to_owned()),
+        ];
+        let said = |o| {
+            segments(&items, o)
+                .iter()
+                .map(|s| s.text.to_string())
+                .collect::<Vec<_>>()
+                .join(" | ")
+        };
+        assert_eq!(
+            said(o(Punct::Some, Lang::Ru)),
+            "link | Цена: 5 рубль (скидка)!"
+        );
+        assert!(said(o(Punct::All, Lang::Ru)).contains("восклицательный знак!"));
+        // A character read alone is named at any level, in the language.
+        let c = [Item::Char("(".to_owned())];
+        assert_eq!(
+            segments(&c, o(Punct::None, Lang::Ru))[0].text.as_ref(),
+            "левая круглая"
+        );
     }
 }

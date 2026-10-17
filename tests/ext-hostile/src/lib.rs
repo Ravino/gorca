@@ -5,7 +5,7 @@
 
 use gorca_ext_api::{Event, EventVerdict, Hooks, Node, PresentCtx, Segment, export_extension, host};
 
-#[link(wasm_import_module = "gorca:ext/host@0.1.0")]
+#[link(wasm_import_module = "gorca:ext/host@0.2.0")]
 unsafe extern "C" {
     #[link_name = "speak"]
     fn raw_speak(ptr: *const u8, len: usize, prio: i32);

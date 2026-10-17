@@ -16,6 +16,8 @@ use gorca_ext_api::terminal::{
     TerminalHooks, Unit, Urgency,
 };
 
+use gorca_ext_api::terminal::word_at;
+
 use crate::prompt::Prompt;
 use crate::screen::{Diff, DiffBuf, Screen, diff, diff_with};
 
@@ -219,6 +221,7 @@ impl Session {
     pub fn step(&mut self, now: Ms, input: TermInput, out: &mut Vec<TermAction>) {
         match input {
             TermInput::Key(k) => self.on_key(now, k, out),
+            TermInput::Raw(k) => self.on_key(now, crate::keys::classify(&k), out),
             TermInput::Edit(e) => self.on_edit(now, &e, out),
             TermInput::Caret(o) => self.on_caret(now, o, out),
             TermInput::Screen { text, caret } => self.on_screen(now, &text, caret, out),
@@ -1176,50 +1179,6 @@ fn edit_between(old: &str, new: &str) -> (String, String) {
         n[head..n.len() - tl].iter().collect(),
         o[head..o.len() - tl].iter().collect(),
     )
-}
-
-/// The character, word or line at scalar offset `caret` of a screen `text`: the unit a review or
-/// "say current" command reads. `None` for a blank position.
-pub fn unit_at(text: &str, caret: u32, unit: Unit) -> Option<String> {
-    let s = Screen::new(text);
-    let (row, col) = s.locate(caret);
-    let line = s.line(row);
-    match unit {
-        Unit::Char => line.chars().nth(col as usize).map(String::from),
-        Unit::Word => word_at(line, col),
-        Unit::Line | Unit::Text => {
-            let t = line.trim_end();
-            (!t.trim().is_empty()).then(|| t.to_owned())
-        }
-    }
-}
-
-/// The whitespace-delimited word at column `col`, or the one before when `col` is on a blank.
-fn word_at(line: &str, col: u32) -> Option<String> {
-    let chars: Vec<char> = line.chars().collect();
-    if chars.is_empty() {
-        return None;
-    }
-    let mut i = col as usize;
-    if i >= chars.len() || chars[i].is_whitespace() {
-        let mut j = i.min(chars.len());
-        while j > 0 && chars[j - 1].is_whitespace() {
-            j -= 1;
-        }
-        if j == 0 {
-            return None;
-        }
-        i = j - 1;
-    }
-    let mut s = i;
-    while s > 0 && !chars[s - 1].is_whitespace() {
-        s -= 1;
-    }
-    let mut e = i;
-    while e + 1 < chars.len() && !chars[e + 1].is_whitespace() {
-        e += 1;
-    }
-    Some(chars[s..=e].iter().collect())
 }
 
 #[cfg(test)]

@@ -254,6 +254,8 @@ struct Shared {
     ext: Option<Arc<dyn crate::ExtSource>>,
     /// The application policy the Reader consults (ADR-0008 W3), if the daemon installed one.
     app_policy: Option<Arc<dyn crate::builtin_ext::AppPolicy>>,
+    /// The native terminal policy (ADR-0008 amendment 1), if the daemon installed one.
+    term_provider: Option<Arc<dyn crate::TermProvider>>,
 }
 
 /// The document side of the core: the focus join, the directory of documents, the registry's
@@ -328,6 +330,7 @@ impl Core {
                 text_dropped: Arc::new(AtomicU64::new(0)),
                 ext: None,
                 app_policy: None,
+                term_provider: None,
             }),
             inbox,
             registrars: Vec::new(),
@@ -343,6 +346,17 @@ impl Core {
     pub fn with_app_policy(mut self, policy: Arc<dyn crate::builtin_ext::AppPolicy>) -> Self {
         if let Some(sh) = Arc::get_mut(&mut self.shared) {
             sh.app_policy = Some(policy);
+        }
+        self
+    }
+
+    /// Install the native terminal policy (the `ext-vte` build the daemon links in when its
+    /// component is not loaded). An extension host's `terminal` interface takes precedence.
+    /// Call before [`Core::run`].
+    #[must_use]
+    pub fn with_term_provider(mut self, provider: Arc<dyn crate::TermProvider>) -> Self {
+        if let Some(sh) = Arc::get_mut(&mut self.shared) {
+            sh.term_provider = Some(provider);
         }
         self
     }
@@ -1025,6 +1039,9 @@ async fn reader_loop(
     if let Some(p) = &shared.app_policy {
         reader = reader.with_app_policy(Arc::clone(p));
     }
+    if let Some(p) = &shared.term_provider {
+        reader = reader.with_term_provider(Arc::clone(p));
+    }
     // N1: every armed deadline stays armed until it fires (a set, not one slot).
     let mut timers: std::collections::BTreeSet<Instant> = std::collections::BTreeSet::new();
     // Review fetches, builds and actions: each in a task this loop owns (aborted with it).
@@ -1073,7 +1090,7 @@ async fn reader_loop(
             match e {
                 ReaderEffect::Speak(intent) => {
                     bump(&shared.stats.utterances);
-                    shared.speech.submit(intent.utterance);
+                    shared.speech.submit(reader.symbolize(intent.utterance));
                 }
                 ReaderEffect::Fetch {
                     node,

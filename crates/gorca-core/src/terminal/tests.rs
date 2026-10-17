@@ -14,13 +14,42 @@ use gorca_model::{
 };
 use gorca_rt::EpochCell;
 
-use super::classify_term_key;
+use gorca_ext_api::terminal::{
+    Ms, TermAction, TermConfig, TermCounters, TermInput, TermSnapshot, TerminalHooks,
+};
+
+use super::raw_key;
 use crate::directory::MirrorDirectory;
 use crate::mode::ModeKeys;
 use crate::reader::{Reader, ReaderEffect, ReaderEffects, ReaderMsg};
 use crate::text::caret::Reply;
 use crate::text::{TextMsg, TextOp, TextReqId};
-use gorca_ext_api::terminal::TermKey;
+
+/// The native build of `ext-vte` behind the core's seam (what the daemon installs with
+/// `--terminal-policy=native`).
+#[derive(Debug)]
+pub(crate) struct NativeTerm;
+
+#[derive(Debug)]
+struct NativeSess(ext_vte::VteExtension);
+
+impl crate::TermSession for NativeSess {
+    fn step(&mut self, now: Ms, input: TermInput, out: &mut Vec<TermAction>) {
+        self.0.step(now, input, out);
+    }
+    fn counters(&self) -> TermCounters {
+        self.0.counters()
+    }
+    fn snapshot(&self) -> Option<TermSnapshot> {
+        self.0.snapshot()
+    }
+}
+
+impl crate::TermProvider for NativeTerm {
+    fn open(&self, cfg: &TermConfig) -> Box<dyn crate::TermSession> {
+        Box::new(NativeSess(ext_vte::VteExtension::new(cfg)))
+    }
+}
 
 fn node() -> NodeKey {
     NodeKey {
@@ -65,6 +94,7 @@ fn rig() -> Rig {
     let dir = Arc::new(MirrorDirectory::new());
     let dropped = Arc::new(AtomicU64::new(0));
     let r = Reader::new(Arc::clone(&epoch), dir, ModeKeys::default())
+        .with_term_provider(Arc::new(NativeTerm))
         .with_text_dropped(Arc::clone(&dropped));
     Rig {
         r,
@@ -238,66 +268,34 @@ fn ev(code: u16, keysym: u32, unichar: u32, mods: Modifiers) -> KeyEvent {
     }
 }
 
+/// The core hands the key over unclassified (which key is a readline motion is the extension's
+/// policy, `ext-vte`'s `keys` tests): only the facts of the press.
 #[test]
-fn keys_are_classified_for_a_terminal() {
+fn a_key_reaches_the_extension_unclassified_with_its_physical_letter() {
     let code = |n: &str| static_keycode(n).unwrap_or(0);
+    let k = raw_key(&ev(code("c"), 'c' as u32, 3, Modifiers::CONTROL));
     assert_eq!(
-        classify_term_key(&ev(0, 'a' as u32, 'a' as u32, NONE)),
-        TermKey::Typed('a')
+        (k.phys, k.ctrl, k.alt, k.shift, k.logo),
+        (b'c', true, false, false, false)
     );
+    assert!(!k.types_a_character());
+    let k = raw_key(&ev(0, 'A' as u32, 'A' as u32, Modifiers::SHIFT));
     assert_eq!(
-        classify_term_key(&ev(0, 0x20, 0x20, NONE)),
-        TermKey::Typed(' ')
+        (k.phys, k.shift, k.keysym, k.unichar),
+        (0, true, 'A' as u32, 'A' as u32)
     );
-    assert_eq!(classify_term_key(&ev(0, 0xff0d, 13, NONE)), TermKey::Enter);
+    assert!(k.types_a_character());
+    // Num Lock is not a modifier of the key; Super is.
+    let k = raw_key(&ev(0, 0xff51, 0, Modifiers::MOD2));
     assert_eq!(
-        classify_term_key(&ev(0, 0xff08, 8, NONE)),
-        TermKey::Backspace
+        (k.ctrl, k.alt, k.shift, k.logo),
+        (false, false, false, false)
     );
-    assert_eq!(classify_term_key(&ev(0, 0xff09, 9, NONE)), TermKey::Tab);
-    assert_eq!(classify_term_key(&ev(0, 0xff52, 0, NONE)), TermKey::LineUp);
-    assert_eq!(
-        classify_term_key(&ev(0, 0xff51, 0, NONE)),
-        TermKey::CharLeft
-    );
-    assert_eq!(
-        classify_term_key(&ev(0, 0xff51, 0, Modifiers::CONTROL)),
-        TermKey::WordLeft
-    );
-    assert_eq!(
-        classify_term_key(&ev(code("c"), 'c' as u32, 3, Modifiers::CONTROL)),
-        TermKey::Interrupt
-    );
-    assert_eq!(
-        classify_term_key(&ev(code("a"), 'a' as u32, 1, Modifiers::CONTROL)),
-        TermKey::LineStart
-    );
-    assert_eq!(
-        classify_term_key(&ev(code("e"), 'e' as u32, 5, Modifiers::CONTROL)),
-        TermKey::LineEnd
-    );
-    assert_eq!(
-        classify_term_key(&ev(code("b"), 'b' as u32, 0, Modifiers::MOD1)),
-        TermKey::WordLeft
-    );
-    // Shift keeps the character; a lone modifier, Escape and F-keys are not characters.
-    assert_eq!(
-        classify_term_key(&ev(0, 'A' as u32, 'A' as u32, Modifiers::SHIFT)),
-        TermKey::Typed('A')
-    );
-    assert_eq!(classify_term_key(&ev(0, 0xffe1, 0, NONE)), TermKey::Other);
-    assert_eq!(classify_term_key(&ev(0, 0xff1b, 27, NONE)), TermKey::Other);
-    assert_eq!(classify_term_key(&ev(0, 0xffbe, 0, NONE)), TermKey::Other);
-    // Super and Ctrl+Alt belong to the desktop.
-    assert_eq!(
-        classify_term_key(&ev(0, 'x' as u32, 'x' as u32, Modifiers::MOD4)),
-        TermKey::Other
-    );
-    // Num Lock does not change the meaning of a key.
-    assert_eq!(
-        classify_term_key(&ev(0, 0xff51, 0, Modifiers::MOD2)),
-        TermKey::CharLeft
-    );
+    assert!(raw_key(&ev(0, 'x' as u32, 'x' as u32, Modifiers::MOD4)).logo);
+    // Enter types no character.
+    assert!(!raw_key(&ev(0, 0xff0d, 13, NONE)).types_a_character());
+    // A key never shows its character in debug output.
+    assert!(!format!("{:?}", raw_key(&ev(0, 'q' as u32, 'q' as u32, NONE))).contains('q'));
 }
 
 #[test]
@@ -306,7 +304,7 @@ fn focusing_a_terminal_reads_the_screen_and_speaks_the_cursor_line_after_the_foc
     let fx = g.focus("out\nme@box:~$ ls", 16);
     assert_eq!(
         spoken(&fx),
-        ["me at box: tilde dollar ls"],
+        ["me at box: $ ls"],
         "punctuation at the default level"
     );
     let u = utterances(&fx)[0];
@@ -374,7 +372,7 @@ fn command_output_is_read_once_after_the_settle_through_one_screen_read() {
     let reads = screen_reads(&fx);
     assert_eq!(reads.len(), 1, "{fx:?}");
     let fx = g.answer(reads[0], "$ ls\nalpha beta\n$ ", 18);
-    assert_eq!(spoken(&fx), ["alpha beta\n dollar"]);
+    assert_eq!(spoken(&fx), ["alpha beta\n$"]);
     let u = utterances(&fx)[0];
     assert_eq!(u.prio, Prio::Text);
     assert_eq!(u.epoch, g.epoch.current());
@@ -446,11 +444,172 @@ fn password_prompt_characters_are_marked_sensitive_and_not_repeatable() {
     assert_eq!(g.r.text.sensitive_utt, Some(utterances(&fx)[0].id));
 }
 
+/// A session that stops answering when `dead` is set (a trapped, busy or disabled extension).
+#[derive(Debug)]
+struct Mortal {
+    inner: NativeSess,
+    dead: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl crate::TermSession for Mortal {
+    fn alive(&self) -> bool {
+        !self.dead.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    fn step(&mut self, now: Ms, input: TermInput, out: &mut Vec<TermAction>) {
+        if self.dead.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+        self.inner.step(now, input, out);
+    }
+    fn counters(&self) -> TermCounters {
+        self.inner.counters()
+    }
+    fn snapshot(&self) -> Option<TermSnapshot> {
+        self.inner.snapshot()
+    }
+}
+
+#[derive(Debug)]
+struct MortalTerm(Arc<std::sync::atomic::AtomicBool>);
+
+impl crate::TermProvider for MortalTerm {
+    fn open(&self, cfg: &TermConfig) -> Box<dyn crate::TermSession> {
+        Box::new(Mortal {
+            inner: NativeSess(ext_vte::VteExtension::new(cfg)),
+            dead: Arc::clone(&self.0),
+        })
+    }
+}
+
+fn mortal_rig() -> (Rig, Arc<std::sync::atomic::AtomicBool>) {
+    let dead = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let mut g = rig();
+    g.r =
+        g.r.with_term_provider(Arc::new(MortalTerm(Arc::clone(&dead))));
+    (g, dead)
+}
+
+fn every_utterance_is_sensitive(g: &Rig, fx: &ReaderEffects) -> bool {
+    utterances(fx)
+        .iter()
+        .all(|u| g.r.text.sensitive_utt == Some(u.id))
+}
+
+#[test]
+fn a_policy_that_dies_during_a_password_prompt_keeps_every_typed_key_sensitive() {
+    use std::sync::atomic::Ordering;
+    let (mut g, dead) = mortal_rig();
+    let prompt = "$ sudo ls\n[sudo] password for me: ";
+    g.focus(prompt, u32::try_from(prompt.chars().count()).unwrap_or(0));
+    // Alive: the first key is sensitive.
+    let fx = g.typed('h');
+    assert_eq!(spoken(&fx), ["h"]);
+    assert!(every_utterance_is_sensitive(&g, &fx));
+    // The extension traps / is busy / is disabled from now on: it answers nothing. The core
+    // still claims and speaks the key, marked sensitive, and never leaves it to the generic echo.
+    dead.store(true, Ordering::Relaxed);
+    for c in ['q', 'Z', '7'] {
+        let keyfx = g.typed(c);
+        assert_eq!(spoken(&keyfx), [c.to_string()], "{c}");
+        assert!(every_utterance_is_sensitive(&g, &keyfx), "{c}: sensitive");
+    }
+    // Enter ends the prompt: the hold goes with it.
+    let _ = g.key(0xff0d, 13, NONE);
+    assert!(!g.r.text.term.secret_hold);
+}
+
+#[test]
+fn the_core_sees_a_password_prompt_even_when_the_policy_never_answers() {
+    // Dead from the start: the extension never reports the prompt; the core's own check of the
+    // screen it read does.
+    let (mut g, dead) = mortal_rig();
+    dead.store(true, std::sync::atomic::Ordering::Relaxed);
+    let prompt = "Enter passphrase for key '/home/me/.ssh/id': ";
+    g.focus(prompt, u32::try_from(prompt.chars().count()).unwrap_or(0));
+    assert!(g.r.text.term.secret_hold);
+    let fx = g.typed('x');
+    assert_eq!(spoken(&fx), ["x"]);
+    assert!(every_utterance_is_sensitive(&g, &fx));
+    // An ordinary prompt does not hold.
+    let (mut g2, dead2) = mortal_rig();
+    dead2.store(true, std::sync::atomic::Ordering::Relaxed);
+    g2.focus("me@box:~$ ", 10);
+    assert!(!g2.r.text.term.secret_hold);
+}
+
+#[test]
+fn the_secret_prompt_table_of_the_core() {
+    for yes in [
+        "[sudo] password for me:",
+        "Password:",
+        "Enter PIN:",
+        "[sudo] \u{43f}\u{430}\u{440}\u{43e}\u{43b}\u{44c} \u{434}\u{43b}\u{44f} me:",
+        "Verification code: ",
+        "Contrase\u{f1}a:",
+    ] {
+        assert!(super::is_secret_prompt(yes), "{yes}");
+    }
+    for no in [
+        "me@box:~$ ",
+        "ping: unknown host",
+        "password reset done",
+        "pinned:x y",
+        "ls",
+    ] {
+        assert!(!super::is_secret_prompt(no), "{no}");
+    }
+}
+
+#[test]
+fn a_terminal_whose_policy_was_disabled_is_still_watched_for_secret_prompts() {
+    #[derive(Debug)]
+    struct NoTerm;
+    impl crate::AppExt for NoTerm {
+        fn on_event(&self, _: &gorca_model::NodeEvent) -> crate::ExtVerdict {
+            crate::ExtVerdict::Pass
+        }
+        fn present(
+            &self,
+            _: &NodeSnapshot,
+            _: crate::present::PresentContext,
+            _: u64,
+        ) -> Option<Vec<gorca_model::Segment>> {
+            None
+        }
+        fn command(&self, _: &str, _: u32) {}
+    }
+    #[derive(Debug)]
+    struct Src;
+    impl crate::ExtSource for Src {
+        fn attach(&self, _: AppId, _: &gorca_model::AppInfo) -> Option<Arc<dyn crate::AppExt>> {
+            None
+        }
+        fn detach(&self, _: AppId) {}
+        fn for_app(&self, _: AppId) -> Option<Arc<dyn crate::AppExt>> {
+            Some(Arc::new(NoTerm))
+        }
+        fn set_sink(&self, _: Arc<dyn crate::ExtSink>) {}
+    }
+    let mut g = rig();
+    g.r = Reader::new(
+        Arc::clone(&g.epoch),
+        Arc::new(MirrorDirectory::new()),
+        ModeKeys::default(),
+    )
+    .with_ext(Arc::new(Src));
+    let prompt = "Password: ";
+    g.focus(prompt, 10);
+    assert!(g.r.term_tracked());
+    let fx = g.typed('k');
+    assert_eq!(spoken(&fx), ["k"]);
+    assert!(every_utterance_is_sensitive(&g, &fx));
+}
+
 #[test]
 fn moving_focus_off_the_terminal_wipes_it_and_ignores_its_late_events() {
     let mut g = rig();
     g.focus("$ ", 2);
-    g.r.text_untrack();
+    g.r.text_untrack("test");
     assert!(!g.r.term_tracked());
     let fx = g.insert(2, "x");
     assert!(spoken(&fx).is_empty());
@@ -503,7 +662,7 @@ fn say_current_line_and_word_read_the_held_screen_with_no_read() {
         ep,
         &mut fx,
     );
-    assert_eq!(spoken(&fx), ["me at box: tilde dollar git status"]);
+    assert_eq!(spoken(&fx), ["me at box: $ git status"]);
     assert!(screen_reads(&fx).is_empty());
 }
 
@@ -545,4 +704,178 @@ fn echo_typed_characters_off_silences_the_typed_character_but_not_the_rest() {
     g.at += 100;
     let fx = g.typed('y');
     assert_eq!(spoken(&fx), ["y"]);
+}
+
+// ---- degraded state: the focused terminal lost its tracking (terminal-degraded-state.md) -----
+
+impl Rig {
+    /// The Reader's focus state as after a finished focus presentation of the terminal.
+    fn hold_focus_on_terminal(&mut self) {
+        let snap = term_snap();
+        self.r.focus = crate::focus::FocusState::Focused {
+            node: node(),
+            epoch: self.epoch.current(),
+            presented: true,
+        };
+        self.r.presented = Some(crate::present::Presented {
+            node: node(),
+            snap,
+            utt: gorca_model::UttId(1),
+            epoch: self.epoch.current(),
+            at: self.now(),
+            ctx: crate::present::PresentContext::Focus,
+        });
+    }
+}
+
+#[test]
+fn a_key_in_a_focused_terminal_that_lost_its_tracking_tracks_it_again_and_reads_what_follows() {
+    let mut g = rig();
+    g.focus("me@box:~$ ", 10);
+    g.hold_focus_on_terminal();
+    // The tracking is lost with no focus change (the extension was not attached at the focus,
+    // a node-removed event, a busy slot): the terminal is still the focus.
+    g.r.term_untrack("test");
+    assert!(!g.r.term_tracked());
+    g.at += 700;
+    let fx = g.typed('l');
+    assert!(g.r.term_tracked(), "the key restarted the tracking");
+    assert_eq!(g.r.terminal_reads().retracked_on_key, 1);
+    let reads = screen_reads(&fx);
+    assert_eq!(reads.len(), 1, "the screen is read again: {fx:?}");
+    g.answer(reads[0], "me@box:~$ l", 11);
+    // History recall: the recalled command is read, and Tab/Backspace/Enter are never names.
+    g.at += 700;
+    let fx = g.key(0xff52, 0, NONE);
+    assert!(spoken(&fx).is_empty(), "the key itself says nothing");
+    g.at += 10;
+    g.replaced();
+    let fx = g.tick(40);
+    let reads = screen_reads(&fx);
+    assert_eq!(reads.len(), 1, "{fx:?}");
+    let fx = g.answer(reads[0], "me@box:~$ echo recalled", 23);
+    assert_eq!(spoken(&fx), ["echo recalled"]);
+    for (sym, uni) in [(0xff09, 9), (0xff08, 8), (0xff0d, 13)] {
+        g.at += 700;
+        let fx = g.key(sym, uni, NONE);
+        let said = spoken(&fx);
+        assert!(
+            said.iter()
+                .all(|s| !["tab", "backspace", "enter"].contains(&s.as_str())),
+            "{sym:#x}: {said:?}"
+        );
+    }
+}
+
+#[test]
+fn a_terminal_that_is_not_the_focus_is_not_tracked_by_a_key() {
+    let mut g = rig();
+    g.focus("me@box:~$ ", 10);
+    g.hold_focus_on_terminal();
+    g.r.term_untrack("test");
+    // Focus moved to another node: the presented node is still the terminal's, the state is not.
+    let other = NodeKey {
+        local: LocalId(10),
+        ..node()
+    };
+    g.r.focus = crate::focus::FocusState::Focused {
+        node: other,
+        epoch: g.epoch.current(),
+        presented: false,
+    };
+    g.typed('l');
+    assert!(!g.r.term_tracked());
+    // An orphaned focus is not guessed either.
+    g.r.focus = crate::focus::FocusState::Orphaned {
+        last: node(),
+        epoch: g.epoch.current(),
+    };
+    g.typed('l');
+    assert!(!g.r.term_tracked());
+    assert_eq!(g.r.terminal_reads().retracked_on_key, 0);
+}
+
+#[test]
+fn the_retracking_on_a_key_is_rate_limited() {
+    let mut g = rig();
+    g.focus("me@box:~$ ", 10);
+    g.hold_focus_on_terminal();
+    // A policy that cannot be had (no session): every key asks, the interval spaces the asks.
+    g.r.term_provider = None;
+    g.r.term_untrack("test");
+    g.at += 700;
+    g.typed('a');
+    g.at += 50;
+    g.typed('b');
+    g.at += 50;
+    g.typed('c');
+    assert_eq!(g.r.terminal_reads().retracked_on_key, 1);
+    g.at += 600;
+    g.typed('d');
+    assert_eq!(g.r.terminal_reads().retracked_on_key, 2);
+    assert!(!g.r.term_tracked(), "no policy, no tracking");
+}
+
+#[test]
+fn key_names_are_silent_while_command_keys_are_off_and_spoken_when_on() {
+    let mut g = rig();
+    // Not a terminal, not a text field: the generic echo.
+    for (sym, uni, name) in [
+        (0xff09, 9, "tab"),
+        (0xff0d, 13, "enter"),
+        (0xff08, 8, "backspace"),
+        (0xff1b, 27, "escape"),
+    ] {
+        g.at += 50;
+        assert!(
+            spoken(&g.key(sym, uni, NONE)).is_empty(),
+            "{name} by default"
+        );
+    }
+    // Typed characters and space are not names.
+    assert_eq!(spoken(&g.typed('a')), ["a"]);
+    assert_eq!(spoken(&g.key(0x20, 0x20, NONE)), ["space"]);
+    g.r.cmd.overlay.command_keys = Some(true);
+    g.r.cmd.republish();
+    for (sym, uni, name) in [(0xff09, 9, "tab"), (0xff0d, 13, "enter")] {
+        g.at += 50;
+        assert_eq!(spoken(&g.key(sym, uni, NONE)), [name]);
+    }
+}
+
+#[test]
+fn a_key_after_a_focus_that_never_finished_presents_it_again_once() {
+    let mut g = rig();
+    // The focus event came 3 s ago and its fetch failed twice: never presented, never tracked.
+    g.r.focus = crate::focus::FocusState::Focused {
+        node: node(),
+        epoch: g.epoch.current(),
+        presented: false,
+    };
+    g.r.last_focus = Some((node(), g.t0));
+    g.at = 3000;
+    let fetches = |fx: &ReaderEffects| {
+        fx.iter()
+            .filter(|e| {
+                matches!(e, ReaderEffect::Fetch { node: n, kind: crate::FetchKind::Focus, .. } if *n == node())
+            })
+            .count()
+    };
+    let fx = g.typed('l');
+    assert_eq!(fetches(&fx), 1, "{fx:?}");
+    assert_eq!(g.r.counters.focus_represented_on_key, 1);
+    g.at += 100;
+    let fx = g.typed('l');
+    assert_eq!(fetches(&fx), 0, "rate limited");
+    // A focus that is still young is simply in flight: not asked again.
+    let mut h = rig();
+    h.r.focus = crate::focus::FocusState::Focused {
+        node: node(),
+        epoch: h.epoch.current(),
+        presented: false,
+    };
+    h.r.last_focus = Some((node(), h.t0));
+    h.at = 300;
+    let fx = h.typed('l');
+    assert_eq!(fetches(&fx), 0);
 }

@@ -465,6 +465,8 @@ pub struct BrowseCounters {
     pub live_spoken: u64,
     pub live_dropped: u64,
     pub live_muted: u64,
+    /// Focus resolutions restarted by a key press in a web application that was not browsing.
+    pub key_resyncs: u64,
 }
 
 /// Settings the browse arm reads (NVDA defaults).
@@ -512,6 +514,8 @@ pub struct BrowseState {
     /// Focus landed on a document root whose mirror had no line yet: the first `Changed` that
     /// brings one speaks it, unless a key or another focus came first (M4).
     pub entry_wait: Option<(DocId, Instant)>,
+    /// The last focus resolution restarted by a key press.
+    pub resync_at: Option<Instant>,
     pub settings: BrowseSettings,
     pub counters: BrowseCounters,
     /// Offset of the cursor in the flat text at the last move, to restore after an edit.
@@ -583,6 +587,7 @@ impl BrowseState {
             pending_word: None,
             pending_tail: None,
             entry_wait: None,
+            resync_at: None,
             settings: BrowseSettings::default(),
             counters: BrowseCounters::default(),
             last_off: 0,

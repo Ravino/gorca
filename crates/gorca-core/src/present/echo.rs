@@ -51,6 +51,13 @@ pub fn key_echo_text(unichar: u32, keysym: u32, modifiers: Modifiers) -> Option<
         .map(String::from)
 }
 
+/// Is the echo text of a key a key NAME ("enter", "tab", "backspace", "escape", "delete", "f 5")
+/// rather than the character it types (a letter, a digit, a symbol, "space")? Names are command
+/// keys: they are spoken only when `echo.command_keys` is on.
+pub fn key_echo_is_action(text: &str) -> bool {
+    text != "space" && text.chars().nth(1).is_some()
+}
+
 /// Key echo: interrupts, carries the epoch of the key press.
 pub fn key_echo(text: &str, id: UttId, epoch: Epoch) -> Utterance {
     let mut u = message(text, id, epoch);
@@ -61,7 +68,7 @@ pub fn key_echo(text: &str, id: UttId, epoch: Epoch) -> Utterance {
 /// A plain spoken message (for example "application not responding").
 pub fn message(text: &str, id: UttId, epoch: Epoch) -> Utterance {
     let mut segments = SmallVec::new();
-    segments.push(seg(text, SegmentKind::Text));
+    segments.push(seg(text, SegmentKind::Said));
     Utterance {
         id,
         segments,

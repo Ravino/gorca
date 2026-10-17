@@ -7,7 +7,7 @@ use gorca_input_api::{KeyClass, KeyIntent};
 
 use crate::SpeechIntent;
 use crate::mode::Mode;
-use crate::present::{key_echo, key_echo_text};
+use crate::present::{key_echo, key_echo_is_action, key_echo_text};
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 
 impl Reader {
@@ -44,6 +44,7 @@ impl Reader {
             }
             KeyClass::PassToApp => {
                 self.pass_key_seen(&intent, fx);
+                self.focus_audit_on_key(&intent, fx);
                 // The text layer speaks typed characters and erasures of an editable object
                 // itself (ADR-0007 TE-1, TE-5): the generic echo would double them.
                 let text_owns = self.text_key(&intent, fx);
@@ -55,6 +56,7 @@ impl Reader {
                         intent.event.keysym,
                         intent.event.modifiers,
                     )
+                    && (!key_echo_is_action(&text) || self.cmd.effective.echo.command_keys)
                 {
                     let id = self.utt_id();
                     let u = key_echo(&text, id, intent.epoch);
@@ -64,4 +66,70 @@ impl Reader {
             KeyClass::Swallowed | KeyClass::Injected => {}
         }
     }
+
+    /// A key that is going to the application reaches a Reader whose picture of the focus may
+    /// have been lost without a focus event (a popup or dialog closed, a lookup failed, an
+    /// extension was not attached yet): every state that waits for the next focus event to be
+    /// repaired is checked here, so one key press is enough, not an Alt+Tab. A terminal that
+    /// holds the focus but is not tracked is tracked again; a web application that is not
+    /// browsing resolves its focus again. Both are rate limited and never guess the focus: they
+    /// start from the focus state the Reader already holds.
+    pub(crate) fn focus_audit_on_key(&mut self, intent: &KeyIntent, fx: &mut ReaderEffects) {
+        if !intent.event.pressed || !self.text_active() {
+            return;
+        }
+        let crate::focus::FocusState::Focused {
+            node, presented, ..
+        } = self.focus
+        else {
+            return;
+        };
+        if self.selection_node == Some(node) {
+            return;
+        }
+        // The focus event came, but its presentation never finished (the read failed twice, the
+        // application was busy): nothing was tracked or announced. Present it again.
+        if !presented && self.represent_unfinished_focus(node, fx) {
+            return;
+        }
+        if !self.term_retrack_on_key(fx) {
+            self.web_resync_on_key(node, fx);
+        }
+    }
+
+    /// The focused node was never presented: ask for it again, once per `REPRESENT_INTERVAL`,
+    /// and only when its first try is long over (it is not simply still in flight).
+    fn represent_unfinished_focus(
+        &mut self,
+        node: gorca_model::NodeKey,
+        fx: &mut ReaderEffects,
+    ) -> bool {
+        let now = self.now;
+        let Some((n, at)) = self.last_focus else {
+            return false;
+        };
+        if n != node || now.saturating_duration_since(at) < REPRESENT_AFTER {
+            return false;
+        }
+        if let Some((rn, rat)) = self.focus_represent_at
+            && rn == node
+            && now.saturating_duration_since(rat) < REPRESENT_INTERVAL
+        {
+            return false;
+        }
+        self.focus_represent_at = Some((node, now));
+        self.counters.focus_represented_on_key += 1;
+        tracing::debug!(
+            ?node,
+            "focused node never presented: presenting it again at a key"
+        );
+        self.represent_focus(node, fx);
+        true
+    }
 }
+
+/// A focus whose presentation has not finished this long after the event is presented again by
+/// the next key.
+const REPRESENT_AFTER: std::time::Duration = std::time::Duration::from_millis(1500);
+/// The shortest time between two such presentations.
+const REPRESENT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);

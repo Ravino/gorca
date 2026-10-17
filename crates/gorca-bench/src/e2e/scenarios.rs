@@ -61,6 +61,8 @@ pub enum Scn {
     W3,
     Fm1,
     Fm2,
+    /// M7: page keys after a popup closes.
+    Wd,
     C1,
     C1h,
     C2,
@@ -95,6 +97,8 @@ pub enum Scn {
     Vv,
     /// M6: flat review of a terminal that keeps printing, across Alt+Tab.
     Vs,
+    /// M6: a long real-terminal session must never degrade (untracked terminal).
+    Vd,
     /// M4b: window and dialog activation speech.
     A1,
     /// M4b: notifications never interrupt focus speech.
@@ -130,6 +134,7 @@ impl Scn {
             Self::W3 => "W3".into(),
             Self::Fm1 => "FM1".into(),
             Self::Fm2 => "FM2".into(),
+            Self::Wd => "WD".into(),
             Self::C1 => "C1".into(),
             Self::C1h => "C1h".into(),
             Self::C2 => "C2".into(),
@@ -160,6 +165,7 @@ impl Scn {
             Self::Vw => "VW".into(),
             Self::Vv => "VV".into(),
             Self::Vs => "VS".into(),
+            Self::Vd => "VD".into(),
             Self::A1 => "A1".into(),
             Self::N1 => "N1".into(),
         }
@@ -194,6 +200,7 @@ impl Scn {
             "W3" => Self::W3,
             "FM1" => Self::Fm1,
             "FM2" => Self::Fm2,
+            "WD" => Self::Wd,
             "C1" => Self::C1,
             "C1h" => Self::C1h,
             "C2" => Self::C2,
@@ -223,6 +230,7 @@ impl Scn {
             "VW" => Self::Vw,
             "VV" => Self::Vv,
             "VS" => Self::Vs,
+            "VD" => Self::Vd,
             "A1" => Self::A1,
             "N1" => Self::N1,
             other => {
@@ -238,9 +246,9 @@ impl Scn {
         [
             "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K2s", "K3",
             "K4", "K4r", "K4h", "R1", "R1s", "RS", "B0", "W1", "BR1", "BR2", "W2", "W2b", "W3",
-            "FM1", "FM2", "C1", "C1h", "C2", "C3", "E1", "E2", "E2f", "S2", "SA1", "SA2", "SA3",
-            "SA3a", "PW", "C1hs", "E1s", "V1", "VT", "VH", "V2", "V3", "VP", "VR", "VF", "VB",
-            "VW", "VV", "VS", "A1", "N1",
+            "FM1", "FM2", "WD", "C1", "C1h", "C2", "C3", "E1", "E2", "E2f", "S2", "SA1", "SA2",
+            "SA3", "SA3a", "PW", "C1hs", "E1s", "V1", "VT", "VH", "V2", "V3", "VP", "VR", "VF",
+            "VB", "VW", "VV", "VS", "VD", "A1", "N1",
         ]
         .iter()
         .chain(super::webtext::IDS)
@@ -557,6 +565,7 @@ pub fn run(
         Scn::W3 => super::web::w3(host, reader, flavor, size, &mut out)?,
         Scn::Fm1 => super::web::fm(host, reader, flavor, size, &mut out, false)?,
         Scn::Fm2 => super::web::fm(host, reader, flavor, size, &mut out, true)?,
+        Scn::Wd => super::web::wd(host, reader, flavor, size, &mut out)?,
         Scn::C1 => super::m3::c1(host, reader, flavor, size, seed, &mut out)?,
         Scn::C1h => super::m3::c1h(host, reader, flavor, size, seed, &mut out)?,
         Scn::C2 => super::m3::c2(host, reader, flavor, size, seed, &mut out)?,
@@ -585,6 +594,7 @@ pub fn run(
         Scn::Vw => super::m6::vw(host, reader, flavor, size, seed, &mut out)?,
         Scn::Vv => super::m6::vv(host, reader, flavor, size, seed, &mut out)?,
         Scn::Vs => super::m6::vs(host, reader, flavor, size, seed, &mut out)?,
+        Scn::Vd => super::m6::vd(host, reader, flavor, size, seed, &mut out)?,
         Scn::A1 => super::m4b::a1(host, reader, flavor, size, seed, &mut out)?,
         Scn::N1 => super::m4b::n1(host, reader, flavor, size, seed, &mut out)?,
     }

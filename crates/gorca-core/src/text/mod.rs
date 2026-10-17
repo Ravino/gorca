@@ -26,7 +26,9 @@ use gorca_model::{
     Utterance,
 };
 use gorca_rt::BudgetClass;
-use gorca_speech::{Caps as VCaps, How, LaneProgress, Punct as VPunct, VerbalizeOpts, Verbalizer};
+use gorca_speech::{
+    Caps as VCaps, How, LaneProgress, Lang, Punct as VPunct, VerbalizeOpts, Verbalizer,
+};
 use gorca_text::caret::Say;
 
 use crate::SpeechIntent;
@@ -418,7 +420,32 @@ impl Reader {
         VerbalizeOpts {
             punct: punct(s.punctuation),
             caps: caps(s.caps),
+            lang: Lang::from_code(&s.language),
         }
+    }
+
+    /// The utterance as it goes to the speech lane: the text the applications gave (names,
+    /// values, descriptions, notifications, OSD) has its symbols named by the current
+    /// punctuation level and language, like text read from a document. The server speaks with
+    /// punctuation off, so this is the only place a symbol gets its name. Segments that are
+    /// already verbalised or are the reader's own words (`Said`) and roles and states pass.
+    pub fn symbolize(&self, mut u: Utterance) -> Utterance {
+        let o = self.verbalize_opts();
+        for seg in &mut u.segments {
+            if !matches!(
+                seg.kind,
+                gorca_model::SegmentKind::Text | gorca_model::SegmentKind::Value
+            ) || seg.text.chars().all(|c| c.is_alphanumeric() || c == ' ')
+            {
+                continue;
+            }
+            let said = self.text.verbalizer.unit(&seg.text, How::Text, &o);
+            if *said != *seg.text {
+                seg.text = Arc::from(said);
+            }
+        }
+        u.segments.retain(|s| !s.text.is_empty());
+        u
     }
 
     /// Verbalise one piece of text speech (VB-4: on the Reader, never on the speech lane).
@@ -461,7 +488,7 @@ impl Reader {
         // Byte offsets (VTE; a capability the connector reports, not a name) are the terminal
         // layer's. Gecko's UTF-16 offsets are followed as they are (`TextUnit::window_follows`).
         if !self.dir.text_window_follows(snap.key.app) {
-            self.text_untrack();
+            self.text_untrack("app not followed");
             return;
         }
         // A terminal has its own arm (M6): the caret machine would speak a screen repaint as
@@ -471,7 +498,7 @@ impl Reader {
             self.term_track(snap, fx);
             return;
         }
-        self.term_untrack();
+        self.term_untrack("text object focused");
         match trackable(snap) {
             Some(kind) => self.text_step(
                 In::Track {
@@ -480,13 +507,13 @@ impl Reader {
                 },
                 fx,
             ),
-            None => self.text_untrack(),
+            None => self.text_untrack("not trackable"),
         }
     }
 
     /// Focus moved on (or the object is gone): forget the window, zeroing it for a secret one.
-    pub(crate) fn text_untrack(&mut self) {
-        self.term_untrack();
+    pub(crate) fn text_untrack(&mut self, why: &'static str) {
+        self.term_untrack(why);
         self.text_untrack_caret();
     }
 
@@ -510,7 +537,7 @@ impl Reader {
         };
         let (current, root) = (t.node, t.root);
         if node == Some(root) || app == Some(root.app) {
-            self.text_untrack();
+            self.text_untrack("tracked object gone");
         } else if node == Some(current) && current != root {
             // The paragraph the caret was in is gone (a merge): back to the focused object.
             let mut sink = ReaderEffects::new();

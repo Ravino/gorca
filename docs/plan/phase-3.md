@@ -61,6 +61,10 @@ Explicitly deferred out of Phase 2 and therefore candidates here:
 | voicego deep improvement | decision 2026-10-14 ("separate effort after Phase 2") | track **V** |
 | Upstreaming (Mutter 48.7 stuck modifier, at-spi2-core, Chromium `IsEnabled`) | decisions 2026-10-14, ADR-0001 §5.5 | track **U** |
 | ADR-0002 perception beyond scaffolding | phase-2 Q6 | stretch **MP** (phases 1–2 only) |
+| Unified editing navigation (user request 2026-10-17): one caret/word/character/line model and speech, as in the terminal, for GTK entries/textviews, gedit, GNOME Text Editor, web editables and the terminal | shared presenter + per-toolkit quirk data; e2e matrix per toolkit | M11 (wave 1) |
+| Verbosity levels and profiles: NVDA-style detail toggles per role/state, per-app profiles | settings + command toggles | **M14a** (design: `docs/plan/phase-3-features.md` §3) |
+| NVDA-derived features (user request 2026-10-17): lock key announcements (Caps/Num/Scroll Lock), input help (gorca+1), speech history and copy last utterance, formatting info (gorca+F), indentation reporting by speech/tone, sleep mode per app, per-app configuration profiles, spell phonetically (double press), date/time and battery/status commands, review-cursor follow toggles | commands + settings; e2e per command | F0 / M12a / M13 / M14a / M15a (ranked and placed in `docs/plan/phase-3-features.md` §8, §12) |
+| Flat review, object navigation and mouse routing everywhere at NVDA parity (user request 2026-10-17), with seams for later graph/vector navigation | review line sources, ShellHelper virtual pointer, parity matrix R4 | **M21** (`docs/plan/phase-3-features.md` §9, §10) |
 | Text editors: gedit and GNOME Text Editor (baseline app scope, user request 2026-10-16) | e2e scenarios for editing, word/line/paragraph navigation, selection, find/replace, tabs; user checklist | M11 (wave 1) |
 | LibreOffice and other apps | CLAUDE.md "later" | Phase 4 (§10) |
 
@@ -506,6 +510,12 @@ dependency on anything.
 
 Wave 2: M12 (rest), M15, M16, M14, M10 integration, M13. Wave 3: M17, M18, M19, then M20.
 
+**Product features (amendment 2026-10-17, `docs/plan/phase-3-features.md` §12):** F0 quick wins (lock keys,
+capital pitch, speech history review, battery, sleep toggle) join Wave 1; **M15a** (`Mode::Chooser`/`Mode::Prompt`,
+command list, history and notification lists) moves ahead of M15 into late Wave 1; **M14a** (profiles and
+verbosity, ADR-0016) precedes the M14 GUI; **M21** (review everywhere and pointer, ADR-0006 amendment 2) is
+Wave 2; M13 gains `CueSink`/`gorca-cues` and dictionary import (ADR-0017).
+
 ## 6. Parallelism and file ownership
 
 | Area (crate / path) | C0 | M10 | M11 | M12 | M13 | M14 | M15 | M16 | M17 | M18 | M19 |
@@ -556,6 +566,8 @@ W = owns, w = small additive edits. Conflict rules (Phase 2 CF-1…CF-5 retired 
 | `docs/upstream.md` (filed upstream issues) | linux-platform-engineer | Track U |
 | `docs/user-guide/{en,ru}/` | tech-writer | M17 |
 | `docs/plan/checklists/M10.md` … `M20.md` (two language columns) | tech-writer | each milestone |
+| `docs/plan/phase-3-features.md` (product features: profiles, help, lists, dictionaries, cues, review everywhere) | architect | F0, M12–M15a, M21 |
+| ADR-0016 configuration profiles and verbosity; ADR-0017 speech text processing and audio cues; ADR-0006 amendment 2 (review everywhere, pointer); ADR-0002 amendment (graph seams) | architect | M14a, M13, M21 |
 
 ADR numbers are the next free ones on 2026-10-16; the orchestrator renumbers if any is taken first.
 

@@ -1,0 +1,22 @@
+mode=ACCEPTANCE ATTEMPT, DEGRADED HOST (--force), PARTIAL (m1 m6)
+utc=2026-10-17T01:27:06Z
+git_rev=d108974 dirty_tracked_files=3 branch=worktree-agent-ab1f7350482f9d118
+kernel=7.1.8+deb13-rt-amd64 cpus=16
+loadavg=13.61 10.67 10.28 4/2356 3147415
+psi_memory_some_avg10=0.00 psi_memory_full_avg10=0.00
+psi_cpu_some_avg10=0.09 psi_io_some_avg10=0.00
+mem_available_mb=15852
+governor=performance 
+rtkit MaxRealtimePriority: i 20 
+rtkit RTTimeUSecMax: x 200000 
+topology: shipped default (--topology=auto); expected arm: lanes-rt (gated by e2e --expect-topology)
+repeats=3 quick=no suites=m1 m6
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=1
+  idle C3_ACPI latency=1048us disabled=1
+  load: 13.61 10.67 10.28 4/2360 3147458
+git_rev_built=d108974 binary=69fb92e724e51dbc mtime=2026-10-17 04:27:06.154842875 +0300
+loadavg_end=8.71 8.23 8.09 1/2528 3283991 elapsed_s=3813

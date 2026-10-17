@@ -24,6 +24,7 @@ mod fake;
 mod lane;
 mod queue;
 mod state;
+mod symbols;
 mod verbalize;
 
 pub use backend::{BackendConnectError, FnBackend, SpeechBackend};
@@ -33,4 +34,5 @@ pub use queue::{FIFO_CAPACITY, SpeechQueue};
 pub use state::{
     REPLACE_DEADLINE, SpeechEffect, SpeechMsg, SpeechState, StepCtx, UttMeta, backoff,
 };
+pub use symbols::{Lang, Table as SymbolTable};
 pub use verbalize::{Caps, How, Punct, VerbalizeOpts, Verbalizer};
