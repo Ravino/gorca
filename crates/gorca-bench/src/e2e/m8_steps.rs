@@ -940,10 +940,10 @@ fn rv_names() -> Vec<Step> {
         s("RM.h2", P0, "H: next heading", n('h'), &["after names"]),
         top("RM.top3"),
         s("RM.k", P0, "K: card link with aria-label", n('k'), &["link, read article card title"]).not(&["card teaser text"]),
-        s("RM.down1", P0, "Down from the card link: its second line", Act::Key(DOWN, 0), &["card teaser text"]),
-        s("RM.down2", P0, "Down again: the tree item keeps its content (NVDA)", Act::Key(DOWN, 0), &["tree view item", "item content"]),
-        s("RM.down3", P0, "Down again: the leading '. ' of page text is kept", Act::Key(DOWN, 0), &[". dot leading paragraph"]),
-        s("RM.down4", P0, "Down again", Act::Key(DOWN, 0), &["after names"]),
+        s("RM.down1", P0, "Down from the card link: its second line", Act::Key(DOWN, 0), &[]).extra(&["card teaser text"], "Blink repeats static text runs (M9), so its lines differ"),
+        s("RM.down2", P0, "Down again: the tree item keeps its content (NVDA)", Act::Key(DOWN, 0), &[]).extra(&["tree view item", "item content"], "Blink repeats static text runs (M9), so its lines differ"),
+        s("RM.down3", P0, "Down again: the leading '. ' of page text is kept", Act::Key(DOWN, 0), &[]).extra(&[". dot leading paragraph"], "Blink repeats static text runs (M9), so its lines differ"),
+        s("RM.down4", P0, "Down again", Act::Key(DOWN, 0), &[]).extra(&["after names"], "Blink repeats static text runs (M9), so its lines differ"),
         s("RM.tree", P0, "Focus tree item with aria-label", Act::Focus(role::TREE_ITEM, "Item label"), &["item label, tree view item"]),
     ]
 }
