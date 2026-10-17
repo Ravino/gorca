@@ -686,7 +686,7 @@ fn forge() -> Vec<Step> {
         s("FG.toggle", P1, "Toggle button focus: pressed state", Act::Focus(role::TOGGLE_BUTTON, "Watch"), &["Watch 12"]).extra(&["not pressed"], "the pressed state is not spoken"),
         top("FG.top2"),
         s("FG.t", P0, "T: the file table, named by its sr-only caption", n('t'), &["Folders and files"]).extra(&["table"], NO_ROLE_WORD),
-        s("FG.t.2", P1, "T: the diff table", n('t'), &["Diff of src/lib.rs"]),
+        s("FG.t.2", P1, "T: the diff table", n('t'), &["Diff of src slash lib dot rs"]),
         top("FG.top3"),
         s("FG.d", P1, "D x3: banner, search, then the global navigation", rep('d', 3), &["Pull requests"]).extra(&["Global"], NO_LANDMARK_NAME),
         top("FG.top4"),
@@ -868,7 +868,7 @@ fn ho() -> Vec<Step> {
 /// focus speech) and quick-navigated (a hit speaks them too).
 fn fb() -> Vec<Step> {
     vec![
-        s("FB.invalid.focus", P0, "Focus on a field with aria-invalid and aria-errormessage: invalid entry, then the message", Act::Focus(role::ENTRY, "Email address"), &["email address, edit", "invalid entry", "enter an address like name@example.com"]),
+        s("FB.invalid.focus", P0, "Focus on a field with aria-invalid and aria-errormessage: invalid entry, then the message", Act::Focus(role::ENTRY, "Email address"), &["email address, edit", "invalid entry", "enter an address like name at example dot com"]),
         esc("FB.e1"),
         s("FB.describedby", P0, "Focus on a field with aria-describedby: the hint after a short pause", Act::Focus(role::ENTRY, "User name"), &["user name, edit", ". at least six characters"]).not(&["invalid"]),
         esc("FB.e2"),
@@ -892,7 +892,7 @@ fn fb() -> Vec<Step> {
         s("FB.disabled.aria", P1, "An aria-disabled button", Act::Focus(role::PUSH_BUTTON, "Aria disabled button"), &["aria disabled button, button"]).extra(&["unavailable"], "Gecko leaves aria-disabled buttons enabled in the state set (to be verified per engine)"),
         // quick navigation hits speak the same words
         top("FB.top"),
-        s("FB.qn.invalid", P0, "E: the invalid field is announced with its error message", n('e'), &["email address, edit", "invalid entry", "enter an address like name@example.com"]),
+        s("FB.qn.invalid", P0, "E: the invalid field is announced with its error message", n('e'), &["email address, edit", "invalid entry", "enter an address like name at example dot com"]),
         s("FB.qn.described", P0, "E: a described field says its hint after a pause", n('e'), &["user name, edit", ". at least six characters"]),
         s("FB.qn.button.disabled", P0, "B: a disabled button is unavailable", rep('b', 2), &["button, unavailable, native disabled button"]),
     ]
