@@ -28,6 +28,27 @@ use crate::reader::{
     ReaderEffect, ReaderEffects, Reconfirm,
 };
 
+/// How long a focus whose fetch was refused as `Busy` waits before it is asked again, per
+/// attempt. The immediate retry (N2) meets the same full queue of a flooded application (the
+/// Shell opening the Alt+Tab switcher); a pause lets the queue drain. At most 3 further tries,
+/// about 0.6 s in all, then the usual fallback.
+const FOCUS_BACKOFF: [Duration; 3] = [
+    Duration::from_millis(60),
+    Duration::from_millis(150),
+    Duration::from_millis(400),
+];
+
+/// A `Busy` focus fetch waiting for its next try (see [`FOCUS_BACKOFF`]).
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct FocusBackoff {
+    pub node: NodeKey,
+    pub epoch: Epoch,
+    /// Tries made so far (index into [`FOCUS_BACKOFF`] of the next delay).
+    pub attempt: usize,
+    /// When the next try is due; `None` while one is in flight.
+    pub due: Option<Instant>,
+}
+
 /// A correction replaces the earlier utterance only if less than this much time has passed
 /// since it was submitted (ADR-0001 8.1: 150 ms of audio); otherwise it is a follow-up.
 pub const REFINE_WINDOW: Duration = Duration::from_millis(150);
@@ -61,6 +82,14 @@ pub fn focus_need(n: &NodeSnapshot) -> PropMask {
     if n.name.as_deref().is_none_or(str::is_empty) {
         need |= PropMask::RELATIONS;
     }
+    // A field's help or error text is spoken after its value: asked for only once the role is
+    // known to be a field (the cold path stays as measured, B-1).
+    if matches!(
+        n.role,
+        Role::TextEntry | Role::PasswordEntry | Role::ComboBox | Role::SpinButton
+    ) {
+        need |= PropMask::DESCRIPTION;
+    }
     need
 }
 
@@ -70,16 +99,23 @@ fn apply_web_extra(
     word: Option<&'static str>,
     tail: &[crate::browse::present::Item],
 ) {
+    use crate::browse::present::Item;
+    let (lead, rest): (Vec<Item>, Vec<Item>) = tail
+        .iter()
+        .cloned()
+        .partition(|i| matches!(i, Item::Lead(_)));
+    let mut front: Vec<gorca_model::Segment> = Vec::new();
     if let Some(w) = word {
-        u.segments.insert(
-            0,
-            gorca_model::Segment {
-                text: Arc::from(w),
-                kind: gorca_model::SegmentKind::Text,
-            },
-        );
+        front.push(gorca_model::Segment {
+            text: Arc::from(w),
+            kind: gorca_model::SegmentKind::Text,
+        });
     }
-    u.segments.extend(crate::browse::present::segments(tail));
+    front.extend(crate::browse::present::segments(&lead));
+    for (at, seg) in front.into_iter().enumerate() {
+        u.segments.insert(at, seg);
+    }
+    u.segments.extend(crate::browse::present::segments(&rest));
 }
 
 impl Reader {
@@ -89,6 +125,7 @@ impl Reader {
             FocusLaneMsg::FocusChanged { node } => {
                 self.selection_node = None;
                 self.focus_retried = None;
+                self.focus_backoff = None;
                 self.revalidate_retried = None;
                 self.web_on_focus(node, fx);
                 self.window_on_focus(node.app);
@@ -96,6 +133,7 @@ impl Reader {
             }
             FocusLaneMsg::ItemSelected { node } => {
                 self.selection_node = Some(node);
+                self.focus_backoff = None;
                 self.begin_focus(node, now, fx);
             }
             FocusLaneMsg::NodeRemoved(n) => {
@@ -390,6 +428,22 @@ impl Reader {
                 });
             }
             gorca_model::Lookup::Miss => {
+                // A node of a mirrored web document: speak it from the mirror now, then confirm
+                // (RV-1); the cold fetch would cost a round trip into a possibly busy browser.
+                if let Some(snap) = self.web_focus_snapshot(node) {
+                    let v = NodeView {
+                        snap: Arc::new(snap),
+                        stale: PropMask::VALUE,
+                        aged: true,
+                    };
+                    self.present_cached(&v, PresentSource::Stale, true, epoch, fx);
+                    fx.push(ReaderEffect::Demand {
+                        node,
+                        why: DemandWhy::Focus,
+                        outcome: DemandOutcome::Miss,
+                    });
+                    return;
+                }
                 fx.push(Self::fetch_effect(
                     node,
                     FOCUS_FIELDS,
@@ -445,7 +499,7 @@ impl Reader {
             self.counters.revalidations += 1;
             fx.push(Self::fetch_effect(
                 v.snap.key,
-                FOCUS_FIELDS,
+                focus_need(&v.snap),
                 self.epoch.current(),
                 FetchKind::Revalidate,
             ));
@@ -515,6 +569,7 @@ impl Reader {
                 });
                 if silent {
                     // The policy says nothing for this node; the bookkeeping above stands.
+                } else if self.web_suppress_focus(snap.key) {
                 } else if hold {
                     self.window_hold(u, fx);
                 } else {
@@ -647,11 +702,65 @@ impl Reader {
                         r.epoch,
                         FetchKind::Focus,
                     ));
+                } else if matches!(r.result, Err(gorca_connector_api::BackendError::Busy))
+                    && self.focus_backoff_wait(r.node, r.epoch, fx)
+                {
+                    // Refused twice in a row: the application is flooded (the Shell opening
+                    // the Alt+Tab switcher). Ask again after a pause, not at once.
+                } else if self.selection_node == Some(r.node) {
+                    // A switcher item that cannot be read says nothing: "unknown" for an
+                    // item the user is only passing over is noise, and the next move speaks.
+                    tracing::debug!(node = ?r.node, "selected item unreadable: silent");
                 } else {
                     // Never stay silent on focus: say that nothing is known.
                     self.say("unknown", fx);
                 }
             }
+        }
+    }
+
+    /// Schedule the next delayed try of a `Busy` focus fetch. False when the tries are used up.
+    fn focus_backoff_wait(&mut self, node: NodeKey, epoch: Epoch, fx: &mut ReaderEffects) -> bool {
+        let attempt = match self.focus_backoff {
+            Some(b) if b.node == node && b.epoch == epoch => b.attempt,
+            Some(_) | None => 0,
+        };
+        let Some(delay) = FOCUS_BACKOFF.get(attempt) else {
+            self.focus_backoff = None;
+            return false;
+        };
+        let due = self.now + *delay;
+        self.focus_backoff = Some(FocusBackoff {
+            node,
+            epoch,
+            attempt: attempt + 1,
+            due: Some(due),
+        });
+        fx.push(ReaderEffect::ArmTimer(due));
+        true
+    }
+
+    /// The timer of [`Self::focus_backoff_wait`]: ask again when due, drop it when the focus has
+    /// moved on, and arm again when the timer fired for another subsystem (N1).
+    pub(crate) fn focus_backoff_timer(&mut self, now: Instant, fx: &mut ReaderEffects) {
+        let Some(b) = self.focus_backoff else {
+            return;
+        };
+        let Some(due) = b.due else {
+            return;
+        };
+        if b.epoch != self.epoch.current() {
+            self.focus_backoff = None;
+        } else if now < due {
+            fx.push(ReaderEffect::ArmTimer(due));
+        } else {
+            self.focus_backoff = Some(FocusBackoff { due: None, ..b });
+            fx.push(Self::fetch_effect(
+                b.node,
+                FOCUS_FIELDS,
+                b.epoch,
+                FetchKind::Focus,
+            ));
         }
     }
 

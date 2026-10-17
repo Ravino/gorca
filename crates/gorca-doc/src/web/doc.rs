@@ -100,11 +100,13 @@ fn splitmix(mut x: u64) -> u64 {
 fn own_chars(text: Option<&str>, flags: NodeFlags) -> impl Iterator<Item = char> + '_ {
     let on = !flags.contains(NodeFlags::HIDDEN);
     let before = on && flags.contains(NodeFlags::BREAK_BEFORE);
+    let gap = on && !before && flags.contains(NodeFlags::CELL_SEP);
     let after = on && flags.contains(NodeFlags::BREAK_AFTER);
     let body = if on { text.unwrap_or("") } else { "" };
     before
         .then_some('\n')
         .into_iter()
+        .chain(gap.then_some(' '))
         .chain(body.chars())
         .chain(after.then_some('\n'))
 }

@@ -28,7 +28,57 @@ pub fn passes_through(role: Role, states: StateSet, reason: Reason) -> bool {
             let editable = states.contains(StateSet::EDITABLE)
                 && !states.contains(StateSet::READ_ONLY)
                 && !matches!(role, Role::Document | Role::DocumentWeb);
+            // D-1 (NVDA `SWITCH_TO_PASS_THROUGH_ON_FOCUS_ROLES`, `ALWAYS_SWITCH...` grid cells):
+            // a focus event on a radio button, tab, menu or list item, or on a focusable cell of
+            // an interactive grid enters focus mode so the arrows drive the widget. Activation
+            // (Enter in browse mode) keeps the browse rules.
+            let focusable = states.contains(StateSet::FOCUSABLE);
+            let focus_widget = reason == Reason::Focus
+                && match role {
+                    // The node is the target of a focus event: these roles are widgets whatever
+                    // the state set says (roving tabindex items may lack `focusable`).
+                    Role::RadioButton | Role::Tab | Role::MenuItem => true,
+                    Role::ListItem => focusable || states.contains(StateSet::SELECTABLE),
+                    Role::Cell | Role::Row | Role::ColumnHeader | Role::RowHeader => focusable,
+                    Role::Unknown
+                    | Role::Application
+                    | Role::Window
+                    | Role::Dialog
+                    | Role::Panel
+                    | Role::Document
+                    | Role::DocumentWeb
+                    | Role::Heading
+                    | Role::Paragraph
+                    | Role::Link
+                    | Role::Image
+                    | Role::List
+                    | Role::Table
+                    | Role::Button
+                    | Role::ToggleButton
+                    | Role::CheckBox
+                    | Role::ComboBox
+                    | Role::TextEntry
+                    | Role::PasswordEntry
+                    | Role::SpinButton
+                    | Role::Slider
+                    | Role::ProgressBar
+                    | Role::Menu
+                    | Role::MenuBar
+                    | Role::Popover
+                    | Role::TabList
+                    | Role::Tree
+                    | Role::TreeItem
+                    | Role::Toolbar
+                    | Role::StatusBar
+                    | Role::Separator
+                    | Role::Label
+                    | Role::StaticText
+                    | Role::Terminal
+                    | Role::Landmark
+                    | Role::Alert => false,
+                };
             editable
+                || focus_widget
                 || match role {
                     Role::TextEntry
                     | Role::PasswordEntry
@@ -149,6 +199,38 @@ mod tests {
         assert!(!passes_through(
             Role::DocumentWeb,
             st(StateSet::EDITABLE),
+            Reason::Focus
+        ));
+    }
+
+    #[test]
+    fn d1_radios_tabs_menu_items_and_grid_cells_pass_keys_through_on_focus_only() {
+        for r in [
+            Role::RadioButton,
+            Role::Tab,
+            Role::MenuItem,
+            Role::ListItem,
+            Role::Cell,
+        ] {
+            assert!(
+                passes_through(r, st(StateSet::FOCUSABLE), Reason::Focus),
+                "{r:?}"
+            );
+        }
+        assert!(!passes_through(
+            Role::RadioButton,
+            st(StateSet::FOCUSABLE),
+            Reason::Activate
+        ));
+        // a plain table cell or list item (not focusable) stays document text
+        assert!(!passes_through(
+            Role::Cell,
+            st(StateSet::empty()),
+            Reason::Focus
+        ));
+        assert!(!passes_through(
+            Role::ListItem,
+            st(StateSet::empty()),
             Reason::Focus
         ));
     }

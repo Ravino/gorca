@@ -1,0 +1,42 @@
+# e2e-m8 m8j-lv
+# utc=2026-10-16T00:11:27Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=35.55 36.94 29.10 37/3168 3060045
+# git_rev=33f9698
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m8j-lv
+# reader=daemon:<repo>/.claude/worktrees/agent-adcbae30d4d7a4ad0/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# quick=true
+# loadavg_before=35.46 37.17 28.88 19/3137 3057733
+# loadavg_end=35.55 36.94 29.10 39/3168 3060042
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# note0=M8-LV LV.alert P0 FAIL: heard "Run alert, button" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-LV.key_ms.n             daemon/voicego            1            1            1  1                  info   [samples]
+M8-LV.key_ms.p50           daemon/voicego        6.051        6.051        6.051  1                  info   [ms]
+M8-LV.key_ms.p95           daemon/voicego        6.051        6.051        6.051  1                  info   [ms]
+M8-LV.key_ms.p99           daemon/voicego        6.051        6.051        6.051  1 <=            5  FAIL   [ms]
+M8-LV.key_ms.max           daemon/voicego        6.051        6.051        6.051  1                  info   [ms]
+M8-LV.live_ms.n            daemon/voicego            4            4            4  1                  info   [samples]
+M8-LV.live_ms.p50          daemon/voicego         86.1         86.1         86.1  1                  info   [ms]
+M8-LV.live_ms.p95          daemon/voicego        101.2        101.2        101.2  1                  info   [ms]
+M8-LV.live_ms.p99          daemon/voicego        101.2        101.2        101.2  1 <=          100  FAIL  65 ms (LV1) + 35 ms rig allowance (DoAction + page handler) [ms]
+M8-LV.live_ms.max          daemon/voicego        101.2        101.2        101.2  1                  info   [ms]
+M8-LV.fail                 daemon/voicego            1            1            1  1 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-LV.gap                  daemon/voicego            0            0            0  1                  info  core ok, NVDA extras missing [steps]
+M8-LV.p0_not_pass          daemon/voicego            1            1            1  1                  info   [steps]
+M8-LV.pass                 daemon/voicego           16           16           16  1                  info   [steps]
+M8-LV.steps                daemon/voicego           17           17           17  1                  info   [steps]
+M8-LV.xfail                daemon/voicego            0            0            0  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-LV.xpass                daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]

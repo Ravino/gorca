@@ -1,0 +1,14 @@
+suite=m7
+step=firefox
+attempt=1
+kind=e2e
+exit=1
+label=acc-20261016T232704Z-m7-firefox-a1
+start=1792193736
+end=1792194328
+seconds=592
+load_start=13.56 17.30 15.23 5/2773 2568891
+load_end=13.36 15.37 15.40 5/2663 2638696
+governor=performance 
+git_rev=c4183c7
+cap_seconds=7200

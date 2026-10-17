@@ -120,16 +120,6 @@ fn esc(id: &'static str) -> Step {
 }
 
 // Reasons repeated across rows.
-const NO_TABLES: &str = "table navigation is Planned(M8): table.* commands are declared, not handled";
-const NO_FRAME_NAV: &str = "quicknav.next.frame (M) is Planned(M7): not implemented on main";
-const NO_NLB: &str = "quicknav.next.not_link_block (N) is Planned(M7): not implemented on main";
-const NO_ANN: &str = "quicknav.next.annotation (A) is Planned(M7): not implemented on main";
-const NO_ERR: &str = "quicknav.next.error (W) is Planned(M7): not implemented on main";
-const NO_PARA: &str = "quicknav.next.paragraph (P) is Planned(M7): not implemented on main";
-const NO_LIVE: &str = "live regions (ADR-0003 13) are M7b: not on main";
-const NO_SEL: &str = "browse-mode selection (Shift+arrows, Ctrl+A) is Planned: not on main";
-const NO_CARET_ANCHOR: &str = "a same-page anchor with no focus moves the DOM caret, not focus: CaretMoved is ignored in Browse (ADR-0003 11); NVDA follows it through scrollingStart";
-const NO_MODAL: &str = "modal scope (ADR-0003 11 Modal) is M7b: not on main";
 const NAME_OMITTED: &str = "the accessible name of a labelled form control is not spoken on quick nav: the label is separate text outside the control's range and the presenter speaks the range only (LP-1, LP-4)";
 const NO_ROLE_WORD: &str = "the role word and count of a container are not spoken when the cursor lands on it (field diff, LP-2: M7b)";
 const NO_LANDMARK_NAME: &str = "a landmark hit is presented as the content at its start; its name and role word are not spoken (BM-3/LP-2 field diff: M7b)";
@@ -219,28 +209,31 @@ fn qn() -> Vec<Step> {
         s("QN.m.2", P1, "M again", n('m'), &["frame", "Embedded frame two"]),
         top("QN.top17"),
         s("QN.o.1", P1, "O: next embedded object (application)", n('o'), &["Calculator widget"]),
-        s("QN.o.2", P1, "O again (object element)", n('o'), &["Plain object"]),
+        s("QN.o.2", P1, "O again (object element)", n('o'), &["Plain object"]).xf("the <object> with text/plain data is not found by O: Firefox gives it no embedded node in the mirror (not investigated)"),
         top("QN.top18"),
         s("QN.t.1", P0, "T: next table", n('t'), &["Fruit table"]).extra(&["table", "2 columns", "3 rows"], NO_ROLE_WORD).gate(Gate::Key),
         s("QN.t.2", P0, "T again", n('t'), &["Veg table"]).extra(&["table"], NO_ROLE_WORD),
         s("QN.t.3", P1, "T: no more tables", n('t'), &["no next table"]),
         // the keys gorca has not built yet
         top("QN.top19"),
-        s("QN.n.1", P1, "N: skip past a block of links", n('n'), &["Text after the link block"]).xf(NO_NLB),
-        s("QN.a.1", P2, "A: next annotation (inserted text)", n('a'), &["Inserted words"]).xf(NO_ANN),
-        s("QN.w.1", P2, "W: next error", n('w'), &["misspeled"]).xf(NO_ERR),
-        s("QN.p.1", P2, "P: next text paragraph", n('p'), &["Alpha link"]).xf(NO_PARA),
+        s("QN.n.1", P1, "N: skip past a block of links", n('n'), &["Text after the link block"]),
+        top("QN.a.1.t"),
+        s("QN.a.1", P2, "A: next annotation (inserted text)", n('a'), &["Inserted words"]),
+        top("QN.w.1.t"),
+        s("QN.w.1", P2, "W: next error", n('w'), &["misspeled"]).xf("aria-invalid=spelling is a text attribute in Firefox (invalid:spelling), the mirror carries node states only; W finds nodes in an invalid state, form fields excluded"),
+        top("QN.p.1.t"),
+        s("QN.p.1", P2, "P: next text paragraph", n('p'), &["Alpha link"]),
         // containers (comma / Shift+comma)
         top("QN.top20"),
         pos("QN.list.enter", n('l')),
-        s("QN.comma.1", P1, "Comma: past the end of the list", n(','), &["First numbered"]).xf("browse.container_end is Planned(M7): not implemented on main"),
-        s("QN.comma.2", P1, "Shift+Comma: back to the start of the container", Act::Key(COMMA_SHIFT, SHIFT), &["First numbered"]).xf("browse.container_start is Planned(M7): not implemented on main"),
+        s("QN.comma.1", P1, "Comma: past the end of the list", n(','), &["First numbered"]),
+        s("QN.comma.2", P1, "Shift+Comma: back to the start of the container", Act::Key(COMMA_SHIFT, SHIFT), &["First numbered"]),
         top("QN.top21"),
-        s("QN.comma.3", P2, "Comma outside any container", n(','), &["Not in a container"]).xf("browse.container_end is Planned(M7): not implemented on main"),
+        s("QN.comma.3", P2, "Comma outside any container", n(','), &["Not in a container"]),
         // single-letter navigation toggle (NVDA+Shift+Space)
-        s("QN.sl.off", P1, "gorca+Shift+Space: single letter navigation off", Act::Chord(INSERT, SPACE, SHIFT), &["single letter navigation off"]).xf("browse.single_letter_toggle is Planned(M7): not implemented on main"),
-        s("QN.sl.key", P1, "H with it off reaches the page", n('h'), &[]).passes_through().xf("browse.single_letter_toggle is Planned(M7): not implemented on main"),
-        s("QN.sl.on", P1, "gorca+Shift+Space: back on", Act::Chord(INSERT, SPACE, SHIFT), &["single letter navigation on"]).xf("browse.single_letter_toggle is Planned(M7): not implemented on main"),
+        s("QN.sl.off", P1, "gorca+Shift+Space: single letter navigation off", Act::Chord(INSERT, SPACE, SHIFT), &["single letter navigation off"]),
+        s("QN.sl.key", P1, "H with it off reaches the page", n('h'), &[]).passes_through(),
+        s("QN.sl.on", P1, "gorca+Shift+Space: back on", Act::Chord(INSERT, SPACE, SHIFT), &["single letter navigation on"]),
     ]
 }
 
@@ -251,28 +244,28 @@ fn tb() -> Vec<Step> {
     vec![
         top("TB.top"),
         s("TB.t.1", P0, "T: next table, named by its caption", n('t'), &["Quarterly sales"]).extra(&["table", "4 columns", "4 rows"], NO_ROLE_WORD),
-        s("TB.into", P0, "Down x2: the caption, then the header row as one line (screen layout on, NVDA default)", Act::Repeat(DOWN, 0, 2), &["Region"]).extra(&["Q1", "Q2", "Q3"], "every table cell is its own line; NVDA reads a table row as one line with screen layout on"),
-        s("TB.right.1", P0, "Ctrl+Alt+Right: next cell", ctrl_alt(RIGHT), &["Q1"]).xf(NO_TABLES).gate(Gate::Key),
-        s("TB.right.2", P0, "Ctrl+Alt+Right again", ctrl_alt(RIGHT), &["Q2"]).xf(NO_TABLES),
-        s("TB.down.1", P0, "Ctrl+Alt+Down: next row, the row header changes and is spoken", ctrl_alt(DOWN), &["North", "20"]).xf(NO_TABLES).gate(Gate::Key),
-        s("TB.down.2", P0, "Ctrl+Alt+Down again", ctrl_alt(DOWN), &["South", "21"]).xf(NO_TABLES),
-        s("TB.up.1", P0, "Ctrl+Alt+Up: previous row", ctrl_alt(UP), &["North", "20"]).xf(NO_TABLES),
-        s("TB.left.1", P0, "Ctrl+Alt+Left: previous column, the column header changes", ctrl_alt(LEFT), &["Q1", "10"]).xf(NO_TABLES),
-        s("TB.left.2", P0, "Ctrl+Alt+Left onto the row header cell", ctrl_alt(LEFT), &["North"]).xf(NO_TABLES),
-        s("TB.edge.left", P0, "Ctrl+Alt+Left at the first column", ctrl_alt(LEFT), &["Edge of table"]).xf(NO_TABLES),
-        s("TB.last.col", P1, "Ctrl+Alt+End: last column", ctrl_alt(END), &["30"]).xf(NO_TABLES),
-        s("TB.edge.right", P1, "Ctrl+Alt+Right at the last column", ctrl_alt(RIGHT), &["Edge of table"]).xf(NO_TABLES),
-        s("TB.last.row", P1, "Ctrl+Alt+PageDown: last row", ctrl_alt(PGDN), &["East", "32"]).xf(NO_TABLES),
-        s("TB.edge.down", P1, "Ctrl+Alt+Down at the last row", ctrl_alt(DOWN), &["Edge of table"]).xf(NO_TABLES),
-        s("TB.first.row", P1, "Ctrl+Alt+PageUp: first row", ctrl_alt(PGUP), &["Q3"]).xf(NO_TABLES),
-        s("TB.first.col", P1, "Ctrl+Alt+Home: first column", ctrl_alt(HOME), &["Region"]).xf(NO_TABLES),
-        s("TB.say.row", P2, "gorca+Ctrl+Alt+Left: speak the whole row", gorca_ctrl_alt(LEFT), &["Region", "Q1", "Q2", "Q3"]).xf(NO_TABLES),
-        s("TB.say.col", P2, "gorca+Ctrl+Alt+Up: speak the whole column", gorca_ctrl_alt(UP), &["Region", "North", "South", "East"]).xf(NO_TABLES),
+        s("TB.into", P0, "Down: T lands on the caption line (the first line of the table, as in NVDA); the next line is the header row, one line (screen layout on, NVDA default)", Act::Repeat(DOWN, 0, 1), &["Region"]).extra(&["Q1", "Q2", "Q3"], "every table cell is its own line; NVDA reads a table row as one line with screen layout on"),
+        s("TB.right.1", P0, "Ctrl+Alt+Right: next cell", ctrl_alt(RIGHT), &["Q1"]).gate(Gate::Key),
+        s("TB.right.2", P0, "Ctrl+Alt+Right again", ctrl_alt(RIGHT), &["Q2"]),
+        s("TB.down.1", P0, "Ctrl+Alt+Down: next row, the row header changes and is spoken", ctrl_alt(DOWN), &["North", "20"]).gate(Gate::Key),
+        s("TB.down.2", P0, "Ctrl+Alt+Down again", ctrl_alt(DOWN), &["South", "21"]),
+        s("TB.up.1", P0, "Ctrl+Alt+Up: previous row", ctrl_alt(UP), &["North", "20"]),
+        s("TB.left.1", P0, "Ctrl+Alt+Left: previous column, the column header changes", ctrl_alt(LEFT), &["Q1", "10"]),
+        s("TB.left.2", P0, "Ctrl+Alt+Left onto the row header cell", ctrl_alt(LEFT), &["North"]),
+        s("TB.edge.left", P0, "Ctrl+Alt+Left at the first column", ctrl_alt(LEFT), &["Edge of table"]),
+        s("TB.last.col", P1, "Ctrl+Alt+End: last column", ctrl_alt(END), &["30"]),
+        s("TB.edge.right", P1, "Ctrl+Alt+Right at the last column", ctrl_alt(RIGHT), &["Edge of table"]),
+        s("TB.last.row", P1, "Ctrl+Alt+PageDown: last row", ctrl_alt(PGDN), &["East", "32"]),
+        s("TB.edge.down", P1, "Ctrl+Alt+Down at the last row", ctrl_alt(DOWN), &["Edge of table"]),
+        s("TB.first.row", P1, "Ctrl+Alt+PageUp: first row", ctrl_alt(PGUP), &["Q3"]),
+        s("TB.first.col", P1, "Ctrl+Alt+Home: first column", ctrl_alt(HOME), &["Region"]),
+        s("TB.say.row", P2, "gorca+Ctrl+Alt+Left: speak the whole row", gorca_ctrl_alt(LEFT), &["Region", "Q1", "Q2", "Q3"]),
+        s("TB.say.col", P2, "gorca+Ctrl+Alt+Up: speak the whole column", gorca_ctrl_alt(UP), &["Region", "North", "South", "East"]),
         top("TB.top2"),
-        s("TB.notcell", P1, "Table keys outside a table", ctrl_alt(DOWN), &["Not in a table cell"]).xf(NO_TABLES),
+        s("TB.notcell", P1, "Table keys outside a table", ctrl_alt(DOWN), &["Not in a table cell"]),
         // spans, layout tables, grids, sparse tables
         s("TB.t.2", P0, "T twice from the top: the span table", rep('t', 2), &["Span table"]).extra(&["table"], NO_ROLE_WORD),
-        s("TB.span.hdr", P2, "Down x2: the caption, then the first header row", Act::Repeat(DOWN, 0, 2), &["Item"]).extra(&["Price"], "every table cell is its own line"),
+        s("TB.span.hdr", P2, "Down: from the caption line to the first header row", Act::Repeat(DOWN, 0, 1), &["Item"]).extra(&["Price"], "every table cell is its own line"),
         s("TB.t.3", P0, "T: the layout table is skipped, the grid is next", n('t'), &["Seat"]).extra(&["Seat grid"], NO_ROLE_WORD).not(&["Layout cell"]),
         s("TB.t.4", P1, "T: sparse table", n('t'), &["Sparse table"]),
         s("TB.t.5", P1, "T: one-cell table", n('t'), &["One cell"]),
@@ -310,7 +303,7 @@ fn fm() -> Vec<Step> {
         esc("FM.e5"),
         s("FM.cb", P0, "Check box focus: stays in browse mode, state spoken", Act::Focus(role::CHECK_BOX, "Gift wrap"), &["check box", "Gift wrap"]).extra(&["not checked"], "the unchecked state is not spoken on focus").not(&["focus mode"]),
         s("FM.btn", P0, "Button focus: stays in browse mode", Act::Focus(role::PUSH_BUTTON, "Save profile"), &["button", "Save profile"]).not(&["focus mode"]),
-        s("FM.radio", P1, "Radio focus: NVDA switches to focus mode (SWITCH_TO_PASS_THROUGH_ON_FOCUS_ROLES); ADR-0003 P(n) says browse", Act::Focus(role::RADIO_BUTTON, "Post"), &["radio button", "Post", "focus mode"]).xf("parity delta D-1: ADR-0003 11 lists radios as not passing through; NVDA does on focus"),
+        s("FM.radio", P1, "Radio focus: NVDA switches to focus mode (SWITCH_TO_PASS_THROUGH_ON_FOCUS_ROLES); ADR-0003 P(n) says browse", Act::Focus(role::RADIO_BUTTON, "Post"), &["radio button", "Post", "focus mode"]),
         esc("FM.e6"),
         s("FM.select", P0, "Combo box (select) focus: focus mode", Act::Focus(role::COMBO_BOX, "Size"), &["focus mode", "Size"]),
         esc("FM.e7"),
@@ -331,10 +324,12 @@ fn fm() -> Vec<Step> {
         esc("FM.e14b"),
         s("FM.letters", P0, "In focus mode letters are not grabbed", Act::Focus(role::ENTRY, "Full name"), &["focus mode"]),
         s("FM.letters.key", P0, "H is not consumed: it reaches the field", n('h'), &[]).passes_through(),
+        s("FM.letters.tab", P0, "Tab is not consumed in focus mode: the page's own tab order (R-6)", key0(TAB), &[]).passes_through(),
+        s("FM.letters.stab", P0, "Shift+Tab is not consumed in focus mode", Act::Key(TAB, SHIFT), &[]).passes_through(),
         s("FM.esc2", P0, "Escape again", key0(ESC), &["browse mode"]).gate(Gate::Mode),
         // keys that must reach the page in browse mode (NVDA's passThrough gesture list)
-        s("FM.pass.tab", P0, "Tab is not grabbed", key0(TAB), &[]).passes_through(),
-        s("FM.pass.shift_tab", P0, "Shift+Tab is not grabbed", Act::Key(TAB, SHIFT), &[]).passes_through(),
+        // Tab is no longer in this list: D-2 grabs it in browse mode while a focusable follows the
+        // cursor (SY.tab; SY.tab.out covers the released case); Shift+Tab likewise (SY.stab).
         s("FM.pass.ctrl_enter", P0, "Ctrl+Enter is not grabbed", Act::Key(ENTER, CTRL), &[]).passes_through(),
         s("FM.pass.shift_f10", P1, "Shift+F10 is not grabbed", Act::Key(key(76, 0xffc7), SHIFT), &[]).passes_through(),
         // a real Tab through the compositor (not the emulated Mutter): focus follows
@@ -401,22 +396,22 @@ fn lm() -> Vec<Step> {
 
 fn lv() -> Vec<Step> {
     vec![
-        s("LV.polite", P0, "aria-live=polite: the new text is spoken", Act::Do(role::PUSH_BUTTON, "Run polite"), &["Polite message"]).xf(NO_LIVE).gate(Gate::Live).win(1500),
-        s("LV.assertive", P0, "aria-live=assertive: spoken", Act::Do(role::PUSH_BUTTON, "Run assertive"), &["Assertive message"]).xf(NO_LIVE).gate(Gate::Live).win(1500),
-        s("LV.alert", P0, "role=alert added: spoken at once", Act::Do(role::PUSH_BUTTON, "Run alert"), &["Alert: disk almost full"]).xf(NO_LIVE).gate(Gate::Live).win(1500),
-        s("LV.status", P0, "role=status text change", Act::Do(role::PUSH_BUTTON, "Run status"), &["Saved at step"]).xf(NO_LIVE).gate(Gate::Live).win(1500),
-        s("LV.log", P0, "role=log: only the appended entry", Act::Do(role::PUSH_BUTTON, "Run log"), &["Log entry"]).xf(NO_LIVE).gate(Gate::Live).win(1500),
-        s("LV.log2", P1, "role=log again: one utterance, not the whole log", Act::Do(role::PUSH_BUTTON, "Run log"), &["Log entry"]).max(1).xf(NO_LIVE).win(1500),
-        s("LV.atomic", P1, "aria-atomic: the whole region is spoken for one changed part", Act::Do(role::PUSH_BUTTON, "Run atomic"), &["Ticker", "points"]).xf(NO_LIVE).win(1500),
-        s("LV.busy", P1, "aria-busy: only the final text, once", Act::Do(role::PUSH_BUTTON, "Run busy"), &["Busy final text"]).not(&["Busy part one"]).xf(NO_LIVE).win(2200),
+        s("LV.polite", P0, "aria-live=polite: the new text is spoken", Act::Do(role::PUSH_BUTTON, "Run polite"), &["Polite message"]).gate(Gate::Live).win(1500),
+        s("LV.assertive", P0, "aria-live=assertive: spoken", Act::Do(role::PUSH_BUTTON, "Run assertive"), &["Assertive message"]).gate(Gate::Live).win(1500),
+        s("LV.alert", P0, "role=alert added: spoken at once", Act::Do(role::PUSH_BUTTON, "Run alert"), &["Alert: disk almost full"]).gate(Gate::Live).win(1500),
+        s("LV.status", P0, "role=status text change", Act::Do(role::PUSH_BUTTON, "Run status"), &["Saved at step"]).gate(Gate::Live).win(1500),
+        s("LV.log", P0, "role=log: only the appended entry", Act::Do(role::PUSH_BUTTON, "Run log"), &["Log entry"]).gate(Gate::Live).win(1500),
+        s("LV.log2", P1, "role=log again: one utterance, not the whole log", Act::Do(role::PUSH_BUTTON, "Run log"), &["Log entry"]).max(1).win(1500),
+        s("LV.atomic", P1, "aria-atomic: the whole region is spoken for one changed part", Act::Do(role::PUSH_BUTTON, "Run atomic"), &["Ticker", "points"]).win(1500),
+        s("LV.busy", P1, "aria-busy: only the final text, once", Act::Do(role::PUSH_BUTTON, "Run busy"), &["Busy final text"]).not(&["Busy part one"]).win(2200),
         s("LV.off", P0, "aria-live=off: nothing", Act::Do(role::PUSH_BUTTON, "Run off"), &[]).not(&["Silent update"]).win(900),
-        s("LV.remove", P2, "aria-relevant=all: a removal is spoken (ADR-0003 LR-2; NVDA ignores removals)", Act::Do(role::PUSH_BUTTON, "Run remove"), &["Removable text A"]).xf(NO_LIVE).win(1200),
-        s("LV.same", P1, "Same text again: spoken once", Act::Do(role::PUSH_BUTTON, "Run same"), &["Same text again"]).xf(NO_LIVE).win(1200),
+        s("LV.remove", P2, "aria-relevant=all: a removal is spoken (ADR-0003 LR-2; NVDA ignores removals)", Act::Do(role::PUSH_BUTTON, "Run remove"), &["Removable text A"]).win(1200),
+        s("LV.same", P1, "Same text again: spoken once", Act::Do(role::PUSH_BUTTON, "Run same"), &["Same text again"]).win(1200),
         s("LV.same2", P1, "Same text a second time within 10 s: suppressed (dedupe)", Act::Do(role::PUSH_BUTTON, "Run same"), &[]).not(&["Same text again"]).win(1200),
-        s("LV.new", P1, "A region that appears with text: the existing text is not spoken, a later change is", Act::Do(role::PUSH_BUTTON, "Run new region"), &["Text added after the region exists"]).not(&["Text present when the region appears"]).xf(NO_LIVE).win(1800),
+        s("LV.new", P1, "A region that appears with text: the existing text is not spoken, a later change is", Act::Do(role::PUSH_BUTTON, "Run new region"), &["Text added after the region exists"]).not(&["Text present when the region appears"]).win(1800),
         s("LV.hidden", P2, "A hidden region changes: nothing", Act::Do(role::PUSH_BUTTON, "Run hidden"), &[]).not(&["Hidden region changed"]).win(900),
-        s("LV.flood", P0, "200 polite updates in 1 s: bounded speech (bucket 1/s burst 3, 4/s per document)", Act::Do(role::PUSH_BUTTON, "Run flood polite"), &["Flood update"]).max(8).xf(NO_LIVE).win(2600),
-        s("LV.flood.a", P1, "200 assertive updates in 1 s: bounded speech (2/s burst 3)", Act::Do(role::PUSH_BUTTON, "Run flood assertive"), &["Assertive flood"]).max(10).xf(NO_LIVE).win(2600),
+        s("LV.flood", P0, "200 polite updates in 1 s: bounded speech (bucket 1/s burst 3, 4/s per document)", Act::Do(role::PUSH_BUTTON, "Run flood polite"), &["Flood update"]).max(8).win(2600),
+        s("LV.flood.a", P1, "200 assertive updates in 1 s: bounded speech (2/s burst 3)", Act::Do(role::PUSH_BUTTON, "Run flood assertive"), &["Assertive flood"]).max(10).win(2600),
         Step::setup("LV.after", "let the flood end", Act::Wait(1500)),
         s("LV.key", P0, "Down after a flood: the reader still answers", key0(DOWN), &[]).min(1).gate(Gate::Key).win(600),
     ]
@@ -440,10 +435,18 @@ fn iframes() -> Vec<Step> {
         s("IF.esc", P1, "Escape in the frame: browse mode", key0(ESC), &["browse mode"]),
         top("IF.top4"),
         s("IF.m.1", P1, "M: next frame, named by its title", n('m'), &["frame", "Nested level one"]),
-        s("IF.m.2", P1, "M again", n('m'), &["Nested level two"]).xf(NO_FRAME_NAV),
+        s("IF.m.2", P1, "M again", n('m'), &["frame", "Level two frame"]),
         s("IF.end", P1, "Ctrl+End: the last line of the outer page after all frames", ctrl(END), &["Outer paragraph after the frames"]),
         s("IF.late", P2, "A frame reloads its content: no speech", Act::Do(role::PUSH_BUTTON, "Reload late frame"), &[]).not(&["After reload text"]).win(900),
         s("IF.late2", P2, "The page is still navigable", ctrl(HOME), &["Outer page heading"]),
+        // Tab from the top of a page with nested frames (R-4, R-5): our first Tab lands on a real
+        // control, never on a frame document; after that focus moved the cursor, so the
+        // browser's own tab order takes over (NVDA #5227).
+        top("IF.tab.top"),
+        s("IF.tab.1", P1, "Tab from the top: the first link, not a frame document", key0(TAB), &["link"]).not(&["document"]).win(1500),
+        s("IF.tab.2", P1, "Tab after a focus-driven move is the browser's (not consumed)", key0(TAB), &[]).passes_through().win(1500),
+        s("IF.tab.3", P1, "Tab again: still the browser's", key0(TAB), &[]).passes_through().win(1500),
+        s("IF.stab", P1, "Shift+Tab after a focus-driven move is the browser's", Act::Key(TAB, SHIFT), &[]).passes_through().win(1500),
     ]
 }
 
@@ -480,10 +483,10 @@ fn an() -> Vec<Step> {
         s("AN.toc.go", P0, "Enter: the cursor lands on the heading", key0(ENTER), &["Section two"]).win(1500),
         top("AN.top3"),
         s("AN.para", P0, "Link to a paragraph id", rep('k', 3), &["Go to paragraph three"]),
-        s("AN.para.go", P0, "Enter: the paragraph is spoken", key0(ENTER), &["Paragraph three is the target"]).xf(NO_CARET_ANCHOR).win(1500),
+        s("AN.para.go", P0, "Enter: the paragraph is spoken", key0(ENTER), &["Paragraph three is the target"]).win(1500),
         top("AN.top4"),
         s("AN.named", P1, "Link to a named anchor", rep('k', 4), &["Go to named anchor"]),
-        s("AN.named.go", P1, "Enter: the text after the anchor is spoken", key0(ENTER), &["Text after a named anchor"]).xf(NO_CARET_ANCHOR).win(1500),
+        s("AN.named.go", P1, "Enter: the text after the anchor is spoken", key0(ENTER), &["Text after a named anchor"]).win(1500),
         top("AN.top5"),
         s("AN.foc", P0, "Link to a focusable div", rep('k', 5), &["Go to focusable target"]),
         s("AN.foc.go", P0, "Enter: focus moves to the div, the cursor follows", key0(ENTER), &["focusable div target"]).win(1500),
@@ -507,6 +510,9 @@ fn sy() -> Vec<Step> {
         s("SY.esc", P0, "Escape", key0(ESC), &["browse mode"]),
         top("SY.top2"),
         s("SY.nomove", P1, "Moving the browse cursor never moves system focus (BM-2)", Act::Repeat(DOWN, 0, 6), &[]).no_focus().win(1200),
+        top("SY.top5"),
+        s("SY.nomove.k", P1, "K onto a link: reading never focuses it or sets the page caret (BM-2, review H-1)", n('k'), &["link one"]).no_focus().win(1500),
+        s("SY.nomove.sel", P1, "Shift+Right inside the link: the virtual selection never touches the page", Act::Key(RIGHT, SHIFT), &["selected"]).no_focus().win(1500),
         top("SY.top4"),
         s("SY.far", P2, "Ctrl+End: the far paragraph after a long spacer", ctrl(END), &["Far paragraph at the bottom"]),
         s("SY.back", P2, "Ctrl+Home back", ctrl(HOME), &["Focus and caret sync"]),
@@ -514,7 +520,28 @@ fn sy() -> Vec<Step> {
         // Tab starts from the browse cursor (NVDA _tabOverride, browseMode.py:2121)
         top("SY.top3"),
         s("SY.down2", P1, "Cursor onto the second paragraph", Act::Repeat(DOWN, 0, 2), &["Second paragraph"]),
-        s("SY.tab", P1, "Tab from the cursor: the next focusable after it, not the first on the page", Act::AppKeys(&[15]), &["link two"]).xf("gorca passes Tab to Firefox, which starts from its own focus point; NVDA's Tab override uses the browse cursor (parity delta D-2)").win(1500),
+        s("SY.tab", P1, "Tab from the cursor: the next focusable after it, not the first on the page (D-2)", key0(TAB), &["link two"]).win(1500),
+        s("SY.tab2", P1, "Tab again after the focus-driven move is the browser's, not consumed (R-5, NVDA #5227)", key0(TAB), &[]).passes_through().win(800),
+        s("SY.btn", P1, "Firefox's own Tab ended on the button: the cursor follows focus", Act::Focus(role::PUSH_BUTTON, "Plain button"), &["Plain button"]).win(800),
+        s("SY.up3", P1, "Up: the cursor moves off the focused button, Tab is ours again", key0(UP), &[]).win(800),
+        Step::setup("SY.up3.wait", "the grab set follows the settled cursor", Act::Wait(500)),
+        s("SY.stab", P1, "Shift+Tab: the previous focusable before the cursor", Act::Key(TAB, SHIFT), &["link"]).not(&["Plain button"]).win(1500),
+        // last: with nothing focusable after the cursor Tab is not grabbed and reaches the page,
+        // which in this rig leaves the document
+        s("SY.end", P1, "Ctrl+End: past the last focusable", ctrl(END), &["Far paragraph at the bottom"]),
+        Step::setup("SY.end.wait", "the grab set follows the settled cursor", Act::Wait(500)),
+        s("SY.tab.out", P1, "Tab with no focusable after the cursor is not consumed (D-2 pass-through)", key0(TAB), &[]).passes_through(),
+        // A held Tab across the grab flip its own focus move causes (R-1): Mutter swallows the
+        // release of a key whose grab was added while it was down.
+        s("SY.hold.down", P1, "Tab down past the last focusable (passes)", Act::PrbDown(TAB, 0), &[]).passes_through().win(300),
+        s("SY.hold.ffocus", P1, "Firefox's native Tab focuses the button", Act::Focus(role::PUSH_BUTTON, "Plain button"), &["Plain button"]).win(500),
+        s("SY.hold.rep", P1, "Mutter autorepeat of the held Tab is not consumed", Act::PrbRep(TAB, 0), &[]).passes_through().win(800),
+        s("SY.hold.up", P1, "Tab released: reaches the app", Act::PrbUp(TAB, 0), &[]).passes_through().win(800),
+        s("SY.hold.field", P1, "Focus the field: focus mode", Act::Focus(role::ENTRY, "Sync field"), &["focus mode"]).win(1000),
+        s("SY.hold.f.down", P1, "Tab down in focus mode (passes)", Act::PrbDown(TAB, 0), &[]).passes_through().win(300),
+        s("SY.hold.f.link", P1, "Firefox's native Tab lands on Link three: browse mode", Act::Focus(role::LINK, "Link three"), &["Link three"]).win(1000),
+        s("SY.hold.f.rep", P1, "Mutter autorepeat of the still-held Tab is not consumed", Act::PrbRep(TAB, 0), &[]).passes_through().win(800),
+        s("SY.hold.f.up", P1, "Tab released: reaches the app (it got the press)", Act::PrbUp(TAB, 0), &[]).passes_through().win(800),
     ]
 }
 
@@ -540,20 +567,20 @@ fn rd() -> Vec<Step> {
         s("RD.pgup", P1, "Page Up back to the first line", key0(PGUP), &["Selection and say-all"]),
         top("RD.top2"),
         pos("RD.p1", key0(DOWN)),
-        s("RD.para", P1, "Ctrl+Down: next paragraph", ctrl(DOWN), &["Kilo lima"]).xf("paragraph and sentence moves are M7b: not on main"),
+        s("RD.para", P1, "Ctrl+Down: next paragraph", ctrl(DOWN), &["Kilo lima"]),
         top("RD.top2b"),
         pos("RD.p1b", key0(DOWN)),
-        s("RD.sent", P1, "Alt+Down: next sentence (only the sentence is spoken)", Act::Key(DOWN, ALT), &[]).exact("Foxtrot golf hotel india juliet.").xf("paragraph and sentence moves are M7b: not on main"),
+        s("RD.sent", P1, "Alt+Down: next sentence (only the sentence is spoken)", Act::Key(DOWN, ALT), &[]).exact("Foxtrot golf hotel india juliet."),
         // selection
         top("RD.top3"),
         pos("RD.sel.0", key0(DOWN)),
-        s("RD.sel.right", P1, "Shift+Right: the character is spoken as selected", Act::Key(RIGHT, SHIFT), &["selected"]).xf(NO_SEL),
-        s("RD.sel.left", P1, "Shift+Left: unselected", Act::Key(LEFT, SHIFT), &["unselected"]).xf(NO_SEL),
-        s("RD.sel.word", P1, "Ctrl+Shift+Right: the word, selected", Act::Key(RIGHT, CTRL | SHIFT), &["selected"]).xf(NO_SEL),
-        s("RD.sel.down", P1, "Shift+Down: the lines, selected", Act::Key(DOWN, SHIFT), &["selected"]).xf(NO_SEL),
-        s("RD.sel.all", P1, "Ctrl+A: select all", ctrl(KEY_A), &["selected"]).xf(NO_SEL),
+        s("RD.sel.right", P1, "Shift+Right: the character is spoken as selected", Act::Key(RIGHT, SHIFT), &["selected"]),
+        s("RD.sel.left", P1, "Shift+Left: unselected", Act::Key(LEFT, SHIFT), &["unselected"]),
+        s("RD.sel.word", P1, "Ctrl+Shift+Right: the word, selected", Act::Key(RIGHT, CTRL | SHIFT), &["selected"]),
+        s("RD.sel.down", P1, "Shift+Down: the lines, selected", Act::Key(DOWN, SHIFT), &["selected"]),
+        s("RD.sel.all", P1, "Ctrl+A: select all", ctrl(KEY_A), &["selected"]),
         pos("RD.copy", ctrl(KEY_C)),
-        s("RD.copy.say", P1, "Ctrl+C then gorca+C reads the clipboard: the selected text", gorca(KEY_C), &["Alpha"]).xf(NO_SEL),
+        s("RD.copy.say", P1, "Ctrl+C then gorca+C reads the clipboard: the selected text", gorca(KEY_C), &["Alpha"]).xf("system clipboard read (gorca+C) is not implemented; Ctrl+C reaches the page, which copies the native selection mirrored for single-node spans"),
         // say-all
         top("RD.top4"),
         Step::setup("RD.sa.slow", "speech takes 120 ms per utterance from here", Act::Speak(120)),
@@ -653,7 +680,8 @@ fn forge() -> Vec<Step> {
     vec![
         top("FG.top"),
         s("FG.h.1", P0, "1: repository heading", lvl(1), &["heading level 1", "gorca-dev"]),
-        s("FG.b.1", P0, "B: the first button, named by aria-label, with its state", n('b'), &["button"]).extra(&["Open global navigation menu", "collapsed"], "B skipped the menu button that has aria-expanded and landed on a later toggle button; state words are not spoken"),
+        top("FG.top1b"),
+        s("FG.b.1", P0, "B: the first button, named by aria-label, with its state", n('b'), &["button"]).extra(&["Open global navigation menu", "collapsed"], "the aria-label name and the collapsed state of the menu button"),
         s("FG.toggle", P1, "Toggle button focus: pressed state", Act::Focus(role::TOGGLE_BUTTON, "Watch"), &["Watch 12"]).extra(&["not pressed"], "the pressed state is not spoken"),
         top("FG.top2"),
         s("FG.t", P0, "T: the file table, named by its sr-only caption", n('t'), &["Folders and files"]).extra(&["table"], NO_ROLE_WORD),
@@ -662,7 +690,7 @@ fn forge() -> Vec<Step> {
         s("FG.d", P1, "D x3: banner, search, then the global navigation", rep('d', 3), &["Pull requests"]).extra(&["Global"], NO_LANDMARK_NAME),
         top("FG.top4"),
         s("FG.h2", P1, "2: the files heading", lvl(2), &["Files"]),
-        s("FG.star", P0, "Activating the star button updates a status region: spoken", Act::Do(role::PUSH_BUTTON, "Star this repository"), &["You starred this repository"]).xf(NO_LIVE).gate(Gate::Live).win(1500),
+        s("FG.star", P0, "Activating the star button updates a status region: spoken", Act::Do(role::PUSH_BUTTON, "Star this repository"), &["You starred this repository"]).gate(Gate::Live).win(1500),
     ]
 }
 
@@ -673,20 +701,21 @@ fn app() -> Vec<Step> {
         s("APP.compose", P0, "Compose opens a modal dialog; focus moves into it: name, and the first field", Act::Do(role::PUSH_BUTTON, "Compose"), &["To"]).extra(&["New message"], "the dialog's name is not spoken when focus enters it").win(1500),
         s("APP.esc", P0, "Escape in the dialog's field: browse mode, the dialog stays", key0(ESC), &["browse mode"]),
         s("APP.h", P0, "Shift+H: the dialog's own heading", p('h'), &["New message"]),
-        s("APP.close", P0, "Discard closes it; focus returns to the opener and the cursor is there", Act::Do(role::PUSH_BUTTON, "Discard"), &["Compose"]).win(1500),
-        s("APP.toast", P1, "The toast 'Dialog closed' is a status region", Act::Wait(300), &["Dialog closed"]).xf(NO_LIVE).win(1500),
+        s("APP.close", P0, "Discard closes it; focus returns to the opener and the cursor is there; the toast 'Dialog closed' (a status region) is spoken after the focus speech", Act::Do(role::PUSH_BUTTON, "Discard"), &["Compose", "Dialog closed"]).win(3000),
         // alert dialog without aria-hidden on the app: modal scope must confine navigation
         s("APP.alert", P0, "The alert dialog opens: name and focus on Cancel", Act::Do(role::PUSH_BUTTON, "Empty trash"), &["Cancel"]).extra(&["Empty trash"], "the dialog's name is not spoken when focus enters it").win(1500),
         s("APP.alert.h", P0, "Shift+H: the dialog heading", p('h'), &["Empty trash"]),
-        s("APP.alert.h2", P0, "Shift+H again: confined to the dialog, nothing from the page behind it", p('h'), &["no previous heading"]).not(&["Inbox", "Mail app"]).xf(NO_MODAL),
-        s("APP.alert.k", P0, "Shift+K: links behind the dialog are not reachable", p('k'), &["no previous link"]).not(&["Inbox", "Quarterly report"]).xf(NO_MODAL),
+        s("APP.alert.h2", P0, "Shift+H again: confined to the dialog, nothing from the page behind it", p('h'), &["no previous heading"]).not(&["Inbox", "Mail app"]),
+        s("APP.alert.k", P0, "Shift+K: links behind the dialog are not reachable", p('k'), &["no previous link"]).not(&["Inbox", "Quarterly report"]),
         s("APP.alert.close", P0, "Cancel: focus returns to the opener", Act::Do(role::PUSH_BUTTON, "Cancel"), &["Empty trash"]).win(1500),
         top("APP.top2"),
         s("APP.tab", P1, "Focus on a tab: tabs switch to focus mode on focus", Act::Focus(role::PAGE_TAB, "Social"), &["tab", "Social"]).extra(&["focus mode"], "NVDA SWITCH_TO_PASS_THROUGH_ON_FOCUS_ROLES includes tabs (D-1)"),
         s("APP.tab.sel", P1, "Activating a tab shows its panel", Act::Do(role::PAGE_TAB, "Social"), &[]).win(700),
-        s("APP.delete", P0, "Delete shows a toast: spoken", Act::Do(role::PUSH_BUTTON, "Delete"), &["Conversation deleted"]).xf(NO_LIVE).win(1500),
+        s("APP.delete", P0, "Delete shows a toast: spoken", Act::Do(role::PUSH_BUTTON, "Delete"), &["Conversation deleted"]).win(1500),
         s("APP.menu", P1, "A menu button opens a menu; focus on a menu item: focus mode", Act::Do(role::PUSH_BUTTON, "More actions"), &[]).win(700),
+        esc("APP.menu.esc"),
         s("APP.menu.item", P1, "Focus on a menu item", Act::Focus(role::MENU_ITEM, "Settings"), &["Settings"]).extra(&["focus mode"], "menu items pass through on focus in NVDA (D-1)"),
+        esc("APP.combo.esc"),
         s("APP.combo", P1, "The address combo box: focus mode", Act::Focus(role::COMBO_BOX, "To address"), &["focus mode"]),
     ]
 }
@@ -703,7 +732,11 @@ fn spa() -> Vec<Step> {
         s("SP.route2", P0, "Back to the first route", Act::Do(role::LINK, "Home route"), &["Home view"]).not(&["List view", "Extra"]).win(1500),
         top("SP.top2"),
         s("SP.items", P0, "I x3: the third list item", rep('i', 3), &["Row 3"]),
-        s("SP.rerender", P0, "The list is re-rendered with the same text: only the toast speaks", Act::Do(role::PUSH_BUTTON, "Re-render list"), &["List refreshed"]).xf(NO_LIVE).not(&["Row 1", "Row 2"]).win(1200),
+        // The page re-renders the list 1200 ms after the click, so the cursor can be put in the
+        // list first: a click on the button would otherwise move focus (and the cursor) to it.
+        Step::setup("SP.rr.click", "press Re-render list; the page re-renders 1200 ms later", Act::Do(role::PUSH_BUTTON, "Re-render list")),
+        s("SP.items2", P0, "I x3 from the button: the third list item", rep('i', 3), &["Row 3"]),
+        s("SP.rerender", P0, "The list is re-rendered with the same text: only the toast speaks", Act::Wait(1500), &["List refreshed"]).not(&["Row 1", "Row 2"]).win(1800),
         s("SP.restore", P0, "Down: the cursor is still on Row 3 (position restore), so Row 4 is next", key0(DOWN), &["Row 4"]).not(&["Row 1"]),
         s("SP.back", P1, "Browser Back (Alt+Left) pops the route: the list view returns", Act::AppKeys(&[56, 105]), &["List view"]).win(1500),
     ]
@@ -745,7 +778,7 @@ pub fn scenarios() -> Vec<Scenario> {
             page: "generated/large-table.html",
             title: "M8 Large table",
             body: Body::TableBig,
-            xfail: Some(NO_TABLES),
+            xfail: None,
         },
     ]
 }

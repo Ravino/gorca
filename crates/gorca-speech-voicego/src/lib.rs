@@ -250,6 +250,11 @@ fn encode(cmd: &SpeechCmd, proto: &mut Proto, out: &mut Vec<u8>, depth: u8) {
             push_line(out, proto, &format!("SET self PITCH {pitch}"));
             push_line(out, proto, &format!("SET self VOLUME {volume}"));
         }
+        SpeechCmd::Configure(setup) => {
+            for l in setup.ssip_lines() {
+                push_line(out, proto, &l);
+            }
+        }
     }
 }
 
@@ -723,6 +728,35 @@ mod tests {
         assert_eq!(next(&mut c).await, SpeechEvent::Ended(UttId(7)));
         assert_eq!(srv.spoken(), ["hello"]);
         assert!(srv.verbs()[0].contains("CLIENT_NAME gorca:main:main"));
+        drop(c);
+        drop(srv);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[tokio::test]
+    async fn configure_sends_the_language_module_and_voice_to_the_server() {
+        let d = tmp("cfg");
+        let srv = MockSpeechServer::start_voicego(&d).await.unwrap();
+        let c = connect(&srv).await;
+        c.submit(SpeechCmd::Configure(gorca_output_api::VoiceSetup {
+            language: Arc::from("ru"),
+            output_module: Arc::from("espeak-ng"),
+            voice: Arc::from(""),
+        }))
+        .unwrap();
+        assert!(
+            srv.wait_verbs(Duration::from_secs(2), |v| v
+                .iter()
+                .any(|l| l == "SET self LANGUAGE ru"))
+                .await
+        );
+        let v = srv.verbs();
+        let m = v
+            .iter()
+            .position(|l| l == "SET self OUTPUT_MODULE espeak-ng");
+        let l = v.iter().position(|l| l == "SET self LANGUAGE ru");
+        assert!(m.is_some() && m < l, "{v:?}");
+        assert!(!v.iter().any(|l| l.contains("SYNTHESIS_VOICE")));
         drop(c);
         drop(srv);
         let _ = std::fs::remove_dir_all(&d);

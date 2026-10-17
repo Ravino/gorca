@@ -184,7 +184,13 @@ fn setup(
         .configure(Duration::from_millis(1), Duration::from_millis(utter_ms));
     let mut args = vec!["--term-trim"];
     args.extend_from_slice(extra);
-    let app = FakeApp::spawn(&rig.env.harness_dir, "terminal", "gnome-terminal-fake", 0, &args)?;
+    let app = FakeApp::spawn(
+        &rig.env.harness_dir,
+        "terminal",
+        "gnome-terminal-fake",
+        0,
+        &args,
+    )?;
     Ok(T {
         rig,
         app,
@@ -2689,6 +2695,184 @@ fn vv_focus(v: &mut V, c: &mut Check) -> Result<()> {
     Ok(())
 }
 
+// ---- VS: flat review of a terminal that keeps printing ----------------------------------------
+
+/// The number a `tick N` or `burst N j` line of the VS loop carries.
+fn vs_count(line: &str) -> Option<u64> {
+    let mut words = line.split_whitespace();
+    match words.next()? {
+        "tick" | "burst" => words.next()?.parse().ok(),
+        _ => None,
+    }
+}
+
+/// How many ticks the VS reading may trail the loop by: the settle, the verification period of
+/// the screen and the review key itself, with room to spare. A stuck snapshot falls behind by
+/// ten ticks a second, without bound.
+const VS_SLACK_TICKS: u64 = 40;
+
+impl V {
+    /// A key only the reader sees (the emulated Mutter): a review key must not reach the terminal.
+    fn reader_key(&mut self, k: K) -> Result<u64> {
+        self.ty.t_ms += 3;
+        let m = self.rig.mutter.as_mut().context("no mutter")?;
+        let down = m.key_full(k.code, k.sym, 0, 0, false, self.ty.t_ms)?;
+        self.ty.t_ms += 3;
+        m.key_full(k.code, k.sym, 0, 0, true, self.ty.t_ms)?;
+        Ok(down.t_emit_ns)
+    }
+}
+
+/// VS: a real gnome-terminal runs a loop that prints a numbered line every 100 ms and a burst of
+/// lines every few seconds; the user presses Alt+Tab away and back and reads the screen with the
+/// numpad review keys, again and again. The line review speaks is always the screen's current
+/// one: its number is never more than `VS_SLACK_TICKS` behind the loop's own counter.
+/// `GORCA_VS_SECS` sets the length (default 240 s, 45 s with `--quick`).
+pub fn vs(
+    host: &HostEnv,
+    reader: &ReaderSpec,
+    flavor: Flavor,
+    size: Size,
+    _seed: u64,
+    out: &mut RunOut,
+) -> Result<()> {
+    if !gate_open(host, "VS", out)? {
+        return Ok(());
+    }
+    if !(flag(host, "GORCA_M6_REAL") && std::env::var_os("GORCA_VTE_WAYLAND").is_some()) {
+        if flag(host, "GORCA_M6_STRICT") {
+            bail!(
+                "VS: GORCA_M6_REAL=1 and the private compositor (tests/term/run_real_vte.sh) are required"
+            );
+        }
+        out.notes
+            .push("VS SKIPPED: needs GORCA_M6_REAL=1 and tests/term/run_real_vte.sh".to_owned());
+        out.x("skipped", 1.0, "flag");
+        return Ok(());
+    }
+    const ALT_TAB: &str = "key 56 15";
+    let root = std::env::var("GORCA_HARNESS_DIR").context("GORCA_HARNESS_DIR not set")?;
+    let counter = std::path::Path::new(&root).join("vs-n");
+    let script = std::path::Path::new(&root).join("vs-loop.sh");
+    std::fs::write(
+        &script,
+        format!(
+            "i=0\nwhile :; do\n  i=$((i+1))\n  echo \"tick $i\"\n  echo $i > '{c}'\n  if [ $((i % 37)) = 0 ]; then\n    for j in $(seq 1 120); do echo \"burst $i $j\"; done\n  fi\n  sleep 0.1\ndone\n",
+            c = counter.display()
+        ),
+    )?;
+    let mut h = m1_env(host);
+    h.reader_env.retain(|(k, _)| k != "RUST_LOG");
+    h.reader_env
+        .push(("RUST_LOG".to_owned(), "gorca_core=debug".to_owned()));
+    let err_path = std::path::Path::new(&root).join("vs-reader.stderr");
+    let mut o = super::scenarios::base_opts(reader, flavor);
+    o.keys = true;
+    o.reader_stderr = Some(err_path.clone());
+    let rig = Rig::start(&h, &o)?;
+    if !rig.keys_ok {
+        bail!("the reader did not register with the emulated keyboard monitor (no SetKeyGrabs)");
+    }
+    rig.mock
+        .configure(Duration::from_millis(1), Duration::from_millis(5));
+    let term = RealTerm::start(host)?;
+    let mut v = V {
+        rig,
+        term,
+        ty: Typist::new(),
+    };
+    std::thread::sleep(Duration::from_secs(4));
+    v.term.rd_line("click");
+    std::thread::sleep(Duration::from_secs(1));
+    // The loop runs in a second application: Alt+Tab goes between it and the first one.
+    v.term
+        .open_second_app(&format!("bash {}", script.display()))?;
+    std::thread::sleep(Duration::from_secs(5));
+    let secs = env_num(host, "GORCA_VS_SECS").unwrap_or(if size.n >= 1200 { 240 } else { 45 });
+    let truth = || -> u64 {
+        std::fs::read_to_string(&counter)
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(0)
+    };
+    let mut failures = 0u64;
+    let mut reads = 0u64;
+    let mut silent = 0u64;
+    let mut worst_lag = 0u64;
+    let mut notes: Vec<String> = Vec::new();
+    // One review read: the line the key speaks and how far behind the loop it is.
+    let mut probe = |v: &mut V, what: &str, k: K, numbered: bool| -> Result<()> {
+        let before = truth();
+        let mut got = v.said_during(700, |v| v.reader_key(k).map(|_| ()))?;
+        if got.is_empty() {
+            // The first key after a focus change can be lost: once more.
+            got = v.said_during(700, |v| v.reader_key(k).map(|_| ()))?;
+        }
+        reads += 1;
+        let n = got.iter().filter_map(|g| vs_count(g)).max();
+        match n {
+            None if !numbered => {}
+            None => {
+                silent += 1;
+                if notes.len() < 10 {
+                    notes.push(format!("VS {what}: no numbered line heard: {got:?}"));
+                }
+            }
+            Some(n) => {
+                let lag = before.saturating_sub(n);
+                worst_lag = worst_lag.max(lag);
+                if lag > VS_SLACK_TICKS {
+                    failures += 1;
+                    if notes.len() < 10 {
+                        notes.push(format!(
+                            "VS {what}: read line {n}, the loop was at {before} ({lag} ticks behind): {got:?}"
+                        ));
+                    }
+                }
+            }
+        }
+        Ok(())
+    };
+    let end = Instant::now() + Duration::from_secs(secs);
+    let mut cycles = 0u64;
+    while Instant::now() < end {
+        cycles += 1;
+        // Away and back.
+        v.term.rd_line(ALT_TAB);
+        std::thread::sleep(Duration::from_millis(1500));
+        v.term.rd_line(ALT_TAB);
+        std::thread::sleep(Duration::from_millis(2000));
+        // Review starts at the caret line; the line above it is the newest one printed.
+        probe(&mut v, "current line", KP_CUR_LINE, false)?;
+        probe(&mut v, "previous line", KP_PREV_LINE, true)?;
+        // Still in review while the loop prints on: the same line index reads newer text.
+        std::thread::sleep(Duration::from_secs(4));
+        probe(&mut v, "same line later", KP_CUR_LINE, true)?;
+        std::thread::sleep(Duration::from_secs(3));
+        probe(&mut v, "line above later", KP_PREV_LINE, true)?;
+        if !v.rig.reader.alive() {
+            bail!("the reader died during VS");
+        }
+    }
+    out.x("vs_stale", failures as f64, "reads");
+    out.x("vs_silent", silent as f64, "reads");
+    out.x("vs_reads", reads as f64, "reads");
+    out.x("vs_cycles", cycles as f64, "cycles");
+    out.x("vs_worst_lag_ticks", worst_lag as f64, "ticks");
+    out.notes.extend(notes);
+    out.notes.push(
+        "VS: flat review of a real gnome-terminal that keeps printing, Alt+Tab away and back between reads (vs_stale gate 0)".into(),
+    );
+    if let Some(dir) = std::env::var_os("GORCA_VV_KEEP_DIR") {
+        let dir = std::path::PathBuf::from(dir);
+        let _ = std::fs::create_dir_all(&dir);
+        if let Some(name) = err_path.file_name() {
+            let _ = std::fs::copy(&err_path, dir.join(name));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2798,6 +2982,14 @@ mod tests {
         c.expect("b", heard(&got, "1041"), &got);
         assert_eq!(c.failures, 1);
         assert_eq!(c.notes.len(), 1);
+    }
+
+    #[test]
+    fn the_vs_loop_lines_carry_their_count() {
+        assert_eq!(vs_count("tick 41"), Some(41));
+        assert_eq!(vs_count("burst 37 12"), Some(37));
+        assert_eq!(vs_count("blank"), None);
+        assert_eq!(vs_count("tick"), None);
     }
 
     #[test]

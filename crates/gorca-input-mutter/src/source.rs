@@ -505,6 +505,9 @@ async fn session(
     // modifier grabs while one is held leaves XKB with a stuck key (P-7).
     let mut held: Vec<u32> = Vec::new();
     let mut deferred: Option<GrabSet> = None;
+    // Ordinary keys that are down (R-1): a keystroke grab is never added for, or removed from, a
+    // held key, or Mutter swallows its release while the application got the press.
+    let mut down: Vec<Down> = Vec::new();
     let mut key_overflows = 0u64;
     // F2: grab mutations are strictly ordered: one in flight, the newest wanted set queued.
     let mut writer = GrabWriter::default();
@@ -531,6 +534,10 @@ async fn session(
         if matches!(state, MonitorState::Lost { .. }) {
             return Err(Attempt::GrabsFailed);
         }
+        let stale_at = deferred
+            .as_ref()
+            .and(down.iter().map(|d| d.at + DOWN_STALE).min())
+            .map(tokio::time::Instant::from_std);
         let next_timer = timers.iter().map(|(t, _)| *t).min();
         // Biased: key events first. A grab change must see every key that was already
         // delivered, or it could change a modifier's grab while that modifier is down (F1).
@@ -547,6 +554,7 @@ async fn session(
                         .map(|l| l.keymap.load().modifiers.clone())
                         .unwrap_or_default();
                     track_held(&mut held, &state, &may_be_modifiers, &ev);
+                    track_down(&mut down, &ev, std::time::Instant::now());
                     if !ctx.sink.push(ev) {
                         // The lane missed an event, so it no longer knows which keys are down
                         // (a dropped release leaves it stale for ever). Never carry on silently:
@@ -557,7 +565,14 @@ async fn session(
                         tracing::warn!(key_overflows, "key channel full; the lane resynchronises at the gap");
                     }
                 }
-                match take_deferred(&mut deferred, &held) {
+                match take_ready(&mut deferred, &held, &state, &down, std::time::Instant::now()) {
+                    Some(set) => MonitorMsg::SetGrabSet(set),
+                    None => continue,
+                }
+            }
+            () = sleep_until(stale_at), if stale_at.is_some() => {
+                // A release that never came (focus left, key lost): stop waiting for it.
+                match take_ready(&mut deferred, &held, &state, &down, std::time::Instant::now()) {
                     Some(set) => MonitorMsg::SetGrabSet(set),
                     None => continue,
                 }
@@ -594,7 +609,9 @@ async fn session(
                     return Ok(());
                 }
                 let want = grabs.borrow_and_update().clone();
-                if !held.is_empty() && modifiers_change(&state, &want) {
+                if (!held.is_empty() && modifiers_change(&state, &want))
+                    || keystroke_conflict(&state, &want, &down, std::time::Instant::now())
+                {
                     deferred = Some(want);
                     continue;
                 }
@@ -685,13 +702,85 @@ fn track_held(held: &mut Vec<u32>, state: &MonitorState, may_be: &[u32], ev: &Ke
     }
 }
 
-/// The grab set that was waiting for the modifiers to come up, once they have.
-fn take_deferred(deferred: &mut Option<GrabSet>, held: &[u32]) -> Option<GrabSet> {
-    if held.is_empty() {
-        deferred.take()
-    } else {
-        None
+/// A key that is down: its keycode (the release may carry another keysym), keysym and the last
+/// press or autorepeat seen.
+struct Down {
+    keycode: u16,
+    keysym: u32,
+    at: std::time::Instant,
+}
+
+/// A held key repeats at 25-30 Hz after its delay; one silent for this long is taken as released.
+const DOWN_STALE: Duration = Duration::from_millis(1500);
+
+fn track_down(down: &mut Vec<Down>, ev: &KeyEvent, now: std::time::Instant) {
+    down.retain(|d| d.keycode != ev.keycode);
+    if ev.pressed {
+        down.push(Down {
+            keycode: ev.keycode,
+            keysym: ev.keysym,
+            at: now,
+        });
     }
+}
+
+/// Tab and ISO_Left_Tab are one physical key.
+fn same_key(a: u32, b: u32) -> bool {
+    a == b || matches!((a, b), (0xff09, 0xfe20) | (0xfe20, 0xff09))
+}
+
+fn current_set(state: &MonitorState) -> Option<&GrabSet> {
+    match state {
+        MonitorState::Watching {
+            grabs: GrabSetState::Committed { set, .. },
+        } => Some(set),
+        MonitorState::Watching {
+            grabs: GrabSetState::Pending { wanted, .. },
+        } => Some(&wanted.1),
+        MonitorState::Unauthorized { .. }
+        | MonitorState::Authorizing { .. }
+        | MonitorState::Lost { .. } => None,
+    }
+}
+
+/// Would `want` add or remove a keystroke grab for a key that is down right now?
+fn keystroke_conflict(
+    state: &MonitorState,
+    want: &GrabSet,
+    down: &[Down],
+    now: std::time::Instant,
+) -> bool {
+    let Some(cur) = current_set(state) else {
+        return false;
+    };
+    let live = |sym: u32| {
+        down.iter()
+            .any(|d| same_key(d.keysym, sym) && now.saturating_duration_since(d.at) < DOWN_STALE)
+    };
+    cur.chords
+        .symmetric_difference(&want.chords)
+        .chain(cur.exact.symmetric_difference(&want.exact))
+        .any(|c| live(c.keysym))
+}
+
+/// The deferred set, once no modifier is held and no changed grab is for a held key.
+fn take_ready(
+    deferred: &mut Option<GrabSet>,
+    held: &[u32],
+    state: &MonitorState,
+    down: &[Down],
+    now: std::time::Instant,
+) -> Option<GrabSet> {
+    if !held.is_empty() {
+        return None;
+    }
+    if deferred
+        .as_ref()
+        .is_some_and(|w| keystroke_conflict(state, w, down, now))
+    {
+        return None;
+    }
+    deferred.take()
 }
 
 /// Publish the committed and wanted sets to the input lane when they change.
@@ -1072,9 +1161,9 @@ mod tests {
             "learn mode keeps them"
         );
         let mut deferred = Some(none);
-        assert!(take_deferred(&mut deferred, &held).is_none());
+        assert!(take_ready(&mut deferred, &held, &state, &[], std::time::Instant::now()).is_none());
         track_held(&mut held, &state, &[], &ev(0xff63, false));
-        assert!(take_deferred(&mut deferred, &held).is_some());
+        assert!(take_ready(&mut deferred, &held, &state, &[], std::time::Instant::now()).is_some());
         assert!(deferred.is_none());
     }
 
@@ -1101,11 +1190,55 @@ mod tests {
         restore.modifiers.insert(0xff63);
         let mut deferred = Some(restore);
         assert!(
-            take_deferred(&mut deferred, &held).is_none(),
+            take_ready(&mut deferred, &held, &state, &[], std::time::Instant::now()).is_none(),
             "not while Insert is down"
         );
         track_held(&mut held, &state, &[0xff63], &ev(false));
-        assert!(take_deferred(&mut deferred, &held).is_some());
+        assert!(take_ready(&mut deferred, &held, &state, &[], std::time::Instant::now()).is_some());
+    }
+
+    #[test]
+    fn a_keystroke_grab_is_never_added_for_a_held_key() {
+        use gorca_input_api::Chord;
+        let state = MonitorState::Watching {
+            grabs: GrabSetState::Committed {
+                generation: 1,
+                set: GrabSet::default(),
+            },
+        };
+        let ev = |keycode, keysym, pressed| KeyEvent {
+            keycode,
+            keysym,
+            unichar: 0,
+            modifiers: Modifiers::empty(),
+            pressed,
+        };
+        let mut want = GrabSet::default();
+        want.chords.insert(Chord {
+            keysym: 0xff09,
+            modifiers: Modifiers::empty(),
+        });
+        let t0 = std::time::Instant::now();
+        let mut down = Vec::new();
+        track_down(&mut down, &ev(23, 0xff09, true), t0);
+        assert!(keystroke_conflict(&state, &want, &down, t0), "Tab is down");
+        // Autorepeats keep it down; a release (even with another keysym) ends it.
+        track_down(&mut down, &ev(23, 0xff09, true), t0);
+        assert_eq!(down.len(), 1);
+        let mut deferred = Some(want.clone());
+        assert!(take_ready(&mut deferred, &[], &state, &down, t0).is_none());
+        assert!(deferred.is_some());
+        // A different key down does not block it.
+        let mut other = Vec::new();
+        track_down(&mut other, &ev(38, 0x61, true), t0);
+        assert!(!keystroke_conflict(&state, &want, &other, t0));
+        // The release lets it through.
+        track_down(&mut down, &ev(23, 0xfe20, false), t0);
+        assert!(take_ready(&mut deferred, &[], &state, &down, t0).is_some());
+        // A key that went silent is not waited for for ever.
+        let mut stale = Vec::new();
+        track_down(&mut stale, &ev(23, 0xff09, true), t0);
+        assert!(!keystroke_conflict(&state, &want, &stale, t0 + DOWN_STALE));
     }
 
     #[test]

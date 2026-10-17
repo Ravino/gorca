@@ -15,14 +15,16 @@ mod utterance;
 mod window;
 
 pub use echo::{key_echo, key_echo_text, message};
-pub use flow::{FOCUS_FIELDS, Presented, RAPID_FOCUS, REFINE_WINDOW, STORM_HOLD, focus_need};
+pub use flow::{
+    FOCUS_FIELDS, FocusBackoff, Presented, RAPID_FOCUS, REFINE_WINDOW, STORM_HOLD, focus_need,
+};
 pub use job::{PresentJob, PresentKind, SpeechIntent};
 pub use log::{NoLabels, NodeLabel, PresentLog, PresentRecord, PresentSource};
 pub(crate) use notification::NoticeCtx;
 pub use notification::{
     announcement_utterance, clean_announcement, is_notice_role, notice_segments,
 };
-pub(crate) use utterance::{changed, present_change};
+pub(crate) use utterance::{changed, mixed_word, present_change};
 pub use utterance::{flat_zone_text, log_states, value_text};
 pub use utterance::{present_focus, present_selected_item};
 pub(crate) use window::WindowCtx;
@@ -134,6 +136,7 @@ fn ext_utterance(segs: Vec<gorca_model::Segment>, id: UttId, epoch: Epoch) -> Ut
         prio: gorca_model::Prio::Interrupt,
         may_refine: false,
         survives_focus_change: false,
+        ttl_secs: 0,
         refines: None,
     }
 }

@@ -1,0 +1,30 @@
+758941698130968 said "M7 Article — Mozilla Firefox, M7 Article, document"
+758941755710731 said "browse mode, heading level 1, Gorca article"
+758942033425504 said "second page link, link"
+758942522761969 said "M7 Article — Mozilla Firefox, panel"
+bus 4 /org/a11y/atspi/accessible/3
+bus 4 /org/a11y/atspi/accessible/39
+bus 4 /org/a11y/atspi/accessible/40
+bus 4 /org/a11y/atspi/accessible/42
+bus 4 /org/a11y/atspi/accessible/40
+bus 4 /org/a11y/atspi/accessible/40
+bus 4 /org/a11y/atspi/accessible/39
+bus 4 /org/a11y/atspi/accessible/43
+bus 4 /org/a11y/atspi/accessible/39
+bus 4 /org/a11y/atspi/accessible/39
+bus 4 /org/a11y/atspi/accessible/38
+bus 4 /org/a11y/atspi/accessible/38
+bus 2 /org/a11y/atspi/accessible/71
+bus 2 /org/a11y/atspi/accessible/72
+bus 2 /org/a11y/atspi/accessible/77
+bus 2 /org/a11y/atspi/accessible/78
+bus 2 /org/a11y/atspi/accessible/79
+bus 2 /org/a11y/atspi/accessible/80
+bus 2 /org/a11y/atspi/accessible/81
+bus 2 /org/a11y/atspi/accessible/82
+bus 1 /org/a11y/atspi/accessible/72
+bus 1 /org/a11y/atspi/accessible/72
+bus 3 /org/a11y/atspi/accessible/91
+bus 1 /org/a11y/atspi/accessible/92
+bus 1 /org/a11y/atspi/accessible/92
+bus 1 /org/a11y/atspi/accessible/101

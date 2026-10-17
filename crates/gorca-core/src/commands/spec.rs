@@ -137,6 +137,18 @@ impl CoreCmd {
                 | CoreCmd::BrowseCursorPrevWord
                 | CoreCmd::BrowseCursorPageUp
                 | CoreCmd::BrowseCursorPageDown
+                | CoreCmd::BrowseCursorNextParagraph
+                | CoreCmd::BrowseCursorPrevParagraph
+                | CoreCmd::BrowseCursorNextSentence
+                | CoreCmd::BrowseCursorPrevSentence
+                | CoreCmd::BrowseSelectNextChar
+                | CoreCmd::BrowseSelectPrevChar
+                | CoreCmd::BrowseSelectNextWord
+                | CoreCmd::BrowseSelectPrevWord
+                | CoreCmd::BrowseSelectNextLine
+                | CoreCmd::BrowseSelectPrevLine
+                | CoreCmd::BrowseSelectPageUp
+                | CoreCmd::BrowseSelectPageDown
                 | CoreCmd::SpeechRingInc
                 | CoreCmd::SpeechRingDec
                 | CoreCmd::SpeechRingIncLarge
@@ -241,7 +253,7 @@ mod tests {
         assert!(impl_names.contains(&"text.say_all"));
         assert!(impl_names.contains(&"info.selection"));
         assert!(impl_names.contains(&"info.formatting"));
-        assert_eq!(impl_names.len(), 137);
+        assert_eq!(impl_names.len(), 180);
     }
 
     #[test]

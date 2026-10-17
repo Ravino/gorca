@@ -1,0 +1,41 @@
+2026-10-16T00:11:06.158483Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-16T00:11:06.190446Z  INFO gorca_phase: phase="warm" wall_ms=31.801917999999997 waited_ms=27.726927 blocked_ms=1.755129 slept_ms=25.904188 rounds=2 probes=19 sampled_nodes=3 tagged_nodes=3 ready=true
+2026-10-16T00:11:06.190864Z  INFO gorca_phase: phase="locate" wall_ms=0.33837100000000003
+2026-10-16T00:11:06.190885Z  INFO gorca_phase: phase="create" wall_ms=0.0023420000000000003
+2026-10-16T00:11:06.193721Z  INFO gorca_phase: phase="fetch" total_ms=2.777517 warm_ms=0.0 frontier_ms=0.133246 get_tree_ms=0.7567389999999999 roles_ms=0.733408 states_ms=0.42444899999999997 text_ms=0.622791 assemble_ms=0.0056040000000000005 heaviest_get_tree_ms=0.266 calls=96 tree_bytes=7711 nodes=31
+2026-10-16T00:11:06.193893Z  INFO gorca_phase: phase="translate" wall_ms=0.078603 nodes=64
+2026-10-16T00:11:06.774973Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:06.852614Z  INFO gorca_phase: phase="live_msg" text=Polite message 1 assertive=false
+2026-10-16T00:11:07.004979Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:07.081122Z  INFO gorca_phase: phase="live_msg" text=Assertive message 2 assertive=true
+2026-10-16T00:11:07.231898Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:08.752196Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:08.829895Z  INFO gorca_phase: phase="live_msg" text=Saved at step 3 assertive=false
+2026-10-16T00:11:08.980805Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:09.058916Z  INFO gorca_phase: phase="live_msg" text=Log entry 4 assertive=false
+2026-10-16T00:11:09.283780Z  INFO gorca_phase: phase="live_msg" text=Log entry 5 assertive=false
+2026-10-16T00:11:10.730903Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:10.807636Z  INFO gorca_phase: phase="live_msg" text=Ticker: 1 points assertive=false
+2026-10-16T00:11:10.953933Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:10.954342Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:11.584616Z  INFO gorca_phase: phase="live_msg" text=Busy final text assertive=false
+2026-10-16T00:11:13.189904Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:14.114717Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:14.191818Z  INFO gorca_phase: phase="live_msg" text=Removable text A assertive=false
+2026-10-16T00:11:14.361244Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:14.460621Z  INFO gorca_phase: phase="live_msg" text=Same text again assertive=false
+2026-10-16T00:11:15.846722Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:16.229626Z  INFO gorca_phase: phase="live_msg" text=Text added after the region exists assertive=false
+2026-10-16T00:11:17.670617Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:17.672865Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:18.597124Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:18.788701Z  INFO gorca_phase: phase="live_msg" text=Flood update 26 assertive=false
+2026-10-16T00:11:18.920469Z  INFO gorca_phase: phase="live_msg" text=Flood update 53 assertive=false
+2026-10-16T00:11:19.053660Z  INFO gorca_phase: phase="live_msg" text=Flood update 80 assertive=false
+2026-10-16T00:11:21.264477Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:21.265157Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-16T00:11:21.468291Z  INFO gorca_phase: phase="live_msg" text=Assertive flood 27 assertive=true
+2026-10-16T00:11:21.604503Z  INFO gorca_phase: phase="live_msg" text=Assertive flood 53 assertive=true
+2026-10-16T00:11:21.727563Z  INFO gorca_phase: phase="live_msg" text=Assertive flood 80 assertive=true
+2026-10-16T00:11:22.002320Z  INFO gorca_phase: phase="live_msg" text=Assertive flood 133 assertive=true
+2026-10-16T00:11:24.189264Z  INFO gorca_phase: phase="live_msg" text=9 updates in Flood region assertive=false

@@ -292,6 +292,7 @@ mod tests {
             prio: Prio::Text,
             may_refine: false,
             survives_focus_change: false,
+            ttl_secs: 0,
             refines: None,
         };
         let v = Verbalizer.verbalize(&u);

@@ -1,6 +1,6 @@
 # Bake-off B-5: runtime topology (one codebase, three placements)
 
-Status: **harness and arms implemented; pilot done on a loaded host (non-authoritative)**.
+Status: **judged 2026-10-16 (loaded host, ordering-based): default is `auto` = lanes-rt with fallback to single; see docs/reports/b5-judgement.md**.
 Authoritative runs wait for a quiet host (section 7). Decision under test: ADR-0001 §15 row 2
 (B-5) and the M-14 budget; `docs/plan/phase-2.md` P0 item 3 and §4.
 Pilot: `docs/reports/b5-pilot.md`. Real-time facts: `docs/reports/2026-10-13-p12-realtime-scheduling.md`.

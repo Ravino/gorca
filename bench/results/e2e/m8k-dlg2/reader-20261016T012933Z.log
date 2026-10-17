@@ -1,0 +1,15 @@
+2026-10-16T01:29:37.733845Z  INFO gorca_phase: phase="web_focus" hit=false mode=Inactive
+2026-10-16T01:29:37.774982Z  INFO gorca_phase: phase="warm" wall_ms=40.978018999999996 waited_ms=33.761382 blocked_ms=7.4146220000000005 slept_ms=26.267395999999998 rounds=2 probes=23 sampled_nodes=9 tagged_nodes=9 ready=true
+2026-10-16T01:29:37.775633Z  INFO gorca_phase: phase="locate" wall_ms=0.5686960000000001
+2026-10-16T01:29:37.775664Z  INFO gorca_phase: phase="create" wall_ms=0.002742
+2026-10-16T01:29:37.778476Z  INFO gorca_phase: phase="fetch" total_ms=2.766228 warm_ms=0.0 frontier_ms=0.463823 get_tree_ms=0.474264 roles_ms=0.518839 states_ms=0.5030129999999999 text_ms=0.38339199999999996 assemble_ms=0.0044340000000000004 heaviest_get_tree_ms=0.222 calls=109 tree_bytes=6593 nodes=33
+2026-10-16T01:29:37.778590Z  INFO gorca_phase: phase="translate" wall_ms=0.058975 nodes=57
+2026-10-16T01:29:38.033484Z  INFO gorca_phase: phase="web_focus" hit=true mode=Browse { doc: DocId(1), cur: WebCursor { node: DocNodeId { slot: 4, gen_: 0 }, local: 0 }, scope: Document, sticky: false }
+2026-10-16T01:29:38.033611Z  INFO gorca_phase: phase="dialog_lead" found=false items=0 had_before=true
+2026-10-16T01:29:38.318875Z  INFO gorca_phase: phase="web_focus" hit=true mode=Browse { doc: DocId(1), cur: WebCursor { node: DocNodeId { slot: 19, gen_: 0 }, local: 0 }, scope: Document, sticky: false }
+2026-10-16T01:29:39.139598Z  INFO gorca_phase: phase="web_focus" hit=false mode=Browse { doc: DocId(1), cur: WebCursor { node: DocNodeId { slot: 4, gen_: 0 }, local: 0 }, scope: Document, sticky: false }
+2026-10-16T01:29:39.139808Z  INFO gorca_phase: phase="web_focus" hit=false mode=Loading { doc: None, since: Instant { tv_sec: 730710, tv_nsec: 618821921 }, focus: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849340733591704984) }, editable: false, known: false }
+2026-10-16T01:29:39.144043Z  INFO gorca_phase: phase="locate" wall_ms=4.218262
+2026-10-16T01:29:39.166804Z  INFO gorca_phase: phase="dialog_lead" found=true items=2 had_before=false
+2026-10-16T01:29:40.602202Z  INFO gorca_phase: phase="web_focus" hit=true mode=Focus { doc: DocId(1), node: DocNodeId { slot: 63, gen_: 0 }, cause: Auto, resume: WebCursor { node: DocNodeId { slot: 63, gen_: 0 }, local: 0 }, scope: Document }
+2026-10-16T01:29:40.602268Z  INFO gorca_phase: phase="dialog_lead" found=false items=0 had_before=true

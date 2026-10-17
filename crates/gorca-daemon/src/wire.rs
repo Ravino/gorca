@@ -77,6 +77,7 @@ pub(crate) fn wire_config(
     links: Arc<LaneLinks>,
     control: mpsc::Sender<ControlMsg>,
     requests: mpsc::Receiver<ConfigRequest>,
+    speech: SpeechHandle,
 ) {
     let task = ConfigTask {
         source: ConfigSource {
@@ -87,6 +88,8 @@ pub(crate) fn wire_config(
         links,
         control,
         requests,
+        speech: Some(speech),
+        env_language: opts.env_language.clone(),
     };
     tasks.spawn("config", task.run(shutdown.clone()));
 }

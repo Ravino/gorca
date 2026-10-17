@@ -1,0 +1,3 @@
+round=2 cond=idle arm=single exit=0
+load_before=43.68 53.04 50.67 8/3744 555517
+load_after=61.50 56.05 52.07 3/3769 557976

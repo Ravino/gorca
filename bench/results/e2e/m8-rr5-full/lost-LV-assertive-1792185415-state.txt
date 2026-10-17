@@ -1,0 +1,27 @@
+801945123808577 said "M8 Live regions — Mozilla Firefox, M8 Live regions, document"
+801945165875501 said "browse mode, heading level 1, Live region policy"
+801945716871746 said "Run polite, button"
+801945795684920 said "Polite message 1"
+bus 4 /org/a11y/atspi/accessible/2
+bus 4 /org/a11y/atspi/accessible/57
+bus 4 /org/a11y/atspi/accessible/58
+bus 4 /org/a11y/atspi/accessible/57
+bus 4 /org/a11y/atspi/accessible/58
+bus 4 /org/a11y/atspi/accessible/58
+bus 4 /org/a11y/atspi/accessible/62
+bus 4 /org/a11y/atspi/accessible/59
+bus 4 /org/a11y/atspi/accessible/57
+bus 4 /org/a11y/atspi/accessible/57
+bus 2 /org/a11y/atspi/accessible/64
+bus 2 /org/a11y/atspi/accessible/69
+bus 2 /org/a11y/atspi/accessible/70
+bus 2 /org/a11y/atspi/accessible/71
+bus 2 /org/a11y/atspi/accessible/76
+bus 2 /org/a11y/atspi/accessible/77
+bus 2 /org/a11y/atspi/accessible/78
+bus 1 /org/a11y/atspi/accessible/64
+bus 1 /org/a11y/atspi/accessible/64
+bus 3 /org/a11y/atspi/accessible/94
+bus 4 /org/a11y/atspi/accessible/81
+bus 1 /org/a11y/atspi/accessible/95
+bus 1 /org/a11y/atspi/accessible/95

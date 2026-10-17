@@ -34,6 +34,9 @@ pub enum FillChoice {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Options {
     pub speech: SpeechMode,
+    /// The speech language the user's locale gives (`ru` for `ru_RU.UTF-8`); `[speech] language`
+    /// overrides it. Empty: `en`.
+    pub env_language: String,
     /// Do not start keyboard monitoring.
     pub no_keyboard: bool,
     /// Own `org.gnome.Orca.KeyboardMonitor` so that Mutter authorises our key monitor (ID-1). Off
@@ -70,8 +73,8 @@ pub struct Options {
     pub shadow: bool,
     /// `--bench-fill-policy=r0|prefetch|candidate`: default is the adopted focus-window prefetch.
     pub fill_policy: FillChoice,
-    /// `--topology=...` / `GORCA_TOPOLOGY`: where the lanes run (bake-off B-5). Default: one
-    /// multi-threaded runtime, the behaviour before the switch existed.
+    /// `--topology=...` / `GORCA_TOPOLOGY`: where the lanes run (bake-off B-5). Default `auto`:
+    /// `lanes-rt` when rtkit grants real-time, else `single`.
     pub topology: crate::topology::Arm,
     /// `--topology-report=PATH` / `GORCA_TOPOLOGY_REPORT`: JSON of what was granted to which
     /// lane (`%p` in the path becomes the pid). Passive; benchmarks read it.
@@ -141,6 +144,8 @@ pub enum ConfigCmd {
     Check(Option<PathBuf>),
     /// Print the built-in defaults as TOML.
     Defaults,
+    /// Print the complete default configuration with a comment per key.
+    PrintDefault,
 }
 
 // `Options` is parsed once at startup; boxing it would only add an allocation and a deref.
@@ -172,6 +177,7 @@ gorca - a screen reader for Linux
 USAGE: gorca [OPTIONS]
        gorca config check [PATH]   report problems in a settings file (exit 1 if any)
        gorca config defaults       print the default settings
+       gorca config print-default  print every setting with its default and a comment
 
 OPTIONS:
     --speech=voicego|ssip|auto   speech backend (default: auto = voicego, then speech-dispatcher)
@@ -190,9 +196,10 @@ OPTIONS:
     --no-probe                   do not ask gsettings about the keyboard and clock
     --bench-present-log=PATH     benchmarks only: write the presentation log (absolute PATH, mode
                                  0600, created anew; secret text is redacted)
-    --topology=single|lanes|lanes-rt
-                                 where the lanes run (bake-off B-5; default: single = one
-                                 multi-threaded runtime). lanes: input and speech on their own
+    --topology=auto|single|lanes|lanes-rt
+                                 where the lanes run (bake-off B-5; default: auto = lanes-rt when
+                                 rtkit grants real-time, else single = one multi-threaded
+                                 runtime). lanes: input and speech on their own
                                  threads, workers and a bulk pool apart. lanes-rt: lanes plus
                                  real-time scheduling through rtkit and pinning to the fast cores, with a
                                  fallback to the plain lanes when rtkit refuses
@@ -331,6 +338,7 @@ impl Options {
         }
         // Defaults for what is still open. The daemon's `main` is the only place that reads the
         // environment; everything below this point receives resolved values.
+        o.env_language = gorca_config::resolve_language("", &get);
         let xdg = get("XDG_RUNTIME_DIR");
         if o.voicego_socket.is_none() {
             o.voicego_socket = gorca_speech_voicego::default_voicego_path(xdg.as_deref());
@@ -417,6 +425,9 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError
                 Ok(Parsed::Config(ConfigCmd::Check(path.map(PathBuf::from))))
             }
             (Some("defaults"), None, None) => Ok(Parsed::Config(ConfigCmd::Defaults)),
+            (Some("print-default" | "--print-default"), None, None) => {
+                Ok(Parsed::Config(ConfigCmd::PrintDefault))
+            }
             (Some(other), _, _) => Err(CliError::Unknown(format!("config {other}"))),
             (None, _, _) => Err(CliError::MissingValue("config")),
         };
@@ -745,6 +756,10 @@ mod tests {
         assert_eq!(
             p(&["config", "defaults"]),
             Ok(Parsed::Config(ConfigCmd::Defaults))
+        );
+        assert_eq!(
+            p(&["config", "print-default"]).unwrap(),
+            Parsed::Config(ConfigCmd::PrintDefault)
         );
         assert!(p(&["config"]).is_err());
         assert!(p(&["config", "frob"]).is_err());

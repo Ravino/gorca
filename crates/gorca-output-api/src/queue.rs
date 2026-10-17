@@ -38,7 +38,8 @@ pub fn started_utt(c: &SpeechCmd) -> Option<UttId> {
         | SpeechCmd::StopAll
         | SpeechCmd::Pause
         | SpeechCmd::Resume
-        | SpeechCmd::SetParams(_) => None,
+        | SpeechCmd::SetParams(_)
+        | SpeechCmd::Configure(_) => None,
     }
 }
 
@@ -96,7 +97,8 @@ pub fn admit<T>(
             | SpeechCmd::Replace { .. }
             | SpeechCmd::Pause
             | SpeechCmd::Resume
-            | SpeechCmd::SetParams(_) => return Err(SubmitError::Full),
+            | SpeechCmd::SetParams(_)
+            | SpeechCmd::Configure(_) => return Err(SubmitError::Full),
         }
     }
     q.push_back(item);

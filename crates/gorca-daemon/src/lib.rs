@@ -260,6 +260,7 @@ async fn announce_notices(
             prio: Prio::Message,
             may_refine: false,
             survives_focus_change: true,
+            ttl_secs: 0,
             refines: None,
         };
         speech.submit(u);
@@ -344,11 +345,22 @@ pub async fn run_with_policy(
 }
 
 async fn run_inner(
-    opts: Options,
+    mut opts: Options,
     shutdown: CancellationToken,
     policy: Option<PolicyFactory>,
     on_ready: Option<Box<dyn FnOnce(DaemonProbe) + Send>>,
 ) -> Result<()> {
+    // `[speech] backend` applies when neither `--speech` nor the environment chose one.
+    if opts.speech == SpeechMode::Auto
+        && let Some(path) = opts.config_path.clone()
+        && let Some(b) = config_task::startup_backend(&path).await
+    {
+        opts.speech = match b {
+            gorca_config::Backend::Auto => SpeechMode::Auto,
+            gorca_config::Backend::Voicego => SpeechMode::Voicego,
+            gorca_config::Backend::Ssip => SpeechMode::Ssip,
+        };
+    }
     let mut tasks = TaskSet::new(shutdown.clone());
     let mut core = Core::new(CoreConfig {
         shutdown_grace: SHUTDOWN_GRACE,
@@ -419,6 +431,7 @@ async fn run_inner(
                 Arc::clone(&links),
                 senders.control.clone(),
                 requests,
+                speech_for_keys.clone(),
             );
         }
         let (grabs, grab_control) = (core.grab_requests(), core.grab_sender());

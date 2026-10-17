@@ -24,7 +24,7 @@ cd "$(dirname "$0")/../.."
 label=${1:?usage: judge.sh <label> [--quick] [--rounds N] [--arms ...] [--conds ...] [--only ...] [--no-build]}
 shift
 quick=""; rounds=3; arms="single,lanes,lanes-rt"; conds="idle,sat"
-only="L1,L2,K1,L3-50k,L2-50k,K1-50k"; build=1
+only="L1,L2,K1,L3-50k,L2-50k,K1-50k,K2,K2s,K3,R1,R1s,A1"; build=1
 while [ $# -gt 0 ]; do
   case "$1" in
     --quick) quick="--quick" ;;
@@ -71,6 +71,14 @@ rtprop() { busctl --system get-property org.freedesktop.RealtimeKit1 /org/freede
   echo "quiet-host:"; bench/b1/quiet-host.sh status 2>&1 | sed 's/^/  /'
 } >"$out/host.txt"
 
+# Background CPU busy percentage of the whole host over one second (other agents' work), before the
+# hog starts: the "how quiet was it" record next to the load average.
+busy_pct() {
+  read -r _ u1 n1 s1 i1 w1 q1 sq1 _ </proc/stat; sleep 1; read -r _ u2 n2 s2 i2 w2 q2 sq2 _ </proc/stat
+  local t1=$((u1+n1+s1+i1+w1+q1+sq1)) t2=$((u2+n2+s2+i2+w2+q2+sq2))
+  echo $(( 100 * ((t2-t1) - (i2+w2-i1-w1)) / (t2-t1) ))
+}
+
 hog_pid=""
 stop_hog() {
   if [ -n "$hog_pid" ]; then
@@ -89,6 +97,7 @@ for ((round = 1; round <= rounds; round++)); do
       dir=$out/raw/$cond/$arm/r$round
       mkdir -p "$dir"
       load0=$(cat /proc/loadavg)
+      busy0=$(busy_pct)
       if [ "$cond" = sat ]; then
         # Long enough for any run; the hog is stopped by PID right after the run.
         target/release/gorca-hog --secs 1800 >"$dir/hog.txt" 2>&1 &
@@ -100,7 +109,9 @@ for ((round = 1; round <= rounds; round++)); do
       status=0
       tests/harness/run-isolated.sh target/release/e2e run \
         --label "b5-$arm-$cond-r$round" $quick --repeats 1 --only "$only" \
-        --reader "daemon:$gorca,--impersonate-orca,--topology=$arm" \
+        --reader "daemon:$root/bench/b5/reader-cpu.sh,$gorca,--impersonate-orca,--topology=$arm" \
+        --reader-env "GORCA_CPU_OUT=$root/$dir/cpu.txt" \
+        --reader-env GORCA_M1=1 --reader-env GORCA_M4=1 --reader-env GORCA_M4B=1 \
         --reader-env "GORCA_TOPOLOGY_REPORT=$root/$dir/rep.%p.json" \
         --reader-env "GORCA_RTKIT_BUS_ADDRESS=$rtkit_bus" \
         --out "$dir" --no-fail >"$dir/stdout.txt" 2>"$dir/stderr.txt" || status=$?
@@ -108,6 +119,7 @@ for ((round = 1; round <= rounds; round++)); do
       {
         echo "round=$round cond=$cond arm=$arm exit=$status"
         echo "load_before=$load0"
+        echo "background_cpu_busy_pct=$busy0"
         echo "load_with_hog=$load_hog"
         echo "load_after=$(cat /proc/loadavg)"
         echo "governor=$(gov)"

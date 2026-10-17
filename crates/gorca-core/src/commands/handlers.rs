@@ -340,6 +340,49 @@ impl Reader {
             | CoreCmd::QuicknavNextFrame
             | CoreCmd::QuicknavPrevFrame
             | CoreCmd::QuicknavNextArticle
+            | CoreCmd::TableNextRow
+            | CoreCmd::TablePrevRow
+            | CoreCmd::TableNextColumn
+            | CoreCmd::TablePrevColumn
+            | CoreCmd::TableFirstRow
+            | CoreCmd::TableLastRow
+            | CoreCmd::TableFirstColumn
+            | CoreCmd::TableLastColumn
+            | CoreCmd::TableSayRow
+            | CoreCmd::TableSayColumn
+            | CoreCmd::TableSayAllRow
+            | CoreCmd::TableSayAllColumn
+            | CoreCmd::BrowseContainerStart
+            | CoreCmd::BrowseContainerEnd
+            | CoreCmd::BrowseSingleLetterToggle
+            | CoreCmd::QuicknavNextNotLinkBlock
+            | CoreCmd::QuicknavPrevNotLinkBlock
+            | CoreCmd::QuicknavNextAnnotation
+            | CoreCmd::QuicknavPrevAnnotation
+            | CoreCmd::QuicknavNextError
+            | CoreCmd::QuicknavPrevError
+            | CoreCmd::QuicknavNextParagraph
+            | CoreCmd::QuicknavPrevParagraph
+            | CoreCmd::BrowseSelectNextChar
+            | CoreCmd::BrowseSelectPrevChar
+            | CoreCmd::BrowseSelectNextWord
+            | CoreCmd::BrowseSelectPrevWord
+            | CoreCmd::BrowseSelectNextLine
+            | CoreCmd::BrowseSelectPrevLine
+            | CoreCmd::BrowseSelectLineStart
+            | CoreCmd::BrowseSelectLineEnd
+            | CoreCmd::BrowseSelectTop
+            | CoreCmd::BrowseSelectBottom
+            | CoreCmd::BrowseSelectPageUp
+            | CoreCmd::BrowseSelectPageDown
+            | CoreCmd::BrowseSelectAll
+            | CoreCmd::BrowseCursorNextParagraph
+            | CoreCmd::BrowseCursorPrevParagraph
+            | CoreCmd::BrowseCursorNextSentence
+            | CoreCmd::BrowseCursorPrevSentence
+            | CoreCmd::BrowseTabNext
+            | CoreCmd::BrowseTabPrev
+            | CoreCmd::BrowseNativeSelectionToggle
             | CoreCmd::QuicknavPrevArticle => self.browse_command(c, rep, now, fx),
             planned_cmds!() => {
                 // Declared but not implemented: the keymap never routes these (inert), so this
@@ -593,7 +636,8 @@ impl Reader {
             || self.keys.commands != l.mode_keys.commands
             || self.keys.exact != l.mode_keys.exact
             || self.keys.quick_nav != l.mode_keys.quick_nav
-            || self.keys.web_escape != l.mode_keys.web_escape;
+            || self.keys.web_escape != l.mode_keys.web_escape
+            || self.keys.letters != l.mode_keys.letters;
         self.cmd.republish();
         // The grab set follows the keymap (HR-1): re-sent only when the keys changed, and
         // always once at startup, which is when the source learns what to grab.

@@ -169,7 +169,7 @@ fn tabbing_through_a_form_is_heard() {
         r.prime(&mut app, "email").await;
         for (node, said) in [
             ("email", "email edit"),
-            ("Subscribe", "Subscribe check box"),
+            ("Subscribe", "Subscribe check box not checked"),
             ("Submit", "Submit button"),
         ] {
             app.focus(node).unwrap();

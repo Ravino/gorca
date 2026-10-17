@@ -1,0 +1,3 @@
+round=3 cond=idle arm=lanes-rt exit=0
+load_before=52.58 58.95 55.76 4/3775 565058
+load_after=43.08 53.32 54.15 9/3489 568356

@@ -255,6 +255,8 @@ pub fn set_affinity(tid: u32, cpus: &[usize]) -> io::Result<()> {
 /// `soft` raises `SIGXCPU` (see [`install_xcpu_demoter`]), `hard` is `SIGKILL`. rtkit refuses
 /// a process whose limit is unset or above its `RTTimeUSecMax`.
 pub fn set_rttime_limit(soft_us: u64, hard_us: u64) -> io::Result<()> {
+    RTTIME_SOFT.store(soft_us, Ordering::Relaxed);
+    RTTIME_HARD.store(hard_us, Ordering::Relaxed);
     let lim = libc::rlimit {
         rlim_cur: soft_us,
         rlim_max: hard_us,
@@ -268,7 +270,31 @@ pub fn set_rttime_limit(soft_us: u64, hard_us: u64) -> io::Result<()> {
     }
 }
 
+/// Current process-wide `RLIMIT_RTTIME` as `(soft, hard)`; `u64::MAX` is unlimited.
+pub fn rttime_limit() -> io::Result<(u64, u64)> {
+    let mut lim = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: `lim` is a live local the kernel writes.
+    if unsafe { libc::getrlimit(libc::RLIMIT_RTTIME, &raw mut lim) } == 0 {
+        Ok((lim.rlim_cur, lim.rlim_max))
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+/// The limits last set by [`set_rttime_limit`], so the `SIGXCPU` handler can re-arm them.
+static RTTIME_SOFT: AtomicU64 = AtomicU64::new(0);
+static RTTIME_HARD: AtomicU64 = AtomicU64::new(0);
 static XCPU_DEMOTIONS: AtomicU64 = AtomicU64::new(0);
+static XCPU_REARM_FAILURES: AtomicU64 = AtomicU64::new(0);
+
+/// How many times re-arming `RLIMIT_RTTIME` after a `SIGXCPU` failed (expected 0).
+#[must_use]
+pub fn xcpu_rearm_failures() -> u64 {
+    XCPU_REARM_FAILURES.load(Ordering::Relaxed)
+}
 
 /// How many times the `SIGXCPU` handler demoted a thread.
 #[must_use]
@@ -284,6 +310,21 @@ extern "C" fn on_xcpu(_sig: libc::c_int) {
     // SAFETY: `param` is a live local; the call is async-signal-safe.
     unsafe {
         libc::sched_setscheduler(0, libc::SCHED_OTHER | RESET_ON_FORK, &raw const param);
+    }
+    // The kernel raises the soft limit by one second when it sends SIGXCPU
+    // (`check_thread_timers`), which puts it above the hard limit: the next runaway would get
+    // SIGKILL without a warning. Put the configured limits back; `setrlimit` is a plain syscall.
+    let soft = RTTIME_SOFT.load(Ordering::Relaxed);
+    let hard = RTTIME_HARD.load(Ordering::Relaxed);
+    if hard != 0 {
+        let lim = libc::rlimit {
+            rlim_cur: soft,
+            rlim_max: hard,
+        };
+        // SAFETY: `lim` is a live local; the kernel only reads it.
+        if unsafe { libc::setrlimit(libc::RLIMIT_RTTIME, &raw const lim) } != 0 {
+            XCPU_REARM_FAILURES.fetch_add(1, Ordering::Relaxed);
+        }
     }
     XCPU_DEMOTIONS.fetch_add(1, Ordering::Relaxed);
 }

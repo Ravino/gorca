@@ -1311,9 +1311,16 @@ impl AtspiDocSource {
         let lane = self.app.next_lane();
         let r = match act {
             DocAction::Focus => {
-                self.app
+                // GrabFocus answers a bool: false means the object did not take focus (R-6).
+                let m = self
+                    .app
                     .call(lane, deadline, &path, COMPONENT, "GrabFocus", &())
                     .await
+                    .map_err(|e| map_dbus(&e))?;
+                return match wire::parse_u32(m.body().data().bytes()) {
+                    Ok(0) => Err(SourceError::Refused),
+                    Ok(_) | Err(_) => Ok(()),
+                };
             }
             DocAction::Click => {
                 self.app

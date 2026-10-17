@@ -1,0 +1,6 @@
+round=1 cond=sat arm=lanes exit=1
+load_before=26.31 28.06 28.55 4/3275 4063388
+background_cpu_busy_pct=8
+load_with_hog=25.80 27.92 28.51 19/3283 4063439
+load_after=25.80 27.92 28.51 2/3268 4063570
+governor=performance 

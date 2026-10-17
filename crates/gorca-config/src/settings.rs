@@ -195,6 +195,56 @@ impl Punct {
     }
 }
 
+/// Which speech server gorca talks to (`[speech] backend`; the `--speech` flag overrides it).
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub enum Backend {
+    /// voicego first, speech-dispatcher when voicego is unreachable.
+    #[default]
+    Auto,
+    Voicego,
+    Ssip,
+}
+
+impl Backend {
+    pub const NAMES: &'static str = "\"auto\", \"voicego\" or \"ssip\"";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "auto" => Some(Backend::Auto),
+            "voicego" => Some(Backend::Voicego),
+            "ssip" => Some(Backend::Ssip),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Backend::Auto => "auto",
+            Backend::Voicego => "voicego",
+            Backend::Ssip => "ssip",
+        }
+    }
+}
+
+/// The speech language: the configured one, else the language of the first set of `LC_ALL`,
+/// `LC_MESSAGES`, `LANG` (`ru_RU.UTF-8` gives `ru`), else `en`. `C` and `POSIX` name no
+/// language and are skipped. `get` looks up an environment variable.
+pub fn resolve_language(configured: &str, get: impl Fn(&str) -> Option<String>) -> String {
+    let configured = configured.trim();
+    if !configured.is_empty() {
+        return configured.to_owned();
+    }
+    for var in ["LC_ALL", "LC_MESSAGES", "LANG"] {
+        let Some(v) = get(var) else { continue };
+        let base = v.trim().split(['.', '@']).next().unwrap_or("");
+        let lang = base.split('_').next().unwrap_or("").to_ascii_lowercase();
+        if !lang.is_empty() && lang != "c" && lang != "posix" {
+            return lang;
+        }
+    }
+    "en".to_owned()
+}
+
 /// How a capital letter is announced (ADR-0007 VB-1).
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
 pub enum Caps {
@@ -272,6 +322,11 @@ pub struct SpeechSettings {
     pub volume: u8,
     pub rate_step: u8,
     pub voice: String,
+    /// BCP-47 or ISO 639 code. Empty: derived from the user's locale at run time.
+    pub language: String,
+    /// Speech-dispatcher output module. Empty: the server default.
+    pub output_module: String,
+    pub backend: Backend,
     pub punctuation: Punct,
     pub caps: Caps,
 }
@@ -284,6 +339,9 @@ impl Default for SpeechSettings {
             volume: 100,
             rate_step: 5,
             voice: String::new(),
+            language: String::new(),
+            output_module: String::new(),
+            backend: Backend::Auto,
             punctuation: Punct::Some,
             caps: Caps::Pitch,
         }
@@ -621,6 +679,14 @@ pub static SETTINGS: &[SettingDef] = &[
         "5",
     ),
     row("speech", "voice", SettingType::Str, "\"\""),
+    row("speech", "language", SettingType::Str, "\"\""),
+    row("speech", "output_module", SettingType::Str, "\"\""),
+    row(
+        "speech",
+        "backend",
+        SettingType::Enum(Backend::NAMES),
+        "\"auto\"",
+    ),
     row(
         "speech",
         "punctuation",
@@ -716,9 +782,247 @@ pub fn defaults_toml() -> String {
     out
 }
 
+/// One-line English description per key, for `gorca config print-default`. The test
+/// `every_setting_has_a_description_and_appears_in_the_commented_defaults` keeps this table in
+/// step with [`SETTINGS`].
+static DOCS: &[(&str, &str, &str)] = &[
+    ("keyboard", "preset", "Key bindings preset."),
+    (
+        "keyboard",
+        "layout",
+        "Keyboard layout of the preset (keypad review keys on the desktop layout).",
+    ),
+    (
+        "keyboard",
+        "modifiers",
+        "Key names that act as the gorca modifier.",
+    ),
+    (
+        "keyboard",
+        "caps_lock_layout_guard",
+        "Drop Caps_Lock as a modifier when it switches keyboard layouts.",
+    ),
+    (
+        "keyboard",
+        "multi_press_ms",
+        "Window in milliseconds for double and triple key presses.",
+    ),
+    (
+        "keyboard",
+        "double_tap_guard_ms",
+        "Ignore a repeat of the same key within this many milliseconds.",
+    ),
+    ("keyboard", "interrupt", "Which key presses cancel speech."),
+    (
+        "keyboard",
+        "stop_speech_on_control",
+        "Control stops speech.",
+    ),
+    (
+        "keyboard",
+        "pause_speech_on_shift",
+        "Shift pauses and resumes speech.",
+    ),
+    (
+        "keymap",
+        "replace_preset",
+        "Use only the [keymap.*] tables instead of layering them over the preset.",
+    ),
+    ("speech", "rate", "Speech rate; 50 is the server default."),
+    ("speech", "pitch", "Speech pitch; 50 is the server default."),
+    (
+        "speech",
+        "volume",
+        "Speech volume; 100 is the server volume.",
+    ),
+    (
+        "speech",
+        "rate_step",
+        "How much one rate, pitch or volume command changes the level.",
+    ),
+    (
+        "speech",
+        "voice",
+        "Synthesis voice name; empty is the server default (SSIP SYNTHESIS_VOICE).",
+    ),
+    (
+        "speech",
+        "language",
+        "Speech language code such as \"ru\"; empty is derived from LC_ALL/LC_MESSAGES/LANG, else \"en\".",
+    ),
+    (
+        "speech",
+        "output_module",
+        "Speech-dispatcher output module such as \"espeak-ng\" or \"rhvoice\"; empty is the server default.",
+    ),
+    (
+        "speech",
+        "backend",
+        "Speech server: voicego with speech-dispatcher fallback (auto), voicego only, or speech-dispatcher only (ssip); the --speech flag wins; needs a restart.",
+    ),
+    ("speech", "punctuation", "How much punctuation is spoken."),
+    ("speech", "caps", "How a capital letter is announced."),
+    ("echo", "typed_characters", "Speak each typed character."),
+    ("echo", "typed_words", "Speak each typed word."),
+    ("echo", "command_keys", "Speak command keys such as Ctrl+S."),
+    (
+        "echo",
+        "inserted_text",
+        "Speak text inserted by paste or autocomplete.",
+    ),
+    (
+        "text",
+        "say_all_moves_caret",
+        "Say all moves the caret as it reads.",
+    ),
+    (
+        "text",
+        "caret_edge_ms",
+        "Caret events within this many milliseconds of an edit count as part of it.",
+    ),
+    (
+        "text",
+        "caret_late_ms",
+        "Caret events later than this many milliseconds after a key are not announced as a move.",
+    ),
+    (
+        "browse",
+        "say_all_on_load",
+        "Read a web page automatically when it finishes loading.",
+    ),
+    (
+        "terminal",
+        "settle_ms",
+        "Wait this many milliseconds for terminal output to settle before speaking.",
+    ),
+    (
+        "terminal",
+        "burst_lines",
+        "Output longer than this many lines is summarised instead of read.",
+    ),
+    (
+        "terminal",
+        "prompt_markers",
+        "Line endings that mark a shell prompt.",
+    ),
+    (
+        "terminal",
+        "prompt_regex",
+        "Regular expression that matches a prompt; empty uses prompt_markers only.",
+    ),
+    (
+        "terminal",
+        "secret_regex",
+        "Regular expression for lines never to speak, such as password prompts; empty is none.",
+    ),
+    ("verbosity", "level", "How much detail is spoken."),
+    (
+        "verbosity",
+        "confirmations",
+        "Full or brief confirmations of settings changes.",
+    ),
+];
+
+/// The description of a key, if it has one.
+pub fn describe(section: &str, key: &str) -> Option<&'static str> {
+    DOCS.iter()
+        .find(|(s, k, _)| *s == section && *k == key)
+        .map(|(_, _, d)| *d)
+}
+
+fn type_text(t: SettingType) -> String {
+    match t {
+        SettingType::Bool => "true or false".to_owned(),
+        SettingType::Int { min, max } => format!("integer {min} to {max}"),
+        SettingType::Enum(names) => format!("one of {names}"),
+        SettingType::Str => "string".to_owned(),
+        SettingType::StrList => "list of strings".to_owned(),
+    }
+}
+
+/// The complete configuration with every section and key at its default, one comment line per
+/// key giving the description, type and allowed values (`gorca config print-default`). Built
+/// from [`SETTINGS`], so it cannot drift from the schema.
+pub fn defaults_toml_commented() -> String {
+    let mut out = String::new();
+    let _ = writeln!(
+        out,
+        "# gorca settings: every key at its default. Delete what you do not change.\n\
+         # Keymap overrides go in [keymap.<context>] tables (see docs/config-reference.md).\n\
+         schema = {SCHEMA}"
+    );
+    let mut section = "";
+    for d in SETTINGS {
+        if d.section != section {
+            section = d.section;
+            let _ = write!(out, "\n[{section}]\n");
+        }
+        let what = describe(d.section, d.key).unwrap_or("");
+        let _ = writeln!(out, "# {what} ({})", type_text(d.ty));
+        let _ = writeln!(out, "{} = {}", d.key, d.default);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_setting_has_a_description_and_appears_in_the_commented_defaults() {
+        let text = defaults_toml_commented();
+        for d in SETTINGS {
+            assert!(
+                describe(d.section, d.key).is_some_and(|x| !x.is_empty()),
+                "{} has no description",
+                d.path()
+            );
+            assert!(
+                text.contains(&format!("\n{} = {}\n", d.key, d.default)),
+                "{} is missing",
+                d.path()
+            );
+        }
+        for s in sections() {
+            assert!(text.contains(&format!("\n[{s}]\n")), "[{s}] is missing");
+        }
+        assert_eq!(
+            DOCS.len(),
+            SETTINGS.len(),
+            "a description without a setting"
+        );
+        // The output is valid settings text with no problems.
+        let l = crate::load(Some(&text), &crate::Presets::builtin());
+        assert!(l.diags.is_empty(), "{:?}", l.diags);
+        assert_eq!(l.settings, Settings::default());
+    }
+
+    #[test]
+    fn language_comes_from_the_setting_then_the_locale_then_english() {
+        let env = |pairs: &'static [(&'static str, &'static str)]| {
+            move |k: &str| {
+                pairs
+                    .iter()
+                    .find(|(n, _)| *n == k)
+                    .map(|(_, v)| (*v).to_owned())
+            }
+        };
+        assert_eq!(
+            resolve_language("de", env(&[("LANG", "ru_RU.UTF-8")])),
+            "de"
+        );
+        assert_eq!(resolve_language("", env(&[("LANG", "ru_RU.UTF-8")])), "ru");
+        assert_eq!(
+            resolve_language("", env(&[("LC_ALL", "C"), ("LANG", "uk_UA@x")])),
+            "uk"
+        );
+        assert_eq!(
+            resolve_language("", env(&[("LC_MESSAGES", "pt_BR"), ("LANG", "ru_RU")])),
+            "pt"
+        );
+        assert_eq!(resolve_language("", env(&[("LANG", "C.UTF-8")])), "en");
+        assert_eq!(resolve_language(" ", env(&[])), "en");
+    }
 
     #[test]
     fn defaults_match_the_adr() {

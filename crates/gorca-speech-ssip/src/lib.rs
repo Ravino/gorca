@@ -199,7 +199,8 @@ fn speak_id(cmd: &SpeechCmd) -> Option<UttId> {
         | SpeechCmd::StopAll
         | SpeechCmd::Pause
         | SpeechCmd::Resume
-        | SpeechCmd::SetParams(_) => None,
+        | SpeechCmd::SetParams(_)
+        | SpeechCmd::Configure(_) => None,
     }
 }
 
@@ -900,6 +901,35 @@ mod tests {
         let v = srv.verbs();
         assert!(v.iter().any(|l| l.contains("NOTIFICATION all on")));
         assert!(v.contains(&"SPEAK".to_owned()));
+        drop(c);
+        drop(srv);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[tokio::test]
+    async fn configure_sends_the_language_module_and_voice_to_the_server() {
+        let d = tmp("cfg");
+        let srv = MockSpeechServer::start_ssip(&d).await.unwrap();
+        let c = connect(&srv).await;
+        c.submit(SpeechCmd::Configure(gorca_output_api::VoiceSetup {
+            language: Arc::from("ru"),
+            output_module: Arc::from("espeak-ng"),
+            voice: Arc::from(""),
+        }))
+        .unwrap();
+        assert!(
+            srv.wait_verbs(Duration::from_secs(2), |v| v
+                .iter()
+                .any(|l| l == "SET self LANGUAGE ru"))
+                .await
+        );
+        let v = srv.verbs();
+        let m = v
+            .iter()
+            .position(|l| l == "SET self OUTPUT_MODULE espeak-ng");
+        let l = v.iter().position(|l| l == "SET self LANGUAGE ru");
+        assert!(m.is_some() && m < l, "{v:?}");
+        assert!(!v.iter().any(|l| l.contains("SYNTHESIS_VOICE")));
         drop(c);
         drop(srv);
         let _ = std::fs::remove_dir_all(&d);

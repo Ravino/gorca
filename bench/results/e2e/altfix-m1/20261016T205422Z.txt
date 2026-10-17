@@ -1,0 +1,70 @@
+# e2e altfix-m1
+# utc=2026-10-16T20:54:22Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=12.03 12.37 13.73 2/2898 1973359
+# git_rev=f3c0aaf
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=altfix-m1
+# reader=daemon:<repo>/.claude/worktrees/agent-a2fa7f21d06011fb9/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=12.03 12.37 13.73 1/2898 1973356
+# reader_env=GORCA_M1=1
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=k2_ms: first SPEAK between a command key and the next one (1200 spoken for 1200 chords)
+# note1=k2_ms: 0 chords without a SPEAK in their window; reader counters: submitted 1231, spoken 1231, superseded 0, stale 0, inbox 0, received by the server 1231
+# note2=k2s_ms: first SPEAK between a command key and the next one (1200 spoken for 1200 chords)
+# note3=k2s_ms: 0 chords without a SPEAK in their window; reader counters: submitted 1231, spoken 1231, superseded 0, stale 0, inbox 0, received by the server 1231
+# note4=k3_ms: first SPEAK between a command key and the next one (1262 spoken for 1200 chords)
+# note5=k3_ms: 0 chords without a SPEAK in their window; reader counters: submitted 1690, spoken 1293, superseded 0, stale 397, inbox 0, received by the server 1293
+# note6=k3_ms: first SPEAK between a command key and the next one (1255 spoken for 1200 chords)
+# note7=k3_ms: 0 chords without a SPEAK in their window; reader counters: submitted 1746, spoken 1286, superseded 1, stale 459, inbox 0, received by the server 1286
+# note8=k3_ms: first SPEAK between a command key and the next one (1239 spoken for 1200 chords)
+# note9=k3_ms: 0 chords without a SPEAK in their window; reader counters: submitted 1634, spoken 1270, superseded 1, stale 363, inbox 0, received by the server 1270
+
+metric                     bus                median          min          max  n op    threshold  res   note
+K2.k2_ms.n                 daemon/voicego         1200         1200         1200  3                  info   [samples]
+K2.k2_ms.p50               daemon/voicego        0.131        0.120        0.131  3                  info   [ms]
+K2.k2_ms.p95               daemon/voicego        0.245        0.211        0.262  3                  info   [ms]
+K2.k2_ms.p99               daemon/voicego        0.314        0.258        0.324  3 <=            5  PASS   [ms]
+K2.k2_ms.p999              daemon/voicego        0.428        0.312        0.488  3                  info   [ms]
+K2.k2_ms.max               daemon/voicego        0.611        0.323        1.200  3                  info   [ms]
+K2.late                    daemon/voicego            0            0            0  3                  info   [events]
+K2.lost                    daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+K2.not_consumed            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+K2.superseded              daemon/voicego            0            0            0  3                  info   [events]
+K2s.k2s_ms.n               daemon/voicego         1200         1200         1200  3                  info   [samples]
+K2s.k2s_ms.p50             daemon/voicego        0.145        0.141        0.155  3                  info   [ms]
+K2s.k2s_ms.p95             daemon/voicego        0.275        0.273        0.297  3                  info   [ms]
+K2s.k2s_ms.p99             daemon/voicego        0.379        0.350        0.382  3 <=            6  PASS   [ms]
+K2s.k2s_ms.p999            daemon/voicego        0.498        0.426        1.961  3                  info   [ms]
+K2s.k2s_ms.max             daemon/voicego        0.558        0.427        4.357  3                  info   [ms]
+K2s.late                   daemon/voicego            0            0            0  3                  info   [events]
+K2s.lost                   daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+K2s.not_consumed           daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+K2s.storm_achieved_eps     daemon/voicego        50000        49999        50000  3 >=        45000  PASS  must reach 90% of the target rate [ev/s]
+K2s.storm_target_eps       daemon/voicego        50000        50000        50000  3                  info   [ev/s]
+K2s.superseded             daemon/voicego            0            0            0  3                  info   [events]
+K3.k3_ms.n                 daemon/voicego         1200         1200         1200  3                  info   [samples]
+K3.k3_ms.p50               daemon/voicego        0.445        0.412        0.462  3                  info   [ms]
+K3.k3_ms.p95               daemon/voicego        0.905        0.893        0.920  3                  info   [ms]
+K3.k3_ms.p99               daemon/voicego        1.207        1.204        1.229  3 <=           15  PASS   [ms]
+K3.k3_ms.p999              daemon/voicego        1.493        1.381        1.527  3                  info   [ms]
+K3.k3_ms.max               daemon/voicego        1.585        1.487        1.947  3                  info   [ms]
+K3.late                    daemon/voicego            0            0            0  3                  info   [events]
+K3.lost                    daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+K3.not_consumed            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+K3.superseded              daemon/voicego            1            0            1  3                  info   [events]

@@ -352,6 +352,28 @@ pub fn browse_grabs(km: &CompiledKeymap, table: &KeysymTable) -> (Vec<Chord>, Ve
     (g.plain, g.exact)
 }
 
+/// The bare single-letter navigation chords: the quick-navigation and container commands, which
+/// `browse.single_letter_toggle` releases to the page.
+pub fn letter_grabs(km: &CompiledKeymap, table: &KeysymTable) -> Vec<Chord> {
+    let g = grabs_where(km, ModeKind::Browse, table, |b| {
+        let name = CoreCmd::from_id(b.cmd).map_or("", |c| c.name());
+        name.starts_with("quicknav.") || name.starts_with("browse.container_")
+    });
+    g.plain
+}
+
+/// The chords of `browse.tab_next` and `browse.tab_prev` (D-2): grabbed only while the browse
+/// cursor has a focusable target in that direction (the Reader decides, from the mirror).
+pub fn tab_grabs(km: &CompiledKeymap, table: &KeysymTable) -> (Vec<Chord>, Vec<Chord>) {
+    let of = |name: &'static str| {
+        grabs_where(km, ModeKind::Browse, table, |b| {
+            CoreCmd::from_id(b.cmd).is_some_and(|c| c.name() == name)
+        })
+        .plain
+    };
+    (of("browse.tab_next"), of("browse.tab_prev"))
+}
+
 /// The chords bound to `browse.escape`, for the auto-focus-mode grab set.
 pub fn escape_grabs(km: &CompiledKeymap, table: &KeysymTable) -> Vec<Chord> {
     let esc = CoreCmd::BrowseEscape.id();
@@ -689,6 +711,47 @@ mod tests {
                         // Neither source reader binds articles by default.
                         "quicknav.next.article",
                         "quicknav.prev.article",
+                        // NVDA-only browse keys: Orca has no virtual buffer (spec D-10).
+                        "quicknav.next.not_link_block",
+                        "quicknav.prev.not_link_block",
+                        "quicknav.next.annotation",
+                        "quicknav.prev.annotation",
+                        "quicknav.next.error",
+                        "quicknav.prev.error",
+                        "quicknav.next.paragraph",
+                        "quicknav.prev.paragraph",
+                        "browse.container_start",
+                        "browse.container_end",
+                        "browse.single_letter_toggle",
+                        "browse.cursor_next_paragraph",
+                        "browse.cursor_prev_paragraph",
+                        "browse.cursor_next_sentence",
+                        "browse.cursor_prev_sentence",
+                        "browse.select_next_char",
+                        "browse.select_prev_char",
+                        "browse.select_next_word",
+                        "browse.select_prev_word",
+                        "browse.select_next_line",
+                        "browse.select_prev_line",
+                        "browse.select_line_start",
+                        "browse.select_line_end",
+                        "browse.select_top",
+                        "browse.select_bottom",
+                        "browse.select_page_up",
+                        "browse.select_page_down",
+                        "browse.select_all",
+                        // Orca leaves Tab to the application and has no native selection mode.
+                        "browse.tab_next",
+                        "browse.tab_prev",
+                        "browse.native_selection_toggle",
+                        // Orca moves cell by cell and reads a row or a column; it has no
+                        // first/last row or column and no say-all of a row.
+                        "table.first_row",
+                        "table.last_row",
+                        "table.first_column",
+                        "table.last_column",
+                        "table.say_all_row",
+                        "table.say_all_column",
                     ]
                 } else {
                     &[
@@ -1049,6 +1112,24 @@ mod tests {
                 .any(|ch| ch.keysym == 0x6d2 && ch.modifiers.is_empty())
         );
         assert!(grab_collisions(&c.keymap, ModeKind::Browse, &t).is_empty());
+    }
+
+    #[test]
+    fn container_keys_and_the_letter_subset_are_grabbed() {
+        let c = compiled("[keyboard]\npreset=\"nvda\"\nlayout=\"desktop\"\n");
+        let (plain, _) = browse_grabs(&c.keymap, &KeysymTable::us());
+        let has = |v: &[Chord], sym: u32, m: Modifiers| {
+            v.iter().any(|ch| ch.keysym == sym && ch.modifiers == m)
+        };
+        assert!(has(&plain, 0x2c, Modifiers::empty()), "comma");
+        assert!(has(&plain, 0x3c, Modifiers::SHIFT), "Shift+comma is less");
+        let letters = letter_grabs(&c.keymap, &KeysymTable::us());
+        assert!(has(&letters, 0x68, Modifiers::empty()), "h is a letter key");
+        assert!(has(&letters, 0x2c, Modifiers::empty()));
+        assert!(
+            !letters.iter().any(|ch| ch.keysym == 0xff54),
+            "Down stays grabbed"
+        );
     }
 
     /// Regression for review finding H-1: an extension default chord spelled with a key alias of a

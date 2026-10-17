@@ -556,18 +556,29 @@ impl Reader {
 
     // ---- events --------------------------------------------------------------------------
 
-    pub(crate) fn on_text(&mut self, m: TextMsg, fx: &mut ReaderEffects) {
-        if let Some(d) = &self.text.dropped {
-            let n = d.load(Ordering::Relaxed);
-            if n != self.text.dropped_seen {
-                self.text.dropped_seen = n;
-                self.text.stats.events_dropped = n;
-                self.term_events_lost(fx);
-                if !self.text.caret.is_off() {
-                    self.text_step(In::Dirty, fx);
-                }
-            }
+    /// Did the app actors lose text events since this was last asked? If so the layers that
+    /// trust their window or screen are told, and the answer is true. Asked on every text
+    /// message and by a terminal review step: a loss followed by silence would otherwise go
+    /// unnoticed for good.
+    pub(crate) fn text_losses(&mut self, fx: &mut ReaderEffects) -> bool {
+        let Some(d) = &self.text.dropped else {
+            return false;
+        };
+        let n = d.load(Ordering::Relaxed);
+        if n == self.text.dropped_seen {
+            return false;
         }
+        self.text.dropped_seen = n;
+        self.text.stats.events_dropped = n;
+        self.term_events_lost(fx);
+        if !self.text.caret.is_off() {
+            self.text_step(In::Dirty, fx);
+        }
+        true
+    }
+
+    pub(crate) fn on_text(&mut self, m: TextMsg, fx: &mut ReaderEffects) {
+        self.text_losses(fx);
         match &m {
             TextMsg::Caret { node, offset } => {
                 tracing::debug!(target: "gorca_text", ?node, offset, "caret event");
@@ -582,6 +593,9 @@ impl Reader {
         }
         match m {
             TextMsg::Caret { node, offset } => {
+                if self.web_caret(node, offset, fx) {
+                    return;
+                }
                 if self.term_is(node) {
                     self.term_caret(offset, fx);
                 } else if self.text_active() && self.text_accepts(node, Some(offset), fx) {
