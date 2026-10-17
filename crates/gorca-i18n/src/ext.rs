@@ -81,37 +81,109 @@ impl ExtCatalog {
     }
 }
 
-type Registry = HashMap<String, [Option<Arc<ExtCatalog>>; Lang::ALL.len()]>;
+/// Who put a namespace into the registry.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum Owner {
+    /// The daemon (first-party extensions' embedded catalogs, tests): never replaced by a loaded
+    /// extension.
+    Builtin,
+    /// A loaded extension; removed when the host that loaded it stops.
+    Extension,
+}
+
+struct Entry {
+    owner: Owner,
+    cats: [Option<Arc<ExtCatalog>>; Lang::ALL.len()],
+}
+
+type Registry = HashMap<String, Entry>;
 
 fn registry() -> &'static RwLock<Registry> {
     static R: std::sync::OnceLock<RwLock<Registry>> = std::sync::OnceLock::new();
     R.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
-/// Register (or replace) the catalog of extension `ns` for `lang`. Returns the lines that did not
-/// parse.
+/// Why a loaded extension's catalog was refused.
+#[derive(Debug, Clone, Eq, PartialEq, thiserror::Error)]
+pub enum RegisterError {
+    #[error("namespace `{0}` is already registered")]
+    Taken(String),
+    #[error("too many extension namespaces")]
+    TooMany,
+    #[error("invalid namespace `{0}`")]
+    BadName(String),
+}
+
+/// Register (or replace) the catalog of a *built-in* namespace `ns` for `lang` (the daemon's
+/// embedded copies of the first-party extensions' catalogs). A loaded extension must use
+/// [`register_extension`], which can never replace this. Returns the lines that did not parse.
 pub fn register(ns: &str, lang: Lang, text: &str) -> Vec<CatalogError> {
     let (cat, errs) = ExtCatalog::parse(text);
     let mut g = registry().write().unwrap_or_else(PoisonError::into_inner);
     if !g.contains_key(ns) && g.len() >= MAX_NAMESPACES {
         return errs;
     }
-    g.entry(ns.to_owned()).or_default()[lang.index()] = Some(Arc::new(cat));
+    let e = g.entry(ns.to_owned()).or_insert_with(|| Entry {
+        owner: Owner::Builtin,
+        cats: Default::default(),
+    });
+    e.owner = Owner::Builtin;
+    e.cats[lang.index()] = Some(Arc::new(cat));
     errs
 }
 
-/// Forget the catalogs of extension `ns` (the extension was unloaded).
-pub fn unregister(ns: &str) {
-    registry()
-        .write()
-        .unwrap_or_else(PoisonError::into_inner)
-        .remove(ns);
+/// Register the catalogs of a loaded extension (one text per language) under its namespace, all
+/// or nothing. A namespace that is already registered (by the core, a first-party extension or
+/// another extension) is refused: an extension can never overwrite someone else's texts.
+/// Returns the lines that did not parse.
+pub fn register_extension(
+    ns: &str,
+    files: &[(Lang, &str)],
+) -> Result<Vec<CatalogError>, RegisterError> {
+    let valid = !ns.is_empty()
+        && ns.len() <= 64
+        && ns
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.');
+    if !valid {
+        return Err(RegisterError::BadName(ns.to_owned()));
+    }
+    let mut errs = Vec::new();
+    let mut cats: [Option<Arc<ExtCatalog>>; Lang::ALL.len()] = Default::default();
+    for (lang, text) in files {
+        let (cat, e) = ExtCatalog::parse(text);
+        errs.extend(e);
+        cats[lang.index()] = Some(Arc::new(cat));
+    }
+    let mut g = registry().write().unwrap_or_else(PoisonError::into_inner);
+    if g.contains_key(ns) {
+        return Err(RegisterError::Taken(ns.to_owned()));
+    }
+    if g.len() >= MAX_NAMESPACES {
+        return Err(RegisterError::TooMany);
+    }
+    g.insert(
+        ns.to_owned(),
+        Entry {
+            owner: Owner::Extension,
+            cats,
+        },
+    );
+    Ok(errs)
+}
+
+/// Forget the catalogs of a loaded extension (it was unloaded). Built-in namespaces stay.
+pub fn unregister_extension(ns: &str) {
+    let mut g = registry().write().unwrap_or_else(PoisonError::into_inner);
+    if g.get(ns).is_some_and(|e| e.owner == Owner::Extension) {
+        g.remove(ns);
+    }
 }
 
 /// Format `key` of extension `ns` in `lang`, falling back to the extension's English text.
 pub fn format(ns: &str, key: &str, lang: Lang, args: &[(&str, Arg<'_>)]) -> Option<String> {
     let g = registry().read().unwrap_or_else(PoisonError::into_inner);
-    let entry = g.get(ns)?;
+    let entry = &g.get(ns)?.cats;
     let (cat, l) = match entry[lang.index()]
         .as_ref()
         .filter(|c| c.msgs.contains_key(key))
@@ -125,6 +197,8 @@ pub fn format(ns: &str, key: &str, lang: Lang, args: &[(&str, Arg<'_>)]) -> Opti
     if let Some((i, _)) = s.char_indices().nth(MAX_OUT_CHARS) {
         s.truncate(i);
     }
+    // A resolved text is never itself a reference.
+    s.retain(|c| c != START && c != SEP);
     Some(s)
 }
 
@@ -149,10 +223,47 @@ pub fn is_reference(text: &str) -> bool {
     text.starts_with(START)
 }
 
+/// Remove the reference marker characters from text that comes from an application (an
+/// accessible name, a screen line) before it is handed to an extension, so that app text can
+/// never be taken for a message reference when the extension passes it back.
+pub fn sanitize(text: &str) -> Cow<'_, str> {
+    if text.contains([START, SEP]) {
+        Cow::Owned(text.chars().filter(|&c| c != START && c != SEP).collect())
+    } else {
+        Cow::Borrowed(text)
+    }
+}
+
 /// Resolve a message reference in `lang`; any other text is returned as it is. A reference to a
 /// message the extension does not have resolves to its key, so the user hears something
-/// recognisable and the extension author sees the mistake.
+/// recognisable and the extension author sees the mistake. Trusted callers only (the core's own
+/// text); text produced by an extension goes through [`resolve_for`].
 pub fn resolve(text: &str, lang: Lang) -> Cow<'_, str> {
+    resolve_in(text, lang, None)
+}
+
+/// Like [`resolve`] for text produced by extension `ns`: a reference into any other namespace
+/// resolves to nothing, so an extension can only speak its own messages.
+pub fn resolve_for<'a>(text: &'a str, lang: Lang, ns: &str) -> Cow<'a, str> {
+    resolve_in(text, lang, Some(ns))
+}
+
+/// Text produced by extension `ns` that is going to be resolved later by the core: a reference
+/// into any other namespace is dropped (it resolves to nothing), everything else is kept as it is.
+pub fn restrict_to<'a>(text: &'a str, ns: &str) -> Cow<'a, str> {
+    let foreign = text
+        .strip_prefix(START)
+        .and_then(|rest| rest.split(SEP).next())
+        .and_then(|head| head.split_once(':'))
+        .is_some_and(|(n, _)| n != ns);
+    if foreign {
+        Cow::Borrowed("")
+    } else {
+        Cow::Borrowed(text)
+    }
+}
+
+fn resolve_in<'a>(text: &'a str, lang: Lang, only: Option<&str>) -> Cow<'a, str> {
     let Some(rest) = text.strip_prefix(START) else {
         return Cow::Borrowed(text);
     };
@@ -164,6 +275,9 @@ pub fn resolve(text: &str, lang: Lang) -> Cow<'_, str> {
     let Some((ns, key)) = head.split_once(':') else {
         return Cow::Owned(head.to_owned());
     };
+    if only.is_some_and(|o| o != ns) {
+        return Cow::Borrowed("");
+    }
     let args: Vec<(&str, Arg<'_>)> = parts
         .take(MAX_REF_ARGS)
         .filter_map(|p| p.split_once('='))
@@ -242,10 +356,65 @@ mod tests {
     }
 
     #[test]
-    fn unregister_forgets_the_namespace() {
-        register("gone-ext", Lang::En, "a = b\n");
-        unregister("gone-ext");
+    fn unregister_forgets_an_extension_namespace_but_not_a_builtin_one() {
+        register_extension("gone-ext", &[(Lang::En, "a = b\n")]).unwrap();
+        assert_eq!(resolve(&encode("gone-ext", "a", &[]), Lang::En), "b");
+        unregister_extension("gone-ext");
         assert_eq!(resolve(&encode("gone-ext", "a", &[]), Lang::En), "a");
+        register("keep-builtin", Lang::En, "a = kept\n");
+        unregister_extension("keep-builtin");
+        assert_eq!(resolve(&encode("keep-builtin", "a", &[]), Lang::En), "kept");
+    }
+
+    #[test]
+    fn an_extension_cannot_take_a_registered_namespace() {
+        register("owned-core", Lang::En, "a = core text\n");
+        let r = register_extension("owned-core", &[(Lang::En, "a = evil\n")]);
+        assert_eq!(r, Err(RegisterError::Taken("owned-core".to_owned())));
+        assert_eq!(
+            resolve(&encode("owned-core", "a", &[]), Lang::En),
+            "core text"
+        );
+        register_extension("first-ext", &[(Lang::En, "a = one\n")]).unwrap();
+        assert!(register_extension("first-ext", &[(Lang::En, "a = two\n")]).is_err());
+        assert_eq!(resolve(&encode("first-ext", "a", &[]), Lang::En), "one");
+        unregister_extension("first-ext");
+        assert!(matches!(
+            register_extension("bad name", &[]),
+            Err(RegisterError::BadName(_))
+        ));
+    }
+
+    #[test]
+    fn an_extension_cannot_speak_another_extensions_messages() {
+        register("scope-a", Lang::En, "a = from a\n");
+        let r = encode("scope-a", "a", &[]);
+        assert_eq!(resolve_for(&r, Lang::En, "scope-a"), "from a");
+        assert_eq!(resolve_for(&r, Lang::En, "scope-b"), "");
+        assert_eq!(resolve_for("plain text", Lang::En, "scope-b"), "plain text");
+    }
+
+    #[test]
+    fn restrict_to_drops_only_foreign_references() {
+        let own = encode("scope-e", "a", &[]);
+        let foreign = encode("scope-f", "a", &[]);
+        assert_eq!(restrict_to(&own, "scope-e"), own);
+        assert_eq!(restrict_to(&foreign, "scope-e"), "");
+        assert_eq!(restrict_to("blank", "scope-e"), "blank");
+    }
+
+    #[test]
+    fn app_text_with_the_marker_is_never_a_reference() {
+        register("scope-c", Lang::En, "a = secret\n");
+        let hostile = format!("{START}scope-c:a");
+        let clean = sanitize(&hostile);
+        assert_eq!(clean, "scope-c:a");
+        assert_eq!(resolve(&clean, Lang::En), "scope-c:a");
+        assert!(matches!(sanitize("plain"), Cow::Borrowed(_)));
+        // A catalog text cannot smuggle the marker into the output either.
+        register("scope-d", Lang::En, "a = x\u{1e}y\n");
+        let out = resolve(&encode("scope-d", "a", &[]), Lang::En).into_owned();
+        assert!(!out.contains(START));
     }
 
     #[test]

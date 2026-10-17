@@ -45,7 +45,9 @@ pub use api::*;
 /// [`i18n::msg`] wherever the ABI takes a text; the core resolves it in the UI language.
 pub mod i18n {
     pub use gorca_i18n::Lang;
-    pub use gorca_i18n::ext::{is_reference, register, resolve, unregister};
+    pub use gorca_i18n::ext::{
+        is_reference, register, resolve, unregister_extension as unregister,
+    };
 
     /// A reference to message `key` of extension `ns` with named arguments.
     pub fn msg(ns: &str, key: &str, args: &[(&str, &str)]) -> String {

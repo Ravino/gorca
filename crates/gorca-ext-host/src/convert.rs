@@ -47,6 +47,13 @@ fn clip(s: &str, max: usize) -> String {
     }
 }
 
+/// Text that comes from an application, as an extension may see it: clipped, and without the
+/// message-reference marker characters, so that it can never be taken for a reference when the
+/// extension hands it back as speech.
+pub fn app_text(s: &str, max: usize) -> String {
+    clip(&gorca_i18n::ext::sanitize(s), max)
+}
+
 pub fn role_to_ext(r: Role) -> api::Role {
     use api::Role as A;
     match r {
@@ -116,14 +123,14 @@ pub fn node_to_ext(n: &NodeSnapshot) -> api::Node {
         name: if secret {
             None
         } else {
-            n.name.as_deref().map(|s| clip(s, MAX_NODE_TEXT_CHARS))
+            n.name.as_deref().map(|s| app_text(s, MAX_NODE_TEXT_CHARS))
         },
         description: if secret {
             None
         } else {
             n.description
                 .as_deref()
-                .map(|s| clip(s, MAX_NODE_TEXT_CHARS))
+                .map(|s| app_text(s, MAX_NODE_TEXT_CHARS))
         },
     }
 }
@@ -145,7 +152,7 @@ pub fn event_to_ext(ev: &NodeEvent) -> Option<api::Event> {
         }
         NodeEvent::SelectionChanged { node } => api::Event::SelectionChanged(key_to_ext(*node)),
         NodeEvent::Announcement { text, .. } => {
-            api::Event::Announcement(clip(text, MAX_NODE_TEXT_CHARS))
+            api::Event::Announcement(app_text(text, MAX_NODE_TEXT_CHARS))
         }
         NodeEvent::WindowEvent { node, kind } => match kind {
             WindowKind::Activate => api::Event::WindowActivated(key_to_ext(*node)),
@@ -158,13 +165,13 @@ pub fn event_to_ext(ev: &NodeEvent) -> Option<api::Event> {
 
 /// Extension segments as core segments, clamped (count and length) and stripped of segments
 /// that are empty after clamping.
-pub fn segments_from_ext(segs: Vec<api::Segment>) -> Vec<Segment> {
-    segments_from_iter(segs)
+pub fn segments_from_ext(ns: &str, segs: Vec<api::Segment>) -> Vec<Segment> {
+    segments_from_iter(ns, segs)
 }
 
 /// Like [`segments_from_ext`] over any iterator: stops pulling at the caps, so a hostile list
 /// is never copied whole.
-pub fn segments_from_iter(segs: impl IntoIterator<Item = api::Segment>) -> Vec<Segment> {
+pub fn segments_from_iter(ns: &str, segs: impl IntoIterator<Item = api::Segment>) -> Vec<Segment> {
     let mut budget = MAX_ANSWER_CHARS;
     let mut out = Vec::new();
     for s in segs.into_iter().take(MAX_SEGMENTS) {
@@ -174,10 +181,14 @@ pub fn segments_from_iter(segs: impl IntoIterator<Item = api::Segment>) -> Vec<S
         if s.text.is_empty() {
             continue;
         }
-        // A message reference of the extension's catalog is resolved in the UI language here,
-        // the one place extension text enters the presentation.
-        let said = gorca_i18n::ext::resolve(&s.text, gorca_i18n::language());
+        // A message reference of the extension's own catalog is resolved in the UI language
+        // here, the one place extension text enters the presentation. A reference into another
+        // namespace resolves to nothing.
+        let said = gorca_i18n::ext::resolve_for(&s.text, gorca_i18n::language(), ns);
         let text = clip(&said, MAX_SEGMENT_CHARS.min(budget));
+        if text.is_empty() {
+            continue;
+        }
         budget = budget.saturating_sub(text.chars().count());
         out.push(Segment {
             text: text.into(),
@@ -207,13 +218,24 @@ mod tests {
                 kind: api::SegmentKind::Text,
             })
             .collect();
-        let out = segments_from_ext(segs);
+        let out = segments_from_ext("hostile-conv", segs);
         let total: usize = out.iter().map(|s| s.text.chars().count()).sum();
         assert!(
             out.iter()
                 .all(|s| s.text.chars().count() <= MAX_SEGMENT_CHARS)
         );
         assert!(total <= MAX_ANSWER_CHARS, "{total}");
+    }
+
+    #[test]
+    fn a_reference_into_another_namespace_is_silent_and_app_text_never_a_reference() {
+        gorca_i18n::ext::register("conv-a", gorca_i18n::Lang::En, "k = text of a\n");
+        let r = gorca_i18n::ext::encode("conv-a", "k", &[]);
+        let own = segments_from_ext("conv-a", vec![api::Segment::text(r.clone())]);
+        assert_eq!(&*own[0].text, "text of a");
+        assert!(segments_from_ext("conv-b", vec![api::Segment::text(r.clone())]).is_empty());
+        // Application text with the marker is cleaned before an extension sees it.
+        assert_eq!(app_text(&r, 100), "conv-a:k");
     }
 
     #[test]
@@ -261,7 +283,7 @@ mod tests {
         let many: Vec<_> = (0..1000)
             .map(|_| api::Segment::text("x".repeat(10_000)))
             .collect();
-        let out = segments_from_ext(many);
+        let out = segments_from_ext("x", many);
         assert!(out.len() <= MAX_SEGMENTS);
         assert!(
             out.iter()
@@ -269,6 +291,6 @@ mod tests {
         );
         let total: usize = out.iter().map(|s| s.text.chars().count()).sum();
         assert_eq!(total, MAX_ANSWER_CHARS, "the answer is capped as a whole");
-        assert!(segments_from_ext(vec![api::Segment::text("")]).is_empty());
+        assert!(segments_from_ext("x", vec![api::Segment::text("")]).is_empty());
     }
 }

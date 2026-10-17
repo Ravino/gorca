@@ -401,7 +401,15 @@ pub(crate) fn present_change(
             if new.states.contains(*flag) {
                 segments.push(seg(t(*word), SegmentKind::State));
             } else {
-                segments.push(seg(&msg!(StateNot, word = t(*word)), SegmentKind::State));
+                // Russian has no "not unavailable": these two have their own positive messages.
+                let off = if *flag == StateSet::DISABLED {
+                    t(M::StateAvailable).to_owned()
+                } else if *flag == StateSet::INVALID {
+                    t(M::StateValid).to_owned()
+                } else {
+                    msg!(StateNot, word = t(*word))
+                };
+                segments.push(seg(&off, SegmentKind::State));
             }
         }
     }

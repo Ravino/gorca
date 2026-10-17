@@ -405,12 +405,12 @@ mod tests {
         assert_eq!(en.level_confirmation(1, false), "punctuation some");
         assert_eq!(en.level_confirmation(1, true), "some");
         let ru = Table::of(Lang::Ru);
-        assert_eq!(ru.level_name(0), "без пунктуации");
-        assert_eq!(ru.level_name(1), "немного");
-        assert_eq!(ru.level_name(2), "большинство");
+        assert_eq!(ru.level_name(0), "нет");
+        assert_eq!(ru.level_name(1), "некоторая");
+        assert_eq!(ru.level_name(2), "основная");
         assert_eq!(ru.level_name(3), "вся");
-        assert_eq!(ru.level_confirmation(2, false), "пунктуация большинство");
-        assert_eq!(ru.level_confirmation(0, false), "пунктуация без пунктуации");
+        assert_eq!(ru.level_confirmation(2, false), "пунктуация: основная");
+        assert_eq!(ru.level_confirmation(0, false), "пунктуация: нет");
     }
 
     #[test]

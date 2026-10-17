@@ -145,7 +145,7 @@ pub(crate) fn where_am_i(chain: &[Arc<NodeSnapshot>], repeat: u8, level: Verbosi
     if let Some(w) = window {
         let role = w.role.spoken();
         parts.push(match named(w) {
-            Some(n) => format!("{n} {role}"),
+            Some(n) => msg!(InfoWindow, name = n, role = role),
             None => role.to_owned(),
         });
     }
@@ -270,11 +270,15 @@ pub(crate) fn time_text(t: LocalTime, clock_24h: bool) -> String {
     if clock_24h {
         msg!(Time24h, h = t.hour, m = m.as_str())
     } else {
+        // The period word follows the time of day (Russian: ночи, утра, дня, вечера); English
+        // keeps AM and PM.
         let (h, ap) = match t.hour {
-            0 => (12, M::TimeAm),
-            1..=11 => (t.hour, M::TimeAm),
-            12 => (12, M::TimePm),
-            h => (h - 12, M::TimePm),
+            0 => (12, M::TimeNight),
+            1..=3 => (t.hour, M::TimeNight),
+            4..=11 => (t.hour, M::TimeMorning),
+            12 => (12, M::TimeDay),
+            13..=16 => (t.hour - 12, M::TimeDay),
+            h => (h - 12, M::TimeEvening),
         };
         msg!(Time12h, h = h, m = m.as_str(), ap = gorca_i18n::t(ap))
     }
@@ -293,6 +297,48 @@ mod tests {
     use super::*;
     use gorca_model::{AppId, AttrMap, ConnectorId, Ifaces, LocalId, Relations};
     use std::time::Instant;
+
+    fn at(hour: u8, minute: u8) -> LocalTime {
+        LocalTime {
+            year: 2026,
+            month: 10,
+            day: 17,
+            weekday: 5,
+            hour,
+            minute,
+        }
+    }
+
+    #[test]
+    fn the_russian_period_word_follows_the_time_of_day() {
+        let _ru = gorca_i18n::scoped(gorca_i18n::Lang::Ru);
+        for (h, want) in [
+            (0, "12:07 ночи"),
+            (3, "3:07 ночи"),
+            (4, "4:07 утра"),
+            (11, "11:07 утра"),
+            (12, "12:07 дня"),
+            (15, "3:07 дня"),
+            (16, "4:07 дня"),
+            (17, "5:07 вечера"),
+            (23, "11:07 вечера"),
+        ] {
+            assert_eq!(time_text(at(h, 7), false), want, "{h}");
+        }
+    }
+
+    #[test]
+    fn english_keeps_am_and_pm() {
+        let _en = gorca_i18n::scoped(gorca_i18n::Lang::En);
+        for (h, want) in [
+            (0, "12:07 AM"),
+            (4, "4:07 AM"),
+            (12, "12:07 PM"),
+            (23, "11:07 PM"),
+        ] {
+            assert_eq!(time_text(at(h, 7), false), want, "{h}");
+        }
+    }
 
     fn key(n: u64) -> NodeKey {
         NodeKey {
@@ -434,7 +480,7 @@ mod tests {
         assert_eq!(date_text(t), "Saturday, October 17, 2026");
         let _ru = gorca_i18n::scoped(gorca_i18n::Lang::Ru);
         assert_eq!(time_text(t, true), "15:07");
-        assert_eq!(time_text(t, false), "3:07 вечера");
+        assert_eq!(time_text(t, false), "3:07 дня");
         assert_eq!(date_text(t), "суббота, 17 октября 2026 года");
     }
 }

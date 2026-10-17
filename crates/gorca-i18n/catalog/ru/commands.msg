@@ -241,3 +241,4 @@ cmd-browse-tab-prev = перейти к предыдущему элементу 
 cmd-browse-native-selection-toggle = включить или выключить системное выделение
 cmd-speech-history-prev = прочитать предыдущую фразу из истории речи
 cmd-speech-history-next = прочитать следующую фразу из истории речи
+info-window = {role} {name}

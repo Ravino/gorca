@@ -25,7 +25,6 @@ crates/gorca-core/src/browse/present.rs | \u{FFFC}
 crates/gorca-core/src/commands/compile.rs | unknown key name
 crates/gorca-core/src/commands/compile.rs | extension default chord not bound: the chord is already in use
 crates/gorca-core/src/commands/compile.rs | extension `{}` default chord `{chord}`
-crates/gorca-core/src/commands/info.rs | {n} {role}
 crates/gorca-core/src/commands/info.rs | node {} of application {}, role {}, {}, {} ancestors known, {} states, name {}
 crates/gorca-core/src/commands/info.rs | no listed
 crates/gorca-core/src/commands/keys.rs | focused node never presented: presenting it again at a key
@@ -123,3 +122,4 @@ extensions/ext-vte/src/prompt.rs | \u{43a}\u{43e}\u{434} \u{43f}\u{43e}\u{434}\u
 extensions/ext-vte/src/prompt.rs | \u{441}\u{435}\u{43a}\u{440}\u{435}\u{442}\u{43d}[\u{430}-\u{44f}]*
 extensions/ext-vte/src/prompt.rs | \u{43f}\u{438}\u{43d}-?\u{43a}\u{43e}\u{434}
 extensions/ext-vte/src/prompt.rs | [^:?\u{ff1a}\u{ff1f}]{0,60}[:?\u{ff1a}\u{ff1f}]\s*$
+crates/gorca-core/src/doc_actor/translate.rs | \u{FFFC}

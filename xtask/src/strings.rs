@@ -11,7 +11,8 @@
 //!   `announce(`, `say_app(`, `message(`, `seg(`, `Item::State(`, `Item::Role(`, `Item::Text(`,
 //!   `Item::Lead(`, `Item::Info(`, `Item::Name(` or builds a `Segment` (`"enter"` in `say("enter")`).
 //!
-//! Skipped: text after the first `#[cfg(test)]` line of a file, `tests/` directories, comment
+//! Skipped: items gated by `#[cfg(test)]` (a module, function, impl or `mod x;`; the rest of the
+//! file is still scanned), `tests/` directories, comment
 //! lines, `tracing` macros, `expect(`, `debug_struct`/`.field(` and `#[error(` lines (logs and
 //! developer diagnostics are not speech).
 //!
@@ -54,6 +55,9 @@ const SPEECH_CALLS: &[&str] = &[
     "Item::Name(",
     "Segment {",
     "notice(",
+    "Piece::phrase(",
+    "Piece::unit(",
+    "TermAction::Say",
 ];
 
 /// Lines that are logs or diagnostics, never speech.
@@ -141,6 +145,88 @@ fn is_prose(s: &str) -> bool {
     spaced || capital || non_ascii || t.contains("\\u{")
 }
 
+/// The source of a line without string and char literals and without a trailing `//` comment
+/// (what is left can be searched for braces).
+fn code_only(line: &str) -> String {
+    let b: Vec<char> = line.chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < b.len() {
+        match b[i] {
+            '/' if b.get(i + 1) == Some(&'/') => break,
+            '\'' => {
+                if b.get(i + 1) == Some(&'\\') {
+                    i += 4;
+                } else if b.get(i + 2) == Some(&'\'') {
+                    i += 3;
+                } else {
+                    i += 1;
+                }
+            }
+            '"' => {
+                i += 1;
+                while i < b.len() && b[i] != '"' {
+                    if b[i] == '\\' {
+                        i += 1;
+                    }
+                    i += 1;
+                }
+                i += 1;
+            }
+            c => {
+                out.push(c);
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+/// Tracks the item that follows a `#[cfg(test)]` attribute so that only it is skipped.
+#[derive(Default)]
+struct TestSkip {
+    /// A `#[cfg(test)]` was seen and its item has not ended yet (no body brace seen).
+    pending: bool,
+    /// Brace depth inside the skipped item (0 = not inside one).
+    depth: usize,
+}
+
+impl TestSkip {
+    /// Whether the (trimmed) line belongs to a test-gated item.
+    fn skips(&mut self, l: &str) -> bool {
+        if self.depth > 0 {
+            self.track(l);
+            return true;
+        }
+        if l.starts_with("#[cfg(test)]") {
+            self.pending = true;
+            return true;
+        }
+        if self.pending {
+            if l.starts_with("#[") || l.starts_with("//") || l.is_empty() {
+                return true;
+            }
+            self.track(l);
+            return true;
+        }
+        false
+    }
+
+    /// Count the braces of a line of the skipped item; an item without a body ends at `;`.
+    fn track(&mut self, l: &str) {
+        let code = code_only(l);
+        let opens = code.matches('{').count();
+        let closes = code.matches('}').count();
+        if self.depth == 0 && opens == 0 {
+            // `mod tests;`, `use x;`, or the head of a multi-line signature.
+            self.pending = !code.trim_end().ends_with(';');
+            return;
+        }
+        self.pending = false;
+        self.depth = (self.depth + opens).saturating_sub(closes);
+    }
+}
+
 fn scan_file(root: &Path, path: &Path, out: &mut Vec<Hit>) -> Result<()> {
     let text = std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
     let rel = path
@@ -148,10 +234,11 @@ fn scan_file(root: &Path, path: &Path, out: &mut Vec<Hit>) -> Result<()> {
         .unwrap_or(path)
         .to_string_lossy()
         .into_owned();
+    let mut skip = TestSkip::default();
     for (i, raw) in text.lines().enumerate() {
         let l = raw.trim();
-        if l.starts_with("#[cfg(test)]") {
-            break;
+        if skip.skips(l) {
+            continue;
         }
         if l.starts_with("//") || l.starts_with("#[") && !l.starts_with("#[error(") {
             continue;
@@ -327,5 +414,39 @@ mod tests {
         assert!(!is_prose("speech.rate_up"));
         assert!(!is_prose("document_web"));
         assert!(!is_prose(", "));
+    }
+
+    fn scan_text(text: &str) -> Vec<usize> {
+        let mut skip = TestSkip::default();
+        let mut hits = Vec::new();
+        for (i, raw) in text.lines().enumerate() {
+            let l = raw.trim();
+            if skip.skips(l) {
+                continue;
+            }
+            if literals(l).iter().any(|x| is_prose(x)) {
+                hits.push(i + 1);
+            }
+        }
+        hits
+    }
+
+    #[test]
+    fn only_test_gated_items_are_skipped() {
+        let src = "fn a() { f(\"first one\"); }\n\
+#[cfg(test)]\n\
+fn helper() {\n    let _ = \"test only\";\n    if x { y }\n}\n\
+fn b() { f(\"second one\"); }\n\
+#[cfg(test)]\nmod tests;\n\
+fn c(\n    a: u8,\n) { f(\"third one\"); }\n\
+#[cfg(test)]\nmod tests {\n    fn t() { \"in tests\"; }\n}\n\
+fn d() { f(\"fourth one\"); }\n";
+        assert_eq!(scan_text(src), [1, 7, 12, 17]);
+    }
+
+    #[test]
+    fn braces_in_literals_do_not_confuse_the_item_tracker() {
+        let src = "#[cfg(test)]\nfn h() {\n    let _ = \"}\";\n    let _ = '}';\n}\nfn z() { f(\"after it\"); }\n";
+        assert_eq!(scan_text(src), [6]);
     }
 }

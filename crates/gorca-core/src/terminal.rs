@@ -505,7 +505,8 @@ impl Reader {
             TextDelta::Insert { offset, len, text } => TermEdit::Insert {
                 offset,
                 len,
-                text: crate::text::decode(text.as_ref()),
+                text: crate::text::decode(text.as_ref())
+                    .map(|t| gorca_i18n::ext::sanitize(&t).into_owned()),
             },
             TextDelta::Delete { offset, len, .. } => TermEdit::Delete { offset, len },
             TextDelta::Replaced { .. } => TermEdit::Replaced,
@@ -543,7 +544,8 @@ impl Reader {
                     self.text.term.secret_hold = true;
                 }
                 TermInput::Screen {
-                    text: w.text.to_string(),
+                    // Application text: never a message reference (ADR-0010).
+                    text: gorca_i18n::ext::sanitize(&w.text).into_owned(),
                     caret: w.caret,
                 }
             }

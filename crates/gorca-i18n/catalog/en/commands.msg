@@ -241,3 +241,4 @@ cmd-browse-tab-prev = focus the previous focusable element before the browse cur
 cmd-browse-native-selection-toggle = toggle native selection mode
 cmd-speech-history-prev = read the previous spoken text from the speech history
 cmd-speech-history-next = read the next spoken text from the speech history
+info-window = {name} {role}

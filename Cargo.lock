@@ -1298,6 +1298,7 @@ dependencies = [
  "gorca-model",
  "gorca-rt",
  "gorca-testkit",
+ "libc",
  "thiserror",
  "toml_edit",
  "tracing",

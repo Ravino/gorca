@@ -3,6 +3,13 @@
 //! One daemon speaks one language at a time: the Reader publishes `speech.language` here when the
 //! effective settings change (`set_language`), and every presenter reads it through [`language`].
 //! A test pins a language for its own thread with [`scoped`], which does not touch other tests.
+//!
+//! The language is process-global on purpose: there is one Reader (one effective settings set)
+//! per daemon, and pure presenters (`t()`) have no settings to consult. Code that holds the
+//! effective settings uses `t_in` with that language, so it never disagrees with its own
+//! settings. If gorca ever hosts several readers in one process, the presenters have to take the
+//! language explicitly; until then `set_language` is called from one place (the Reader's
+//! settings load).
 
 use std::cell::Cell;
 use std::sync::atomic::{AtomicU8, Ordering};

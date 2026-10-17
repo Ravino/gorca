@@ -105,9 +105,23 @@ impl Catalog {
         self.msgs.get(id as usize)
     }
 
-    /// The text of a message without placeholders (empty for one that has placeholders).
+    /// The text of a message without placeholders. Asking for one that has placeholders is a
+    /// bug in the caller (it must use [`Catalog::format`]): it panics in debug builds and tests,
+    /// and in release speaks the English text if that one is plain, else nothing.
     pub fn get(&self, id: MsgId) -> &str {
-        self.template(id).and_then(Template::plain).unwrap_or("")
+        if let Some(p) = self.template(id).and_then(Template::plain) {
+            return p;
+        }
+        debug_assert!(
+            false,
+            "message `{}` has placeholders: use msg!(.., name = value), not t()",
+            id.key()
+        );
+        if self.lang == Lang::En {
+            ""
+        } else {
+            catalog(Lang::En).get(id)
+        }
     }
 
     /// Format a message.
@@ -220,6 +234,48 @@ mod tests {
                 r.missing.iter().map(|m| m.key()).collect::<Vec<_>>()
             );
         }
+    }
+
+    #[test]
+    fn a_plain_message_is_returned_as_it_is() {
+        for l in Lang::ALL {
+            for id in MsgId::ALL {
+                // Every message either is plain or has placeholders; `get` must only be asked
+                // for the plain ones (checked here without tripping the debug assertion).
+                if catalog(l).template(*id).and_then(Template::plain).is_some() {
+                    let _ = catalog(l).get(*id);
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "has placeholders")]
+    fn t_on_a_message_with_placeholders_fails_loudly_in_tests() {
+        let id = MsgId::ALL
+            .iter()
+            .find(|id| {
+                catalog(Lang::En)
+                    .template(**id)
+                    .and_then(Template::plain)
+                    .is_none()
+            })
+            .copied()
+            .expect("the catalog has a message with placeholders");
+        let _ = catalog(Lang::En).get(id);
+    }
+
+    #[test]
+    fn the_text_editing_messages_have_plurals_in_both_languages() {
+        let n = |l, n: i32| tf_in(l, MsgId::TextChars, &[("n", Arg::from(n))]);
+        assert_eq!(n(Lang::En, 1), "1 character");
+        assert_eq!(n(Lang::En, 5), "5 characters");
+        assert_eq!(n(Lang::Ru, 1), "1 символ");
+        assert_eq!(n(Lang::Ru, 3), "3 символа");
+        assert_eq!(n(Lang::Ru, 11), "11 символов");
+        assert_eq!(t_in(Lang::En, MsgId::TextNewLine), "new line");
+        assert_eq!(t_in(Lang::En, MsgId::StateAvailable), "not unavailable");
+        assert_eq!(t_in(Lang::Ru, MsgId::StateAvailable), "доступно");
     }
 
     #[test]

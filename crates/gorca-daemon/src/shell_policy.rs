@@ -81,7 +81,7 @@ fn kind(k: ext_gnome_shell::SegmentKind) -> SegmentKind {
 /// An extension text in the UI language: a message reference of the extension's catalog is
 /// resolved, a literal passes through.
 fn resolve(text: &str) -> String {
-    gorca_i18n::ext::resolve(text, gorca_i18n::language()).into_owned()
+    gorca_i18n::ext::resolve_for(text, gorca_i18n::language(), "ext-gnome-shell").into_owned()
 }
 
 impl AppPolicy for ShellPolicy {
@@ -89,6 +89,9 @@ impl AppPolicy for ShellPolicy {
         if self.faults.load(Ordering::Relaxed) >= DISABLE_AFTER {
             return PolicyVerdict::Default;
         }
+        // Application text never reads as a message reference (ADR-0010).
+        let name = f.name.map(gorca_i18n::ext::sanitize);
+        let description = f.description.map(gorca_i18n::ext::sanitize);
         let facts = Facts {
             moment: match f.moment {
                 PolicyMoment::Focus => Moment::Focus,
@@ -98,8 +101,8 @@ impl AppPolicy for ShellPolicy {
             },
             role: ext_role(f.role),
             states: f.states.bits(),
-            name: f.name,
-            description: f.description,
+            name: name.as_deref(),
+            description: description.as_deref(),
             range: f
                 .range
                 .map(|(current, min, max)| Range { current, min, max }),

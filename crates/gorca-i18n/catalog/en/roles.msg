@@ -96,3 +96,5 @@ state-current-location = current location
 state-current-date = current date
 state-current-time = current time
 state-level = level {l}
+state-available = not unavailable
+state-valid = not invalid entry

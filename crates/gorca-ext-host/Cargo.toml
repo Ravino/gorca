@@ -15,6 +15,7 @@ gorca-rt = { workspace = true }
 gorca-core = { workspace = true }
 gorca-config = { workspace = true }
 bitflags = { workspace = true }
+libc = { workspace = true }
 toml_edit = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

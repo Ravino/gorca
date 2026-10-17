@@ -66,8 +66,6 @@ info-no-name = {role}, no name
 info-out-of-date = information may be out of date
 
 # Time and date.
-time-am = AM
-time-pm = PM
 time-12h = {h}:{m} {ap}
 time-24h = {h}:{m}
 month-1 = January
@@ -129,3 +127,7 @@ echo-tab = tab
 echo-escape = escape
 echo-delete = delete
 echo-f = f {n}
+time-night = AM
+time-morning = AM
+time-day = PM
+time-evening = PM
