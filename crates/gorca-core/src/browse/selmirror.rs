@@ -42,6 +42,9 @@ pub struct Plan {
     pub gecko_lossy: bool,
 }
 
+/// The marker an image leaves in the flat text.
+const OBJECT: char = '\u{FFFC}';
+
 /// Offsets in a container's hypertext: UTF-16 units and scalars.
 type Off = (u32, u32);
 
@@ -58,7 +61,7 @@ fn is_leaf(d: &WebDoc, id: DocNodeId) -> bool {
 /// An embedded object with no text of its own: an image (its flat text is the U+FFFC marker).
 fn is_object(d: &WebDoc, id: DocNodeId) -> bool {
     d.node(id)
-        .is_some_and(|v| v.role == Role::Image && v.text == Some("\u{FFFC}"))
+        .is_some_and(|v| v.role == Role::Image && v.text.is_some_and(|t| t.chars().eq([OBJECT])))
         && d.child_count(id) == Some(0)
 }
 
