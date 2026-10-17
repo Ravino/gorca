@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Extension hook points (ADR-0001 section 10, ADR-0008 section 3.3).
 //!
 //! The core owns the *shape* of the hooks and nothing else: these traits use core types only

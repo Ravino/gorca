@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Rule 8: only the daemon's `main.rs` reads the process environment or opens a bus by looking
 //! around (`Builder::session()`, `Connection::session()`, ...).
 //!

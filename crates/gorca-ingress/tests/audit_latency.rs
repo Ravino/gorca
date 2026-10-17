@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Security audit (2026-10-12, commit 74dbd07): worst-case cost of one critical section.
 //!
 //! The reference drain is one thread that pushes for every app; a push that holds an app's lock

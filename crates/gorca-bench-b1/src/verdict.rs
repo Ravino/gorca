@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! H-4: presentation and truth logs, and the verdict classifier of SPEC 6.2.
 //!
 //! Inputs are two JSON-lines files, both `CLOCK_MONOTONIC` nanoseconds:

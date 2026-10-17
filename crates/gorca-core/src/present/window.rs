@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Window activation, dialogs and alerts (M4b, phase-2.md M4; Orca `on_window_activated`).
 //!
 //! When a window is activated the user hears its title and, for a dialog or an alert, what it

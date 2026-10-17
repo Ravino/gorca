@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Who is on the other end of a speech socket (review F14).
 //!
 //! gorca sends everything it reads to the speech service, passwords and terminal output

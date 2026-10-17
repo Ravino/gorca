@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! voicego native `SpeechClient`.
 //!
 //! Wire facts (`docs/platform/voicego-protocol.md`, TBD-V1..V6 answered):

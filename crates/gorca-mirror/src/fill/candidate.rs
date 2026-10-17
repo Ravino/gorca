@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The bake-off hook (B-1 SPEC 10): `gorca_mirror::fill::Candidate`.
 //!
 //! After the B-1 decision (2026-10-14) the candidate *is* the adopted product policy,

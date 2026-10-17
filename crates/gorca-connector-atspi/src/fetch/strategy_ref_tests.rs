@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The naive reference strategy against a fake application on an isolated bus (no real desktop).
 //! Skips (and passes) when the harness prerequisites are missing.
 #![allow(clippy::unwrap_used, clippy::expect_used)]

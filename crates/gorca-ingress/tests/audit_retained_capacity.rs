@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Security audit (2026-10-12, commit 74dbd07): `take()`/`enter_flooded()`/`compact_if_sparse()`
 //! call `HashMap::clear()` on `index` and `by_node`, which keeps the capacity. One storm to
 //! `hard_cap` leaves ~11 MiB per app allocated for the life of the app, outside the global

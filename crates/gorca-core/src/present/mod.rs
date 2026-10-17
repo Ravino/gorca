@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Hot-path presentation: a pure function over a snapshot (ADR-0001 section 3.3).
 //!
 //! > "Hot-path presentation (focus, one nav step) runs inline as a pure function over snapshots.

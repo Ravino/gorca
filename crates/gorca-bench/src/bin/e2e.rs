@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `e2e`: end-to-end latency harness runner (Phase 1). Run it inside the isolated session:
 //!
 //! ```text

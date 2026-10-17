@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Hostile extensions cannot delay the core's key-to-speech path (security review: a slot must
 //! never be able to hold up the Reader, the app actor or the workers of another slot).
 //!

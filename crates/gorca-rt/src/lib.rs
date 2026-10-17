@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Runtime primitives shared by every gorca crate.
 //!
 //! Responsibility (ADR-0001 section 11): "lanes (thread spawn, naming, rtkit priority),

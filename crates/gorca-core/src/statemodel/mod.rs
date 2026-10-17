@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Model-based (property) tests of the Reader's mode and state transitions.
 //!
 //! The Reader is driven in-process through `Reader::handle`, the way the lanes drive it, against

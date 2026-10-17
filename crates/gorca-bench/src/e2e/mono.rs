@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `CLOCK_MONOTONIC` in nanoseconds: the one clock shared by every process of a run.
 #![allow(unsafe_code)]
 

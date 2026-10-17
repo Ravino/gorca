@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! B-2 (ingress push/drain) and MB-1 (mirror read/write) baselines for the reference
 //! implementations.
 

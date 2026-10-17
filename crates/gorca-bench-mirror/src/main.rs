@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! MB-1: mirror store microbenchmark (decision MS-3). See docs/reports/2026-10-13-mb1-mirror-store.md.
 //!
 //! ```text

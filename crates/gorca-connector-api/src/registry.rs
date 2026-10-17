@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! App announcement (`AppRegistrar`) and the scope table that enforces C-5.
 
 use std::collections::HashMap;

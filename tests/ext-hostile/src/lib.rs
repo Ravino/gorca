@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Hostile extension (from the m5 review probe, kept as a regression fixture): exercises host-side
 //! work that guest fuel cannot see, the canonical-ABI lift of import arguments, and host-call loops.
 //! Built by `crates/gorca-ext-host/tests/hostile.rs`; not a workspace member (raw wasm imports).

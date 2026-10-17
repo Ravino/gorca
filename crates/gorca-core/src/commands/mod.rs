@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The command layer (ADR-0005): the closed command set, the keymap compiler, and the Reader's
 //! `Key`, `Mode` and `Control` arms.
 //!

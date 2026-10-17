@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Message bookkeeping shared by the SSIP-family speech clients (voicego binary framing and text
 //! SSIP): replies come back in command order, events (`7xx`) carry the server's message id, and
 //! gorca addresses utterances by its own `UttId`.

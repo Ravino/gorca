@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! End-to-end tests of the source against an in-process fake AT-SPI peer (a zbus peer-to-peer
 //! server that answers `Accessible` and `Collection.GetTree` over a socketpair), so the block
 //! fetch, the event-driven updates and the identity ladder run in `make check` without a browser.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Screen geometry used in snapshots and hit tests.
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]

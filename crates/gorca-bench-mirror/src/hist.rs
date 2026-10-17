@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Log-linear histogram over nanosecond values: 32 sub-buckets per power of two (about 3 %
 //! relative error), mergeable, no allocation on record.
 

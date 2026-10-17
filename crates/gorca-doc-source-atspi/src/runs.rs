@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! TX-1 text runs (ADR-0003 AM-5, browse-mode design FT-1, FT-2).
 //!
 //! Firefox keeps the text of a container in the container's hypertext, with one U+FFFC for each

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Node snapshots and freshness (ADR-0001 sections 4.2 and 4.4).
 
 use std::sync::Arc;

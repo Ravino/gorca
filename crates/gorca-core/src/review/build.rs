@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The I/O side of review (ADR-0006 6.1, 5.3, 6.6, 8): everything that talks to an application.
 //!
 //! These are plain `async fn`s over a [`ReviewIo`] (the app's request channel, its fill channel

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Conformance checks for connectors and sources (ADR-0001 C-1..C-6, SL-1..SL-4). Each check
 //! returns a measurement or a verdict; the caller decides the threshold, so the same code serves
 //! unit tests (generous bounds, debug builds) and the perf harness (tight bounds, release).

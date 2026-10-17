@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! D-Bus wire framing for the raw drain: the fixed header, the header-field array and the three
 //! method calls the drain makes (`Hello`, `AddMatch`). No body is decoded here.
 

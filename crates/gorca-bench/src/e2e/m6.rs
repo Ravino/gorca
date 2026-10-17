@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! M6 end-to-end gates (docs/plan/phase-2.md 2.1 V1-V3, milestone M6): a terminal, through the
 //! real connector, the real keyboard path and the `terminal` scenario of `fakeapp.py`.
 //!

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! M8b: ARIA roles, states and descriptions as words (NVDA parity).
 //!
 //! One place that turns what the web source normalised (`role`, `states`, and the attributes

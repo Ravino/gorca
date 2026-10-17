@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Watchdog heartbeat (ADR-0001 section 6.6). A lane records progress; an OS thread outside
 //! tokio evaluates it. A stall over 250 ms with a non-empty queue is logged; over 2 s it
 //! triggers a supervised restart.

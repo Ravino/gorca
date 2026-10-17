@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The AT-SPI connector against a real (private) a11y bus and fake applications, with the real
 //! core behind it and a recording speech sink. Needs `tests/harness` prerequisites; when they
 //! are missing the tests say so and pass (they are listed in the final report as not run).

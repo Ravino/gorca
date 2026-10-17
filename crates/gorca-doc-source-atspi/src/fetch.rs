@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Block fetch of one document: `Collection.GetTree` for structure, names and attributes, then
 //! pipelined `GetRole` / `GetState` / `GetText` passes over the same P2P pool.
 //!

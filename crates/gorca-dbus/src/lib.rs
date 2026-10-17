@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Deadline call helper, drain primitives, P2P pool and `SIOCINQ` sampling.
 //!
 //! Responsibility (ADR-0001 sections 5.3 and 11): "deadline call helper, event-connection drain

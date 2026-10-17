@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Minimal D-Bus wire codec: exactly what the harness needs, written independently of zbus and of
 //! the drain implementations so it can act as ground truth.
 //!

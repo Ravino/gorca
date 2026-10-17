@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Battery state from UPower's display device (`org.freedesktop.UPower`), read-only, on the
 //! system bus. Opened per request: the command is rare, so no connection is kept open, and
 //! every await runs under the core's own deadline (`gorca_core::BATTERY_DEADLINE`) plus the

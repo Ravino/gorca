@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! AT-SPI events as the source sees them, and the dirty set that turns an event burst into a
 //! small refetch plan (ADR-0003 sections 9.1-9.3, normalisation AS-4).
 //!

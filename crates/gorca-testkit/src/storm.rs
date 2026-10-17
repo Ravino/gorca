@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Deterministic event storm generator (M-3, M-11 harness input). xorshift64*, no `rand`
 //! dependency, so a seed reproduces a run exactly.
 

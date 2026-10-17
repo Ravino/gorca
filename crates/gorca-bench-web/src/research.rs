@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Research scenario for ADR-0003 TBD-WEB-1/2/3, run against Firefox and Chromium through the same
 //! source:
 //!

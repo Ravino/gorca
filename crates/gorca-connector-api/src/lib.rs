@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The connector boundary (ADR-0001 section 5.1).
 //!
 //! Responsibility (section 11): `Connector`, `ConnectorCtx`, `AppPort`,

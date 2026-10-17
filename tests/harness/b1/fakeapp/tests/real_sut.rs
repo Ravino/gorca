@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `RealSut` against real `b1-fakeapp` processes, without a daemon: the Sut plumbing the
 //! conformance suite and the walk run on in the real configuration.
 

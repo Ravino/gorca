@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Reviewer probes (M4b r1). Each asserts the behaviour the spec/threat model promises.
 #![allow(clippy::wildcard_enum_match_arm)]
 use super::tests::{fixture, node, said};

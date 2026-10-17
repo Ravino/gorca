@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! MA-6 evidence: the cost of `apply` per node, and of `sweep` and `invalidate_all`, at the caps.
 //! Printed, and asserted against a generous bound so a regression of an order of magnitude fails.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::cast_precision_loss)]

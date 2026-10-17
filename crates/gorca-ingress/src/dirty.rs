@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Per-node dirty bits used when an app is `Flooded` (R-3).
 
 use std::collections::HashSet;

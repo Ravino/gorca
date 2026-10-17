@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The pass-through predicate `P(node, reason)` (browse-mode design 7.2, ADR-0003 11), after
 //! NVDA's `shouldPassThrough` (`refs/nvda/source/browseMode.py:326-440`).
 //!

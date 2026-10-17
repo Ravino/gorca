@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! M4b end to end: window activation, dialogs, announcements and Shell notifications through the
 //! real daemon wiring, against a fake AT-SPI application and a mock speech server, in private
 //! sessions (`tests/harness`). Needs the harness prerequisites; without them each test prints

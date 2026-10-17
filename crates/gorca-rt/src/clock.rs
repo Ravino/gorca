@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Clock abstraction; virtual in tests (ADR-0001 section 5.1 `ConnectorCtx::clock`).
 
 use std::sync::Arc;

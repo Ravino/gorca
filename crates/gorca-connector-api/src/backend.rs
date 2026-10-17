@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Core to connector requests. Every request has a deadline (never-block rule).
 
 use std::ops::Range;

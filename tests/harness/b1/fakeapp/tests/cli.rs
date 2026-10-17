@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The binary: control channel, truth log, isolation refusal, every shipped model loads.
 
 #![allow(

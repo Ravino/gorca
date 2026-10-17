@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! M7a end-to-end gates and walkthrough (browse-mode design 15, 16): gorca (the real daemon)
 //! reading a PRIVATE Firefox, with the emulated Mutter delivering keys and the mock speech server
 //! scoring the answers.

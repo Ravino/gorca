@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Extension host: the wasmtime embedding, limits, manifests, matching and keymap merge.
 //!
 //! Responsibility (ADR-0001 sections 10 and 11, ADR-0008 section 3.3): load extensions, run their

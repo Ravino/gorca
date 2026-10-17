@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The system under test, as the conformance suite sees it (SPEC 5.7).
 //!
 //! A [`Sut`] is "a reader (R0 or an arm) attached to fake applications". The cases drive the

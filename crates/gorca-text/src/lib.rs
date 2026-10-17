@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The shared text layer (ADR-0007 section 3). Pure: no tokio, no I/O, no connector types.
 //!
 //! One implementation of every text rule, used by native text fields (a window over AT-SPI

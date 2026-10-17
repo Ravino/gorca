@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Bake-off B-1 harness (native mirror fill strategy), perf-engineer share (SPEC section 11:
 //! H-4 verdicts, H-5 message accounting, H-6 runner, H-7 step bench, H-9 R0 definition, H-12 host).
 //!

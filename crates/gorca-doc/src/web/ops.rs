@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Incremental update operations (ADR-0003 section 9.6) and the identity hooks for SPA churn
 //! (variant C, section 5): removal detaches a subtree instead of destroying it, so a later
 //! re-match can bring the same `DocNodeId`s back (IL-R3, IL-R4).

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Deterministic AT-SPI event workloads: what the fake apps would emit, as data.
 //!
 //! A [`Gen`] is a pure function of `(seed, mix, slots)`. The feeder consumes the first `n`

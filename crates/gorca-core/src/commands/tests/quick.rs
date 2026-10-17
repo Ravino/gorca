@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! F0 quick wins: lock keys, capital pitch, speech history, sleep mode, battery.
 
 use super::*;

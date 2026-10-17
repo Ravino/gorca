@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Scenarios that run the Python fake apps of `tests/harness` (storm, mixed, hung) against the
 //! drain under test, inside `tests/harness/run-isolated.sh`. A truth tap on the same bus
 //! provides the ground truth and the arrival times.

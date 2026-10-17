@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `KeySource` for Mutter's `org.freedesktop.a11y.KeyboardMonitor` (ADR-0001 sections 5.5, 7.3,
 //! ADR-0005 4, 8.2).
 //!

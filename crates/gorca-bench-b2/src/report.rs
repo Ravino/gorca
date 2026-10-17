@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Result rows: a fixed table printed for humans, and the same data as JSON for comparison
 //! across commits (`bench/results/b2-ingress/<label>/`).
 

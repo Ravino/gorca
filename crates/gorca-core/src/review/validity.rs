@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Is a line model still true? (ADR-0006 6.5.) Checked on every step, with no messages.
 //!
 //! An O(1) revision fast path first; then one lock-free mirror read per distinct node of the

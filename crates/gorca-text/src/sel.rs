@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Selection diffing (ADR-0007 section 8, SL-3). Selections are sets of scalar ranges; the
 //! diff says which text became selected and which became unselected.
 

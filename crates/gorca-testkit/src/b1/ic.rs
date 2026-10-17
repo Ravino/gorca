@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Invalidation conformance suite IC-1..IC-23 (SPEC 5.7).
 //!
 //! Each case drives fake apps through [`Cmd`]s and judges what the reader under test presented

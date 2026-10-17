@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! ADR-0008 micro-benchmark: wasmtime component-model call overhead for per-engine web quirk
 //! hooks, against the same logic called natively (direct and behind `catch_unwind`).
 //!

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The settings KV: the only persistent state an extension has. One namespace per extension; an
 //! extension can neither see nor name another's. Bounded in key count and size. Persistence is
 //! the host's job and never happens on a hook's thread: [`SettingsKv::take_dirty`] tells the

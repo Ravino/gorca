@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Navigation categories (ADR-0003 section 4.4), node flags, node specs and the pure
 //! `(role, level, flags) -> categories` function (DM-4).
 

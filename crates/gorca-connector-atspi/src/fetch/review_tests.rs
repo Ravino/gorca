@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The review operations (bounds, visible lines, actions, collection) against the fake
 //! application on an isolated bus. Skips (and passes) when the harness prerequisites are missing.
 #![allow(clippy::unwrap_used, clippy::expect_used)]

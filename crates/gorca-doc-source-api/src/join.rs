@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Identity reconciliation port (ADR-0001 section 9.3, IR-2, IR-4).
 
 use gorca_model::{NodeKey, SrcNodeId};

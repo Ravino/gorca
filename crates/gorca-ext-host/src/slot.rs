@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! One extension for one application: the instance, its health and the fault policy.
 //!
 //! Every fault (trap, panic, epoch interrupt, native overrun) drops the instance and builds a

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Ingress conformance (SPEC section 4): the candidate's `IngressSender`/`IngressReceiver`
 //! against the executable specification in `gorca_bench_b2::model`, no bus involved.
 

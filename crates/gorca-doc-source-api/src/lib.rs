@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The SourceLayer boundary under the web document mirror (ADR-0001 section 9.2).
 //!
 //! Responsibility (section 11): `DocSource`, `DocSourceCtx`, `SourceCaps`, `DocDelta`,

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! M4a end-to-end gate R1 (docs/adr/0006 18): a review step on a valid line model to speech.
 //!
 //! The stimulus is the desktop layout's unmodified numpad review keys through `fake_mutter.py`,

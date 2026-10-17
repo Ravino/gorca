@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! A policy for tests of the **shared** fill code (driver, store, connector): it asks for
 //! everything, as often as it may, and leaves refusing, rate limiting and eligibility to the
 //! driver.

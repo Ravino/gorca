@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! ID-5 (amended 2026-10-14, docs/reports/live-keys-swallowed.md): "At startup gorca sets
 //! `org.a11y.Status.IsEnabled = true`. It never writes `ScreenReaderEnabled`. Shutdown restores
 //! the previous `IsEnabled`, unless a screen reader has since claimed the desktop."

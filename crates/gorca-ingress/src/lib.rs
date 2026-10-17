@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Per-app coalescing ingress (ADR-0001 section 6.3).
 //!
 //! Responsibility (section 11): "coalescing ingress: `CoalesceKey`, `Slot`, push/drain API

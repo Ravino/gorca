@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! B-6 scenarios. Each returns a JSON value for `bench/results/web-prep/`.
 //!
 //! * `build`: M-9 / WM-1, full-tree build time, stage by stage, over a matrix of strategies.

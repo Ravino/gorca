@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Hand-written readers for the few AT-SPI reply shapes the block fetch needs.
 //!
 //! Why not zvariant: a `GetTree` reply for a 100k-node page is ~15 MB of `a((so)a{sv})`.

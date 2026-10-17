@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The WASM backend: wasmtime component model, one `Store` per (extension, application), the
 //! 32 MiB memory cap, a pooling allocator so a reset is a fresh `Store` from an `InstancePre`
 //! (measured 9 to 31 microseconds, ADR-0008 section 2).

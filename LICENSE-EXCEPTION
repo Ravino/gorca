@@ -1,0 +1,59 @@
+gorca additional permission under GNU GPL version 3, section 7
+===============================================================
+
+NOTE: DRAFT. This text has not been reviewed by a lawyer. It must be reviewed
+by someone who drafts licence exceptions before the first release (compare the
+GCC Runtime Library Exception, the Linux syscall note and the "Non-GPL
+Components in Plugins" exception in NVDA's copying.txt).
+
+The gorca core is licensed under the GNU General Public License, version 3 or
+(at your option) any later version (see the file LICENSE). The files listed
+under "Extension SDK" below are licensed under MIT OR Apache-2.0 instead (see
+LICENSE-MIT and LICENSE-APACHE in crates/gorca-ext-api/) and are not affected
+by this document.
+
+Definitions
+
+  "gorca" means the program gorca as distributed by the gorca authors, and
+  every file in this repository that is licensed under the GNU GPL.
+
+  "Extension SDK" means the Rust crate gorca-ext-api (crates/gorca-ext-api/),
+  including the WebAssembly Interface Type (WIT) files in
+  crates/gorca-ext-api/wit/, as published by the gorca authors under the
+  licence MIT OR Apache-2.0.
+
+  "Extension" means a WebAssembly component (or a work that is compiled to
+  one) that is loaded and run by gorca, that interacts with gorca solely
+  through the interfaces defined in the Extension SDK (the imports it calls
+  and the exports it provides), and that does not itself contain any part of
+  gorca other than the Extension SDK.
+
+Additional permission
+
+  If you convey an Extension, the GNU General Public License does not require
+  you to license the Extension, or any work you combine it with, under the
+  terms of the GNU General Public License, even though gorca loads and runs the
+  Extension and exchanges data with it through the Extension SDK interfaces.
+  You may choose the licence for the Extension (including a proprietary one),
+  provided that you comply with the licence of the parts of the Extension SDK
+  that you include in it (MIT or Apache-2.0, at your option).
+
+  This permission applies to the Extension only. It does not apply to
+  modified versions of gorca, to code that is linked into the gorca process
+  by other means (for example a native build of an extension compiled into the
+  daemon, or a patch to gorca), or to a work that includes any other part of
+  gorca. If you modify gorca, or extend the interfaces of the Extension SDK in
+  a way that exposes other parts of gorca to Extensions, you may extend this
+  permission to your modified version, but you are not obliged to do so. If you
+  do not wish to do so, delete this exception statement from your version.
+
+Notes
+
+  * This permission is granted by the copyright holders of gorca under section
+    7 of the GNU GPL version 3. As section 7 says, you may remove it from a
+    copy you convey; if you do, you must remove it from the whole copy.
+  * The permission covers licensing of the Extension. It grants no right to
+    use the names gorca, Orca or NVDA as a trademark.
+  * Parts of gorca that were derived from third-party GPL works (see
+    THIRD-PARTY.md) are licensed by their authors under their own terms; this
+    exception is granted only for the rights held by the gorca authors.

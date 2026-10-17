@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Built-in app profiles: the minimal in-tree stand-in for per-app extension hooks until the
 //! WASM extension host is wired (`gorca-ext-api`). The core never branches on an application
 //! name anywhere else; it asks [`AppProfile::for_app`], which matches on [`AppInfo`] the same

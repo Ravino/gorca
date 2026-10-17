@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Per-application request service: turns `BackendRequest`s into AT-SPI calls over the call
 //! connection. Every call carries the request's deadline (R2, D-4); the number of requests in
 //! flight is bounded per application (C-3), so a hung application costs its own actor only.

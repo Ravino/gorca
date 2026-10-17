@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Preemption-proof timing for latency-bound tests.
 //!
 //! A bound such as "one push holds the lock for at most 250 us" is a statement about the work

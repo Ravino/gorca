@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The translator: a settled batch of `DocDelta`s becomes `DocOp`s on the document mirror
 //! (browse-mode design section 4.2, TR-1 to TR-6).
 //!

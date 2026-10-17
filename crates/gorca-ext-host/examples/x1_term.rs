@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! X1 for the terminal policy (`ext-vte`): the whole host path of `TermSession::step` as the
 //! Reader calls it (slot `try_lock`, input lowering, the call, lifting the actions), on the
 //! component, on the native build behind the host and on the native build called directly (what

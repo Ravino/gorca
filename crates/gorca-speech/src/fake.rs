@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! In-process fake `SpeechClient` and `SpeechBackend` for the lane and failover tests.
 
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicUsize, Ordering};

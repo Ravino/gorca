@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Shared fixtures for the host's integration tests: the test extension built both ways, a
 //! recording sink and snapshot builders.
 

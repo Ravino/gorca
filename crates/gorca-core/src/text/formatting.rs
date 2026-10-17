@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `info.formatting`: what is spoken for the formatting of the character under the caret
 //! (ADR-0007 M3b). The connector has already mapped the toolkit's attribute names to
 //! [`TextFormat`]; this is only wording.

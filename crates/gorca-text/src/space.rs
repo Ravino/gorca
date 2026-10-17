@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `TextSpace`: the one trait through which native text, browse-mode flat text and review read
 //! units (ADR-0007 section 3, TL-1 to TL-4), plus [`CharsSpace`], the implementation over a
 //! resident `&[char]` that the document mirror and the native window both delegate to.

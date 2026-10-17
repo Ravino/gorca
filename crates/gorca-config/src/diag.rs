@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Diagnostics: every problem found while loading is reported, none is fatal (ADR-0005 7.4).
 
 use std::fmt;

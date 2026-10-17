@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Command metadata (ADR-0005 3.1): the static spec of every command and the name table.
 
 use std::collections::HashMap;

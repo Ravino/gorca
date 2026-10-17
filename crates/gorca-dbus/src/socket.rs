@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Socket backlog sampling for drain lag detection (D-2).
 //!
 //! The only `unsafe` in this crate (ADR-0001 section 11, rule 6): one `ioctl`.

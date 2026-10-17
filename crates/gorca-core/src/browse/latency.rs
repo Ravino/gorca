@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Gorca-side cost of the browse hot paths on large mirrors: W1 (quick-nav key to speech),
 //! BR1 (cursor key to speech) and J1 (focus join). They measure what the Reader does between
 //! receiving the key and handing the utterance over; the end-to-end figures (with the key

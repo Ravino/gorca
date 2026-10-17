@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Pure decoding of AT-SPI replies into core values (C-4, C-6). Nothing here touches the bus, so
 //! everything is unit-tested with hostile inputs. All of it is untrusted data.
 

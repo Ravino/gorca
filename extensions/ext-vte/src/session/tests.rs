@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Session scenarios: a tiny terminal model feeds the extension the way the host would.
 
 #![allow(clippy::cast_possible_truncation, clippy::format_collect)]

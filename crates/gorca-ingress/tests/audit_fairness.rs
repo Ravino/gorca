@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! AU-3 / AU-6 / AU-1 regression tests for the judge's findings on candidate A (B-2 judgement,
 //! section 4.4): many-connection starvation, the cost of a preemption, uncharged ring records.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

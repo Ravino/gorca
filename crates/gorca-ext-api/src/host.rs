@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! The host functions, as free functions: one API for both builds of an extension.
 //!
 //! - Component build (`wasm32`): each call is the WIT import of the `host` interface.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! How each `BackendOp` is executed: which AT-SPI calls, in which order, how many at once.
 //!
 //! This file is the **naive reference strategy**, the one R0 uses: one sequential call chain per

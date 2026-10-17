@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Review cursor types (ADR-0006 3). All `Copy`, so `Mode` stays `Copy`.
 
 use gorca_model::{DocId, NodeKey};

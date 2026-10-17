@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 use gorca_rt::{BoxFuture, CancellationToken, Clock, Deadline, mpsc, watch};
 
 use crate::event::KeyEvent;

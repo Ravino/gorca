@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Core-side request helper: the "never block" rule for `BackendRequest`.
 
 use std::time::Duration;

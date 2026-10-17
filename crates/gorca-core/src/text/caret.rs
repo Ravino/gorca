@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The caret state machine (ADR-0007 section 5): one tracked text object, the slot that binds a
 //! movement key to the caret event it causes, typing echo, edit handling and selection.
 //!

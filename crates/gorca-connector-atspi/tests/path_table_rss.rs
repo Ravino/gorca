@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The path table's byte cap must bound real memory, not just its own accounting.
 //!
 //! Review finding (phase 1): with 52k live entries RSS grew 279 MiB, because `HashMap::clear`

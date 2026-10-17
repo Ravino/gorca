@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Core entry point and structured concurrency root.
 //!
 //! [`Core::run`] owns every task of the engine (a [`TaskSet`] under one `CancellationToken`) and

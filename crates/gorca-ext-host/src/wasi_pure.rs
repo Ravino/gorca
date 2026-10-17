@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The pure WASI imports a Rust `wasm32-wasip2` extension may pull in: random numbers and
 //! clocks. Everything else WASI (files, sockets, environment, stdio, process) stays a trap, so an
 //! extension has no ambient capability. These are implemented from the host's own state and make

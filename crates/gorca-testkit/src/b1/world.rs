@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The pure state of one B-1 fake application: the tree, its mutations and the events and truth
 //! lines they cause (SPEC 8.1, H-2).
 //!

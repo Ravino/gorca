@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Child processes of a run: the Python fake apps / fake Mutter (JSON-lines control channel),
 //! the reader under test, and the bus-floor focus tap.
 

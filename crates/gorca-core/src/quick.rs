@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! F0 quick wins (docs/plan/phase-3-features.md): lock-key announcements, capital pitch, speech
 //! history, battery and per-application sleep mode. Additive Reader state and handlers; the
 //! keypress path only reads and writes plain fields (FP-2: no IPC on it).

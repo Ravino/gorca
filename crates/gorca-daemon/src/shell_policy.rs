@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The native adapter between the core's `AppPolicy` and the `ext-gnome-shell` rule table
 //! (ADR-0008 section 3.3: first-party extensions run native in-process now and as WASM after M5).
 //! It turns core facts into the extension's plain facts and the verdict back, and contains the

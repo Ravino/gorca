@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Workload model: node construction, the tree shape, the reader command, the writer op mix.
 
 use std::fmt::Write as _;

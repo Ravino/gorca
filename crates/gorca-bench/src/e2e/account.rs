@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Speech accounting for the strict key gates: every utterance the reader submitted must end
 //! up spoken at the server or in a named drop counter.
 //!

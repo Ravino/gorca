@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Redaction of secret text for diagnostics (the presentation log).
 //!
 //! Password text is spoken but never logged (docs/decisions.md). A diagnostic that must still

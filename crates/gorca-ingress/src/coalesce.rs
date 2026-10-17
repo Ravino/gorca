@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Per-app ingress: a bounded lock-free MPSC ring in front of a consumer-side coalescing table
 //! (B-2 candidate A).
 //!

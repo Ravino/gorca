@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Candidate A: a raw socket drain. One named thread does a blocking `recv` into a 1 MiB
 //! buffer, frames the D-Bus stream itself, peeks at the header fields, maps the signal with
 //! [`map_signal`] and pushes the events into the lock-free ring of the sending app. No zbus on

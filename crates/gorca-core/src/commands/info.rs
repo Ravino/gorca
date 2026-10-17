@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Text of the `info.*` and `debug.*` commands: pure functions over mirror snapshots.
 //!
 //! "Where am I" v1 (ADR-0005 6.4) uses the ancestry the mirror already holds: application,

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! H-10(a): service-time fidelity. Its own test binary so no other test competes for the cores.
 
 #![allow(

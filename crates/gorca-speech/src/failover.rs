@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `FailoverClient`: an ordered list of speech backends behind one [`SpeechClient`] (TBD-V6).
 //!
 //! - On start the primary is tried under a Startup-class deadline. After

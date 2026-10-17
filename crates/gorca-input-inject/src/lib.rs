@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `KeyInjector` over RemoteDesktop/EIS (libei) and the injection expectation table.
 //!
 //! Responsibility (ADR-0001 section 11): "`KeyInjector` over RemoteDesktop/EIS (libei);

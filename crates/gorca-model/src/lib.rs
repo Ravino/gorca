@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Connector-neutral object model.
 //!
 //! Responsibility (ADR-0001 section 4, section 11): `NodeKey`, `AppId`, `Role`, `StateSet`,

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Pure SSIP lowering: command lines, dot-stuffed data blocks, handshake, capabilities.
 
 use gorca_model::Prio;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! A terminal policy session over an extension slot (the `terminal` interface, ADR-0001 T-2).
 //!
 //! The Reader owns one [`HostTermSession`] per tracked terminal and drives it with plain inputs.

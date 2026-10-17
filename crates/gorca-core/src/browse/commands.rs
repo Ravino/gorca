@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The Reader's browse arm: focus handling, document notices, key commands (browse-mode design
 //! sections 7 and 8). Everything on a key's path to speech reads one published `WebDoc` and
 //! sends nothing but fire-and-forget effects afterwards (BI-1, BI-2).

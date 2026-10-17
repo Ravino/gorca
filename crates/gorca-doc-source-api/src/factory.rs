@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Per-application source factory (ADR-0003 AM-10, browse-mode design section 6).
 //!
 //! The core keeps no transport knowledge: everything that needs the application's bus name, its

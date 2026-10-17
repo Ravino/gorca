@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Event-connection drain: the B-2 interface (ADR-0001 sections 5.3 and 6.3).
 //!
 //! A drain owns one or more D-Bus connections to the a11y bus, installs the match rules, reads

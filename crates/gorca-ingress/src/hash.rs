@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! A small multiplicative hasher for the node tables.
 //!
 //! The keys are 64-bit object-path hashes the application controls, so the state carries a

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The terminal screen as the extension keeps it: text, line index, line hashes, and the
 //! line-level diff of two screens (ADR-0001 T-2).
 //!

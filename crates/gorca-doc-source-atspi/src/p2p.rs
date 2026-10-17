@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Per-application connection pool: N peer-to-peer connections to the browser's own AT-SPI socket
 //! (ADR-0003 AS-1, ADR-0001 D-7), or the bus call connection when P2P is unavailable.
 //!

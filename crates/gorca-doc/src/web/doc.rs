@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `WebDoc`: generational arena + intrusive tree + augmented implicit treap over document
 //! order (ADR-0003 sections 4.1, 4.4, 4.5; GM section 1.2).
 //!

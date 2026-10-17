@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! M8 gate harness: NVDA browse-mode parity scenarios (docs/plan/m8-spec.md).
 //!
 //! The runner is data driven. A [`Scenario`] is one corpus page (`tests/web/m8/pages/`) plus an

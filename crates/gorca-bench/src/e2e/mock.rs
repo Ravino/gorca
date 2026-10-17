@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Mock speech servers: voicego (binary framing, `docs/platform/voicego-protocol.md`) and
 //! speech-dispatcher (text SSIP). Both record a `CLOCK_MONOTONIC` timestamp the moment a read
 //! returns data that contains a complete SPEAK or STOP/CANCEL.

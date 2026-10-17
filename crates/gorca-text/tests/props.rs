@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Seeded property tests for segmentation, stepping, selection diffing, edit coalescing, echo
 //! dedupe and offset conversion. Every failure message carries the seed and the input, so a
 //! failing case replays exactly.

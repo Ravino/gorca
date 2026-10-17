@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `save`: write the overlay into the original text, keeping comments and order (HR-5).
 //!
 //! Pure: it takes the file text and returns the new text. Reading the file, the hash guard

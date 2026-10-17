@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The whole speech stack over real sockets: lane -> failover -> voicego / SSIP clients ->
 //! mock servers. Covers cancel + speak, a focus storm, voicego down (SSIP fallback) and
 //! voicego back.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Dependency-direction rules from ADR-0001 section 11, evaluated on the resolved dependency
 //! graph (production edges only: normal and build dependencies; dev-dependencies are test-only
 //! and may use anything).

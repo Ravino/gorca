@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `b6`: the B-6 web SourceLayer harness.
 //!
 //! ```text

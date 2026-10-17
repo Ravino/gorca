@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 use std::time::Instant;
 
 use gorca_model::{Epoch, Prio};

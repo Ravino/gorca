@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! H-7 entry point: `cargo bench -p gorca-bench-b1 --bench step`.
 //!
 //! Writes `step.json` into `$B1_RUN_DIR` (or prints it). Subject selection:

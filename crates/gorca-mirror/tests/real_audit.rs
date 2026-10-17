@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The MA audits of the B-1 conformance kit (`gorca_testkit::b1::audit`) against the real store,
 //! the real shared driver and the R0 policy: MA-1 counters, MA-2 churn, MA-3 foreign refs,
 //! MA-4 late replies, MA-5 re-dirty, MA-6 apply cost (per driver slice), MA-9 health.

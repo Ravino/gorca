@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `b1 run --rundirs` end to end on synthetic run directories: interleaving bookkeeping, median
 //! gating, the exit code and the result files. No daemon, no bus.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]

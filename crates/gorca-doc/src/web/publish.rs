@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Left-right publication (ADR-0003 section 4.8), built on `arc-swap` so it needs no `unsafe`.
 //!
 //! Two copies of the document exist. Readers load the *live* one through an `ArcSwap` and never

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Decoder of `org.a11y.atspi.Cache.GetItems` replies (B-1 PW-9, audit MA-7).
 //!
 //! The reply is **untrusted input of up to 16 MiB**. This decoder never panics, bounds everything

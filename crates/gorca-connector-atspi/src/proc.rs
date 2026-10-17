@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Process identity beyond the pid.
 //!
 //! A pid alone is not an identity: pids are reused. A process is identified by `(pid, start

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 use bitflags::bitflags;
 use gorca_model::Epoch;
 

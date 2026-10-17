@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The native backend (ADR-0008 section 3.3): the extension value is linked in-process and called
 //! under `catch_unwind`; a call that returns after its CPU limit is a fault (detected, not
 //! pre-empted: a native hang stalls its caller until the app actor's watchdog acts, which is why

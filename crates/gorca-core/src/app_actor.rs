@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! App actor (ADR-0001 section 6.1): one per application. Owns the mirror writer, drains the
 //! ingress, applies the invalidation contract of B-1 section 5.1 to the mirror, tracks
 //! `AppHealth`, runs the shared fill driver and routes user-relevant events to the Reader.

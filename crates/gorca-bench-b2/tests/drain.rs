@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Drain conformance (SPEC section 3): framing, mapping, routing, robustness and lifecycle,
 //! against the mock broker so every byte on the wire is under the test's control.
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Read-only rows of a terminal snapshot (`TermSnapshot::text`): the contract helper both sides
 //! share, so the core can review a screen and read the unit at the caret without knowing which
 //! extension produced it.

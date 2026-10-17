@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The truth tap: a second, simple blocking reader on the same bus with its own decoder.
 //! It sees exactly the broadcasts the drain under test is owed, timestamps them on arrival and
 //! folds them per sender, so a run with traffic the harness did not generate itself (the

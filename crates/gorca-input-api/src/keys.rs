@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Keysyms, key names and the physical-key resolver (ADR-0005 K-8).
 //!
 //! Command chords match **physical keys**: a key name from the keymap (`t`, `f12`, `kp_home`)

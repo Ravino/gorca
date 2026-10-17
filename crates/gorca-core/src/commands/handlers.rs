@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Command execution (ADR-0005 6): Reader messages that yield speech intents and effects.
 //!
 //! Every handler is synchronous and bounded. IPC-backed answers (`info.where_am_i`,

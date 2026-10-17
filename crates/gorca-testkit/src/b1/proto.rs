@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Wire-level vocabulary shared by the B-1 fake application (`tests/harness/b1/fakeapp`), the
 //! in-process model of it ([`super::world`]) and the drivers: the model schema (SPEC 8.1), the
 //! control commands, the truth log (SPEC 6.1) and the call counters.

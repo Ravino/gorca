@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! A mock speech server for tests: speaks voicego's binary-framed SSIP or plain text SSIP over a
 //! UNIX socket in a caller-supplied directory, records everything it is told to speak, and emits
 //! `225` / `701` / `702` / `703` the way `docs/platform/voicego-protocol.md` describes.

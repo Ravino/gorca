@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Say-all in browse mode (browse design 9, ADR-0007 section 13): the page is read from the
 //! virtual cursor in sentence chunks by the same engine as a native text field
 //! ([`crate::text::say_all`]), with the document's flat text as the source. Nothing here waits

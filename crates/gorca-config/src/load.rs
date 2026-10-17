@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `load`: parse, migrate, validate and layer. It never fails and never panics (ADR-0005 7.4).
 //!
 //! Parsing goes to a TOML tree first and every key is extracted on its own (CV-1), so one bad

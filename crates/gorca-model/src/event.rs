@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Normalised events (ADR-0001 section 4.4). Connectors map raw events into this closed set and
 //! the coalescer works on it.
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Offset conversion between an application's raw text offsets and the core's Unicode scalar
 //! offsets (ADR-0001 TU-1 to TU-3, ADR-0007 TQ-1).
 //!

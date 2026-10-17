@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! A scripted connector with real node data: the in-process stand-in for an AT-SPI application
 //! when a test needs the whole core pipeline (ingress, app actor, Reader, fetch, speech) but no
 //! bus. Unlike [`FakeConnector`](crate::FakeConnector) it answers `Fetch` with node snapshots,

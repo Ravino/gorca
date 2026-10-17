@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! H-5: D-Bus message accounting.
 //!
 //! Finding (Debian 13, dbus-daemon 1.16.2): the daemon **does** expose

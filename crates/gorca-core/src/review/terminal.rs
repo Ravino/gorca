@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Flat review over a terminal's screen (ADR-0006 LS-1, milestone M6).
 //!
 //! The terminal extension holds the visible screen (ADR-0001 T-2); a review key reads a line

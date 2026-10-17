@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Minimal regressions for the bugs the random sequences found, and sanity checks of the
 //! harness itself. The `#[ignore]`d ones fail on the current tree; each names the fix it waits
 //! for and is run with `cargo test -p gorca-core statemodel -- --ignored`.

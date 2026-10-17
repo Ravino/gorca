@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The whole core pipeline without a bus: scripted application -> ingress -> app actor -> Reader
 //! -> fetch -> utterance. Real tasks, real threads, real time (margins are generous; the claims
 //! are about ordering and bounds, not microseconds).

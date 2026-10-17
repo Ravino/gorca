@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Keymaps as data: chord strings, contexts, layering and the conflict rules (ADR-0005 7.5).
 //!
 //! The config crate knows chords and command **names** only. Mapping names to commands and

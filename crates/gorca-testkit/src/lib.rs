@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Test kit: fake connector, fake `DocSource`, virtual clock, conformance suites, storm
 //! generator.
 //!

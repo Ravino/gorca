@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! AU-7: concurrent pushes never overshoot the global budget, Focus charges and ring records
 //! included. Several producers per app, text deltas and focus are charged too.
 //!

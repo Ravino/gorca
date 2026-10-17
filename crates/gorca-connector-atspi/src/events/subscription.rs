@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The subscription a fill strategy adds on top of the shared base set.
 //!
 //! The base set (`REGISTERED_EVENTS`, [`gorca_dbus::drain::default_match_rules`]) is shared and

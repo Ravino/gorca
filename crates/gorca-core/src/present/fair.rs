@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Per-owner fairness for the presenters that speak or read on an application's say-so
 //! (announcements, notification banners, window activations, M4b).
 //!

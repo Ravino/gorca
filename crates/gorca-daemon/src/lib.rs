@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The `gorca` daemon: configuration, wiring, signals. The only crate that wires concrete
 //! implementations (ADR-0001 section 11, rule 3).
 //!

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The applications protected from eviction, published lock-free.
 //!
 //! The Reader publishes an application only after it **accepted and presented** that application's

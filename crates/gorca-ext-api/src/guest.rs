@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Component build: WIT bindings for the guest side and the adapter that maps the WIT `hooks`
 //! exports onto [`Hooks`]. Only compiled for `wasm32`.
 

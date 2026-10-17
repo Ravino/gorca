@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The shipped keymap presets: NVDA desktop (default), NVDA laptop and the Orca pair. They are
 //! ordinary TOML in the same format as the user's file, embedded at build time.
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The `Focus`, `Reply` and `Timer` arms: focus settling, the mirror read of B-1 5.2, fetch on
 //! miss, RV-1 revalidation (5.3), the removed-focus proof of life (5.5), the state-change
 //! presenter S1 (5.6), presentation and the focused-application protection published once a

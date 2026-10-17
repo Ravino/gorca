@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `WebSpace`: the document flat text as a [`gorca_text::TextSpace`] (ADR-0007 section 3, browse
 //! design FT-7, FT-8). Every lookup is `Ready`: the mirror is resident, so no step needs IPC.
 //!

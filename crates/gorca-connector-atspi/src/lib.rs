@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! AT-SPI connector: toolkit normalisation tables, `AtspiDocSource`, `org.a11y.Status`
 //! enablement.
 //!

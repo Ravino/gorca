@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Stamps the binary with the git revision it was built from (`GORCA_GIT_REV`), so a test
 //! harness can refuse to measure a binary that does not match the tree it claims to measure.
 

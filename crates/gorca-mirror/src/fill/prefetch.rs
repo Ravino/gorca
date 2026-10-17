@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The product fill policy (B-1 adoption of arm C, decision 2026-10-14): lazy everywhere, a
 //! prefetch of the focus window, an eager `CacheDump` only where the connector verified it
 //! complete *and* the configuration asks for it (off by default).

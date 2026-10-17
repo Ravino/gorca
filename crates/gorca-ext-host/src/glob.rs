@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /// Minimal glob: `*` matches any run of characters (including none), `?` exactly one.
 /// Iterative, O(n*m) worst case without recursion, so hostile manifests cannot blow the stack.
 pub fn glob_match(pattern: &str, text: &str) -> bool {

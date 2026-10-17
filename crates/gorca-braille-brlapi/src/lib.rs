@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! BrlAPI braille backend. Stub until the braille ADR.
 //!
 //! Responsibility (ADR-0001 section 11): "`gorca-braille-brlapi/` stub until the braille ADR".

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Deadlines and budget classes (ADR-0001 section 6.4). "Every await on IPC goes through a
 //! timeout": [`with_deadline`] is the single wrapper.
 

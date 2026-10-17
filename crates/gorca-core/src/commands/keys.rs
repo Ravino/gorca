@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The `Key` arm: classification result to effect, plus key echo.
 
 use std::sync::atomic::Ordering;

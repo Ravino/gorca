@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! gorca core: Reader, app actors, doc actors, Focus/Mode/Health state machines, presenter.
 //!
 //! Responsibility (ADR-0001 sections 3, 6, 7 and 11): "Reader, app actors, doc actors,

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! A replica of the a11y key logic in Mutter (ADR-0005 4.3), line by line.
 //!
 //! Sources (`refs/mutter/src/backends`):

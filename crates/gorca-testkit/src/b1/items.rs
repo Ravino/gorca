@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `Cache.GetItems` wire format: an encoder for test dumps, the adapter trait for the decoder
 //! under test (PW-9, `fetch/items.rs`), and a bounded reference decoder (MA-7).
 //!

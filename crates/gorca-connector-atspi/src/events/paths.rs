@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Reverse mapping `NodeKey` -> object path, bounded **per owning process** and globally.
 //!
 //! B-1 PW-7: the per-owner quota is at least `MAX_MIRROR_NODES` (every node the mirror may hold

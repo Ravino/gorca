@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! ADR-0008 Q-E4: does Gecko's UTF-16 offset handling for native text fields need a TX-1 run
 //! cache (a per-node map between the app's offsets and Unicode scalars), or does the text
 //! window in the app's own offsets do?

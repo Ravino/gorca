@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! X1: extension hook overhead (ADR-0001 M-7, phase-2 plan M5 acceptance; the ex-B-4 benchmark).
 //!
 //! Times the *whole* host path of a hook as the core sees it: `AppExts::on_event` and

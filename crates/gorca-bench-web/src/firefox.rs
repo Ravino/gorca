@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Private Firefox for the harness.
 //!
 //! * Own profile directory under a temp dir (`--profile`), `--no-remote --new-instance`, so it can

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Thread placement primitives for the runtime topology (bake-off B-5, P-12 report): scheduling
 //! policy, CPU affinity, per-thread CPU time and the `/proc` thread table.
 //!

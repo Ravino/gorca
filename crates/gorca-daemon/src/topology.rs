@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Runtime topology (bake-off B-5, ADR-0001 M-14): where the lanes run, one codebase.
 //!
 //! The arms differ only in *placement and scheduling*. The lane code (key pump, speech lane,

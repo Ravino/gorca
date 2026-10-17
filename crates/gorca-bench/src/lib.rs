@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Criterion microbenchmarks (MB-*) and the entry points of the M-1 / M-3 / M-11 harnesses.
 //!
 //! Responsibility (ADR-0001 sections 14 and 11): "criterion microbenches (MB-*) +

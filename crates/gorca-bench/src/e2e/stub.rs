@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Stub "reader": the stand-in for `gorca-daemon` until the Phase 1 slice lands.
 //!
 //! It links exactly the pieces that exist today: the raw a11y-bus drain (`gorca-dbus`), the

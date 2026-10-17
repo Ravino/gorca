@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The `Mode` arm: mode state machine steps and their effects.
 
 use crate::mode::{ModeEffect, ModeMsg};

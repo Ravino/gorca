@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The scripted walk W-1 (SPEC 8.2): deterministic, seeded, human-paced; and the run-directory
 //! writer of the contract in `crates/gorca-bench-b1/src/rundir.rs`.
 //!

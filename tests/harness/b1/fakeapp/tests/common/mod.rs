@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Private dbus-daemon for the fake app's own tests. Isolated: its own socket under a fresh
 //! temporary directory, no service directories (nothing can be activated), no ambient bus.
 

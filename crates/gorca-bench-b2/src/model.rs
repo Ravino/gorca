@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The executable specification: a canonical event type, an exact single-threaded model of the
 //! ingress coalescer (SPEC section 4), and the consumer-side state fold used to compare an
 //! implementation with the ground truth (SPEC section 5).

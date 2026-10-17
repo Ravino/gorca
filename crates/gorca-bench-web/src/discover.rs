@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Find the browser application and the test page's `document web` on a private a11y bus.
 
 use std::sync::Arc;

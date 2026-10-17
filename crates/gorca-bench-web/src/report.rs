@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Minimal JSON writer and sample statistics for the harness output (no serde_json in the
 //! workspace; the output is flat and small).
 

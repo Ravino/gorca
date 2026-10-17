@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Security audit (2026-10-12, commit 74dbd07): a `Text` slot holds up to `max_text_deltas`
 //! deltas but is charged as one slot, to `live`, to `hard_cap` and to the global `SlotBudget`.
 //! Fails today; `#[ignore]` so `make check` stays green. Run with

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Keymap compilation (ADR-0005 7.1, 7.5): chord and command names to O(1) lookup tables, plus
 //! the platform facts that change which keys are usable (U-1, 8.1).
 

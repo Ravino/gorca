@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `gorca` binary entry point. See the library crate for what is wired.
 
 use std::process::ExitCode;

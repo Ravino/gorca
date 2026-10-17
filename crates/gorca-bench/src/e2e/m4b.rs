@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! M4b end-to-end gates (docs/plan/phase-2.md M4, Desktop and Shell polish).
 //!
 //! | id | stimulus | metrics |

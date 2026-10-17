@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The wall-clock backstop of `present` and `policy` only faults a hook that consumed CPU or is
 //! genuinely stuck (docs/reports/m5-impl.md, "CPU-time backstop"). A healthy hook that is slow in
 //! wall time (descheduled, or waiting in a slow host call) must never fault: three faults in 60 s

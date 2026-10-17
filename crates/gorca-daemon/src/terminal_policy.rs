@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The native build of `ext-vte` behind the core's [`TermProvider`] seam (ADR-0008 amendment 1:
 //! the component is the default, the same source built natively is the exclusive fallback).
 //!

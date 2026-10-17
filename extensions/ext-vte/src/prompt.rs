@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Prompt and password-prompt recognition for a terminal line.
 //!
 //! There is no structural information in the AT-SPI tree (no OSC 133), so the prompt end is a

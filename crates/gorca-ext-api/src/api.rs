@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Hand-written mirror of `wit/gorca-ext.wit`.
 //!
 //! These are the types an extension is written against. The same source builds two ways

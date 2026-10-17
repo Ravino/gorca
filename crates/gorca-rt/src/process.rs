@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Process identity helpers (ADR-0001 ID-2).
 //!
 //! `comm` must be `orca` before `IsEnabled` is set, so that Chromium's `/proc`
