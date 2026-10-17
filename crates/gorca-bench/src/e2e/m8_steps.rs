@@ -901,17 +901,17 @@ fn fb() -> Vec<Step> {
 // ---- reviewer probes (M8b review, not for merge) ----
 fn rv_desc() -> Vec<Step> {
     vec![
-        top("RD.top"),
-        s("RD.h", P0, "H x2: the page after 300 megabyte descriptions", rep('h', 2), &["after desc"]).win(4000),
-        s("RD.b", P0, "B: sentinel", n('b'), &["sentinel button"]).win(3000),
-        s("RD.focus", P0, "Focus a described button: bounded description", Act::Focus(role::PUSH_BUTTON, "Btn 5"), &["btn 5, button"]).win(3000),
+        top("RVD.top"),
+        s("RVD.h", P0, "H x2: the page after 300 megabyte descriptions", rep('h', 2), &["after desc"]).win(4000),
+        s("RVD.b", P0, "B: sentinel", n('b'), &["sentinel button"]).win(3000),
+        s("RVD.focus", P0, "Focus a described button: bounded description", Act::Focus(role::PUSH_BUTTON, "Btn 5"), &["btn 5, button"]).win(3000),
     ]
 }
 fn rv_name() -> Vec<Step> {
     vec![
-        top("RN.top"),
-        s("RN.h", P0, "H x2: the page after 300 megabyte names", rep('h', 2), &["after name"]).win(4000),
-        s("RN.b", P0, "B: sentinel", n('b'), &["sentinel button"]).win(3000),
+        top("RVN.top"),
+        s("RVN.h", P0, "H x2: the page after 300 megabyte names", rep('h', 2), &["after name"]).win(4000),
+        s("RVN.b", P0, "B: sentinel", n('b'), &["sentinel button"]).win(3000),
     ]
 }
 fn rv_inv() -> Vec<Step> {
