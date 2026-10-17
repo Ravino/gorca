@@ -512,7 +512,13 @@ pub fn segments(items: &[Item], o: VerbalizeOpts) -> SmallVec<[Segment; 4]> {
             };
             (!text.is_empty()).then(|| Segment {
                 text: Arc::from(text),
-                kind: i.kind(),
+                kind: match i.kind() {
+                    SegmentKind::Text => SegmentKind::Said,
+                    other @ (SegmentKind::Role
+                    | SegmentKind::State
+                    | SegmentKind::Value
+                    | SegmentKind::Said) => other,
+                },
             })
         })
         .collect()

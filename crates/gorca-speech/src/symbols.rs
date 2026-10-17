@@ -446,5 +446,8 @@ mod tests {
         let ru = Table::of(Lang::Ru);
         assert_eq!(ru.char_name('?'), Some("вопросительный знак"));
         assert_eq!(ru.char_name('\u{20bd}'), Some("рубль"));
+        assert_eq!(ru.char_name('#'), Some("решётка"));
+        assert_eq!(Table::of(Lang::En).char_name('#'), Some("number"));
+        assert_eq!(Table::of(Lang::En).char_name('@'), Some("at"));
     }
 }

@@ -2393,3 +2393,84 @@ fn russian_text_is_spoken_with_russian_symbol_names_by_level() {
     g.entry("", 0);
     assert_eq!(spoken(&g.insert(0, "Привет, дела?")), ["Привет, дела?"]);
 }
+
+fn app_said(g: &Rig, texts: &[&str]) -> Vec<String> {
+    use gorca_model::{Segment, SegmentKind};
+    let mut u = crate::present::message("", gorca_model::UttId(900), gorca_model::Epoch(1));
+    u.segments.clear();
+    for t in texts {
+        u.segments.push(Segment {
+            text: Arc::from(*t),
+            kind: SegmentKind::Text,
+        });
+    }
+    g.r.symbolize(u)
+        .segments
+        .iter()
+        .map(|s| s.text.to_string())
+        .collect()
+}
+
+const NAMES: [&str; 5] = ["C++", "C#", "Save as\u{2026}", "50%", "Gmail (3)"];
+
+#[test]
+fn names_from_applications_are_symbol_processed_at_the_level_in_english() {
+    let mut g = rig();
+    set_speech(&mut g, "en", gorca_config::Punct::Some);
+    assert_eq!(
+        app_said(&g, &NAMES),
+        [
+            "C plus plus",
+            "C number",
+            "Save as\u{2026}",
+            "50 percent",
+            "Gmail (3)"
+        ]
+    );
+    set_speech(&mut g, "en", gorca_config::Punct::All);
+    assert_eq!(
+        app_said(&g, &["Save as\u{2026}", "Gmail (3)"]),
+        [
+            "Save as ellipsis\u{2026}",
+            "Gmail left paren(3 right paren)"
+        ]
+    );
+    set_speech(&mut g, "en", gorca_config::Punct::None);
+    assert_eq!(app_said(&g, &["C++", "50%"]), ["C", "50"]);
+}
+
+#[test]
+fn names_from_applications_are_symbol_processed_at_the_level_in_russian() {
+    let mut g = rig();
+    set_speech(&mut g, "ru", gorca_config::Punct::Some);
+    assert_eq!(
+        app_said(&g, &NAMES),
+        [
+            "C плюс плюс",
+            "C решётка",
+            "Save as\u{2026}",
+            "50 процент",
+            "Gmail (3)"
+        ]
+    );
+    set_speech(&mut g, "ru", gorca_config::Punct::Most);
+    assert_eq!(
+        app_said(&g, &["Gmail (3)"]),
+        ["Gmail левая круглая(3 правая круглая)"]
+    );
+}
+
+#[test]
+fn the_readers_own_words_and_plain_names_are_left_alone() {
+    use gorca_model::{Segment, SegmentKind};
+    let mut g = rig();
+    set_speech(&mut g, "ru", gorca_config::Punct::All);
+    let mut u = crate::present::message("a, b.", gorca_model::UttId(901), gorca_model::Epoch(1));
+    u.segments.push(Segment {
+        text: Arc::from("Кнопка OK"),
+        kind: SegmentKind::Text,
+    });
+    let said = g.r.symbolize(u);
+    let t: Vec<_> = said.segments.iter().map(|s| &*s.text).collect();
+    assert_eq!(t, ["a, b.", "Кнопка OK"]);
+}
