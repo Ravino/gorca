@@ -782,6 +782,7 @@ impl AppActor {
                     if let Some(d) = &self.directory {
                         d.set_text_unit(self.app, self.profile.text_unit);
                         d.set_text_insert_slack(self.app, self.profile.text_insert_slack);
+                        d.set_edit_quirks(self.app, self.profile.edit_quirks);
                         d.set_page_events_settle(self.app, info.page_events_settle_ms);
                         d.set_pid(self.app, info.pid);
                         d.set_policy(self.app, self.profile.policy);

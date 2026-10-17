@@ -331,6 +331,86 @@ fn a_word_motion_speaks_the_word() {
 }
 
 #[test]
+fn a_word_motion_speaks_the_word_passed_without_its_punctuation() {
+    // readline's forward-word stops at the end of "usr" in a path; the shared presenter speaks
+    // the word, not the whole whitespace-delimited token (the unified editing model).
+    let mut r = Rig::new();
+    r.focus("$ ls /usr/local/bin", 5);
+    r.key(TermKey::WordRight);
+    let a = r.feed(TermInput::Caret(9));
+    assert_eq!(texts(&a), vec!["usr".to_owned()]);
+    r.key(TermKey::WordRight);
+    let a = r.feed(TermInput::Caret(15));
+    assert_eq!(texts(&a), vec!["local".to_owned()]);
+    r.key(TermKey::WordLeft);
+    let a = r.feed(TermInput::Caret(10));
+    assert_eq!(texts(&a), vec!["local".to_owned()]);
+}
+
+#[test]
+fn a_word_motion_that_ends_at_the_end_of_the_line_speaks_the_last_word() {
+    let mut r = Rig::new();
+    r.focus("$ echo hello, world", 7);
+    r.key(TermKey::WordRight);
+    let a = r.feed(TermInput::Caret(12));
+    assert_eq!(texts(&a), vec!["hello".to_owned()]);
+    r.key(TermKey::WordRight);
+    let a = r.feed(TermInput::Caret(19));
+    assert_eq!(texts(&a), vec!["world".to_owned()]);
+}
+
+#[test]
+fn a_motion_key_that_moves_nothing_speaks_the_unit_at_the_caret_after_the_edge_time() {
+    let mut r = Rig::new();
+    r.focus("$ abc def", 2);
+    // Left at the start of the command (readline does not move): no caret event.
+    r.key(TermKey::CharLeft);
+    assert!(texts(&r.wait(50)).is_empty(), "not yet");
+    assert_eq!(texts(&r.wait(60)), vec!["a".to_owned()]);
+    // Ctrl+Left at the start speaks the word at the caret, Home the character.
+    r.key(TermKey::WordLeft);
+    assert_eq!(texts(&r.wait(110)), vec!["abc".to_owned()]);
+    r.key(TermKey::LineStart);
+    assert_eq!(texts(&r.wait(110)), vec!["a".to_owned()]);
+    // A real move is answered once and the edge timer stays quiet.
+    r.key(TermKey::CharRight);
+    assert_eq!(texts(&r.feed(TermInput::Caret(3))), vec!["b".to_owned()]);
+    assert!(texts(&r.wait(200)).is_empty());
+}
+
+#[test]
+fn a_slow_caret_event_is_the_only_answer_to_a_key_that_can_move() {
+    // Over a slow link the caret event comes 100-250 ms after the key. The key could move the
+    // caret, so nothing is said for the old position: exactly one utterance, the new unit.
+    let mut r = Rig::new();
+    r.focus("$ abc def", 2);
+    r.key(TermKey::CharRight);
+    assert!(
+        texts(&r.wait(120)).is_empty(),
+        "the edge timer must not read the old caret"
+    );
+    assert_eq!(texts(&r.feed(TermInput::Caret(3))), vec!["b".to_owned()]);
+    assert!(texts(&r.wait(300)).is_empty(), "spoken once");
+    // The caret event never comes (a lost move): the long timer speaks the unit at the caret.
+    r.key(TermKey::CharRight);
+    assert!(texts(&r.wait(120)).is_empty());
+    assert_eq!(texts(&r.wait(130)), vec!["b".to_owned()]);
+}
+
+#[test]
+fn a_key_that_cannot_move_speaks_at_the_short_edge_time() {
+    // Left at the start of the command and Right behind the last character move nothing.
+    let mut r = Rig::new();
+    r.focus("$ abc", 2);
+    r.key(TermKey::CharLeft);
+    assert_eq!(texts(&r.wait(110)), vec!["a".to_owned()]);
+    let mut r = Rig::new();
+    r.focus("$ abc", 5);
+    r.key(TermKey::CharRight);
+    assert_eq!(texts(&r.wait(110)), vec!["blank".to_owned()]);
+}
+
+#[test]
 fn a_caret_without_a_key_is_silent() {
     let mut r = Rig::new();
     r.focus("$ abc", 5);

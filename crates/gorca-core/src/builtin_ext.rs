@@ -73,6 +73,8 @@ pub struct AppProfile {
     pub text_unit: TextUnit,
     /// Quirk data from the connector: see `AppInfo::text_insert_slack`.
     pub text_insert_slack: u32,
+    /// Quirk data from the connector: see `AppInfo::edit_quirks`.
+    pub edit_quirks: gorca_model::EditQuirks,
     /// `state-changed:showing(1)` on a node the mirror does not know may be a notification banner
     /// or an OSD: the Reader reads it (M4b). The Shell creates those actors on demand, and St
     /// sets `showing` when they are mapped; no other signal says a banner appeared. Taken from
@@ -91,6 +93,7 @@ impl AppProfile {
             speak_selection: info.verified_shell,
             text_unit: info.text_unit,
             text_insert_slack: info.text_insert_slack,
+            edit_quirks: info.edit_quirks,
             watch_showing: info.verified_shell,
             policy: info.verified_shell,
         }
@@ -113,6 +116,7 @@ mod tests {
             dump_complete: false,
             text_unit: gorca_model::TextUnit::Scalar,
             text_insert_slack: 0,
+            edit_quirks: gorca_model::EditQuirks::default(),
             page_events_settle_ms: 0,
             web_engine: gorca_model::WebEngine::None,
             root: None,

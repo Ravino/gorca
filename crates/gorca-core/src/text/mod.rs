@@ -23,8 +23,8 @@ use std::time::Instant;
 use gorca_connector_api::BackendError;
 use gorca_input_api::{KeyIntent, classify_text_key};
 use gorca_model::{
-    Epoch, NodeKey, NodeSnapshot, Prio, Role, StateSet, TextDelta, TextGranularity, UttId,
-    Utterance,
+    EditQuirks, Epoch, NodeKey, NodeSnapshot, Prio, Role, StateSet, TextDelta, TextGranularity,
+    UttId, Utterance,
 };
 use gorca_rt::BudgetClass;
 use gorca_speech::{
@@ -384,6 +384,11 @@ impl Reader {
             .caret
             .tracked()
             .map_or(0, |t| self.dir.text_insert_slack(t.root.app));
+        let quirks = self
+            .text
+            .caret
+            .tracked()
+            .map_or_else(EditQuirks::default, |t| self.dir.edit_quirks(t.root.app));
         let epoch_now = self.epoch.current();
         let mut out = std::mem::take(&mut self.text.out);
         out.clear();
@@ -395,6 +400,7 @@ impl Reader {
                 epoch_now,
                 cfg,
                 insert_slack,
+                quirks,
                 next_req: &mut self.text.next_req,
                 stats: &mut self.text.stats,
                 out: &mut out,

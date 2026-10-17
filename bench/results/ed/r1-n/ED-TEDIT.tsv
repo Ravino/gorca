@@ -1,0 +1,74 @@
+type	h | e | l | l | o | comma | space | b | r | a | v | e | space | w | o | r | l | d
+Left	d
+Right	space
+Home	a
+Left at start	blank
+End	blank
+Right at end	a
+Ctrl+Left 1	two
+Ctrl+Left 2	one
+Ctrl+Left 3	one
+Ctrl+Left 4 at start	one
+Ctrl+Right 1	one
+Ctrl+Right 2	two
+Ctrl+Right 3	alpha
+Ctrl+Right 4 at end	secondhello
+BackSpace	o
+Delete at end	comma
+Home 2	a
+Delete	a
+Shift+Right	l selected
+Shift+Right 2	p selected
+Shift+Left	p unselected
+Shift+Left 2	l unselected
+Ctrl+Shift+Right	lpha selected
+Ctrl+Shift+Left	lpha unselected
+Shift+End	lpha secondhell brave world charlie delta echo foxtrot golf hotel india selected
+Shift+Home	lpha secondhell brave world charlie delta echo foxtrot golf hotel india unselected
+Ctrl+A	all selected, 138 characters
+Right collapses	blank
+End 2	blank
+Ctrl+BackSpace	line
+Ctrl+Delete at end	
+Home 3	l
+Ctrl+Delete	last
+select all	all selected, 130 characters
+clear	one two\nlpha secondhell brave world charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec\n
+type line 1	o | n | e | space | t | w | o
+Enter	new line
+type paragraph	a | l | p | h | a | space | b | r | a | v | o | space | c | h | a | r | l | i | e | space | d | e | l | t | a | space | e | c | h | o | space | f | o | x | t | r | o | t | space | g | o | l | f | space | h | o | t | e | l | space | i | n | d | i | a | space | j | u | l | i | e | t | space | k | i | l | o | space | l | i | m | a | space | m | i | k | e | space | n | o | v | e | m | b | e | r | space | o | s | c | a | r | space | p | a | p | a | space | q | u | e | b | e | c
+Enter 2	new line
+type last	l | a | s | t | space | l | i | n | e
+Up	mike november oscar papa quebec
+Up 2	alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima
+Up 3	one two
+Down	alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima
+Ctrl+Up	one two
+Ctrl+Up 2	one two
+Ctrl+Down	alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec
+Ctrl+Home	one two
+Ctrl+End	last line
+PageUp	one two
+PageDown	last line
+Ctrl+Home 2	one two
+Shift+Down	one two selected
+Shift+Down 2	alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima selected
+Shift+Up	alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima unselected
+Ctrl+Shift+Down	alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec\nlast line selected
+Ctrl+Shift+End	
+BackSpace selection	one two\nalpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec\nlast line
+Ctrl+Z	one two\nalpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec\nlast line
+Ctrl+Home 3	one two
+Ctrl+F	
+find: type	b | r | a | v | o
+find: Enter	new line | edit
+find: Escape	
+Ctrl+H	edit, bravo
+replace: Escape	edit
+Ctrl+T	edit
+Ctrl+Alt+PageUp check	edit
+tab 2: type	s | e | c | o | n | d
+Ctrl+Alt+PageUp	
+Ctrl+Alt+PageDown	edit
+Ctrl+S	Name, edit, New Document dot txt
+save: Escape	edit | New Document (Draft) - Text Editor

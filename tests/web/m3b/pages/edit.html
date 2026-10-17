@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Edit Matrix</title>
+<style>
+body{font:16px sans-serif}
+#ce{border:1px solid #888;min-height:6em;width:20em;white-space:pre-wrap}
+textarea{width:20em;height:8em}
+input{width:30em}
+</style>
+</head>
+<body>
+<h1>Edit matrix</h1>
+<p><label for="in1">Line</label> <input id="in1" type="text"></p>
+<p><label for="ta">Notes</label><br><textarea id="ta"></textarea></p>
+<p id="cel">Editor</p>
+<div id="ce" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="cel"></div>
+<p><button id="b1">After</button></p>
+</body>
+</html>

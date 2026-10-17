@@ -1,0 +1,62 @@
+# e2e p10
+# utc=2026-10-17T10:19:04Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=16.14 12.13 10.06 3/2553 1274477
+# git_rev=0f0c9c04
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx1
+# topology_expected=-
+# label=p10
+# reader=daemon:<repo>/.claude/worktrees/agent-a12af19ad0bb6b976/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=16.14 12.13 10.06 2/2553 1274474
+# reader_env=GORCA_ED=1 GORCA_M1=1 GORCA_M3=1 GORCA_M4=1 GORCA_M6=1 GORCA_M6_REAL=1 GORCA_M7=1 NO_COLOR=1 GORCA_TOPOLOGY_REPORT=bench/results/e2e/p10/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=ED-CHTA select all: []
+# note1=ED-CHTA clear: []
+# note2=ED-CHTA type line 1: [o | n | e | space | t | w | o]
+# note3=ED-CHTA Enter: [new line]
+# note4=ED-CHTA type paragraph: [a | l | p | h | a | space | b | r | a | v | o | space | c | h | a | r | l | i | e | space | d | e | l | t | a | space | e | c | h | o | space | f | o | x | t | r | o | t | space | g | o | l | f | space | h | o | t | e | l | space | i | n | d | i | a | space | j | u | l | i | e | t | space | k | i | l | o | space | l | i | m | a | space | m | i | k | e | space | n | o | v | e | m | b | e | r | space | o | s | c | a | r | space | p | a | p | a | space | q | u | e | b | e | c]
+# note5=ED-CHTA Enter 2: [new line]
+# note6=ED-CHTA type last: [l | a | s | t | space | l | i | n | e]
+# note7=ED-CHTA Up: [papa quebec]
+# note8=ED-CHTA Up 2: [kilo lima mike november oscar]
+# note9=ED-CHTA Up 3: [foxtrot golf hotel india juliet]
+# note10=ED-CHTA Down: [kilo lima mike november oscar]
+# note11=ED-CHTA Ctrl+Up: [one two]
+# note12=ED-CHTA Ctrl+Up 2: [one two]
+# note13=ED-CHTA Ctrl+Down: [alpha bravo harlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec]
+# note14=ED-CHTA Ctrl+Home: [one two]
+# note15=ED-CHTA Ctrl+End: [last line]
+# note16=ED-CHTA PageUp: [one two]
+# note17=ED-CHTA PageDown: [last line]
+# note18=ED-CHTA Ctrl+Home 2: [one two]
+# note19=ED-CHTA Shift+Down: [one two selected]
+# note20=ED-CHTA Shift+Down 2: [alpha bravo harlie delta echo selected]
+# note21=ED-CHTA Shift+Up: [alpha bravo harlie delta echo unselected]
+# note22=ED-CHTA Ctrl+Shift+Down: [alpha bravo harlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec selected]
+# note23=ED-CHTA Ctrl+Shift+End: [last line selected]
+# note24=ED-CHTA BackSpace selection: [one two
+alpha bravo harlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec
+last line]
+# note25=ED-CHTA Ctrl+Z: [one two
+alpha bravo harlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec
+last line]
+
+metric                     bus                median          min          max  n op    threshold  res   note
+ED-CHTA.ed_failures        daemon/voicego            0            0            0  1                  info   [steps]
+ED-CHTA.ed_steps           daemon/voicego           26           26           26  1                  info   [steps]

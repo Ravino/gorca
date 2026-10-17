@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use gorca_i18n::{MsgId as M, msg};
 use gorca_input_api::{ClipOp, KeyUnit, TextDir, TextKey};
 use gorca_model::{
-    Epoch, NodeKey, Prio, TextGranularity, TextSelections, TextUnitAt, TextWindowFill,
+    EditQuirks, Epoch, NodeKey, Prio, TextGranularity, TextSelections, TextUnitAt, TextWindowFill,
 };
 use gorca_rt::BudgetClass;
 use gorca_speech::How;
@@ -46,6 +46,8 @@ pub const HOLD: Duration = Duration::from_millis(5);
 const PLACING: Duration = Duration::from_millis(600);
 /// Caret moves made by gorca itself are remembered this long (say-all, review).
 const OWN_MOVE: Duration = Duration::from_millis(300);
+/// A caret event this soon after Return, at the start of another block, is the new line itself.
+const ENTER_BLOCK: Duration = Duration::from_millis(300);
 /// How long a presentation fetch may take before the machine gives up on it.
 const FETCH_GRACE: Duration = Duration::from_millis(150);
 /// Unexplained inserts (a log appending) are spoken at most this often (EV-5).
@@ -235,6 +237,8 @@ pub struct Ctx<'a> {
     pub cfg: Cfg,
     /// The app's insert-offset slack, from its connector's quirk table (0: none; see `insert`).
     pub insert_slack: u32,
+    /// The app's editing-presenter facts, from its connector's quirk table.
+    pub quirks: EditQuirks,
     pub next_req: &'a mut u64,
     pub stats: &'a mut TextCounters,
     pub out: &'a mut Vec<Out>,
@@ -392,6 +396,9 @@ pub struct Tracked {
     pub caret: Option<u32>,
     /// Where the caret was before the word move being presented (CR-2 `Move{Word}`).
     word_from: Option<u32>,
+    /// When Return was last typed into a multi-line object: a rich editable answers it with a
+    /// new block, and the caret event of that block (offset 0) is the new line, already spoken.
+    enter_at: Option<Instant>,
     /// The last fetched selection set with its texts.
     sel: Vec<(Range<u32>, Arc<str>)>,
     pub win: TextWindow,
@@ -442,6 +449,7 @@ impl Tracked {
             kind,
             caret: None,
             word_from: None,
+            enter_at: None,
             sel: Vec::new(),
             win: TextWindow::new(),
             expect: ExpectRing::new(),
@@ -677,10 +685,10 @@ fn to_u32(n: usize) -> u32 {
 }
 
 /// The text of `say` at `at`, from the window, or what must be fetched first.
-fn unit_text(t: &Tracked, say: Say, at: u32) -> Lookup<(How, String)> {
+fn unit_text(t: &Tracked, say: Say, at: u32, q: EditQuirks) -> Lookup<(How, String)> {
     let space = NativeText::new(&t.win, !t.kind.multiline);
     let presented = match say {
-        Say::Word => tc::present_word(&space, t.word_from, at),
+        Say::Word => tc::present_word(&space, t.word_from, at, q),
         Say::Char | Say::Line | Say::Paragraph => tc::present(&space, at, say),
     };
     match presented {
@@ -845,10 +853,14 @@ impl CaretState {
         t.held_del = None;
         // Right after focus the caret event is the browser placing the caret, not the user
         // moving it: remember where it is and say nothing.
+        let new_block = at == Some(0)
+            && t.enter_at
+                .is_some_and(|a| now.saturating_duration_since(a) < ENTER_BLOCK);
         let placing = idle
             && at.is_some()
-            && t.since
-                .is_some_and(|a| now.saturating_duration_since(a) < PLACING);
+            && (new_block
+                || t.since
+                    .is_some_and(|a| now.saturating_duration_since(a) < PLACING));
         if placing {
             t.caret = at;
         }
@@ -918,6 +930,9 @@ impl CaretState {
             TextKey::Typed { ch } => {
                 t.late = None;
                 t.held = None;
+                if ch == '\n' && t.kind.multiline {
+                    t.enter_at = Some(cx.now);
+                }
                 if t.kind.multiline || !is_line_key(ch) {
                     // The insert may already be here, ahead of its key.
                     let claimed = claim_held_insert(&mut t, ch, epoch, cx);
@@ -1200,10 +1215,13 @@ impl CaretState {
         match self {
             CaretState::Off => CaretState::Off,
             // The caret event of a Shift move already asked; this event brings nothing new.
+            // GTK4 also signals `text-selection-changed` with every plain caret move: that
+            // move's unit fetch (a line, a paragraph) is still in flight and is not this
+            // event's to drop (a collapse caused by a key is silent anyway, SL-3).
             CaretState::Fetching {
                 t,
                 req,
-                want: want @ Want::Selection { .. },
+                want,
                 epoch,
                 deadline,
             } => CaretState::Fetching {
@@ -1213,7 +1231,6 @@ impl CaretState {
                 epoch,
                 deadline,
             },
-            CaretState::Fetching { t, .. } => CaretState::Idle { t }.on_selection(cx),
             CaretState::Idle { t } => {
                 if t.sel_quiet.is_some_and(|until| cx.now <= until) {
                     return CaretState::Idle { t };
@@ -1544,7 +1561,7 @@ fn present_inner(
         t.word_from = t.caret;
     }
     t.caret = Some(at);
-    match unit_text(&t, say, at) {
+    match unit_text(&t, say, at, cx.quirks) {
         Lookup::Ready((how, text)) => {
             t.word_from = None;
             cx.stats.window_hits += 1;
@@ -1817,6 +1834,13 @@ fn insert(
         alt: None,
         until: cx.now + ABSORB,
     });
+    // Text goes in at the caret and the caret ends up behind it. GTK4 text views send no caret
+    // event for typed text, so without this the tracked caret stays where the typing began and
+    // the next arrow key's (correct) caret event looks like a move the wrong way. Engines
+    // with an insert-offset quirk report offsets that cannot be trusted this way.
+    if cx.insert_slack == 0 && caret_before == Some(offset) {
+        t.caret = Some(offset.saturating_add(len));
+    }
     t.replaced = None;
     let paste = matches!(slot, Some((TextKey::Clipboard(ClipOp::Paste), ..)));
     let source = if paste {
@@ -1949,7 +1973,16 @@ fn speak_inserted(
         return false;
     }
     let mut pieces: SmallVec<[Piece; 2]> = SmallVec::new();
-    pieces.push(Piece::unit(How::Text, text.to_owned()));
+    // Blanks that follow Return (auto-indent) are the indent of the new line: say how deep it is
+    // instead of "blank".
+    let indent = t
+        .enter_at
+        .filter(|a| cx.now.saturating_duration_since(*a) < INDENT_AFTER_ENTER)
+        .and_then(|_| indent_phrase(text.trim_start_matches(['\n', '\r'])));
+    match indent {
+        Some(p) => pieces.push(Piece::phrase(&p)),
+        None => pieces.push(Piece::unit(How::Text, text.to_owned())),
+    }
     if more > 0 {
         pieces.push(Piece::phrase(&msg!(TextAndMore, n = more)));
     }
@@ -1958,6 +1991,27 @@ fn speak_inserted(
     cx.say(sp);
     cx.stats.inserted_spoken += 1;
     true
+}
+
+/// How long after Return the blanks an editor inserts are its auto-indent.
+const INDENT_AFTER_ENTER: Duration = Duration::from_millis(400);
+
+/// `4 spaces`, `1 tab`, `2 tabs` (catalogue messages) for text that is only blanks.
+pub(super) fn indent_phrase(text: &str) -> Option<String> {
+    let spaces = text.chars().filter(|c| *c == ' ').count();
+    let tabs = text.chars().filter(|c| *c == '\t').count();
+    if text.is_empty() || spaces + tabs != text.chars().count() {
+        return None;
+    }
+    let s = match spaces {
+        0 => None,
+        n => Some(msg!(TextIndentSpaces, n = n)),
+    };
+    let t = match tabs {
+        0 => None,
+        n => Some(msg!(TextIndentTabs, n = n)),
+    };
+    Some([s, t].into_iter().flatten().collect::<Vec<_>>().join(", "))
 }
 
 /// The held insert is not explained by any key: speak it as inserted text, and remember it for
@@ -2116,6 +2170,9 @@ fn delete(
             if after != offset {
                 t.win.invalidate();
                 cx.stats.window_dirty += 1;
+            } else if cx.insert_slack == 0 {
+                // The erase leaves the caret at the hole (GTK4 sends no caret event for it).
+                t.caret = Some(after);
             }
             (cx.insert_slack > 0).then_some(after)
         }

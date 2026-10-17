@@ -1,0 +1,192 @@
+# e2e mrg
+# utc=2026-10-17T16:13:35Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=21.30 17.51 17.83 9/2214 2717324
+# git_rev=c4e6b0cb
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx6
+# topology_expected=-
+# label=mrg
+# reader=daemon:<repo>/.claude/worktrees/agent-a12af19ad0bb6b976/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=21.30 17.51 17.83 10/2214 2717321
+# reader_env=GORCA_ED=1 GORCA_M1=1 GORCA_M3=1 GORCA_M4=1 GORCA_M6=1 GORCA_M6_REAL=1 GORCA_M7=1 NO_COLOR=1 GORCA_TOPOLOGY_REPORT=bench/results/e2e/mrg/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=ED-GEDIT type: [h | e | l | l | o | comma | space | b | r | a | v | e | space | w | o | r | l | d]
+# note1=ED-GEDIT Left: [d]
+# note2=ED-GEDIT Right: [blank]
+# note3=ED-GEDIT Home: [h]
+# note4=ED-GEDIT Left at start: [h]
+# note5=ED-GEDIT End: [blank]
+# note6=ED-GEDIT Right at end: [blank]
+# note7=ED-GEDIT Ctrl+Left 1: [world]
+# note8=ED-GEDIT Ctrl+Left 2: [brave]
+# note9=ED-GEDIT Ctrl+Left 3: [,]
+# note10=ED-GEDIT Ctrl+Left 4 at start: [hello]
+# note11=ED-GEDIT Ctrl+Right 1: [hello]
+# note12=ED-GEDIT Ctrl+Right 2: [,]
+# note13=ED-GEDIT Ctrl+Right 3: [brave]
+# note14=ED-GEDIT Ctrl+Right 4 at end: [world]
+# note15=ED-GEDIT BackSpace: [d]
+# note16=ED-GEDIT Delete at end: []
+# note17=ED-GEDIT Home 2: [h]
+# note18=ED-GEDIT Delete: [h]
+# note19=ED-GEDIT Shift+Right: [e selected]
+# note20=ED-GEDIT Shift+Right 2: [l selected]
+# note21=ED-GEDIT Shift+Left: [l unselected]
+# note22=ED-GEDIT Shift+Left 2: [e unselected]
+# note23=ED-GEDIT Ctrl+Shift+Right: [ello selected]
+# note24=ED-GEDIT Ctrl+Shift+Left: [ello unselected]
+# note25=ED-GEDIT Shift+End: [all selected, 16 characters]
+# note26=ED-GEDIT Shift+Home: [ello, brave worl unselected]
+# note27=ED-GEDIT Ctrl+A: [all selected, 16 characters]
+# note28=ED-GEDIT Right collapses: [blank]
+# note29=ED-GEDIT End 2: [blank]
+# note30=ED-GEDIT Ctrl+BackSpace: [worl]
+# note31=ED-GEDIT Ctrl+Delete at end: []
+# note32=ED-GEDIT Home 3: [e]
+# note33=ED-GEDIT Ctrl+Delete: [ello]
+# note34=ED-GEDIT select all: [all selected, 8 characters]
+# note35=ED-GEDIT clear: [, brave]
+# note36=ED-GEDIT type line 1: [o | n | e | space | t | w | o]
+# note37=ED-GEDIT Enter: [new line]
+# note38=ED-GEDIT type paragraph: [a | l | p | h | a | space | b | r | a | v | o | space | c | h | a | r | l | i | e | space | d | e | l | t | a | space | e | c | h | o | space | f | o | x | t | r | o | t | space | g | o | l | f | space | h | o | t | e | l | space | i | n | d | i | a | space | j | u | l | i | e | t | space | k | i | l | o | space | l | i | m | a | space | m | i | k | e | space | n | o | v | e | m | b | e | r | space | o | s | c | a | r | space | p | a | p | a | space | q | u | e | b | e | c]
+# note39=ED-GEDIT Enter 2: [new line]
+# note40=ED-GEDIT type last: [l | a | s | t | space | l | i | n | e]
+# note41=ED-GEDIT Up: [papa quebec]
+# note42=ED-GEDIT Up 2: [alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar]
+# note43=ED-GEDIT Up 3: [one two]
+# note44=ED-GEDIT Down: [alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar]
+# note45=ED-GEDIT Ctrl+Up: [one two]
+# note46=ED-GEDIT Ctrl+Up 2: [one two]
+# note47=ED-GEDIT Ctrl+Down: [alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec]
+# note48=ED-GEDIT Ctrl+Home: [one two]
+# note49=ED-GEDIT Ctrl+End: [last line]
+# note50=ED-GEDIT PageUp: [one two]
+# note51=ED-GEDIT PageDown: [last line]
+# note52=ED-GEDIT Ctrl+Home 2: [one two]
+# note53=ED-GEDIT Shift+Down: [one two selected]
+# note54=ED-GEDIT Shift+Down 2: [alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar selected]
+# note55=ED-GEDIT Shift+Up: [alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar unselected]
+# note56=ED-GEDIT Ctrl+Shift+Down: [alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec
+last line selected]
+# note57=ED-GEDIT Ctrl+Shift+End: []
+# note58=ED-GEDIT BackSpace selection: [one two
+alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec
+last line]
+# note59=ED-GEDIT Ctrl+Z: [one two
+alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec
+last line]
+# note60=ED-GEDIT Ctrl+Home 3: [one two]
+# note61=ED-GEDIT Ctrl+F: [Search, edit]
+# note62=ED-GEDIT find: type: [b | r | a | v | o]
+# note63=ED-GEDIT find: Enter: [edit]
+# note64=ED-GEDIT find: Escape: []
+# note65=ED-GEDIT Ctrl+H: [Find and Replace, dialog, edit, bravo]
+# note66=ED-GEDIT replace: Escape: [star Untitled Document 1 - gedit, edit]
+# note67=ED-GEDIT Ctrl+T: [edit]
+# note68=ED-GEDIT tab 2: type: [s | e | c | o | n | d]
+# note69=ED-GEDIT Ctrl+Alt+PageUp: [edit]
+# note70=ED-GEDIT Ctrl+Alt+PageDown: [edit]
+# note71=ED-GEDIT Ctrl+S: [Save As, Name, edit, Untitled Document 2]
+# note72=ED-GEDIT save: Escape: [Untitled Document 2 - gedit, edit]
+# note73=ED-TEDIT type: [h | e | l | l | o | comma | space | b | r | a | v | e | space | w | o | r | l | d]
+# note74=ED-TEDIT Left: [d]
+# note75=ED-TEDIT Right: [blank]
+# note76=ED-TEDIT Home: [h]
+# note77=ED-TEDIT Left at start: [h]
+# note78=ED-TEDIT End: [blank]
+# note79=ED-TEDIT Right at end: [blank]
+# note80=ED-TEDIT Ctrl+Left 1: [world]
+# note81=ED-TEDIT Ctrl+Left 2: [brave]
+# note82=ED-TEDIT Ctrl+Left 3: [,]
+# note83=ED-TEDIT Ctrl+Left 4 at start: [hello]
+# note84=ED-TEDIT Ctrl+Right 1: [hello]
+# note85=ED-TEDIT Ctrl+Right 2: [,]
+# note86=ED-TEDIT Ctrl+Right 3: [brave]
+# note87=ED-TEDIT Ctrl+Right 4 at end: [world]
+# note88=ED-TEDIT BackSpace: [d]
+# note89=ED-TEDIT Delete at end: []
+# note90=ED-TEDIT Home 2: [h]
+# note91=ED-TEDIT Delete: [h]
+# note92=ED-TEDIT Shift+Right: [e selected]
+# note93=ED-TEDIT Shift+Right 2: [l selected]
+# note94=ED-TEDIT Shift+Left: [l unselected]
+# note95=ED-TEDIT Shift+Left 2: [e unselected]
+# note96=ED-TEDIT Ctrl+Shift+Right: [ello selected]
+# note97=ED-TEDIT Ctrl+Shift+Left: [ello unselected]
+# note98=ED-TEDIT Shift+End: [all selected, 16 characters]
+# note99=ED-TEDIT Shift+Home: [ello, brave worl unselected]
+# note100=ED-TEDIT Ctrl+A: [all selected, 16 characters]
+# note101=ED-TEDIT Right collapses: [blank]
+# note102=ED-TEDIT End 2: [blank]
+# note103=ED-TEDIT Ctrl+BackSpace: [worl]
+# note104=ED-TEDIT Ctrl+Delete at end: []
+# note105=ED-TEDIT Home 3: [e]
+# note106=ED-TEDIT Ctrl+Delete: [ello]
+# note107=ED-TEDIT select all: [all selected, 8 characters]
+# note108=ED-TEDIT clear: [, brave]
+# note109=ED-TEDIT type line 1: [o | n | e | space | t | w | o]
+# note110=ED-TEDIT Enter: [new line]
+# note111=ED-TEDIT type paragraph: [a | l | p | h | a | space | b | r | a | v | o | space | c | h | a | r | l | i | e | space | d | e | l | t | a | space | e | c | h | o | space | f | o | x | t | r | o | t | space | g | o | l | f | space | h | o | t | e | l | space | i | n | d | i | a | space | j | u | l | i | e | t | space | k | i | l | o | space | l | i | m | a | space | m | i | k | e | space | n | o | v | e | m | b | e | r | space | o | s | c | a | r | space | p | a | p | a | space | q | u | e | b | e | c]
+# note112=ED-TEDIT Enter 2: [new line]
+# note113=ED-TEDIT type last: [l | a | s | t | space | l | i | n | e]
+# note114=ED-TEDIT Up: [mike november oscar papa quebec]
+# note115=ED-TEDIT Up 2: [alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima]
+# note116=ED-TEDIT Up 3: [one two]
+# note117=ED-TEDIT Down: [alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima]
+# note118=ED-TEDIT Ctrl+Up: [one two]
+# note119=ED-TEDIT Ctrl+Up 2: [one two]
+# note120=ED-TEDIT Ctrl+Down: [alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec]
+# note121=ED-TEDIT Ctrl+Home: [one two]
+# note122=ED-TEDIT Ctrl+End: [last line]
+# note123=ED-TEDIT PageUp: [one two]
+# note124=ED-TEDIT PageDown: [last line]
+# note125=ED-TEDIT Ctrl+Home 2: [one two]
+# note126=ED-TEDIT Shift+Down: [one two selected]
+# note127=ED-TEDIT Shift+Down 2: [alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima selected]
+# note128=ED-TEDIT Shift+Up: [alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima unselected]
+# note129=ED-TEDIT Ctrl+Shift+Down: [alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec
+last line selected]
+# note130=ED-TEDIT Ctrl+Shift+End: []
+# note131=ED-TEDIT BackSpace selection: [one two
+alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec
+last line]
+# note132=ED-TEDIT Ctrl+Z: [one two
+alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec
+last line]
+# note133=ED-TEDIT Ctrl+Home 3: [one two]
+# note134=ED-TEDIT Ctrl+F: []
+# note135=ED-TEDIT find: type: [b | r | a | v | o]
+# note136=ED-TEDIT find: Enter: [new line | edit]
+# note137=ED-TEDIT find: Escape: []
+# note138=ED-TEDIT Ctrl+H: [edit, bravo]
+# note139=ED-TEDIT replace: Escape: [edit]
+# note140=ED-TEDIT Ctrl+T: [edit]
+# note141=ED-TEDIT Ctrl+Alt+PageUp check: [edit]
+# note142=ED-TEDIT tab 2: type: [s | e | c | o | n | d]
+# note143=ED-TEDIT Ctrl+Alt+PageUp: []
+# note144=ED-TEDIT Ctrl+Alt+PageDown: [edit]
+# note145=ED-TEDIT Ctrl+S: heard [] (want speech)
+# note146=ED-TEDIT save: Escape: [edit | New Document (Draft) - Text Editor]
+# note147=ED-TEDIT Ctrl+S: [Name, edit, New Document dot txt]
+
+metric                     bus                median          min          max  n op    threshold  res   note
+ED-GEDIT.ed_failures       daemon/voicego            0            0            0  3                  info   [steps]
+ED-GEDIT.ed_steps          daemon/voicego           73           73           73  3                  info   [steps]
+ED-TEDIT.ed_failures       daemon/voicego            0            0            1  3                  info   [steps]
+ED-TEDIT.ed_steps          daemon/voicego           74           74           74  3                  info   [steps]

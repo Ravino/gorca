@@ -1803,7 +1803,7 @@ fn vf_big(
 /// A real `gnome-terminal-server` and its window, started in the private AT-SPI session by
 /// `tests/term/run_real_vte.sh` (the compositor world and its RemoteDesktop keyboard are the
 /// script's). Own process groups, signalled only through them.
-struct RealTerm {
+pub(super) struct RealTerm {
     server: std::process::Child,
     client: std::process::Child,
     rd: std::process::Child,
@@ -1812,7 +1812,7 @@ struct RealTerm {
 }
 
 impl RealTerm {
-    fn start(host: &HostEnv) -> Result<Self> {
+    pub(super) fn start(host: &HostEnv) -> Result<Self> {
         use std::os::unix::process::CommandExt;
         use std::process::{Command, Stdio};
         let wayland = std::env::var("GORCA_VTE_WAYLAND").context("GORCA_VTE_WAYLAND not set")?;
@@ -1903,7 +1903,7 @@ impl RealTerm {
         })
     }
 
-    fn rd_line(&mut self, line: &str) {
+    pub(super) fn rd_line(&mut self, line: &str) {
         use std::io::Write;
         if let Some(stdin) = self.rd.stdin.as_mut() {
             let _ = writeln!(stdin, "{line}");

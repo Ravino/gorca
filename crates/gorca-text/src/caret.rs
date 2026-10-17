@@ -4,6 +4,8 @@
 
 use std::ops::Range;
 
+use gorca_model::{EditQuirks, WordLanding};
+
 use crate::space::{Lookup, TextSpace, Unit};
 
 /// The unit a movement key advances by (mirror of the input lane's `KeyUnit`, ADR-0007 4.1).
@@ -93,26 +95,59 @@ pub fn present(space: &dyn TextSpace, at: u32, say: Say) -> Lookup<Presented> {
 
 /// CR-2 for `Move{Word}`: the word to speak when the caret went from `from` to `at`.
 ///
-/// Toolkits disagree on where Ctrl+Right lands. NVDA's Windows targets stop at the start of the
-/// next word, where the word at the caret is the one just reached. GTK and Gecko on Linux stop
-/// at the END of the next word, where the word at the caret is the following punctuation, a
-/// space, or nothing at the end of the text, and the word just reached is the one that ends at
-/// the caret (Orca speaks the traversed text for the same reason: `script_utilities.py`,
-/// `get_word_at_offset_adjusted_for_navigation`). So a forward move that landed right after a
-/// non-space scalar, at the end of a word, speaks the word ending at the caret. Every other
-/// move speaks the word starting at the caret, and `blank` at the end of the text (NVDA).
-pub fn present_word(space: &dyn TextSpace, from: Option<u32>, at: u32) -> Lookup<Presented> {
-    if from.is_some_and(|f| f < at) && at > 0 {
-        let w = crate::ready!(space.unit_at(at - 1, Unit::Word));
-        let mut t = String::new();
-        crate::ready!(space.read(w.clone(), &mut t));
-        let kept = t.trim_end_matches(char::is_whitespace).chars().count();
-        let ends_here = u32::try_from(kept).is_ok_and(|k| w.start + k == at);
-        if ends_here && w.start < at {
-            return Lookup::Ready(Presented::Text(w.start..at));
-        }
+/// Toolkits disagree on where Ctrl+Right lands (`EditQuirks::word_landing`, measured in the
+/// editing matrix). Windows-style toolkits stop at the START of the next word, where the word at
+/// the caret is the one just reached ([`WordLanding::Start`]). GTK, GtkSourceView, Gecko, Blink
+/// and readline stop at the END of the word they pass ([`WordLanding::End`]), where the word at
+/// the caret is the following punctuation, a space, or nothing at the end of the text, and the
+/// word just passed is the one that ends at the caret (Orca speaks the traversed text for the
+/// same reason: `script_utilities.py`, `get_word_at_offset_adjusted_for_navigation`).
+///
+/// So for an END toolkit a forward move that landed right after a non-space scalar, at the end
+/// of a word, speaks the word passed: the last word of the traversed span that has a letter or a
+/// digit in it, so that Gecko, which lands behind the comma of "hello, " after one Ctrl+Right,
+/// still speaks "hello" and not ",". A span of punctuation alone (GtkSourceView and Blink stop
+/// between a word and its comma) speaks that punctuation. Every other move speaks the word
+/// starting at the caret, and `blank` at the end of the text with nothing under the caret (NVDA).
+pub fn present_word(
+    space: &dyn TextSpace,
+    from: Option<u32>,
+    at: u32,
+    q: EditQuirks,
+) -> Lookup<Presented> {
+    if q.word_landing == WordLanding::End
+        && let Some(f) = from.filter(|f| *f < at)
+        && at > 0
+        && let Some(r) = crate::ready!(passed_word(space, f, at))
+    {
+        return Lookup::Ready(Presented::Text(r));
     }
     present(space, at, Say::Word)
+}
+
+/// The word passed by a forward move from `from` to `at` (END toolkits), if the move ended at the
+/// end of one.
+fn passed_word(space: &dyn TextSpace, from: u32, at: u32) -> Lookup<Option<Range<u32>>> {
+    let mut end = at;
+    let mut first = true;
+    loop {
+        let w = crate::ready!(space.unit_at(end - 1, Unit::Word));
+        let mut t = String::new();
+        crate::ready!(space.read(w.clone(), &mut t));
+        let kept = t.trim_end_matches(char::is_whitespace);
+        let n = u32::try_from(kept.chars().count()).unwrap_or(u32::MAX);
+        let stop = w.start.saturating_add(n);
+        // Only the first word has to END where the caret is; behind it the span is walked back.
+        if first && (n == 0 || stop != at) {
+            return Lookup::Ready(None);
+        }
+        first = false;
+        let lettered = kept.chars().any(char::is_alphanumeric);
+        if lettered || w.start <= from || w.start == 0 {
+            return Lookup::Ready(Some(w.start..stop));
+        }
+        end = w.start;
+    }
 }
 
 #[cfg(test)]
@@ -142,7 +177,7 @@ mod tests {
 
     fn word(text: &str, from: Option<u32>, at: u32) -> Lookup<Presented> {
         let c: Vec<char> = text.chars().collect();
-        present_word(&CharsSpace::new(&c, 0), from, at)
+        present_word(&CharsSpace::new(&c, 0), from, at, EditQuirks::default())
     }
 
     #[test]
@@ -173,6 +208,59 @@ mod tests {
         assert_eq!(
             word("a\nb", Some(0), 2),
             Lookup::Ready(Presented::Text(2..3))
+        );
+    }
+
+    #[test]
+    fn a_landing_behind_the_trailing_punctuation_speaks_the_word_not_the_mark() {
+        // Gecko: Ctrl+Right from 0 in "hello, brave world" lands at 6, behind the comma.
+        let t = "hello, brave world";
+        assert_eq!(word(t, Some(0), 6), Lookup::Ready(Presented::Text(0..5)));
+        // Pango skips the comma and lands at the end of "brave".
+        assert_eq!(word(t, Some(5), 12), Lookup::Ready(Presented::Text(7..12)));
+        // GtkSourceView and Blink stop between the word and the comma, then behind the comma.
+        assert_eq!(word(t, Some(0), 5), Lookup::Ready(Presented::Text(0..5)));
+        assert_eq!(word(t, Some(5), 6), Lookup::Ready(Presented::Text(5..6)));
+        // A path: readline's Alt+f stops at the end of each name.
+        assert_eq!(
+            word("/usr/local/bin", Some(0), 4),
+            Lookup::Ready(Presented::Text(1..4))
+        );
+    }
+
+    #[test]
+    fn present_word_agrees_with_the_extension_sdk_vectors() {
+        // `gorca_ext_api::terminal::word_motion` is the slice form of this model for terminals.
+        for &(text, from, at, want) in gorca_ext_api::terminal::WORD_MOTION_VECTORS {
+            let c: Vec<char> = text.chars().collect();
+            let got = match present_word(&CharsSpace::new(&c, 0), from, at, EditQuirks::default()) {
+                Lookup::Ready(Presented::Text(r)) => c[r.start as usize..r.end as usize]
+                    .iter()
+                    .collect::<String>()
+                    .trim()
+                    .to_owned(),
+                Lookup::Ready(Presented::Blank) => String::new(),
+                Lookup::Need(n) => panic!("{text:?}: needs {n:?}"),
+            };
+            assert_eq!(got, want, "{text:?} {from:?} -> {at}");
+        }
+    }
+
+    #[test]
+    fn a_start_landing_toolkit_speaks_the_word_at_the_caret() {
+        let c: Vec<char> = "foo,bar baz".chars().collect();
+        let sp = CharsSpace::new(&c, 0);
+        let q = EditQuirks {
+            word_landing: WordLanding::Start,
+        };
+        assert_eq!(
+            present_word(&sp, Some(0), 4, q),
+            Lookup::Ready(Presented::Text(4..8))
+        );
+        // The same landing under the END row reads the span: "foo".
+        assert_eq!(
+            present_word(&sp, Some(0), 4, EditQuirks::default()),
+            Lookup::Ready(Presented::Text(0..3))
         );
     }
 

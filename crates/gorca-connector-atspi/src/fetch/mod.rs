@@ -405,6 +405,7 @@ fn announce_info(
         dump_complete: verified_shell,
         text_unit: class.text_unit(),
         text_insert_slack: class.text_insert_slack(),
+        edit_quirks: class.edit_quirks(),
         page_events_settle_ms: settle_ms,
         web_engine: class.web_engine(),
         root: Some(NodeKey {

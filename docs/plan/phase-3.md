@@ -61,11 +61,11 @@ Explicitly deferred out of Phase 2 and therefore candidates here:
 | voicego deep improvement | decision 2026-10-14 ("separate effort after Phase 2") | track **V** |
 | Upstreaming (Mutter 48.7 stuck modifier, at-spi2-core, Chromium `IsEnabled`) | decisions 2026-10-14, ADR-0001 §5.5 | track **U** |
 | ADR-0002 perception beyond scaffolding | phase-2 Q6 | stretch **MP** (phases 1–2 only) |
-| Unified editing navigation (user request 2026-10-17): one caret/word/character/line model and speech, as in the terminal, for GTK entries/textviews, gedit, GNOME Text Editor, web editables and the terminal | shared presenter + per-toolkit quirk data; e2e matrix per toolkit | M11 (wave 1) |
+| Unified editing navigation (user request 2026-10-17): one caret/word/character/line model and speech, as in the terminal, for GTK entries/textviews, gedit, GNOME Text Editor, web editables and the terminal | shared presenter + per-toolkit quirk data; e2e matrix per toolkit | M11 (wave 1); **done 2026-10-17**: `docs/reports/unified-editing.md`, checklist `docs/plan/checklists/editors.md` |
 | Verbosity levels and profiles: NVDA-style detail toggles per role/state, per-app profiles | settings + command toggles | **M14a** (design: `docs/plan/phase-3-features.md` §3) |
 | NVDA-derived features (user request 2026-10-17): lock key announcements (Caps/Num/Scroll Lock), input help (gorca+1), speech history and copy last utterance, formatting info (gorca+F), indentation reporting by speech/tone, sleep mode per app, per-app configuration profiles, spell phonetically (double press), date/time and battery/status commands, review-cursor follow toggles | commands + settings; e2e per command | F0 / M12a / M13 / M14a / M15a (ranked and placed in `docs/plan/phase-3-features.md` §8, §12) |
 | Flat review, object navigation and mouse routing everywhere at NVDA parity (user request 2026-10-17), with seams for later graph/vector navigation | review line sources, ShellHelper virtual pointer, parity matrix R4 | **M21** (`docs/plan/phase-3-features.md` §9, §10) |
-| Text editors: gedit and GNOME Text Editor (baseline app scope, user request 2026-10-16) | e2e scenarios for editing, word/line/paragraph navigation, selection, find/replace, tabs; user checklist | M11 (wave 1) |
+| Text editors: gedit and GNOME Text Editor (baseline app scope, user request 2026-10-16) | e2e scenarios for editing, word/line/paragraph navigation, selection, find/replace, tabs; user checklist | M11 (wave 1); **baseline done 2026-10-17** (gaps: Text Editor find bar, tab names; see the report) |
 | LibreOffice and other apps | CLAUDE.md "later" | Phase 4 (§10) |
 
 ## 2. Rules that apply to every milestone
