@@ -717,6 +717,8 @@ impl Reader {
                     // TBD: live-region policy lives in gorca-doc; resync scheduling in the app actor.
                 }
                 BackgroundMsg::ExtSpeech { text, interrupt } => {
+                    // A message reference of an extension's catalog is said in the UI language.
+                    let text = gorca_i18n::ext::resolve(&text, gorca_i18n::language());
                     if interrupt {
                         self.say(&text, &mut fx);
                     } else {

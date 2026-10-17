@@ -9,7 +9,8 @@
 //! 3. `gorca-core` must not depend on any `gorca-connector-*`, `gorca-speech-*`, `gorca-input-*`
 //!    (except `-api`) or `gorca-ext-host`. Only `gorca-daemon` wires concrete implementations.
 //! 4. `gorca-model`, `gorca-doc` and `gorca-text` must not depend on `tokio`.
-//! 5. Extensions depend only on `gorca-ext-api`.
+//! 5. Extensions depend only on `gorca-ext-api` (which re-exports the pure leaf `gorca-i18n`
+//!    for message references, ADR-0010).
 //! 9. The WASM runtime is confined (M5): only `gorca-ext-host` may depend on `wasmtime*`, only
 //!    `gorca-ext-api` (for the `wasm32` component build) on `wit-bindgen*`, and the host must not
 //!    reach `zbus*` or `atspi*` (an extension sees the core's types, never a connector's).
@@ -238,8 +239,11 @@ pub fn check(g: &Graph) -> Vec<Violation> {
     }
     // Rule 5.
     for p in g.pkgs.values().filter(|p| p.is_extension) {
-        let forbidden =
-            |d: &str| g.pkgs.get(d).is_some_and(|x| x.in_workspace) && d != "gorca-ext-api";
+        let forbidden = |d: &str| {
+            g.pkgs.get(d).is_some_and(|x| x.in_workspace)
+                && d != "gorca-ext-api"
+                && d != "gorca-i18n"
+        };
         if let Some(chain) = g.path_to(&p.name, forbidden) {
             report(
                 5,

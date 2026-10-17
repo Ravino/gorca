@@ -21,6 +21,7 @@ repository = "TBD"
 [workspace.dependencies]
 # Internal crates.
 gorca-model = { path = "crates/gorca-model" }
+gorca-i18n = { path = "crates/gorca-i18n" }
 gorca-config = { path = "crates/gorca-config" }
 gorca-rt = { path = "crates/gorca-rt" }
 gorca-ingress = { path = "crates/gorca-ingress" }

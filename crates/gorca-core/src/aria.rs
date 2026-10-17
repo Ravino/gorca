@@ -16,6 +16,7 @@
 use std::sync::Arc;
 
 use gorca_doc_source_api::web_attrs;
+use gorca_i18n::{MsgId as M, msg, t};
 use gorca_model::{AttrKey, Role, StateSet};
 use smallvec::SmallVec;
 
@@ -71,19 +72,19 @@ impl Kind {
     pub fn word(self) -> Option<&'static str> {
         Some(match self {
             Kind::Plain => return None,
-            Kind::Switch => "switch",
-            Kind::Tab => "tab",
-            Kind::TabList => "tab control",
-            Kind::TabPanel => "property page",
-            Kind::Tree => "tree view",
-            Kind::TreeItem => "tree view item",
-            Kind::Menu => "menu",
-            Kind::MenuBar => "menu bar",
-            Kind::MenuItem => "menu item",
-            Kind::MenuItemCheckBox => "check menu item",
-            Kind::MenuItemRadio => "radio menu item",
-            Kind::Toolbar => "tool bar",
-            Kind::Group => "grouping",
+            Kind::Switch => t(M::AriaSwitch),
+            Kind::Tab => t(M::AriaTab),
+            Kind::TabList => t(M::AriaTabList),
+            Kind::TabPanel => t(M::AriaTabPanel),
+            Kind::Tree => t(M::AriaTree),
+            Kind::TreeItem => t(M::AriaTreeItem),
+            Kind::Menu => t(M::AriaMenu),
+            Kind::MenuBar => t(M::AriaMenuBar),
+            Kind::MenuItem => t(M::AriaMenuItem),
+            Kind::MenuItemCheckBox => t(M::AriaCheckMenuItem),
+            Kind::MenuItemRadio => t(M::AriaRadioMenuItem),
+            Kind::Toolbar => t(M::AriaToolbar),
+            Kind::Group => t(M::AriaGroup),
         })
     }
 
@@ -183,7 +184,7 @@ pub fn state_words(n: &Node<'_>, unavailable: bool, focus: bool) -> SmallVec<[&'
     // States NVDA sorts after `required` and `invalid entry` (bit values 44 to 50 of its `State`).
     let mut late: SmallVec<[&'static str; 3]> = SmallVec::new();
     if unavailable {
-        out.push("unavailable");
+        out.push(t(M::StateUnavailable));
     }
     // NVDA drops `selected` for list, tree and menu items (selection follows the focus there);
     // a tab says it.
@@ -199,7 +200,7 @@ pub fn state_words(n: &Node<'_>, unavailable: bool, focus: bool) -> SmallVec<[&'
             Kind::TreeItem | Kind::MenuItem | Kind::MenuItemCheckBox | Kind::MenuItemRadio
         );
     if st.contains(StateSet::SELECTED) && !(quiet_selected && st.contains(StateSet::SELECTABLE)) {
-        out.push("selected");
+        out.push(t(M::StateSelected));
     } else if focus
         && quiet_selected
         && !menu_item
@@ -207,43 +208,43 @@ pub fn state_words(n: &Node<'_>, unavailable: bool, focus: bool) -> SmallVec<[&'
         && st.contains(StateSet::SELECTABLE | StateSet::FOCUSABLE)
     {
         // NVDA says what is not selected only when it takes the focus.
-        out.push("not selected");
+        out.push(t(M::StateNotSelected));
     }
     if st.contains(StateSet::BUSY) {
-        out.push("busy");
+        out.push(t(M::StateBusy));
     }
     let mixed = st.contains(StateSet::MIXED);
     match n.check_style() {
         CheckStyle::OnOff => late.push(if st.contains(StateSet::CHECKED) {
-            "on"
+            t(M::StateOn)
         } else {
-            "off"
+            t(M::StateOff)
         }),
         CheckStyle::Checked => out.push(if mixed {
-            "half checked"
+            t(M::StateHalfChecked)
         } else if st.contains(StateSet::CHECKED) {
-            "checked"
+            t(M::StateChecked)
         } else {
-            "not checked"
+            t(M::StateNotChecked)
         }),
         CheckStyle::Pressed => {
             if mixed {
-                late.push("half pressed");
+                late.push(t(M::StateHalfPressed));
             } else if st.contains(StateSet::PRESSED) || st.contains(StateSet::CHECKED) {
-                out.push("pressed");
+                out.push(t(M::StatePressed));
             } else {
-                out.push("not pressed");
+                out.push(t(M::StateNotPressed));
             }
         }
         CheckStyle::None => {
             if st.contains(StateSet::PRESSED) {
-                out.push("pressed");
+                out.push(t(M::StatePressed));
             }
             if st.contains(StateSet::CHECKED) {
-                out.push("checked");
+                out.push(t(M::StateChecked));
             }
             if mixed && n.role == Role::ProgressBar {
-                late.push("indeterminate");
+                late.push(t(M::StateIndeterminate));
             }
         }
     }
@@ -253,30 +254,30 @@ pub fn state_words(n: &Node<'_>, unavailable: bool, focus: bool) -> SmallVec<[&'
             Role::TextEntry | Role::PasswordEntry | Role::CheckBox
         )
     {
-        out.push("read only");
+        out.push(t(M::StateReadOnly));
     }
     let popup = popup_word(n);
     let menu_with_popup = matches!(n.role, Role::MenuItem) || kind == Kind::MenuItem;
     if !(menu_with_popup && popup.is_some()) {
         if st.contains(StateSet::EXPANDED) {
-            out.push("expanded");
+            out.push(t(M::StateExpanded));
         } else if st.contains(StateSet::COLLAPSED) {
-            out.push("collapsed");
+            out.push(t(M::StateCollapsed));
         }
     }
     if let Some(p) = popup {
         // `submenu` is HASPOPUP (13); the dialog, grid, list and tree kinds are 47 to 50.
-        if p == "submenu" {
-            out.push(p);
+        if p == M::StateSubmenu {
+            out.push(t(p));
         } else {
-            late.push(p);
+            late.push(t(p));
         }
     }
     if st.contains(StateSet::REQUIRED) {
-        out.push("required");
+        out.push(t(M::StateRequired));
     }
     if st.contains(StateSet::INVALID) && n.role != Role::Landmark && n.role != Role::Panel {
-        out.push("invalid entry");
+        out.push(t(M::StateInvalidEntry));
     }
     out.extend(late);
     out
@@ -284,18 +285,18 @@ pub fn state_words(n: &Node<'_>, unavailable: bool, focus: bool) -> SmallVec<[&'
 
 /// `aria-haspopup` (`aria.py` `ariaHaspopupValuesToNVDAStates`, state labels of `state.py`). A
 /// combo box inherently opens a list, so that is not said for it.
-fn popup_word(n: &Node<'_>) -> Option<&'static str> {
+fn popup_word(n: &Node<'_>) -> Option<M> {
     let kind = match n.attr(web_attrs::HASPOPUP) {
         Some(v) => v,
         None if n.states.contains(StateSet::HAS_POPUP) => "true",
         None => return None,
     };
     match kind {
-        "true" | "menu" => (n.role != Role::ComboBox).then_some("submenu"),
-        "dialog" => Some("opens dialog"),
-        "grid" => Some("opens grid"),
-        "listbox" => (n.role != Role::ComboBox).then_some("opens list"),
-        "tree" => Some("opens tree"),
+        "true" | "menu" => (n.role != Role::ComboBox).then_some(M::StateSubmenu),
+        "dialog" => Some(M::StateOpensDialog),
+        "grid" => Some(M::StateOpensGrid),
+        "listbox" => (n.role != Role::ComboBox).then_some(M::StateOpensList),
+        "tree" => Some(M::StateOpensTree),
         _ => None,
     }
 }
@@ -304,12 +305,12 @@ fn popup_word(n: &Node<'_>) -> Option<&'static str> {
 pub fn current_word(n: &Node<'_>) -> Option<&'static str> {
     match n.attr(web_attrs::CURRENT)? {
         "" | "false" => None,
-        "page" => Some("current page"),
-        "step" => Some("current step"),
-        "location" => Some("current location"),
-        "date" => Some("current date"),
-        "time" => Some("current time"),
-        _ => Some("current"),
+        "page" => Some(t(M::StateCurrentPage)),
+        "step" => Some(t(M::StateCurrentStep)),
+        "location" => Some(t(M::StateCurrentLocation)),
+        "date" => Some(t(M::StateCurrentDate)),
+        "time" => Some(t(M::StateCurrentTime)),
+        _ => Some(t(M::StateCurrent)),
     }
 }
 
@@ -319,7 +320,7 @@ pub fn level_phrase(n: &Node<'_>) -> Option<String> {
     (n.kind() == Kind::TreeItem || n.role == Role::TreeItem)
         .then(|| n.level())
         .flatten()
-        .map(|l| format!("level {l}"))
+        .map(|l| msg!(StateLevel, l = l))
 }
 
 /// The error message of an invalid node.

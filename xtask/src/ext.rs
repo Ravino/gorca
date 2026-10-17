@@ -7,6 +7,7 @@
 //! ```text
 //! <target>/<debug|release>/extensions/<name>/ext.toml
 //! <target>/<debug|release>/extensions/<name>/<module>.wasm
+//! <target>/<debug|release>/extensions/<name>/i18n/<lang>.msg   (the extension's message catalogs)
 //! ```
 //!
 //! which is `<exe dir>/extensions` for `target/<profile>/gorca`, the first place the daemon
@@ -79,6 +80,10 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<bool> {
             std::fs::create_dir_all(&d).with_context(|| format!("create {}", d.display()))?;
             copy(&manifest, &d.join("ext.toml"))?;
             copy(&built, &d.join(&module))?;
+            copy_catalogs(
+                &root.join("extensions").join(name).join("i18n"),
+                &d.join("i18n"),
+            )?;
             println!("installed {}", d.join(&module).display());
         }
     }
@@ -111,5 +116,22 @@ fn copy(from: &Path, to: &Path) -> Result<()> {
     std::fs::copy(from, &tmp)
         .with_context(|| format!("copy {} to {}", from.display(), tmp.display()))?;
     std::fs::rename(&tmp, to).with_context(|| format!("rename to {}", to.display()))?;
+    Ok(())
+}
+
+/// Copy an extension's `i18n/*.msg` catalogs next to its manifest (none is fine).
+fn copy_catalogs(from: &Path, to: &Path) -> Result<()> {
+    let Ok(rd) = std::fs::read_dir(from) else {
+        return Ok(());
+    };
+    std::fs::create_dir_all(to).with_context(|| format!("create {}", to.display()))?;
+    for e in rd {
+        let path = e?.path();
+        if path.extension().is_some_and(|x| x == "msg")
+            && let Some(name) = path.file_name()
+        {
+            copy(&path, &to.join(name))?;
+        }
+    }
     Ok(())
 }

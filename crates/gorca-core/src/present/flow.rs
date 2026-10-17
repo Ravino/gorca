@@ -352,7 +352,11 @@ impl Reader {
             FocusEffect::QueryActiveWindowFocus => fx.push(ReaderEffect::QueryActiveWindowFocus),
             FocusEffect::AnnounceNotResponding => {
                 let id = self.utt_id();
-                let u = message("application not responding", id, self.epoch.current());
+                let u = message(
+                    gorca_i18n::t(gorca_i18n::MsgId::AppNotResponding),
+                    id,
+                    self.epoch.current(),
+                );
                 fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
             }
         }
@@ -412,7 +416,8 @@ impl Reader {
             .is_some_and(|b| b.web_apps.contains(&snap.key.app));
         if web && super::utterance::never_disabled(snap.role) {
             u.segments.retain(|s| {
-                !(s.kind == gorca_model::SegmentKind::State && &*s.text == "unavailable")
+                !(s.kind == gorca_model::SegmentKind::State
+                    && &*s.text == gorca_i18n::t(gorca_i18n::MsgId::StateUnavailable))
             });
         }
     }
@@ -763,7 +768,7 @@ impl Reader {
                     tracing::debug!(node = ?r.node, "selected item unreadable: silent");
                 } else {
                     // Never stay silent on focus: say that nothing is known.
-                    self.say("unknown", fx);
+                    self.say(gorca_i18n::t(gorca_i18n::MsgId::FocusUnknown), fx);
                 }
             }
         }

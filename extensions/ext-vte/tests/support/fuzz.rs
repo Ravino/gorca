@@ -85,7 +85,9 @@ impl Host {
         for a in out {
             self.actions.push((self.now, a.clone()));
             match a {
-                TermAction::Say { text, unit, .. } => self.said.push((self.now, text, unit)),
+                TermAction::Say { text, unit, .. } => {
+                    self.said.push((self.now, ext_vte::english(&text), unit));
+                }
                 TermAction::FetchScreen => self.read = Some(self.now + 2),
                 TermAction::ArmTimer(t) => self.tick = Some(self.tick.map_or(t, |d| d.min(t))),
                 TermAction::ClaimKey => {}

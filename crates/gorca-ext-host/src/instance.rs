@@ -286,7 +286,7 @@ impl InstShared {
         }
         // The WASM backend refuses oversize lifts before copying (hostcall fuel); the clip here
         // bounds what a native extension can pass.
-        let segs = crate::convert::segments_from_iter(segments.iter().take(64).cloned());
+        let segs = crate::convert::segments_from_iter(&self.ext, segments.iter().take(64).cloned());
         let text = gorca_core::segments_text(&segs);
         if text.is_empty() || !self.allow_speech() {
             return;
