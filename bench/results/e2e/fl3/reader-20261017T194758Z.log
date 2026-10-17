@@ -1,0 +1,580 @@
+2026-10-17T19:48:00.151039Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883550203692935694) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:48:04.853073Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169214391318357178) } parent_children=Count(29) kids=29 truncated=false complete=true
+2026-10-17T19:48:04.853198Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=1
+2026-10-17T19:48:04.853211Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853217Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853220Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853222Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853226Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853229Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853233Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853237Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853241Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853243Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853246Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853249Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853252Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853255Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853272Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853275Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853277Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853280Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853282Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853284Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853286Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853289Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.853291Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.855666Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888325382693309942) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-17T19:48:04.858066Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888338576832848474) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.858206Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888324283181681731) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-17T19:48:04.859580Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888323183670053520) } parent_children=Count(10) kids=10 truncated=false complete=true
+2026-10-17T19:48:04.859606Z DEBUG gorca_core::review::build: review build round misses=4 ok=4 nodes=6
+2026-10-17T19:48:04.859613Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859618Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859621Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859625Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859628Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859632Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859636Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859639Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859642Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859645Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859649Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859652Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859656Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859659Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859663Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859666Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859670Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859673Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859676Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859680Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859683Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859686Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859690Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.859694Z DEBUG gorca_core::review::collect: review prune unavailable role=MenuBar states=StateSet(VISIBLE | ENABLED) name=Some("Application")
+2026-10-17T19:48:04.859702Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.861667Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885381990065156770) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.861687Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885385288600041403) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.863186Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887334722716481056) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:48:04.863899Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886349560297793225) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-17T19:48:04.863928Z DEBUG gorca_core::review::build: review build round misses=5 ok=4 nodes=21
+2026-10-17T19:48:04.863936Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.863942Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.863945Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.863950Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.863953Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.863957Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.863961Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.863965Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.863970Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.863974Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.863977Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.863981Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.863984Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.863988Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.863992Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.863996Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.864000Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.864003Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.864007Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.864011Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.864014Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.864018Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.864021Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.864026Z DEBUG gorca_core::review::collect: review prune unavailable role=MenuBar states=StateSet(VISIBLE | ENABLED) name=Some("Application")
+2026-10-17T19:48:04.864041Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Back")
+2026-10-17T19:48:04.864051Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Forward")
+2026-10-17T19:48:04.864056Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.865149Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884399026669725361) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.865202Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883539208576653584) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.865626Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886352858832677858) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.866197Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884397927158097150) } parent_children=Count(5) kids=5 truncated=false complete=true
+2026-10-17T19:48:04.866208Z DEBUG gorca_core::review::build: review build round misses=4 ok=4 nodes=26
+2026-10-17T19:48:04.866213Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866217Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866222Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866225Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866228Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866232Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866236Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866239Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866242Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866246Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866249Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866252Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866256Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866259Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866263Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866266Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866269Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866272Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866276Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866284Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866291Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866295Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866298Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866301Z DEBUG gorca_core::review::collect: review prune unavailable role=MenuBar states=StateSet(VISIBLE | ENABLED) name=Some("Application")
+2026-10-17T19:48:04.866309Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("New Tab")
+2026-10-17T19:48:04.866314Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Back")
+2026-10-17T19:48:04.866317Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Forward")
+2026-10-17T19:48:04.866322Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866326Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866880Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882557344692850386) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.866900Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=32
+2026-10-17T19:48:04.866904Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866908Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866912Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866916Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866921Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866925Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866929Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866934Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866938Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866940Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866943Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866947Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866950Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866954Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866958Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866961Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866965Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866969Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866975Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866980Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866983Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866987Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866990Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.866993Z DEBUG gorca_core::review::collect: review prune unavailable role=MenuBar states=StateSet(VISIBLE | ENABLED) name=Some("Application")
+2026-10-17T19:48:04.867000Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("New Tab")
+2026-10-17T19:48:04.867004Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Back")
+2026-10-17T19:48:04.867007Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Forward")
+2026-10-17T19:48:04.867011Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.867014Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869219Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883551303204563905) } parent_children=Count(6) kids=6 truncated=false complete=true
+2026-10-17T19:48:04.869247Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=33
+2026-10-17T19:48:04.869251Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869255Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869258Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869262Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869266Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869270Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869274Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869277Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869280Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869284Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869289Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869292Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869296Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869300Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869304Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869308Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869311Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869318Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869323Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869326Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869329Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869332Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869336Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869339Z DEBUG gorca_core::review::collect: review prune unavailable role=MenuBar states=StateSet(VISIBLE | ENABLED) name=Some("Application")
+2026-10-17T19:48:04.869346Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("New Tab")
+2026-10-17T19:48:04.869351Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Back")
+2026-10-17T19:48:04.869354Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Forward")
+2026-10-17T19:48:04.869358Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869362Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.869370Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Most read")
+2026-10-17T19:48:04.869373Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Footer")
+2026-10-17T19:48:04.873190Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4881565585204393289) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-17T19:48:04.874549Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4881562286669508656) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:48:04.874575Z DEBUG gorca_core::review::build: review build round misses=2 ok=2 nodes=36
+2026-10-17T19:48:04.874581Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874587Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874597Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874602Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874605Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874607Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874610Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874617Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874620Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874627Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874629Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874632Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874639Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874648Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874657Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874660Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874662Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874666Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874668Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874679Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874681Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874684Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874686Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874691Z DEBUG gorca_core::review::collect: review prune unavailable role=MenuBar states=StateSet(VISIBLE | ENABLED) name=Some("Application")
+2026-10-17T19:48:04.874699Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("New Tab")
+2026-10-17T19:48:04.874710Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Back")
+2026-10-17T19:48:04.874716Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Forward")
+2026-10-17T19:48:04.874720Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874726Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.874737Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Comments (3)")
+2026-10-17T19:48:04.874740Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Most read")
+2026-10-17T19:48:04.874744Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Footer")
+2026-10-17T19:48:04.876315Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4851325352080247389) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:48:04.877593Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4881566684716021500) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.879047Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4851308859405824224) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.881261Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4881567784227649711) } parent_children=Count(16) kids=16 truncated=false complete=true
+2026-10-17T19:48:04.881311Z DEBUG gorca_core::review::build: review build round misses=4 ok=4 nodes=42
+2026-10-17T19:48:04.881319Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881331Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881345Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881349Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881353Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881357Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881361Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881365Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881369Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881373Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881377Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881381Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881385Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881389Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881393Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881398Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881401Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881405Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881409Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881413Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881417Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881421Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881424Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881429Z DEBUG gorca_core::review::collect: review prune unavailable role=MenuBar states=StateSet(VISIBLE | ENABLED) name=Some("Application")
+2026-10-17T19:48:04.881440Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("New Tab")
+2026-10-17T19:48:04.881446Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Back")
+2026-10-17T19:48:04.881451Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Forward")
+2026-10-17T19:48:04.881456Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881462Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.881481Z DEBUG gorca_core::review::collect: review prune unavailable role=Panel states=StateSet(VISIBLE | ENABLED) name=Some("A reader at work. Photograph: Staff")
+2026-10-17T19:48:04.881485Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("Researchers")
+2026-10-17T19:48:04.881491Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("The latency problem")
+2026-10-17T19:48:04.881496Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.881500Z DEBUG gorca_core::review::collect: review prune unavailable role=Unknown states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.881503Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("official guidance test suite")
+2026-10-17T19:48:04.881507Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Advertisement")
+2026-10-17T19:48:04.881511Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("What changed")
+2026-10-17T19:48:04.881514Z DEBUG gorca_core::review::collect: review prune unavailable role=List states=StateSet(VISIBLE | ENABLED) name=Some("1. Browse mode keeps a mirror of the page in memory. 2. Navigation commands answer from the mirror without a round trip. 3. Live regions are throttled so a ticker cannot drown the speech.")
+2026-10-17T19:48:04.881520Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("Tables of results")
+2026-10-17T19:48:04.881523Z DEBUG gorca_core::review::collect: review prune unavailable role=Table states=StateSet(VISIBLE | ENABLED) name=Some("Median key-to-speech latency")
+2026-10-17T19:48:04.881526Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("What users say")
+2026-10-17T19:48:04.881530Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("consistency")
+2026-10-17T19:48:04.881534Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.881537Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Related articles")
+2026-10-17T19:48:04.881541Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Comments (3)")
+2026-10-17T19:48:04.881544Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Most read")
+2026-10-17T19:48:04.881548Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Footer")
+2026-10-17T19:48:04.884433Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4315196885242011573) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-17T19:48:04.885935Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4840755746800336521) } parent_children=Count(6) kids=6 truncated=false complete=true
+2026-10-17T19:48:04.886836Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4881574381297418977) } parent_children=Count(6) kids=6 truncated=false complete=true
+2026-10-17T19:48:04.886868Z DEBUG gorca_core::review::build: review build round misses=3 ok=3 nodes=48
+2026-10-17T19:48:04.886883Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886892Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886897Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886900Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886920Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886940Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886944Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886947Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886951Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886965Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886969Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886973Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886977Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886981Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886984Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886988Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886992Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886995Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.886998Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.887002Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.887005Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.887009Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.887012Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.887017Z DEBUG gorca_core::review::collect: review prune unavailable role=MenuBar states=StateSet(VISIBLE | ENABLED) name=Some("Application")
+2026-10-17T19:48:04.887029Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("New Tab")
+2026-10-17T19:48:04.887036Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Back")
+2026-10-17T19:48:04.887041Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Forward")
+2026-10-17T19:48:04.887045Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.887052Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.887079Z DEBUG gorca_core::review::collect: review prune unavailable role=Panel states=StateSet(VISIBLE | ENABLED) name=Some("A reader at work. Photograph: Staff")
+2026-10-17T19:48:04.887082Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("Researchers")
+2026-10-17T19:48:04.887086Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("The latency problem")
+2026-10-17T19:48:04.887089Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.887095Z DEBUG gorca_core::review::collect: review prune unavailable role=Unknown states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.887100Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("official guidance test suite")
+2026-10-17T19:48:04.887103Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Advertisement")
+2026-10-17T19:48:04.887106Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("What changed")
+2026-10-17T19:48:04.887110Z DEBUG gorca_core::review::collect: review prune unavailable role=List states=StateSet(VISIBLE | ENABLED) name=Some("1. Browse mode keeps a mirror of the page in memory. 2. Navigation commands answer from the mirror without a round trip. 3. Live regions are throttled so a ticker cannot drown the speech.")
+2026-10-17T19:48:04.887114Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("Tables of results")
+2026-10-17T19:48:04.887117Z DEBUG gorca_core::review::collect: review prune unavailable role=Table states=StateSet(VISIBLE | ENABLED) name=Some("Median key-to-speech latency")
+2026-10-17T19:48:04.887120Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("What users say")
+2026-10-17T19:48:04.887123Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("consistency")
+2026-10-17T19:48:04.887127Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.887130Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Related articles")
+2026-10-17T19:48:04.887133Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Comments (3)")
+2026-10-17T19:48:04.887137Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Most read")
+2026-10-17T19:48:04.887140Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Footer")
+2026-10-17T19:48:04.888321Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4841750804823678251) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.888365Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4840752448265451888) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.888392Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4841753003846934673) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.888440Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4840767841428246842) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.888465Z DEBUG gorca_core::review::build: review build round misses=10 ok=4 nodes=62
+2026-10-17T19:48:04.888471Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888476Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888480Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888484Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888492Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888501Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888505Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888508Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888512Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888516Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888520Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888523Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888526Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888529Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888533Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888536Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888540Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888543Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888546Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888550Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888553Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888556Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888559Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888563Z DEBUG gorca_core::review::collect: review prune unavailable role=MenuBar states=StateSet(VISIBLE | ENABLED) name=Some("Application")
+2026-10-17T19:48:04.888574Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("New Tab")
+2026-10-17T19:48:04.888580Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Back")
+2026-10-17T19:48:04.888583Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Forward")
+2026-10-17T19:48:04.888588Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888593Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.888616Z DEBUG gorca_core::review::collect: review prune unavailable role=Panel states=StateSet(VISIBLE | ENABLED) name=Some("A reader at work. Photograph: Staff")
+2026-10-17T19:48:04.888620Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("Researchers")
+2026-10-17T19:48:04.888623Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("The latency problem")
+2026-10-17T19:48:04.888627Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.888630Z DEBUG gorca_core::review::collect: review prune unavailable role=Unknown states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.888635Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("official guidance test suite")
+2026-10-17T19:48:04.888640Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Advertisement")
+2026-10-17T19:48:04.888643Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("What changed")
+2026-10-17T19:48:04.888647Z DEBUG gorca_core::review::collect: review prune unavailable role=List states=StateSet(VISIBLE | ENABLED) name=Some("1. Browse mode keeps a mirror of the page in memory. 2. Navigation commands answer from the mirror without a round trip. 3. Live regions are throttled so a ticker cannot drown the speech.")
+2026-10-17T19:48:04.888650Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("Tables of results")
+2026-10-17T19:48:04.888653Z DEBUG gorca_core::review::collect: review prune unavailable role=Table states=StateSet(VISIBLE | ENABLED) name=Some("Median key-to-speech latency")
+2026-10-17T19:48:04.888657Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("What users say")
+2026-10-17T19:48:04.888660Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("consistency")
+2026-10-17T19:48:04.888663Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.888666Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Related articles")
+2026-10-17T19:48:04.888669Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Comments (3)")
+2026-10-17T19:48:04.888674Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Most read")
+2026-10-17T19:48:04.888677Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Footer")
+2026-10-17T19:48:04.889737Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4315193586707126940) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.889764Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4841757401893447517) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.889803Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4841755202870191095) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.890053Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849338534568448562) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.890084Z DEBUG gorca_core::review::build: review build round misses=6 ok=4 nodes=66
+2026-10-17T19:48:04.890089Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890094Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890099Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890102Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890105Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890111Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890118Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890121Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890124Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890128Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890131Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890134Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890137Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890140Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890143Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890146Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890149Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890152Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890155Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890158Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890161Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890164Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890167Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890171Z DEBUG gorca_core::review::collect: review prune unavailable role=MenuBar states=StateSet(VISIBLE | ENABLED) name=Some("Application")
+2026-10-17T19:48:04.890180Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("New Tab")
+2026-10-17T19:48:04.890185Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Back")
+2026-10-17T19:48:04.890188Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Forward")
+2026-10-17T19:48:04.890192Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890198Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.890219Z DEBUG gorca_core::review::collect: review prune unavailable role=Panel states=StateSet(VISIBLE | ENABLED) name=Some("A reader at work. Photograph: Staff")
+2026-10-17T19:48:04.890223Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("Researchers")
+2026-10-17T19:48:04.890226Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("The latency problem")
+2026-10-17T19:48:04.890229Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.890232Z DEBUG gorca_core::review::collect: review prune unavailable role=Unknown states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.890238Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("official guidance test suite")
+2026-10-17T19:48:04.890242Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Advertisement")
+2026-10-17T19:48:04.890246Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("What changed")
+2026-10-17T19:48:04.890249Z DEBUG gorca_core::review::collect: review prune unavailable role=List states=StateSet(VISIBLE | ENABLED) name=Some("1. Browse mode keeps a mirror of the page in memory. 2. Navigation commands answer from the mirror without a round trip. 3. Live regions are throttled so a ticker cannot drown the speech.")
+2026-10-17T19:48:04.890252Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("Tables of results")
+2026-10-17T19:48:04.890255Z DEBUG gorca_core::review::collect: review prune unavailable role=Table states=StateSet(VISIBLE | ENABLED) name=Some("Median key-to-speech latency")
+2026-10-17T19:48:04.890258Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("What users say")
+2026-10-17T19:48:04.890263Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("consistency")
+2026-10-17T19:48:04.890266Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.890269Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Related articles")
+2026-10-17T19:48:04.890273Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Comments (3)")
+2026-10-17T19:48:04.890276Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Most read")
+2026-10-17T19:48:04.890279Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Footer")
+2026-10-17T19:48:04.891171Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4846534779917078187) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:48:04.891567Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849340733591704984) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.891588Z DEBUG gorca_core::review::build: review build round misses=2 ok=2 nodes=70
+2026-10-17T19:48:04.891594Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891598Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891602Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891605Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891609Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891612Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891615Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891619Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891622Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891628Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891635Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891638Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891641Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891644Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891647Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891651Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891654Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891657Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891660Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891663Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891666Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891669Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891672Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891676Z DEBUG gorca_core::review::collect: review prune unavailable role=MenuBar states=StateSet(VISIBLE | ENABLED) name=Some("Application")
+2026-10-17T19:48:04.891684Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("New Tab")
+2026-10-17T19:48:04.891689Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Back")
+2026-10-17T19:48:04.891692Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Forward")
+2026-10-17T19:48:04.891696Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891700Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.891720Z DEBUG gorca_core::review::collect: review prune unavailable role=ListItem states=StateSet(VISIBLE | ENABLED) name=Some("• Save for later")
+2026-10-17T19:48:04.891725Z DEBUG gorca_core::review::collect: review prune unavailable role=Panel states=StateSet(VISIBLE | ENABLED) name=Some("A reader at work. Photograph: Staff")
+2026-10-17T19:48:04.891729Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("Researchers")
+2026-10-17T19:48:04.891732Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("The latency problem")
+2026-10-17T19:48:04.891735Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.891738Z DEBUG gorca_core::review::collect: review prune unavailable role=Unknown states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.891741Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("official guidance test suite")
+2026-10-17T19:48:04.891745Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Advertisement")
+2026-10-17T19:48:04.891748Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("What changed")
+2026-10-17T19:48:04.891754Z DEBUG gorca_core::review::collect: review prune unavailable role=List states=StateSet(VISIBLE | ENABLED) name=Some("1. Browse mode keeps a mirror of the page in memory. 2. Navigation commands answer from the mirror without a round trip. 3. Live regions are throttled so a ticker cannot drown the speech.")
+2026-10-17T19:48:04.891759Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("Tables of results")
+2026-10-17T19:48:04.891762Z DEBUG gorca_core::review::collect: review prune unavailable role=Table states=StateSet(VISIBLE | ENABLED) name=Some("Median key-to-speech latency")
+2026-10-17T19:48:04.891765Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("What users say")
+2026-10-17T19:48:04.891768Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("consistency")
+2026-10-17T19:48:04.891771Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.891774Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Related articles")
+2026-10-17T19:48:04.891777Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Comments (3)")
+2026-10-17T19:48:04.891780Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Most read")
+2026-10-17T19:48:04.891783Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Footer")
+2026-10-17T19:48:04.892369Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4846538078451962820) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.892381Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4846535879428706398) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:48:04.892399Z DEBUG gorca_core::review::build: review build round misses=2 ok=2 nodes=73
+2026-10-17T19:48:04.892403Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892407Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892410Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892413Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892417Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892420Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892423Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892427Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892430Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892433Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892436Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892439Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892445Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892452Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892455Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892458Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892461Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892464Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892467Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892470Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892473Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892476Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892479Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892482Z DEBUG gorca_core::review::collect: review prune unavailable role=MenuBar states=StateSet(VISIBLE | ENABLED) name=Some("Application")
+2026-10-17T19:48:04.892491Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("New Tab")
+2026-10-17T19:48:04.892495Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Back")
+2026-10-17T19:48:04.892499Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Forward")
+2026-10-17T19:48:04.892502Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892506Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.892524Z DEBUG gorca_core::review::collect: review prune unavailable role=ListItem states=StateSet(VISIBLE | ENABLED) name=Some("• Save for later")
+2026-10-17T19:48:04.892527Z DEBUG gorca_core::review::collect: review prune unavailable role=Panel states=StateSet(VISIBLE | ENABLED) name=Some("A reader at work. Photograph: Staff")
+2026-10-17T19:48:04.892531Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("Researchers")
+2026-10-17T19:48:04.892534Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("The latency problem")
+2026-10-17T19:48:04.892537Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.892540Z DEBUG gorca_core::review::collect: review prune unavailable role=Unknown states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.892543Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("official guidance test suite")
+2026-10-17T19:48:04.892548Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Advertisement")
+2026-10-17T19:48:04.892551Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("What changed")
+2026-10-17T19:48:04.892554Z DEBUG gorca_core::review::collect: review prune unavailable role=List states=StateSet(VISIBLE | ENABLED) name=Some("1. Browse mode keeps a mirror of the page in memory. 2. Navigation commands answer from the mirror without a round trip. 3. Live regions are throttled so a ticker cannot drown the speech.")
+2026-10-17T19:48:04.892562Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("Tables of results")
+2026-10-17T19:48:04.892566Z DEBUG gorca_core::review::collect: review prune unavailable role=Table states=StateSet(VISIBLE | ENABLED) name=Some("Median key-to-speech latency")
+2026-10-17T19:48:04.892569Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("What users say")
+2026-10-17T19:48:04.892572Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("consistency")
+2026-10-17T19:48:04.892575Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.892578Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Related articles")
+2026-10-17T19:48:04.892581Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Comments (3)")
+2026-10-17T19:48:04.892584Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Most read")
+2026-10-17T19:48:04.892587Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Footer")
+2026-10-17T19:48:04.896029Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896047Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896056Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896059Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896062Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896064Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896069Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896072Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896076Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896080Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896083Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896087Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896091Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896095Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896098Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896102Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896105Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896108Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896112Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896115Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896123Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896131Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896134Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896139Z DEBUG gorca_core::review::collect: review prune unavailable role=MenuBar states=StateSet(VISIBLE | ENABLED) name=Some("Application")
+2026-10-17T19:48:04.896150Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("New Tab")
+2026-10-17T19:48:04.896155Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Back")
+2026-10-17T19:48:04.896159Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=Some("Forward")
+2026-10-17T19:48:04.896164Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896169Z DEBUG gorca_core::review::collect: review prune unavailable role=Menu states=StateSet(ENABLED) name=None
+2026-10-17T19:48:04.896196Z DEBUG gorca_core::review::collect: review prune unavailable role=ListItem states=StateSet(VISIBLE | ENABLED) name=Some("• Save for later")
+2026-10-17T19:48:04.896201Z DEBUG gorca_core::review::collect: review prune unavailable role=Panel states=StateSet(VISIBLE | ENABLED) name=Some("A reader at work. Photograph: Staff")
+2026-10-17T19:48:04.896205Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("Researchers")
+2026-10-17T19:48:04.896208Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("The latency problem")
+2026-10-17T19:48:04.896212Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.896215Z DEBUG gorca_core::review::collect: review prune unavailable role=Unknown states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.896218Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("official guidance test suite")
+2026-10-17T19:48:04.896224Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Advertisement")
+2026-10-17T19:48:04.896227Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("What changed")
+2026-10-17T19:48:04.896231Z DEBUG gorca_core::review::collect: review prune unavailable role=List states=StateSet(VISIBLE | ENABLED) name=Some("1. Browse mode keeps a mirror of the page in memory. 2. Navigation commands answer from the mirror without a round trip. 3. Live regions are throttled so a ticker cannot drown the speech.")
+2026-10-17T19:48:04.896234Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("Tables of results")
+2026-10-17T19:48:04.896237Z DEBUG gorca_core::review::collect: review prune unavailable role=Table states=StateSet(VISIBLE | ENABLED) name=Some("Median key-to-speech latency")
+2026-10-17T19:48:04.896240Z DEBUG gorca_core::review::collect: review prune unavailable role=Heading states=StateSet(VISIBLE | ENABLED) name=Some("What users say")
+2026-10-17T19:48:04.896243Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=Some("consistency")
+2026-10-17T19:48:04.896246Z DEBUG gorca_core::review::collect: review prune unavailable role=Paragraph states=StateSet(VISIBLE | ENABLED) name=None
+2026-10-17T19:48:04.896250Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Related articles")
+2026-10-17T19:48:04.896256Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Comments (3)")
+2026-10-17T19:48:04.896261Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Most read")
+2026-10-17T19:48:04.896264Z DEBUG gorca_core::review::collect: review prune unavailable role=Landmark states=StateSet(VISIBLE | ENABLED) name=Some("Footer")
+2026-10-17T19:48:04.896342Z DEBUG gorca_core::review::build: review model built lines=6 zones=22 completeness=Complete still_missing=[]
+2026-10-17T19:48:28.950919Z DEBUG gorca_core::review::build: review model built lines=1 zones=1 completeness=GeometryFallback still_missing=[]

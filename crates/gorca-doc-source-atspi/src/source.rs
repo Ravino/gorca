@@ -79,7 +79,22 @@ pub struct SourceConfig {
     pub dormant_marks: usize,
 }
 
-/// Engine quirks of the tree the source reads (Blink today).
+/// The hypertext range Gecko takes for `sp` (Firefox 153 ESR, measured): an end offset that names
+/// an embedded hypertext child includes it, so a range that ends on such a child names the child
+/// (`end - 1`), and a range that ends right before one leaves out its white space (`end - 1`) or
+/// takes the child along. An image is not hypertext: ending after it needs no adjustment.
+pub(crate) fn gecko_range(sp: &gorca_model::SelSpan<SrcNodeId>) -> std::ops::Range<u32> {
+    let end = sp.range.end;
+    let end = if (sp.end_on_child || (sp.child_follows && sp.trim_ws)) && end > sp.range.start {
+        end - 1
+    } else {
+        end
+    };
+    sp.range.start..end
+}
+
+/// Engine quirks of the tree the source reads (Blink today). A quirk table: one flag per quirk.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub struct EngineQuirks {
     /// Chromium reorders keyed lists without an event (`SourceCaps::silent_reorders`).
@@ -92,6 +107,9 @@ pub struct EngineQuirks {
     /// is scrolled into view. The source scrolls each such frame into view once, then back
     /// (`docs/reports/m9-impl.md`, iframes).
     pub wake_offscreen_frames: bool,
+    /// Blink keeps a single selection range and reads a selection end offset as exclusive
+    /// (Gecko adds ranges and ends after an embedded child that the offset names).
+    pub selection_single_exclusive: bool,
 }
 
 impl EngineQuirks {
@@ -101,6 +119,7 @@ impl EngineQuirks {
             silent_reorders: on,
             static_leaves_repeat_text: on,
             wake_offscreen_frames: on,
+            selection_single_exclusive: on,
         }
     }
 }
@@ -1515,17 +1534,215 @@ impl AtspiDocSource {
                     .call(lane, deadline, &path, TEXT, "SetCaretOffset", &(o,))
                     .await
             }
-            DocAction::SetSelection(r) => {
-                let (a, b) = (
-                    i32::try_from(r.start).unwrap_or(0),
-                    i32::try_from(r.end).unwrap_or(0),
-                );
-                self.app
-                    .call(lane, deadline, &path, TEXT, "SetSelection", &(0i32, a, b))
-                    .await
+            DocAction::SetSourceSelection(spec) => {
+                return self.select(live, spec, deadline).await;
             }
+            DocAction::ClearSelection => {
+                return self.clear_selection(&path, deadline).await;
+            }
+            DocAction::SetSelection(_) => return Err(SourceError::NotSupported),
         };
         r.map(|_| ()).map_err(|e| map_dbus(&e))
+    }
+
+    fn path_of(live: &Live, node: SrcNodeId) -> Option<String> {
+        live.ident.path_of(node).and_then(|p| live.paths.path_of(p))
+    }
+
+    /// `Text.GetNSelections` and `RemoveSelection` of every range but the first: the browser
+    /// keeps its ranges for the whole document, so stale extras of an earlier mirror go.
+    async fn drop_extra_ranges(&self, path: &str, deadline: Deadline) -> Result<(), SourceError> {
+        self.remove_ranges(path, 1, deadline).await
+    }
+
+    /// `RemoveSelection` of every range from the last down to index `keep` (0 removes all).
+    async fn remove_ranges(
+        &self,
+        path: &str,
+        keep: u32,
+        deadline: Deadline,
+    ) -> Result<(), SourceError> {
+        let lane = self.app.next_lane();
+        let m = self
+            .app
+            .call(lane, deadline, path, TEXT, "GetNSelections", &())
+            .await
+            .map_err(|e| map_dbus(&e))?;
+        let n = wire::parse_u32(m.body().data().bytes())
+            .unwrap_or(0)
+            .min(64);
+        for i in (keep..n).rev() {
+            let i = i32::try_from(i).unwrap_or(1);
+            self.app
+                .call(
+                    self.app.next_lane(),
+                    deadline,
+                    path,
+                    TEXT,
+                    "RemoveSelection",
+                    &(i,),
+                )
+                .await
+                .map_err(|e| map_dbus(&e))?;
+        }
+        Ok(())
+    }
+
+    /// One `Text.SetSelection(0, ..)` or `AddSelection`; the reply is the browser's yes or no.
+    async fn range_call(
+        &self,
+        path: &str,
+        first: bool,
+        range: &std::ops::Range<u32>,
+        deadline: Deadline,
+    ) -> Result<bool, SourceError> {
+        let (a, b) = (
+            i32::try_from(range.start).unwrap_or(0),
+            i32::try_from(range.end).unwrap_or(0),
+        );
+        let lane = self.app.next_lane();
+        let m = if first {
+            self.app
+                .call(lane, deadline, path, TEXT, "SetSelection", &(0i32, a, b))
+                .await
+        } else {
+            self.app
+                .call(lane, deadline, path, TEXT, "AddSelection", &(a, b))
+                .await
+        }
+        .map_err(|e| map_dbus(&e))?;
+        Ok(wire::parse_u32(m.body().data().bytes()).unwrap_or(0) != 0)
+    }
+
+    /// Mirror a page selection.
+    ///
+    /// Blink takes the exact interval in one call (`Document.SetTextSelections`, ATK 2.52+,
+    /// offsets in scalars) and keeps a single range with exclusive ends, so when the call
+    /// answers false the rounded-out single range is the fallback. Gecko adds ranges, so it gets
+    /// the exact legs (UTF-16 offsets, ends adapted by `gecko_range`), and the single range when
+    /// it refuses a second. A plan that had to fall back, or that Gecko cannot take exactly, ends
+    /// `Approximate`. Never leaves a half set.
+    async fn select(
+        &self,
+        live: &Live,
+        spec: &gorca_model::SelectionSpec<SrcNodeId>,
+        deadline: Deadline,
+    ) -> Result<(), SourceError> {
+        let blink = self.config.quirks.selection_single_exclusive;
+        let root = Self::path_of(live, spec.root);
+        if let Some(root) = root.as_deref() {
+            self.drop_extra_ranges(root, deadline).await?;
+        }
+        let mut approximate = false;
+        if blink {
+            if let (Some(root), Some(start), Some(end)) = (
+                root.as_deref(),
+                Self::path_of(live, spec.doc_range.start.0),
+                Self::path_of(live, spec.doc_range.end.0),
+            ) && self
+                .set_text_selections(
+                    root,
+                    (&start, spec.doc_range.start.1),
+                    (&end, spec.doc_range.end.1),
+                    deadline,
+                )
+                .await?
+            {
+                return Ok(());
+            }
+            approximate = true;
+        } else if let Some(root) = root.as_deref()
+            && !spec.spans.is_empty()
+        {
+            let mut all = true;
+            for (i, sp) in spec.spans.iter().enumerate() {
+                let Some(p) = Self::path_of(live, sp.node) else {
+                    all = false;
+                    break;
+                };
+                let range = gecko_range(sp);
+                if !self.range_call(&p, i == 0, &range, deadline).await? {
+                    all = false;
+                    break;
+                }
+            }
+            if all {
+                return if spec.gecko_lossy {
+                    Err(SourceError::Approximate)
+                } else {
+                    Ok(())
+                };
+            }
+            self.drop_extra_ranges(root, deadline).await?;
+            approximate = true;
+        }
+        let sp = &spec.snap;
+        let path = Self::path_of(live, sp.node).ok_or(SourceError::NotSupported)?;
+        let range = if blink {
+            sp.range_cp.clone()
+        } else {
+            gecko_range(sp)
+        };
+        if self.range_call(&path, true, &range, deadline).await? {
+            if approximate || spec.gecko_lossy {
+                Err(SourceError::Approximate)
+            } else {
+                Ok(())
+            }
+        } else {
+            Err(SourceError::Refused)
+        }
+    }
+
+    /// `Document.SetTextSelections` with one range from `start` to `end` (object path and offset
+    /// in scalars each). The bus name inside an object reference is ignored by Chromium
+    /// (measured), the path is what counts.
+    async fn set_text_selections(
+        &self,
+        document: &str,
+        start: (&str, u32),
+        end: (&str, u32),
+        deadline: Deadline,
+    ) -> Result<bool, SourceError> {
+        use zbus::zvariant::ObjectPath;
+        let name = self.app.bus_name();
+        let (Ok(a), Ok(b)) = (ObjectPath::try_from(start.0), ObjectPath::try_from(end.0)) else {
+            return Ok(false);
+        };
+        let range = vec![(
+            (name.clone(), a),
+            i32::try_from(start.1).unwrap_or(0),
+            (name, b),
+            i32::try_from(end.1).unwrap_or(0),
+            true,
+        )];
+        let m = self
+            .app
+            .call(
+                self.app.next_lane(),
+                deadline,
+                document,
+                "org.a11y.atspi.Document",
+                "SetTextSelections",
+                &(range,),
+            )
+            .await;
+        match m {
+            Ok(m) => Ok(wire::parse_u32(m.body().data().bytes()).unwrap_or(0) != 0),
+            // An engine without the method (Gecko, ATK older than 2.52) answers an error: not a
+            // failure of the request, the caller falls back.
+            Err(e) => {
+                tracing::debug!(error = %e, "SetTextSelections unavailable; using one range");
+                Ok(false)
+            }
+        }
+    }
+
+    /// Remove every range of the document. Never `SetSelection(0, 0, 0)`: Firefox resolves
+    /// offset 0 to the first text leaf and focuses its container when that is focusable (a skip
+    /// link), `RemoveSelection` only edits the DOM selection.
+    async fn clear_selection(&self, path: &str, deadline: Deadline) -> Result<(), SourceError> {
+        self.remove_ranges(path, 0, deadline).await
     }
 
     /// IR-4: a heuristic join is confirmed when the object still exists with the same role.
@@ -1551,5 +1768,43 @@ impl AtspiDocSource {
             Ok(m) => wire::parse_u32(m.body().data().bytes()).ok() == Some(old),
             Err(_) => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+    use gorca_model::SelSpan;
+
+    fn sp(
+        r: std::ops::Range<u32>,
+        end_on_child: bool,
+        child_follows: bool,
+        trim_ws: bool,
+    ) -> SelSpan<SrcNodeId> {
+        SelSpan {
+            node: SrcNodeId(1),
+            range_cp: r.clone(),
+            end_on_object: false,
+            range: r,
+            end_on_child,
+            child_follows,
+            trim_ws,
+        }
+    }
+
+    #[test]
+    fn gecko_names_the_last_child_and_leaves_out_a_space_before_one() {
+        // Measured on Firefox 153 ESR: an end offset that is a child's character includes the child.
+        assert_eq!(gecko_range(&sp(2..4, true, false, false)), 2..3);
+        assert_eq!(gecko_range(&sp(1..2, true, false, false)), 1..1);
+        assert_eq!(gecko_range(&sp(0..5, false, true, true)), 0..4);
+        // A letter before the child stays, and the child comes along (nothing else is possible).
+        assert_eq!(gecko_range(&sp(0..5, false, true, false)), 0..5);
+        // An image is not hypertext: ending after it needs no adjustment.
+        let mut img = sp(0..6, false, false, false);
+        img.end_on_object = true;
+        assert_eq!(gecko_range(&img), 0..6);
+        assert_eq!(gecko_range(&sp(6..24, false, false, false)), 6..24);
     }
 }

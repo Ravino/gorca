@@ -2146,7 +2146,10 @@ fn delete(
                 text: d,
                 at: cx.now,
             });
-            if t.expect.newest_age_ms(cx.now_ms).is_some_and(|age| age <= ABSORB_MS) {
+            if t.expect
+                .newest_age_ms(cx.now_ms)
+                .is_some_and(|age| age <= ABSORB_MS)
+            {
                 t.replaced = Some(cx.now);
             }
         }

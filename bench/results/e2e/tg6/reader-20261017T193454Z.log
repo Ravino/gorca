@@ -1,0 +1,25 @@
+2026-10-17T19:35:06.992608Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T19:35:06.992690Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T19:35:07.021711Z  INFO gorca_phase: phase="warm" wall_ms=28.99493 waited_ms=28.112493999999998 blocked_ms=1.72175 slept_ms=26.339379 rounds=2 probes=23 sampled_nodes=4 tagged_nodes=4 ready=true
+2026-10-17T19:35:07.022064Z  INFO gorca_phase: phase="locate" wall_ms=0.288038
+2026-10-17T19:35:07.022087Z  INFO gorca_phase: phase="create" wall_ms=0.002923
+2026-10-17T19:35:07.026282Z  INFO gorca_phase: phase="fetch" total_ms=4.124204000000001 warm_ms=0.0 frontier_ms=0.046666 get_tree_ms=0.77916 roles_ms=1.502056 states_ms=0.692057 text_ms=0.995152 assemble_ms=0.015562000000000001 heaviest_get_tree_ms=0.215 calls=135 tree_bytes=13247 nodes=52
+2026-10-17T19:35:07.026457Z  INFO gorca_phase: phase="translate" wall_ms=0.08739899999999999 nodes=81
+2026-10-17T19:35:08.365644Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T19:35:08.366354Z  INFO gorca_phase: phase="locate" wall_ms=0.61682
+2026-10-17T19:35:09.870725Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:35:11.369788Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:35:12.879065Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:35:14.379782Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:35:15.880154Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:35:17.388353Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:35:18.894989Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:35:20.402619Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:35:21.909932Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:35:23.418778Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:35:24.919438Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:35:26.428734Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:35:26.428876Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:35:27.930771Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:35:29.428111Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:35:29.428234Z  INFO gorca_phase: phase="web_focus" hit=true

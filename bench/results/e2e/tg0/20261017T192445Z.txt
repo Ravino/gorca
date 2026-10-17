@@ -1,0 +1,45 @@
+# e2e-m8 tg0
+# utc=2026-10-17T19:24:45Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=11.40 11.03 11.18 2/2262 3737885
+# git_rev=b2723b99
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=tg0
+# reader=daemon:<repo>/.claude/worktrees/agent-a006f03fcecc9742b/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# quick=false
+# loadavg_before=10.58 10.86 11.13 2/2277 3736927
+# loadavg_end=11.40 11.03 11.18 3/2262 3737882
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-QN QN.hl.2 P0 FAIL: heard "heading level 2, Heading two second" 
+# note1=M8-QN QN.hl.2b P0 FAIL: heard "no next heading level 2" 
+# note2=M8-QN QN.hl.3 P1 FAIL: heard "no next heading level 3" 
+# note3=M8-QN QN.hl.4 P1 FAIL: heard "no next heading level 4" 
+# note4=M8-QN QN.hl.5 P1 FAIL: heard "no next heading level 5" 
+# note5=M8-QN QN.hl.6 P1 FAIL: heard "no next heading level 6" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-QN.key_ms.n             daemon/voicego            4            4            4  1                  info   [samples]
+M8-QN.key_ms.p50           daemon/voicego        0.379        0.379        0.379  1                  info   [ms]
+M8-QN.key_ms.p95           daemon/voicego        0.438        0.438        0.438  1                  info   [ms]
+M8-QN.key_ms.p99           daemon/voicego        0.438        0.438        0.438  1 <=            5  PASS   [ms]
+M8-QN.key_ms.max           daemon/voicego        0.438        0.438        0.438  1                  info   [ms]
+M8-QN.fail                 daemon/voicego            6            6            6  1 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-QN.gap                  daemon/voicego            0            0            0  1                  info  core ok, NVDA extras missing [steps]
+M8-QN.p0_not_pass          daemon/voicego            2            2            2  1                  info   [steps]
+M8-QN.pass                 daemon/voicego           10           10           10  1                  info   [steps]
+M8-QN.steps                daemon/voicego           16           16           16  1                  info   [steps]
+M8-QN.xfail                daemon/voicego            0            0            0  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-QN.xpass                daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]

@@ -123,7 +123,60 @@ pub enum DocAction {
     Click,
     ScrollIntoView,
     SetCaret(u32),
-    SetSelection(Range<u32>),
+    /// Select these hypertext ranges in the page (core side: ids are [`DocNodeId`]; the doc actor
+    /// rewrites it to [`DocAction::SetSourceSelection`] before the source sees it).
+    SetSelection(SelectionSpec<DocNodeId>),
+    /// The same with the source's own node ids.
+    SetSourceSelection(SelectionSpec<SrcNodeId>),
+    /// Collapse the page selection set earlier (and drop extra ranges); `node` is a container
+    /// that held it.
+    ClearSelection,
+}
+
+/// One hypertext range of a page selection: `range` in UTF-16 units (Gecko's unit) and
+/// `range_cp` in Unicode scalars (Blink's), `end` exclusive and exact. The flags say what the
+/// end touches, because engines read an end offset that names an embedded child differently
+/// (Firefox ends the range after a hypertext child and before an object, Blink excludes both):
+/// the source adapts, the mirror stays engine-neutral.
+#[allow(clippy::struct_excessive_bools)] // four independent facts about one range end
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SelSpan<N> {
+    pub node: N,
+    pub range: Range<u32>,
+    pub range_cp: Range<u32>,
+    /// The last selected character is an embedded hypertext child (a link, a list item).
+    pub end_on_child: bool,
+    /// The last selected character is an embedded object that has no text (an image).
+    pub end_on_object: bool,
+    /// The character at `end` is an embedded hypertext child.
+    pub child_follows: bool,
+    /// The last selected character is white space (leaving it out names the same words).
+    pub trim_ws: bool,
+}
+
+/// The exact atom interval as two points, for engines that take one range across objects
+/// (`Document.SetTextSelections`): `(object, offset in scalars)` for the start and the end.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DocRange<N> {
+    pub start: (N, u32),
+    pub end: (N, u32),
+}
+
+/// A page selection as hypertext ranges: `spans` are exact (one range each, in document order),
+/// `snap` is the single-range alternative for engines that keep one range.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SelectionSpec<N> {
+    /// The document node: the browser keeps its ranges per document, and only the document's
+    /// hypertext counts and removes all of them.
+    pub root: N,
+    pub spans: Vec<SelSpan<N>>,
+    pub snap: SelSpan<N>,
+    /// The exact interval as two points (see [`DocRange`]).
+    pub doc_range: DocRange<N>,
+    /// Gecko cannot select this exactly (a leg ends inside a hypertext child it continues
+    /// into, or several ranges are joined with no separator): the copy may differ from what
+    /// was heard. The source reports `Approximate` when it applied such a plan.
+    pub gecko_lossy: bool,
 }
 
 /// Fallback caret bookmark when a node no longer joins (IR-7): `(ordinal, context hash)`,

@@ -54,6 +54,24 @@ pub struct FocusBackoff {
 /// label child usually arrives within a few frames.
 pub const NAME_RETRY_DELAY: Duration = Duration::from_millis(120);
 
+/// How long after a focus a change of the focused node's name is still spoken: a page that sets
+/// its label from a script after the focus event (a framework state update) is heard once the name
+/// is there; later than that the focus is long over and a changing name is not news.
+pub const NAME_FOLLOW_WINDOW: Duration = Duration::from_millis(2000);
+
+/// A name that is nothing to say: empty, blank, or made only of private-use glyphs (an icon font
+/// draws its symbol with a code point that speaks as nothing).
+pub(crate) fn name_is_blank(name: Option<&str>) -> bool {
+    name.is_none_or(|n| {
+        n.chars().all(|c| {
+            c.is_whitespace()
+                || c.is_control()
+                || gorca_model::text::is_object_marker(c)
+                || gorca_model::text::is_icon_glyph(c)
+        })
+    })
+}
+
 /// A presented node without a name, waiting for its one late re-read.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct NameRetry {
@@ -65,7 +83,7 @@ pub struct NameRetry {
 
 /// Roles that are only meaningful with a name: speaking one bare ("button") is the symptom of a
 /// late label.
-fn needs_name(role: Role) -> bool {
+pub(crate) fn needs_name(role: Role) -> bool {
     matches!(
         role,
         Role::Button
@@ -568,7 +586,7 @@ impl Reader {
     ) {
         // M8b: a web node is spoken with what the document mirror knows about it (ARIA role,
         // current, haspopup, description, error text), which a focus fetch does not carry.
-        let overlaid = self.web_overlay(snap);
+        let overlaid = self.spoken_snapshot(snap);
         let snap = &overlaid;
         tracing::debug!(node = ?snap.key, states = ?snap.states, ?source, from_cache, "focus presented");
         let (next, effect) = self.focus.step(FocusMsg::Presented { node: snap.key });
@@ -775,10 +793,22 @@ impl Reader {
         }
     }
 
+    /// The snapshot as it is spoken: with what the document mirror adds (M8b, and the name of a
+    /// control the engine left nameless), and a name that is only an icon glyph counted as none.
+    fn spoken_snapshot(&self, snap: &Arc<NodeSnapshot>) -> Arc<NodeSnapshot> {
+        let overlaid = self.web_overlay(snap);
+        if overlaid.name.is_some() && name_is_blank(overlaid.name.as_deref()) {
+            let mut c = (*overlaid).clone();
+            c.name = None;
+            return Arc::new(c);
+        }
+        overlaid
+    }
+
     /// A node presented without a name gets one late re-read (once per node, only for roles
     /// that need a name and only if the speech was not silenced by policy).
     fn name_retry_arm(&mut self, snap: &Arc<NodeSnapshot>, epoch: Epoch, fx: &mut ReaderEffects) {
-        let nameless = snap.name.as_deref().is_none_or(|n| n.trim().is_empty());
+        let nameless = name_is_blank(snap.name.as_deref());
         if !nameless || !needs_name(snap.role) || self.name_retried == Some(snap.key) {
             return;
         }
@@ -826,10 +856,10 @@ impl Reader {
         if new.states.contains(StateSet::DEFUNCT) {
             return;
         }
-        let Some(name) = new.name.as_deref().filter(|n| !n.trim().is_empty()) else {
+        let Some(name) = new.name.as_deref().filter(|n| !name_is_blank(Some(n))) else {
             return;
         };
-        if p.snap.name.as_deref().is_some_and(|n| !n.trim().is_empty()) {
+        if !name_is_blank(p.snap.name.as_deref()) {
             return;
         }
         let ch = Changed {
@@ -945,7 +975,7 @@ impl Reader {
                 self.apply_focus(FocusMsg::NodeRemoved(r.node), fx);
             }
             Ok(new) => {
-                let new = &self.web_overlay(new);
+                let new = &self.spoken_snapshot(new);
                 let ch = changed(&p.snap, new, skip_states(p.ctx));
                 if ch.is_empty() {
                     self.counters.revalidations_agreed += 1;
@@ -1024,6 +1054,22 @@ impl Reader {
         if p.node != node {
             return;
         }
+        // A name-only change is news only right after the focus (see `NAME_FOLLOW_WINDOW`).
+        // Outside web documents only a node spoken without a name follows: a title-like name
+        // that changes after commands (a terminal) must not be echoed.
+        if !mask.intersects(PropMask::STATES | PropMask::VALUE) {
+            let soon = self.last_focus.is_some_and(|(n, at)| {
+                n == node && self.now.saturating_duration_since(at) < NAME_FOLLOW_WINDOW
+            });
+            let eligible = name_is_blank(p.snap.name.as_deref())
+                || self
+                    .web
+                    .as_ref()
+                    .is_some_and(|b| b.web_apps.contains(&node.app));
+            if !soon || !eligible {
+                return;
+            }
+        }
         fx.push(ReaderEffect::Demand {
             node,
             why: DemandWhy::StateChange,
@@ -1069,7 +1115,7 @@ impl Reader {
         {
             f.publish(r.node.app);
         }
-        let new = &self.web_overlay(new);
+        let new = &self.spoken_snapshot(new);
         let ch = changed(&p.snap, new, skip_states(p.ctx));
         if ch.is_empty() {
             return;

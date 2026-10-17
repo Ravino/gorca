@@ -389,11 +389,18 @@ impl Session {
     /// A history key that changed nothing on the screen: read the line it left, so that a
     /// recall is never silent.
     fn flush_vertical(&mut self, now: Ms, out: &mut Vec<TermAction>) {
-        if !self.vertical_open
-            || !matches!(self.phase, Phase::Idle)
-            || self.expect_valid(now) != Expect::Vertical
-            || now < self.expect_at.saturating_add(VERTICAL_MS)
-        {
+        if !self.vertical_open || !matches!(self.phase, Phase::Idle) {
+            return;
+        }
+        // The expectation ran out while the screen was being read (a slow or failing read keeps
+        // the phase busy past `EXPECT_MS`): the request is stale. Dropping it also drops its
+        // deadline, which would otherwise stay due and re-arm the timer for ever.
+        if self.expect_valid(now) != Expect::Vertical {
+            self.vertical_open = false;
+            self.vertical_keys = 0;
+            return;
+        }
+        if now < self.expect_at.saturating_add(VERTICAL_MS) {
             return;
         }
         self.vertical_open = false;

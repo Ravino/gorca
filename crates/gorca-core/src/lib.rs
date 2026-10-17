@@ -67,7 +67,7 @@ pub use commands::{
 };
 pub use directory::{MirrorDirectory, Owner};
 pub use doc_actor::{
-    DocActorSpec, DocCounters, DocCtl, DocDirectory, DocHandle, DocNotice, WebJoin,
+    DocActorSpec, DocCounters, DocCtl, DocDirectory, DocHandle, DocNotice, SelOutcome, WebJoin,
     prepare as prepare_doc_actor,
 };
 pub use doc_registry::{BUILD_HOLD, HubCfg, HubMsg, HubTx, WarmState, hub_channel, run_hub};

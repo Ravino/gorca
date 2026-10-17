@@ -1579,6 +1579,91 @@ mod tests {
         assert_eq!(published.get(), Some(app()), "earned by the state re-read");
     }
 
+    /// A page that sets its label after the focus event (a framework state update): the name
+    /// change of the focused node is read and spoken when it comes soon after the focus, and
+    /// ignored when it comes long after (a constantly changing label is not news).
+    #[test]
+    fn a_name_change_soon_after_the_focus_is_spoken_and_a_late_one_is_not() {
+        let mut f = fixture();
+        let now = Instant::now();
+        let fx = focus_on(&mut f, 1, now);
+        assert_eq!(effects_of(&fx), ["fetch-focus", "demand"]);
+        // An icon glyph is not a name.
+        f.reader.handle(
+            reply(&f, 1, FetchKind::Focus, snap(1, Role::Button, "\u{e900}")),
+            now,
+        );
+        let soon = now + Duration::from_millis(400);
+        let fx = f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::StateChanged {
+                node: key(1),
+                mask: PropMask::NAME,
+            }),
+            soon,
+        );
+        assert!(
+            effects_of(&fx).contains(&"fetch-s1"),
+            "{:?}",
+            effects_of(&fx)
+        );
+        let fx = f.reader.handle(
+            reply(&f, 1, FetchKind::StateChange, snap(1, Role::Button, "Play")),
+            soon,
+        );
+        assert_eq!(spoken(&fx), ["Play"]);
+        let late = now + Duration::from_millis(5000);
+        let fx = f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::StateChanged {
+                node: key(1),
+                mask: PropMask::NAME,
+            }),
+            late,
+        );
+        assert!(
+            !effects_of(&fx).contains(&"fetch-s1"),
+            "{:?}",
+            effects_of(&fx)
+        );
+    }
+
+    /// A node spoken with a name outside a web document (a terminal whose name follows its title)
+    /// is not followed when the name changes.
+    #[test]
+    fn a_named_native_node_does_not_follow_name_changes() {
+        let mut f = fixture();
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        f.reader.handle(
+            reply(&f, 1, FetchKind::Focus, snap(1, Role::Button, "Terminal")),
+            now,
+        );
+        let fx = f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::StateChanged {
+                node: key(1),
+                mask: PropMask::NAME,
+            }),
+            now + Duration::from_millis(300),
+        );
+        assert!(
+            !effects_of(&fx).contains(&"fetch-s1"),
+            "{:?}",
+            effects_of(&fx)
+        );
+    }
+
+    /// A focus whose only name is an icon glyph is spoken as the bare role, not as the glyph.
+    #[test]
+    fn an_icon_glyph_name_is_not_spoken() {
+        let mut f = fixture();
+        let now = Instant::now();
+        focus_on(&mut f, 1, now);
+        let fx = f.reader.handle(
+            reply(&f, 1, FetchKind::Focus, snap(1, Role::Button, "\u{e900}")),
+            now,
+        );
+        assert_eq!(spoken(&fx), ["button"]);
+    }
+
     /// RR-2: a state re-read that does not show FOCUSED earns nothing.
     #[test]
     fn an_unfocused_state_reply_earns_nothing() {

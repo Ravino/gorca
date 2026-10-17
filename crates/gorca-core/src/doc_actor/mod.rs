@@ -95,6 +95,25 @@ pub enum DocCtl {
     Rebuild,
     /// A user-driven pull on a node: focus it, click it, scroll it into view (IR-5).
     Act { node: DocNodeId, act: DocAction },
+    /// A page-selection action whose result comes back as [`DocNotice::SelectionDone`] with the
+    /// same `req`: never fire-and-forget, never dropped without a reply.
+    Select {
+        req: u32,
+        node: DocNodeId,
+        act: DocAction,
+    },
+}
+
+/// How a page-selection action ended.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum SelOutcome {
+    Done,
+    /// Applied, but the page selection is not exactly the virtual one (the copy may differ).
+    Approximate,
+    /// The source cannot select in this document (no text path, no selection support).
+    NotSupported,
+    /// Refused, timed out, node gone or the action queue was full.
+    Failed,
 }
 
 /// What a document tells the Reader (DA-P2). Background lane semantics: never blocks the actor.
@@ -121,6 +140,12 @@ pub enum DocNotice {
     /// A live region changed (ADR-0003 13): already classified, deduplicated and rate-limited by
     /// the document, so the Reader only decides whether this document is the one in front.
     Live { doc: DocId, msg: LiveMsg },
+    /// The result of a [`DocCtl::Select`].
+    SelectionDone {
+        doc: DocId,
+        req: u32,
+        outcome: SelOutcome,
+    },
 }
 
 /// Everything the Reader needs to read and steer one document.
@@ -475,6 +500,7 @@ async fn run(
     let mut src_task: JoinSet<Result<(), SourceError>> = JoinSet::new();
     src_task.spawn(source.attach(ctx));
     let mut actions: JoinSet<()> = JoinSet::new();
+    let mut sel_chain: Option<oneshot::Receiver<()>> = None;
     let mut a = Actor {
         spec_doc: doc,
         app,
@@ -540,7 +566,26 @@ async fn run(
                     DocCtl::Rebuild => { let _ = a.requests.try_send(DocRequest::Rebuild); }
                     DocCtl::Act { node, act } => {
                         if actions.len() < MAX_ACTIONS {
-                            spawn_action(&mut actions, &a, node, act);
+                            spawn_action(&mut actions, &a, node, act, None);
+                        } else if matches!(act, DocAction::Focus) {
+                            // A dropped focus request must not leave the grabbed Tab silent.
+                            let _ = a.notices.try_send(DocNotice::FocusFailed { doc: a.spec_doc });
+                        }
+                    }
+                    DocCtl::Select { req, node, act } => {
+                        if actions.len() < MAX_ACTIONS {
+                            // One selection at a time, in request order (ADR-0021 I-3): this
+                            // one waits for the previous to finish, so a clear can never
+                            // overtake the set it follows.
+                            let (done, next) = oneshot::channel();
+                            let prev = sel_chain.replace(next);
+                            spawn_action(&mut actions, &a, node, act, Some((req, prev, done)));
+                        } else {
+                            let _ = a.notices.try_send(DocNotice::SelectionDone {
+                                doc: a.spec_doc,
+                                req,
+                                outcome: SelOutcome::Failed,
+                            });
                         }
                     }
                 }
@@ -582,16 +627,90 @@ fn flush_all(a: &mut Actor, deltas: &mut DeltaReceiver) -> bool {
 }
 
 /// IR-5: the action goes to the source that declared it, by the source's own node id.
-fn spawn_action(set: &mut JoinSet<()>, a: &Actor, node: DocNodeId, act: DocAction) {
-    let src = a
-        .read
-        .with(|d| d.node(node).and_then(|v| v.meta).and_then(|m| m.src));
-    let Some(src) = src else { return };
+fn spawn_action(
+    set: &mut JoinSet<()>,
+    a: &Actor,
+    node: DocNodeId,
+    act: DocAction,
+    select: Option<(u32, Option<oneshot::Receiver<()>>, oneshot::Sender<()>)>,
+) {
+    let select_req = select.as_ref().map(|(r, _, _)| *r);
+    // A selection request always gets an answer, also when it cannot even be sent.
+    let fail = |a: &Actor| {
+        if let Some(req) = select_req {
+            let _ = a.notices.try_send(DocNotice::SelectionDone {
+                doc: a.spec_doc,
+                req,
+                outcome: SelOutcome::Failed,
+            });
+        }
+    };
+    let src_of = |d: &gorca_doc::web::WebDoc, n: DocNodeId| {
+        d.node(n).and_then(|v| v.meta).and_then(|m| m.src)
+    };
+    let src = a.read.with(|d| src_of(d, node));
+    let Some(src) = src else {
+        fail(a);
+        return;
+    };
+    // A page selection names core nodes; the source knows its own ids. A span whose node has no
+    // source id (a synthetic container) cannot be addressed, so the whole request is dropped.
+    let act = match act {
+        DocAction::SetSelection(spec) => {
+            let mapped = a.read.with(|d| {
+                let map = |s: &gorca_model::SelSpan<DocNodeId>| {
+                    src_of(d, s.node).map(|node| gorca_model::SelSpan {
+                        node,
+                        range: s.range.clone(),
+                        range_cp: s.range_cp.clone(),
+                        end_on_child: s.end_on_child,
+                        end_on_object: s.end_on_object,
+                        child_follows: s.child_follows,
+                        trim_ws: s.trim_ws,
+                    })
+                };
+                let spans = spec.spans.iter().map(map).collect::<Option<Vec<_>>>()?;
+                let snap = map(&spec.snap)?;
+                let root = src_of(d, spec.root)?;
+                let doc_range = gorca_model::DocRange {
+                    start: (src_of(d, spec.doc_range.start.0)?, spec.doc_range.start.1),
+                    end: (src_of(d, spec.doc_range.end.0)?, spec.doc_range.end.1),
+                };
+                Some(gorca_model::SelectionSpec {
+                    root,
+                    spans,
+                    snap,
+                    doc_range,
+                    gecko_lossy: spec.gecko_lossy,
+                })
+            });
+            let Some(mapped) = mapped else {
+                fail(a);
+                return;
+            };
+            DocAction::SetSourceSelection(mapped)
+        }
+        other @ (DocAction::Focus
+        | DocAction::Click
+        | DocAction::ScrollIntoView
+        | DocAction::SetCaret(_)
+        | DocAction::SetSourceSelection(_)
+        | DocAction::ClearSelection) => other,
+    };
     let req = a.requests.clone();
     let notices = a.notices.clone();
     let doc = a.spec_doc;
     let is_focus = matches!(act, DocAction::Focus);
     set.spawn(async move {
+        // Wait for the selection request before this one; `done` is dropped at the end, which
+        // releases the next one in line (also when this task is aborted).
+        let (prev, _done) = match select {
+            Some((_, prev, done)) => (prev, Some(done)),
+            None => (None, None),
+        };
+        if let Some(prev) = prev {
+            let _ = prev.await;
+        }
         let (reply, rx) = oneshot::channel();
         let deadline = Deadline(Instant::now() + ACTION_DEADLINE);
         let sent = req
@@ -602,16 +721,26 @@ fn spawn_action(set: &mut JoinSet<()>, a: &Actor, node: DocNodeId, act: DocActio
                 reply,
             })
             .await;
-        let ok = if sent.is_ok() {
-            matches!(
-                tokio::time::timeout(ACTION_DEADLINE + Duration::from_millis(50), rx).await,
-                Ok(Ok(Ok(())))
-            )
+        let result = if sent.is_ok() {
+            match tokio::time::timeout(ACTION_DEADLINE + Duration::from_millis(50), rx).await {
+                Ok(Ok(r)) => Some(r),
+                Ok(Err(_)) | Err(_) => None,
+            }
         } else {
-            false
+            None
         };
+        let ok = matches!(result, Some(Ok(())));
         if is_focus && !ok {
             let _ = notices.try_send(DocNotice::FocusFailed { doc });
+        }
+        if let Some(req) = select_req {
+            let outcome = match result {
+                Some(Ok(())) => SelOutcome::Done,
+                Some(Err(SourceError::Approximate)) => SelOutcome::Approximate,
+                Some(Err(SourceError::NotSupported)) => SelOutcome::NotSupported,
+                Some(Err(_)) | None => SelOutcome::Failed,
+            };
+            let _ = notices.try_send(DocNotice::SelectionDone { doc, req, outcome });
         }
     });
 }

@@ -7,11 +7,13 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use gorca_model::{ChildList, Ifaces, Lookup, NodeKey, NodeSnapshot, PropMask, Role, StateSet};
+use gorca_model::{
+    ChildList, Ifaces, Lookup, NodeKey, NodeSnapshot, PropMask, Rect, Role, StateSet,
+};
 
 use super::cluster::BuildNode;
 use super::model::{ReviewLimits, TruncWhy};
-use super::objnav::{NavSource, PresClass, class};
+use super::objnav::{NavSource, PresClass, class_in};
 
 /// What a build wants from the app, in the order the task asks for it.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -31,6 +33,28 @@ pub struct Collected {
     /// Nodes whose visible text lines are wanted (in `nodes` order).
     pub text_nodes: Vec<NodeKey>,
     pub truncated: Option<TruncWhy>,
+    /// The rectangle a web document's text lines are clipped to (its viewport), per text node.
+    pub text_clips: HashMap<NodeKey, Rect>,
+}
+
+/// Where the walk is relative to a web document.
+#[derive(Copy, Clone, Debug)]
+enum Web {
+    Outside,
+    /// Inside a `DocumentWeb`, whose extents are known or not.
+    Inside(Option<Rect>),
+}
+
+fn overlaps(a: Rect, b: Rect) -> bool {
+    let (ax1, ay1) = (
+        i64::from(a.x) + i64::from(a.w),
+        i64::from(a.y) + i64::from(a.h),
+    );
+    let (bx1, by1) = (
+        i64::from(b.x) + i64::from(b.w),
+        i64::from(b.y) + i64::from(b.h),
+    );
+    i64::from(a.x) < bx1 && i64::from(b.x) < ax1 && i64::from(a.y) < by1 && i64::from(b.y) < ay1
 }
 
 /// Nodes the app can hang text lines on. A snapshot from a focus fetch or a child fetch does not
@@ -106,7 +130,7 @@ struct Ctx<'a, S: NavSource> {
 }
 
 impl<S: NavSource> Ctx<'_, S> {
-    fn walk(&mut self, k: NodeKey, parent: Option<NodeKey>, depth: u16) {
+    fn walk(&mut self, k: NodeKey, parent: Option<NodeKey>, depth: u16, web: Web) {
         if self.out.truncated.is_some() || !self.seen.insert(k) {
             return;
         }
@@ -133,8 +157,44 @@ impl<S: NavSource> Ctx<'_, S> {
             }
             return;
         }
-        if class(s) == PresClass::Unavailable {
+        let web = match (web, s.role) {
+            (Web::Outside, Role::DocumentWeb) => Web::Inside(
+                (s.have.contains(PropMask::BOUNDS) && !v.stale.contains(PropMask::BOUNDS))
+                    .then_some(s.bounds)
+                    .flatten(),
+            ),
+            (w, _) => w,
+        };
+        let in_web = !matches!(web, Web::Outside);
+        if class_in(s, in_web) == PresClass::Unavailable {
             return;
+        }
+        // Gecko leaves SHOWING off the nodes outside the viewport (and off most containers): such
+        // a node of a web document is entered only when it overlaps the document's rectangle, or
+        // a long page spends the node cap on what is scrolled away.
+        if let Web::Inside(doc) = web
+            && s.role != Role::DocumentWeb
+            && class_in(s, false) == PresClass::Unavailable
+        {
+            let known = s.have.contains(PropMask::BOUNDS) && !v.stale.contains(PropMask::BOUNDS);
+            match (doc, s.bounds) {
+                (Some(d), Some(b)) if known => {
+                    if !overlaps(d, b) {
+                        return;
+                    }
+                }
+                (Some(_), _) if !known => {
+                    self.direct.push(Miss::Bounds(k));
+                    return;
+                }
+                // The document's own extents are not known yet (its fetch is queued).
+                _ => return,
+            }
+        }
+        if wants_lines(s)
+            && let Web::Inside(Some(d)) = web
+        {
+            self.out.text_clips.insert(k, d);
         }
         // Another surface (SF-1): excluded here, it gets its own model.
         if k != self.surface && is_surface_role(s.role) {
@@ -142,7 +202,7 @@ impl<S: NavSource> Ctx<'_, S> {
         }
         let lacks_bounds = !s.have.contains(PropMask::BOUNDS) || v.stale.contains(PropMask::BOUNDS);
         let wants_bounds = depth == 0
-            || class(s) == PresClass::Content
+            || class_in(s, in_web) == PresClass::Content
             || s.states.contains(StateSet::FOCUSABLE)
             || wants_lines(s);
         if lacks_bounds && wants_bounds {
@@ -162,7 +222,7 @@ impl<S: NavSource> Ctx<'_, S> {
         match &s.children {
             ChildList::Known(list) if !stale_children => {
                 for c in list {
-                    self.walk(*c, Some(k), depth.saturating_add(1));
+                    self.walk(*c, Some(k), depth.saturating_add(1), web);
                 }
             }
             ChildList::Count(0) if !stale_children => {}
@@ -185,7 +245,7 @@ pub fn collect<S: NavSource>(src: &S, surface: NodeKey, limits: ReviewLimits) ->
         node_misses: HashMap::new(),
         direct: Vec::new(),
     };
-    cx.walk(surface, None, 0);
+    cx.walk(surface, None, 0, Web::Outside);
     let mut misses: Vec<Miss> = Vec::new();
     let mut seen: HashSet<Miss> = HashSet::new();
     let mut push = |m: Miss, misses: &mut Vec<Miss>| {
@@ -352,6 +412,87 @@ mod tests {
         m2.put_at(snap(4, Role::Button, "C", Some(1), &[]), r(0, 20));
         let c2 = collect(&m2, key(1), ReviewLimits::default());
         assert_eq!(c2.misses, [Miss::Node(key(2))]);
+    }
+
+    /// Gecko marks only some web nodes SHOWING (links, controls), not containers or text: inside a
+    /// web document VISIBLE is enough; outside one a VISIBLE-only node is still pruned.
+    #[test]
+    fn a_web_documents_visible_only_nodes_are_kept_and_other_toolkits_are_not() {
+        let visible_only = |mut s: NodeSnapshot| {
+            s.states = StateSet::VISIBLE;
+            s.have |= PropMask::STATES;
+            s
+        };
+        let mut m = MapSrc::default();
+        m.put_at(snap(1, Role::Window, "W", None, &[2, 5]), r(0, 0));
+        let page = Rect {
+            x: 0,
+            y: 0,
+            w: 200,
+            h: 100,
+        };
+        m.put_at(snap(2, Role::DocumentWeb, "Page", Some(1), &[3]), page);
+        m.put_at(
+            visible_only(snap(3, Role::Landmark, "Main", Some(2), &[4])),
+            r(0, 10),
+        );
+        m.put_at(
+            visible_only(snap(4, Role::Heading, "Title", Some(3), &[])),
+            r(0, 20),
+        );
+        m.put_at(
+            visible_only(snap(5, Role::Panel, "Native", Some(1), &[6])),
+            r(0, 30),
+        );
+        m.put_at(snap(6, Role::Button, "Never", Some(5), &[]), r(0, 40));
+        let c = collect(&m, key(1), ReviewLimits::default());
+        let ids: Vec<_> = c.nodes.iter().map(|n| n.snap.key.local.0).collect();
+        assert_eq!(ids, [1, 2, 3, 4]);
+    }
+
+    /// A long scrolled page: thousands of VISIBLE-only paragraphs above the viewport must not use
+    /// up the node cap before the on-screen heading (review H-1).
+    #[test]
+    fn a_long_scrolled_page_reaches_its_on_screen_content() {
+        let visible_only = |mut s: NodeSnapshot| {
+            s.states = StateSet::VISIBLE;
+            s.have |= PropMask::STATES;
+            s
+        };
+        let page = Rect {
+            x: 0,
+            y: 0,
+            w: 200,
+            h: 100,
+        };
+        let above = |y: i32| Rect {
+            x: 0,
+            y,
+            w: 50,
+            h: 10,
+        };
+        let mut m = MapSrc::default();
+        let kids: Vec<u64> = (10..5010).collect();
+        let mut doc_kids = kids.clone();
+        doc_kids.push(9);
+        m.put_at(snap(1, Role::Window, "W", None, &[2]), page);
+        m.put_at(snap(2, Role::DocumentWeb, "Page", Some(1), &doc_kids), page);
+        for k in &kids {
+            let y = -10_000 + i32::try_from(*k).unwrap_or(0);
+            m.put_at(
+                visible_only(snap(*k, Role::Paragraph, "p", Some(2), &[])),
+                above(y),
+            );
+        }
+        m.put_at(
+            visible_only(snap(9, Role::Heading, "On screen", Some(2), &[])),
+            above(20),
+        );
+        let c = collect(&m, key(1), ReviewLimits::default());
+        assert!(c.truncated.is_none(), "{:?}", c.truncated);
+        assert!(c.nodes.iter().any(|n| n.snap.key.local.0 == 9));
+        assert_eq!(c.nodes.len(), 3, "window, document, heading");
+        assert_eq!(c.text_clips.get(&key(9)), Some(&page));
     }
 
     #[test]

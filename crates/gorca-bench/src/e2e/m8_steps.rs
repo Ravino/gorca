@@ -949,6 +949,150 @@ fn rv_names() -> Vec<Step> {
     ]
 }
 
+/// Telegram Web voice-message markup variants (field report 2026-10-17): Tab onto the play button
+/// and B (quick nav) onto the same button must be spoken with the same name. Each variant is
+/// reached by Tab first (page order), then by B from the top of the page; the labels the page sets
+/// from its focus handlers (V11 to V13) exist by then. V1 is a control with only an icon glyph:
+/// both ways say just the role and never the glyph.
+fn tg() -> Vec<Step> {
+    let mut v = vec![top("TG.top0"), pos("TG.tab.0", Act::AppKeys(&[15]))];
+    let tab = |id: &'static str, what: &'static str, say: &'static [&'static str]| {
+        s(id, P1, what, Act::AppKeys(&[15]), say).win(2000)
+    };
+    v.push(tab("TG.tab.1", "V1 Tab: icon glyph only, no name: role alone", &["button"]).not(&["\u{e900}"]));
+    v.push(tab("TG.tab.2", "V2 Tab: aria-label on the button", &["Play audio", "button"]));
+    v.push(tab("TG.tab.3", "V3 Tab: aria-label on the svg inside", &["Play icon label", "button"]));
+    v.push(tab("TG.tab.4", "V4 Tab: svg title element inside", &["Svg title play", "button"]));
+    v.push(tab("TG.tab.5", "V5 Tab: title attribute only", &["button", "Play by title"]).not(&["\u{e900}"]));
+    v.push(tab("TG.tab.6", "V6 Tab: aria-labelledby over two elements", &["Voice message six 0:21", "button"]));
+    v.push(tab("TG.tab.7", "V7 Tab: aria-describedby only", &["button", "0:30"]).not(&["\u{e900}"]));
+    v.push(tab("TG.tab.8", "V8 Tab: wrapper role=button named from content", &["Play eight 0:44", "button"]));
+    v.push(tab("TG.tab.9", "V8 Tab: the inner button", &["Play eight", "button"]));
+    v.push(tab("TG.tab.10", "V9 Tab: label only in aria-hidden content: role alone", &["button"]).not(&["object", "hidden nine"]));
+    v.push(tab("TG.tab.11", "V10 Tab: label set 1.2 s after load", &["Play late ten", "button"]));
+    v.push(tab("TG.tab.12", "V11 Tab: label set by the focus handler at once", &["Play after 0"]));
+    v.push(tab("TG.tab.13", "V12 Tab: label set 150 ms after the focus: the name follows the bare role", &["Play after 150"]));
+    v.push(tab("TG.tab.14", "V13 Tab: label set 600 ms after the focus: the name follows", &["Play after 600"]));
+    v.push(top("TG.top"));
+    let b = |id: &'static str, what: &'static str, say: &'static [&'static str]| {
+        s(id, P1, what, n('b'), say).win(2000)
+    };
+    v.push(b("TG.b.1", "V1 B: icon glyph only: role alone", &["button"]).not(&["\u{e900}"]));
+    v.push(b("TG.b.2", "V2 B: same name as Tab", &["Play audio", "button"]));
+    v.push(b("TG.b.3", "V3 B: same name as Tab", &["Play icon label", "button"]));
+    v.push(b("TG.b.4", "V4 B: same name as Tab", &["Svg title play", "button"]));
+    v.push(b("TG.b.5", "V5 B: same name as Tab", &["button", "Play by title"]).not(&["\u{e900}"]));
+    v.push(b("TG.b.6", "V6 B: same name as Tab", &["Voice message six 0:21", "button"]));
+    v.push(b("TG.b.7", "V7 B: same name as Tab", &["button", "0:30"]).not(&["\u{e900}"]));
+    v.push(b("TG.b.8", "V8 B: same name as Tab", &["Play eight", "button"]));
+    v.push(b("TG.b.9", "V9 B: role alone", &["button"]).not(&["object", "hidden nine"]));
+    v.push(b("TG.b.10", "V10 B: same name as Tab", &["Play late ten", "button"]));
+    v.push(b("TG.b.11", "V11 B: the label the page set", &["Play after 0", "button"]));
+    v.push(b("TG.b.12", "V12 B: the label the page set", &["Play after 150", "button"]));
+    v.push(b("TG.b.13", "V13 B: the label the page set", &["Play after 600", "button"]));
+    v
+}
+
+// Keypad keys as the compositor sends them with Num Lock off (XKB codes, KP_7 = 79).
+const KP_HOME: K = key(79, 0xff95);
+const KP_UP: K = key(80, 0xff97);
+const KP_PRIOR: K = key(81, 0xff9a);
+const KP_RIGHT: K = key(85, 0xff98);
+const KP_DOWN: K = key(88, 0xff99);
+const KP_NEXT: K = key(89, 0xff9b);
+const KP_SUB: K = key(82, 0xffad);
+
+/// Flat review (numpad review keys) over a Firefox page: the review cursor has to read the page
+/// content, not only the window chrome (field report 2026-10-17).
+fn fl() -> Vec<Step> {
+    vec![
+        top("FL.top"),
+        s("FL.h", P1, "H: the browse cursor on the first heading", n('h'), &["Screen readers learn"]),
+        s("FL.cur", P1, "Review current line (screen review starts at the focus)", Act::Key(KP_UP, 0), &["News article", "Account menu"]).win(1500),
+        pos("FL.top2", Act::Key(KP_HOME, SHIFT)),
+        pos("FL.next1", Act::Key(KP_PRIOR, 0)),
+        pos("FL.next2", Act::Key(KP_PRIOR, 0)),
+        pos("FL.next3", Act::Key(KP_PRIOR, 0)),
+        pos("FL.next4", Act::Key(KP_PRIOR, 0)),
+        s("FL.next5", P1, "Review next line", Act::Key(KP_PRIOR, 0), &["Skip to main content"]).win(1500),
+        pos("FL.word", Act::Key(KP_RIGHT, 0)),
+        pos("FL.char", Act::Key(KP_NEXT, 0)),
+        s("FL.end", P1, "Review bottom", Act::Key(KP_PRIOR, SHIFT), &["Breadcrumb"]).win(1500),
+        s("FL.prev", P1, "Review previous line", Act::Key(KP_HOME, 0), &["Copy link"]).win(1500),
+        pos("FL.tofocus", Act::Chord(INSERT, KP_SUB, 0)),
+        pos("FL.mode", Act::Chord(INSERT, KP_HOME, 0)),
+        pos("FL.obj", Act::Chord(INSERT, KP_DOWN, 0)),
+        s("FL.objn", P1, "Object: next", Act::Chord(INSERT, KP_RIGHT, 0), &["Cookie consent"]).win(1500),
+    ]
+}
+
+/// Flat review on a page far longer than the walk's node cap, scrolled to its end: the lines on the
+/// screen are the last ones, not the chrome (review H-1).
+fn fls() -> Vec<Step> {
+    vec![
+        top("FLS.top"),
+        pos("FLS.cur", Act::Key(KP_UP, 0)),
+        Step::setup("FLS.wait", "the model build carries on past its first deadline", Act::Wait(2500)),
+        s("FLS.bottom", P1, "Review bottom: the last lines on screen, not the chrome", Act::Key(KP_PRIOR, SHIFT), &["Final heading marker"]).win(3000),
+    ]
+}
+
+/// Custom ARIA buttons (div/span role=button with an aria-label and only an icon inside): Tab, B
+/// and the plain arrow keys must each say the label once, with the role once (field report
+/// 2026-10-18). `telegram2.html` has one control per row; the labels are the NATO words.
+/// A step's tokens built at run time: the label and the role word (the table lives for the run).
+fn leak(name: &'static str) -> &'static [&'static str] {
+    Box::leak(vec![name, "button"].into_boxed_slice())
+}
+
+fn tg2() -> Vec<Step> {
+    // Down and B visit these in order (Lima inner is inside the Kilo wrapper's line; the wrapper's
+    // line says both).
+    const NAMES: [&str; 13] = ["Alpha svg", "Bravo hidden svg", "Charlie empty img", "Delta css glyph", "Echo glyph text", "Foxtrot canvas", "Golf empty div", "Hotel svg title", "India native hidden svg", "Juliet no tabindex", "Kilo wrapper", "Mike time label", "Send message"];
+    // Tab skips Juliet (no tabindex) and stops twice in the Kilo row.
+    const TAB_NAMES: [&str; 13] = ["Alpha svg", "Bravo hidden svg", "Charlie empty img", "Delta css glyph", "Echo glyph text", "Foxtrot canvas", "Golf empty div", "Hotel svg title", "India native hidden svg", "Kilo wrapper", "Lima inner", "Mike time label", "Send message"];
+    const TAB: [&str; 13] = ["T2.tab.1", "T2.tab.2", "T2.tab.3", "T2.tab.4", "T2.tab.5", "T2.tab.6", "T2.tab.7", "T2.tab.8", "T2.tab.9", "T2.tab.10", "T2.tab.11", "T2.tab.12", "T2.tab.13"];
+    const DN: [&str; 13] = ["T2.d.1", "T2.d.2", "T2.d.3", "T2.d.4", "T2.d.5", "T2.d.6", "T2.d.7", "T2.d.8", "T2.d.9", "T2.d.10", "T2.d.11", "T2.d.12", "T2.d.13"];
+    const QB: [&str; 13] = ["T2.b.1", "T2.b.2", "T2.b.3", "T2.b.4", "T2.b.5", "T2.b.6", "T2.b.7", "T2.b.8", "T2.b.9", "T2.b.10", "T2.b.11", "T2.b.12", "T2.b.13"];
+    let mut v = vec![top("T2.top0"), pos("T2.tab.0", Act::AppKeys(&[15]))];
+    for (id, name) in TAB.into_iter().zip(TAB_NAMES) {
+        v.push(s(id, P1, "Tab onto the control: the label, the role once", Act::AppKeys(&[15]), leak(name)).once(&["button"]).win(2000));
+    }
+    v.push(top("T2.top"));
+    for (id, name) in DN.into_iter().zip(NAMES) {
+        // The wrapper row holds two buttons (outer and inner): two role words are right there.
+        let once: &'static [&'static str] = if name == "Kilo wrapper" { &[] } else { &["button"] };
+        v.push(s(id, P1, "Down: the control's line says its label, the role once", Act::Key(DOWN, 0), leak(name)).once(once).win(2000));
+    }
+    // The inline run of three icon buttons is one line, said whole.
+    v.push(s("T2.d.run", P1, "Down: a line of three icon buttons says all three", Act::Key(DOWN, 0), &["Run one", "Run two", "Run three"]).win(2000));
+    v.push(top("T2.top2"));
+    for (id, name) in QB.into_iter().zip(NAMES) {
+        v.push(s(id, P1, "B: the control, the label, the role once", n('b'), leak(name)).win(2000));
+    }
+    v
+}
+
+/// The same kind of custom buttons mounted by a script after load, one label set late and one
+/// node replaced by a re-render: Tab and Down say the label, the role once.
+fn tg3() -> Vec<Step> {
+    const TAB_NAMES: [&str; 5] = ["Dyn replaced", "Dyn attach", "Dyn late label", "Dyn wrapper", "Dyn inner"];
+    const TAB: [&str; 5] = ["T3.tab.1", "T3.tab.2", "T3.tab.3", "T3.tab.4", "T3.tab.5"];
+    const DN_NAMES: [&str; 5] = ["Dyn replaced", "Dyn attach", "Dyn late label", "Message text between", "Dyn wrapper"];
+    const DN: [&str; 5] = ["T3.d.1", "T3.d.2", "T3.d.3", "T3.d.4", "T3.d.5"];
+    let mut v = vec![Step::setup("T3.wait", "let the page mount its chat", Act::Wait(2500)), top("T3.top0"), pos("T3.tab.0", Act::AppKeys(&[15]))];
+    for (id, name) in TAB.into_iter().zip(TAB_NAMES) {
+        v.push(s(id, P1, "Tab onto the next custom button: label, role once", Act::AppKeys(&[15]), leak(name)).once(&["button"]).win(2000));
+    }
+    v.push(top("T3.top"));
+    for (id, name) in DN.into_iter().zip(DN_NAMES) {
+        let once: &'static [&'static str] = if name == "Dyn wrapper" || name == "Message text between" { &[] } else { &["button"] };
+        let say: &'static [&'static str] = if name == "Message text between" { &["Message text between"] } else { leak(name) };
+        v.push(s(id, P1, "Down: the next line says its label, role once", Act::Key(DOWN, 0), say).once(once).win(2000));
+    }
+    v
+}
+
 /// Every scenario, in run order.
 pub fn scenarios() -> Vec<Scenario> {
     let sc = |id, area, page, title, body| Scenario { id, area, page, title, body, xfail: None };
@@ -974,6 +1118,11 @@ pub fn scenarios() -> Vec<Scenario> {
         sc("M8-BWG", "ARIA widgets: names, roles, states", "../../m8b/pages/widgets.html", "M8b Widgets", Body::Steps(wg)),
         sc("M8-BFB", "ARIA forms: invalid, described, required, read only", "../../m8b/pages/forms.html", "M8b Forms", Body::Steps(fb)),
         sc("M8-BHO", "hostile ARIA: cycles, fan-out, megabyte strings", "../../m8b/pages/hostile.html", "M8b Hostile", Body::Steps(ho)),
+        sc("M8-TG", "Telegram voice message: Tab and B name the same button", "telegram.html", "M8 Telegram voice message", Body::Steps(tg)),
+        sc("M8-FL", "flat review over a web page", "news.html", "M8 News article", Body::Steps(fl)),
+        sc("M8-FLS", "flat review on a long scrolled page", "longscroll.html", "M8 Long scrolled page", Body::Steps(fls)),
+        sc("M8-TG2", "custom ARIA buttons: Tab, B and arrows", "telegram2.html", "M8 Telegram custom buttons", Body::Steps(tg2)),
+        sc("M8-TG3", "custom ARIA buttons mounted after load", "telegram3.html", "M8 Telegram dynamic buttons", Body::Steps(tg3)),
         sc("M8-RDESC", "review: description flood", "../../m8b/review/r_desc.html", "M8b Review Desc", Body::Steps(rv_desc)),
         sc("M8-RNAME", "review: name flood", "../../m8b/review/r_name.html", "M8b Review Name", Body::Steps(rv_name)),
         sc("M8-RINV", "review: invalid flood", "../../m8b/review/r_invalid.html", "M8b Review Invalid", Body::Steps(rv_inv)),

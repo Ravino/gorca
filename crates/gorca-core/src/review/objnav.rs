@@ -46,10 +46,18 @@ fn blank(s: Option<&Arc<str>>) -> bool {
 /// their own (filler, scroll pane, split pane, section, root pane, ...) arrive as `Unknown` or
 /// `Panel` from the connector and are layout.
 pub fn class(snap: &NodeSnapshot) -> PresClass {
+    class_in(snap, false)
+}
+
+/// [`class`] for a node inside a web document (`web`): Gecko sets `SHOWING` on some of its nodes
+/// only (links and controls, not containers, landmarks or text), so `VISIBLE` alone counts there;
+/// what is off screen is clipped by its extents.
+pub fn class_in(snap: &NodeSnapshot, web: bool) -> PresClass {
     let showing = !snap.have.contains(PropMask::STATES)
         || (snap.states.contains(StateSet::SHOWING) && snap.states.contains(StateSet::VISIBLE))
         // Some toolkits set only one of the pair.
-        || snap.states.contains(StateSet::SHOWING);
+        || snap.states.contains(StateSet::SHOWING)
+        || (web && snap.states.contains(StateSet::VISIBLE));
     if snap.states.contains(StateSet::DEFUNCT) || !showing {
         return PresClass::Unavailable;
     }

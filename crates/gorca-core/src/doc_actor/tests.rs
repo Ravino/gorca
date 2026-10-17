@@ -222,6 +222,32 @@ async fn activity_and_actions_reach_the_source_by_its_own_ids() {
 }
 
 #[tokio::test]
+async fn a_selection_request_is_always_answered_even_when_its_node_is_gone() {
+    let mut r = rig();
+    r.script.batches.send(first_batch()).await.unwrap();
+    next_notice(&mut r).await;
+    r.handle
+        .ctl
+        .send(DocCtl::Select {
+            req: 7,
+            node: DocNodeId::from_parts(999, 0),
+            act: DocAction::ClearSelection,
+        })
+        .await
+        .unwrap();
+    assert!(matches!(
+        next_notice(&mut r).await,
+        DocNotice::SelectionDone {
+            req: 7,
+            outcome: crate::doc_actor::SelOutcome::Failed,
+            ..
+        }
+    ));
+    r.shutdown.cancel();
+    let _ = r.task.await;
+}
+
+#[tokio::test]
 async fn a_batch_the_mirror_rejects_asks_the_source_for_a_rebuild_and_keeps_the_last_good_state() {
     let mut r = rig();
     r.script.batches.send(first_batch()).await.unwrap();

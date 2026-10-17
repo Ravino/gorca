@@ -22,7 +22,8 @@ pub mod speech;
 pub mod text;
 
 pub use doc::{
-    DocAction, DocDelta, DocHint, DocId, DocNodeId, SrcNode, SrcNodeId, TextAnchor, TextEdit,
+    DocAction, DocDelta, DocHint, DocId, DocNodeId, DocRange, SelSpan, SelectionSpec, SrcNode,
+    SrcNodeId, TextAnchor, TextEdit,
 };
 pub use event::{
     AppInfo, AppLifecycle, CaretOrigin, ConnectorKind, DocKind, LazyText, NodeEvent, Politeness,

@@ -76,4 +76,7 @@ pub enum SourceError {
     /// The object answered but declined (a `GrabFocus` that returned false).
     #[error("request refused")]
     Refused,
+    /// A page selection was applied, but not exactly as asked (the engine rounded it).
+    #[error("applied approximately")]
+    Approximate,
 }

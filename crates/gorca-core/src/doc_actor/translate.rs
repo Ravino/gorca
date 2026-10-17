@@ -1044,10 +1044,27 @@ impl Translator {
                 }
             }
         }
-        let mut ops: Vec<DocOp> = Vec::new();
-        {
+        // Deepest first, each change applied before the next node is looked at: a button's
+        // anchor depends on whether its icon child already carries one.
+        let mut order: Vec<(usize, DocNodeId)> = {
             let doc = w.doc();
-            for id in cands {
+            cands
+                .into_iter()
+                .map(|id| {
+                    let mut depth = 0usize;
+                    let mut cur = doc.parent(id);
+                    while let Some(p) = cur {
+                        depth += 1;
+                        cur = doc.parent(p);
+                    }
+                    (depth, id)
+                })
+                .collect()
+        };
+        order.sort_by_key(|(depth, _)| std::cmp::Reverse(*depth));
+        for (_, id) in order {
+            let op = {
+                let doc = w.doc();
                 let Some(v) = doc.node(id) else { continue };
                 if !marker_role(v.role) || v.flags.contains(NodeFlags::HIDDEN) {
                     continue;
@@ -1056,20 +1073,24 @@ impl Translator {
                     continue;
                 };
                 let own = doc.own_len(id).unwrap_or(0);
-                let descendants = (e - s).saturating_sub(own);
+                // MI-1: what the descendants contribute counts only if a user could land on it:
+                // a line break or white space (a block icon such as a canvas) is no anchor.
+                let mut after_own = String::new();
+                doc.read_text(s.saturating_add(own), e, &mut after_own);
+                let descendants = after_own.chars().filter(|c| !c.is_whitespace()).count();
                 let has_marker = v.text == Some("\u{FFFC}");
                 let own_text_empty = v.text.is_none_or(str::is_empty);
                 if descendants == 0 && own_text_empty {
-                    ops.push(DocOp::SetText {
+                    DocOp::SetText {
                         id,
                         text: Some(Arc::from("\u{FFFC}")),
-                    });
+                    }
                 } else if descendants > 0 && has_marker {
-                    ops.push(DocOp::SetText { id, text: None });
+                    DocOp::SetText { id, text: None }
+                } else {
+                    continue;
                 }
-            }
-        }
-        for op in ops {
+            };
             w.apply(op)?;
         }
         Ok(())
@@ -1334,6 +1355,37 @@ mod tests {
             o.join_del.contains(&LocalId(1006)),
             "old keys leave the join"
         );
+    }
+
+    /// MI-1: a button whose only descendant is a block with no text (a canvas icon) contributes
+    /// nothing but a line break, so it needs its own anchor or arrows skip it.
+    #[test]
+    fn a_button_holding_only_a_textless_block_keeps_an_anchor() {
+        let (mut w, r) = channel(1);
+        let mut t = Translator::new();
+        t.apply(
+            &mut w,
+            vec![
+                DocDelta::Reset {
+                    root: SrcNodeId(1),
+                    nav_id: 1,
+                },
+                DocDelta::Upsert(vec![
+                    n(1, Role::DocumentWeb),
+                    with_display(n(2, Role::Button), "inline"),
+                    with_display(n(3, Role::Unknown), "block"),
+                ]),
+                list(1, &[2]),
+                list(2, &[3]),
+                DocDelta::Settled { batch: 1 },
+            ],
+        )
+        .unwrap();
+        w.publish();
+        r.with(|d| {
+            let text = d.text_in(0, d.text_len());
+            assert!(text.contains("\u{FFFC}"), "{text:?}");
+        });
     }
 
     #[test]

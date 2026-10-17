@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>M8 Telegram voice message</title>
+<style>
+  body { font-family: sans-serif; }
+  .msg { margin: 8px 0; padding: 6px; border: 1px solid #ccc; }
+  .audio { display: flex; align-items: center; gap: 8px; }
+  .audio-toggle { width: 48px; height: 48px; border-radius: 24px; background: #3390ec; color: #fff;
+                  display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+  .tgico::before { content: "\e900"; font-family: serif; }
+  .waveform { width: 120px; height: 24px; background: #ddd; }
+</style>
+</head>
+<body>
+<h1>Chat with Alice</h1>
+
+<!-- V1: WebK-like. A focusable div[role=button] with an icon-font glyph (CSS content only) and no
+     label at all; the title and the duration sit in sibling elements. -->
+<div class="msg" id="v1">
+  <div class="audio is-voice">
+    <div class="audio-toggle tgico" role="button" tabindex="0" id="play1"></div>
+    <div class="audio-details">
+      <div class="audio-title">Voice message</div>
+      <canvas class="waveform" width="120" height="24"></canvas>
+      <div class="audio-subtitle">0:12</div>
+    </div>
+  </div>
+  <span class="time">10:41</span>
+</div>
+
+<!-- V2: WebA-like. A real button with an aria-label on the button (the control case). -->
+<div class="msg" id="v2">
+  <div class="audio">
+    <button class="audio-toggle" aria-label="Play audio" id="play2"><i class="tgico" aria-hidden="true"></i></button>
+    <div class="audio-details"><span class="audio-title">Voice message two</span> <span class="audio-subtitle">0:07</span></div>
+  </div>
+</div>
+
+<!-- V3: the label only on the svg icon inside the button (aria-label on a child). -->
+<div class="msg" id="v3">
+  <div class="audio">
+    <button class="audio-toggle" id="play3"><svg width="24" height="24" viewBox="0 0 24 24" role="img" aria-label="Play icon label"><path d="M8 5v14l11-7z"/></svg></button>
+    <div class="audio-details"><span class="audio-title">Voice message three</span> <span class="audio-subtitle">0:09</span></div>
+  </div>
+</div>
+
+<!-- V4: an svg with a <title> child and no ARIA at all. -->
+<div class="msg" id="v4">
+  <div class="audio">
+    <button class="audio-toggle" id="play4"><svg width="24" height="24" viewBox="0 0 24 24"><title>Svg title play</title><path d="M8 5v14l11-7z"/></svg></button>
+    <div class="audio-details"><span class="audio-title">Voice message four</span> <span class="audio-subtitle">0:11</span></div>
+  </div>
+</div>
+
+<!-- V5: the title attribute only (tooltip). -->
+<div class="msg" id="v5">
+  <div class="audio">
+    <div class="audio-toggle tgico" role="button" tabindex="0" title="Play by title" id="play5"></div>
+    <div class="audio-details"><span class="audio-title">Voice message five</span> <span class="audio-subtitle">0:13</span></div>
+  </div>
+</div>
+
+<!-- V6: aria-labelledby to the title and the duration; the name lives in other elements. -->
+<div class="msg" id="v6">
+  <div class="audio">
+    <div class="audio-toggle tgico" role="button" tabindex="0" aria-labelledby="t6 d6" id="play6"></div>
+    <div class="audio-details"><span class="audio-title" id="t6">Voice message six</span> <span class="audio-subtitle" id="d6">0:21</span></div>
+  </div>
+</div>
+
+<!-- V7: aria-describedby only (no name). -->
+<div class="msg" id="v7">
+  <div class="audio">
+    <div class="audio-toggle tgico" role="button" tabindex="0" aria-describedby="d7" id="play7"></div>
+    <div class="audio-details"><span class="audio-title">Voice message seven</span> <span class="audio-subtitle" id="d7">0:30</span></div>
+  </div>
+</div>
+
+<!-- V8: a wrapper div[tabindex=0][role=button] around an inner unlabeled button with inner text. -->
+<div class="msg" id="v8">
+  <div class="audio" role="button" tabindex="0" id="wrap8">
+    <button class="audio-toggle" id="play8"><span class="dur8">Play eight</span></button>
+    <span class="audio-subtitle">0:44</span>
+  </div>
+</div>
+
+<!-- V9: the label is aria-hidden text inside the button (hidden from the tree, visible nowhere). -->
+<div class="msg" id="v9">
+  <div class="audio">
+    <button class="audio-toggle" id="play9"><span aria-hidden="true">Hidden nine</span><svg width="24" height="24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
+    <span class="audio-subtitle">0:51</span>
+  </div>
+</div>
+
+<!-- V10: the aria-label is added by script shortly after load (name-changed after focus is possible). -->
+<div class="msg" id="v10">
+  <div class="audio">
+    <button class="audio-toggle" id="play10"><i class="tgico"></i></button>
+    <span class="audio-subtitle">1:02</span>
+  </div>
+</div>
+<!-- V11 to V13: the label is set by the page's own focus handler, 0 ms, 150 ms and 600 ms after the
+     focus event (a React state update after the first render). The name changes after the focus. -->
+<div class="msg" id="v11"><button class="audio-toggle late" data-delay="0" id="play11"><i class="tgico"></i></button> <span class="audio-subtitle">1:11</span></div>
+<div class="msg" id="v12"><button class="audio-toggle late" data-delay="150" id="play12"><i class="tgico"></i></button> <span class="audio-subtitle">1:12</span></div>
+<div class="msg" id="v13"><button class="audio-toggle late" data-delay="600" id="play13"><i class="tgico"></i></button> <span class="audio-subtitle">1:13</span></div>
+
+<script>
+  // V10: the label arrives 1.2 s after load.
+  setTimeout(() => document.getElementById('play10').setAttribute('aria-label', 'Play late ten'), 1200);
+  // V11 to V13: the label arrives data-delay ms after the focus.
+  for (const b of document.querySelectorAll('button.late')) {
+    b.addEventListener('focus', () => {
+      const d = Number(b.dataset.delay);
+      const set = () => b.setAttribute('aria-label', 'Play after ' + d);
+      if (d === 0) set(); else setTimeout(set, d);
+    });
+  }
+</script>
+
+<p>End of chat.</p>
+</body>
+</html>

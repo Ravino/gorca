@@ -44,6 +44,14 @@ impl Reader {
         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
     }
 
+    /// Speak a short notice behind what is being said, without cutting it.
+    pub(crate) fn say_queued(&mut self, text: &str, fx: &mut ReaderEffects) {
+        let id = self.utt_id();
+        let mut u = message(text, id, self.epoch.current());
+        u.prio = Prio::Message;
+        fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+    }
+
     /// Speak text that holds what an application said (a window title, a node description):
     /// its symbols are named by the punctuation level on the way to the lane.
     pub(crate) fn say_app(&mut self, text: &str, fx: &mut ReaderEffects) {
