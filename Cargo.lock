@@ -1301,6 +1301,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "gorca-i18n"
+version = "0.0.0"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "gorca-ingress"
 version = "0.0.0"
 dependencies = [
@@ -1375,6 +1382,7 @@ name = "gorca-model"
 version = "0.0.0"
 dependencies = [
  "bitflags",
+ "gorca-i18n",
  "smallvec",
 ]
 
