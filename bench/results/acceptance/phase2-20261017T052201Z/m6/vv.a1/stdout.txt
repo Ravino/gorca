@@ -1,0 +1,84 @@
+# e2e acc-20261017T052201Z-m6-vv-a1
+# utc=2026-10-17T06:12:59Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=18.77 18.31 18.33 2/2838 513155
+# git_rev=6a86749
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx3
+# topology_expected=lanes-rt
+# label=acc-20261017T052201Z-m6-vv-a1
+# reader=daemon:<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=18.77 18.31 18.33 2/2838 513152
+# reader_env=GORCA_M6=1 GORCA_M6_STRICT=1 GORCA_M6_REAL=1 NO_COLOR=1 GORCA_TOPOLOGY_REPORT=<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/bench/results/acceptance/phase2-20261017T052201Z/m6/vv.a1/res/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=VV Ctrl+PgUp: the first tab's prompt: heard ["Terminal, terminal", "application not responding"]
+# note1=VV: a real gnome-terminal-server (VTE 0.80) in a private headless session; keys go to the reader through the emulated Mutter and to the terminal through the compositor's RemoteDesktop keyboard; floods are `yes` and `seq 1 100000000`
+# note2=probe #0 (type; before: ) wanted "e", heard [+175.5ms "h"]
+# note3=probe #1 (type; before: type "e") wanted "c", heard [+105.0ms "h", +141.2ms "o"]
+# note4=Home: wanted ["e"], heard []
+# note5=End: wanted ["blank"], heard []
+
+metric                     bus                median          min          max  n op    threshold  res   note
+VV.vv_flood_key_ms.n       daemon/voicego           42           42           42  3                  info   [samples]
+VV.vv_flood_key_ms.p50     daemon/voicego        0.460        0.352        0.462  3                  info   [ms]
+VV.vv_flood_key_ms.p95     daemon/voicego         20.8        5.305         29.7  3                  info   [ms]
+VV.vv_flood_key_ms.p99     daemon/voicego        106.5         55.1        122.1  3 <=            4  FAIL   [ms]
+VV.vv_flood_key_ms.p999    daemon/voicego        106.5         55.1        122.1  3                  info   [ms]
+VV.vv_flood_key_ms.max     daemon/voicego        106.5         55.1        122.1  3                  info   [ms]
+VV.vv_key_ms.n             daemon/voicego           10            8           10  3                  info   [samples]
+VV.vv_key_ms.p50           daemon/voicego        0.498        0.429        0.601  3                  info   [ms]
+VV.vv_key_ms.p95           daemon/voicego        0.576        0.453         34.5  3                  info   [ms]
+VV.vv_key_ms.p99           daemon/voicego        0.576        0.453         34.5  3 <=            3  PASS   [ms]
+VV.vv_key_ms.p999          daemon/voicego        0.576        0.453         34.5  3                  info   [ms]
+VV.vv_key_ms.max           daemon/voicego        0.576        0.453         34.5  3                  info   [ms]
+VV.vv_stop_ms.n            daemon/voicego            2            2            2  3                  info   [samples]
+VV.vv_stop_ms.p50          daemon/voicego        0.245        0.181        2.636  3                  info   [ms]
+VV.vv_stop_ms.p95          daemon/voicego        0.245        0.181        2.636  3                  info   [ms]
+VV.vv_stop_ms.p99          daemon/voicego        0.245        0.181        2.636  3 <=            2  PASS   [ms]
+VV.vv_stop_ms.p999         daemon/voicego        0.245        0.181        2.636  3                  info   [ms]
+VV.vv_stop_ms.max          daemon/voicego        0.245        0.181        2.636  3                  info   [ms]
+VV.vv_ctrlc_retries        daemon/voicego            0            0            1  3                  info   [presses]
+VV.vv_failures             daemon/voicego            0            0            2  3 <=            0  FAIL  gated on the max over repeats [steps]
+VV.vv_focus_failures       daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [steps]
+VV.vv_password_echo_double daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_password_echo_extra  daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_password_echo_missing daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_password_log_empty   daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [files]
+VV.vv_password_plaintext_in_logs daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [occurrences]
+VV.vv_password_prompt_missing daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_screen_failures      daemon/voicego            0            0            1  3 <=            0  FAIL  gated on the max over repeats [steps]
+VV.vv_seq_cpu_pct          daemon/voicego        2.394        2.107        3.223  3                  info   [% of one core]
+VV.vv_seq_flood_unspoken   daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_seq_key_lost         daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_seq_prompt_missing   daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_seq_siocinq_p99_kib  daemon/voicego            0            0            0  3                  info   [KiB]
+VV.vv_seq_speaks_per_s     daemon/voicego        0.750        0.750        0.750  3                  info   [1/s]
+VV.vv_server_aborts        daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_server_criticals     daemon/voicego            0            0            0  3                  info   [lines]
+VV.vv_siocinq_p99_kib      daemon/voicego            0            0        0.189  3 <=         1024  PASS  p99 of the unread bytes on the reader's bus sockets during the real floods [KiB]
+VV.vv_type_double          daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_type_extra           daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_type_missing         daemon/voicego            0            0            2  3 <=            0  FAIL  gated on the max over repeats [events]
+VV.vv_worst_cpu_pct        daemon/voicego        2.465        2.394        3.223  3 <=           60  PASS  reader CPU during the worst real flood, percent of one core [% of one core]
+VV.vv_yes_cpu_pct          daemon/voicego        2.465        1.934        2.727  3                  info   [% of one core]
+VV.vv_yes_flood_unspoken   daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_yes_key_lost         daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_yes_prompt_missing   daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [events]
+VV.vv_yes_siocinq_p99_kib  daemon/voicego            0            0        0.189  3                  info   [KiB]
+VV.vv_yes_speaks_per_s     daemon/voicego        1.333        1.250        1.583  3                  info   [1/s]
+

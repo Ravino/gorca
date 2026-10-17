@@ -1,0 +1,8 @@
+private compositor: /tmp/gorca-vte.JYyoWf/x/gorca-vte-28277
+== reader <repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/gorca built from 6a86749, tree at 6a86749
+== e2e acc-20261017T040807Z-m6-vv-a1: reader=daemon:<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/gorca backend=voicego repeats=3 load=15.28 19.96 18.00 7/2452 29391
+-- round 1/3 VV (load 15.28 19.96 18.00 9/2452 29391)
+-- round 2/3 VV (load 13.56 18.09 17.59 1/2533 45551)
+-- round 3/3 VV (load 17.73 17.99 17.60 7/2515 55691)
+== wrote <repo>/.claude/worktrees/agent-a442a2fa7ae77a061/bench/results/acceptance/phase2-20261017T040807Z/m6/vv.a1/res/20261017T051440Z.{json,txt}
+== 1 gate(s) FAILED

@@ -62,6 +62,13 @@ const MOTIONS_MAX: usize = 8;
 const EDIT_CARET_MS: Ms = 2;
 /// Fetch retries before the session waits for the next event.
 const RETRIES_MAX: u8 = 2;
+/// A history key whose redraw has not come after this long found nothing to change (the same
+/// command twice, the end of the history): the line is read anyway.
+const VERTICAL_MS: Ms = 250;
+/// Most history keys counted while their redraws are outstanding.
+const VERTICAL_MAX: u8 = 8;
+/// Rows above the cursor row searched for the start of a wrapped command.
+const WRAP_ROWS_MAX: usize = 32;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum Phase {
@@ -112,6 +119,10 @@ pub struct Session {
     late: VecDeque<(char, Ms)>,
     expect: Expect,
     expect_at: Ms,
+    /// History keys pressed whose redraws have not all been read (two quick presses can have
+    /// their redraws split across readings), and whether the newest one is still unanswered.
+    vertical_keys: u8,
+    vertical_open: bool,
     /// A caret event arrived that the last motion key explains and that has not been read yet
     /// (the screen was changing under it).
     caret_keyed: bool,
@@ -168,6 +179,8 @@ impl Session {
             late: VecDeque::new(),
             expect: Expect::None,
             expect_at: 0,
+            vertical_keys: 0,
+            vertical_open: false,
             caret_keyed: false,
             popped: VecDeque::new(),
             erased: VecDeque::new(),
@@ -207,6 +220,8 @@ impl Session {
         self.caret_keyed = false;
         self.motions.clear();
         self.expect = Expect::None;
+        self.vertical_keys = 0;
+        self.vertical_open = false;
         self.secret = false;
         self.interrupt_at = None;
         self.quiet = false;
@@ -290,7 +305,11 @@ impl Session {
             .late
             .front()
             .map(|&(_, at)| at.saturating_add(LATE_KEY_MS));
-        [phase, gate, late].into_iter().flatten().min()
+        let vertical = (self.vertical_open
+            && matches!(self.phase, Phase::Idle)
+            && self.expect == Expect::Vertical)
+            .then(|| self.expect_at.saturating_add(VERTICAL_MS));
+        [phase, gate, late, vertical].into_iter().flatten().min()
     }
 
     fn arm(&mut self, now: Ms, out: &mut Vec<TermAction>) {
@@ -332,6 +351,92 @@ impl Session {
             self.flush_output(now, out);
         }
         self.flush_late(now, out);
+        self.flush_vertical(now, out);
+    }
+
+    /// A history key that changed nothing on the screen: read the line it left, so that a
+    /// recall is never silent.
+    fn flush_vertical(&mut self, now: Ms, out: &mut Vec<TermAction>) {
+        if !self.vertical_open
+            || !matches!(self.phase, Phase::Idle)
+            || self.expect_valid(now) != Expect::Vertical
+            || now < self.expect_at.saturating_add(VERTICAL_MS)
+        {
+            return;
+        }
+        self.vertical_open = false;
+        self.vertical_keys = 0;
+        self.expect = Expect::None;
+        let screen = if self.live_ok && !self.live.is_empty() {
+            &self.live
+        } else {
+            &self.base
+        };
+        if screen.is_empty() {
+            return;
+        }
+        let (row, _) = screen.locate(self.caret);
+        let cmd = self
+            .command_at(screen, row, "")
+            .unwrap_or_else(|| screen.line(row).trim_end().to_owned());
+        self.counters.history_read += 1;
+        self.say_command(&cmd, out);
+    }
+
+    fn say_command(&self, cmd: &str, out: &mut Vec<TermAction>) {
+        if cmd.trim().is_empty() {
+            self.say(out, "blank", Unit::Text, Urgency::Key);
+        } else {
+            self.say(out, cmd.trim_end(), Unit::Line, Urgency::Key);
+        }
+    }
+
+    /// The command being edited on the logical line that ends on `row` of `screen`: the prompt
+    /// is dropped and wrapped rows are joined (VTE shows each row of a wrapped line on its own
+    /// line). `prefix` is the prompt text known from an earlier reading, which finds the first
+    /// row better than the prompt heuristic does.
+    fn command_at(&self, screen: &Screen, row: usize, prefix: &str) -> Option<String> {
+        // VTE trims trailing blanks: a prompt with nothing after it lacks its last space.
+        let known = prefix.trim_end();
+        let lowest = row.saturating_sub(WRAP_ROWS_MAX);
+        for r in (lowest..=row).rev() {
+            let line = screen.line(r);
+            let start = if !known.is_empty() && line.starts_with(known) {
+                known.chars().count()
+            } else if known.is_empty() {
+                match self.prompt.end(line) {
+                    Some(pe) => pe as usize,
+                    None => continue,
+                }
+            } else {
+                continue;
+            };
+            // Rows above the cursor row belong to the command only when each is a full row
+            // (a wrapped row has the terminal's width; output and older prompts do not).
+            let width = line.chars().count();
+            if (r..row).any(|i| screen.line(i).chars().count() != width) {
+                return None;
+            }
+            let mut cmd: String = line.chars().skip(start).collect();
+            for i in r + 1..=row {
+                cmd.push_str(screen.line(i));
+            }
+            // A prompt with nothing after it lost its trailing blank in the earlier reading.
+            return Some(cmd.trim().to_owned());
+        }
+        // The remembered prompt is not on screen (a different one): ask the heuristic.
+        if known.is_empty() {
+            None
+        } else {
+            self.command_at(screen, row, "")
+        }
+    }
+
+    /// The prompt text of the cursor line of `screen`, when it has one.
+    fn prompt_text(&self, screen: &Screen, row: usize) -> String {
+        let line = screen.line(row);
+        let pe = self.prompt.end(line).unwrap_or(0);
+        line.chars().take(pe as usize).collect()
     }
 
     /// Held characters whose key never came: text nobody typed, read as such.
@@ -399,12 +504,17 @@ impl Session {
     }
 
     fn on_key(&mut self, now: Ms, key: TermKey, out: &mut Vec<TermAction>) {
+        let prev_expect = self.expect_valid(now);
         self.expect_at = now;
         // Any key press cancels what is queued in the speech lane (a newer epoch): output waiting
         // for its turn is as stale as that, and the pacing that protects the lane starts over.
         self.counters.output_lines_skipped += self.outq.len() as u64;
         self.outq.clear();
         self.out_gate = 0;
+        if !matches!(key, TermKey::LineUp | TermKey::LineDown) {
+            self.vertical_keys = 0;
+            self.vertical_open = false;
+        }
         match key {
             TermKey::Typed(c) => {
                 out.push(TermAction::ClaimKey);
@@ -495,6 +605,11 @@ impl Session {
             }
             TermKey::LineUp | TermKey::LineDown => {
                 out.push(TermAction::ClaimKey);
+                if prev_expect != Expect::Vertical {
+                    self.vertical_keys = 0;
+                }
+                self.vertical_keys = self.vertical_keys.saturating_add(1).min(VERTICAL_MAX);
+                self.vertical_open = true;
                 self.expect = Expect::Vertical;
             }
             TermKey::Interrupt => {
@@ -650,6 +765,7 @@ impl Session {
             Expect::Vertical => {
                 if row != self.last_row {
                     self.expect = Expect::None;
+                    self.vertical_open = false;
                     self.caret_keyed = false;
                     self.say_line(&self.live, row, out);
                 }
@@ -779,6 +895,11 @@ impl Session {
                     | Expect::Motion(_)
             );
         let unmatched = df.unmatched();
+        // The screen changed under a history key (a recall, or a pager scrolling): the change is
+        // its answer, whatever it said, and the key has nothing left to read on its own.
+        if !unmatched.is_empty() {
+            self.vertical_open = false;
+        }
         let mut spoke = false;
         // After Ctrl+C the output may still be flowing: those screens are not read. The first
         // one that has gone quiet is (see `emit_output`), and so are five seconds later on.
@@ -794,6 +915,13 @@ impl Session {
             self.counters.output_lines_skipped += unmatched.len() as u64;
             self.last_row = cl;
             return;
+        } else if !unmatched.is_empty()
+            && exp == Expect::Vertical
+            && let Some(cmd) = self.recalled(&new, cl, &df)
+        {
+            spoke = true;
+            self.history_done();
+            self.say_command(&cmd, out);
         } else if !unmatched.is_empty() {
             if Self::is_line_edit(&df, &unmatched, cl, editing) {
                 spoke = self.line_edit(&new, cl, &df, &unmatched, exp, out);
@@ -830,6 +958,7 @@ impl Session {
                 Expect::Vertical if cl != self.last_row => {
                     self.say_line(&new, cl, out);
                     self.expect = Expect::None;
+                    self.vertical_open = false;
                 }
                 Expect::Vertical
                 | Expect::Motion(_)
@@ -844,6 +973,31 @@ impl Session {
         self.last_row = cl;
         self.base = new;
         self.base_caret = self.caret;
+    }
+
+    /// A history key's redraw has been read: one fewer is outstanding. When another is still
+    /// to come (two quick presses), its redraw is recognised too.
+    fn history_done(&mut self) {
+        self.counters.history_read += 1;
+        self.vertical_open = false;
+        self.vertical_keys = self.vertical_keys.saturating_sub(1);
+        if self.vertical_keys == 0 {
+            self.expect = Expect::None;
+        }
+    }
+
+    /// The command now on the cursor line when a history key explains the change and the
+    /// command is not the one the last reading showed. Works for commands that wrap onto
+    /// several rows and for screens that scrolled under them.
+    fn recalled(&self, new: &Screen, cl: usize, df: &Diff) -> Option<String> {
+        if df.bulk {
+            return None;
+        }
+        let (brow, _) = self.base.locate(self.base_caret);
+        let prefix = self.prompt_text(&self.base, brow);
+        let old = self.command_at(&self.base, brow, &prefix)?;
+        let cmd = self.command_at(new, cl, &prefix)?;
+        (cmd != old).then_some(cmd)
     }
 
     /// Is the change confined to the cursor line (and the wrapped rows above it) while a key
@@ -889,13 +1043,8 @@ impl Session {
             let line = new.line(cl);
             let pe = self.prompt.end(line).unwrap_or(0);
             let cmd: String = line.chars().skip(pe as usize).collect();
-            self.expect = Expect::None;
-            self.counters.history_read += 1;
-            if cmd.trim().is_empty() {
-                self.say(out, "blank", Unit::Text, Urgency::Key);
-            } else {
-                self.say(out, cmd.trim_end(), Unit::Line, Urgency::Key);
-            }
+            self.history_done();
+            self.say_command(&cmd, out);
             return true;
         }
         let (ins, del) = edit_between(&old_text, &new_text);

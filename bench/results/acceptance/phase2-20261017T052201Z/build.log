@@ -1,0 +1,9 @@
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.09s
+installed <repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/debug/extensions/ext-gnome-shell/ext_gnome_shell.wasm
+installed <repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/extensions/ext-gnome-shell/ext_gnome_shell.wasm
+installed <repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/debug/extensions/ext-vte/ext_vte.wasm
+installed <repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/extensions/ext-vte/ext_vte.wasm
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.04s
+   Compiling ext-vte v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/extensions/ext-vte)
+   Compiling gorca-ext-host v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/crates/gorca-ext-host)
+    Finished `release` profile [optimized + debuginfo] target(s) in 47.14s
