@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Role normalisation table (C-4). TBD: complete mapping; unknown roles must also carry a raw
 //! attribute so they are not lost.
 

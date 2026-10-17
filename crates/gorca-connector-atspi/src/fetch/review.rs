@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Review operations of the connector (ADR-0006 15.1): window-relative extents on snapshots,
 //! visible text lines, actions for `review.activate` / `review.move_focus`, and the status-bar
 //! `Collection` search.

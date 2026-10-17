@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Hard resource bounds (B-1 SPEC section 7). Every bound is a requirement for every fill
 //! strategy: overflow degrades to "less cached" (a miss), never to unbounded growth, a wrong
 //! presentation or starvation of the Interactive class.

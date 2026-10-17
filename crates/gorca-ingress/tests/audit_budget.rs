@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Security audit of the `SlotBudget` accounting (2026-10-12, commit 74dbd07).
 //!
 //! Threat model: any process on the a11y bus can send unlimited signals, open several

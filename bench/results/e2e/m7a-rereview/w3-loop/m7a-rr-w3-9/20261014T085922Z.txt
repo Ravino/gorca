@@ -12,7 +12,7 @@
 # python=Python 3.13.5
 # build=release
 # label=m7a-rr-w3-9
-# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/src/target/release/gorca
+# reader=daemon:/tmp/scratch/src/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=1200

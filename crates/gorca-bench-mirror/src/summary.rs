@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Aggregates the CSVs written by `mb1 run` into `summary.md`: medians over the interleaved
 //! repeats, plus the min-max range of the headline tail so noise is visible.
 

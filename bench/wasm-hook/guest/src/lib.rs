@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! WASM guest: wraps quirk-logic behind the WIT world.
 // Generated export shims take one argument per flattened record field.
 #![allow(clippy::too_many_arguments)]

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `ext-vte`: terminal (VTE) policy extension.
 //!
 //! Responsibility (ADR-0001 sections 5.6, 10 and 11, ADR-0008 tier W3): supplies the T-2 policy

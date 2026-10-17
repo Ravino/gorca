@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Text-key classification (ADR-0007 4.1): which keys act on a text field, and how.
 //!
 //! A pure table over the keysym, the physical key and the modifiers without locks. The Reader

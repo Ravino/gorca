@@ -60,7 +60,7 @@ levels), and that Control_L/Control_R are never gorca modifiers.
 
 ## Rig
 
-`/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/cc/` (drive.sh, entry.py):
+`/tmp/scratch/cc/` (drive.sh, entry.py):
 `tests/shell/run_shell.sh` world, `tests/web/m7/rd.py` RemoteDesktop key injection (evdev 29+30,
 29+46), release gorca binary `<repo>/target/release/gorca --impersonate-orca` in the private world
 only.

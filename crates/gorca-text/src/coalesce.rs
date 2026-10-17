@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Coalescing of text edits (ADR-0007 section 9, EV-1, EV-5). Consecutive edits that touch each
 //! other fold into one net splice, so a burst of typing, a held BackSpace or a log view
 //! appending produces one thing to present per batch. Lengths only: the text of the net insert

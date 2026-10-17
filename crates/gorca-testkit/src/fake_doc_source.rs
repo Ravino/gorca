@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! A scripted web document source and a fake source factory, for the state machines of the
 //! document side (doc actor, registry, Reader) without a browser.
 //!

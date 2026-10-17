@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The consumer-side coalescing table.
 //!
 //! Pending events are stored **in output order** in one `Vec<NodeEvent>` (`events`), with a

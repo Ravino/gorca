@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The store: `scc::HashIndex<NodeKey, Arc<ArcSwap<Entry>>>` per app (decision MS-3), one writer
 //! (the app actor), any number of lock-free readers.
 //!

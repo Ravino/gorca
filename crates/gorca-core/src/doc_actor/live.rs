@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Live-region policy (ADR-0003 section 13, M8): which changes of a document become speech,
 //! and how many. Pure over a published `WebDoc` plus a caller-supplied clock, so it is tested
 //! without a browser and costs nothing on the key path: the document actor feeds it the nodes a

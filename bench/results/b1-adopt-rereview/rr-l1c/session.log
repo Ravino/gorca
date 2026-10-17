@@ -3,12 +3,12 @@
    Compiling tokio v1.53.2
    Compiling tokio-util v0.7.20
    Compiling zbus v5.19.0
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-ingress)
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-mirror)
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-bench-b2)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-bench-b1)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 6.60s
      Running unittests src/lib.rs (target/debug/deps/gorca_bench_b1-fabe3af03abd0289)
 
@@ -94,20 +94,20 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
    Compiling enumflags2 v0.7.12
    Compiling zvariant v5.15.0
    Compiling tracing v0.1.44
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-ingress)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
    Compiling zbus_names v4.3.4
    Compiling zbus_macros v5.19.0
    Compiling zbus v5.19.0
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-bench-b2)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-bench-b1)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `release` profile [optimized + debuginfo] target(s) in 14.36s
    Compiling syn v3.0.8
    Compiling syn v2.0.119
    Compiling bitflags v2.13.2
    Compiling serde v1.0.229
-   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-model)
+   Compiling gorca-model v0.0.0 (<repo>/crates/gorca-model)
    Compiling tokio-macros v2.7.2
    Compiling thiserror-impl v2.0.21
    Compiling serde_derive v1.0.229
@@ -116,19 +116,19 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
    Compiling thiserror v2.0.21
    Compiling tracing v0.1.44
    Compiling tokio-util v0.7.20
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-ingress)
-   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-doc-source-api)
-   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-connector-api)
-   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-testkit)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/crates/gorca-doc-source-api)
+   Compiling gorca-connector-api v0.0.0 (<repo>/crates/gorca-connector-api)
+   Compiling gorca-testkit v0.0.0 (<repo>/crates/gorca-testkit)
     Finished `release` profile [optimized + debuginfo] target(s) in 16.49s
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-rt)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
    Compiling zbus v5.19.0
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-ingress)
-   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-doc-source-api)
-   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-connector-api)
-   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-testkit)
-   Compiling b1-fakeapp v0.0.0 (<repo>/.claude/worktrees/b1-rereview/tests/harness/b1/fakeapp)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/crates/gorca-doc-source-api)
+   Compiling gorca-connector-api v0.0.0 (<repo>/crates/gorca-connector-api)
+   Compiling gorca-testkit v0.0.0 (<repo>/crates/gorca-testkit)
+   Compiling b1-fakeapp v0.0.0 (<repo>/tests/harness/b1/fakeapp)
     Finished `release` profile [optimized + debuginfo] target(s) in 20.82s
 [1/6] r0 walk #0 (load 16.10 13.99 11.74 2/3534 1436542)
 2026-10-15T12:16:39.349939Z  INFO gorca_daemon: gorca started workers=8 speech=Voicego topology="single"
@@ -220,5 +220,5 @@ B1-STALE@walk              r0                      0            0            0  
 |---|---|---|
 | r0 | no | B1-L4.announce |
 | p | no | B1-L4.announce |
-wrote <repo>/.claude/worktrees/b1-rereview/bench/results/b1-adopt-rereview/rr-l1c/rr-l1c/20261015T134420Z.json
+wrote <repo>/bench/results/b1-adopt-rereview/rr-l1c/rr-l1c/20261015T134420Z.json
 == end 2026-10-15T13:44:20Z rc=0 load 8.77 8.80 9.93 1/3543 1777995

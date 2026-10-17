@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Platform probe (ADR-0005 8): the desktop facts that change which keys gorca can use.
 //!
 //! Read through `gsettings get` subprocesses, each under a 500 ms deadline, off the hot lanes.

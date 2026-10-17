@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Bus fixtures: the mock broker, a private `dbus-daemon`, a private `dbus-broker` (the one that
 //! reproduces F-3 for real), or an existing bus (the isolated AT-SPI harness).
 //!

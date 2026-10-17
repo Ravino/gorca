@@ -13,10 +13,11 @@ members = [
 version = "0.0.0"
 edition = "2024"
 rust-version = "1.99"
-# TBD: the owner has not chosen a license yet.
-license = "TBD"
+# Core: GPL-3.0-or-later (plus the section 7 permission in LICENSE-EXCEPTION).
+# The extension SDK crate (gorca-ext-api) overrides this with MIT OR Apache-2.0.
+license = "GPL-3.0-or-later"
 publish = false
-repository = "TBD"
+repository = "https://github.com/Ravino/gorca"
 
 [workspace.dependencies]
 # Internal crates.

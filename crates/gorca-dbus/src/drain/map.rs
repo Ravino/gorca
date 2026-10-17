@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Reference mapping from AT-SPI event signals to the closed `NodeEvent` set.
 //!
 //! This is the table in `docs/bakeoff/b2-ingress/SPEC.md` section 3.2. Every B-2 candidate must

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Representative per-engine quirk normalisation, shared verbatim by the native baseline and the
 //! WASM guest so both arms run the same code. Engine 1 = Gecko, 2 = Blink.
 #![no_std]

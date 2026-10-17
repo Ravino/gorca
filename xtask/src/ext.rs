@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `cargo xtask build-ext`: build the shipped extensions as `wasm32-wasip2` components and lay
 //! them out where the daemon looks (ADR-0008 amendment 1: extensions are built once for WASM,
 //! the default, and natively; this is the WASM half).

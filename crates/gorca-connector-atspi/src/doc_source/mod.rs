@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 use gorca_doc_source_api::{
     ActionCaps, DocSource, DocSourceCtx, JoinKeyCaps, SourceCaps, SourceError, SourceKind,
 };

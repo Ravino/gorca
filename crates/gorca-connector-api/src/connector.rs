@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The `Connector` trait and its context.
 
 use gorca_model::{ConnectorId, ConnectorKind};

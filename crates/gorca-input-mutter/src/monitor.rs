@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 use std::time::{Duration, Instant};
 
 use gorca_input_api::GrabSet;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `SimSut`: SPEC section 5 as an executable reference reader, in virtual time.
 //!
 //! The reader here is deliberately small and literal: the invalidation table of 5.1, the read

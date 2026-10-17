@@ -263,8 +263,8 @@ test result: ok. 50 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; fin
 # loadavg_end=10.77 11.85 11.54 4/3698 1950178
 # reader_env=GORCA_M1=1 GORCA_M1_STRICT=1 GORCA_M4=1 GORCA_M4_STRICT=1 GORCA_M4B=1 GORCA_M4B_STRICT=1 GORCA_LOG=info
 # gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
-# reader_args=--impersonate-orca --shell-policy=auto --ext-dir=<repo>/.claude/worktrees/agent-a150de05806536e83/target/release/extensions
-# ext_dir=<repo>/.claude/worktrees/agent-a150de05806536e83/target/release/extensions
+# reader_args=--impersonate-orca --shell-policy=auto --ext-dir=<repo>/target/release/extensions
+# ext_dir=<repo>/target/release/extensions
 # extensions=ext-gnome-shell
 # note0=A1: 150 fresh dialogs and 150 fresh plain windows after 6 warm-up ones; the focus follows the activation by 2 ms; a1_ms is the activation emit to the first SPEAK carrying the focus button (the title, role and dialog text lead it in one utterance)
 # note1=N1: 60 trials of 400 ms focus speech, cycling polite announcement, assertive announcement + newer focus, Shell banner, banner + newer focus; 60 notifications spoken

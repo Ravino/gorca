@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `e2e-m8`: the M8 (NVDA browse-mode parity) gate runner. Run it inside the private sessions:
 //!
 //! ```text

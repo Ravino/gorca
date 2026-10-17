@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Focus state machine (ADR-0001 section 7.1).
 
 use std::time::{Duration, Instant};

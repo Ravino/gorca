@@ -1,4 +1,7 @@
-# Symbol table, English. Modelled on the behaviour of NVDA symbols.dic; names are original.
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Symbol table, English. Modelled on NVDA's symbols.dic (Copyright NVDA contributors,
+# GPL-2.0-or-later, https://github.com/nvaccess/nvda) as a reference. Many names and levels
+# coincide with NVDA's table; see THIRD-PARTY.md. The format, identifiers and the @word.* strings are gorca's own.
 # Fields (tab separated): symbol, spoken name, level, preserve.
 #   symbol: one character, "U+XXXX", the literal "...", or "@id" for a complex rule or word.
 #   level: none (always spoken), some, most, all, char (only when one character is read).

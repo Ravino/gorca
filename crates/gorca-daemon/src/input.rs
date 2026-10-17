@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The input pump: the daemon's glue between the key source and the Reader (ADR-0005 4).
 //!
 //! It owns the [`InputLane`] classifier. For every key the source delivers it classifies, applies

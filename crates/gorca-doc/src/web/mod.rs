@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Web-prep core (ADR-0003 sections 4.1, 4.4, 4.5, 4.8, 9.6; GM section 1.2): generational
 //! arena, document-order treap with per-category summaries, flat-text map, incremental ops and
 //! left-right publication. Pure data; no tokio, no I/O, no `gorca-core` types.

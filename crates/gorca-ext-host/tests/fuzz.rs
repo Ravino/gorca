@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Fuzzing the WIT boundary (M5 acceptance: "no core panic from any extension input"). Seeded and
 //! deterministic, so a failure reproduces; a failing seed is printed.
 //!

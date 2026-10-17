@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `ext-gnome-shell`: GNOME Shell presentation policy (M4b, ADR-0001 section 10, ADR-0008).
 //!
 //! The Shell is a Clutter/St application: no Selection interface, actors that appear and vanish

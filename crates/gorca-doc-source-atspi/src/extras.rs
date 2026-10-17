@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! M8b: what the browsers say about a node beyond role, state, name and attributes, and the
 //! per-engine rows that normalise it.
 //!

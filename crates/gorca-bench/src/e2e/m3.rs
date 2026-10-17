@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! M3 end-to-end gates (docs/adr/0007 16): caret echo, typing echo, selection, say-all and
 //! password handling, through the real connector and the real keyboard path.
 //!

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `RealSut`: `b1-fakeapp` processes on an isolated a11y bus, observed through the presentation
 //! log of the daemon under test (PW-10, `--bench-present-log`).
 //!

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Process-level checks: the binary starts, ignores SIGUSR1 and exits cleanly (status 0) on
 //! SIGINT and SIGTERM.
 // Test code: ADR-0001 section 11 rule 6 exempts it from the unwrap/expect/panic lints.

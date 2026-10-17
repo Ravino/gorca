@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Node presentation: name, role, states and value as one utterance.
 
 use std::sync::Arc;

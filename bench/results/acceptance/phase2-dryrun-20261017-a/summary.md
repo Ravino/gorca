@@ -1,6 +1,6 @@
 # Phase 2 acceptance: DRY RUN, NOT ACCEPTANCE DATA (gates pass)
 
-Mode: **DRY RUN (not acceptance), PARTIAL (m4 x1)**. Run dir: `<repo>/.claude/worktrees/agent-a212e0b0695e3d0d9/bench/results/acceptance/phase2-dryrun-20261017-a`.
+Mode: **DRY RUN (not acceptance), PARTIAL (m4 x1)**. Run dir: `<repo>/bench/results/acceptance/phase2-dryrun-20261017-a`.
 Resolved topology (from the reader reports): lanes-rtx2.
 
 ## Steps

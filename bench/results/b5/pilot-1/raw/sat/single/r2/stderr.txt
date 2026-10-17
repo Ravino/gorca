@@ -1,5 +1,5 @@
-== reader <repo>/.claude/worktrees/agent-a12a85c2ca79d781a/target/release/gorca built from 932d611, tree at 932d611
-== e2e b5-single-sat-r2: reader=daemon:<repo>/.claude/worktrees/agent-a12a85c2ca79d781a/target/release/gorca backend=voicego repeats=1 load=29.47 22.00 16.27 34/3209 215946
+== reader <repo>/target/release/gorca built from 932d611, tree at 932d611
+== e2e b5-single-sat-r2: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=1 load=29.47 22.00 16.27 34/3209 215946
 -- round 1/1 L1 (load 29.47 22.00 16.27 34/3209 215946)
 2026-10-14T23:46:38.472367Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
 2026-10-14T23:46:38.484451Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus

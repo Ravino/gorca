@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Cache-domain warming (ADR-0003 AS-3, WF-3).
 //!
 //! Firefox serves AT-SPI queries from the parent process's cache of the content tree and starts

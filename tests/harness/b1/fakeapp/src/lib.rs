@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `b1-fakeapp`: the fake AT-SPI application of bake-off B-1 (SPEC 8.1, H-2).
 //!
 //! One binary, many models (`../models/*.json`). The tree, its mutations and the truth log are

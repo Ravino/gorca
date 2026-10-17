@@ -1,5 +1,5 @@
 """V-2 Shell: extents of St/Clutter a11y objects. PRIVATE session only."""
-import sys; sys.path.insert(0,"<repo>/tools/platform-probes/adr6")
+import sys; sys.path.insert(0,__import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 from rig import *
 shell_pid=int(sys.argv[1])
 b=":1.0"; print("shell bus",b); root="/org/a11y/atspi/accessible/root"

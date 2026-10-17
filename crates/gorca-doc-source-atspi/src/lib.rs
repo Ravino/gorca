@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `AtspiDocSource`: the mandatory AT-SPI document source under the web mirror (ADR-0003 6.2).
 //!
 //! * [`p2p`]: per-app pool of peer-to-peer connections (fallback: the bus connection).

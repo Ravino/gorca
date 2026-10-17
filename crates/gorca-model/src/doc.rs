@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Pure-data types of the web document mirror and its source boundary.
 //!
 //! ADR-0001 section 11 lists `DocDelta`, `DocNodeId` and friends under `gorca-doc-source-api`,

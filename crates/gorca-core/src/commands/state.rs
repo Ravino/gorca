@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Messages and state of the command layer: settings snapshots from the config task, notices
 //! from the input source, and the requests the Reader sends back out (ADR-0005 6, 7.6).
 

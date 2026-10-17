@@ -5,7 +5,7 @@
    Compiling chrono v0.4.45
    Compiling id-arena v2.3.0
    Compiling serde_json v1.0.154
-   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-daemon)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
    Compiling lock_api v0.4.14
    Compiling seize v0.5.1
    Compiling hashbrown v0.14.5
@@ -31,75 +31,75 @@
    Compiling wasmtime-internal-core v49.0.3
    Compiling tinytemplate v1.2.1
    Compiling cargo_metadata v0.23.1
-   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-model)
+   Compiling gorca-model v0.0.0 (<repo>/crates/gorca-model)
    Compiling regalloc2 v0.15.2
    Compiling parking_lot_core v0.9.12
    Compiling cranelift-bitset v0.136.3
    Compiling wasmtime-internal-jit-icache-coherence v49.0.3
    Compiling gimli v0.33.0
    Compiling object v0.40.0
-   Compiling gorca-text v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-text)
+   Compiling gorca-text v0.0.0 (<repo>/crates/gorca-text)
    Compiling cranelift-entity v0.136.3
-   Compiling gorca-doc v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-doc)
+   Compiling gorca-doc v0.0.0 (<repo>/crates/gorca-doc)
    Compiling pulley-interpreter v49.0.3
    Compiling cranelift-bforest v0.136.3
    Compiling criterion v0.8.2
    Compiling zbus_names v4.3.4
-   Compiling gorca-config v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-config)
+   Compiling gorca-config v0.0.0 (<repo>/crates/gorca-config)
    Compiling tokio-util v0.7.20
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-rt)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
    Compiling zbus_macros v5.19.0
    Compiling zbus_xml v5.2.1
    Compiling inotify v0.11.5
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-ingress)
-   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-doc-source-api)
-   Compiling gorca-output-api v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-output-api)
-   Compiling gorca-input-api v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-input-api)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/crates/gorca-doc-source-api)
+   Compiling gorca-output-api v0.0.0 (<repo>/crates/gorca-output-api)
+   Compiling gorca-input-api v0.0.0 (<repo>/crates/gorca-input-api)
    Compiling zbus-lockstep v0.5.2
-   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-connector-api)
-   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-testkit)
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-mirror)
-   Compiling gorca-speech v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-speech)
+   Compiling gorca-connector-api v0.0.0 (<repo>/crates/gorca-connector-api)
+   Compiling gorca-testkit v0.0.0 (<repo>/crates/gorca-testkit)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-speech v0.0.0 (<repo>/crates/gorca-speech)
    Compiling wasm-encoder v0.258.3
    Compiling wit-parser v0.258.3
-   Compiling gorca-speech-voicego v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-speech-voicego)
+   Compiling gorca-speech-voicego v0.0.0 (<repo>/crates/gorca-speech-voicego)
    Compiling zbus-lockstep-macros v0.5.2
-   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-core)
-   Compiling gorca-speech-ssip v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-speech-ssip)
+   Compiling gorca-core v0.0.0 (<repo>/crates/gorca-core)
+   Compiling gorca-speech-ssip v0.0.0 (<repo>/crates/gorca-speech-ssip)
    Compiling wasmprinter v0.258.3
    Compiling atspi-common v0.14.0
    Compiling zbus v5.19.0
    Compiling wasm-metadata v0.258.3
-   Compiling gorca-input-xkb v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-input-xkb)
+   Compiling gorca-input-xkb v0.0.0 (<repo>/crates/gorca-input-xkb)
    Compiling wit-parser v0.261.0
-   Compiling gorca-input-inject v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-input-inject)
+   Compiling gorca-input-inject v0.0.0 (<repo>/crates/gorca-input-inject)
    Compiling cranelift-codegen v0.136.3
-   Compiling gorca-braille-brlapi v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-braille-brlapi)
+   Compiling gorca-braille-brlapi v0.0.0 (<repo>/crates/gorca-braille-brlapi)
    Compiling wasmtime-environ v49.0.3
    Compiling dashmap v6.2.1
    Compiling wit-component v0.258.3
-   Compiling gorca-bench-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-bench-mirror)
+   Compiling gorca-bench-mirror v0.0.0 (<repo>/crates/gorca-bench-mirror)
    Compiling wasmtime-internal-wit-bindgen v49.0.3
-   Compiling xtask v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/xtask)
-   Compiling ext-vte v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/extensions/ext-vte)
+   Compiling xtask v0.0.0 (<repo>/xtask)
+   Compiling ext-vte v0.0.0 (<repo>/extensions/ext-vte)
    Compiling wasmtime-internal-component-macro v49.0.3
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-dbus)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
    Compiling atspi v0.30.0
-   Compiling b1-fakeapp v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/tests/harness/b1/fakeapp)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-bench-b2)
-   Compiling gorca-doc-source-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-doc-source-atspi)
-   Compiling gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-connector-atspi)
-   Compiling gorca-input-mutter v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-input-mutter)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-bench-b1)
-   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-bench)
-   Compiling gorca-ext-api v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-ext-api)
-   Compiling gorca-bench-web v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-bench-web)
+   Compiling b1-fakeapp v0.0.0 (<repo>/tests/harness/b1/fakeapp)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-doc-source-atspi v0.0.0 (<repo>/crates/gorca-doc-source-atspi)
+   Compiling gorca-connector-atspi v0.0.0 (<repo>/crates/gorca-connector-atspi)
+   Compiling gorca-input-mutter v0.0.0 (<repo>/crates/gorca-input-mutter)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
+   Compiling gorca-bench v0.0.0 (<repo>/crates/gorca-bench)
+   Compiling gorca-ext-api v0.0.0 (<repo>/crates/gorca-ext-api)
+   Compiling gorca-bench-web v0.0.0 (<repo>/crates/gorca-bench-web)
    Compiling cranelift-native v0.136.3
    Compiling cranelift-frontend v0.136.3
    Compiling wasmtime-internal-unwinder v49.0.3
    Compiling wasmtime-internal-cranelift v49.0.3
    Compiling wasmtime v49.0.3
-   Compiling gorca-ext-host v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-ext-host)
+   Compiling gorca-ext-host v0.0.0 (<repo>/crates/gorca-ext-host)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 15s
      Running unittests src/lib.rs (target/debug/deps/b1_fakeapp-615bcf4c72ce2219)
 
@@ -1422,15 +1422,15 @@ running 3 tests
    Compiling enumflags2 v0.7.12
    Compiling tracing v0.1.44
    Compiling zvariant v5.15.0
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-ingress)
-   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-doc-source-api)
-   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-connector-api)
-   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-testkit)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/crates/gorca-doc-source-api)
+   Compiling gorca-connector-api v0.0.0 (<repo>/crates/gorca-connector-api)
+   Compiling gorca-testkit v0.0.0 (<repo>/crates/gorca-testkit)
    Compiling zbus_names v4.3.4
    Compiling zbus_macros v5.19.0
    Compiling zbus v5.19.0
-   Compiling b1-fakeapp v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/tests/harness/b1/fakeapp)
+   Compiling b1-fakeapp v0.0.0 (<repo>/tests/harness/b1/fakeapp)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.77s
 test the_policy_hears_of_a_new_app_before_it_does_anything ... ok
 test the_invalidation_suite_passes_against_the_real_daemon has been running for over 60 seconds

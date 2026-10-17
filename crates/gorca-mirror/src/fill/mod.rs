@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The fill policy (B-1 SPEC 4.4): when to fetch what so that the next focus, state change or
 //! "where am I" is answered from memory.
 //!

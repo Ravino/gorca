@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Caret-move classification: which unit to speak for which key (ADR-0007 section 5.2, CR-2 to
 //! CR-4). Pure tables and one helper that turns a unit choice into a range over any
 //! [`TextSpace`], so native fields and browse mode present identically.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Corpus loader: reads `tests/web/b6/corpus.tsv` and renders each entry to HTML bytes.
 //!
 //! `gen_large` entries are generated here with the same templates as

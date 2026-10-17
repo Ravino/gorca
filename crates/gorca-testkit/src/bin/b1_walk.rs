@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `b1-walk`: the walk driver of bake-off B-1 (H-3). It is what `bench/b1/driver.sh` runs through
 //! `B1_WALK_DRIVER`, inside `tests/harness/run-isolated.sh`.
 //!

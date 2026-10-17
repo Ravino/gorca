@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Client of `org.freedesktop.RealtimeKit1` (rtkit) for the hot lanes of runtime-topology arm
 //! (c), following the order PipeWire uses (P-12 report, section 2): the caller sets
 //! `RLIMIT_RTTIME` first (rtkit refuses an unlimited process), clamps the wanted priority to the

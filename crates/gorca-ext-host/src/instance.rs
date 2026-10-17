@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! What every instance of an extension has in common: its shared host context, the host functions
 //! (written once over the API types, used by both backends), faults and the hook trait the slot
 //! drives.

@@ -1,7 +1,7 @@
 == session adopt-final2 start 2026-10-14T20:06:21Z load 9.47 7.76 5.78 2/2509 3595583
 == host: load 9.47 7.76 5.78 2/2510 3595588 governor performance  ==
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench-b1)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.66s
      Running unittests src/lib.rs (target/debug/deps/gorca_bench_b1-fabe3af03abd0289)
 
@@ -183,8 +183,8 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
      Running benches/step.rs (target/release/deps/step-c5c043c303998992)
 step[candidate-standin]: median over 7 rounds of the worst step = 18.5 us (gate 250 us)
 [18/22] p step #0 (load 0.66 0.92 1.94 1/2409 3772620)
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench-b1)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `bench` profile [optimized + debuginfo] target(s) in 2.97s
      Running benches/step.rs (target/release/deps/step-de5c2acddd90b898)
 step[focus-prefetch]: median over 7 rounds of the worst step = 32.7 us (gate 250 us)

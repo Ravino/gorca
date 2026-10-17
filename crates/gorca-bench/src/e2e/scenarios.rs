@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Scenario bodies. Each builds a [`Rig`], drives a stimulus, correlates the mock speech
 //! server's records with the stimulus timestamps and returns raw samples (milliseconds).
 //!

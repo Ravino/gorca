@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Input boundary: key events, key sources, injection, grab sets and key classification.
 //!
 //! Responsibility (ADR-0001 section 11): `KeyEvent`, `KeySource`, `KeyInjector`, `GrabSet`,

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Core types to extension types and back. The extension API is deliberately a narrow subset of
 //! the core model (ADR-0001 section 10): ids are packed integers, roles are the WIT enum, text is
 //! copied. Everything an extension returns is clamped here, so a hostile or buggy extension cannot

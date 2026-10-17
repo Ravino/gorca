@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `b1`: B-1 harness runner.
 //!
 //! ```text

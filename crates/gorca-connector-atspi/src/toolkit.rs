@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Toolkit normalisation keys (ADR-0001 section 5.6). Quirks that more than one consumer needs
 //! live in tables keyed by `AppInfo.toolkit`, never in ad-hoc code.
 

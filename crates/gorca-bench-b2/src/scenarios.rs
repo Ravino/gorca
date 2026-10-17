@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The benchmark scenarios T1..T6 and the fixture self-test (SPEC section 6).
 
 use std::io::{Read, Write};

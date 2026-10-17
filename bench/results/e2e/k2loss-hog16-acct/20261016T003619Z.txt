@@ -12,7 +12,7 @@
 # python=Python 3.13.5
 # build=release
 # label=k2loss-hog16-acct
-# reader=daemon:<repo>/.claude/worktrees/k2loss/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=20
 # samples_per_series=1200

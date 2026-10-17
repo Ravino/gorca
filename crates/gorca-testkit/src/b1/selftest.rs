@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Harness self-tests (SPEC H-10(b)/(c)): the conformance suite must pass for a reader that
 //! implements the contract and must fail, for the right case, for a reader with a known defect.
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Announcements and notifications (M4b, phase-2.md M4; Orca `_on_showing_changed` for the
 //! `notification` role and `object:announcement`).
 //!

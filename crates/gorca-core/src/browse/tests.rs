@@ -1,4 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};

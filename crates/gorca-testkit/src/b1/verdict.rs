@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Verdict per presentation (SPEC 6.2), the small in-testkit version used by the conformance cases.
 //!
 //! The runner's classifier (`gorca-bench-b1::verdict`) works on the on-disk logs and is the

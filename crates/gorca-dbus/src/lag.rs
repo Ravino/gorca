@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! D-2 lag detection with hysteresis.
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

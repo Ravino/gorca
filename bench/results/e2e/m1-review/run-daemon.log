@@ -19,7 +19,7 @@ test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
 test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.04s
 
     Finished `release` profile [optimized + debuginfo] target(s) in 0.07s
-== e2e m1-review: reader=daemon:<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/target/release/gorca backend=voicego repeats=1 load=8.56 11.83 13.04 16/2318 4667
+== e2e m1-review: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=1 load=8.56 11.83 13.04 16/2318 4667
 -- round 1/1 K2 (load 8.56 11.83 13.04 24/2318 4667)
 2026-10-13T14:17:19.819959Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
 2026-10-13T14:17:19.821665Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
@@ -64,7 +64,7 @@ test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; fin
 # python=Python 3.13.5
 # build=release
 # label=m1-review
-# reader=daemon:<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=150

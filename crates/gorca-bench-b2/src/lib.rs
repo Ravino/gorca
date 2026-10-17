@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Bake-off B-2 harness (event socket drain + ingress coalescer).
 //!
 //! The harness compiles against the public API of `gorca-dbus::drain` and `gorca-ingress`, so

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Reader-level tests of the review arm, driven through `Reader::handle` like the keys are.
 #![allow(
     clippy::wildcard_enum_match_arm,

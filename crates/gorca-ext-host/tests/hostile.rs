@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Hostile-extension fixtures for the host-side work a guest's fuel cannot see (review finding
 //! M-1): oversize arguments, host-call loops and aliased lists. Reports the worst time a
 //! hostile `present` holds the calling thread (the Reader), per attack, and asserts it stays

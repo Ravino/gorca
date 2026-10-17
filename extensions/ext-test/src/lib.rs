@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `ext-test`: the host's fault-injection and acceptance extension.
 //!
 //! Benign unless triggered, so it can stay loaded while the latency gates run (M5 acceptance:

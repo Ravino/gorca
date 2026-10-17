@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The policy audits of the B-1 kit (MA-1, MA-6, MA-9) against the adopted policy through the real driver, and
 //! MA-6 at the SPEC 7 caps (65 536 live nodes, 4 096-event batch, dirty-all) on the policy alone.
 #![allow(clippy::unwrap_used, clippy::expect_used)]

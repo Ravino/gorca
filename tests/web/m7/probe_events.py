@@ -3,7 +3,7 @@ import gi
 gi.require_version("Gio", "2.0")
 from gi.repository import Gio, GLib
 
-ROOT = "<repo>/.claude/worktrees/agent-a1d08cc29c61e0bae"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", ".."))
 AX = ROOT + "/tests/web/m7/ax.py"
 addr = os.environ["AT_SPI_BUS_ADDRESS"]
 conn = Gio.DBusConnection.new_for_address_sync(

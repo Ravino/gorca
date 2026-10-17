@@ -28,8 +28,8 @@ test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
 test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
 
     Finished `release` profile [optimized + debuginfo] target(s) in 0.25s
-== reader <repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca built from df20f8c, tree at df20f8c
-== e2e adopt-m3c: reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca backend=voicego repeats=1 load=8.29 11.14 13.61 2/2980 431338
+== reader <repo>/target/release/gorca built from df20f8c, tree at df20f8c
+== e2e adopt-m3c: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=1 load=8.29 11.14 13.61 2/2980 431338
 -- round 1/1 C1 (load 8.29 11.14 13.61 2/2980 431338)
 2026-10-15T00:11:07.329517Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
 2026-10-15T00:11:07.330778Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
@@ -144,7 +144,7 @@ test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; fin
 # python=Python 3.13.5
 # build=release
 # label=adopt-m3c
-# reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=150

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Bootstrap I/O: finding the a11y bus, connecting to it, ID-5 enablement and listener
 //! registration. Every call goes through `gorca_dbus::call_method` with a deadline (R2).
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Gate thresholds of SPEC section 9. The SPEC table is generated from [`GATES`]; do not
 //! restate a number anywhere else in the harness.
 

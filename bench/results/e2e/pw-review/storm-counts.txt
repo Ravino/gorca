@@ -1,4 +1,4 @@
 1 utterances for 300 2 utterances for 300 2 utterances for 300 1 utterances for 300 2 utterances for 300  <- <repo>
 Updated 1 path from the index
-164 utterances for 300 206 utterances for 300 232 utterances for 300 212 utterances for 300 225 utterances for 300  <- <repo>/.claude/worktrees/agent-aeebce99e42aab241
+164 utterances for 300 206 utterances for 300 232 utterances for 300 212 utterances for 300 225 utterances for 300  <- <repo>
 Updated 1 path from the index

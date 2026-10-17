@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Extension API: the WIT world, a Rust mirror of its types and traits, and (later) generated
 //! bindings.
 //!

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Core role enum: a superset mapping of ARIA 1.2, AT-SPI and AccessKit roles (ADR-0001 4.2).
 //!
 //! TBD: the full table is generated from the connector mapping work. Unknown raw roles map to

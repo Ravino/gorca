@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Identities (ADR-0001 section 4.1) and the process-wide epoch value.
 
 use std::fmt;

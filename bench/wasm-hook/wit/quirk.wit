@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 package gorca:bench@0.1.0;
 
 /// Shapes mirror the hot-path hook candidates for per-engine web quirks (ADR-0008).

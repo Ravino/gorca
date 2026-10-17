@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Hard resource bounds (SPEC 3.6 / 4.5): hostile input must not grow memory, and every cap
 //! counter must equal the real size of its structure after every operation.
 #![allow(

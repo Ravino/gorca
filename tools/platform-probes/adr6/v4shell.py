@@ -1,5 +1,5 @@
 """V-4 Shell/St: any bounds-changed / geometry-ish events while Overview opens and closes. PRIVATE session only."""
-import sys; sys.path.insert(0,"<repo>/tools/platform-probes/adr6")
+import sys; sys.path.insert(0,__import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 from rig import *
 from collections import Counter
 K=Keys(own=False); pump(1)

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The terminal presenter policy (ADR-0001 T-2): one [`Session`] per terminal widget.
 //!
 //! A session is a pure state machine over [`TermInput`] and a millisecond clock the host owns.

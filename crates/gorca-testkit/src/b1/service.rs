@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Seeded randomness and the serial service-time model (SPEC 8.1, D-1).
 
 use super::proto::ServiceSpec;

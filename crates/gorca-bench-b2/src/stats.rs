@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Exact percentiles over collected samples, and spread across repeated runs.
 
 #[derive(Clone, Debug, Default, PartialEq)]

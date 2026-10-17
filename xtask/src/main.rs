@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Repository automation. `cargo xtask deps` enforces the ADR-0001 section 11 dependency rules
 //! over `cargo metadata`; see [`deps`].
 

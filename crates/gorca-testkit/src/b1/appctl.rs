@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Driving the `b1-fakeapp` binary: spawn it inside an isolated bus, send [`Cmd`]s, read the
 //! truth log. The binary's path is the caller's business (`env!("CARGO_BIN_EXE_b1-fakeapp")` in
 //! the fake app's own tests; the runner locates it next to its own executable).

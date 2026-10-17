@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `org.freedesktop.a11y.KeyboardMonitor` client: name ownership (ID-1) and the `MonitorState`
 //! state machine.
 //!

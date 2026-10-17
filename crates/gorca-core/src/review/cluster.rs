@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `build_line_model`: zones from snapshots and text lines, clustered into lines
 //! (ADR-0006 6.3, 6.4, 6.7). **Pure**: owned input, no I/O, no clock. It runs on the `cpu` pool.
 //!

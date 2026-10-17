@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `gorca-hog`: the synthetic M-15 load of bake-off B-5. Saturates every core with the kind of
 //! work a parallel tree build does (decode, sort, hash a table of node records), at the default
 //! scheduling class, so the scheduler has to choose between it and the reader under test.

@@ -1,4 +1,4 @@
-== e2e m3-flakeS-instr-1: reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/flake/gorca-instr backend=voicego repeats=2 load=22.98 22.09 18.49 21/2644 2753934
+== e2e m3-flakeS-instr-1: reader=daemon:/tmp/scratch/flake/gorca-instr backend=voicego repeats=2 load=22.98 22.09 18.49 21/2644 2753934
 2026-10-14T09:30:02.407476Z  INFO gorca_daemon::input: input lane statistics keys=4098 ambiguous=0 band_forks=0
 2026-10-14T09:31:02.408095Z  INFO gorca_daemon::input: input lane statistics keys=8422 ambiguous=0 band_forks=0
 2026-10-14T09:32:02.408043Z  INFO gorca_daemon::input: input lane statistics keys=12718 ambiguous=0 band_forks=0
@@ -12,7 +12,7 @@
 2026-10-14T09:38:52.341132Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 10032, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
 == wrote bench/results/e2e/m3-flakeS-instr-1/20261014T093852Z.{json,txt}
 == 2 gate(s) FAILED
-== e2e m3-flakeS-instr-2: reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/flake/gorca-instr backend=voicego repeats=2 load=24.54 23.18 21.87 15/2986 2789852
+== e2e m3-flakeS-instr-2: reader=daemon:/tmp/scratch/flake/gorca-instr backend=voicego repeats=2 load=24.54 23.18 21.87 15/2986 2789852
 2026-10-14T09:59:37.680013Z  INFO gorca_daemon::input: input lane statistics keys=4080 ambiguous=0 band_forks=0
 2026-10-14T10:00:37.680051Z  INFO gorca_daemon::input: input lane statistics keys=8414 ambiguous=0 band_forks=0
 2026-10-14T10:01:37.680349Z  INFO gorca_daemon::input: input lane statistics keys=12674 ambiguous=0 band_forks=0

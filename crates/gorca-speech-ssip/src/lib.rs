@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! SSIP `SpeechClient` (speech-dispatcher; voicego in text-SSIP mode).
 //!
 //! Responsibility (ADR-0001 sections 8.2 and 11): compatibility backend. Wire mapping from the

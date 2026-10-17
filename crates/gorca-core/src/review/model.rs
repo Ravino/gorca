@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The flat-review line model (ADR-0006 3, 6): an immutable `Arc<LineModel>` per surface.
 
 use std::collections::HashMap;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The document registry (browse-mode design sections 5.3 and 6, ADR-0003 AM-10): one task that
 //! owns the web side of every application.
 //!

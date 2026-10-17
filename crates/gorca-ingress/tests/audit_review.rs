@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Regression tests for the findings of the review of the B-2 fixes (2026-10-12):
 //! F-1 (Focus in the ring survives preemption), F-2 (failed preemption is O(1)),
 //! F-3 (the reserve is exact with any number of producers), F-4 (a backed-up reaper hands the

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Terminal extension interface (ADR-0001 section 5.6 T-2, ADR-0008 tier W3, milestone M6).
 //!
 //! The terminal presenter is product policy: what counts as new output, where the prompt ends,

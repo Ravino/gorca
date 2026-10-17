@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The consumer side of a run: a router that hands out per-app ingresses, and one consumer
 //! thread per app that plays the role of the app actor (wake on `notified`, `drain`, fold).
 

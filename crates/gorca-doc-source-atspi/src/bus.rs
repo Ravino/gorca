@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Stand-alone event feed for the source: subscribes to `org.a11y.atspi.Event.Object` of one
 //! application on an a11y bus and forwards normalised [`AtspiEvent`]s.
 //!

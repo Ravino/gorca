@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Routing of a browser application's events to the documents that own the nodes (browse-mode
 //! design JN-3, EF-1). One call from the app actor's pump; no shared lines with the Reader
 //! routing.

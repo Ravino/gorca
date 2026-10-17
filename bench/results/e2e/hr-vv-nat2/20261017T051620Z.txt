@@ -14,7 +14,7 @@
 # topology_arms=lanes-rtx1
 # topology_expected=-
 # label=hr-vv-nat2
-# reader=daemon:<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=150
@@ -23,8 +23,8 @@
 # loadavg_end=18.26 19.27 18.24 3/2813 76066
 # reader_env=GORCA_M6=1 GORCA_M6_REAL=1 GORCA_VD_RECOVER=1 GORCA_VD_ROUNDS=1 GORCA_TOPOLOGY_REPORT=bench/results/e2e/hr-vv-nat2/topology/topology.%p.json
 # gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
-# reader_args=--impersonate-orca --terminal-policy=native --ext-dir=<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/extensions
-# ext_dir=<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/extensions
+# reader_args=--impersonate-orca --terminal-policy=native --ext-dir=<repo>/target/release/extensions
+# ext_dir=<repo>/target/release/extensions
 # extensions=ext-gnome-shell,ext-vte
 # note0=VV: a real gnome-terminal-server (VTE 0.80) in a private headless session; keys go to the reader through the emulated Mutter and to the terminal through the compositor's RemoteDesktop keyboard; floods are `yes` and `seq 1 100000000`
 

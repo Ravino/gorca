@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The terminal arm of the Reader (milestone M6, ADR-0001 T-2, ADR-0008 tier W3).
 //!
 //! The policy lives in the `ext-vte` extension (prompt detection, new output against repaint,

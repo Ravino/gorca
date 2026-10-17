@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `gorca-stub-reader`: the daemon stand-in of the e2e harness. See `gorca_bench::e2e::stub`.
 //!
 //! Runs until stdin reaches EOF (the harness owns the pipe, so the stub dies with it) and

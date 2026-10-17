@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The run-directory contract between the walk driver (H-3, test-engineer), the daemon (PW-10) and
 //! this harness, and the evaluation of one run into gate metrics.
 //!

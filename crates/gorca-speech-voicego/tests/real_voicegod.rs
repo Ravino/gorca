@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Manual check against a real `voicegod` (not part of `cargo test`; run with `--ignored`).
 //!
 //! Start a private voicegod (null sink) and point the test at its socket:

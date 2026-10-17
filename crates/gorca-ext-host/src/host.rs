@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The host: loads manifests and components, matches them to applications, owns the worker that
 //! runs commands and flushes settings, and implements the core's [`ExtSource`] hook points.
 

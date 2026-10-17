@@ -1,6 +1,6 @@
 #!/bin/bash
 # Re-review: W3 alone, one repeat per daemon start (the presentation log is per daemon).
-cd /tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/src || exit 1
+cd /tmp/scratch/src || exit 1
 N=${1:-30}
 for i in $(seq 1 $N); do
   echo "=== run $i load $(cat /proc/loadavg)"

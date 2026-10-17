@@ -1,2 +1,2 @@
-installed <repo>/.claude/worktrees/agent-a150de05806536e83/target/debug/extensions/ext-gnome-shell/ext_gnome_shell.wasm
-installed <repo>/.claude/worktrees/agent-a150de05806536e83/target/release/extensions/ext-gnome-shell/ext_gnome_shell.wasm
+installed <repo>/target/debug/extensions/ext-gnome-shell/ext_gnome_shell.wasm
+installed <repo>/target/release/extensions/ext-gnome-shell/ext_gnome_shell.wasm

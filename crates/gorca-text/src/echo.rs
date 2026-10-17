@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Typing-echo model (ADR-0007 section 7, TE-1 to TE-7). Pure state: time is passed in as
 //! milliseconds from any monotonic origin, so the Reader's fake clock drives the tests.
 //!

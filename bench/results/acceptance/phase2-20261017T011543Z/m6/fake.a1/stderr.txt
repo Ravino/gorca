@@ -1,2 +1,2 @@
-== reader <repo>/.claude/worktrees/agent-ab1f7350482f9d118/target/release/gorca built from ce46cac, tree at d108974
+== reader <repo>/target/release/gorca built from ce46cac, tree at d108974
 Error: the reader binary was built from ce46cac but the tree is at d108974: rebuild it (cargo build --release -p gorca-daemon) or pass --allow-stale-reader

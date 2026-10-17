@@ -1,7 +1,7 @@
 private compositor: /tmp/gorca-vte.uubwXV/x/gorca-vte-3268515
-== reader <repo>/.claude/worktrees/agent-ab1f7350482f9d118/target/release/gorca built from d108974, tree at d108974
-== e2e acc-20261017T012706Z-m6-vv-a1: reader=daemon:<repo>/.claude/worktrees/agent-ab1f7350482f9d118/target/release/gorca backend=voicego repeats=3 load=4.98 6.69 7.75 3/2684 3268814
+== reader <repo>/target/release/gorca built from d108974, tree at d108974
+== e2e acc-20261017T012706Z-m6-vv-a1: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=4.98 6.69 7.75 3/2684 3268814
 -- round 1/3 VV (load 4.98 6.69 7.75 3/2684 3268814)
 -- round 2/3 VV (load 9.90 7.48 7.88 1/2665 3273457)
 -- round 3/3 VV (load 9.34 7.94 7.99 3/2584 3279113)
-== wrote <repo>/.claude/worktrees/agent-ab1f7350482f9d118/bench/results/acceptance/phase2-20261017T012706Z/m6/vv.a1/res/20261017T023037Z.{json,txt}
+== wrote <repo>/bench/results/acceptance/phase2-20261017T012706Z/m6/vv.a1/res/20261017T023037Z.{json,txt}

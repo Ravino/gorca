@@ -76,7 +76,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
    Compiling syn v2.0.119
    Compiling bitflags v2.13.2
    Compiling serde v1.0.229
-   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-model)
+   Compiling gorca-model v0.0.0 (<repo>/crates/gorca-model)
    Compiling tokio-macros v2.7.2
    Compiling thiserror-impl v2.0.21
    Compiling serde_derive v1.0.229
@@ -85,11 +85,11 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
    Compiling thiserror v2.0.21
    Compiling tracing v0.1.44
    Compiling tokio-util v0.7.20
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-ingress)
-   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-doc-source-api)
-   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-connector-api)
-   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-testkit)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/crates/gorca-doc-source-api)
+   Compiling gorca-connector-api v0.0.0 (<repo>/crates/gorca-connector-api)
+   Compiling gorca-testkit v0.0.0 (<repo>/crates/gorca-testkit)
     Finished `release` profile [optimized + debuginfo] target(s) in 15.13s
     Finished `release` profile [optimized + debuginfo] target(s) in 0.04s
 [1/16] r0 walk #0 (load 9.82 18.34 19.32 4/2478 2991556)
@@ -163,21 +163,21 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
    Compiling zvariant v5.15.0
    Compiling tracing v0.1.44
    Compiling tokio-util v0.7.20
-   Compiling gorca-rt v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/r0tree/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/r0tree/crates/gorca-ingress)
+   Compiling gorca-rt v0.0.0 (/tmp/scratch/r0tree/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (/tmp/scratch/r0tree/crates/gorca-ingress)
    Compiling zbus_names v4.3.4
-   Compiling gorca-mirror v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/r0tree/crates/gorca-mirror)
+   Compiling gorca-mirror v0.0.0 (/tmp/scratch/r0tree/crates/gorca-mirror)
    Compiling zbus_macros v5.19.0
    Compiling zbus v5.19.0
-   Compiling gorca-dbus v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/r0tree/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/r0tree/crates/gorca-bench-b2)
-   Compiling gorca-bench-b1 v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/r0tree/crates/gorca-bench-b1)
+   Compiling gorca-dbus v0.0.0 (/tmp/scratch/r0tree/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (/tmp/scratch/r0tree/crates/gorca-bench-b2)
+   Compiling gorca-bench-b1 v0.0.0 (/tmp/scratch/r0tree/crates/gorca-bench-b1)
     Finished `bench` profile [optimized + debuginfo] target(s) in 14.41s
      Running benches/step.rs (target/release/deps/step-c5c043c303998992)
 step[candidate-standin]: median over 7 rounds of the worst step = 12.7 us (gate 250 us)
 [12/16] p step #0 (load 6.10 5.49 6.64 1/2506 3078953)
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench-b1)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `bench` profile [optimized + debuginfo] target(s) in 2.93s
      Running benches/step.rs (target/release/deps/step-de5c2acddd90b898)
 step[focus-prefetch]: median over 7 rounds of the worst step = 24.8 us (gate 250 us)

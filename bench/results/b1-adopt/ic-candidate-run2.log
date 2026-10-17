@@ -1,16 +1,16 @@
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
-   Compiling gorca-speech-ssip v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-speech-ssip)
-   Compiling gorca-speech-voicego v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-speech-voicego)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-speech-ssip v0.0.0 (<repo>/crates/gorca-speech-ssip)
+   Compiling gorca-speech-voicego v0.0.0 (<repo>/crates/gorca-speech-voicego)
    Compiling inotify v0.11.5
    Compiling zbus v5.19.0
-   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-testkit)
-   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-core)
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-dbus)
+   Compiling gorca-testkit v0.0.0 (<repo>/crates/gorca-testkit)
+   Compiling gorca-core v0.0.0 (<repo>/crates/gorca-core)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
    Compiling atspi v0.30.0
-   Compiling gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-connector-atspi)
-   Compiling gorca-input-mutter v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-input-mutter)
-   Compiling gorca-doc-source-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-doc-source-atspi)
-   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-daemon)
+   Compiling gorca-connector-atspi v0.0.0 (<repo>/crates/gorca-connector-atspi)
+   Compiling gorca-input-mutter v0.0.0 (<repo>/crates/gorca-input-mutter)
+   Compiling gorca-doc-source-atspi v0.0.0 (<repo>/crates/gorca-doc-source-atspi)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 14.90s
      Running tests/b1_ic.rs (target/debug/deps/b1_ic-db130a3ebd2fa224)
 

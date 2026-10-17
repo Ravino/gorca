@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Supervisor primitives (ADR-0001 section 6.5): every spawned task has an owner
 //! ([`TaskSet`]) and a cancellation path ([`CancellationToken`]).
 

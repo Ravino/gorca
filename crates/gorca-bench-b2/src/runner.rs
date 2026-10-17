@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! One complete run: bus fixture, drain under test, per-app consumers, paced feeders, sampling
 //! and ground-truth comparison. Everything the scenarios measure comes out of [`execute`].
 

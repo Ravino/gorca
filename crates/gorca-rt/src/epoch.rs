@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The epoch as a lock-free cancellation primitive (ADR-0001 section 3.4).
 
 use std::sync::atomic::{AtomicU64, Ordering};

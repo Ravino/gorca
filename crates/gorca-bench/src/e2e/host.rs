@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Host metadata recorded with every result (the host is loaded, so numbers need context).
 
 use std::process::Command;

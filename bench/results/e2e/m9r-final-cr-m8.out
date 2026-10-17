@@ -1,7 +1,7 @@
 == host: load 6.72 7.49 9.41 2/2117 808839 ==
     Finished `release` profile [optimized + debuginfo] target(s) in 0.14s
 private compositor: /tmp/gorca-m8c.kxkEzi/x/gorca-m8-808827
-== e2e-m8 m9r-final-cr-m8: reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca backend=voicego repeats=3 load=6.72 7.49 9.41 8/2281 809179
+== e2e-m8 m9r-final-cr-m8: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=6.72 7.49 9.41 8/2281 809179
 -- round 1/3 M8-QN (load 6.72 7.49 9.41 11/2281 809179)
 kill: (-809236): No such process
 -- round 1/3 M8-TB (load 9.40 7.98 9.48 2/2249 809994)

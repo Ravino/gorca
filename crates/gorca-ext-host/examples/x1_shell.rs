@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! X1 for the GNOME Shell policy (`ext-gnome-shell`): the whole host path of the `policy` hook as
 //! the Reader calls it (`AppExt::policy`: fact conversion, slot `try_lock`, the call, lifting and
 //! clamping the verdict), on both builds of the one source, against the same rows through the

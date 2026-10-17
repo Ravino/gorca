@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `AtspiDocSource`: the `DocSource` that feeds one browser document into the mirror.
 //!
 //! Life cycle: build (block fetch, [`crate::fetch`]) -> live (events -> dirty set -> settle ->

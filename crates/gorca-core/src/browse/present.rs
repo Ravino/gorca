@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Line presentation (browse-mode design 8.2, LP-1 to LP-4): what the user hears for a range of
 //! the flat text. Everything is built from one published `WebDoc` snapshot, so it costs no IPC
 //! and finishes in microseconds (LP-3).

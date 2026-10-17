@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The Reader (ADR-0001 sections 2.5, 3.3, 6.2).
 //!
 //! > "One Reader owns user-visible state (focus, mode, navigation, epoch). It never awaits. It

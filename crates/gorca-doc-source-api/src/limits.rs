@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Resource caps for page-fed data. Source data is untrusted (SL-3): the source and the
 //! translator apply the same caps, cut what exceeds them, count it and go on. Nothing here
 //! panics.

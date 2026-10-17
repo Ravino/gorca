@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! AT-SPI role and state numbers (values of `AtspiRole` / `AtspiStateType`, stable ABI) and
 //! their normalisation to `gorca_model`. The numbers were read from `Atspi.Role` /
 //! `Atspi.StateType` of at-spi2-core 2.56; this crate deliberately does not link the `atspi`

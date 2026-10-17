@@ -1,7 +1,7 @@
 head 875ce66 start 2026-10-15T12:01:24Z load 9.41 8.60 8.61
 FMT_OK
-    Checking gorca-bench v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-bench)
-    Checking gorca-bench-web v0.0.0 (<repo>/.claude/worktrees/b1-rereview/crates/gorca-bench-web)
+    Checking gorca-bench v0.0.0 (<repo>/crates/gorca-bench)
+    Checking gorca-bench-web v0.0.0 (<repo>/crates/gorca-bench-web)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.98s
 clippy rc=0
 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

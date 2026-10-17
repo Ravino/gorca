@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The compiled keymap and the types the input lane looks chords up with (ADR-0005 4.1, 5.2).
 //!
 //! `gorca-core` compiles a `ResolvedKeymap` (chord and command names) into this immutable,

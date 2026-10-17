@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Audit tests MA-1..MA-10 (SPEC 9.1), written before the arms and the PW code exist.
 //!
 //! The mirror, the fill policy, the admission control and the dump decoder of PW-1..PW-12 do not

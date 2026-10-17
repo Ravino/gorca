@@ -5,7 +5,7 @@
 # Prints whether the app's process holds a connection on the a11y bus.
 export DBUS_SESSION_BUS_ADDRESS="$1"
 BIN="$2"; MODE="$3"; APP="$4"
-L=/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/ns
+L=/tmp/scratch/ns
 W=$L/sh
 export XDG_CONFIG_HOME=$W/config GSETTINGS_BACKEND=keyfile XDG_RUNTIME_DIR=$W/run
 export WAYLAND_DISPLAY=gorca-test-0 GDK_BACKEND=wayland MOZ_ENABLE_WAYLAND=1
@@ -25,7 +25,7 @@ case "$APP" in
     setsid firefox-esr --profile $PROF --no-remote --new-instance about:blank > $L/app.log 2>&1 &
     APID=$!; WAIT=15 ;;
   gtk4)
-    setsid env -u NO_AT_BRIDGE -u GTK_A11Y /usr/bin/python3 <repo>/tools/platform-probes/gtkkeys.py > $L/app.log 2>&1 &
+    setsid env -u NO_AT_BRIDGE -u GTK_A11Y /usr/bin/python3 "$(dirname "$0")/../gtkkeys.py" > $L/app.log 2>&1 &
     APID=$!; WAIT=5 ;;
   gtk3)
     setsid env -u NO_AT_BRIDGE -u GTK_A11Y /usr/bin/python3 $L/gtk3app.py > $L/app.log 2>&1 &

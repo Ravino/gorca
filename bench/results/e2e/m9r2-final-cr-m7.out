@@ -1,10 +1,10 @@
 == host: load 13.16 10.97 9.98 8/2166 847000 ==
-   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-daemon)
-   Compiling gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-connector-atspi)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
+   Compiling gorca-connector-atspi v0.0.0 (<repo>/crates/gorca-connector-atspi)
     Finished `release` profile [optimized + debuginfo] target(s) in 55.11s
 private compositor: /tmp/gorca-m7c.epQXRZ/x/gorca-m7-846987
-== reader <repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca built from a64b618, tree at a64b618
-== e2e m9r2-final-cr-m7: reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca backend=voicego repeats=3 load=10.14 10.57 9.91 2/2327 851679
+== reader <repo>/target/release/gorca built from a64b618, tree at a64b618
+== e2e m9r2-final-cr-m7: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=10.14 10.57 9.91 2/2327 851679
 -- round 1/3 B0 (load 10.14 10.57 9.91 3/2327 851679)
 kill: (-851737): No such process
 -- round 1/3 W1 (load 9.41 10.41 9.86 2/2320 852024)
@@ -90,7 +90,7 @@ kill: (-889648): No such process
 # topology_arms=lanes-rtx42
 # topology_expected=-
 # label=m9r2-final-cr-m7
-# reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=3
 # samples_per_series=1200

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Say-all chunking (ADR-0007 section 11): the next stretch of text to hand to the speech
 //! server, ending at a sentence boundary when one fits, else at a line or word boundary.
 

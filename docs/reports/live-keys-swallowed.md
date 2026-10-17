@@ -102,7 +102,7 @@ modifier mid-hold (P-7 XKB desync risk, loses chord swallowing).
 ## Evidence / files
 
 * `tools/platform-probes/stuck-modifier/{bare.py,replay2.py,model48.py,fresh.sh,README.md}`
-* scratch logs: `/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/lk/` (rp-*.err, rf*.out)
+* scratch logs: `/tmp/scratch/lk/` (rp-*.err, rf*.out)
 * Journal: 11:07:56 gorca start, Orca autostart 11:07:56, lane stats keys=195/386 ambiguous=9/17, stop 11:09:56.
 * Private rig only; nothing touched the live session (read-only journalctl, gsettings get, busctl list, ps).
 * Unverified: the user's exact trigger (long Insert hold) is inferred from the symptom; the live Mutter

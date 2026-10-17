@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Property tests: random op sequences against a naive tree model, checking structure,
 //! navigation, summaries, flat text and publication after every step. proptest is not
 //! vendored, so these are seeded loops (failures print the seed and step).

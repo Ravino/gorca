@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Deterministic synthetic page generator for tests and the MB benches: a document with a
 //! navigation landmark, regions of headings, paragraphs (text runs and links), lists, tables
 //! and forms, shaped like a long article page.

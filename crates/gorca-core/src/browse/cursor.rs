@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Virtual-cursor moves over the flat text (browse-mode design section 8.1). Pure functions of
 //! a published `WebDoc`: no IPC, no allocation beyond the text of the unit being spoken.
 //!

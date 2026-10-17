@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Unit segmentation: one implementation of every rule, shared by native text, browse mode and
 //! review (ADR-0007 section 3.1, TL-1 to TL-4).
 //!

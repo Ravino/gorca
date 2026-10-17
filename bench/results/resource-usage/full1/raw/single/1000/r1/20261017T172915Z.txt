@@ -14,21 +14,21 @@
 # topology_arms=singlex1
 # topology_expected=-
 # label=ru-single-1000-r1
-# reader=daemon:<repo>/.claude/worktrees/agent-aad69142db3796c20/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=1200
 # l2_trials=400
 # quick=false
 # loadavg_end=21.49 18.98 17.14 10/2121 3212903
-# reader_env=GORCA_M1=1 GORCA_M4=1 GORCA_M4B=1 GORCA_TOPOLOGY_REPORT=<repo>/.claude/worktrees/agent-aad69142db3796c20/bench/results/resource-usage/full1/raw/single/1000/r1/rep.%p.json GORCA_RTKIT_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
+# reader_env=GORCA_M1=1 GORCA_M4=1 GORCA_M4B=1 GORCA_TOPOLOGY_REPORT=<repo>/bench/results/resource-usage/full1/raw/single/1000/r1/rep.%p.json GORCA_RTKIT_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
 # gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
 # reader_args=--impersonate-orca --topology=single
 # ext_dir=none
 # extensions=none
 # note0=k2_ms: first SPEAK between a command key and the next one (700 spoken for 700 chords)
 # note1=k2_ms: 0 chords without a SPEAK in their window; reader counters: submitted 730, spoken 730, superseded 0, stale 0, inbox 0, received by the server 730
-# note2=raw samples: <repo>/.claude/worktrees/agent-aad69142db3796c20/bench/results/resource-usage/full1/raw/single/1000/r1/RU-1000-3202865.csv
+# note2=raw samples: <repo>/bench/results/resource-usage/full1/raw/single/1000/r1/RU-1000-3202865.csv
 # note3=RU-1000: reader pid 3202865, steady window 4.5..13.9 s, storm stop 13.9 s, 130 samples
 
 metric                     bus                median          min          max  n op    threshold  res   note

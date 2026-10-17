@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Per-app lock-free snapshot store (ADR-0001 section 5.2, PC-1, decision MS-3), the fill policy
 //! trait and the shared fill driver (B-1).
 //!

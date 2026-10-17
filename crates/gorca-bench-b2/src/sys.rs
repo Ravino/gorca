@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The few raw system calls the harness needs. All unsafe code of the crate lives here.
 #![allow(unsafe_code)]
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! End to end: fake AT-SPI application on a private bus -> the real daemon wiring (AT-SPI
 //! connector, core, speech lane, failover client, voicego and SSIP clients) -> mock speech
 //! servers. Everything runs in private, isolated sessions (`tests/harness`); the user's session,

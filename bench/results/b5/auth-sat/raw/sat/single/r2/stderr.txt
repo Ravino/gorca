@@ -1,5 +1,5 @@
-== reader <repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/bench/b5/reader-cpu.sh built from 1993580, tree at 1993580
-== e2e b5-single-sat-r2: reader=daemon:<repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/bench/b5/reader-cpu.sh backend=voicego repeats=1 load=39.58 39.87 35.24 38/3610 3530046
+== reader <repo>/bench/b5/reader-cpu.sh built from 1993580, tree at 1993580
+== e2e b5-single-sat-r2: reader=daemon:<repo>/bench/b5/reader-cpu.sh backend=voicego repeats=1 load=39.58 39.87 35.24 38/3610 3530046
 -- round 1/1 L1 (load 39.58 39.87 35.24 36/3608 3530049)
 2026-10-16T09:32:14.361706Z  INFO gorca_daemon: shell policy: ext-gnome-shell native build
 2026-10-16T09:32:14.361925Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"

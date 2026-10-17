@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Table navigation over the mirror (ADR-0003 4.6, M8): cell lookup, row and column steps and
 //! header lookup, all from the tree with no grid copy. A move costs O(depth + cells in one row)
 //! plus, for the last row, one pass over the table's row list, so it stays far below the 5 ms

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The terminal policy as a slot of the extension host (ADR-0001 T-2, ADR-0008 tier W3): the
 //! session the Reader drives survives a fault of the policy (trap, loop, memory, panic) by
 //! starting the next instance over (configure, then a `focus` that reads the screen again), and

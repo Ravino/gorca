@@ -1,7 +1,7 @@
 == session adopt-rev-quick start 2026-10-14T22:03:44Z load 6.09 4.22 3.79 3/2478 3850853
 == host: load 6.09 4.22 3.79 1/2479 3850858 governor performance  ==
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench-b1)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.91s
      Running unittests src/lib.rs (target/debug/deps/gorca_bench_b1-fabe3af03abd0289)
 
@@ -94,12 +94,12 @@ test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; 
 error: test failed, to rerun pass `-p b1-fakeapp --test fidelity`
 == fidelity: fail: service-time model off in all 1 attempts; last attempt 1: p50 delta 0.647 ms, p99 delta 1.805 ms (strict=true) ==
     Finished `release` profile [optimized + debuginfo] target(s) in 0.05s
-   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-connector-api)
-   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-testkit)
+   Compiling gorca-connector-api v0.0.0 (<repo>/crates/gorca-connector-api)
+   Compiling gorca-testkit v0.0.0 (<repo>/crates/gorca-testkit)
     Finished `release` profile [optimized + debuginfo] target(s) in 11.98s
-   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-connector-api)
-   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-testkit)
-   Compiling b1-fakeapp v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/tests/harness/b1/fakeapp)
+   Compiling gorca-connector-api v0.0.0 (<repo>/crates/gorca-connector-api)
+   Compiling gorca-testkit v0.0.0 (<repo>/crates/gorca-testkit)
+   Compiling b1-fakeapp v0.0.0 (<repo>/tests/harness/b1/fakeapp)
     Finished `release` profile [optimized + debuginfo] target(s) in 16.27s
 [1/18] r0 walk #0 (load 4.78 4.10 3.76 2/2469 3852894)
 2026-10-14T22:04:19.576745Z  INFO gorca_daemon: gorca started workers=8 speech=Voicego
@@ -188,8 +188,8 @@ error: test failed, to rerun pass `-p b1-fakeapp --test fidelity`
      Running benches/step.rs (target/release/deps/step-c5c043c303998992)
 step[candidate-standin]: median over 7 rounds of the worst step = 16.3 us (gate 250 us)
 [14/18] p step #0 (load 16.52 20.16 17.27 6/3057 269536)
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench-b1)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `bench` profile [optimized + debuginfo] target(s) in 3.75s
      Running benches/step.rs (target/release/deps/step-de5c2acddd90b898)
 step[focus-prefetch]: median over 7 rounds of the worst step = 33.1 us (gate 250 us)

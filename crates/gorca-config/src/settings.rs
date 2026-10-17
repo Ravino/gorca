@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The settings schema (v1): typed values, defaults, ranges, and the runtime overlay.
 //!
 //! One row of [`SETTINGS`] per key drives unknown-key detection, "did you mean" and the

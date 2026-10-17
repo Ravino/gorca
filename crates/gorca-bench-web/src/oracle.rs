@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! A minimal mirror that applies `DocDelta`s with the same semantics as `gorca-doc`
 //! (`Upsert` replaces node data, `Children` is a complete ordered list that drops absent
 //! children, `Removed` drops a subtree). The harness uses it instead of `gorca-doc` so that it

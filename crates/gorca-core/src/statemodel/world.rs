@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The simulated desktop behind the model-based tests: one application with a window, two text
 //! fields, a button, a terminal and an optional dialog. It owns the ground truth (focus, text,
 //! caret, which nodes are alive) and answers every effect the Reader emits the way the lanes and

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Text units and queries (ADR-0001 section 4.3).
 //!
 //! - **TU-1** The core API uses Unicode scalar value offsets.

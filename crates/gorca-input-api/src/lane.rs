@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The input lane's classifier (ADR-0005 4.2): one `KeyEvent` in, one [`KeyIntent`] out, O(1),
 //! synchronous, no I/O. The daemon's pump task owns an [`InputLane`] and calls
 //! [`InputLane::on_key`] for every event the key source delivers.

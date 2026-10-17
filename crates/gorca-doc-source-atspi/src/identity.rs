@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! SPA identity, ladder variant C (ADR-0003 section 5), as a re-keying layer under the source.
 //!
 //! The mirror keys nodes by `SrcNodeId`. This module decides which `SrcNodeId` an AT-SPI object

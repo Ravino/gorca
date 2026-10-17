@@ -14,7 +14,7 @@
 # topology_arms=lanes-rtx1
 # topology_expected=-
 # label=vte-vv-native-3
-# reader=daemon:<repo>/.claude/worktrees/agent-a911fd551e3bc9b5a/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=1200

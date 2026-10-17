@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Backend factory abstraction. `gorca-speech` knows no concrete backend (rule 3); the daemon
 //! wraps `VoicegoClient::connect` and `SsipClient::connect` into [`SpeechBackend`]s.
 

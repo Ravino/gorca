@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The review commands as Reader handlers (ADR-0006 4, 5, 6, 7, 8).
 //!
 //! A command either finishes in the same call (a mirror hit, a valid model: no IPC) or

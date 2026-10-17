@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Per-keystroke cost of the text layer. Target: well under 50 us per keystroke (the gorca-side
 //! budget for keypress to speech start is 15 ms, ADR-0007 C1/E1).
 //!

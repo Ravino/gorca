@@ -1,5 +1,5 @@
 """V-5b: does VTE a11y Text expose scrollback? Scroll up with Shift+PageUp and compare. PRIVATE session only."""
-import sys; sys.path.insert(0,"<repo>/tools/platform-probes/adr6")
+import sys; sys.path.insert(0,__import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 from rig import *
 b=app_by_pid(int(sys.argv[1])); t="/org/a11y/atspi/accessible/60"
 K=Keys(own=False)

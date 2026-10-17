@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The AT-SPI [`DocSourceFactory`]: everything the core must not know about a browser's AT-SPI
 //! surface (browse-mode design section 6, ADR-0003 AM-10).
 //!

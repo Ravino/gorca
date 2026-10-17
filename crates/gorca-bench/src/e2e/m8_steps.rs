@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The M8 scenario table: one corpus page plus its scripted steps per scenario.
 //!
 //! Expected speech is NVDA's, adapted (docs/plan/m8-spec.md names the rule or source line for

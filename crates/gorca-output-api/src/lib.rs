@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Output boundary: speech and braille backends (ADR-0001 section 8).
 //!
 //! Responsibility (section 11): `SpeechClient`, `SpeechCmd`, `SpeechEvent`, `SpeechCaps`,

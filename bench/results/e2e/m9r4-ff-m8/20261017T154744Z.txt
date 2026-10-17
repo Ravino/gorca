@@ -12,7 +12,7 @@
 # python=Python 3.13.5
 # build=release
 # label=m9r4-ff-m8
-# reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=3
 # samples_per_series=150

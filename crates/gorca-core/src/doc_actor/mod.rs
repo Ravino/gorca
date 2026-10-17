@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Document actor (ADR-0001 section 6.1, browse-mode design section 5): one per web document.
 //!
 //! The actor is a CPU actor. A source (the only component that talks to the browser) pushes

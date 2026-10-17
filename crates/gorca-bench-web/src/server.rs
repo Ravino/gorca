@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Tiny HTTP server for the corpus: serves pages (with the B-6 driver injected), the driver
 //! script, and the command/acknowledge long-poll the page uses to take orders from the harness.
 //!

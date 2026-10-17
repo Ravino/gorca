@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The AT-SPI connector (ADR-0001 section 5.3).
 //!
 //! Topology, all owned by [`AtspiConnector::run`]:

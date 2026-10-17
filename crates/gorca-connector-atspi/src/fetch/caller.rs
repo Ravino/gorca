@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The call connection of one application, with the shadow-mode gate.
 //!
 //! The connection, the bus name and the shadow flag are private to this module: strategy code

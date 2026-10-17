@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The D-Bus face of the fake app: connections, the serial "main loop" thread, signals.
 
 use std::collections::{BTreeSet, HashMap};

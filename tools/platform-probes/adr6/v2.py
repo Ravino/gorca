@@ -1,11 +1,11 @@
 """V-2 extents sanity. usage: v2.py gtk3|gtk4|adw. PRIVATE session only."""
-import sys; sys.path.insert(0,"<repo>/tools/platform-probes/adr6")
+import sys; sys.path.insert(0,__import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 from rig import *
 import json
 which=sys.argv[1]
 K=Keys(own=False); pump(1); K.tap(125); pump(1)
 script={"gtk3":"app3.py","gtk4":"app4.py","adw":"appadw.py"}[which]
-p=subprocess.Popen(["/usr/bin/python3","<repo>/tools/platform-probes/adr6/"+script],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True,bufsize=1,stderr=subprocess.DEVNULL)
+p=subprocess.Popen(["/usr/bin/python3",__import__("os").path.dirname(__import__("os").path.abspath(__file__))+"/"+script],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True,bufsize=1,stderr=subprocess.DEVNULL)
 def say(c): p.stdin.write(c+"\n"); p.stdin.flush()
 def truth():
     say("truth")

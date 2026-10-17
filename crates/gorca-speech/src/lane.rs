@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The speech lane (ADR-0001 sections 7.4, 8.1, 8.3): turns utterances into `SpeechCmd`s.
 //!
 //! Producers (the Reader, `PresentJob`s) call [`SpeechHandle::submit`], which never blocks:

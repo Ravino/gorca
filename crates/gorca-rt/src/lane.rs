@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Hot lanes: dedicated OS threads (ADR-0001 section 3.2, PC-4).
 
 use std::any::Any;

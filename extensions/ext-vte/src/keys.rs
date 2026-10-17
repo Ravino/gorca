@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Which key is what in a terminal: the readline and emacs bindings (shell policy, ADR-0008).
 //!
 //! The core hands over the key as it saw it ([`RawKey`]); the Control and Alt shortcuts are

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # usage: status.sh ADDR   -- PRIVATE session only: does org.a11y.Status Set write gsettings?
 export DBUS_SESSION_BUS_ADDRESS="$1"
-W=/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/ns/sh
+W=/tmp/scratch/ns/sh
 export XDG_CONFIG_HOME=$W/config GSETTINGS_BACKEND=keyfile
 show() {
   echo "  gsettings screen-reader-enabled=$(gsettings get org.gnome.desktop.a11y.applications screen-reader-enabled) toolkit-accessibility=$(gsettings get org.gnome.desktop.interface toolkit-accessibility)"

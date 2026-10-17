@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 // gorca extension world, ADR-0001 section 10.
 // Where hooks run: `on-event` in the app actor's context, `command` on the host's worker threads,
 // and `present` (with `nav-units` / `nav-match` when a presenter asks) inline on the Reader lane,

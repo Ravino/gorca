@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use gorca_connector_api::{RegistrarRequest, ScopeRegistry, registrar_channel};

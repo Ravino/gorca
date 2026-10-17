@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Command line. Hand-rolled: the surface is a handful of flags and the binary must not grow a
 //! parser dependency for them.
 

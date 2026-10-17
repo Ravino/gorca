@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Sender -> application routing for the event drain.
 //!
 //! The drain asks [`AtspiRouter::resolve`] on its own thread and must never wait. The first event

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! M3b and M7b end-to-end gates: gorca (the real daemon) with a PRIVATE Firefox, the emulated
 //! Mutter delivering the keys to gorca and the compositor's virtual keyboard delivering them to
 //! the page (`tests/web/m7/rd.py`), the mock speech server scoring the answers.

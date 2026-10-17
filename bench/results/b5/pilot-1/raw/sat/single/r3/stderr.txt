@@ -1,5 +1,5 @@
-== reader <repo>/.claude/worktrees/agent-a12a85c2ca79d781a/target/release/gorca built from 932d611, tree at 932d611
-== e2e b5-single-sat-r3: reader=daemon:<repo>/.claude/worktrees/agent-a12a85c2ca79d781a/target/release/gorca backend=voicego repeats=1 load=21.49 20.95 16.74 21/3264 239373
+== reader <repo>/target/release/gorca built from 932d611, tree at 932d611
+== e2e b5-single-sat-r3: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=1 load=21.49 20.95 16.74 21/3264 239373
 -- round 1/1 L1 (load 21.49 20.95 16.74 20/3264 239373)
 2026-10-14T23:49:12.407353Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
 2026-10-14T23:49:12.407975Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=100ms

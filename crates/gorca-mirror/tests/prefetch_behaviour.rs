@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The adopted fill policy (`FocusPrefetch`) through the real shared driver and store, against a
 //! small modelled tree: what it asks for, when, and what it leaves alone. No bus, no connector.
 #![allow(clippy::unwrap_used, clippy::expect_used)]

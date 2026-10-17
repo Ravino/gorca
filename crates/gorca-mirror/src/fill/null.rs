@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! R0: the baseline policy. Nothing is prefetched: every focus miss is fetched by the Reader's
 //! shared path, and the cache serves revisits.
 

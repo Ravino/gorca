@@ -12,14 +12,14 @@
 # python=Python 3.13.5
 # build=release
 # label=b5-default-strict
-# reader=daemon:<repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=3
 # samples_per_series=1200
 # l2_trials=400
 # quick=false
 # loadavg_end=13.15 15.77 26.71 7/3433 405024
-# reader_env=GORCA_TOPOLOGY_REPORT=<repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/bench/results/b5/default-strict/rep.%p.json GORCA_RTKIT_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket GORCA_M1=1 GORCA_M1_STRICT=1 GORCA_M4=1 GORCA_M4_STRICT=1
+# reader_env=GORCA_TOPOLOGY_REPORT=<repo>/bench/results/b5/default-strict/rep.%p.json GORCA_RTKIT_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket GORCA_M1=1 GORCA_M1_STRICT=1 GORCA_M4=1 GORCA_M4_STRICT=1
 # gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
 # reader_args=--impersonate-orca
 # ext_dir=none

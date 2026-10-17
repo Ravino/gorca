@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Text-interface reads for the Reader's text layer (ADR-0007 sections 4.2 and 6): the window
 //! around the caret, one unit at an offset, and the selections with their text.
 //!

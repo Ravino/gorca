@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! M1 end-to-end gates K2, K3, K4 (docs/plan/phase-2.md 2.1, ADR-0005 10) plus K2s.
 //!
 //! The stimulus drives `fake_mutter.py`, which ports Mutter's grab semantics (exact-mask matching,

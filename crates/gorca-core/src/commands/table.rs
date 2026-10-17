@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The closed command set (ADR-0005 3.2): one enum variant and one static spec per command.
 //!
 //! Generated once from the ADR table and maintained by hand afterwards: implementing a command

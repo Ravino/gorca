@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Baseline marks: steps that fail on `main` at the time M8 was prepared, with the root cause.
 //!
 //! The scenario table (`m8_steps.rs`) states what NVDA does. This table records, per step id,

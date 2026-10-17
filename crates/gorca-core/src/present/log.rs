@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The presentation log (B-1 PW-10): one JSON line per utterance that presents a node, and one per
 //! refine or follow-up of it, so a harness can judge every presentation against the truth.
 //!

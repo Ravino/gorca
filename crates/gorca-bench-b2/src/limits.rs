@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Pass thresholds of bake-off B-2. Single source of truth: SPEC.md section 6 quotes these.
 //! A candidate passes a metric when its **median over the runs** satisfies the threshold; the
 //! min/max over runs are reported so variance is visible.

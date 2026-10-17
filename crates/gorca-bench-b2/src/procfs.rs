@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `/proc` readers: per-thread CPU time, memory. Safe std only.
 
 use std::collections::BTreeMap;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Reviewer probes (M4b r2). Each asserts what the review fix promises or what the user should hear.
 #![allow(clippy::wildcard_enum_match_arm)]
 use super::tests::{Fx, app, fixture, key, node, prios, said, snap};

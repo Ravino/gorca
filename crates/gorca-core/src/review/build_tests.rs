@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Tests of the I/O side of review against an in-process fake application: a task that answers
 #![allow(
     clippy::wildcard_enum_match_arm,

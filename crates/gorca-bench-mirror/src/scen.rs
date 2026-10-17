@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Scenarios: steady-state mixed load (readers + one paced or flat-out writer + visibility
 //! prober) and the 100k-node subtree removal.
 

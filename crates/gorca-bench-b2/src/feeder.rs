@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Paced event feeders: one thread per simulated app writes preformatted signals into a sink
 //! (the mock broker link, or a client connection to a real bus), stamping probe events with
 //! the time just before the write.

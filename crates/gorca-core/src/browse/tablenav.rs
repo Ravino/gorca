@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Table navigation in browse mode (NVDA `Ctrl+Alt+arrows`, M8): move the cursor from cell to
 //! cell, speak the cell with the header that changed, say a row or a column. Everything reads one
 //! published `WebDoc`; no IPC.

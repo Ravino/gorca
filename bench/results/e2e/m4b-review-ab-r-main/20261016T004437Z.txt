@@ -12,7 +12,7 @@
 # python=Python 3.13.5
 # build=release
 # label=m4b-review-ab-r-main
-# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/bin/rv-gorca-main
+# reader=daemon:/tmp/scratch/bin/rv-gorca-main
 # backend=voicego
 # repeats=3
 # samples_per_series=1200

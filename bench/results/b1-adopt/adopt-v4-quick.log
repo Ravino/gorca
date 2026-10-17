@@ -1,7 +1,7 @@
 == session adopt-v4-quick start 2026-10-14T13:52:16Z load 23.89 22.68 21.17 14/2809 3149897
 == host: load 23.89 22.68 21.17 13/2810 3149902 governor performance  ==
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench-b1)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 1.53s
      Running unittests src/lib.rs (target/debug/deps/gorca_bench_b1-fabe3af03abd0289)
 
@@ -149,8 +149,8 @@ error: test failed, to rerun pass `-p b1-fakeapp --test fidelity`
      Running benches/step.rs (target/release/deps/step-c5c043c303998992)
 step[candidate-standin]: median over 7 rounds of the worst step = 11.3 us (gate 250 us)
 [10/14] p step #0 (load 11.63 6.33 6.21 7/2773 3297850)
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench-b1)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `bench` profile [optimized + debuginfo] target(s) in 3.18s
      Running benches/step.rs (target/release/deps/step-de5c2acddd90b898)
 step[focus-prefetch]: median over 7 rounds of the worst step = 22.7 us (gate 250 us)

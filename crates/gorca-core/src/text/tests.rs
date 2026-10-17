@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Reader-level tests of the text layer: keys and text events in, speech and fetches out, with
 //! a fake clock. The machine itself is exercised through [`Reader::handle`], the way the
 //! lanes drive it.

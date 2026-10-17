@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! H-6: interleaved repeats across arms, median gating, report rows.
 //!
 //! The runner never builds or starts anything itself. For every slot of the schedule it either

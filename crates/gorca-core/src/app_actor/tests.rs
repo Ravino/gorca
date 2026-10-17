@@ -1,4 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 use super::*;
 use crate::reader::reader_channels;

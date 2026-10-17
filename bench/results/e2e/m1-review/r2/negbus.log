@@ -24,7 +24,7 @@
    Compiling event-listener v5.4.2
    Compiling find-msvc-tools v0.1.14
    Compiling shlex v2.0.1
-   Compiling gorca-model v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-model)
+   Compiling gorca-model v0.0.0 (/tmp/scratch/negbus/crates/gorca-model)
    Compiling futures-sink v0.3.34
    Compiling zmij v1.0.23
    Compiling rustix v1.1.5
@@ -73,7 +73,7 @@
    Compiling oorandom v11.1.5
    Compiling arc-swap v1.9.2
    Compiling anes v0.1.6
-   Compiling gorca-mirror v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-mirror)
+   Compiling gorca-mirror v0.0.0 (/tmp/scratch/negbus/crates/gorca-mirror)
    Compiling criterion-plot v0.8.2
    Compiling regex v1.13.1
    Compiling clap v4.6.7
@@ -99,14 +99,14 @@
    Compiling ciborium v0.2.2
    Compiling criterion v0.8.2
    Compiling tokio-util v0.7.20
-   Compiling gorca-rt v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-ingress)
+   Compiling gorca-rt v0.0.0 (/tmp/scratch/negbus/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (/tmp/scratch/negbus/crates/gorca-ingress)
    Compiling zbus_names v4.3.4
    Compiling zbus_macros v5.19.0
    Compiling zbus v5.19.0
-   Compiling gorca-dbus v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-bench-b2)
-   Compiling gorca-bench v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-bench)
+   Compiling gorca-dbus v0.0.0 (/tmp/scratch/negbus/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (/tmp/scratch/negbus/crates/gorca-bench-b2)
+   Compiling gorca-bench v0.0.0 (/tmp/scratch/negbus/crates/gorca-bench)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 11.61s
      Running unittests src/lib.rs (target/debug/deps/gorca_bench-1dcf1d8e39749383)
 
@@ -137,16 +137,16 @@ test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; fin
    Compiling enumflags2 v0.7.12
    Compiling zvariant v5.15.0
    Compiling tracing v0.1.44
-   Compiling gorca-rt v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-ingress)
+   Compiling gorca-rt v0.0.0 (/tmp/scratch/negbus/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (/tmp/scratch/negbus/crates/gorca-ingress)
    Compiling zbus_names v4.3.4
    Compiling zbus_macros v5.19.0
    Compiling zbus v5.19.0
-   Compiling gorca-dbus v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-bench-b2)
-   Compiling gorca-bench v0.0.0 (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/crates/gorca-bench)
+   Compiling gorca-dbus v0.0.0 (/tmp/scratch/negbus/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (/tmp/scratch/negbus/crates/gorca-bench-b2)
+   Compiling gorca-bench v0.0.0 (/tmp/scratch/negbus/crates/gorca-bench)
     Finished `release` profile [optimized + debuginfo] target(s) in 15.44s
-== e2e m1-review-negbus: reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/target/release/gorca backend=voicego repeats=1 load=16.04 13.72 12.03 4/2260 168421
+== e2e m1-review-negbus: reader=daemon:/tmp/scratch/negbus/target/release/gorca backend=voicego repeats=1 load=16.04 13.72 12.03 4/2260 168421
 -- round 1/1 K4 (load 16.04 13.72 12.03 3/2260 168421)
 2026-10-13T15:39:20.190864Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
 2026-10-13T15:39:20.192595Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
@@ -194,7 +194,7 @@ test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; fin
 # python=Python 3.13.5
 # build=release
 # label=m1-review-negbus
-# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/negbus/target/release/gorca
+# reader=daemon:/tmp/scratch/negbus/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=150

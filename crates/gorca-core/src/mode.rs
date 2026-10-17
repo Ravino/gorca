@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Mode state machine (ADR-0001 section 7.2).
 //!
 //! > "Transitions come from user commands, from focus entering or leaving a document, and from

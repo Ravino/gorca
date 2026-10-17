@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The off-screen frame wake (`EngineQuirks::wake_offscreen_frames`).
 //!
 //! Blink serializes a cross-process iframe only while it intersects the viewport. The wake

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! H-7 / MA-6: in-process microbenchmark of one policy `step()` at the SPEC 7 caps.
 //!
 //! The harness does not know the policy type (it does not exist on `main` yet and each arm brings

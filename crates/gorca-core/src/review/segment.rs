@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Text units inside a zone (ADR-0006 6.9, TX-1).
 //!
 //! M4a ships [`SimpleUnits`]: a word is a maximal run of non-whitespace, a character is an

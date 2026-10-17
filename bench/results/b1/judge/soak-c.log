@@ -2,12 +2,12 @@
    Compiling tokio v1.53.2
    Compiling tokio-util v0.7.20
    Compiling zbus v5.19.0
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-ingress)
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-mirror)
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-bench-b2)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-bench-b1)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 6.91s
      Running unittests src/lib.rs (target/debug/deps/gorca_bench_b1-fabe3af03abd0289)
 
@@ -102,11 +102,11 @@ error: test failed, to rerun pass `-p b1-fakeapp --test fidelity`
     Finished `release` profile [optimized + debuginfo] target(s) in 0.04s
    Compiling tokio v1.53.2
    Compiling tokio-util v0.7.20
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-ingress)
-   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-doc-source-api)
-   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-connector-api)
-   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-testkit)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/crates/gorca-doc-source-api)
+   Compiling gorca-connector-api v0.0.0 (<repo>/crates/gorca-connector-api)
+   Compiling gorca-testkit v0.0.0 (<repo>/crates/gorca-testkit)
     Finished `release` profile [optimized + debuginfo] target(s) in 14.75s
 [1/1] c soak #0 (load 10.59 7.52 6.49 2/2850 2181703)
 2026-10-14T05:25:31.883907Z  INFO gorca_daemon: gorca started workers=8 speech=Voicego

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Say-all over a native text object (ADR-0007 section 11): read from the caret to the end in
 //! sentence chunks, keeping up to three chunks queued at the speech lane so there is no gap
 //! between them, following the server's progress, and moving the caret to the chunk being

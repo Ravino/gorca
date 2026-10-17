@@ -27,11 +27,11 @@ test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
 
 test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
 
-   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-core)
-   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-daemon)
+   Compiling gorca-core v0.0.0 (<repo>/crates/gorca-core)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
     Finished `release` profile [optimized + debuginfo] target(s) in 17.91s
-== reader <repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca built from 9d44caa, tree at 9d44caa
-== e2e adopt-m3b: reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca backend=voicego repeats=1 load=4.09 3.69 3.27 2/2567 3565631
+== reader <repo>/target/release/gorca built from 9d44caa, tree at 9d44caa
+== e2e adopt-m3b: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=1 load=4.09 3.69 3.27 2/2567 3565631
 -- round 1/1 C1 (load 4.09 3.69 3.27 2/2567 3565631)
 2026-10-14T19:49:33.135031Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
 2026-10-14T19:49:33.135633Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
@@ -146,7 +146,7 @@ test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; fin
 # python=Python 3.13.5
 # build=release
 # label=adopt-m3b
-# reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=150

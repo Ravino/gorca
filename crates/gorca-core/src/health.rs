@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Per-app health state machine (ADR-0001 section 6.4).
 
 use std::time::{Duration, Instant};

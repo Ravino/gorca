@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! gorca settings and keymaps as data (ADR-0005 section 7).
 //!
 //! Pure: no tokio, no I/O, no XKB, no dependency on `gorca-core`. The daemon reads the file,

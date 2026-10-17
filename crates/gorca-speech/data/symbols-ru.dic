@@ -1,5 +1,8 @@
-# Таблица символов, русский язык. Поведение по образцу NVDA symbols.dic; названия собственные.
-# Поля через табуляцию: символ, название, уровень, сохранение (см. symbols-en.dic).
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Symbol table, Russian. Modelled on NVDA's symbols.dic (Copyright NVDA contributors,
+# GPL-2.0-or-later, https://github.com/nvaccess/nvda) as a reference. Many names and levels
+# coincide with NVDA's table; see THIRD-PARTY.md. The format, identifiers and the @word.* strings are gorca's own.
+# Fields (tab separated): symbol, spoken name, level, preserve (see symbols-en.dic).
 @sentence.dot	точка	all	always
 @sentence.bang	восклицательный знак	all	always
 @sentence.question	вопросительный знак	all	always

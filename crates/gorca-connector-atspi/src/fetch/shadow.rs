@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Shadow mode (B-1 PW-11, SPEC 8.4): gorca runs beside the user's real screen reader and may
 //! only **read**. This is the allowlist the connector enforces on every call it makes to an
 //! application; the run is audited independently from a `dbus-monitor` capture (MA-10).

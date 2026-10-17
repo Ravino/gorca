@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Key echo and plain messages.
 
 use gorca_i18n::MsgId as M;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Bulk-presentation job descriptors and the intent handed to the speech lane.
 
 use gorca_model::{Epoch, NodeKey, Utterance};

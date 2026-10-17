@@ -1,5 +1,5 @@
 """V-5 VTE (GNOME Terminal) Text costs with a 10 000-line scrollback. PRIVATE session only. usage: v5.py SERVERPID"""
-import sys; sys.path.insert(0,"<repo>/tools/platform-probes/adr6")
+import sys; sys.path.insert(0,__import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 from rig import *
 import statistics
 b=app_by_pid(int(sys.argv[1])); print("bus",b); root="/org/a11y/atspi/accessible/root"

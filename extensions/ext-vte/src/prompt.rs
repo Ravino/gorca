@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Prompt and password-prompt recognition for a terminal line.
 //!
 //! There is no structural information in the AT-SPI tree (no OSC 133), so the prompt end is a
@@ -189,7 +190,7 @@ mod tests {
     fn password_prompts_are_recognised() {
         let p = p();
         for yes in [
-            "[sudo] password for evgeniy: ",
+            "[sudo] password for alice: ",
             "Password:",
             "Enter passphrase for key '/home/u/.ssh/id_ed25519': ",
             "Current password: ",
@@ -197,7 +198,7 @@ mod tests {
             "Verification code: ",
             "mysql password?",
             // Localised (sudo, PAM, ssh, passwd) prompts.
-            "[sudo] \u{43f}\u{430}\u{440}\u{43e}\u{43b}\u{44c} \u{434}\u{43b}\u{44f} evgeniy: ",
+            "[sudo] \u{43f}\u{430}\u{440}\u{43e}\u{43b}\u{44c} \u{434}\u{43b}\u{44f} alice: ",
             "\u{41f}\u{430}\u{440}\u{43e}\u{43b}\u{44c}:",
             "\u{41f}\u{430}\u{440}\u{43e}\u{43b}\u{44c} \u{434}\u{43b}\u{44f} user@host: ",
             "\u{422}\u{435}\u{43a}\u{443}\u{449}\u{438}\u{439} \u{43f}\u{430}\u{440}\u{43e}\u{43b}\u{44c}: ",

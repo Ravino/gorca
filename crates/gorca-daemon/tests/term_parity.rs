@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Parity of the terminal policy across its three runtimes (ADR-0008 amendment 1: one source, two
 //! builds): the daemon's native provider (`--terminal-policy=native`, the exclusive fallback), the
 //! native build behind the extension host, and the `wasm32-wasip2` component under wasmtime.

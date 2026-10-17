@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Utterances (ADR-0001 sections 7.4 and 8.1).
 
 use std::sync::Arc;

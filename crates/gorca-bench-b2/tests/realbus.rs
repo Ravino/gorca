@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Real-bus fixtures: a private dbus-daemon and a private dbus-broker. Skipped (with a note)
 //! when the binaries are not installed.
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! H-6/H-12: host metadata recorded with every result, and the quiet-host check.
 //!
 //! A number from a loaded host is informative only. The recipe for authoritative runs (load < 1,

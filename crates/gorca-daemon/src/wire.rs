@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Subsystem wiring: one additive `wire_*` function per subsystem (phase-2 plan CF-2).
 //!
 //! Each function spawns its tasks on the shared [`TaskSet`] and returns what later wiring steps

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Document mirror: keyed forest, flat text, bookmarks (ADR-0001 section 9.4).
 //!
 //! Responsibility (section 11): "document mirror: keyed forest, flat text, indexes, diff,

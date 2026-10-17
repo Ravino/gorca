@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! H-5 against a real private dbus-daemon: Debug.Stats presence, per-connection counters, and the
 //! monitor under a match rule. Skips (with a note) when `dbus-daemon` is missing.
 #![allow(

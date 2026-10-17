@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Reader-level tests of the terminal arm: keys and `text-changed` in, speech and screen reads
 //! out, with a fake clock, the way the lanes drive the Reader.
 

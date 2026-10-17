@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Interleaved A/B of VT+V1, main core vs fix core, same harness, pinned to CPUs 2-5.
 set -u
-cd <repo>/.claude/worktrees/m6-focus-review
+cd <repo>
 . ./env.sh
-S=/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/m6ab
+S=/tmp/scratch/m6ab
 for pair in 1 2 3 4 5 6; do
   seed=$((pair * 7919))
   if [ $((pair % 2)) = 1 ]; then order="main fix"; else order="fix main"; fi

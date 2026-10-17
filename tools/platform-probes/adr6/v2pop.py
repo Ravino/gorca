@@ -1,9 +1,9 @@
 """V-2 popover: GTK4 popover surface coordinates. PRIVATE session only."""
-import sys; sys.path.insert(0,"<repo>/tools/platform-probes/adr6")
+import sys; sys.path.insert(0,__import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 from rig import *
 import json
 K=Keys(own=False); pump(1); K.tap(125); pump(1)
-p=subprocess.Popen(["/usr/bin/python3","<repo>/tools/platform-probes/adr6/app4.py"],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True,bufsize=1,stderr=subprocess.DEVNULL)
+p=subprocess.Popen(["/usr/bin/python3",__import__("os").path.dirname(__import__("os").path.abspath(__file__))+"/app4.py"],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True,bufsize=1,stderr=subprocess.DEVNULL)
 def say(c): p.stdin.write(c+"\n"); p.stdin.flush()
 def truth():
     say("truth")

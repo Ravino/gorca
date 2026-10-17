@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Replay of a REAL gnome-terminal 3.56 / VTE 0.80 session through the terminal policy.
 //!
 //! `tests/fixtures/gnome-terminal-3.56-vte-0.80-session.jsonl` was recorded by

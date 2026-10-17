@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! In-process mock broker. It speaks just enough of the bus protocol for a drain to connect
 //! (SASL EXTERNAL, `Hello`, `AddMatch`) and then lets the harness push signal bytes at it with
 //! full control: pacing, fragmentation, and the **F-3 behaviour of dbus-broker**: the bytes a

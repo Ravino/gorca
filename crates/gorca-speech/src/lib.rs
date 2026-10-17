@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! SpeechQueue state machine, speech lane logic and verbalizer.
 //!
 //! Responsibility (ADR-0001 section 11): "`SpeechQueue` SM, speech lane, verbalizer

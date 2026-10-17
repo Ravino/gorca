@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! B-1 harness (bake-off `docs/bakeoff/b1-mirror-fill/SPEC.md`), test-engineer share.
 //!
 //! | Module | SPEC item |

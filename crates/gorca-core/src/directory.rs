@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Lock-free directory of per-app mirrors for the Reader (PC-1).
 
 use std::collections::{HashMap, HashSet};

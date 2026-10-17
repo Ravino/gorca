@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Method handling: (path, interface, member, body) to a reply, against a [`World`].
 //!
 //! Pure with respect to I/O so it can be unit-tested without a bus.

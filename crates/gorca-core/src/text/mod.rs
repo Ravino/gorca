@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Text, caret and typing echo (milestone M3, ADR-0007).
 //!
 //! - [`caret`]: the per-object state machine (key-to-caret correlation, typing echo, edits,

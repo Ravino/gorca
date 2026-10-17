@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The five candidate stores behind one trait set. All use the same cheap integer hasher so the
 //! comparison is about the concurrency scheme, not SipHash. Values are `Arc<Node>` (MS-1: a hit
 //! hands out a shared snapshot; per-node consistency only, MS-2).

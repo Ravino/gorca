@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Symbol tables per language (ADR-0007 VB-1/VB-2), modelled on NVDA's `symbols.dic`.
 //!
 //! A table maps a symbol to a spoken name, the lowest punctuation level at which the name is

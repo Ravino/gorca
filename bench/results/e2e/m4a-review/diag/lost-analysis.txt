@@ -1,4 +1,4 @@
-/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/diag/r1_ms-554985898409548.tsv keys 1200 speaks 1200 cancels 48
+/tmp/scratch/diag/r1_ms-554985898409548.tsv keys 1200 speaks 1200 cancels 48
  LOST key 905 next gap to next key 13.37 ms
    key 903 next t=+-28.85 [('S', 0.44, 'Row 1 button')]
    key 904 prev t=+-14.43 [('S', 1.86, 'Row 0 button')]

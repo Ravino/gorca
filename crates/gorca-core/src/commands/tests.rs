@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Handler tests: every implemented command, driven through `Reader::handle` (CR-1).
 
 use std::sync::Arc;

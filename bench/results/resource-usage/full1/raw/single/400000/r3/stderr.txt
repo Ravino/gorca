@@ -1,4 +1,4 @@
-== reader <repo>/.claude/worktrees/agent-aad69142db3796c20/target/release/gorca built from b0caf12b, tree at b0caf12b
-== e2e ru-single-400000-r3: reader=daemon:<repo>/.claude/worktrees/agent-aad69142db3796c20/target/release/gorca backend=voicego repeats=1 load=21.42 16.56 17.36 5/2192 3374546
+== reader <repo>/target/release/gorca built from b0caf12b, tree at b0caf12b
+== e2e ru-single-400000-r3: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=1 load=21.42 16.56 17.36 5/2192 3374546
 -- round 1/1 RU-400000 (load 21.42 16.56 17.36 4/2192 3374546)
 == wrote bench/results/resource-usage/full1/raw/single/400000/r3/20261017T175035Z.{json,txt}

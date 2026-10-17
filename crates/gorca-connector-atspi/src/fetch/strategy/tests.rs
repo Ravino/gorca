@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Arm A strategy: ordering and bounds of the concurrent paths, against a fake application on an
 //! isolated bus. Skips (and passes) when the harness prerequisites are missing.
 #![allow(clippy::unwrap_used, clippy::expect_used)]

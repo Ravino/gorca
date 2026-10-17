@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Process-local monotonic nanosecond clock shared by feeders and consumers.
 
 use std::sync::OnceLock;

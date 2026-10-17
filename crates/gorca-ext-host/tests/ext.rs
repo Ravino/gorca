@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Host behaviour on both backends (the same extension source, built both ways, ADR-0008 3.3):
 //! hooks, verdict composition, fault containment, reset latency, three strikes, isolation between
 //! applications, settings and the keymap merge.

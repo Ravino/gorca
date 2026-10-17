@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Moves of the flat-review position over a [`LineModel`] (ADR-0006 6.9, 4.2). Pure index
 //! arithmetic over immutable data: no IPC, no locks, which is what makes R1 hold.
 

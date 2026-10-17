@@ -12,7 +12,7 @@
 # python=Python 3.13.5
 # build=release
 # label=m6fix-w2b-main-2
-# reader=daemon:<repo>/.claude/worktrees/m6fix-main/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=5
 # samples_per_series=1200

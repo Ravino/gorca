@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! B-6 arms (ADR-0003 section 16). Both arms implement the same `DocSource` against the same
 //! mirror, so they differ only below the boundary; the harness drives them through [`B6Arm`].
 //!

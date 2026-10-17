@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The native text window (ADR-0007 section 6): a bounded copy of the text around the caret, kept
 //! in step with the application by splicing its `text-changed` events, plus a small cache of the
 //! lines the toolkit reported. Character, word and paragraph units are answered from it with no

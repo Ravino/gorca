@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Browse-mode reading units over the flat text (ADR-0003 section 4.5): character, word and
 //! line ranges, and stepping between them. Offsets are Unicode scalar indices into the
 //! concatenation of node contributions (own text, plus one `\n` for a `BREAK_AFTER` node).

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Rust side of `tests/harness`: an isolated session (private session bus, a11y bus, registry
 //! daemon) and scriptable fake AT-SPI applications, for tests that need a real bus.
 //!

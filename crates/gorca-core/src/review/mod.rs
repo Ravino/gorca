@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Review cursor, object navigation and flat review (ADR-0006, milestone M4a).
 //!
 //! The Reader arm: [`ReviewMsg`] handling, [`ReviewState`], and the command layer in

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Languages with a catalog, and the process-wide UI language.
 //!
 //! One daemon speaks one language at a time: the Reader publishes `speech.language` here when the

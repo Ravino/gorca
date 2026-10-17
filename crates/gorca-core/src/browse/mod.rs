@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Browse mode (ADR-0003 section 11, browse-mode design section 7): the Reader's virtual cursor
 //! over a web document mirror and the browse/focus mode machine.
 //!

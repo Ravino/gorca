@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The test-only debug accessor of the B-1 conformance suite (SPEC 5.7): read-only access to the
 //! mirrors of a daemon that runs in the same process as the test, addressed the way the fake
 //! applications are (unique bus name and object path), so a case can prove it exercised what it

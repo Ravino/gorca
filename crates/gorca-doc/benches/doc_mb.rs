@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! MB benches for the web document core (ADR-0003 MB-4/MB-5 style): nav queries, flat-text
 //! queries, update batches and publish latency at 1k / 10k / 100k / 1M nodes.
 //!

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The rig of one run: private-bus guard, mock speech server, reader child, fake apps, taps.
 
 use std::collections::HashMap;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The config task (ADR-0005 7.6): the only place that reads or writes `gorca.toml`.
 //!
 //! ```text

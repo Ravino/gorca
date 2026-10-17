@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! End-to-end latency harness for Phase 1 (keypress / focus event -> speech start).
 //!
 //! ```text

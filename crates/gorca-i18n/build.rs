@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Generates `MsgId` (one variant per key of the English catalog) and the embedded catalog
 //! sources, so a message id is a compile-time name and a typo cannot reach a user.
 

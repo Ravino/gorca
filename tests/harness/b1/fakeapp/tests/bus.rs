@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The fake app on a private bus: protocol, serial service time, modes, signals, quirks.
 
 #![allow(

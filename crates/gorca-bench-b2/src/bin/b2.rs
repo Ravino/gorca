@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `b2`: bake-off B-2 benchmark runner. Prints a result table and writes JSON under
 //! `bench/results/b2-ingress/<label>/`.
 //!

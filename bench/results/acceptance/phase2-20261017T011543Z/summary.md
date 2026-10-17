@@ -1,6 +1,6 @@
 # Phase 2 acceptance: FAIL
 
-Mode: **ACCEPTANCE ATTEMPT, DEGRADED HOST (--force), PARTIAL (m1 m6)**. Run dir: `<repo>/.claude/worktrees/agent-ab1f7350482f9d118/bench/results/acceptance/phase2-20261017T011543Z`.
+Mode: **ACCEPTANCE ATTEMPT, DEGRADED HOST (--force), PARTIAL (m1 m6)**. Run dir: `<repo>/bench/results/acceptance/phase2-20261017T011543Z`.
 Resolved topology (from the reader reports): not reported (wrappers without --expect-topology only).
 
 ## Steps

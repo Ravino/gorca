@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Neutral web-document exchange format between a `DocSource` and `gorca-doc`.
 //!
 //! The contract is `gorca_model::DocDelta`; this module adds the two things that contract leaves

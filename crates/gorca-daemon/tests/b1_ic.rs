@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The invalidation conformance suite IC-1..IC-23 (B-1 SPEC 5.7) against the real daemon: the
 //! real connector, app actors, mirror, driver and Reader run in this process on isolated buses,
 //! `b1-fakeapp` processes play the applications, the presentation log (PW-10) is what the suite

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Character formatting for `info.formatting` (ADR-0007 M3b): the attribute run at an offset,
 //! mapped from each toolkit's attribute names to [`TextFormat`].
 //!

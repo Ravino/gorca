@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Test-isolation tripwire (review F6).
 //!
 //! A test process that reaches the user's real desktop (their session bus, a11y bus, voicego or

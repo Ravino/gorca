@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The surface walk of a model build (ADR-0006 6.1 steps 1 and 2, 6.2): read the mirror under
 //! the surface root in pre-order, prune what is not showing and what is another surface, and
 //! list what the mirror lacks. Pure over a [`NavSource`]; the build task fetches the misses and

@@ -14,7 +14,7 @@
 # topology_arms=lanes-rtx2
 # topology_expected=-
 # label=punct-r1
-# reader=daemon:<repo>/.claude/worktrees/agent-punct-symbols/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=1200

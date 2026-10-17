@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! `CLOCK_MONOTONIC` in nanoseconds: the clock shared by every process of a run (same as
 //! `gorca-bench`'s `e2e::mono`, which this crate does not depend on).
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The emulated Mutter keyboard manager (`tests/harness/fake_mutter.py`), as the B-1 walk uses it
 //! to press the daemon's real `info.where_am_i` command (Insert+Tab of the NVDA desktop keymap,
 //! ADR-0005) instead of calling an in-process shortcut.

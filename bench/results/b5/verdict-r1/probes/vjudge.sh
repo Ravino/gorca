@@ -2,7 +2,7 @@
 # Reviewer re-run of B-5 (verdict): judge.sh loop with --allow-stale-reader (binary = d0a13c0 code,
 # stamped e185a10 because the relink at HEAD was OOM-killed). Hog stopped by recorded PID only.
 set -uo pipefail
-cd <repo>/.claude/worktrees/agent-ab8dc123ed2f390a2
+cd <repo>
 . ./env.sh
 label=$1; rounds=$2; arms=$3; conds=$4; only=$5
 out=bench/results/b5/$label; [ -e "$out" ] && { echo exists; exit 1; }

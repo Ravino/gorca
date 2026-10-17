@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Admission to the bounded command queue in front of a speech writer (S-3, review F10).
 //!
 //! The rule: **a stop always gets through**. When the server stops reading and the queue is full:

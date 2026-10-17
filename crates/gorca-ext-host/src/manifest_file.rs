@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The manifest file (`ext.toml`): parse and validate. Never panics; every problem is an error
 //! the loader reports and survives (a broken extension never affects the core).
 //!

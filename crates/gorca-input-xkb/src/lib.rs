@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The keysym table of the configured input sources (K-8b), read through libxkbcommon.
 //!
 //! Mutter matches a key grab against the keysym the active layout produced, so a quick-navigation

@@ -174,7 +174,7 @@ Cancel-to-silence at a real device was not measured (no real sink).
 ## Reproduce
 
 Build and rig live in the session scratchpad
-(`/tmp/-www-a11y/.../scratchpad/{rig,soak}`); the soak client is about 280
+(`/tmp/scratch/{rig,soak}`); the soak client is about 280
 lines of Go and can be moved into `scripts/` if wanted. Commands:
 `. ./env.sh; cd refs/voicego; go vet ./... && go test -race ./...` and
 `go test -race -tags espeak_ng_real ./cmd/voicego-engine-espeak-ng`.

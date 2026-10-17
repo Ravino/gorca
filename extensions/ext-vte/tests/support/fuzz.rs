@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Randomised typing against a model of a real VTE (rows ending in `\n`, written blanks kept,
 //! payloads on inserts and deletes, caret events after the text), with the shell's echo
 //! arriving 2 to 25 ms after the key, before or after the key is seen. Every key must be spoken

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! Object navigation (ADR-0006 5): presentation classes, the simple-review walks of NVDA
 //! (`simpleParent`, `simpleFirstChild`, `simpleNext`, `simplePrevious`, `nextInFlow`) and the raw
 //! tree moves, all over mirror reads.
