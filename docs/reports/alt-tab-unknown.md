@@ -53,3 +53,7 @@ Log of the pre-fix control run: Ctrl+Alt+Tab first item `unknown`, then `Windows
 - Private Shell rig (alttab_drive, 2 rounds): "gtkwin.py, button", "gedit, button", "Top Bar, button",
   "Windows, button" as before; the bare-"button" race did not occur in this run, so the late path is covered by the
   unit and fake-app tests, not by a live reproduction.
+
+## Security follow-up 2026-10-17: secrets never become names
+- The name fallback classifies every node it reads (role and state first, fail closed): a password field is never read (name or text) and is not searched; text is lent only by non-editable label/static-text leaves, every other node lends its name only. A password field itself gets no fallback name. Presentation and debug logs carry no fallback names (the debug line logs node, states, source only; the presentation log already redacts password roles).
+- Tests: `a_password_field_never_leaks_into_a_name`, `an_editable_entry_lends_no_text_to_a_name`, `source_tests`.

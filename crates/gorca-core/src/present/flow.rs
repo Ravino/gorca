@@ -813,6 +813,7 @@ impl Reader {
             role: false,
             states: StateSet::empty(),
             value: false,
+            description: false,
         };
         let mut merged = (*p.snap).clone();
         merged.name = Some(name.into());
