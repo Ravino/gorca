@@ -106,7 +106,8 @@ impl Reader {
         let mut u = message("", id, epoch);
         u.prio = Prio::Text;
         u.segments.clear();
-        u.segments.extend(present::segments(&items));
+        u.segments
+            .extend(present::segments(&items, self.verbalize_opts()));
         Some(u)
     }
 

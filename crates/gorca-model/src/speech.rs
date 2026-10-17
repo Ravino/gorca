@@ -27,6 +27,9 @@ pub enum SegmentKind {
     /// sequence (M8b). `browse.description_pause = false` turns it into plain `Text`. Carried as a
     /// kind, never as characters of the text, so page text that starts with ". " is untouched.
     Description,
+    /// Text that is already verbalised (symbols named by the punctuation level) or is the
+    /// reader's own message: never symbol-processed again on its way to the speech lane.
+    Said,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

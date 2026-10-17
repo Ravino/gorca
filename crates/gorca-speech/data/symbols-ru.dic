@@ -1,0 +1,110 @@
+# Таблица символов, русский язык. Поведение по образцу NVDA symbols.dic; названия собственные.
+# Поля через табуляцию: символ, название, уровень, сохранение (см. symbols-en.dic).
+@word.blank	пусто
+@word.object	объект
+@word.cap	заглавная
+@level.none	без пунктуации
+@level.some	немного
+@level.most	большинство
+@level.all	вся
+@word.confirm	пунктуация {}
+@sentence.dot	точка	all	always
+@sentence.bang	восклицательный знак	all	always
+@sentence.question	вопросительный знак	all	always
+@phrase.semi	точка с запятой	most	always
+@phrase.colon	двоеточие	most	always
+@multiple.dot	заполняющие точки	all	always
+@decimal.point		none	always
+@decimal.comma		none	always
+@inword.apostrophe	апостроф	all	norep
+@negative.number	минус	none	norep
+U+0000	пусто	char
+U+0009	таб	char
+U+000A	пусто	char
+U+000D	пусто	char
+U+000C	разрыв страницы	none
+U+0020	пробел	char
+U+00A0	пробел	char
+U+2009	пробел	char
+U+202F	пробел	char
+U+200B	пробел нулевой ширины	char
+U+200E	знак слева направо	char
+U+200F	знак справа налево	char
+!	восклицательный знак	all
+"	кавычка	most
+U+0023	решётка	some
+$	доллар	all	norep
+£	фунт	all	norep
+€	евро	all	norep
+¢	центы	all	norep
+¥	иена	all	norep
+₹	рупия	some	norep
+₽	рубль	some	norep
+₴	гривна	some	norep
+%	процент	some
+‰	промилле	some
+&	амперсанд	some
+'	апостроф	all
+(	левая круглая	most	always
+)	правая круглая	most	always
+*	звёздочка	some
++	плюс	some
+,	запятая	all	always
+-	дефис	most	always
+.	точка	some
+/	косая черта	some
+:	двоеточие	most	norep
+;	точка с запятой	most
+<	меньше	some
+=	равно	some
+>	больше	some
+?	вопросительный знак	all
+U+0040	собака	some
+[	левая квадратная	most
+]	правая квадратная	most
+\	обратная косая черта	most
+^	крышка	most
+_	подчёркивание	most
+`	обратный апостроф	most
+{	левая фигурная	most
+}	правая фигурная	most
+|	вертикальная черта	most
+~	тильда	most
+¦	разорванная вертикальная черта	most
+¡	перевёрнутый восклицательный знак	some
+¿	перевёрнутый вопросительный знак	some
+·	средняя точка	most
+„	нижняя кавычка лапка	most
+“	левая двойная кавычка	most
+”	правая двойная кавычка	most
+‘	левая одиночная кавычка	most
+’	правая одиночная кавычка	most
+′	штрих	some
+″	двойной штрих	some
+•	маркер	some
+…	многоточие	all	always
+...	многоточие	all	always
+–	короткое тире	most	always
+—	тире	most	always
+‐	дефис	most	always
+«	левая ёлочка	most	always
+»	правая ёлочка	most	always
+§	параграф	all
+°	градус	some
+©	копирайт	some
+®	зарегистрировано	some
+™	торговая марка	some
+№	номер	some
+µ	микро	some
+¶	знак абзаца	most
+±	плюс-минус	some
+×	умножить	some
+÷	разделить	some
+−	минус	most	always
+≈	приблизительно равно	some
+≠	не равно	some
+≤	меньше или равно	some
+≥	больше или равно	some
+→	стрелка вправо	some
+←	стрелка влево	some
+∞	бесконечность	some

@@ -1090,7 +1090,7 @@ async fn reader_loop(
             match e {
                 ReaderEffect::Speak(intent) => {
                     bump(&shared.stats.utterances);
-                    shared.speech.submit(intent.utterance);
+                    shared.speech.submit(reader.symbolize(intent.utterance));
                 }
                 ReaderEffect::Fetch {
                     node,

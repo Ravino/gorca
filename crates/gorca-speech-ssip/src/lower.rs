@@ -238,7 +238,8 @@ mod tests {
             [
                 "SET self OUTPUT_MODULE espeak-ng\r\n",
                 "SET self LANGUAGE ru\r\n",
-                "SET self SYNTHESIS_VOICE ru\r\n"
+                "SET self SYNTHESIS_VOICE ru\r\n",
+                "SET self PUNCTUATION none\r\n"
             ]
         );
         let lang = SpeechCmd::Configure(VoiceSetup {
@@ -247,9 +248,16 @@ mod tests {
         });
         assert_eq!(
             lines(&lower(&lang, Prio::Text)),
-            ["SET self LANGUAGE ru\r\n"]
+            ["SET self LANGUAGE ru\r\n", "SET self PUNCTUATION none\r\n"]
         );
-        assert!(lower(&SpeechCmd::Configure(VoiceSetup::default()), Prio::Text).is_empty());
+        // gorca verbalises symbols itself: the server never reads punctuation, whatever is set.
+        assert_eq!(
+            lines(&lower(
+                &SpeechCmd::Configure(VoiceSetup::default()),
+                Prio::Text
+            )),
+            ["SET self PUNCTUATION none\r\n"]
+        );
     }
 
     #[test]

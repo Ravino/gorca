@@ -3,6 +3,9 @@ use std::sync::Arc;
 use gorca_model::Utterance;
 use gorca_output_api::Verbalized;
 
+use crate::symbols::Lang;
+use crate::symbols::Table;
+
 /// How much punctuation is spoken by name (ADR-0007 VB-1). The same four levels as the
 /// `speech.punctuation` setting; the core maps one to the other.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
@@ -43,6 +46,20 @@ pub enum How {
 pub struct VerbalizeOpts {
     pub punct: Punct,
     pub caps: Caps,
+    /// Selects the symbol table (names, levels, preserve rules).
+    pub lang: Lang,
+}
+
+impl Punct {
+    /// The rank of the level in a symbol table (`none` 0 up to `all` 3).
+    fn rank(self) -> u8 {
+        match self {
+            Punct::None => 0,
+            Punct::Some => 1,
+            Punct::Most => 2,
+            Punct::All => 3,
+        }
+    }
 }
 
 /// Turns an utterance into server text and a unit of text into what is spoken. Verbalisation
@@ -50,84 +67,6 @@ pub struct VerbalizeOpts {
 /// (section 8.1, VB-4).
 #[derive(Debug, Default)]
 pub struct Verbalizer;
-
-/// Names of symbols spoken at the `some` level and above.
-const SOME: &[(char, &str)] = &[
-    ('@', "at"),
-    ('#', "number"),
-    ('$', "dollar"),
-    ('%', "percent"),
-    ('^', "caret"),
-    ('&', "and"),
-    ('*', "star"),
-    ('+', "plus"),
-    ('=', "equals"),
-    ('<', "less"),
-    ('>', "greater"),
-    ('/', "slash"),
-    ('\\', "backslash"),
-    ('|', "bar"),
-    ('~', "tilde"),
-    ('_', "underscore"),
-    ('\u{20ac}', "euro"),
-    ('\u{a3}', "pound"),
-    ('\u{a9}', "copyright"),
-];
-
-/// Added at `most`.
-const MOST: &[(char, &str)] = &[
-    ('(', "left paren"),
-    (')', "right paren"),
-    ('[', "left bracket"),
-    (']', "right bracket"),
-    ('{', "left brace"),
-    ('}', "right brace"),
-    ('"', "quote"),
-    ('\'', "apostrophe"),
-    ('`', "grave"),
-    ('\u{ab}', "left quote"),
-    ('\u{bb}', "right quote"),
-    ('\u{2014}', "dash"),
-    ('\u{2013}', "dash"),
-];
-
-/// Added at `all`.
-const ALL: &[(char, &str)] = &[
-    ('.', "dot"),
-    (',', "comma"),
-    (';', "semicolon"),
-    (':', "colon"),
-    ('!', "bang"),
-    ('?', "question"),
-    ('-', "dash"),
-    ('\u{2026}', "ellipsis"),
-];
-
-fn lookup(table: &'static [(char, &'static str)], c: char) -> Option<&'static str> {
-    table.iter().find(|(k, _)| *k == c).map(|(_, v)| *v)
-}
-
-/// The name of a symbol at `level`, or `None` when it is not spoken by name there.
-fn symbol_name(c: char, level: Punct) -> Option<&'static str> {
-    match level {
-        Punct::None => None,
-        Punct::Some => lookup(SOME, c),
-        Punct::Most => lookup(SOME, c).or_else(|| lookup(MOST, c)),
-        Punct::All => lookup(SOME, c)
-            .or_else(|| lookup(MOST, c))
-            .or_else(|| lookup(ALL, c)),
-    }
-}
-
-/// The name of a single character, whatever the level (VB-1): every symbol has one.
-fn char_name(c: char) -> Option<&'static str> {
-    symbol_name(c, Punct::All).or(match c {
-        ' ' | '\u{a0}' => Some("space"),
-        '\t' => Some("tab"),
-        '\n' | '\r' | '\u{2028}' | '\u{2029}' => Some("blank"),
-        _ => None,
-    })
-}
 
 /// A unit that holds nothing but embedded-object marks (an inline image or link inside a
 /// paragraph): it is said as "object", never as "blank".
@@ -184,8 +123,9 @@ impl Verbalizer {
     /// What to say for the unit `s` read from a text (ADR-0007 section 3.2). Empty input is
     /// "blank".
     pub fn unit(&self, s: &str, how: How, o: &VerbalizeOpts) -> String {
+        let t = Table::of(o.lang);
         if only_objects(s) {
-            return "object".to_owned();
+            return t.object().to_owned();
         }
         let s = without_phantoms(s);
         let s = s.as_ref();
@@ -197,58 +137,52 @@ impl Verbalizer {
 
     /// One character (a grapheme: the first scalar decides its name).
     fn one_char(s: &str, o: VerbalizeOpts) -> String {
+        let t = Table::of(o.lang);
         let Some(c) = s.chars().next() else {
-            return "blank".to_owned();
+            return t.blank().to_owned();
         };
-        if let Some(name) = char_name(c) {
+        if let Some(name) = t.char_name(c) {
             return name.to_owned();
         }
         if c.is_uppercase() && o.caps == Caps::Say {
-            return format!("cap {s}");
+            return format!("{} {s}", t.cap());
         }
         s.to_owned()
     }
 
     /// A word, a line or running text: whitespace-only is "blank" (VB-2); the symbols of the
-    /// punctuation level are replaced by their names; the line break at the end is dropped.
+    /// punctuation level are replaced by their names (NVDA rules, see `symbols`); the line
+    /// break at the end is dropped.
     fn run(s: &str, o: VerbalizeOpts) -> String {
+        let t = Table::of(o.lang);
         let s = s.trim_end_matches(['\n', '\r']);
         if s.chars().all(char::is_whitespace) {
-            return "blank".to_owned();
+            return t.blank().to_owned();
         }
-        if o.punct == Punct::None {
-            return s.to_owned();
+        let said = t.process(s, o.punct.rank());
+        if !said.is_empty() {
+            return said;
         }
-        let mut out = String::with_capacity(s.len() + 8);
-        for c in s.chars() {
-            match symbol_name(c, o.punct) {
-                Some(name) => {
-                    if !out.is_empty() && !out.ends_with(' ') {
-                        out.push(' ');
-                    }
-                    out.push_str(name);
-                    out.push(' ');
-                }
-                None if c == ' ' && out.ends_with(' ') => {}
-                None => out.push(c),
-            }
-        }
-        let trimmed = out.trim_end().len();
-        out.truncate(trimmed);
-        out
+        // Nothing but marks the level does not name ("?" alone at `some`): saying nothing would
+        // leave the user without a landing, so the marks are named like single characters.
+        s.chars()
+            .filter_map(|c| t.char_name(c))
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     /// Spell `s` letter by letter (`text.spell_*`), or with the phonetic alphabet for Latin
     /// letters when `phonetic` is set. Every character is named, so spelling a word that holds
     /// a space or a symbol says so.
     pub fn spell(&self, s: &str, phonetic: bool, o: &VerbalizeOpts) -> String {
+        let t = Table::of(o.lang);
         if only_objects(s) {
-            return "object".to_owned();
+            return t.object().to_owned();
         }
         let s = without_phantoms(s);
         let s = s.trim_end_matches(['\n', '\r']);
         if s.is_empty() {
-            return "blank".to_owned();
+            return t.blank().to_owned();
         }
         let mut parts: Vec<String> = Vec::new();
         for c in s.chars() {
@@ -263,7 +197,7 @@ impl Verbalizer {
                 Self::one_char(c.encode_utf8(&mut buf), *o)
             };
             if c.is_uppercase() && o.caps == Caps::Say && phonetic {
-                parts.push(format!("cap {part}"));
+                parts.push(format!("{} {part}", t.cap()));
             } else {
                 parts.push(part);
             }
@@ -335,6 +269,14 @@ mod tests {
         VerbalizeOpts {
             punct,
             caps: Caps::Pitch,
+            lang: Lang::En,
+        }
+    }
+
+    fn ru(punct: Punct) -> VerbalizeOpts {
+        VerbalizeOpts {
+            lang: Lang::Ru,
+            ..opts(punct)
         }
     }
 
@@ -359,6 +301,7 @@ mod tests {
         let say = VerbalizeOpts {
             punct: Punct::Some,
             caps: Caps::Say,
+            lang: Lang::En,
         };
         assert_eq!(v.unit("A", How::Char, &say), "cap A");
         assert_eq!(v.unit("a", How::Char, &say), "a");
@@ -368,15 +311,18 @@ mod tests {
     #[test]
     fn words_and_lines_apply_the_punctuation_level() {
         let v = Verbalizer;
-        assert_eq!(v.unit("a@b.c", How::Word, &opts(Punct::None)), "a@b.c");
-        assert_eq!(v.unit("a@b.c", How::Word, &opts(Punct::Some)), "a at b.c");
+        assert_eq!(v.unit("a@b.c", How::Word, &opts(Punct::None)), "a b c");
+        assert_eq!(
+            v.unit("a@b.c", How::Word, &opts(Punct::Some)),
+            "a at b dot c"
+        );
         assert_eq!(
             v.unit("f(x)", How::Line, &opts(Punct::Most)),
-            "f left paren x right paren"
+            "f left paren(x right paren)"
         );
         assert_eq!(
             v.unit("Hi, you.\n", How::Line, &opts(Punct::All)),
-            "Hi comma you dot"
+            "Hi comma, you dot."
         );
     }
 
@@ -413,5 +359,146 @@ mod tests {
         assert_eq!(v.spell("ab", true, &o), "alpha, bravo");
         assert_eq!(v.spell("", false, &o), "blank");
         assert_eq!(v.spell("\u{43f}\u{440}", false, &o), "\u{43f}, \u{440}");
+    }
+
+    fn words(v: &Verbalizer, text: &str, o: VerbalizeOpts) -> String {
+        v.unit(text, How::Text, &o)
+    }
+
+    const SENTENCE: &str = "\u{41f}\u{440}\u{438}\u{432}\u{435}\u{442}, \u{43a}\u{430}\u{43a} \u{434}\u{435}\u{43b}\u{430} \u{442}\u{432}\u{43e}\u{438}?";
+
+    #[test]
+    fn a_russian_sentence_by_level() {
+        let v = Verbalizer;
+        // Levels none to some keep the marks as they are, for the pause; most too (the comma
+        // and the question mark are named at `all` only).
+        for p in [Punct::None, Punct::Some, Punct::Most] {
+            assert_eq!(words(&v, SENTENCE, ru(p)), SENTENCE, "{p:?}");
+        }
+        assert_eq!(
+            words(&v, SENTENCE, ru(Punct::All)),
+            "Привет запятая, как дела твои вопросительный знак?"
+        );
+        // Spelled out by word units too.
+        assert_eq!(
+            v.unit("Привет, ", How::Word, &ru(Punct::All)),
+            "Привет запятая,"
+        );
+        assert_eq!(v.unit("Привет, ", How::Word, &ru(Punct::Some)), "Привет,");
+    }
+
+    #[test]
+    fn a_russian_sentence_char_by_char_names_every_symbol() {
+        let v = Verbalizer;
+        for p in [Punct::None, Punct::Some, Punct::Most, Punct::All] {
+            let o = ru(p);
+            assert_eq!(v.unit(",", How::Char, &o), "запятая");
+            assert_eq!(v.unit("?", How::Char, &o), "вопросительный знак");
+            assert_eq!(v.unit(" ", How::Char, &o), "пробел");
+            assert_eq!(v.unit("\u{43f}", How::Char, &o), "п");
+            assert_eq!(v.unit("\u{2116}", How::Char, &o), "номер");
+            assert_eq!(v.unit("\u{ab}", How::Char, &o), "левая ёлочка");
+            assert_eq!(v.unit("\u{bb}", How::Char, &o), "правая ёлочка");
+            assert_eq!(v.unit("\u{2014}", How::Char, &o), "тире");
+            assert_eq!(v.unit("\u{2026}", How::Char, &o), "многоточие");
+            assert_eq!(v.unit("\u{20bd}", How::Char, &o), "рубль");
+        }
+        // The same characters in English speech keep their English names.
+        let en = opts(Punct::All);
+        assert_eq!(v.unit(",", How::Char, &en), "comma");
+        assert_eq!(v.unit("\u{2116}", How::Char, &en), "number sign");
+    }
+
+    #[test]
+    fn levels_follow_the_nvda_table() {
+        let v = Verbalizer;
+        let at = |s: &str, p| v.unit(s, How::Word, &opts(p));
+        // `some`: symbols such as @ # % + = are named, brackets are not.
+        assert_eq!(at("a+b", Punct::None), "a b");
+        assert_eq!(at("a+b", Punct::Some), "a plus b");
+        assert_eq!(at("(x)", Punct::Some), "(x)");
+        assert_eq!(at("(x)", Punct::Most), "left paren(x right paren)");
+        // `all` adds the dollar sign and the quote at every level above.
+        assert_eq!(at("$5", Punct::Most), "$5");
+        assert_eq!(at("$5", Punct::All), "dollar 5");
+        assert_eq!(at("\"x\"", Punct::Some), "x");
+        assert_eq!(at("\"x\"", Punct::Most), "quote x quote");
+    }
+
+    #[test]
+    fn repeated_symbols_are_counted() {
+        let v = Verbalizer;
+        assert_eq!(v.unit("-----", How::Line, &opts(Punct::All)), "5 dash");
+        assert_eq!(v.unit("-----", How::Line, &ru(Punct::All)), "5 дефис");
+        assert_eq!(v.unit("-----", How::Line, &opts(Punct::Some)), "-----");
+        assert_eq!(v.unit("=====", How::Line, &ru(Punct::Some)), "5 равно");
+        assert_eq!(
+            v.unit("***", How::Line, &opts(Punct::Some)),
+            "star star star"
+        );
+        assert_eq!(
+            v.unit("a....b", How::Line, &opts(Punct::All)),
+            "a multiple dots....b"
+        );
+    }
+
+    #[test]
+    fn digits_and_letters_around_a_symbol() {
+        let v = Verbalizer;
+        let en = |s: &str, p| v.unit(s, How::Text, &opts(p));
+        // A decimal point and a decimal comma stay in the number at every level.
+        assert_eq!(en("3.14", Punct::All), "3.14");
+        assert_eq!(en("3.14", Punct::None), "3.14");
+        assert_eq!(v.unit("3,14", How::Text, &ru(Punct::All)), "3,14");
+        // A minus before a number is a minus; a hyphen inside a word is a dash by level.
+        assert_eq!(en("-5", Punct::None), "minus 5");
+        assert_eq!(v.unit("-5", How::Text, &ru(Punct::Some)), "минус 5");
+        assert_eq!(en("well-known", Punct::Some), "well-known");
+        assert_eq!(en("well-known", Punct::Most), "well dash-known");
+        // An apostrophe inside a word is left alone until `all`.
+        assert_eq!(en("don't", Punct::Most), "don't");
+        assert_eq!(en("don't", Punct::All), "don apostrophe t");
+        // The end of a sentence keeps its mark.
+        assert_eq!(en("Hello.", Punct::Some), "Hello.");
+        assert_eq!(en("Hello. Bye", Punct::All), "Hello dot. Bye");
+        assert_eq!(en("what?!", Punct::All), "what question bang!");
+    }
+
+    #[test]
+    fn terminal_command_line_by_level() {
+        let v = Verbalizer;
+        let line = "ls -la | grep \"x\"";
+        assert_eq!(v.unit(line, How::Line, &opts(Punct::None)), "ls -la grep x");
+        assert_eq!(v.unit(line, How::Line, &opts(Punct::Some)), "ls -la grep x");
+        assert_eq!(
+            v.unit(line, How::Line, &opts(Punct::Most)),
+            "ls dash-la bar grep quote x quote"
+        );
+        assert_eq!(
+            v.unit(line, How::Line, &ru(Punct::Most)),
+            "ls дефис-la вертикальная черта grep кавычка x кавычка"
+        );
+    }
+
+    #[test]
+    fn a_say_all_paragraph_in_russian() {
+        let v = Verbalizer;
+        let para = "Цена: 3,5 ₽ (скидка — 10%). Звоните «сегодня»!";
+        let some = v.unit(para, How::Text, &ru(Punct::Some));
+        assert_eq!(
+            some,
+            "Цена: 3,5 рубль (скидка — 10 процент ). Звоните «сегодня»!"
+        );
+        let all = v.unit(para, How::Text, &ru(Punct::All));
+        assert!(all.contains("двоеточие:"), "{all}");
+        assert!(
+            all.contains("левая круглая(") || all.contains("левая круглая ("),
+            "{all}"
+        );
+        assert!(
+            all.contains("тире—") && all.contains("левая ёлочка«"),
+            "{all}"
+        );
+        assert!(all.ends_with("восклицательный знак!"), "{all}");
     }
 }

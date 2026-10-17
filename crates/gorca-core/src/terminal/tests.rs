@@ -304,7 +304,7 @@ fn focusing_a_terminal_reads_the_screen_and_speaks_the_cursor_line_after_the_foc
     let fx = g.focus("out\nme@box:~$ ls", 16);
     assert_eq!(
         spoken(&fx),
-        ["me at box: tilde dollar ls"],
+        ["me at box: $ ls"],
         "punctuation at the default level"
     );
     let u = utterances(&fx)[0];
@@ -372,7 +372,7 @@ fn command_output_is_read_once_after_the_settle_through_one_screen_read() {
     let reads = screen_reads(&fx);
     assert_eq!(reads.len(), 1, "{fx:?}");
     let fx = g.answer(reads[0], "$ ls\nalpha beta\n$ ", 18);
-    assert_eq!(spoken(&fx), ["alpha beta\n dollar"]);
+    assert_eq!(spoken(&fx), ["alpha beta\n$"]);
     let u = utterances(&fx)[0];
     assert_eq!(u.prio, Prio::Text);
     assert_eq!(u.epoch, g.epoch.current());
@@ -662,7 +662,7 @@ fn say_current_line_and_word_read_the_held_screen_with_no_read() {
         ep,
         &mut fx,
     );
-    assert_eq!(spoken(&fx), ["me at box: tilde dollar git status"]);
+    assert_eq!(spoken(&fx), ["me at box: $ git status"]);
     assert!(screen_reads(&fx).is_empty());
 }
 

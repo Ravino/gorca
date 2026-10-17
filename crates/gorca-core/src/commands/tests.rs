@@ -988,3 +988,18 @@ fn an_extension_command_is_queued_to_the_host_never_run_in_the_reader() {
         vec![("core-test".to_owned(), 42)]
     );
 }
+
+#[test]
+fn the_punctuation_cycle_is_confirmed_in_the_speech_language() {
+    let mut f = fixture();
+    let fx = f.run(CoreCmd::SpeechPunctuationCycle, 1);
+    assert_eq!(spoken(&fx), ["punctuation most"]);
+    f.reader.cmd.file.speech.language = "ru".to_owned();
+    f.reader.cmd.republish();
+    let fx = f.run(CoreCmd::SpeechPunctuationCycle, 1);
+    assert_eq!(spoken(&fx), ["пунктуация вся"]);
+    let fx = f.run(CoreCmd::SpeechPunctuationCycle, 1);
+    assert_eq!(spoken(&fx), ["пунктуация без пунктуации"]);
+    let fx = f.run(CoreCmd::SpeechPunctuationCycle, 1);
+    assert_eq!(spoken(&fx), ["пунктуация немного"]);
+}

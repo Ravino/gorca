@@ -42,6 +42,18 @@ impl Reader {
         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
     }
 
+    /// Speak text that holds what an application said (a window title, a node description):
+    /// its symbols are named by the punctuation level on the way to the lane.
+    pub(crate) fn say_app(&mut self, text: &str, fx: &mut ReaderEffects) {
+        let id = self.utt_id();
+        let mut u = message(text, id, self.epoch.current());
+        u.prio = Prio::Interrupt;
+        for s in &mut u.segments {
+            s.kind = gorca_model::SegmentKind::Text;
+        }
+        fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+    }
+
     /// Speak a notice that no key caused: it must not be cancelled by the next focus change.
     pub(crate) fn announce(&mut self, text: &str, fx: &mut ReaderEffects) {
         let id = self.utt_id();
@@ -219,8 +231,21 @@ impl Reader {
                 let v = self.cmd.effective.speech.punctuation.next();
                 self.cmd.overlay.punctuation = Some(v);
                 self.cmd.republish();
-                let name = v.name();
-                self.confirm(&format!("punctuation {name}"), name, fx);
+                // Said in the speech language, with the level named as the symbol table does.
+                let table = gorca_speech::SymbolTable::of(gorca_speech::Lang::from_code(
+                    &self.cmd.effective.speech.language,
+                ));
+                let rank = match v {
+                    gorca_config::Punct::None => 0,
+                    gorca_config::Punct::Some => 1,
+                    gorca_config::Punct::Most => 2,
+                    gorca_config::Punct::All => 3,
+                };
+                let (full, brief) = (
+                    table.level_confirmation(rank, false),
+                    table.level_confirmation(rank, true),
+                );
+                self.confirm(&full, &brief, fx);
             }
             CoreCmd::SettingsReload => fx.push(ReaderEffect::Config(ConfigRequest::Reload)),
             CoreCmd::SettingsSave => {
@@ -509,7 +534,7 @@ impl Reader {
             },
             PendingKind::NodeInfo => info::node_info(&chain),
         };
-        self.say(&text, fx);
+        self.say_app(&text, fx);
     }
 
     /// A reply for a pending command. `true` when it was consumed by one.
