@@ -23,6 +23,7 @@
 //! | BAR1 | a page loads: title, then it reads itself; a key stops it | `bar_failures`, `bar_start_ms` (information) |
 //! | BL1 | quick navigation on the Russian layout, Shift+digit on both | `bl_failures` |
 //! | FR1 | frame and article quick navigation on a page with an iframe | `fr_failures` |
+//! | TB1 | three tabs, Ctrl+Tab and Ctrl+Shift+Tab | `tb_failures` (gate 0: every switch says the new title), `tb1_ms` |
 //!
 //! Everything is skipped unless `--reader-env GORCA_M7=1` and the private compositor are there
 //! (`tests/web/m7/run_m7.sh`).
@@ -45,7 +46,7 @@ use super::web::{
 /// The scenario ids of this module, in the order of a full run.
 pub const IDS: &[&str] = &[
     "FC1h", "FC1", "FE1", "FCE2", "FE2", "FS2", "FSA1", "FSA3", "FCE1", "FT1", "FP1", "BSA1",
-    "BAR1", "BL1", "FR1",
+    "BAR1", "BL1", "FR1", "TB1",
 ];
 
 /// The reader does not read pages by itself (the M7a keys-by-line scenarios), or does (the
@@ -81,6 +82,7 @@ pub fn run(
         "BAR1" => bar1(host, reader, flavor, out),
         "BL1" => bl1(host, reader, flavor, out),
         "FR1" => fr1(host, reader, flavor, out),
+        "TB1" => tb1(host, reader, flavor, out),
         other => bail!("unknown web text scenario {other}"),
     }
 }
@@ -1837,5 +1839,55 @@ fn step(
         ));
     }
     sleep(150);
+    Ok(())
+}
+
+/// TB1: three tabs; Ctrl+Tab and Ctrl+Shift+Tab. Every switch must say the new page's title.
+fn tb1(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor, out: &mut RunOut) -> Result<()> {
+    let dir = super::web::pages_dir(host);
+    let urls: Vec<String> = ["tab-a.html", "tab-b.html", "tab-c.html"]
+        .iter()
+        .map(|n| file_url(&dir.join(n)))
+        .collect::<Result<_>>()?;
+    // Firefox shows the last URL it was given.
+    let (w, doc) = Web::start_cfg(host, reader, flavor, &urls, "Tab Gamma", CFG_QUIET)?;
+    let mut f = Ft {
+        w,
+        doc: doc.clone(),
+        woken: false,
+    };
+    f.w.prime(&doc)?;
+    sleep(1500);
+    // Alt+1 selects the first tab, so the walk starts from a known place.
+    f.w.ff.keys(&[56, 2]);
+    sleep(1500);
+    let tab = k(15, 0xff09);
+    let steps: [(u32, &str); 5] = [
+        (CONTROL, "Tab Beta"),
+        (CONTROL, "Tab Gamma"),
+        (CONTROL | SHIFT, "Tab Beta"),
+        (CONTROL | SHIFT, "Tab Alpha"),
+        (CONTROL | SHIFT, "Tab Gamma"),
+    ];
+    let mut fails: Vec<String> = Vec::new();
+    for (state, want) in steps {
+        let mark = f.w.mark();
+        let ev0 = f.w.tap.len();
+        let t0 = super::mono::now_ns();
+        let (_, took) = f.key(tab, 0, state)?;
+        out.notes.push(format!("TB1 Tab state {state:#x} took={took}"));
+        sleep(2500);
+        let heard = f.heard(mark);
+        out.notes.push(format!("TB1 -> {want}: heard {heard:?}"));
+        out.notes.push(format!("TB1 events {:?}", f.w.tap.since(ev0)));
+        match heard.iter().find(|(_, t)| t.contains(want)) {
+            Some((t, _)) => out.x("tb1_ms", ms(t.saturating_sub(t0)), "ms"),
+            None => fails.push(format!("{want}: not announced; heard {heard:?}")),
+        }
+    }
+    out.x("tb_failures", fails.len() as f64, "failures");
+    for x in &fails {
+        out.notes.push(format!("TB1 FAIL {x}"));
+    }
     Ok(())
 }

@@ -1021,6 +1021,15 @@ impl Reader {
                 | WebMode::Browse { .. }
                 | WebMode::Focus { .. } => None,
             };
+            // The focus moved into another document than the one we were in (a tab switch, a
+            // window switch, or a return from the browser chrome to a different page) and lands
+            // on something inside it: the page's title leads, as when the document itself is
+            // focused. A document that is still loading announces itself on adoption.
+            let switched = self.web.as_ref().is_some_and(|b| {
+                b.active != Some(doc)
+                    && b.suppress_focus != Some(node)
+                    && !matches!(b.mode, WebMode::Loading { .. })
+            });
             self.web_activate(doc, fx);
             self.web_apply(
                 WebEv::FocusIn {
@@ -1055,6 +1064,10 @@ impl Reader {
             }
             self.web_dialog_lead(doc, id, last_before);
             self.web_listbox_lead(doc, id, last_before);
+            tracing::info!(target: "gorca_phase", phase = "web_doc_switch", switched, active = ?self.web.as_ref().map(|b| b.active), doc = ?doc);
+            if switched {
+                self.web_document_lead(doc, id);
+            }
             self.web_refresh_popup(fx);
             // The cursor jumped with the focus: Tab availability changed with it (R-5), and no
             // scroll timer is armed to notice.
@@ -1286,6 +1299,23 @@ impl Reader {
         if editable {
             self.web_retry_loading(true, fx);
         }
+    }
+
+    /// Focus moved into another document (a tab or window switch) onto a node inside it: the
+    /// page title leads the focus speech. Focus on the document itself speaks its own name.
+    fn web_document_lead(&mut self, doc: DocId, id: DocNodeId) {
+        let Some(b) = self.web.as_mut() else { return };
+        let Some(h) = b.docs.get(doc) else { return };
+        let title = h.read.with(|d| {
+            if d.root() == Some(id) || is_document(d, id) {
+                return None;
+            }
+            title_of(d)
+        });
+        let Some(title) = title else { return };
+        let mut lead = vec![Item::Lead(title)];
+        lead.extend(b.pending_tail.take().map(|(t, _)| t).unwrap_or_default());
+        b.pending_tail = Some((lead, self.now));
     }
 
     /// Focus entered a dialog (its name and role lead the focus speech, once): the dialog around
@@ -1559,6 +1589,9 @@ impl Reader {
                     let (role, states) = h.read.with(|d| role_states(d, id));
                     (id, forms::passes_through(role, states, Reason::Focus))
                 });
+                // A document the focus was not in before (the first visit of a tab): the page
+                // title leads when the focus sits inside it rather than on its root.
+                let switched = b.active != Some(doc);
                 self.web_activate(doc, fx);
                 self.web_apply(
                     WebEv::FirstUseful {
@@ -1579,7 +1612,25 @@ impl Reader {
                     // window activates, with no focus event of ours to place the cursor).
                     self.web_place_first_line(doc);
                 }
-                let spoke = self.web_speak_entry(doc, at_top || at_root, at_top, fx);
+                // The focus utterance went out before the page was known, without its title:
+                // say title and focused node again in one piece (the mode word rides on it).
+                let titled = match focus_node {
+                    Some((n, _)) if switched && n != root => self.web.as_ref().and_then(|b| {
+                        b.docs.get(doc)?.read.with(|d| {
+                            let mut items = vec![Item::Lead(title_of(d)?)];
+                            items.extend(present::describe_node(d, n));
+                            Some(items)
+                        })
+                    }),
+                    Some(_) | None => None,
+                };
+                let spoke = match titled {
+                    Some(items) => {
+                        self.web_speak(&items, fx);
+                        true
+                    }
+                    None => self.web_speak_entry(doc, at_top || at_root, at_top, fx),
+                };
                 if (at_top || at_root) && !self.dir.is_settling(app, self.now) {
                     self.web_auto_read(doc, spoke, fx);
                 }
