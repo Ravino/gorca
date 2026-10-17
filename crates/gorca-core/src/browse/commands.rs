@@ -941,6 +941,17 @@ impl Reader {
             {
                 b.suppress_focus = Some(node);
             }
+            // A nested document taking the focus on its way to its content (Chromium focuses the
+            // frame's document before the link inside it): the page is browsed, not announced
+            // frame by frame.
+            if matches!(b.mode, WebMode::Browse { .. })
+                && h.read.with(|d| {
+                    d.node(id)
+                        .is_some_and(|v| v.cats.intersects(gorca_doc::web::Cat::FRAME))
+                })
+            {
+                b.suppress_focus = Some(node);
+            }
             let passes = forms::passes_through(role, states, Reason::Focus);
             let application = forms::is_application(role);
             let last_before = match b.mode {
