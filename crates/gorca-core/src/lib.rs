@@ -27,6 +27,7 @@
 #![deny(clippy::wildcard_enum_match_arm)]
 
 mod app_actor;
+mod aria;
 mod browse;
 mod builtin_ext;
 mod commands;
@@ -38,9 +39,12 @@ mod focus;
 mod health;
 mod mode;
 mod present;
+mod quick;
 mod reader;
 mod review;
 mod runtime;
+#[cfg(test)]
+mod statemodel;
 mod terminal;
 mod text;
 
@@ -88,6 +92,9 @@ pub use present::{
     PresentRecord, PresentSource, Presented, Presenter, PresenterRegistry, RAPID_FOCUS,
     REFINE_WINDOW, STORM_HOLD, SpeechIntent, focus_need, key_echo_text, present_focus,
     present_selected_item,
+};
+pub use quick::{
+    BATTERY_DEADLINE, BatteryState, HISTORY_CAP, PowerInfo, PowerSource, install_power_source,
 };
 pub use reader::{
     BackgroundMsg, DUPLICATE_FOCUS_WINDOW, FetchKind, FocusLaneMsg, QueryReply, Reader,

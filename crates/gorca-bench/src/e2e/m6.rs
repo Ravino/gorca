@@ -918,8 +918,8 @@ pub fn vh(
         feed(&mut t.app, &format!("^C\r\n{PROMPT}"))?;
         Ok(())
     })?;
-    // bash echoes ^C after what is typed, then prints a new prompt; the verbalizer names the caret.
-    c.step("Ctrl+C at the prompt", &["~caret C"], &got);
+    // bash echoes ^C after what is typed, then prints a new prompt; at the default punctuation level the caret is not named.
+    c.step("Ctrl+C at the prompt", &["~C"], &got);
     std::thread::sleep(Duration::from_millis(1200));
     // A directory listing of twenty lines is read once, in order.
     let mut listing = String::from("\r\n");
@@ -1546,7 +1546,7 @@ pub fn vr(
         tap(t, KP_CUR_LINE, 0, 0)?;
         Ok(())
     })?;
-    expect("current line", "me@box:~$", &got);
+    expect("current line", "me at box: $", &got);
     for (i, row) in (0..8).rev().take(3).enumerate() {
         let got = said_during(&mut t, 250, |t| {
             tap(t, KP_PREV_LINE, 0, 0)?;
@@ -2405,7 +2405,7 @@ pub fn vv(
         let said_dollar = |v: &V| {
             texts(&v.rig.mock.since(mark))
                 .iter()
-                .any(|(ts, s)| *ts > t_key && s.contains("dollar"))
+                .any(|(ts, s)| *ts > t_key && (s.contains("dollar") || s.contains('$')))
         };
         let mut t_key = t_key;
         if !said_dollar(&v) {
@@ -2423,7 +2423,7 @@ pub fn vv(
         key_lat.extend(lat);
         let prompt_said = spoken
             .iter()
-            .any(|(ts, s)| *ts > t_key && s.contains("dollar"));
+            .any(|(ts, s)| *ts > t_key && (s.contains("dollar") || s.contains('$')));
         if !prompt_said {
             let after: Vec<String> = spoken
                 .iter()
@@ -2555,7 +2555,11 @@ fn vv_password(
         v.press(ENTER, 13, 0, &[28])?;
         Ok(())
     })?;
-    c.expect("prompt after the password", heard(&got, "dollar"), &got);
+    c.expect(
+        "prompt after the password",
+        heard(&got, "dollar") || heard(&got, "$"),
+        &got,
+    );
     std::thread::sleep(Duration::from_millis(500));
     let mut hits = 0u64;
     let mut empty = 0u64;
@@ -2607,7 +2611,11 @@ fn vv_pager(v: &mut V, c: &mut Check) -> Result<()> {
         v.type_char('q')?;
         Ok(())
     })?;
-    c.expect("q: back at the prompt", heard(&got, "dollar"), &got);
+    c.expect(
+        "q: back at the prompt",
+        heard(&got, "dollar") || heard(&got, "$"),
+        &got,
+    );
     Ok(())
 }
 
@@ -2619,7 +2627,7 @@ fn vv_tabs(v: &mut V, c: &mut Check) -> Result<()> {
     })?;
     c.expect(
         "Ctrl+Shift+T: the new tab's prompt",
-        heard(&got, "dollar"),
+        heard(&got, "dollar") || heard(&got, "$"),
         &got,
     );
     let got = v.said_during(1500, |v| {
@@ -2628,7 +2636,7 @@ fn vv_tabs(v: &mut V, c: &mut Check) -> Result<()> {
     })?;
     c.expect(
         "Ctrl+PgUp: the first tab's prompt",
-        heard(&got, "dollar"),
+        heard(&got, "dollar") || heard(&got, "$"),
         &got,
     );
     Ok(())
@@ -2961,6 +2969,65 @@ fn vd_cycle(v: &mut V, c: &mut Check, tag: &str) -> Result<()> {
             .map(|_| ())
     })?;
     c.vd(&format!("{tag} Ctrl+U again"), !got.is_empty(), &got);
+    vd_recall(v, c, tag)
+}
+
+/// How many utterances contain `needle`.
+fn heard_count(got: &[String], needle: &str) -> usize {
+    got.iter().filter(|g| g.contains(needle)).count()
+}
+
+/// History recall (the `terminal-history-recall` regression): a short and a long command, the
+/// long one wrapping over several rows, are recalled with Up/Down, in quick succession and after
+/// Ctrl+C. Every recall must be read exactly once.
+fn vd_recall(v: &mut V, c: &mut Check, tag: &str) -> Result<()> {
+    let short = format!("echo {tag}s");
+    let long = format!("echo {tag}l {}", "x".repeat(200));
+    for cmd in [&short, &long] {
+        v.said_during(300, |v| v.type_text(cmd).map(|_| ()))?;
+        v.said_during(900, |v| v.press(ENTER, 13, 0, &[28]).map(|_| ()))?;
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    let once = |c: &mut Check, name: &str, got: &[String], needle: &str| {
+        c.vd(name, heard_count(got, needle) == 1, got);
+    };
+    let nl = format!("echo {tag}l");
+    let ns = format!("echo {tag}s");
+    let got = v.said_during(600, |v| v.press(UP, 0, 0, &[103]).map(|_| ()))?;
+    once(c, &format!("{tag} Up: the wrapped command"), &got, &nl);
+    let got = v.said_during(600, |v| v.press(UP, 0, 0, &[103]).map(|_| ()))?;
+    once(c, &format!("{tag} Up: the short command"), &got, &ns);
+    let got = v.said_during(600, |v| v.press(DOWN, 0, 0, &[108]).map(|_| ()))?;
+    once(c, &format!("{tag} Down: the wrapped command"), &got, &nl);
+    let got = v.said_during(600, |v| v.press(DOWN, 0, 0, &[108]).map(|_| ()))?;
+    c.vd(
+        &format!("{tag} Down: the empty line"),
+        !got.is_empty(),
+        &got,
+    );
+    // Two presses in quick succession: the last recall is what the line shows.
+    let got = v.said_during(900, |v| {
+        v.press(UP, 0, 0, &[103])?;
+        std::thread::sleep(Duration::from_millis(40));
+        v.press(UP, 0, 0, &[103]).map(|_| ())
+    })?;
+    c.vd(
+        &format!("{tag} Up Up: the short command"),
+        heard(&got, &ns),
+        &got,
+    );
+    // Ctrl+C, then Up again.
+    v.said_during(600, |v| {
+        v.chord(&[CTRL_L], KEY_C, 3, CONTROL, &[29, 46]).map(|_| ())
+    })?;
+    std::thread::sleep(Duration::from_millis(500));
+    let got = v.said_during(600, |v| v.press(UP, 0, 0, &[103]).map(|_| ()))?;
+    once(c, &format!("{tag} Up after Ctrl+C"), &got, &nl);
+    let got = v.said_during(500, |v| {
+        v.chord(&[CTRL_L], KEY_U, 21, CONTROL, &[29, 22])
+            .map(|_| ())
+    })?;
+    c.vd(&format!("{tag} Ctrl+U after recall"), !got.is_empty(), &got);
     Ok(())
 }
 

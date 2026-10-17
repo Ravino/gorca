@@ -622,6 +622,7 @@ mod tests {
             text: Verbalized {
                 text: Arc::from("x"),
                 lang: None,
+                pitch_delta: 0,
             },
             voice: VoiceRef::Default,
             marks: false,

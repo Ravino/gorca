@@ -98,6 +98,11 @@ impl Reader {
             return;
         };
         let rep = intent.repeat.max(1);
+        // Sleep mode: the focused application owns its keys and gorca stays silent, except for
+        // the toggle (and quit, so a sleeping reader can still be ended).
+        if self.sleeping_now() && !matches!(c, CoreCmd::InputSleepToggle | CoreCmd::GorcaQuit) {
+            return;
+        }
         match c {
             CoreCmd::SpeechStop => {
                 // The input lane advanced the epoch on the Control press: speech is already
@@ -136,6 +141,16 @@ impl Reader {
                 }
                 None => self.say("nothing to repeat", fx),
             },
+            CoreCmd::SpeechHistoryPrev => self.history_step(true, fx),
+            CoreCmd::SpeechHistoryNext => self.history_step(false, fx),
+            CoreCmd::InputSleepToggle => self.sleep_toggle(fx),
+            CoreCmd::InfoBattery => {
+                fx.push(ReaderEffect::Desktop(
+                    crate::present::DesktopEffect::Battery {
+                        epoch: self.epoch.current(),
+                    },
+                ));
+            }
             CoreCmd::SpeechRingNext => {
                 self.cmd.ring = self.cmd.ring.next();
                 self.say_ring(fx);

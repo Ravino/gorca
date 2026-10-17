@@ -311,16 +311,36 @@ fn map_fetch(e: &FetchError) -> SourceError {
 }
 
 /// `(raw role, raw state bits, name, attributes)` of one object.
-type ReadTuple = (u32, u64, Option<Arc<str>>, Vec<(String, String)>);
+///
+/// The last element is the `aria-errormessage` target the error text came from, if any.
+type ReadTuple = (
+    u32,
+    u64,
+    Option<Arc<str>>,
+    Vec<(String, String)>,
+    Option<String>,
+);
 
-/// Re-read role, state, name and attributes of one object (four pipelined calls).
-async fn read_node_raw(app: &AppConn, path: &str, dl: Deadline) -> Option<ReadTuple> {
+/// Error texts one re-read batch fetches (a toggle storm over hundreds of invalid fields must
+/// not turn into hundreds of relation round trips; a focused field reads its own on focus).
+const MAX_REREAD_ERROR_TEXTS: usize = 16;
+
+/// Re-read role, state, name, attributes and description of one object (five pipelined calls),
+/// plus the error message of an invalid control (M8b).
+async fn read_node_raw(
+    app: &AppConn,
+    path: &str,
+    dl: Deadline,
+    quirks: crate::extras::WebQuirks,
+    error_budget: &std::sync::atomic::AtomicUsize,
+) -> Option<ReadTuple> {
     let lane = app.next_lane();
     let role = app.call(lane, dl, path, ACCESSIBLE, "GetRole", &());
     let state = app.call(lane + 1, dl, path, ACCESSIBLE, "GetState", &());
     let name = app.call(lane + 2, dl, path, PROPERTIES, "Get", &(ACCESSIBLE, "Name"));
     let attrs = app.call(lane + 3, dl, path, ACCESSIBLE, "GetAttributes", &());
-    let (role, state, name, attrs) = tokio::join!(role, state, name, attrs);
+    let desc = crate::extras::description(app, path, dl);
+    let (role, state, name, attrs, desc) = tokio::join!(role, state, name, attrs, desc);
     let role = wire::parse_u32(role.ok()?.body().data().bytes()).ok()?;
     let state = wire::parse_state(state.ok()?.body().data().bytes()).ok()?;
     let name = name
@@ -332,11 +352,32 @@ async fn read_node_raw(app: &AppConn, path: &str, dl: Deadline) -> Option<ReadTu
         })
         .filter(|s| !s.is_empty())
         .map(|s| Arc::<str>::from(s.as_str()));
-    let attrs = attrs
+    let mut attrs = attrs
         .ok()
         .and_then(|m| wire::parse_string_map(m.body().data().bytes()).ok())
         .unwrap_or_default();
-    Some((role, state, name, attrs))
+    for (_, v) in &mut attrs {
+        gorca_doc_source_api::limits::clip_text(
+            v,
+            gorca_doc_source_api::limits::MAX_ATTR_VALUE_BYTES,
+        );
+    }
+    if let Some(d) = desc {
+        attrs.push(("description".to_owned(), d.to_string()));
+    }
+    let invalid = state & (1u64 << roles::state_bit::INVALID_ENTRY) != 0;
+    let mut target = None;
+    if invalid
+        && crate::extras::takes_error_text(roles::map_role(role))
+        && error_budget.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < MAX_REREAD_ERROR_TEXTS
+    {
+        crate::extras::warm_relations(app, path, quirks, dl).await;
+        if let Some((tp, t)) = crate::extras::error_text(app, path, dl).await {
+            attrs.push(("error-text".to_owned(), t.to_string()));
+            target = Some(tp);
+        }
+    }
+    Some((role, state, name, attrs, target))
 }
 
 /// Mutable per-document state of the running source.
@@ -442,6 +483,25 @@ fn note(live: &mut Live, e: &AtspiEvent) {
         live.root_errors = ROOT_ERROR_LIMIT;
     }
     live.dirty.note(e);
+    // The text an invalid field shows lives in another node (`aria-errormessage`): when that
+    // node's text or name changes, the fields are re-read too.
+    if matches!(
+        e.kind,
+        crate::events::EventKind::TextChanged { .. }
+            | crate::events::EventKind::NameChanged
+            | crate::events::EventKind::ChildAdded { .. }
+            | crate::events::EventKind::ChildRemoved { .. }
+    ) && !live.paths.error_fields(e.path).is_empty()
+    {
+        let fields: Vec<PathKey> = live.paths.error_fields(e.path).to_vec();
+        for f in fields {
+            live.dirty.note(&AtspiEvent {
+                path: f,
+                kind: crate::events::EventKind::DescriptionChanged,
+                at: e.at,
+            });
+        }
+    }
 }
 
 /// Root list failures before the source gives up the document.
@@ -748,12 +808,15 @@ impl AtspiDocSource {
     ) -> Vec<(SrcNodeId, Option<ReadTuple>)> {
         let targets = Arc::new(targets);
         let cursor = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let error_budget = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let quirks = self.config.fetch.quirks;
         let workers = (self.app.lanes() * 4).min(targets.len()).max(1);
         let mut tasks = Vec::with_capacity(workers);
         for _ in 0..workers {
             let app = Arc::clone(&self.app);
             let targets = Arc::clone(&targets);
             let cursor = Arc::clone(&cursor);
+            let error_budget = Arc::clone(&error_budget);
             let timeout = self.config.call_timeout;
             tasks.push(tokio::spawn(async move {
                 let mut out = Vec::new();
@@ -763,7 +826,10 @@ impl AtspiDocSource {
                         break;
                     };
                     let dl = Deadline(Instant::now() + timeout);
-                    out.push((*id, read_node_raw(&app, path, dl).await));
+                    out.push((
+                        *id,
+                        read_node_raw(&app, path, dl, quirks, &error_budget).await,
+                    ));
                 }
                 out
             }));
@@ -803,8 +869,12 @@ impl AtspiDocSource {
         id_fresh: bool,
         local: Option<gorca_model::LocalId>,
     ) -> (SrcNode, SibInfo) {
-        let (raw_role, state, name, attrs) = read;
+        let (raw_role, state, name, attrs, _) = read;
         let role = roles::map_role(raw_role);
+        let authored = attrs
+            .iter()
+            .any(|(k, v)| k == "explicit-name" && v == "true");
+        let name = self.config.fetch.quirks.name(role, authored, name);
         let mut amap: SmallVec<[(gorca_model::AttrKey, Arc<str>); 4]> = SmallVec::new();
         for (k, v) in attrs {
             amap.push((self.interner.key(&k), Arc::from(v.as_str())));
@@ -838,7 +908,11 @@ impl AtspiDocSource {
             SrcNode {
                 id,
                 role,
-                states: roles::map_states(state),
+                states: self
+                    .config
+                    .fetch
+                    .quirks
+                    .states(role, roles::map_states(state)),
                 name,
                 text,
                 attrs: amap,
@@ -935,6 +1009,12 @@ impl AtspiDocSource {
                     continue;
                 };
                 rec.props_refreshed += 1;
+                if let Some(t) = &read.4 {
+                    let tk = live.paths.intern(t);
+                    if let Some(f) = live.ident.path_of(id) {
+                        live.paths.note_error_target(tk, f);
+                    }
+                }
                 let local = live
                     .ident
                     .path_of(id)

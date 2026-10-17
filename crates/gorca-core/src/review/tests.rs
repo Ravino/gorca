@@ -485,7 +485,7 @@ fn spelling_on_the_second_press() {
     let fx = f.run(CoreCmd::ReviewCurWord);
     assert_eq!(said(&fx), ["Apply"]);
     let fx = f.run_n(CoreCmd::ReviewCurWord, 2);
-    assert_eq!(said(&fx), ["A p p l y"]);
+    assert_eq!(said(&fx), ["A, p, p, l, y"]);
     let fx = f.run(CoreCmd::ReviewCurChar);
     assert_eq!(said(&fx), ["A"]);
 }
@@ -696,7 +696,7 @@ fn the_status_bar_is_found_in_the_mirror_and_never_enters_review() {
     assert_eq!(effects(&fx, is_ipc), 0);
     assert_eq!(f.reader.mode(), Mode::Focus);
     let fx = f.run_n(CoreCmd::InfoStatusBar, 2);
-    assert_eq!(said(&fx), ["R e a d y"]);
+    assert_eq!(said(&fx), ["R, e, a, d, y"]);
 }
 
 #[test]
@@ -1182,7 +1182,7 @@ fn terminal_review_reads_the_held_screen_by_line_word_and_char_with_no_ipc() {
     );
     // Review starts on the line with the caret, and every step is a mirror-only, IPC-free read.
     let fx = f.run(CoreCmd::ReviewCurLine);
-    assert_eq!(said(&fx), ["me@box:~$ ls -l"]);
+    assert_eq!(said(&fx), ["me at box: $ ls -l"]);
     assert_eq!(effects(&fx, is_ipc), 0);
     let fx = f.run(CoreCmd::ReviewPrevLine);
     assert_eq!(said(&fx), ["alpha beta"]);
@@ -1196,7 +1196,7 @@ fn terminal_review_reads_the_held_screen_by_line_word_and_char_with_no_ipc() {
     let fx = f.run(CoreCmd::ReviewPrevLine);
     assert_eq!(said(&fx), ["Top"]);
     let fx = f.run(CoreCmd::ReviewBottom);
-    assert_eq!(said(&fx), ["me@box:~$ ls -l"]);
+    assert_eq!(said(&fx), ["me at box: $ ls -l"]);
     assert_eq!(effects(&fx, is_ipc), 0);
 }
 
@@ -1355,4 +1355,24 @@ fn a_new_tracking_never_matches_a_model_built_from_an_earlier_one() {
     let g2 = f.reader.term_snapshot(key(2)).unwrap().generation;
     assert_ne!(g1, g2);
     assert_ne!(g1 >> 32, g2 >> 32, "the tracking is part of the generation");
+}
+
+#[test]
+fn character_reading_names_every_character_in_the_speech_language() {
+    use super::flat::FlatMove::{CurChar, CurWord, NextChar};
+    let mut f = fixture();
+    for ch in ["!", "(", "@", ",", "-", "~", "$"] {
+        let en = f.reader.review_voice(CurChar, false, 1, ch);
+        assert!(!en.is_empty() && en != ch, "{ch:?} is named: {en:?}");
+    }
+    assert_eq!(f.reader.review_voice(NextChar, false, 1, " "), "space");
+    assert_eq!(f.reader.review_voice(CurChar, false, 1, ""), "blank");
+    assert_eq!(f.reader.review_voice(CurChar, false, 1, "a"), "a");
+    assert_eq!(f.reader.review_voice(NextChar, true, 1, "Bottom"), "Bottom");
+    f.reader.cmd.file.speech.language = "ru".to_owned();
+    f.reader.cmd.republish();
+    assert_eq!(f.reader.review_voice(NextChar, false, 1, " "), "пробел");
+    let bang = f.reader.review_voice(CurChar, false, 1, "!");
+    assert!(!bang.is_empty() && bang != "!", "{bang:?}");
+    assert_eq!(f.reader.review_voice(CurWord, false, 1, "дом"), "дом");
 }

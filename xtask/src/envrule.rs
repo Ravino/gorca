@@ -35,6 +35,8 @@ const EXEMPT: &[&str] = &[
     "crates/gorca-bench-b2/",
     "crates/gorca-bench-web/",
     "crates/gorca-testkit/",
+    // Test-only module (`#[cfg(test)] mod statemodel` in lib.rs): seed and case-count knobs.
+    "crates/gorca-core/src/statemodel/",
     "xtask/",
 ];
 

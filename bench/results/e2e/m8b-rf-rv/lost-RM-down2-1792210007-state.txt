@@ -1,0 +1,40 @@
+826532760480531 said "M8b Review Names — Mozilla Firefox, M8b Review Names, document"
+826532792383251 said "browse mode, heading level 1, Review names"
+826533060645654 said "Read article Card title, link"
+826533344041023 said "M8b Review Names, document, heading level 1, Review names"
+826533819538328 said "Review names"
+826534120042896 said "button, Hidden label text"
+826534247389383 said "Subscribe box, check box, not checked"
+826534368825473 said "button, Hidden label text"
+826534495288123 said "Subscribe box, check box, not checked"
+826535098536648 said "heading level 1, Review names"
+826535398862934 said "heading level 2, Short heading label"
+826535529397752 said "heading level 2, After names"
+826536132857034 said "heading level 1, Review names"
+826536433293195 said "link, Read article Card title"
+826537136659397 said "Card teaser text"
+826537840302964 said "tree view, tree view item, level 1, • Item content"
+bus 4 /org/a11y/atspi/accessible/2
+bus 4 /org/a11y/atspi/accessible/57
+bus 4 /org/a11y/atspi/accessible/58
+bus 4 /org/a11y/atspi/accessible/58
+bus 4 /org/a11y/atspi/accessible/58
+bus 4 /org/a11y/atspi/accessible/61
+bus 4 /org/a11y/atspi/accessible/57
+bus 4 /org/a11y/atspi/accessible/59
+bus 4 /org/a11y/atspi/accessible/57
+bus 4 /org/a11y/atspi/accessible/57
+bus 2 /org/a11y/atspi/accessible/63
+bus 2 /org/a11y/atspi/accessible/69
+bus 2 /org/a11y/atspi/accessible/70
+bus 2 /org/a11y/atspi/accessible/71
+bus 2 /org/a11y/atspi/accessible/72
+bus 2 /org/a11y/atspi/accessible/73
+bus 2 /org/a11y/atspi/accessible/75
+bus 1 /org/a11y/atspi/accessible/63
+bus 1 /org/a11y/atspi/accessible/63
+bus 3 /org/a11y/atspi/accessible/86
+bus 1 /org/a11y/atspi/accessible/90
+bus 1 /org/a11y/atspi/accessible/90
+bus 1 /org/a11y/atspi/accessible/63
+bus 1 /org/a11y/atspi/accessible/63

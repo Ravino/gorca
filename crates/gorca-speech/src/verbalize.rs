@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use gorca_model::Utterance;
-use gorca_output_api::Verbalized;
+use gorca_model::{SegmentKind, Utterance};
+use gorca_output_api::{CAPITAL_PITCH_DELTA, Verbalized};
 
 use crate::symbols::Lang;
 use crate::symbols::Table;
@@ -20,8 +20,8 @@ pub enum Punct {
 /// How a capital letter is announced when a single character is spoken.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
 pub enum Caps {
-    /// A higher pitch. The text carries no marker today: the server cannot be told yet, so
-    /// this speaks a capital like its lower-case letter.
+    /// A higher pitch for a capital spoken alone: the Reader marks the utterance
+    /// (`SegmentKind::Capital`) and the speech client raises the pitch for it.
     #[default]
     Pitch,
     /// The word "cap" before the letter.
@@ -105,13 +105,21 @@ impl Verbalizer {
                 continue;
             }
             if !text.is_empty() {
-                text.push_str(", ");
+                // A description is a pause: "Name, edit. Help text".
+                text.push_str(if seg.kind == gorca_model::SegmentKind::Description {
+                    ". "
+                } else {
+                    ", "
+                });
             }
             text.push_str(&seg.text);
         }
+        // A capital spoken alone gets a temporary pitch change (`speech.caps = "pitch"`).
+        let capital = u.segments.iter().any(|s| s.kind == SegmentKind::Capital);
         Verbalized {
             text: Arc::from(text),
             lang: u.lang.clone(),
+            pitch_delta: if capital { CAPITAL_PITCH_DELTA } else { 0 },
         }
     }
 
@@ -207,6 +215,32 @@ mod tests {
     use gorca_model::speech::SegmentKind;
     use gorca_model::{Epoch, Prio, Segment, UttId};
     use smallvec::smallvec;
+
+    #[test]
+    fn a_description_is_set_off_by_its_kind_and_content_is_never_mistaken_for_it() {
+        let seg = |t: &str, kind| Segment {
+            text: Arc::from(t),
+            kind,
+        };
+        let u = Utterance {
+            id: UttId(1),
+            segments: smallvec![
+                seg("Name", SegmentKind::Text),
+                seg("edit", SegmentKind::Role),
+                seg("Help", SegmentKind::Description),
+                // Page text that begins with a sentence break stays a comma-joined segment.
+                seg(". Dot", SegmentKind::Text)
+            ],
+            lang: None,
+            epoch: Epoch(1),
+            prio: Prio::Text,
+            may_refine: false,
+            survives_focus_change: false,
+            ttl_secs: 0,
+            refines: None,
+        };
+        assert_eq!(&*Verbalizer.verbalize(&u).text, "Name, edit. Help, . Dot");
+    }
 
     #[test]
     fn segments_are_joined_and_empty_ones_skipped() {

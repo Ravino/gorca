@@ -101,6 +101,11 @@ pub trait TermSession: Send + fmt::Debug {
     fn alive(&self) -> bool {
         true
     }
+    /// Is this the core's own stand-in (no policy behind it: it says nothing and claims no
+    /// keys)? The Reader replaces it by a real session as soon as one can be opened.
+    fn degraded(&self) -> bool {
+        false
+    }
     /// The screen as last known, for review and the "say current" commands.
     fn snapshot(&self) -> Option<TermSnapshot>;
 }

@@ -28,7 +28,7 @@
 //!   in-place `Upsert`, not `Removed` + new id (identity ladder variant C, ADR-0003 section 5).
 //!   `Removed` therefore means "this logical item is gone".
 
-use gorca_model::{AttrKey, DocDelta, SrcNode, SrcNodeId};
+use gorca_model::{AttrKey, DocDelta, Role, SrcNode, SrcNodeId};
 use smallvec::SmallVec;
 
 /// Well-known attribute keys (stable across sources).
@@ -70,6 +70,20 @@ pub mod web_attrs {
     pub const DISPLAY: AttrKey = AttrKey(18);
     /// `layout-guess` (`true` on a table Firefox believes is for layout).
     pub const LAYOUT_GUESS: AttrKey = AttrKey(19);
+    /// The accessible description (`aria-describedby`, `aria-description`, `title` as a fallback):
+    /// the `Description` property, delivered with the tree so browse mode needs no IPC (M8b).
+    /// Synthetic: not an object attribute of any engine.
+    pub const DESCRIPTION: AttrKey = AttrKey(20);
+    /// The text of the `aria-errormessage` target of an invalid node (relation `error-message`),
+    /// read by the source. Synthetic.
+    pub const ERROR_TEXT: AttrKey = AttrKey(21);
+    /// `aria-current` (`page`, `step`, `location`, `date`, `time`, `true`; `false` is dropped).
+    pub const CURRENT: AttrKey = AttrKey(22);
+    /// `aria-haspopup` (`true`, `menu`, `listbox`, `tree`, `grid`, `dialog`).
+    pub const HASPOPUP: AttrKey = AttrKey(23);
+    /// `true` when the author gave the node its name (`aria-label`, `aria-labelledby`, `alt`,
+    /// `title`, a `<label>`) instead of the engine computing it from content.
+    pub const EXPLICIT_NAME: AttrKey = AttrKey(24);
     /// First key a source may allocate dynamically.
     pub const FIRST_DYNAMIC: u16 = 256;
 
@@ -85,6 +99,11 @@ pub mod web_attrs {
             CONTAINER_LIVE => "container-live",
             DISPLAY => "display",
             LAYOUT_GUESS => "layout-guess",
+            DESCRIPTION => "description",
+            ERROR_TEXT => "error-text",
+            CURRENT => "current",
+            HASPOPUP => "haspopup",
+            EXPLICIT_NAME => "explicit-name",
             ATOMIC => "container-atomic",
             RELEVANT => "container-relevant",
             BUSY => "container-busy",
@@ -111,6 +130,11 @@ pub mod web_attrs {
             "container-live" => CONTAINER_LIVE,
             "display" => DISPLAY,
             "layout-guess" => LAYOUT_GUESS,
+            "description" => DESCRIPTION,
+            "error-text" => ERROR_TEXT,
+            "current" => CURRENT,
+            "haspopup" => HASPOPUP,
+            "explicit-name" => EXPLICIT_NAME,
             "container-atomic" | "atomic" => ATOMIC,
             "container-relevant" | "relevant" => RELEVANT,
             "container-busy" | "busy" => BUSY,
@@ -179,6 +203,23 @@ impl TreeBlock {
 }
 
 /// True for keys a source allocated itself.
+/// Roles whose invalid state is announced with their error message. Containers (a form that
+/// holds an invalid field) are marked invalid by Gecko too and say nothing.
+pub fn takes_error_text(role: Role) -> bool {
+    matches!(
+        role,
+        Role::TextEntry
+            | Role::PasswordEntry
+            | Role::ComboBox
+            | Role::CheckBox
+            | Role::RadioButton
+            | Role::SpinButton
+            | Role::Slider
+            | Role::ToggleButton
+            | Role::Button
+    )
+}
+
 pub fn is_dynamic(key: AttrKey) -> bool {
     key.0 >= web_attrs::FIRST_DYNAMIC
 }

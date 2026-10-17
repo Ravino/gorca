@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>M8b Widgets</title>
+<style>body{font:16px sans-serif}[role=tab][aria-selected=true]{font-weight:bold}li{margin:2px 0}</style>
+</head>
+<body>
+<h1>M8b APG widgets</h1>
+
+<nav aria-label="Primary">
+  <ul><li><a href="#a">Home link</a></li><li><a href="#b">Docs link</a></li></ul>
+</nav>
+
+<section aria-labelledby="sec-names">
+<h2 id="sec-names">Names</h2>
+<p>
+  <button id="b-close" aria-label="Close dialog"><svg width="10" height="10" aria-hidden="true"><path d="M0 0L10 10"/></svg></button>
+  <button id="b-search" aria-label="Search the site">&#x1F50D;</button>
+  <button id="b-plain">Save draft</button>
+  <button id="b-lb" aria-labelledby="lb1 lb2">ignored visible</button>
+  <span id="lb1">Send</span> <span id="lb2">message</span>
+  <button id="b-title" title="Title only"></button>
+  <a id="lnk-label" href="#x" aria-label="Read more about pandas">Read more</a>
+  <img id="img-alt" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" alt="Company logo">
+</p>
+<p>
+  <span id="ad1">Shipping</span> <span id="ad2">address</span>
+  <input id="in-chain" type="text" aria-labelledby="ad1 ad2">
+  <input id="in-label" type="text" aria-label="Quantity">
+</p>
+</section>
+
+<section aria-label="Tabs demo">
+<h2>Tabs</h2>
+<div role="tablist" aria-label="Entertainment">
+  <button role="tab" id="tab-1" aria-selected="true" aria-controls="panel-1">Nils Frahm</button>
+  <button role="tab" id="tab-2" aria-selected="false" aria-controls="panel-2" tabindex="-1">Agnes Obel</button>
+  <button role="tab" id="tab-3" aria-selected="false" aria-controls="panel-3" tabindex="-1">Joke</button>
+</div>
+<div role="tabpanel" id="panel-1" aria-labelledby="tab-1"><p>Nils Frahm is a German musician.</p></div>
+<div role="tabpanel" id="panel-2" aria-labelledby="tab-2" hidden><p>Agnes Obel is a Danish musician.</p></div>
+<div role="tabpanel" id="panel-3" aria-labelledby="tab-3" hidden><p>What do you call a bear.</p></div>
+</section>
+
+<section aria-label="Switch demo">
+<h2>Switch</h2>
+<button role="switch" id="sw-on" aria-checked="true">Notifications</button>
+<button role="switch" id="sw-off" aria-checked="false">Dark mode</button>
+</section>
+
+<section aria-label="Tree demo">
+<h2>Tree</h2>
+<ul role="tree" aria-label="Files">
+  <li tabindex="-1" role="treeitem" aria-expanded="true" aria-level="1" aria-setsize="2" aria-posinset="1">Documents
+    <ul role="group">
+      <li tabindex="-1" role="treeitem" aria-level="2" aria-setsize="2" aria-posinset="1" aria-selected="true">Report</li>
+      <li tabindex="-1" role="treeitem" aria-level="2" aria-setsize="2" aria-posinset="2">Budget</li>
+    </ul>
+  </li>
+  <li tabindex="-1" role="treeitem" aria-expanded="false" aria-level="1" aria-setsize="2" aria-posinset="2">Pictures
+    <ul role="group"><li tabindex="-1" role="treeitem" aria-level="2" aria-setsize="1" aria-posinset="1">Holiday</li></ul>
+  </li>
+</ul>
+</section>
+
+<section aria-label="Combobox demo">
+<h2>Combobox</h2>
+<label for="cb-in">Favourite fruit</label>
+<input id="cb-in" type="text" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-controls="cb-list" aria-autocomplete="list">
+<ul id="cb-list" role="listbox" aria-label="Fruits" hidden>
+  <li role="option" id="o1" aria-selected="true">Apple</li>
+  <li role="option" id="o2">Banana</li>
+</ul>
+<div role="listbox" aria-label="Toppings" tabindex="0" id="lb-top">
+  <div role="option" aria-selected="true">Cheese</div>
+  <div role="option" aria-selected="false">Olives</div>
+</div>
+</section>
+
+<section aria-label="Menu button demo">
+<h2>Menu button</h2>
+<button id="mb" aria-haspopup="menu" aria-expanded="false" aria-controls="mb-menu">Actions</button>
+<ul id="mb-menu" role="menu" aria-label="Actions menu">
+  <li tabindex="-1" role="menuitem">Copy</li>
+  <li tabindex="-1" role="menuitemcheckbox" aria-checked="true">Word wrap</li>
+  <li tabindex="-1" role="menuitemradio" aria-checked="true">Small</li>
+  <li tabindex="-1" role="menuitemradio" aria-checked="false">Large</li>
+</ul>
+</section>
+
+<section aria-label="Disclosure demo">
+<h2>Disclosure</h2>
+<button id="disc" aria-expanded="false" aria-controls="disc-body">Show details</button>
+<div id="disc-body" hidden><p>Hidden details.</p></div>
+<button id="disc2" aria-expanded="true" aria-controls="disc-body2">Hide notes</button>
+<div id="disc-body2"><p>Visible notes.</p></div>
+</section>
+
+<section aria-label="Accordion demo">
+<h2>Accordion</h2>
+<h3><button id="acc1" aria-expanded="true" aria-controls="acc-p1">Personal information</button></h3>
+<div id="acc-p1" role="region" aria-labelledby="acc1"><p>Personal fields.</p></div>
+<h3><button id="acc2" aria-expanded="false" aria-controls="acc-p2">Billing address</button></h3>
+<div id="acc-p2" role="region" aria-labelledby="acc2" hidden><p>Billing fields.</p></div>
+</section>
+
+<section aria-label="Toolbar demo">
+<h2>Toolbar</h2>
+<div role="toolbar" aria-label="Text formatting">
+  <button aria-pressed="true">Bold</button>
+  <button aria-pressed="false">Italic</button>
+  <button aria-pressed="mixed">Underline</button>
+  <button aria-label="Align left" aria-haspopup="true">&#x2261;</button>
+</div>
+</section>
+
+<section aria-label="Breadcrumb demo">
+<h2>Breadcrumb and current</h2>
+<nav aria-label="Breadcrumb">
+  <ol>
+    <li><a href="#h">Home crumb</a></li>
+    <li><a href="#p">Products crumb</a></li>
+    <li><a href="#c" aria-current="page">Gadgets crumb</a></li>
+  </ol>
+</nav>
+<ol aria-label="Steps">
+  <li><a href="#s1" aria-current="step">Step one link</a></li>
+  <li><a href="#s2" aria-current="location">Location link</a></li>
+  <li><a href="#s3" aria-current="date">Date link</a></li>
+  <li><a href="#s4" aria-current="time">Time link</a></li>
+  <li><a href="#s5" aria-current="true">True link</a></li>
+  <li><a href="#s6" aria-current="false">False link</a></li>
+</ol>
+</section>
+
+<section aria-label="Headings demo">
+<h2>Headings by role</h2>
+<div role="heading" aria-level="4">Custom heading four</div>
+<div role="heading" aria-level="2">Custom heading two</div>
+</section>
+
+<section aria-label="Live demo">
+<h2>Busy</h2>
+<div id="busy" aria-busy="true"><p>Loading results text.</p></div>
+<div role="status" aria-label="Progress status"><p>Idle status text.</p></div>
+</section>
+
+<p>End of widgets page.</p>
+</body>
+</html>

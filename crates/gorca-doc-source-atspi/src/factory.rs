@@ -338,12 +338,16 @@ impl DocSourceFactory for AtspiDocSourceFactory {
                 TextUnit::Scalar
             };
             let (_closed, events) = mpsc::channel(1);
-            let (source, _metrics) = AtspiDocSource::new(
-                Arc::clone(&entry.conn),
-                path,
-                SourceConfig::browse(unit, blink),
-                events,
-            );
+            let mut config = SourceConfig::browse(unit, blink);
+            config.fetch.quirks = if gecko {
+                crate::extras::WebQuirks::GECKO
+            } else if blink {
+                crate::extras::WebQuirks::BLINK
+            } else {
+                crate::extras::WebQuirks::NONE
+            };
+            let (source, _metrics) =
+                AtspiDocSource::new(Arc::clone(&entry.conn), path, config, events);
             let source = source.with_interner(Arc::clone(&entry.interner));
             Ok(Box::new(source) as Box<dyn DocSource>)
         })

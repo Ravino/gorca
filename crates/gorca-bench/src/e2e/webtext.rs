@@ -1638,10 +1638,20 @@ fn bar1(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor, out: &mut RunOut) -
         woken: false,
     };
     // gorca attached to a page that was already open: no load happened, so nothing reads.
+    // Exception (M9 review L-2): Chromium started after the reader (the default order of the
+    // Chromium rig; `GORCA_M9_BROWSER_FIRST=1` is the already-open case) opens its page in its
+    // first seconds: a fresh launch whose first page is the user's, so it must read itself.
+    let fresh_launch = std::env::var("GORCA_M7_BROWSER").is_ok_and(|v| v == "chromium")
+        && !std::env::var("GORCA_M9_BROWSER_FIRST").is_ok_and(|v| v == "1");
     f.w.prime(&doc)?;
     sleep(2500);
     let quiet: Vec<(u64, String)> = f.heard(0);
-    if quiet.iter().any(|(_, t)| paragraph_no(t).is_some()) {
+    let read_itself = quiet.iter().any(|(_, t)| paragraph_no(t).is_some());
+    if fresh_launch && !read_itself {
+        fails.push(format!(
+            "the first page of a freshly launched browser was not read: {quiet:?}"
+        ));
+    } else if !fresh_launch && read_itself {
         fails.push(format!(
             "a page that was already open read itself: {quiet:?}"
         ));

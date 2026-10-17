@@ -115,6 +115,9 @@ pub struct Table {
     /// level change (`{}` stands for the level name).
     levels: [Box<str>; 4],
     confirm: Box<str>,
+    /// The other `@word.*` entries (lock keys, history, sleep mode, battery): UI words the
+    /// Reader composes its messages from, so a message is spoken in the speech language.
+    words: HashMap<Box<str>, Box<str>>,
 }
 
 fn rule_index(r: Rule) -> usize {
@@ -147,6 +150,10 @@ impl Table {
                 "word.object" => self.object = name.into(),
                 "word.cap" => self.cap = name.into(),
                 "word.confirm" => self.confirm = name.into(),
+                other if other.starts_with("word.") => {
+                    self.words
+                        .insert(other["word.".len()..].into(), name.into());
+                }
                 "level.none" => self.levels[0] = name.into(),
                 "level.some" => self.levels[1] = name.into(),
                 "level.most" => self.levels[2] = name.into(),
@@ -224,6 +231,27 @@ impl Table {
 
     pub fn cap(&self) -> &str {
         &self.cap
+    }
+
+    /// A UI word by id (`lock.caps`, `history.empty`, ...); empty when the table has none.
+    pub fn word(&self, id: &str) -> &str {
+        self.words.get(id).map_or("", |w| &**w)
+    }
+
+    /// A UI word with each `{}` replaced, in order, by the next of `args`.
+    pub fn word_with(&self, id: &str, args: &[&str]) -> String {
+        let mut out = String::new();
+        let mut rest = self.word(id);
+        for a in args {
+            let Some((head, tail)) = rest.split_once("{}") else {
+                break;
+            };
+            out.push_str(head);
+            out.push_str(a);
+            rest = tail;
+        }
+        out.push_str(rest);
+        out
     }
 
     /// The spoken name of a punctuation level (rank 0 `none` to 3 `all`).
@@ -416,6 +444,22 @@ mod tests {
         assert_eq!(t.overlay(RU_DIC), 0);
         assert!(t.simple.len() > 80);
         assert_eq!(t.rules.len(), RULES.len());
+    }
+
+    #[test]
+    fn ui_words_are_localised_with_an_english_fallback() {
+        let en = Table::of(Lang::En);
+        let ru = Table::of(Lang::Ru);
+        assert_eq!(
+            en.word_with("lock.on", &[en.word("lock.caps")]),
+            "Caps Lock on"
+        );
+        assert_eq!(
+            ru.word_with("lock.off", &[ru.word("lock.num")]),
+            "Num Lock выключен"
+        );
+        assert_eq!(en.word_with("battery.hm", &["2", "5"]), "2 h 5 min");
+        assert_eq!(en.word("no.such"), "");
     }
 
     #[test]

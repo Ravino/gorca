@@ -98,6 +98,8 @@ pub struct RawNode {
     pub state_words: Vec<u32>,
     pub name: Option<String>,
     pub description: Option<String>,
+    /// The `aria-errormessage` text of an invalid web control (read on a focus fetch).
+    pub error_text: Option<String>,
     pub value: Option<RawValue>,
     /// Parent reference, already resolved to a key of this app (foreign refs are dropped).
     pub parent: Option<NodeKey>,
@@ -158,7 +160,10 @@ pub fn snapshot(key: NodeKey, raw: &RawNode, now: Instant) -> Arc<NodeSnapshot> 
             (None, None) => ChildList::Unknown,
         },
         interfaces: raw.interfaces,
-        attrs: AttrMap::default(),
+        attrs: match non_empty(raw.error_text.as_deref()) {
+            Some(t) => AttrMap::from_iter([(gorca_doc_source_api::web_attrs::ERROR_TEXT, t)]),
+            None => AttrMap::default(),
+        },
         relations: Relations::default(),
         bounds: None,
         have: raw.have,

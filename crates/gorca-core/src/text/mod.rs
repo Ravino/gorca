@@ -351,6 +351,14 @@ impl Reader {
         matches!(self.mode, Mode::Focus | Mode::PassThrough { .. })
     }
 
+    /// Review ended: caret, edit and selection events were dropped while it lasted, so the
+    /// tracked window is stale. It is refetched on demand.
+    pub(crate) fn text_resync_after_review(&mut self, fx: &mut ReaderEffects) {
+        if !self.text.caret.is_off() && self.text_active() {
+            self.text_step(In::Dirty, fx);
+        }
+    }
+
     fn text_cfg(&self) -> Cfg {
         let s = &self.cmd.effective;
         Cfg {
@@ -443,7 +451,9 @@ impl Reader {
         for seg in &mut u.segments {
             if !matches!(
                 seg.kind,
-                gorca_model::SegmentKind::Text | gorca_model::SegmentKind::Value
+                gorca_model::SegmentKind::Text
+                    | gorca_model::SegmentKind::Value
+                    | gorca_model::SegmentKind::Description
             ) || seg.text.chars().all(|c| c.is_alphanumeric() || c == ' ')
             {
                 continue;
@@ -481,6 +491,22 @@ impl Reader {
         let id = self.utt_id();
         let mut u = message(&text, id, s.epoch);
         u.prio = s.prio;
+        // A single character (typed, a character move, an erasure): a capital gets its pitch.
+        if let [p] = s.pieces.as_slice()
+            && p.how == Some(How::Char)
+            && p.spell == Spell::No
+        {
+            self.mark_capital(&mut u);
+        }
+        // Typing echo is not kept in the speech history.
+        if matches!(
+            s.reason,
+            gorca_text::echo::Reason::Typed
+                | gorca_text::echo::Reason::TypedWord
+                | gorca_text::echo::Reason::Erased
+        ) {
+            self.cmd.quick.echo_ids.push(id);
+        }
         if s.sensitive {
             self.text.sensitive_utt = Some(id);
         }

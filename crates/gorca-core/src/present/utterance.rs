@@ -24,7 +24,7 @@ const STATE_WORDS: &[(StateSet, &str)] = &[
 /// What the MIXED state means for `role` (R-6): a tri-state check box or radio button is "half
 /// checked", a toggle button "half pressed" (`aria-pressed=mixed`), a progress bar
 /// "indeterminate" (no value). Other roles say nothing for it.
-pub(crate) fn mixed_word(role: Role) -> Option<&'static str> {
+pub(super) fn mixed_word(role: Role) -> Option<&'static str> {
     if matches!(role, Role::CheckBox | Role::RadioButton) {
         Some("half checked")
     } else if role == Role::ToggleButton {
@@ -76,7 +76,82 @@ pub(crate) fn never_disabled(role: Role) -> bool {
     )
 }
 
+/// Presentation of a focused node of web content (M8b): the web source's attributes are on the
+/// snapshot (`xml-roles`, `current`, `haspopup`, `error-text`, ...), so the role and state words
+/// are NVDA's (`aria`). Order: name, role, states, current, value, description (after a short
+/// pause), level, error text.
+fn present_web(
+    n: &NodeSnapshot,
+    node: &crate::aria::Node<'_>,
+    id: UttId,
+    epoch: Epoch,
+    skip: StateSet,
+) -> Utterance {
+    use crate::aria;
+    let mut segments: SmallVec<[Segment; 4]> = SmallVec::new();
+    let name = n.name.as_deref().filter(|s| !s.is_empty());
+    if let Some(name) = name {
+        segments.push(seg(name, SegmentKind::Text));
+    }
+    let role = aria::role_word(node).unwrap_or_else(|| n.role.spoken());
+    if !role.is_empty() {
+        segments.push(seg(role, SegmentKind::Role));
+    }
+    // Gecko reports no Sensitive on static content, which the connector maps to DISABLED.
+    let unavailable = n.states.contains(StateSet::DISABLED)
+        && !never_disabled(n.role)
+        && !skip.contains(StateSet::DISABLED);
+    for w in aria::state_words(node, unavailable, true) {
+        if w == "selected" && skip.contains(StateSet::SELECTED) {
+            continue;
+        }
+        segments.push(seg(w, SegmentKind::State));
+    }
+    if let Some(c) = aria::current_word(node) {
+        segments.push(seg(c, SegmentKind::State));
+    }
+    if let Some(v) = value_text(n.value.as_ref()) {
+        segments.push(seg(&v, SegmentKind::Value));
+    }
+    if let Some(d) = aria::speakable_description(n.description.as_deref(), name) {
+        segments.push(seg(d, SegmentKind::Description));
+    }
+    if let Some(l) = aria::level_phrase(node) {
+        segments.push(seg(&l, SegmentKind::Text));
+    } else if n.role == Role::Heading
+        && let Some(l) = node.level()
+    {
+        segments.push(seg(&format!("level {l}"), SegmentKind::Text));
+    }
+    if let Some(e) = aria::error_text(node) {
+        segments.push(seg(e, SegmentKind::Text));
+    }
+    let may_refine = match n.fresh {
+        Freshness::Fresh { .. } => false,
+        Freshness::Stale { .. } | Freshness::Defunct => true,
+    };
+    Utterance {
+        id,
+        segments,
+        lang: None,
+        epoch,
+        prio: Prio::Interrupt,
+        may_refine,
+        survives_focus_change: false,
+        ttl_secs: 0,
+        refines: None,
+    }
+}
+
 fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Utterance {
+    let node = crate::aria::Node {
+        role: n.role,
+        states: n.states,
+        attrs: &n.attrs,
+    };
+    if node.is_web() {
+        return present_web(n, &node, id, epoch, skip);
+    }
     let mut segments: SmallVec<[Segment; 4]> = SmallVec::new();
     if let Some(name) = n.name.as_deref().filter(|s| !s.is_empty()) {
         segments.push(seg(name, SegmentKind::Text));
@@ -280,9 +355,23 @@ pub(crate) fn present_change(
     let check = StateSet::CHECKED | StateSet::MIXED;
     let expand = StateSet::EXPANDED | StateSet::COLLAPSED;
     let mixed_w = mixed_word(new.role).filter(|_| new.states.contains(StateSet::MIXED));
+    let switch = crate::aria::Node {
+        role: new.role,
+        states: new.states,
+        attrs: &new.attrs,
+    }
+    .kind()
+        == crate::aria::Kind::Switch;
     if ch.states.intersects(check) && (mixed_w.is_some() || !new.states.contains(StateSet::MIXED)) {
         let w = if let Some(w) = mixed_w {
             w
+        } else if switch {
+            // role=switch: NVDA's `on` / `off`, never checked.
+            if new.states.contains(StateSet::CHECKED) {
+                "on"
+            } else {
+                "off"
+            }
         } else if new.states.contains(StateSet::CHECKED) {
             "checked"
         } else {
@@ -515,6 +604,83 @@ mod change_tests {
         assert_eq!(change_words(&on, &off), ["not checked"]);
     }
 
+    fn web_snap(name: &str, role: Role, states: StateSet, attrs: &[(u16, &str)]) -> NodeSnapshot {
+        let mut n = snap(name, states, None);
+        n.role = role;
+        n.attrs = attrs
+            .iter()
+            .map(|(k, v)| (gorca_model::AttrKey(*k), Arc::<str>::from(*v)))
+            .collect();
+        n
+    }
+
+    #[test]
+    fn web_focus_speech_has_nvda_roles_states_description_and_error() {
+        use gorca_doc_source_api::web_attrs as w;
+        let tag = (w::TAG.0, "button");
+        // A switch is "switch, on", never "toggle button, checked".
+        let sw = web_snap(
+            "Notifications",
+            Role::ToggleButton,
+            StateSet::CHECKED,
+            &[tag, (w::XML_ROLES.0, "switch")],
+        );
+        assert_eq!(
+            texts(&present_focus(&sw, UttId(1), Epoch(1))),
+            ["Notifications", "switch", "on"]
+        );
+        // Description after a pause segment, error text last.
+        let mut f = web_snap(
+            "Email",
+            Role::TextEntry,
+            StateSet::INVALID | StateSet::REQUIRED,
+            &[(w::TAG.0, "input"), (w::ERROR_TEXT.0, "Enter an address")],
+        );
+        f.description = Some(Arc::from("Work address"));
+        assert_eq!(
+            texts(&present_focus(&f, UttId(1), Epoch(1))),
+            [
+                "Email",
+                "edit",
+                "required",
+                "invalid entry",
+                "Work address",
+                "Enter an address"
+            ]
+        );
+        // The description is a structured pause: no characters of the text carry it, and the
+        // setting only turns the kind into plain text.
+        let mut u = present_focus(&f, UttId(1), Epoch(1));
+        assert!(
+            u.segments
+                .iter()
+                .any(|s| s.kind == gorca_model::SegmentKind::Description
+                    && &*s.text == "Work address")
+        );
+        crate::aria::strip_pause(&mut u);
+        assert!(texts(&u).contains(&"Work address".to_owned()));
+        assert!(
+            u.segments
+                .iter()
+                .all(|s| s.kind != gorca_model::SegmentKind::Description)
+        );
+        // A flipped switch is announced on / off.
+        let off = web_snap(
+            "Notifications",
+            Role::ToggleButton,
+            StateSet::empty(),
+            &[tag, (w::XML_ROLES.0, "switch")],
+        );
+        assert_eq!(change_words(&sw, &off), ["off"]);
+        assert_eq!(change_words(&off, &sw), ["on"]);
+        // Desktop nodes (no web attributes) keep the old words.
+        let desk = snap("Wi-Fi", StateSet::CHECKED, None);
+        assert_eq!(
+            texts(&present_focus(&desk, UttId(1), Epoch(1))),
+            ["Wi-Fi", "check box", "checked"]
+        );
+    }
+
     #[test]
     fn equal_snapshots_have_no_change_and_focus_state_is_ignored() {
         let a = snap("Wi-Fi", StateSet::CHECKED, None);
@@ -623,5 +789,58 @@ mod change_tests {
             u.segments.iter().any(|s| &*s.text == "unavailable"),
             "native rows keep it"
         );
+    }
+
+    mod probe_m8b {
+        // Reviewer probes for M8b focus speech. Insert as `mod probe_m8b { ... }` at the end of
+        // `mod change_tests` in crates/gorca-core/src/present/utterance.rs.
+        use super::*;
+
+        // P6: a Firefox chrome / XUL menu item (Gecko gives chrome elements a `tag` too) that is
+        // selectable and focusable but not selected. NVDA never says "not selected" for MENUITEM.
+        #[test]
+        fn probe_menu_item_not_selected() {
+            let mut n = snap(
+                "Bookmarks",
+                StateSet::SELECTABLE | StateSet::FOCUSABLE,
+                None,
+            );
+            n.role = Role::MenuItem;
+            n.attrs = vec![(
+                gorca_doc_source_api::web_attrs::TAG,
+                Arc::<str>::from("menuitem"),
+            )]
+            .into_iter()
+            .collect();
+            let t = texts(&present_focus(&n, UttId(1), Epoch(1)));
+            eprintln!("P6: {t:?}");
+            assert!(!t.contains(&"not selected".to_owned()), "{t:?}");
+        }
+
+        // P7: NVDA state order: HASPOPUP_DIALOG (bit 47) after REQUIRED (15) and INVALID (17);
+        // ON (46) after REQUIRED.
+        #[test]
+        fn probe_state_order() {
+            let mut n = snap(
+                "Pick",
+                StateSet::REQUIRED | StateSet::HAS_POPUP | StateSet::COLLAPSED,
+                None,
+            );
+            n.role = Role::Button;
+            n.attrs = vec![
+                (
+                    gorca_doc_source_api::web_attrs::TAG,
+                    Arc::<str>::from("button"),
+                ),
+                (
+                    gorca_doc_source_api::web_attrs::HASPOPUP,
+                    Arc::<str>::from("dialog"),
+                ),
+            ]
+            .into_iter()
+            .collect();
+            let t = texts(&present_focus(&n, UttId(1), Epoch(1)));
+            eprintln!("P7: {t:?}");
+        }
     }
 }

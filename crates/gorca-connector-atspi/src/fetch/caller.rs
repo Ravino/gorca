@@ -14,8 +14,9 @@ use zbus::Connection;
 use zbus::zvariant::{OwnedObjectPath, OwnedValue, Value as Zv};
 
 use super::{
-    ACCESSIBLE, APPLICATION, CACHE, CACHE_PATH, ENTRY_TEXT_CHARS, MAX_SUBTREE_NODES, NULL_PATH,
-    PROPS, RELATION_LABELLED_BY, ROOT_PATH, TEXT, VALUE, items, shadow,
+    ACCESSIBLE, APPLICATION, CACHE, CACHE_PATH, ENTRY_TEXT_CHARS, ERROR_TEXT_CHARS,
+    MAX_SUBTREE_NODES, NULL_PATH, PROPS, RELATION_ERROR_MESSAGE, RELATION_LABELLED_BY, ROOT_PATH,
+    TEXT, VALUE, items, shadow,
 };
 
 /// `(so)` as a variant: `Some((bus, path))`, `None` for the null object or a wrong shape.
@@ -176,6 +177,74 @@ impl Caller {
             .find(|(kind, _)| *kind == RELATION_LABELLED_BY)
             .and_then(|(_, targets)| targets.into_iter().next())
             .map(|(bus, p)| (bus, p.as_str().to_owned())))
+    }
+
+    /// The text of the `aria-errormessage` target of `path` (relation `error-message`), when the
+    /// target lives in this application: its `Text` (at most `ERROR_TEXT_CHARS`, never past the
+    /// end, which Gecko refuses), else its name. `None` when there is no relation or no text.
+    pub(super) async fn error_text_of(&self, path: &str, deadline: Deadline) -> Option<String> {
+        let m = self
+            .call(
+                &self.bus_name,
+                deadline,
+                path,
+                ACCESSIBLE,
+                "GetRelationSet",
+                &(),
+            )
+            .await
+            .ok()?;
+        let sets = m
+            .body()
+            .deserialize::<Vec<(u32, Vec<(String, OwnedObjectPath)>)>>()
+            .ok()?;
+        let (bus, target) = sets
+            .into_iter()
+            .find(|(kind, _)| *kind == RELATION_ERROR_MESSAGE)
+            .and_then(|(_, targets)| targets.into_iter().next())?;
+        if bus != *self.bus_name {
+            return None;
+        }
+        let target = target.as_str();
+        let count = match self
+            .prop(&self.bus_name, target, TEXT, "CharacterCount", deadline)
+            .await
+        {
+            Ok(v) => i32::try_from(v).unwrap_or(0),
+            Err(_) => 0,
+        };
+        let end = count.clamp(0, ERROR_TEXT_CHARS);
+        let text = match self
+            .call(
+                &self.bus_name,
+                deadline,
+                target,
+                TEXT,
+                "GetText",
+                &(0i32, end),
+            )
+            .await
+        {
+            Ok(m) => m
+                .body()
+                .deserialize::<String>()
+                .ok()
+                .map(|s| s.trim().to_owned())
+                .filter(|s| !s.is_empty()),
+            Err(_) => None,
+        };
+        let text = match text {
+            Some(t) => t,
+            None => self
+                .name_of(&self.bus_name, target, deadline)
+                .await
+                .ok()
+                .map(|s| s.trim().to_owned())
+                .filter(|s| !s.is_empty())?,
+        };
+        let text = text.replace(['\u{FFFC}', '\n'], " ");
+        let text = text.trim();
+        (!text.is_empty()).then(|| text.to_owned())
     }
 
     pub(super) async fn text_prefix(

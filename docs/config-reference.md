@@ -107,6 +107,8 @@ caret_late_ms = 400
 [browse]
 # Read a web page automatically when it finishes loading. (true or false)
 say_all_on_load = true
+# Say the description of a web control after a short pause. (true or false)
+description_pause = true
 
 [terminal]
 # Wait this many milliseconds for terminal output to settle before speaking. (integer 10 to 200)

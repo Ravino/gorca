@@ -158,6 +158,11 @@ pub enum BackgroundMsg {
     /// Speech from an extension (a command's answer, a rewrite verdict, an "extension disabled"
     /// notice). `interrupt` answers a key the user pressed.
     ExtSpeech { text: Arc<str>, interrupt: bool },
+    /// The answer to `info.battery`: `None` when the power source did not answer in time.
+    Battery {
+        info: Option<crate::quick::PowerInfo>,
+        epoch: Epoch,
+    },
 }
 
 #[derive(Debug)]
@@ -674,6 +679,19 @@ impl Reader {
     pub fn handle(&mut self, msg: ReaderMsg, now: Instant) -> ReaderEffects {
         let mut fx = ReaderEffects::new();
         let is_key = matches!(msg, ReaderMsg::Key(_) | ReaderMsg::Control(_));
+        // Speech history: key echo is not kept, answers to command chords are.
+        let record = match &msg {
+            ReaderMsg::Key(i) => matches!(i.class, gorca_input_api::KeyClass::Command(_)),
+            ReaderMsg::Control(_) => false,
+            ReaderMsg::Focus(_)
+            | ReaderMsg::Reply(_)
+            | ReaderMsg::Background(_)
+            | ReaderMsg::Mode(_)
+            | ReaderMsg::Review(_)
+            | ReaderMsg::Text(_)
+            | ReaderMsg::Doc(_)
+            | ReaderMsg::Timer => true,
+        };
         self.now = now;
         if is_key {
             self.win.last_input = Some(now);
@@ -694,6 +712,7 @@ impl Reader {
                 BackgroundMsg::LevelChanged { node } => self.on_level_changed(node, &mut fx),
                 BackgroundMsg::LevelRead { info } => self.on_level_read(&info, &mut fx),
                 BackgroundMsg::Notice { info } => self.on_notice(&info, &mut fx),
+                BackgroundMsg::Battery { info, epoch } => self.on_battery(info, epoch, &mut fx),
                 BackgroundMsg::ResyncNeeded(_) => {
                     // TBD: live-region policy lives in gorca-doc; resync scheduling in the app actor.
                 }
@@ -731,6 +750,7 @@ impl Reader {
         }
         self.text_after(&mut fx);
         self.remember_spoken(is_key, &fx);
+        self.after_message(record, &mut fx);
         fx
     }
 }

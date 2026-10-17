@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M8b Forms</title></head>
+<body>
+<h1>M8b form states</h1>
+<form aria-label="Signup">
+<p>
+  <label for="f-email">Email address</label>
+  <input id="f-email" type="email" aria-invalid="true" aria-errormessage="e-email" value="not-an-email">
+  <span id="e-email">Enter an address like name@example.com</span>
+</p>
+<p>
+  <label for="f-user">User name</label>
+  <input id="f-user" type="text" aria-describedby="h-user" value="">
+  <span id="h-user">At least six characters</span>
+</p>
+<p>
+  <label for="f-pw">Password field</label>
+  <input id="f-pw" type="text" aria-invalid="true" aria-describedby="h-pw" value="abc">
+  <span id="h-pw">Use a long password</span>
+</p>
+<p>
+  <label for="f-req">Required name</label>
+  <input id="f-req" type="text" required>
+  <label for="f-areq">Aria required name</label>
+  <input id="f-areq" type="text" aria-required="true">
+</p>
+<p>
+  <label for="f-ro">Read only name</label>
+  <input id="f-ro" type="text" aria-readonly="true" value="fixed">
+  <label for="f-ro2">Native read only</label>
+  <input id="f-ro2" type="text" readonly value="fixed too">
+</p>
+<p>
+  <label for="f-dis">Disabled name</label>
+  <input id="f-dis" type="text" disabled value="off">
+  <button id="f-adis" aria-disabled="true">Aria disabled button</button>
+  <button id="f-ndis" disabled>Native disabled button</button>
+</p>
+<p>
+  <input id="f-chk" type="checkbox" aria-invalid="true" aria-describedby="h-chk"><label for="f-chk">Accept terms</label>
+  <span id="h-chk">You must accept to continue</span>
+</p>
+<div role="radiogroup" aria-label="Size" aria-required="true">
+  <input type="radio" name="sz" id="r1" checked><label for="r1">Small size</label>
+  <input type="radio" name="sz" id="r2"><label for="r2">Large size</label>
+</div>
+<p>
+  <label for="f-sel">Colour pick</label>
+  <select id="f-sel" aria-describedby="h-sel"><option>Red</option><option selected>Green</option></select>
+  <span id="h-sel">Pick one</span>
+</p>
+<p>
+  <label for="f-multi">Notes area</label>
+  <textarea id="f-multi" aria-describedby="h-multi" aria-multiline="true"></textarea>
+  <span id="h-multi">Optional notes</span>
+</p>
+<p><button id="f-btn" aria-describedby="h-btn">Submit form</button><span id="h-btn">Sends the signup</span></p>
+</form>
+<p>End of forms page.</p>
+</body>
+</html>

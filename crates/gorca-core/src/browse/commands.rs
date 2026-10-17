@@ -1042,6 +1042,58 @@ impl Reader {
         }
     }
 
+    /// M8b: the snapshot of a web node with what only the document mirror knows (the attribute
+    /// map with `xml-roles`, `current`, `haspopup`, `error-text`; the description; the states the
+    /// web source normalised). Any other snapshot comes back unchanged.
+    pub(crate) fn web_overlay(
+        &self,
+        snap: &Arc<gorca_model::NodeSnapshot>,
+    ) -> Arc<gorca_model::NodeSnapshot> {
+        let Some(b) = self.web.as_ref() else {
+            return Arc::clone(snap);
+        };
+        let Some((doc, id)) = b.join.get(snap.key) else {
+            return Arc::clone(snap);
+        };
+        let Some(h) = b.docs.get(doc) else {
+            return Arc::clone(snap);
+        };
+        h.read
+            .with(|d| {
+                let v = d.node(id)?;
+                let m = v.meta?;
+                if m.attrs.is_empty() {
+                    return None;
+                }
+                let mut c = (**snap).clone();
+                // The engine's name of a list or tree item carries the list marker; the document
+                // mirror's does not (web source quirk row).
+                if matches!(v.role, Role::ListItem | Role::TreeItem)
+                    && let Some(n) = v.name.filter(|n| !n.is_empty())
+                {
+                    c.name = Some(Arc::from(n));
+                }
+                // An error text the focus fetch just read is fresher than the mirror's (and the
+                // only one for an invalid field past the source's per-fetch cap).
+                let fetched = snap
+                    .attrs
+                    .iter()
+                    .find(|(k, _)| *k == gorca_doc_source_api::web_attrs::ERROR_TEXT)
+                    .cloned();
+                c.attrs.clone_from(&m.attrs);
+                if let Some((k, t)) = fetched {
+                    c.attrs.retain(|(a, _)| *a != k);
+                    c.attrs.push((k, t));
+                }
+                if c.description.is_none() {
+                    c.description.clone_from(&m.description);
+                }
+                c.states |= m.states & (StateSet::READ_ONLY | StateSet::HAS_POPUP);
+                Some(Arc::new(c))
+            })
+            .unwrap_or_else(|| Arc::clone(snap))
+    }
+
     /// A key press while the focus is in a web application but the web layer is not browsing
     /// (`Inactive` or still `Loading`): the document lookup that should have settled the focus
     /// failed or never answered (a busy page, a lookup that timed out) and nothing else retries
@@ -1076,7 +1128,7 @@ impl Reader {
     /// name, value), so the first focus into a field is spoken at once and the fetch only
     /// confirms it (the mirror knows the node: this is what the page last told us).
     pub(crate) fn web_focus_snapshot(&self, node: NodeKey) -> Option<gorca_model::NodeSnapshot> {
-        use gorca_model::{AttrMap, ChildList, Freshness, Ifaces, PropMask, Relations};
+        use gorca_model::{ChildList, Freshness, Ifaces, PropMask, Relations};
         let b = self.web.as_ref()?;
         let (doc, id) = b.join.get(node)?;
         let h = b.docs.get(doc)?;
@@ -1091,6 +1143,17 @@ impl Reader {
             }
             let name = v.name.filter(|n| !n.is_empty())?;
             let meta = v.meta?;
+            // An invalid control whose error text the mirror lacks (the source reads a bounded
+            // number per fetch) takes the full focus fetch, which reads it (M8b).
+            if meta.states.contains(StateSet::INVALID)
+                && gorca_doc_source_api::takes_error_text(v.role)
+                && !meta
+                    .attrs
+                    .iter()
+                    .any(|(k, _)| *k == gorca_doc_source_api::web_attrs::ERROR_TEXT)
+            {
+                return None;
+            }
             let mut have = PropMask::NAME | PropMask::ROLE | PropMask::STATES;
             // A password's value is never spoken, not even from the mirror.
             let value = meta.value.clone().filter(|_| v.role != Role::PasswordEntry);
@@ -1102,12 +1165,12 @@ impl Reader {
                 role: v.role,
                 states: meta.states,
                 name: Some(Arc::from(name)),
-                description: None,
+                description: meta.description.clone(),
                 value,
                 parent: None,
                 children: ChildList::Unknown,
                 interfaces: Ifaces::empty(),
-                attrs: AttrMap::default(),
+                attrs: meta.attrs.clone(),
                 relations: Relations::default(),
                 bounds: None,
                 have,
@@ -1847,6 +1910,9 @@ impl Reader {
         }
         u.segments
             .extend(present::segments(items, self.verbalize_opts()));
+        if !self.cmd.effective.browse.description_pause {
+            crate::aria::strip_pause(&mut u);
+        }
         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
     }
 

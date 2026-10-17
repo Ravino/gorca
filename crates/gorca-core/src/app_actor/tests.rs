@@ -877,6 +877,7 @@ fn on_event_verdicts_decide_what_the_reader_hears() {
                     | BackgroundMsg::LevelChanged { .. }
                     | BackgroundMsg::LevelRead { .. }
                     | BackgroundMsg::Notice { .. }
+                    | BackgroundMsg::Battery { .. }
                     | BackgroundMsg::ResyncNeeded(_) => None,
                 }
             } else {
