@@ -1,0 +1,26 @@
+== phase2 acceptance: ACCEPTANCE ATTEMPT, DEGRADED HOST (--force), PARTIAL (m1 m6)
+mode=ACCEPTANCE ATTEMPT, DEGRADED HOST (--force), PARTIAL (m1 m6)
+utc=2026-10-17T01:15:16Z
+git_rev=ce46cac dirty_tracked_files=0 branch=worktree-agent-ab1f7350482f9d118
+kernel=7.1.8+deb13-rt-amd64 cpus=16
+loadavg=10.63 9.96 10.16 2/2540 3102384
+psi_memory_some_avg10=0.00 psi_memory_full_avg10=0.00
+psi_cpu_some_avg10=0.38 psi_io_some_avg10=0.45
+mem_available_mb=16598
+governor=performance 
+rtkit MaxRealtimePriority: i 20 
+rtkit RTTimeUSecMax: x 200000 
+topology: shipped default (--topology=auto); expected arm: lanes-rt (gated by e2e --expect-topology)
+repeats=3 quick=no suites=m1 m6
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=1
+  idle C3_ACPI latency=1048us disabled=1
+  load: 10.63 9.96 10.16 3/2542 3102425
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! HOST NOT QUIET: load average 10.63 > 4
+!! --force: continuing, summary is marked DEGRADED
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+phase2: missing target/release/e2e-m8 (build first)
