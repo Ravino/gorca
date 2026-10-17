@@ -77,7 +77,7 @@ thread_local! {
 
 /// Publish the UI language (the Reader does, when the effective settings change).
 pub fn set_language(lang: Lang) {
-    CURRENT.store(lang.index() as u8, Ordering::Relaxed);
+    CURRENT.store(u8::from(lang == Lang::Ru), Ordering::Relaxed);
 }
 
 /// The language messages are formatted in on this thread.

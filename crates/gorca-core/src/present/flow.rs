@@ -416,7 +416,8 @@ impl Reader {
             .is_some_and(|b| b.web_apps.contains(&snap.key.app));
         if web && super::utterance::never_disabled(snap.role) {
             u.segments.retain(|s| {
-                !(s.kind == gorca_model::SegmentKind::State && &*s.text == gorca_i18n::t(gorca_i18n::MsgId::StateUnavailable))
+                !(s.kind == gorca_model::SegmentKind::State
+                    && &*s.text == gorca_i18n::t(gorca_i18n::MsgId::StateUnavailable))
             });
         }
     }

@@ -21,6 +21,7 @@
 //! (test-only modules, structured logs). Entries that no longer match are reported, not fatal.
 
 use std::collections::BTreeSet;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -186,7 +187,9 @@ fn collect(root: &Path, rel: &str, out: &mut Vec<Hit>) -> Result<()> {
         entries.sort();
         for e in entries {
             if e.is_dir() {
-                if e.file_name().is_some_and(|n| n == "tests" || n == "benches") {
+                if e.file_name()
+                    .is_some_and(|n| n == "tests" || n == "benches")
+                {
                     continue;
                 }
                 stack.push(e);
@@ -203,7 +206,9 @@ fn collect(root: &Path, rel: &str, out: &mut Vec<Hit>) -> Result<()> {
 }
 
 /// The allow-list: `(path, literal)` pairs and whole-file entries.
-fn load_allow(root: &Path) -> Result<(BTreeSet<(String, String)>, BTreeSet<String>)> {
+type Allow = (BTreeSet<(String, String)>, BTreeSet<String>);
+
+fn load_allow(root: &Path) -> Result<Allow> {
     let text = std::fs::read_to_string(root.join(ALLOW_FILE))
         .with_context(|| format!("read {ALLOW_FILE}"))?;
     let mut pairs = BTreeSet::new();
@@ -251,7 +256,7 @@ pub fn run(update: bool) -> Result<bool> {
             .join("\n");
         body.push('\n');
         for f in &files {
-            body.push_str(&format!("{f} | *\n"));
+            let _ = writeln!(body, "{f} | *");
         }
         let mut seen = BTreeSet::new();
         for h in &hits {
@@ -259,7 +264,7 @@ pub fn run(update: bool) -> Result<bool> {
                 continue;
             }
             if seen.insert((h.path.clone(), h.literal.clone())) {
-                body.push_str(&format!("{} | {}\n", h.path, h.literal));
+                let _ = writeln!(body, "{} | {}", h.path, h.literal);
             }
         }
         std::fs::write(root.join(ALLOW_FILE), body)?;

@@ -739,32 +739,8 @@ impl AppExt for AppExts {
     }
 }
 
-#[cfg(test)]
-mod busy_tests {
-    use super::{event_kind, repeats_when_busy};
-    use gorca_ext_api as api;
-
-    #[test]
-    fn only_high_rate_kinds_repeat_a_decision_while_busy() {
-        let k = (1, 1);
-        for (e, repeats) in [
-            (api::Event::FocusChanged(k), false),
-            (api::Event::PropertiesChanged(k, 0), true),
-            (api::Event::ChildrenChanged(k), true),
-            (api::Event::TextChanged(k), true),
-            (api::Event::CaretMoved(k, 0), true),
-            (api::Event::SelectionChanged(k), true),
-            (api::Event::Announcement(String::new()), false),
-            (api::Event::WindowActivated(k), false),
-            (api::Event::NodeRemoved(k), false),
-        ] {
-            assert_eq!(repeats_when_busy(event_kind(&e)), repeats, "{e:?}");
-        }
-    }
-}
-
 /// The largest catalog file read from an extension directory.
-const MAX_CATALOG_BYTES: u64 = 256 * 1024;
+const MAX_CATALOG_BYTES: u64 = gorca_i18n::ext::MAX_CATALOG_BYTES as u64;
 
 /// Register the extension's message catalogs: `<dir>/i18n/<lang>.msg` for every language the
 /// core has a catalog for. A missing or broken file is skipped (the extension then speaks its
@@ -793,12 +769,38 @@ fn load_catalogs(dir: &Path, ns: &str) {
 /// a literal (accepted until WIT 1.0, ADR-0010).
 fn help_text(ns: &str, help: &str) -> String {
     let key = !help.is_empty()
-        && help
-            .split('-')
-            .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()));
+        && help.split('-').all(|p| {
+            !p.is_empty()
+                && p.chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        });
     if key {
         gorca_i18n::ext::encode(ns, help, &[])
     } else {
         help.to_owned()
+    }
+}
+
+#[cfg(test)]
+mod busy_tests {
+    use super::{event_kind, repeats_when_busy};
+    use gorca_ext_api as api;
+
+    #[test]
+    fn only_high_rate_kinds_repeat_a_decision_while_busy() {
+        let k = (1, 1);
+        for (e, repeats) in [
+            (api::Event::FocusChanged(k), false),
+            (api::Event::PropertiesChanged(k, 0), true),
+            (api::Event::ChildrenChanged(k), true),
+            (api::Event::TextChanged(k), true),
+            (api::Event::CaretMoved(k, 0), true),
+            (api::Event::SelectionChanged(k), true),
+            (api::Event::Announcement(String::new()), false),
+            (api::Event::WindowActivated(k), false),
+            (api::Event::NodeRemoved(k), false),
+        ] {
+            assert_eq!(repeats_when_busy(event_kind(&e)), repeats, "{e:?}");
+        }
     }
 }

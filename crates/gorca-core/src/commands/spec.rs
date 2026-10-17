@@ -211,7 +211,11 @@ mod tests {
             assert_eq!(*c as usize, i, "discriminants are dense");
             let s = c.spec();
             assert_eq!(s.cmd, *c);
-            assert!(!s.help_text().is_empty() && !s.name.is_empty(), "{}", s.name);
+            assert!(
+                !s.help_text().is_empty() && !s.name.is_empty(),
+                "{}",
+                s.name
+            );
             assert!((1..=3).contains(&s.max_press));
             assert_eq!(CoreCmd::from_id(c.id()), Some(*c));
             assert_eq!(CommandTable::get().by_name(s.name), Some(*c));

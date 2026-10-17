@@ -1,5 +1,6 @@
 //! Key echo and plain messages.
 
+use gorca_i18n::MsgId as M;
 use gorca_input_api::Modifiers;
 use gorca_model::{Epoch, Prio, SegmentKind, UttId, Utterance};
 use smallvec::SmallVec;
@@ -75,7 +76,6 @@ pub fn key_echo_spoken(
     if !key_echo_is_action(text) {
         return v.unit(text, gorca_speech::How::Char, &o);
     }
-    use gorca_i18n::MsgId as M;
     let named = match text {
         "enter" => Some(M::EchoEnter),
         "backspace" => Some(M::EchoBackspace),

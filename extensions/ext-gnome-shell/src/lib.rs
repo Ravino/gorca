@@ -216,14 +216,11 @@ pub fn decide(f: &Facts<'_>) -> Verdict {
         },
         Then::SayLevel => match f.range {
             Some(r) => {
-                let default_name;
-                let name = match f.name.filter(|n| !n.trim().is_empty()) {
-                    Some(n) => n,
-                    None => {
-                        default_name = i18n::msg(NAME, "level", &[]);
-                        &default_name
-                    }
-                };
+                let default_name = i18n::msg(NAME, "level", &[]);
+                let name = f
+                    .name
+                    .filter(|n| !n.trim().is_empty())
+                    .unwrap_or(&default_name);
                 Verdict::Say(vec![
                     Segment {
                         text: name.to_owned(),

@@ -168,7 +168,14 @@ fn unit_move(
     fwd: bool,
 ) -> FlatOut {
     let Some(g) = global(model, pos) else {
-        return boundary(pos, if fwd { t(M::ReviewBottom) } else { t(M::ReviewTop) });
+        return boundary(
+            pos,
+            if fwd {
+                t(M::ReviewBottom)
+            } else {
+                t(M::ReviewTop)
+            },
+        );
     };
     let here = model.zones.get(g as usize);
     let in_zone = here.and_then(|z| {
@@ -191,13 +198,27 @@ fn unit_move(
             .and_then(|p| last_unit_before(model, units, p, unit)),
     };
     let Some((tg, r)) = target else {
-        return boundary(pos, if fwd { t(M::ReviewBottom) } else { t(M::ReviewTop) });
+        return boundary(
+            pos,
+            if fwd {
+                t(M::ReviewBottom)
+            } else {
+                t(M::ReviewTop)
+            },
+        );
     };
     let (Some(z), Some(p)) = (
         model.zones.get(tg as usize),
         pos_of_global(model, tg, r.start),
     ) else {
-        return boundary(pos, if fwd { t(M::ReviewBottom) } else { t(M::ReviewTop) });
+        return boundary(
+            pos,
+            if fwd {
+                t(M::ReviewBottom)
+            } else {
+                t(M::ReviewTop)
+            },
+        );
     };
     let said = slice(&z.text, &r);
     FlatOut {
@@ -245,8 +266,18 @@ pub fn flat_step(model: &LineModel, pos: &FlatPos, mv: FlatMove, units: &dyn Tex
             (pos.line < last).then_some(pos.line + 1),
             t(M::ReviewBottom),
         ),
-        FlatMove::Top => to_line(model, pos, (!model.is_empty()).then_some(0), t(M::ReviewTop)),
-        FlatMove::Bottom => to_line(model, pos, (!model.is_empty()).then_some(last), t(M::ReviewBottom)),
+        FlatMove::Top => to_line(
+            model,
+            pos,
+            (!model.is_empty()).then_some(0),
+            t(M::ReviewTop),
+        ),
+        FlatMove::Bottom => to_line(
+            model,
+            pos,
+            (!model.is_empty()).then_some(last),
+            t(M::ReviewBottom),
+        ),
         FlatMove::CurLine => FlatOut {
             said: line_text(model, pos.line),
             pos: *pos,

@@ -237,7 +237,9 @@ fn notice_text(n: FailoverNotice) -> String {
             gorca_i18n::msg!(SpeechFallback, from = from, to = to)
         }
         FailoverNotice::Restored { backend } => gorca_i18n::msg!(SpeechRestored, backend = backend),
-        FailoverNotice::Unavailable => gorca_i18n::t(gorca_i18n::MsgId::SpeechUnavailable).to_owned(),
+        FailoverNotice::Unavailable => {
+            gorca_i18n::t(gorca_i18n::MsgId::SpeechUnavailable).to_owned()
+        }
     }
 }
 

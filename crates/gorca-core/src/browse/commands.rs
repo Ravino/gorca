@@ -237,8 +237,18 @@ const QUICKNAV: &[(CoreCmd, Dir, Cat, M)] = &[
         Cat::HEADING_6,
         M::WebNoPrevHeading6,
     ),
-    (CoreCmd::QuicknavNextLink, Dir::Next, Cat::LINK, M::WebNoNextLink),
-    (CoreCmd::QuicknavPrevLink, Dir::Prev, Cat::LINK, M::WebNoPrevLink),
+    (
+        CoreCmd::QuicknavNextLink,
+        Dir::Next,
+        Cat::LINK,
+        M::WebNoNextLink,
+    ),
+    (
+        CoreCmd::QuicknavPrevLink,
+        Dir::Prev,
+        Cat::LINK,
+        M::WebNoPrevLink,
+    ),
     (
         CoreCmd::QuicknavNextVisited,
         Dir::Next,
@@ -275,8 +285,18 @@ const QUICKNAV: &[(CoreCmd, Dir, Cat, M)] = &[
         Cat::FORM_FIELD,
         M::WebNoPrevFormField,
     ),
-    (CoreCmd::QuicknavNextList, Dir::Next, Cat::LIST, M::WebNoNextList),
-    (CoreCmd::QuicknavPrevList, Dir::Prev, Cat::LIST, M::WebNoPrevList),
+    (
+        CoreCmd::QuicknavNextList,
+        Dir::Next,
+        Cat::LIST,
+        M::WebNoNextList,
+    ),
+    (
+        CoreCmd::QuicknavPrevList,
+        Dir::Prev,
+        Cat::LIST,
+        M::WebNoPrevList,
+    ),
     (
         CoreCmd::QuicknavNextListItem,
         Dir::Next,
@@ -409,8 +429,18 @@ const QUICKNAV: &[(CoreCmd, Dir, Cat, M)] = &[
         Cat::EMBEDDED_OR_DIALOG,
         M::WebNoPrevEmbeddedObject,
     ),
-    (CoreCmd::QuicknavNextTable, Dir::Next, Cat::TABLE, M::WebNoNextTable),
-    (CoreCmd::QuicknavPrevTable, Dir::Prev, Cat::TABLE, M::WebNoPrevTable),
+    (
+        CoreCmd::QuicknavNextTable,
+        Dir::Next,
+        Cat::TABLE,
+        M::WebNoNextTable,
+    ),
+    (
+        CoreCmd::QuicknavPrevTable,
+        Dir::Prev,
+        Cat::TABLE,
+        M::WebNoPrevTable,
+    ),
     (
         CoreCmd::QuicknavNextAnnotation,
         Dir::Next,
@@ -423,8 +453,18 @@ const QUICKNAV: &[(CoreCmd, Dir, Cat, M)] = &[
         Cat::ANNOTATION,
         M::WebNoPrevAnnotation,
     ),
-    (CoreCmd::QuicknavNextError, Dir::Next, Cat::ERROR, M::WebNoNextError),
-    (CoreCmd::QuicknavPrevError, Dir::Prev, Cat::ERROR, M::WebNoPrevError),
+    (
+        CoreCmd::QuicknavNextError,
+        Dir::Next,
+        Cat::ERROR,
+        M::WebNoNextError,
+    ),
+    (
+        CoreCmd::QuicknavPrevError,
+        Dir::Prev,
+        Cat::ERROR,
+        M::WebNoPrevError,
+    ),
     (
         CoreCmd::QuicknavNextParagraph,
         Dir::Next,
@@ -437,8 +477,18 @@ const QUICKNAV: &[(CoreCmd, Dir, Cat, M)] = &[
         Cat::TEXT_BLOCK,
         M::WebNoPrevParagraph,
     ),
-    (CoreCmd::QuicknavNextFrame, Dir::Next, Cat::FRAME, M::WebNoNextFrame),
-    (CoreCmd::QuicknavPrevFrame, Dir::Prev, Cat::FRAME, M::WebNoPrevFrame),
+    (
+        CoreCmd::QuicknavNextFrame,
+        Dir::Next,
+        Cat::FRAME,
+        M::WebNoNextFrame,
+    ),
+    (
+        CoreCmd::QuicknavPrevFrame,
+        Dir::Prev,
+        Cat::FRAME,
+        M::WebNoPrevFrame,
+    ),
     (
         CoreCmd::QuicknavNextArticle,
         Dir::Next,
@@ -2482,14 +2532,7 @@ impl Reader {
         }
     }
 
-    fn web_quicknav(
-        &mut self,
-        dir: Dir,
-        cat: Cat,
-        none: M,
-        now: Instant,
-        fx: &mut ReaderEffects,
-    ) {
+    fn web_quicknav(&mut self, dir: Dir, cat: Cat, none: M, now: Instant, fx: &mut ReaderEffects) {
         let Some((doc, cur, _)) = self.browse_ctx(fx) else {
             return;
         };

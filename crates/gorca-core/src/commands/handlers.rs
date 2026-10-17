@@ -606,7 +606,10 @@ impl Reader {
             }
             None => t(M::InputHelpUnbound).to_owned(),
         };
-        self.say(&msg!(InputHelpLine, key = key.as_str(), help = help.as_str()), fx);
+        self.say(
+            &msg!(InputHelpLine, key = key.as_str(), help = help.as_str()),
+            fx,
+        );
     }
 
     pub(crate) fn on_control(&mut self, m: ControlMsg, now: Instant, fx: &mut ReaderEffects) {
@@ -827,7 +830,10 @@ mod tests {
             )),
             "горка контрол шифт T"
         );
-        assert_eq!(key_description(&intent(0xffc9, Modifiers::empty())), "эф 12");
+        assert_eq!(
+            key_description(&intent(0xffc9, Modifiers::empty())),
+            "эф 12"
+        );
         assert_eq!(key_description(&intent(0x20, Modifiers::empty())), "пробел");
     }
 
@@ -840,7 +846,13 @@ mod tests {
         assert_eq!(say(5), "в настройках 5 проблем");
         assert_eq!(say(21), "в настройках 21 проблема");
         let _en = gorca_i18n::scoped(gorca_i18n::Lang::En);
-        assert_eq!(gorca_i18n::msg!(SettingsProblems, n = 1usize), "1 settings problem");
-        assert_eq!(gorca_i18n::msg!(SettingsProblems, n = 2usize), "2 settings problems");
+        assert_eq!(
+            gorca_i18n::msg!(SettingsProblems, n = 1usize),
+            "1 settings problem"
+        );
+        assert_eq!(
+            gorca_i18n::msg!(SettingsProblems, n = 2usize),
+            "2 settings problems"
+        );
     }
 }

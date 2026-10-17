@@ -209,7 +209,10 @@ mod tests {
             .collect();
         let out = segments_from_ext(segs);
         let total: usize = out.iter().map(|s| s.text.chars().count()).sum();
-        assert!(out.iter().all(|s| s.text.chars().count() <= MAX_SEGMENT_CHARS));
+        assert!(
+            out.iter()
+                .all(|s| s.text.chars().count() <= MAX_SEGMENT_CHARS)
+        );
         assert!(total <= MAX_ANSWER_CHARS, "{total}");
     }
 

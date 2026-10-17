@@ -171,7 +171,9 @@ impl Template {
                 .iter()
                 .map(|p| match p {
                     Piece::Lit(s) | Piece::Var(s) => s.len() + 2,
-                    Piece::Plural(n, f) => n.len() + 2 + f.iter().map(|x| x.len() + 1).sum::<usize>(),
+                    Piece::Plural(n, f) => {
+                        n.len() + 2 + f.iter().map(|x| x.len() + 1).sum::<usize>()
+                    }
                 })
                 .sum(),
         }
@@ -282,7 +284,12 @@ mod tests {
 
     #[test]
     fn english_plurals() {
-        for (n, want) in [(0, "0 items"), (1, "1 item"), (2, "2 items"), (11, "11 items")] {
+        for (n, want) in [
+            (0, "0 items"),
+            (1, "1 item"),
+            (2, "2 items"),
+            (11, "11 items"),
+        ] {
             assert_eq!(
                 f("{n} item{n#|s}", Lang::En, &[("n", n.into())]),
                 want.to_owned()
@@ -326,7 +333,10 @@ mod tests {
         assert_eq!(Template::parse("a {b"), Err(TemplateError::Unclosed));
         assert_eq!(Template::parse("a } b"), Err(TemplateError::Stray));
         assert_eq!(Template::parse("a {} b"), Err(TemplateError::BadName));
-        assert_eq!(Template::parse("{a{b}}"), Err(TemplateError::NestedPlaceholder));
+        assert_eq!(
+            Template::parse("{a{b}}"),
+            Err(TemplateError::NestedPlaceholder)
+        );
     }
 
     #[test]

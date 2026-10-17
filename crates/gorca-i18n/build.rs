@@ -99,8 +99,8 @@ fn main() {
     }
     let mut dup = keys.clone();
     dup.sort();
-    if let Some(w) = dup.windows(2).find(|w| w[0] == w[1]) {
-        fail(&format!("duplicate key `{}` in the English catalog", w[0]));
+    if let Some([k, _]) = dup.windows(2).find(|w| w[0] == w[1]) {
+        fail(&format!("duplicate key `{k}` in the English catalog"));
     }
 
     gen_src.push_str(

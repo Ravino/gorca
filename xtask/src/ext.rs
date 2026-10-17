@@ -80,7 +80,10 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<bool> {
             std::fs::create_dir_all(&d).with_context(|| format!("create {}", d.display()))?;
             copy(&manifest, &d.join("ext.toml"))?;
             copy(&built, &d.join(&module))?;
-            copy_catalogs(&root.join("extensions").join(name).join("i18n"), &d.join("i18n"))?;
+            copy_catalogs(
+                &root.join("extensions").join(name).join("i18n"),
+                &d.join("i18n"),
+            )?;
             println!("installed {}", d.join(&module).display());
         }
     }

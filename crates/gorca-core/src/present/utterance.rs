@@ -2,11 +2,11 @@
 
 use std::sync::Arc;
 
+use gorca_i18n::{MsgId as M, msg, t};
 use gorca_model::{
     Epoch, Freshness, NodeSnapshot, Prio, Role, Segment, SegmentKind, StateSet, UttId, Utterance,
     Value,
 };
-use gorca_i18n::{MsgId as M, msg, t};
 use smallvec::SmallVec;
 
 /// State words in speaking order (catalog ids). TBD: verbosity settings.
@@ -401,10 +401,7 @@ pub(crate) fn present_change(
             if new.states.contains(*flag) {
                 segments.push(seg(t(*word), SegmentKind::State));
             } else {
-                segments.push(seg(
-                    &msg!(StateNot, word = t(*word)),
-                    SegmentKind::State,
-                ));
+                segments.push(seg(&msg!(StateNot, word = t(*word)), SegmentKind::State));
             }
         }
     }

@@ -112,7 +112,10 @@ pub fn unregister(ns: &str) {
 pub fn format(ns: &str, key: &str, lang: Lang, args: &[(&str, Arg<'_>)]) -> Option<String> {
     let g = registry().read().unwrap_or_else(PoisonError::into_inner);
     let entry = g.get(ns)?;
-    let (cat, l) = match entry[lang.index()].as_ref().filter(|c| c.msgs.contains_key(key)) {
+    let (cat, l) = match entry[lang.index()]
+        .as_ref()
+        .filter(|c| c.msgs.contains_key(key))
+    {
         Some(c) => (c, lang),
         None => (entry[Lang::En.index()].as_ref()?, Lang::En),
     };
@@ -203,7 +206,10 @@ mod tests {
         let r = encode("hostile", "boom", &[("a", &huge)]);
         assert_eq!(resolve(&r, Lang::En), "");
         // Too many entries and over-long templates are dropped at load.
-        let many: String = (0..MAX_ENTRIES + 500).map(|i| format!("k{i} = v\n")).collect();
+        let mut many = String::new();
+        for i in 0..MAX_ENTRIES + 500 {
+            let _ = std::fmt::Write::write_fmt(&mut many, format_args!("k{i} = v\n"));
+        }
         let long = format!("long = {}\n", "z".repeat(MAX_TEMPLATE_BYTES + 1));
         register("hostile2", Lang::En, &format!("{long}{many}"));
         let r = encode("hostile2", "long", &[]);

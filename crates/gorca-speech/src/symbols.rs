@@ -116,13 +116,9 @@ impl Table {
         let key = f.next()?;
         let name = f.next()?;
         if let Some(id) = key.strip_prefix('@') {
-            match id {
-                _ => {
-                    let (_, rule) = RULES.iter().find(|(n, _)| *n == id)?;
-                    let sym = Self::sym(name, f.next(), f.next())?;
-                    self.rules.insert(rule_index(*rule), sym);
-                }
-            }
+            let (_, rule) = RULES.iter().find(|(n, _)| *n == id)?;
+            let sym = Self::sym(name, f.next(), f.next())?;
+            self.rules.insert(rule_index(*rule), sym);
             return Some(());
         }
         let sym = Self::sym(name, f.next(), f.next())?;
@@ -403,7 +399,7 @@ mod tests {
         assert_eq!(t.rules.len(), RULES.len());
     }
 
-        #[test]
+    #[test]
     fn level_changes_are_confirmed_in_the_language() {
         let en = Table::of(Lang::En);
         assert_eq!(en.level_confirmation(1, false), "punctuation some");
