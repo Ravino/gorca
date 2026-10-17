@@ -16,6 +16,8 @@ use gorca_model::{DocNodeId, Role, Segment, SegmentKind, StateSet};
 use gorca_speech::{How, VerbalizeOpts, Verbalizer};
 use smallvec::SmallVec;
 
+use crate::aria;
+
 /// Quick navigation speaks at most this many scalars of the target (LP-4).
 pub const QUICK_NAV_CAP: u32 = 400;
 /// A line is cut here when it is spoken (LP-3 guard bound).
@@ -34,12 +36,21 @@ pub enum Item {
     Lead(String),
     /// One character read on its own: spoken by name whatever the punctuation level.
     Char(String),
+    /// Position and error words that belong to the control spoken just before ("level 2", the
+    /// text of an `aria-errormessage`): not content, so they never count as the name.
+    Info(String),
+    /// The description of the node (`aria-describedby`): said after a short pause
+    /// (`SegmentKind::Description`).
+    Desc(String),
 }
 
 impl Item {
     pub fn kind(&self) -> SegmentKind {
         match self {
-            Item::Text(_) | Item::Name(_) | Item::Lead(_) | Item::Char(_) => SegmentKind::Text,
+            Item::Text(_) | Item::Name(_) | Item::Lead(_) | Item::Char(_) | Item::Info(_) => {
+                SegmentKind::Text
+            }
+            Item::Desc(_) => SegmentKind::Description,
             Item::Role(_) => SegmentKind::Role,
             Item::State(_) => SegmentKind::State,
         }
@@ -47,9 +58,24 @@ impl Item {
 
     pub fn text(&self) -> &str {
         match self {
-            Item::Text(t) | Item::Role(t) | Item::Name(t) | Item::Lead(t) | Item::Char(t) => t,
+            Item::Text(t)
+            | Item::Role(t)
+            | Item::Name(t)
+            | Item::Lead(t)
+            | Item::Char(t)
+            | Item::Info(t)
+            | Item::Desc(t) => t,
             Item::State(s) => s,
         }
+    }
+}
+
+/// The aria facts of a document node.
+fn node_of<'a>(v: &NodeView<'a>) -> aria::Node<'a> {
+    aria::Node {
+        role: v.role,
+        states: v.meta.map_or(StateSet::empty(), |m| m.states),
+        attrs: v.meta.map_or(&[][..], |m| m.attrs.as_slice()),
     }
 }
 
@@ -73,9 +99,19 @@ fn announced(role: Role) -> bool {
     )
 }
 
+/// Is the node announced where it starts, by role: the plain roles above, plus the ARIA items
+/// (tab, tree item, menu item, switch) that have no role of their own in the mirror.
+fn announced_node(v: &NodeView<'_>) -> bool {
+    announced(v.role)
+        || matches!(v.role, Role::Tab | Role::TreeItem)
+        || aria::Kind::is_item(node_of(v).kind())
+}
+
 fn role_phrase(v: &NodeView<'_>) -> String {
     let st = v.meta.map_or(StateSet::empty(), |m| m.states);
-    if v.role == Role::Link {
+    if let Some(w) = aria::role_word(&node_of(v)).filter(|_| v.role != Role::Heading) {
+        w.to_owned()
+    } else if v.role == Role::Link {
         if st.contains(StateSet::VISITED) {
             "visited link".to_owned()
         } else {
@@ -94,37 +130,14 @@ fn role_phrase(v: &NodeView<'_>) -> String {
     }
 }
 
-/// States spoken after a control's role.
-fn push_states(role: Role, st: StateSet, out: &mut Vec<Item>) {
-    let checkable = matches!(role, Role::CheckBox | Role::RadioButton);
-    let mixed = st
-        .contains(StateSet::MIXED)
-        .then(|| crate::present::mixed_word(role))
-        .flatten();
-    if !checkable && let Some(w) = mixed {
-        out.push(Item::State(w));
-    }
-    if checkable {
-        out.push(Item::State(if let Some(w) = mixed {
-            w
-        } else if st.contains(StateSet::CHECKED) {
-            "checked"
-        } else {
-            "not checked"
-        }));
-    }
-    if st.contains(StateSet::PRESSED) && mixed.is_none() {
-        out.push(Item::State("pressed"));
-    }
-    if st.contains(StateSet::EXPANDED) {
-        out.push(Item::State("expanded"));
-    } else if st.contains(StateSet::COLLAPSED) {
-        out.push(Item::State("collapsed"));
-    }
+/// States spoken after a control's role (NVDA order and words: `aria::state_words`).
+fn push_states(v: &NodeView<'_>, out: &mut Vec<Item>) {
+    let st = v.meta.map_or(StateSet::empty(), |m| m.states);
+    let node = node_of(v);
     // Firefox never sets ENABLED on static content (the document, headings), and clears it on
     // disabled controls: the absence only means "unavailable" for things that can be disabled.
     let control = matches!(
-        role,
+        v.role,
         Role::Button
             | Role::ToggleButton
             | Role::CheckBox
@@ -134,19 +147,16 @@ fn push_states(role: Role, st: StateSet, out: &mut Vec<Item>) {
             | Role::PasswordEntry
             | Role::SpinButton
     );
-    if st.contains(StateSet::DISABLED)
-        || (control && !st.is_empty() && !st.contains(StateSet::ENABLED))
-    {
-        out.push(Item::State("unavailable"));
+    let unavailable = st.contains(StateSet::DISABLED)
+        || (control && !st.is_empty() && !st.contains(StateSet::ENABLED));
+    for w in aria::state_words(&node, unavailable, false) {
+        out.push(Item::State(w));
     }
-    if st.contains(StateSet::READ_ONLY) && matches!(role, Role::TextEntry | Role::PasswordEntry) {
-        out.push(Item::State("read only"));
+    if let Some(c) = aria::current_word(&node) {
+        out.push(Item::State(c));
     }
-    if st.contains(StateSet::REQUIRED) {
-        out.push(Item::State("required"));
-    }
-    if st.contains(StateSet::INVALID) {
-        out.push(Item::State("invalid entry"));
+    if let Some(l) = aria::level_phrase(&node) {
+        out.push(Item::Info(l));
     }
 }
 
@@ -235,6 +245,7 @@ pub fn table_dims(doc: &WebDoc, id: DocNodeId) -> (usize, usize) {
 fn container_items(doc: &WebDoc, v: &NodeView<'_>, id: DocNodeId) -> Option<Vec<Item>> {
     let mut out = Vec::new();
     let name = v.name.filter(|n| !n.is_empty());
+    let kind = node_of(v).kind();
     if v.cats.intersects(Cat::LIST) && v.role == Role::List {
         let n = doc
             .children(id)
@@ -290,6 +301,17 @@ fn container_items(doc: &WebDoc, v: &NodeView<'_>, id: DocNodeId) -> Option<Vec<
             }
             .to_owned(),
         ));
+    } else if kind.is_container()
+        && (name.is_some() || !matches!(kind, aria::Kind::Group | aria::Kind::TabPanel))
+    {
+        // An ARIA container (tab list, tree, menu, tool bar, a named group or tab panel) is
+        // announced with its name and NVDA's word for it.
+        if let Some(n) = name {
+            out.push(Item::Name(n.to_owned()));
+        }
+        if let Some(w) = kind.word() {
+            out.push(Item::Role(w.to_owned()));
+        }
     } else {
         return None;
     }
@@ -301,7 +323,12 @@ fn name_spoken(items: &[Item], name: &str) -> bool {
     let name = name.trim().to_lowercase();
     items.iter().any(|i| match i {
         Item::Text(t) | Item::Name(t) => t.to_lowercase().contains(&name),
-        Item::Role(_) | Item::State(_) | Item::Lead(_) | Item::Char(_) => false,
+        Item::Role(_)
+        | Item::State(_)
+        | Item::Lead(_)
+        | Item::Char(_)
+        | Item::Info(_)
+        | Item::Desc(_) => false,
     })
 }
 
@@ -338,34 +365,49 @@ fn selected_value(doc: &WebDoc, id: DocNodeId) -> Option<String> {
 fn enter_items(v: &NodeView<'_>, out: &mut Vec<Item>) {
     out.push(Item::Role(role_phrase(v)));
     let st = v.meta.map_or(StateSet::empty(), |m| m.states);
-    // A control that carries its own text is followed by that text; its states come first.
-    if !matches!(v.role, Role::Link | Role::Heading) {
-        push_states(v.role, st, out);
-    } else if st.contains(StateSet::EXPANDED) {
-        out.push(Item::State("expanded"));
-    } else if st.contains(StateSet::COLLAPSED) {
-        out.push(Item::State("collapsed"));
+    // A control that carries its own text is followed by that text; its states come first. A
+    // link or a heading says only whether it is expanded and which one is current.
+    if matches!(v.role, Role::Link | Role::Heading) {
+        if st.contains(StateSet::EXPANDED) {
+            out.push(Item::State("expanded"));
+        } else if st.contains(StateSet::COLLAPSED) {
+            out.push(Item::State("collapsed"));
+        }
+        if let Some(c) = aria::current_word(&node_of(v)) {
+            out.push(Item::State(c));
+        }
+    } else {
+        push_states(v, out);
+        if let Some(e) = aria::error_text(&node_of(v)) {
+            out.push(Item::Info(e.to_owned()));
+        }
     }
 }
 
 /// A control with no text: its role, state and value (and name where the name is all there is).
 fn marker_items(v: &NodeView<'_>, out: &mut Vec<Item>) {
-    let st = v.meta.map_or(StateSet::empty(), |m| m.states);
     // A graphic or a button is its name; a check box or an edit is labelled by text beside it.
+    // (NVDA also names a check box or radio button whose label is not visible: nameIsContent in
+    // `gecko_ia2.cpp`; a label on the same line makes `dedupe_names` drop the repeat.)
     let named = matches!(
         v.role,
         Role::Image | Role::Button | Role::ToggleButton | Role::ProgressBar | Role::Slider
-    );
+    ) || (matches!(v.role, Role::CheckBox | Role::RadioButton)
+        && node_of(v).authored_name());
     if named && let Some(n) = v.name.filter(|n| !n.is_empty()) {
         out.push(Item::Name(n.to_owned()));
     }
     out.push(Item::Role(role_phrase(v)));
-    push_states(v.role, st, out);
+    push_states(v, out);
     if matches!(v.role, Role::TextEntry | Role::PasswordEntry) {
         out.push(Item::State("blank"));
     }
     if v.role == Role::Image && v.name.is_none_or(str::is_empty) {
         out.insert(0, Item::State("unlabeled"));
+    }
+    // What is wrong with an invalid field is said with it, in a line as well as on a hit.
+    if let Some(e) = aria::error_text(&node_of(v)) {
+        out.push(Item::Info(e.to_owned()));
     }
 }
 
@@ -373,6 +415,36 @@ fn marker_items(v: &NodeView<'_>, out: &mut Vec<Item>) {
 /// the blocks that open inside it.
 fn eff_start(doc: &WebDoc, id: DocNodeId, _v: &NodeView<'_>) -> Option<u32> {
     super::cursor::content_start(doc, id)
+}
+
+/// Roles whose accessible name the author may replace (`aria-label`, `aria-labelledby`, `alt`,
+/// `title`): the name is spoken instead of the content text (the browser-computed accname,
+/// M8b), like NVDA's buffer shows the label of such a node. The list is NVDA's `nameIsContent`
+/// (`gecko_ia2.cpp`): link, button, toggle button, menu item, heading, page tab. A tree item is
+/// not in it: its content stays and its label is only its focus name.
+fn takes_authored_name(v: &NodeView<'_>) -> bool {
+    let n = node_of(v);
+    n.authored_name()
+        && (matches!(
+            v.role,
+            Role::Link | Role::Button | Role::ToggleButton | Role::Tab | Role::Heading
+        ) || matches!(
+            n.kind(),
+            aria::Kind::MenuItem | aria::Kind::MenuItemCheckBox | aria::Kind::MenuItemRadio
+        ))
+}
+
+/// A node that was just announced and whose name was written by the author: say the name and
+/// return the offset where its content ends (the content is not spoken). 0 for no override.
+fn authored_name_items(doc: &WebDoc, id: DocNodeId, v: &NodeView<'_>, out: &mut Vec<Item>) -> u32 {
+    let Some(name) = v.name.map(str::trim).filter(|n| !n.is_empty()) else {
+        return 0;
+    };
+    if !takes_authored_name(v) {
+        return 0;
+    }
+    out.push(Item::Name(name.to_owned()));
+    doc.subtree_text_range(id).map_or(0, |(_, e)| e)
 }
 
 /// Describe the flat-text range `[a, b)`.
@@ -435,6 +507,8 @@ pub fn describe_from(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Vec<Ite
     if let Some(f) = from {
         out.extend(leaving_items(doc, f, a));
     }
+    // Text before this offset is replaced by an authored accessible name (`aria-label`, ...).
+    let mut skip_to: u32 = 0;
     // Ancestors whose content starts exactly here were entered on this range.
     let mut chain: Vec<DocNodeId> = Vec::new();
     let mut cur = doc.parent(n0);
@@ -450,8 +524,9 @@ pub fn describe_from(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Vec<Ite
         {
             continue;
         }
-        if announced(v.role) {
+        if announced_node(&v) {
             enter_items(&v, &mut out);
+            skip_to = skip_to.max(authored_name_items(doc, id, &v, &mut out));
         } else if let Some(items) = container_items(doc, &v, id) {
             out.extend(items);
         }
@@ -469,10 +544,11 @@ pub fn describe_from(doc: &WebDoc, a: u32, b: u32, from: Option<u32>) -> Vec<Ite
         }
         let entered = if first { eff == a } else { eff >= a };
         let is_marker = v.text == Some("\u{FFFC}");
-        if entered && announced(v.role) && !hidden && !is_marker {
+        if entered && announced_node(&v) && !hidden && !is_marker {
             enter_items(&v, &mut out);
+            skip_to = skip_to.max(authored_name_items(doc, id, &v, &mut out));
         }
-        let lo = a.max(off);
+        let lo = a.max(off).max(skip_to);
         let hi = b.min(off + own);
         if lo < hi {
             if is_marker {
@@ -507,8 +583,12 @@ pub fn segments(items: &[Item], o: VerbalizeOpts) -> SmallVec<[Segment; 4]> {
             }
             let text = match i {
                 Item::Char(_) => v.unit(t, How::Char, &o),
-                Item::Text(_) | Item::Name(_) | Item::Lead(_) => v.unit(t, How::Text, &o),
-                Item::Role(_) | Item::State(_) => t.to_owned(),
+                Item::Text(_) | Item::Name(_) | Item::Lead(_) | Item::Info(_) => {
+                    v.unit(t, How::Text, &o)
+                }
+                // A description keeps its own kind and is symbol-processed once, by
+                // `Reader::symbolize` at the speech sink (which handles that kind too).
+                Item::Role(_) | Item::State(_) | Item::Desc(_) => t.to_owned(),
             };
             (!text.is_empty()).then(|| Segment {
                 text: Arc::from(text),
@@ -517,6 +597,7 @@ pub fn segments(items: &[Item], o: VerbalizeOpts) -> SmallVec<[Segment; 4]> {
                     other @ (SegmentKind::Role
                     | SegmentKind::State
                     | SegmentKind::Value
+                    | SegmentKind::Description
                     | SegmentKind::Said) => other,
                 },
             })
@@ -567,7 +648,7 @@ pub fn describe_node_from(doc: &WebDoc, id: DocNodeId, from: Option<u32>) -> Vec
     // A node with no content on the page (an empty heading, a link that is all image) is still
     // announced, once.
     let announced_here = items.iter().any(|i| matches!(i, Item::Role(_)));
-    if !announced_here && announced(v.role) {
+    if !announced_here && announced_node(&v) {
         let mut pre = Vec::new();
         enter_items(&v, &mut pre);
         pre.append(&mut items);
@@ -604,6 +685,14 @@ pub fn describe_node_from(doc: &WebDoc, id: DocNodeId, from: Option<u32>) -> Vec
         pre.append(&mut items);
         items = pre;
     }
+    // The description (`aria-describedby`, a tooltip title) is said after the rest, unless the
+    // line already says it.
+    if let Some(d) =
+        aria::speakable_description(v.meta.and_then(|m| m.description.as_deref()), v.name)
+        && !name_spoken(&items, d)
+    {
+        items.push(Item::Desc(d.to_owned()));
+    }
     dedupe_names(&mut items);
     items
 }
@@ -614,7 +703,13 @@ fn dedupe_names(items: &mut Vec<Item>) {
         .iter()
         .filter_map(|i| match i {
             Item::Text(t) => Some(t.to_lowercase()),
-            Item::Role(_) | Item::State(_) | Item::Name(_) | Item::Lead(_) | Item::Char(_) => None,
+            Item::Role(_)
+            | Item::State(_)
+            | Item::Name(_)
+            | Item::Lead(_)
+            | Item::Char(_)
+            | Item::Info(_)
+            | Item::Desc(_) => None,
         })
         .collect();
     items.retain(|i| match i {
@@ -622,7 +717,13 @@ fn dedupe_names(items: &mut Vec<Item>) {
             let n = n.trim().to_lowercase();
             n.is_empty() || !texts.iter().any(|t| t.contains(&n))
         }
-        Item::Text(_) | Item::Role(_) | Item::State(_) | Item::Lead(_) | Item::Char(_) => true,
+        Item::Text(_)
+        | Item::Role(_)
+        | Item::State(_)
+        | Item::Lead(_)
+        | Item::Char(_)
+        | Item::Info(_)
+        | Item::Desc(_) => true,
     });
 }
 
@@ -849,6 +950,255 @@ mod tests {
         assert_eq!(say(&describe_node(&d, c)), "Country combo box Albania");
     }
 
+    // ---- M8b: ARIA names, roles, states, descriptions ---------------------------------------
+
+    fn aria_node(
+        role: Role,
+        st: StateSet,
+        attrs: &[(gorca_model::AttrKey, &str)],
+        desc: Option<&str>,
+    ) -> NodeSpec {
+        leaf(role).meta(Arc::new(NodeMeta {
+            states: st,
+            description: desc.map(Arc::from),
+            attrs: attrs.iter().map(|(k, v)| (*k, Arc::from(*v))).collect(),
+            ..NodeMeta::default()
+        }))
+    }
+
+    fn blk() -> NodeFlags {
+        NodeFlags::BLOCK | NodeFlags::BREAK_BEFORE
+    }
+
+    fn doc_of(children: Vec<SubtreeSpec>) -> WebDoc {
+        let mut d = WebDoc::new(9);
+        let root = SubtreeSpec::with_children(leaf(Role::DocumentWeb), children);
+        assert!(
+            d.apply(&DocOp::InsertSubtree {
+                parent: None,
+                before: None,
+                subtree: Arc::new(root),
+            })
+            .is_ok()
+        );
+        d
+    }
+
+    fn txt(t: &str) -> SubtreeSpec {
+        SubtreeSpec::leaf(leaf(Role::StaticText).text(t))
+    }
+
+    #[test]
+    fn an_authored_name_replaces_the_visible_text_of_a_button_or_link() {
+        let author = [
+            (web_attrs::EXPLICIT_NAME, "true"),
+            (web_attrs::TAG, "button"),
+        ];
+        let btn = SubtreeSpec::with_children(
+            aria_node(Role::Button, StateSet::ENABLED, &author, None)
+                .name("Search the site")
+                .flags(blk()),
+            vec![txt("magnifier")],
+        );
+        let plain = SubtreeSpec::with_children(
+            aria_node(
+                Role::Button,
+                StateSet::ENABLED,
+                &[(web_attrs::TAG, "button")],
+                None,
+            )
+            .name("Save draft")
+            .flags(blk()),
+            vec![txt("Save draft")],
+        );
+        let link = SubtreeSpec::with_children(
+            aria_node(
+                Role::Link,
+                StateSet::ENABLED,
+                &[(web_attrs::EXPLICIT_NAME, "true")],
+                None,
+            )
+            .name("Read more about pandas")
+            .flags(blk()),
+            vec![txt("Read more")],
+        );
+        let d = doc_of(vec![btn, plain, link]);
+        assert_eq!(line_of(&d, 1), "button Search the site");
+        assert_eq!(line_of(&d, 2), "button Save draft");
+        assert_eq!(line_of(&d, 3), "link Read more about pandas");
+        let b = d.first_of(gorca_doc::web::Cat::BUTTON).unwrap();
+        assert_eq!(say(&describe_node(&d, b)), "button Search the site");
+    }
+
+    #[test]
+    fn switches_tabs_and_toggles_say_their_nvda_words() {
+        let sw = |on: bool| {
+            SubtreeSpec::with_children(
+                aria_node(
+                    Role::ToggleButton,
+                    if on {
+                        StateSet::ENABLED | StateSet::CHECKED
+                    } else {
+                        StateSet::ENABLED
+                    },
+                    &[(web_attrs::XML_ROLES, "switch"), (web_attrs::TAG, "button")],
+                    None,
+                )
+                .flags(blk()),
+                vec![txt("Notifications")],
+            )
+        };
+        let tab = SubtreeSpec::with_children(
+            aria_node(
+                Role::Tab,
+                StateSet::ENABLED | StateSet::SELECTED | StateSet::SELECTABLE,
+                &[(web_attrs::XML_ROLES, "tab"), (web_attrs::TAG, "button")],
+                None,
+            )
+            .flags(blk()),
+            vec![txt("Nils Frahm")],
+        );
+        let toggle = SubtreeSpec::with_children(
+            aria_node(
+                Role::ToggleButton,
+                StateSet::ENABLED,
+                &[(web_attrs::TAG, "button")],
+                None,
+            )
+            .flags(blk()),
+            vec![txt("Italic")],
+        );
+        let d = doc_of(vec![sw(true), sw(false), tab, toggle]);
+        assert_eq!(line_of(&d, 1), "switch on Notifications");
+        assert_eq!(line_of(&d, 2), "switch off Notifications");
+        assert_eq!(line_of(&d, 3), "tab selected Nils Frahm");
+        assert_eq!(line_of(&d, 4), "toggle button not pressed Italic");
+    }
+
+    #[test]
+    fn tree_items_say_level_and_expansion_and_links_say_current() {
+        let ti = |t: &str, st: StateSet, lvl: &str| {
+            SubtreeSpec::with_children(
+                aria_node(
+                    Role::TreeItem,
+                    st,
+                    &[
+                        (web_attrs::XML_ROLES, "treeitem"),
+                        (web_attrs::LEVEL, lvl),
+                        (web_attrs::TAG, "li"),
+                    ],
+                    None,
+                )
+                .flags(blk()),
+                vec![txt(t)],
+            )
+        };
+        let cur = SubtreeSpec::with_children(
+            aria_node(
+                Role::Link,
+                StateSet::ENABLED,
+                &[(web_attrs::CURRENT, "page"), (web_attrs::TAG, "a")],
+                None,
+            )
+            .flags(blk()),
+            vec![txt("Gadgets")],
+        );
+        let d = doc_of(vec![
+            ti("Documents", StateSet::ENABLED | StateSet::EXPANDED, "1"),
+            ti("Pictures", StateSet::ENABLED | StateSet::COLLAPSED, "1"),
+            cur,
+        ]);
+        assert_eq!(line_of(&d, 1), "tree view item expanded level 1 Documents");
+        assert_eq!(line_of(&d, 2), "tree view item collapsed level 1 Pictures");
+        assert_eq!(line_of(&d, 3), "link current page Gadgets");
+    }
+
+    #[test]
+    fn a_hit_on_a_field_says_its_description_after_a_pause_and_its_error_text() {
+        let field = SubtreeSpec::leaf(
+            aria_node(
+                Role::TextEntry,
+                StateSet::ENABLED | StateSet::EDITABLE | StateSet::INVALID | StateSet::REQUIRED,
+                &[
+                    (web_attrs::TAG, "input"),
+                    (
+                        web_attrs::ERROR_TEXT,
+                        "Enter an address like name@example.com",
+                    ),
+                ],
+                Some("At least six characters"),
+            )
+            .name("Email address")
+            .flags(blk())
+            .text("\u{FFFC}"),
+        );
+        let d = doc_of(vec![field]);
+        let e = d.first_of(gorca_doc::web::Cat::EDIT).unwrap();
+        let items = describe_node(&d, e);
+        assert_eq!(
+            say(&items),
+            "Email address edit required invalid entry blank Enter an address like name@example.com At least six characters"
+        );
+        // The description carries the pause; the rest is plain.
+        let segs = segments(&items, test_opts());
+        let last = segs.last().unwrap();
+        assert_eq!(last.kind, SegmentKind::Description, "{:?}", last.text);
+        // A line (arrow keys) says the error but not the description.
+        assert_eq!(
+            line_of(&d, 1),
+            "edit required invalid entry blank Enter an address like name@example.com"
+        );
+    }
+
+    #[test]
+    fn aria_containers_are_announced_with_name_and_nvda_word() {
+        let tl = SubtreeSpec::with_children(
+            aria_node(
+                Role::TabList,
+                StateSet::ENABLED,
+                &[(web_attrs::XML_ROLES, "tablist"), (web_attrs::TAG, "div")],
+                None,
+            )
+            .name("Entertainment")
+            .flags(blk()),
+            vec![txt("First tab text")],
+        );
+        let toolbar = SubtreeSpec::with_children(
+            aria_node(
+                Role::Toolbar,
+                StateSet::ENABLED,
+                &[(web_attrs::XML_ROLES, "toolbar"), (web_attrs::TAG, "div")],
+                None,
+            )
+            .name("Text formatting")
+            .flags(blk()),
+            vec![txt("Bold")],
+        );
+        let unnamed = SubtreeSpec::with_children(
+            aria_node(
+                Role::Panel,
+                StateSet::ENABLED,
+                &[(web_attrs::XML_ROLES, "group"), (web_attrs::TAG, "div")],
+                None,
+            )
+            .flags(blk()),
+            vec![txt("Plain group text")],
+        );
+        let d = doc_of(vec![tl, toolbar, unnamed]);
+        assert_eq!(line_of(&d, 1), "Entertainment tab control First tab text");
+        assert_eq!(line_of(&d, 2), "Text formatting tool bar Bold");
+        assert_eq!(line_of(&d, 3), "Plain group text");
+    }
+
+    fn test_opts() -> VerbalizeOpts {
+        use gorca_speech::{Caps, Lang, Punct};
+        VerbalizeOpts {
+            punct: Punct::Some,
+            caps: Caps::Pitch,
+            lang: Lang::En,
+        }
+    }
+
     #[test]
     fn web_text_is_spoken_with_the_symbol_names_of_the_language_and_level() {
         use gorca_speech::{Caps, Lang, Punct};
@@ -879,5 +1229,133 @@ mod tests {
             segments(&c, o(Punct::None, Lang::Ru))[0].text.as_ref(),
             "левая круглая"
         );
+    }
+
+    mod probe_m8b {
+        // Reviewer probes for M8b browse presentation. Insert as `mod probe_m8b { ... }` at the end of
+        // `mod tests` in crates/gorca-core/src/browse/present.rs (needs `use super::*;`).
+        use super::*;
+
+        fn blk2() -> NodeFlags {
+            NodeFlags::BLOCK | NodeFlags::BREAK_BEFORE
+        }
+
+        // P1: a check box named only by aria-label (no visible label). NVDA renders the name
+        // (gecko_ia2.cpp nameIsContent for check/radio when the label is not visible).
+        #[test]
+        fn probe_checkbox_aria_label_in_line() {
+            let cb = SubtreeSpec::leaf(
+                aria_node(
+                    Role::CheckBox,
+                    StateSet::ENABLED | StateSet::FOCUSABLE,
+                    &[
+                        (web_attrs::EXPLICIT_NAME, "true"),
+                        (web_attrs::TAG, "input"),
+                    ],
+                    None,
+                )
+                .name("Subscribe box")
+                .flags(blk2())
+                .text("\u{FFFC}"),
+            );
+            let d = doc_of(vec![cb]);
+            eprintln!("P1 line: {}", line_of(&d, 1));
+            assert!(
+                line_of(&d, 1).contains("Subscribe box"),
+                "{}",
+                line_of(&d, 1)
+            );
+        }
+
+        // P2: a heading with aria-label. NVDA: heading is nameIsContent, the label replaces content.
+        #[test]
+        fn probe_heading_aria_label() {
+            let h = SubtreeSpec::with_children(
+                aria_node(
+                    Role::Heading,
+                    StateSet::ENABLED,
+                    &[
+                        (web_attrs::EXPLICIT_NAME, "true"),
+                        (web_attrs::TAG, "h2"),
+                        (web_attrs::LEVEL, "2"),
+                    ],
+                    None,
+                )
+                .name("Short heading label")
+                .flags(blk2()),
+                vec![txt("Long visible heading content")],
+            );
+            let d = doc_of(vec![h]);
+            eprintln!("P2 line: {}", line_of(&d, 1));
+            assert!(
+                line_of(&d, 1).contains("Short heading label"),
+                "{}",
+                line_of(&d, 1)
+            );
+        }
+
+        // P4: a tree item with aria-label. NVDA's nameIsContent list has no outline item: content stays.
+        #[test]
+        fn probe_tree_item_aria_label() {
+            let ti = SubtreeSpec::with_children(
+                aria_node(
+                    Role::TreeItem,
+                    StateSet::ENABLED,
+                    &[
+                        (web_attrs::EXPLICIT_NAME, "true"),
+                        (web_attrs::TAG, "li"),
+                        (web_attrs::XML_ROLES, "treeitem"),
+                    ],
+                    None,
+                )
+                .name("Item label")
+                .flags(blk2()),
+                vec![txt("Item content")],
+            );
+            let d = doc_of(vec![ti]);
+            eprintln!("P4 line: {}", line_of(&d, 1));
+        }
+
+        // P5: page text that starts with ". ". With description_pause=false the strip
+        // removes it from content too.
+        #[test]
+        fn probe_pause_prefix_collides_with_content() {
+            let p = SubtreeSpec::with_children(
+                leaf(Role::Paragraph).flags(blk2()),
+                vec![txt(". Dot leading paragraph")],
+            );
+            let d = doc_of(vec![p]);
+            let s = d.line_start(1).unwrap();
+            let (_, e) = d.line_range(s);
+            let segs = segments(&describe(&d, s, e), test_opts());
+            let mut u = gorca_model::Utterance {
+                id: gorca_model::UttId(1),
+                segments: segs,
+                lang: None,
+                epoch: gorca_model::Epoch(1),
+                prio: gorca_model::Prio::Interrupt,
+                may_refine: false,
+                survives_focus_change: false,
+                ttl_secs: 0,
+                refines: None,
+            };
+            eprintln!(
+                "P5 before: {:?}",
+                u.segments
+                    .iter()
+                    .map(|s| s.text.to_string())
+                    .collect::<Vec<_>>()
+            );
+            let before = u.segments.clone();
+            crate::aria::strip_pause(&mut u);
+            eprintln!(
+                "P5 after strip: {:?}",
+                u.segments
+                    .iter()
+                    .map(|s| s.text.to_string())
+                    .collect::<Vec<_>>()
+            );
+            assert_eq!(u.segments, before, "content altered");
+        }
     }
 }

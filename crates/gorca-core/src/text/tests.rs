@@ -2474,3 +2474,31 @@ fn the_readers_own_words_and_plain_names_are_left_alone() {
     let t: Vec<_> = said.segments.iter().map(|s| &*s.text).collect();
     assert_eq!(t, ["a, b.", "Кнопка OK"]);
 }
+
+#[test]
+fn a_description_is_symbol_processed_once_and_still_follows_the_pause() {
+    use crate::browse::present::{Item, segments};
+    use gorca_model::SegmentKind;
+    let mut g = rig();
+    set_speech(&mut g, "en", gorca_config::Punct::Some);
+    let items = [
+        Item::Name("Search".to_owned()),
+        Item::Role("edit".to_owned()),
+        Item::Desc("C++ 50%".to_owned()),
+    ];
+    let mut u = crate::present::message("", gorca_model::UttId(902), gorca_model::Epoch(1));
+    u.segments.clear();
+    u.segments.extend(segments(&items, g.r.verbalize_opts()));
+    let said = g.r.symbolize(u);
+    let d = said
+        .segments
+        .iter()
+        .find(|s| s.kind == SegmentKind::Description)
+        .map(|s| s.text.to_string());
+    assert_eq!(d.as_deref(), Some("C plus plus 50 percent"));
+    // A second pass changes nothing (no double processing).
+    let again = g.r.symbolize(said.clone());
+    assert_eq!(again.segments, said.segments);
+    let v = gorca_speech::Verbalizer.verbalize(&said);
+    assert_eq!(&*v.text, "Search, edit. C plus plus 50 percent");
+}

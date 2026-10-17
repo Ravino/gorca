@@ -334,6 +334,7 @@ fn apply_key(section: &str, key: &str, v: &Item, s: &mut Settings, diags: &mut V
             }
         }
         ("browse", "say_all_on_load") => b(&mut s.browse.say_all_on_load, diags),
+        ("browse", "description_pause") => b(&mut s.browse.description_pause, diags),
         ("terminal", "settle_ms") => {
             if let Some(n) = read_int(v, &path, 10, 200, diags) {
                 s.terminal.settle_ms = u32::try_from(n).unwrap_or(30);
@@ -834,7 +835,7 @@ mod tests {
 multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_control=false\npause_speech_on_shift=false\n\
 [keymap]\nreplace_preset=true\n[speech]\nrate=10\npitch=11\nvolume=12\nrate_step=7\nvoice=\"x\"\nlanguage=\"ru\"\noutput_module=\"rhvoice\"\nbackend=\"ssip\"\npunctuation=\"all\"\ncaps=\"say\"\n\
 [echo]\ntyped_characters=false\ntyped_words=true\ncommand_keys=true\ninserted_text=false\n\
-[text]\nsay_all_moves_caret=false\ncaret_edge_ms=50\ncaret_late_ms=300\n[browse]\nsay_all_on_load=false\n\
+[text]\nsay_all_moves_caret=false\ncaret_edge_ms=50\ncaret_late_ms=300\n[browse]\nsay_all_on_load=false\ndescription_pause=false\n\
 [terminal]\nsettle_ms=40\nburst_lines=20\nprompt_markers=[\"> \"]\nprompt_regex=\"^x\"\nsecret_regex=\"y$\"\n[verbosity]\nlevel=\"brief\"\nconfirmations=\"brief\"\n";
         let l = load_text(text);
         assert!(l.diags.is_empty(), "{:?}", l.diags);
@@ -856,7 +857,7 @@ multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_
         assert_eq!(l.settings.speech.language, "ru");
         assert_eq!(l.settings.speech.output_module, "rhvoice");
         assert_eq!(l.settings.speech.backend, Backend::Ssip);
-        assert_eq!(SETTINGS.len(), 35);
+        assert_eq!(SETTINGS.len(), 36);
     }
 
     #[test]

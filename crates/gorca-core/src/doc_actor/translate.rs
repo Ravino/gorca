@@ -266,7 +266,11 @@ fn meta_of(n: &SrcNode) -> Arc<NodeMeta> {
         src: Some(n.id),
         local: n.local,
         states: n.states,
-        description: None,
+        description: n
+            .attrs
+            .iter()
+            .find(|(k, _)| *k == web_attrs::DESCRIPTION)
+            .map(|(_, v)| Arc::clone(v)),
         value: None,
         attrs: n.attrs.clone(),
     })
@@ -276,7 +280,19 @@ fn meta_of(n: &SrcNode) -> Arc<NodeMeta> {
 pub fn spec_of(n: &SrcNode, nested_doc: bool) -> NodeSpec {
     let (flags, level) = derive_flags(n, nested_doc);
     let mut s = NodeSpec::new(n.role).level(level).flags(flags);
-    s.name.clone_from(&n.name);
+    // A page can put a megabyte in aria-label: the translator applies the source's cap again.
+    s.name = n.name.as_ref().map(|a| {
+        if a.len() > gorca_doc_source_api::limits::MAX_NAME_BYTES {
+            let mut t = a.to_string();
+            gorca_doc_source_api::limits::clip_text(
+                &mut t,
+                gorca_doc_source_api::limits::MAX_NAME_BYTES,
+            );
+            Arc::from(t)
+        } else {
+            Arc::clone(a)
+        }
+    });
     s.text = clip_arc(n.text.as_ref());
     s.meta(meta_of(n))
 }

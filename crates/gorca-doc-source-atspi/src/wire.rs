@@ -10,7 +10,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use gorca_doc_source_api::web_attrs;
+use gorca_doc_source_api::{limits, web_attrs};
 use gorca_model::AttrKey;
 use smallvec::SmallVec;
 
@@ -40,6 +40,15 @@ pub struct Rd<'a> {
 impl<'a> Rd<'a> {
     pub fn new(b: &'a [u8]) -> Self {
         Self { b, p: 0 }
+    }
+
+    /// Jump to `end` (an array's end) without reading what is in between.
+    pub fn skip_to(&mut self, end: usize) -> WireResult<()> {
+        if end > self.b.len() {
+            return Err(WireError::Truncated(self.p));
+        }
+        self.p = self.p.max(end);
+        Ok(())
     }
 
     pub fn pos(&self) -> usize {
@@ -330,18 +339,24 @@ pub fn parse_get_tree(body: &[u8], interner: &AttrInterner) -> WireResult<TreeRe
             let sig = r.sig()?;
             match (k, sig) {
                 ("Name", b"s") => {
-                    let s = r.str()?;
+                    let s = limits::clip_str(r.str()?, limits::MAX_NAME_BYTES);
                     if !s.is_empty() {
                         node.name = Some(Arc::from(s));
                     }
                 }
                 ("ChildCount", b"i") => node.child_count = r.i32()?,
+                ("Description", b"s") => {
+                    let s = limits::clip_str(r.str()?, limits::MAX_DESCRIPTION_BYTES);
+                    if !s.is_empty() {
+                        node.attrs.push((web_attrs::DESCRIPTION, Arc::from(s)));
+                    }
+                }
                 ("Attributes", b"a{ss}") => {
                     let aend = r.array_end(8)?;
                     while r.pos() < aend {
                         r.align(8)?;
                         let ak = r.str()?;
-                        let av = r.str()?;
+                        let av = limits::clip_str(r.str()?, limits::MAX_ATTR_VALUE_BYTES);
                         let key = interner.key(ak);
                         let val = if av.len() <= 32 {
                             if let Some(a) = pool.get(av) {
@@ -402,6 +417,33 @@ pub fn parse_children(body: &[u8]) -> WireResult<Vec<(String, String)>> {
     Ok(v)
 }
 
+/// `GetRelationSet` reply body: `a(ua(so))`, the relation type and its `(bus, path)` targets.
+pub fn parse_relations(body: &[u8]) -> WireResult<Vec<Relation>> {
+    let mut r = Rd::new(body);
+    let end = r.array_end(8)?;
+    let mut out = Vec::new();
+    // A hostile page can list thousands of targets: only the first few are decoded, the rest of
+    // the reply is skipped unread.
+    while r.pos() < end && out.len() < limits::MAX_RELATIONS {
+        r.align(8)?;
+        let kind = r.u32()?;
+        let tend = r.array_end(8)?;
+        let mut targets = Vec::new();
+        while r.pos() < tend && targets.len() < limits::MAX_RELATION_TARGETS {
+            r.align(8)?;
+            let bus = r.str()?.to_owned();
+            let path = r.str()?.to_owned();
+            targets.push((bus, path));
+        }
+        r.skip_to(tend)?;
+        out.push((kind, targets));
+    }
+    Ok(out)
+}
+
+/// A relation of `GetRelationSet`: the type and its `(bus, path)` targets.
+pub type Relation = (u32, Vec<(String, String)>);
+
 /// A reply that is a single `s`.
 pub fn parse_string(body: &[u8]) -> WireResult<&str> {
     Rd::new(body).str()
@@ -433,6 +475,16 @@ pub fn parse_variant_ref(body: &[u8]) -> WireResult<(String, String)> {
     Ok((bus, path))
 }
 
+/// A reply that is a single variant holding `i` (`Properties.Get` of `Text.CharacterCount`).
+pub fn parse_variant_i32(body: &[u8]) -> WireResult<i32> {
+    let mut r = Rd::new(body);
+    let sig = r.sig()?;
+    if sig != b"i" {
+        return Err(WireError::Shape("variant is not an int"));
+    }
+    r.i32()
+}
+
 /// A reply that is a single variant holding `s` (`Properties.Get` of a string property).
 pub fn parse_variant_string(body: &[u8]) -> WireResult<&str> {
     let mut r = Rd::new(body);
@@ -455,6 +507,54 @@ mod tests {
     fn encode<T: serde::Serialize + zbus::zvariant::Type>(v: &T) -> Vec<u8> {
         let ctx = Context::new_dbus(zbus::zvariant::LE, 0);
         to_bytes(ctx, v).map(|d| d.to_vec()).unwrap_or_default()
+    }
+
+    #[test]
+    fn relations_are_bounded_in_count_and_targets() {
+        // 40 relations, each with 100 targets: decoding stops at the caps and never fails.
+        let targets: Vec<(String, ObjectPath<'_>)> = (0..100)
+            .map(|i| {
+                (
+                    ":1.7".to_owned(),
+                    ObjectPath::try_from(format!("/org/a11y/atspi/accessible/{i}")).unwrap(),
+                )
+            })
+            .collect();
+        let v: Vec<(u32, Vec<(String, ObjectPath<'_>)>)> =
+            (0..40).map(|k| (k, targets.clone())).collect();
+        let rels = parse_relations(&encode(&v)).unwrap();
+        assert_eq!(rels.len(), limits::MAX_RELATIONS);
+        assert!(
+            rels.iter()
+                .all(|(_, t)| t.len() == limits::MAX_RELATION_TARGETS)
+        );
+    }
+
+    #[test]
+    fn a_huge_name_and_description_are_clipped() {
+        let big = "x".repeat(1 << 20);
+        let mut p1: Map<String, Value<'_>> = Map::new();
+        p1.insert("Name".into(), Value::from(big.as_str()));
+        p1.insert("ChildCount".into(), Value::from(0i32));
+        p1.insert("Description".into(), Value::from(big.as_str()));
+        let v: Vec<Entry<'_>> = vec![(
+            (
+                ":1.7".into(),
+                ObjectPath::try_from("/org/a11y/atspi/accessible/41").unwrap(),
+            ),
+            p1,
+        )];
+        let t = parse_get_tree(&encode(&v), &AttrInterner::default()).unwrap();
+        assert_eq!(
+            t.nodes[0].name.as_deref().map(str::len),
+            Some(limits::MAX_NAME_BYTES)
+        );
+        let d = t.nodes[0]
+            .attrs
+            .iter()
+            .find(|(k, _)| *k == web_attrs::DESCRIPTION)
+            .map(|(_, v)| v.len());
+        assert_eq!(d, Some(limits::MAX_DESCRIPTION_BYTES));
     }
 
     #[test]

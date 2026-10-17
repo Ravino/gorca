@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>M8b Review Name</title></head>
+<body>
+<h1>Review name flood</h1>
+<div id="big"></div>
+<div id="host"></div>
+<h2>After name</h2>
+<button id="sentinel">Sentinel button</button>
+<script>
+document.getElementById('big').textContent = 'D'.repeat(1 << 20);
+const host = document.getElementById('host');
+for (let i = 0; i < 300; i++) { const b = document.createElement('button'); b.setAttribute('aria-labelledby', 'big'); b.textContent = 'Btn ' + i; host.appendChild(b); }
+</script>
+</body></html>

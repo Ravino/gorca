@@ -434,7 +434,9 @@ impl Reader {
         for seg in &mut u.segments {
             if !matches!(
                 seg.kind,
-                gorca_model::SegmentKind::Text | gorca_model::SegmentKind::Value
+                gorca_model::SegmentKind::Text
+                    | gorca_model::SegmentKind::Value
+                    | gorca_model::SegmentKind::Description
             ) || seg.text.chars().all(|c| c.is_alphanumeric() || c == ' ')
             {
                 continue;
