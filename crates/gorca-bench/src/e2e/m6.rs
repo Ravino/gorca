@@ -2961,6 +2961,65 @@ fn vd_cycle(v: &mut V, c: &mut Check, tag: &str) -> Result<()> {
             .map(|_| ())
     })?;
     c.vd(&format!("{tag} Ctrl+U again"), !got.is_empty(), &got);
+    vd_recall(v, c, tag)
+}
+
+/// How many utterances contain `needle`.
+fn heard_count(got: &[String], needle: &str) -> usize {
+    got.iter().filter(|g| g.contains(needle)).count()
+}
+
+/// History recall (the `terminal-history-recall` regression): a short and a long command, the
+/// long one wrapping over several rows, are recalled with Up/Down, in quick succession and after
+/// Ctrl+C. Every recall must be read exactly once.
+fn vd_recall(v: &mut V, c: &mut Check, tag: &str) -> Result<()> {
+    let short = format!("echo {tag}s");
+    let long = format!("echo {tag}l {}", "x".repeat(200));
+    for cmd in [&short, &long] {
+        v.said_during(300, |v| v.type_text(cmd).map(|_| ()))?;
+        v.said_during(900, |v| v.press(ENTER, 13, 0, &[28]).map(|_| ()))?;
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    let once = |c: &mut Check, name: &str, got: &[String], needle: &str| {
+        c.vd(name, heard_count(got, needle) == 1, got);
+    };
+    let nl = format!("echo {tag}l");
+    let ns = format!("echo {tag}s");
+    let got = v.said_during(600, |v| v.press(UP, 0, 0, &[103]).map(|_| ()))?;
+    once(c, &format!("{tag} Up: the wrapped command"), &got, &nl);
+    let got = v.said_during(600, |v| v.press(UP, 0, 0, &[103]).map(|_| ()))?;
+    once(c, &format!("{tag} Up: the short command"), &got, &ns);
+    let got = v.said_during(600, |v| v.press(DOWN, 0, 0, &[108]).map(|_| ()))?;
+    once(c, &format!("{tag} Down: the wrapped command"), &got, &nl);
+    let got = v.said_during(600, |v| v.press(DOWN, 0, 0, &[108]).map(|_| ()))?;
+    c.vd(
+        &format!("{tag} Down: the empty line"),
+        !got.is_empty(),
+        &got,
+    );
+    // Two presses in quick succession: the last recall is what the line shows.
+    let got = v.said_during(900, |v| {
+        v.press(UP, 0, 0, &[103])?;
+        std::thread::sleep(Duration::from_millis(40));
+        v.press(UP, 0, 0, &[103]).map(|_| ())
+    })?;
+    c.vd(
+        &format!("{tag} Up Up: the short command"),
+        heard(&got, &ns),
+        &got,
+    );
+    // Ctrl+C, then Up again.
+    v.said_during(600, |v| {
+        v.chord(&[CTRL_L], KEY_C, 3, CONTROL, &[29, 46]).map(|_| ())
+    })?;
+    std::thread::sleep(Duration::from_millis(500));
+    let got = v.said_during(600, |v| v.press(UP, 0, 0, &[103]).map(|_| ()))?;
+    once(c, &format!("{tag} Up after Ctrl+C"), &got, &nl);
+    let got = v.said_during(500, |v| {
+        v.chord(&[CTRL_L], KEY_U, 21, CONTROL, &[29, 22])
+            .map(|_| ())
+    })?;
+    c.vd(&format!("{tag} Ctrl+U after recall"), !got.is_empty(), &got);
     Ok(())
 }
 

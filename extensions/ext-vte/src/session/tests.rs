@@ -1321,7 +1321,11 @@ fn history_recall_is_spoken_once_in_every_redraw_shape() {
     for hist_len in [0usize, 3, 9, 30] {
         for shape in 0..3u8 {
             for (i, from) in RECALL_CMDS.iter().enumerate() {
-                for to in RECALL_CMDS.iter().skip(i + 1).chain(RECALL_CMDS.iter().take(i)) {
+                for to in RECALL_CMDS
+                    .iter()
+                    .skip(i + 1)
+                    .chain(RECALL_CMDS.iter().take(i))
+                {
                     if from == to {
                         continue;
                     }
@@ -1334,5 +1338,95 @@ fn history_recall_is_spoken_once_in_every_redraw_shape() {
             }
         }
     }
-    assert!(fails.is_empty(), "{} failures:\n{}", fails.len(), fails.join("\n"));
+    assert!(
+        fails.is_empty(),
+        "{} failures:\n{}",
+        fails.len(),
+        fails.join("\n")
+    );
+}
+
+#[test]
+fn a_history_key_that_changes_nothing_still_reads_the_line() {
+    // The same command twice in the history: readline redraws nothing.
+    let mut r = Rig::new();
+    r.focus("out\nme@box:~$ ls", 16);
+    r.key(TermKey::LineUp);
+    let a = r.wait(300);
+    assert_eq!(says(&a), vec![("ls".to_owned(), Urgency::Key)]);
+    // Once only.
+    assert!(texts(&r.wait(1000)).is_empty());
+}
+
+#[test]
+fn a_recall_is_not_read_twice_when_its_redraw_comes_late() {
+    let mut r = Rig::new();
+    r.focus("out\nme@box:~$ ", 14);
+    r.key(TermKey::LineUp);
+    let mut said = texts(&r.wait(100));
+    said.extend(texts(&r.repaint("out\nme@box:~$ git status", 24)));
+    said.extend(texts(&r.wait(1000)));
+    assert_eq!(said, vec!["git status".to_owned()]);
+}
+
+#[test]
+fn two_quick_history_keys_read_each_recall_once() {
+    // The first redraw is read before the second key's redraw arrives.
+    let mut r = Rig::new();
+    r.focus("out\nme@box:~$ ", 14);
+    r.key(TermKey::LineUp);
+    r.screen = "out\nme@box:~$ ls\n".to_owned();
+    r.caret = 16;
+    let mut acts = r.feed(TermInput::Edit(TermEdit::Replaced));
+    acts.extend(r.feed(TermInput::Caret(16)));
+    // The settle fires and the read is in flight when the second key is pressed.
+    r.now += 31;
+    acts.extend(r.feed(TermInput::Tick));
+    r.key(TermKey::LineUp);
+    r.now += 1;
+    acts.extend(r.feed(TermInput::Screen {
+        text: "out\nme@box:~$ ls\n".to_owned(),
+        caret: Some(16),
+    }));
+    r.screen = "out\nme@box:~$ git status\n".to_owned();
+    r.caret = 24;
+    acts.extend(r.feed(TermInput::Edit(TermEdit::Replaced)));
+    acts.extend(r.feed(TermInput::Caret(24)));
+    acts.extend(r.wait(31));
+    acts.extend(r.wait(1000));
+    assert_eq!(
+        texts(&acts),
+        vec!["ls".to_owned(), "git status".to_owned()],
+        "{acts:?}"
+    );
+}
+
+#[test]
+fn a_pager_scrolling_under_down_is_not_followed_by_a_line_read() {
+    let mut r = Rig::new();
+    let page = |a: usize| format!("{}:", lines(a..a + 23));
+    r.focus(&page(1000), page(1000).chars().count() as u32);
+    r.key(TermKey::LineDown);
+    r.screen = page(1001);
+    r.caret = r.screen.chars().count() as u32;
+    let mut acts = r.feed(TermInput::Edit(TermEdit::Replaced));
+    acts.extend(r.wait(31));
+    acts.extend(r.wait(1000));
+    let said = texts(&acts);
+    assert!(!said.iter().any(|t| t == ":"), "{said:?}");
+}
+
+#[test]
+fn recall_to_a_blank_line_below_older_prompts_says_blank_not_the_output() {
+    // The older prompt line above has the same prompt text; the empty recall lost its blank.
+    let mut r = Rig::new();
+    let above = "me@box:~$ git status\nOn branch main\n";
+    r.focus(&format!("{above}me@box:~$ git status"), 56);
+    r.key(TermKey::LineDown);
+    let a = r.repaint(&format!("{above}me@box:~$"), 49);
+    assert_eq!(texts(&a), vec!["blank".to_owned()]);
+    // And a recall to a command, with the same older prompts above.
+    r.key(TermKey::LineUp);
+    let a = r.repaint(&format!("{above}me@box:~$ ls"), 52);
+    assert_eq!(texts(&a), vec!["ls".to_owned()]);
 }

@@ -1,0 +1,68 @@
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.10s
+installed <repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/debug/extensions/ext-gnome-shell/ext_gnome_shell.wasm
+installed <repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/extensions/ext-gnome-shell/ext_gnome_shell.wasm
+installed <repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/debug/extensions/ext-vte/ext_vte.wasm
+installed <repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/extensions/ext-vte/ext_vte.wasm
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.05s
+   Compiling serde v1.0.229
+   Compiling syn v3.0.8
+   Compiling indexmap v2.14.2
+   Compiling anyhow v1.0.104
+   Compiling wasmparser v0.258.3
+   Compiling rustix v1.1.5
+   Compiling linux-raw-sys v0.12.1
+   Compiling zmij v1.0.23
+   Compiling regex-automata v0.4.18
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling thiserror v2.0.21
+   Compiling tokio-macros v2.7.2
+   Compiling tokio v1.53.2
+   Compiling smallvec v1.16.3
+   Compiling wasmtime-internal-core v49.0.3
+   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/crates/gorca-model)
+   Compiling cranelift-bitset v0.136.3
+   Compiling cranelift-entity v0.136.3
+   Compiling cobs v0.3.0
+   Compiling postcard v1.1.3
+   Compiling cranelift-bforest v0.136.3
+   Compiling pulley-interpreter v49.0.3
+   Compiling regalloc2 v0.15.2
+   Compiling tokio-util v0.7.20
+   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/crates/gorca-rt)
+   Compiling wasm-encoder v0.258.3
+   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/crates/gorca-ingress)
+   Compiling cranelift-codegen v0.136.3
+   Compiling wasmprinter v0.258.3
+   Compiling wasm-metadata v0.258.3
+   Compiling wit-parser v0.258.3
+   Compiling wit-component v0.258.3
+   Compiling wasmtime-environ v49.0.3
+   Compiling wasmtime-internal-wit-bindgen v49.0.3
+   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/crates/gorca-connector-api)
+   Compiling gorca-output-api v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/crates/gorca-output-api)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/crates/gorca-doc-source-api)
+   Compiling gorca-text v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/crates/gorca-text)
+   Compiling gorca-doc v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/crates/gorca-doc)
+   Compiling gorca-speech v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/crates/gorca-speech)
+   Compiling wasmtime-internal-component-macro v49.0.3
+   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/crates/gorca-mirror)
+   Compiling gorca-input-api v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/crates/gorca-input-api)
+   Compiling wasmtime-internal-jit-icache-coherence v49.0.3
+   Compiling gorca-config v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/crates/gorca-config)
+   Compiling async-trait v0.1.92
+   Compiling memfd v0.6.6
+   Compiling serde_json v1.0.154
+   Compiling itoa v1.0.18
+   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/crates/gorca-core)
+   Compiling regex v1.13.1
+   Compiling cranelift-frontend v0.136.3
+   Compiling wasmtime-internal-unwinder v49.0.3
+   Compiling cranelift-native v0.136.3
+   Compiling wasmtime-internal-cranelift v49.0.3
+   Compiling ext-vte v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/extensions/ext-vte)
+   Compiling wasmtime v49.0.3
+   Compiling gorca-ext-host v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/crates/gorca-ext-host)
+   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/crates/gorca-testkit)
+   Compiling ext-test v0.0.0 (<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/extensions/ext-test)
+    Finished `release` profile [optimized + debuginfo] target(s) in 2m 11s

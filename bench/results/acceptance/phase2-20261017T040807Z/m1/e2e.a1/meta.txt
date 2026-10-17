@@ -1,0 +1,14 @@
+suite=m1
+step=e2e
+attempt=1
+kind=e2e
+exit=0
+label=acc-20261017T040807Z-m1-e2e-a1
+start=1792210223
+end=1792211081
+seconds=858
+load_start=20.02 19.27 17.77 4/2899 3853461
+load_end=10.32 13.02 15.10 16/3366 3946353
+governor=performance 
+git_rev=6a86749
+cap_seconds=5400
