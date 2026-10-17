@@ -29,6 +29,8 @@ pub const MAX_REF_BYTES: usize = 4096;
 pub const MAX_REF_ARGS: usize = 16;
 /// Characters of a resolved message (the expansion of placeholders is cut here).
 pub const MAX_OUT_CHARS: usize = 2048;
+/// Bytes of a whole catalog file; a larger one is refused before it is parsed.
+pub const MAX_CATALOG_BYTES: usize = 256 * 1024;
 /// Extensions with a catalog.
 pub const MAX_NAMESPACES: usize = 64;
 
@@ -42,16 +44,35 @@ pub struct ExtCatalog {
 }
 
 impl ExtCatalog {
-    /// Parse a catalog file; lines that do not parse are returned and skipped.
+    /// Parse a catalog file. Bounded before anything is parsed or allocated: the raw text over
+    /// [`MAX_CATALOG_BYTES`] is refused whole, a line over the template bound is skipped
+    /// unparsed, and reading stops at [`MAX_ENTRIES`]. Lines that do not parse are returned.
     pub fn parse(text: &str) -> (ExtCatalog, Vec<CatalogError>) {
-        let (items, errs) = parse_catalog(text);
-        let msgs = items
-            .into_iter()
-            .filter(|(k, _)| k.len() <= 128)
-            .filter(|(_, t)| t.source_len() <= MAX_TEMPLATE_BYTES)
-            .take(MAX_ENTRIES)
-            .collect();
-        (ExtCatalog { msgs }, errs)
+        let mut cat = ExtCatalog::default();
+        let mut errs = Vec::new();
+        if text.len() > MAX_CATALOG_BYTES {
+            return (cat, errs);
+        }
+        for (i, raw) in text.lines().enumerate() {
+            if cat.msgs.len() >= MAX_ENTRIES {
+                break;
+            }
+            let l = raw.trim();
+            if l.is_empty() || l.starts_with('#') || l.len() > MAX_TEMPLATE_BYTES + 130 {
+                continue;
+            }
+            let (items, e) = parse_catalog(l);
+            errs.extend(e.into_iter().map(|e| match e {
+                CatalogError::NoEquals { .. } => CatalogError::NoEquals { line: i + 1 },
+                other => other,
+            }));
+            for (k, t) in items {
+                if k.len() <= 128 && t.source_len() <= MAX_TEMPLATE_BYTES {
+                    cat.msgs.entry(k).or_insert(t);
+                }
+            }
+        }
+        (cat, errs)
     }
 
     /// The keys, for tests and parity checks.
@@ -97,7 +118,7 @@ pub fn format(ns: &str, key: &str, lang: Lang, args: &[(&str, Arg<'_>)]) -> Opti
     };
     let t = cat.msgs.get(key)?;
     let mut s = String::new();
-    t.format_into(&mut s, l, args);
+    t.format_capped(&mut s, l, args, MAX_OUT_CHARS * 4);
     if let Some((i, _)) = s.char_indices().nth(MAX_OUT_CHARS) {
         s.truncate(i);
     }
@@ -196,6 +217,22 @@ mod tests {
         register("rec", Lang::En, "r = {a}\n");
         let r = encode("rec", "r", &[("a", "{a}")]);
         assert_eq!(resolve(&r, Lang::En), "{a}");
+    }
+
+    #[test]
+    fn an_oversized_catalog_is_refused_before_parsing() {
+        let huge = format!("a = b\n{}", "# pad\n".repeat(MAX_CATALOG_BYTES / 4));
+        assert!(huge.len() > MAX_CATALOG_BYTES);
+        register("oversize", Lang::En, &huge);
+        let r = encode("oversize", "a", &[]);
+        assert_eq!(resolve(&r, Lang::En), "a", "nothing was loaded");
+        // A very long line is skipped without parsing.
+        let line = format!("big = {}\nok = fine\n", "{x}".repeat(50_000));
+        register("longline", Lang::En, &line);
+        let r = encode("longline", "ok", &[]);
+        assert_eq!(resolve(&r, Lang::En), "fine");
+        let r = encode("longline", "big", &[]);
+        assert_eq!(resolve(&r, Lang::En), "big");
     }
 
     #[test]

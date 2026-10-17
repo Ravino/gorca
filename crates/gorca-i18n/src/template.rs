@@ -207,12 +207,27 @@ impl Template {
 
     /// Append the message to `out`. A missing argument formats as nothing.
     pub fn format_into(&self, out: &mut String, lang: Lang, args: &[(&str, Arg<'_>)]) {
+        self.format_capped(out, lang, args, usize::MAX);
+    }
+
+    /// Like [`Template::format_into`], but stops expanding once `out` holds `max_bytes` (an
+    /// untrusted template and arguments never allocate more than one piece past the bound).
+    pub fn format_capped(
+        &self,
+        out: &mut String,
+        lang: Lang,
+        args: &[(&str, Arg<'_>)],
+        max_bytes: usize,
+    ) {
         if let Some(p) = &self.plain {
             out.push_str(p);
             return;
         }
         let find = |name: &str| args.iter().find(|(n, _)| *n == name).map(|(_, a)| *a);
         for p in &*self.pieces {
+            if out.len() >= max_bytes {
+                return;
+            }
             match p {
                 Piece::Lit(s) => out.push_str(s),
                 Piece::Var(n) => match find(n) {
