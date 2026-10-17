@@ -58,7 +58,8 @@ pub enum Exp {
     BlockSelection,
     /// Any non-empty speech.
     Some,
-    /// The text that was removed: speech, none of it `blank` (checklist row 25).
+    /// The text that was removed (checklist row 25): the whole document, which the script selected
+    /// with Ctrl+Home, Shift+Down ... Ctrl+Shift+End; compared with line breaks as blanks.
     Removed,
 }
 
@@ -206,10 +207,12 @@ pub fn check(t: Target, chromium: bool, step: &str, got: &[String]) -> Option<Re
             }
         }
         Exp::Removed => {
-            if got.iter().any(|s| !s.trim().is_empty()) && !got.iter().any(|s| s == "blank") {
+            let norm = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+            let doc = norm(&format!("one two {PARA} last line"));
+            if norm(&got.join(" ")) == doc {
                 Ok(())
             } else {
-                Err("(want the removed text)".to_owned())
+                Err("(want the removed text: the whole document)".to_owned())
             }
         }
         Exp::Line => one(got).and_then(|s| {

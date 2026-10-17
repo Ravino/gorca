@@ -379,21 +379,32 @@ fn a_motion_key_that_moves_nothing_speaks_the_unit_at_the_caret_after_the_edge_t
 }
 
 #[test]
-fn a_late_caret_event_after_the_edge_timer_still_speaks_the_unit_it_moved_onto() {
-    // Over a slow link the caret event arrives after EDGE_MS: the edge timer has spoken the unit
-    // at the old caret, and the real event must not be silent (it answers with the new unit).
+fn a_slow_caret_event_is_the_only_answer_to_a_key_that_can_move() {
+    // Over a slow link the caret event comes 100-250 ms after the key. The key could move the
+    // caret, so nothing is said for the old position: exactly one utterance, the new unit.
     let mut r = Rig::new();
     r.focus("$ abc def", 2);
     r.key(TermKey::CharRight);
-    assert_eq!(texts(&r.wait(120)), vec!["a".to_owned()]);
+    assert!(texts(&r.wait(120)).is_empty(), "the edge timer must not read the old caret");
     assert_eq!(texts(&r.feed(TermInput::Caret(3))), vec!["b".to_owned()]);
-    // The key's answer is used up; a later unexplained caret move stays silent.
-    assert!(says(&r.feed(TermInput::Caret(4))).is_empty());
-    // A caret event later than the motion window is not the key's.
+    assert!(texts(&r.wait(300)).is_empty(), "spoken once");
+    // The caret event never comes (a lost move): the long timer speaks the unit at the caret.
     r.key(TermKey::CharRight);
-    assert_eq!(texts(&r.wait(120)), vec!["c".to_owned()]);
-    r.now += 300;
-    assert!(says(&r.feed(TermInput::Caret(5))).is_empty());
+    assert!(texts(&r.wait(120)).is_empty());
+    assert_eq!(texts(&r.wait(130)), vec!["b".to_owned()]);
+}
+
+#[test]
+fn a_key_that_cannot_move_speaks_at_the_short_edge_time() {
+    // Left at the start of the command and Right behind the last character move nothing.
+    let mut r = Rig::new();
+    r.focus("$ abc", 2);
+    r.key(TermKey::CharLeft);
+    assert_eq!(texts(&r.wait(110)), vec!["a".to_owned()]);
+    let mut r = Rig::new();
+    r.focus("$ abc", 5);
+    r.key(TermKey::CharRight);
+    assert_eq!(texts(&r.wait(110)), vec!["blank".to_owned()]);
 }
 
 #[test]

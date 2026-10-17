@@ -119,3 +119,34 @@ nothing useful. Assert the line that Up lands on.
 `extensions/ext-vte/src/session/tests.rs` and run with `cargo test -p ext-vte reviewer_probes -- --nocapture`,
 file restored from a copy afterwards; `grep` over `bench/results/e2e/*/*.json` for
 `ED-* BackSpace selection`. Incremental dirs cleared after the runs.
+
+## Round 2 (head `923ab6b0`, 2026-10-17)
+
+Verdict: **MERGE AFTER FIXES** (re-merge current main; decide the terminal edge policy, R2-1).
+
+Gates (reviewer, 4 threads): fmt clean; clippy `--all-targets -D warnings` clean; `cargo test --workspace
+--no-fail-fast` 2195 passed, 0 failed, 17 ignored; `xtask deps`/`strings` ok; `build-ext` ok.
+
+| Must-fix | Status |
+|---|---|
+| F1 stale vs main | Fixed for `b0caf12b`, but main has moved again (`cb9cec24`): `git merge-tree` reports 3 conflicts, each one hunk: `crates/gorca-bench/src/e2e/scenarios.rs`, `crates/gorca-core/src/text/caret.rs` (`insert()`: the branch's tracked-caret update vs main's `t.replaced = None`; keep both), `crates/gorca-core/src/text/tests.rs`. Rerun FF typing/URL-bar targets after: main's `replaced` logic sits on the same insert/delete path. |
+| F2 terminal late caret | Partly fixed. `edged` queue (`session.rs`): a caret event within `MOTION_MS` of an edged key now speaks the right unit. The edge speech is still emitted first; the regression test codifies two utterances (`"a"` then `"b"`). |
+| F3 SDK dependency | Fixed. `gorca-ext-api` depends only on `gorca-i18n`; slice `terminal::word_motion`; `WORD_MOTION_VECTORS` run by both crates (`gorca-text` dev-dep only); `xtask/src/deps.rs` identical to main again (rule 5 and its `gorca-model` bad case restored). |
+| F4 harness/report | Fixed. `Exp::Removed` (non-blank speech, no `blank`); contenteditables `known_failing`; `ed_gate_failures` wired in `bin/e2e.rs:272` (native + terminal). Still lenient: any non-blank speech passes, not the removed text itself. |
+
+### R2-1 (MEDIUM): the VT failure is consistent with the edge path; yes, both utterances are spoken
+By construction, for a caret event 100-250 ms after a Left/Right key: `flush_edge` speaks the unit at the OLD
+caret at 100 ms (`Urgency::Key`), then `on_caret` pops `edged` and speaks the new unit. Both go out; the second
+can only cut the first short if it is still playing. A harness that counts heard utterances sees one wrong plus one
+right (`vt_extra`); beyond 250 ms only the wrong one (`vt_extra` + `vt_missing`). That matches "VT failed once at
+load 20 (vt_extra/vt_missing 2)", where caret latency above 100 ms is plausible. Not proven with a trace.
+Fix: fire the edge only when the key cannot move (Left/Home/WordLeft with the caret at the prompt end, Right/End
+at the end of the input; both known from `Prompt` and the live line), otherwise wait the full `MOTION_MS`.
+Then a slow link never hears the old character.
+
+### R2-2 (LOW, unclassified): ED-G3E extra `ello, brave worl` after Ctrl+A
+1 of 8 recorded runs: `[all selected, 16 characters | ello, brave worl]`. This is not the typist-drop class
+(those show `k:NN` codes). The extra string is the text of the previous Shift+Home step's selection, spoken
+without `unselected`, so a late reply or a second selection event reached the reader after Ctrl+A. One
+candidate is this branch's `on_selection` change (a selection event during any `Fetching` is now ignored, so
+the order of fetch and reply changes). Treat it as a real intermittent until a reader log shows otherwise.
