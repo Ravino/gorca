@@ -205,10 +205,10 @@ fn punct(p: gorca_config::Punct) -> VPunct {
 }
 
 fn caps(c: gorca_config::Caps) -> VCaps {
-    match c {
-        gorca_config::Caps::Pitch => VCaps::Pitch,
-        gorca_config::Caps::Say => VCaps::Say,
-        gorca_config::Caps::Off => VCaps::Off,
+    VCaps {
+        pitch: c.pitch,
+        sound: c.sound,
+        word: c.word,
     }
 }
 

@@ -35,4 +35,4 @@ pub use state::{
     REPLACE_DEADLINE, SpeechEffect, SpeechMsg, SpeechState, StepCtx, UttMeta, backoff,
 };
 pub use symbols::{Lang, Table as SymbolTable};
-pub use verbalize::{Caps, How, Punct, VerbalizeOpts, Verbalizer};
+pub use verbalize::{CapitalFx, Caps, How, Punct, VerbalizeOpts, Verbalizer};

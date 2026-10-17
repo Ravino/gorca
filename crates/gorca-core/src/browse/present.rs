@@ -577,9 +577,9 @@ pub fn segments(items: &[Item], o: VerbalizeOpts) -> SmallVec<[Segment; 4]> {
             };
             // A capital read alone gets the capital pitch (`speech.caps = "pitch"`).
             let capital = matches!(i, Item::Char(_))
-                && o.caps == gorca_speech::Caps::Pitch
-                && text.chars().count() == 1
-                && text.chars().all(char::is_uppercase);
+                && o.caps.marks()
+                && t.chars().count() == 1
+                && t.chars().all(char::is_uppercase);
             (!text.is_empty()).then(|| Segment {
                 text: Arc::from(text),
                 kind: match i.kind() {
@@ -1186,7 +1186,7 @@ mod tests {
         use gorca_speech::{Caps, Lang, Punct};
         VerbalizeOpts {
             punct: Punct::Some,
-            caps: Caps::Pitch,
+            caps: Caps::PITCH,
             lang: Lang::En,
         }
     }
@@ -1196,7 +1196,7 @@ mod tests {
         use gorca_speech::{Caps, Lang, Punct};
         let o = |punct, lang| VerbalizeOpts {
             punct,
-            caps: Caps::Pitch,
+            caps: Caps::PITCH,
             lang,
         };
         let items = [

@@ -486,6 +486,11 @@ impl Reader {
             self.cmd.sent_levels = Some(l);
             fx.push(ReaderEffect::SpeechCtl(SpeechCtl::SetParams(l)));
         }
+        let c = self.cmd.capital_levels();
+        if self.cmd.sent_capitals != Some(c) {
+            self.cmd.sent_capitals = Some(c);
+            fx.push(ReaderEffect::SpeechCtl(SpeechCtl::SetCapitals(c)));
+        }
     }
 
     /// The node the user is on: the focused one, or the one about to be.

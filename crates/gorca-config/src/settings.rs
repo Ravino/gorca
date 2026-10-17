@@ -245,35 +245,71 @@ pub fn resolve_language(configured: &str, get: impl Fn(&str) -> Option<String>) 
     "en".to_owned()
 }
 
-/// How a capital letter is announced (ADR-0007 VB-1).
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
-pub enum Caps {
-    /// A higher pitch (a server that cannot do that says "cap").
-    #[default]
-    Pitch,
-    /// The word "cap" before the letter.
-    Say,
-    Off,
+/// How a capital letter spoken alone is announced (ADR-0007 VB-1): any combination of a pitch
+/// change, a short sound and the word "cap" before the letter. Like NVDA's three capital
+/// options, the three are independent.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+// Three independent switches that are separate entries of one list in the file.
+#[allow(clippy::struct_excessive_bools)]
+pub struct Caps {
+    /// The letter is spoken with a changed pitch (`speech.caps_pitch_change`).
+    pub pitch: bool,
+    /// A sound icon plays before the letter (needs a speech server that can play it).
+    pub sound: bool,
+    /// The word "cap" ("заглавная") is spoken before the letter.
+    pub word: bool,
+}
+
+impl Default for Caps {
+    fn default() -> Self {
+        Caps::PITCH
+    }
 }
 
 impl Caps {
-    pub const NAMES: &'static str = "\"pitch\", \"say\" or \"off\"";
+    pub const NAMES: &'static str = "\"pitch\", \"sound\" or \"word\"";
+    pub const PITCH: Caps = Caps {
+        pitch: true,
+        sound: false,
+        word: false,
+    };
+    pub const OFF: Caps = Caps {
+        pitch: false,
+        sound: false,
+        word: false,
+    };
 
-    pub fn parse(s: &str) -> Option<Self> {
+    /// Add the option named `s`; the old single values `say` (= word) and `off` (nothing) still
+    /// read. `false` for an unknown name.
+    pub fn add(&mut self, s: &str) -> bool {
         match s {
-            "pitch" => Some(Caps::Pitch),
-            "say" => Some(Caps::Say),
-            "off" => Some(Caps::Off),
-            _ => None,
+            "pitch" => self.pitch = true,
+            "sound" => self.sound = true,
+            "word" | "say" => self.word = true,
+            "off" => {}
+            _ => return false,
         }
+        true
     }
 
-    pub fn name(self) -> &'static str {
-        match self {
-            Caps::Pitch => "pitch",
-            Caps::Say => "say",
-            Caps::Off => "off",
+    /// Any option on.
+    pub fn any(self) -> bool {
+        self.pitch || self.sound || self.word
+    }
+
+    /// The option names, in the order of the file.
+    pub fn names(self) -> Vec<&'static str> {
+        let mut v = Vec::with_capacity(3);
+        if self.pitch {
+            v.push("pitch");
         }
+        if self.sound {
+            v.push("sound");
+        }
+        if self.word {
+            v.push("word");
+        }
+        v
     }
 }
 
@@ -329,6 +365,9 @@ pub struct SpeechSettings {
     pub backend: Backend,
     pub punctuation: Punct,
     pub caps: Caps,
+    /// How far a capital's pitch moves from the voice's, in percent of the pitch range
+    /// (NVDA `capPitchChange`); used with "pitch" in `caps`.
+    pub caps_pitch_change: u8,
 }
 
 impl Default for SpeechSettings {
@@ -343,7 +382,8 @@ impl Default for SpeechSettings {
             output_module: String::new(),
             backend: Backend::Auto,
             punctuation: Punct::Some,
-            caps: Caps::Pitch,
+            caps: Caps::PITCH,
+            caps_pitch_change: 30,
         }
     }
 }
@@ -697,11 +737,12 @@ pub static SETTINGS: &[SettingDef] = &[
         SettingType::Enum("\"none\", \"some\", \"most\" or \"all\""),
         "\"some\"",
     ),
+    row("speech", "caps", SettingType::StrList, "[\"pitch\"]"),
     row(
         "speech",
-        "caps",
-        SettingType::Enum("\"pitch\", \"say\" or \"off\""),
-        "\"pitch\"",
+        "caps_pitch_change",
+        SettingType::Int { min: 0, max: 100 },
+        "30",
     ),
     row("echo", "typed_characters", SettingType::Bool, "true"),
     row("echo", "typed_words", SettingType::Bool, "false"),
@@ -866,7 +907,16 @@ static DOCS: &[(&str, &str, &str)] = &[
         "Speech server: voicego with speech-dispatcher fallback (auto), voicego only, or speech-dispatcher only (ssip); the --speech flag wins; needs a restart.",
     ),
     ("speech", "punctuation", "How much punctuation is spoken."),
-    ("speech", "caps", "How a capital letter is announced."),
+    (
+        "speech",
+        "caps",
+        "How a capital letter spoken alone is announced: any of \"pitch\", \"sound\" (earcon) and \"word\" (\"cap\" before the letter), for example [\"pitch\", \"sound\"]; [] is none.",
+    ),
+    (
+        "speech",
+        "caps_pitch_change",
+        "How far the pitch of a capital moves from the voice, in percent of the pitch range (needs \"pitch\" in caps).",
+    ),
     ("echo", "typed_characters", "Speak each typed character."),
     ("echo", "typed_words", "Speak each typed word."),
     ("echo", "command_keys", "Speak command keys such as Ctrl+S."),

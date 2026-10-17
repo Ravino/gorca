@@ -83,8 +83,10 @@ output_module = ""
 backend = "auto"
 # How much punctuation is spoken. (one of "none", "some", "most" or "all")
 punctuation = "some"
-# How a capital letter is announced. (one of "pitch", "say" or "off")
-caps = "pitch"
+# How a capital letter spoken alone is announced: any of "pitch", "sound" (earcon) and "word" ("cap" before the letter), for example ["pitch", "sound"]; [] is none. (list of strings)
+caps = ["pitch"]
+# How far the pitch of a capital moves from the voice, in percent of the pitch range (needs "pitch" in caps). (integer 0 to 100)
+caps_pitch_change = 30
 
 [echo]
 # Speak each typed character. (true or false)

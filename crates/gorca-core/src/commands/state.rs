@@ -96,10 +96,20 @@ pub struct VoiceLevels {
     pub volume: u8,
 }
 
+/// What a capital letter spoken alone gets besides its text (`speech.caps`).
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct CapitalLevels {
+    /// Pitch change in percent of the pitch range, 0 when the pitch is not asked for.
+    pub pitch_percent: u8,
+    /// A sound icon before the letter.
+    pub cue: bool,
+}
+
 /// Speech control, ordered with utterances (ADR-0005 6.2).
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SpeechCtl {
     SetParams(VoiceLevels),
+    SetCapitals(CapitalLevels),
     Pause,
     Resume,
     /// `speech.mode_cycle`: drop new utterances while muted.
@@ -225,6 +235,8 @@ pub(crate) struct CmdState {
     pub clock: Arc<dyn WallClock>,
     /// Voice levels last sent to the speech lane.
     pub sent_levels: Option<VoiceLevels>,
+    /// Capital-letter effects last sent to the speech lane.
+    pub sent_capitals: Option<CapitalLevels>,
     pub told_held: bool,
     pub told_lost: bool,
     pub told_caps: bool,
@@ -263,6 +275,11 @@ impl CmdState {
                 pitch: 50,
                 volume: 100,
             }),
+            // The lane starts with +30 on the pitch and no sound (the `speech.caps` default).
+            sent_capitals: Some(CapitalLevels {
+                pitch_percent: 30,
+                cue: false,
+            }),
             told_held: false,
             told_lost: false,
             told_caps: false,
@@ -278,6 +295,14 @@ impl CmdState {
             rate: s.rate,
             pitch: s.pitch,
             volume: s.volume,
+        }
+    }
+
+    pub(crate) fn capital_levels(&self) -> CapitalLevels {
+        let s = &self.effective.speech;
+        CapitalLevels {
+            pitch_percent: if s.caps.pitch { s.caps_pitch_change } else { 0 },
+            cue: s.caps.sound,
         }
     }
 

@@ -160,6 +160,10 @@ impl SpeechOut for LaneOut {
     fn control(&self, ctl: SpeechCtl) {
         self.0.control(match ctl {
             SpeechCtl::SetParams(l) => SpeechControl::SetParams(voice_params(l)),
+            SpeechCtl::SetCapitals(c) => SpeechControl::SetCapitals(gorca_speech::CapitalFx {
+                pitch_delta: i8::try_from(c.pitch_percent.min(100)).unwrap_or(0),
+                cue: c.cue,
+            }),
             SpeechCtl::Pause => SpeechControl::Pause,
             SpeechCtl::Resume => SpeechControl::Resume,
             SpeechCtl::Mute(m) => SpeechControl::Mute(m),

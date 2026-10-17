@@ -2499,7 +2499,7 @@ fn a_description_is_symbol_processed_once_and_still_follows_the_pause() {
     // A second pass changes nothing (no double processing).
     let again = g.r.symbolize(said.clone());
     assert_eq!(again.segments, said.segments);
-    let v = gorca_speech::Verbalizer.verbalize(&said);
+    let v = gorca_speech::Verbalizer.verbalize(&said, gorca_speech::CapitalFx::default());
     assert_eq!(&*v.text, "Search, edit. C plus plus 50 percent");
 }
 

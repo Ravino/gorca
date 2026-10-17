@@ -65,6 +65,19 @@ pub struct FakeClient {
 }
 
 pub fn fake_client(atomic_replace: bool, health: ClientHealth) -> (FakeClient, FakeCtl) {
+    fake_client_with(atomic_replace, health, false)
+}
+
+/// Like [`fake_client`], with a server that plays sound icons (`SpeechCaps::sound_icons`).
+pub fn fake_client_with_sound_icons(health: ClientHealth) -> (FakeClient, FakeCtl) {
+    fake_client_with(true, health, true)
+}
+
+fn fake_client_with(
+    atomic_replace: bool,
+    health: ClientHealth,
+    sound_icons: bool,
+) -> (FakeClient, FakeCtl) {
     let (tx, rx) = mpsc::channel(64);
     let ctl = FakeCtl {
         cmds: Arc::new(Mutex::new(Vec::new())),
@@ -81,6 +94,7 @@ pub fn fake_client(atomic_replace: bool, health: ClientHealth) -> (FakeClient, F
                 index_marks: false,
                 audio_progress: false,
                 ssml: false,
+                sound_icons,
             },
             ctl: ctl.clone(),
             events: rx,

@@ -365,8 +365,11 @@ fn apply_key(section: &str, key: &str, v: &Item, s: &mut Settings, diags: &mut V
             }
         }
         ("speech", "caps") => {
-            if let Some(p) = read_enum(v, &path, Caps::parse, Caps::NAMES, diags) {
-                s.speech.caps = p;
+            s.speech.caps = read_caps(v, &path, diags);
+        }
+        ("speech", "caps_pitch_change") => {
+            if let Some(n) = read_int(v, &path, 0, 100, diags) {
+                s.speech.caps_pitch_change = u8::try_from(n).unwrap_or(30);
             }
         }
         ("verbosity", "level") => {
@@ -483,6 +486,40 @@ fn read_str_list(v: &Item, path: &str, diags: &mut Vec<Diag>) -> Option<Vec<Stri
         }
     }
     Some(out)
+}
+
+/// `speech.caps`: a list of `pitch`, `sound` and `word`. A single string still reads (those
+/// three and the old `say` and `off`).
+fn read_caps(v: &Item, path: &str, diags: &mut Vec<Diag>) -> Caps {
+    let mut caps = Caps::OFF;
+    let mut name = |text: Option<&str>, span: Option<(u32, u32)>, diags: &mut Vec<Diag>| match text
+    {
+        Some(t) if caps.add(t) => {}
+        Some(t) => diags.push(Diag::error(
+            path,
+            span,
+            DiagMsg::UnknownEnum {
+                value: t.to_owned(),
+                allowed: Caps::NAMES,
+            },
+        )),
+        None => diags.push(Diag::error(
+            path,
+            span,
+            DiagMsg::WrongType {
+                expected: "a list of strings",
+            },
+        )),
+    };
+    if let Some(arr) = v.as_array() {
+        for e in arr {
+            let span = e.span().map(|r| (clamp_u32(r.start), clamp_u32(r.end)));
+            name(e.as_str(), span, diags);
+        }
+    } else {
+        name(v.as_str(), span_of(v), diags);
+    }
+    caps
 }
 
 fn read_modifiers(v: &Item, path: &str, diags: &mut Vec<Diag>) -> Option<Vec<String>> {
@@ -827,13 +864,47 @@ mod tests {
     }
 
     #[test]
+    fn caps_reads_a_list_of_independent_options() {
+        let c = |t: &str| load_text(t);
+        let l = c("[speech]\ncaps = [\"pitch\", \"sound\", \"word\"]\n");
+        assert!(l.diags.is_empty(), "{:?}", l.diags);
+        assert_eq!(l.settings.speech.caps.names(), ["pitch", "sound", "word"]);
+        let l = c("[speech]\ncaps = [\"word\", \"sound\"]\n");
+        assert_eq!(l.settings.speech.caps.names(), ["sound", "word"]);
+        let l = c("[speech]\ncaps = []\n");
+        assert!(l.diags.is_empty() && !l.settings.speech.caps.any());
+        // The values of the old single-choice setting still read.
+        let l = c("[speech]\ncaps = \"say\"\n");
+        assert_eq!(l.settings.speech.caps.names(), ["word"]);
+        let l = c("[speech]\ncaps = \"off\"\n");
+        assert!(l.diags.is_empty() && !l.settings.speech.caps.any());
+        let l = c("[speech]\ncaps = \"pitch\"\n");
+        assert_eq!(l.settings.speech.caps, Caps::PITCH);
+        // A wrong name is reported and the rest of the list still counts.
+        let l = c("[speech]\ncaps = [\"pitch\", \"loud\"]\n");
+        assert_eq!(l.diags.len(), 1);
+        assert!(l.diags[0].to_string().contains("loud"));
+        let l = c("[speech]\ncaps = 3\n");
+        assert_eq!(l.diags.len(), 1);
+    }
+
+    #[test]
+    fn caps_pitch_change_is_a_percent() {
+        let l = load_text("[speech]\ncaps_pitch_change = 12\n");
+        assert_eq!(l.settings.speech.caps_pitch_change, 12);
+        assert_eq!(Settings::default().speech.caps_pitch_change, 30);
+        let l = load_text("[speech]\ncaps_pitch_change = 101\n");
+        assert_eq!(l.diags.len(), 1);
+    }
+
+    #[test]
     fn every_setting_row_is_read() {
         // Setting every key to a non-default value must change `Settings`, so a row without a
         // matching arm in `apply_key` is caught.
         let text = "\
 [keyboard]\npreset=\"orca\"\nlayout=\"laptop\"\nmodifiers=[\"Insert\"]\ncaps_lock_layout_guard=false\n\
 multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_control=false\npause_speech_on_shift=false\n\
-[keymap]\nreplace_preset=true\n[speech]\nrate=10\npitch=11\nvolume=12\nrate_step=7\nvoice=\"x\"\nlanguage=\"ru\"\noutput_module=\"rhvoice\"\nbackend=\"ssip\"\npunctuation=\"all\"\ncaps=\"say\"\n\
+[keymap]\nreplace_preset=true\n[speech]\nrate=10\npitch=11\nvolume=12\nrate_step=7\nvoice=\"x\"\nlanguage=\"ru\"\noutput_module=\"rhvoice\"\nbackend=\"ssip\"\npunctuation=\"all\"\ncaps=[\"sound\"]\ncaps_pitch_change=10\n\
 [echo]\ntyped_characters=false\ntyped_words=true\ncommand_keys=true\ninserted_text=false\n\
 [text]\nsay_all_moves_caret=false\ncaret_edge_ms=50\ncaret_late_ms=300\n[browse]\nsay_all_on_load=false\ndescription_pause=false\n\
 [terminal]\nsettle_ms=40\nburst_lines=20\nprompt_markers=[\"> \"]\nprompt_regex=\"^x\"\nsecret_regex=\"y$\"\n[verbosity]\nlevel=\"brief\"\nconfirmations=\"brief\"\n";
@@ -857,7 +928,7 @@ multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_
         assert_eq!(l.settings.speech.language, "ru");
         assert_eq!(l.settings.speech.output_module, "rhvoice");
         assert_eq!(l.settings.speech.backend, Backend::Ssip);
-        assert_eq!(SETTINGS.len(), 36);
+        assert_eq!(SETTINGS.len(), 37);
     }
 
     #[test]
