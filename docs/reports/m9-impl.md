@@ -86,3 +86,24 @@ Code head of the fixes: see section 5.3. All fixes are data-driven (no engine na
   `is_gecko/is_blink` read it instead of sniffing names. `Toolkit::classify` matches Chromium's `ToolkitName` first
   (the same for Chrome, Edge, Brave and Electron) and then names (chrom, electron, brave, msedge, vivaldi).
 - L-3 stays: the checklist row Alt+Down on the Combo field is still manual.
+
+### 5.3 Gate results of the review fixes (code head eff0ad4c, results-only commits after it)
+
+- Unit gates at head: `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`
+  (124 suites, 0 failed), `cargo xtask deps`: all OK.
+- H-1 sequence FS2, FSA1, FSA3, FCE1 x 5 (`bench/results/e2e/m9r4-seq-cr`, `m9r4-seq-ff`): FCE1/FSA1/FSA3/FS2 lost 0 on Chromium
+  and Firefox.
+- Strict K2/K3/K4/R1 with `--impersonate-orca`, 3 repeats (`m9r4-strict`): all pass. M7 set and M8 corpus on both
+  engines, typing set on both: see `bench/results/e2e/m9r4-*` and the m9r3 runs (same code). Host load 5-18 (matrix log
+  `m9r4-matrix.log`).
+- Failing gates are all single-repeat "max over repeats" gates with median 0, same code as the passing m9r3 runs, and
+  the same shapes on main baselines: triage in `docs/reports/m9-gate-triage.md`.
+
+### 5.4 Known issues (not caused by this branch)
+
+- **K-1** `FS2.page_dropped` (and FC1h) measure the browser dropping keys under load, not gorca. Not scored; `FS2.lost` is 0.
+- **K-2** The 100 ms boundary speech (`caret.rs:80`, CR-3) repeats the old line while a page stalls: FC1 lost/double/late
+  and FC1h fc_extra/fc_double in one repeat (Chromium `m9r4-cr-typing`: keys 204-208 heard "Line 0204"). Main shows the same
+  shape on Firefox.
+- **K-3** A bare-letter stray speech in FS2 (`fc_extra`, "q" at +13..20 ms) already exists on main.
+- L-3 stays: the Alt+Down checklist row on the Combo field is manual.
