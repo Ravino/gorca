@@ -117,6 +117,12 @@ pub struct ReviewState {
     pub(crate) step_started: Option<Instant>,
     /// The line last spoken from the current model, for the RR-1 correction.
     pub(crate) rr_check: Option<RrCheck>,
+    /// The screen text the terminal model `cur` was built from (model id, hash): a new screen
+    /// generation with the same text (a caret move) does not rebuild it.
+    pub(crate) term_text: Option<(ModelId, u64)>,
+    /// The line a terminal cursor is on after it scrolled off the screen, as a one-line model
+    /// (ADR-0018): word and character moves go on reading it.
+    pub(crate) held: Option<Arc<LineModel>>,
 }
 
 /// The line a revalidation may have to correct (ADR-0006 RR-1, F-4).
@@ -159,6 +165,8 @@ impl ReviewState {
             counters: ReviewCounters::default(),
             step_started: None,
             rr_check: None,
+            term_text: None,
+            held: None,
         }
     }
 

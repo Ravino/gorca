@@ -41,6 +41,19 @@ pub struct ZoneAnchor {
     pub node: NodeKey,
     pub src_start: u32,
     pub y_mid: i32,
+    /// [`hash_line`] of the line's text: a terminal position follows its content, not its row.
+    pub line_hash: u64,
+}
+
+/// FNV-1a over the trailing-space-trimmed text of a line: cheap, and a collision only costs a
+/// wrong guess of where a scrolled line went (ADR-0018).
+pub fn hash_line(s: &str) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in s.trim_end().bytes() {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x0100_0000_01b3);
+    }
+    h
 }
 
 /// A position inside a line model.

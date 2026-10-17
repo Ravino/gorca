@@ -4,7 +4,7 @@
 use gorca_i18n::{MsgId as M, t};
 use gorca_model::NodeKey;
 
-use super::cursor::{FlatPos, ZoneAnchor};
+use super::cursor::{FlatPos, ZoneAnchor, hash_line};
 use super::model::{LineModel, LineSource, Zone, ZoneKind};
 use super::segment::{TextUnits, Unit, slice};
 
@@ -59,6 +59,7 @@ pub fn pos_at(model: &LineModel, line: u32, zone: u16, offset: u32) -> Option<Fl
                 || l.top.saturating_add(l.bottom.saturating_sub(l.top) / 2),
                 |r| r.y.saturating_add_unsigned(r.h / 2),
             ),
+            line_hash: hash_line(&l.text),
         },
     })
 }
@@ -90,8 +91,11 @@ pub fn anchor_at_node(model: &LineModel, node: NodeKey) -> Option<FlatPos> {
 /// Re-anchor a position of an older model (RA-1).
 pub fn reanchor(model: &LineModel, a: ZoneAnchor) -> Option<FlatPos> {
     if model.source == LineSource::Terminal {
-        // A screen is a grid: the same row is the same place, whatever the text scrolled to.
-        return nearest_line(model, a.y_mid);
+        // No old model to compare with: the content first (ADR-0018), else the same row.
+        return match carry_terminal(None, model, &a, 0) {
+            Some(Carried::At(p)) => Some(p),
+            Some(Carried::Gone) | None => nearest_line(model, a.y_mid),
+        };
     }
     let zs = model.by_node.get(&a.node)?;
     let pick = zs
@@ -119,6 +123,111 @@ pub fn nearest_line(model: &LineModel, y_mid: i32) -> Option<FlatPos> {
         })?
         .0;
     pos_at(model, u32::try_from(best).ok()?, 0, 0)
+}
+
+/// Where a terminal position went when the screen was rebuilt (ADR-0018).
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Carried {
+    /// On the same content (or on the row its content was rewritten on), same offset.
+    At(FlatPos),
+    /// The line scrolled off the screen: nothing on the new screen is it any more.
+    Gone,
+}
+
+/// Most rows the shift estimate looks at; a bigger screen is compared on its first rows.
+const SHIFT_ROWS: usize = 512;
+
+/// The row of a terminal anchor in the model it was made for.
+fn anchor_row(a: &ZoneAnchor) -> usize {
+    usize::try_from(a.y_mid.max(0) / super::terminal::ROW_H).unwrap_or(0)
+}
+
+/// The signed row shift (new row = old row + d) that makes most non-blank rows of `old` equal to
+/// rows of `new`, with the number of rows it explains. Ties go to the smallest |d|, then to the
+/// scroll direction output makes (up, d < 0).
+fn best_shift(old: &[u64], new: &[u64], blank: u64) -> (i64, usize) {
+    let (o, n) = (&old[..old.len().min(SHIFT_ROWS)], &new[..new.len().min(SHIFT_ROWS)]);
+    let mut best = (0i64, 0usize);
+    let span = i64::try_from(o.len().max(n.len())).unwrap_or(0);
+    for k in 0..=span {
+        for d in [-k, k] {
+            if k == 0 && d != 0 {
+                continue;
+            }
+            let score = o
+                .iter()
+                .enumerate()
+                .filter(|(i, h)| {
+                    **h != blank
+                        && i64::try_from(*i)
+                            .ok()
+                            .and_then(|i| usize::try_from(i + d).ok())
+                            .and_then(|j| n.get(j))
+                            == Some(*h)
+                })
+                .count();
+            if score > best.1 {
+                best = (d, score);
+            }
+        }
+    }
+    (best.0, best.1)
+}
+
+/// Carry a terminal position over to a rebuilt screen. The line is followed by its content: the
+/// scroll between the screens is estimated from the rows they share (`old` is the screen the
+/// position was made on, when still known), the line is found at its shifted row or, failing
+/// that, anywhere on the screen; a line rewritten in place (progress bar, prompt) keeps its
+/// shifted row; a line that left the screen is `Gone`. Without `old` the row is the best guess
+/// and nothing is ever `Gone`. `None` when the new screen is empty.
+pub fn carry_terminal(
+    old: Option<&LineModel>,
+    new: &LineModel,
+    a: &ZoneAnchor,
+    offset: u32,
+) -> Option<Carried> {
+    if new.lines.is_empty() {
+        return None;
+    }
+    let row = anchor_row(a);
+    let new_h: Vec<u64> = new.lines.iter().map(|l| hash_line(&l.text)).collect();
+    let (d, score) = old.map_or((0, 0), |o| {
+        let old_h: Vec<u64> = o.lines.iter().map(|l| hash_line(&l.text)).collect();
+        best_shift(&old_h, &new_h, hash_line(""))
+    });
+    let target = i64::try_from(row).unwrap_or(0) + d;
+    let at = |j: usize| {
+        u32::try_from(j)
+            .ok()
+            .and_then(|l| pos_at(new, l, 0, offset))
+            .map(Carried::At)
+    };
+    let shifted = usize::try_from(target).ok().filter(|t| *t < new_h.len());
+    if let Some(t) = shifted
+        && new_h[t] == a.line_hash
+    {
+        return at(t);
+    }
+    // The same content somewhere else: the nearest to where the shift puts it.
+    let want = target.clamp(0, i64::try_from(new_h.len() - 1).unwrap_or(0));
+    let same = new_h
+        .iter()
+        .enumerate()
+        .filter(|(_, h)| **h == a.line_hash)
+        .min_by_key(|(j, _)| (i64::try_from(*j).unwrap_or(0) - want).abs())
+        .map(|(j, _)| j);
+    if let Some(j) = same {
+        return at(j);
+    }
+    match (old.is_some(), shifted) {
+        // Continuity but the row is off the screen: scrolled away.
+        (true, None) if score > 0 => Some(Carried::Gone),
+        // Nothing in common at all with a known screen: a flood or a clear replaced it.
+        (true, _) if score == 0 => Some(Carried::Gone),
+        // Rewritten in place at its shifted row.
+        (_, Some(t)) => at(t),
+        (_, None) => at(usize::try_from(want).unwrap_or(0)),
+    }
 }
 
 fn boundary(pos: &FlatPos, text: &'static str) -> FlatOut {
@@ -220,11 +329,20 @@ fn unit_move(
             },
         );
     };
-    let said = slice(&z.text, &r);
+    let said = spoken(&z.text, &r, unit);
     FlatOut {
         pos: p,
         said,
         boundary: false,
+    }
+}
+
+/// What is said for the unit `r` of `text`: a word is said without the spaces it carries.
+fn spoken(text: &str, r: &std::ops::Range<u32>, unit: Unit) -> String {
+    let s = slice(text, r);
+    match unit {
+        Unit::Word => s.trim_end().to_owned(),
+        Unit::Char => s,
     }
 }
 
@@ -234,7 +352,7 @@ fn current_unit(model: &LineModel, pos: &FlatPos, units: &dyn TextUnits, unit: U
         .and_then(|z| {
             units
                 .at(&z.text, pos.offset, unit)
-                .map(|r| slice(&z.text, &r))
+                .map(|r| spoken(&z.text, &r, unit))
         })
         .unwrap_or_default();
     FlatOut {
@@ -437,12 +555,95 @@ mod tests {
                 ZoneAnchor {
                     node: key(99),
                     src_start: 0,
-                    y_mid: 0
+                    y_mid: 0,
+                    line_hash: 0
                 }
             )
             .is_none()
         );
         assert_eq!(nearest_line(&m, 45).unwrap().line, 1);
         assert_eq!(anchor_at_node(&m, key(3)).unwrap().line, 1);
+    }
+    // ---- terminal positions follow their content (ADR-0018) ---------------------------------
+
+    fn screen(text: &str) -> LineModel {
+        use gorca_ext_api::terminal::TermSnapshot;
+        let n = key(2);
+        super::super::terminal::terminal_model(
+            n.app,
+            n,
+            &TermSnapshot {
+                text: text.to_owned(),
+                caret: 0,
+                generation: 1,
+            },
+            &ReviewLimits::default(),
+            Instant::now(),
+        )
+    }
+
+    fn carried(old: &LineModel, new: &LineModel, line: u32, offset: u32) -> Option<Carried> {
+        let p = pos_at(old, line, 0, offset)?;
+        carry_terminal(Some(old), new, &p.anchor, p.offset)
+    }
+
+    fn at(c: Option<Carried>) -> (u32, u32) {
+        match c {
+            Some(Carried::At(p)) => (p.line, p.offset),
+            other => panic!("not carried: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_scrolled_line_is_followed_with_its_offset() {
+        let old = screen("a1\nalpha bravo\nb2\nc3");
+        let new = screen("alpha bravo\nb2\nc3\nd4");
+        assert_eq!(at(carried(&old, &new, 1, 6)), (0, 6));
+        // Output that scrolls by two.
+        let new = screen("b2\nc3\nd4\ne5");
+        assert_eq!(carried(&old, &new, 1, 6), Some(Carried::Gone));
+    }
+
+    #[test]
+    fn a_line_rewritten_in_place_keeps_its_row_and_clamps_the_offset() {
+        let old = screen("x1\nprogress 10%\nx3");
+        let new = screen("x1\nprogress 100% done\nx3");
+        assert_eq!(at(carried(&old, &new, 1, 5)), (1, 5));
+        let new = screen("x1\nok\nx3");
+        assert_eq!(at(carried(&old, &new, 1, 9)), (1, 1), "clamped to the new length");
+    }
+
+    #[test]
+    fn repeated_lines_follow_the_scroll_not_the_nearest_equal_line() {
+        let old = screen("y\ny\ny\ny\nanchor\ny\ntail one");
+        let new = screen("y\ny\nanchor\ny\ntail one\nnew two\nnew three");
+        // "y" at row 5 is the one after "anchor": two rows up, now row 3.
+        assert_eq!(at(carried(&old, &new, 5, 0)), (3, 0));
+        assert_eq!(at(carried(&old, &new, 4, 2)), (2, 2));
+    }
+
+    #[test]
+    fn a_screen_with_nothing_in_common_loses_the_line_but_a_missing_old_screen_never_does() {
+        let old = screen("one\ntwo\nthree");
+        let new = screen("four\nfive\nsix");
+        assert_eq!(carried(&old, &new, 1, 0), Some(Carried::Gone));
+        let p = pos_at(&old, 1, 0, 0).unwrap();
+        assert_eq!(
+            at(carry_terminal(None, &new, &p.anchor, 0).into()),
+            (1, 0),
+            "no old screen: the row"
+        );
+        assert!(carry_terminal(Some(&old), &screen(""), &p.anchor, 0).is_none());
+    }
+
+    #[test]
+    fn the_shift_estimate_is_bounded_on_a_huge_screen() {
+        let text: String = (0..3000).map(|i| format!("line {i}\n")).collect();
+        let old = screen(&text);
+        let shifted: String = (1..3001).map(|i| format!("line {i}\n")).collect();
+        let new = screen(&shifted);
+        let t = Instant::now();
+        let _ = carried(&old, &new, 700, 0);
+        assert!(t.elapsed() < std::time::Duration::from_millis(500));
     }
 }

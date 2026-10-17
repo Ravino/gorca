@@ -24,3 +24,4 @@ nav-no-parent = Нет объемлющего объекта
 nav-no-child = Нет вложенных объектов
 nav-no-next = Нет следующего
 nav-no-prev = Нет предыдущего
+review-scrolled = прокручено

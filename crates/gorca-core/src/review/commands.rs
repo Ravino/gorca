@@ -17,10 +17,14 @@ use smallvec::SmallVec;
 use super::build::{NavFetchError, ProbeItem, RrVerdict};
 use super::cursor::{BuildId, FlatPos, ModelId, NavReqId, ReviewCursor, ReviewFrom, ReviewKind};
 use super::cursor::{ReviewOrigin, ReviewPos};
-use super::flat::{FlatMove, anchor_at_node, flat_step, line_text, nearest_line, pos_at, reanchor};
+use super::flat::{
+    Carried, FlatMove, anchor_at_node, carry_terminal, flat_step, line_text, nearest_line, pos_at,
+    reanchor,
+};
 use super::model::{Completeness, LineModel, LineSource};
+use super::terminal::held_model;
 use super::objnav::{NavMove, NavOp, StepResult, step, step_degraded};
-use super::segment::{Dir, SimpleUnits, TextUnits, Unit, slice};
+use super::segment::{Dir, SimpleUnits, TermUnits, TextUnits, Unit, slice};
 use super::validity::{Validity, validity};
 use super::{BuildRequest, OpState, ReviewMsg, RrCheck};
 use crate::SpeechIntent;
@@ -470,7 +474,7 @@ impl Reader {
 
     // ---- cursor helpers ---------------------------------------------------------------------
 
-    fn cursor(&self) -> Option<ReviewCursor> {
+    pub(super) fn cursor(&self) -> Option<ReviewCursor> {
         match self.mode {
             Mode::Review { cursor, .. } => Some(cursor),
             Mode::Focus
@@ -850,10 +854,19 @@ impl Reader {
     /// goes on.
     pub(crate) fn review_term_replied(&mut self, fx: &mut ReaderEffects) {
         let Some(p) = self.take_pending(|w| w == What::Term) else {
+            self.review_term_answered(fx);
             return;
         };
         let now = self.now;
         self.resume(p, None, now, fx);
+    }
+
+    /// A terminal review key spoke from the held screen while the screen was being read again:
+    /// when the answer comes, the spoken line is checked against it (RV-1).
+    pub(crate) fn review_term_answered(&mut self, fx: &mut ReaderEffects) {
+        if matches!(self.review.op, OpState::Idle) {
+            self.term_review_refresh(fx);
+        }
     }
 
     fn build_suspend(
@@ -883,7 +896,13 @@ impl Reader {
             if p.model == m.id {
                 return Some(p);
             }
-            if let Some(q) = reanchor(m, p.anchor).or_else(|| nearest_line(m, p.anchor.y_mid)) {
+            if m.source == LineSource::Terminal {
+                if let Some(Carried::At(q)) = carry_terminal(None, m, &p.anchor, p.offset) {
+                    return Some(q);
+                }
+            } else if let Some(q) =
+                reanchor(m, p.anchor).or_else(|| nearest_line(m, p.anchor.y_mid))
+            {
                 return Some(q);
             }
         }
@@ -919,19 +938,28 @@ impl Reader {
         // that screen may be missing output (events lost, or the application's events are being
         // dropped because it is not the protected one) or the terminal is not tracked at all, it
         // is read first and the step waits for it, once.
+        // With a held screen the key speaks from it at once and the read it started corrects
+        // the line afterwards if it was wrong (ADR-0018, ADR-0001 R3); only a terminal with no
+        // screen at all is waited for.
+        let mut speak_first = false;
         if attempts == 0 {
             if let Some(snap) = self.term_untracked_focus(nav) {
                 self.term_adopt(&snap, fx);
                 return self.term_wait();
             }
             if self.term_review_untrusted(nav, fx) {
-                return self.term_wait();
+                if self.term_snapshot(nav).is_none() {
+                    return self.term_wait();
+                }
+                speak_first = true;
             }
         }
         let picked = match self.term_review_model(nav, now, fx) {
             Some(m) => Pick::Ready(m, true),
             None => self.pick_model(nav),
         };
+        // Installing a rebuilt screen carried the cursor over: read it again.
+        let cur = self.cursor().unwrap_or(cur);
         let (model, is_cur) = match picked {
             Pick::Ready(m, c) => (m, c),
             Pick::Build(s) => {
@@ -959,6 +987,15 @@ impl Reader {
             self.on_mode(ModeMsg::ExitReview, fx);
             return Step::Done;
         };
+        if model.source == LineSource::Terminal
+            && let ReviewPos::Screen(Some(p)) = cur.pos
+            && let Some(held) = self.review.held.clone()
+            && held.id == p.model
+            && held.surface == model.surface
+        {
+            self.exec_held(&held, &model, &cur, p, mv, rep, fx);
+            return Step::Done;
+        }
         // Validity on every step: O(1) when nothing was written, O(nodes) lock-free reads else.
         let checked = if is_cur { self.review.checked_rev } else { 0 };
         let (verdict, rev) = validity(&model, &handle, checked);
@@ -969,8 +1006,11 @@ impl Reader {
             self.say(t(M::WordBlank), fx);
             return Step::Done;
         };
-        let units = SimpleUnits;
-        let out = flat_step(&model, &pos, mv, &units);
+        let out = if model.source == LineSource::Terminal {
+            flat_step(&model, &pos, mv, &TermUnits)
+        } else {
+            flat_step(&model, &pos, mv, &SimpleUnits)
+        };
         if let Validity::Dirty(dirty) = &verdict {
             let target: SmallVec<[NodeKey; 8]> = model
                 .line_zones(out.pos.line as usize)
@@ -1021,7 +1061,71 @@ impl Reader {
         }
         // RR-1: geometry changes without events (scroll, resize) are caught after the fact.
         self.maybe_revalidate(&model, &out.pos, is_cur, now, fx);
+        if speak_first && let Some(l) = model.lines.get(out.pos.line as usize) {
+            // RV-1: the screen is being read again; a different line gets corrected.
+            self.review.rr_check = Some(RrCheck {
+                model: model.id,
+                anchor: out.pos.anchor,
+                text: Arc::clone(&l.text),
+                epoch: self.epoch.current(),
+            });
+        }
         Step::Done
+    }
+
+    /// A terminal cursor on a line that scrolled off the screen (ADR-0018): word and character
+    /// moves go on reading the line it was on; anything that leaves the line lands on the top
+    /// row of the screen and says so.
+    #[allow(clippy::too_many_arguments)]
+    fn exec_held(
+        &mut self,
+        held: &Arc<LineModel>,
+        screen: &Arc<LineModel>,
+        cur: &ReviewCursor,
+        p: FlatPos,
+        mv: FlatMove,
+        rep: u8,
+        fx: &mut ReaderEffects,
+    ) {
+        let intra = !matches!(
+            mv,
+            FlatMove::PrevLine | FlatMove::NextLine | FlatMove::Top | FlatMove::Bottom
+        );
+        if intra {
+            let out = flat_step(held, &p, mv, &TermUnits);
+            if !out.boundary {
+                let text = self.review_voice(mv, false, rep, &out.said);
+                self.say(&text, fx);
+                self.set_cursor(ReviewCursor {
+                    nav: cur.nav,
+                    pos: ReviewPos::Screen(Some(out.pos)),
+                });
+                return;
+            }
+        }
+        self.review.held = None;
+        let Some(top) = pos_at(screen, 0, 0, 0) else {
+            self.say(t(M::WordBlank), fx);
+            return;
+        };
+        let (pos, said, scrolled) = match mv {
+            FlatMove::Top | FlatMove::Bottom => {
+                let o = flat_step(screen, &top, mv, &TermUnits);
+                (o.pos, o.said, false)
+            }
+            _ => (top, line_text(screen, 0), true),
+        };
+        let line = self.review_voice(FlatMove::CurLine, false, rep, &said);
+        let text = if scrolled {
+            format!("{}, {line}", t(M::ReviewScrolled))
+        } else {
+            line
+        };
+        self.say(&text, fx);
+        self.set_cursor(ReviewCursor {
+            nav: cur.nav,
+            pos: ReviewPos::Screen(Some(pos)),
+        });
     }
 
     fn background_refresh(
@@ -1179,8 +1283,15 @@ impl Reader {
         if chk.anchor.node.app != model.app {
             return;
         }
-        let Some(p) = reanchor(model, chk.anchor).or_else(|| nearest_line(model, chk.anchor.y_mid))
-        else {
+        let found = if model.source == LineSource::Terminal {
+            match carry_terminal(None, model, &chk.anchor, 0) {
+                Some(Carried::At(p)) => Some(p),
+                Some(Carried::Gone) | None => None,
+            }
+        } else {
+            reanchor(model, chk.anchor).or_else(|| nearest_line(model, chk.anchor.y_mid))
+        };
+        let Some(p) = found else {
             return;
         };
         let now_text = line_text(model, p.line);
@@ -1202,10 +1313,13 @@ impl Reader {
             .cur
             .as_ref()
             .is_some_and(|c| c.surface == model.surface);
+        // The screen the cursor was made on, for the scroll estimate of a terminal.
+        let before = self.review.cur.clone().filter(|_| same_surface);
         if same_surface {
             // A refresh of the current surface replaces it.
         } else {
             self.review.prev = self.review.cur.take();
+            self.review.held = None;
         }
         self.review.cur = Some(Arc::clone(model));
         self.review.checked_rev = 0;
@@ -1223,7 +1337,54 @@ impl Reader {
             && let ReviewPos::Screen(Some(p)) = cur.pos
             && p.model != model.id
         {
+            if model.source == LineSource::Terminal {
+                self.carry_terminal_cursor(&cur, p, before.as_deref(), model, now);
+                return;
+            }
             let np = reanchor(model, p.anchor).or_else(|| nearest_line(model, p.anchor.y_mid));
+            self.set_cursor(ReviewCursor {
+                nav: cur.nav,
+                pos: ReviewPos::Screen(np),
+            });
+        }
+    }
+
+    /// The cursor `cur` at `p` follows its line to the rebuilt screen `model` (ADR-0018): by
+    /// content, keeping the offset; a line that left the screen is kept as a one-line model.
+    fn carry_terminal_cursor(
+        &mut self,
+        cur: &ReviewCursor,
+        p: FlatPos,
+        before: Option<&LineModel>,
+        model: &Arc<LineModel>,
+        now: Instant,
+    ) {
+        let held = self.review.held.clone().filter(|h| h.id == p.model);
+        let old = before.filter(|o| o.id == p.model);
+        let moved = match (&held, carry_terminal(old, model, &p.anchor, p.offset)) {
+            (_, None) => Some(None),
+            (_, Some(Carried::At(np))) => {
+                self.review.held = None;
+                Some(Some(np))
+            }
+            // Still not on the screen: the cursor stays on the held line.
+            (Some(_), Some(Carried::Gone)) => None,
+            (None, Some(Carried::Gone)) => {
+                let text = old
+                    .and_then(|o| o.lines.get(p.line as usize))
+                    .map(|l| Arc::clone(&l.text));
+                match text {
+                    Some(t) => {
+                        let h = Arc::new(held_model(model.app, model.surface, &t, now));
+                        let np = pos_at(&h, 0, 0, p.offset);
+                        self.review.held = Some(h);
+                        Some(np)
+                    }
+                    None => Some(nearest_line(model, p.anchor.y_mid)),
+                }
+            }
+        };
+        if let Some(np) = moved {
             self.set_cursor(ReviewCursor {
                 nav: cur.nav,
                 pos: ReviewPos::Screen(np),
