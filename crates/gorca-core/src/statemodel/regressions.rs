@@ -149,3 +149,204 @@ fn review_by_character_goes_on_while_the_line_shifts_up() {
     ]);
     expect_clean(&steps);
 }
+
+fn quick(op: Op) -> Step {
+    Step { dt: 1, op }
+}
+
+/// Found by the 50k run (seed 37737, shrunk): the policy slot is absent at the focus (the
+/// stand-in tracks the terminal), busy at the first key (the upgrade finds no session), healthy
+/// at the second key. That key must upgrade the stand-in to the real policy.
+#[test]
+fn a_degraded_terminal_is_upgraded_by_the_first_key_after_the_slot_recovers() {
+    expect_clean(&[
+        quick(Op::WasmDeployment),
+        quick(Op::Ext(ExtState::Absent)),
+        quick(Op::Focus {
+            node: TERM,
+            prelude: None,
+            dups: 2,
+        }),
+        quick(Op::Ext(ExtState::Busy)),
+        quick(Op::Type(KeyKind::Space, Modifiers::empty())),
+        quick(Op::Ext(ExtState::Healthy)),
+        quick(Op::Type(KeyKind::Space, Modifiers::empty())),
+    ]);
+}
+
+/// Found by the 50k run (seed 47158, shrunk): the baseline read of the terminal fails, the
+/// dialog closes and focus returns, reads work again, then the user types. The terminal must
+/// have been tracked again with a baseline by that key.
+#[test]
+fn a_terminal_whose_baseline_read_failed_is_tracked_again_by_the_next_key() {
+    expect_clean(&[
+        quick(Op::FailFetches(true)),
+        quick(Op::CloseDialog {
+            refocus: true,
+            to: TERM,
+        }),
+        quick(Op::TermScroll),
+        quick(Op::FailFetches(false)),
+        quick(Op::Type(KeyKind::Backspace, Modifiers::empty())),
+    ]);
+}
+
+/// Found by the 50k run (seed 812856, shrunk): the first key retries the failed baseline read
+/// while reads still fail; the next key, with reads back, must retry again, not wait out the
+/// interval of the attempt that failed.
+#[test]
+fn a_failed_retry_of_the_baseline_does_not_hold_back_the_next_key() {
+    expect_clean(&[
+        quick(Op::FailFetches(true)),
+        quick(Op::Focus {
+            node: TERM,
+            prelude: None,
+            dups: 0,
+        }),
+        quick(Op::Type(KeyKind::Enter, Modifiers::empty())),
+        quick(Op::FailFetches(false)),
+        quick(Op::Type(KeyKind::Backspace, Modifiers::empty())),
+    ]);
+}
+
+fn after(dt: u64, op: Op) -> Step {
+    Step { dt, op }
+}
+
+/// Found by the 50k run (seed 47624, shrunk) while the key-time re-read was in development: keys
+/// that re-read a baseline-less terminal while every read fails must not leave the extension
+/// re-arming a timer that is already due (a timer storm).
+#[test]
+fn re_reading_a_baseline_less_terminal_while_reads_fail_arms_no_timer_storm() {
+    expect_clean(&[
+        quick(Op::Focus {
+            node: TERM,
+            prelude: None,
+            dups: 0,
+        }),
+        quick(Op::Cmd(CoreCmd::ReviewCurLine, 1)),
+        quick(Op::FailFetches(true)),
+        quick(Op::Type(KeyKind::Backspace, Modifiers::empty())),
+        quick(Op::Type(KeyKind::Down, Modifiers::empty())),
+        after(2600, Op::FailFetches(false)),
+        after(2600, Op::Type(KeyKind::Letter('z'), Modifiers::CONTROL)),
+    ]);
+}
+
+/// Found by the 50k run (seed 2021185, shrunk): background output replaces the whole screen, and
+/// the line the review cursor was on is gone. The invariant `review-drift` flagged the cursor
+/// moving to the new prompt line, but a line the screen no longer has has nothing to stay on; the
+/// invariant now asks that the old line is still there. (With the line present the cursor stays:
+/// `review_by_character_goes_on_while_the_line_shifts_up`.)
+#[test]
+fn review_by_character_stays_on_its_line_while_the_terminal_answers_late() {
+    expect_clean(&[
+        quick(Op::TermAsync),
+        quick(Op::Focus {
+            node: TERM,
+            prelude: None,
+            dups: 2,
+        }),
+        quick(Op::Type(KeyKind::Letter('z'), Modifiers::SHIFT)),
+        quick(Op::Cmd(CoreCmd::ReviewNextChar, 2)),
+        quick(Op::TermAsync),
+        quick(Op::Cmd(CoreCmd::ReviewNextChar, 2)),
+    ]);
+}
+
+/// Found by the 50k run (seed 823517, shrunk; a known id before): Up in the terminal after review
+/// must speak the recalled command.
+#[test]
+fn history_recall_after_review_is_spoken() {
+    expect_clean(&[
+        quick(Op::Focus {
+            node: TERM,
+            prelude: None,
+            dups: 0,
+        }),
+        quick(Op::Type(KeyKind::Down, Modifiers::empty())),
+        quick(Op::Type(KeyKind::Backspace, Modifiers::empty())),
+        quick(Op::Type(KeyKind::Backspace, Modifiers::empty())),
+        quick(Op::Type(KeyKind::Letter('b'), Modifiers::empty())),
+        quick(Op::Cmd(CoreCmd::ObjectNext, 2)),
+        quick(Op::Type(KeyKind::Up, Modifiers::empty())),
+    ]);
+}
+
+/// Found by the strict 20k x 150 run (seed 9100776, shrunk): every key re-tracks the terminal
+/// while all reads fail, and the deadlines of the replaced sessions kept ticking their successor,
+/// which re-armed its own on every tick (44 parallel timer chains in the model).
+#[test]
+fn re_tracking_on_every_key_while_reads_fail_starts_no_timer_chains() {
+    use KeyKind::{End, Letter, Punct, Space, Tab};
+    let t = |k: KeyKind, m: Modifiers| quick(Op::Type(k, m));
+    let n = Modifiers::empty();
+    let c = |c: CoreCmd, r: u8| quick(Op::Cmd(c, r));
+    expect_clean(&[
+        quick(Op::HoldReplies(true)),
+        quick(Op::Remove(1)),
+        quick(Op::FailFetches(true)),
+        quick(Op::Focus {
+            node: TERM,
+            prelude: None,
+            dups: 0,
+        }),
+        c(CoreCmd::ObjectNext, 1),
+        t(Letter('q'), n),
+        c(CoreCmd::ReviewTop, 1),
+        t(Tab, n),
+        t(Punct('!'), n),
+        c(CoreCmd::ReviewStartOfLine, 1),
+        c(CoreCmd::ReviewEndOfLine, 1),
+        c(CoreCmd::ReviewEndOfLine, 1),
+        t(Letter('k'), n),
+        c(CoreCmd::ReviewTop, 2),
+        c(CoreCmd::ReviewPrevChar, 2),
+        c(CoreCmd::ReviewToFocus, 1),
+        t(Letter('q'), n),
+        c(CoreCmd::ObjectNext, 1),
+        t(Letter('b'), n),
+        c(CoreCmd::ReviewPrevWord, 2),
+        t(Letter('z'), Modifiers::SHIFT),
+        t(Letter('b'), n),
+        t(Space, Modifiers::SHIFT),
+        c(CoreCmd::ReviewPrevWord, 1),
+        t(Space, Modifiers::SHIFT),
+        after(2600, Op::Type(End, n)),
+    ]);
+}
+
+/// The extension's `ArmTimer` milliseconds and the Reader's clock share one origin: a timer fired
+/// exactly at the instant the Reader armed reaches the session as a tick (`Tracked.due`), so after
+/// a typing session every armed deadline has been consumed and none is left re-arming.
+#[test]
+fn every_deadline_the_terminal_session_armed_is_consumed_by_its_own_tick() {
+    let mut s = Sim::new(true);
+    s.focus_to(TERM, true, 0);
+    s.settle(2000);
+    for k in ['l', 's'] {
+        s.type_key(KeyKind::Letter(k), Modifiers::empty());
+        s.settle(1);
+    }
+    s.type_key(KeyKind::Enter, Modifiers::empty());
+    s.settle(10_000);
+    assert!(s.timers.is_empty());
+    assert!(s.r.term_snapshot(key(TERM)).is_some());
+}
+
+/// One key that leaves review on a terminal without a baseline starts exactly one tracking (and so one baseline read): the key
+/// path re-tracks it, and `text_mode_changed` must not track it a second time (that would drop
+/// the read in flight).
+#[test]
+fn a_key_leaving_review_on_a_cold_terminal_starts_one_tracking() {
+    let mut s = Sim::new(true);
+    s.fail_fetches = Some(gorca_connector_api::BackendError::Busy);
+    s.focus_to(TERM, true, 0);
+    s.settle(3000);
+    s.command(CoreCmd::ReviewCurLine, 1);
+    s.settle(3000);
+    let started = s.r.term_trackings();
+    s.type_key(KeyKind::Letter('x'), Modifiers::empty());
+    let now = s.r.term_trackings();
+    assert_eq!(now - started, 1);
+}

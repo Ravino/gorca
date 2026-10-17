@@ -484,7 +484,10 @@ impl Sim {
                 result: Ok(()),
             })],
             ReaderEffect::ArmTimer(t) => {
-                self.timers.push(t);
+                // As the runtime: a set, identical deadlines collapse (runtime.rs, N1).
+                if !self.timers.contains(&t) {
+                    self.timers.push(t);
+                }
                 vec![]
             }
             ReaderEffect::Demand { .. }

@@ -1290,6 +1290,10 @@ impl Reader {
         }
         let snap = self.presented.as_ref().map(|p| Arc::clone(&p.snap));
         match (self.text.caret.is_off(), snap) {
+            (true, Some(s))
+                if s.states.contains(StateSet::FOCUSED)
+                    && s.role == Role::Terminal
+                    && self.term_resume(s.key, fx) => {}
             (true, Some(s)) if s.states.contains(StateSet::FOCUSED) => self.text_track(&s, fx),
             (false, _) if fresh_track => {}
             (false, _) => self.text_step(In::Dirty, fx),
