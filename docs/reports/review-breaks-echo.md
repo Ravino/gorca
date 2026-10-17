@@ -50,7 +50,16 @@ This is the same signature as the earlier terminal/web "degraded" reports; those
 - Updated 3 review tests for verbalizer spelling/levels.
 
 ## Gates
-See the brief; e2e logs under /var/tmp/rbe/out (rbe-*-N.log, 3 repeats).
+fmt, clippy -D warnings, cargo test --workspace (all green), cargo xtask deps: ok. e2e (release, --impersonate-orca,
+3 rounds each, host load 17-25 from other agents; logs /var/tmp/rbe/out, results bench/results/e2e/rbe-*):
+- R1/R1s/RS: pass (one earlier R1 p99 3.4 ms vs 3 under load 18, passed on rerun).
+- M3 typing C*/E*: only the known load-dependent E2 `e2_missing` (1 event in one round); C3 failed
+  deterministically because its expectation predates the symbol tables ("?" is now spoken "question"):
+  harness expectation updated.
+- Strict K2/K2s/K3/K4 (GORCA_M1=1 GORCA_M1_STRICT=1): pass.
+- M6 real VTE VR/VV: expectations updated ("$" prompt is no longer "dollar" at level most; review
+  current line reads "me at box: $"); then pass. One VV round showed `Down: empty line heard []` and
+  `BackSpace ... wanted space heard c` once, not reproduced in the final run.
 
 ## Not done
 No GTK-entry end-to-end scenario for review-then-type exists yet; the unit rig drives `Reader`
