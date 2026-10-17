@@ -12,6 +12,7 @@
 
 pub mod bus;
 pub mod events;
+pub mod extras;
 pub mod factory;
 pub mod fetch;
 pub mod identity;
@@ -23,6 +24,7 @@ pub mod warm;
 pub mod wire;
 
 pub use events::{AtspiEvent, EventKind, SettlePolicy};
+pub use extras::WebQuirks;
 pub use factory::{AtspiDocSourceFactory, PathResolver};
 pub use fetch::{
     FetchError, FetchOpts, FetchTimings, FetchedDoc, PathTable, Split, StatePolicy, TextPolicy,

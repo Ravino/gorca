@@ -266,7 +266,11 @@ fn meta_of(n: &SrcNode) -> Arc<NodeMeta> {
         src: Some(n.id),
         local: n.local,
         states: n.states,
-        description: None,
+        description: n
+            .attrs
+            .iter()
+            .find(|(k, _)| *k == web_attrs::DESCRIPTION)
+            .map(|(_, v)| Arc::clone(v)),
         value: None,
         attrs: n.attrs.clone(),
     })

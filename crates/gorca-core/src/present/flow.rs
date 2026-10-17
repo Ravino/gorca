@@ -519,6 +519,10 @@ impl Reader {
         from_cache: bool,
         fx: &mut ReaderEffects,
     ) {
+        // M8b: a web node is spoken with what the document mirror knows about it (ARIA role,
+        // current, haspopup, description, error text), which a focus fetch does not carry.
+        let overlaid = self.web_overlay(snap);
+        let snap = &overlaid;
         tracing::debug!(node = ?snap.key, states = ?snap.states, ?source, from_cache, "focus presented");
         let (next, effect) = self.focus.step(FocusMsg::Presented { node: snap.key });
         self.focus = next;
@@ -531,6 +535,9 @@ impl Reader {
                     PresentContext::Focus
                 };
                 let mut u = self.presenters.present(ctx, snap, id, epoch);
+                if !self.cmd.effective.browse.description_pause {
+                    crate::aria::strip_pause(&mut u);
+                }
                 self.drop_web_unavailable(&mut u, snap);
                 let silent = ctx == PresentContext::Focus && self.apply_policy(snap, &mut u);
                 let hold = ctx == PresentContext::Focus
@@ -808,6 +815,7 @@ impl Reader {
                 self.apply_focus(FocusMsg::NodeRemoved(r.node), fx);
             }
             Ok(new) => {
+                let new = &self.web_overlay(new);
                 let ch = changed(&p.snap, new, skip_states(p.ctx));
                 if ch.is_empty() {
                     self.counters.revalidations_agreed += 1;
@@ -931,6 +939,7 @@ impl Reader {
         {
             f.publish(r.node.app);
         }
+        let new = &self.web_overlay(new);
         let ch = changed(&p.snap, new, skip_states(p.ctx));
         if ch.is_empty() {
             return;

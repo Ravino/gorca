@@ -70,6 +70,20 @@ pub mod web_attrs {
     pub const DISPLAY: AttrKey = AttrKey(18);
     /// `layout-guess` (`true` on a table Firefox believes is for layout).
     pub const LAYOUT_GUESS: AttrKey = AttrKey(19);
+    /// The accessible description (`aria-describedby`, `aria-description`, `title` as a fallback):
+    /// the `Description` property, delivered with the tree so browse mode needs no IPC (M8b).
+    /// Synthetic: not an object attribute of any engine.
+    pub const DESCRIPTION: AttrKey = AttrKey(20);
+    /// The text of the `aria-errormessage` target of an invalid node (relation `error-message`),
+    /// read by the source. Synthetic.
+    pub const ERROR_TEXT: AttrKey = AttrKey(21);
+    /// `aria-current` (`page`, `step`, `location`, `date`, `time`, `true`; `false` is dropped).
+    pub const CURRENT: AttrKey = AttrKey(22);
+    /// `aria-haspopup` (`true`, `menu`, `listbox`, `tree`, `grid`, `dialog`).
+    pub const HASPOPUP: AttrKey = AttrKey(23);
+    /// `true` when the author gave the node its name (`aria-label`, `aria-labelledby`, `alt`,
+    /// `title`, a `<label>`) instead of the engine computing it from content.
+    pub const EXPLICIT_NAME: AttrKey = AttrKey(24);
     /// First key a source may allocate dynamically.
     pub const FIRST_DYNAMIC: u16 = 256;
 
@@ -85,6 +99,11 @@ pub mod web_attrs {
             CONTAINER_LIVE => "container-live",
             DISPLAY => "display",
             LAYOUT_GUESS => "layout-guess",
+            DESCRIPTION => "description",
+            ERROR_TEXT => "error-text",
+            CURRENT => "current",
+            HASPOPUP => "haspopup",
+            EXPLICIT_NAME => "explicit-name",
             ATOMIC => "container-atomic",
             RELEVANT => "container-relevant",
             BUSY => "container-busy",
@@ -111,6 +130,11 @@ pub mod web_attrs {
             "container-live" => CONTAINER_LIVE,
             "display" => DISPLAY,
             "layout-guess" => LAYOUT_GUESS,
+            "description" => DESCRIPTION,
+            "error-text" => ERROR_TEXT,
+            "current" => CURRENT,
+            "haspopup" => HASPOPUP,
+            "explicit-name" => EXPLICIT_NAME,
             "container-atomic" | "atomic" => ATOMIC,
             "container-relevant" | "relevant" => RELEVANT,
             "container-busy" | "busy" => BUSY,

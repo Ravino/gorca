@@ -336,6 +336,12 @@ pub fn parse_get_tree(body: &[u8], interner: &AttrInterner) -> WireResult<TreeRe
                     }
                 }
                 ("ChildCount", b"i") => node.child_count = r.i32()?,
+                ("Description", b"s") => {
+                    let s = r.str()?;
+                    if !s.is_empty() {
+                        node.attrs.push((web_attrs::DESCRIPTION, Arc::from(s)));
+                    }
+                }
                 ("Attributes", b"a{ss}") => {
                     let aend = r.array_end(8)?;
                     while r.pos() < aend {
@@ -400,6 +406,27 @@ pub fn parse_children(body: &[u8]) -> WireResult<Vec<(String, String)>> {
         v.push((bus.to_owned(), path.to_owned()));
     }
     Ok(v)
+}
+
+/// `GetRelationSet` reply body: `a(ua(so))`, the relation type and its `(bus, path)` targets.
+pub fn parse_relations(body: &[u8]) -> WireResult<Vec<(u32, Vec<(String, String)>)>> {
+    let mut r = Rd::new(body);
+    let end = r.array_end(8)?;
+    let mut out = Vec::new();
+    while r.pos() < end {
+        r.align(8)?;
+        let kind = r.u32()?;
+        let tend = r.array_end(8)?;
+        let mut targets = Vec::new();
+        while r.pos() < tend {
+            r.align(8)?;
+            let bus = r.str()?.to_owned();
+            let path = r.str()?.to_owned();
+            targets.push((bus, path));
+        }
+        out.push((kind, targets));
+    }
+    Ok(out)
 }
 
 /// A reply that is a single `s`.

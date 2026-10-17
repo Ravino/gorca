@@ -24,7 +24,7 @@ const STATE_WORDS: &[(StateSet, &str)] = &[
 /// What the MIXED state means for `role` (R-6): a tri-state check box or radio button is "half
 /// checked", a toggle button "half pressed" (`aria-pressed=mixed`), a progress bar
 /// "indeterminate" (no value). Other roles say nothing for it.
-pub(crate) fn mixed_word(role: Role) -> Option<&'static str> {
+pub(super) fn mixed_word(role: Role) -> Option<&'static str> {
     if matches!(role, Role::CheckBox | Role::RadioButton) {
         Some("half checked")
     } else if role == Role::ToggleButton {
@@ -76,7 +76,85 @@ pub(crate) fn never_disabled(role: Role) -> bool {
     )
 }
 
+/// Presentation of a focused node of web content (M8b): the web source's attributes are on the
+/// snapshot (`xml-roles`, `current`, `haspopup`, `error-text`, ...), so the role and state words
+/// are NVDA's (`aria`). Order: name, role, states, current, value, description (after a short
+/// pause), level, error text.
+fn present_web(
+    n: &NodeSnapshot,
+    node: &crate::aria::Node<'_>,
+    id: UttId,
+    epoch: Epoch,
+    skip: StateSet,
+) -> Utterance {
+    use crate::aria;
+    let mut segments: SmallVec<[Segment; 4]> = SmallVec::new();
+    let name = n.name.as_deref().filter(|s| !s.is_empty());
+    if let Some(name) = name {
+        segments.push(seg(name, SegmentKind::Text));
+    }
+    let role = aria::role_word(node).unwrap_or_else(|| n.role.spoken());
+    if !role.is_empty() {
+        segments.push(seg(role, SegmentKind::Role));
+    }
+    // Gecko reports no Sensitive on static content, which the connector maps to DISABLED.
+    let unavailable = n.states.contains(StateSet::DISABLED)
+        && !never_disabled(n.role)
+        && !skip.contains(StateSet::DISABLED);
+    for w in aria::state_words(node, unavailable, true) {
+        if w == "selected" && skip.contains(StateSet::SELECTED) {
+            continue;
+        }
+        segments.push(seg(w, SegmentKind::State));
+    }
+    if let Some(c) = aria::current_word(node) {
+        segments.push(seg(c, SegmentKind::State));
+    }
+    if let Some(v) = value_text(n.value.as_ref()) {
+        segments.push(seg(&v, SegmentKind::Value));
+    }
+    if let Some(d) = aria::speakable_description(n.description.as_deref(), name) {
+        segments.push(seg(
+            &format!("{}{d}", gorca_model::PAUSE),
+            SegmentKind::Text,
+        ));
+    }
+    if let Some(l) = aria::level_phrase(node) {
+        segments.push(seg(&l, SegmentKind::Text));
+    } else if n.role == Role::Heading
+        && let Some(l) = node.level()
+    {
+        segments.push(seg(&format!("level {l}"), SegmentKind::Text));
+    }
+    if let Some(e) = aria::error_text(node) {
+        segments.push(seg(e, SegmentKind::Text));
+    }
+    let may_refine = match n.fresh {
+        Freshness::Fresh { .. } => false,
+        Freshness::Stale { .. } | Freshness::Defunct => true,
+    };
+    Utterance {
+        id,
+        segments,
+        lang: None,
+        epoch,
+        prio: Prio::Interrupt,
+        may_refine,
+        survives_focus_change: false,
+        ttl_secs: 0,
+        refines: None,
+    }
+}
+
 fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Utterance {
+    let node = crate::aria::Node {
+        role: n.role,
+        states: n.states,
+        attrs: &n.attrs,
+    };
+    if node.is_web() {
+        return present_web(n, &node, id, epoch, skip);
+    }
     let mut segments: SmallVec<[Segment; 4]> = SmallVec::new();
     if let Some(name) = n.name.as_deref().filter(|s| !s.is_empty()) {
         segments.push(seg(name, SegmentKind::Text));
@@ -280,9 +358,23 @@ pub(crate) fn present_change(
     let check = StateSet::CHECKED | StateSet::MIXED;
     let expand = StateSet::EXPANDED | StateSet::COLLAPSED;
     let mixed_w = mixed_word(new.role).filter(|_| new.states.contains(StateSet::MIXED));
+    let switch = crate::aria::Node {
+        role: new.role,
+        states: new.states,
+        attrs: &new.attrs,
+    }
+    .kind()
+        == crate::aria::Kind::Switch;
     if ch.states.intersects(check) && (mixed_w.is_some() || !new.states.contains(StateSet::MIXED)) {
         let w = if let Some(w) = mixed_w {
             w
+        } else if switch {
+            // role=switch: NVDA's `on` / `off`, never checked.
+            if new.states.contains(StateSet::CHECKED) {
+                "on"
+            } else {
+                "off"
+            }
         } else if new.states.contains(StateSet::CHECKED) {
             "checked"
         } else {

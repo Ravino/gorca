@@ -1006,11 +1006,44 @@ impl Reader {
         }
     }
 
+    /// M8b: the snapshot of a web node with what only the document mirror knows (the attribute
+    /// map with `xml-roles`, `current`, `haspopup`, `error-text`; the description; the states the
+    /// web source normalised). Any other snapshot comes back unchanged.
+    pub(crate) fn web_overlay(
+        &self,
+        snap: &Arc<gorca_model::NodeSnapshot>,
+    ) -> Arc<gorca_model::NodeSnapshot> {
+        let Some(b) = self.web.as_ref() else {
+            return Arc::clone(snap);
+        };
+        let Some((doc, id)) = b.join.get(snap.key) else {
+            return Arc::clone(snap);
+        };
+        let Some(h) = b.docs.get(doc) else {
+            return Arc::clone(snap);
+        };
+        h.read
+            .with(|d| {
+                let m = d.node(id)?.meta?;
+                if m.attrs.is_empty() {
+                    return None;
+                }
+                let mut c = (**snap).clone();
+                c.attrs = m.attrs.clone();
+                if c.description.is_none() {
+                    c.description.clone_from(&m.description);
+                }
+                c.states |= m.states & (StateSet::READ_ONLY | StateSet::HAS_POPUP);
+                Some(Arc::new(c))
+            })
+            .unwrap_or_else(|| Arc::clone(snap))
+    }
+
     /// A cold focus on a mirrored web node: its snapshot from the document mirror (role, states,
     /// name, value), so the first focus into a field is spoken at once and the fetch only
     /// confirms it (the mirror knows the node: this is what the page last told us).
     pub(crate) fn web_focus_snapshot(&self, node: NodeKey) -> Option<gorca_model::NodeSnapshot> {
-        use gorca_model::{AttrMap, ChildList, Freshness, Ifaces, PropMask, Relations};
+        use gorca_model::{ChildList, Freshness, Ifaces, PropMask, Relations};
         let b = self.web.as_ref()?;
         let (doc, id) = b.join.get(node)?;
         let h = b.docs.get(doc)?;
@@ -1036,12 +1069,12 @@ impl Reader {
                 role: v.role,
                 states: meta.states,
                 name: Some(Arc::from(name)),
-                description: None,
+                description: meta.description.clone(),
                 value,
                 parent: None,
                 children: ChildList::Unknown,
                 interfaces: Ifaces::empty(),
-                attrs: AttrMap::default(),
+                attrs: meta.attrs.clone(),
                 relations: Relations::default(),
                 bounds: None,
                 have,
@@ -1740,6 +1773,9 @@ impl Reader {
             });
         }
         u.segments.extend(present::segments(items));
+        if !self.cmd.effective.browse.description_pause {
+            crate::aria::strip_pause(&mut u);
+        }
         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
     }
 

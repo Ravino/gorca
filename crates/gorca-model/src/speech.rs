@@ -16,6 +16,12 @@ pub enum Prio {
     Notification,
 }
 
+/// A segment whose text starts with this is set off from the one before it by a sentence break
+/// instead of the comma that joins segments (M8b: a description is said after a short pause,
+/// like NVDA's separate description sequence). The prefix is the only carrier, so no speech
+/// interface changes; `browse.description_pause = false` strips it before speaking.
+pub const PAUSE: &str = ". ";
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SegmentKind {
     Text,

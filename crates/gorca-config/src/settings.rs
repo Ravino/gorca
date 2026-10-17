@@ -399,12 +399,16 @@ pub struct BrowseSettings {
     /// Read a page from its top as soon as it has loaded (NVDA `autoSayAllOnPageLoad`, on by
     /// default).
     pub say_all_on_load: bool,
+    /// Say the description of a control (`aria-describedby`, a tooltip title) after a short
+    /// pause, as its own sentence, instead of straight after the other words (M8b).
+    pub description_pause: bool,
 }
 
 impl Default for BrowseSettings {
     fn default() -> Self {
         Self {
             say_all_on_load: true,
+            description_pause: true,
         }
     }
 }
@@ -720,6 +724,7 @@ pub static SETTINGS: &[SettingDef] = &[
         "400",
     ),
     row("browse", "say_all_on_load", SettingType::Bool, "true"),
+    row("browse", "description_pause", SettingType::Bool, "true"),
     row(
         "terminal",
         "settle_ms",
@@ -889,6 +894,11 @@ static DOCS: &[(&str, &str, &str)] = &[
         "browse",
         "say_all_on_load",
         "Read a web page automatically when it finishes loading.",
+    ),
+    (
+        "browse",
+        "description_pause",
+        "Say the description of a web control after a short pause.",
     ),
     (
         "terminal",

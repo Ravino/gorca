@@ -165,6 +165,14 @@ impl Verbalizer {
             if seg.text.is_empty() {
                 continue;
             }
+            if let Some(rest) = seg.text.strip_prefix(gorca_model::PAUSE) {
+                // A pause: "Name, edit. Help text".
+                if !text.is_empty() {
+                    text.push_str(". ");
+                }
+                text.push_str(rest);
+                continue;
+            }
             if !text.is_empty() {
                 text.push_str(", ");
             }

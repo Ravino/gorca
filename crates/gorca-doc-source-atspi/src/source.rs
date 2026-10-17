@@ -283,14 +283,16 @@ fn map_fetch(e: &FetchError) -> SourceError {
 /// `(raw role, raw state bits, name, attributes)` of one object.
 type ReadTuple = (u32, u64, Option<Arc<str>>, Vec<(String, String)>);
 
-/// Re-read role, state, name and attributes of one object (four pipelined calls).
+/// Re-read role, state, name, attributes and description of one object (five pipelined calls),
+/// plus the error message of an invalid control (M8b).
 async fn read_node_raw(app: &AppConn, path: &str, dl: Deadline) -> Option<ReadTuple> {
     let lane = app.next_lane();
     let role = app.call(lane, dl, path, ACCESSIBLE, "GetRole", &());
     let state = app.call(lane + 1, dl, path, ACCESSIBLE, "GetState", &());
     let name = app.call(lane + 2, dl, path, PROPERTIES, "Get", &(ACCESSIBLE, "Name"));
     let attrs = app.call(lane + 3, dl, path, ACCESSIBLE, "GetAttributes", &());
-    let (role, state, name, attrs) = tokio::join!(role, state, name, attrs);
+    let desc = crate::extras::description(app, path, dl);
+    let (role, state, name, attrs, desc) = tokio::join!(role, state, name, attrs, desc);
     let role = wire::parse_u32(role.ok()?.body().data().bytes()).ok()?;
     let state = wire::parse_state(state.ok()?.body().data().bytes()).ok()?;
     let name = name
@@ -302,10 +304,20 @@ async fn read_node_raw(app: &AppConn, path: &str, dl: Deadline) -> Option<ReadTu
         })
         .filter(|s| !s.is_empty())
         .map(|s| Arc::<str>::from(s.as_str()));
-    let attrs = attrs
+    let mut attrs = attrs
         .ok()
         .and_then(|m| wire::parse_string_map(m.body().data().bytes()).ok())
         .unwrap_or_default();
+    if let Some(d) = desc {
+        attrs.push(("description".to_owned(), d.to_string()));
+    }
+    let invalid = state & (1u64 << roles::state_bit::INVALID_ENTRY) != 0;
+    if invalid
+        && crate::extras::takes_error_text(roles::map_role(role))
+        && let Some(t) = crate::extras::error_text(app, path, dl).await
+    {
+        attrs.push(("error-text".to_owned(), t.to_string()));
+    }
     Some((role, state, name, attrs))
 }
 
@@ -742,7 +754,11 @@ impl AtspiDocSource {
             SrcNode {
                 id,
                 role,
-                states: roles::map_states(state),
+                states: self
+                    .config
+                    .fetch
+                    .quirks
+                    .states(role, roles::map_states(state)),
                 name,
                 text,
                 attrs: amap,

@@ -89,6 +89,8 @@ pub struct FetchOpts {
     pub offload_bytes: usize,
     /// Activate Firefox's lazy cache domains before the first fetch (AS-3). Cheap once warm.
     pub warm: bool,
+    /// Engine rows that normalise what a node says (M8b, ADR-0008).
+    pub quirks: crate::extras::WebQuirks,
 }
 
 impl Default for FetchOpts {
@@ -105,6 +107,7 @@ impl Default for FetchOpts {
             call_timeout: Duration::from_secs(5),
             offload_bytes: 256 * 1024,
             warm: true,
+            quirks: crate::extras::WebQuirks::NONE,
         }
     }
 }
@@ -377,6 +380,30 @@ async fn complete(
             tm.calls += tm.text_calls;
         }
 
+        // 4b. The error message of invalid controls (M8b): a relation, never in `Description`.
+        let mut error_text: HashMap<usize, Arc<str>> = HashMap::new();
+        {
+            let invalid = 1u64 << roles::state_bit::INVALID_ENTRY;
+            let want: Vec<usize> = (0..n)
+                .filter(|i| {
+                    states_raw[*i].is_some_and(|s| s & invalid != 0)
+                        && crate::extras::takes_error_text(roles::map_role(raw_roles[*i]))
+                })
+                .take(MAX_ERROR_TEXTS)
+                .collect();
+            if !want.is_empty() {
+                let paths: Vec<String> = want.iter().map(|i| targets[*i].clone()).collect();
+                let res =
+                    crate::extras::error_texts(conn, paths, Duration::from_millis(1500)).await;
+                tm.calls += want.len() as u64 * 2;
+                for (i, t) in want.into_iter().zip(res) {
+                    if let Some(t) = t {
+                        error_text.insert(i, t);
+                    }
+                }
+            }
+        }
+
         // 5. Assemble neutral nodes.
         let t_asm = Instant::now();
         let mut out_nodes = Vec::with_capacity(n);
@@ -389,9 +416,12 @@ async fn complete(
                 attrs.push((web_attrs::RAW_ROLE, Arc::from(rr.to_string().as_str())));
             }
             let states = match states_raw[i] {
-                Some(s) => roles::map_states(s),
+                Some(s) => opts.quirks.states(role, roles::map_states(s)),
                 None => roles::DEFAULT_PLAIN_STATES,
             };
+            if let Some(t) = error_text.remove(&i) {
+                attrs.push((web_attrs::ERROR_TEXT, t));
+            }
             keys.push(rn.path);
             out_nodes.push(SrcNode {
                 id: SrcNodeId(rn.path.0),
@@ -437,6 +467,10 @@ async fn complete(
         })
     }
 }
+
+/// Most invalid controls whose error text one fetch reads (a form of hundreds of invalid
+/// fields must not turn into hundreds of round trips).
+const MAX_ERROR_TEXTS: usize = 64;
 
 type Slot<T> = (usize, T);
 
@@ -546,7 +580,7 @@ pub fn tree_args() -> TreeArgs {
             0,
             false,
         ),
-        vec!["Name", "ChildCount", "Attributes"],
+        vec!["Name", "ChildCount", "Attributes", "Description"],
     )
 }
 
