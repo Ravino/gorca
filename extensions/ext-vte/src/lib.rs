@@ -16,6 +16,30 @@
 //!
 //! Allowed dependencies: `gorca-ext-api` only among workspace crates (section 11, rule 5).
 
+/// The extension name: the namespace of its message catalog.
+pub const NAME: &str = "ext-vte";
+/// The message catalogs (`i18n/<lang>.msg`), embedded for the native build.
+pub const CATALOG_EN: &str = include_str!("../i18n/en.msg");
+pub const CATALOG_RU: &str = include_str!("../i18n/ru.msg");
+
+/// Register the embedded catalogs (the WASM component's files are loaded by the host).
+pub fn register_catalogs() {
+    gorca_ext_api::i18n::register(NAME, gorca_ext_api::i18n::Lang::En, CATALOG_EN);
+    gorca_ext_api::i18n::register(NAME, gorca_ext_api::i18n::Lang::Ru, CATALOG_RU);
+}
+
+/// A said text in English (tests: a message reference is resolved, a literal passes through).
+#[doc(hidden)]
+pub fn english(text: &str) -> String {
+    register_catalogs();
+    gorca_ext_api::i18n::resolve(text, gorca_ext_api::i18n::Lang::En).into_owned()
+}
+
+/// The reference to the message `blank` (what is said for an empty unit).
+pub(crate) fn blank() -> String {
+    gorca_ext_api::i18n::msg(NAME, "blank", &[])
+}
+
 mod keys;
 mod prompt;
 mod screen;

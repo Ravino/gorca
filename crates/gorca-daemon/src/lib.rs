@@ -390,6 +390,7 @@ async fn run_inner(
     // The first-party extensions' message catalogs: registered up front, replaced by the files
     // next to a WASM component when the host loads one.
     ext_gnome_shell::register_catalogs();
+    ext_vte::register_catalogs();
     let (mut core, shell_in_host, terminal_in_host) = wire::wire_ext(core, &opts).await;
     // The terminal policy (ADR-0008 amendment 1): the `ext-vte` WASM component when the extension
     // host loaded it, else the native build of the same source behind the core's `TermProvider`.
