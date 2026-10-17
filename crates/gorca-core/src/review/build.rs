@@ -356,7 +356,20 @@ async fn lines_of(
         max_bytes: io.limits.bytes_per_node,
     };
     match io.call(class, BackendOp::Text(q)).await {
-        Ok(BackendReply::Lines(l)) => (node, Some(Arc::from(l.lines))),
+        Ok(BackendReply::Lines(l)) => {
+            // A line of nothing but embedded-object markers (a web document's own text is one
+            // marker per child) says nothing and its extents cover its children: dropped.
+            let lines: Vec<TextLine> = l
+                .lines
+                .into_iter()
+                .filter(|x| {
+                    x.text
+                        .chars()
+                        .any(|c| !c.is_whitespace() && c != '\u{FFFC}')
+                })
+                .collect();
+            (node, Some(Arc::from(lines)))
+        }
         Ok(_) | Err(_) => (node, None),
     }
 }

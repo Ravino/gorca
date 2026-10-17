@@ -10,7 +10,7 @@ use gorca_model::{ChildList, Ifaces, Lookup, NodeKey, NodeSnapshot, PropMask, Ro
 
 use super::cluster::BuildNode;
 use super::model::{ReviewLimits, TruncWhy};
-use super::objnav::{NavSource, PresClass, class};
+use super::objnav::{NavSource, PresClass, class_in};
 
 /// What a build wants from the app, in the order the task asks for it.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -105,7 +105,7 @@ struct Ctx<'a, S: NavSource> {
 }
 
 impl<S: NavSource> Ctx<'_, S> {
-    fn walk(&mut self, k: NodeKey, parent: Option<NodeKey>, depth: u16) {
+    fn walk(&mut self, k: NodeKey, parent: Option<NodeKey>, depth: u16, in_web: bool) {
         if self.out.truncated.is_some() || !self.seen.insert(k) {
             return;
         }
@@ -132,7 +132,8 @@ impl<S: NavSource> Ctx<'_, S> {
             }
             return;
         }
-        if class(s) == PresClass::Unavailable {
+        let in_web = in_web || matches!(s.role, Role::DocumentWeb);
+        if class_in(s, in_web) == PresClass::Unavailable {
             return;
         }
         // Another surface (SF-1): excluded here, it gets its own model.
@@ -141,7 +142,7 @@ impl<S: NavSource> Ctx<'_, S> {
         }
         let lacks_bounds = !s.have.contains(PropMask::BOUNDS) || v.stale.contains(PropMask::BOUNDS);
         let wants_bounds = depth == 0
-            || class(s) == PresClass::Content
+            || class_in(s, in_web) == PresClass::Content
             || s.states.contains(StateSet::FOCUSABLE)
             || wants_lines(s);
         if lacks_bounds && wants_bounds {
@@ -161,7 +162,7 @@ impl<S: NavSource> Ctx<'_, S> {
         match &s.children {
             ChildList::Known(list) if !stale_children => {
                 for c in list {
-                    self.walk(*c, Some(k), depth.saturating_add(1));
+                    self.walk(*c, Some(k), depth.saturating_add(1), in_web);
                 }
             }
             ChildList::Count(0) if !stale_children => {}
@@ -184,7 +185,7 @@ pub fn collect<S: NavSource>(src: &S, surface: NodeKey, limits: ReviewLimits) ->
         node_misses: HashMap::new(),
         direct: Vec::new(),
     };
-    cx.walk(surface, None, 0);
+    cx.walk(surface, None, 0, false);
     let mut misses: Vec<Miss> = Vec::new();
     let mut seen: HashSet<Miss> = HashSet::new();
     let mut push = |m: Miss, misses: &mut Vec<Miss>| {
@@ -351,6 +352,36 @@ mod tests {
         m2.put_at(snap(4, Role::Button, "C", Some(1), &[]), r(0, 20));
         let c2 = collect(&m2, key(1), ReviewLimits::default());
         assert_eq!(c2.misses, [Miss::Node(key(2))]);
+    }
+
+    /// Gecko marks only some web nodes SHOWING (links, controls), not containers or text: inside a
+    /// web document VISIBLE is enough; outside one a VISIBLE-only node is still pruned.
+    #[test]
+    fn a_web_documents_visible_only_nodes_are_kept_and_other_toolkits_are_not() {
+        let visible_only = |mut s: NodeSnapshot| {
+            s.states = StateSet::VISIBLE;
+            s.have |= PropMask::STATES;
+            s
+        };
+        let mut m = MapSrc::default();
+        m.put_at(snap(1, Role::Window, "W", None, &[2, 5]), r(0, 0));
+        m.put_at(snap(2, Role::DocumentWeb, "Page", Some(1), &[3]), r(0, 0));
+        m.put_at(
+            visible_only(snap(3, Role::Landmark, "Main", Some(2), &[4])),
+            r(0, 10),
+        );
+        m.put_at(
+            visible_only(snap(4, Role::Heading, "Title", Some(3), &[])),
+            r(0, 20),
+        );
+        m.put_at(
+            visible_only(snap(5, Role::Panel, "Native", Some(1), &[6])),
+            r(0, 30),
+        );
+        m.put_at(snap(6, Role::Button, "Never", Some(5), &[]), r(0, 40));
+        let c = collect(&m, key(1), ReviewLimits::default());
+        let ids: Vec<_> = c.nodes.iter().map(|n| n.snap.key.local.0).collect();
+        assert_eq!(ids, [1, 2, 3, 4]);
     }
 
     #[test]

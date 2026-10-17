@@ -996,9 +996,7 @@ fn tg() -> Vec<Step> {
 const KP_HOME: K = key(79, 0xff95);
 const KP_UP: K = key(80, 0xff97);
 const KP_PRIOR: K = key(81, 0xff9a);
-const KP_LEFT: K = key(83, 0xff96);
 const KP_RIGHT: K = key(85, 0xff98);
-const KP_END: K = key(87, 0xff9c);
 const KP_DOWN: K = key(88, 0xff99);
 const KP_NEXT: K = key(89, 0xff9b);
 const KP_SUB: K = key(82, 0xffad);
@@ -1009,26 +1007,21 @@ fn fl() -> Vec<Step> {
     vec![
         top("FL.top"),
         s("FL.h", P1, "H: the browse cursor on the first heading", n('h'), &["Screen readers learn"]),
-        s("FL.cur", P1, "Review current line (object review starts at the focus)", Act::Key(KP_UP, 0), &["@@"]).win(1500),
-        s("FL.mode", P1, "Review mode next: screen", Act::Chord(INSERT, KP_HOME, 0), &["@@"]).win(1500),
-        s("FL.cur2", P1, "Review current line in screen mode", Act::Key(KP_UP, 0), &["@@"]).win(1500),
-        s("FL.next1", P1, "Review next line", Act::Key(KP_PRIOR, 0), &["@@"]).win(1500),
-        s("FL.next2", P1, "Review next line", Act::Key(KP_PRIOR, 0), &["@@"]).win(1500),
-        s("FL.next3", P1, "Review next line", Act::Key(KP_PRIOR, 0), &["@@"]).win(1500),
-        s("FL.top2", P1, "Review top", Act::Key(KP_HOME, SHIFT), &["@@"]).win(1500),
-        s("FL.next4", P1, "Review next line from the top", Act::Key(KP_PRIOR, 0), &["@@"]).win(1500),
-        s("FL.word", P1, "Review next word", Act::Key(KP_RIGHT, 0), &["@@"]).win(1500),
-        s("FL.char", P1, "Review next char", Act::Key(KP_NEXT, 0), &["@@"]).win(1500),
-        s("FL.tofocus", P1, "Review to focus", Act::Chord(INSERT, KP_SUB, 0), &["@@"]).win(1500),
-        s("FL.obj", P1, "Object: first child", Act::Chord(INSERT, KP_DOWN, 0), &["@@"]).win(1500),
-        s("FL.obj2", P1, "Object: first child", Act::Chord(INSERT, KP_DOWN, 0), &["@@"]).win(1500),
-        s("FL.obj3", P1, "Object: parent", Act::Chord(INSERT, KP_UP, 0), &["@@"]).win(1500),
-        s("FL.objn", P1, "Object: next", Act::Chord(INSERT, KP_RIGHT, 0), &["@@"]).win(1500),
-        s("FL.objn2", P1, "Object: next", Act::Chord(INSERT, KP_RIGHT, 0), &["@@"]).win(1500),
-        s("FL.end", P1, "Review bottom", Act::Key(KP_PRIOR, SHIFT), &["@@"]).win(1500),
-        s("FL.prev", P1, "Review previous line", Act::Key(KP_HOME, 0), &["@@"]).win(1500),
-        s("FL.left", P1, "unused", Act::Key(KP_LEFT, 0), &["@@"]).win(1500),
-        s("FL.endk", P1, "unused", Act::Key(KP_END, 0), &["@@"]).win(1500),
+        s("FL.cur", P1, "Review current line (screen review starts at the focus)", Act::Key(KP_UP, 0), &["News article", "Account menu"]).win(1500),
+        pos("FL.top2", Act::Key(KP_HOME, SHIFT)),
+        pos("FL.next1", Act::Key(KP_PRIOR, 0)),
+        pos("FL.next2", Act::Key(KP_PRIOR, 0)),
+        pos("FL.next3", Act::Key(KP_PRIOR, 0)),
+        pos("FL.next4", Act::Key(KP_PRIOR, 0)),
+        s("FL.next5", P1, "Review next line", Act::Key(KP_PRIOR, 0), &["Skip to main content"]).win(1500),
+        pos("FL.word", Act::Key(KP_RIGHT, 0)),
+        pos("FL.char", Act::Key(KP_NEXT, 0)),
+        s("FL.end", P1, "Review bottom", Act::Key(KP_PRIOR, SHIFT), &["Breadcrumb"]).win(1500),
+        s("FL.prev", P1, "Review previous line", Act::Key(KP_HOME, 0), &["Copy link"]).win(1500),
+        pos("FL.tofocus", Act::Chord(INSERT, KP_SUB, 0)),
+        pos("FL.mode", Act::Chord(INSERT, KP_HOME, 0)),
+        pos("FL.obj", Act::Chord(INSERT, KP_DOWN, 0)),
+        s("FL.objn", P1, "Object: next", Act::Chord(INSERT, KP_RIGHT, 0), &["Cookie consent"]).win(1500),
     ]
 }
 
