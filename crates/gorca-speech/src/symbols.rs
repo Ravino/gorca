@@ -85,7 +85,7 @@ pub struct Table {
     simple: HashMap<char, Sym>,
     /// Multi-character symbols (`...`), longest first.
     multi: Vec<(Box<str>, Sym)>,
-    cap: Box<str>,
+    rules: HashMap<usize, Sym>,
     /// The language of the table: its UI words (blank, object, cap, level names) come from the
     /// message catalog of the same language.
     lang: Lang,
