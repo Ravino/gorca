@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>M8 Telegram custom buttons</title>
+<style>
+  .tgico::before { content: "\e900"; font-family: serif; }
+  .btn { display: inline-flex; width: 40px; height: 40px; background: #3390ec; color: #fff; }
+  .row { margin: 4px 0; }
+</style>
+</head>
+<body>
+<p>Start of chat.</p>
+
+<!-- Every control sits alone in a block row, so each is exactly one browse-mode line. The labels
+     are unique; the icon content differs. -->
+
+<div class="row"><div class="btn" role="button" tabindex="0" aria-label="Alpha svg"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div></div>
+<div class="row"><div class="btn" role="button" tabindex="0" aria-label="Bravo hidden svg"><svg aria-hidden="true" width="24" height="24"><path d="M8 5v14l11-7z"/></svg></div></div>
+<div class="row"><div class="btn" role="button" tabindex="0" aria-label="Charlie empty img"><img alt="" width="24" height="24" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></div></div>
+<div class="row"><span class="btn" role="button" tabindex="0" aria-label="Delta css glyph"><i class="tgico"></i></span></div>
+<div class="row"><div class="btn" role="button" tabindex="0" aria-label="Echo glyph text"><i class="tgico" aria-hidden="true">&#xe900;</i></div></div>
+<div class="row"><div class="btn" role="button" tabindex="0" aria-label="Foxtrot canvas"><canvas width="24" height="24"></canvas></div></div>
+<div class="row"><div class="btn" role="button" tabindex="0" aria-label="Golf empty div"></div></div>
+<div class="row"><div class="btn" role="button" tabindex="0" aria-label="Hotel svg title"><svg width="24" height="24"><title>Inner title</title><path d="M8 5v14l11-7z"/></svg></div></div>
+<div class="row"><button class="btn" aria-label="India native hidden svg"><svg aria-hidden="true" width="24" height="24"><path d="M8 5v14l11-7z"/></svg></button></div>
+<div class="row"><span class="btn" role="button" aria-label="Juliet no tabindex"><i class="tgico"></i></span></div>
+<div class="row"><div class="btn" role="button" tabindex="0" aria-label="Kilo wrapper"><button aria-label="Lima inner"><i class="tgico"></i></button></div></div>
+<div class="row"><div class="btn" role="button" tabindex="0" aria-label="Mike time label"><span class="time">10:41</span></div></div>
+<div class="row"><div class="btn" role="button" tabindex="0" aria-label="Send message"><svg aria-hidden="true" width="24" height="24"><path d="M8 5v14l11-7z"/></svg></div></div>
+
+<!-- An inline run of three icon buttons on ONE line (a composer toolbar). -->
+<div class="row" id="run"><span class="btn" role="button" tabindex="0" aria-label="Run one"><svg aria-hidden="true" width="24" height="24"><path d="M8 5v14l11-7z"/></svg></span><span class="btn" role="button" tabindex="0" aria-label="Run two"><svg aria-hidden="true" width="24" height="24"><path d="M8 5v14l11-7z"/></svg></span><span class="btn" role="button" tabindex="0" aria-label="Run three"><svg aria-hidden="true" width="24" height="24"><path d="M8 5v14l11-7z"/></svg></span></div>
+
+<p>End of chat.</p>
+</body>
+</html>

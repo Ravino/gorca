@@ -1,0 +1,59 @@
+2026-10-17T19:30:52.706323Z DEBUG gorca_core::present::flow: focus lane msg=WindowActivated { window: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169213291806728967) } }
+2026-10-17T19:30:52.713885Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883552402716192116) } }
+2026-10-17T19:30:52.713915Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T19:30:52.713939Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883552402716192116) } }
+2026-10-17T19:30:52.713944Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T19:30:52.713947Z DEBUG gorca_core::present::flow: repeated focus event node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883552402716192116) } state=Idle unearned=true presented=None
+2026-10-17T19:30:52.714282Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883552402716192116) } states=StateSet(FOCUSED | DISABLED | SHOWING | VISIBLE) source=MissReply from_cache=false
+2026-10-17T19:30:52.743249Z  INFO gorca_phase: phase="warm" wall_ms=29.242307 waited_ms=28.389289 blocked_ms=2.1011580000000003 slept_ms=26.218902999999997 rounds=2 probes=23 sampled_nodes=4 tagged_nodes=4 ready=true
+2026-10-17T19:30:52.743588Z  INFO gorca_phase: phase="locate" wall_ms=0.278667
+2026-10-17T19:30:52.743609Z  INFO gorca_phase: phase="create" wall_ms=0.00265
+2026-10-17T19:30:52.747078Z  INFO gorca_phase: phase="fetch" total_ms=3.413634 warm_ms=0.0 frontier_ms=0.21654700000000002 get_tree_ms=0.804559 roles_ms=0.655506 states_ms=0.866895 text_ms=0.572979 assemble_ms=0.012442 heaviest_get_tree_ms=0.283 calls=135 tree_bytes=13247 nodes=52
+2026-10-17T19:30:52.747273Z  INFO gorca_phase: phase="translate" wall_ms=0.0901 nodes=81
+2026-10-17T19:30:54.069638Z DEBUG gorca_core::present::flow: focus lane msg=WindowActivated { window: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169213291806728967) } }
+2026-10-17T19:30:54.070011Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4847525439893907073) } }
+2026-10-17T19:30:54.070024Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-17T19:30:54.070760Z  INFO gorca_phase: phase="locate" wall_ms=0.6766829999999999
+2026-10-17T19:30:54.070843Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4847525439893907073) } states=StateSet(FOCUSED | FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=MissReply from_cache=false
+2026-10-17T19:30:55.579227Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4881568883739277922) } }
+2026-10-17T19:30:55.579264Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:30:55.579297Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4881568883739277922) } states=StateSet(FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=Stale from_cache=true
+2026-10-17T19:30:57.072179Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4881573281785790766) } }
+2026-10-17T19:30:57.072269Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:30:57.072306Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4881573281785790766) } states=StateSet(FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=Stale from_cache=true
+2026-10-17T19:30:58.581004Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848376461893953162) } }
+2026-10-17T19:30:58.581069Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:30:58.581095Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848376461893953162) } states=StateSet(FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=Stale from_cache=true
+2026-10-17T19:31:00.090163Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848374262870696740) } }
+2026-10-17T19:31:00.090234Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:31:00.090265Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848374262870696740) } states=StateSet(FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=Stale from_cache=true
+2026-10-17T19:31:01.600174Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } }
+2026-10-17T19:31:01.600241Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:31:01.600277Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848372063847440318) } states=StateSet(FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=Stale from_cache=true
+2026-10-17T19:31:03.107059Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848369864824183896) } }
+2026-10-17T19:31:03.107114Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:31:03.107140Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848369864824183896) } states=StateSet(FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=Stale from_cache=true
+2026-10-17T19:31:04.614573Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } }
+2026-10-17T19:31:04.614633Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:31:04.614671Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848367665800927474) } states=StateSet(FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=Stale from_cache=true
+2026-10-17T19:31:06.122617Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849333037010307507) } }
+2026-10-17T19:31:06.122673Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:31:06.122709Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849333037010307507) } states=StateSet(FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=Stale from_cache=true
+2026-10-17T19:31:07.630893Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4846536978940334609) } }
+2026-10-17T19:31:07.630939Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:31:07.630965Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4846536978940334609) } states=StateSet(FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=Stale from_cache=true
+2026-10-17T19:31:09.141026Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849331937498679296) } }
+2026-10-17T19:31:09.141090Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:31:09.141690Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849331937498679296) } states=StateSet(FOCUSED | FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=MissReply from_cache=false
+2026-10-17T19:31:10.648003Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849334136521935718) } }
+2026-10-17T19:31:10.648072Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:31:10.648122Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849334136521935718) } states=StateSet(FOCUSABLE | VISIBLE | ENABLED) source=Stale from_cache=true
+2026-10-17T19:31:12.155249Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849336335545192140) } }
+2026-10-17T19:31:12.155313Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:31:12.155337Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849336335545192140) } states=StateSet(FOCUSABLE | VISIBLE | ENABLED) source=Stale from_cache=true
+2026-10-17T19:31:13.664106Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849339634080076773) } }
+2026-10-17T19:31:13.664151Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:31:13.664185Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849339634080076773) } states=StateSet(FOCUSABLE | VISIBLE | ENABLED) source=Stale from_cache=true
+2026-10-17T19:31:15.171539Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883552402716192116) } }
+2026-10-17T19:31:15.171620Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-17T19:31:15.171707Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883552402716192116) } states=StateSet(FOCUSED | FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=Hit from_cache=true

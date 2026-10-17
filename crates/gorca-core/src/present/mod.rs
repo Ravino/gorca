@@ -19,6 +19,7 @@ pub use flow::{
     FOCUS_FIELDS, FocusBackoff, NameRetry, Presented, RAPID_FOCUS, REFINE_WINDOW, STORM_HOLD,
     focus_need,
 };
+pub(crate) use flow::{name_is_blank, needs_name};
 pub use job::{PresentJob, PresentKind, SpeechIntent};
 pub use log::{NoLabels, NodeLabel, PresentLog, PresentRecord, PresentSource};
 pub(crate) use notification::NoticeCtx;

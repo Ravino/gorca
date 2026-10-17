@@ -1,0 +1,9 @@
+2026-10-17T21:06:48.558778Z DEBUG gorca_core::present::flow: focus lane msg=WindowActivated { window: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169214391318357178) } }
+2026-10-17T21:06:48.574168Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884389131065071462) } }
+2026-10-17T21:06:48.574573Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884389131065071462) } states=StateSet(FOCUSED | DISABLED | SHOWING | VISIBLE) source=MissReply from_cache=false
+2026-10-17T21:06:49.946133Z DEBUG gorca_core::present::flow: focus lane msg=WindowActivated { window: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169214391318357178) } }
+2026-10-17T21:06:49.947202Z DEBUG gorca_core::present::flow: focus lane msg=FocusChanged { node: NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(1006319625720251006) } }
+2026-10-17T21:06:49.947881Z DEBUG gorca_core::present::flow: focus presented node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(1006319625720251006) } states=StateSet(FOCUSED | FOCUSABLE | SHOWING | VISIBLE | ENABLED) source=MissReply from_cache=false
+2026-10-17T21:06:51.202606Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887340220274622111) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-17T21:06:51.202681Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=1
+2026-10-17T21:06:51.202701Z DEBUG gorca_core::review::build: review model built lines=1 zones=1 completeness=Complete still_missing=[]

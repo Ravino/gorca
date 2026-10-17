@@ -1,0 +1,12 @@
+{
+  "meta": {"utc": "2026-10-17T19:24:12Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "9.77 10.74 11.10 1/2241 3733842", "git_rev": "b2723b99", "git_dirty": "true", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "label": "tg1", "reader": "daemon:<repo>/.claude/worktrees/agent-a006f03fcecc9742b/target/release/gorca", "backend": "voicego", "repeats": "1", "samples_per_series": "1200", "quick": "false", "loadavg_before": "10.43 10.96 11.19 1/2250 3729863", "loadavg_end": "9.77 10.74 11.10 4/2241 3733839", "gates": "fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats", "reader_args": "--impersonate-orca", "ext_dir": "none", "extensions": "none"},
+  "rows": [
+    {"id": "M8-TG.fail", "scenario": "M8-TG", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "steps", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "steps that fail and are not marked expected-fail"},
+    {"id": "M8-TG.gap", "scenario": "M8-TG", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": "core ok, NVDA extras missing"},
+    {"id": "M8-TG.p0_not_pass", "scenario": "M8-TG", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-TG.pass", "scenario": "M8-TG", "bus": "daemon/voicego", "value": 22, "min": 22, "max": 22, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-TG.steps", "scenario": "M8-TG", "bus": "daemon/voicego", "value": 22, "min": 22, "max": 22, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-TG.xfail", "scenario": "M8-TG", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": "expected-fail steps that fail (gap table)"},
+    {"id": "M8-TG.xpass", "scenario": "M8-TG", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": "expected-fail steps that pass: remove their xf() mark"}
+  ]
+}

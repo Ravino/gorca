@@ -1,0 +1,35 @@
+2026-10-17T21:05:41.200392Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169213291806728967) } parent_children=Count(29) kids=29 truncated=false complete=true
+2026-10-17T21:05:41.200516Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=1
+2026-10-17T21:05:41.205542Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888324283181681731) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-17T21:05:41.210707Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887339120762993900) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T21:05:41.210957Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888323183670053520) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-17T21:05:41.212187Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888339676344476685) } parent_children=Count(10) kids=10 truncated=false complete=true
+2026-10-17T21:05:41.212234Z DEBUG gorca_core::review::build: review build round misses=4 ok=4 nodes=6
+2026-10-17T21:05:41.216088Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887334722716481056) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T21:05:41.216324Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887335822228109267) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T21:05:41.218414Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887349016367647799) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T21:05:41.220234Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887341319786250322) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-17T21:05:41.220280Z DEBUG gorca_core::review::build: review build round misses=5 ok=4 nodes=21
+2026-10-17T21:05:41.223969Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884401225692981783) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T21:05:41.224326Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885385288600041403) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T21:05:41.225149Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886355057855934280) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T21:05:41.226023Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885381990065156770) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-17T21:05:41.226062Z DEBUG gorca_core::review::build: review build round misses=4 ok=4 nodes=26
+2026-10-17T21:05:41.227512Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883548004669679272) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T21:05:41.227555Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=31
+2026-10-17T21:05:41.230586Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883552402716192116) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-17T21:05:41.230663Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=32
+2026-10-17T21:05:41.325930Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882556245181222175) } parent_children=Count(6002) kids=256 truncated=false complete=false
+2026-10-17T21:05:41.326103Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=34
+2026-10-17T21:05:41.326220Z DEBUG gorca_core::review::build: review model built lines=7 zones=22 completeness=Truncated(Deadline) still_missing=[Expand(NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882556245181222175) })]
+2026-10-17T21:05:41.399920Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882556245181222175) } parent_children=Count(6002) kids=256 truncated=false complete=false
+2026-10-17T21:05:41.400245Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=34
+2026-10-17T21:05:41.468531Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882556245181222175) } parent_children=Count(6002) kids=256 truncated=false complete=false
+2026-10-17T21:05:41.468816Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=34
+2026-10-17T21:05:41.539454Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882556245181222175) } parent_children=Count(6002) kids=256 truncated=false complete=false
+2026-10-17T21:05:41.539778Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=34
+2026-10-17T21:05:41.607487Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882556245181222175) } parent_children=Count(6002) kids=256 truncated=false complete=false
+2026-10-17T21:05:41.607825Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=34
+2026-10-17T21:05:41.675831Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882556245181222175) } parent_children=Count(6002) kids=256 truncated=false complete=false
+2026-10-17T21:05:41.676215Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=34
+2026-10-17T21:05:41.676327Z DEBUG gorca_core::review::build: review model built lines=7 zones=22 completeness=Truncated(Deadline) still_missing=[Expand(NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882556245181222175) })]

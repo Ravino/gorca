@@ -236,6 +236,7 @@ pub mod state_bit {
     pub const TRANSIENT: u8 = 28;
     pub const VISIBLE: u8 = 30;
     pub const MANAGES_DESCENDANTS: u8 = 31;
+    pub const INDETERMINATE: u8 = 32;
     pub const REQUIRED: u8 = 33;
     pub const INVALID_ENTRY: u8 = 36;
     pub const VISITED: u8 = 40;
@@ -247,8 +248,8 @@ pub mod state_bit {
 pub fn map_states(bits: u64) -> StateSet {
     use state_bit::{
         ACTIVE, BUSY, CHECKED, COLLAPSED, DEFUNCT, EDITABLE, ENABLED, EXPANDED, FOCUSABLE, FOCUSED,
-        HAS_POPUP, INVALID_ENTRY, MANAGES_DESCENDANTS, MODAL, MULTI_LINE, PRESSED, READ_ONLY,
-        REQUIRED, SELECTABLE, SELECTED, SHOWING, TRANSIENT, VISIBLE, VISITED,
+        HAS_POPUP, INDETERMINATE, INVALID_ENTRY, MANAGES_DESCENDANTS, MODAL, MULTI_LINE, PRESSED,
+        READ_ONLY, REQUIRED, SELECTABLE, SELECTED, SHOWING, TRANSIENT, VISIBLE, VISITED,
     };
     let has = |n: u8| bits & (1u64 << n) != 0;
     let mut s = StateSet::empty();
@@ -277,6 +278,7 @@ pub fn map_states(bits: u64) -> StateSet {
         (HAS_POPUP, StateSet::HAS_POPUP),
         (READ_ONLY, StateSet::READ_ONLY),
         (VISITED, StateSet::VISITED),
+        (INDETERMINATE, StateSet::MIXED),
     ] {
         if has(n) {
             s |= f;
@@ -292,6 +294,13 @@ pub fn map_states(bits: u64) -> StateSet {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn indeterminate_maps_to_mixed() {
+        let bits = (1u64 << state_bit::INDETERMINATE) | (1u64 << state_bit::ENABLED);
+        assert!(map_states(bits).contains(StateSet::MIXED));
+        assert!(!map_states(1u64 << state_bit::ENABLED).contains(StateSet::MIXED));
+    }
 
     #[test]
     fn web_roles_map() {

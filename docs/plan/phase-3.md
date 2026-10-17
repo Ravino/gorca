@@ -408,7 +408,8 @@ directory and precedence over system ones, per-extension state in the state dir 
 No signing or store in Phase 3 (Phase 4).
 **Agents:** wasm-engineer (lead), architect (ADR-0015 extension API stability), tech-writer, reviewer
 (security review of the manifest/capability model).
-**Depends on:** M11 (state dir), M12 (catalogs in extensions), M14 (settings schema).
+**Depends on:** M11 (state dir), M12 (catalogs in extensions), M14 (settings schema); the M18a platform
+core (WIT 0.9, selectors, patches) depends on **M22a** (ADR-0022 §2.10, owner decision 2026-10-18).
 **Bake-off:** none. **Acceptance.** X1 unchanged; a third-party example built outside the repo loads;
 fuzzed manifests never crash the host; capability denial tested.
 
@@ -426,6 +427,37 @@ AT-SPI" by config); `cargo xtask deps` proves the core imports no connector type
 **Agents:** architect (ADR-0014), rust-engineer, test-engineer (N2).
 **Depends on:** C0 only. Lowest priority of Phase 3; may slip to Phase 4 without blocking the release.
 **Bake-off:** none.
+
+### M22 — Semantic model, one fusion stage and one presentation pipeline (ADR-0022, Proposed)
+
+**User-testable increment.** The same control sounds the same on focus, browse line, quick nav and
+review (role, states, position, name once); native GTK4 lists, trees and fields report position,
+level, placeholder and shortcuts; state changes of focus ancestors and of browse-activated nodes are
+announced; a diagnostics command explains why gorca said a word.
+
+**Slices and dependencies** (ADR-0022 §2.10–§2.11):
+
+| Slice | Content | Depends on | Must land before |
+|---|---|---|---|
+| **P2-ARIA-0** (Phase 2 polish) | icon-only button tests (after the BT1 repro), MI-1 anchor collapse + inline runs, PR-1 across focus + browse tail, mixed state, cross-surface test | C0 | M22a |
+| **M22a** model + fusion | `gorca-model::sem` (`Semantics`, `SemEntry`, `ProvTag`), `gorca-sem-atspi` (one normaliser), ADR-0008 quirk table (engine knowledge out of core), registers + `FUSE` in the node writers, `explain`, `MsgId`/origin on `Segment`, dual-carry with legacy agreement assertions; replaces `web_overlay`/`subtree_label` and the second normaliser; F1–F10, B-FUSE | P2-ARIA-0 | **M18a**, M22b1 |
+| **M22b1** focus + changes | `gorca-present` compose/render, rule table, shadow diff; switch `present_focus`/`present_change`/`apply_web_extra` | M22a | M22b2 |
+| **M22b2** browse | switch browse line, quick nav, say-all, leads; doc actor `translate.rs`/`live.rs` read `Semantics` | M22b1 | M15 elements list, M10 integration |
+| **M22b3** review | switch review/object nav, `review/cluster.rs` | M22b1 | M21 |
+| **M22b4** remaining surfaces + extensions | window, notification, where-am-I/info; every extension text path through IR/dedupe/render (WIT 0.9 `present` IR form) | M22b1, M18a | M18b SDK examples |
+| **M22c** changes + context | ST-1..6, `ContextTracker`, busy suppression, rate limits | M22b2 | — |
+| **M22d** verbosity + native parity | `ReportFlags` gating, presets, GTK4 rows; Qt/LibreOffice rows later | M22b1, M14a | — |
+
+**Order with M18a** (owner decision 2026-10-18, ADR-0022 §2.10): **M22a → M18a**. M18a designs WIT 0.9
+on the final model: it freezes the M22a code registries, exposes semantics through accessors (recommended)
+or whatever ADR-0019 C-1 picks, ships `present` in the IR-edit form, and plugs the selector engine into
+`FUSE` layer S1. M18b (SDK) follows M18a and M22b4.
+**Agents:** architect (ADR-0022), rust-engineer (M22a/b), web-a11y-engineer (rule table, NVDA
+parity, fixtures), test-engineer (tier-1 array, shadow diff), perf-engineer (B-FUSE, B-SEM-1/2,
+M-6b), wasm-engineer (registries, accessors in M18a), reviewer.
+**Bake-off:** none; A-vs-C representation micro-bench (2 days) before M22a.
+**Acceptance.** ADR-0022 M-1..M-13: P0–P10 and F1–F10 in `cargo test`, zero shadow diff outside
+`deviations.toml` per switched surface, M-6/M-6b latency gates, B-FUSE ≤ 2 µs/event p99.
 
 ### M20 — Release candidate and closed alpha
 
@@ -496,7 +528,12 @@ C0 (M8, M9, B-5, ext-vte) ──┬─► M12a seams ──┬─► M12 ──�
                             ├─► M11 ─────────┼─► M14 ──► M18              ├─► M17 ──► M20 (RC, alpha)
                             ├─► M16 ─────────┘                            │
                             ├─► M10 backend + ADR-0009 (no deps) ─────────┘
-                            └─► M19 (any time, lowest priority)
+                            ├─► M19 (any time, lowest priority)
+                            └─► P2-ARIA-0 ──► M22a ──┬─► M18a ──────────────┬─► M18b
+                                                     └─► M22b1 ─┬─► M22b2 ──► M15, M10 integration, M22c
+                                                                ├─► M22b3 ──► M21
+                                                                ├─► M22b4 (after M18a) ─┘
+                                                                └─► M22d (after M14a)
 Track V (V0 → V1 → B-7?)  and Track U run alongside everything.
 M17 packaging skeleton + P-15 start in Wave 1; MP only if Wave 3 has capacity.
 ```
@@ -515,6 +552,13 @@ capital pitch, speech history review, battery, sleep toggle) join Wave 1; **M15a
 command list, history and notification lists) moves ahead of M15 into late Wave 1; **M14a** (profiles and
 verbosity, ADR-0016) precedes the M14 GUI; **M21** (review everywhere and pointer, ADR-0006 amendment 2) is
 Wave 2; M13 gains `CueSink`/`gorca-cues` and dictionary import (ADR-0017).
+
+**Semantics (amendment 2026-10-18, owner decision; ADR-0022 Proposed):** Phase 3 starts with
+P2-ARIA-0 → **M22a**, then **M18a** on the final model (supersedes "Phase 3 starts with M18a" of
+2026-10-17 for that slot). M22b1 runs in parallel with M18a; M22b2 precedes M15 and M10 integration;
+M22b3 precedes M21; M22b4 follows M18a and precedes M18b; M22d follows M14a. M22a/b own
+`gorca-core/present/`, `browse/present.rs` and `doc_actor/` while they run: schedule them after the M12a
+sweep (or fold M12a's catalog ids into M22b), and serialise with M15 on `browse/`.
 
 ## 6. Parallelism and file ownership
 
@@ -567,6 +611,7 @@ W = owns, w = small additive edits. Conflict rules (Phase 2 CF-1…CF-5 retired 
 | `docs/user-guide/{en,ru}/` | tech-writer | M17 |
 | `docs/plan/checklists/M10.md` … `M20.md` (two language columns) | tech-writer | each milestone |
 | `docs/plan/phase-3-features.md` (product features: profiles, help, lists, dictionaries, cues, review everywhere) | architect | F0, M12–M15a, M21 |
+| ADR-0022 semantic model, fusion and presentation pipeline (Proposed, r2 2026-10-18) | architect | M22a, then M18a |
 | ADR-0016 configuration profiles and verbosity; ADR-0017 speech text processing and audio cues; ADR-0006 amendment 2 (review everywhere, pointer); ADR-0002 amendment (graph seams) | architect | M14a, M13, M21 |
 
 ADR numbers are the next free ones on 2026-10-16; the orchestrator renumbers if any is taken first.

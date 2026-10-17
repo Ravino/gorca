@@ -138,6 +138,8 @@ pub(super) struct Step {
     pub say: &'static [&'static str],
     /// Tokens that must not be.
     pub not: &'static [&'static str],
+    /// Each of these occurs exactly once in what was heard (the role word is said once).
+    pub once: &'static [&'static str],
     /// NVDA parity extras (field-diff words, counts): missing extras make the step a `Gap`.
     pub extra: &'static [&'static str],
     pub extra_why: &'static str,
@@ -177,6 +179,7 @@ impl Step {
             act,
             say,
             not: &[],
+            once: &[],
             extra: &[],
             extra_why: "",
             exact: None,
@@ -202,6 +205,12 @@ impl Step {
     #[must_use]
     pub fn not(mut self, t: &'static [&'static str]) -> Self {
         self.not = t;
+        self
+    }
+
+    #[must_use]
+    pub fn once(mut self, t: &'static [&'static str]) -> Self {
+        self.once = t;
         self
     }
 
@@ -375,6 +384,7 @@ fn judge(st: &Step, utterances: &[String], consumed: bool, focus_events: usize) 
     let heard = norm(&utterances.join(" "));
     let core = has_all(&heard, st.say)
         && st.not.iter().all(|t| !heard.contains(&norm(t)))
+        && st.once.iter().all(|t| heard.matches(&norm(t)).count() == 1)
         && st.exact.is_none_or(|e| heard == norm(e))
         && st.max_say.is_none_or(|m| utterances.len() <= m)
         && st
