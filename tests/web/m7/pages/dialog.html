@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>M7 Dialog</title></head>
+<body>
+<h1>Chats</h1>
+<div id="list">
+<a href="#c1">Chat one</a>
+<a href="#c2">Chat two</a>
+<a href="#c3">Chat three</a>
+<a href="#c4">Chat four</a>
+</div>
+<p><button id="open">New dialog</button></p>
+<div id="slot"></div>
+<script>
+function renderList() {
+  const l = document.getElementById('list');
+  l.replaceChildren();
+  for (const n of ['Chat one', 'Chat two', 'Chat three', 'Chat four']) {
+    const a = document.createElement('a');
+    a.href = '#' + n;
+    a.textContent = n;
+    l.appendChild(a);
+  }
+}
+document.getElementById('open').addEventListener('click', () => {
+  const d = document.createElement('div');
+  d.id = 'overlay';
+  d.setAttribute('role', 'dialog');
+  d.setAttribute('aria-label', 'Popup');
+  d.innerHTML =
+    '<p>Popup text</p>' +
+    '<button id="b-restore">Close and restore</button> ' +
+    '<button id="b-blur">Close and blur</button> ' +
+    '<button id="b-rerender">Close and re-render</button> ' +
+    '<button id="b-none">Close and drop focus</button>';
+  document.getElementById('slot').appendChild(d);
+  document.getElementById('b-restore').focus();
+  const close = () => d.remove();
+  document.getElementById('b-restore').addEventListener('click', () => {
+    close();
+    document.getElementById('open').focus();
+  });
+  document.getElementById('b-blur').addEventListener('click', () => {
+    close();
+    document.activeElement && document.activeElement.blur();
+  });
+  document.getElementById('b-rerender').addEventListener('click', () => {
+    close();
+    renderList();
+    document.querySelector('#list a').focus();
+  });
+  document.getElementById('b-none').addEventListener('click', () => {
+    close();
+    renderList();
+  });
+});
+</script>
+</body>
+</html>

@@ -225,6 +225,15 @@ impl Reader {
         }
     }
 
+    /// Present the focused `node` again (its first presentation never finished): the same path a
+    /// focus event takes after the settle, under the current epoch.
+    pub(crate) fn represent_focus(&mut self, node: NodeKey, fx: &mut ReaderEffects) {
+        self.focus_retried = None;
+        self.focus_backoff = None;
+        let epoch = self.epoch.current();
+        self.begin_present(node, epoch, fx);
+    }
+
     /// Whether the application of `node` has not earned the protection yet (and `node` is a real
     /// focus, not a switcher selection). The grace of the previous application does not count:
     /// it ends, and only publishing makes the application current.

@@ -2207,3 +2207,74 @@ fn r6_native_selection_toggle_outside_a_web_page_says_it_is_unavailable() {
         ["native selection is only available on web pages"]
     );
 }
+
+// ---- degraded state: a web application that is not browsing resolves its focus at a key -----
+
+#[test]
+fn a_key_after_a_failed_document_lookup_asks_again_and_the_page_comes_back() {
+    let mut r = rig();
+    r.focus(1006);
+    assert!(matches!(r.reader.mode(), Mode::Browse { .. }));
+    // The popup closed, the focus is on a node no document knows yet, and the lookup failed:
+    // the web layer is inactive and the keys are passed on (the key echo says "enter").
+    r.focus(2000);
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::NoDocument { focus: nk(2000) }),
+        r.now,
+    );
+    assert_eq!(r.mode(), WebMode::Inactive);
+    assert_eq!(r.reader.mode(), Mode::Focus);
+    // One key is enough to ask again.
+    let fx = type_a(&mut r);
+    assert!(
+        effects_web(&fx)
+            .iter()
+            .any(|a| matches!(a, WebEffect::Ensure { focus } if *focus == nk(2000))),
+        "{fx:?}"
+    );
+    assert!(matches!(r.mode(), WebMode::Loading { .. }));
+    assert_eq!(
+        r.reader.web.as_ref().map(|b| b.counters.key_resyncs),
+        Some(1)
+    );
+    // The document answers: browse mode is back.
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::FirstUseful {
+            doc: DocId(1),
+            app: app(),
+        }),
+        r.now,
+    );
+    assert!(matches!(r.mode(), WebMode::Browse { .. }), "{:?}", r.mode());
+}
+
+#[test]
+fn a_key_while_the_document_is_still_unknown_asks_for_it_again_at_most_twice_a_second() {
+    let mut r = rig();
+    r.focus(2000);
+    assert!(matches!(r.mode(), WebMode::Loading { .. }));
+    let asks = |fx: &ReaderEffects| {
+        effects_web(fx)
+            .iter()
+            .filter(|a| matches!(a, WebEffect::Ensure { focus } if *focus == nk(2000)))
+            .count()
+    };
+    let first = type_a(&mut r);
+    assert_eq!(asks(&first), 1, "the lookup is asked again");
+    let second = type_a(&mut r);
+    assert_eq!(asks(&second), 0, "rate limited");
+    r.now += Duration::from_millis(600);
+    let third = type_a(&mut r);
+    assert_eq!(asks(&third), 1);
+}
+
+#[test]
+fn a_key_in_a_browsing_page_resolves_nothing() {
+    let mut r = rig();
+    r.focus(1006);
+    type_a(&mut r);
+    assert_eq!(
+        r.reader.web.as_ref().map(|b| b.counters.key_resyncs),
+        Some(0)
+    );
+}

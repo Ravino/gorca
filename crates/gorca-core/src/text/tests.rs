@@ -515,6 +515,8 @@ fn space_and_return_have_names_when_typed() {
 #[test]
 fn return_in_a_single_line_entry_is_the_generic_echo() {
     let mut g = rig();
+    g.r.cmd.overlay.command_keys = Some(true);
+    g.r.cmd.republish();
     g.entry("x", 1);
     let fx = g.key(0xff0d, 0x0d, NONE);
     assert_eq!(spoken(&fx), ["enter"], "an entry's Return is activation");
@@ -782,6 +784,8 @@ fn nothing_deleted_at_the_boundary_is_silent() {
 #[test]
 fn backspace_outside_a_text_field_keeps_the_generic_echo() {
     let mut g = rig();
+    g.r.cmd.overlay.command_keys = Some(true);
+    g.r.cmd.republish();
     let fx = g.key(BACKSPACE, 0x08, NONE);
     assert_eq!(spoken(&fx), ["backspace"]);
 }
@@ -1364,6 +1368,8 @@ fn an_entry_that_does_not_say_editable_still_echoes_once() {
 #[test]
 fn tab_in_a_text_view_is_typed_once_and_in_an_entry_it_is_the_generic_echo() {
     let mut g = rig();
+    g.r.cmd.overlay.command_keys = Some(true);
+    g.r.cmd.republish();
     g.area("", 0);
     assert_eq!(spoken(&g.key(0xff09, 0x09, NONE)), ["tab"]);
     assert!(
@@ -1371,6 +1377,8 @@ fn tab_in_a_text_view_is_typed_once_and_in_an_entry_it_is_the_generic_echo() {
         "the insert is its twin"
     );
     let mut h = rig();
+    h.r.cmd.overlay.command_keys = Some(true);
+    h.r.cmd.republish();
     h.entry("x", 1);
     assert_eq!(
         spoken(&h.key(0xff09, 0x09, NONE)),

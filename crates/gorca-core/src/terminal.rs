@@ -15,7 +15,7 @@
 //! avoids VTE's unreliable character count).
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use gorca_ext_api::terminal::{
     Ms, RawKey, TermAction, TermConfig, TermCounters, TermEdit, TermInput, TermSnapshot, Unit,
@@ -33,6 +33,9 @@ use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 use crate::text::caret::Reply;
 use crate::text::{TextOp, TextReqId};
 
+/// The shortest time between two on-demand re-trackings of one terminal.
+const RETRACK_INTERVAL: Duration = Duration::from_millis(500);
+
 /// The Reader's terminal state: at most one tracked terminal, the focused one.
 #[derive(Debug, Default)]
 pub struct TermState {
@@ -48,6 +51,8 @@ pub struct TermState {
     secret_hold: bool,
     /// Numbers the trackings: a screen generation is only comparable within one tracking.
     next_serial: u64,
+    /// The last on-demand re-tracking on a key (see `Reader::focus_audit_on_key`).
+    retrack_at: Option<(NodeKey, Instant)>,
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -60,6 +65,8 @@ pub struct TermReads {
     /// Review steps that waited for a fresh screen read (events lost, focus not protected, or the
     /// terminal not tracked).
     pub review_syncs: u64,
+    /// Trackings restarted by a key press in the focused terminal that had lost its tracking.
+    pub retracked_on_key: u64,
 }
 
 #[derive(Debug)]
@@ -351,6 +358,44 @@ impl Reader {
         {
             self.term_fetch(fx);
         }
+    }
+
+    /// A key press found the focused terminal untracked: its tracking was lost without a focus
+    /// change (the first focus came before its extension attached, the policy slot was busy or
+    /// down at that moment, a node-removed event, a mode that was not `Focus` when it settled).
+    /// A terminal that holds the focus is tracked again, from the presented snapshot, at most
+    /// once per `RETRACK_INTERVAL`. Returns true when it started. Never a guess about focus:
+    /// the focus state must still be on the presented terminal.
+    pub(crate) fn term_retrack_on_key(&mut self, fx: &mut ReaderEffects) -> bool {
+        if self.term_tracked() || !self.text_active() {
+            return false;
+        }
+        let Some(p) = &self.presented else {
+            return false;
+        };
+        let focused_here = matches!(
+            self.focus,
+            crate::focus::FocusState::Focused { node, .. } if node == p.node
+        );
+        if p.snap.role != Role::Terminal
+            || !focused_here
+            || self.selection_node == Some(p.node)
+            || !self.dir.text_window_follows(p.node.app)
+        {
+            return false;
+        }
+        if let Some((n, at)) = self.text.term.retrack_at
+            && n == p.node
+            && self.now.saturating_duration_since(at) < RETRACK_INTERVAL
+        {
+            return false;
+        }
+        let (node, snap) = (p.node, Arc::clone(&p.snap));
+        self.text.term.retrack_at = Some((node, self.now));
+        self.text.term.reads.retracked_on_key += 1;
+        tracing::debug!(target: "gorca_terminal", ?node, "focused terminal untracked at a key: tracking it again");
+        self.term_track(&snap, fx);
+        self.term_tracked()
     }
 
     /// Focus moved on, or the terminal is gone: wipe what the extension knows (secrets included).

@@ -62,6 +62,8 @@ const ENTRY_WAIT: Duration = Duration::from_secs(2);
 pub(super) const SCROLL_DEBOUNCE: Duration = Duration::from_millis(150);
 /// Focus in a document the mirror does not know yet waits this long (browse design 7.3).
 const LOADING_GRACE: Duration = Duration::from_secs(1);
+/// The shortest time between two focus resolutions restarted by key presses.
+const KEY_RESYNC_INTERVAL: Duration = Duration::from_millis(500);
 
 /// What a cursor command computed from one snapshot.
 enum Outcome {
@@ -1004,6 +1006,36 @@ impl Reader {
             }
             self.web_apply(WebEv::FocusAway, fx, false);
         }
+    }
+
+    /// A key press while the focus is in a web application but the web layer is not browsing
+    /// (`Inactive` or still `Loading`): the document lookup that should have settled the focus
+    /// failed or never answered (a busy page, a lookup that timed out) and nothing else retries
+    /// it until the next focus event. Resolve the focus again, at most once per
+    /// `KEY_RESYNC_INTERVAL`. True when it started.
+    pub(crate) fn web_resync_on_key(&mut self, node: NodeKey, fx: &mut ReaderEffects) -> bool {
+        let now = self.now;
+        let Some(b) = self.web.as_mut() else {
+            return false;
+        };
+        if !b.web_apps.contains(&node.app)
+            || matches!(b.mode, WebMode::Browse { .. } | WebMode::Focus { .. })
+            || b.resync_at
+                .is_some_and(|at| now.saturating_duration_since(at) < KEY_RESYNC_INTERVAL)
+        {
+            return false;
+        }
+        b.resync_at = Some(now);
+        b.counters.key_resyncs += 1;
+        tracing::debug!(target: "gorca_phase", phase = "web_key_resync", mode = ?b.mode);
+        if let WebMode::Loading { focus, .. } = b.mode {
+            // Waiting for a document that never came: ask for it again, and look the join up.
+            fx.push(ReaderEffect::Web(WebEffect::Ensure { focus }));
+            self.web_retry_loading(false, fx);
+        } else {
+            self.web_on_focus(node, fx);
+        }
+        true
     }
 
     /// A cold focus on a mirrored web node: its snapshot from the document mirror (role, states,

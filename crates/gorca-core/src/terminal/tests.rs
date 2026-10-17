@@ -705,3 +705,177 @@ fn echo_typed_characters_off_silences_the_typed_character_but_not_the_rest() {
     let fx = g.typed('y');
     assert_eq!(spoken(&fx), ["y"]);
 }
+
+// ---- degraded state: the focused terminal lost its tracking (terminal-degraded-state.md) -----
+
+impl Rig {
+    /// The Reader's focus state as after a finished focus presentation of the terminal.
+    fn hold_focus_on_terminal(&mut self) {
+        let snap = term_snap();
+        self.r.focus = crate::focus::FocusState::Focused {
+            node: node(),
+            epoch: self.epoch.current(),
+            presented: true,
+        };
+        self.r.presented = Some(crate::present::Presented {
+            node: node(),
+            snap,
+            utt: gorca_model::UttId(1),
+            epoch: self.epoch.current(),
+            at: self.now(),
+            ctx: crate::present::PresentContext::Focus,
+        });
+    }
+}
+
+#[test]
+fn a_key_in_a_focused_terminal_that_lost_its_tracking_tracks_it_again_and_reads_what_follows() {
+    let mut g = rig();
+    g.focus("me@box:~$ ", 10);
+    g.hold_focus_on_terminal();
+    // The tracking is lost with no focus change (the extension was not attached at the focus,
+    // a node-removed event, a busy slot): the terminal is still the focus.
+    g.r.term_untrack("test");
+    assert!(!g.r.term_tracked());
+    g.at += 700;
+    let fx = g.typed('l');
+    assert!(g.r.term_tracked(), "the key restarted the tracking");
+    assert_eq!(g.r.terminal_reads().retracked_on_key, 1);
+    let reads = screen_reads(&fx);
+    assert_eq!(reads.len(), 1, "the screen is read again: {fx:?}");
+    g.answer(reads[0], "me@box:~$ l", 11);
+    // History recall: the recalled command is read, and Tab/Backspace/Enter are never names.
+    g.at += 700;
+    let fx = g.key(0xff52, 0, NONE);
+    assert!(spoken(&fx).is_empty(), "the key itself says nothing");
+    g.at += 10;
+    g.replaced();
+    let fx = g.tick(40);
+    let reads = screen_reads(&fx);
+    assert_eq!(reads.len(), 1, "{fx:?}");
+    let fx = g.answer(reads[0], "me@box:~$ echo recalled", 23);
+    assert_eq!(spoken(&fx), ["echo recalled"]);
+    for (sym, uni) in [(0xff09, 9), (0xff08, 8), (0xff0d, 13)] {
+        g.at += 700;
+        let fx = g.key(sym, uni, NONE);
+        let said = spoken(&fx);
+        assert!(
+            said.iter()
+                .all(|s| !["tab", "backspace", "enter"].contains(&s.as_str())),
+            "{sym:#x}: {said:?}"
+        );
+    }
+}
+
+#[test]
+fn a_terminal_that_is_not_the_focus_is_not_tracked_by_a_key() {
+    let mut g = rig();
+    g.focus("me@box:~$ ", 10);
+    g.hold_focus_on_terminal();
+    g.r.term_untrack("test");
+    // Focus moved to another node: the presented node is still the terminal's, the state is not.
+    let other = NodeKey {
+        local: LocalId(10),
+        ..node()
+    };
+    g.r.focus = crate::focus::FocusState::Focused {
+        node: other,
+        epoch: g.epoch.current(),
+        presented: false,
+    };
+    g.typed('l');
+    assert!(!g.r.term_tracked());
+    // An orphaned focus is not guessed either.
+    g.r.focus = crate::focus::FocusState::Orphaned {
+        last: node(),
+        epoch: g.epoch.current(),
+    };
+    g.typed('l');
+    assert!(!g.r.term_tracked());
+    assert_eq!(g.r.terminal_reads().retracked_on_key, 0);
+}
+
+#[test]
+fn the_retracking_on_a_key_is_rate_limited() {
+    let mut g = rig();
+    g.focus("me@box:~$ ", 10);
+    g.hold_focus_on_terminal();
+    // A policy that cannot be had (no session): every key asks, the interval spaces the asks.
+    g.r.term_provider = None;
+    g.r.term_untrack("test");
+    g.at += 700;
+    g.typed('a');
+    g.at += 50;
+    g.typed('b');
+    g.at += 50;
+    g.typed('c');
+    assert_eq!(g.r.terminal_reads().retracked_on_key, 1);
+    g.at += 600;
+    g.typed('d');
+    assert_eq!(g.r.terminal_reads().retracked_on_key, 2);
+    assert!(!g.r.term_tracked(), "no policy, no tracking");
+}
+
+#[test]
+fn key_names_are_silent_while_command_keys_are_off_and_spoken_when_on() {
+    let mut g = rig();
+    // Not a terminal, not a text field: the generic echo.
+    for (sym, uni, name) in [
+        (0xff09, 9, "tab"),
+        (0xff0d, 13, "enter"),
+        (0xff08, 8, "backspace"),
+        (0xff1b, 27, "escape"),
+    ] {
+        g.at += 50;
+        assert!(
+            spoken(&g.key(sym, uni, NONE)).is_empty(),
+            "{name} by default"
+        );
+    }
+    // Typed characters and space are not names.
+    assert_eq!(spoken(&g.typed('a')), ["a"]);
+    assert_eq!(spoken(&g.key(0x20, 0x20, NONE)), ["space"]);
+    g.r.cmd.overlay.command_keys = Some(true);
+    g.r.cmd.republish();
+    for (sym, uni, name) in [(0xff09, 9, "tab"), (0xff0d, 13, "enter")] {
+        g.at += 50;
+        assert_eq!(spoken(&g.key(sym, uni, NONE)), [name]);
+    }
+}
+
+#[test]
+fn a_key_after_a_focus_that_never_finished_presents_it_again_once() {
+    let mut g = rig();
+    // The focus event came 3 s ago and its fetch failed twice: never presented, never tracked.
+    g.r.focus = crate::focus::FocusState::Focused {
+        node: node(),
+        epoch: g.epoch.current(),
+        presented: false,
+    };
+    g.r.last_focus = Some((node(), g.t0));
+    g.at = 3000;
+    let fetches = |fx: &ReaderEffects| {
+        fx.iter()
+            .filter(|e| {
+                matches!(e, ReaderEffect::Fetch { node: n, kind: crate::FetchKind::Focus, .. } if *n == node())
+            })
+            .count()
+    };
+    let fx = g.typed('l');
+    assert_eq!(fetches(&fx), 1, "{fx:?}");
+    assert_eq!(g.r.counters.focus_represented_on_key, 1);
+    g.at += 100;
+    let fx = g.typed('l');
+    assert_eq!(fetches(&fx), 0, "rate limited");
+    // A focus that is still young is simply in flight: not asked again.
+    let mut h = rig();
+    h.r.focus = crate::focus::FocusState::Focused {
+        node: node(),
+        epoch: h.epoch.current(),
+        presented: false,
+    };
+    h.r.last_focus = Some((node(), h.t0));
+    h.at = 300;
+    let fx = h.typed('l');
+    assert_eq!(fetches(&fx), 0);
+}

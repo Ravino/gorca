@@ -406,6 +406,8 @@ pub struct Reader {
     pub(crate) web: Option<BrowseState>,
     /// The focus whose fetch failed and was tried once more (N2).
     pub(crate) focus_retried: Option<NodeKey>,
+    /// The last focus presentation restarted by a key press (the first one never finished).
+    pub(crate) focus_represent_at: Option<(NodeKey, Instant)>,
     /// A focus (or switcher selection) whose fetch was refused as `Busy` and is asked again
     /// after a growing delay (the application is flooded, e.g. the Shell opening the Alt+Tab
     /// switcher: asking again at once meets the same full queue).
@@ -453,6 +455,8 @@ pub struct ReaderCounters {
     pub focus_reconfirm_retries: u64,
     /// Reconfirm reads started by a key press in an unprotected terminal.
     pub focus_reconfirm_key_reads: u64,
+    /// Focus presentations that never finished and were restarted by a key press.
+    pub focus_represented_on_key: u64,
     /// RV-1 fetches issued.
     pub revalidations: u64,
     /// RV-1 replies that agreed with what was presented.
@@ -492,6 +496,7 @@ impl Reader {
             review: ReviewState::new(),
             web: None,
             focus_retried: None,
+            focus_represent_at: None,
             focus_backoff: None,
             name_retry: None,
             name_retried: None,
@@ -1112,6 +1117,8 @@ mod tests {
     #[test]
     fn selection_speech_outranks_the_echo_of_the_key_that_caused_it() {
         let mut f = fixture();
+        f.reader.cmd.overlay.command_keys = Some(true);
+        f.reader.cmd.republish();
         f.writer.apply(
             SnapshotBatch {
                 nodes: vec![selected_snap(1, "Files")],

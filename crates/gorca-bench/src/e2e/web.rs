@@ -1620,3 +1620,71 @@ pub fn w2(
     }
     Ok(())
 }
+
+// ---------------------------------------------------------------------------------------------
+// WD: the page keys must keep working after a popup closes
+
+const TAB_KEY: K = K {
+    code: 23,
+    sym: 0xff09,
+};
+
+/// WD: a modal popup opens and closes in four ways (focus restored, blurred, list re-rendered
+/// with the focus on a new node, focus dropped), and then Tab and Enter are pressed on the page.
+/// Browse mode must be back: Enter on a link is grabbed (the page handles it), and the generic
+/// key echo never speaks "tab" or "enter" (the signature of a reader that lost the page).
+/// `wd_failures` gate 0.
+pub fn wd(
+    host: &HostEnv,
+    reader: &super::apps::ReaderSpec,
+    flavor: Flavor,
+    _size: Size,
+    out: &mut RunOut,
+) -> Result<()> {
+    if !gate_open(host, "WD", out)? {
+        return Ok(());
+    }
+    let url = file_url(&pages_dir(host).join("dialog.html"))?;
+    let (mut w, doc) = Web::start(host, reader, flavor, &[url], "M7 Dialog")?;
+    w.prime(&doc)?;
+    let open = w.find(&doc.path, "button", "New dialog")?;
+    let mut failures = 0u64;
+    for (variant, label) in [
+        ("Close and restore", "restore"),
+        ("Close and blur", "blur"),
+        ("Close and re-render", "rerender"),
+        ("Close and drop focus", "drop"),
+        ("Close and restore", "restore again"),
+    ] {
+        let link = w.find(&doc.path, "link", "Chat one")?;
+        w.focus(&link)?;
+        std::thread::sleep(Duration::from_millis(600));
+        w.action(&open)?;
+        std::thread::sleep(Duration::from_millis(1200));
+        let close = w.find(&doc.path, "button", variant)?;
+        let mark = w.mark();
+        w.action(&close)?;
+        std::thread::sleep(Duration::from_millis(1500));
+        let after_close: Vec<String> = speaks_since(&w, mark).into_iter().map(|s| s.1).collect();
+        // The user presses Tab through the chat list and Enter.
+        let mark = w.mark();
+        let (_, tab_consumed) = w.press(TAB_KEY, 0)?;
+        std::thread::sleep(Duration::from_millis(600));
+        let (_, enter_consumed) = w.press(ENTER, 0)?;
+        std::thread::sleep(Duration::from_millis(900));
+        let keys: Vec<String> = speaks_since(&w, mark).into_iter().map(|s| s.1).collect();
+        let named = keys
+            .iter()
+            .any(|t| matches!(t.trim(), "tab" | "enter" | "backspace"));
+        let bad = named || !enter_consumed;
+        if bad {
+            failures += 1;
+        }
+        out.notes.push(format!(
+            "WD {label}: after the close {after_close:?}; Tab consumed {tab_consumed}, Enter consumed {enter_consumed}; keys said {keys:?}{}",
+            if bad { "  <-- FAILED" } else { "" }
+        ));
+    }
+    out.x("wd_failures", failures as f64, "variants");
+    Ok(())
+}

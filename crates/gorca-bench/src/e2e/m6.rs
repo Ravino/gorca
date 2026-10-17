@@ -3015,8 +3015,7 @@ const PAGE_DOWN: K = K {
 /// in a tracked terminal are never spoken as names: a name means the terminal is not tracked).
 fn key_name_spoken(got: &[String]) -> Option<&str> {
     got.iter().map(String::as_str).find(|s| {
-        ["tab", "backspace", "enter", "return"]
-            .contains(&s.to_ascii_lowercase().as_str())
+        ["tab", "backspace", "enter", "return"].contains(&s.to_ascii_lowercase().as_str())
     })
 }
 
@@ -3061,10 +3060,14 @@ fn vd_cycle(v: &mut V, c: &mut Check, tag: &str) -> Result<()> {
     })?;
     c.vd(&format!("{tag} Ctrl+U"), !got.is_empty(), &got);
     // Several candidates: the common prefix completes, the second Tab pair lists them.
-    let got = v.said_during(300, |v| v.type_text("ls /usr/bin/gnome-s").map(|_| ()))?;
+    let got = v.said_during(300, |v| v.type_text("ls /usr/bin/gnome-se").map(|_| ()))?;
     c.vd(&format!("{tag} typing a path"), !got.is_empty(), &got);
     let got = v.said_during(600, |v| v.press(TAB, 9, 0, &[15]).map(|_| ()))?;
-    c.vd(&format!("{tag} Tab: the prefix"), heard(&got, "ession"), &got);
+    c.vd(
+        &format!("{tag} Tab: the prefix"),
+        heard(&got, "ession"),
+        &got,
+    );
     let got = v.said_during(1500, |v| {
         v.press(TAB, 9, 0, &[15])?;
         std::thread::sleep(Duration::from_millis(150));
