@@ -1240,3 +1240,249 @@ fn output_that_arrives_before_any_baseline_is_spoken_not_swallowed() {
     let spoken = texts(&a).join("|");
     assert!(spoken.contains("out"), "{spoken}");
 }
+
+// ---- history recall under many redraw shapes --------------------------------------------------
+
+/// A readline terminal: `hist` rows above the prompt, a prompt, the command, wrapped at `w`
+/// columns, on a screen of `h` rows. The prompt stays on the bottom row once the screen is full.
+struct Tty {
+    w: usize,
+    h: usize,
+    hist: Vec<String>,
+}
+
+const PROMPT: &str = "me@box:~$ ";
+
+impl Tty {
+    /// The screen text (every row plus a newline, blank rows included) and the caret offset.
+    fn render(&self, cmd: &str) -> (String, u32) {
+        let line: Vec<char> = format!("{PROMPT}{cmd}").chars().collect();
+        let mut rows = self.hist.clone();
+        for ch in line.chunks(self.w) {
+            rows.push(ch.iter().collect());
+        }
+        let last = rows.len() - 1;
+        let drop = rows.len().saturating_sub(self.h);
+        let caret_row = (last - drop).min(self.h - 1);
+        let mut shown: Vec<String> = rows.into_iter().skip(drop).collect();
+        while shown.len() < self.h {
+            shown.push(String::new());
+        }
+        let mut off = 0u32;
+        let mut text = String::new();
+        for (i, r) in shown.iter().enumerate() {
+            let r = r.trim_end();
+            let n = r.chars().count() as u32;
+            if i < caret_row {
+                off += n + 1;
+            } else if i == caret_row {
+                off += n;
+            }
+            text.push_str(r);
+            text.push('\n');
+        }
+        (text, off)
+    }
+}
+
+/// The events VTE sends for one redraw, in one of several shapes.
+fn redraw_events(old: &str, new: &str, shape: u8, caret: u32) -> Vec<TermInput> {
+    let mut ev = Vec::new();
+    let o: Vec<char> = old.chars().collect();
+    let n: Vec<char> = new.chars().collect();
+    match shape {
+        0 => ev.push(TermInput::Edit(TermEdit::Replaced)),
+        1 => {
+            ev.push(TermInput::Edit(TermEdit::Delete {
+                offset: 0,
+                len: o.len() as u32,
+            }));
+            ev.push(TermInput::Edit(TermEdit::Insert {
+                offset: 0,
+                len: n.len() as u32,
+                text: Some(new.to_owned()),
+            }));
+        }
+        _ => {
+            let m = o.len().min(n.len());
+            let mut head = 0;
+            while head < m && o[head] == n[head] {
+                head += 1;
+            }
+            let mut tl = 0;
+            while tl < m - head && o[o.len() - 1 - tl] == n[n.len() - 1 - tl] {
+                tl += 1;
+            }
+            let del = o.len() - head - tl;
+            let ins: String = n[head..n.len() - tl].iter().collect();
+            if del > 0 {
+                ev.push(TermInput::Edit(TermEdit::Delete {
+                    offset: head as u32,
+                    len: del as u32,
+                }));
+            }
+            if !ins.is_empty() {
+                ev.push(TermInput::Edit(TermEdit::Insert {
+                    offset: head as u32,
+                    len: ins.chars().count() as u32,
+                    text: Some(ins),
+                }));
+            }
+        }
+    }
+    ev.push(TermInput::Caret(caret));
+    ev
+}
+
+const RECALL_CMDS: [&str; 10] = [
+    "ls",
+    "git status",
+    "git commit -m \"a fairly long message that wraps past the width\"",
+    "echo \u{43f}\u{440}\u{438}\u{432}\u{435}\u{442} \u{43c}\u{438}\u{440}",
+    "cat /etc/passwd /etc/group /etc/hosts /etc/fstab /etc/os-release /etc/issue /etc/motd",
+    "x",
+    "",
+    "ls -l",
+    "lsa",
+    "ls -la /usr/share/doc/some/very/long/path/that/keeps/going/and/going/and/going/on/and/on",
+];
+
+/// One recall of `to` over `from` on a screen with `hist_len` rows of output, in redraw `shape`.
+fn recall_says(hist_len: usize, shape: u8, from: &str, to: &str) -> Vec<String> {
+    let tty = Tty {
+        w: 40,
+        h: 10,
+        hist: (0..hist_len).map(|k| format!("out {k}")).collect(),
+    };
+    let (s0, c0) = tty.render(from);
+    let (s1, c1) = tty.render(to);
+    let mut r = Rig::new();
+    r.focus(&s0, c0);
+    r.key(TermKey::LineUp);
+    r.screen = s1.clone();
+    r.caret = c1;
+    let mut acts = Vec::new();
+    for e in redraw_events(&s0, &s1, shape, c1) {
+        r.now += 1;
+        acts.extend(r.feed(e));
+    }
+    acts.extend(r.wait(31));
+    acts.extend(r.wait(100));
+    texts(&acts)
+}
+
+#[test]
+fn history_recall_is_spoken_once_in_every_redraw_shape() {
+    let mut fails = Vec::new();
+    for hist_len in [0usize, 3, 9, 30] {
+        for shape in 0..3u8 {
+            for (i, from) in RECALL_CMDS.iter().enumerate() {
+                for to in RECALL_CMDS
+                    .iter()
+                    .skip(i + 1)
+                    .chain(RECALL_CMDS.iter().take(i))
+                {
+                    if from == to {
+                        continue;
+                    }
+                    let t = recall_says(hist_len, shape, from, to);
+                    let want = if to.is_empty() { "blank" } else { to };
+                    if t != vec![want.to_owned()] {
+                        fails.push(format!("h{hist_len} s{shape} {from:?} -> {to:?}: {t:?}"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        fails.is_empty(),
+        "{} failures:\n{}",
+        fails.len(),
+        fails.join("\n")
+    );
+}
+
+#[test]
+fn a_history_key_that_changes_nothing_still_reads_the_line() {
+    // The same command twice in the history: readline redraws nothing.
+    let mut r = Rig::new();
+    r.focus("out\nme@box:~$ ls", 16);
+    r.key(TermKey::LineUp);
+    let a = r.wait(300);
+    assert_eq!(says(&a), vec![("ls".to_owned(), Urgency::Key)]);
+    // Once only.
+    assert!(texts(&r.wait(1000)).is_empty());
+}
+
+#[test]
+fn a_recall_is_not_read_twice_when_its_redraw_comes_late() {
+    let mut r = Rig::new();
+    r.focus("out\nme@box:~$ ", 14);
+    r.key(TermKey::LineUp);
+    let mut said = texts(&r.wait(100));
+    said.extend(texts(&r.repaint("out\nme@box:~$ git status", 24)));
+    said.extend(texts(&r.wait(1000)));
+    assert_eq!(said, vec!["git status".to_owned()]);
+}
+
+#[test]
+fn two_quick_history_keys_read_each_recall_once() {
+    // The first redraw is read before the second key's redraw arrives.
+    let mut r = Rig::new();
+    r.focus("out\nme@box:~$ ", 14);
+    r.key(TermKey::LineUp);
+    r.screen = "out\nme@box:~$ ls\n".to_owned();
+    r.caret = 16;
+    let mut acts = r.feed(TermInput::Edit(TermEdit::Replaced));
+    acts.extend(r.feed(TermInput::Caret(16)));
+    // The settle fires and the read is in flight when the second key is pressed.
+    r.now += 31;
+    acts.extend(r.feed(TermInput::Tick));
+    r.key(TermKey::LineUp);
+    r.now += 1;
+    acts.extend(r.feed(TermInput::Screen {
+        text: "out\nme@box:~$ ls\n".to_owned(),
+        caret: Some(16),
+    }));
+    r.screen = "out\nme@box:~$ git status\n".to_owned();
+    r.caret = 24;
+    acts.extend(r.feed(TermInput::Edit(TermEdit::Replaced)));
+    acts.extend(r.feed(TermInput::Caret(24)));
+    acts.extend(r.wait(31));
+    acts.extend(r.wait(1000));
+    assert_eq!(
+        texts(&acts),
+        vec!["ls".to_owned(), "git status".to_owned()],
+        "{acts:?}"
+    );
+}
+
+#[test]
+fn a_pager_scrolling_under_down_is_not_followed_by_a_line_read() {
+    let mut r = Rig::new();
+    let page = |a: usize| format!("{}:", lines(a..a + 23));
+    r.focus(&page(1000), page(1000).chars().count() as u32);
+    r.key(TermKey::LineDown);
+    r.screen = page(1001);
+    r.caret = r.screen.chars().count() as u32;
+    let mut acts = r.feed(TermInput::Edit(TermEdit::Replaced));
+    acts.extend(r.wait(31));
+    acts.extend(r.wait(1000));
+    let said = texts(&acts);
+    assert!(!said.iter().any(|t| t == ":"), "{said:?}");
+}
+
+#[test]
+fn recall_to_a_blank_line_below_older_prompts_says_blank_not_the_output() {
+    // The older prompt line above has the same prompt text; the empty recall lost its blank.
+    let mut r = Rig::new();
+    let above = "me@box:~$ git status\nOn branch main\n";
+    r.focus(&format!("{above}me@box:~$ git status"), 56);
+    r.key(TermKey::LineDown);
+    let a = r.repaint(&format!("{above}me@box:~$"), 49);
+    assert_eq!(texts(&a), vec!["blank".to_owned()]);
+    // And a recall to a command, with the same older prompts above.
+    r.key(TermKey::LineUp);
+    let a = r.repaint(&format!("{above}me@box:~$ ls"), 52);
+    assert_eq!(texts(&a), vec!["ls".to_owned()]);
+}

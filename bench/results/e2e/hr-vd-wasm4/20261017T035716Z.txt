@@ -1,0 +1,35 @@
+# e2e hr-vd-wasm4
+# utc=2026-10-17T03:57:16Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=13.09 17.08 16.26 16/3168 3746189
+# git_rev=6a86749
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx1
+# topology_expected=-
+# label=hr-vd-wasm4
+# reader=daemon:<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=13.09 17.08 16.26 6/3168 3746186
+# reader_env=GORCA_M6=1 GORCA_M6_REAL=1 GORCA_VD_RECOVER=1 GORCA_VD_ROUNDS=2 GORCA_TOPOLOGY_REPORT=bench/results/e2e/hr-vd-wasm4/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca --terminal-policy=auto --ext-dir=<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/extensions
+# ext_dir=<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/extensions
+# extensions=ext-gnome-shell,ext-vte
+# note0=VD round 0 (idle 20 s): 0 failing steps
+# note1=VD round 1 (second app window, Alt+Tab back): 0 failing steps
+
+metric                     bus                median          min          max  n op    threshold  res   note
+VD.vd_bad_rounds           daemon/voicego            0            0            0  1                  info   [rounds]
+VD.vd_base_failures        daemon/voicego            0            0            0  1                  info   [steps]
+VD.vd_failures             daemon/voicego            0            0            0  1                  info   [steps]

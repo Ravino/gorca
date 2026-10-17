@@ -22,14 +22,6 @@ pub enum Dir {
     Back,
 }
 
-/// How to spell a text out. M4a speaks all of them as letters.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum Spell {
-    Letters,
-    Phonetic,
-    CodePoint,
-}
-
 pub type Ranges = SmallVec<[Range<u32>; 16]>;
 
 pub trait TextUnits: Send + Sync {
@@ -53,9 +45,6 @@ pub trait TextUnits: Send + Sync {
             Dir::Back => all.into_iter().rev().find(|r| r.start < cur_start),
         }
     }
-
-    /// The spoken form of `s` spelled out.
-    fn spell(&self, s: &str, how: Spell) -> String;
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -93,29 +82,6 @@ impl TextUnits for SimpleUnits {
         }
         out
     }
-
-    fn spell(&self, s: &str, how: Spell) -> String {
-        // M3's verbalizer will give Phonetic and CodePoint their own forms.
-        match how {
-            Spell::Letters | Spell::Phonetic | Spell::CodePoint => spell_letters(s),
-        }
-    }
-}
-
-/// `Save` becomes "S a v e"; a space is "space".
-pub fn spell_letters(text: &str) -> String {
-    let mut out = String::with_capacity(text.len() * 2);
-    for (i, g) in text.graphemes(true).enumerate() {
-        if i > 0 {
-            out.push(' ');
-        }
-        if g.chars().all(char::is_whitespace) {
-            out.push_str("space");
-        } else {
-            out.push_str(g);
-        }
-    }
-    out
 }
 
 /// The substring of `text` for the scalar range `r`.
@@ -124,17 +90,6 @@ pub fn slice(text: &str, r: &Range<u32>) -> String {
         .skip(r.start as usize)
         .take(r.end.saturating_sub(r.start) as usize)
         .collect()
-}
-
-/// The spoken form of one character or grapheme (a space is "space").
-pub fn char_text(g: &str) -> String {
-    if g.is_empty() {
-        "blank".to_owned()
-    } else if g.chars().all(char::is_whitespace) {
-        "space".to_owned()
-    } else {
-        g.to_owned()
-    }
 }
 
 #[cfg(test)]
@@ -185,11 +140,7 @@ mod tests {
     }
 
     #[test]
-    fn spelling_names_spaces() {
-        assert_eq!(spell_letters("a b"), "a space b");
-        assert_eq!(SimpleUnits.spell("Save", Spell::Letters), "S a v e");
-        assert_eq!(char_text(" "), "space");
-        assert_eq!(char_text(""), "blank");
+    fn slice_is_by_scalar() {
         assert_eq!(slice("héllo wörld", &(1..4)), "éll");
     }
 }

@@ -1,0 +1,14 @@
+suite=m6
+step=vv
+attempt=1
+kind=e2e
+exit=1
+label=acc-20261017T040807Z-m6-vv-a1
+start=1792213713
+end=1792214083
+seconds=370
+load_start=15.28 19.96 18.00 6/2277 28273
+load_end=26.84 20.35 18.44 32/2202 66823
+governor=performance 
+git_rev=6a86749
+cap_seconds=3600

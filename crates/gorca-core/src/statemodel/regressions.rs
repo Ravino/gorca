@@ -53,7 +53,6 @@ fn the_same_seed_gives_the_same_sequence_and_verdict() {
 /// because the text layer is switched off in review and nothing switched review off.
 /// Fixed by commit 4652684 (branch worktree-agent-a81984edf8db88784).
 #[test]
-#[ignore = "fails until 4652684 (fix(review): leave review when a key is typed into the focused object) is merged"]
 fn typing_into_the_focused_entry_leaves_review() {
     expect_clean(&[
         focus(ENTRY),
