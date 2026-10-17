@@ -703,9 +703,15 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
                         };
                         // The unit this move has to land on while the line has room for it.
                         let room = TermUnits.next(t0, *o0, unit, dir);
-                        // review-drift: the line is on the screen, the move had room in it,
-                        // yet the cursor is on another line.
-                        if t1 != *t0 && on_screen && room.is_some() {
+                        // review-drift: the line is (still) on the screen, the move had room in
+                        // it, yet the cursor is on another line. A line the screen no longer has
+                        // (output replaced it) has nothing to stay on: the cursor goes to the
+                        // nearest line of the new screen.
+                        if t1 != *t0
+                            && on_screen
+                            && room.is_some()
+                            && s.r.review_screen_has_line(t0)
+                        {
                             bail!(
                                 "review-drift",
                                 format!("{c:?} at {o0} of {t0:?} ended on {t1:?} at {o1}")
@@ -798,7 +804,7 @@ fn env_u64(name: &str, default: u64) -> u64 {
 /// Invariant ids that are known to fail on the current tree: each has an `#[ignore]`d regression
 /// test in `regressions.rs` and a note in `docs/reports/reader-state-proptest.md`. Setting
 /// `GORCA_STATE_STRICT=1` removes the allowance.
-const KNOWN: &[&str] = &["review-kept", "term-silent-after-review"];
+const KNOWN: &[&str] = &[];
 
 thread_local! {
     /// While set, the checks of the `KNOWN` invariants are switched off (so that they do not

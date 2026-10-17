@@ -1461,6 +1461,14 @@ impl Reader {
         Some((text, p.offset, on_screen))
     }
 
+    /// Test probe: does the current terminal model still have a line with exactly this text?
+    #[cfg(test)]
+    pub(crate) fn review_screen_has_line(&self, text: &str) -> bool {
+        self.review.cur.as_ref().is_some_and(|c| {
+            c.source == LineSource::Terminal && c.lines.iter().any(|l| *l.text == *text)
+        })
+    }
+
     /// Test probe: is a review step suspended on a terminal's screen read?
     #[cfg(test)]
     pub(crate) fn review_waits_for_terminal(&self) -> bool {

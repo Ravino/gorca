@@ -478,6 +478,24 @@ impl Reader {
         started
     }
 
+    /// The text layer is active again (review ended, a mode that had switched it off is over)
+    /// with `node` still the tracked terminal: keep its session, with what the last key made it
+    /// expect, and have it read the screen again (what happened meanwhile is a plain change, not
+    /// a new baseline that would speak the line over a history recall). False when the terminal
+    /// is not tracked, or only by the stand-in: the caller tracks it afresh.
+    pub(crate) fn term_resume(&mut self, node: NodeKey, fx: &mut ReaderEffects) -> bool {
+        let live = self
+            .text
+            .term
+            .tracked
+            .as_ref()
+            .is_some_and(|t| t.node == node && !t.sess.degraded() && t.read_ok);
+        if live {
+            self.term_events_lost(fx);
+        }
+        live
+    }
+
     /// Focus moved on, or the terminal is gone: wipe what the extension knows (secrets included).
     pub(crate) fn term_untrack(&mut self, why: &'static str) {
         self.text.term.secret_hold = false;

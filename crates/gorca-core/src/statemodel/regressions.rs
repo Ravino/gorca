@@ -232,3 +232,43 @@ fn re_reading_a_baseline_less_terminal_while_reads_fail_arms_no_timer_storm() {
         after(2600, Op::Type(KeyKind::Letter('z'), Modifiers::CONTROL)),
     ]);
 }
+
+/// Found by the 50k run (seed 2021185, shrunk): background output replaces the whole screen, and
+/// the line the review cursor was on is gone. The invariant `review-drift` flagged the cursor
+/// moving to the new prompt line, but a line the screen no longer has has nothing to stay on; the
+/// invariant now asks that the old line is still there. (With the line present the cursor stays:
+/// `review_by_character_goes_on_while_the_line_shifts_up`.)
+#[test]
+fn review_by_character_stays_on_its_line_while_the_terminal_answers_late() {
+    expect_clean(&[
+        quick(Op::TermAsync),
+        quick(Op::Focus {
+            node: TERM,
+            prelude: None,
+            dups: 2,
+        }),
+        quick(Op::Type(KeyKind::Letter('z'), Modifiers::SHIFT)),
+        quick(Op::Cmd(CoreCmd::ReviewNextChar, 2)),
+        quick(Op::TermAsync),
+        quick(Op::Cmd(CoreCmd::ReviewNextChar, 2)),
+    ]);
+}
+
+/// Found by the 50k run (seed 823517, shrunk; a known id before): Up in the terminal after review
+/// must speak the recalled command.
+#[test]
+fn history_recall_after_review_is_spoken() {
+    expect_clean(&[
+        quick(Op::Focus {
+            node: TERM,
+            prelude: None,
+            dups: 0,
+        }),
+        quick(Op::Type(KeyKind::Down, Modifiers::empty())),
+        quick(Op::Type(KeyKind::Backspace, Modifiers::empty())),
+        quick(Op::Type(KeyKind::Backspace, Modifiers::empty())),
+        quick(Op::Type(KeyKind::Letter('b'), Modifiers::empty())),
+        quick(Op::Cmd(CoreCmd::ObjectNext, 2)),
+        quick(Op::Type(KeyKind::Up, Modifiers::empty())),
+    ]);
+}

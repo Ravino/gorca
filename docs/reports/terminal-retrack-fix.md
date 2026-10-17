@@ -39,7 +39,7 @@ the re-read because `read_ok` is set by any answered read.
 
 ## Results
 - Strict 50k, after the fix: seeds 1 and 100000 clean. Seed 777777 and 2000000 still report
-  `term-silent-after-review` (823517; KNOWN list) and `review-drift` (2021185). Both were verified
+  `term-silent-after-review (823517) and `review-drift` (2021185). Both were verified
   to reproduce identically on base 10ab9f6f (term code reverted), so they are separate
   pre-existing review bugs, not terminal tracking; not fixed here.
 - Gates: fmt, clippy --workspace --all-targets -D warnings, cargo test --workspace (all ok), xtask strings ok.
