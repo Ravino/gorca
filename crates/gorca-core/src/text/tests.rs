@@ -2501,4 +2501,80 @@ fn a_description_is_symbol_processed_once_and_still_follows_the_pause() {
     assert_eq!(again.segments, said.segments);
     let v = gorca_speech::Verbalizer.verbalize(&said);
     assert_eq!(&*v.text, "Search, edit. C plus plus 50 percent");
+
+// ---- review must not leave the typing echo altered --------------------------------------
+
+fn enter_review(g: &mut Rig) {
+    use crate::mode::{ModeMsg, ReviewCursor, ReviewFrom, ReviewOrigin};
+    use crate::review::ReviewKind;
+    let mut fx = ReaderEffects::new();
+    g.r.on_mode(
+        ModeMsg::EnterReview {
+            origin: ReviewOrigin {
+                node: node(),
+                from: ReviewFrom::Focus,
+            },
+            cursor: ReviewCursor::at(node(), ReviewKind::Screen),
+        },
+        &mut fx,
+    );
+    assert!(matches!(g.r.mode(), crate::mode::Mode::Review { .. }));
+}
+
+/// Type "a", review, then type space and "!" and press Backspace: what each key said.
+fn review_then_type(lang: &str) -> Vec<Vec<String>> {
+    let mut g = rig();
+    g.r.cmd.file.speech.language = lang.to_owned();
+    g.r.cmd.republish();
+    g.entry("", 0);
+    let _ = g.typed('a');
+    let _ = g.insert(0, "a");
+    let _ = g.caret(1);
+    enter_review(&mut g);
+    let mut out = Vec::new();
+    for (at, c) in [(1, ' '), (2, '!')] {
+        out.push(spoken(&g.typed(c)));
+        assert!(
+            matches!(g.r.mode(), crate::mode::Mode::Focus),
+            "typing leaves review"
+        );
+        let _ = g.insert(at, &c.to_string());
+        let _ = g.caret(at + 1);
+    }
+    let _ = g.key(0xff08, 0, Modifiers::empty());
+    out.push(spoken(&g.delete(2, Some("!"), 1)));
+    out
+}
+
+#[test]
+fn typing_after_review_echoes_like_before_in_russian() {
+    let out = review_then_type("ru");
+    assert_eq!(out[0], ["пробел"], "space");
+    assert_eq!(out[1].len(), 1);
+    assert_ne!(out[1][0], "!", "the symbol is named");
+    assert_eq!(out[2].len(), 1, "the erased character is spoken");
+}
+
+#[test]
+fn typing_after_review_echoes_like_before_in_english() {
+    let out = review_then_type("en");
+    assert_eq!(out[0], ["space"]);
+    assert_eq!(out[1].len(), 1);
+    assert_ne!(out[1][0], "!");
+    assert_eq!(out[2].len(), 1);
+}
+
+#[test]
+fn lone_modifiers_do_not_end_review_and_generic_echo_is_localised() {
+    let mut g = rig();
+    g.entry("", 0);
+    enter_review(&mut g);
+    let _ = g.key(0xffe1, 0, Modifiers::empty());
+    assert!(matches!(g.r.mode(), crate::mode::Mode::Review { .. }));
+    // Generic echo of a key the text layer does not own (no tracked object).
+    let mut h = rig();
+    h.r.cmd.file.speech.language = "ru".to_owned();
+    h.r.cmd.republish();
+    assert_eq!(spoken(&h.typed(' ')), ["пробел"]);
+    assert_eq!(spoken(&h.typed('!')).len(), 1);
 }

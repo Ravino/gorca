@@ -7,7 +7,7 @@ use gorca_input_api::{KeyClass, KeyIntent};
 
 use crate::SpeechIntent;
 use crate::mode::Mode;
-use crate::present::{key_echo, key_echo_is_action, key_echo_text};
+use crate::present::{key_echo, key_echo_is_action, key_echo_spoken, key_echo_text};
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 
 impl Reader {
@@ -44,6 +44,7 @@ impl Reader {
             }
             KeyClass::PassToApp => {
                 self.pass_key_seen(&intent, fx);
+                self.review_left_by_key(&intent, fx);
                 self.focus_audit_on_key(&intent, fx);
                 // The text layer speaks typed characters and erasures of an editable object
                 // itself (ADR-0007 TE-1, TE-5): the generic echo would double them.
@@ -59,12 +60,30 @@ impl Reader {
                     && (!key_echo_is_action(&text) || self.cmd.effective.echo.command_keys)
                 {
                     let id = self.utt_id();
-                    let u = key_echo(&text, id, intent.epoch);
+                    let said =
+                        key_echo_spoken(&text, &self.text.verbalizer, self.verbalize_opts());
+                    let u = key_echo(&said, id, intent.epoch);
                     fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
                 }
             }
             KeyClass::Swallowed | KeyClass::Injected => {}
         }
+    }
+
+    /// A key press that goes to the application ends review: the user is typing into the focused
+    /// object, so the text layer (typed-character echo, erasures, caret) must own the key again
+    /// instead of the generic key echo naming it. Review resumes at the focus on its next
+    /// command (ADR-0006 4.1). Lone modifiers never leave review.
+    fn review_left_by_key(&mut self, intent: &KeyIntent, fx: &mut ReaderEffects) {
+        if !intent.event.pressed
+            || !matches!(self.mode, Mode::Review { .. })
+            || (0xffe1..=0xffee).contains(&intent.event.keysym)
+        {
+            return;
+        }
+        self.review_cancel_pending();
+        self.on_mode(crate::mode::ModeMsg::ExitReview, fx);
+        self.text_resync_after_review(fx);
     }
 
     /// A key that is going to the application reaches a Reader whose picture of the focus may

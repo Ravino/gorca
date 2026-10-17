@@ -342,6 +342,14 @@ impl Reader {
         matches!(self.mode, Mode::Focus | Mode::PassThrough { .. })
     }
 
+    /// Review ended: caret, edit and selection events were dropped while it lasted, so the
+    /// tracked window is stale. It is refetched on demand.
+    pub(crate) fn text_resync_after_review(&mut self, fx: &mut ReaderEffects) {
+        if !self.text.caret.is_off() && self.text_active() {
+            self.text_step(In::Dirty, fx);
+        }
+    }
+
     fn text_cfg(&self) -> Cfg {
         let s = &self.cmd.effective;
         Cfg {

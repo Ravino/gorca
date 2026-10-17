@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 
 use gorca_connector_api::ActionReq;
 use gorca_model::{Epoch, Lookup, NodeKey, NodeSnapshot, PropMask, Role, StateSet};
+use gorca_speech::How;
 use smallvec::SmallVec;
 
 use super::build::{NavFetchError, ProbeItem, RrVerdict};
@@ -18,7 +19,7 @@ use super::cursor::{ReviewOrigin, ReviewPos};
 use super::flat::{FlatMove, anchor_at_node, flat_step, line_text, nearest_line, pos_at, reanchor};
 use super::model::{Completeness, LineModel, LineSource};
 use super::objnav::{NavMove, NavOp, StepResult, step, step_degraded};
-use super::segment::{Dir, SimpleUnits, Spell, TextUnits, Unit, char_text, slice, spell_letters};
+use super::segment::{Dir, SimpleUnits, TextUnits, Unit, slice};
 use super::validity::{Validity, validity};
 use super::{BuildRequest, OpState, ReviewMsg, RrCheck};
 use crate::SpeechIntent;
@@ -298,6 +299,11 @@ impl Reader {
             self.review.op = OpState::Idle;
             self.on_mode(ModeMsg::ExitReview, fx);
         }
+    }
+
+    /// Drop the pending review operation (review is being left).
+    pub(crate) fn review_cancel_pending(&mut self) {
+        self.review.op = OpState::Idle;
     }
 
     pub(crate) fn review_app_gone(&mut self, app: gorca_model::AppId, fx: &mut ReaderEffects) {
@@ -684,7 +690,8 @@ impl Reader {
                     if name.is_empty() {
                         self.say(&format!("{}, no name", v.snap.role.spoken()), fx);
                     } else {
-                        self.say(&spell_letters(name), fx);
+                        let spelled = self.review_spell(name);
+                        self.say(&spelled, fx);
                     }
                     return Step::Done;
                 }
@@ -985,21 +992,9 @@ impl Reader {
             let d = if many { None } else { Some(list) };
             self.background_refresh(&model, d, now, fx);
         }
-        // Speak.
-        let mut text = out.said.clone();
-        if rep >= 2
-            && matches!(
-                mv,
-                FlatMove::CurLine | FlatMove::CurWord | FlatMove::CurChar
-            )
-        {
-            let how = match (rep, mv) {
-                (3.., FlatMove::CurChar) => Spell::CodePoint,
-                (3.., _) => Spell::Phonetic,
-                _ => Spell::Letters,
-            };
-            text = units.spell(&text, how);
-        }
+        // Speak: every unit is named like text read from a document, in the current language and
+        // at the current level; a character is always named, punctuation included.
+        let mut text = self.review_voice(mv, out.boundary, rep, &out.said);
         if out.boundary
             && out.said == "Bottom"
             && matches!(model.completeness, Completeness::Truncated(_))
@@ -1235,6 +1230,44 @@ impl Reader {
         }
     }
 
+    /// `text` spelled letter by letter, every character named in the current language.
+    fn review_spell(&self, text: &str) -> String {
+        self.text
+            .verbalizer
+            .spell(text, false, &self.verbalize_opts())
+    }
+
+    /// What is spoken for the unit a review move read: names it by the current language and
+    /// punctuation level (a character is always named, VB-1), spells it when the command was
+    /// repeated. Boundary words ("Top", "Bottom") pass untouched.
+    pub(super) fn review_voice(&self, mv: FlatMove, boundary: bool, rep: u8, said: &str) -> String {
+        if boundary {
+            return said.to_owned();
+        }
+        let o = self.verbalize_opts();
+        let v = &self.text.verbalizer;
+        let how = match mv {
+            FlatMove::PrevChar | FlatMove::CurChar | FlatMove::NextChar => How::Char,
+            FlatMove::PrevWord | FlatMove::CurWord | FlatMove::NextWord => How::Word,
+            FlatMove::PrevLine
+            | FlatMove::CurLine
+            | FlatMove::NextLine
+            | FlatMove::Top
+            | FlatMove::Bottom
+            | FlatMove::StartOfLine
+            | FlatMove::EndOfLine => How::Line,
+        };
+        let spelled = matches!(
+            mv,
+            FlatMove::CurLine | FlatMove::CurWord | FlatMove::CurChar
+        ) && rep >= 2;
+        if spelled {
+            v.spell(said, rep >= 3, &o)
+        } else {
+            v.unit(said, how, &o)
+        }
+    }
+
     // ---- object review over the navigator's text -----------------------------------------
 
     #[allow(clippy::too_many_arguments)]
@@ -1264,7 +1297,7 @@ impl Reader {
         };
         let text = flat_zone_text(&snap);
         let units = SimpleUnits;
-        let (new_offset, said, _boundary) = match mv {
+        let (new_offset, said, boundary) = match mv {
             FlatMove::CurLine => (offset, text.clone(), false),
             FlatMove::PrevLine | FlatMove::Top | FlatMove::StartOfLine => {
                 let edge = matches!(mv, FlatMove::PrevLine);
@@ -1292,17 +1325,7 @@ impl Reader {
                     .at(&text, offset, unit)
                     .map(|r| slice(&text, &r))
                     .unwrap_or_default();
-                (
-                    offset,
-                    if unit == Unit::Char {
-                        char_text(&s)
-                    } else if s.is_empty() {
-                        "blank".to_owned()
-                    } else {
-                        s
-                    },
-                    false,
-                )
+                (offset, s, false)
             }
             FlatMove::NextWord | FlatMove::PrevWord | FlatMove::NextChar | FlatMove::PrevChar => {
                 let unit = if matches!(mv, FlatMove::NextWord | FlatMove::PrevWord) {
@@ -1318,11 +1341,7 @@ impl Reader {
                 match units.next(&text, offset, unit, dir) {
                     Some(r) => {
                         let s = slice(&text, &r);
-                        (
-                            r.start,
-                            if unit == Unit::Char { char_text(&s) } else { s },
-                            false,
-                        )
+                        (r.start, s, false)
                     }
                     None => (
                         offset,
@@ -1336,15 +1355,7 @@ impl Reader {
                 }
             }
         };
-        let spoken = if rep >= 2
-            && matches!(
-                mv,
-                FlatMove::CurLine | FlatMove::CurWord | FlatMove::CurChar
-            ) {
-            spell_letters(&said)
-        } else {
-            said
-        };
+        let spoken = self.review_voice(mv, boundary, rep, &said);
         self.say(if spoken.is_empty() { "blank" } else { &spoken }, fx);
         self.set_cursor(ReviewCursor {
             nav: cur.nav,
@@ -1574,7 +1585,11 @@ impl Reader {
         } else {
             parts.join(", ")
         };
-        let text = if rep >= 2 { spell_letters(&text) } else { text };
+        let text = if rep >= 2 {
+            self.review_spell(&text)
+        } else {
+            text
+        };
         self.say(&text, fx);
     }
 

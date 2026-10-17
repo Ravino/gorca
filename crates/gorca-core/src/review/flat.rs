@@ -5,7 +5,7 @@ use gorca_model::NodeKey;
 
 use super::cursor::{FlatPos, ZoneAnchor};
 use super::model::{LineModel, LineSource, Zone, ZoneKind};
-use super::segment::{TextUnits, Unit, char_text, slice};
+use super::segment::{TextUnits, Unit, slice};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum FlatMove {
@@ -201,10 +201,7 @@ fn unit_move(
     let said = slice(&z.text, &r);
     FlatOut {
         pos: p,
-        said: match unit {
-            Unit::Char => char_text(&said),
-            Unit::Word => said,
-        },
+        said,
         boundary: false,
     }
 }
@@ -220,11 +217,7 @@ fn current_unit(model: &LineModel, pos: &FlatPos, units: &dyn TextUnits, unit: U
         .unwrap_or_default();
     FlatOut {
         pos: *pos,
-        said: match unit {
-            Unit::Char => char_text(&said),
-            Unit::Word if said.is_empty() => "blank".to_owned(),
-            Unit::Word => said,
-        },
+        said,
         boundary: false,
     }
 }
