@@ -61,6 +61,16 @@ contenteditable is sometimes silent (no deletion event reaches the reader in tim
 New strings are few: `new line`, `{n} spaces` / `{n} tabs` (auto-indent), `all selected, N characters`, `selected` /
 `unselected`. Grouped in `gorca-core/src/text/caret.rs` for the M12a catalogue migration.
 
-## Gates
+## Gates (final tree)
 
-See the final brief in the commit message of the closing commit and `bench/results/e2e/ug-*`.
+* `cargo fmt --check` clean; `cargo clippy --workspace --all-targets -- -D warnings` clean; `cargo xtask deps` ok;
+  `cargo test --workspace`: 2097 passed, 0 failed, 17 ignored (includes the statemodel sequence tests).
+* M3 typing/caret (C1,C1h,C2,C3,E1,E2,E2f,S2,SA1-3): 26 PASS, 0 FAIL (`bench/results/e2e/fin-m3`); an earlier run
+  (`ug-m3`) showed the known E2 load flake.
+* M6 VH/VT: VH pass; VT failed once at host load 15 with other agents' e2e running (`fin-m6`: vt_missing max 7),
+  passed 0/0/0/0 on rerun (`fin-vt2`), as did the earlier run at lower load (`ug-m6`). Kept both results.
+* M8 FC1/FE/FC typing: FC1 failed twice under load (`ug-m8`: p99 374 ms, lost 12; `ug-m8b`: lost 7 in one repeat),
+  then passed 3/3 repeats twice (`ug-m8c`, `ug-m8d`, p99 0.79 ms); FC1h, FE1, FCE2, FE2, FS2, FCE1: 34 PASS, 0 FAIL
+  (`ug-m8e`).
+* Strict K2/K3 and R1 with `--impersonate-orca`: 6 and 3 PASS, 0 FAIL (`fin-k2k3`, `fin-r1`).
+* ED matrix: see above (native, Firefox, Chromium groups, 3 repeats).
