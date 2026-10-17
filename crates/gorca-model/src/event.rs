@@ -149,6 +149,18 @@ pub enum ConnectorKind {
     Fake,
 }
 
+/// The web engine behind an application's pages (`AppInfo::web_engine`).
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub enum WebEngine {
+    /// Not a web engine (or one gorca does not know).
+    #[default]
+    None,
+    /// Gecko (Firefox, Thunderbird).
+    Gecko,
+    /// Blink (Chrome, Chromium, Edge, Brave, Electron).
+    Blink,
+}
+
 /// Extensions match on these; the core never branches on toolkit or app name.
 #[derive(Clone, Debug)]
 pub struct AppInfo {
@@ -179,6 +191,11 @@ pub struct AppInfo {
     /// reader was running. Chromium's tree appears after the first read; its documents then
     /// report `load-complete` although their pages were loaded long ago.
     pub page_events_settle_ms: u32,
+    /// The web engine that renders this application's pages, from the connector's toolkit
+    /// classification (`ToolkitName`, then the application name as the fallback): Chrome,
+    /// Chromium, Edge, Brave and Electron apps are all `Blink`. Selects the web document source
+    /// and its quirks; never derived from a name outside the connector.
+    pub web_engine: WebEngine,
     /// The application's root node, when the connector knows it. A fill policy that starts at
     /// the root (an eager dump, a window prefetch) gets it with `FillInput::Appeared`.
     pub root: Option<crate::NodeKey>,

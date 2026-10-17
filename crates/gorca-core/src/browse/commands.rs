@@ -52,6 +52,9 @@ const CLICK_FOCUS_WINDOW: Duration = Duration::from_millis(800);
 const SELECT_SPEAK_CAP: u32 = 300;
 /// A mode word waits this long for the utterance it belongs to.
 /// A document focus this soon after our own click or Enter is the click's own.
+/// How long the speech of a frame document that took the focus waits for the focus to move on
+/// into the frame before the stop is announced.
+const FRAME_FOCUS_DEFER: Duration = Duration::from_millis(250);
 const REFOCUS_SILENT_WINDOW: Duration = Duration::from_millis(2000);
 const WORD_TTL: Duration = Duration::from_millis(600);
 /// The line that follows a document's focus utterance waits for a cold fetch this long (M4).
@@ -953,6 +956,9 @@ impl Reader {
                 })
             {
                 b.suppress_focus = Some(node);
+                let due = self.now + FRAME_FOCUS_DEFER;
+                b.frame_focus = Some((node, due));
+                fx.push(ReaderEffect::ArmTimer(due));
             }
             let passes = forms::passes_through(role, states, Reason::Focus);
             let application = forms::is_application(role);
@@ -1666,7 +1672,38 @@ impl Reader {
     }
 
     /// Timers: a document that is slow to mirror, and the debounced scroll (LP-6).
+    /// The deadline of a swallowed frame-document focus (`Browse::frame_focus`): when the frame
+    /// document is still what was presented last and nothing newer happened (no focus moved
+    /// into the frame, no key), the Tab stop is announced like any other focus.
+    fn web_frame_focus_timer(&mut self, now: Instant, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_mut() else { return };
+        let Some((node, due)) = b.frame_focus else {
+            return;
+        };
+        if now < due {
+            fx.push(ReaderEffect::ArmTimer(due));
+            return;
+        }
+        b.frame_focus = None;
+        if b.suppress_focus == Some(node) {
+            b.suppress_focus = None;
+        }
+        let Some(p) = self.presented.clone() else {
+            return;
+        };
+        if p.node != node || p.epoch != self.epoch.current() {
+            return;
+        }
+        let id = self.utt_id();
+        let u = self
+            .presenters
+            .present(crate::PresentContext::Focus, &p.snap, id, p.epoch);
+        self.log_presentation(&u, &p.snap, crate::PresentSource::MissReply, None);
+        fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+    }
+
     pub(crate) fn web_timer(&mut self, now: Instant, fx: &mut ReaderEffects) {
+        self.web_frame_focus_timer(now, fx);
         self.web_auto_read_timer(fx);
         let Some(b) = self.web.as_mut() else { return };
         let mut sync_tabs = false;

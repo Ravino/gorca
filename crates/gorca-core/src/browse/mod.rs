@@ -541,6 +541,11 @@ pub struct BrowseState {
     /// The focus event of this node is the browser re-focusing the document we already browse
     /// (a same-page link, a click): nothing is spoken for it and the cursor stays.
     pub suppress_focus: Option<NodeKey>,
+    /// A nested document took the focus in browse mode and its speech was swallowed on the
+    /// assumption that the focus moves on into the frame (Chromium); when nothing newer
+    /// happened by the deadline, the stop was real (Firefox Tab onto a frame) and the frame is
+    /// announced after all.
+    pub frame_focus: Option<(NodeKey, Instant)>,
     /// When we last clicked a link or button for the user (`DoDefault`): a caret event within
     /// [`CARET_FOLLOW`] of it is the page answering our action (anchor jumps), not the user.
     pub activated: Option<Instant>,
@@ -599,6 +604,7 @@ impl BrowseState {
             popup_open: false,
             live_tokens: (LIVE_BURST, None),
             suppress_focus: None,
+            frame_focus: None,
             activated: None,
             click_target: None,
             sel: None,

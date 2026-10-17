@@ -59,6 +59,7 @@ fn info() -> AppInfo {
         text_unit: gorca_model::TextUnit::Scalar,
         text_insert_slack: 0,
         page_events_settle_ms: 0,
+        web_engine: Default::default(),
         root: None,
     }
 }

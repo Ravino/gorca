@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use gorca_doc_source_api::{DocSource, DocSourceFactory, SourceError, WarmOutcome, WarmReport};
-use gorca_model::{AppId, AppInfo, NodeKey, TextUnit};
+use gorca_model::{AppId, AppInfo, NodeKey, TextUnit, WebEngine};
 use gorca_rt::{BoxFuture, Deadline, mpsc};
 
 use crate::p2p::{AppConn, ConnectOpts};
@@ -78,15 +78,11 @@ fn dl(d: Duration) -> Deadline {
 }
 
 fn is_gecko(info: &AppInfo) -> bool {
-    let t = info.toolkit.to_ascii_lowercase();
-    let a = info.app_name.to_ascii_lowercase();
-    t == "gecko" || a.contains("firefox") || a.contains("thunderbird")
+    info.web_engine == WebEngine::Gecko
 }
 
 fn is_blink(info: &AppInfo) -> bool {
-    let t = info.toolkit.to_ascii_lowercase();
-    let a = info.app_name.to_ascii_lowercase();
-    t == "chromium" || a.contains("chrom") || a.contains("electron")
+    info.web_engine == WebEngine::Blink
 }
 
 /// `Properties.Get(Accessible, "Parent")`: `(bus, path)` of the parent reference.
@@ -362,6 +358,7 @@ mod tests {
 
     use super::*;
 
+    /// What the connector hands over: the engine from its toolkit table.
     fn info(toolkit: &str, name: &str) -> AppInfo {
         AppInfo {
             toolkit: Arc::from(toolkit),
@@ -373,21 +370,25 @@ mod tests {
             text_unit: gorca_model::TextUnit::Scalar,
             text_insert_slack: 0,
             page_events_settle_ms: 0,
+            web_engine: Default::default(),
             root: None,
         }
     }
 
+    fn with_engine(mut i: AppInfo, e: WebEngine) -> AppInfo {
+        i.web_engine = e;
+        i
+    }
+
     #[test]
-    fn browsers_are_recognised_and_only_gecko_warms() {
-        let g = info("Gecko", "Firefox");
-        let c = info("Chromium", "Google Chrome");
+    fn the_web_engine_comes_from_the_connectors_row_not_from_the_name() {
+        let g = with_engine(info("Gecko", "Firefox"), WebEngine::Gecko);
+        let c = with_engine(info("Chromium", "Google Chrome"), WebEngine::Blink);
         let n = info("GTK 4.14", "Settings");
         assert!(is_gecko(&g) && !is_blink(&g));
         assert!(is_blink(&c) && !is_gecko(&c));
         assert!(!is_gecko(&n) && !is_blink(&n));
-        assert!(
-            is_gecko(&info("gtk", "firefox-esr")),
-            "name wins when toolkit lies"
-        );
+        // A name alone says nothing: the connector's classification is the one source.
+        assert!(!is_blink(&info("gtk", "chromium")));
     }
 }

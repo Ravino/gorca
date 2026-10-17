@@ -78,6 +78,37 @@ pub fn read_proc_info(pid: u32) -> ProcInfo {
     info
 }
 
+/// Kernel clock ticks per second in `/proc/<pid>/stat` times (`USER_HZ`: 100 on every Linux
+/// architecture gorca targets).
+const USER_HZ: u64 = 100;
+
+/// How long ago a process started, from its start time in clock ticks since boot and
+/// `/proc/uptime`. `None` when `/proc/uptime` cannot be read or the start is in the future.
+pub fn age_ms(start_ticks: u64) -> Option<u64> {
+    let up = std::fs::read_to_string("/proc/uptime").ok()?;
+    age_ms_at(start_ticks, &up)
+}
+
+/// [`age_ms`] for the contents of `/proc/uptime` (`"<uptime secs> <idle secs>"`).
+pub fn age_ms_at(start_ticks: u64, uptime: &str) -> Option<u64> {
+    let secs: f64 = uptime.split_whitespace().next()?.parse().ok()?;
+    if !secs.is_finite() || secs < 0.0 {
+        return None;
+    }
+    // Centiseconds, rounded down: `USER_HZ` is 100, so a tick is 10 ms.
+    let now_ms = (secs * 1000.0) as u64;
+    now_ms.checked_sub(start_ticks.saturating_mul(1000 / USER_HZ))
+}
+
+/// [`age_ms`] off the async executor (a short `/proc` read under a deadline).
+pub async fn age_ms_async(start_ticks: u64) -> Option<u64> {
+    let job = tokio::task::spawn_blocking(move || age_ms(start_ticks));
+    match tokio::time::timeout(std::time::Duration::from_millis(250), job).await {
+        Ok(Ok(a)) => a,
+        Ok(Err(_)) | Err(_) => None,
+    }
+}
+
 /// [`read_proc_info`] off the async executor: `/proc` reads are fast but they are synchronous
 /// file I/O, so they run on a blocking thread under a deadline. Unknown on timeout.
 pub async fn read_proc_info_async(pid: u32) -> ProcInfo {
@@ -93,6 +124,14 @@ mod tests {
     use super::*;
 
     const STAT: &str = "1234 (gnome-shell) S 1 1234 1234 0 -1 4194560 1000 0 0 0 10 5 0 0 20 0 12 0 98765 1000000 500 18446744073709551615 0 0 0 0 0 0 0 0 0 0 0 0 17 3 0 0 0 0 0";
+
+    #[test]
+    fn the_age_of_a_process_follows_uptime_and_start_ticks() {
+        // Started at tick 98_765 (987.65 s), now 990.0 s since boot: 2.35 s old.
+        assert_eq!(age_ms_at(98_765, "990.00 5000.00\n"), Some(2350));
+        assert_eq!(age_ms_at(99_100, "990.00 1.0"), None, "a start in the future is no age");
+        assert_eq!(age_ms_at(1, "garbage"), None);
+    }
 
     #[test]
     fn pgrp_and_start_time_are_read() {
