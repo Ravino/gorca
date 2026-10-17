@@ -74,3 +74,12 @@ New strings are few: `new line`, `{n} spaces` / `{n} tabs` (auto-indent), `all s
   (`ug-m8e`).
 * Strict K2/K3 and R1 with `--impersonate-orca`: 6 and 3 PASS, 0 FAIL (`fin-k2k3`, `fin-r1`).
 * ED matrix: see above (native, Firefox, Chromium groups, 3 repeats).
+
+## After merging main (M12a catalogue), head of this section
+
+Indent phrases moved into the catalogue (`text-indent-spaces`, `text-indent-tabs`, en and ru plural forms); a single
+tab now reads `1 tab`. Gates on the merged tree: fmt, clippy `--all-targets -D warnings`, `cargo xtask deps` and
+`strings` ok; `cargo test --workspace --no-fail-fast`: 2140 passed, 0 failed, 17 ignored. M3 (`mrg-m3`, host load
+15-19 from other agents): 25 PASS, E2 `e2_double` max 1 in one repeat (the known E2 load flake class, median 0).
+ED-GEDIT 0/0/0; ED-TEDIT 0/0/0 in `mrg3`, but one silent save-dialog step in each of two earlier runs (`mrg`, `mrg2`)
+at load 19: kept, flaky class under load, not reproduced at lower load.
