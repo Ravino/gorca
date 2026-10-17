@@ -173,6 +173,9 @@ pub struct AppInfo {
     /// accepts any other insert reported up to this many units after the caret. Data from the
     /// connector's per-engine quirk table (ADR-0008), never derived in the core from a name.
     pub text_insert_slack: u32,
+    /// Facts the shared editing presenter needs about this application's toolkit (word landing).
+    /// Connector quirk table data (ADR-0008).
+    pub edit_quirks: crate::EditQuirks,
     /// The application's root node, when the connector knows it. A fill policy that starts at
     /// the root (an eager dump, a window prefetch) gets it with `FillInput::Appeared`.
     pub root: Option<crate::NodeKey>,

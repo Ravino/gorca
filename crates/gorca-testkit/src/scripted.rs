@@ -235,6 +235,7 @@ impl Connector for ScriptedConnector {
                     dump_complete: false,
                     text_unit: gorca_model::TextUnit::Scalar,
                     text_insert_slack: 0,
+                    edit_quirks: gorca_model::EditQuirks::default(),
                     root: None,
                 };
                 let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);

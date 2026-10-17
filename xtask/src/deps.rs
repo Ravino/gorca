@@ -9,7 +9,9 @@
 //! 3. `gorca-core` must not depend on any `gorca-connector-*`, `gorca-speech-*`, `gorca-input-*`
 //!    (except `-api`) or `gorca-ext-host`. Only `gorca-daemon` wires concrete implementations.
 //! 4. `gorca-model`, `gorca-doc` and `gorca-text` must not depend on `tokio`.
-//! 5. Extensions depend only on `gorca-ext-api`.
+//! 5. Extensions depend only on `gorca-ext-api`. The API crate re-exports the pure text layer
+//!    (`gorca-text`, with `gorca-model` below it: no tokio, no I/O), so a terminal presents caret
+//!    moves with the code every other editor uses; nothing else of the workspace is reachable.
 //! 9. The WASM runtime is confined (M5): only `gorca-ext-host` may depend on `wasmtime*`, only
 //!    `gorca-ext-api` (for the `wasm32` component build) on `wit-bindgen*`, and the host must not
 //!    reach `zbus*` or `atspi*` (an extension sees the core's types, never a connector's).
@@ -53,6 +55,9 @@ const MAY_USE_ZBUS: &[&str] = &[
     "b1-fakeapp",
 ];
 const MAY_USE_ATSPI: &[&str] = &["gorca-connector-atspi"];
+/// What an extension may reach in the workspace: the API crate and the pure text layer it
+/// re-exports (rule 5).
+const EXT_API_AND_PURE_TEXT: &[&str] = &["gorca-ext-api", "gorca-text", "gorca-model"];
 const TOKIO_FREE: &[&str] = &["gorca-model", "gorca-doc", "gorca-text", "gorca-config"];
 /// Concrete implementations that only `gorca-daemon` wires (rule 3, second sentence).
 const CONCRETE: &[&str] = &[
@@ -238,8 +243,9 @@ pub fn check(g: &Graph) -> Vec<Violation> {
     }
     // Rule 5.
     for p in g.pkgs.values().filter(|p| p.is_extension) {
-        let forbidden =
-            |d: &str| g.pkgs.get(d).is_some_and(|x| x.in_workspace) && d != "gorca-ext-api";
+        let forbidden = |d: &str| {
+            g.pkgs.get(d).is_some_and(|x| x.in_workspace) && !EXT_API_AND_PURE_TEXT.contains(&d)
+        };
         if let Some(chain) = g.path_to(&p.name, forbidden) {
             report(
                 5,
@@ -477,13 +483,15 @@ mod tests {
     fn extensions_may_only_use_ext_api() {
         let ok = graph(&[
             ("ext-vte", true, &["gorca-ext-api", "serde"]),
-            ("gorca-ext-api", true, &[]),
+            ("gorca-ext-api", true, &["gorca-text"]),
+            ("gorca-text", true, &["gorca-model"]),
+            ("gorca-model", true, &[]),
         ]);
         assert_eq!(check(&ok), vec![]);
         let bad = graph(&[
-            ("ext-vte", true, &["gorca-ext-api", "gorca-model"]),
+            ("ext-vte", true, &["gorca-ext-api", "gorca-core"]),
             ("gorca-ext-api", true, &[]),
-            ("gorca-model", true, &[]),
+            ("gorca-core", true, &[]),
         ]);
         assert_eq!(rules(&check(&bad)), vec![5]);
     }

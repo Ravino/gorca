@@ -8,6 +8,9 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+# The pure text layer (no tokio, no I/O): the terminal presents caret moves with the same code as
+# every other editor (docs/reports/unified-editing.md).
+gorca-text = { workspace = true }
 
 # The component build of an extension (wasm32 only). Native builds and the host never link it.
 [target.'cfg(target_arch = "wasm32")'.dependencies]

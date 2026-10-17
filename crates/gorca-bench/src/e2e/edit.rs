@@ -325,6 +325,10 @@ pub fn script(t: Target) -> Vec<Step> {
             st("Ctrl+Z", KEY_Z.ctrl()),
         ]);
     }
+    if t.is_app() && std::env::var("GORCA_ED_PHASE").as_deref() == Ok("app") {
+        s.clear();
+        s.push(typed("seed", "alpha bravo charlie"));
+    }
     if t.is_app() && std::env::var("GORCA_ED_PHASE").as_deref() != Ok("single") {
         s.extend(app_steps(t));
     }
@@ -774,7 +778,7 @@ pub fn run(
                 out.notes
                     .push(format!("{id} {}: heard [{line}] {why}", r.name));
             }
-            Some(Err(_)) | Some(Ok(())) | None => {
+            Some(Err(_) | Ok(())) | None => {
                 out.notes.push(format!("{id} {}: [{line}]", r.name));
             }
         }

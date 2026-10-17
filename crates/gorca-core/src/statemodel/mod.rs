@@ -19,6 +19,10 @@
 //!   `echo.command_keys` is on.
 //! * `focus-lost`     a delivered focus event ends with the Reader focused and presented on that
 //!   node, and focus leaves review.
+//! * `caret-silent`  Left, Right, Home and End into a settled entry or text view that the text layer
+//!   tracks are answered (a key that moves nothing speaks the unit at the caret), and
+//!   `caret-unit` by the character the caret is on, also when the widgets behave like GTK4's
+//!   (`Op::Gtk4`: no caret event for typed text, a selection event behind every move).
 //! * `epoch`          the epoch never goes back and no utterance carries a future epoch.
 //!
 //! Runs: `GORCA_STATE_CASES` sequences (default 500; CI), `GORCA_STATE_SEED`, `GORCA_STATE_LEN`
@@ -42,6 +46,7 @@ mod regressions;
 mod world;
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::atomic::Ordering;
 
 use gorca_input_api::Modifiers;
 use gorca_model::{Epoch, Prio};
@@ -112,6 +117,8 @@ pub(crate) enum Op {
     Notify,
     ExtSpeech(bool),
     LoseEvents(bool),
+    /// The text widgets behave like GTK4's (see `Sim::gtk4`).
+    Gtk4(bool),
     FailFetches(bool),
     HoldReplies(bool),
     /// The extension slot changes state (busy, faulted, recovered, absent).
@@ -255,6 +262,7 @@ pub(crate) fn gen_step(g: &mut Rng) -> Step {
         97 => Op::HoldReplies(g.below(2) == 0),
         98 => Op::Hung,
         99 => Op::Revive(g.pick(&NODES)),
+        104..=105 => Op::Gtk4(g.below(2) == 0),
         _ => Op::Ext(g.pick(&[ExtState::Absent, ExtState::Healthy, ExtState::Busy])),
     };
     Step { dt, op }
@@ -396,6 +404,7 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
         let mode_before = s.r.mode();
         let focus_before = s.w.focus;
         let pre = settled(&s);
+        let tracked_pre = pre.is_some_and(|n| tracking_ok(&s, n).is_ok());
         let presented_before = matches!(
             s.r.focus(),
             FocusState::Focused {
@@ -454,6 +463,7 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
             Op::Notify => s.announce(),
             Op::ExtSpeech(b) => s.ext_speech(b),
             Op::LoseEvents(b) => s.lose_events = b,
+            Op::Gtk4(b) => s.gtk4 = b,
             Op::FailFetches(b) => {
                 s.fail_fetches = b.then_some(gorca_connector_api::BackendError::Timeout);
             }
@@ -532,6 +542,46 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
                                 format!(
                                     "{k:?} typed into {n} (mode before {mode_before:?}) spoke {:?}",
                                     s.spoken.iter().map(|u| u.text.as_str()).collect::<Vec<_>>()
+                                ),
+                            );
+                        }
+                    }
+                    // caret-silent / caret-unit: a caret key into a settled entry or text view that
+                    // the text layer tracks is answered, and by the character at the caret.
+                    if m.is_empty()
+                        && matches!(mode_before, Mode::Focus)
+                        && matches!(n, ENTRY | AREA)
+                        && matches!(
+                            k,
+                            KeyKind::Left | KeyKind::Right | KeyKind::Home | KeyKind::End
+                        )
+                        && clean
+                        && !s.lose_events
+                        && tracked_pre
+                    {
+                        let said: Vec<&str> = s
+                            .spoken
+                            .iter()
+                            .filter(|u| u.prio == Prio::Interrupt && !u.text.is_empty())
+                            .map(|u| u.text.as_str())
+                            .collect();
+                        if said.is_empty() {
+                            bail!(
+                                "caret-silent",
+                                format!("{k:?} in {n} (gtk4: {}) was not answered", s.gtk4),
+                            );
+                        }
+                        let at = s.w.bufs.get(&n).and_then(|b| b.text.get(b.caret).copied());
+                        // (After lost events the window is stale: the layer cannot know the character.)
+                        if let Some(c) = at.filter(|c| c.is_alphanumeric())
+                            && s.dropped.load(Ordering::Relaxed) == 0
+                            && !said.iter().any(|t| *t == c.to_string())
+                        {
+                            bail!(
+                                "caret-unit",
+                                format!(
+                                    "{k:?} in {n} (gtk4: {}) landed on {c:?} and spoke {said:?}",
+                                    s.gtk4
                                 ),
                             );
                         }
@@ -668,6 +718,7 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
             | Op::Notify
             | Op::ExtSpeech(_)
             | Op::LoseEvents(_)
+            | Op::Gtk4(_)
             | Op::FailFetches(_)
             | Op::HoldReplies(_)
             | Op::Ext(_)

@@ -386,6 +386,7 @@ fn announce_info(port: &AppPort, toolkit: &str, app_name: &str, verified_shell: 
         dump_complete: verified_shell,
         text_unit: class.text_unit(),
         text_insert_slack: class.text_insert_slack(),
+        edit_quirks: class.edit_quirks(),
         root: Some(NodeKey {
             app: port.app,
             local: gorca_dbus::drain::local_id(ROOT_PATH),

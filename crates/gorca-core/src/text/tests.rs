@@ -2613,7 +2613,7 @@ fn typing_without_caret_events_still_correlates_the_next_arrow_key() {
     g.area("", 0);
     for (i, c) in "ab".chars().enumerate() {
         let _ = g.typed(c);
-        let _ = g.insert(i as u32, &c.to_string());
+        let _ = g.insert(u32::try_from(i).unwrap_or(0), &c.to_string());
     }
     let _ = g.tick(300);
     let _ = g.key(LEFT, 0, NONE);
@@ -2633,4 +2633,54 @@ fn backspace_without_caret_events_keeps_the_tracked_caret() {
     let fx = g.caret(1);
     assert_eq!(spoken(&fx), ["b"]);
     assert_eq!(g.r.text_counters().caret_uncorrelated, 0);
+}
+
+#[test]
+fn return_in_a_contenteditable_says_new_line_once_not_the_blank_block_too() {
+    // The browser answers Return with a new paragraph and puts the caret at its start (offset 0 of
+    // another node): that caret event is the new line, which the key already spoke.
+    let mut g = gecko_rig();
+    let (p, q) = (leaf(96), leaf(97));
+    g.rich(p, "One two");
+    g.advance(1000);
+    let fx = g.key(0xff0d, 13, NONE);
+    assert_eq!(spoken(&fx), ["new line"]);
+    g.advance(3);
+    let fx = g.caret_on(q, 0);
+    assert!(spoken(&fx).is_empty(), "{fx:?}");
+    let fx = g.tick(20);
+    assert!(spoken(&fx).is_empty(), "no uncorrelated line read: {fx:?}");
+    // A caret event at the start of another block long after Return is a real move.
+    g.advance(1000);
+    let _ = g.key(UP, 0, NONE);
+    let fx = g.caret_on(p, 0);
+    assert!(spoken(&fx).is_empty() || spoken(&fx).len() == 1);
+}
+
+#[test]
+fn auto_indent_after_return_says_how_deep_the_new_line_is() {
+    let mut g = rig();
+    g.area("    indented", 12);
+    let fx = g.key(0xff0d, 13, NONE);
+    assert_eq!(spoken(&fx), ["new line"]);
+    // The editor answers with the line break and four blanks: the break is the key's.
+    assert!(spoken(&g.insert(12, "\n    ")).is_empty());
+    assert!(spoken(&g.caret(17)).is_empty());
+    assert_eq!(spoken(&g.tick(10)), ["4 spaces"]);
+    // A tab indent.
+    g.advance(500);
+    let _ = g.key(0xff0d, 13, NONE);
+    let _ = g.insert(17, "\n\t");
+    assert_eq!(spoken(&g.tick(10)), ["tab"]);
+}
+
+#[test]
+fn indent_phrases() {
+    use super::caret::indent_phrase;
+    assert_eq!(indent_phrase("  ").as_deref(), Some("2 spaces"));
+    assert_eq!(indent_phrase(" ").as_deref(), Some("1 space"));
+    assert_eq!(indent_phrase("\t\t").as_deref(), Some("2 tabs"));
+    assert_eq!(indent_phrase("\t  ").as_deref(), Some("2 spaces, tab"));
+    assert_eq!(indent_phrase("x "), None);
+    assert_eq!(indent_phrase(""), None);
 }

@@ -50,6 +50,9 @@ export GORCA_M7_CBUS=$CBUS
 export GORCA_ED_TOOLS=$HERE
 export GORCA_E2E_SCRIPTS=$ROOT/tests/harness
 export MOZ_ENABLE_WAYLAND=1
+# Chromium learns that a screen reader runs the way it does for gorca (an `orca` process, full
+# accessibility mode with inline text boxes: visual lines); GORCA_M9_AT=poke gives paragraph lines.
+export GORCA_M9_AT=${GORCA_M9_AT:-orca}
 echo "private compositor: $GORCA_VTE_WAYLAND" >&2
 
 export GORCA_PASSTHROUGH="GORCA_VTE_WAYLAND GORCA_VTE_CBUS GORCA_VTE_TOOLS GORCA_M7_WAYLAND GORCA_M7_CBUS GORCA_ED_TOOLS GORCA_E2E_SCRIPTS MOZ_ENABLE_WAYLAND GORCA_M7_BROWSER GORCA_M7_CHROMIUM GORCA_M9_AT GORCA_ED_TARGETS GORCA_ED_OUT GORCA_E2E_READER_LOG GORCA_ED_PLAN GORCA_ED_PHASE GORCA_ED_PROBE"

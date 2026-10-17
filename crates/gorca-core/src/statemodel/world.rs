@@ -207,6 +207,9 @@ pub(super) struct Sim {
     pub lose_events: bool,
     /// A read was answered with a failure since the last focus event.
     pub failed_reads: bool,
+    /// GTK4 text widgets: no caret event for typed or erased text, and a `text-selection-changed`
+    /// behind every caret move (docs/reports/unified-editing.md).
+    pub gtk4: bool,
     pub spoken: Vec<Spoke>,
     pub timers: Vec<Instant>,
 }
@@ -266,6 +269,7 @@ impl Sim {
             fail_fetches: None,
             lose_events: false,
             failed_reads: false,
+            gtk4: false,
             spoken: Vec::new(),
             timers: Vec::new(),
         };
@@ -708,6 +712,8 @@ impl Sim {
     }
 
     fn emit(&mut self, node: u64, delta: Option<TextDelta>, caret: Option<usize>) {
+        let gtk4_field = self.gtk4 && matches!(node, ENTRY | AREA | DLG_ENTRY);
+        let edited = delta.is_some();
         let node = key(node);
         if self.lose_events {
             self.dropped.fetch_add(1, Ordering::Relaxed);
@@ -716,11 +722,16 @@ impl Sim {
         if let Some(delta) = delta {
             self.handle(ReaderMsg::Text(TextMsg::Edit { node, delta }));
         }
-        if let Some(c) = caret {
+        if let Some(c) = caret
+            && !(gtk4_field && edited)
+        {
             self.handle(ReaderMsg::Text(TextMsg::Caret {
                 node,
                 offset: u32::try_from(c).unwrap_or(0),
             }));
+            if gtk4_field {
+                self.handle(ReaderMsg::Text(TextMsg::Selection { node }));
+            }
         }
     }
 
