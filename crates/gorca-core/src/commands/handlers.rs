@@ -816,4 +816,31 @@ mod tests {
         );
         assert_eq!(key_description(&intent(0xffc9, Modifiers::empty())), "f 12");
     }
+
+    #[test]
+    fn key_descriptions_are_said_in_the_ui_language() {
+        let _ru = gorca_i18n::scoped(gorca_i18n::Lang::Ru);
+        assert_eq!(
+            key_description(&intent(
+                0x74,
+                Modifiers::GORCA | Modifiers::SHIFT | Modifiers::CONTROL
+            )),
+            "горка контрол шифт T"
+        );
+        assert_eq!(key_description(&intent(0xffc9, Modifiers::empty())), "эф 12");
+        assert_eq!(key_description(&intent(0x20, Modifiers::empty())), "пробел");
+    }
+
+    #[test]
+    fn counted_messages_use_the_russian_plural_forms() {
+        let _ru = gorca_i18n::scoped(gorca_i18n::Lang::Ru);
+        let say = |n: usize| gorca_i18n::msg!(SettingsProblems, n = n);
+        assert_eq!(say(1), "в настройках 1 проблема");
+        assert_eq!(say(3), "в настройках 3 проблемы");
+        assert_eq!(say(5), "в настройках 5 проблем");
+        assert_eq!(say(21), "в настройках 21 проблема");
+        let _en = gorca_i18n::scoped(gorca_i18n::Lang::En);
+        assert_eq!(gorca_i18n::msg!(SettingsProblems, n = 1usize), "1 settings problem");
+        assert_eq!(gorca_i18n::msg!(SettingsProblems, n = 2usize), "2 settings problems");
+    }
 }

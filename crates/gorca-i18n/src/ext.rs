@@ -18,6 +18,20 @@ use crate::catalog::{CatalogError, parse_catalog};
 use crate::lang::Lang;
 use crate::template::{Arg, Template};
 
+/// Caps on what an extension can make the core hold or say (an extension is untrusted).
+/// Catalog entries per extension and language.
+pub const MAX_ENTRIES: usize = 1024;
+/// Bytes of one template; a longer one is dropped at load.
+pub const MAX_TEMPLATE_BYTES: usize = 1024;
+/// Bytes of a message reference; a longer one resolves to nothing.
+pub const MAX_REF_BYTES: usize = 4096;
+/// Arguments of one reference.
+pub const MAX_REF_ARGS: usize = 16;
+/// Characters of a resolved message (the expansion of placeholders is cut here).
+pub const MAX_OUT_CHARS: usize = 2048;
+/// Extensions with a catalog.
+pub const MAX_NAMESPACES: usize = 64;
+
 const START: char = '\u{1e}';
 const SEP: char = '\u{1f}';
 
@@ -31,12 +45,13 @@ impl ExtCatalog {
     /// Parse a catalog file; lines that do not parse are returned and skipped.
     pub fn parse(text: &str) -> (ExtCatalog, Vec<CatalogError>) {
         let (items, errs) = parse_catalog(text);
-        (
-            ExtCatalog {
-                msgs: items.into_iter().collect(),
-            },
-            errs,
-        )
+        let msgs = items
+            .into_iter()
+            .filter(|(k, _)| k.len() <= 128)
+            .filter(|(_, t)| t.source_len() <= MAX_TEMPLATE_BYTES)
+            .take(MAX_ENTRIES)
+            .collect();
+        (ExtCatalog { msgs }, errs)
     }
 
     /// The keys, for tests and parity checks.
@@ -57,6 +72,9 @@ fn registry() -> &'static RwLock<Registry> {
 pub fn register(ns: &str, lang: Lang, text: &str) -> Vec<CatalogError> {
     let (cat, errs) = ExtCatalog::parse(text);
     let mut g = registry().write().unwrap_or_else(PoisonError::into_inner);
+    if !g.contains_key(ns) && g.len() >= MAX_NAMESPACES {
+        return errs;
+    }
     g.entry(ns.to_owned()).or_default()[lang.index()] = Some(Arc::new(cat));
     errs
 }
@@ -80,6 +98,9 @@ pub fn format(ns: &str, key: &str, lang: Lang, args: &[(&str, Arg<'_>)]) -> Opti
     let t = cat.msgs.get(key)?;
     let mut s = String::new();
     t.format_into(&mut s, l, args);
+    if let Some((i, _)) = s.char_indices().nth(MAX_OUT_CHARS) {
+        s.truncate(i);
+    }
     Some(s)
 }
 
@@ -111,12 +132,16 @@ pub fn resolve(text: &str, lang: Lang) -> Cow<'_, str> {
     let Some(rest) = text.strip_prefix(START) else {
         return Cow::Borrowed(text);
     };
+    if text.len() > MAX_REF_BYTES {
+        return Cow::Borrowed("");
+    }
     let mut parts = rest.split(SEP);
     let head = parts.next().unwrap_or("");
     let Some((ns, key)) = head.split_once(':') else {
         return Cow::Owned(head.to_owned());
     };
     let args: Vec<(&str, Arg<'_>)> = parts
+        .take(MAX_REF_ARGS)
         .filter_map(|p| p.split_once('='))
         .map(|(n, v)| (n, Arg::Str(v)))
         .collect();
@@ -142,6 +167,35 @@ mod tests {
     fn plain_text_passes_through_and_a_missing_key_shows_the_key() {
         assert_eq!(resolve("ext hello", Lang::Ru), "ext hello");
         assert_eq!(resolve(&encode("nope", "k", &[]), Lang::En), "k");
+    }
+
+    #[test]
+    fn hostile_catalogs_and_references_are_capped() {
+        // A short template that expands a long argument many times is cut at the output cap.
+        let big = "x".repeat(MAX_REF_BYTES - 200);
+        register("hostile", Lang::En, "boom = {a}{a}{a}{a}{a}{a}{a}{a}\n");
+        let r = encode("hostile", "boom", &[("a", &big)]);
+        let out = resolve(&r, Lang::En);
+        assert!(out.chars().count() <= MAX_OUT_CHARS);
+        // An over-long reference resolves to nothing.
+        let huge = "y".repeat(MAX_REF_BYTES);
+        let r = encode("hostile", "boom", &[("a", &huge)]);
+        assert_eq!(resolve(&r, Lang::En), "");
+        // Too many entries and over-long templates are dropped at load.
+        let many: String = (0..MAX_ENTRIES + 500).map(|i| format!("k{i} = v\n")).collect();
+        let long = format!("long = {}\n", "z".repeat(MAX_TEMPLATE_BYTES + 1));
+        register("hostile2", Lang::En, &format!("{long}{many}"));
+        let r = encode("hostile2", "long", &[]);
+        assert_eq!(resolve(&r, Lang::En), "long");
+        let r = encode("hostile2", "k0", &[]);
+        assert_eq!(resolve(&r, Lang::En), "v");
+        let last = format!("k{}", MAX_ENTRIES + 400);
+        let r = encode("hostile2", &last, &[]);
+        assert_eq!(resolve(&r, Lang::En), last);
+        // Arguments are never expanded again (no recursion).
+        register("rec", Lang::En, "r = {a}\n");
+        let r = encode("rec", "r", &[("a", "{a}")]);
+        assert_eq!(resolve(&r, Lang::En), "{a}");
     }
 
     #[test]

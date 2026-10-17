@@ -847,4 +847,55 @@ mod change_tests {
             eprintln!("P7: {t:?}");
         }
     }
+
+    /// M12a: the same presenters speak Russian from the catalog when the language is Russian,
+    /// and English is unchanged next to it.
+    #[test]
+    fn russian_focus_speech_comes_from_the_catalog() {
+        use gorca_doc_source_api::web_attrs as w;
+        let _ru = gorca_i18n::scoped(gorca_i18n::Lang::Ru);
+        let desk = snap("Wi-Fi", StateSet::CHECKED, None);
+        let mut b = desk.clone();
+        b.role = Role::CheckBox;
+        assert_eq!(
+            texts(&present_focus(&b, UttId(1), Epoch(1))),
+            ["Wi-Fi", "флажок", "отмечено"]
+        );
+        let mut off = b.clone();
+        off.states = StateSet::empty();
+        assert_eq!(
+            texts(&present_focus(&off, UttId(1), Epoch(1))),
+            ["Wi-Fi", "флажок", "не отмечено"]
+        );
+        assert_eq!(change_words(&off, &b), ["отмечено"]);
+        let sw = web_snap(
+            "Уведомления",
+            Role::ToggleButton,
+            StateSet::CHECKED,
+            &[(w::TAG.0, "button"), (w::XML_ROLES.0, "switch")],
+        );
+        assert_eq!(
+            texts(&present_focus(&sw, UttId(1), Epoch(1))),
+            ["Уведомления", "переключатель", "включено"]
+        );
+        let mut col = snap("Fruit", StateSet::COLLAPSED, None);
+        col.role = Role::ComboBox;
+        assert_eq!(
+            texts(&present_focus(&col, UttId(1), Epoch(1))),
+            ["Fruit", "комбинированный список", "свёрнуто"]
+        );
+    }
+
+    #[test]
+    fn english_is_the_default_next_to_a_russian_scope() {
+        let b = {
+            let mut n = snap("Wi-Fi", StateSet::CHECKED, None);
+            n.role = Role::CheckBox;
+            n
+        };
+        assert_eq!(
+            texts(&present_focus(&b, UttId(1), Epoch(1))),
+            ["Wi-Fi", "check box", "checked"]
+        );
+    }
 }

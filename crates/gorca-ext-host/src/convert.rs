@@ -197,6 +197,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_message_reference_cannot_exceed_the_segment_and_answer_caps() {
+        gorca_i18n::ext::register("hostile-conv", gorca_i18n::Lang::En, "b = {a}{a}{a}{a}\n");
+        let arg = "x".repeat(1500);
+        let r = gorca_i18n::ext::encode("hostile-conv", "b", &[("a", &arg)]);
+        let segs: Vec<api::Segment> = (0..64)
+            .map(|_| api::Segment {
+                text: r.clone(),
+                kind: api::SegmentKind::Text,
+            })
+            .collect();
+        let out = segments_from_ext(segs);
+        let total: usize = out.iter().map(|s| s.text.chars().count()).sum();
+        assert!(out.iter().all(|s| s.text.chars().count() <= MAX_SEGMENT_CHARS));
+        assert!(total <= MAX_ANSWER_CHARS, "{total}");
+    }
+
+    #[test]
     fn app_ids_round_trip() {
         for (c, s) in [(0u16, 0u32), (1, 1), (u16::MAX, u32::MAX), (7, 123_456)] {
             let a = AppId {

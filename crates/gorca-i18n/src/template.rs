@@ -162,6 +162,21 @@ impl Template {
         })
     }
 
+    /// The length of the template text, an upper bound of its source size (for load caps).
+    pub fn source_len(&self) -> usize {
+        match &self.plain {
+            Some(p) => p.len(),
+            None => self
+                .pieces
+                .iter()
+                .map(|p| match p {
+                    Piece::Lit(s) | Piece::Var(s) => s.len() + 2,
+                    Piece::Plural(n, f) => n.len() + 2 + f.iter().map(|x| x.len() + 1).sum::<usize>(),
+                })
+                .sum(),
+        }
+    }
+
     /// The empty message.
     pub fn empty() -> Self {
         Template {

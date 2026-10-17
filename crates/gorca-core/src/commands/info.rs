@@ -418,4 +418,23 @@ mod tests {
             "{s}"
         );
     }
+
+    #[test]
+    fn time_and_date_follow_the_ui_language() {
+        let t = LocalTime {
+            year: 2026,
+            month: 10,
+            day: 17,
+            weekday: 5,
+            hour: 15,
+            minute: 7,
+        };
+        assert_eq!(time_text(t, true), "15:07");
+        assert_eq!(time_text(t, false), "3:07 PM");
+        assert_eq!(date_text(t), "Saturday, October 17, 2026");
+        let _ru = gorca_i18n::scoped(gorca_i18n::Lang::Ru);
+        assert_eq!(time_text(t, true), "15:07");
+        assert_eq!(time_text(t, false), "3:07 вечера");
+        assert_eq!(date_text(t), "суббота, 17 октября 2026 года");
+    }
 }

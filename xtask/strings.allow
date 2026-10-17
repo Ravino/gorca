@@ -1,0 +1,4 @@
+# PR-7 allow-list (see xtask/src/strings.rs): string literals in the speech paths that are NOT
+# user-facing messages: log and debug text, protocol names, attribute values, match patterns and
+# internal ids. Format: `repo/path.rs | literal as written`; `repo/path.rs | *` allows a file.
+# Adding a line here is a review decision: user-facing text belongs in the message catalog.
