@@ -121,6 +121,8 @@ pub enum FetchKind {
     Revalidate,
     /// S1: the focused node's state or value changed; speak the change.
     StateChange,
+    /// The one late re-read of a presented node that had no name: speak the name alone.
+    Name,
     /// A command's answer (`info.where_am_i`, `info.window_title`, debug): speak the reply.
     Info,
 }
@@ -404,10 +406,17 @@ pub struct Reader {
     pub(crate) web: Option<BrowseState>,
     /// The focus whose fetch failed and was tried once more (N2).
     pub(crate) focus_retried: Option<NodeKey>,
+    /// The last focus presentation restarted by a key press (the first one never finished).
+    pub(crate) focus_represent_at: Option<(NodeKey, Instant)>,
     /// A focus (or switcher selection) whose fetch was refused as `Busy` and is asked again
     /// after a growing delay (the application is flooded, e.g. the Shell opening the Alt+Tab
     /// switcher: asking again at once meets the same full queue).
     pub(crate) focus_backoff: Option<crate::present::FocusBackoff>,
+    /// A presented node that had no name, waiting for its one late re-read (the name may come
+    /// from a relation or label child that arrives after the node).
+    pub(crate) name_retry: Option<crate::present::NameRetry>,
+    /// The node whose late name re-read was already used (once per node).
+    pub(crate) name_retried: Option<NodeKey>,
     /// The focus whose failed RV-1 re-read was already retried once (a fresh deadline).
     pub(crate) revalidate_retried: Option<NodeKey>,
     /// A repeated focus event after a presentation that could not show `FOCUSED` yet.
@@ -431,6 +440,8 @@ pub struct Reader {
     pub(crate) notice: crate::present::NoticeCtx,
     /// The installed application policy (ADR-0008 W3), if any.
     pub(crate) app_policy: Option<Arc<dyn crate::builtin_ext::AppPolicy>>,
+    /// The native terminal policy, used when no extension of the application is one.
+    pub(crate) term_provider: Option<Arc<dyn crate::TermProvider>>,
 }
 
 /// Revalidation and correction counters (B-1 M-6).
@@ -444,6 +455,8 @@ pub struct ReaderCounters {
     pub focus_reconfirm_retries: u64,
     /// Reconfirm reads started by a key press in an unprotected terminal.
     pub focus_reconfirm_key_reads: u64,
+    /// Focus presentations that never finished and were restarted by a key press.
+    pub focus_represented_on_key: u64,
     /// RV-1 fetches issued.
     pub revalidations: u64,
     /// RV-1 replies that agreed with what was presented.
@@ -483,7 +496,10 @@ impl Reader {
             review: ReviewState::new(),
             web: None,
             focus_retried: None,
+            focus_represent_at: None,
             focus_backoff: None,
+            name_retry: None,
+            name_retried: None,
             revalidate_retried: None,
             reconfirm: Reconfirm::Idle,
             timeout_charged: false,
@@ -493,7 +509,15 @@ impl Reader {
             win: crate::present::WindowCtx::new(),
             notice: crate::present::NoticeCtx::new(),
             app_policy: None,
+            term_provider: None,
         }
+    }
+
+    /// Terminals without an extension of their own are tracked with `provider`'s sessions.
+    #[must_use]
+    pub fn with_term_provider(mut self, provider: Arc<dyn crate::TermProvider>) -> Self {
+        self.term_provider = Some(provider);
+        self
     }
 
     /// Route `present` hooks and extension commands through `src` (ADR-0001 section 10).
@@ -699,6 +723,7 @@ impl Reader {
                 self.web_timer(now, &mut fx);
                 self.text_timer(&mut fx);
                 self.focus_backoff_timer(now, &mut fx);
+                self.name_retry_timer(now, &mut fx);
                 self.window_timer(&mut fx);
                 self.notice_timer(&mut fx);
                 self.level_timer(&mut fx);
@@ -1092,6 +1117,8 @@ mod tests {
     #[test]
     fn selection_speech_outranks_the_echo_of_the_key_that_caused_it() {
         let mut f = fixture();
+        f.reader.cmd.overlay.command_keys = Some(true);
+        f.reader.cmd.republish();
         f.writer.apply(
             SnapshotBatch {
                 nodes: vec![selected_snap(1, "Files")],
@@ -1895,6 +1922,10 @@ mod tests {
                     kind: FetchKind::Info,
                     ..
                 } => "fetch-info",
+                ReaderEffect::Fetch {
+                    kind: FetchKind::Name,
+                    ..
+                } => "fetch-name",
                 ReaderEffect::Demand { .. } => "demand",
                 ReaderEffect::FocusSettled { .. } => "settled",
                 ReaderEffect::QueryActiveWindowFocus => "query",
@@ -2310,6 +2341,67 @@ mod tests {
             at,
         );
         assert_eq!(spoken(&fx), ["Files button"]);
+    }
+
+    /// An unnamed button is spoken bare once, then its late name is read again after a short
+    /// pause and only the name is added (no second role, no repeat).
+    #[test]
+    fn a_nameless_button_gets_one_late_name_and_only_the_name_is_spoken() {
+        let mut f = fixture();
+        let t = Instant::now();
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node: key(1) }),
+            t,
+        );
+        f.reader
+            .handle(ReaderMsg::Timer, t + std::time::Duration::from_millis(5));
+        let fx = f.reader.handle(
+            reply(&f, 1, FetchKind::Focus, selected_snap(1, "")),
+            t + std::time::Duration::from_millis(6),
+        );
+        assert_eq!(spoken(&fx), ["button"]);
+        let at = timer_of(&fx).expect("the late name read is armed");
+        let early = f.reader.handle(ReaderMsg::Timer, t);
+        assert!(!effects_of(&early).contains(&"fetch-name"));
+        let due = f.reader.handle(ReaderMsg::Timer, at);
+        assert!(
+            effects_of(&due).contains(&"fetch-name"),
+            "{:?}",
+            effects_of(&due)
+        );
+        let fx = f
+            .reader
+            .handle(reply(&f, 1, FetchKind::Name, selected_snap(1, "Files")), at);
+        assert_eq!(spoken(&fx), ["Files"]);
+        // Once per node: presenting the same item again does not read it a third time.
+        let again = f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node: key(1) }),
+            at + std::time::Duration::from_secs(1),
+        );
+        assert!(timer_of(&again).is_none() || !effects_of(&again).contains(&"fetch-name"));
+    }
+
+    /// Nothing is added when the late read is still nameless or the focus moved on.
+    #[test]
+    fn a_late_name_that_is_still_empty_or_stale_says_nothing() {
+        let mut f = fixture();
+        let t = Instant::now();
+        f.reader.handle(
+            ReaderMsg::Focus(FocusLaneMsg::ItemSelected { node: key(1) }),
+            t,
+        );
+        f.reader
+            .handle(ReaderMsg::Timer, t + std::time::Duration::from_millis(5));
+        let fx = f.reader.handle(
+            reply(&f, 1, FetchKind::Focus, selected_snap(1, "")),
+            t + std::time::Duration::from_millis(6),
+        );
+        let at = timer_of(&fx).expect("armed");
+        f.reader.handle(ReaderMsg::Timer, at);
+        let fx = f
+            .reader
+            .handle(reply(&f, 1, FetchKind::Name, selected_snap(1, "")), at);
+        assert!(spoken(&fx).is_empty(), "{:?}", spoken(&fx));
     }
 
     /// The tries are bounded: a switcher item that stays unreadable is silent, a real focus

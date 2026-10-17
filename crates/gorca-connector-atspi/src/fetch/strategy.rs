@@ -16,7 +16,7 @@ use smallvec::SmallVec;
 
 use super::items::{self, MAX_DUMP_BYTES};
 use super::{
-    CallCx, MAX_ANCESTRY_DEPTH, MAX_CHILD_RANGE, MAX_SUBTREE_NODES, RawBatch, Resolved,
+    CallCx, Caller, MAX_ANCESTRY_DEPTH, MAX_CHILD_RANGE, MAX_SUBTREE_NODES, RawBatch, Resolved,
     backend_error, label_may_be_read, wants_entry_text,
 };
 use crate::decode::{MAX_TEXT_BYTES, RawNode, RawValue, clip, clip_child_count};
@@ -126,17 +126,129 @@ async fn fetch_node(
         raw.value = value_for(cx, core_role, states, path, dl).await;
         have |= PropMask::VALUE;
     }
-    if raw.name.as_deref().is_none_or(str::is_empty) && want.contains(PropMask::NAME) && name_ok {
+    if raw.name.as_deref().is_none_or(str::is_empty)
+        && want.contains(PropMask::NAME)
+        && name_ok
+        && source_for(core_role, states) != Source::Secret
+    {
         have |= PropMask::RELATIONS;
-        if let Ok(Some((bus, p))) = c.label_target(path, dl).await
-            && label_may_be_read(&bus, c.bus_name())
-            && let Ok(label) = c.name_of(&bus, &p, dl).await
-        {
+        if let Some(label) = name_fallback(c, path, dl).await {
             raw.name = Some(label);
         }
     }
     raw.have = have;
     Ok((raw, parent_ref))
+}
+
+/// Visited-node budget of the descendant label search (breadth first).
+pub(super) const LABEL_SEARCH_NODES: u32 = 8;
+/// Depth of the descendant label search below the unnamed node.
+const LABEL_SEARCH_DEPTH: usize = 2;
+
+/// Name of a node that has none, by accname-like rules available over AT-SPI: the first
+/// `LabelledBy` target's name (then its text), else the names (or text) of its descendants,
+/// bounded in depth and count, all within the caller's deadline. Any failure only costs the
+/// fallback.
+async fn name_fallback(c: &Caller, path: &str, dl: Deadline) -> Option<String> {
+    if let Ok(Some((bus, p))) = c.label_target(path, dl).await
+        && label_may_be_read(&bus, c.bus_name())
+        && let Some(kind) = classify(c, &p, dl).await
+        && kind != Source::Secret
+    {
+        if let Ok(label) = c.name_of(&bus, &p, dl).await
+            && !label.trim().is_empty()
+        {
+            return Some(label);
+        }
+        if kind == Source::Label
+            && let Ok(t) = c.text_prefix(&p, dl).await
+            && !t.trim().is_empty()
+        {
+            return Some(clip(&t, MAX_TEXT_BYTES).to_owned());
+        }
+    }
+    descendant_label(c, path, dl).await
+}
+
+/// What a node may contribute to a name it does not own.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum Source {
+    /// A password field, or a node that could not be classified: neither its name nor its text
+    /// is read (fail closed; secrets may only be spoken by typed echo, never become a name).
+    Secret,
+    /// A label-like, non-editable node: its name, else its text.
+    Label,
+    /// Anything else: its name only, never its text (an entry, a terminal, a document).
+    NameOnly,
+}
+
+fn source_for(role: Role, states: StateSet) -> Source {
+    match role {
+        Role::PasswordEntry => Source::Secret,
+        Role::Label | Role::StaticText if !states.contains(StateSet::EDITABLE) => Source::Label,
+        _ => Source::NameOnly,
+    }
+}
+
+/// Role and state of `path` decide what it may contribute; a failed read is `None` (skip).
+async fn classify(c: &Caller, path: &str, dl: Deadline) -> Option<Source> {
+    let (role, state) = tokio::join!(c.role(path, dl), c.state(path, dl));
+    let role = crate::decode::role_from_raw(role.ok()?);
+    let states = crate::decode::states_from_raw(&state.ok()?);
+    Some(source_for(role, states))
+}
+
+/// Join the names of the descendants of `path` (breadth first, at most
+/// [`LABEL_SEARCH_NODES`] visited, [`LABEL_SEARCH_DEPTH`] deep). A label-like leaf without a
+/// name contributes its text; secret nodes are skipped whole. A named node is taken whole: its
+/// own children are not searched.
+async fn descendant_label(c: &Caller, path: &str, dl: Deadline) -> Option<String> {
+    let mut queue: std::collections::VecDeque<(String, usize)> = std::collections::VecDeque::new();
+    queue.push_back((path.to_owned(), 0));
+    let mut visited = 0u32;
+    let mut parts: Vec<String> = Vec::new();
+    while let Some((p, depth)) = queue.pop_front() {
+        if depth >= LABEL_SEARCH_DEPTH {
+            continue;
+        }
+        let count = c.child_count_of(&p, dl).await.ok()?;
+        let count = u32::try_from(count).unwrap_or(0).min(LABEL_SEARCH_NODES);
+        for i in 0..count {
+            if visited >= LABEL_SEARCH_NODES {
+                break;
+            }
+            let Ok(Some((bus, child))) = c.child_at(&p, i, dl).await else {
+                continue;
+            };
+            if bus != c.bus_name() {
+                continue;
+            }
+            visited += 1;
+            let Some(kind) = classify(c, &child, dl).await else {
+                continue;
+            };
+            if kind == Source::Secret {
+                continue;
+            }
+            if let Ok(n) = c.name_of(&bus, &child, dl).await
+                && !n.trim().is_empty()
+            {
+                parts.push(n);
+                continue;
+            }
+            let kids = c.child_count_of(&child, dl).await.unwrap_or(0);
+            if kids > 0 {
+                queue.push_back((child, depth + 1));
+            } else if kind == Source::Label
+                && let Ok(t) = c.text_prefix(&child, dl).await
+                && !t.trim().is_empty()
+            {
+                parts.push(clip(&t, MAX_TEXT_BYTES).to_owned());
+            }
+        }
+    }
+    let joined = parts.join(" ");
+    (!joined.trim().is_empty()).then_some(joined)
 }
 
 async fn value_for(
@@ -650,3 +762,23 @@ pub(crate) async fn cache_dump(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod source_tests {
+    use super::*;
+
+    #[test]
+    fn only_non_editable_labels_may_lend_text_and_passwords_lend_nothing() {
+        let none = StateSet::empty();
+        assert_eq!(source_for(Role::PasswordEntry, none), Source::Secret);
+        assert_eq!(source_for(Role::Label, none), Source::Label);
+        assert_eq!(source_for(Role::StaticText, none), Source::Label);
+        assert_eq!(
+            source_for(Role::Label, StateSet::EDITABLE),
+            Source::NameOnly
+        );
+        for r in [Role::TextEntry, Role::Document, Role::Button, Role::Unknown] {
+            assert_eq!(source_for(r, none), Source::NameOnly, "{r:?}");
+        }
+    }
+}

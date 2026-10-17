@@ -644,10 +644,11 @@ fn alt_tab_in_the_switcher_speaks_windows_and_never_echoes_tab() {
             after.iter().all(|t| t.trim() != "tab"),
             "Tab under Alt must not be echoed: {after:?}"
         );
-        // A bare Tab is still echoed (Orca's action-key default).
+        // A bare Tab is a key name: silent while `echo.command_keys` is off (the default).
         mutter.key(23, 0xff09, 0).unwrap();
+        tokio::time::sleep(Duration::from_millis(500)).await;
         assert!(
-            wait_text_since(&voicego, mark, "tab", Duration::from_secs(5)).await,
+            voicego.spoken()[mark..].iter().all(|t| t.trim() != "tab"),
             "{:?}",
             &voicego.spoken()[mark..]
         );

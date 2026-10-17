@@ -36,3 +36,24 @@ Log of the pre-fix control run: Ctrl+Alt+Tab first item `unknown`, then `Windows
 - The very first item of a held Alt+Tab was once spoken as bare "button": the unnamed switcher button gets its name
   only from a `labelled-by` relation, which can be late. Naming such buttons from their label child is not done.
 - The root cause of the refusals (the Shell main loop answering slowly while the switcher animates) is untouched.
+
+## Follow-up 2026-10-17: names for nameless buttons (the "Open" item, closed)
+- Connector (`fetch/strategy.rs::name_fallback`): when `Name` is empty, the name comes from the first `LabelledBy`
+  target (its name, then its text), else from descendants (`descendant_label`: breadth first, depth 2, 8 nodes, same
+  bus name only, names then text of leaves, joined), all on the fetch deadline; any failure only costs the fallback.
+- Reader (`present/flow.rs::name_retry_*`, `FetchKind::Name`): a presented node of a name-needing role (button,
+  toggle, check, radio, menu item, link, tab, list item, combo) with an empty name gets one re-read after 120 ms
+  (once per node, cancelled by any newer epoch); if a name has appeared only the name is spoken, never the role.
+  The trigger is the timer window, not a property event: a late relation raises no AT-SPI event of its own.
+- No Shell-specific rule was needed, so ext-gnome-shell is untouched.
+- Tests: reader `a_nameless_button_gets_one_late_name_and_only_the_name_is_spoken`,
+  `a_late_name_that_is_still_empty_or_stale_says_nothing`; connector (fake app now has `labelled_by`)
+  `an_unnamed_node_is_named_by_its_labelled_by_target`, `..._by_its_label_children`,
+  `text_children_name_a_node_and_an_empty_one_stays_empty`, `the_descendant_label_search_is_bounded`.
+- Private Shell rig (alttab_drive, 2 rounds): "gtkwin.py, button", "gedit, button", "Top Bar, button",
+  "Windows, button" as before; the bare-"button" race did not occur in this run, so the late path is covered by the
+  unit and fake-app tests, not by a live reproduction.
+
+## Security follow-up 2026-10-17: secrets never become names
+- The name fallback classifies every node it reads (role and state first, fail closed): a password field is never read (name or text) and is not searched; text is lent only by non-editable label/static-text leaves, every other node lends its name only. A password field itself gets no fallback name. Presentation and debug logs carry no fallback names (the debug line logs node, states, source only; the presentation log already redacts password roles).
+- Tests: `a_password_field_never_leaks_into_a_name`, `an_editable_entry_lends_no_text_to_a_name`, `source_tests`.

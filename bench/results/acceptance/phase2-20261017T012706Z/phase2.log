@@ -1,0 +1,48 @@
+== phase2 acceptance: ACCEPTANCE ATTEMPT, DEGRADED HOST (--force), PARTIAL (m1 m6)
+mode=ACCEPTANCE ATTEMPT, DEGRADED HOST (--force), PARTIAL (m1 m6)
+utc=2026-10-17T01:27:06Z
+git_rev=d108974 dirty_tracked_files=3 branch=worktree-agent-ab1f7350482f9d118
+kernel=7.1.8+deb13-rt-amd64 cpus=16
+loadavg=13.61 10.67 10.28 4/2356 3147415
+psi_memory_some_avg10=0.00 psi_memory_full_avg10=0.00
+psi_cpu_some_avg10=0.09 psi_io_some_avg10=0.00
+mem_available_mb=15852
+governor=performance 
+rtkit MaxRealtimePriority: i 20 
+rtkit RTTimeUSecMax: x 200000 
+topology: shipped default (--topology=auto); expected arm: lanes-rt (gated by e2e --expect-topology)
+repeats=3 quick=no suites=m1 m6
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=1
+  idle C3_ACPI latency=1048us disabled=1
+  load: 13.61 10.67 10.28 4/2360 3147458
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! HOST NOT QUIET: load average 13.61 > 4
+!! --force: continuing, summary is marked DEGRADED
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+######## suite m1
+== m1/e2e attempt 1  load 13.61 10.67 10.28 5/2359 3147492  cap 5400s
+   -> ok (exit 0, 836 s)
+
+######## suite m6
+== m6/fake attempt 1  load 8.19 8.86 9.58 7/2989 3191821  cap 7200s
+   -> ok (exit 0, 2609 s)
+== m6/vv attempt 1  load 5.33 6.78 7.78 2/2522 3268510  cap 3600s
+   -> ok (exit 0, 368 s)
+# Phase 2 acceptance: PASS ON A DEGRADED HOST, NOT ACCEPTANCE
+
+Mode: **ACCEPTANCE ATTEMPT, DEGRADED HOST (--force), PARTIAL (m1 m6)**. Run dir: `<repo>/.claude/worktrees/agent-ab1f7350482f9d118/bench/results/acceptance/phase2-20261017T012706Z`.
+Resolved topology (from the reader reports): lanes-rtx24, lanes-rtx3, lanes-rtx39.
+
+## Steps
+
+| step | result | attempt | wall | load1 min-max | mem PSI max | gated rows | FAIL rows | notes |
+|---|---|---|---|---|---|---|---|---|
+| m1/e2e | PASS | a1 | 836 s | 6.5-14.4 | 2.750 | 31 | 0 | - |
+| m6/fake | PASS | a1 | 2609 s | 4.5-10.7 | 3.480 | 45 | 0 | - |
+| m6/vv | PASS | a1 | 368 s | 4.4-10.2 | 0.370 | 24 | 0 | - |
+summary: <repo>/.claude/worktrees/agent-ab1f7350482f9d118/bench/results/acceptance/phase2-20261017T012706Z/summary.md (exit 0)

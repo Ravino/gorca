@@ -41,6 +41,7 @@ mod manifest;
 mod manifest_file;
 mod native;
 mod slot;
+mod term;
 mod wasi_pure;
 mod wasm;
 
@@ -60,4 +61,5 @@ pub use manifest::{
 pub use manifest_file::{MAX_MANIFEST_BYTES, ManifestError};
 pub use native::{NativeFactory, NativeInstance};
 pub use slot::{Factory, LoadedExt, Slot};
+pub use term::HostTermSession;
 pub use wasm::{ExtEngine, POOL_INSTANCES, TICK, WasmInstance, WasmModule};

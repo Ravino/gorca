@@ -94,6 +94,9 @@ pub struct Options {
     /// host loaded it, else the native build linked into the daemon. `native`: always the native
     /// build (the component is not loaded).
     pub shell_policy: ShellPolicyMode,
+    /// `--terminal-policy=auto|native` / `GORCA_TERMINAL_POLICY`: where the terminal policy runs,
+    /// with the same meaning as `--shell-policy` for the `ext-vte` component.
+    pub terminal_policy: ShellPolicyMode,
 }
 
 /// Where the Shell policy runs (ADR-0008 amendment 1: one source, two builds).
@@ -214,6 +217,9 @@ OPTIONS:
     --shell-policy=auto|native   where the GNOME Shell presentation policy runs: the ext-gnome-shell
                                  WASM component when it is installed (auto, default), or the
                                  native build linked into the daemon (native)
+    --terminal-policy=auto|native  where the terminal policy runs: the ext-vte WASM component
+                                 when it is installed (auto, default), or the native build
+                                 linked into the daemon (native)
     --ext-settings=PATH          the extensions' settings file (default:
                                  $XDG_STATE_HOME/gorca/ext-settings.toml)
     -h, --help                   print this help
@@ -310,6 +316,11 @@ impl Options {
             && let Some(p) = get("GORCA_SHELL_POLICY").and_then(|v| ShellPolicyMode::parse(&v))
         {
             o.shell_policy = p;
+        }
+        if o.terminal_policy == ShellPolicyMode::Auto
+            && let Some(p) = get("GORCA_TERMINAL_POLICY").and_then(|v| ShellPolicyMode::parse(&v))
+        {
+            o.terminal_policy = p;
         }
         o.default_ext_settings(&get);
         if get("GORCA_IMPERSONATE_ORCA").is_some_and(|v| v == "1") {
@@ -521,6 +532,14 @@ pub fn parse<I: IntoIterator<Item = String>>(args: I) -> Result<Parsed, CliError
                 let v = value("--shell-policy")?;
                 opts.shell_policy = ShellPolicyMode::parse(&v).ok_or(CliError::BadValue {
                     flag: "--shell-policy",
+                    value: v,
+                    expected: "auto or native",
+                })?;
+            }
+            "--terminal-policy" => {
+                let v = value("--terminal-policy")?;
+                opts.terminal_policy = ShellPolicyMode::parse(&v).ok_or(CliError::BadValue {
+                    flag: "--terminal-policy",
                     value: v,
                     expected: "auto or native",
                 })?;

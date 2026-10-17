@@ -135,7 +135,8 @@ fn fixture() -> Fx {
     let dir = Arc::new(MirrorDirectory::new());
     let (writer, handle) = mirror();
     dir.insert(app(), &handle);
-    let reader = Reader::new(Arc::clone(&epoch), dir, ModeKeys::default());
+    let reader = Reader::new(Arc::clone(&epoch), dir, ModeKeys::default())
+        .with_term_provider(Arc::new(crate::terminal::tests::NativeTerm));
     Fx {
         reader,
         writer,
@@ -1209,7 +1210,8 @@ fn term_fixture(
     let dir = Arc::new(MirrorDirectory::new());
     let (writer, handle) = mirror();
     dir.insert(app(), &handle);
-    let mut reader = Reader::new(Arc::clone(&epoch), dir, ModeKeys::default());
+    let mut reader = Reader::new(Arc::clone(&epoch), dir, ModeKeys::default())
+        .with_term_provider(Arc::new(crate::terminal::tests::NativeTerm));
     if let Some(d) = dropped {
         reader = reader.with_text_dropped(d);
     }
@@ -1335,7 +1337,7 @@ fn review_never_serves_the_model_of_a_terminal_that_is_no_longer_tracked() {
     assert_eq!(said(&fx), ["$"]);
     // The tracking is gone (a focus event the presentation did not finish, a lost track): the
     // model built from the old screen has no zones to check and must not be read from.
-    f.reader.term_untrack();
+    f.reader.term_untrack("test");
     let mut fx = f.run(CoreCmd::ReviewPrevLine);
     assert!(said(&fx).is_empty(), "stale speech: {:?}", said(&fx));
     let fx = f.settle_and_answer(&mut fx, "new 8\nnew 9\n$ ");
@@ -1347,7 +1349,7 @@ fn a_new_tracking_never_matches_a_model_built_from_an_earlier_one() {
     let mut f = term_fixture(None, None);
     f.focus_terminal("a\nb\n$ ");
     let g1 = f.reader.term_snapshot(key(2)).unwrap().generation;
-    f.reader.term_untrack();
+    f.reader.term_untrack("test");
     f.now += Duration::from_millis(500);
     f.focus_terminal("c\nd\n$ ");
     let g2 = f.reader.term_snapshot(key(2)).unwrap().generation;

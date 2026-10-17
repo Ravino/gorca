@@ -1,0 +1,56 @@
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.12s
+private compositor: /tmp/gorca-m7c.gg3WzC/x/gorca-m7-2568896
+== reader <repo>/.claude/worktrees/agent-a212e0b0695e3d0d9/target/release/gorca built from c4183c7, tree at c4183c7
+== e2e acc-20261016T232704Z-m7-firefox-a1: reader=daemon:<repo>/.claude/worktrees/agent-a212e0b0695e3d0d9/target/release/gorca backend=voicego repeats=1 load=13.56 17.30 15.23 3/2921 2569237
+-- round 1/1 B0 (load 13.56 17.30 15.23 2/2921 2569237)
+kill: (-2569316): No such process
+-- round 1/1 W1 (load 14.11 17.29 15.25 1/2922 2569752)
+kill: (-2569830): No such process
+-- round 1/1 BR1 (load 13.76 17.06 15.21 1/2874 2571224)
+kill: (-2571316): No such process
+-- round 1/1 BR2 (load 12.71 16.49 15.08 1/2871 2573237)
+kill: (-2573322): No such process
+-- round 1/1 W2 (load 12.52 16.33 15.04 5/2882 2574516)
+kill: (-2574597): No such process
+-- round 1/1 W2b (load 12.64 16.29 15.03 4/2874 2575407)
+kill: (-2575482): No such process
+kill: (-2576291): No such process
+kill: (-2576972): No such process
+-- round 1/1 W3 (load 11.44 15.65 14.86 5/2865 2577886)
+kill: (-2577973): No such process
+-- round 1/1 FM1 (load 11.87 15.60 14.85 6/2907 2578716)
+kill: (-2578798): No such process
+-- round 1/1 FM2 (load 11.16 15.39 14.79 1/2904 2579257)
+kill: (-2579332): No such process
+-- round 1/1 FC1h (load 11.57 15.27 14.76 1/2711 2580201)
+kill: (-2580283): No such process
+-- round 1/1 FC1 (load 14.93 15.72 14.93 9/2751 2586612)
+kill: (-2586721): No such process
+-- round 1/1 FE1 (load 15.18 15.71 14.95 8/2694 2591478)
+kill: (-2591557): No such process
+-- round 1/1 FE2 (load 18.24 16.27 15.16 6/2705 2592860)
+kill: (-2592940): No such process
+-- round 1/1 FS2 (load 23.38 18.47 16.01 3/2647 2596665)
+kill: (-2596740): No such process
+-- round 1/1 FSA1 (load 19.76 18.17 16.01 2/2722 2598396)
+kill: (-2598472): No such process
+-- round 1/1 FSA3 (load 18.04 17.85 16.00 8/2754 2607114)
+kill: (-2607263): No such process
+-- round 1/1 FCE1 (load 18.17 17.87 16.07 7/2806 2613350)
+kill: (-2613443): No such process
+-- round 1/1 FCE2 (load 16.24 17.49 15.98 2/2728 2617765)
+kill: (-2617861): No such process
+-- round 1/1 FT1 (load 14.69 16.97 15.85 8/2811 2620148)
+kill: (-2620243): No such process
+-- round 1/1 FP1 (load 14.01 16.70 15.79 1/2725 2623722)
+kill: (-2623804): No such process
+-- round 1/1 BSA1 (load 13.93 16.55 15.76 4/2698 2625472)
+kill: (-2625553): No such process
+-- round 1/1 BAR1 (load 11.23 15.39 15.41 8/2857 2632187)
+kill: (-2632300): No such process
+-- round 1/1 BL1 (load 11.38 15.22 15.35 5/2812 2635489)
+kill: (-2635588): No such process
+-- round 1/1 FR1 (load 11.75 15.24 15.36 6/2810 2636613)
+kill: (-2636697): No such process
+== wrote <repo>/.claude/worktrees/agent-a212e0b0695e3d0d9/bench/results/acceptance/phase2-dryrun-20261017-b/m7/firefox.a1/res/20261016T234526Z.{json,txt}
+== 6 gate(s) FAILED

@@ -81,7 +81,7 @@ def path_of(nid):
 
 class Node:
     __slots__ = ("id", "parent", "children", "role", "name", "desc", "states", "text", "caret",
-                 "actions", "editable", "extents", "no_text_extents", "hang", "sel", "value")
+                 "actions", "editable", "extents", "no_text_extents", "hang", "sel", "value", "labelled_by")
 
     def __init__(self, nid, parent, role, name, text=None, editable=False, actions=(), states=(),
                  extents=None, no_text_extents=False, value=None):
@@ -101,6 +101,7 @@ class Node:
         self.hang = False                                     # never answer any call (OB-4)
         self.sel = []                                         # selected ranges [(start, end)], M3
         self.value = tuple(value) if value else None          # (current, min, max): Value interface, M4b
+        self.labelled_by = None                               # node id of the LABELLED_BY target
 
 
 class ApiError(Exception):
@@ -446,6 +447,10 @@ def _(app, n):
 
 @impl(IF_ACC, "GetRelationSet", "", "a(ua(so))")
 def _(app, n):
+    if n.labelled_by is not None and app.nodes[n.labelled_by] is not None:
+        # ATSPI_RELATION_LABELLED_BY = 2
+        return (dbus.Array([(dbus.UInt32(2), dbus.Array([app.child_ref(n, n.labelled_by)], signature="(so)"))],
+                           signature="(ua(so))"),)
     return (dbus.Array([], signature="(ua(so))"),)
 
 
@@ -1482,6 +1487,8 @@ def handle(app, cmd):
     elif c == "add_child":
         p = app.node(cmd["parent"])
         n = app.add_child(p, int(cmd.get("role", R_LIST_ITEM)), cmd["name"], text=cmd.get("text"))
+        if "labelled_by" in cmd:
+            n.labelled_by = app.node(cmd["labelled_by"]).id
         return {"path": path_of(n.id), "id": n.id}
     elif c == "remove":
         app.remove_node(app.node(cmd["node"]))

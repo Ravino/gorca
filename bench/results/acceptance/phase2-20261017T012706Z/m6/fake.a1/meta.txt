@@ -1,0 +1,14 @@
+suite=m6
+step=fake
+attempt=1
+kind=e2e
+exit=0
+label=acc-20261017T012706Z-m6-fake-a1
+start=1792201262
+end=1792203871
+seconds=2609
+load_start=8.19 8.86 9.58 7/2989 3191821
+load_end=5.33 6.78 7.78 1/2523 3268502
+governor=performance 
+git_rev=d108974
+cap_seconds=7200

@@ -19,7 +19,7 @@ const ROOT: &str = "/org/a11y/atspi/accessible/root";
 
 struct Rig {
     cx: CallCx,
-    _app: FakeApp,
+    app: FakeApp,
     _session: Session,
 }
 
@@ -59,7 +59,7 @@ async fn rig(args: &[&str]) -> Option<Rig> {
     };
     Some(Rig {
         cx,
-        _app: app,
+        app,
         _session: session,
     })
 }
@@ -300,4 +300,128 @@ fn strategy_sources_cannot_reach_the_raw_connection() {
             );
         }
     }
+}
+
+fn id_of(reply: &str) -> u64 {
+    // The reply carries the request id too; the node id is the one inside "path".
+    let path = reply.find("/accessible/").expect("path in reply");
+    let tail = &reply[path + "/accessible/".len()..];
+    let end = tail.find('"').expect("closing quote");
+    tail[..end].parse().expect("numeric node id")
+}
+
+const LABEL: u32 = 29;
+const BUTTON: u32 = 43;
+
+fn add(r: &mut Rig, parent: u64, role: u32, name: &str, extra: &str) -> u64 {
+    let body = format!(
+        "\"cmd\":\"add_child\",\"parent\":{parent},\"role\":{role},\"name\":\"{name}\"{extra}"
+    );
+    id_of(&r.app.cmd(&body).expect("add_child"))
+}
+
+async fn name_of(r: &Rig, id: u64) -> Option<String> {
+    let n = resolved(&r.cx, id);
+    strategy::fetch(&r.cx, &n, PropMask::NAME, dl())
+        .await
+        .unwrap()
+        .name
+}
+
+/// An unnamed button takes the name of its `labelled-by` target.
+#[test]
+fn an_unnamed_node_is_named_by_its_labelled_by_target() {
+    run(async {
+        let Some(mut r) = rig(TREE).await else { return };
+        let label = add(&mut r, 1, LABEL, "Files", "");
+        let b = add(&mut r, 1, BUTTON, "", &format!(",\"labelled_by\":{label}"));
+        assert_eq!(name_of(&r, b).await.as_deref(), Some("Files"));
+    });
+}
+
+/// With no relation, the names of the label children are joined (bounded depth and count).
+#[test]
+fn an_unnamed_node_is_named_by_its_label_children() {
+    run(async {
+        let Some(mut r) = rig(TREE).await else { return };
+        let b = add(&mut r, 1, BUTTON, "", "");
+        add(&mut r, b, LABEL, "Open", "");
+        add(&mut r, b, LABEL, "Files", "");
+        assert_eq!(name_of(&r, b).await.as_deref(), Some("Open Files"));
+    });
+}
+
+/// A nameless child with only text is read through the Text interface; a node with nothing
+/// to say stays unnamed (no invented name).
+#[test]
+fn text_children_name_a_node_and_an_empty_one_stays_empty() {
+    run(async {
+        let Some(mut r) = rig(TREE).await else { return };
+        let b = add(&mut r, 1, BUTTON, "", "");
+        add(&mut r, b, LABEL, "", ",\"text\":\"Terminal\"");
+        assert_eq!(name_of(&r, b).await.as_deref(), Some("Terminal"));
+        let empty = add(&mut r, 1, BUTTON, "", "");
+        assert!(name_of(&r, empty).await.is_none_or(|n| n.is_empty()));
+    });
+}
+
+/// The descendant search is bounded: a wide unnamed subtree is cut at the node budget.
+#[test]
+fn the_descendant_label_search_is_bounded() {
+    run(async {
+        let Some(mut r) = rig(TREE).await else { return };
+        let b = add(&mut r, 1, BUTTON, "", "");
+        for i in 0..20 {
+            add(&mut r, b, LABEL, &format!("w{i}"), "");
+        }
+        let name = name_of(&r, b).await.unwrap_or_default();
+        assert_eq!(
+            name.split(' ').count(),
+            super::strategy::LABEL_SEARCH_NODES as usize
+        );
+    });
+}
+
+const PASSWORD: u32 = 40;
+const ENTRY: u32 = 79;
+
+/// A password field inside a nameless button, or behind its `labelled-by`, never becomes the
+/// button's name (neither its name nor its text is read); a plain label beside it still does.
+#[test]
+fn a_password_field_never_leaks_into_a_name() {
+    run(async {
+        let Some(mut r) = rig(TREE).await else { return };
+        // Descendant chain: button > [password(text), label].
+        let b = add(&mut r, 1, BUTTON, "", "");
+        add(&mut r, b, PASSWORD, "", ",\"text\":\"hunter2\"");
+        assert!(name_of(&r, b).await.is_none_or(|n| n.is_empty()));
+        add(&mut r, b, LABEL, "Sign in", "");
+        let name = name_of(&r, b).await.unwrap_or_default();
+        assert_eq!(name, "Sign in");
+        assert!(!name.contains("hunter2"));
+        // Deeper: button > panel > password.
+        let b2 = add(&mut r, 1, BUTTON, "", "");
+        let panel = add(&mut r, b2, 39, "", "");
+        add(&mut r, panel, PASSWORD, "", ",\"text\":\"hunter2\"");
+        assert!(name_of(&r, b2).await.is_none_or(|n| n.is_empty()));
+        // Relation: labelled-by a password field (named or not).
+        let pw = add(&mut r, 1, PASSWORD, "Secret", ",\"text\":\"hunter2\"");
+        let b3 = add(&mut r, 1, BUTTON, "", &format!(",\"labelled_by\":{pw}"));
+        assert!(name_of(&r, b3).await.is_none_or(|n| n.is_empty()));
+        // The password field itself gets no fallback name.
+        let pw2 = add(&mut r, 1, PASSWORD, "", ",\"text\":\"hunter2\"");
+        add(&mut r, pw2, LABEL, "leak", "");
+        assert!(name_of(&r, pw2).await.is_none_or(|n| n.is_empty()));
+    });
+}
+
+/// Text is lent only by label-like, non-editable leaves: an entry's contents are never a name.
+#[test]
+fn an_editable_entry_lends_no_text_to_a_name() {
+    run(async {
+        let Some(mut r) = rig(TREE).await else { return };
+        let b = add(&mut r, 1, BUTTON, "", "");
+        add(&mut r, b, ENTRY, "", ",\"text\":\"private note\"");
+        assert!(name_of(&r, b).await.is_none_or(|n| n.is_empty()));
+    });
 }
