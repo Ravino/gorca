@@ -130,3 +130,23 @@ Also noted:
 * `web-list-box` and `web-list` are both "список", so "нет следующего списка" is ambiguous; use "список выбора".
 * `mod-gorca` "горка" (a common noun, "slide") is acceptable phonetically, but brand text should stay "gorca".
 * `state-has-popup` + "развёрнуто" run together: "развёрнуто есть всплывающее меню".
+
+## Fix round (2026-10-17)
+
+| Finding | Status |
+|---|---|
+| F-1 caret.rs strings | done: `text-new-line`, `text-and-more`, `text-chars` (ru plurals), `text-all-selected`, `text-selected`/`-unselected`, count variants |
+| F-2 lint scans by item | done: only `#[cfg(test)]` items are skipped; `Piece::phrase(`, `Piece::unit(`, `TermAction::Say` are speech calls; fixture self-tests; 315 literals / 102 allowed, nothing new flagged |
+| F-3 `{n} {role}` | done: `info-window`, allowlist entry dropped |
+| F-4 extension catalogues | done: registered after `add_wasm` succeeds; a taken namespace is refused (`register_extension`); unregistered when the host drops; duplicate dirs already fail in `add_wasm` |
+| F-5 | done: `resolve_for`/`restrict_to` bind a reference to its extension; U+001E/U+001F stripped from app text (`sanitize`) at the core, host and shell-policy boundaries |
+| F-6 | documented: language stays process-global (one Reader per daemon) |
+| F-7 | done: `get()` on a template with placeholders panics in debug and tests |
+| F-8 | done: `read_catalog_file` opens O_NONBLOCK, regular files only, `take(MAX+1)` |
+| 15 Russian fixes | done, including the time-of-day words (ночи/утра/дня/вечера); English keeps AM/PM |
+
+Found while fixing: the Wasm terminal host resolved references early, so its action lengths differed from the other runtimes (term_parity); the host now only drops foreign references and the core resolves. Segments that resolve to empty are dropped.
+
+Gates: fmt, clippy -D warnings, `cargo xtask deps` and `strings` clean. `cargo test --workspace` (RUST_TEST_THREADS=4) ran twice after the fixes: the second was fully green. A first run saw `b1_ic` IC-12 "VACUOUS ... probe says Miss" (a cache probe on the real daemon, timing under load); it passed on a solo rerun and on the second full run. It is flaky and not caused by this change. It is reported here, not hidden.
+E2E strict K2/K3/R1/A1, 1 repeat, `bench/results/e2e/m12a-fix/`: K2 p99 0.253 ms, K3 1.083, R1 0.336, A1 5.849; all PASS (main: 0.206 / 1.094 / 0.306 / 5.397).
+English identity: the differential golden probes of the review are no longer on disk and were not rerun. The English unit tests (time AM/PM, `text-chars`, `state-available` = "not unavailable") and the e2e transcripts pass.
