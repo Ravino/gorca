@@ -2261,7 +2261,7 @@ fn gtk_ctrl_right_speaks_the_word_just_reached_through_the_end_of_the_text() {
     let mut g = rig();
     g.entry("Привет, как дела твои?", 0);
     let said = word_walk(&mut g, RIGHT, &[6, 11, 16, 21, 22]);
-    assert_eq!(said, ["Привет", "как", "дела", "твои", "?"]);
+    assert_eq!(said, ["Привет", "как", "дела", "твои", "question"]);
 }
 
 #[test]
@@ -2370,4 +2370,26 @@ fn right_arrow_across_a_line_end_speaks_blank_for_the_break_like_nvda_then_the_n
     assert_eq!(step(&mut g, RIGHT, 4), ["d"]);
     assert_eq!(step(&mut g, RIGHT, 5), ["blank"]);
     assert_eq!(step(&mut g, LEFT, 4), ["d"]);
+}
+
+fn set_speech(g: &mut Rig, lang: &str, punct: gorca_config::Punct) {
+    let mut s = (*g.r.cmd.effective).clone();
+    s.speech.language = lang.to_owned();
+    s.speech.punctuation = punct;
+    g.r.cmd.effective = Arc::new(s);
+}
+
+#[test]
+fn russian_text_is_spoken_with_russian_symbol_names_by_level() {
+    let mut g = rig();
+    set_speech(&mut g, "ru", gorca_config::Punct::All);
+    g.entry("", 0);
+    assert_eq!(
+        spoken(&g.insert(0, "Привет, дела?")),
+        ["Привет запятая, дела вопросительный знак?"]
+    );
+    let mut g = rig();
+    set_speech(&mut g, "ru", gorca_config::Punct::Some);
+    g.entry("", 0);
+    assert_eq!(spoken(&g.insert(0, "Привет, дела?")), ["Привет, дела?"]);
 }

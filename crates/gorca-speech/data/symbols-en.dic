@@ -1,0 +1,113 @@
+# Symbol table, English. Modelled on the behaviour of NVDA symbols.dic; names are original.
+# Fields (tab separated): symbol, spoken name, level, preserve.
+#   symbol: one character, "U+XXXX", the literal "...", or "@id" for a complex rule or word.
+#   level: none (always spoken), some, most, all, char (only when one character is read).
+#   preserve: never (default), always (keep the mark for prosody), norep (keep it when not named).
+@word.blank	blank
+@word.object	object
+@word.cap	cap
+@level.none	none
+@level.some	some
+@level.most	most
+@level.all	all
+@word.confirm	punctuation {}
+@sentence.dot	dot	all	always
+@sentence.bang	bang	all	always
+@sentence.question	question	all	always
+@phrase.semi	semicolon	most	always
+@phrase.colon	colon	most	always
+@multiple.dot	multiple dots	all	always
+@decimal.point		none	always
+@decimal.comma		none	always
+@inword.apostrophe	apostrophe	all	norep
+@negative.number	minus	none	norep
+U+0000	blank	char
+U+0009	tab	char
+U+000A	blank	char
+U+000D	blank	char
+U+000C	page break	none
+U+0020	space	char
+U+00A0	space	char
+U+2009	space	char
+U+202F	space	char
+U+200B	zero width space	char
+U+200E	left to right mark	char
+U+200F	right to left mark	char
+!	bang	all
+"	quote	most
+#	number	some
+$	dollar	all	norep
+£	pound	all	norep
+€	euro	all	norep
+¢	cents	all	norep
+¥	yen	all	norep
+₹	rupee	some	norep
+₽	ruble	some	norep
+₴	hryvnia	some	norep
+%	percent	some
+‰	per mille	some
+&	and	some
+'	apostrophe	all
+(	left paren	most	always
+)	right paren	most	always
+*	star	some
++	plus	some
+,	comma	all	always
+-	dash	most	always
+.	dot	some
+/	slash	some
+:	colon	most	norep
+;	semicolon	most
+<	less	some
+=	equals	some
+>	greater	some
+?	question	all
+U+0040	at	some
+[	left bracket	most
+]	right bracket	most
+\	backslash	most
+^	caret	most
+_	underscore	most
+`	grave	most
+{	left brace	most
+}	right brace	most
+|	bar	most
+~	tilde	most
+¦	broken bar	most
+¡	inverted bang	some
+¿	inverted question	some
+·	middle dot	most
+„	low double quote	most
+“	left quote	most
+”	right quote	most
+‘	left single quote	most
+’	right single quote	most
+′	prime	some
+″	double prime	some
+•	bullet	some
+…	ellipsis	all	always
+...	ellipsis	all	always
+–	en dash	most	always
+—	em dash	most	always
+‐	hyphen	most	always
+«	left guillemet	most	always
+»	right guillemet	most	always
+§	section	all
+°	degrees	some
+©	copyright	some
+®	registered	some
+™	trademark	some
+№	number sign	some
+µ	micro	some
+¶	paragraph mark	most
+±	plus or minus	some
+×	times	some
+÷	divided by	some
+−	minus	most	always
+≈	approximately	some
+≠	not equal	some
+≤	less or equal	some
+≥	greater or equal	some
+→	right arrow	some
+←	left arrow	some
+∞	infinity	some

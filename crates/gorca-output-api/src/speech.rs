@@ -41,7 +41,8 @@ pub struct VoiceSetup {
 
 impl VoiceSetup {
     /// The SSIP `SET self ...` lines (no line ending). The module comes first because
-    /// switching it resets the language and voice on some servers.
+    /// switching it resets the language and voice on some servers. The last line always turns
+    /// the server's own punctuation reading off.
     pub fn ssip_lines(&self) -> Vec<String> {
         // A value with a control character could end the line and start another command.
         let ok = |s: &str| !s.is_empty() && !s.chars().any(char::is_control);
@@ -55,6 +56,9 @@ impl VoiceSetup {
         if ok(&self.voice) {
             v.push(format!("SET self SYNTHESIS_VOICE {}", self.voice));
         }
+        // gorca names every symbol itself (`gorca-speech` symbol tables, per level and
+        // language), so the server must not read punctuation a second time.
+        v.push("SET self PUNCTUATION none".to_owned());
         v
     }
 }

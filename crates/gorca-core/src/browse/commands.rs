@@ -584,7 +584,7 @@ fn single_char(d: &WebDoc, r: &Range<u32>, from: Option<u32>) -> Vec<Item> {
     if let [Item::Text(t)] = items.as_slice() {
         let mut it = t.chars();
         if let (Some(c), None) = (it.next(), it.next()) {
-            return vec![Item::Text(present::char_name(c))];
+            return vec![Item::Char(c.to_string())];
         }
         return vec![Item::Text(t.clone())];
     }
@@ -593,7 +593,7 @@ fn single_char(d: &WebDoc, r: &Range<u32>, from: Option<u32>) -> Vec<Item> {
         return t
             .chars()
             .next()
-            .map(|c| vec![Item::Text(present::char_name(c))])
+            .map(|c| vec![Item::Char(c.to_string())])
             .unwrap_or_default();
     }
     items
@@ -1771,7 +1771,8 @@ impl Reader {
                 kind: SegmentKind::Text,
             });
         }
-        u.segments.extend(present::segments(items));
+        u.segments
+            .extend(present::segments(items, self.verbalize_opts()));
         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
     }
 

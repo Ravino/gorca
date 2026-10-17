@@ -757,6 +757,8 @@ mod tests {
         let l = v.iter().position(|l| l == "SET self LANGUAGE ru");
         assert!(m.is_some() && m < l, "{v:?}");
         assert!(!v.iter().any(|l| l.contains("SYNTHESIS_VOICE")));
+        // gorca names symbols itself, so the server's punctuation reading is switched off.
+        assert!(v.iter().any(|l| l == "SET self PUNCTUATION none"), "{v:?}");
         drop(c);
         drop(srv);
         let _ = std::fs::remove_dir_all(&d);

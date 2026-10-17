@@ -26,7 +26,9 @@ use gorca_model::{
     Utterance,
 };
 use gorca_rt::BudgetClass;
-use gorca_speech::{Caps as VCaps, How, LaneProgress, Punct as VPunct, VerbalizeOpts, Verbalizer};
+use gorca_speech::{
+    Caps as VCaps, How, LaneProgress, Lang, Punct as VPunct, VerbalizeOpts, Verbalizer,
+};
 use gorca_text::caret::Say;
 
 use crate::SpeechIntent;
@@ -418,6 +420,7 @@ impl Reader {
         VerbalizeOpts {
             punct: punct(s.punctuation),
             caps: caps(s.caps),
+            lang: Lang::from_code(&s.language),
         }
     }
 
