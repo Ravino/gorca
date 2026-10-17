@@ -1651,9 +1651,10 @@ impl Reader {
                 // focus presenter words it (it replaces the first, short utterance).
                 let titled = match focus_node {
                     Some((n, _)) if switched && n != root => self.web.as_ref().and_then(|b| {
-                        b.docs.get(doc)?.read.with(|d| {
-                            Some((title_of(d)?, present::describe_node(d, n)))
-                        })
+                        b.docs
+                            .get(doc)?
+                            .read
+                            .with(|d| Some((title_of(d)?, present::describe_node(d, n))))
                     }),
                     Some(_) | None => None,
                 };
@@ -1751,12 +1752,18 @@ impl Reader {
         };
         let word = self.web_take_word();
         let id = self.utt_id();
-        let mut u = self
-            .presenters
-            .present(crate::PresentContext::Focus, &p.snap, id, self.epoch.current());
+        let mut u = self.presenters.present(
+            crate::PresentContext::Focus,
+            &p.snap,
+            id,
+            self.epoch.current(),
+        );
         u.prio = Prio::Interrupt;
         u.may_refine = true;
-        let front = word.into_iter().map(Arc::<str>::from).chain([Arc::from(title)]);
+        let front = word
+            .into_iter()
+            .map(Arc::<str>::from)
+            .chain([Arc::from(title)]);
         for (at, text) in front.enumerate() {
             u.segments.insert(
                 at,

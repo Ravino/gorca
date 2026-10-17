@@ -371,7 +371,16 @@ pub fn k3(
         modifier: INSERT,
         key: TAB,
     };
-    chord_series(&mut rig, out, "k3_ms", &c, size.n, seed, Before::FocusFresh, None)
+    chord_series(
+        &mut rig,
+        out,
+        "k3_ms",
+        &c,
+        size.n,
+        seed,
+        Before::FocusFresh,
+        None,
+    )
 }
 
 fn forger_command(rig: &Rig, args: &[&str]) -> std::process::Command {
