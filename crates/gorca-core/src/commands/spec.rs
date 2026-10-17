@@ -88,8 +88,15 @@ pub struct CmdSpec {
     pub interrupts: bool,
     /// Runs even in learn mode.
     pub input_help_bypass: bool,
-    /// Learn-mode description.
-    pub help: &'static str,
+    /// Learn-mode description (catalog `cmd-<name>`).
+    pub help: gorca_i18n::MsgId,
+}
+
+impl CmdSpec {
+    /// The learn-mode description in the UI language.
+    pub fn help_text(&self) -> &'static str {
+        gorca_i18n::t(self.help)
+    }
 }
 
 impl CoreCmd {
@@ -204,7 +211,7 @@ mod tests {
             assert_eq!(*c as usize, i, "discriminants are dense");
             let s = c.spec();
             assert_eq!(s.cmd, *c);
-            assert!(!s.help.is_empty() && !s.name.is_empty(), "{}", s.name);
+            assert!(!s.help_text().is_empty() && !s.name.is_empty(), "{}", s.name);
             assert!((1..=3).contains(&s.max_press));
             assert_eq!(CoreCmd::from_id(c.id()), Some(*c));
             assert_eq!(CommandTable::get().by_name(s.name), Some(*c));

@@ -3,6 +3,7 @@
 //! "Where am I" v1 (ADR-0005 6.4) uses the ancestry the mirror already holds: application,
 //! window, the container chain with positions ("list, 3 of 12"), then the object itself.
 
+use gorca_i18n::{MsgId as M, msg, t as tr};
 use std::fmt::Write as _;
 use std::sync::Arc;
 
@@ -78,21 +79,21 @@ fn is_container(role: Role) -> bool {
 }
 
 fn state_words(s: StateSet) -> Vec<&'static str> {
-    const W: &[(StateSet, &str)] = &[
-        (StateSet::DISABLED, "unavailable"),
-        (StateSet::CHECKED, "checked"),
-        (StateSet::PRESSED, "pressed"),
-        (StateSet::SELECTED, "selected"),
-        (StateSet::EXPANDED, "expanded"),
-        (StateSet::COLLAPSED, "collapsed"),
-        (StateSet::REQUIRED, "required"),
-        (StateSet::INVALID, "invalid entry"),
-        (StateSet::READ_ONLY, "read only"),
-        (StateSet::HAS_POPUP, "has popup"),
+    const W: &[(StateSet, M)] = &[
+        (StateSet::DISABLED, M::StateUnavailable),
+        (StateSet::CHECKED, M::StateChecked),
+        (StateSet::PRESSED, M::StatePressed),
+        (StateSet::SELECTED, M::StateSelected),
+        (StateSet::EXPANDED, M::StateExpanded),
+        (StateSet::COLLAPSED, M::StateCollapsed),
+        (StateSet::REQUIRED, M::StateRequired),
+        (StateSet::INVALID, M::StateInvalidEntry),
+        (StateSet::READ_ONLY, M::StateReadOnly),
+        (StateSet::HAS_POPUP, M::StateHasPopup),
     ];
     W.iter()
         .filter(|(f, _)| s.contains(*f))
-        .map(|(_, w)| *w)
+        .map(|(_, w)| tr(*w))
         .collect()
 }
 
@@ -109,7 +110,7 @@ pub(crate) fn spell(text: &str) -> String {
     text.chars()
         .map(|c| {
             if c == ' ' {
-                "space".to_owned()
+                tr(M::WordSpace).to_owned()
             } else {
                 c.to_string()
             }
@@ -121,12 +122,12 @@ pub(crate) fn spell(text: &str) -> String {
 /// Text of "where am I". `chain` is leaf first. `repeat`: 1 basic, 2 detailed, 3 spell the name.
 pub(crate) fn where_am_i(chain: &[Arc<NodeSnapshot>], repeat: u8, level: Verbosity) -> String {
     let Some(leaf) = chain.first() else {
-        return "no focus".to_owned();
+        return tr(M::NoFocus).to_owned();
     };
     if repeat >= 3 {
         return match named(leaf) {
             Some(n) => spell(n),
-            None => format!("{}, no name", leaf.role.spoken()),
+            None => msg!(InfoNoName, role = leaf.role.spoken()),
         };
     }
     let detailed = repeat == 2 || level == Verbosity::Verbose;
@@ -169,7 +170,7 @@ pub(crate) fn where_am_i(chain: &[Arc<NodeSnapshot>], repeat: u8, level: Verbosi
         if let Some(child) = chain.get(i - 1)
             && let Some((at, of)) = position(n, child.key)
         {
-            let _ = write!(s, ", {at} of {of}");
+            let _ = write!(s, ", {}", msg!(InfoPosition, at = at, of = of));
         }
         parts.push(s);
     }
@@ -196,7 +197,7 @@ pub(crate) fn where_am_i(chain: &[Arc<NodeSnapshot>], repeat: u8, level: Verbosi
             parts.push(d.to_owned());
         }
         if matches!(leaf.fresh, Freshness::Stale { .. } | Freshness::Defunct) {
-            parts.push("information may be out of date".to_owned());
+            parts.push(tr(M::InfoOutOfDate).to_owned());
         }
     }
     parts.join(", ")
@@ -212,7 +213,7 @@ pub(crate) fn window_title(chain: &[Arc<NodeSnapshot>]) -> Option<String> {
 
 pub(crate) fn node_info(chain: &[Arc<NodeSnapshot>]) -> String {
     let Some(n) = chain.first() else {
-        return "no focus".to_owned();
+        return tr(M::NoFocus).to_owned();
     };
     let fresh = match n.fresh {
         Freshness::Fresh { .. } => "fresh",
@@ -240,51 +241,51 @@ pub(crate) fn node_info(chain: &[Arc<NodeSnapshot>]) -> String {
     )
 }
 
-const MONTHS: [&str; 12] = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
+const MONTHS: [M; 12] = [
+    M::Month1,
+    M::Month2,
+    M::Month3,
+    M::Month4,
+    M::Month5,
+    M::Month6,
+    M::Month7,
+    M::Month8,
+    M::Month9,
+    M::Month10,
+    M::Month11,
+    M::Month12,
 ];
-const DAYS: [&str; 7] = [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-    "Sunday",
+const DAYS: [M; 7] = [
+    M::Day1,
+    M::Day2,
+    M::Day3,
+    M::Day4,
+    M::Day5,
+    M::Day6,
+    M::Day7,
 ];
 
 pub(crate) fn time_text(t: LocalTime, clock_24h: bool) -> String {
+    let m = format!("{:02}", t.minute);
     if clock_24h {
-        format!("{}:{:02}", t.hour, t.minute)
+        msg!(Time24h, h = t.hour, m = m.as_str())
     } else {
         let (h, ap) = match t.hour {
-            0 => (12, "AM"),
-            1..=11 => (t.hour, "AM"),
-            12 => (12, "PM"),
-            h => (h - 12, "PM"),
+            0 => (12, M::TimeAm),
+            1..=11 => (t.hour, M::TimeAm),
+            12 => (12, M::TimePm),
+            h => (h - 12, M::TimePm),
         };
-        format!("{h}:{:02} {ap}", t.minute)
+        msg!(Time12h, h = h, m = m.as_str(), ap = gorca_i18n::t(ap))
     }
 }
 
 pub(crate) fn date_text(t: LocalTime) -> String {
-    let day = DAYS.get(usize::from(t.weekday)).copied().unwrap_or("");
+    let day = DAYS.get(usize::from(t.weekday)).map_or("", |d| tr(*d));
     let month = MONTHS
         .get(usize::from(t.month.saturating_sub(1)))
-        .copied()
-        .unwrap_or("");
-    format!("{day}, {month} {}, {}", t.day, t.year)
+        .map_or("", |m| tr(*m));
+    msg!(DateFull, day = day, month = month, d = t.day, y = t.year)
 }
 
 #[cfg(test)]

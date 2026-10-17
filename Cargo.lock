@@ -1157,6 +1157,7 @@ dependencies = [
  "gorca-doc",
  "gorca-doc-source-api",
  "gorca-ext-api",
+ "gorca-i18n",
  "gorca-ingress",
  "gorca-input-api",
  "gorca-mirror",
@@ -1325,6 +1326,7 @@ version = "0.0.0"
 dependencies = [
  "arc-swap",
  "bitflags",
+ "gorca-i18n",
  "gorca-model",
  "gorca-rt",
  "smallvec",
@@ -1412,6 +1414,7 @@ dependencies = [
 name = "gorca-speech"
 version = "0.0.0"
 dependencies = [
+ "gorca-i18n",
  "gorca-model",
  "gorca-output-api",
  "gorca-rt",

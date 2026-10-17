@@ -4,6 +4,7 @@
 //! `info.window_title`, `debug.node_info`) read the mirror and, on a miss, emit one Interactive
 //! fetch and finish on the reply (CR-3).
 
+use gorca_i18n::{MsgId as M, msg, t};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -120,13 +121,13 @@ impl Reader {
             CoreCmd::SpeechModeCycle => {
                 if self.cmd.speech_on {
                     // Spoken before muting, so the user hears that it happened.
-                    self.say("speech off", fx);
+                    self.say(t(M::SpeechOff), fx);
                     self.cmd.speech_on = false;
                     fx.push(ReaderEffect::SpeechCtl(SpeechCtl::Mute(true)));
                 } else {
                     self.cmd.speech_on = true;
                     fx.push(ReaderEffect::SpeechCtl(SpeechCtl::Mute(false)));
-                    self.say("speech on", fx);
+                    self.say(t(M::SpeechOn), fx);
                 }
             }
             CoreCmd::SpeechRepeatLast => match self.cmd.last_spoken.clone() {
@@ -139,7 +140,7 @@ impl Reader {
                     u.survives_focus_change = false;
                     fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
                 }
-                None => self.say("nothing to repeat", fx),
+                None => self.say(t(M::NothingToRepeat), fx),
             },
             CoreCmd::SpeechHistoryPrev => self.history_step(true, fx),
             CoreCmd::SpeechHistoryNext => self.history_step(false, fx),
@@ -188,32 +189,36 @@ impl Reader {
             CoreCmd::EchoTypedCharsToggle => {
                 let v = !self.cmd.effective.echo.typed_characters;
                 self.cmd.overlay.typed_characters = Some(v);
-                self.toggled("speak typed characters", v, fx);
+                self.toggled(M::CmdTypedCharsOn, M::CmdTypedCharsOff, v, fx);
             }
             CoreCmd::EchoTypedWordsToggle => {
                 let v = !self.cmd.effective.echo.typed_words;
                 self.cmd.overlay.typed_words = Some(v);
-                self.toggled("speak typed words", v, fx);
+                self.toggled(M::CmdTypedWordsOn, M::CmdTypedWordsOff, v, fx);
             }
             CoreCmd::EchoCommandKeysToggle => {
                 let v = !self.cmd.effective.echo.command_keys;
                 self.cmd.overlay.command_keys = Some(v);
-                self.toggled("speak command keys", v, fx);
+                self.toggled(M::CmdCommandKeysOn, M::CmdCommandKeysOff, v, fx);
             }
             CoreCmd::VerbosityCycle => {
                 let v = self.cmd.effective.verbosity.level.next();
                 self.cmd.overlay.verbosity = Some(v);
                 self.cmd.republish();
-                let name = v.name();
-                self.confirm(&format!("verbosity {name}"), name, fx);
+                let name = match v {
+                    gorca_config::Verbosity::Brief => t(M::VerbosityBrief),
+                    gorca_config::Verbosity::Normal => t(M::VerbosityNormal),
+                    gorca_config::Verbosity::Verbose => t(M::VerbosityVerbose),
+                };
+                self.confirm(&msg!(VerbosityConfirm, name = name), name, fx);
             }
             CoreCmd::InputLearnModeToggle => {
                 let entering = !matches!(self.mode, Mode::InputHelp { .. });
                 self.on_mode(ModeMsg::ToggleInputHelp, fx);
                 if entering {
-                    self.confirm("learn mode on, Escape to exit", "learn on", fx);
+                    self.confirm(t(M::LearnOn), t(M::LearnOnBrief), fx);
                 } else {
-                    self.confirm("learn mode off", "learn off", fx);
+                    self.confirm(t(M::LearnOff), t(M::LearnOffBrief), fx);
                 }
             }
             CoreCmd::InputPassNextKey => {
@@ -221,7 +226,7 @@ impl Reader {
                 if matches!(self.mode, Mode::PassThrough { .. }) {
                     self.cmd.pass_deadline = Some(now + PASS_TIMEOUT);
                     fx.push(ReaderEffect::ArmTimer(now + PASS_TIMEOUT));
-                    self.confirm("pass next key", "pass", fx);
+                    self.confirm(t(M::PassNext), t(M::PassNextBrief), fx);
                 }
             }
             CoreCmd::TextSayAll => self.say_all_start(intent.epoch, fx),
@@ -265,7 +270,7 @@ impl Reader {
             CoreCmd::SettingsReload => fx.push(ReaderEffect::Config(ConfigRequest::Reload)),
             CoreCmd::SettingsSave => {
                 if self.cmd.newer_schema {
-                    self.say("not saved: settings file is from a newer version", fx);
+                    self.say(t(M::SettingsNotSavedNewer), fx);
                 } else {
                     fx.push(ReaderEffect::Config(ConfigRequest::Save(
                         self.cmd.overlay.clone(),
@@ -275,9 +280,9 @@ impl Reader {
             CoreCmd::SettingsReportProblems => {
                 let n = self.cmd.problems.len();
                 if n == 0 {
-                    self.say("no settings problems", fx);
+                    self.say(t(M::SettingsNoProblems), fx);
                 } else {
-                    let mut text = format!("{n} settings problem{}", plural(n));
+                    let mut text = msg!(SettingsProblems, n = n);
                     for p in self.cmd.problems.iter().take(5) {
                         text.push_str(". ");
                         text.push_str(p);
@@ -427,21 +432,25 @@ impl Reader {
             planned_cmds!() => {
                 // Declared but not implemented: the keymap never routes these (inert), so this
                 // is only reachable through a stale table. Say so instead of staying silent.
-                self.say("command not available yet", fx);
+                self.say(t(M::CommandNotAvailable), fx);
             }
         }
     }
 
-    fn toggled(&mut self, what: &str, on: bool, fx: &mut ReaderEffects) {
+    fn toggled(&mut self, on_msg: M, off_msg: M, on: bool, fx: &mut ReaderEffects) {
         self.cmd.republish();
-        let word = if on { "on" } else { "off" };
-        self.confirm(&format!("{what} {word}"), word, fx);
+        let (full, word) = if on {
+            (on_msg, M::StateOn)
+        } else {
+            (off_msg, M::StateOff)
+        };
+        self.confirm(t(full), t(word), fx);
     }
 
     fn say_ring(&mut self, fx: &mut ReaderEffects) {
         let ring = self.cmd.ring;
         let v = self.level(ring);
-        self.say(&format!("{} {v}", ring.name()), fx);
+        self.say(&msg!(RingSay, name = ring.name(), v = v), fx);
     }
 
     fn level(&self, ring: Ring) -> u8 {
@@ -491,7 +500,7 @@ impl Reader {
 
     fn ask_node(&mut self, kind: PendingKind, repeat: u8, fx: &mut ReaderEffects) {
         let Some(node) = self.current_node() else {
-            self.say("no focus", fx);
+            self.say(t(M::NoFocus), fx);
             return;
         };
         if kind == PendingKind::WhereAmI {
@@ -526,7 +535,7 @@ impl Reader {
                     kind: crate::reader::FetchKind::Info,
                 });
             }
-            Lookup::Gone => self.say("focused object is gone", fx),
+            Lookup::Gone => self.say(t(M::FocusGone), fx),
         }
     }
 
@@ -545,7 +554,7 @@ impl Reader {
             PendingKind::WindowTitle => match info::window_title(&chain) {
                 Some(t) if repeat >= 2 => info::spell(&t),
                 Some(t) => t,
-                None => "window title not available".to_owned(),
+                None => t(M::WindowTitleUnavailable).to_owned(),
             },
             PendingKind::NodeInfo => info::node_info(&chain),
         };
@@ -569,7 +578,7 @@ impl Reader {
         self.cmd.pending = None;
         match result.or_else(|| self.dir.lookup(node).hit()) {
             Some(snap) => self.answer_node(p.kind, p.repeat, &snap, fx),
-            None => self.say("application not responding", fx),
+            None => self.say(t(M::AppNotResponding), fx),
         }
         true
     }
@@ -581,22 +590,23 @@ impl Reader {
         cmd: Option<CmdId>,
         fx: &mut ReaderEffects,
     ) {
-        let mut text = key_description(intent);
-        text.push_str(": ");
+        let key = key_description(intent);
         let ext_help = cmd
             .and_then(|c| crate::ExtCommands::installed().and_then(|e| e.get(c)))
-            .map(|s| s.help.as_str());
-        match cmd.and_then(CoreCmd::from_id) {
-            None if ext_help.is_some() => text.push_str(ext_help.unwrap_or_default()),
+            .map(|s| gorca_i18n::ext::resolve(&s.help, gorca_i18n::language()).into_owned());
+        let help = match cmd.and_then(CoreCmd::from_id) {
+            None if ext_help.is_some() => ext_help.unwrap_or_default(),
             Some(c) => {
-                text.push_str(c.spec().help);
+                let h = c.spec().help_text();
                 if let super::spec::Availability::Planned(_) = c.spec().available {
-                    text.push_str(", not available yet");
+                    msg!(InputHelpPlanned, help = h)
+                } else {
+                    h.to_owned()
                 }
             }
-            None => text.push_str("not bound"),
-        }
-        self.say(&text, fx);
+            None => t(M::InputHelpUnbound).to_owned(),
+        };
+        self.say(&msg!(InputHelpLine, key = key.as_str(), help = help.as_str()), fx);
     }
 
     pub(crate) fn on_control(&mut self, m: ControlMsg, now: Instant, fx: &mut ReaderEffects) {
@@ -605,10 +615,10 @@ impl Reader {
             ControlMsg::Settings(SettingsMsg::Loaded(l)) => self.on_loaded(&l, fx),
             ControlMsg::Settings(SettingsMsg::SaveResult(r)) => {
                 let text = match r {
-                    SaveResult::Saved => "settings saved",
-                    SaveResult::FileChanged => "not saved: settings file changed on disk",
-                    SaveResult::NewerSchema => "not saved: settings file is from a newer version",
-                    SaveResult::Failed => "settings could not be saved",
+                    SaveResult::Saved => t(M::SettingsSaved),
+                    SaveResult::FileChanged => t(M::SettingsNotSavedChanged),
+                    SaveResult::NewerSchema => t(M::SettingsNotSavedNewer),
+                    SaveResult::Failed => t(M::SettingsSaveFailed),
                 };
                 self.say(text, fx);
             }
@@ -622,38 +632,35 @@ impl Reader {
             InputNotice::HeldByOtherScreenReader => {
                 if !self.cmd.told_held {
                     self.cmd.told_held = true;
-                    self.announce(
-                        "Another screen reader holds the keyboard; gorca commands are unavailable",
-                        fx,
-                    );
+                    self.announce(t(M::InputHeldByOther), fx);
                 }
             }
             InputNotice::Unavailable => {
                 if !self.cmd.told_unavailable {
                     self.cmd.told_unavailable = true;
-                    self.announce("keyboard commands unavailable", fx);
+                    self.announce(t(M::InputUnavailable), fx);
                 }
             }
             InputNotice::Lost => {
                 if !self.cmd.told_lost {
                     self.cmd.told_lost = true;
-                    self.announce("keyboard commands unavailable", fx);
+                    self.announce(t(M::InputUnavailable), fx);
                 }
             }
             InputNotice::ModifierStuck(keysym) => {
                 let name = match keysym {
-                    0xff63 => "Insert",
-                    0xff9e => "Keypad Insert",
-                    0xffe5 => "Caps Lock",
-                    _ => "the gorca key",
+                    0xff63 => t(M::InputKeyInsert),
+                    0xff9e => t(M::InputKeyKpInsert),
+                    0xffe5 => t(M::InputKeyCapsLock),
+                    _ => t(M::InputKeyGorca),
                 };
-                self.announce(&format!("{name} stuck, tap {name}"), fx);
+                self.announce(&msg!(InputStuck, name = name), fx);
             }
             InputNotice::Restored => {
                 self.cmd.told_unavailable = false;
                 if self.cmd.told_lost {
                     self.cmd.told_lost = false;
-                    self.announce("keyboard commands restored", fx);
+                    self.announce(t(M::InputRestored), fx);
                 }
             }
         }
@@ -679,6 +686,10 @@ impl Reader {
             || self.keys.web_escape != l.mode_keys.web_escape
             || self.keys.letters != l.mode_keys.letters;
         self.cmd.republish();
+        // Messages and role words follow the speech language of the new settings.
+        gorca_i18n::set_language(gorca_i18n::Lang::from_code(
+            &self.cmd.effective.speech.language,
+        ));
         // The grab set follows the keymap (HR-1): re-sent only when the keys changed, and
         // always once at startup, which is when the source learns what to grab.
         self.keys = l.mode_keys.clone();
@@ -690,32 +701,26 @@ impl Reader {
         self.cmd.problems.clone_from(&l.problems);
         self.cmd.problems_hash = l.problems_hash;
         let n = l.problems.len();
-        let tail = if n > 0 && new_problems {
-            format!(
-                ", {n} problem{}. Press gorca control shift R for details",
-                plural(n)
-            )
+        let reloaded = if n > 0 && new_problems {
+            msg!(SettingsReloadedProblems, n = n)
         } else {
-            String::new()
+            t(M::SettingsReloaded).to_owned()
         };
         match l.cause {
             LoadCause::FileChanged | LoadCause::Explicit => {
-                self.announce(&format!("settings reloaded{tail}"), fx);
+                self.announce(&reloaded, fx);
             }
             LoadCause::Startup => {
                 if n > 0 {
-                    self.announce(&format!("Settings: {n} problem{}", plural(n)), fx);
+                    self.announce(&msg!(SettingsStartupProblems, n = n), fx);
                 }
             }
-            LoadCause::Saved => self.announce("settings saved", fx),
+            LoadCause::Saved => self.announce(t(M::SettingsSaved), fx),
             LoadCause::Layouts => {}
         }
         if l.caps_lock_dropped && !self.cmd.told_caps {
             self.cmd.told_caps = true;
-            self.announce(
-                "Caps Lock is used for something else, so the gorca key is Insert",
-                fx,
-            );
+            self.announce(t(M::InputCapsDropped), fx);
         }
     }
 
@@ -740,7 +745,7 @@ impl Reader {
                 self.cmd.pass_deadline = None;
                 if matches!(self.mode, Mode::PassThrough { .. }) {
                     self.on_mode(ModeMsg::EndPassThrough, fx);
-                    self.say("pass next key cancelled", fx);
+                    self.say(t(M::PassCancelled), fx);
                 }
             }
             Some(d) => fx.push(ReaderEffect::ArmTimer(d)),
@@ -749,29 +754,25 @@ impl Reader {
     }
 }
 
-fn plural(n: usize) -> &'static str {
-    if n == 1 { "" } else { "s" }
-}
-
 /// "gorca control T": the modifiers, then the key.
 pub(crate) fn key_description(intent: &KeyIntent) -> String {
     use gorca_input_api::Modifiers;
     let mut parts: Vec<String> = Vec::new();
     let m = intent.chord.map_or(intent.event.modifiers, |c| c.mods);
     if m.contains(Modifiers::GORCA) {
-        parts.push("gorca".to_owned());
+        parts.push(t(M::ModGorca).to_owned());
     }
     if m.contains(Modifiers::CONTROL) {
-        parts.push("control".to_owned());
+        parts.push(t(M::ModControl).to_owned());
     }
     if m.contains(Modifiers::MOD1) {
-        parts.push("alt".to_owned());
+        parts.push(t(M::ModAlt).to_owned());
     }
     if m.contains(Modifiers::MOD4) {
-        parts.push("super".to_owned());
+        parts.push(t(M::ModSuper).to_owned());
     }
     if m.contains(Modifiers::SHIFT) {
-        parts.push("shift".to_owned());
+        parts.push(t(M::ModShift).to_owned());
     }
     parts.push(spoken_key_name(intent.event.keysym, intent.event.unichar));
     parts.join(" ")

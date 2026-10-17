@@ -11,30 +11,8 @@ use std::sync::OnceLock;
 const EN_DIC: &str = include_str!("../data/symbols-en.dic");
 const RU_DIC: &str = include_str!("../data/symbols-ru.dic");
 
-/// A language with its own symbol table. Anything else speaks the English one.
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
-pub enum Lang {
-    #[default]
-    En,
-    Ru,
-}
-
-impl Lang {
-    /// The table language for a locale-ish code (`ru`, `ru_RU.UTF-8`, `ru-RU`); English when
-    /// the language has no table.
-    pub fn from_code(code: &str) -> Self {
-        let base = code
-            .trim()
-            .split(['.', '@', '_', '-'])
-            .next()
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        match base.as_str() {
-            "ru" => Lang::Ru,
-            _ => Lang::En,
-        }
-    }
-}
+/// A language with its own symbol table and message catalog (defined by `gorca-i18n`).
+pub use gorca_i18n::Lang;
 
 /// The level at which a symbol is spoken by name. `Char` is spoken only when one character is
 /// read; `None` is spoken at every level.
@@ -107,17 +85,10 @@ pub struct Table {
     simple: HashMap<char, Sym>,
     /// Multi-character symbols (`...`), longest first.
     multi: Vec<(Box<str>, Sym)>,
-    rules: HashMap<usize, Sym>,
-    blank: Box<str>,
-    object: Box<str>,
     cap: Box<str>,
-    /// Spoken names of the four levels (`none` to `all`) and the confirmation sentence of a
-    /// level change (`{}` stands for the level name).
-    levels: [Box<str>; 4],
-    confirm: Box<str>,
-    /// The other `@word.*` entries (lock keys, history, sleep mode, battery): UI words the
-    /// Reader composes its messages from, so a message is spoken in the speech language.
-    words: HashMap<Box<str>, Box<str>>,
+    /// The language of the table: its UI words (blank, object, cap, level names) come from the
+    /// message catalog of the same language.
+    lang: Lang,
 }
 
 fn rule_index(r: Rule) -> usize {
@@ -146,18 +117,6 @@ impl Table {
         let name = f.next()?;
         if let Some(id) = key.strip_prefix('@') {
             match id {
-                "word.blank" => self.blank = name.into(),
-                "word.object" => self.object = name.into(),
-                "word.cap" => self.cap = name.into(),
-                "word.confirm" => self.confirm = name.into(),
-                other if other.starts_with("word.") => {
-                    self.words
-                        .insert(other["word.".len()..].into(), name.into());
-                }
-                "level.none" => self.levels[0] = name.into(),
-                "level.some" => self.levels[1] = name.into(),
-                "level.most" => self.levels[2] = name.into(),
-                "level.all" => self.levels[3] = name.into(),
                 _ => {
                     let (_, rule) = RULES.iter().find(|(n, _)| *n == id)?;
                     let sym = Self::sym(name, f.next(), f.next())?;
@@ -203,7 +162,10 @@ impl Table {
     }
 
     fn build(lang: Lang) -> Self {
-        let mut t = Table::default();
+        let mut t = Table {
+            lang,
+            ..Table::default()
+        };
         t.overlay(EN_DIC);
         if lang == Lang::Ru {
             t.overlay(RU_DIC);
@@ -221,42 +183,33 @@ impl Table {
         }
     }
 
-    pub fn blank(&self) -> &str {
-        &self.blank
+    /// The language of the table.
+    pub fn lang(&self) -> Lang {
+        self.lang
     }
 
-    pub fn object(&self) -> &str {
-        &self.object
+    pub fn blank(&self) -> &'static str {
+        gorca_i18n::t_in(self.lang, gorca_i18n::MsgId::WordBlank)
     }
 
-    pub fn cap(&self) -> &str {
-        &self.cap
+    pub fn object(&self) -> &'static str {
+        gorca_i18n::t_in(self.lang, gorca_i18n::MsgId::WordObject)
     }
 
-    /// A UI word by id (`lock.caps`, `history.empty`, ...); empty when the table has none.
-    pub fn word(&self, id: &str) -> &str {
-        self.words.get(id).map_or("", |w| &**w)
-    }
-
-    /// A UI word with each `{}` replaced, in order, by the next of `args`.
-    pub fn word_with(&self, id: &str, args: &[&str]) -> String {
-        let mut out = String::new();
-        let mut rest = self.word(id);
-        for a in args {
-            let Some((head, tail)) = rest.split_once("{}") else {
-                break;
-            };
-            out.push_str(head);
-            out.push_str(a);
-            rest = tail;
-        }
-        out.push_str(rest);
-        out
+    pub fn cap(&self) -> &'static str {
+        gorca_i18n::t_in(self.lang, gorca_i18n::MsgId::WordCap)
     }
 
     /// The spoken name of a punctuation level (rank 0 `none` to 3 `all`).
-    pub fn level_name(&self, rank: u8) -> &str {
-        self.levels.get(usize::from(rank)).map_or("", |n| &**n)
+    pub fn level_name(&self, rank: u8) -> &'static str {
+        use gorca_i18n::MsgId as M;
+        let id = match rank {
+            0 => M::LevelNone,
+            1 => M::LevelSome,
+            2 => M::LevelMost,
+            _ => M::LevelAll,
+        };
+        gorca_i18n::t_in(self.lang, id)
     }
 
     /// What is said when the level changes to `rank`, in full or as the bare level name.
@@ -265,7 +218,11 @@ impl Table {
         if brief {
             name.to_owned()
         } else {
-            self.confirm.replace("{}", name)
+            gorca_i18n::tf_in(
+                self.lang,
+                gorca_i18n::MsgId::WordConfirm,
+                &[("level", name.into())],
+            )
         }
     }
 
@@ -446,23 +403,7 @@ mod tests {
         assert_eq!(t.rules.len(), RULES.len());
     }
 
-    #[test]
-    fn ui_words_are_localised_with_an_english_fallback() {
-        let en = Table::of(Lang::En);
-        let ru = Table::of(Lang::Ru);
-        assert_eq!(
-            en.word_with("lock.on", &[en.word("lock.caps")]),
-            "Caps Lock on"
-        );
-        assert_eq!(
-            ru.word_with("lock.off", &[ru.word("lock.num")]),
-            "Num Lock выключен"
-        );
-        assert_eq!(en.word_with("battery.hm", &["2", "5"]), "2 h 5 min");
-        assert_eq!(en.word("no.such"), "");
-    }
-
-    #[test]
+        #[test]
     fn level_changes_are_confirmed_in_the_language() {
         let en = Table::of(Lang::En);
         assert_eq!(en.level_confirmation(1, false), "punctuation some");

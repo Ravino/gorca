@@ -2,6 +2,7 @@
 //! history, battery and per-application sleep mode. Additive Reader state and handlers; the
 //! keypress path only reads and writes plain fields (FP-2: no IPC on it).
 
+use gorca_i18n::{MsgId as M, t_in, tf_in};
 use std::collections::{HashSet, VecDeque};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -43,11 +44,11 @@ impl LockKey {
         }
     }
 
-    fn word(self) -> &'static str {
+    fn word(self) -> M {
         match self {
-            LockKey::Caps => "lock.caps",
-            LockKey::Num => "lock.num",
-            LockKey::Scroll => "lock.scroll",
+            LockKey::Caps => M::LockCaps,
+            LockKey::Num => M::LockNum,
+            LockKey::Scroll => M::LockScroll,
         }
     }
 }
@@ -181,7 +182,12 @@ pub(crate) struct QuickState {
 }
 
 fn table(r: &Reader) -> &'static SymbolTable {
-    SymbolTable::of(Lang::from_code(&r.cmd.effective.speech.language))
+    SymbolTable::of(lang(r))
+}
+
+/// The speech language of the Reader's effective settings.
+fn lang(r: &Reader) -> Lang {
+    Lang::from_code(&r.cmd.effective.speech.language)
 }
 
 fn is_single_capital(s: &str) -> bool {
@@ -244,10 +250,11 @@ impl Reader {
             LockKey::Num => locks.num = on,
             LockKey::Scroll => locks.scroll = on,
         }
-        let t = table(self);
-        let text = t.word_with(
-            if on { "lock.on" } else { "lock.off" },
-            &[t.word(key.word())],
+        let lang = lang(self);
+        let text = tf_in(
+            lang,
+            if on { M::LockOn } else { M::LockOff },
+            &[("key", t_in(lang, key.word()).into())],
         );
         self.say(&text, fx);
     }
@@ -268,16 +275,16 @@ impl Reader {
     /// `speech.history_prev` / `speech.history_next`.
     pub(crate) fn history_step(&mut self, back: bool, fx: &mut ReaderEffects) {
         self.cmd.quick.no_history = true;
-        let t = table(self);
+        let lang = lang(self);
         match self.cmd.quick.history.step(back) {
-            HistoryStep::Empty => self.say(t.word("history.empty"), fx),
+            HistoryStep::Empty => self.say(t_in(lang, M::HistoryEmpty), fx),
             HistoryStep::Edge { oldest } => {
                 let w = if oldest {
-                    "history.oldest"
+                    M::HistoryOldest
                 } else {
-                    "history.newest"
+                    M::HistoryNewest
                 };
-                self.say(t.word(w), fx);
+                self.say(t_in(lang, w), fx);
             }
             HistoryStep::Item(u) => self.respeak(u, fx),
         }
@@ -296,7 +303,7 @@ impl Reader {
     /// `input.sleep_toggle`.
     pub(crate) fn sleep_toggle(&mut self, fx: &mut ReaderEffects) {
         let Some(node) = self.current_node() else {
-            self.say("no focus", fx);
+            self.say(t_in(lang(self), M::NoFocus), fx);
             return;
         };
         let q = &mut self.cmd.quick;
@@ -304,9 +311,9 @@ impl Reader {
         if on {
             q.sleeping.insert(node.app);
         }
-        let t = table(self);
+        let lang = lang(self);
         let before = fx.len();
-        self.say(t.word(if on { "sleep.on" } else { "sleep.off" }), fx);
+        self.say(t_in(lang, if on { M::SleepOn } else { M::SleepOff }), fx);
         if let Some(ReaderEffect::Speak(s)) = fx.get(before) {
             self.cmd.quick.sleep_pass = Some(s.utterance.id);
         }
@@ -325,7 +332,7 @@ impl Reader {
         if epoch < self.epoch.current() {
             return;
         }
-        let text = battery_text(table(self), info);
+        let text = battery_text(lang(self), info);
         self.say(&text, fx);
     }
 
@@ -377,7 +384,7 @@ impl Reader {
             }
             if in_secret || secret == Some(id) {
                 let mut u = s.utterance.clone();
-                let word = table(self).word("history.secret");
+                let word = t_in(lang(self), M::HistorySecret);
                 u.segments.clear();
                 u.segments.push(gorca_model::Segment {
                     text: Arc::from(word),
@@ -392,34 +399,34 @@ impl Reader {
     }
 }
 
-/// The spoken battery report.
-pub(crate) fn battery_text(t: &SymbolTable, info: Option<PowerInfo>) -> String {
+/// The spoken battery report, in `lang`.
+pub(crate) fn battery_text(lang: Lang, info: Option<PowerInfo>) -> String {
     let Some(i) = info else {
-        return t.word("battery.unavailable").to_owned();
+        return t_in(lang, M::BatteryUnavailable).to_owned();
     };
     if !i.present {
-        return t.word("battery.none").to_owned();
+        return t_in(lang, M::BatteryNone).to_owned();
     }
-    let mut parts = vec![t.word_with("battery.percent", &[&i.percent.to_string()])];
+    let mut parts = vec![tf_in(lang, M::BatteryPercent, &[("n", i.percent.into())])];
     let state = match i.state {
-        BatteryState::Charging => Some("battery.charging"),
-        BatteryState::Discharging => Some("battery.discharging"),
-        BatteryState::Empty => Some("battery.empty"),
-        BatteryState::FullyCharged => Some("battery.full"),
-        BatteryState::PendingCharge => Some("battery.pending"),
+        BatteryState::Charging => Some(M::BatteryCharging),
+        BatteryState::Discharging => Some(M::BatteryDischarging),
+        BatteryState::Empty => Some(M::BatteryEmpty),
+        BatteryState::FullyCharged => Some(M::BatteryFull),
+        BatteryState::PendingCharge => Some(M::BatteryPending),
         BatteryState::Unknown => None,
     };
     if let Some(w) = state {
-        parts.push(t.word(w).to_owned());
+        parts.push(t_in(lang, w).to_owned());
     }
     if let Some(secs) = i.secs_left.filter(|s| *s >= 60) {
         let (h, m) = (secs / 3600, secs % 3600 / 60);
         let dur = if h > 0 {
-            t.word_with("battery.hm", &[&h.to_string(), &m.to_string()])
+            tf_in(lang, M::BatteryHm, &[("h", h.into()), ("m", m.into())])
         } else {
-            t.word_with("battery.m", &[&m.to_string()])
+            tf_in(lang, M::BatteryM, &[("m", m.into())])
         };
-        parts.push(t.word_with("battery.time", &[&dur]));
+        parts.push(tf_in(lang, M::BatteryTime, &[("dur", dur.as_str().into())]));
     }
     parts.join(", ")
 }

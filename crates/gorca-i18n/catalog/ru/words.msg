@@ -1,0 +1,32 @@
+# Слова, из которых собираются сообщения (раньше строки `@word.*` и `@level.*` таблиц символов).
+
+word-blank = пусто
+word-object = объект
+word-cap = заглавная
+level-none = без пунктуации
+level-some = немного
+level-most = большинство
+level-all = вся
+word-confirm = пунктуация {level}
+lock-caps = Caps Lock
+lock-num = Num Lock
+lock-scroll = Scroll Lock
+lock-on = {key} включён
+lock-off = {key} выключен
+history-secret = пароль
+history-empty = история речи пуста
+history-oldest = самое старое
+history-newest = самое новое
+sleep-on = режим сна включён
+sleep-off = режим сна выключен
+battery-none = батареи нет
+battery-unavailable = состояние батареи недоступно
+battery-percent = {n} {n#процент|процента|процентов}
+battery-charging = заряжается
+battery-discharging = разряжается
+battery-full = полностью заряжена
+battery-empty = разряжена
+battery-pending = ожидает зарядки
+battery-time = осталось {dur}
+battery-hm = {h} ч {m} мин
+battery-m = {m} мин

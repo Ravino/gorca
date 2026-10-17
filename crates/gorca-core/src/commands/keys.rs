@@ -34,13 +34,13 @@ impl Reader {
                 // for a real command chord, never for a modifier or an unbound key.
                 if committed.is_some() && intent.kind == gorca_input_api::PressKind::Press {
                     self.cmd.ambiguous_cues += 1;
-                    self.say("again", fx);
+                    self.say(gorca_i18n::t(gorca_i18n::MsgId::KeyAgain), fx);
                 }
             }
             KeyClass::ModifierPassThrough => {
                 // LM-5: the double tap still reaches the application in learn mode.
                 if matches!(self.mode, Mode::InputHelp { .. }) {
-                    self.say("gorca key passed to application", fx);
+                    self.say(gorca_i18n::t(gorca_i18n::MsgId::KeyGorcaPassed), fx);
                 }
             }
             KeyClass::PassToApp => {
