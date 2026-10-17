@@ -1188,10 +1188,13 @@ impl CaretState {
         match self {
             CaretState::Off => CaretState::Off,
             // The caret event of a Shift move already asked; this event brings nothing new.
+            // GTK4 also signals `text-selection-changed` with every plain caret move: that
+            // move's unit fetch (a line, a paragraph) is still in flight and is not this
+            // event's to drop (a collapse caused by a key is silent anyway, SL-3).
             CaretState::Fetching {
                 t,
                 req,
-                want: want @ Want::Selection { .. },
+                want,
                 epoch,
                 deadline,
             } => CaretState::Fetching {
@@ -1201,7 +1204,6 @@ impl CaretState {
                 epoch,
                 deadline,
             },
-            CaretState::Fetching { t, .. } => CaretState::Idle { t }.on_selection(cx),
             CaretState::Idle { t } => {
                 if t.sel_quiet.is_some_and(|until| cx.now <= until) {
                     return CaretState::Idle { t };
@@ -1805,6 +1807,13 @@ fn insert(
         alt: None,
         until: cx.now + ABSORB,
     });
+    // Text goes in at the caret and the caret ends up behind it. GTK4 text views send no caret
+    // event for typed text, so without this the tracked caret stays where the typing began and
+    // the next arrow key's (correct) caret event looks like a move the wrong way. Engines
+    // with an insert-offset quirk report offsets that cannot be trusted this way.
+    if cx.insert_slack == 0 && caret_before == Some(offset) {
+        t.caret = Some(offset.saturating_add(len));
+    }
     let paste = matches!(slot, Some((TextKey::Clipboard(ClipOp::Paste), ..)));
     let source = if paste {
         InsertSource::Paste
@@ -2103,6 +2112,9 @@ fn delete(
             if after != offset {
                 t.win.invalidate();
                 cx.stats.window_dirty += 1;
+            } else if cx.insert_slack == 0 {
+                // The erase leaves the caret at the hole (GTK4 sends no caret event for it).
+                t.caret = Some(after);
             }
             (cx.insert_slack > 0).then_some(after)
         }

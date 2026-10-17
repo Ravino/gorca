@@ -2579,3 +2579,58 @@ fn lone_modifiers_do_not_end_review_and_generic_echo_is_localised() {
     assert_eq!(spoken(&h.typed(' ')), ["пробел"]);
     assert_eq!(spoken(&h.typed('!')).len(), 1);
 }
+
+// ---- unified editing (docs/reports/unified-editing.md) ---------------------------------------
+
+#[test]
+fn gtk4_selection_event_with_a_plain_move_does_not_drop_the_line_fetch() {
+    // GTK4 signals `text-selection-changed` right behind every caret move. The line fetch of a
+    // Down key is in flight when it arrives; before the fix the machine fell back to Idle and the
+    // reply was dropped (Up, Down, PageUp, Ctrl+Home were silent in GTK4 text views).
+    let mut g = rig();
+    g.area("ab\ncd\nef", 0);
+    let _ = g.key(DOWN, 0, NONE);
+    let fx = g.caret(3);
+    let f = fetches(&fx);
+    assert_eq!(f.len(), 1);
+    let fx = g.selection_event();
+    assert!(spoken(&fx).is_empty() && fetches(&fx).is_empty());
+    let fx = g.reply(
+        f[0].0,
+        Reply::Unit(TextUnitAt {
+            range: 3..6,
+            text: Arc::from("cd\n"),
+        }),
+    );
+    assert_eq!(spoken(&fx), ["cd"]);
+}
+
+#[test]
+fn typing_without_caret_events_still_correlates_the_next_arrow_key() {
+    // GTK4 text views send no caret event for typed text. The tracked caret follows the typed
+    // text, so Left (caret event 1) is a move of this key, not "the wrong way" and a late line.
+    let mut g = rig();
+    g.area("", 0);
+    for (i, c) in "ab".chars().enumerate() {
+        let _ = g.typed(c);
+        let _ = g.insert(i as u32, &c.to_string());
+    }
+    let _ = g.tick(300);
+    let _ = g.key(LEFT, 0, NONE);
+    let fx = g.caret(1);
+    assert_eq!(spoken(&fx), ["b"], "the character the caret moved over");
+    assert_eq!(g.r.text_counters().caret_uncorrelated, 0);
+}
+
+#[test]
+fn backspace_without_caret_events_keeps_the_tracked_caret() {
+    let mut g = rig();
+    g.area("abc", 3);
+    let _ = g.key(BACKSPACE, 0, NONE);
+    let fx = g.delete(2, Some("c"), 1);
+    assert_eq!(spoken(&fx), ["c"]);
+    let _ = g.key(LEFT, 0, NONE);
+    let fx = g.caret(1);
+    assert_eq!(spoken(&fx), ["b"]);
+    assert_eq!(g.r.text_counters().caret_uncorrelated, 0);
+}

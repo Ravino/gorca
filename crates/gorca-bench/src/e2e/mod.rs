@@ -33,6 +33,8 @@
 
 pub mod account;
 pub mod apps;
+pub mod edit;
+pub mod edit_model;
 pub mod host;
 pub mod m1;
 pub mod m3;
