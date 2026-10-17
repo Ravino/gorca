@@ -185,6 +185,12 @@ impl AppConn {
         }
     }
 
+    /// The application's bus name for object references, empty on a peer-to-peer connection
+    /// (the engines read the path of a reference, not its name).
+    pub fn bus_name(&self) -> String {
+        self.dest.clone().unwrap_or_default()
+    }
+
     pub fn is_p2p(&self) -> bool {
         self.p2p
     }
