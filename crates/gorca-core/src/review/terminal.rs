@@ -2,9 +2,9 @@
 //!
 //! The terminal extension holds the visible screen (ADR-0001 T-2); a review key reads a line
 //! model built from that snapshot, with no IPC. One zone per screen row, rows in order, the
-//! row's text as the zone's text. The model is rebuilt when the snapshot's generation changes,
-//! and the cursor is re-anchored by row (a screen is a grid, so "the same row" is the same place
-//! after a scroll), never by source offset.
+//! row's text as the zone's text. The model is rebuilt when the screen text changes (a caret-only
+//! generation keeps it), and the cursor follows its line by content (ADR-0018, `flat::carry_terminal`),
+//! never by visible row: a screen that scrolls under a streaming program must not move the cursor.
 
 use std::collections::HashMap;
 use std::sync::Arc;
