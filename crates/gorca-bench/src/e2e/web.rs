@@ -479,9 +479,21 @@ impl EventTap {
             .collect()
     }
 
+    /// The path of the last event of `kind`.
+    pub(super) fn last_path(&self, kind: u8) -> Option<String> {
+        let seen = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
+        seen.iter()
+            .rev()
+            .find(|e| e.kind == kind)
+            .map(|e| e.path.clone())
+    }
+
     /// How many events were seen so far (a mark for [`EventTap::since`]).
     pub(super) fn len(&self) -> usize {
-        self.seen.lock().unwrap_or_else(PoisonError::into_inner).len()
+        self.seen
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .len()
     }
 
     /// The events after mark `from`, as "kind path member:detail" strings.
@@ -489,7 +501,14 @@ impl EventTap {
         let seen = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
         seen.iter()
             .skip(from)
-            .map(|e| format!("{} {} {}", e.kind, e.path.rsplit('/').next().unwrap_or(""), e.what))
+            .map(|e| {
+                format!(
+                    "{} {} {}",
+                    e.kind,
+                    e.path.rsplit('/').next().unwrap_or(""),
+                    e.what
+                )
+            })
             .collect()
     }
 

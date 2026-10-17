@@ -2440,7 +2440,11 @@ fn a_tab_switch_onto_a_link_leads_with_the_new_page_title_once() {
     let fx = r.focus(3006);
     assert_eq!(spoken(&fx), ["Second page the docs link"]);
     let fx = r.focus(3002);
-    assert_eq!(spoken(&fx), ["Welcome heading"], "the title leads only once");
+    assert_eq!(
+        spoken(&fx),
+        ["Welcome heading"],
+        "the title leads only once"
+    );
     // And back, with the chrome in between: the first page is announced again.
     r.focus(2000);
     r.reader.handle(
@@ -2490,4 +2494,54 @@ fn the_first_visit_of_a_tab_resolves_with_its_title_and_the_focused_node_in_one_
     assert_eq!(said.len(), 1, "{said:?}");
     assert!(said[0].contains("Second page"), "{said:?}");
     assert!(said[0].contains("the docs"), "{said:?}");
+}
+
+fn child_of(parent: u64, mut n: NodeSnapshot) -> Arc<NodeSnapshot> {
+    n.parent = Some(nk(parent));
+    Arc::new(n)
+}
+
+#[test]
+fn a_focus_in_the_browsers_own_interface_neither_waits_for_a_document_nor_says_a_mode_word() {
+    let mut r = rig();
+    // Application > window > toolbar > editable combo box (the address bar), all in the cache.
+    r.mirror.apply(
+        SnapshotBatch {
+            nodes: vec![
+                (*snap(5000, Role::Application, "Firefox", StateSet::empty()))
+                    .clone()
+                    .into(),
+                child_of(
+                    5000,
+                    (*snap(5001, Role::Window, "Firefox", StateSet::empty())).clone(),
+                ),
+                child_of(
+                    5001,
+                    (*snap(5002, Role::Toolbar, "", StateSet::empty())).clone(),
+                ),
+                child_of(
+                    5002,
+                    (*snap(
+                        5003,
+                        Role::ComboBox,
+                        "Search or enter address",
+                        StateSet::EDITABLE | StateSet::FOCUSABLE,
+                    ))
+                    .clone(),
+                ),
+            ],
+            ..Default::default()
+        },
+        ApplyOrigin::Push,
+    );
+    r.focus(1006); // browsing a page first
+    let fx = r.focus(5003);
+    assert_eq!(r.mode(), WebMode::Inactive);
+    assert!(
+        !spoken(&fx)
+            .iter()
+            .any(|s| s.contains("focus mode") || s.contains("browse mode")),
+        "{:?}",
+        spoken(&fx)
+    );
 }

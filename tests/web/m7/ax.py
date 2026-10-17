@@ -196,6 +196,14 @@ def handle(req):
         except GLib.Error:
             rn = "?"
         return {"ok": True, "role": rn, "name": name_of(req["bus"], req["path"])}
+    if cmd == "selection":
+        # (start, end) of the first selection of a text node, or null
+        txt = "org.a11y.atspi.Text"
+        n = call(req["bus"], req["path"], txt, "GetNSelections")[0]
+        if not n:
+            return {"ok": True, "sel": None}
+        r = call(req["bus"], req["path"], txt, "GetSelection", (0,), "(i)")
+        return {"ok": True, "sel": [r[0], r[1]]}
     if cmd == "caret":
         return {"ok": True, "caret": prop(req["bus"], req["path"], "org.a11y.atspi.Text", "CaretOffset")}
     if cmd == "has_state":

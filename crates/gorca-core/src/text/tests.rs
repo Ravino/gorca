@@ -304,6 +304,15 @@ fn ctrl_right_speaks_the_word_and_home_the_character() {
 }
 
 #[test]
+fn an_editable_combo_box_is_tracked_like_a_text_field_and_a_plain_one_is_not() {
+    // Firefox's address bar is an editable combo box.
+    let editable = snap(Role::ComboBox, StateSet::EDITABLE | StateSet::FOCUSABLE);
+    assert!(super::trackable(&editable).is_some_and(|k| k.editable));
+    let plain = snap(Role::ComboBox, StateSet::FOCUSABLE);
+    assert!(super::trackable(&plain).is_none());
+}
+
+#[test]
 fn a_space_and_the_end_of_text_have_names() {
     let mut g = rig();
     g.entry("a b", 0);

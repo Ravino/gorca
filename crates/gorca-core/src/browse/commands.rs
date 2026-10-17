@@ -1064,7 +1064,6 @@ impl Reader {
             }
             self.web_dialog_lead(doc, id, last_before);
             self.web_listbox_lead(doc, id, last_before);
-            tracing::info!(target: "gorca_phase", phase = "web_doc_switch", switched, active = ?self.web.as_ref().map(|b| b.active), doc = ?doc);
             if switched {
                 self.web_document_lead(doc, id);
             }
@@ -1077,6 +1076,17 @@ impl Reader {
         // IR-3: the join missed. Browse keys must never be grabbed while focus may be in a
         // field we have not mirrored, so this is `Loading` (grabs off) until it is resolved.
         if b.web_apps.contains(&node.app) {
+            // The browser's own interface (address bar, its suggestion list, tab strip, menus):
+            // the whole ancestor chain is known and holds no document, so the focus is not in
+            // web content and must neither wait for a document nor say a mode word.
+            if self.outside_every_document(node) {
+                if let Some(b) = self.web.as_mut() {
+                    b.focus_node = None;
+                }
+                self.web_apply(WebEv::FocusAway, fx, false);
+                return;
+            }
+            let Some(b) = self.web.as_mut() else { return };
             b.counters.join_misses += 1;
             let (editable, known) = match self.dir.lookup(node) {
                 Lookup::Hit(snap) => (
@@ -1104,6 +1114,26 @@ impl Reader {
             }
             self.web_apply(WebEv::FocusAway, fx, false);
         }
+    }
+
+    /// True when every ancestor of `node` up to the top is in the directory and none is a
+    /// document: the node is in an application's own interface, not in web content. Any gap in
+    /// the chain gives false (unknown), so a cold web node keeps the Loading path.
+    fn outside_every_document(&self, node: NodeKey) -> bool {
+        let mut cur = node;
+        for _ in 0..32 {
+            let Some(sn) = self.dir.lookup(cur).hit() else {
+                return false;
+            };
+            if matches!(sn.role, Role::DocumentWeb | Role::Document) {
+                return false;
+            }
+            match sn.parent {
+                Some(p) => cur = p,
+                None => return sn.role == Role::Application,
+            }
+        }
+        false
     }
 
     /// M8b: the snapshot of a web node with what only the document mirror knows (the attribute
