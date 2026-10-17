@@ -1,0 +1,18 @@
+# M9 final matrix
+== 21:34:23 cr-m7 start head e44b51d load 9.01 10.86 11.94 3/2538 2185320 mem_avail_GiB 15.4
+   psi memory: some avg10=0.00 avg60=0.07 avg300=0.08 total=2877487754 full avg10=0.00 avg60=0.07 avg300=0.08 total=2351326891 
+   psi cpu: some avg10=0.12 avg60=1.17 avg300=2.47 total=33176446364
+   exit 0
+== 21:54:27 cr-m7 end head e44b51d load 9.60 9.69 10.29 2/2540 2222699 mem_avail_GiB 16.0
+   psi memory: some avg10=0.01 avg60=0.16 avg300=0.30 total=2883575664 full avg10=0.00 avg60=0.14 avg300=0.28 total=2357329193 
+   psi cpu: some avg10=0.01 avg60=0.05 avg300=0.10 total=33184064712
+== 21:54:27 cr-typing start head e44b51d load 9.60 9.69 10.29 7/2542 2222709 mem_avail_GiB 16.0
+   psi memory: some avg10=0.01 avg60=0.16 avg300=0.30 total=2883575664 full avg10=0.00 avg60=0.14 avg300=0.28 total=2357329193 
+   psi cpu: some avg10=0.01 avg60=0.05 avg300=0.10 total=33184064747
+   exit 1
+== 22:32:57 cr-typing end head e44b51d load 9.49 11.31 11.40 1/2604 2359543 mem_avail_GiB 16.0
+   psi memory: some avg10=0.46 avg60=0.18 avg300=0.21 total=2889933942 full avg10=0.46 avg60=0.18 avg300=0.20 total=2363548042 
+   psi cpu: some avg10=0.06 avg60=0.53 avg300=1.71 total=33221962451
+== 22:32:57 cr-m8 start head e44b51d load 9.49 11.31 11.40 1/2604 2359551 mem_avail_GiB 16.0
+   psi memory: some avg10=0.46 avg60=0.18 avg300=0.21 total=2889933942 full avg10=0.46 avg60=0.18 avg300=0.20 total=2363548042 
+   psi cpu: some avg10=0.06 avg60=0.53 avg300=1.71 total=33221962451

@@ -1,0 +1,43 @@
+# e2e m9i-wake1
+# utc=2026-10-16T20:08:32Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=28.00 19.77 15.55 20/2703 1721332
+# git_rev=70a4c06
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m9i-wake1
+# reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=28.00 19.77 15.55 27/2704 1721326
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=entry: []
+# note1=Down: "heading level 1, Gorca article" (2.64 ms)
+# note2=Right: "o" (0.75 ms)
+# note3=Ctrl+Right: "article" (0.39 ms)
+# note4=H: "heading level 2, Introduction" (0.37 ms)
+# note5=2: "heading level 2, Details" (0.31 ms)
+# note6=H at the last heading: "no next heading" (0.29 ms)
+# note7=Shift+H: "heading level 2, Introduction" (0.31 ms)
+# note8=K: "link, details below" (0.32 ms)
+# note9=Escape: "browse mode, Your name, edit, blank, button, Send" (0.59 ms)
+# note10=Tab onto a link: "second page link, link"
+# note11=after Enter: ["M7 Second, document"]
+# note12=FAIL entry: the first line was not spoken
+# note13=FAIL Down: wanted ["This is the first paragraph"], heard "heading level 1, Gorca article"
+
+metric                     bus                median          min          max  n op    threshold  res   note
+B0.web_failures            daemon/voicego            2            2            2  1 <=            0  FAIL  gated on the max over repeats [checks]

@@ -1,0 +1,41 @@
+# e2e-m8 m9i-if
+# utc=2026-10-16T20:29:38Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=16.62 17.05 17.71 1/2703 1889843
+# git_rev=8ffd45d
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=m9i-if
+# reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# quick=true
+# loadavg_before=17.66 17.24 17.79 3/2739 1889007
+# loadavg_end=16.62 17.05 17.71 2/2703 1889840
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-IF IF.h.form P1 FAIL: heard "heading level 2, Srcdoc heading" 
+# note1=M8-IF IF.h.srcdoc P1 FAIL: heard "no next heading" 
+# note2=M8-IF IF.f.1 P0 FAIL: heard "button, Level four button | button, Reload late frame" 
+# note3=M8-IF IF.b.1 P1 FAIL: heard "no next button" 
+# note4=M8-IF IF.focus P0 FAIL: heard "" find failed: {"ok":false,"error":"not found","event":"reply","id":7}
+# note5=M8-IF IF.esc P1 FAIL: heard "[key passed to the app] escape" 
+# note6=M8-IF IF.m.1 P1 FAIL: heard "frame, M8 frame level one, Level one heading, Level one text with, link, a link, ., heading level 1, Level two heading, Level two text., heading level 1, Level three heading, Level three text., heading level 1, Level four heading, Deepest f~" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-IF.fail                 daemon/voicego            7            7            7  1 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-IF.gap                  daemon/voicego            0            0            0  1                  info  core ok, NVDA extras missing [steps]
+M8-IF.p0_not_pass          daemon/voicego            2            2            2  1                  info   [steps]
+M8-IF.pass                 daemon/voicego            5            5            5  1                  info   [steps]
+M8-IF.steps                daemon/voicego           13           13           13  1                  info   [steps]
+M8-IF.xfail                daemon/voicego            1            1            1  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-IF.xpass                daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]
