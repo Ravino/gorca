@@ -800,20 +800,22 @@ fn the_retracking_on_a_key_is_rate_limited() {
     let mut g = rig();
     g.focus("me@box:~$ ", 10);
     g.hold_focus_on_terminal();
-    // A policy that cannot be had (no session): every key asks, the interval spaces the asks.
+    // A policy that cannot be had (no session): every key asks again (the policy may be back),
+    // nothing is tracked, so nothing uses up the interval.
     g.r.term_provider = None;
     g.r.term_untrack("test");
     g.at += 700;
     g.typed('a');
     g.at += 50;
     g.typed('b');
-    g.at += 50;
-    g.typed('c');
-    assert_eq!(g.r.terminal_reads().retracked_on_key, 1);
-    g.at += 600;
-    g.typed('d');
     assert_eq!(g.r.terminal_reads().retracked_on_key, 2);
     assert!(!g.r.term_tracked(), "no policy, no tracking");
+    // The policy comes back: the next key tracks, and the interval then spaces the asks.
+    g.r.term_provider = Some(Arc::new(NativeTerm));
+    g.at += 50;
+    g.typed('c');
+    assert!(g.r.term_tracked());
+    assert_eq!(g.r.terminal_reads().retracked_on_key, 3);
 }
 
 #[test]

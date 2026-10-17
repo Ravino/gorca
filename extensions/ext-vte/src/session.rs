@@ -62,6 +62,11 @@ const MOTIONS_MAX: usize = 8;
 const EDIT_CARET_MS: Ms = 2;
 /// Fetch retries before the session waits for the next event.
 const RETRIES_MAX: u8 = 2;
+/// A failed baseline read is retried after `BASE_RETRY_MS << attempt` (capped), this many times;
+/// after that the next screen event starts one.
+const BASE_RETRIES_MAX: u8 = 5;
+const BASE_RETRY_MS: Ms = 200;
+const BASE_RETRY_CAP_MS: Ms = 1600;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 enum Phase {
@@ -107,6 +112,15 @@ pub struct Session {
     retries: u8,
     /// Events arrived while the baseline was being read.
     dirty_baseline: bool,
+    /// A baseline read failed and none has succeeded since: nothing is known about the screen.
+    base_failed: bool,
+    /// The baseline in flight was started by a screen event (not by the focus or a retry).
+    base_by_event: bool,
+    /// Retry of a failed baseline: when, and how many were made.
+    base_retry: Option<Ms>,
+    base_attempts: u8,
+    /// Whether the baseline being retried speaks the line it reads (the focus presentation).
+    base_speak: bool,
     pending: VecDeque<(char, Ms)>,
     /// Characters that appeared on the screen before the key that typed them was seen.
     late: VecDeque<(char, Ms)>,
@@ -164,6 +178,11 @@ impl Session {
             last_fetch: 0,
             retries: 0,
             dirty_baseline: false,
+            base_failed: false,
+            base_by_event: false,
+            base_retry: None,
+            base_attempts: 0,
+            base_speak: false,
             pending: VecDeque::new(),
             late: VecDeque::new(),
             expect: Expect::None,
@@ -200,6 +219,11 @@ impl Session {
         self.last_row = 0;
         self.retries = 0;
         self.dirty_baseline = false;
+        self.base_failed = false;
+        self.base_by_event = false;
+        self.base_retry = None;
+        self.base_attempts = 0;
+        self.base_speak = false;
         self.pending.clear();
         self.late.clear();
         self.erased.clear();
@@ -232,6 +256,7 @@ impl Session {
             }
             TermInput::Focus => {
                 self.reset();
+                self.base_speak = true;
                 self.phase = Phase::Baselining {
                     since: now,
                     speak: true,
@@ -279,7 +304,8 @@ impl Session {
 
     fn deadline(&self) -> Option<Ms> {
         let phase = match self.phase {
-            Phase::Cold | Phase::Idle => None,
+            Phase::Cold => self.base_retry,
+            Phase::Idle => None,
             Phase::Baselining { since, .. } | Phase::Fetching { since, .. } => {
                 Some(since.saturating_add(FETCH_TIMEOUT_MS))
             }
@@ -322,11 +348,16 @@ impl Session {
             }
             Phase::Baselining { since, .. } => {
                 if now >= since.saturating_add(FETCH_TIMEOUT_MS) {
-                    self.counters.fetch_failed += 1;
-                    self.phase = Phase::Cold;
+                    self.baseline_lost(now);
                 }
             }
-            Phase::Cold | Phase::Idle => {}
+            Phase::Cold => {
+                if self.base_retry.is_some_and(|at| now >= at) {
+                    self.base_retry = None;
+                    self.begin_baseline(now, self.base_speak, false, out);
+                }
+            }
+            Phase::Idle => {}
         }
         if !self.outq.is_empty() && now >= self.out_gate {
             self.flush_output(now, out);
@@ -371,12 +402,23 @@ impl Session {
     fn on_failed(&mut self, now: Ms) {
         match self.phase {
             Phase::Fetching { .. } => self.fetch_lost(now),
-            Phase::Baselining { .. } => {
-                self.counters.fetch_failed += 1;
-                self.phase = Phase::Cold;
-            }
+            Phase::Baselining { .. } => self.baseline_lost(now),
             Phase::Cold | Phase::Idle | Phase::Settling { .. } => {}
         }
+    }
+
+    /// The baseline read failed or never came back: nothing is known about the screen. Read it
+    /// again after a growing pause (a few times); until one succeeds, whatever the screen shows
+    /// is not a baseline, see `on_screen`.
+    fn baseline_lost(&mut self, now: Ms) {
+        self.counters.fetch_failed += 1;
+        self.phase = Phase::Cold;
+        self.base_failed = true;
+        self.base_retry = (self.base_attempts < BASE_RETRIES_MAX).then(|| {
+            let wait = (BASE_RETRY_MS << self.base_attempts).min(BASE_RETRY_CAP_MS);
+            self.base_attempts += 1;
+            now.saturating_add(wait)
+        });
     }
 
     // ---- keys --------------------------------------------------------------------------------
@@ -535,12 +577,16 @@ impl Session {
 
     // ---- events ------------------------------------------------------------------------------
 
+    /// A screen event found the session cold: read the screen.
     fn start_baseline(&mut self, now: Ms, out: &mut Vec<TermAction>) {
-        self.phase = Phase::Baselining {
-            since: now,
-            speak: false,
-        };
+        self.base_retry = None;
+        self.begin_baseline(now, false, true, out);
+    }
+
+    fn begin_baseline(&mut self, now: Ms, speak: bool, by_event: bool, out: &mut Vec<TermAction>) {
+        self.phase = Phase::Baselining { since: now, speak };
         self.dirty_baseline = false;
+        self.base_by_event = by_event;
         out.push(TermAction::FetchScreen);
     }
 
@@ -702,9 +748,19 @@ impl Session {
                 }
                 self.live = new.clone();
                 self.live_ok = true;
-                if speak && !new.is_empty() {
+                // Output that came while no baseline was known cannot be told from what was
+                // there before: say what is above the prompt rather than swallow it.
+                let orphan = self.base_failed && (self.base_by_event || self.dirty_baseline);
+                if orphan {
+                    let lines = self.tail_above(&new, row);
+                    self.dirty_baseline = false;
+                    self.emit_output(now, lines, out);
+                } else if speak && !new.is_empty() {
                     self.say_line(&new, row, out);
                 }
+                self.base_failed = false;
+                self.base_attempts = 0;
+                self.base_retry = None;
                 self.base = new;
                 self.phase = if self.dirty_baseline {
                     self.dirty_baseline = false;
@@ -1026,6 +1082,18 @@ impl Session {
             (Some(t), _) => self.say(out, &t, Unit::Word, Urgency::Key),
             (None, _) => self.say(out, "blank", Unit::Text, Urgency::Key),
         }
+    }
+
+    /// The last non-blank lines above `row`, at most `burst_lines`, oldest first.
+    fn tail_above(&self, s: &Screen, row: usize) -> Vec<String> {
+        let mut v: Vec<String> = (0..row)
+            .rev()
+            .map(|i| s.line(i).trim_end().to_owned())
+            .filter(|l| !l.trim().is_empty())
+            .take(self.cfg.burst_lines as usize)
+            .collect();
+        v.reverse();
+        v
     }
 
     fn say_line(&self, s: &Screen, row: usize, out: &mut Vec<TermAction>) {

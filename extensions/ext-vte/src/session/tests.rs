@@ -153,7 +153,7 @@ fn a_failed_baseline_goes_cold_and_the_next_event_reads_again_silently() {
     let a = r.feed(TermInput::Focus);
     assert!(a.iter().any(|x| matches!(x, TermAction::FetchScreen)));
     let a = r.feed(TermInput::ScreenFailed);
-    assert!(a.is_empty());
+    assert!(says(&a).is_empty());
     assert_eq!(r.s.counters().fetch_failed, 1);
     // A text event wakes it: a silent baseline.
     r.caret = 2;
@@ -1183,4 +1183,60 @@ fn a_password_prompt_deep_in_a_big_cyrillic_screen_is_secret() {
     );
     assert!(r.s.secret);
     assert!(r.s.pending.is_empty(), "a secret is not kept");
+}
+
+#[test]
+fn a_failed_baseline_is_read_again_by_itself_with_a_growing_pause() {
+    let mut r = Rig::new();
+    r.screen = "$ ".to_owned();
+    r.caret = 2;
+    let a = r.feed(TermInput::Focus);
+    assert!(a.iter().any(|x| matches!(x, TermAction::FetchScreen)));
+    let a = r.feed(TermInput::ScreenFailed);
+    assert!(
+        a.iter()
+            .any(|x| matches!(x, TermAction::ArmTimer(t) if *t == r.now + BASE_RETRY_MS)),
+        "{a:?}"
+    );
+    // The retry fails too: the pause doubles; the third read succeeds and speaks the prompt.
+    r.now += BASE_RETRY_MS;
+    let a = r.feed(TermInput::Tick);
+    assert!(a.iter().any(|x| matches!(x, TermAction::FetchScreen)));
+    r.feed(TermInput::ScreenFailed);
+    assert_eq!(r.s.base_retry, Some(r.now + 2 * BASE_RETRY_MS));
+    r.now += 2 * BASE_RETRY_MS;
+    let a = r.feed(TermInput::Tick);
+    let a = r.answer(a);
+    assert_eq!(texts(&a), vec!["$".to_owned()]);
+    assert!(r.s.snapshot().is_some());
+    assert_eq!(r.s.base_attempts, 0);
+}
+
+#[test]
+fn baseline_retries_are_bounded() {
+    let mut r = Rig::new();
+    r.feed(TermInput::Focus);
+    r.feed(TermInput::ScreenFailed);
+    for _ in 0..BASE_RETRIES_MAX {
+        r.now += BASE_RETRY_CAP_MS;
+        r.feed(TermInput::Tick);
+        r.feed(TermInput::ScreenFailed);
+    }
+    assert!(r.s.base_retry.is_none(), "gives up and waits for an event");
+    assert!(r.s.snapshot().is_none());
+}
+
+#[test]
+fn output_that_arrives_before_any_baseline_is_spoken_not_swallowed() {
+    let mut r = Rig::new();
+    r.feed(TermInput::Focus);
+    r.feed(TermInput::ScreenFailed);
+    // The retries are spent before the output shows up.
+    r.s.base_retry = None;
+    r.screen = "$ ls\nout\n$ ".to_owned();
+    r.caret = 11;
+    let a = r.feed(TermInput::Edit(TermEdit::Replaced));
+    let a = r.answer(a);
+    let spoken = texts(&a).join("|");
+    assert!(spoken.contains("out"), "{spoken}");
 }

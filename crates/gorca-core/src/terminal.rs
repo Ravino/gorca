@@ -160,6 +160,9 @@ impl TermSession for WatchOnly {
     fn snapshot(&self) -> Option<TermSnapshot> {
         None
     }
+    fn degraded(&self) -> bool {
+        true
+    }
 }
 
 /// Words of a password prompt, matched as substrings of the lowercased line (the core's own
@@ -324,23 +327,35 @@ impl Reader {
     pub(crate) fn term_track(&mut self, snap: &NodeSnapshot, fx: &mut ReaderEffects) {
         self.term_untrack("retrack");
         let cfg = self.term_config();
-        // The extension host's terminal policy for this application (the WASM component), else
-        // the native build the daemon installed; neither: this terminal is not tracked.
-        let app_ext = self.ext.as_ref().and_then(|src| src.for_app(snap.key.app));
-        let sess = app_ext
-            .as_ref()
-            .and_then(|a| a.terminal(&cfg))
-            .or_else(|| self.term_provider.as_ref().map(|p| p.open(&cfg)))
+        let sess = self.term_open_real(snap.key, &cfg).or_else(|| {
             // An application with extensions whose terminal policy is gone (disabled after
             // repeated faults) is still watched for secret prompts, by the core alone: fail closed.
-            .or_else(|| app_ext.map(|_| Box::new(WatchOnly::default()) as Box<dyn TermSession>));
+            self.ext
+                .as_ref()
+                .and_then(|src| src.for_app(snap.key.app))
+                .map(|_| Box::new(WatchOnly::default()) as Box<dyn TermSession>)
+        });
         let Some(sess) = sess else {
             return;
         };
+        self.term_start(snap.key, sess, fx);
+    }
+
+    /// The extension host's terminal policy for this application (the WASM component), else the
+    /// native build the daemon installed; neither: none (a busy or disabled slot gives none).
+    fn term_open_real(&self, node: NodeKey, cfg: &TermConfig) -> Option<Box<dyn TermSession>> {
+        self.ext
+            .as_ref()
+            .and_then(|src| src.for_app(node.app))
+            .and_then(|a| a.terminal(cfg))
+            .or_else(|| self.term_provider.as_ref().map(|p| p.open(cfg)))
+    }
+
+    fn term_start(&mut self, node: NodeKey, sess: Box<dyn TermSession>, fx: &mut ReaderEffects) {
         self.text.term.next_serial += 1;
-        tracing::debug!(target: "gorca_terminal", node = ?snap.key, serial = self.text.term.next_serial, "terminal tracked");
+        tracing::debug!(target: "gorca_terminal", ?node, serial = self.text.term.next_serial, "terminal tracked");
         self.text.term.tracked = Some(Tracked {
-            node: snap.key,
+            node,
             serial: self.text.term.next_serial,
             sess,
             fetch: None,
@@ -367,7 +382,18 @@ impl Reader {
     /// once per `RETRACK_INTERVAL`. Returns true when it started. Never a guess about focus:
     /// the focus state must still be on the presented terminal.
     pub(crate) fn term_retrack_on_key(&mut self, fx: &mut ReaderEffects) -> bool {
-        if self.term_tracked() || !self.text_active() {
+        if !self.text_active() {
+            return false;
+        }
+        // Tracked with a real policy: nothing to repair. Tracked by the stand-in (the policy slot
+        // was busy or down at the focus): upgraded below once a real session can be opened.
+        let degraded = self
+            .text
+            .term
+            .tracked
+            .as_ref()
+            .is_some_and(|t| t.sess.degraded());
+        if self.term_tracked() && !degraded {
             return false;
         }
         let Some(p) = &self.presented else {
@@ -391,11 +417,37 @@ impl Reader {
             return false;
         }
         let (node, snap) = (p.node, Arc::clone(&p.snap));
-        self.text.term.retrack_at = Some((node, self.now));
-        self.text.term.reads.retracked_on_key += 1;
+        if degraded {
+            // Only a tracking for the focused terminal itself, and only when the policy is back:
+            // otherwise the stand-in stays (it keeps the secret watch) and nothing restarts.
+            if !self.term_is(node) {
+                return false;
+            }
+            let cfg = self.term_config();
+            let Some(sess) = self.term_open_real(node, &cfg) else {
+                return false;
+            };
+            self.text.term.retrack_at = Some((node, self.now));
+            self.text.term.reads.retracked_on_key += 1;
+            tracing::debug!(target: "gorca_terminal", ?node, "terminal tracked without its policy: upgrading");
+            // A secret prompt seen by the stand-in still holds: the new session starts from a
+            // fresh read and must not speak a password prompt aloud meanwhile.
+            let hold = self.text.term.secret_hold;
+            self.term_untrack("upgrade");
+            self.text.term.secret_hold = hold;
+            self.term_start(node, sess, fx);
+            return true;
+        }
         tracing::debug!(target: "gorca_terminal", ?node, "focused terminal untracked at a key: tracking it again");
         self.term_track(&snap, fx);
-        self.term_tracked()
+        // Only a tracking that started uses up the interval: an attempt that found no policy
+        // (slot absent or busy) must not hold back the next key's, the policy may be back.
+        let started = self.term_tracked();
+        if started {
+            self.text.term.retrack_at = Some((node, self.now));
+        }
+        self.text.term.reads.retracked_on_key += 1;
+        started
     }
 
     /// Focus moved on, or the terminal is gone: wipe what the extension knows (secrets included).
