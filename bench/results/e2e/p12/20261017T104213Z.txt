@@ -1,0 +1,47 @@
+# e2e p12
+# utc=2026-10-17T10:42:13Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=10.93 9.91 10.12 1/2555 1356313
+# git_rev=0f0c9c04
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx1
+# topology_expected=-
+# label=p12
+# reader=daemon:<repo>/.claude/worktrees/agent-a12af19ad0bb6b976/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=10.93 9.91 10.12 3/2555 1356309
+# reader_env=GORCA_ED=1 GORCA_M1=1 GORCA_M3=1 GORCA_M4=1 GORCA_M6=1 GORCA_M6_REAL=1 GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_text=trace,gorca_core=debug GORCA_TOPOLOGY_REPORT=bench/results/e2e/p12/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=ED-TEDIT seed: [a | l | p | h | a | space | b | r | a | v | o | space | c | h | a | r | l | i | e]
+# note1=ED-TEDIT Ctrl+Home 3: [alpha bravo charlie]
+# note2=ED-TEDIT Ctrl+F: []
+# note3=ED-TEDIT find: type: [b | r | a | v | o]
+# note4=ED-TEDIT find: Enter: [new line | edit]
+# note5=ED-TEDIT find: Escape: []
+# note6=ED-TEDIT Ctrl+H: [edit, bravo]
+# note7=ED-TEDIT replace: Escape: [edit]
+# note8=ED-TEDIT Ctrl+T: [edit]
+# note9=ED-TEDIT Ctrl+Alt+PageUp check: [edit]
+# note10=ED-TEDIT tab 2: type: [s | e | c | o | n | d]
+# note11=ED-TEDIT Ctrl+Alt+PageUp: []
+# note12=ED-TEDIT Ctrl+Alt+PageDown: [edit]
+# note13=ED-TEDIT Ctrl+S: [Name, edit, New Document dot txt]
+# note14=ED-TEDIT save: Escape: [edit | New Document (Draft) - Text Editor]
+
+metric                     bus                median          min          max  n op    threshold  res   note
+ED-TEDIT.ed_failures       daemon/voicego            0            0            0  1                  info   [steps]
+ED-TEDIT.ed_steps          daemon/voicego           15           15           15  1                  info   [steps]

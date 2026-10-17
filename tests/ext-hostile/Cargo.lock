@@ -125,7 +125,25 @@ dependencies = [
 name = "gorca-ext-api"
 version = "0.0.0"
 dependencies = [
+ "gorca-text",
  "wit-bindgen",
+]
+
+[[package]]
+name = "gorca-model"
+version = "0.0.0"
+dependencies = [
+ "bitflags",
+ "smallvec",
+]
+
+[[package]]
+name = "gorca-text"
+version = "0.0.0"
+dependencies = [
+ "gorca-model",
+ "smallvec",
+ "unicode-segmentation",
 ]
 
 [[package]]
@@ -286,6 +304,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
+name = "smallvec"
+version = "1.16.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b3dc8af474f516a851ff4bd12db780f948b9250ad37211e4eec0bccea54e01b"
+
+[[package]]
 name = "syn"
 version = "2.0.119"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -312,6 +336,12 @@ name = "unicode-ident"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
+
+[[package]]
+name = "unicode-segmentation"
+version = "1.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8"
 
 [[package]]
 name = "unicode-xid"

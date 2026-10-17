@@ -1,0 +1,60 @@
+type	h | e | l | l | o | comma | space | b | r | a | v | e | space | w | o | r | l | d
+Left	d
+Right	blank
+Home	h
+Left at start	h
+End	blank
+Right at end	blank
+Ctrl+Left 1	world
+Ctrl+Left 2	brave
+Ctrl+Left 3	hello
+Ctrl+Left 4 at start	hello
+Ctrl+Right 1	hello
+Ctrl+Right 2	brave
+Ctrl+Right 3	world
+Ctrl+Right 4 at end	blank
+BackSpace	d
+Delete at end	
+Home 2	h
+Delete	h
+Shift+Right	e selected
+Shift+Right 2	l selected
+Shift+Left	l unselected
+Shift+Left 2	e unselected
+Ctrl+Shift+Right	ello, selected
+Ctrl+Shift+Left	ello, unselected
+Shift+End	all selected, 16 characters
+Shift+Home	ello, brave worl unselected
+Ctrl+A	all selected, 16 characters
+Right collapses	blank
+End 2	blank
+Ctrl+BackSpace	worl
+Ctrl+Delete at end	
+Home 3	e
+Ctrl+Delete	ello,
+select all	all selected, 7 characters
+clear	brave
+type line 1	o | n | e | space | t | w | o
+Enter	new line
+type paragraph	a | l | p | h | a | space | b | r | a | v | o | space | c | h | a | r | l | i | e | space | d | e | l | t | a | space | e | c | h | o | space | f | o | x | t | r | o | t | space | g | o | l | f | space | h | o | t | e | l | space | i | n | d | i | a | space | j | u | l | i | e | t | space | k | i | l | o | space | l | i | m | a | space | m | i | k | e | space | n | o | v | e | m | b | e | r | space | o | s | c | a | r | space | p | a | p | a | space | q | u | e | b | e | c
+Enter 2	new line
+type last	l | a | s | t | space | l | i | n | e
+Up	papa quebec
+Up 2	kilo lima mike november oscar
+Up 3	foxtot golf hotel india juliet
+Down	kilo lima mike november oscar
+Ctrl+Up	alpha bravo charlie delta echo foxtot golf hotel india juliet kilo lima mike november oscar papa quebec
+Ctrl+Up 2	alpha bravo charlie delta echo foxtot golf hotel india juliet kilo lima mike november oscar papa quebec
+Ctrl+Down	alpha bravo charlie delta echo foxtot golf hotel india juliet kilo lima mike november oscar papa quebec
+Ctrl+Home	one two
+Ctrl+End	last line
+PageUp	one two
+PageDown	last line
+Ctrl+Home 2	one two
+Shift+Down	one two selected
+Shift+Down 2	alpha bravo charlie delta echo selected
+Shift+Up	alpha bravo charlie delta echo unselected
+Ctrl+Shift+Down	alpha bravo charlie delta echo selected
+Ctrl+Shift+End	foxtot golf hotel india juliet kilo lima mike november oscar papa quebec\nlast line selected
+BackSpace selection	one two\nalpha bravo charlie delta echo foxtot golf hotel india juliet kilo lima mike november oscar papa quebec\nlast line
+Ctrl+Z	one two\nalpha bravo charlie delta echo foxtot golf hotel india juliet kilo lima mike november oscar papa quebec\nlast line

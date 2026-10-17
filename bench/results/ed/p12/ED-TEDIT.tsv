@@ -1,0 +1,15 @@
+seed	a | l | p | h | a | space | b | r | a | v | o | space | c | h | a | r | l | i | e
+Ctrl+Home 3	alpha bravo charlie
+Ctrl+F	
+find: type	b | r | a | v | o
+find: Enter	new line | edit
+find: Escape	
+Ctrl+H	edit, bravo
+replace: Escape	edit
+Ctrl+T	edit
+Ctrl+Alt+PageUp check	edit
+tab 2: type	s | e | c | o | n | d
+Ctrl+Alt+PageUp	
+Ctrl+Alt+PageDown	edit
+Ctrl+S	Name, edit, New Document dot txt
+save: Escape	edit | New Document (Draft) - Text Editor

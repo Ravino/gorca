@@ -15,6 +15,17 @@ app_actor.rs}`, `crates/gorca-model/src/text.rs`, `crates/gorca-ingress/src/tabl
 
 ## 0. Changelog
 
+- 2026-10-17: unified editing (`docs/reports/unified-editing.md`). One presenter for every editor: the terminal
+  (ext-vte) now speaks its readline word motions with the same code as GTK, Gecko and Blink (`gorca-text`
+  `caret::present_word`, shipped to extensions through `gorca-ext-api::text`), so a word is the TL-1 word and
+  not a whitespace token. CR-2 `Move{Word}`: the word *passed* (the last word with a letter or digit in the
+  traversed span) after a forward move that ended at the end of a word, the word at the caret otherwise; the
+  toolkit's landing is connector data (`EditQuirks::word_landing`, row `edit-presenter`). CR-3 holds in the
+  terminal too (a motion key that moves nothing speaks the unit at the caret after 100 ms). GTK4 facts handled in
+  the machine: a selection event behind every caret move no longer drops the fetch of a plain move, and the
+  tracked caret follows typed or erased text (GTK4 sends no caret event for it). A caret event at offset 0 of
+  another block right after Return in a rich editable is the new line itself (not read again). Blanks inserted
+  right after Return (auto-indent) are spoken as `N spaces` / `tab`.
 - 2026-10-14: first version, Accepted.
 - 2026-10-14: TI-3 clarified (`docs/reports/m3-e2-flake.md`): an echo made stale by a newer key before it is sent
   (E-2, newest wins) is not "missing"; E2 counts only echoes lost in some other way.
@@ -419,7 +430,7 @@ Invariants:
 | Key | Spoken |
 |---|---|
 | `Move{Char}` | the character at the new caret (TL-2); at end of text `blank` |
-| `Move{Word}` | the word starting at the caret (TL-1) |
+| `Move{Word}` | the word just passed after a forward move that ended a word, else the word at the caret (TL-1; `present_word`, unified editing 2026-10-17) |
 | `Move{Line}`, `Move{Page}` | the line at the caret (toolkit line, TL-3) |
 | `Move{Paragraph}` | the paragraph (`GetStringAtOffset(PARAGRAPH)`) |
 | `Move{LineEdge}` | the character at the caret (NVDA, Orca) |
