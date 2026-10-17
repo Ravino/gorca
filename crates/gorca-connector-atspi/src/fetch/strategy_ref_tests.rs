@@ -310,8 +310,8 @@ fn id_of(reply: &str) -> u64 {
     tail[..end].parse().expect("numeric node id")
 }
 
-const LABEL: u32 = 3;
-const BUTTON: u32 = 4;
+const LABEL: u32 = 29;
+const BUTTON: u32 = 43;
 
 fn add(r: &mut Rig, parent: u64, role: u32, name: &str, extra: &str) -> u64 {
     let body = format!(
@@ -379,5 +379,49 @@ fn the_descendant_label_search_is_bounded() {
             name.split(' ').count(),
             super::strategy::LABEL_SEARCH_NODES as usize
         );
+    });
+}
+
+const PASSWORD: u32 = 40;
+const ENTRY: u32 = 79;
+
+/// A password field inside a nameless button, or behind its `labelled-by`, never becomes the
+/// button's name (neither its name nor its text is read); a plain label beside it still does.
+#[test]
+fn a_password_field_never_leaks_into_a_name() {
+    run(async {
+        let Some(mut r) = rig(TREE).await else { return };
+        // Descendant chain: button > [password(text), label].
+        let b = add(&mut r, 1, BUTTON, "", "");
+        add(&mut r, b, PASSWORD, "", ",\"text\":\"hunter2\"");
+        assert!(name_of(&r, b).await.is_none_or(|n| n.is_empty()));
+        add(&mut r, b, LABEL, "Sign in", "");
+        let name = name_of(&r, b).await.unwrap_or_default();
+        assert_eq!(name, "Sign in");
+        assert!(!name.contains("hunter2"));
+        // Deeper: button > panel > password.
+        let b2 = add(&mut r, 1, BUTTON, "", "");
+        let panel = add(&mut r, b2, 39, "", "");
+        add(&mut r, panel, PASSWORD, "", ",\"text\":\"hunter2\"");
+        assert!(name_of(&r, b2).await.is_none_or(|n| n.is_empty()));
+        // Relation: labelled-by a password field (named or not).
+        let pw = add(&mut r, 1, PASSWORD, "Secret", ",\"text\":\"hunter2\"");
+        let b3 = add(&mut r, 1, BUTTON, "", &format!(",\"labelled_by\":{pw}"));
+        assert!(name_of(&r, b3).await.is_none_or(|n| n.is_empty()));
+        // The password field itself gets no fallback name.
+        let pw2 = add(&mut r, 1, PASSWORD, "", ",\"text\":\"hunter2\"");
+        add(&mut r, pw2, LABEL, "leak", "");
+        assert!(name_of(&r, pw2).await.is_none_or(|n| n.is_empty()));
+    });
+}
+
+/// Text is lent only by label-like, non-editable leaves: an entry's contents are never a name.
+#[test]
+fn an_editable_entry_lends_no_text_to_a_name() {
+    run(async {
+        let Some(mut r) = rig(TREE).await else { return };
+        let b = add(&mut r, 1, BUTTON, "", "");
+        add(&mut r, b, ENTRY, "", ",\"text\":\"private note\"");
+        assert!(name_of(&r, b).await.is_none_or(|n| n.is_empty()));
     });
 }
