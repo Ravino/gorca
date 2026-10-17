@@ -70,7 +70,7 @@ Type `one two`, Return, a paragraph of about 100 characters that wraps in the wi
 | 32 | Ctrl+S | the save dialog with the name field (`Name`, the proposed name) |
 | 33 | Escape | back in the text, window title spoken |
 | 34 | Modified document: the window title | gedit speaks `star` before the title of a modified document (the `*` of its title) |
-| 35 | Auto-indent on (Preferences), Return after an indented line | `new line`, then the indent as `N spaces` (or `tab`) |
+| 35 | Auto-indent on (Preferences), Return after an indented line | `new line`, then the indent as `N spaces` (or `1 tab`, `N tabs`) |
 
 ## Known differences (not bugs)
 

@@ -5,6 +5,7 @@
 //! (RS-1: at most one review operation is pending). Commands pressed meanwhile queue (at most 8)
 //! and run after it; only the last one speaks. Nothing here awaits (R3).
 
+use gorca_i18n::{MsgId as M, msg, t};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -495,7 +496,7 @@ impl Reader {
             return None;
         }
         let Some(node) = self.current_node() else {
-            self.say("no focus", fx);
+            self.say(t(M::NoFocus), fx);
             return None;
         };
         let from = match self.mode {
@@ -617,18 +618,18 @@ impl Reader {
                 if matches!(self.mode, Mode::Review { .. }) {
                     self.review.op = OpState::Idle;
                     self.on_mode(ModeMsg::ExitReview, fx);
-                    self.say("review off", fx);
+                    self.say(t(M::ReviewOff), fx);
                 } else if self.cursor_or_enter(fx).is_some() {
-                    self.say("review on", fx);
+                    self.say(t(M::ReviewOn), fx);
                 }
                 Step::Done
             }
             RCmd::SimpleToggle => {
                 self.review.simple = !self.review.simple;
                 let t = if self.review.simple {
-                    "simple review on"
+                    t(M::ReviewSimpleOn)
                 } else {
-                    "simple review off"
+                    t(M::ReviewSimpleOff)
                 };
                 self.say(t, fx);
                 Step::Done
@@ -636,9 +637,9 @@ impl Reader {
             RCmd::FocusFollowsToggle => {
                 self.review.focus_follows = !self.review.focus_follows;
                 let t = if self.review.focus_follows {
-                    "review follows focus on"
+                    t(M::ReviewFollowsFocusOn)
                 } else {
-                    "review follows focus off"
+                    t(M::ReviewFollowsFocusOff)
                 };
                 self.say(t, fx);
                 Step::Done
@@ -667,7 +668,7 @@ impl Reader {
     }
 
     fn exit_lost(&mut self, fx: &mut ReaderEffects) {
-        self.say("review position lost", fx);
+        self.say(t(M::ReviewPositionLost), fx);
         self.on_mode(ModeMsg::ExitReview, fx);
     }
 
@@ -688,7 +689,7 @@ impl Reader {
                 if rep >= 2 {
                     let name = v.snap.name.as_deref().unwrap_or("");
                     if name.is_empty() {
-                        self.say(&format!("{}, no name", v.snap.role.spoken()), fx);
+                        self.say(&msg!(InfoNoName, role = v.snap.role.spoken()), fx);
                     } else {
                         let spelled = self.review_spell(name);
                         self.say(&spelled, fx);
@@ -711,14 +712,14 @@ impl Reader {
             }
             Lookup::Miss => {
                 if attempts >= self.review.limits.nav_suspensions {
-                    self.say("not responding", fx);
+                    self.say(t(M::ReviewNotResponding), fx);
                     Step::Done
                 } else {
                     self.nav_suspend(NavOp::Node { node: k })
                 }
             }
             Lookup::Gone => {
-                self.say("object is gone", fx);
+                self.say(t(M::ReviewObjectGone), fx);
                 Step::Done
             }
         }
@@ -737,7 +738,7 @@ impl Reader {
             self.review.counters.objnav_degraded += 1;
             match step_degraded(&*self.dir, nav, mv, limits) {
                 StepResult::Empty | StepResult::Stop(_) => {
-                    self.say("not responding", fx);
+                    self.say(t(M::ReviewNotResponding), fx);
                     return Step::Done;
                 }
                 found @ StepResult::Found(_) => found,
@@ -935,14 +936,14 @@ impl Reader {
             Pick::Ready(m, c) => (m, c),
             Pick::Build(s) => {
                 if attempts >= self.review.limits.nav_suspensions {
-                    self.say("review unavailable", fx);
+                    self.say(t(M::ReviewUnavailable), fx);
                     return Step::Done;
                 }
                 return self.build_suspend(s, None, None);
             }
             Pick::Ancestry(op) => {
                 if attempts >= self.review.limits.nav_suspensions {
-                    self.say("review unavailable", fx);
+                    self.say(t(M::ReviewUnavailable), fx);
                     return Step::Done;
                 }
                 return self.nav_suspend(op);
@@ -965,7 +966,7 @@ impl Reader {
             self.review.checked_rev = rev;
         }
         let Some(pos) = self.flat_pos(&model, &cur) else {
-            self.say("blank", fx);
+            self.say(t(M::WordBlank), fx);
             return Step::Done;
         };
         let units = SimpleUnits;
@@ -996,10 +997,10 @@ impl Reader {
         // at the current level; a character is always named, punctuation included.
         let mut text = self.review_voice(mv, out.boundary, rep, &out.said);
         if out.boundary
-            && out.said == "Bottom"
+            && out.said == t(M::ReviewBottom)
             && matches!(model.completeness, Completeness::Truncated(_))
         {
-            "Bottom, more content not shown".clone_into(&mut text);
+            t(M::ReviewBottomTruncated).clone_into(&mut text);
         }
         self.say(&text, fx);
         if out.boundary {
@@ -1141,10 +1142,10 @@ impl Reader {
                 if waiting && let Some(p) = self.take_pending(|_| true) {
                     let text = match e {
                         super::build::BuildError::Hung | super::build::BuildError::Refused => {
-                            "not responding"
+                            t(M::ReviewNotResponding)
                         }
                         super::build::BuildError::Gone | super::build::BuildError::Internal => {
-                            "review unavailable"
+                            t(M::ReviewUnavailable)
                         }
                     };
                     self.say(text, fx);
@@ -1215,7 +1216,7 @@ impl Reader {
         {
             self.review.told_fallback.truncate(3);
             self.review.told_fallback.push(model.surface);
-            self.announce("layout unavailable", fx);
+            self.announce(t(M::ReviewLayoutUnavailable), fx);
         }
         if let Some(cur) = self.cursor()
             && cur.nav.app == model.app
@@ -1285,13 +1286,13 @@ impl Reader {
             Lookup::Hit(v) => v.snap,
             Lookup::Miss => {
                 if attempts >= self.review.limits.nav_suspensions {
-                    self.say("not responding", fx);
+                    self.say(t(M::ReviewNotResponding), fx);
                     return Step::Done;
                 }
                 return self.nav_suspend(NavOp::Node { node: nav });
             }
             Lookup::Gone => {
-                self.say("object is gone", fx);
+                self.say(t(M::ReviewObjectGone), fx);
                 return Step::Done;
             }
         };
@@ -1301,14 +1302,22 @@ impl Reader {
             FlatMove::CurLine => (offset, text.clone(), false),
             FlatMove::PrevLine | FlatMove::Top | FlatMove::StartOfLine => {
                 let edge = matches!(mv, FlatMove::PrevLine);
-                (0, if edge { "Top".to_owned() } else { text.clone() }, edge)
+                (
+                    0,
+                    if edge {
+                        t(M::ReviewTop).to_owned()
+                    } else {
+                        text.clone()
+                    },
+                    edge,
+                )
             }
             FlatMove::NextLine | FlatMove::Bottom | FlatMove::EndOfLine => {
                 let edge = matches!(mv, FlatMove::NextLine);
                 (
                     0,
                     if edge {
-                        "Bottom".to_owned()
+                        t(M::ReviewBottom).to_owned()
                     } else {
                         text.clone()
                     },
@@ -1346,9 +1355,9 @@ impl Reader {
                     None => (
                         offset,
                         if dir == Dir::Fwd {
-                            "Bottom".to_owned()
+                            t(M::ReviewBottom).to_owned()
                         } else {
-                            "Top".to_owned()
+                            t(M::ReviewTop).to_owned()
                         },
                         true,
                     ),
@@ -1356,7 +1365,14 @@ impl Reader {
             }
         };
         let spoken = self.review_voice(mv, boundary, rep, &said);
-        self.say(if spoken.is_empty() { "blank" } else { &spoken }, fx);
+        self.say(
+            if spoken.is_empty() {
+                t(M::WordBlank)
+            } else {
+                &spoken
+            },
+            fx,
+        );
         self.set_cursor(ReviewCursor {
             nav: cur.nav,
             pos: ReviewPos::Object {
@@ -1414,7 +1430,7 @@ impl Reader {
             self.on_mode(ModeMsg::ExitReview, fx);
         }
         let Some(node) = node else {
-            self.say("no focus", fx);
+            self.say(t(M::NoFocus), fx);
             return;
         };
         match self.dir.view(node) {
@@ -1426,13 +1442,13 @@ impl Reader {
                     .present(PresentContext::Focus, &v.snap, id, epoch);
                 fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
             }
-            Lookup::Miss | Lookup::Gone => self.say("focus", fx),
+            Lookup::Miss | Lookup::Gone => self.say(t(M::ReviewFocus), fx),
         }
     }
 
     fn exec_act(&mut self, stage: ActStage, fx: &mut ReaderEffects) -> Step {
         let Some(cur) = self.cursor() else {
-            self.say("review is not active", fx);
+            self.say(t(M::ReviewNotActive), fx);
             return Step::Done;
         };
         let Some(nav) = self.live_nav(&cur) else {
@@ -1471,9 +1487,9 @@ impl Reader {
             }
             (ActStage::Select, Err(_)) => {
                 self.review.counters.review_move_focus_unsupported += 1;
-                self.say("cannot move focus here", fx);
+                self.say(t(M::ReviewCannotMoveFocus), fx);
             }
-            (ActStage::Activate, Err(_)) => self.say("cannot activate", fx),
+            (ActStage::Activate, Err(_)) => self.say(t(M::ReviewCannotActivate), fx),
         }
         self.finish_queue(p.queued, now, fx);
     }
@@ -1495,7 +1511,7 @@ impl Reader {
 
     fn exec_status_bar(&mut self, rep: u8, attempts: u8, fx: &mut ReaderEffects) -> Step {
         let Some(node) = self.current_node() else {
-            self.say("no focus", fx);
+            self.say(t(M::NoFocus), fx);
             return Step::Done;
         };
         let surface = match self.surface_of(node) {
@@ -1581,7 +1597,7 @@ impl Reader {
             }
         }
         let text = if parts.is_empty() {
-            "status bar".to_owned()
+            t(M::ReviewStatusBar).to_owned()
         } else {
             parts.join(", ")
         };
@@ -1611,7 +1627,7 @@ impl Reader {
             });
         match last {
             Some(t) => self.say(&t, fx),
-            None => self.say("no status bar found", fx),
+            None => self.say(t(M::ReviewNoStatusBar), fx),
         }
     }
 }

@@ -2671,7 +2671,7 @@ fn auto_indent_after_return_says_how_deep_the_new_line_is() {
     g.advance(500);
     let _ = g.key(0xff0d, 13, NONE);
     let _ = g.insert(17, "\n\t");
-    assert_eq!(spoken(&g.tick(10)), ["tab"]);
+    assert_eq!(spoken(&g.tick(10)), ["1 tab"]);
 }
 
 #[test]
@@ -2680,7 +2680,7 @@ fn indent_phrases() {
     assert_eq!(indent_phrase("  ").as_deref(), Some("2 spaces"));
     assert_eq!(indent_phrase(" ").as_deref(), Some("1 space"));
     assert_eq!(indent_phrase("\t\t").as_deref(), Some("2 tabs"));
-    assert_eq!(indent_phrase("\t  ").as_deref(), Some("2 spaces, tab"));
+    assert_eq!(indent_phrase("\t  ").as_deref(), Some("2 spaces, 1 tab"));
     assert_eq!(indent_phrase("x "), None);
     assert_eq!(indent_phrase(""), None);
 }

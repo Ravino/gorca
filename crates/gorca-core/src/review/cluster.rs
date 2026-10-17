@@ -130,7 +130,12 @@ fn object_zone(n: &BuildNode, surface: Option<Rect>) -> Option<Zone> {
             return None;
         }
         let w = s.role.spoken();
-        if w.is_empty() { "object" } else { w }.clone_into(&mut text);
+        if w.is_empty() {
+            gorca_i18n::t(gorca_i18n::MsgId::WordObject)
+        } else {
+            w
+        }
+        .clone_into(&mut text);
     }
     Some(Zone {
         node: s.key,

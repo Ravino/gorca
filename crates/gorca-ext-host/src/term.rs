@@ -19,7 +19,9 @@ use std::fmt;
 use std::sync::Arc;
 
 use gorca_core::TermSession;
-use gorca_ext_api::terminal::{Ms, TermAction, TermConfig, TermCounters, TermInput, TermSnapshot};
+use gorca_ext_api::terminal::{
+    Ms, TermAction, TermConfig, TermCounters, TermEdit, TermInput, TermSnapshot,
+};
 
 use crate::instance::HookKind;
 use crate::slot::Slot;
@@ -71,6 +73,23 @@ impl TermSession for HostTermSession {
             return;
         }
         self.dirty.set(true);
+        // Screen text comes from the application: it must never read as a message reference.
+        let input = match input {
+            TermInput::Screen { text, caret } => TermInput::Screen {
+                text: gorca_i18n::ext::sanitize(&text).into_owned(),
+                caret,
+            },
+            TermInput::Edit(TermEdit::Insert {
+                offset,
+                len,
+                text: Some(t),
+            }) => TermInput::Edit(TermEdit::Insert {
+                offset,
+                len,
+                text: Some(gorca_i18n::ext::sanitize(&t).into_owned()),
+            }),
+            other => other,
+        };
         let slot = &self.slot;
         let cfg = &self.cfg;
         let seen = self.seen;
@@ -101,7 +120,22 @@ impl TermSession for HostTermSession {
             Some((gen_now, acts)) => {
                 self.seen = gen_now;
                 self.stale = false;
-                out.extend(acts);
+                // An extension speaks its own messages only.
+                let ns = self.slot.name();
+                out.extend(acts.into_iter().map(|a| match a {
+                    TermAction::Say {
+                        text,
+                        unit,
+                        urgency,
+                        sensitive,
+                    } => TermAction::Say {
+                        text: gorca_i18n::ext::restrict_to(&text, ns).into_owned(),
+                        unit,
+                        urgency,
+                        sensitive,
+                    },
+                    other => other,
+                }));
             }
             None => self.stale = true,
         }

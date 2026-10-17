@@ -142,9 +142,9 @@ impl Ring {
 
     pub(crate) fn name(self) -> &'static str {
         match self {
-            Ring::Rate => "rate",
-            Ring::Pitch => "pitch",
-            Ring::Volume => "volume",
+            Ring::Rate => gorca_i18n::t(gorca_i18n::MsgId::RingRate),
+            Ring::Pitch => gorca_i18n::t(gorca_i18n::MsgId::RingPitch),
+            Ring::Volume => gorca_i18n::t(gorca_i18n::MsgId::RingVolume),
         }
     }
 }

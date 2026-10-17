@@ -2,23 +2,24 @@
 
 use std::sync::Arc;
 
+use gorca_i18n::{MsgId as M, msg, t};
 use gorca_model::{
     Epoch, Freshness, NodeSnapshot, Prio, Role, Segment, SegmentKind, StateSet, UttId, Utterance,
     Value,
 };
 use smallvec::SmallVec;
 
-/// State words in speaking order. TBD: localisation and verbosity settings.
-const STATE_WORDS: &[(StateSet, &str)] = &[
-    (StateSet::DISABLED, "unavailable"),
-    (StateSet::MIXED, "half checked"),
-    (StateSet::CHECKED, "checked"),
-    (StateSet::PRESSED, "pressed"),
-    (StateSet::SELECTED, "selected"),
-    (StateSet::EXPANDED, "expanded"),
-    (StateSet::COLLAPSED, "collapsed"),
-    (StateSet::REQUIRED, "required"),
-    (StateSet::INVALID, "invalid entry"),
+/// State words in speaking order (catalog ids). TBD: verbosity settings.
+const STATE_WORDS: &[(StateSet, M)] = &[
+    (StateSet::DISABLED, M::StateUnavailable),
+    (StateSet::MIXED, M::StateHalfChecked),
+    (StateSet::CHECKED, M::StateChecked),
+    (StateSet::PRESSED, M::StatePressed),
+    (StateSet::SELECTED, M::StateSelected),
+    (StateSet::EXPANDED, M::StateExpanded),
+    (StateSet::COLLAPSED, M::StateCollapsed),
+    (StateSet::REQUIRED, M::StateRequired),
+    (StateSet::INVALID, M::StateInvalidEntry),
 ];
 
 /// What the MIXED state means for `role` (R-6): a tri-state check box or radio button is "half
@@ -26,11 +27,11 @@ const STATE_WORDS: &[(StateSet, &str)] = &[
 /// "indeterminate" (no value). Other roles say nothing for it.
 pub(super) fn mixed_word(role: Role) -> Option<&'static str> {
     if matches!(role, Role::CheckBox | Role::RadioButton) {
-        Some("half checked")
+        Some(t(M::StateHalfChecked))
     } else if role == Role::ToggleButton {
-        Some("half pressed")
+        Some(t(M::StateHalfPressed))
     } else if role == Role::ProgressBar {
-        Some("indeterminate")
+        Some(t(M::StateIndeterminate))
     } else {
         None
     }
@@ -102,7 +103,7 @@ fn present_web(
         && !never_disabled(n.role)
         && !skip.contains(StateSet::DISABLED);
     for w in aria::state_words(node, unavailable, true) {
-        if w == "selected" && skip.contains(StateSet::SELECTED) {
+        if w == t(M::StateSelected) && skip.contains(StateSet::SELECTED) {
             continue;
         }
         segments.push(seg(w, SegmentKind::State));
@@ -121,7 +122,7 @@ fn present_web(
     } else if n.role == Role::Heading
         && let Some(l) = node.level()
     {
-        segments.push(seg(&format!("level {l}"), SegmentKind::Text));
+        segments.push(seg(&msg!(StateLevel, l = l), SegmentKind::Text));
     }
     if let Some(e) = aria::error_text(node) {
         segments.push(seg(e, SegmentKind::Text));
@@ -185,7 +186,7 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
             continue;
         }
         if n.states.contains(*flag) && !skip.contains(*flag) {
-            segments.push(seg(word, SegmentKind::State));
+            segments.push(seg(t(*word), SegmentKind::State));
         }
     }
     // A checkable control says its off state too ("check box not checked", "not pressed").
@@ -194,13 +195,13 @@ fn present_with(n: &NodeSnapshot, id: UttId, epoch: Epoch, skip: StateSet) -> Ut
         && !n.states.contains(StateSet::CHECKED)
         && !skip.contains(StateSet::CHECKED)
     {
-        Some("not checked")
+        Some(t(M::StateNotChecked))
     } else if n.role == Role::ToggleButton
         && !mixed
         && !n.states.intersects(StateSet::PRESSED | StateSet::CHECKED)
         && !skip.contains(StateSet::PRESSED)
     {
-        Some("not pressed")
+        Some(t(M::StateNotPressed))
     } else {
         None
     };
@@ -368,24 +369,24 @@ pub(crate) fn present_change(
         } else if switch {
             // role=switch: NVDA's `on` / `off`, never checked.
             if new.states.contains(StateSet::CHECKED) {
-                "on"
+                t(M::StateOn)
             } else {
-                "off"
+                t(M::StateOff)
             }
         } else if new.states.contains(StateSet::CHECKED) {
-            "checked"
+            t(M::StateChecked)
         } else {
-            "not checked"
+            t(M::StateNotChecked)
         };
         segments.push(seg(w, SegmentKind::State));
     }
     if ch.states.intersects(expand) {
         let w = if new.states.contains(StateSet::EXPANDED) {
-            "expanded"
+            t(M::StateExpanded)
         } else if new.states.contains(StateSet::COLLAPSED) {
-            "collapsed"
+            t(M::StateCollapsed)
         } else {
-            "not expanded"
+            t(M::StateNotExpanded)
         };
         segments.push(seg(w, SegmentKind::State));
     }
@@ -398,9 +399,17 @@ pub(crate) fn present_change(
         }
         if ch.states.contains(*flag) {
             if new.states.contains(*flag) {
-                segments.push(seg(word, SegmentKind::State));
+                segments.push(seg(t(*word), SegmentKind::State));
             } else {
-                segments.push(seg(&format!("not {word}"), SegmentKind::State));
+                // Russian has no "not unavailable": these two have their own positive messages.
+                let off = if *flag == StateSet::DISABLED {
+                    t(M::StateAvailable).to_owned()
+                } else if *flag == StateSet::INVALID {
+                    t(M::StateValid).to_owned()
+                } else {
+                    msg!(StateNot, word = t(*word))
+                };
+                segments.push(seg(&off, SegmentKind::State));
             }
         }
     }
@@ -499,7 +508,7 @@ pub fn flat_zone_text(n: &NodeSnapshot) -> String {
     }
     for (flag, word) in STATE_WORDS {
         if n.states.contains(*flag) {
-            push(word);
+            push(t(*word));
         }
     }
     if let Some(v) = value_text(n.value.as_ref()) {
@@ -842,5 +851,56 @@ mod change_tests {
             let t = texts(&present_focus(&n, UttId(1), Epoch(1)));
             eprintln!("P7: {t:?}");
         }
+    }
+
+    /// M12a: the same presenters speak Russian from the catalog when the language is Russian,
+    /// and English is unchanged next to it.
+    #[test]
+    fn russian_focus_speech_comes_from_the_catalog() {
+        use gorca_doc_source_api::web_attrs as w;
+        let _ru = gorca_i18n::scoped(gorca_i18n::Lang::Ru);
+        let desk = snap("Wi-Fi", StateSet::CHECKED, None);
+        let mut b = desk.clone();
+        b.role = Role::CheckBox;
+        assert_eq!(
+            texts(&present_focus(&b, UttId(1), Epoch(1))),
+            ["Wi-Fi", "флажок", "отмечено"]
+        );
+        let mut off = b.clone();
+        off.states = StateSet::empty();
+        assert_eq!(
+            texts(&present_focus(&off, UttId(1), Epoch(1))),
+            ["Wi-Fi", "флажок", "не отмечено"]
+        );
+        assert_eq!(change_words(&off, &b), ["отмечено"]);
+        let sw = web_snap(
+            "Уведомления",
+            Role::ToggleButton,
+            StateSet::CHECKED,
+            &[(w::TAG.0, "button"), (w::XML_ROLES.0, "switch")],
+        );
+        assert_eq!(
+            texts(&present_focus(&sw, UttId(1), Epoch(1))),
+            ["Уведомления", "переключатель", "включено"]
+        );
+        let mut col = snap("Fruit", StateSet::COLLAPSED, None);
+        col.role = Role::ComboBox;
+        assert_eq!(
+            texts(&present_focus(&col, UttId(1), Epoch(1))),
+            ["Fruit", "комбинированный список", "свёрнуто"]
+        );
+    }
+
+    #[test]
+    fn english_is_the_default_next_to_a_russian_scope() {
+        let b = {
+            let mut n = snap("Wi-Fi", StateSet::CHECKED, None);
+            n.role = Role::CheckBox;
+            n
+        };
+        assert_eq!(
+            texts(&present_focus(&b, UttId(1), Epoch(1))),
+            ["Wi-Fi", "check box", "checked"]
+        );
     }
 }

@@ -2,6 +2,7 @@
 //! sections 7 and 8). Everything on a key's path to speech reads one published `WebDoc` and
 //! sends nothing but fire-and-forget effects afterwards (BI-1, BI-2).
 
+use gorca_i18n::{MsgId as M, t};
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -151,308 +152,358 @@ const SELECT: &[(CoreCmd, Move)] = &[
 ];
 
 /// The quick-navigation commands that are implemented: direction, category, spoken name.
-const QUICKNAV: &[(CoreCmd, Dir, Cat, &str)] = &[
+const QUICKNAV: &[(CoreCmd, Dir, Cat, M)] = &[
     (
         CoreCmd::QuicknavNextHeading,
         Dir::Next,
         Cat::HEADING,
-        "heading",
+        M::WebNoNextHeading,
     ),
     (
         CoreCmd::QuicknavPrevHeading,
         Dir::Prev,
         Cat::HEADING,
-        "heading",
+        M::WebNoPrevHeading,
     ),
     (
         CoreCmd::QuicknavNextHeading1,
         Dir::Next,
         Cat::HEADING_1,
-        "heading level 1",
+        M::WebNoNextHeading1,
     ),
     (
         CoreCmd::QuicknavPrevHeading1,
         Dir::Prev,
         Cat::HEADING_1,
-        "heading level 1",
+        M::WebNoPrevHeading1,
     ),
     (
         CoreCmd::QuicknavNextHeading2,
         Dir::Next,
         Cat::HEADING_2,
-        "heading level 2",
+        M::WebNoNextHeading2,
     ),
     (
         CoreCmd::QuicknavPrevHeading2,
         Dir::Prev,
         Cat::HEADING_2,
-        "heading level 2",
+        M::WebNoPrevHeading2,
     ),
     (
         CoreCmd::QuicknavNextHeading3,
         Dir::Next,
         Cat::HEADING_3,
-        "heading level 3",
+        M::WebNoNextHeading3,
     ),
     (
         CoreCmd::QuicknavPrevHeading3,
         Dir::Prev,
         Cat::HEADING_3,
-        "heading level 3",
+        M::WebNoPrevHeading3,
     ),
     (
         CoreCmd::QuicknavNextHeading4,
         Dir::Next,
         Cat::HEADING_4,
-        "heading level 4",
+        M::WebNoNextHeading4,
     ),
     (
         CoreCmd::QuicknavPrevHeading4,
         Dir::Prev,
         Cat::HEADING_4,
-        "heading level 4",
+        M::WebNoPrevHeading4,
     ),
     (
         CoreCmd::QuicknavNextHeading5,
         Dir::Next,
         Cat::HEADING_5,
-        "heading level 5",
+        M::WebNoNextHeading5,
     ),
     (
         CoreCmd::QuicknavPrevHeading5,
         Dir::Prev,
         Cat::HEADING_5,
-        "heading level 5",
+        M::WebNoPrevHeading5,
     ),
     (
         CoreCmd::QuicknavNextHeading6,
         Dir::Next,
         Cat::HEADING_6,
-        "heading level 6",
+        M::WebNoNextHeading6,
     ),
     (
         CoreCmd::QuicknavPrevHeading6,
         Dir::Prev,
         Cat::HEADING_6,
-        "heading level 6",
+        M::WebNoPrevHeading6,
     ),
-    (CoreCmd::QuicknavNextLink, Dir::Next, Cat::LINK, "link"),
-    (CoreCmd::QuicknavPrevLink, Dir::Prev, Cat::LINK, "link"),
+    (
+        CoreCmd::QuicknavNextLink,
+        Dir::Next,
+        Cat::LINK,
+        M::WebNoNextLink,
+    ),
+    (
+        CoreCmd::QuicknavPrevLink,
+        Dir::Prev,
+        Cat::LINK,
+        M::WebNoPrevLink,
+    ),
     (
         CoreCmd::QuicknavNextVisited,
         Dir::Next,
         Cat::LINK_VISITED,
-        "visited link",
+        M::WebNoNextVisitedLink,
     ),
     (
         CoreCmd::QuicknavPrevVisited,
         Dir::Prev,
         Cat::LINK_VISITED,
-        "visited link",
+        M::WebNoPrevVisitedLink,
     ),
     (
         CoreCmd::QuicknavNextUnvisited,
         Dir::Next,
         Cat::LINK_UNVISITED,
-        "unvisited link",
+        M::WebNoNextUnvisitedLink,
     ),
     (
         CoreCmd::QuicknavPrevUnvisited,
         Dir::Prev,
         Cat::LINK_UNVISITED,
-        "unvisited link",
+        M::WebNoPrevUnvisitedLink,
     ),
     (
         CoreCmd::QuicknavNextFormField,
         Dir::Next,
         Cat::FORM_FIELD,
-        "form field",
+        M::WebNoNextFormField,
     ),
     (
         CoreCmd::QuicknavPrevFormField,
         Dir::Prev,
         Cat::FORM_FIELD,
-        "form field",
+        M::WebNoPrevFormField,
     ),
-    (CoreCmd::QuicknavNextList, Dir::Next, Cat::LIST, "list"),
-    (CoreCmd::QuicknavPrevList, Dir::Prev, Cat::LIST, "list"),
+    (
+        CoreCmd::QuicknavNextList,
+        Dir::Next,
+        Cat::LIST,
+        M::WebNoNextList,
+    ),
+    (
+        CoreCmd::QuicknavPrevList,
+        Dir::Prev,
+        Cat::LIST,
+        M::WebNoPrevList,
+    ),
     (
         CoreCmd::QuicknavNextListItem,
         Dir::Next,
         Cat::LIST_ITEM,
-        "list item",
+        M::WebNoNextListItem,
     ),
     (
         CoreCmd::QuicknavPrevListItem,
         Dir::Prev,
         Cat::LIST_ITEM,
-        "list item",
+        M::WebNoPrevListItem,
     ),
     (
         CoreCmd::QuicknavNextButton,
         Dir::Next,
         Cat::BUTTON,
-        "button",
+        M::WebNoNextButton,
     ),
     (
         CoreCmd::QuicknavPrevButton,
         Dir::Prev,
         Cat::BUTTON,
-        "button",
+        M::WebNoPrevButton,
     ),
     (
         CoreCmd::QuicknavNextEdit,
         Dir::Next,
         Cat::EDIT,
-        "edit field",
+        M::WebNoNextEditField,
     ),
     (
         CoreCmd::QuicknavPrevEdit,
         Dir::Prev,
         Cat::EDIT,
-        "edit field",
+        M::WebNoPrevEditField,
     ),
     (
         CoreCmd::QuicknavNextSeparator,
         Dir::Next,
         Cat::SEPARATOR,
-        "separator",
+        M::WebNoNextSeparator,
     ),
     (
         CoreCmd::QuicknavPrevSeparator,
         Dir::Prev,
         Cat::SEPARATOR,
-        "separator",
+        M::WebNoPrevSeparator,
     ),
     (
         CoreCmd::QuicknavNextRadio,
         Dir::Next,
         Cat::RADIO,
-        "radio button",
+        M::WebNoNextRadioButton,
     ),
     (
         CoreCmd::QuicknavPrevRadio,
         Dir::Prev,
         Cat::RADIO,
-        "radio button",
+        M::WebNoPrevRadioButton,
     ),
     (
         CoreCmd::QuicknavNextCombobox,
         Dir::Next,
         Cat::COMBOBOX,
-        "combo box",
+        M::WebNoNextComboBox,
     ),
     (
         CoreCmd::QuicknavPrevCombobox,
         Dir::Prev,
         Cat::COMBOBOX,
-        "combo box",
+        M::WebNoPrevComboBox,
     ),
     (
         CoreCmd::QuicknavNextCheckbox,
         Dir::Next,
         Cat::CHECKBOX,
-        "check box",
+        M::WebNoNextCheckBox,
     ),
     (
         CoreCmd::QuicknavPrevCheckbox,
         Dir::Prev,
         Cat::CHECKBOX,
-        "check box",
+        M::WebNoPrevCheckBox,
     ),
     (
         CoreCmd::QuicknavNextGraphic,
         Dir::Next,
         Cat::GRAPHIC,
-        "graphic",
+        M::WebNoNextGraphic,
     ),
     (
         CoreCmd::QuicknavPrevGraphic,
         Dir::Prev,
         Cat::GRAPHIC,
-        "graphic",
+        M::WebNoPrevGraphic,
     ),
     (
         CoreCmd::QuicknavNextBlockquote,
         Dir::Next,
         Cat::BLOCKQUOTE,
-        "block quote",
+        M::WebNoNextBlockQuote,
     ),
     (
         CoreCmd::QuicknavPrevBlockquote,
         Dir::Prev,
         Cat::BLOCKQUOTE,
-        "block quote",
+        M::WebNoPrevBlockQuote,
     ),
     (
         CoreCmd::QuicknavNextLandmark,
         Dir::Next,
         Cat::ANY_LANDMARK,
-        "landmark",
+        M::WebNoNextLandmark,
     ),
     (
         CoreCmd::QuicknavPrevLandmark,
         Dir::Prev,
         Cat::ANY_LANDMARK,
-        "landmark",
+        M::WebNoPrevLandmark,
     ),
     (
         CoreCmd::QuicknavNextEmbedded,
         Dir::Next,
         Cat::EMBEDDED_OR_DIALOG,
-        "embedded object",
+        M::WebNoNextEmbeddedObject,
     ),
     (
         CoreCmd::QuicknavPrevEmbedded,
         Dir::Prev,
         Cat::EMBEDDED_OR_DIALOG,
-        "embedded object",
+        M::WebNoPrevEmbeddedObject,
     ),
-    (CoreCmd::QuicknavNextTable, Dir::Next, Cat::TABLE, "table"),
-    (CoreCmd::QuicknavPrevTable, Dir::Prev, Cat::TABLE, "table"),
+    (
+        CoreCmd::QuicknavNextTable,
+        Dir::Next,
+        Cat::TABLE,
+        M::WebNoNextTable,
+    ),
+    (
+        CoreCmd::QuicknavPrevTable,
+        Dir::Prev,
+        Cat::TABLE,
+        M::WebNoPrevTable,
+    ),
     (
         CoreCmd::QuicknavNextAnnotation,
         Dir::Next,
         Cat::ANNOTATION,
-        "annotation",
+        M::WebNoNextAnnotation,
     ),
     (
         CoreCmd::QuicknavPrevAnnotation,
         Dir::Prev,
         Cat::ANNOTATION,
-        "annotation",
+        M::WebNoPrevAnnotation,
     ),
-    (CoreCmd::QuicknavNextError, Dir::Next, Cat::ERROR, "error"),
-    (CoreCmd::QuicknavPrevError, Dir::Prev, Cat::ERROR, "error"),
+    (
+        CoreCmd::QuicknavNextError,
+        Dir::Next,
+        Cat::ERROR,
+        M::WebNoNextError,
+    ),
+    (
+        CoreCmd::QuicknavPrevError,
+        Dir::Prev,
+        Cat::ERROR,
+        M::WebNoPrevError,
+    ),
     (
         CoreCmd::QuicknavNextParagraph,
         Dir::Next,
         Cat::TEXT_BLOCK,
-        "paragraph",
+        M::WebNoNextParagraph,
     ),
     (
         CoreCmd::QuicknavPrevParagraph,
         Dir::Prev,
         Cat::TEXT_BLOCK,
-        "paragraph",
+        M::WebNoPrevParagraph,
     ),
-    (CoreCmd::QuicknavNextFrame, Dir::Next, Cat::FRAME, "frame"),
-    (CoreCmd::QuicknavPrevFrame, Dir::Prev, Cat::FRAME, "frame"),
+    (
+        CoreCmd::QuicknavNextFrame,
+        Dir::Next,
+        Cat::FRAME,
+        M::WebNoNextFrame,
+    ),
+    (
+        CoreCmd::QuicknavPrevFrame,
+        Dir::Prev,
+        Cat::FRAME,
+        M::WebNoPrevFrame,
+    ),
     (
         CoreCmd::QuicknavNextArticle,
         Dir::Next,
         Cat::ARTICLE,
-        "article",
+        M::WebNoNextArticle,
     ),
     (
         CoreCmd::QuicknavPrevArticle,
         Dir::Prev,
         Cat::ARTICLE,
-        "article",
+        M::WebNoPrevArticle,
     ),
 ];
 
-fn quicknav(c: CoreCmd) -> Option<(Dir, Cat, &'static str)> {
+fn quicknav(c: CoreCmd) -> Option<(Dir, Cat, M)> {
     QUICKNAV
         .iter()
         .find(|(cmd, ..)| *cmd == c)
@@ -1241,7 +1292,7 @@ impl Reader {
                     if let Some(name) = v.name.filter(|n| !n.is_empty()) {
                         out.push(Item::Lead(name.to_owned()));
                     }
-                    out.push(Item::Lead("dialog".to_owned()));
+                    out.push(Item::Lead(t(M::RoleDialog).to_owned()));
                     return Some((n, out));
                 }
                 cur = d.parent(n);
@@ -1298,7 +1349,7 @@ impl Reader {
                     if let Some(name) = v.name.filter(|n| !n.is_empty()) {
                         out.push(Item::Lead(name.to_owned()));
                     }
-                    out.push(Item::Lead("list box".to_owned()));
+                    out.push(Item::Lead(t(M::WebListBox).to_owned()));
                     return Some(out);
                 }
                 cur = d.parent(n);
@@ -1435,7 +1486,7 @@ impl Reader {
             DocNotice::FocusFailed { doc } => {
                 // The grabbed Tab asked for a focus the page refused: say so (R-6).
                 if self.web.as_ref().is_some_and(|b| b.mode.doc() == Some(doc)) {
-                    self.say("can't move focus there", fx);
+                    self.say(t(M::WebCantMoveFocus), fx);
                 }
             }
             DocNotice::Gone { doc } => {
@@ -1856,7 +1907,7 @@ impl Reader {
             WebMode::Browse { doc, cur, .. } => Some((doc, cur, b.settings.max_line)),
             WebMode::Loading { .. } => {
                 b.counters.still_loading += 1;
-                self.say("loading", fx);
+                self.say(t(M::WebLoading), fx);
                 None
             }
             WebMode::Focus { .. } | WebMode::Inactive => None,
@@ -1871,7 +1922,7 @@ impl Reader {
         fx: &mut ReaderEffects,
     ) {
         if self.web.is_none() {
-            self.say("browse mode is not available", fx);
+            self.say(t(M::WebBrowseUnavailable), fx);
             return;
         }
         if let Some(b) = self.web.as_mut() {
@@ -1910,8 +1961,8 @@ impl Reader {
                 Dir::Prev
             };
             self.web_not_link_block(dir, now, fx);
-        } else if let Some((dir, cat, name)) = quicknav(c) {
-            self.web_quicknav(dir, cat, name, now, fx);
+        } else if let Some((dir, cat, none)) = quicknav(c) {
+            self.web_quicknav(dir, cat, none, now, fx);
         } else if let Some((_, mv)) = CURSOR.iter().find(|(cmd, _)| *cmd == c) {
             self.web_cursor_cmd(*mv, false, now, fx);
         } else if let Some((_, mv)) = SELECT.iter().find(|(cmd, _)| *cmd == c) {
@@ -1927,7 +1978,7 @@ impl Reader {
             WebMode::Browse { doc, cur, .. } => (doc, Some(cur.node)),
             WebMode::Focus { doc, .. } => (doc, None),
             WebMode::Inactive | WebMode::Loading { .. } => {
-                self.say("not in a web page", fx);
+                self.say(t(M::WebNotInPage), fx);
                 return;
             }
         };
@@ -2071,7 +2122,7 @@ impl Reader {
                         return Outcome::Nothing;
                     };
                     let items = match kind {
-                        Kind::Char if blank => vec![Item::Text("blank".to_owned())],
+                        Kind::Char if blank => vec![Item::Text(t(M::WebBlank).to_owned())],
                         Kind::Char => single_char(d, &speak, Some(off0)),
                         Kind::Word => trim_items(present::describe_from(
                             d,
@@ -2114,14 +2165,18 @@ impl Reader {
                     }
                     let text = span.split_whitespace().collect::<Vec<_>>().join(" ");
                     let text = if text.is_empty() {
-                        "blank".to_owned()
+                        t(M::WebBlank).to_owned()
                     } else {
                         text
                     };
                     self.web_speak(
                         &[
                             Item::Text(text),
-                            Item::State(if growing { "selected" } else { "unselected" }),
+                            Item::State(if growing {
+                                t(M::StateSelected)
+                            } else {
+                                t(M::WebUnselected)
+                            }),
                         ],
                         fx,
                     );
@@ -2136,8 +2191,8 @@ impl Reader {
                     b.counters.edges += 1;
                 }
                 let w = match e {
-                    Edge::Top => "top",
-                    Edge::Bottom => "bottom",
+                    Edge::Top => t(M::WebTop),
+                    Edge::Bottom => t(M::WebBottom),
                 };
                 self.say(w, fx);
             }
@@ -2166,7 +2221,13 @@ impl Reader {
         if let Some(b) = self.web.as_mut() {
             b.sel = Some((0, last));
         }
-        self.web_speak(&[Item::Text("all".to_owned()), Item::State("selected")], fx);
+        self.web_speak(
+            &[
+                Item::Text(t(M::WebAll).to_owned()),
+                Item::State(t(M::StateSelected)),
+            ],
+            fx,
+        );
         self.web_native_selection(doc, 0, last, fx);
         fx.push(ReaderEffect::ArmTimer(now + SCROLL_DEBOUNCE));
     }
@@ -2315,8 +2376,8 @@ impl Reader {
             }));
         } else {
             let w = match dir {
-                Dir::Next => "no next focusable element",
-                Dir::Prev => "no previous focusable element",
+                Dir::Next => t(M::WebNoNextFocusable),
+                Dir::Prev => t(M::WebNoPrevFocusable),
             };
             self.say(w, fx);
         }
@@ -2325,7 +2386,7 @@ impl Reader {
     /// gorca+Shift+F10: the page's own selection follows the virtual one, or stops following.
     fn web_native_selection_toggle(&mut self, fx: &mut ReaderEffects) {
         if self.web.as_ref().is_none_or(|b| b.mode.doc().is_none()) {
-            self.say("native selection is only available on web pages", fx);
+            self.say(t(M::WebNativeSelectionWebOnly), fx);
             return;
         }
         let Some(b) = self.web.as_mut() else { return };
@@ -2345,9 +2406,9 @@ impl Reader {
         }
         self.say(
             if on {
-                "native selection on"
+                t(M::WebNativeSelectionOn)
             } else {
-                "native selection off"
+                t(M::WebNativeSelectionOff)
             },
             fx,
         );
@@ -2363,9 +2424,9 @@ impl Reader {
         }
         self.say(
             if on {
-                "single letter navigation on"
+                t(M::WebSingleLetterOn)
             } else {
-                "single letter navigation off"
+                t(M::WebSingleLetterOff)
             },
             fx,
         );
@@ -2417,8 +2478,8 @@ impl Reader {
                 self.web_speak(&items, fx);
                 fx.push(ReaderEffect::ArmTimer(now + SCROLL_DEBOUNCE));
             }
-            Out::NoContainer => self.say("Not in a container", fx),
-            Out::Bottom => self.say("bottom", fx),
+            Out::NoContainer => self.say(t(M::WebNoContainer), fx),
+            Out::Bottom => self.say(t(M::WebBottom), fx),
         }
     }
 
@@ -2467,18 +2528,11 @@ impl Reader {
             self.web_speak(&items, fx);
             fx.push(ReaderEffect::ArmTimer(now + SCROLL_DEBOUNCE));
         } else {
-            self.say("no more text after a block of links", fx);
+            self.say(t(M::WebNoMoreTextAfterLinks), fx);
         }
     }
 
-    fn web_quicknav(
-        &mut self,
-        dir: Dir,
-        cat: Cat,
-        name: &'static str,
-        now: Instant,
-        fx: &mut ReaderEffects,
-    ) {
+    fn web_quicknav(&mut self, dir: Dir, cat: Cat, none: M, now: Instant, fx: &mut ReaderEffects) {
         let Some((doc, cur, _)) = self.browse_ctx(fx) else {
             return;
         };
@@ -2505,11 +2559,7 @@ impl Reader {
             self.web_speak(&items, fx);
             fx.push(ReaderEffect::ArmTimer(now + SCROLL_DEBOUNCE));
         } else {
-            let w = match dir {
-                Dir::Next => "next",
-                Dir::Prev => "previous",
-            };
-            self.say(&format!("no {w} {name}"), fx);
+            self.say(t(none), fx);
         }
     }
 }

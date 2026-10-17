@@ -11,7 +11,8 @@
 //! 4. `gorca-model`, `gorca-doc` and `gorca-text` must not depend on `tokio`.
 //! 5. Extensions depend only on `gorca-ext-api`. The API crate re-exports the pure text layer
 //!    (`gorca-text`, with `gorca-model` below it: no tokio, no I/O), so a terminal presents caret
-//!    moves with the code every other editor uses; nothing else of the workspace is reachable.
+//!    moves with the code every other editor uses, and the pure leaf `gorca-i18n` for message
+//!    references (ADR-0010); nothing else of the workspace is reachable.
 //! 9. The WASM runtime is confined (M5): only `gorca-ext-host` may depend on `wasmtime*`, only
 //!    `gorca-ext-api` (for the `wasm32` component build) on `wit-bindgen*`, and the host must not
 //!    reach `zbus*` or `atspi*` (an extension sees the core's types, never a connector's).
@@ -57,7 +58,8 @@ const MAY_USE_ZBUS: &[&str] = &[
 const MAY_USE_ATSPI: &[&str] = &["gorca-connector-atspi"];
 /// What an extension may reach in the workspace: the API crate and the pure text layer it
 /// re-exports (rule 5).
-const EXT_API_AND_PURE_TEXT: &[&str] = &["gorca-ext-api", "gorca-text", "gorca-model"];
+const EXT_API_AND_PURE_TEXT: &[&str] =
+    &["gorca-ext-api", "gorca-text", "gorca-model", "gorca-i18n"];
 const TOKIO_FREE: &[&str] = &["gorca-model", "gorca-doc", "gorca-text", "gorca-config"];
 /// Concrete implementations that only `gorca-daemon` wires (rule 3, second sentence).
 const CONCRETE: &[&str] = &[

@@ -10,10 +10,12 @@ publish.workspace = true
 [dependencies]
 gorca-ext-api = { workspace = true }
 gorca-model = { workspace = true }
+gorca-i18n = { workspace = true }
 gorca-rt = { workspace = true }
 gorca-core = { workspace = true }
 gorca-config = { workspace = true }
 bitflags = { workspace = true }
+libc = { workspace = true }
 toml_edit = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

@@ -657,3 +657,71 @@ fn memory_loops_and_oom_are_faults_at_every_reset() {
     assert_eq!(h.stats().disabled, 1);
     assert_eq!(ae.on_event(&announce("suppress")), ExtVerdict::Pass);
 }
+
+// ---- extension catalogs (M12a review F-4) ----
+
+fn catalog_text(ns: &str, key: &str) -> String {
+    gorca_i18n::ext::resolve(&gorca_i18n::ext::encode(ns, key, &[]), gorca_i18n::Lang::En)
+        .into_owned()
+}
+
+#[test]
+fn an_extension_catalog_is_registered_only_after_validation_and_never_replaces_a_namespace() {
+    let root = std::env::temp_dir().join(format!("gorca-ext-cat-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    // A first-party namespace the daemon registered up front.
+    gorca_i18n::ext::register("ext-vte", gorca_i18n::Lang::En, "probe = core text\n");
+    // 1. An extension that claims `ext-vte` but whose component does not load.
+    std::fs::create_dir_all(root.join("a-evil/i18n")).unwrap();
+    std::fs::write(
+        root.join("a-evil/ext.toml"),
+        "name = \"ext-vte\"\nmodule = \"e.wasm\"\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("a-evil/e.wasm"), b"\0asm not a component").unwrap();
+    std::fs::write(root.join("a-evil/i18n/en.msg"), "probe = evil\n").unwrap();
+    // 2. An extension that does not load and has its own name: nothing is registered.
+    std::fs::create_dir_all(root.join("b-broken/i18n")).unwrap();
+    std::fs::write(
+        root.join("b-broken/ext.toml"),
+        "name = \"cat-broken\"\nmodule = \"e.wasm\"\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("b-broken/e.wasm"), b"\0asm not a component").unwrap();
+    std::fs::write(root.join("b-broken/i18n/en.msg"), "probe = broken\n").unwrap();
+    // 3. The good extension, twice (a duplicate directory).
+    for d in ["c-good", "d-good-again"] {
+        std::fs::create_dir_all(root.join(d).join("i18n")).unwrap();
+        std::fs::write(
+            root.join(d).join("ext.toml"),
+            include_str!("../../../extensions/ext-test/ext.toml"),
+        )
+        .unwrap();
+        std::fs::write(root.join(d).join("ext_test.wasm"), common::wasm_bytes()).unwrap();
+    }
+    std::fs::write(root.join("c-good/i18n/en.msg"), "probe = first\n").unwrap();
+    std::fs::write(root.join("d-good-again/i18n/en.msg"), "probe = second\n").unwrap();
+
+    let mut b = gorca_ext_host::ExtHost::builder(Arc::new(gorca_core::MirrorDirectory::new()));
+    b.load_dir(&root);
+    let ok: Vec<_> = b
+        .reports()
+        .iter()
+        .filter(|r| r.result.is_ok())
+        .filter_map(|r| r.name.clone())
+        .collect();
+    assert_eq!(ok, vec!["ext-test".to_owned()], "the duplicate is rejected");
+    assert_eq!(b.reports().iter().filter(|r| r.result.is_err()).count(), 3);
+    assert_eq!(catalog_text("ext-vte", "probe"), "core text");
+    assert_eq!(
+        catalog_text("cat-broken", "probe"),
+        "probe",
+        "not registered"
+    );
+    assert_eq!(catalog_text("ext-test", "probe"), "first");
+    // Unloading the host unregisters what it registered, and only that.
+    drop(b.build());
+    assert_eq!(catalog_text("ext-test", "probe"), "probe");
+    assert_eq!(catalog_text("ext-vte", "probe"), "core text");
+    let _ = std::fs::remove_dir_all(root);
+}
