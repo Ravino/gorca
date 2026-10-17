@@ -4,3 +4,6 @@
    psi memory: some avg10=0.00 avg60=0.34 avg300=0.39 total=2968158993 full avg10=0.00 avg60=0.34 avg300=0.36 total=2436482398 
 == 02:58:54 cr-typing2 start head ebead6e load 12.08 14.71 13.63 1/2527 3437639 mem_avail_GiB 16.1
    psi memory: some avg10=0.00 avg60=0.34 avg300=0.39 total=2968158993 full avg10=0.00 avg60=0.34 avg300=0.36 total=2436482398 
+== 03:37:16 cr-typing2 end head 5262c5d load 14.91 12.39 10.09 6/2532 3565721 mem_avail_GiB 13.7
+   psi memory: some avg10=0.00 avg60=0.09 avg300=0.45 total=2977068653 full avg10=0.00 avg60=0.07 avg300=0.39 total=2444862006 
+# done
