@@ -23,9 +23,16 @@ impl Toolkit {
         if a.contains("firefox") || a.contains("thunderbird") || t == "gecko" {
             Toolkit::Firefox
         } else if t == "chromium"
-            || ["chrom", "electron", "brave", "msedge", "microsoft-edge", "vivaldi"]
-                .iter()
-                .any(|n| a.contains(n))
+            || [
+                "chrom",
+                "electron",
+                "brave",
+                "msedge",
+                "microsoft-edge",
+                "vivaldi",
+            ]
+            .iter()
+            .any(|n| a.contains(n))
         {
             Toolkit::Chromium
         } else if a.contains("gnome-terminal") || a.contains("ptyxis") || a.contains("kgx") {
@@ -232,7 +239,10 @@ mod tests {
             assert_eq!(c.web_engine(), WebEngine::Blink);
             assert!(c.text_leaf_children_repeat_parent_text());
         }
-        assert_eq!(Toolkit::classify("Gecko", "x").web_engine(), WebEngine::Gecko);
+        assert_eq!(
+            Toolkit::classify("Gecko", "x").web_engine(),
+            WebEngine::Gecko
+        );
         assert_eq!(Toolkit::classify("gtk4", "x").web_engine(), WebEngine::None);
     }
 }

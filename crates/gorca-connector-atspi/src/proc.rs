@@ -91,12 +91,12 @@ pub fn age_ms(start_ticks: u64) -> Option<u64> {
 
 /// [`age_ms`] for the contents of `/proc/uptime` (`"<uptime secs> <idle secs>"`).
 pub fn age_ms_at(start_ticks: u64, uptime: &str) -> Option<u64> {
-    let secs: f64 = uptime.split_whitespace().next()?.parse().ok()?;
-    if !secs.is_finite() || secs < 0.0 {
-        return None;
-    }
-    // Centiseconds, rounded down: `USER_HZ` is 100, so a tick is 10 ms.
-    let now_ms = (secs * 1000.0) as u64;
+    let first = uptime.split_whitespace().next()?;
+    let (whole, frac) = first.split_once('.').unwrap_or((first, "0"));
+    let secs: u64 = whole.parse().ok()?;
+    // Hundredths of a second: `USER_HZ` is 100, so a tick is 10 ms.
+    let hundredths: u64 = format!("{frac:0<2}")[..2].parse().ok()?;
+    let now_ms = secs.checked_mul(1000)?.checked_add(hundredths * 10)?;
     now_ms.checked_sub(start_ticks.saturating_mul(1000 / USER_HZ))
 }
 
@@ -129,7 +129,11 @@ mod tests {
     fn the_age_of_a_process_follows_uptime_and_start_ticks() {
         // Started at tick 98_765 (987.65 s), now 990.0 s since boot: 2.35 s old.
         assert_eq!(age_ms_at(98_765, "990.00 5000.00\n"), Some(2350));
-        assert_eq!(age_ms_at(99_100, "990.00 1.0"), None, "a start in the future is no age");
+        assert_eq!(
+            age_ms_at(99_100, "990.00 1.0"),
+            None,
+            "a start in the future is no age"
+        );
         assert_eq!(age_ms_at(1, "garbage"), None);
     }
 

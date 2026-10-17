@@ -1455,7 +1455,12 @@ mod frame_wake {
     }
 
     fn members(page: &Shared) -> Vec<(u64, &'static str)> {
-        page.lock().unwrap().log.iter().map(|(i, m, _)| (*i, *m)).collect()
+        page.lock()
+            .unwrap()
+            .log
+            .iter()
+            .map(|(i, m, _)| (*i, *m))
+            .collect()
     }
 
     /// An article whose first screen has no link, button or list item (only a heading and a
@@ -1487,12 +1492,18 @@ mod frame_wake {
         let offset = page.lock().unwrap().offset;
         b.shutdown.cancel();
         let _ = b.task.await;
-        assert!(calls.contains(&(fr, "ScrollTo")), "the frame was scrolled into view: {calls:?}");
+        assert!(
+            calls.contains(&(fr, "ScrollTo")),
+            "the frame was scrolled into view: {calls:?}"
+        );
         assert!(
             calls.iter().any(|(_, m)| *m == "ScrollToPoint"),
             "the page was scrolled back: {calls:?}"
         );
-        assert_eq!(offset, 130, "the original scroll offset is restored exactly: {calls:?}");
+        assert_eq!(
+            offset, 130,
+            "the original scroll offset is restored exactly: {calls:?}"
+        );
     }
 
     /// The user scrolls while the frame wakes: the viewport is theirs, nothing is restored.
@@ -1514,7 +1525,10 @@ mod frame_wake {
         // Wait for the wake's scroll, then scroll like a user would.
         let t0 = Instant::now();
         while !members(&page).contains(&(fr, "ScrollTo")) {
-            assert!(t0.elapsed() < Duration::from_secs(5), "the frame was never scrolled");
+            assert!(
+                t0.elapsed() < Duration::from_secs(5),
+                "the frame was never scrolled"
+            );
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
         tokio::time::sleep(Duration::from_millis(150)).await;
@@ -1551,7 +1565,10 @@ mod frame_wake {
         let calls = members(&page);
         b.shutdown.cancel();
         let _ = b.task.await;
-        assert!(calls.is_empty(), "no scrolling without a way back: {calls:?}");
+        assert!(
+            calls.is_empty(),
+            "no scrolling without a way back: {calls:?}"
+        );
     }
 
     /// The document closes (navigation) right after its build: the frame wake stops with it.

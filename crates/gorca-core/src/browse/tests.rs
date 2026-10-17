@@ -1728,9 +1728,8 @@ fn with_frame(r: &mut Rig) {
     r.focus(1002);
     let mut frame = block(src(30, Role::DocumentWeb, Some(1030)));
     frame.name = Some(Arc::from("Ad frame"));
-    let out = r
-        .tr
-        .apply(
+    let out =
+        r.tr.apply(
             &mut r.writer,
             vec![
                 DocDelta::Upsert(vec![frame, run(31, "Inside the frame")]),
@@ -1752,7 +1751,12 @@ fn with_frame(r: &mut Rig) {
     }
     r.mirror.apply(
         SnapshotBatch {
-            nodes: vec![snap(1030, Role::DocumentWeb, "Ad frame", StateSet::FOCUSABLE)],
+            nodes: vec![snap(
+                1030,
+                Role::DocumentWeb,
+                "Ad frame",
+                StateSet::FOCUSABLE,
+            )],
             ..Default::default()
         },
         ApplyOrigin::Push,
@@ -1772,12 +1776,20 @@ fn a_frame_document_on_the_way_to_its_content_stays_silent() {
     let mut r = rig();
     with_frame(&mut r);
     let fx = r.focus(1030);
-    assert!(spoken(&fx).is_empty(), "the frame stop is deferred: {:?}", spoken(&fx));
+    assert!(
+        spoken(&fx).is_empty(),
+        "the frame stop is deferred: {:?}",
+        spoken(&fx)
+    );
     let fx = r.focus(1006);
     assert_eq!(spoken(&fx), ["the docs link"]);
     r.now += Duration::from_millis(400);
     let fx = r.reader.handle(ReaderMsg::Timer, r.now);
-    assert!(spoken(&fx).is_empty(), "the deferred frame speech is cancelled: {:?}", spoken(&fx));
+    assert!(
+        spoken(&fx).is_empty(),
+        "the deferred frame speech is cancelled: {:?}",
+        spoken(&fx)
+    );
 }
 
 #[test]
@@ -1791,7 +1803,10 @@ fn a_tab_stop_on_a_frame_document_is_announced_when_nothing_follows() {
     let fx = r.reader.handle(ReaderMsg::Timer, r.now);
     let said = spoken(&fx);
     assert_eq!(said.len(), 1, "{said:?}");
-    assert!(said[0].contains("Ad frame"), "the frame title is spoken: {said:?}");
+    assert!(
+        said[0].contains("Ad frame"),
+        "the frame title is spoken: {said:?}"
+    );
 }
 
 #[test]

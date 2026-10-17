@@ -2526,7 +2526,10 @@ mod probe_m9r {
     #[test]
     fn probe_m9r_control_no_mode_flip_follows_the_paragraph() {
         let (fetched, node) = right_into_paragraph(false);
-        assert!(fetched && node == Some(leaf(96)), "control: {fetched} {node:?}");
+        assert!(
+            fetched && node == Some(leaf(96)),
+            "control: {fetched} {node:?}"
+        );
     }
 
     #[test]

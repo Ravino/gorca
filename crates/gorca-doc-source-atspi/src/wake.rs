@@ -111,7 +111,10 @@ async fn wake(app: &AppConn, plan: WakePlan, timeout: Duration) {
     let Some((reference, origin)) = find_reference(app, &plan.refs, timeout).await else {
         // Nothing in view to measure the scroll position against: leave the frames asleep
         // rather than scroll the page without a way back.
-        tracing::debug!(frames = plan.frames.len(), "no reference node, frames not woken");
+        tracing::debug!(
+            frames = plan.frames.len(),
+            "no reference node, frames not woken"
+        );
         return;
     };
     let (mut woke, mut scrolled) = (0usize, 0usize);

@@ -38,8 +38,8 @@ use crate::fetch::{
 use crate::identity::{IdentityMap, MatchStats, SibInfo, Sig};
 use crate::p2p::AppConn;
 use crate::roles;
-use crate::wake;
 use crate::runs::RunLayer;
+use crate::wake;
 use crate::wire::{self, AttrInterner, PathKey};
 
 const ACCESSIBLE: &str = "org.a11y.atspi.Accessible";

@@ -19,8 +19,8 @@ pub mod p2p;
 pub mod roles;
 pub mod runs;
 pub mod source;
-pub mod warm;
 mod wake;
+pub mod warm;
 pub mod wire;
 
 pub use events::{AtspiEvent, EventKind, SettlePolicy};
