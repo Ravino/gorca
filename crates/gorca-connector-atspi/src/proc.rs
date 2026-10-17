@@ -95,7 +95,7 @@ pub fn age_ms_at(start_ticks: u64, uptime: &str) -> Option<u64> {
     let (whole, frac) = first.split_once('.').unwrap_or((first, "0"));
     let secs: u64 = whole.parse().ok()?;
     // Hundredths of a second: `USER_HZ` is 100, so a tick is 10 ms.
-    let hundredths: u64 = format!("{frac:0<2}")[..2].parse().ok()?;
+    let hundredths: u64 = format!("{frac:0<2}").get(..2)?.parse().ok()?;
     let now_ms = secs.checked_mul(1000)?.checked_add(hundredths * 10)?;
     now_ms.checked_sub(start_ticks.saturating_mul(1000 / USER_HZ))
 }

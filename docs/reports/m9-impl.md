@@ -107,3 +107,14 @@ Code head of the fixes: see section 5.3. All fixes are data-driven (no engine na
   shape on Firefox.
 - **K-3** A bare-letter stray speech in FS2 (`fc_extra`, "q" at +13..20 ms) already exists on main.
 - L-3 stays: the Alt+Down checklist row on the Combo field is manual.
+
+### 5.5 Fix round after the short review (`docs/reports/m9-fixround-verify.md`)
+
+- **F-1 (fixed)**: the document actor cancels its source token when the main loop ends (`doc_actor/mod.rs`) and the registry
+  cancels a document's token in `on_doc_ended` (`doc_registry.rs`), so the detached frame wake stops with its document.
+  Test: `doc_actor::tests::a_task_the_source_detached_stops_when_the_document_ends` (fails without the fix, checked).
+  Nit: `proc.rs` uses `.get(..2)`.
+- Follow-ups, not fixed: **F-2** the deferred frame-focus announcement drops a browse-mode word queued on the swallowed focus
+  (cosmetic); **F-3** the wake restore assumes an instant scroll (CSS `scroll-behavior: smooth` would leave the page scrolled;
+  needs one e2e probe); **F-4** the early caret replay accepts an `Ancestry::Unknown` node (Firefox is safe, mirrored nodes are
+  rejected).
