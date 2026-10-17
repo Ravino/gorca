@@ -1,0 +1,52 @@
+# e2e ru-single-typ-r3
+# utc=2026-10-17T17:44:15Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=15.99 18.60 18.57 2/2443 3341874
+# git_rev=b0caf12b
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=singlex1
+# topology_expected=-
+# label=ru-single-typ-r3
+# reader=daemon:<repo>/.claude/worktrees/agent-aad69142db3796c20/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=15.99 18.60 18.57 2/2443 3341871
+# reader_env=GORCA_M1=1 GORCA_M4=1 GORCA_M4B=1 GORCA_TOPOLOGY_REPORT=<repo>/.claude/worktrees/agent-aad69142db3796c20/bench/results/resource-usage/full1/raw/single/typ/r3/rep.%p.json GORCA_RTKIT_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca --topology=single
+# ext_dir=none
+# extensions=none
+# note0=raw samples: <repo>/.claude/worktrees/agent-aad69142db3796c20/bench/results/resource-usage/full1/raw/single/typ/r3/RU-typ-3339292.csv
+# note1=RU-typ: reader pid 3339292, steady window 4.5..14.7 s, storm stop 14.7 s, 134 samples
+
+metric                     bus                median          min          max  n op    threshold  res   note
+RU-typ.cpu_pct_1s_windows.n daemon/voicego           10           10           10  1                  info   [samples]
+RU-typ.cpu_pct_1s_windows.p50 daemon/voicego        2.493        2.493        2.493  1                  info   [ms]
+RU-typ.cpu_pct_1s_windows.p95 daemon/voicego        2.494        2.494        2.494  1                  info   [ms]
+RU-typ.cpu_pct_1s_windows.p99 daemon/voicego        2.494        2.494        2.494  1                  info   [ms]
+RU-typ.cpu_pct_1s_windows.p999 daemon/voicego        2.494        2.494        2.494  1                  info   [ms]
+RU-typ.cpu_pct_1s_windows.max daemon/voicego        2.494        2.494        2.494  1                  info   [ms]
+RU-typ.after_cpu_pct       daemon/voicego        0.356        0.356        0.356  1                  info   [% of one core]
+RU-typ.after_rss_mib       daemon/voicego         14.7         14.7         14.7  1                  info   [MiB]
+RU-typ.idle_cpu_pct        daemon/voicego        0.356        0.356        0.356  1                  info   [% of one core]
+RU-typ.peak_pss_mib        daemon/voicego         12.4         12.4         12.4  1                  info   [MiB]
+RU-typ.peak_rss_hwm_mib    daemon/voicego         14.7         14.7         14.7  1                  info   [MiB]
+RU-typ.pre_pss_mib         daemon/voicego         12.3         12.3         12.3  1                  info   [MiB]
+RU-typ.pre_rss_mib         daemon/voicego         14.5         14.5         14.5  1                  info   [MiB]
+RU-typ.recovery_cpu_s      daemon/voicego            0            0            0  1                  info   [s (cap 12)]
+RU-typ.steady_cpu_pct      daemon/voicego        1.596        1.596        1.596  1                  info   [% of one core]
+RU-typ.steady_pss_avg_mib  daemon/voicego         12.4         12.4         12.4  1                  info   [MiB]
+RU-typ.steady_rss_avg_mib  daemon/voicego         14.6         14.6         14.6  1                  info   [MiB]
+RU-typ.storm_achieved_eps  daemon/voicego        199.9        199.9        199.9  1                  info   [ev/s]
+RU-typ.storm_max_lag_ms    daemon/voicego            5            5            5  1                  info   [ms]
+RU-typ.threads_max         daemon/voicego           23           23           23  1                  info   [threads]

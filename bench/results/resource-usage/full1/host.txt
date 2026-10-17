@@ -1,0 +1,9 @@
+label=full1 utc=2026-10-17T17:27:03Z
+git_rev=b0caf12b dirty=3
+kernel=7.1.8+deb13-rt-amd64 cpus=16
+governor=performance 
+loadavg_start=17.96 16.62 16.17 13/2215 3185084
+levels=0,typ,1000,10000,50000,100000,200000,400000 topos=single,lanes-rt repeats=3
+               total        used        free      shared  buff/cache   available
+Mem:           31586       18418         283         646       13820       13167
+loadavg_end=25.02 18.35 17.91 22/2217 3379386
