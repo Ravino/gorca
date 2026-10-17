@@ -24,3 +24,4 @@ nav-no-parent = No containing object
 nav-no-child = No objects inside
 nav-no-next = No next
 nav-no-prev = No previous
+review-scrolled = scrolled

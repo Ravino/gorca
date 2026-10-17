@@ -2708,7 +2708,12 @@ fn vv_focus(v: &mut V, c: &mut Check) -> Result<()> {
 /// The number a `tick N` or `burst N j` line of the VS loop carries.
 fn vs_count(line: &str) -> Option<u64> {
     let mut words = line.split_whitespace();
-    match words.next()? {
+    // A review key that left a line which scrolled off the screen says so first (ADR-0018).
+    let mut first = words.next()?;
+    if first == "scrolled," {
+        first = words.next()?;
+    }
+    match first {
         "tick" | "burst" => words.next()?.parse().ok(),
         _ => None,
     }
@@ -2733,8 +2738,11 @@ impl V {
 
 /// VS: a real gnome-terminal runs a loop that prints a numbered line every 100 ms and a burst of
 /// lines every few seconds; the user presses Alt+Tab away and back and reads the screen with the
-/// numpad review keys, again and again. The line review speaks is always the screen's current
-/// one: its number is never more than `VS_SLACK_TICKS` behind the loop's own counter.
+/// numpad review keys, again and again. A line read fresh (the line above the caret) is the
+/// screen's current one: its number is never more than `VS_SLACK_TICKS` behind the loop's own
+/// counter. The review cursor then stays on that line while the loop prints on (ADR-0018): the
+/// same line read 4 s later has the same number (`vs_drift` 0); the line above it, 3 s later,
+/// is a numbered line, announced as scrolled once the first one has left the screen.
 /// `GORCA_VS_SECS` sets the length (default 240 s, 45 s with `--quick`).
 pub fn vs(
     host: &HostEnv,
@@ -2806,10 +2814,12 @@ pub fn vs(
     let mut failures = 0u64;
     let mut reads = 0u64;
     let mut silent = 0u64;
+    let mut drift = 0u64;
+    let mut last_fresh: Option<u64> = None;
     let mut worst_lag = 0u64;
     let mut notes: Vec<String> = Vec::new();
     // One review read: the line the key speaks and how far behind the loop it is.
-    let mut probe = |v: &mut V, what: &str, k: K, numbered: bool| -> Result<()> {
+    let mut probe = |v: &mut V, what: &str, k: K, numbered: bool, fresh: bool| -> Result<()> {
         let before = truth();
         let mut got = v.said_during(700, |v| v.reader_key(k).map(|_| ()))?;
         if got.is_empty() {
@@ -2826,7 +2836,19 @@ pub fn vs(
                     notes.push(format!("VS {what}: no numbered line heard: {got:?}"));
                 }
             }
+            Some(n) if what == "same line later" => {
+                if last_fresh.is_some_and(|f| f != n) {
+                    drift += 1;
+                    if notes.len() < 10 {
+                        notes.push(format!(
+                            "VS {what}: read line {n}, the cursor was on {last_fresh:?}: {got:?}"
+                        ));
+                    }
+                }
+            }
+            Some(_) if !fresh => {}
             Some(n) => {
+                last_fresh = Some(n);
                 let lag = before.saturating_sub(n);
                 worst_lag = worst_lag.max(lag);
                 if lag > VS_SLACK_TICKS {
@@ -2851,19 +2873,20 @@ pub fn vs(
         v.term.rd_line(ALT_TAB);
         std::thread::sleep(Duration::from_millis(2000));
         // Review starts at the caret line; the line above it is the newest one printed.
-        probe(&mut v, "current line", KP_CUR_LINE, false)?;
-        probe(&mut v, "previous line", KP_PREV_LINE, true)?;
-        // Still in review while the loop prints on: the same line index reads newer text.
+        probe(&mut v, "current line", KP_CUR_LINE, false, false)?;
+        probe(&mut v, "previous line", KP_PREV_LINE, true, true)?;
+        // Still in review while the loop prints on: the cursor stays on its line.
         std::thread::sleep(Duration::from_secs(4));
-        probe(&mut v, "same line later", KP_CUR_LINE, true)?;
+        probe(&mut v, "same line later", KP_CUR_LINE, true, false)?;
         std::thread::sleep(Duration::from_secs(3));
-        probe(&mut v, "line above later", KP_PREV_LINE, true)?;
+        probe(&mut v, "line above later", KP_PREV_LINE, true, false)?;
         if !v.rig.reader.alive() {
             bail!("the reader died during VS");
         }
     }
     out.x("vs_stale", failures as f64, "reads");
     out.x("vs_silent", silent as f64, "reads");
+    out.x("vs_drift", drift as f64, "reads");
     out.x("vs_reads", reads as f64, "reads");
     out.x("vs_cycles", cycles as f64, "cycles");
     out.x("vs_worst_lag_ticks", worst_lag as f64, "ticks");

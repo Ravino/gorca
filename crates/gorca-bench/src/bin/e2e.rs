@@ -291,6 +291,7 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "v2_make_after_missing"
                     | "vv_failures"
                     | "vs_stale"
+                    | "vs_drift"
                     | "vs_silent"
                     | "vv_type_missing"
                     | "vv_type_double"

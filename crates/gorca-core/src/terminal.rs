@@ -500,7 +500,54 @@ impl Reader {
         self.term_step(TermInput::Caret(offset), fx);
     }
 
+    /// Count the rows an edit scrolled off the top of the screen, for review's anchor (ADR-0018).
+    fn term_note_scroll(&mut self, delta: &TextDelta) {
+        // Only a delete at the top of the screen can be a scroll: no snapshot (a call into the
+        // extension) for anything else.
+        match delta {
+            TextDelta::Delete { offset: 0, .. } => {}
+            TextDelta::Replaced { .. } => {
+                self.review.scroll.exact = false;
+                return;
+            }
+            TextDelta::Insert { .. } | TextDelta::Delete { .. } => return,
+        }
+        let snap = self
+            .text
+            .term
+            .tracked
+            .as_ref()
+            .map(|t| t.node)
+            .and_then(|n| self.term_snapshot(n));
+        let hint = &mut self.review.scroll;
+        let Some(snap) = snap.filter(|s| hint.serial == s.generation >> 32) else {
+            hint.exact = false;
+            return;
+        };
+        match delta {
+            TextDelta::Delete { offset: 0, len, .. } => {
+                if *len as usize >= snap.text.chars().count() {
+                    // The whole screen went: nothing survives to be counted.
+                    hint.exact = false;
+                } else {
+                    let gone = snap.text.chars().take(*len as usize);
+                    let rows = gone.filter(|c| *c == '\n').count();
+                    hint.rows = hint
+                        .rows
+                        .saturating_add(u32::try_from(rows).unwrap_or(u32::MAX));
+                }
+            }
+            TextDelta::Replaced { .. } => hint.exact = false,
+            TextDelta::Insert { .. } | TextDelta::Delete { .. } => {}
+        }
+    }
+
     pub(crate) fn term_edit(&mut self, delta: TextDelta, fx: &mut ReaderEffects) {
+        if matches!(self.mode, crate::mode::Mode::Review { .. }) {
+            self.term_note_scroll(&delta);
+        } else {
+            self.review.scroll.exact = false;
+        }
         let edit = match delta {
             TextDelta::Insert { offset, len, text } => TermEdit::Insert {
                 offset,
@@ -517,6 +564,7 @@ impl Reader {
     /// Events were lost upstream: the extension must read the screen again.
     pub(crate) fn term_events_lost(&mut self, fx: &mut ReaderEffects) {
         if self.term_tracked() {
+            self.review.scroll.exact = false;
             self.text.term.reads.events_lost += 1;
             self.term_step(TermInput::Edit(TermEdit::Replaced), fx);
         }

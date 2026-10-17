@@ -1287,19 +1287,25 @@ impl Fx {
 }
 
 #[test]
-fn review_of_a_terminal_whose_events_were_lost_reads_the_screen_again_before_it_speaks() {
+fn review_of_a_terminal_whose_events_were_lost_speaks_the_held_screen_and_corrects_after_the_read()
+{
     let dropped = Arc::new(std::sync::atomic::AtomicU64::new(0));
     let mut f = term_fixture(Some(Arc::clone(&dropped)), None);
     f.focus_terminal("old 1\nold 2\n$ ");
     let fx = f.run(CoreCmd::ReviewCurLine);
     assert_eq!(said(&fx), ["$"]);
     // The app actor lost text events (a flood, a full queue) and nothing followed: the held
-    // screen is old. The next review step reads the screen first and speaks the new one.
+    // screen may be old. The next review step speaks from it at once (it never waits for the
+    // read) and the line is corrected when the new screen turns out to be different (RV-1).
     dropped.fetch_add(3, std::sync::atomic::Ordering::Relaxed);
     let mut fx = f.run(CoreCmd::ReviewPrevLine);
-    assert!(said(&fx).is_empty(), "stale speech: {:?}", said(&fx));
+    assert_eq!(said(&fx), ["old 2"], "spoken at once from the held screen");
     let fx = f.settle_and_answer(&mut fx, "new 8\nnew 9\n$ ");
-    assert_eq!(said(&fx), ["new 9"]);
+    assert_eq!(
+        said(&fx),
+        ["new 9"],
+        "corrected, once, though no line is shared"
+    );
     assert_eq!(f.reader.terminal_reads().review_syncs, 1);
     // Trusted again: the next step reads the held screen with no wait.
     let fx = f.run(CoreCmd::ReviewPrevLine);
@@ -1315,16 +1321,19 @@ fn review_of_a_terminal_that_is_not_the_protected_application_reads_the_screen_a
     f.focus_terminal("old 1\nold 2\n$ ");
     cell.forget(app());
     let mut fx = f.run(CoreCmd::ReviewCurLine);
-    assert!(said(&fx).is_empty(), "stale speech: {:?}", said(&fx));
+    assert_eq!(said(&fx), ["$"], "spoken at once, no wait");
     let fx = f.settle_and_answer(&mut fx, "new 8\nnew 9\n$ ");
-    assert_eq!(said(&fx), ["$"]);
+    assert!(
+        said(&fx).is_empty(),
+        "the line did not change: no correction"
+    );
     let mut fx = f.run(CoreCmd::ReviewPrevLine);
-    assert!(said(&fx).is_empty(), "stale speech: {:?}", said(&fx));
+    assert_eq!(said(&fx), ["new 9"]);
     let fx = f.settle_and_answer(&mut fx, "newer 9\nnewer 10\n$ ");
     assert_eq!(
         said(&fx),
         ["newer 10"],
-        "the screen read again, not the old one"
+        "the screen read again, the line corrected"
     );
     assert!(f.reader.terminal_reads().review_syncs >= 2);
 }
@@ -1375,4 +1384,175 @@ fn character_reading_names_every_character_in_the_speech_language() {
     let bang = f.reader.review_voice(CurChar, false, 1, "!");
     assert!(!bang.is_empty() && bang != "!", "{bang:?}");
     assert_eq!(f.reader.review_voice(CurWord, false, 1, "дом"), "дом");
+}
+
+// ---- a terminal whose output streams while the user reviews it (ADR-0018, Option A) -------------
+
+impl Fx {
+    /// The screen of the tracked terminal changes to `screen` (output arrived): the extension is
+    /// told its events were lost, reads the screen and gets `screen`.
+    fn terminal_output(&mut self, screen: &str) {
+        let mut fx = ReaderEffects::default();
+        self.reader.term_events_lost(&mut fx);
+        self.settle_and_answer(&mut fx, screen);
+    }
+}
+
+#[test]
+fn live_review_a_word_move_continues_in_the_line_while_output_scrolls_the_screen() {
+    // T-A1: the reported bug. Every word key found the screen changed and started again at the
+    // first word of the row.
+    let mut f = term_fixture(None, None);
+    f.focus_terminal("one\nalpha bravo charlie delta\nout 1");
+    f.run(CoreCmd::ReviewCurLine);
+    let fx = f.run(CoreCmd::ReviewPrevLine);
+    assert_eq!(said(&fx), ["alpha bravo charlie delta"]);
+    let fx = f.run(CoreCmd::ReviewNextWord);
+    assert_eq!(said(&fx), ["bravo"]);
+    // One line of output: the screen scrolls by one, the user's line is now the first row.
+    f.terminal_output("alpha bravo charlie delta\nout 1\nout 2");
+    let fx = f.run(CoreCmd::ReviewNextWord);
+    assert_eq!(said(&fx), ["charlie"]);
+    f.terminal_output("out 1\nout 2\nout 3");
+    let fx = f.run(CoreCmd::ReviewNextWord);
+    assert_eq!(
+        said(&fx),
+        ["delta"],
+        "scrolled away: its text is still read"
+    );
+}
+
+#[test]
+fn live_review_a_caret_only_change_does_not_rebuild_the_model() {
+    // T-A2: a caret move bumps the screen generation; the text is the same.
+    let mut f = term_fixture(None, None);
+    f.focus_terminal("one\nalpha bravo\nout 1");
+    f.run(CoreCmd::ReviewCurLine);
+    f.run(CoreCmd::ReviewPrevLine);
+    let id = f.reader.review.cur.as_ref().map(|m| m.id);
+    let g = f.reader.term_snapshot(key(2)).unwrap().generation;
+    let mut fx = ReaderEffects::default();
+    f.reader.term_caret(3, &mut fx);
+    assert_ne!(g, f.reader.term_snapshot(key(2)).unwrap().generation);
+    let fx = f.run(CoreCmd::ReviewNextWord);
+    assert_eq!(said(&fx), ["bravo"]);
+    assert_eq!(f.reader.review.cur.as_ref().map(|m| m.id), id, "same model");
+}
+
+#[test]
+fn live_review_a_line_that_scrolled_away_is_said_to_have_left_when_the_line_changes() {
+    // T-A4: word moves go on in the held line; a line move says so and lands on the top row.
+    let mut f = term_fixture(None, None);
+    f.focus_terminal("one\nalpha bravo\nout 1");
+    f.run(CoreCmd::ReviewCurLine);
+    f.run(CoreCmd::ReviewPrevLine);
+    f.terminal_output("out 1\nout 2\nout 3");
+    let fx = f.run(CoreCmd::ReviewNextChar);
+    assert_eq!(said(&fx), ["l"], "the held line goes on being read");
+    let fx = f.run(CoreCmd::ReviewNextWord);
+    assert_eq!(said(&fx), ["bravo"]);
+    let fx = f.run(CoreCmd::ReviewNextLine);
+    assert_eq!(said(&fx), ["scrolled, out 1"]);
+    let fx = f.run(CoreCmd::ReviewNextLine);
+    assert_eq!(said(&fx), ["out 2"], "an ordinary line move again");
+}
+
+#[test]
+fn live_review_a_flood_does_not_make_a_review_key_wait() {
+    // T-A6: events lost, a screen is held: the key speaks within the step.
+    let dropped = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let mut f = term_fixture(Some(Arc::clone(&dropped)), None);
+    f.focus_terminal("one\nalpha bravo\nout 1");
+    f.run(CoreCmd::ReviewCurLine);
+    f.run(CoreCmd::ReviewPrevLine);
+    dropped.fetch_add(5, std::sync::atomic::Ordering::Relaxed);
+    let fx = f.run(CoreCmd::ReviewNextWord);
+    assert_eq!(said(&fx), ["bravo"]);
+    assert!(
+        !matches!(f.reader.review.op, super::OpState::Pending(_)),
+        "no suspended step"
+    );
+}
+
+#[test]
+fn live_review_a_screen_replaced_as_a_whole_keeps_the_line_the_user_is_on() {
+    // A flood outran the extension: nothing of the old screen is on the new one. The line is
+    // held, not replaced by whatever is on the same row.
+    let mut f = term_fixture(None, None);
+    f.focus_terminal("old 1\nalpha bravo\n$ ");
+    f.run(CoreCmd::ReviewCurLine);
+    f.run(CoreCmd::ReviewPrevLine);
+    let fx = f.run(CoreCmd::ReviewNextWord);
+    assert_eq!(said(&fx), ["bravo"]);
+    f.terminal_output("n1\nn2\n$ ");
+    let fx = f.run(CoreCmd::ReviewPrevChar);
+    assert_eq!(said(&fx), ["space"]);
+}
+
+#[test]
+fn live_review_identical_lines_never_move_the_cursor_on_a_guess() {
+    // A flood of the same line: the scroll cannot be told from the content; the cursor holds.
+    let mut f = term_fixture(None, None);
+    f.focus_terminal("ok\nok\nok\nok\nend here");
+    f.run(CoreCmd::ReviewCurLine);
+    f.run(CoreCmd::ReviewPrevLine);
+    let fx = f.run(CoreCmd::ReviewPrevLine);
+    assert_eq!(said(&fx), ["ok"]);
+    f.terminal_output("ok\nok\nok\nok\nok");
+    let fx = f.run(CoreCmd::ReviewNextChar);
+    assert_eq!(said(&fx), ["k"]);
+    let fx = f.run(CoreCmd::ReviewNextLine);
+    assert!(said(&fx)[0].starts_with("scrolled,") || said(&fx)[0] == "ok");
+}
+
+#[test]
+fn live_review_the_rows_the_terminal_reports_scrolled_move_the_cursor_exactly() {
+    // A flood of one line: the content cannot tell which "ok" the cursor was on, the delete
+    // events at the top of the screen can.
+    let mut f = term_fixture(None, None);
+    f.focus_terminal("ok\nok\nok\nok\nend");
+    f.run(CoreCmd::ReviewCurLine);
+    f.run(CoreCmd::ReviewPrevLine);
+    f.run(CoreCmd::ReviewNextChar);
+    let row = |f: &Fx| match f.reader.cursor().map(|c| c.pos) {
+        Some(super::cursor::ReviewPos::Screen(Some(p))) => (p.line, p.offset),
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(row(&f), (3, 1));
+    let mut fx = ReaderEffects::default();
+    for _ in 0..2 {
+        let d = gorca_model::TextDelta::Delete {
+            offset: 0,
+            len: 3,
+            text: None,
+        };
+        f.reader.term_edit(d, &mut fx);
+    }
+    let fx = f.run(CoreCmd::ReviewPrevChar);
+    assert_eq!(said(&fx), ["o"]);
+    assert_eq!(
+        row(&f),
+        (1, 0),
+        "two rows up, offset carried then moved back"
+    );
+}
+
+#[test]
+fn live_review_the_correction_speaks_the_line_the_cursor_is_on() {
+    // A line spoken from a stale screen, then the screen scrolls by one and the line is rewritten.
+    let dropped = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let mut f = term_fixture(Some(Arc::clone(&dropped)), None);
+    f.focus_terminal("a1\nb2\nprog 10%\n$ ");
+    f.run(CoreCmd::ReviewCurLine);
+    dropped.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let mut fx = f.run(CoreCmd::ReviewPrevLine);
+    assert_eq!(said(&fx), ["prog 10 percent"]);
+    let fx = f.settle_and_answer(&mut fx, "b2\nprog 20%\nc3\n$ ");
+    assert_eq!(
+        said(&fx),
+        ["prog 20 percent"],
+        "the cursor's line, not another"
+    );
+    let fx = f.run(CoreCmd::ReviewCurLine);
+    assert_eq!(said(&fx), ["prog 20 percent"]);
 }
