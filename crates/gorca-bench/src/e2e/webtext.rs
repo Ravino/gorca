@@ -1453,8 +1453,14 @@ fn fp1(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor, out: &mut RunOut) ->
     let mut f = Ft::open(host, reader, flavor, "fields.html", "M3b Fields", CFG_QUIET)?;
     let mut fails: Vec<String> = Vec::new();
     let path = f.enter_role("combo box", "Combo")?;
-    // Alt+Down opens the popup (the page's own widget).
-    let (_, took) = f.key(DOWN, 0, ALT)?;
+    // Alt+Down opens the popup (the page's own widget). Chromium treats the release of Alt as
+    // a menu-bar gesture and the next key (our Escape) never reaches the page, so there the
+    // page's F4 opens it instead.
+    let (_, took) = if chromium_selected() {
+        f.key(k(62, 0xffc1), 0, 0)?
+    } else {
+        f.key(DOWN, 0, ALT)?
+    };
     if took {
         fails.push("Alt+Down was swallowed".into());
     }
@@ -1632,10 +1638,20 @@ fn bar1(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor, out: &mut RunOut) -
         woken: false,
     };
     // gorca attached to a page that was already open: no load happened, so nothing reads.
+    // Exception (M9 review L-2): Chromium started after the reader (the default order of the
+    // Chromium rig; `GORCA_M9_BROWSER_FIRST=1` is the already-open case) opens its page in its
+    // first seconds: a fresh launch whose first page is the user's, so it must read itself.
+    let fresh_launch = std::env::var("GORCA_M7_BROWSER").is_ok_and(|v| v == "chromium")
+        && !std::env::var("GORCA_M9_BROWSER_FIRST").is_ok_and(|v| v == "1");
     f.w.prime(&doc)?;
     sleep(2500);
     let quiet: Vec<(u64, String)> = f.heard(0);
-    if quiet.iter().any(|(_, t)| paragraph_no(t).is_some()) {
+    let read_itself = quiet.iter().any(|(_, t)| paragraph_no(t).is_some());
+    if fresh_launch && !read_itself {
+        fails.push(format!(
+            "the first page of a freshly launched browser was not read: {quiet:?}"
+        ));
+    } else if !fresh_launch && read_itself {
         fails.push(format!(
             "a page that was already open read itself: {quiet:?}"
         ));

@@ -1,0 +1,31 @@
+== 12:08:17 build start head 82329a7e dirty=0 load 13.63 14.05 12.36 6/2781 1755007 avail_GiB 15
+   exit 0
+== 12:09:17 build end head 82329a7e dirty=0 load 18.07 15.03 12.80 36/2686 1759245 avail_GiB 15
+== 12:09:17 seq-cr start head 82329a7e dirty=0 load 18.07 15.03 12.80 36/2686 1759270 avail_GiB 15
+   exit 1
+== 12:26:12 seq-cr end head 82329a7e dirty=0 load 13.63 14.31 13.54 7/3434 1861996 avail_GiB 12
+== 12:26:12 seq-ff start head 82329a7e dirty=0 load 13.63 14.31 13.54 7/3434 1862021 avail_GiB 12
+   exit 1
+== 12:43:53 seq-ff end head 568474e0 dirty=0 load 11.90 14.53 14.44 1/2656 1976617 avail_GiB 14
+== 12:43:53 strict start head 568474e0 dirty=0 load 11.90 14.53 14.44 1/2656 1976642 avail_GiB 14
+   exit 0
+== 12:56:52 strict end head 568474e0 dirty=0 load 5.61 8.43 11.58 1/2173 1997238 avail_GiB 15
+== 12:56:52 cr-m7 start head 568474e0 dirty=0 load 5.61 8.43 11.58 7/2173 1997263 avail_GiB 15
+   exit 0
+== 13:15:56 cr-m7 end head bfbb3295 dirty=0 load 7.03 8.10 8.63 5/2375 2034714 avail_GiB 14
+== 13:15:56 cr-typing start head bfbb3295 dirty=0 load 7.03 8.10 8.63 10/2384 2034748 avail_GiB 14
+   exit 1
+== 13:55:20 cr-typing end head bfbb3295 dirty=0 load 8.39 7.30 7.87 1/2453 2128488 avail_GiB 15
+== 13:55:20 cr-m8 start head bfbb3295 dirty=0 load 8.39 7.30 7.87 1/2453 2128513 avail_GiB 15
+   exit 0
+== 14:19:16 cr-m8 end head bfbb3295 dirty=0 load 5.23 6.92 7.33 1/2045 2163597 avail_GiB 15
+== 14:19:17 ff-m7 start head bfbb3295 dirty=0 load 5.23 6.92 7.33 1/2045 2163622 avail_GiB 15
+   exit 0
+== 14:39:34 ff-m7 end head bfbb3295 dirty=0 load 8.52 8.21 7.75 3/2025 2191427 avail_GiB 15
+== 14:39:34 ff-typing start head bfbb3295 dirty=0 load 8.52 8.21 7.75 2/2025 2191452 avail_GiB 15
+   exit 1
+== 15:19:42 ff-typing end head 942af2fc dirty=0 load 9.41 12.36 12.40 1/2249 2310153 avail_GiB 15
+== 15:19:42 ff-m8 start head 942af2fc dirty=0 load 9.41 12.36 12.40 4/2249 2310178 avail_GiB 15
+   exit 0
+== 15:47:46 ff-m8 end head 0383414e dirty=0 load 11.85 16.07 15.11 3/2191 2466409 avail_GiB 15
+== 15:47:46 done head 0383414e dirty=0 load 11.85 16.07 15.11 1/2191 2466434 avail_GiB 15

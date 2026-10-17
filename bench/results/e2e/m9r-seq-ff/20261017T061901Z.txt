@@ -1,0 +1,81 @@
+# e2e m9r-seq-ff
+# utc=2026-10-17T06:19:01Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=25.92 22.90 20.29 3/2471 573193
+# git_rev=bd4b400
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx20
+# topology_expected=-
+# label=m9r-seq-ff
+# reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca
+# backend=voicego
+# repeats=5
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=25.92 22.90 20.29 3/2471 573190
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info GORCA_TOPOLOGY_REPORT=bench/results/e2e/m9r-seq-ff/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=FCE1 stray speech "object" at +101.4 ms after key #0
+# note1=FCE1 lost #0: wanted "n", key to next key 161.4 ms, heard [+101.4ms "object", +170.6ms "n"]
+# note2=FCE1 lost #1: wanted "e", key to next key 165.9 ms, heard [+9.2ms "n", +170.0ms "e"]
+# note3=FCE1 lost #2: wanted "space", key to next key 160.7 ms, heard [+4.1ms "e", +165.2ms "space"]
+# note4=FCE1 lost #3: wanted "😀", key to next key 160.5 ms, heard [+4.5ms "space", +166.7ms "😀"]
+# note5=FCE1 lost #4: wanted "space", key to next key 160.6 ms, heard [+6.2ms "😀", +163.9ms "space"]
+# note6=FCE1 event source /org/a11y/atspi/accessible/102: {"ok":true,"role":"paragraph","name":"","event":"reply","id":8}
+# note7=FCE1 event source /org/a11y/atspi/accessible/103: {"ok":true,"role":"paragraph","name":"","event":"reply","id":9}
+# note8=FS2: 3 of 492 keys moved no caret in the page (not scored)
+# note9=FS2: 6 of 492 keys moved no caret in the page (not scored)
+# note10=FS2: 7 of 492 keys moved no caret in the page (not scored)
+# note11=FS2 stray speech "g" at +46.9 ms after key #335
+# note12=FS2 stray speech "j" at +20.9 ms after key #357
+# note13=FS2: 12 of 492 keys moved no caret in the page (not scored)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+FS2.fs2_ms.n               daemon/voicego          462          459          468  5                  info   [samples]
+FS2.fs2_ms.p50             daemon/voicego        0.634        0.567        0.754  5                  info   [ms]
+FS2.fs2_ms.p95             daemon/voicego        2.236        1.010        3.566  5                  info   [ms]
+FS2.fs2_ms.p99             daemon/voicego        4.625        1.308         10.3  5 <=           15  PASS   [ms]
+FS2.fs2_ms.p999            daemon/voicego        9.402        6.400         14.8  5                  info   [ms]
+FS2.fs2_ms.max             daemon/voicego        9.402        6.400         14.8  5                  info   [ms]
+FS2.fc_extra               daemon/voicego            0            0            2  5 <=            0  FAIL  gated on the max over repeats [speeches]
+FS2.fc_late                daemon/voicego            0            0            0  5 <=            0  PASS  gated on the max over repeats [speeches]
+FS2.lost                   daemon/voicego            0            0            0  5 <=            0  PASS  gated on the max over repeats [keys]
+FS2.page_dropped           daemon/voicego            6            0           12  5 <=            2  FAIL  Keys the page dropped (FC1h, FS2; not scored, speech after them judged) [keys]
+FSA1.fsa1_ms.n             daemon/voicego           30           30           30  5                  info   [samples]
+FSA1.fsa1_ms.p50           daemon/voicego        0.984        0.859        1.332  5                  info   [ms]
+FSA1.fsa1_ms.p95           daemon/voicego        3.777        1.403         12.6  5                  info   [ms]
+FSA1.fsa1_ms.p99           daemon/voicego         12.6        4.161         21.0  5 <=           15  PASS   [ms]
+FSA1.fsa1_ms.p999          daemon/voicego         12.6        4.161         21.0  5                  info   [ms]
+FSA1.fsa1_ms.max           daemon/voicego         12.6        4.161         21.0  5                  info   [ms]
+FSA1.lost                  daemon/voicego            0            0            0  5 <=            0  PASS  gated on the max over repeats [events]
+FSA3.fsa3_stop_ms.n        daemon/voicego            8            8            8  5                  info   [samples]
+FSA3.fsa3_stop_ms.p50      daemon/voicego        0.336        0.288        0.475  5                  info   [ms]
+FSA3.fsa3_stop_ms.p95      daemon/voicego        0.429        0.388        2.067  5                  info   [ms]
+FSA3.fsa3_stop_ms.p99      daemon/voicego        0.429        0.388        2.067  5 <=            2  PASS   [ms]
+FSA3.fsa3_stop_ms.p999     daemon/voicego        0.429        0.388        2.067  5                  info   [ms]
+FSA3.fsa3_stop_ms.max      daemon/voicego        0.429        0.388        2.067  5                  info   [ms]
+FSA3.lost                  daemon/voicego            0            0            0  5 <=            0  PASS  gated on the max over repeats [events]
+FSA3.sa3_caret_wrong       daemon/voicego            0            0            0  5 <=            0  PASS  gated on the max over repeats [events]
+FSA3.sa3_not_silenced      daemon/voicego            0            0            0  5 <=            0  PASS  gated on the max over repeats [events]
+FCE1.fce1_ms.n             daemon/voicego           17           16           17  5                  info   [samples]
+FCE1.fce1_ms.p50           daemon/voicego        0.125        0.080        160.6  5                  info   [ms]
+FCE1.fce1_ms.p95           daemon/voicego        0.720        0.492        161.8  5                  info   [ms]
+FCE1.fce1_ms.p99           daemon/voicego        1.719        0.770        162.4  5                  info   [ms]
+FCE1.fce1_ms.p999          daemon/voicego        1.719        0.770        162.4  5                  info   [ms]
+FCE1.fce1_ms.max           daemon/voicego        1.719        0.770        162.4  5                  info   [ms]
+FCE1.fc_double             daemon/voicego            0            0            0  5 <=            0  PASS  gated on the max over repeats [keys]
+FCE1.fc_extra              daemon/voicego            0            0            1  5 <=            0  FAIL  gated on the max over repeats [speeches]
+FCE1.fc_late               daemon/voicego            0            0           10  5 <=            0  FAIL  gated on the max over repeats [speeches]
+FCE1.ft_failures           daemon/voicego            0            0            1  5 <=            0  FAIL  gated on the max over repeats [checks]
+FCE1.lost                  daemon/voicego            0            0            1  5 <=            0  FAIL  gated on the max over repeats [keys]

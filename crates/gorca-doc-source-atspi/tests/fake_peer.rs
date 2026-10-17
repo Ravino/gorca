@@ -1353,3 +1353,256 @@ async fn the_parent_walk_finds_the_topmost_document_and_a_search_finds_any() {
     // fake whose node 0 is not special, so only check that a miss is a clean `None`.
     assert_eq!(any_document(&conn).await, None);
 }
+
+// ---------------------------------------------------------------------------------------------
+// The off-screen frame wake (`EngineQuirks::wake_offscreen_frames`), M9 review fixes M-1, M-2.
+
+mod frame_wake {
+    use super::*;
+    use gorca_doc_source_atspi::source::EngineQuirks;
+
+    /// A page whose scroll offset the fake Component interface moves and measures: a node at
+    /// page position `top` has its screen y at `top - offset`.
+    #[derive(Default)]
+    struct Page {
+        offset: i32,
+        /// (path id, member, time) of every scroll call.
+        log: Vec<(u64, &'static str, Instant)>,
+    }
+    type Shared = Arc<Mutex<Page>>;
+
+    struct Comp {
+        page: Shared,
+        id: u64,
+        top: i32,
+    }
+
+    #[zbus::interface(name = "org.a11y.atspi.Component")]
+    impl Comp {
+        fn scroll_to(&self, _kind: u32) -> bool {
+            let mut p = self.page.lock().unwrap();
+            p.log.push((self.id, "ScrollTo", Instant::now()));
+            p.offset = self.top;
+            true
+        }
+
+        fn scroll_to_point(&self, _coord: u32, _x: i32, y: i32) -> bool {
+            let mut p = self.page.lock().unwrap();
+            p.log.push((self.id, "ScrollToPoint", Instant::now()));
+            p.offset = self.top - y;
+            true
+        }
+
+        fn get_extents(&self, _coord: u32) -> (i32, i32, i32, i32) {
+            let p = self.page.lock().unwrap();
+            (10, self.top - p.offset, 200, 20)
+        }
+    }
+
+    async fn comp(fake: &Fake, page: &Shared, id: u64, top: i32) {
+        for s in &fake.servers {
+            s.object_server()
+                .at(
+                    path_of(id).as_str(),
+                    Comp {
+                        page: Arc::clone(page),
+                        id,
+                        top,
+                    },
+                )
+                .await
+                .unwrap();
+        }
+    }
+
+    fn not_showing(fake: &Fake, id: u64) {
+        fake.tree.lock().unwrap().nodes.get_mut(&id).unwrap().state &= !(1 << 25);
+    }
+
+    async fn start_blink(fake: Fake, conn: AppConn, doc: u64) -> Browse {
+        let (_unused_tx, ev_rx) = mpsc::channel(8);
+        let mut cfg = SourceConfig::browse(gorca_model::TextUnit::Scalar, true);
+        cfg.quirks = EngineQuirks::blink(true);
+        cfg.fetch = FetchOpts {
+            text: TextPolicy::All,
+            ..fast_opts(Split::Whole)
+        };
+        let (source, _metrics) = AtspiDocSource::new(Arc::new(conn), path_of(doc), cfg, ev_rx);
+        let (sink, rx) = delta_channel(1 << 14);
+        let (req_tx, req_rx) = mpsc::channel(8);
+        let (join, _j) = join_channel(8);
+        let (events, core_events) = mpsc::channel(64);
+        let shutdown = CancellationToken::new();
+        let ctx = DocSourceCtx {
+            doc: DocId(1),
+            app: app_id(),
+            sink,
+            requests: req_rx,
+            events: core_events,
+            join,
+            shutdown: shutdown.clone(),
+            clock: Clock::System,
+        };
+        let task = tokio::spawn(Box::new(source).attach(ctx));
+        Browse {
+            fake,
+            rx,
+            events,
+            requests: req_tx,
+            shutdown,
+            task,
+        }
+    }
+
+    fn members(page: &Shared) -> Vec<(u64, &'static str)> {
+        page.lock()
+            .unwrap()
+            .log
+            .iter()
+            .map(|(i, m, _)| (*i, *m))
+            .collect()
+    }
+
+    /// An article whose first screen has no link, button or list item (only a heading and a
+    /// paragraph) and an embedded cross-site frame further down: the frame is scrolled into
+    /// view, and the page is back at exactly the original offset (here a page that was
+    /// scrolled 130 px when the document was built).
+    #[tokio::test]
+    async fn frame_wake_restores_the_exact_scroll_offset_on_a_text_only_page() {
+        let (fake, conn) = Fake::start(2).await;
+        let page: Shared = Arc::default();
+        page.lock().unwrap().offset = 130;
+        let doc = fake.node(raw::DOCUMENT_WEB, "page", "body", None).await;
+        let h = fake.node(raw::HEADING, "Title", "h1", None).await;
+        let p = fake.node(raw::PARAGRAPH, "", "p", None).await;
+        let fr = fake.node(28, "Video", "iframe", None).await;
+        fake.link(doc, h);
+        fake.link(doc, p);
+        fake.link(doc, fr);
+        fake.set_text(h, "Title");
+        fake.set_text(p, "Some text.");
+        not_showing(&fake, fr);
+        comp(&fake, &page, h, 150).await;
+        comp(&fake, &page, p, 400).await;
+        comp(&fake, &page, fr, 5000).await;
+        let mut b = start_blink(fake, conn, doc).await;
+        let _ = until_settled(&mut b).await;
+        tokio::time::sleep(Duration::from_millis(2500)).await;
+        let calls = members(&page);
+        let offset = page.lock().unwrap().offset;
+        b.shutdown.cancel();
+        let _ = b.task.await;
+        assert!(
+            calls.contains(&(fr, "ScrollTo")),
+            "the frame was scrolled into view: {calls:?}"
+        );
+        assert!(
+            calls.iter().any(|(_, m)| *m == "ScrollToPoint"),
+            "the page was scrolled back: {calls:?}"
+        );
+        assert_eq!(
+            offset, 130,
+            "the original scroll offset is restored exactly: {calls:?}"
+        );
+    }
+
+    /// The user scrolls while the frame wakes: the viewport is theirs, nothing is restored.
+    #[tokio::test]
+    async fn frame_wake_never_overrides_a_scroll_the_user_made_meanwhile() {
+        let (fake, conn) = Fake::start(2).await;
+        let page: Shared = Arc::default();
+        let doc = fake.node(raw::DOCUMENT_WEB, "page", "body", None).await;
+        let h = fake.node(raw::HEADING, "Title", "h1", None).await;
+        let fr = fake.node(28, "Video", "iframe", None).await;
+        fake.link(doc, h);
+        fake.link(doc, fr);
+        fake.set_text(h, "Title");
+        not_showing(&fake, fr);
+        comp(&fake, &page, h, 50).await;
+        comp(&fake, &page, fr, 5000).await;
+        let mut b = start_blink(fake, conn, doc).await;
+        let _ = until_settled(&mut b).await;
+        // Wait for the wake's scroll, then scroll like a user would.
+        let t0 = Instant::now();
+        while !members(&page).contains(&(fr, "ScrollTo")) {
+            assert!(
+                t0.elapsed() < Duration::from_secs(5),
+                "the frame was never scrolled"
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        page.lock().unwrap().offset = 777;
+        tokio::time::sleep(Duration::from_millis(2000)).await;
+        let calls = members(&page);
+        let offset = page.lock().unwrap().offset;
+        b.shutdown.cancel();
+        let _ = b.task.await;
+        assert_eq!(offset, 777, "the user's scroll position stays: {calls:?}");
+        assert!(
+            !calls.iter().any(|(_, m)| *m == "ScrollToPoint"),
+            "no restore after a user scroll: {calls:?}"
+        );
+    }
+
+    /// A page with nothing in view to measure the position against is left alone.
+    #[tokio::test]
+    async fn frame_wake_does_nothing_when_no_node_is_in_view() {
+        let (fake, conn) = Fake::start(2).await;
+        let page: Shared = Arc::default();
+        let doc = fake.node(raw::DOCUMENT_WEB, "page", "body", None).await;
+        let h = fake.node(raw::HEADING, "Title", "h1", None).await;
+        let fr = fake.node(28, "Video", "iframe", None).await;
+        fake.link(doc, h);
+        fake.link(doc, fr);
+        not_showing(&fake, h);
+        not_showing(&fake, fr);
+        comp(&fake, &page, h, 50).await;
+        comp(&fake, &page, fr, 5000).await;
+        let mut b = start_blink(fake, conn, doc).await;
+        let _ = until_settled(&mut b).await;
+        tokio::time::sleep(Duration::from_millis(800)).await;
+        let calls = members(&page);
+        b.shutdown.cancel();
+        let _ = b.task.await;
+        assert!(
+            calls.is_empty(),
+            "no scrolling without a way back: {calls:?}"
+        );
+    }
+
+    /// The document closes (navigation) right after its build: the frame wake stops with it.
+    #[tokio::test]
+    async fn frame_wake_stops_with_the_source() {
+        let (fake, conn) = Fake::start(2).await;
+        let page: Shared = Arc::default();
+        let doc = fake.node(raw::DOCUMENT_WEB, "page", "body", None).await;
+        let h = fake.node(raw::HEADING, "Title", "h1", None).await;
+        fake.link(doc, h);
+        comp(&fake, &page, h, 50).await;
+        for i in 0..4 {
+            let fr = fake.node(28, &format!("Ad {i}"), "iframe", None).await;
+            fake.link(doc, fr);
+            not_showing(&fake, fr);
+            comp(&fake, &page, fr, 3000 + 100 * i).await;
+        }
+        let mut b = start_blink(fake, conn, doc).await;
+        let _ = until_settled(&mut b).await;
+        b.shutdown.cancel();
+        let _ = b.task.await;
+        let closed = Instant::now();
+        tokio::time::sleep(Duration::from_millis(3500)).await;
+        let after: Vec<u64> = page
+            .lock()
+            .unwrap()
+            .log
+            .iter()
+            .filter(|(_, _, t)| *t > closed)
+            .map(|(i, _, _)| *i)
+            .collect();
+        assert!(
+            after.is_empty(),
+            "frames of a closed document were still scrolled into view: {after:?}"
+        );
+    }
+}

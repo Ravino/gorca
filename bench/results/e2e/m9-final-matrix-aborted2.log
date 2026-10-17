@@ -1,0 +1,11 @@
+# M9 final matrix
+== 23:01:21 cr-m7 start head 83e4992 load 9.42 9.38 9.75 6/2328 2400763 mem_avail_GiB 15.9
+   psi memory: some avg10=0.00 avg60=0.00 avg300=0.01 total=2894639447 full avg10=0.00 avg60=0.00 avg300=0.01 total=2368201442 
+   psi cpu: some avg10=0.31 avg60=0.11 avg300=0.02 total=33231712763
+   exit 0
+== 23:21:21 cr-m7 end head 83e4992 load 15.32 15.13 12.39 3/2950 2476456 mem_avail_GiB 15.7
+   psi memory: some avg10=0.74 avg60=0.99 avg300=0.65 total=2899858365 full avg10=0.58 avg60=0.91 avg300=0.60 total=2373154602 
+   psi cpu: some avg10=0.32 avg60=0.90 avg300=1.31 total=33246025956
+== 23:21:21 cr-typing start head 83e4992 load 15.32 15.13 12.39 3/2950 2476464 mem_avail_GiB 15.7
+   psi memory: some avg10=0.74 avg60=0.99 avg300=0.65 total=2899858365 full avg10=0.58 avg60=0.91 avg300=0.60 total=2373154602 
+   psi cpu: some avg10=0.32 avg60=0.90 avg300=1.31 total=33246026075

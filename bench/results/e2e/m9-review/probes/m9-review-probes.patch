@@ -1,0 +1,292 @@
+diff --git a/crates/gorca-core/src/text/caret.rs b/crates/gorca-core/src/text/caret.rs
+index ddd861a..59cd4f1 100644
+--- a/crates/gorca-core/src/text/caret.rs
++++ b/crates/gorca-core/src/text/caret.rs
+@@ -876,6 +876,7 @@ impl CaretState {
+     }
+ 
+     fn track(self, node: NodeKey, kind: Kind, cx: &mut Ctx<'_>) -> CaretState {
++        tracing::debug!(target: "gorca_text", ?node, ?kind, state = ?std::mem::discriminant(&self), "PROBE track");
+         let mut t = match self.into_tracked() {
+             Some(mut t) if t.node == node => {
+                 t.kind = kind;
+@@ -1261,6 +1262,7 @@ impl CaretState {
+     // ---- fetch replies ---------------------------------------------------------------------
+ 
+     fn on_fetched(self, req: TextReqId, result: Result<Reply, ()>, cx: &mut Ctx<'_>) -> CaretState {
++        tracing::debug!(target: "gorca_text", ?req, state = match &self { CaretState::Off => "off", CaretState::Idle{..} => "idle", CaretState::Awaiting{..} => "awaiting", CaretState::Fetching{..} => "fetching" }, hosts = self.tracked().map(|t| t.hosts), "PROBE fetched");
+         match self {
+             CaretState::Off => CaretState::Off,
+             CaretState::Fetching {
+@@ -1721,7 +1723,13 @@ fn window_paragraph(t: &Tracked, at: u32) -> Option<String> {
+ /// the window did not change since the request.
+ fn stray(t: &mut Tracked, req: TextReqId, result: Result<Reply, ()>) {
+     let fresh = t.take_rev(req) == Some(t.win.rev());
++    tracing::debug!(target: "gorca_text", fresh, ok = result.is_ok(), "PROBE stray reply");
+     if !fresh {
++        // FIX candidate (M9 review): that the root hosts embedded objects does not depend on
++        // the window revision; a stale fill still says so.
++        if let Ok(Reply::Window(fill)) = &result {
++            note_hosts(t, &fill.text);
++        }
+         return;
+     }
+     match result {
+diff --git a/crates/gorca-core/src/text/mod.rs b/crates/gorca-core/src/text/mod.rs
+index 3731cf6..fd6aea8 100644
+--- a/crates/gorca-core/src/text/mod.rs
++++ b/crates/gorca-core/src/text/mod.rs
+@@ -598,7 +598,9 @@ impl Reader {
+                 }
+                 if self.term_is(node) {
+                     self.term_caret(offset, fx);
+-                } else if self.text_active() && self.text_accepts(node, Some(offset), fx) {
++                } else if !self.text_active() {
++                    tracing::debug!(target: "gorca_text", mode = ?self.mode, "PROBE caret: text not active");
++                } else if self.text_accepts(node, Some(offset), fx) {
+                     self.text_step(In::Caret { offset }, fx);
+                 }
+             }
+@@ -645,6 +647,7 @@ impl Reader {
+             return true;
+         }
+         if node.app != t.root.app || !t.kind.editable || !t.hosts {
++            tracing::debug!(target: "gorca_text", ?node, root = ?t.root, cur = ?t.node, editable = t.kind.editable, hosts = t.hosts, "PROBE accepts: refused (kind/hosts)");
+             return false;
+         }
+         if node != t.root {
+@@ -654,7 +657,10 @@ impl Reader {
+                 // that must not steal the editable. Only a caret event may redirect tracking
+                 // on an unknown node: Gecko sends caret-moved for the focused editable's
+                 // descendants only.
+-                (Ancestry::Outside, _) | (Ancestry::Unknown, false) => return false,
++                (Ancestry::Outside, _) | (Ancestry::Unknown, false) => {
++                    tracing::debug!(target: "gorca_text", ?node, caret = at.is_some(), "PROBE accepts: refused (ancestry)");
++                    return false;
++                }
+                 (Ancestry::Unknown, true) | (Ancestry::Inside, _) => {}
+             }
+         }
+diff --git a/crates/gorca-core/src/text/tests.rs b/crates/gorca-core/src/text/tests.rs
+index f906734..9153b98 100644
+--- a/crates/gorca-core/src/text/tests.rs
++++ b/crates/gorca-core/src/text/tests.rs
+@@ -2363,3 +2363,67 @@ fn right_arrow_across_a_line_end_speaks_blank_for_the_break_like_nvda_then_the_n
+     assert_eq!(step(&mut g, RIGHT, 5), ["blank"]);
+     assert_eq!(step(&mut g, LEFT, 4), ["d"]);
+ }
++
++/// M9 review probes (FCE1 on Chromium): the focus that switches browse -> focus mode tracks the
++/// contenteditable and, in the same turn, `text_mode_changed` dirties the window, so the
++/// prefetch reply is stale and `hosts` is never learned. If the browser's caret-placing event
++/// was handled before the focus (separate lanes), nothing else fetches a window of the root.
++mod probe_m9r {
++    use super::*;
++
++    fn focus_rich(g: &mut Rig, flip: bool) {
++        let s = snap(
++            Role::TextEntry,
++            StateSet::EDITABLE | StateSet::FOCUSED | StateSet::MULTILINE,
++        );
++        if flip {
++            g.r.text.was_active = false;
++        }
++        let mut fx = ReaderEffects::new();
++        g.r.now = g.now();
++        g.r.text_track(&s, &mut fx);
++        g.r.text_after(&mut fx);
++        let f = fetches(&fx);
++        let (req, _) = f[0];
++        let _ = g.reply(
++            req,
++            Reply::Window(TextWindowFill {
++                base: 0,
++                text: Arc::from("\u{FFFC}\u{FFFC}"),
++                len: 2,
++                caret: Some(0),
++            }),
++        );
++    }
++
++    fn right_into_paragraph(flip: bool) -> (bool, Option<NodeKey>) {
++        let mut g = rig();
++        let p = leaf(96);
++        focus_rich(&mut g, flip);
++        g.advance(1000);
++        let mut fx = g.key(RIGHT, 0, NONE);
++        g.advance(3);
++        fx.extend(g.caret_on(p, 1));
++        fx.extend(g.tick(30));
++        let fetched_p = fetches(&fx).iter().any(|(_, op)| match op {
++            TextOp::Window { node, .. } | TextOp::AtOffset { node, .. } => *node == p,
++            _ => false,
++        });
++        (fetched_p, g.r.text.caret.tracked().map(|t| t.node))
++    }
++
++    #[test]
++    fn probe_m9r_control_no_mode_flip_follows_the_paragraph() {
++        let (fetched, node) = right_into_paragraph(false);
++        assert!(fetched && node == Some(leaf(96)), "control: {fetched} {node:?}");
++    }
++
++    #[test]
++    fn probe_m9r_mode_flip_in_the_focus_turn_loses_the_paragraph() {
++        let (fetched, node) = right_into_paragraph(true);
++        assert!(
++            fetched && node == Some(leaf(96)),
++            "after the browse->focus flip in the focus turn, Right in the paragraph is ignored: fetched={fetched} tracked={node:?}"
++        );
++    }
++}
+diff --git a/crates/gorca-doc-source-atspi/tests/fake_peer.rs b/crates/gorca-doc-source-atspi/tests/fake_peer.rs
+index dc815bc..c0bdb5f 100644
+--- a/crates/gorca-doc-source-atspi/tests/fake_peer.rs
++++ b/crates/gorca-doc-source-atspi/tests/fake_peer.rs
+@@ -1353,3 +1353,146 @@ async fn the_parent_walk_finds_the_topmost_document_and_a_search_finds_any() {
+     // fake whose node 0 is not special, so only check that a miss is a clean `None`.
+     assert_eq!(any_document(&conn).await, None);
+ }
++
++// ---------------------------------------------------------------------------------------------
++// M9 review probes: the off-screen frame wake (`EngineQuirks::wake_offscreen_frames`).
++
++mod probe_m9r {
++    use super::*;
++    use gorca_doc_source_atspi::source::EngineQuirks;
++
++    type Log = Arc<Mutex<Vec<(u64, u32, Instant)>>>;
++
++    struct Comp {
++        log: Log,
++        id: u64,
++    }
++
++    #[zbus::interface(name = "org.a11y.atspi.Component")]
++    impl Comp {
++        fn scroll_to(&self, kind: u32) -> bool {
++            self.log.lock().unwrap().push((self.id, kind, Instant::now()));
++            true
++        }
++    }
++
++    async fn comp(fake: &Fake, log: &Log, id: u64) {
++        for s in &fake.servers {
++            s.object_server()
++                .at(
++                    path_of(id).as_str(),
++                    Comp {
++                        log: Arc::clone(log),
++                        id,
++                    },
++                )
++                .await
++                .unwrap();
++        }
++    }
++
++    fn not_showing(fake: &Fake, id: u64) {
++        fake.tree.lock().unwrap().nodes.get_mut(&id).unwrap().state &= !(1 << 25);
++    }
++
++    async fn start_blink(fake: Fake, conn: AppConn, doc: u64) -> Browse {
++        let (_unused_tx, ev_rx) = mpsc::channel(8);
++        let mut cfg = SourceConfig::browse(gorca_model::TextUnit::Scalar, true);
++        cfg.quirks = EngineQuirks::blink(true);
++        cfg.fetch = FetchOpts {
++            text: TextPolicy::All,
++            ..fast_opts(Split::Whole)
++        };
++        let (source, _metrics) = AtspiDocSource::new(Arc::new(conn), path_of(doc), cfg, ev_rx);
++        let (sink, rx) = delta_channel(1 << 14);
++        let (req_tx, req_rx) = mpsc::channel(8);
++        let (join, _j) = join_channel(8);
++        let (events, core_events) = mpsc::channel(64);
++        let shutdown = CancellationToken::new();
++        let ctx = DocSourceCtx {
++            doc: DocId(1),
++            app: app_id(),
++            sink,
++            requests: req_rx,
++            events: core_events,
++            join,
++            shutdown: shutdown.clone(),
++            clock: Clock::System,
++        };
++        let task = tokio::spawn(Box::new(source).attach(ctx));
++        Browse {
++            fake,
++            rx,
++            events,
++            requests: req_tx,
++            shutdown,
++            task,
++        }
++    }
++
++    /// An article whose first screen has no link, button or list item (only a heading and a
++    /// paragraph) and an embedded cross-site frame further down: the frame is scrolled into
++    /// view, and the page must be scrolled back.
++    #[tokio::test]
++    async fn probe_m9r_frame_wake_scrolls_the_page_back() {
++        let (fake, conn) = Fake::start(2).await;
++        let log: Log = Arc::default();
++        let doc = fake.node(raw::DOCUMENT_WEB, "page", "body", None).await;
++        let h = fake.node(raw::HEADING, "Title", "h1", None).await;
++        let p = fake.node(raw::PARAGRAPH, "", "p", None).await;
++        let fr = fake.node(28, "Video", "iframe", None).await;
++        fake.link(doc, h);
++        fake.link(doc, p);
++        fake.link(doc, fr);
++        fake.set_text(h, "Title");
++        fake.set_text(p, "Some text.");
++        not_showing(&fake, fr);
++        for id in [doc, h, p, fr] {
++            comp(&fake, &log, id).await;
++        }
++        let mut b = start_blink(fake, conn, doc).await;
++        let _ = until_settled(&mut b).await;
++        tokio::time::sleep(Duration::from_millis(1500)).await;
++        let calls: Vec<(u64, u32)> = log.lock().unwrap().iter().map(|(i, k, _)| (*i, *k)).collect();
++        b.shutdown.cancel();
++        let _ = b.task.await;
++        assert!(calls.contains(&(fr, 6)), "the frame was scrolled into view: {calls:?}");
++        assert!(
++            calls.len() >= 2,
++            "the page was scrolled to the frame and never scrolled back: {calls:?}"
++        );
++    }
++
++    /// The document closes (navigation) right after its build: the frame wake must stop with it.
++    #[tokio::test]
++    async fn probe_m9r_frame_wake_stops_with_the_source() {
++        let (fake, conn) = Fake::start(2).await;
++        let log: Log = Arc::default();
++        let doc = fake.node(raw::DOCUMENT_WEB, "page", "body", None).await;
++        let mut frames = Vec::new();
++        for i in 0..4 {
++            let fr = fake.node(28, &format!("Ad {i}"), "iframe", None).await;
++            fake.link(doc, fr);
++            not_showing(&fake, fr);
++            comp(&fake, &log, fr).await;
++            frames.push(fr);
++        }
++        let mut b = start_blink(fake, conn, doc).await;
++        let _ = until_settled(&mut b).await;
++        b.shutdown.cancel();
++        let _ = b.task.await;
++        let closed = Instant::now();
++        tokio::time::sleep(Duration::from_millis(3500)).await;
++        let after: Vec<u64> = log
++            .lock()
++            .unwrap()
++            .iter()
++            .filter(|(_, _, t)| *t > closed)
++            .map(|(i, _, _)| *i)
++            .collect();
++        assert!(
++            after.is_empty(),
++            "frames of a closed document were still scrolled into view: {after:?}"
++        );
++    }
++}

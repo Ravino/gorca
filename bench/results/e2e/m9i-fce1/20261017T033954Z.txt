@@ -1,0 +1,41 @@
+# e2e m9i-fce1
+# utc=2026-10-17T03:39:54Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=20.93 15.86 11.76 8/2643 3600974
+# git_rev=5262c5d
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx3
+# topology_expected=-
+# label=m9i-fce1
+# reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=20.93 15.86 11.76 13/2644 3600968
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info,gorca_text=debug GORCA_TOPOLOGY_REPORT=bench/results/e2e/m9i-fce1/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+
+metric                     bus                median          min          max  n op    threshold  res   note
+FCE1.fce1_ms.n             daemon/voicego           17           17           17  3                  info   [samples]
+FCE1.fce1_ms.p50           daemon/voicego        0.208        0.142        0.230  3                  info   [ms]
+FCE1.fce1_ms.p95           daemon/voicego        1.047        0.662        3.065  3                  info   [ms]
+FCE1.fce1_ms.p99           daemon/voicego        1.654        1.259        4.351  3                  info   [ms]
+FCE1.fce1_ms.p999          daemon/voicego        1.654        1.259        4.351  3                  info   [ms]
+FCE1.fce1_ms.max           daemon/voicego        1.654        1.259        4.351  3                  info   [ms]
+FCE1.fc_double             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FCE1.fc_extra              daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+FCE1.fc_late               daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [speeches]
+FCE1.ft_failures           daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [checks]
+FCE1.lost                  daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]

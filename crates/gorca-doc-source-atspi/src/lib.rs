@@ -20,6 +20,7 @@ pub mod p2p;
 pub mod roles;
 pub mod runs;
 pub mod source;
+mod wake;
 pub mod warm;
 pub mod wire;
 

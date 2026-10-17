@@ -53,6 +53,9 @@ const CLICK_FOCUS_WINDOW: Duration = Duration::from_millis(800);
 const SELECT_SPEAK_CAP: u32 = 300;
 /// A mode word waits this long for the utterance it belongs to.
 /// A document focus this soon after our own click or Enter is the click's own.
+/// How long the speech of a frame document that took the focus waits for the focus to move on
+/// into the frame before the stop is announced.
+const FRAME_FOCUS_DEFER: Duration = Duration::from_millis(250);
 const REFOCUS_SILENT_WINDOW: Duration = Duration::from_millis(2000);
 const WORD_TTL: Duration = Duration::from_millis(600);
 /// The line that follows a document's focus utterance waits for a cold fetch this long (M4).
@@ -914,6 +917,23 @@ impl Reader {
         }
     }
 
+    /// Put the cursor on the first line of the page (the line an entry speaks).
+    fn web_place_first_line(&mut self, doc: DocId) {
+        let Some(b) = self.web.as_mut() else { return };
+        let Some(h) = b.docs.get(doc) else { return };
+        let max_line = b.settings.max_line;
+        let placed = h.read.with(|d| match cursor::first_line(d, max_line) {
+            Mv::Landed { off, .. } => cursor::cursor_at(d, off).map(|c| (c, off)),
+            Mv::Edge(_) => None,
+        });
+        if let Some((cur, off)) = placed {
+            b.last_off = off;
+            if let WebMode::Browse { cur: c, .. } = &mut b.mode {
+                *c = cur;
+            }
+        }
+    }
+
     // ---- focus ----------------------------------------------------------------------------
 
     /// Keep `popup_open` true to the field in focus mode, and the grab set with it: Escape is
@@ -976,6 +996,20 @@ impl Reader {
                 && self.now.saturating_duration_since(at) < CLICK_FOCUS_WINDOW
             {
                 b.suppress_focus = Some(node);
+            }
+            // A nested document taking the focus on its way to its content (Chromium focuses the
+            // frame's document before the link inside it): the page is browsed, not announced
+            // frame by frame.
+            if matches!(b.mode, WebMode::Browse { .. })
+                && h.read.with(|d| {
+                    d.node(id)
+                        .is_some_and(|v| v.cats.intersects(gorca_doc::web::Cat::FRAME))
+                })
+            {
+                b.suppress_focus = Some(node);
+                let due = self.now + FRAME_FOCUS_DEFER;
+                b.frame_focus = Some((node, due));
+                fx.push(ReaderEffect::ArmTimer(due));
             }
             let passes = forms::passes_through(role, states, Reason::Focus);
             let application = forms::is_application(role);
@@ -1539,8 +1573,14 @@ impl Reader {
                 let at_root = focus_node.is_some_and(|(n, _)| n == root);
                 let at_top = focus_node.is_none();
                 self.web_place(doc, focus_node.map_or(root, |(n, _)| n));
-                let spoke = self.web_speak_entry(doc, at_top || at_root, at_top, fx);
                 if at_top || at_root {
+                    // The first line is about to be spoken: the cursor sits on it, so that Down
+                    // reads the line after it (Chromium announces the page by itself when its
+                    // window activates, with no focus event of ours to place the cursor).
+                    self.web_place_first_line(doc);
+                }
+                let spoke = self.web_speak_entry(doc, at_top || at_root, at_top, fx);
+                if (at_top || at_root) && !self.dir.is_settling(app, self.now) {
                     self.web_auto_read(doc, spoke, fx);
                 }
             }
@@ -1559,8 +1599,11 @@ impl Reader {
                         true,
                     );
                     self.web_place(doc, root);
+                    self.web_place_first_line(doc);
                     let spoke = self.web_speak_entry(doc, true, true, fx);
-                    self.web_auto_read(doc, spoke, fx);
+                    if !self.dir.is_settling(app, self.now) {
+                        self.web_auto_read(doc, spoke, fx);
+                    }
                 }
             }
             WebMode::Browse { .. } | WebMode::Focus { .. } => {}
@@ -1743,7 +1786,38 @@ impl Reader {
     }
 
     /// Timers: a document that is slow to mirror, and the debounced scroll (LP-6).
+    /// The deadline of a swallowed frame-document focus (`Browse::frame_focus`): when the frame
+    /// document is still what was presented last and nothing newer happened (no focus moved
+    /// into the frame, no key), the Tab stop is announced like any other focus.
+    fn web_frame_focus_timer(&mut self, now: Instant, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_mut() else { return };
+        let Some((node, due)) = b.frame_focus else {
+            return;
+        };
+        if now < due {
+            fx.push(ReaderEffect::ArmTimer(due));
+            return;
+        }
+        b.frame_focus = None;
+        if b.suppress_focus == Some(node) {
+            b.suppress_focus = None;
+        }
+        let Some(p) = self.presented.clone() else {
+            return;
+        };
+        if p.node != node || p.epoch != self.epoch.current() {
+            return;
+        }
+        let id = self.utt_id();
+        let u = self
+            .presenters
+            .present(crate::PresentContext::Focus, &p.snap, id, p.epoch);
+        self.log_presentation(&u, &p.snap, crate::PresentSource::MissReply, None);
+        fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+    }
+
     pub(crate) fn web_timer(&mut self, now: Instant, fx: &mut ReaderEffects) {
+        self.web_frame_focus_timer(now, fx);
         self.web_auto_read_timer(fx);
         let Some(b) = self.web.as_mut() else { return };
         let mut sync_tabs = false;
