@@ -360,6 +360,21 @@ fn history_recall_reads_the_command_without_the_prompt() {
 }
 
 #[test]
+fn a_stale_history_request_leaves_no_deadline_behind() {
+    let mut r = Rig::new();
+    r.focus("out\nme@box:~$ ", 14);
+    assert!(claimed(&r.key(TermKey::LineUp)));
+    assert!(r.s.vertical_open);
+    // The redraw never came and the tick comes late (the screen was busy being read): the
+    // expectation is over, so is the request, and no deadline stays due (it re-armed the timer
+    // for ever).
+    r.now += 3000;
+    r.feed(TermInput::Tick);
+    assert!(!r.s.vertical_open);
+    assert_eq!(r.s.deadline(), None);
+}
+
+#[test]
 fn history_recall_to_an_empty_line_says_blank() {
     let mut r = Rig::new();
     r.focus("out\nme@box:~$ ls", 16);

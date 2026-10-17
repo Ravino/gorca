@@ -1,0 +1,42 @@
+# e2e retrack-VD-chunk2
+# utc=2026-10-17T18:46:44Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=9.39 10.41 9.82 2/2406 3571591
+# git_rev=2592f832
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx1
+# topology_expected=-
+# label=retrack-VD-chunk2
+# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/rt/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=9.39 10.41 9.82 2/2406 3571588
+# reader_env=GORCA_M6=1 GORCA_M6_REAL=1 GORCA_VD_ROUNDS=2 GORCA_TOPOLOGY_REPORT=bench/results/e2e/retrack-VD-chunk2/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=VD round 0 (idle 20 s): 0 failing steps
+# note1=VD round 1 (second app window, Alt+Tab back): 0 failing steps
+# note2=VD round 2 (tab switch): 1 failing steps
+# note3=VD round 3 (notifications): 0 failing steps
+# note4=VD round 4 (bell): 0 failing steps
+# note5=VD round 5 (overview and back): 0 failing steps
+# note6=VD round 6 (Alt+Tab storm): 0 failing steps
+# note7=VD round 7 (search bar and Escape): 0 failing steps
+# note8=VV r2 Enter: the output: heard ["bash: 5 5 5 echo: command not found\nbash-5.2$"]
+
+metric                     bus                median          min          max  n op    threshold  res   note
+VD.vd_bad_rounds           daemon/voicego            1            1            1  1                  info   [rounds]
+VD.vd_base_failures        daemon/voicego            0            0            0  1                  info   [steps]
+VD.vd_failures             daemon/voicego            1            1            1  1                  info   [steps]

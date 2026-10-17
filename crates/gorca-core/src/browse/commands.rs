@@ -18,13 +18,13 @@ use super::cursor::{self, Edge, Mv};
 use super::forms::{self, Reason};
 use super::present::{self, Item};
 use super::{
-    BrowseState, CursorFrom, LIVE_TTL_ASSERTIVE, LIVE_TTL_POLITE, ModeWord, SavedWeb, WebEv, WebFx,
-    WebMode, step,
+    BrowseState, CursorFrom, LIVE_TTL_ASSERTIVE, LIVE_TTL_POLITE, ModeWord, NativeSync, SavedWeb,
+    SelectionModel, WebEv, WebFx, WebMode, step,
 };
 use crate::SpeechIntent;
 use crate::commands::CoreCmd;
 use crate::doc_actor::live::LiveMsg;
-use crate::doc_actor::{DocDirectory, DocNotice, WebJoin};
+use crate::doc_actor::{DocDirectory, DocNotice, SelOutcome, WebJoin};
 use crate::focus::FocusState;
 use crate::mode::{Mode, ModeMsg, WebCursor};
 use crate::present::message;
@@ -42,6 +42,13 @@ pub enum WebEffect {
         doc: DocId,
         node: DocNodeId,
         act: DocAction,
+    },
+    /// A page-selection action; its result returns as `DocNotice::SelectionDone { req }`.
+    Select {
+        doc: DocId,
+        node: DocNodeId,
+        act: DocAction,
+        req: u32,
     },
 }
 
@@ -62,6 +69,9 @@ const WORD_TTL: Duration = Duration::from_millis(600);
 const TAIL_TTL: Duration = Duration::from_secs(2);
 /// A late first line (the mirror was empty at focus time) is still spoken within this window.
 const ENTRY_WAIT: Duration = Duration::from_secs(2);
+/// The page selection follows the virtual one this long after the last change, so a held
+/// Shift+arrow sets it once; short, so a Ctrl+C right after the keys finds it in place.
+const SEL_DEBOUNCE: Duration = Duration::from_millis(40);
 /// Held cursor keys scroll the page once per this interval (LP-6).
 pub(super) const SCROLL_DEBOUNCE: Duration = Duration::from_millis(150);
 /// Focus in a document the mirror does not know yet waits this long (browse design 7.3).
@@ -74,6 +84,9 @@ enum Outcome {
     Moved {
         cur: WebCursor,
         off: u32,
+        /// The active end of a selection: `off`, or one past it when the move ended on the last
+        /// character of a line (End), so that character is inside the range.
+        active: u32,
         /// Where the cursor was (the active end of a selection being extended).
         from: u32,
         items: Vec<Item>,
@@ -570,25 +583,6 @@ fn modal_scope(d: &WebDoc, mut node: DocNodeId) -> Option<DocNodeId> {
             return Some(node);
         }
         node = d.parent(node)?;
-    }
-    None
-}
-
-/// The nearest focusable node from `node` up to, but not including, the document (which every
-/// engine reports as focusable). An embedded document (`Cat::FRAME`) is not one: its content is
-/// reached through its own focusable elements, and a frame is never a Tab stop (R-4, R-5).
-fn focusable_around(d: &WebDoc, node: DocNodeId) -> Option<DocNodeId> {
-    let root = d.root();
-    let mut n = node;
-    for _ in 0..64 {
-        if Some(n) != root
-            && d.node(n).is_some_and(|v| {
-                v.cats.intersects(Cat::FOCUSABLE) && !v.cats.intersects(Cat::FRAME)
-            })
-        {
-            return Some(n);
-        }
-        n = d.parent(n)?;
     }
     None
 }
@@ -1622,6 +1616,9 @@ impl Reader {
                 self.web_apply(WebEv::NoDocument { focus }, fx, true);
             }
             DocNotice::Live { doc, msg } => self.web_live(doc, &msg, fx),
+            DocNotice::SelectionDone { doc, req, outcome } => {
+                self.web_selection_done(doc, req, outcome, fx);
+            }
             DocNotice::FocusFailed { doc } => {
                 // The grabbed Tab asked for a focus the page refused: say so (R-6).
                 if self.web.as_ref().is_some_and(|b| b.mode.doc() == Some(doc)) {
@@ -1993,6 +1990,15 @@ impl Reader {
         self.web_auto_read_timer(fx);
         let Some(b) = self.web.as_mut() else { return };
         let mut sync_tabs = false;
+        let mut sync_sel = false;
+        if let Some(due) = b.sel_due {
+            if due <= now {
+                b.sel_due = None;
+                sync_sel = true;
+            } else {
+                fx.push(ReaderEffect::ArmTimer(due));
+            }
+        }
         if let Some((due, doc, node, _)) = b.scroll_due {
             if due <= now {
                 b.scroll_due = None;
@@ -2046,6 +2052,9 @@ impl Reader {
                 );
                 self.web_place(doc, root);
             }
+        }
+        if sync_sel {
+            self.web_mirror_selection(fx);
         }
         if sync_tabs {
             self.web_sync_tab_grabs(fx);
@@ -2321,6 +2330,9 @@ impl Reader {
         }
         b.last_off = off;
         b.sel = None;
+        if b.native_sel_node.is_some() && b.model == SelectionModel::Native {
+            b.sel_due = Some(now + SEL_DEBOUNCE);
+        }
         b.cursor_from = CursorFrom::Own;
         b.counters.moves += 1;
         b.scroll_due = Some((now + SCROLL_DEBOUNCE, doc, cur.node, cur.local));
@@ -2340,8 +2352,17 @@ impl Reader {
         let Some(h) = b.docs.get(doc) else { return };
         let last = b.last_off;
         let page = b.settings.lines_per_page;
+        let sel_now = b.sel;
         let outcome = h.read.with(|d| {
-            let off = cursor::offset_of(d, cur).unwrap_or_else(|| last.min(d.text_len()));
+            let at = cursor::offset_of(d, cur).unwrap_or_else(|| last.min(d.text_len()));
+            // A selection that ended on the last character of a line (End, Ctrl+A) has its
+            // active end one past the cursor: the next selecting move starts from that end.
+            let off = match sel_now {
+                Some((_, act)) if select && act == at.saturating_add(1) && act <= d.text_len() => {
+                    act
+                }
+                Some(_) | None => at,
+            };
             let off0 = off;
             let (mv, kind) = match mv_kind {
                 Move::Line(dir) => (cursor::line(d, max_line, off, dir), Kind::Line),
@@ -2378,11 +2399,17 @@ impl Reader {
                         )),
                         Kind::Line => present::describe_from(d, speak.start, speak.end, Some(off0)),
                     };
-                    let (lo, hi) = (off0.min(off), off0.max(off));
+                    let active = if select && matches!(mv_kind, Move::LineEnd) {
+                        off.saturating_add(1)
+                    } else {
+                        off
+                    };
+                    let (lo, hi) = (off0.min(active), off0.max(active));
                     let span = d.text_in(lo, hi.min(lo.saturating_add(SELECT_SPEAK_CAP)));
                     Outcome::Moved {
                         cur,
                         off,
+                        active,
                         from: off0,
                         items,
                         span,
@@ -2394,6 +2421,7 @@ impl Reader {
             Outcome::Moved {
                 cur,
                 off,
+                active,
                 from,
                 items,
                 span,
@@ -2405,9 +2433,9 @@ impl Reader {
                     .map_or(from, |(a, _)| a);
                 self.web_set_cursor(doc, cur, off, now);
                 if select {
-                    let growing = off.abs_diff(anchor) >= from.abs_diff(anchor);
+                    let growing = active.abs_diff(anchor) >= from.abs_diff(anchor);
                     if let Some(b) = self.web.as_mut() {
-                        b.sel = (off != anchor).then_some((anchor, off));
+                        b.sel = (active != anchor).then_some((anchor, active));
                     }
                     let text = span.split_whitespace().collect::<Vec<_>>().join(" ");
                     let text = if text.is_empty() {
@@ -2426,7 +2454,7 @@ impl Reader {
                         ],
                         fx,
                     );
-                    self.web_native_selection(doc, anchor, off, fx);
+                    self.web_sel_changed(now, fx);
                 } else {
                     self.web_speak(&items, fx);
                 }
@@ -2465,7 +2493,9 @@ impl Reader {
         };
         self.web_set_cursor(doc, cu, last, now);
         if let Some(b) = self.web.as_mut() {
-            b.sel = Some((0, last));
+            // The cursor sits on the last character; the range includes it (see `web_cursor_cmd`:
+            // an active end one past the cursor is the end of the line or of the text).
+            b.sel = Some((0, last.saturating_add(1)));
         }
         self.web_speak(
             &[
@@ -2474,56 +2504,110 @@ impl Reader {
             ],
             fx,
         );
-        self.web_native_selection(doc, 0, last, fx);
+        self.web_sel_changed(now, fx);
         fx.push(ReaderEffect::ArmTimer(now + SCROLL_DEBOUNCE));
     }
 
-    /// Native selection mode (D-3): mirror the virtual range into the page's own selection so
-    /// its Ctrl+C copies it. Only when the mode is on and both ends lie in one text node that is
-    /// not inside a focusable element (an engine may focus the element that gets a selection,
-    /// which would move system focus, BM-2). Anything else clears what we set before, so the
-    /// page never keeps a stale selection.
-    fn web_native_selection(&mut self, doc: DocId, a: u32, b_off: u32, fx: &mut ReaderEffects) {
-        let Some(b) = self.web.as_ref() else { return };
-        if !b.native_selection {
+    /// The virtual selection changed: bring the page's own selection up to date a moment later
+    /// (one update for a burst of keys), so the browser's Ctrl+C copies it.
+    fn web_sel_changed(&mut self, now: Instant, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_mut() else { return };
+        if b.model != SelectionModel::Native {
             return;
         }
-        let Some(h) = b.docs.get(doc) else { return };
-        let target = h.read.with(|d| {
-            let (n1, l1) = d.at_offset(a)?;
-            let (n2, l2) = d.at_offset(b_off)?;
-            let inside_focusable = focusable_around(d, n1).is_some();
-            (n1 == n2 && !inside_focusable).then(|| (n1, l1.min(l2)..l1.max(l2)))
-        });
-        let prev = self.web.as_ref().and_then(|b| b.native_sel_node);
-        match target {
-            Some((node, range)) => {
-                if let Some((pd, pn)) = prev
-                    && (pd, pn) != (doc, node)
-                {
-                    self.web_native_clear(fx);
-                }
-                if let Some(b) = self.web.as_mut() {
-                    b.native_sel_node = Some((doc, node));
-                }
-                fx.push(ReaderEffect::Web(WebEffect::Act {
-                    doc,
-                    node,
-                    act: DocAction::SetSelection(range),
-                }));
-            }
-            None => self.web_native_clear(fx),
+        let due = now + SEL_DEBOUNCE;
+        b.sel_due = Some(due);
+        fx.push(ReaderEffect::ArmTimer(due));
+    }
+
+    /// Mirror `sel` into the page: one deadline-bounded action to the document's source, never
+    /// awaited. A range the page cannot take (a password field, a focusable container whose
+    /// selection would move system focus, BM-2) clears what we set before instead, so the page
+    /// never keeps a stale selection for its Ctrl+C to copy.
+    fn web_mirror_selection(&mut self, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_ref() else { return };
+        if b.model != SelectionModel::Native {
+            return;
         }
+        let WebMode::Browse { doc, .. } = b.mode else {
+            return;
+        };
+        let Some(h) = b.docs.get(doc) else { return };
+        let range = b.sel.map(|(a, e)| (a.min(e), a.max(e)));
+        let root = h.read.with(WebDoc::root);
+        let focused = b.focus_node.filter(|(fd, _)| *fd == doc).map(|(_, n)| n);
+        let plan = range.and_then(|(lo, hi)| {
+            h.read.with(|d| {
+                // Select-all may skip leading text whose container is focusable (a skip
+                // link); any other selection that would start there is not mirrored.
+                let all = lo == 0 && hi >= d.text_len();
+                // Firefox focuses the container that holds the start of a selection range when
+                // it is focusable (a link, and the document itself for text directly in the
+                // body) and not focused yet: that would move system focus (BM-2).
+                let risky = |d: &WebDoc, n: DocNodeId| {
+                    Some(n) != focused
+                        && d.node(n).is_some_and(|v| {
+                            v.cats.intersects(Cat::FOCUSABLE) && !v.cats.intersects(Cat::FRAME)
+                        })
+                };
+                let mut from = lo;
+                for _ in 0..8 {
+                    let p = super::selmirror::plan_with(d, from, hi, &risky)?;
+                    if !risky(d, p.start_container) {
+                        return Some(p);
+                    }
+                    if !all || p.first_end >= hi {
+                        return None;
+                    }
+                    from = p.first_end;
+                }
+                None
+            })
+        });
+        let had_sel = range.is_some();
+        let Some(plan) = plan else {
+            self.web_native_clear(fx);
+            if had_sel {
+                // Nothing the page can take (a link start, a password field): Ctrl+C would
+                // copy a stale clipboard, so say so (ADR-0021 S-1).
+                self.web_selection_notice(M::WebSelectionNotSet, fx);
+            }
+            return;
+        };
+        let Some(root) = root else { return };
+        let spec = gorca_model::SelectionSpec {
+            root,
+            spans: plan.spans.clone(),
+            snap: plan.snap.clone(),
+            doc_range: plan.doc_range.clone(),
+            gecko_lossy: plan.gecko_lossy,
+        };
+        let Some(first) = plan.spans.first().map(|s| s.node) else {
+            return;
+        };
+        let Some(b) = self.web.as_mut() else { return };
+        b.native_sel_node = Some((doc, root));
+        b.sel_req = b.sel_req.wrapping_add(1);
+        let req = b.sel_req;
+        b.sync = NativeSync::Pending { req };
+        fx.push(ReaderEffect::Web(WebEffect::Select {
+            doc,
+            node: first,
+            act: DocAction::SetSelection(spec),
+            req,
+        }));
     }
 
     /// Collapse the page selection we set earlier, if any.
     fn web_native_clear(&mut self, fx: &mut ReaderEffects) {
         let Some(b) = self.web.as_mut() else { return };
+        b.sync = NativeSync::Idle;
+        b.sel_notified = false;
         if let Some((doc, node)) = b.native_sel_node.take() {
             fx.push(ReaderEffect::Web(WebEffect::Act {
                 doc,
                 node,
-                act: DocAction::SetSelection(0..0),
+                act: DocAction::ClearSelection,
             }));
         }
     }
@@ -2629,35 +2713,92 @@ impl Reader {
         }
     }
 
-    /// gorca+Shift+F10: the page's own selection follows the virtual one, or stops following.
+    /// gorca+Shift+F10: switch between "page selection" (the page's own selection follows the
+    /// virtual one, the browser's Ctrl+C copies it) and "virtual selection" (the page is left
+    /// alone). Switching to the page selection first asks the document whether it can select at
+    /// all, and says "page selection" only when it can (ADR-0021 S-4).
     fn web_native_selection_toggle(&mut self, fx: &mut ReaderEffects) {
-        if self.web.as_ref().is_none_or(|b| b.mode.doc().is_none()) {
+        let Some(b) = self.web.as_ref() else { return };
+        let WebMode::Browse { doc, .. } = b.mode else {
             self.say(t(M::WebNativeSelectionWebOnly), fx);
             return;
-        }
-        let Some(b) = self.web.as_mut() else { return };
-        b.native_selection = !b.native_selection;
-        let on = b.native_selection;
-        let sel = b.sel;
-        let doc = match b.mode {
-            WebMode::Browse { doc, .. } => Some(doc),
-            WebMode::Inactive | WebMode::Loading { .. } | WebMode::Focus { .. } => None,
         };
-        if on {
-            if let (Some(doc), Some((a, e))) = (doc, sel) {
-                self.web_native_selection(doc, a, e, fx);
+        if b.model == SelectionModel::Native {
+            if let Some(b) = self.web.as_mut() {
+                b.model = SelectionModel::Virtual;
+                b.sel_due = None;
             }
-        } else {
             self.web_native_clear(fx);
+            self.say(t(M::WebNativeSelectionOff), fx);
+            return;
         }
-        self.say(
-            if on {
-                t(M::WebNativeSelectionOn)
-            } else {
-                t(M::WebNativeSelectionOff)
-            },
-            fx,
-        );
+        let Some(root) = b.docs.get(doc).and_then(|h| h.read.with(WebDoc::root)) else {
+            self.say(t(M::WebSelectionUnavailable), fx);
+            return;
+        };
+        let Some(b) = self.web.as_mut() else { return };
+        b.sel_req = b.sel_req.wrapping_add(1);
+        let req = b.sel_req;
+        b.sync = NativeSync::Probing { req };
+        // Clearing the document's ranges is a harmless probe of the selection path.
+        fx.push(ReaderEffect::Web(WebEffect::Select {
+            doc,
+            node: root,
+            act: DocAction::ClearSelection,
+            req,
+        }));
+    }
+
+    /// A notice about the page selection, spoken once per selection burst.
+    fn web_selection_notice(&mut self, msg: M, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_mut() else { return };
+        if std::mem::replace(&mut b.sel_notified, true) {
+            return;
+        }
+        self.say_queued(t(msg), fx);
+    }
+
+    /// The result of a selection request: the probe of the switch, or a mirror of the range.
+    fn web_selection_done(
+        &mut self,
+        doc: DocId,
+        req: u32,
+        outcome: SelOutcome,
+        fx: &mut ReaderEffects,
+    ) {
+        let Some(b) = self.web.as_mut() else { return };
+        if b.mode.doc() != Some(doc) {
+            return;
+        }
+        match b.sync {
+            NativeSync::Probing { req: r } if r == req => {
+                b.sync = NativeSync::Idle;
+                if matches!(outcome, SelOutcome::Done | SelOutcome::Approximate) {
+                    b.model = SelectionModel::Native;
+                    let has_sel = b.sel.is_some();
+                    if has_sel {
+                        self.web_mirror_selection(fx);
+                    }
+                    self.say(t(M::WebNativeSelectionOn), fx);
+                } else {
+                    self.say(t(M::WebSelectionUnavailable), fx);
+                }
+            }
+            NativeSync::Pending { req: r } if r == req => {
+                b.sync = NativeSync::Idle;
+                match outcome {
+                    SelOutcome::Done => {}
+                    // Applied, but the browser's copy may differ from what was heard.
+                    SelOutcome::Approximate => {
+                        self.web_selection_notice(M::WebSelectionIncomplete, fx);
+                    }
+                    SelOutcome::NotSupported | SelOutcome::Failed => {
+                        self.web_selection_notice(M::WebSelectionNotSet, fx);
+                    }
+                }
+            }
+            NativeSync::Idle | NativeSync::Pending { .. } | NativeSync::Probing { .. } => {}
+        }
     }
 
     /// gorca+Shift+Space: the bare quick-navigation keys go to the page, or come back.
