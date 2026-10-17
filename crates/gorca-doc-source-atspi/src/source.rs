@@ -721,6 +721,10 @@ impl AtspiDocSource {
     ) -> (SrcNode, SibInfo) {
         let (raw_role, state, name, attrs) = read;
         let role = roles::map_role(raw_role);
+        let authored = attrs
+            .iter()
+            .any(|(k, v)| k == "explicit-name" && v == "true");
+        let name = self.config.fetch.quirks.name(role, authored, name);
         let mut amap: SmallVec<[(gorca_model::AttrKey, Arc<str>); 4]> = SmallVec::new();
         for (k, v) in attrs {
             amap.push((self.interner.key(&k), Arc::from(v.as_str())));

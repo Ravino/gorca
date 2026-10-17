@@ -742,6 +742,146 @@ fn spa() -> Vec<Step> {
     ]
 }
 
+// ---------------------------------------------------------------------------------------------
+// M8b: ARIA names, roles, states and descriptions (tests/web/m8b/pages). The words are NVDA's
+// (`refs/nvda/source/controlTypes/role.py` and `state.py` labels, `speech/speech.py` order); a
+// phrase token such as "close dialog, button" also checks the order the segments are joined in.
+
+
+/// Widgets page (`widgets.html`): names, tabs, switch, tree, combobox, menu button, disclosure,
+/// accordion, toolbar, breadcrumb and aria-current, custom headings, landmark names.
+fn wg() -> Vec<Step> {
+    vec![
+        // accessible names: aria-label, aria-labelledby, title, alt
+        top("WG.top"),
+        s("WG.btn.label", P0, "B: an icon button is its aria-label, the svg is not read", n('b'), &["close dialog, button"]).not(&["blank"]).gate(Gate::Key),
+        s("WG.btn.label2", P0, "B: aria-label wins over the visible glyph", n('b'), &["button, search the site"]).not(&["\u{1F50D}"]),
+        s("WG.btn.plain", P0, "B: a plain button is its content", n('b'), &["button, save draft"]),
+        s("WG.btn.labelledby", P0, "B: aria-labelledby chain beats the visible text", n('b'), &["button, send message"]).not(&["ignored visible"]),
+        s("WG.btn.title", P1, "B: a button named by title only", n('b'), &["title only, button"]),
+        top("WG.top1"),
+        s("WG.lnk.label", P0, "K x3: a link with aria-label says the label, not its text", rep('k', 3), &["link, read more about pandas"]).not(&["read more,"]),
+        top("WG.top2"),
+        s("WG.edit.chain", P0, "E: an edit named by an aria-labelledby chain of two spans", n('e'), &["shipping address, edit"]),
+        s("WG.edit.label", P0, "E: an edit named by aria-label", n('e'), &["quantity, edit"]),
+        // tabs
+        top("WG.top3"),
+        pos("WG.tabs.h", rep('h', 2)),
+        s("WG.tabs.line", P0, "Down onto the tab list: the name and tab control, then each tab with its selection", Act::Key(DOWN, 0), &["entertainment, tab control", "tab, selected, nils frahm", "tab, agnes obel"]),
+        s("WG.tab.focus.sel", P0, "Focus on the selected tab: name, tab, selected", Act::Focus(role::PAGE_TAB, "Nils Frahm"), &["nils frahm, tab, selected"]),
+        esc("WG.e1"),
+        s("WG.tab.focus", P0, "Focus on an unselected tab: no selected word", Act::Focus(role::PAGE_TAB, "Agnes Obel"), &["agnes obel, tab"]).not(&["selected"]),
+        esc("WG.e2"),
+        // switch
+        top("WG.top4"),
+        pos("WG.sw.h", rep('h', 3)),
+        s("WG.sw.line", P0, "Down onto the switches: role switch with on and off", Act::Key(DOWN, 0), &["switch, on, notifications", "switch, off, dark mode"]).not(&["toggle button", "checked", "pressed"]),
+        s("WG.sw.on", P0, "Focus on a switch that is on", Act::Focus(role::TOGGLE_BUTTON, "Notifications"), &["notifications, switch, on"]).not(&["checked"]),
+        esc("WG.e3"),
+        s("WG.sw.off", P0, "Focus on a switch that is off", Act::Focus(role::TOGGLE_BUTTON, "Dark mode"), &["dark mode, switch, off"]).not(&["not checked", "not pressed"]),
+        esc("WG.e4"),
+        // tree
+        top("WG.top5"),
+        pos("WG.tree.h", rep('h', 4)),
+        s("WG.tree.line", P0, "Down onto the tree: name and tree view, then the first item with level and expansion", Act::Key(DOWN, 0), &["files, tree view", "tree view item, expanded, level 1", "documents"]),
+        s("WG.tree.focus1", P0, "Focus on an expanded, unselected tree item: NVDA says not selected on focus", Act::Focus(role::TREE_ITEM, "Documents"), &["documents, tree view item, not selected, expanded, level 1"]).not(&["\u{2022}"]),
+        esc("WG.e5"),
+        s("WG.tree.focus2", P0, "Focus on a collapsed tree item", Act::Focus(role::TREE_ITEM, "Pictures"), &["pictures, tree view item, not selected, collapsed, level 1"]),
+        esc("WG.e6"),
+        s("WG.tree.focus3", P0, "Focus on a nested item: its own level; selected is silent for tree items", Act::Focus(role::TREE_ITEM, "Report"), &["report, tree view item, level 2"]).not(&["selected"]),
+        esc("WG.e7"),
+        s("WG.tree.focus4", P1, "Focus on an unselected nested item", Act::Focus(role::TREE_ITEM, "Budget"), &["budget, tree view item, not selected, level 2"]),
+        esc("WG.e8"),
+        // combo box, menu button, menu items
+        s("WG.combo", P0, "Focus on a combo box with aria-haspopup=listbox: collapsed, no popup word", Act::Focus(role::COMBO_BOX, "Favourite fruit"), &["favourite fruit, combo box, collapsed"]).not(&["opens list", "submenu"]),
+        esc("WG.e9"),
+        s("WG.menubtn", P0, "Focus on a menu button: collapsed and submenu", Act::Focus(role::PUSH_BUTTON, "Actions"), &["actions, button, collapsed, submenu"]),
+        esc("WG.e10"),
+        s("WG.menu.item", P1, "Focus on a menu item", Act::Focus(role::MENU_ITEM, "Copy"), &["copy, menu item"]),
+        esc("WG.e11"),
+        s("WG.menu.check", P0, "Focus on a menu item check box", Act::Focus(role::ANY, "Word wrap"), &["word wrap, check menu item, checked"]),
+        esc("WG.e12"),
+        s("WG.menu.radio1", P0, "Focus on a checked menu item radio", Act::Focus(role::ANY, "Small"), &["small, radio menu item, checked"]),
+        esc("WG.e13"),
+        s("WG.menu.radio2", P0, "Focus on an unchecked menu item radio", Act::Focus(role::ANY, "Large"), &["large, radio menu item, not checked"]),
+        esc("WG.e14"),
+        // disclosure and accordion
+        s("WG.disc.closed", P0, "Disclosure button, collapsed", Act::Focus(role::PUSH_BUTTON, "Show details"), &["show details, button, collapsed"]),
+        esc("WG.e15"),
+        s("WG.disc.open", P0, "Disclosure button, expanded", Act::Focus(role::PUSH_BUTTON, "Hide notes"), &["hide notes, button, expanded"]),
+        esc("WG.e16"),
+        s("WG.acc.open", P0, "Accordion header button, expanded", Act::Focus(role::PUSH_BUTTON, "Personal information"), &["personal information, button, expanded"]),
+        esc("WG.e17"),
+        s("WG.acc.closed", P0, "Accordion header button, collapsed", Act::Focus(role::PUSH_BUTTON, "Billing address"), &["billing address, button, collapsed"]),
+        esc("WG.e18"),
+        // toolbar
+        s("WG.tb.pressed", P0, "Toggle button, pressed", Act::Focus(role::TOGGLE_BUTTON, "Bold"), &["bold, toggle button, pressed"]).not(&["not pressed"]),
+        esc("WG.e19"),
+        s("WG.tb.unpressed", P0, "Toggle button, not pressed", Act::Focus(role::TOGGLE_BUTTON, "Italic"), &["italic, toggle button, not pressed"]),
+        esc("WG.e20"),
+        s("WG.tb.mixed", P1, "Toggle button, aria-pressed=mixed", Act::Focus(role::TOGGLE_BUTTON, "Underline"), &["underline, toggle button, half pressed"]),
+        esc("WG.e21"),
+        s("WG.tb.popup", P1, "Icon button with aria-haspopup: the label and submenu", Act::Focus(role::PUSH_BUTTON, "Align left"), &["align left, button, submenu"]),
+        esc("WG.e22"),
+        // aria-current
+        s("WG.cur.page", P0, "Breadcrumb link, aria-current=page", Act::Focus(role::LINK, "Gadgets crumb"), &["gadgets crumb, link, current page"]),
+        s("WG.cur.step", P0, "aria-current=step", Act::Focus(role::LINK, "Step one link"), &["step one link, link, current step"]),
+        s("WG.cur.location", P1, "aria-current=location", Act::Focus(role::LINK, "Location link"), &["location link, link, current location"]),
+        s("WG.cur.date", P1, "aria-current=date", Act::Focus(role::LINK, "Date link"), &["date link, link, current date"]),
+        s("WG.cur.time", P1, "aria-current=time", Act::Focus(role::LINK, "Time link"), &["time link, link, current time"]),
+        s("WG.cur.true", P1, "aria-current=true", Act::Focus(role::LINK, "True link"), &["true link, link, current"]).not(&["current page", "current step"]),
+        s("WG.cur.false", P1, "aria-current=false says nothing", Act::Focus(role::LINK, "False link"), &["false link, link"]).not(&["current"]),
+        top("WG.top6"),
+        pos("WG.crumb.k", rep('k', 5)),
+        s("WG.crumb.line", P0, "K onto the current breadcrumb link", n('k'), &["link, current page, gadgets crumb"]),
+        // headings by role and level
+        top("WG.top7"),
+        pos("WG.h.pos", rep('h', 13)),
+        s("WG.h.role4", P1, "H: a div with role=heading aria-level=4", n('h'), &["heading level 4, custom heading four"]),
+        s("WG.h.role2", P1, "H: role=heading aria-level=2", n('h'), &["heading level 2, custom heading two"]),
+        // landmarks with aria-label / aria-labelledby names
+        top("WG.top8"),
+        s("WG.d.nav", P0, "D: a nav named by aria-label", n('d'), &["primary, navigation landmark"]),
+        s("WG.d.region", P0, "D: a section named by aria-labelledby", n('d'), &["region", "names"]),
+        s("WG.d.region2", P1, "D: a section named by aria-label", n('d'), &["tabs demo, region"]),
+    ]
+}
+
+/// Forms page (`forms.html`): invalid with error message, describedby hints, required, read
+/// only, disabled; every control is focused (the description and error words are part of the
+/// focus speech) and quick-navigated (a hit speaks them too).
+fn fb() -> Vec<Step> {
+    vec![
+        s("FB.invalid.focus", P0, "Focus on a field with aria-invalid and aria-errormessage: invalid entry, then the message", Act::Focus(role::ENTRY, "Email address"), &["email address, edit", "invalid entry", "enter an address like name@example.com"]),
+        esc("FB.e1"),
+        s("FB.describedby", P0, "Focus on a field with aria-describedby: the hint after a short pause", Act::Focus(role::ENTRY, "User name"), &["user name, edit", ". at least six characters"]).not(&["invalid"]),
+        esc("FB.e2"),
+        s("FB.invalid.described", P0, "An invalid field with a hint: invalid entry, then the hint", Act::Focus(role::ENTRY, "Password field"), &["password field, edit", "invalid entry", ". use a long password"]),
+        esc("FB.e3"),
+        s("FB.required", P0, "A field with aria-required: the word required", Act::Focus(role::ENTRY, "Aria required name"), &["aria required name, edit, required"]),
+        esc("FB.e4"),
+        s("FB.required.native", P0, "A native required field", Act::Focus(role::ENTRY, "Required name"), &["required name, edit", "required"]),
+        esc("FB.e5"),
+        s("FB.readonly.native", P0, "A native read-only field", Act::Focus(role::ENTRY, "Native read only"), &["native read only, edit", "read only"]),
+        esc("FB.e6"),
+        s("FB.readonly.aria", P1, "An aria-readonly field", Act::Focus(role::ENTRY, "Read only name"), &["read only name, edit"]).extra(&["read only"], "Gecko does not expose aria-readonly on an <input> (Blink sets read-only)"),
+        esc("FB.e7"),
+        s("FB.checkbox", P0, "An invalid check box with a hint", Act::Focus(role::CHECK_BOX, "Accept terms"), &["accept terms, check box, not checked", "invalid entry", ". you must accept to continue"]),
+        esc("FB.e8"),
+        s("FB.select", P1, "A select with a hint", Act::Focus(role::COMBO_BOX, "Colour pick"), &["colour pick, combo box", ". pick one"]),
+        esc("FB.e9"),
+        s("FB.textarea", P1, "A textarea with a hint", Act::Focus(role::ENTRY, "Notes area"), &["notes area, edit", ". optional notes"]),
+        esc("FB.e10"),
+        s("FB.button", P0, "A button with aria-describedby", Act::Focus(role::PUSH_BUTTON, "Submit form"), &["submit form, button", ". sends the signup"]).not(&["focus mode"]),
+        s("FB.disabled.aria", P1, "An aria-disabled button", Act::Focus(role::PUSH_BUTTON, "Aria disabled button"), &["aria disabled button, button"]).extra(&["unavailable"], "Gecko leaves aria-disabled buttons enabled in the state set (to be verified per engine)"),
+        // quick navigation hits speak the same words
+        top("FB.top"),
+        s("FB.qn.invalid", P0, "E: the invalid field is announced with its error message", n('e'), &["email address, edit", "invalid entry", "enter an address like name@example.com"]),
+        s("FB.qn.described", P0, "E: a described field says its hint after a pause", n('e'), &["user name, edit", ". at least six characters"]),
+        s("FB.qn.button.disabled", P0, "B: a disabled button is unavailable", rep('b', 2), &["button, unavailable, native disabled button"]),
+    ]
+}
+
 /// Every scenario, in run order.
 pub fn scenarios() -> Vec<Scenario> {
     let sc = |id, area, page, title, body| Scenario { id, area, page, title, body, xfail: None };
@@ -764,6 +904,8 @@ pub fn scenarios() -> Vec<Scenario> {
         sc("M8-FORGE", "real-world: code forge repository page", "forge.html", "M8 Forge repository", Body::Steps(forge)),
         sc("M8-APP", "real-world: web app with dialogs", "webapp.html", "M8 Web app dialogs", Body::Steps(app)),
         sc("M8-SPA", "dynamic SPA updates", "spa.html", "M8 SPA", Body::Steps(spa)),
+        sc("M8B-WG", "ARIA widgets: names, roles, states", "../../m8b/pages/widgets.html", "M8b Widgets", Body::Steps(wg)),
+        sc("M8B-FB", "ARIA forms: invalid, described, required, read only", "../../m8b/pages/forms.html", "M8b Forms", Body::Steps(fb)),
         Scenario {
             id: "M8-PF1",
             area: "W1 at 100k nodes: H / Shift+H p99 5 ms",

@@ -419,6 +419,10 @@ async fn complete(
                 Some(s) => opts.quirks.states(role, roles::map_states(s)),
                 None => roles::DEFAULT_PLAIN_STATES,
             };
+            let authored = attrs
+                .iter()
+                .any(|(k, v)| *k == web_attrs::EXPLICIT_NAME && &**v == "true");
+            let name = opts.quirks.name(role, authored, rn.name);
             if let Some(t) = error_text.remove(&i) {
                 attrs.push((web_attrs::ERROR_TEXT, t));
             }
@@ -427,7 +431,7 @@ async fn complete(
                 id: SrcNodeId(rn.path.0),
                 role,
                 states,
-                name: rn.name,
+                name,
                 text: texts[i].take(),
                 attrs,
                 local: targets.get(i).map(|p| gorca_dbus::drain::local_id(p)),

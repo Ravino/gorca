@@ -360,6 +360,9 @@ fn enter_items(v: &NodeView<'_>, out: &mut Vec<Item>) {
     // link or a heading says only whether it is expanded and which one is current.
     if !matches!(v.role, Role::Link | Role::Heading) {
         push_states(v, out);
+        if let Some(e) = aria::error_text(&node_of(v)) {
+            out.push(Item::Info(e.to_owned()));
+        }
     } else {
         if st.contains(StateSet::EXPANDED) {
             out.push(Item::State("expanded"));

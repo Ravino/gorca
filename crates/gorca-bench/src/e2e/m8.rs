@@ -60,6 +60,7 @@ pub const P2: u8 = 2;
 /// AT-SPI role numbers (`AtspiRole`, stable ABI) used to find controls in the corpus pages.
 pub mod role {
     pub const CHECK_BOX: i32 = 7;
+    pub const CHECK_MENU_ITEM: i32 = 8;
     pub const COMBO_BOX: i32 = 11;
     pub const LIST: i32 = 31;
     pub const MENU_ITEM: i32 = 35;
@@ -67,11 +68,13 @@ pub mod role {
     pub const PASSWORD_TEXT: i32 = 40;
     pub const PUSH_BUTTON: i32 = 43;
     pub const RADIO_BUTTON: i32 = 44;
+    pub const RADIO_MENU_ITEM: i32 = 45;
     pub const SLIDER: i32 = 51;
     pub const SPIN_BUTTON: i32 = 52;
     pub const TABLE_CELL: i32 = 56;
     pub const TOGGLE_BUTTON: i32 = 62;
     pub const TREE: i32 = 65;
+    pub const TREE_ITEM: i32 = 91;
     pub const APPLICATION: i32 = 75;
     pub const ENTRY: i32 = 79;
     pub const LINK: i32 = 88;

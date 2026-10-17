@@ -1024,11 +1024,19 @@ impl Reader {
         };
         h.read
             .with(|d| {
-                let m = d.node(id)?.meta?;
+                let v = d.node(id)?;
+                let m = v.meta?;
                 if m.attrs.is_empty() {
                     return None;
                 }
                 let mut c = (**snap).clone();
+                // The engine's name of a list or tree item carries the list marker; the document
+                // mirror's does not (web source quirk row).
+                if matches!(v.role, Role::ListItem | Role::TreeItem)
+                    && let Some(n) = v.name.filter(|n| !n.is_empty())
+                {
+                    c.name = Some(Arc::from(n));
+                }
                 c.attrs = m.attrs.clone();
                 if c.description.is_none() {
                     c.description.clone_from(&m.description);
