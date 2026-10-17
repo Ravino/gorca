@@ -8,6 +8,27 @@
 @level.most	большинство
 @level.all	вся
 @word.confirm	пунктуация {}
+@word.lock.caps	Caps Lock
+@word.lock.num	Num Lock
+@word.lock.scroll	Scroll Lock
+@word.lock.on	{} включён
+@word.lock.off	{} выключен
+@word.history.empty	история речи пуста
+@word.history.oldest	самое старое
+@word.history.newest	самое новое
+@word.sleep.on	режим сна включён
+@word.sleep.off	режим сна выключен
+@word.battery.none	батареи нет
+@word.battery.unavailable	состояние батареи недоступно
+@word.battery.percent	{} процентов
+@word.battery.charging	заряжается
+@word.battery.discharging	разряжается
+@word.battery.full	полностью заряжена
+@word.battery.empty	разряжена
+@word.battery.pending	ожидает зарядки
+@word.battery.time	осталось {}
+@word.battery.hm	{} ч {} мин
+@word.battery.m	{} мин
 @sentence.dot	точка	all	always
 @sentence.bang	восклицательный знак	all	always
 @sentence.question	вопросительный знак	all	always

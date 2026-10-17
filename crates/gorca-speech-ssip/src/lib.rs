@@ -144,6 +144,9 @@ struct Proto {
     pending_body: Option<String>,
     /// `230` arrived: the writer may send the body.
     body_ready: Option<String>,
+    /// The pitch last set with `SetParams` (wire scale): the base a capital's raise is added
+    /// to, and what is restored after it. The server starts at 0.
+    base_pitch: i8,
 }
 
 #[derive(Debug)]
@@ -210,8 +213,18 @@ fn encode(cmd: &SpeechCmd, proto: &mut Proto, out: &mut Vec<u8>) {
         proto.tracker.mark_replaced(*stop);
     }
     let id = speak_id(cmd);
-    for item in lower(cmd, Prio::Text) {
+    if let SpeechCmd::SetParams(p) = cmd {
+        proto.base_pitch = p.pitch;
+    }
+    for item in lower(cmd, Prio::Text, proto.base_pitch) {
         match item {
+            // A line after a `SPEAK` body (the pitch restore) is written right behind it.
+            SsipOut::Line(l) if proto.pending_body.is_some() => {
+                if let Some(body) = proto.pending_body.as_mut() {
+                    body.push_str(&l);
+                }
+                proto.tracker.expect(Expect::Simple);
+            }
             SsipOut::Line(l) => {
                 out.extend_from_slice(l.as_bytes());
                 match (l.as_str(), id) {
@@ -614,7 +627,7 @@ impl SpeechClient for SsipClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gorca_output_api::{Verbalized, VoiceRef};
+    use gorca_output_api::{Verbalized, VoiceParams, VoiceRef};
     use gorca_testkit::MockSpeechServer;
     use std::time::Instant;
 
@@ -634,6 +647,7 @@ mod tests {
             text: Verbalized {
                 text: Arc::from(text),
                 lang: None,
+                pitch_delta: 0,
             },
             voice: VoiceRef::Default,
             marks: false,
@@ -930,6 +944,44 @@ mod tests {
         let l = v.iter().position(|l| l == "SET self LANGUAGE ru");
         assert!(m.is_some() && m < l, "{v:?}");
         assert!(!v.iter().any(|l| l.contains("SYNTHESIS_VOICE")));
+        drop(c);
+        drop(srv);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[tokio::test]
+    async fn a_capital_is_raised_for_its_own_message_and_the_pitch_restored() {
+        let d = tmp("cap");
+        let srv = MockSpeechServer::start_ssip(&d).await.unwrap();
+        srv.set_speak_time(Duration::from_millis(5));
+        let mut c = connect(&srv).await;
+        c.submit(SpeechCmd::SetParams(VoiceParams {
+            rate: 0,
+            pitch: 10,
+            volume: 0,
+        }))
+        .unwrap();
+        c.submit(SpeechCmd::Speak {
+            id: UttId(1),
+            text: Verbalized {
+                text: Arc::from("A"),
+                lang: None,
+                pitch_delta: 30,
+            },
+            voice: VoiceRef::Default,
+            marks: false,
+        })
+        .unwrap();
+        until(&mut c, SpeechEvent::Ended(UttId(1))).await;
+        c.submit(speak(2, "b")).unwrap();
+        until(&mut c, SpeechEvent::Ended(UttId(2))).await;
+        assert_eq!(srv.spoken(), ["A", "b"]);
+        let v = srv.verbs();
+        let at = |l: &str| v.iter().rposition(|x| x == l);
+        let raised = at("SET self PITCH 40").unwrap();
+        let restored = at("SET self PITCH 10").unwrap();
+        let first_speak = v.iter().position(|x| x == "SPEAK").unwrap();
+        assert!(raised < first_speak && first_speak < restored, "{v:?}");
         drop(c);
         drop(srv);
         let _ = std::fs::remove_dir_all(&d);

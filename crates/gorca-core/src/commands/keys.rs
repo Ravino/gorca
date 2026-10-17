@@ -19,6 +19,7 @@ impl Reader {
             // The input lane watches this counter while learn mode holds the keyboard (LM-3).
             l.reader_ack.fetch_add(1, Ordering::AcqRel);
         }
+        self.observe_locks(&intent, fx);
         match intent.class {
             KeyClass::Command(cmd) | KeyClass::Watched(cmd) => {
                 self.run_command(cmd, &intent, now, fx);
@@ -59,7 +60,8 @@ impl Reader {
                     && (!key_echo_is_action(&text) || self.cmd.effective.echo.command_keys)
                 {
                     let id = self.utt_id();
-                    let u = key_echo(&text, id, intent.epoch);
+                    let mut u = key_echo(&text, id, intent.epoch);
+                    self.mark_capital(&mut u);
                     fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
                 }
             }

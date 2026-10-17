@@ -149,6 +149,9 @@ struct WriteQueue {
 #[derive(Debug, Default)]
 struct Proto {
     tracker: MsgTracker,
+    /// The pitch last set with `SetParams` (wire scale), the base a capital's raise is added to.
+    /// The server starts at 0.
+    base_pitch: i8,
 }
 
 #[derive(Debug)]
@@ -194,6 +197,15 @@ impl Shared {
     }
 }
 
+/// The pitch to speak with for a `pitch_delta`, or `None` when the voice pitch is left alone.
+fn raised_pitch(base: i8, delta: i8) -> Option<i8> {
+    if delta == 0 {
+        return None;
+    }
+    let p = base.saturating_add(delta).clamp(-100, 100);
+    (p != base).then_some(p)
+}
+
 fn push_frame(out: &mut Vec<u8>, payload: &[u8]) {
     let len = u32::try_from(payload.len()).unwrap_or(u32::MAX);
     out.extend_from_slice(&len.to_be_bytes());
@@ -222,8 +234,19 @@ fn speak_bytes(text: &Verbalized) -> Vec<u8> {
 fn encode(cmd: &SpeechCmd, proto: &mut Proto, out: &mut Vec<u8>, depth: u8) {
     match cmd {
         SpeechCmd::Speak { id, text, .. } => {
+            // A capital: the server snapshots its settings when it enqueues the SPEAK
+            // (`session.go` speak path), so a raised pitch before it and the base pitch right
+            // after it affect this message only. All in one write; replies arrive in order.
+            let raised = raised_pitch(proto.base_pitch, text.pitch_delta);
+            if let Some(p) = raised {
+                push_line(out, proto, &format!("SET self PITCH {p}"));
+            }
             out.extend_from_slice(&speak_bytes(text));
             proto.tracker.expect(Expect::Speak(*id));
+            if raised.is_some() {
+                let base = proto.base_pitch;
+                push_line(out, proto, &format!("SET self PITCH {base}"));
+            }
         }
         SpeechCmd::Replace { stop, then } => {
             push_line(out, proto, "STOP self");
@@ -246,6 +269,7 @@ fn encode(cmd: &SpeechCmd, proto: &mut Proto, out: &mut Vec<u8>, depth: u8) {
             pitch,
             volume,
         }) => {
+            proto.base_pitch = *pitch;
             push_line(out, proto, &format!("SET self RATE {rate}"));
             push_line(out, proto, &format!("SET self PITCH {pitch}"));
             push_line(out, proto, &format!("SET self VOLUME {volume}"));
@@ -546,6 +570,7 @@ mod tests {
             text: Verbalized {
                 text: Arc::from(text),
                 lang: None,
+                pitch_delta: 0,
             },
             voice: VoiceRef::Default,
             marks: false,

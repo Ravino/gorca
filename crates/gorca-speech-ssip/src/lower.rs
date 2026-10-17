@@ -44,6 +44,15 @@ fn priority_name(p: Prio) -> &'static str {
     }
 }
 
+/// The pitch to speak with for a `pitch_delta`, or `None` when the voice pitch is left alone.
+pub fn raised_pitch(base: i8, delta: i8) -> Option<i8> {
+    if delta == 0 {
+        return None;
+    }
+    let p = base.saturating_add(delta).clamp(-100, 100);
+    (p != base).then_some(p)
+}
+
 /// Dot-stuff and terminate the body (RFC 821 style, as SSIP does). Newlines are normalised
 /// to CRLF; lone CR are dropped.
 pub fn data_block(text: &str) -> String {
@@ -64,7 +73,12 @@ pub fn data_block(text: &str) -> String {
 ///
 /// `prio` is the priority class of the utterance; `SpeechCmd::Speak` does not carry it, so the
 /// caller passes the one it recorded for the id.
-pub fn lower(cmd: &SpeechCmd, prio: Prio) -> Vec<SsipOut> {
+///
+/// `base_pitch` is the pitch last set on the connection (wire scale): a text with a
+/// `pitch_delta` is spoken with `SET self PITCH base+delta` before `SPEAK` and the base pitch is
+/// set again right after the body (the server captures the settings at `SPEAK`, so the change
+/// affects this message only).
+pub fn lower(cmd: &SpeechCmd, prio: Prio, base_pitch: i8) -> Vec<SsipOut> {
     match cmd {
         SpeechCmd::Speak {
             text, voice, marks, ..
@@ -82,13 +96,20 @@ pub fn lower(cmd: &SpeechCmd, prio: Prio) -> Vec<SsipOut> {
             if *marks {
                 out.push(SsipOut::Line("SET self SSML_MODE on\r\n".to_owned()));
             }
+            let raised = raised_pitch(base_pitch, text.pitch_delta);
+            if let Some(p) = raised {
+                out.push(SsipOut::Line(format!("SET self PITCH {p}\r\n")));
+            }
             out.push(SsipOut::Line("SPEAK\r\n".to_owned()));
             out.push(SsipOut::Data(data_block(&text.text)));
+            if raised.is_some() {
+                out.push(SsipOut::Line(format!("SET self PITCH {base_pitch}\r\n")));
+            }
             out
         }
         SpeechCmd::Replace { then, .. } => {
             let mut out = vec![SsipOut::Line("STOP self\r\n".to_owned())];
-            out.extend(lower(then, prio));
+            out.extend(lower(then, prio, base_pitch));
             out
         }
         SpeechCmd::Stop { .. } => vec![SsipOut::Line("STOP self\r\n".to_owned())],
@@ -134,6 +155,7 @@ mod tests {
             text: Verbalized {
                 text: Arc::from(text),
                 lang: None,
+                pitch_delta: 0,
             },
             voice: VoiceRef::Default,
             marks: false,
@@ -150,11 +172,40 @@ mod tests {
 
     #[test]
     fn speak_sets_priority_then_speaks_and_sends_the_body() {
-        let out = lower(&speak("hello"), Prio::Text);
+        let out = lower(&speak("hello"), Prio::Text, 0);
         assert_eq!(
             lines(&out),
             ["SET self PRIORITY text\r\n", "SPEAK\r\n", "hello\r\n.\r\n"]
         );
+    }
+
+    #[test]
+    fn a_capital_is_spoken_with_a_raised_pitch_and_the_base_restored_after_the_body() {
+        let cmd = SpeechCmd::Speak {
+            id: UttId(3),
+            text: Verbalized {
+                text: Arc::from("A"),
+                lang: None,
+                pitch_delta: 30,
+            },
+            voice: VoiceRef::Default,
+            marks: false,
+        };
+        let out = lower(&cmd, Prio::Interrupt, 10);
+        assert_eq!(
+            lines(&out),
+            [
+                "SET self PRIORITY important\r\n",
+                "SET self PITCH 40\r\n",
+                "SPEAK\r\n",
+                "A\r\n.\r\n",
+                "SET self PITCH 10\r\n"
+            ]
+        );
+        // At the top of the range there is nothing to raise.
+        assert_eq!(raised_pitch(100, 30), None);
+        assert_eq!(raised_pitch(90, 30), Some(100));
+        assert_eq!(raised_pitch(0, 0), None);
     }
 
     #[test]
@@ -163,7 +214,7 @@ mod tests {
             stop: UttId(1),
             then: Box::new(speak("new")),
         };
-        let out = lower(&cmd, Prio::Interrupt);
+        let out = lower(&cmd, Prio::Interrupt, 0);
         assert_eq!(
             lines(&out),
             [
@@ -182,11 +233,12 @@ mod tests {
             text: Verbalized {
                 text: Arc::from("x"),
                 lang: None,
+                pitch_delta: 0,
             },
             voice: VoiceRef::Named(Arc::from("male1")),
             marks: true,
         };
-        let out = lower(&cmd, Prio::Message);
+        let out = lower(&cmd, Prio::Message, 0);
         let l = lines(&out);
         assert!(l.contains(&"SET self SYNTHESIS_VOICE male1\r\n"));
         assert!(l.contains(&"SET self SSML_MODE on\r\n"));
@@ -196,19 +248,19 @@ mod tests {
     #[test]
     fn control_commands() {
         assert_eq!(
-            lines(&lower(&SpeechCmd::Stop { id: UttId(1) }, Prio::Text)),
+            lines(&lower(&SpeechCmd::Stop { id: UttId(1) }, Prio::Text, 0)),
             ["STOP self\r\n"]
         );
         assert_eq!(
-            lines(&lower(&SpeechCmd::StopAll, Prio::Text)),
+            lines(&lower(&SpeechCmd::StopAll, Prio::Text, 0)),
             ["CANCEL self\r\n"]
         );
         assert_eq!(
-            lines(&lower(&SpeechCmd::Pause, Prio::Text)),
+            lines(&lower(&SpeechCmd::Pause, Prio::Text, 0)),
             ["PAUSE self\r\n"]
         );
         assert_eq!(
-            lines(&lower(&SpeechCmd::Resume, Prio::Text)),
+            lines(&lower(&SpeechCmd::Resume, Prio::Text, 0)),
             ["RESUME self\r\n"]
         );
         let p = SpeechCmd::SetParams(VoiceParams {
@@ -217,7 +269,7 @@ mod tests {
             volume: 50,
         });
         assert_eq!(
-            lines(&lower(&p, Prio::Text)),
+            lines(&lower(&p, Prio::Text, 0)),
             [
                 "SET self RATE -10\r\n",
                 "SET self PITCH 0\r\n",
@@ -234,7 +286,7 @@ mod tests {
             voice: Arc::from("ru"),
         });
         assert_eq!(
-            lines(&lower(&full, Prio::Text)),
+            lines(&lower(&full, Prio::Text, 0)),
             [
                 "SET self OUTPUT_MODULE espeak-ng\r\n",
                 "SET self LANGUAGE ru\r\n",
@@ -247,14 +299,15 @@ mod tests {
             ..VoiceSetup::default()
         });
         assert_eq!(
-            lines(&lower(&lang, Prio::Text)),
+            lines(&lower(&lang, Prio::Text, 0)),
             ["SET self LANGUAGE ru\r\n", "SET self PUNCTUATION none\r\n"]
         );
         // gorca verbalises symbols itself: the server never reads punctuation, whatever is set.
         assert_eq!(
             lines(&lower(
                 &SpeechCmd::Configure(VoiceSetup::default()),
-                Prio::Text
+                Prio::Text,
+                0
             )),
             ["SET self PUNCTUATION none\r\n"]
         );

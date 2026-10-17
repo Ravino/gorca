@@ -510,14 +510,21 @@ pub fn segments(items: &[Item], o: VerbalizeOpts) -> SmallVec<[Segment; 4]> {
                 Item::Text(_) | Item::Name(_) | Item::Lead(_) => v.unit(t, How::Text, &o),
                 Item::Role(_) | Item::State(_) => t.to_owned(),
             };
+            // A capital read alone gets the capital pitch (`speech.caps = "pitch"`).
+            let capital = matches!(i, Item::Char(_))
+                && o.caps == gorca_speech::Caps::Pitch
+                && text.chars().count() == 1
+                && text.chars().all(char::is_uppercase);
             (!text.is_empty()).then(|| Segment {
                 text: Arc::from(text),
                 kind: match i.kind() {
+                    _ if capital => SegmentKind::Capital,
                     SegmentKind::Text => SegmentKind::Said,
                     other @ (SegmentKind::Role
                     | SegmentKind::State
                     | SegmentKind::Value
-                    | SegmentKind::Said) => other,
+                    | SegmentKind::Said
+                    | SegmentKind::Capital) => other,
                 },
             })
         })

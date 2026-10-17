@@ -713,6 +713,9 @@ impl Reader {
         };
         let mut u = message(&said, id, epoch);
         u.prio = prio;
+        if unit == Unit::Char {
+            self.mark_capital(&mut u);
+        }
         if sensitive {
             self.text.sensitive_utt = Some(id);
         }

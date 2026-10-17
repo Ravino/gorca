@@ -4,6 +4,8 @@
 [keymap.global]
 "gorca+s" = "speech.mode_cycle"
 "gorca+x" = "speech.repeat_last"
+"gorca+shift+x" = "speech.history_prev"
+"gorca+ctrl+shift+x" = "speech.history_next"
 "gorca+ctrl+x" = "speech.copy_last"
 "gorca+ctrl+shift+up" = "speech.ring_inc"
 "gorca+ctrl+shift+down" = "speech.ring_dec"

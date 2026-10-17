@@ -25,6 +25,9 @@ pub enum SegmentKind {
     /// Text that is already verbalised (symbols named by the punctuation level) or is the
     /// reader's own message: never symbol-processed again on its way to the speech lane.
     Said,
+    /// A capital letter spoken alone (`speech.caps = "pitch"`): already verbalised like
+    /// `Said`, and the speech client speaks it with a raised pitch (NVDA `capPitchChange`).
+    Capital,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

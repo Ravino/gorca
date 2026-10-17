@@ -19,6 +19,7 @@ fn speak(id: u64, text: &str) -> SpeechCmd {
         text: Verbalized {
             text: Arc::from(text),
             lang: None,
+            pitch_delta: 0,
         },
         voice: VoiceRef::Default,
         marks: false,
