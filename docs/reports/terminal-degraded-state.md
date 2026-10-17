@@ -69,3 +69,8 @@ E2E: `VD` (real terminal soak) and `WD` (Firefox popup) as regression steps.
 ## Verification
 fmt, `clippy --workspace --all-targets -D warnings`, `cargo test --workspace` (all pass), `cargo xtask deps` clean.
 Gate results (M6 fake, VV, strict K2/K3/R1, 3 repeats): see the end of this file.
+
+## Gate results (head after the merge of main, degraded host: load 4-14, --force)
+- `bench/acceptance/phase2.sh --only m1,m6 --force`, 3 repeats, run dir `bench/results/acceptance/phase2-20261017T011543Z` (first attempt there failed only on a stale reader rev check, kept) and the rerun dir listed in `/var/tmp/vdx/accept2.out`: m1 (strict K2 K2s K3 K4 K4h R1 R1s RS, `--impersonate-orca`) PASS 31 gated rows; m6 fake (V1 VT VH V2 V3 VP VR VF VB VW) PASS 45 gated rows; VV real gnome-terminal PASS 24 gated rows. The host was not quiet, so this is not an acceptance run.
+- VS real terminal x3 (`bench/results/e2e/vs-final`): vs_silent 0, vs_stale 0, worst lag 2-3 ticks.
+- VD 10 rounds clean (vd2); WD 5 variants clean (wd1).
