@@ -16,9 +16,7 @@ use gorca_ext_api::terminal::{
     TerminalHooks, Unit, Urgency,
 };
 
-use gorca_ext_api::terminal::word_at;
-use gorca_ext_api::text::caret::{Presented, present_word};
-use gorca_ext_api::text::{CharsSpace, EditQuirks, Lookup};
+use gorca_ext_api::terminal::{word_at, word_motion};
 
 use crate::prompt::Prompt;
 use crate::screen::{Diff, DiffBuf, Screen, diff, diff_with};
@@ -158,6 +156,10 @@ pub struct Session {
     /// Motion keys whose caret events have not been read yet, oldest first (two arrow keys can
     /// be pressed before the first one's caret event arrives).
     motions: VecDeque<(Unit, Ms)>,
+    /// Motion keys answered by the edge timer (the key time): a caret event that still comes
+    /// within `MOTION_MS` of the key (a slow link) is the key's real answer and replaces the
+    /// edge speech, which read the unit at the old caret.
+    edged: VecDeque<(Unit, Ms)>,
     /// A password prompt is active: typed characters are secret.
     secret: bool,
     /// Ctrl+C was pressed at this time: output that is still flowing is not read; the first
@@ -211,6 +213,7 @@ impl Session {
             held_now: false,
             last_edit_at: None,
             motions: VecDeque::new(),
+            edged: VecDeque::new(),
             secret: false,
             interrupt_at: None,
             quiet: false,
@@ -248,6 +251,7 @@ impl Session {
         self.popped.clear();
         self.caret_keyed = false;
         self.motions.clear();
+        self.edged.clear();
         self.expect = Expect::None;
         self.vertical_keys = 0;
         self.vertical_open = false;
@@ -417,6 +421,10 @@ impl Session {
                 break;
             }
             self.motions.pop_front();
+            if self.edged.len() >= MOTIONS_MAX {
+                self.edged.pop_front();
+            }
+            self.edged.push_back((unit, at));
             let (row, col) = self.live.locate(self.caret);
             self.say_at(&self.live, row, col, unit, None, out);
         }
@@ -841,6 +849,31 @@ impl Session {
         let (row, col) = self.live.locate(off);
         if let Some((unit, _)) = self.motions.pop_front() {
             self.caret_keyed = !self.motions.is_empty();
+            let (prow, pcol) = self.live.locate(prev);
+            self.say_at(
+                &self.live,
+                row,
+                col,
+                unit,
+                (prow == row).then_some(pcol),
+                out,
+            );
+            self.last_row = row;
+            return;
+        }
+        // A caret event that comes after the edge timer already spoke for its key (a slow link):
+        // the move did happen, so speak what it moved over instead.
+        while self
+            .edged
+            .front()
+            .is_some_and(|&(_, at)| now.saturating_sub(at) > MOTION_MS)
+        {
+            self.edged.pop_front();
+        }
+        if moved
+            && !with_edit
+            && let Some((unit, _)) = self.edged.pop_front()
+        {
             let (prow, pcol) = self.live.locate(prev);
             self.say_at(
                 &self.live,
@@ -1282,19 +1315,9 @@ impl Session {
         let text = match unit {
             Unit::Word => {
                 let chars: Vec<char> = line.trim_end().chars().collect();
-                match present_word(
-                    &CharsSpace::new(&chars, 0),
-                    from,
-                    col,
-                    EditQuirks::default(),
-                ) {
-                    Lookup::Ready(Presented::Text(r)) => chars
-                        .get(r.start as usize..r.end as usize)
-                        .map(|w| w.iter().collect::<String>())
-                        .map(|w| w.trim().to_owned())
-                        .filter(|w| !w.is_empty()),
-                    Lookup::Ready(Presented::Blank) | Lookup::Need(_) => None,
-                }
+                word_motion(&chars, from, col)
+                    .map(|r| chars[r].iter().collect::<String>().trim().to_owned())
+                    .filter(|w| !w.is_empty())
             }
             Unit::Line | Unit::Text => word_at(line, col),
             Unit::Char => line.chars().nth(col as usize).map(String::from),

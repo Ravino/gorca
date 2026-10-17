@@ -379,6 +379,24 @@ fn a_motion_key_that_moves_nothing_speaks_the_unit_at_the_caret_after_the_edge_t
 }
 
 #[test]
+fn a_late_caret_event_after_the_edge_timer_still_speaks_the_unit_it_moved_onto() {
+    // Over a slow link the caret event arrives after EDGE_MS: the edge timer has spoken the unit
+    // at the old caret, and the real event must not be silent (it answers with the new unit).
+    let mut r = Rig::new();
+    r.focus("$ abc def", 2);
+    r.key(TermKey::CharRight);
+    assert_eq!(texts(&r.wait(120)), vec!["a".to_owned()]);
+    assert_eq!(texts(&r.feed(TermInput::Caret(3))), vec!["b".to_owned()]);
+    // The key's answer is used up; a later unexplained caret move stays silent.
+    assert!(says(&r.feed(TermInput::Caret(4))).is_empty());
+    // A caret event later than the motion window is not the key's.
+    r.key(TermKey::CharRight);
+    assert_eq!(texts(&r.wait(120)), vec!["c".to_owned()]);
+    r.now += 300;
+    assert!(says(&r.feed(TermInput::Caret(5))).is_empty());
+}
+
+#[test]
 fn a_caret_without_a_key_is_silent() {
     let mut r = Rig::new();
     r.focus("$ abc", 5);

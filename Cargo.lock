@@ -1278,7 +1278,6 @@ name = "gorca-ext-api"
 version = "0.0.0"
 dependencies = [
  "gorca-i18n",
- "gorca-text",
  "wit-bindgen",
  "wit-parser 0.261.0",
 ]
@@ -1480,6 +1479,7 @@ dependencies = [
 name = "gorca-text"
 version = "0.0.0"
 dependencies = [
+ "gorca-ext-api",
  "gorca-model",
  "smallvec",
  "unicode-segmentation",

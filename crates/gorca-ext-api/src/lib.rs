@@ -12,9 +12,9 @@
 //! generates them (TBD, `wasm-engineer`, lands with `gorca-ext-host`). A test parses the WIT file
 //! so it cannot rot unnoticed.
 //!
-//! This crate's only gorca dependency is the pure text layer (`gorca-text`: no tokio, no I/O,
-//! re-exported as [`text`]): a WASM extension links only this, and a terminal presents caret
-//! moves with the same code as every other editor.
+//! This crate's only gorca dependency is the pure leaf `gorca-i18n`: a WASM extension links only
+//! this. The terminal word model is kept in step with the editing presenter by shared test
+//! vectors (`terminal::WORD_MOTION_VECTORS`), not by a dependency.
 //!
 //! # Writing an extension (one source, two builds)
 //!
@@ -37,8 +37,6 @@ pub mod host;
 
 pub mod grid;
 
-/// The shared text layer: units, caret presentation, the editing quirk rows.
-pub use gorca_text as text;
 #[cfg(target_arch = "wasm32")]
 pub mod guest;
 pub mod terminal;

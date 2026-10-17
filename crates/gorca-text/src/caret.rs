@@ -229,6 +229,24 @@ mod tests {
     }
 
     #[test]
+    fn present_word_agrees_with_the_extension_sdk_vectors() {
+        // `gorca_ext_api::terminal::word_motion` is the slice form of this model for terminals.
+        for &(text, from, at, want) in gorca_ext_api::terminal::WORD_MOTION_VECTORS {
+            let c: Vec<char> = text.chars().collect();
+            let got = match present_word(&CharsSpace::new(&c, 0), from, at, EditQuirks::default()) {
+                Lookup::Ready(Presented::Text(r)) => c[r.start as usize..r.end as usize]
+                    .iter()
+                    .collect::<String>()
+                    .trim()
+                    .to_owned(),
+                Lookup::Ready(Presented::Blank) => String::new(),
+                Lookup::Need(n) => panic!("{text:?}: needs {n:?}"),
+            };
+            assert_eq!(got, want, "{text:?} {from:?} -> {at}");
+        }
+    }
+
+    #[test]
     fn a_start_landing_toolkit_speaks_the_word_at_the_caret() {
         let c: Vec<char> = "foo,bar baz".chars().collect();
         let sp = CharsSpace::new(&c, 0);

@@ -12,6 +12,10 @@ gorca-model = { workspace = true }
 smallvec = { workspace = true }
 unicode-segmentation = { workspace = true }
 
+[dev-dependencies]
+# Test vectors of the terminal word model (shared with the extension SDK, which cannot link this crate).
+gorca-ext-api = { workspace = true }
+
 [[bench]]
 name = "keystroke"
 harness = false

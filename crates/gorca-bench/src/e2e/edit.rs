@@ -782,13 +782,21 @@ pub fn run(
     dump(id, &rows);
     let probe = std::env::var_os("GORCA_ED_PROBE").is_some();
     let mut failures = 0u64;
+    let mut gated = 0u64;
     for r in &rows {
         let line = r.got.join(" | ");
         match super::edit_model::check(t, chromium, r.name, &r.got) {
             Some(Err(why)) if !probe => {
                 failures += 1;
+                let known = super::edit_model::known_failing(t, r.name);
+                // Web targets are reported, not gated: the typist of the browser rigs drops letters
+                // (flake class); the native targets and the terminal gate.
+                if !known && !matches!(t, Target::Web(_)) {
+                    gated += 1;
+                }
+                let tag = if known { " [known failing]" } else { "" };
                 out.notes
-                    .push(format!("{id} {}: heard [{line}] {why}", r.name));
+                    .push(format!("{id} {}: heard [{line}] {why}{tag}", r.name));
             }
             Some(Err(_) | Ok(())) | None => {
                 out.notes.push(format!("{id} {}: [{line}]", r.name));
@@ -797,5 +805,9 @@ pub fn run(
     }
     out.x("ed_steps", rows.len() as f64, "steps");
     out.x("ed_failures", failures as f64, "steps");
+    // The gated metric (bin/e2e.rs, threshold 0): native editors and the terminal only.
+    if !matches!(t, Target::Web(_)) {
+        out.x("ed_gate_failures", gated as f64, "steps");
+    }
     Ok(())
 }

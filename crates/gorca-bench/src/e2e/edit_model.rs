@@ -58,6 +58,8 @@ pub enum Exp {
     BlockSelection,
     /// Any non-empty speech.
     Some,
+    /// The text that was removed: speech, none of it `blank` (checklist row 25).
+    Removed,
 }
 
 fn ex(v: &[&str]) -> Exp {
@@ -149,11 +151,18 @@ pub fn expect(t: Target, chromium: bool, step: &str) -> Option<Exp> {
         "Shift+Down" | "Shift+Down 2" | "Ctrl+Shift+Down" => Exp::Selected,
         "Shift+Up" if editable(t) => Exp::BlockSelection,
         "Shift+Up" => Exp::Unselected,
-        "BackSpace selection" => Exp::Some,
+        "BackSpace selection" => Exp::Removed,
         // The editor applications: find, replace, tabs and the save dialog speak something.
         "Ctrl+H" | "Ctrl+S" | "save: Escape" => Exp::Some,
         _ => return None,
     })
+}
+
+/// Steps that are known to fail on a target, with evidence in docs/reports/unified-editing.md
+/// (verification F4): a contenteditable of Firefox and Chromium does not speak the removed text
+/// when Backspace deletes a selection. They are recorded as failures and never gate.
+pub fn known_failing(t: Target, step: &str) -> bool {
+    editable(t) && step == "BackSpace selection"
 }
 
 fn is_line_of_paragraph(s: &str) -> bool {
@@ -194,6 +203,13 @@ pub fn check(t: Target, chromium: bool, step: &str, got: &[String]) -> Option<Re
                 Ok(())
             } else {
                 Err("(want speech)".to_owned())
+            }
+        }
+        Exp::Removed => {
+            if got.iter().any(|s| !s.trim().is_empty()) && !got.iter().any(|s| s == "blank") {
+                Ok(())
+            } else {
+                Err("(want the removed text)".to_owned())
             }
         }
         Exp::Line => one(got).and_then(|s| {
@@ -242,6 +258,22 @@ mod tests {
 
     fn g(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn backspace_over_a_selection_must_speak_the_removed_text() {
+        let t = Target::Gtk4Text;
+        assert_eq!(
+            check(t, false, "BackSpace selection", &g(&["one two"])),
+            Some(Ok(()))
+        );
+        assert!(check(t, false, "BackSpace selection", &g(&["blank"])).is_some_and(|r| r.is_err()));
+        assert!(check(t, false, "BackSpace selection", &g(&[])).is_some_and(|r| r.is_err()));
+        assert!(known_failing(
+            Target::Web(WebField::Editable),
+            "BackSpace selection"
+        ));
+        assert!(!known_failing(t, "BackSpace selection"));
     }
 
     #[test]
