@@ -1546,7 +1546,7 @@ pub fn vr(
         tap(t, KP_CUR_LINE, 0, 0)?;
         Ok(())
     })?;
-    expect("current line", "me@box:~$", &got);
+    expect("current line", "me at box: $", &got);
     for (i, row) in (0..8).rev().take(3).enumerate() {
         let got = said_during(&mut t, 250, |t| {
             tap(t, KP_PREV_LINE, 0, 0)?;
@@ -2405,7 +2405,7 @@ pub fn vv(
         let said_dollar = |v: &V| {
             texts(&v.rig.mock.since(mark))
                 .iter()
-                .any(|(ts, s)| *ts > t_key && s.contains("dollar"))
+                .any(|(ts, s)| *ts > t_key && (s.contains("dollar") || s.contains('$')))
         };
         let mut t_key = t_key;
         if !said_dollar(&v) {
@@ -2423,7 +2423,7 @@ pub fn vv(
         key_lat.extend(lat);
         let prompt_said = spoken
             .iter()
-            .any(|(ts, s)| *ts > t_key && s.contains("dollar"));
+            .any(|(ts, s)| *ts > t_key && (s.contains("dollar") || s.contains('$')));
         if !prompt_said {
             let after: Vec<String> = spoken
                 .iter()
@@ -2555,7 +2555,11 @@ fn vv_password(
         v.press(ENTER, 13, 0, &[28])?;
         Ok(())
     })?;
-    c.expect("prompt after the password", heard(&got, "dollar"), &got);
+    c.expect(
+        "prompt after the password",
+        heard(&got, "dollar") || heard(&got, "$"),
+        &got,
+    );
     std::thread::sleep(Duration::from_millis(500));
     let mut hits = 0u64;
     let mut empty = 0u64;
@@ -2607,7 +2611,11 @@ fn vv_pager(v: &mut V, c: &mut Check) -> Result<()> {
         v.type_char('q')?;
         Ok(())
     })?;
-    c.expect("q: back at the prompt", heard(&got, "dollar"), &got);
+    c.expect(
+        "q: back at the prompt",
+        heard(&got, "dollar") || heard(&got, "$"),
+        &got,
+    );
     Ok(())
 }
 
@@ -2619,7 +2627,7 @@ fn vv_tabs(v: &mut V, c: &mut Check) -> Result<()> {
     })?;
     c.expect(
         "Ctrl+Shift+T: the new tab's prompt",
-        heard(&got, "dollar"),
+        heard(&got, "dollar") || heard(&got, "$"),
         &got,
     );
     let got = v.said_during(1500, |v| {
@@ -2628,7 +2636,7 @@ fn vv_tabs(v: &mut V, c: &mut Check) -> Result<()> {
     })?;
     c.expect(
         "Ctrl+PgUp: the first tab's prompt",
-        heard(&got, "dollar"),
+        heard(&got, "dollar") || heard(&got, "$"),
         &got,
     );
     Ok(())

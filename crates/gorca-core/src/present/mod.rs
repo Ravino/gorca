@@ -14,7 +14,7 @@ mod notification;
 mod utterance;
 mod window;
 
-pub use echo::{key_echo, key_echo_is_action, key_echo_text, message};
+pub use echo::{key_echo, key_echo_is_action, key_echo_spoken, key_echo_text, message};
 pub use flow::{
     FOCUS_FIELDS, FocusBackoff, NameRetry, Presented, RAPID_FOCUS, REFINE_WINDOW, STORM_HOLD,
     focus_need,

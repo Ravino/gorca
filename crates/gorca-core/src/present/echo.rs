@@ -58,6 +58,39 @@ pub fn key_echo_is_action(text: &str) -> bool {
     text != "space" && text.chars().nth(1).is_some()
 }
 
+/// What a key echo text is said as: a typed character or "space" is named like a character read
+/// from a text (the symbol tables, the current language and caps setting), and the names of the
+/// action keys are translated. English text keeps its own names.
+pub fn key_echo_spoken(
+    text: &str,
+    v: &gorca_speech::Verbalizer,
+    o: gorca_speech::VerbalizeOpts,
+) -> String {
+    if text == "space" {
+        return v.unit(" ", gorca_speech::How::Char, &o);
+    }
+    if !key_echo_is_action(text) {
+        return v.unit(text, gorca_speech::How::Char, &o);
+    }
+    if o.lang == gorca_speech::Lang::Ru {
+        let ru = match text {
+            "enter" => Some("ввод"),
+            "backspace" => Some("удалить назад"),
+            "tab" => Some("табуляция"),
+            "escape" => Some("выход"),
+            "delete" => Some("удалить"),
+            _ => None,
+        };
+        if let Some(n) = ru {
+            return n.to_owned();
+        }
+        if let Some(n) = text.strip_prefix("f ") {
+            return format!("эф {n}");
+        }
+    }
+    text.to_owned()
+}
+
 /// Key echo: interrupts, carries the epoch of the key press.
 pub fn key_echo(text: &str, id: UttId, epoch: Epoch) -> Utterance {
     let mut u = message(text, id, epoch);
