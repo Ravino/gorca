@@ -1,33 +1,33 @@
 == host: load 6.88 6.66 7.69 10/2023 1139143 ==
-   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-model)
-   Compiling gorca-config v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-config)
-   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-daemon)
-   Compiling ext-vte v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/extensions/ext-vte)
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-rt)
-   Compiling gorca-text v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-text)
-   Compiling gorca-doc v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-doc)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-ingress)
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-dbus)
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-mirror)
-   Compiling gorca-output-api v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-output-api)
-   Compiling gorca-input-api v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-input-api)
-   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-doc-source-api)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-bench-b2)
-   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-connector-api)
-   Compiling gorca-speech v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-speech)
-   Compiling gorca-doc-source-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-doc-source-atspi)
-   Compiling gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-connector-atspi)
-   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-bench)
-   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-core)
-   Compiling gorca-input-xkb v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-input-xkb)
-   Compiling gorca-input-mutter v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-input-mutter)
-   Compiling gorca-speech-ssip v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-speech-ssip)
-   Compiling gorca-speech-voicego v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-speech-voicego)
-   Compiling gorca-ext-host v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-ext-host)
+   Compiling gorca-model v0.0.0 (<repo>/crates/gorca-model)
+   Compiling gorca-config v0.0.0 (<repo>/crates/gorca-config)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
+   Compiling ext-vte v0.0.0 (<repo>/extensions/ext-vte)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-text v0.0.0 (<repo>/crates/gorca-text)
+   Compiling gorca-doc v0.0.0 (<repo>/crates/gorca-doc)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-output-api v0.0.0 (<repo>/crates/gorca-output-api)
+   Compiling gorca-input-api v0.0.0 (<repo>/crates/gorca-input-api)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/crates/gorca-doc-source-api)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-connector-api v0.0.0 (<repo>/crates/gorca-connector-api)
+   Compiling gorca-speech v0.0.0 (<repo>/crates/gorca-speech)
+   Compiling gorca-doc-source-atspi v0.0.0 (<repo>/crates/gorca-doc-source-atspi)
+   Compiling gorca-connector-atspi v0.0.0 (<repo>/crates/gorca-connector-atspi)
+   Compiling gorca-bench v0.0.0 (<repo>/crates/gorca-bench)
+   Compiling gorca-core v0.0.0 (<repo>/crates/gorca-core)
+   Compiling gorca-input-xkb v0.0.0 (<repo>/crates/gorca-input-xkb)
+   Compiling gorca-input-mutter v0.0.0 (<repo>/crates/gorca-input-mutter)
+   Compiling gorca-speech-ssip v0.0.0 (<repo>/crates/gorca-speech-ssip)
+   Compiling gorca-speech-voicego v0.0.0 (<repo>/crates/gorca-speech-voicego)
+   Compiling gorca-ext-host v0.0.0 (<repo>/crates/gorca-ext-host)
     Finished `release` profile [optimized + debuginfo] target(s) in 1m 03s
 private compositor: /tmp/gorca-m7c.HgSDjU/x/gorca-m7-1139131
-== reader <repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca built from eff0ad4, tree at eff0ad4
-== e2e m9r3-final-cr-m7: reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca backend=voicego repeats=3 load=7.75 7.13 7.79 3/2175 1141076
+== reader <repo>/target/release/gorca built from eff0ad4, tree at eff0ad4
+== e2e m9r3-final-cr-m7: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=7.75 7.13 7.79 3/2175 1141076
 -- round 1/3 B0 (load 7.75 7.13 7.79 3/2175 1141076)
 kill: (-1141135): No such process
 -- round 1/3 W1 (load 7.39 7.07 7.76 1/2209 1141455)
@@ -111,7 +111,7 @@ kill: (-1182366): No such process
 # topology_arms=lanes-rtx42
 # topology_expected=-
 # label=m9r3-final-cr-m7
-# reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=3
 # samples_per_series=1200

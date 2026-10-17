@@ -12,7 +12,7 @@
 # python=Python 3.13.5
 # build=release
 # label=m8-rereview-ab-base-r4
-# reader=daemon:<repo>/.claude/worktrees/m8-review/target/ab-base/target/release/gorca
+# reader=daemon:<repo>/target/ab-base/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=1200

@@ -1,10 +1,10 @@
 == host: load 7.87 7.68 8.79 1/3107 1851543 ==
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-ingress)
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-dbus)
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench-b2)
-   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-bench v0.0.0 (<repo>/crates/gorca-bench)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 2.71s
      Running unittests src/lib.rs (target/debug/deps/gorca_bench-b4921a7a1562f132)
 
@@ -36,40 +36,40 @@ test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; fin
    Compiling crossbeam-utils v0.8.23
    Compiling crossbeam-epoch v0.9.21
    Compiling crossbeam-deque v0.8.8
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-rt)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
    Compiling rayon-core v1.13.0
    Compiling either v1.19.0
-   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-daemon)
-   Compiling gorca-output-api v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-output-api)
-   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-doc-source-api)
-   Compiling gorca-input-api v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-input-api)
-   Compiling gorca-speech v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-speech)
-   Compiling gorca-speech-ssip v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-speech-ssip)
-   Compiling gorca-speech-voicego v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-speech-voicego)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
+   Compiling gorca-output-api v0.0.0 (<repo>/crates/gorca-output-api)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/crates/gorca-doc-source-api)
+   Compiling gorca-input-api v0.0.0 (<repo>/crates/gorca-input-api)
+   Compiling gorca-speech v0.0.0 (<repo>/crates/gorca-speech)
+   Compiling gorca-speech-ssip v0.0.0 (<repo>/crates/gorca-speech-ssip)
+   Compiling gorca-speech-voicego v0.0.0 (<repo>/crates/gorca-speech-voicego)
    Compiling concurrent-queue v2.5.0
    Compiling crossbeam-queue v0.3.14
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-ingress)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
    Compiling async-io v2.6.0
    Compiling async-channel v2.5.0
    Compiling async-executor v1.14.0
    Compiling blocking v1.7.0
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
-   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-connector-api)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-connector-api v0.0.0 (<repo>/crates/gorca-connector-api)
    Compiling async-signal v0.2.14
    Compiling async-process v2.5.0
    Compiling rayon v1.12.0
    Compiling zbus v5.19.0
-   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-core)
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-dbus)
+   Compiling gorca-core v0.0.0 (<repo>/crates/gorca-core)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
    Compiling atspi v0.30.0
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench-b2)
-   Compiling gorca-doc-source-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-doc-source-atspi)
-   Compiling gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-connector-atspi)
-   Compiling gorca-input-mutter v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-input-mutter)
-   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-doc-source-atspi v0.0.0 (<repo>/crates/gorca-doc-source-atspi)
+   Compiling gorca-connector-atspi v0.0.0 (<repo>/crates/gorca-connector-atspi)
+   Compiling gorca-input-mutter v0.0.0 (<repo>/crates/gorca-input-mutter)
+   Compiling gorca-bench v0.0.0 (<repo>/crates/gorca-bench)
     Finished `release` profile [optimized + debuginfo] target(s) in 25.40s
-== reader <repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca built from 3d09a7e, tree at 3d09a7e
-== e2e rr-k: reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca backend=voicego repeats=3 load=11.10 8.47 9.03 3/3090 1854538
+== reader <repo>/target/release/gorca built from 3d09a7e, tree at 3d09a7e
+== e2e rr-k: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=11.10 8.47 9.03 3/3090 1854538
 -- round 1/3 K2 (load 11.10 8.47 9.03 3/3090 1854538)
 2026-10-15T14:00:33.494680Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
 2026-10-15T14:00:33.495653Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
@@ -316,7 +316,7 @@ test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; fin
 # python=Python 3.13.5
 # build=release
 # label=rr-k
-# reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=3
 # samples_per_series=1200

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! The embedded catalogs: one immutable table per language, indexed by [`MsgId`].
 //!
 //! The tables are built once (first use) from the `catalog/<lang>/*.msg` files compiled into the

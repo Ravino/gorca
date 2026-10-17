@@ -1,11 +1,11 @@
 load_start 15.53 12.47 10.98 4/2690 1101180
 == host: load 15.53 12.47 10.98 4/2691 1101187 ==
-   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a702d0a17a733562c/crates/gorca-bench)
-   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a702d0a17a733562c/crates/gorca-daemon)
+   Compiling gorca-bench v0.0.0 (<repo>/crates/gorca-bench)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
     Finished `release` profile [optimized + debuginfo] target(s) in 15.11s
 private compositor: /tmp/gorca-m7c.58iPlx/x/gorca-m7-1101181
-== reader <repo>/.claude/worktrees/agent-a702d0a17a733562c/target/release/gorca built from 00bdce8, tree at 00bdce8
-== e2e m3b-m7b-review: reader=daemon:<repo>/.claude/worktrees/agent-a702d0a17a733562c/target/release/gorca backend=voicego repeats=3 load=14.88 12.56 11.04 2/2859 1102101
+== reader <repo>/target/release/gorca built from 00bdce8, tree at 00bdce8
+== e2e m3b-m7b-review: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=14.88 12.56 11.04 2/2859 1102101
 -- round 1/3 FE2 (load 14.88 12.56 11.04 2/2859 1102101)
 kill: (-1102139): No such process
 -- round 1/3 FCE2 (load 9.27 11.44 10.90 1/2829 1103984)
@@ -38,7 +38,7 @@ kill: (-1125691): No such process
 # python=Python 3.13.5
 # build=release
 # label=m3b-m7b-review
-# reader=daemon:<repo>/.claude/worktrees/agent-a702d0a17a733562c/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=3
 # samples_per_series=1200

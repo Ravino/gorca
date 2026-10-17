@@ -17,7 +17,7 @@
    Compiling lock_api v0.4.14
    Compiling ordered-stream v0.2.0
    Compiling futures-lite v2.6.1
-   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/agent-a7220896a4b874d87/crates/gorca-model)
+   Compiling gorca-model v0.0.0 (<repo>/crates/gorca-model)
    Compiling tracing-core v0.1.36
    Compiling event-listener-strategy v0.5.4
    Compiling async-broadcast v0.7.2
@@ -45,13 +45,13 @@
    Compiling zvariant_derive v5.15.0
    Compiling zvariant v5.15.0
    Compiling tokio-util v0.7.20
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-a7220896a4b874d87/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-a7220896a4b874d87/crates/gorca-ingress)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
    Compiling zbus_names v4.3.4
    Compiling zbus_macros v5.19.0
    Compiling zbus v5.19.0
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-a7220896a4b874d87/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/agent-a7220896a4b874d87/crates/gorca-bench-b2)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 11.85s
      Running unittests src/lib.rs (target/debug/deps/gorca_bench_b2-a8e94cec28270b3b)
 
@@ -168,7 +168,7 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
    Compiling event-listener-strategy v0.5.4
    Compiling lock_api v0.4.14
    Compiling indexmap v2.14.2
-   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/agent-a7220896a4b874d87/crates/gorca-model)
+   Compiling gorca-model v0.0.0 (<repo>/crates/gorca-model)
    Compiling futures-io v0.3.34
    Compiling fastrand v2.5.0
    Compiling linux-raw-sys v0.12.1
@@ -206,12 +206,12 @@ test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
    Compiling zvariant v5.15.0
    Compiling zbus_names v4.3.4
    Compiling tokio-util v0.7.20
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-a7220896a4b874d87/crates/gorca-rt)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
    Compiling zbus_macros v5.19.0
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-a7220896a4b874d87/crates/gorca-ingress)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
    Compiling zbus v5.19.0
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-a7220896a4b874d87/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/agent-a7220896a4b874d87/crates/gorca-bench-b2)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
     Finished `release` profile [optimized + debuginfo] target(s) in 24.94s
      Running unittests src/lib.rs (target/release/deps/gorca_bench_b2-1b8db85239e00a3a)
 

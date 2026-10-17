@@ -1,11 +1,11 @@
-   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-testkit)
-   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-daemon)
+   Compiling gorca-testkit v0.0.0 (<repo>/crates/gorca-testkit)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 3.21s
      Running tests/b1_ic.rs (target/debug/deps/b1_ic-db130a3ebd2fa224)
 
 running 3 tests
-   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-testkit)
-   Compiling b1-fakeapp v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/tests/harness/b1/fakeapp)
+   Compiling gorca-testkit v0.0.0 (<repo>/crates/gorca-testkit)
+   Compiling b1-fakeapp v0.0.0 (<repo>/tests/harness/b1/fakeapp)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.37s
 test the_policy_hears_of_a_new_app_before_it_does_anything ... ok
 test the_invalidation_suite_passes_against_the_real_daemon has been running for over 60 seconds

@@ -1,13 +1,13 @@
 == gates start 2026-10-15T08:06:29Z load 15.25 10.20 5.43 10/3101 733836
 fmt rc=0
-    Checking gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-core)
-    Checking gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-daemon)
-    Checking gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-connector-atspi)
+    Checking gorca-core v0.0.0 (<repo>/crates/gorca-core)
+    Checking gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
+    Checking gorca-connector-atspi v0.0.0 (<repo>/crates/gorca-connector-atspi)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.26s
 clippy rc=0
-   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-core)
-   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-daemon)
-   Compiling gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-connector-atspi)
+   Compiling gorca-core v0.0.0 (<repo>/crates/gorca-core)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
+   Compiling gorca-connector-atspi v0.0.0 (<repo>/crates/gorca-connector-atspi)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 36.34s
      Running unittests src/lib.rs (target/debug/deps/b1_fakeapp-2852a6364ce58b14)
 

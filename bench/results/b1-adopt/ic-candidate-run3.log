@@ -1,6 +1,6 @@
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
-   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-core)
-   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-daemon)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-core v0.0.0 (<repo>/crates/gorca-core)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 7.78s
      Running tests/b1_ic.rs (target/debug/deps/b1_ic-db130a3ebd2fa224)
 

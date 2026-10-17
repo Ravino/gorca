@@ -1,7 +1,7 @@
 == host: load 14.18 15.90 13.89 4/2156 3434185 ==
     Finished `release` profile [optimized + debuginfo] target(s) in 0.22s
 private compositor: /tmp/gorca-m8c.bVMnys/x/gorca-m8-3434179
-== e2e-m8 m8b-review: reader=daemon:<repo>/.claude/worktrees/m8b-review/target/release/gorca backend=voicego repeats=1 load=13.52 15.73 13.85 2/2276 3434662
+== e2e-m8 m8b-review: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=1 load=13.52 15.73 13.85 2/2276 3434662
 -- round 1/1 M8-QN (load 13.52 15.73 13.85 2/2276 3434662)
 kill: (-3434755): No such process
 -- round 1/1 M8-TB (load 10.88 14.78 13.61 3/2252 3436300)
@@ -70,7 +70,7 @@ kill: (-3455910): No such process
 # python=Python 3.13.5
 # build=release
 # label=m8b-review
-# reader=daemon:<repo>/.claude/worktrees/m8b-review/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=150

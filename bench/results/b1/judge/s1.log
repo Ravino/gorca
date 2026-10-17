@@ -8,12 +8,12 @@
    Compiling arc-swap v1.9.2
    Compiling tokio-util v0.7.20
    Compiling zbus v5.19.0
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-ingress)
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-mirror)
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-bench-b2)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-bench-b1)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 6.44s
      Running unittests src/lib.rs (target/debug/deps/gorca_bench_b1-fabe3af03abd0289)
 
@@ -117,20 +117,20 @@ error: test failed, to rerun pass `-p b1-fakeapp --test fidelity`
    Compiling zvariant v5.15.0
    Compiling tracing v0.1.44
    Compiling tokio-util v0.7.20
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-ingress)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
    Compiling zbus_names v4.3.4
    Compiling zbus_macros v5.19.0
    Compiling zbus v5.19.0
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-bench-b2)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-bench-b1)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `release` profile [optimized + debuginfo] target(s) in 16.14s
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-ingress)
-   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-doc-source-api)
-   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-connector-api)
-   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-testkit)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/crates/gorca-doc-source-api)
+   Compiling gorca-connector-api v0.0.0 (<repo>/crates/gorca-connector-api)
+   Compiling gorca-testkit v0.0.0 (<repo>/crates/gorca-testkit)
     Finished `release` profile [optimized + debuginfo] target(s) in 13.52s
 [1/24] a walk #0 (load 13.86 9.48 7.76 8/2361 1616966)
 2026-10-14T01:36:23.783317Z  INFO gorca_daemon: gorca started workers=8 speech=Voicego
@@ -220,8 +220,8 @@ error: test failed, to rerun pass `-p b1-fakeapp --test fidelity`
 2026-10-14T02:39:05.158009Z  INFO gorca_input_mutter::source: keyboard monitor active
 2026-10-14T02:41:04.141609Z  INFO gorca_daemon::input: input lane statistics keys=20 ambiguous=0 band_forks=0
 [16/24] a step #0 (load 1.36 2.71 3.58 1/2277 1820186)
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-mirror)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/judge-b1-a/crates/gorca-bench-b1)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `bench` profile [optimized + debuginfo] target(s) in 2.90s
      Running benches/step.rs (target/release/deps/step-de5c2acddd90b898)
 step[arm-a-lazy]: median over 7 rounds of the worst step = 46.3 us (gate 250 us)
@@ -241,7 +241,7 @@ step[arm-a-lazy]: median over 7 rounds of the worst step = 46.3 us (gate 250 us)
    Compiling parking v2.2.1
    Compiling indexmap v2.14.2
    Compiling endi v1.1.1
-   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-model)
+   Compiling gorca-model v0.0.0 (<repo>/crates/gorca-model)
    Compiling toml_parser v1.1.5+spec-1.1.0
    Compiling event-listener v5.4.2
    Compiling toml_edit v0.25.17+spec-1.1.0
@@ -275,14 +275,14 @@ step[arm-a-lazy]: median over 7 rounds of the worst step = 46.3 us (gate 250 us)
    Compiling zvariant v5.15.0
    Compiling zbus_names v4.3.4
    Compiling tokio-util v0.7.20
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-rt)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
    Compiling zbus_macros v5.19.0
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-ingress)
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-mirror)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
    Compiling zbus v5.19.0
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-bench-b2)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/judge-b1-c/crates/gorca-bench-b1)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `bench` profile [optimized + debuginfo] target(s) in 19.97s
      Running benches/step.rs (target/release/deps/step-de5c2acddd90b898)
 step[arm-c-hybrid]: median over 7 rounds of the worst step = 338.7 us (gate 250 us)
@@ -300,15 +300,15 @@ step[arm-c-hybrid]: median over 7 rounds of the worst step = 338.7 us (gate 250 
    Compiling enumflags2 v0.7.12
    Compiling zvariant v5.15.0
    Compiling tracing v0.1.44
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/judge-b1-r0/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/judge-b1-r0/crates/gorca-ingress)
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/judge-b1-r0/crates/gorca-mirror)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
    Compiling zbus_names v4.3.4
    Compiling zbus_macros v5.19.0
    Compiling zbus v5.19.0
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/judge-b1-r0/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/judge-b1-r0/crates/gorca-bench-b2)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/judge-b1-r0/crates/gorca-bench-b1)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `bench` profile [optimized + debuginfo] target(s) in 34.14s
      Running benches/step.rs (target/release/deps/step-de5c2acddd90b898)
 step[candidate-standin]: median over 7 rounds of the worst step = 19.0 us (gate 250 us)

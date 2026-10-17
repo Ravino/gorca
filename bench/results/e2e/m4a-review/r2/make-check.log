@@ -1,13 +1,13 @@
 . ./env.sh && cargo fmt --all --check
 . ./env.sh && cargo clippy --workspace --all-targets -- -D warnings
-    Checking gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-af5a980a5d5abcb8b/crates/gorca-core)
-    Checking gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-af5a980a5d5abcb8b/crates/gorca-daemon)
-    Checking gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/agent-af5a980a5d5abcb8b/crates/gorca-connector-atspi)
+    Checking gorca-core v0.0.0 (<repo>/crates/gorca-core)
+    Checking gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
+    Checking gorca-connector-atspi v0.0.0 (<repo>/crates/gorca-connector-atspi)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.80s
 . ./env.sh && cargo test --workspace
-   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-af5a980a5d5abcb8b/crates/gorca-core)
-   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-af5a980a5d5abcb8b/crates/gorca-daemon)
-   Compiling gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/agent-af5a980a5d5abcb8b/crates/gorca-connector-atspi)
+   Compiling gorca-core v0.0.0 (<repo>/crates/gorca-core)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
+   Compiling gorca-connector-atspi v0.0.0 (<repo>/crates/gorca-connector-atspi)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 8.40s
      Running unittests src/lib.rs (target/debug/deps/b1_fakeapp-2852a6364ce58b14)
 

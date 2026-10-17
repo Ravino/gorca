@@ -19,6 +19,12 @@ and interfaces that can still change. Braille is not implemented yet.
 - **Crash isolation.** Extensions run as WebAssembly components with CPU, memory and call-size
   limits; a faulty extension or per-application handler cannot take down the core.
 
+Resource use, measured on a private session with a release build and synthetic event storms
+(`docs/reports/resource-usage.md`): idle about 0.4 % of one core and about 15 MiB of memory;
+memory stays flat up to 100k events per second; CPU grows about 0.55 to 0.6 % of a core per 1,000
+events per second; key to speech stays at p99 0.3 to 1 ms up to 100k events per second. Real
+applications such as Firefox hold more state: a live session shows about 40 MiB.
+
 The measured numbers and the conditions they were taken under are in `docs/reports/` and
 `bench/results/`. Latency gates are unreliable on a loaded host; see `docs/decisions.md`.
 
@@ -37,15 +43,23 @@ Phase 1 (focus reader, speech, event ingress, test harness) and most of Phase 2 
   lock keys, battery and clock.
 - GNOME Terminal (VTE): screen change reading, typing and history recall echo, password prompts
   kept silent.
-- Firefox: browse mode with structural quick navigation, tables, live regions, forms and
+- Firefox: the tab strip and address bar are announced (page title on tab switch, address bar
+  autocomplete), and browse mode with structural quick navigation, tables, live regions, forms and
   focus-mode switching, and ARIA names, roles, states and descriptions modelled on NVDA.
+- Chromium and Chrome: browse mode on the same web engine as Firefox, with per-engine quirk rows.
+  gorca wakes the browser's accessibility tree itself. Known issues are listed in
+  `docs/reports/m9-fixround-verify.md`.
 - Speech: punctuation levels and per-language symbol tables (English and Russian), capital
-  letters announced by pitch, language, output module and voice selection.
+  letters announced by any combination of pitch, the word "cap" and a sound (the sound is not
+  working yet), language, output module and voice selection.
+- Localisation: every spoken string comes from a message catalogue (English and Russian,
+  ADR-0010), also for extensions.
+- Terminal review follows its line by content while output streams (ADR-0018).
 - Extensions: a WebAssembly extension host (wasmtime). The GNOME Shell and terminal policies ship
   as extensions.
 
-Not done yet: Chromium support (a baseline and test harness are in, the work is not), braille,
-the Newton connector, a settings GUI, packaging. See `docs/plan/phase-2.md` and
+Planned, not done: braille, the Newton connector, an extension (add-on) platform with
+third-party add-ons and a store (ADR-0019, proposed), a settings GUI, packaging. See `docs/plan/phase-2.md` and
 `docs/plan/phase-3.md` for what is planned, and `CHANGELOG.md` for the detail.
 
 ## Architecture
@@ -144,20 +158,20 @@ desktop. The end-to-end latency harness is described in `bench/e2e/README.md`, t
 
 ## Contributing
 
-The project has no contribution process yet. Open an issue before sending large changes. Code is
-checked with `cargo fmt`, `cargo clippy -- -D warnings` and `cargo test`; non-test code does not
-use `unwrap()`.
+See `CONTRIBUTING.md`. Contributions are accepted under the Developer Certificate of Origin
+(`Signed-off-by` on every commit); there is no CLA. Open an issue before sending large changes.
 
 ## Licence
 
 - The gorca core is licensed under the **GNU General Public License, version 3 or (at your option)
   any later version** (`LICENSE`).
-- The extension SDK, the `gorca-ext-api` crate and its WIT files in `crates/gorca-ext-api/`, is
-  licensed under **MIT OR Apache-2.0** (`crates/gorca-ext-api/LICENSE-MIT` and
-  `crates/gorca-ext-api/LICENSE-APACHE`).
+- The core and the built-in extensions (`extensions/`) are GPL-3.0-or-later.
+- The extension SDK is licensed under **MIT OR Apache-2.0**: the `gorca-ext-api` crate with its
+  WIT files in `crates/gorca-ext-api/`, and `gorca-i18n`, the only workspace crate it depends on
+  (`LICENSE-MIT` and `LICENSE-APACHE` sit in each crate directory).
 - `LICENSE-EXCEPTION` adds a GPL-3.0 section 7 additional permission: a WebAssembly extension that
   talks to gorca only through the extension SDK may be distributed under any licence. This text is
-  a draft and has not yet had a legal review.
+  a draft and has not yet had a legal review. Any licence (open, closed, free or paid) is allowed for such add-ons.
 - Third-party references and the origin of the symbol tables are listed in `THIRD-PARTY.md`.
 - voicego is a separate AGPL-3.0 program that gorca communicates with over a socket; no voicego
   code is part of this repository.

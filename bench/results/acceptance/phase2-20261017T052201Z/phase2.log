@@ -31,18 +31,18 @@ quiet-host:
    stderr: -- round 3/3 VW (load 16.36 19.06 21.48 5/3085 397715)
    stderr: -- round 3/3 V1 (load 14.77 18.43 21.20 7/3076 398750)
    stderr: -- round 3/3 VT (load 13.53 16.04 19.81 2/3091 408458)
-   stderr: == wrote <repo>/.claude/worktrees/agent-a442a2fa7ae77a061/bench/results/acceptance/phase2-20261017T052201Z/m6/fake.a1/res/20261017T060649Z.{json,txt}
+   stderr: == wrote <repo>/bench/results/acceptance/phase2-20261017T052201Z/m6/fake.a1/res/20261017T060649Z.{json,txt}
    stderr: == 4 gate(s) FAILED
 == m6/vv attempt 1  load 19.76 15.90 17.85 13/2880 455241  cap 3600s
    -> FAIL (exit 1, 370 s)
    stderr: -- round 1/3 VV (load 19.76 15.90 17.85 11/2845 456046)
    stderr: -- round 2/3 VV (load 19.47 16.96 18.00 11/2699 472729)
    stderr: -- round 3/3 VV (load 19.99 17.85 18.19 15/2911 496356)
-   stderr: == wrote <repo>/.claude/worktrees/agent-a442a2fa7ae77a061/bench/results/acceptance/phase2-20261017T052201Z/m6/vv.a1/res/20261017T061259Z.{json,txt}
+   stderr: == wrote <repo>/bench/results/acceptance/phase2-20261017T052201Z/m6/vv.a1/res/20261017T061259Z.{json,txt}
    stderr: == 4 gate(s) FAILED
 # Phase 2 acceptance: FAIL
 
-Mode: **ACCEPTANCE ATTEMPT, DEGRADED HOST (--force), PARTIAL (m6)**. Run dir: `<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/bench/results/acceptance/phase2-20261017T052201Z`.
+Mode: **ACCEPTANCE ATTEMPT, DEGRADED HOST (--force), PARTIAL (m6)**. Run dir: `<repo>/bench/results/acceptance/phase2-20261017T052201Z`.
 Resolved topology (from the reader reports): lanes-rtx3, lanes-rtx39.
 
 ## Steps
@@ -51,4 +51,4 @@ Resolved topology (from the reader reports): lanes-rtx3, lanes-rtx39.
 |---|---|---|---|---|---|---|---|---|
 | m6/fake | FAIL | a1 | 2639 s | 9.7-53.0 | 20.730 | 45 | 4 | exit 1; 4 gate rows FAIL |
 | m6/vv | FAIL | a1 | 370 s | 16.8-21.1 | 10.720 | 24 | 4 | exit 1; 4 gate rows FAIL |
-summary: <repo>/.claude/worktrees/agent-a442a2fa7ae77a061/bench/results/acceptance/phase2-20261017T052201Z/summary.md (exit 1)
+summary: <repo>/bench/results/acceptance/phase2-20261017T052201Z/summary.md (exit 1)

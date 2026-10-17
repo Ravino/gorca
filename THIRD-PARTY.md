@@ -45,4 +45,4 @@ The generated file ships with release artefacts and is not committed.
 ## Test fixtures
 
 The test pages under `tests/web/` are written for this project. They mimic the structure of common
-sites (for example an encyclopedia article) but contain no copied site code, with one exception: the first two sentences of the lede in `tests/web/m8/pages/wiki.html` follow the English Wikipedia article "Screen reader" (CC BY-SA 4.0).
+sites (for example an encyclopedia article) but contain no copied site code.

@@ -14,19 +14,19 @@
 # topology_arms=lanes-rtx1
 # topology_expected=-
 # label=ru-lanes-rt-0-r3
-# reader=daemon:<repo>/.claude/worktrees/agent-aad69142db3796c20/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=1200
 # l2_trials=400
 # quick=false
 # loadavg_end=18.38 19.31 18.79 4/2507 3338210
-# reader_env=GORCA_M1=1 GORCA_M4=1 GORCA_M4B=1 GORCA_TOPOLOGY_REPORT=<repo>/.claude/worktrees/agent-aad69142db3796c20/bench/results/resource-usage/full1/raw/lanes-rt/0/r3/rep.%p.json GORCA_RTKIT_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
+# reader_env=GORCA_M1=1 GORCA_M4=1 GORCA_M4B=1 GORCA_TOPOLOGY_REPORT=<repo>/bench/results/resource-usage/full1/raw/lanes-rt/0/r3/rep.%p.json GORCA_RTKIT_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
 # gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
 # reader_args=--impersonate-orca --topology=lanes-rt
 # ext_dir=none
 # extensions=none
-# note0=raw samples: <repo>/.claude/worktrees/agent-aad69142db3796c20/bench/results/resource-usage/full1/raw/lanes-rt/0/r3/RU-0-3334574.csv
+# note0=raw samples: <repo>/bench/results/resource-usage/full1/raw/lanes-rt/0/r3/RU-0-3334574.csv
 # note1=RU-0: reader pid 3334574, steady window 3.0..11.0 s, storm stop 11.0 s, 55 samples
 
 metric                     bus                median          min          max  n op    threshold  res   note

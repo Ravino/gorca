@@ -14,14 +14,14 @@
 # topology_arms=lanes-rtx24
 # topology_expected=lanes-rt
 # label=acc-20261017T040807Z-m1-e2e-a1
-# reader=daemon:<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=3
 # samples_per_series=1200
 # l2_trials=400
 # quick=false
 # loadavg_end=10.52 13.11 15.14 7/3381 3946116
-# reader_env=GORCA_M1=1 GORCA_M1_STRICT=1 GORCA_M4=1 GORCA_M4_STRICT=1 NO_COLOR=1 GORCA_TOPOLOGY_REPORT=<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/bench/results/acceptance/phase2-20261017T040807Z/m1/e2e.a1/res/topology/topology.%p.json
+# reader_env=GORCA_M1=1 GORCA_M1_STRICT=1 GORCA_M4=1 GORCA_M4_STRICT=1 NO_COLOR=1 GORCA_TOPOLOGY_REPORT=<repo>/bench/results/acceptance/phase2-20261017T040807Z/m1/e2e.a1/res/topology/topology.%p.json
 # gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
 # reader_args=--impersonate-orca
 # ext_dir=none

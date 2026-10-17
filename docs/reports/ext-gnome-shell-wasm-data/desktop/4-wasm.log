@@ -11,13 +11,13 @@ running 6 tests
 2026-10-16T06:22:58.923831Z  INFO gorca_daemon: shell policy: ext-gnome-shell native build
 2026-10-16T06:22:58.924093Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
 2026-10-16T06:22:58.924122Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
-shell policy under test: WASM component (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-daemon/../../target/debug/extensions)
+shell policy under test: WASM component (<repo>/crates/gorca-daemon/../../target/debug/extensions)
 2026-10-16T06:22:58.924246Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
 2026-10-16T06:22:58.925684Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
 2026-10-16T06:22:58.927577Z  INFO gorca_daemon: shell policy: ext-gnome-shell native build
 2026-10-16T06:22:58.928024Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
 2026-10-16T06:22:58.928111Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
-shell policy under test: WASM component (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-daemon/../../target/debug/extensions)
+shell policy under test: WASM component (<repo>/crates/gorca-daemon/../../target/debug/extensions)
 2026-10-16T06:22:58.945333Z  INFO gorca_daemon: shell policy: ext-gnome-shell native build
 2026-10-16T06:22:58.945548Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
 2026-10-16T06:22:58.945571Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off

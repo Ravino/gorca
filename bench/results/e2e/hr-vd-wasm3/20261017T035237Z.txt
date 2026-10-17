@@ -14,7 +14,7 @@
 # topology_arms=lanes-rtx1
 # topology_expected=-
 # label=hr-vd-wasm3
-# reader=daemon:<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=150
@@ -23,8 +23,8 @@
 # loadavg_end=22.49 20.06 16.36 14/2678 3705189
 # reader_env=GORCA_M6=1 GORCA_M6_REAL=1 GORCA_VD_RECOVER=1 GORCA_VD_ROUNDS=2 GORCA_TOPOLOGY_REPORT=bench/results/e2e/hr-vd-wasm3/topology/topology.%p.json
 # gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
-# reader_args=--impersonate-orca --terminal-policy=auto --ext-dir=<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/extensions
-# ext_dir=<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/extensions
+# reader_args=--impersonate-orca --terminal-policy=auto --ext-dir=<repo>/target/release/extensions
+# ext_dir=<repo>/target/release/extensions
 # extensions=ext-gnome-shell,ext-vte
 # note0=VD round 0 (idle 20 s): 0 failing steps
 # note1=VD round 1 (second app window, Alt+Tab back): 0 failing steps

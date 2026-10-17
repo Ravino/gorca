@@ -1,3 +1,3 @@
-   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-af5a980a5d5abcb8b/crates/gorca-core)
-   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-af5a980a5d5abcb8b/crates/gorca-daemon)
+   Compiling gorca-core v0.0.0 (<repo>/crates/gorca-core)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
     Finished `release` profile [optimized + debuginfo] target(s) in 13.69s

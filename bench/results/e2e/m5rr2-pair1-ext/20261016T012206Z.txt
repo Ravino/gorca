@@ -12,7 +12,7 @@
 # python=Python 3.13.5
 # build=release
 # label=m5rr2-pair1-ext
-# reader=daemon:<repo>/.claude/worktrees/agent-a5aefe82e077800c6/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=3
 # samples_per_series=1200
@@ -21,8 +21,8 @@
 # loadavg_end=12.74 17.41 20.97 11/3447 3855388
 # reader_env=GORCA_M1=1 GORCA_M1_STRICT=1 GORCA_M4=1 GORCA_M4_STRICT=1
 # gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
-# reader_args=--impersonate-orca --ext-dir=/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/extdir
-# ext_dir=/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/extdir
+# reader_args=--impersonate-orca --ext-dir=/tmp/scratch/extdir
+# ext_dir=/tmp/scratch/extdir
 # extensions=ext-test
 # note0=k2_ms: first SPEAK between a command key and the next one (1200 spoken for 1200 chords)
 # note1=k3_ms: first SPEAK between a command key and the next one (1256 spoken for 1200 chords)

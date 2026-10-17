@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! PR-7: no literal user-facing text in the speech paths (ADR-0010).
 //!
 //! Every spoken, brailled or displayed string goes through the message catalog by id

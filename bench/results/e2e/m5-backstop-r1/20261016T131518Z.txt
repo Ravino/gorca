@@ -21,8 +21,8 @@
 # loadavg_end=32.16 34.80 35.28 34/2920 19710
 # reader_env=GORCA_M1=1 GORCA_M1_STRICT=1 GORCA_M4=1 GORCA_M4_STRICT=1
 # gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
-# reader_args=--impersonate-orca --ext-dir=<repo>/.claude/worktrees/agent-a05f7786fd84a9875/target/release/extensions
-# ext_dir=<repo>/.claude/worktrees/agent-a05f7786fd84a9875/target/release/extensions
+# reader_args=--impersonate-orca --ext-dir=<repo>/target/release/extensions
+# ext_dir=<repo>/target/release/extensions
 # extensions=ext-gnome-shell
 # note0=A1 SKIPPED: set GORCA_M4B=1 to run the M4b gates
 # note1=N1 SKIPPED: set GORCA_M4B=1 to run the M4b gates

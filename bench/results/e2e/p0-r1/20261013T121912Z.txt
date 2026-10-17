@@ -12,7 +12,7 @@
 # python=Python 3.13.5
 # build=release
 # label=p0-r1
-# reader=daemon:<repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon
+# reader=daemon:<repo>/target/release/gorca-daemon
 # backend=voicego
 # repeats=3
 # samples_per_series=1200
@@ -21,30 +21,30 @@
 # loadavg_end=17.22 15.10 12.77 4/4298 3662158
 # reader_env=
 # gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
-# note0=L1 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note1=L1s run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note2=L2 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note3=L3-10k run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note4=L3-50k run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note5=L4 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note6=L4c run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note7=K1 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note8=L1 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note9=L1s run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note10=L2 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note11=L3-10k run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note12=L3-50k run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note13=L4 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note14=L4c run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note15=K1 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note16=L1s run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note17=L2 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note18=L3-10k run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note19=L3-50k run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note20=L4 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note21=L4c run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note22=K1 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
-# note23=L1 run failed: starting reader <repo>/.claude/worktrees/agent-a3b2a2937874225d7/target/release/gorca-daemon: No such file or directory (os error 2)
+# note0=L1 run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note1=L1s run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note2=L2 run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note3=L3-10k run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note4=L3-50k run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note5=L4 run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note6=L4c run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note7=K1 run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note8=L1 run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note9=L1s run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note10=L2 run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note11=L3-10k run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note12=L3-50k run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note13=L4 run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note14=L4c run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note15=K1 run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note16=L1s run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note17=L2 run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note18=L3-10k run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note19=L3-50k run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note20=L4 run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note21=L4c run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note22=K1 run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
+# note23=L1 run failed: starting reader <repo>/target/release/gorca-daemon: No such file or directory (os error 2)
 
 metric                     bus                median          min          max  n op    threshold  res   note
 F0.f0_mock_ms.n            daemon/voicego         1200         1200         1200  3                  info   [samples]

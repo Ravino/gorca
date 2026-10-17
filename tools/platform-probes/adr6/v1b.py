@@ -1,5 +1,5 @@
 """V-1b: keysym/state delivered for every keypad key, NumLock off/on, with/without Shift. PRIVATE session only."""
-import sys; sys.path.insert(0,"<repo>/tools/platform-probes/adr6")
+import sys; sys.path.insert(0,__import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 from rig import *
 K=Keys(); G=GtkKeys(); pump(1.5); K.tap(125); pump(1)
 names={71:"KP7",72:"KP8",73:"KP9",74:"KP-",75:"KP4",76:"KP5",77:"KP6",78:"KP+",79:"KP1",80:"KP2",81:"KP3",82:"KP0",83:"KP.",96:"KPEnter",98:"KP/",55:"KP*"}

@@ -1,3 +1,3 @@
-    Checking ext-test v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/extensions/ext-test)
-    Checking gorca-ext-host v0.0.0 (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-ext-host)
+    Checking ext-test v0.0.0 (<repo>/extensions/ext-test)
+    Checking gorca-ext-host v0.0.0 (<repo>/crates/gorca-ext-host)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.84s

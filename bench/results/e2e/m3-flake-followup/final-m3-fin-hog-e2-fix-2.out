@@ -1,5 +1,5 @@
-== reader /tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/f/gorca-fix built from 9d44caa, tree at 9d44caa
-== e2e m3-fin-hog-e2-fix-2: reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/f/gorca-fix backend=voicego repeats=2 load=20.08 20.43 16.67 13/2546 3117236
+== reader /tmp/scratch/f/gorca-fix built from 9d44caa, tree at 9d44caa
+== e2e m3-fin-hog-e2-fix-2: reader=daemon:/tmp/scratch/f/gorca-fix backend=voicego repeats=2 load=20.08 20.43 16.67 13/2546 3117236
 -- round 1/2 E2 (load 20.08 20.43 16.67 13/2546 3117236)
 2026-10-14T13:29:09.077953Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
 2026-10-14T13:29:09.079861Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
@@ -44,7 +44,7 @@
 # python=Python 3.13.5
 # build=release
 # label=m3-fin-hog-e2-fix-2
-# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/f/gorca-fix
+# reader=daemon:/tmp/scratch/f/gorca-fix
 # backend=voicego
 # repeats=2
 # samples_per_series=1200

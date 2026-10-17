@@ -1,8 +1,8 @@
 == host: load 12.73 14.22 12.03 1/2524 1739113 ==
-   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-daemon)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
     Finished `release` profile [optimized + debuginfo] target(s) in 51.92s
 private compositor: /tmp/gorca-m8c.aDNIXZ/x/gorca-m8-1739107
-== e2e-m8 m9r3-final-ff-m8: reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca backend=voicego repeats=3 load=12.02 13.81 12.02 8/2663 1742044
+== e2e-m8 m9r3-final-ff-m8: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=12.02 13.81 12.02 8/2663 1742044
 -- round 1/3 M8-QN (load 12.02 13.81 12.02 8/2663 1742044)
 kill: (-1742101): No such process
 -- round 1/3 M8-TB (load 13.95 14.02 12.16 4/2481 1749074)
@@ -179,7 +179,7 @@ kill: (-1906895): No such process
 # python=Python 3.13.5
 # build=release
 # label=m9r3-final-ff-m8
-# reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=3
 # samples_per_series=150

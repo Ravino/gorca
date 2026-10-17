@@ -6,7 +6,7 @@
 export DBUS_SESSION_BUS_ADDRESS="$1"
 BIN="$2"
 PRESET="${3:-plain}"
-L=/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/ns
+L=/tmp/scratch/ns
 W=$L/sh
 export XDG_CONFIG_HOME=$W/config GSETTINGS_BACKEND=keyfile XDG_RUNTIME_DIR=$W/run
 show() {

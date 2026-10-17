@@ -138,7 +138,7 @@ def static_scenarios():
     out = {}
     for n in (2000, 10000):
         out[f'static/large{n}'] = (f'file://{d}/large{n}.html', mk(['mut.rename(100)', 'mut.addCards(50)', 'mut.live(200)', 'mut.removeCards(20)', 'mut.route()']))
-    out['static/frames'] = ('file://<repo>/tests/web/pages/frames/outer.html', [])
+    out['static/frames'] = ('file://' + os.path.join(ROOT, 'tests/web/pages/frames/outer.html'), [])
     return out
 
 if __name__ == '__main__':

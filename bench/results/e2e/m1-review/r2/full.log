@@ -16,7 +16,7 @@
    Compiling event-listener v5.4.2
    Compiling ordered-stream v0.2.0
    Compiling futures-lite v2.6.1
-   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/crates/gorca-model)
+   Compiling gorca-model v0.0.0 (<repo>/crates/gorca-model)
    Compiling tracing-core v0.1.36
    Compiling event-listener-strategy v0.5.4
    Compiling async-broadcast v0.7.2
@@ -24,7 +24,7 @@
    Compiling crossbeam-queue v0.3.14
    Compiling arc-swap v1.9.2
    Compiling toml_parser v1.1.5+spec-1.1.0
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/crates/gorca-mirror)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
    Compiling syn v3.0.8
    Compiling syn v2.0.119
    Compiling toml_edit v0.25.17+spec-1.1.0
@@ -57,15 +57,15 @@
    Compiling ciborium-ll v0.2.2
    Compiling tokio-util v0.7.20
    Compiling ciborium v0.2.2
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/crates/gorca-ingress)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
    Compiling criterion v0.8.2
    Compiling zbus_names v4.3.4
    Compiling zbus_macros v5.19.0
    Compiling zbus v5.19.0
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/crates/gorca-bench-b2)
-   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/crates/gorca-bench)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-bench v0.0.0 (<repo>/crates/gorca-bench)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 10.27s
      Running unittests src/lib.rs (target/debug/deps/gorca_bench-0badb14e7328ca07)
 
@@ -88,7 +88,7 @@ test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
 test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
 
     Finished `release` profile [optimized + debuginfo] target(s) in 0.11s
-== e2e m1-review-r2: reader=daemon:<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/target/release/gorca backend=voicego repeats=3 load=11.85 12.98 11.87 2/2272 171175
+== e2e m1-review-r2: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=11.85 12.98 11.87 2/2272 171175
 -- round 1/3 K2 (load 11.85 12.98 11.87 3/2272 171175)
 2026-10-13T15:40:08.339798Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
 2026-10-13T15:40:08.341303Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
@@ -290,7 +290,7 @@ K4r DEBUG stuck code 118 now GrabState { grab_all: false, modifiers: 3, applied:
 # python=Python 3.13.5
 # build=release
 # label=m1-review-r2
-# reader=daemon:<repo>/.claude/worktrees/agent-a4851ad62a46d65fe/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=3
 # samples_per_series=1200

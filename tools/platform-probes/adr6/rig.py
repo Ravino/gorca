@@ -40,7 +40,7 @@ class Keys:
         try: call(sess,"org.gnome.Mutter.RemoteDesktop",s.sp,"org.gnome.Mutter.RemoteDesktop.Session","Stop")
         except Exception: pass
 class GtkKeys:
-    def __init__(s,script="<repo>/tools/platform-probes/gtkkeys.py"):
+    def __init__(s,script=__import__("os").path.dirname(__import__("os").path.abspath(__file__))+"/../gtkkeys.py"):
         env=dict(os.environ,NO_AT_BRIDGE="1",GTK_A11Y="none")
         s.p=subprocess.Popen(["/usr/bin/python3",script],stdout=subprocess.PIPE,env=env,text=True,bufsize=1)
         os.set_blocking(s.p.stdout.fileno(),False); s.lines=[]

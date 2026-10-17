@@ -1,5 +1,5 @@
-== reader <repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/bench/b5/reader-cpu.sh built from 1993580, tree at 1993580
-== e2e b5-lanes-sat-r1: reader=daemon:<repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/bench/b5/reader-cpu.sh backend=voicego repeats=1 load=38.75 36.13 24.62 26/3579 3352354
+== reader <repo>/bench/b5/reader-cpu.sh built from 1993580, tree at 1993580
+== e2e b5-lanes-sat-r1: reader=daemon:<repo>/bench/b5/reader-cpu.sh backend=voicego repeats=1 load=38.75 36.13 24.62 26/3579 3352354
 -- round 1/1 L1 (load 38.75 36.13 24.62 25/3579 3352354)
 2026-10-16T09:09:00.690448Z  INFO gorca_daemon: shell policy: ext-gnome-shell native build
 2026-10-16T09:09:00.692123Z  INFO gorca_daemon::topology: lane placed lane=gorca-input tid=3352421 granted=none via="-" pinned=None error=None

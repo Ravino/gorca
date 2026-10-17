@@ -1,10 +1,10 @@
 """V-3 GetOffsetAtPoint + V-4 bounds-changed. usage: v34.py gtk3|gtk4. PRIVATE session only."""
-import sys; sys.path.insert(0,"<repo>/tools/platform-probes/adr6")
+import sys; sys.path.insert(0,__import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 from rig import *
 import json
 which=sys.argv[1]
 K=Keys(own=False); pump(1); K.tap(125); pump(1)
-p=subprocess.Popen(["/usr/bin/python3","<repo>/tools/platform-probes/adr6/"+("app3.py" if which=="gtk3" else "app4.py")],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True,bufsize=1,stderr=subprocess.DEVNULL)
+p=subprocess.Popen(["/usr/bin/python3",__import__("os").path.dirname(__import__("os").path.abspath(__file__))+"/"+("app3.py" if which=="gtk3" else "app4.py")],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True,bufsize=1,stderr=subprocess.DEVNULL)
 def say(c): p.stdin.write(c+"\n"); p.stdin.flush()
 def truth():
     say("truth")

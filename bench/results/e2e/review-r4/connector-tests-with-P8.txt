@@ -1,16 +1,16 @@
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-ingress)
-   Compiling gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-doc-source-api)
-   Compiling gorca-output-api v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-output-api)
-   Compiling gorca-input-api v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-input-api)
-   Compiling gorca-speech v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-speech)
-   Compiling gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-connector-api)
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-dbus)
-   Compiling gorca-testkit v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-testkit)
-   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-core)
-   Compiling gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-connector-atspi)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/crates/gorca-doc-source-api)
+   Compiling gorca-output-api v0.0.0 (<repo>/crates/gorca-output-api)
+   Compiling gorca-input-api v0.0.0 (<repo>/crates/gorca-input-api)
+   Compiling gorca-speech v0.0.0 (<repo>/crates/gorca-speech)
+   Compiling gorca-connector-api v0.0.0 (<repo>/crates/gorca-connector-api)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-testkit v0.0.0 (<repo>/crates/gorca-testkit)
+   Compiling gorca-core v0.0.0 (<repo>/crates/gorca-core)
+   Compiling gorca-connector-atspi v0.0.0 (<repo>/crates/gorca-connector-atspi)
     Finished `release` profile [optimized + debuginfo] target(s) in 25.58s
-     Running unittests src/lib.rs (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/tgt/release/deps/gorca_connector_atspi-d6ba16c52add5457)
+     Running unittests src/lib.rs (/tmp/scratch/tgt/release/deps/gorca_connector_atspi-d6ba16c52add5457)
 
 running 70 tests
 test connector::tests::missing_addresses_are_an_error_not_an_environment_lookup ... ok

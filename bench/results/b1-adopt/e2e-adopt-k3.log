@@ -1,6 +1,6 @@
 == host: load 14.45 16.41 16.81 2/3036 368465 ==
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
-   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-bench v0.0.0 (<repo>/crates/gorca-bench)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 1.08s
      Running unittests src/lib.rs (target/debug/deps/gorca_bench-b4921a7a1562f132)
 
@@ -29,10 +29,10 @@ test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
 
 test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
 
-   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench)
+   Compiling gorca-bench v0.0.0 (<repo>/crates/gorca-bench)
     Finished `release` profile [optimized + debuginfo] target(s) in 7.30s
-== reader <repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca built from df20f8c, tree at df20f8c
-== e2e adopt-k3: reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca backend=voicego repeats=3 load=13.66 16.18 16.73 2/3038 369269
+== reader <repo>/target/release/gorca built from df20f8c, tree at df20f8c
+== e2e adopt-k3: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=13.66 16.18 16.73 2/3038 369269
 -- round 1/3 K2 (load 13.66 16.18 16.73 2/3038 369269)
 2026-10-14T23:58:45.573189Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
 2026-10-14T23:58:45.574044Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
@@ -254,7 +254,7 @@ test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; fin
 # python=Python 3.13.5
 # build=release
 # label=adopt-k3
-# reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=3
 # samples_per_series=1200

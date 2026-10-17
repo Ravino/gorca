@@ -14,7 +14,7 @@
 # topology_arms=none
 # topology_expected=-
 # label=m8b-rf-shell
-# reader=daemon:<repo>/.claude/worktrees/agent-a3b9b6b013b2bcaf7/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=3
 # samples_per_series=1200

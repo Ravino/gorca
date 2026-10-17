@@ -1,5 +1,5 @@
 == host: load 2.06 3.62 3.01 1/2545 3557122 ==
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
 warning: constant `BEFORE` is never used
   --> crates/gorca-mirror/src/fill/prefetch.rs:43:7
    |
@@ -77,7 +77,7 @@ warning: methods `ensure_window`, `ask_window`, and `ask_extend` are never used
     |        ^^^^^^^^^^
 
 warning: `gorca-mirror` (lib) generated 10 warnings
-   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench)
+   Compiling gorca-bench v0.0.0 (<repo>/crates/gorca-bench)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.69s
      Running unittests src/lib.rs (target/debug/deps/gorca_bench-b4921a7a1562f132)
 
@@ -106,7 +106,7 @@ test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
 
 test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
 
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-mirror)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
 warning: constant `BEFORE` is never used
   --> crates/gorca-mirror/src/fill/prefetch.rs:43:7
    |
@@ -183,13 +183,13 @@ warning: methods `ensure_window`, `ask_window`, and `ask_extend` are never used
 609 |     fn ask_extend(
     |        ^^^^^^^^^^
 
-   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-bench)
-   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-core)
+   Compiling gorca-bench v0.0.0 (<repo>/crates/gorca-bench)
+   Compiling gorca-core v0.0.0 (<repo>/crates/gorca-core)
 warning: `gorca-mirror` (lib) generated 10 warnings
-   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a259b4477ef251616/crates/gorca-daemon)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
     Finished `release` profile [optimized + debuginfo] target(s) in 18.86s
-== reader <repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca built from 9d44caa, tree at 9d44caa
-== e2e dbg-c1b: reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca backend=voicego repeats=1 load=4.52 4.07 3.17 2/2573 3558082
+== reader <repo>/target/release/gorca built from 9d44caa, tree at 9d44caa
+== e2e dbg-c1b: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=1 load=4.52 4.07 3.17 2/2573 3558082
 -- round 1/1 C1 (load 4.52 4.07 3.17 2/2573 3558082)
 2026-10-14T19:43:43.367977Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
 2026-10-14T19:43:43.368505Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
@@ -213,7 +213,7 @@ warning: `gorca-mirror` (lib) generated 10 warnings
 # python=Python 3.13.5
 # build=release
 # label=dbg-c1b
-# reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=150

@@ -1,5 +1,5 @@
-== reader <repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/bench/b5/reader-cpu.sh built from e185a10, tree at d0a13c0
-== e2e b5v-single-idle-r3: reader=daemon:<repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/bench/b5/reader-cpu.sh backend=voicego repeats=1 load=66.80 63.48 56.47 11/3787 561971
+== reader <repo>/bench/b5/reader-cpu.sh built from e185a10, tree at d0a13c0
+== e2e b5v-single-idle-r3: reader=daemon:<repo>/bench/b5/reader-cpu.sh backend=voicego repeats=1 load=66.80 63.48 56.47 11/3787 561971
 -- round 1/1 L3-10k (load 66.80 63.48 56.47 14/3787 561971)
 2026-10-16T17:48:23.093395Z  INFO gorca_daemon: shell policy: ext-gnome-shell native build
 2026-10-16T17:48:23.130695Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=D-Bus error: org.freedesktop.DBus.Error.NameHasNoOwner: Could not get owner of name 'org.freedesktop.a11y.Manager': no such name backoff=100ms

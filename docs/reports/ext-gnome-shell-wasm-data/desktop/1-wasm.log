@@ -2,7 +2,7 @@
      Running tests/desktop.rs (target/debug/deps/desktop-97082bd93440597a)
 
 running 6 tests
-shell policy under test: WASM component (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-daemon/../../target/debug/extensions)
+shell policy under test: WASM component (<repo>/crates/gorca-daemon/../../target/debug/extensions)
 2026-10-16T06:22:36.560190Z  INFO gorca_daemon: shell policy: ext-gnome-shell native build
 2026-10-16T06:22:36.560487Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
 2026-10-16T06:22:36.560521Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
@@ -17,7 +17,7 @@ shell policy under test: WASM component (<repo>/.claude/worktrees/agent-a150de05
 2026-10-16T06:22:36.580717Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
 2026-10-16T06:22:36.580729Z  INFO gorca_daemon::wire: keyboard monitoring disabled (--no-keyboard)
 2026-10-16T06:22:36.580743Z  WARN gorca_daemon::wire: no runtime directory: browse mode stays off
-shell policy under test: WASM component (<repo>/.claude/worktrees/agent-a150de05806536e83/crates/gorca-daemon/../../target/debug/extensions)
+shell policy under test: WASM component (<repo>/crates/gorca-daemon/../../target/debug/extensions)
 2026-10-16T06:22:36.617063Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
 2026-10-16T06:22:36.617797Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"
 2026-10-16T06:22:36.618952Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="single"

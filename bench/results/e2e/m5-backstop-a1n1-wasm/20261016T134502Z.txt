@@ -21,8 +21,8 @@
 # loadavg_end=25.73 28.14 31.53 7/3316 122489
 # reader_env=GORCA_M1=1 GORCA_M1_STRICT=1 GORCA_M4=1 GORCA_M4_STRICT=1 GORCA_M4B=1 GORCA_M4B_STRICT=1
 # gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
-# reader_args=--impersonate-orca --ext-dir=<repo>/.claude/worktrees/agent-a05f7786fd84a9875/target/release/extensions
-# ext_dir=<repo>/.claude/worktrees/agent-a05f7786fd84a9875/target/release/extensions
+# reader_args=--impersonate-orca --ext-dir=<repo>/target/release/extensions
+# ext_dir=<repo>/target/release/extensions
 # extensions=ext-gnome-shell
 # note0=A1 first mismatch: wanted `Delete item 112?, dialog, Item 112 will be lost., Confirm 112, button`, got `Delete item 112?, dialog, Confirm 112, button`
 # note1=A1: 150 fresh dialogs and 150 fresh plain windows after 6 warm-up ones; the focus follows the activation by 2 ms; a1_ms is the activation emit to the first SPEAK carrying the focus button (the title, role and dialog text lead it in one utterance)

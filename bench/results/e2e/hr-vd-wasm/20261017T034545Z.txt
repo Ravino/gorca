@@ -14,7 +14,7 @@
 # topology_arms=lanes-rtx1
 # topology_expected=-
 # label=hr-vd-wasm
-# reader=daemon:<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=150
@@ -23,8 +23,8 @@
 # loadavg_end=13.79 17.67 14.17 1/2990 3664618
 # reader_env=GORCA_M6=1 GORCA_M6_REAL=1 GORCA_VD_RECOVER=1 GORCA_VD_ROUNDS=3 GORCA_TOPOLOGY_REPORT=bench/results/e2e/hr-vd-wasm/topology/topology.%p.json
 # gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
-# reader_args=--impersonate-orca --terminal-policy=auto --ext-dir=<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/extensions
-# ext_dir=<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/extensions
+# reader_args=--impersonate-orca --terminal-policy=auto --ext-dir=<repo>/target/release/extensions
+# ext_dir=<repo>/target/release/extensions
 # extensions=ext-gnome-shell,ext-vte
 # note0=VD run failed: no evdev code for 'S'
 

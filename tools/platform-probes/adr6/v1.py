@@ -1,5 +1,5 @@
 """V-1: Shift+KP_* grab compilation. PRIVATE session only."""
-import sys; sys.path.insert(0,"<repo>/tools/platform-probes/adr6")
+import sys; sys.path.insert(0,__import__("os").path.dirname(__import__("os").path.abspath(__file__)))
 from rig import *
 K=Keys(); G=GtkKeys()
 pump(1.5); K.tap(125); pump(1.0)   # leave Overview

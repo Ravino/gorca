@@ -1,10 +1,10 @@
 import os, sys, time, subprocess, json
-L="/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/lk"
+L="/tmp/scratch/lk"
 os.environ["DBUS_SESSION_BUS_ADDRESS"]=sys.argv[1]
 os.environ["XDG_RUNTIME_DIR"]=L+"/sh/run"
 os.environ["WAYLAND_DISPLAY"]="gorca-test-0"; os.environ["GDK_BACKEND"]="wayland"
 GORCA=sys.argv[2]; seq=json.loads(sys.argv[3]); tag=sys.argv[4]
-sys.path.insert(0,"<repo>/tools/platform-probes/adr6")
+sys.path.insert(0,__import__("os").path.dirname(__import__("os").path.abspath(__file__))+"/../adr6")
 import rig
 from rig import pump
 k=rig.Keys(own=False); g=rig.GtkKeys(); pump(2)

@@ -30,7 +30,7 @@
    Compiling signal-hook-registry v1.4.8
    Compiling socket2 v0.6.5
    Compiling futures-sink v0.3.34
-   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/judge-b1-probe/crates/gorca-model)
+   Compiling gorca-model v0.0.0 (<repo>/crates/gorca-model)
    Compiling event-listener v5.4.2
    Compiling rustix v1.1.5
    Compiling proc-macro-crate v3.5.0
@@ -70,15 +70,15 @@
    Compiling zvariant_derive v5.15.0
    Compiling zvariant v5.15.0
    Compiling tokio-util v0.7.20
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/judge-b1-probe/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/judge-b1-probe/crates/gorca-ingress)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
    Compiling zbus_names v4.3.4
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/judge-b1-probe/crates/gorca-mirror)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
    Compiling zbus_macros v5.19.0
    Compiling zbus v5.19.0
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/judge-b1-probe/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/judge-b1-probe/crates/gorca-bench-b2)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/judge-b1-probe/crates/gorca-bench-b1)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 12.91s
      Running unittests src/lib.rs (target/debug/deps/gorca_bench_b1-fabe3af03abd0289)
 
@@ -209,14 +209,14 @@ error: test failed, to rerun pass `-p b1-fakeapp --test fidelity`
    Compiling zvariant_derive v5.15.0
    Compiling zvariant v5.15.0
    Compiling tokio-util v0.7.20
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/judge-b1-probe/crates/gorca-rt)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
    Compiling zbus_names v4.3.4
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/judge-b1-probe/crates/gorca-ingress)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
    Compiling zbus_macros v5.19.0
    Compiling zbus v5.19.0
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/judge-b1-probe/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/judge-b1-probe/crates/gorca-bench-b2)
-   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/judge-b1-probe/crates/gorca-bench-b1)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
     Finished `release` profile [optimized + debuginfo] target(s) in 14.63s
     Finished `release` profile [optimized + debuginfo] target(s) in 0.04s
 [1/6] a walk #0 (load 9.36 6.81 6.58 1/2613 2147842)

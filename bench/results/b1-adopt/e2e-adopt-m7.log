@@ -1,8 +1,8 @@
 == host: load 4.26 4.24 3.55 1/2558 3566668 ==
     Finished `release` profile [optimized + debuginfo] target(s) in 0.08s
 private compositor: /tmp/gorca-m7c.UI5i1l/x/gorca-m7-3566662
-== reader <repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca built from 9d44caa, tree at 9d44caa
-== e2e adopt-m7: reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca backend=voicego repeats=1 load=4.00 4.18 3.53 2/2717 3566968
+== reader <repo>/target/release/gorca built from 9d44caa, tree at 9d44caa
+== e2e adopt-m7: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=1 load=4.00 4.18 3.53 2/2717 3566968
 -- round 1/1 F0 (load 4.00 4.18 3.53 2/2717 3566968)
 -- round 1/1 L1 (load 4.00 4.18 3.53 1/2717 3566972)
 -- round 1/1 L1s (load 4.00 4.18 3.54 1/2721 3567021)
@@ -67,7 +67,7 @@ kill: (-3571827): No such process
 # python=Python 3.13.5
 # build=release
 # label=adopt-m7
-# reader=daemon:<repo>/.claude/worktrees/agent-a259b4477ef251616/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=150

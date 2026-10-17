@@ -29,22 +29,22 @@ WARNING: 1 other cargo/rustc processes are running (one cargo at a time)
 ######## suite m1
 == m1/e2e attempt 1  load 14.52 11.79 10.78 16/2510 3115035  cap 5400s
    -> FAIL (exit 1, 1 s)
-   stderr: == reader <repo>/.claude/worktrees/agent-ab1f7350482f9d118/target/release/gorca built from ce46cac, tree at d108974
+   stderr: == reader <repo>/target/release/gorca built from ce46cac, tree at d108974
    stderr: Error: the reader binary was built from ce46cac but the tree is at d108974: rebuild it (cargo build --release -p gorca-daemon) or pass --allow-stale-reader
 
 ######## suite m6
 == m6/fake attempt 1  load 15.36 12.01 10.85 19/2531 3115417  cap 7200s
    -> FAIL (exit 1, 1 s)
-   stderr: == reader <repo>/.claude/worktrees/agent-ab1f7350482f9d118/target/release/gorca built from ce46cac, tree at d108974
+   stderr: == reader <repo>/target/release/gorca built from ce46cac, tree at d108974
    stderr: Error: the reader binary was built from ce46cac but the tree is at d108974: rebuild it (cargo build --release -p gorca-daemon) or pass --allow-stale-reader
 == m6/vv attempt 1  load 15.36 12.01 10.85 4/2526 3115583  cap 3600s
    -> FAIL (exit 1, 6 s)
    stderr: private compositor: /tmp/gorca-vte.AgCzL5/x/gorca-vte-3115587
-   stderr: == reader <repo>/.claude/worktrees/agent-ab1f7350482f9d118/target/release/gorca built from ce46cac, tree at d108974
+   stderr: == reader <repo>/target/release/gorca built from ce46cac, tree at d108974
    stderr: Error: the reader binary was built from ce46cac but the tree is at d108974: rebuild it (cargo build --release -p gorca-daemon) or pass --allow-stale-reader
 # Phase 2 acceptance: FAIL
 
-Mode: **ACCEPTANCE ATTEMPT, DEGRADED HOST (--force), PARTIAL (m1 m6)**. Run dir: `<repo>/.claude/worktrees/agent-ab1f7350482f9d118/bench/results/acceptance/phase2-20261017T011543Z`.
+Mode: **ACCEPTANCE ATTEMPT, DEGRADED HOST (--force), PARTIAL (m1 m6)**. Run dir: `<repo>/bench/results/acceptance/phase2-20261017T011543Z`.
 Resolved topology (from the reader reports): not reported (wrappers without --expect-topology only).
 
 ## Steps
@@ -54,4 +54,4 @@ Resolved topology (from the reader reports): not reported (wrappers without --ex
 | m1/e2e | FAIL | a1 | 1 s | 14.5-14.5 | 0 | 0 | 0 | exit 1 |
 | m6/fake | FAIL | a1 | 1 s | 15.4-15.4 | 0 | 0 | 0 | exit 1 |
 | m6/vv | FAIL | a1 | 6 s | 15.4-15.5 | 0.560 | 0 | 0 | exit 1 |
-summary: <repo>/.claude/worktrees/agent-ab1f7350482f9d118/bench/results/acceptance/phase2-20261017T011543Z/summary.md (exit 1)
+summary: <repo>/bench/results/acceptance/phase2-20261017T011543Z/summary.md (exit 1)

@@ -65,7 +65,7 @@
     Checking unicode-segmentation v1.13.3
    Compiling find-msvc-tools v0.1.14
    Compiling shlex v2.0.1
-    Checking gorca-ext-api v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-ext-api)
+    Checking gorca-ext-api v0.0.0 (<repo>/crates/gorca-ext-api)
    Compiling log v0.4.34
    Compiling wasmtime-internal-core v49.0.3
    Compiling version_check v0.9.5
@@ -128,7 +128,7 @@
     Checking simdutf8 v0.1.5
     Checking rayon v1.12.0
     Checking static_assertions v1.1.0
-    Checking ext-vte v0.0.0 (<repo>/.claude/worktrees/m8-review/extensions/ext-vte)
+    Checking ext-vte v0.0.0 (<repo>/extensions/ext-vte)
     Checking lazy_static v1.5.1
     Checking matchers v0.2.0
    Compiling tracing-attributes v0.1.31
@@ -159,13 +159,13 @@
     Checking tokio v1.53.2
     Checking clap_lex v1.1.1
     Checking tracing v0.1.44
-   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-daemon)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
     Checking anstyle v1.0.14
     Checking ciborium-io v0.2.2
     Checking tracing-subscriber v0.3.23
     Checking itertools v0.13.0
     Checking clap_builder v4.6.7
-    Checking ext-gnome-shell v0.0.0 (<repo>/.claude/worktrees/m8-review/extensions/ext-gnome-shell)
+    Checking ext-gnome-shell v0.0.0 (<repo>/extensions/ext-gnome-shell)
     Checking same-file v1.0.6
     Checking cast v0.3.0
     Checking walkdir v2.5.0
@@ -173,14 +173,14 @@
     Checking oorandom v11.1.5
     Checking anes v0.1.6
     Checking futures-util v0.3.34
-    Checking ext-test v0.0.0 (<repo>/.claude/worktrees/m8-review/extensions/ext-test)
+    Checking ext-test v0.0.0 (<repo>/extensions/ext-test)
    Compiling camino v1.2.6
    Compiling parking_lot_core v0.9.12
     Checking lock_api v0.4.14
    Compiling cranelift-codegen-meta v0.136.3
     Checking cargo-platform v0.3.3
     Checking cobs v0.3.0
-    Checking gorca-config v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-config)
+    Checking gorca-config v0.0.0 (<repo>/crates/gorca-config)
     Checking seize v0.5.1
     Checking hashbrown v0.14.5
     Checking wasmparser v0.261.0
@@ -192,7 +192,7 @@
    Compiling zvariant_utils v4.2.0
    Compiling zcheapstr v1.1.0
    Compiling enumflags2 v0.7.12
-    Checking gorca-model v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-model)
+    Checking gorca-model v0.0.0 (<repo>/crates/gorca-model)
     Checking postcard v1.1.3
     Checking regalloc2 v0.15.2
    Compiling wit-parser v0.258.3
@@ -201,33 +201,33 @@
     Checking cargo_metadata v0.23.1
     Checking dashmap v6.2.1
     Checking wasmtime-internal-jit-icache-coherence v49.0.3
-    Checking gorca-text v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-text)
-    Checking gorca-bench-mirror v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-bench-mirror)
+    Checking gorca-text v0.0.0 (<repo>/crates/gorca-text)
+    Checking gorca-bench-mirror v0.0.0 (<repo>/crates/gorca-bench-mirror)
     Checking cranelift-entity v0.136.3
    Compiling zvariant_derive v5.15.0
     Checking tokio-util v0.7.20
-    Checking gorca-doc v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-doc)
+    Checking gorca-doc v0.0.0 (<repo>/crates/gorca-doc)
    Compiling wasm-metadata v0.258.3
-    Checking gorca-rt v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-rt)
+    Checking gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
     Checking cranelift-bforest v0.136.3
     Checking inotify v0.11.5
-    Checking xtask v0.0.0 (<repo>/.claude/worktrees/m8-review/xtask)
+    Checking xtask v0.0.0 (<repo>/xtask)
    Compiling zvariant v5.15.0
-    Checking gorca-ingress v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-ingress)
-    Checking gorca-doc-source-api v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-doc-source-api)
-    Checking gorca-output-api v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-output-api)
-    Checking gorca-input-api v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-input-api)
-    Checking gorca-speech v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-speech)
-    Checking gorca-connector-api v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-connector-api)
-    Checking gorca-mirror v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-mirror)
-    Checking gorca-speech-voicego v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-speech-voicego)
-    Checking gorca-speech-ssip v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-speech-ssip)
-    Checking gorca-testkit v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-testkit)
-    Checking gorca-input-xkb v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-input-xkb)
-    Checking gorca-input-inject v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-input-inject)
+    Checking gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+    Checking gorca-doc-source-api v0.0.0 (<repo>/crates/gorca-doc-source-api)
+    Checking gorca-output-api v0.0.0 (<repo>/crates/gorca-output-api)
+    Checking gorca-input-api v0.0.0 (<repo>/crates/gorca-input-api)
+    Checking gorca-speech v0.0.0 (<repo>/crates/gorca-speech)
+    Checking gorca-connector-api v0.0.0 (<repo>/crates/gorca-connector-api)
+    Checking gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+    Checking gorca-speech-voicego v0.0.0 (<repo>/crates/gorca-speech-voicego)
+    Checking gorca-speech-ssip v0.0.0 (<repo>/crates/gorca-speech-ssip)
+    Checking gorca-testkit v0.0.0 (<repo>/crates/gorca-testkit)
+    Checking gorca-input-xkb v0.0.0 (<repo>/crates/gorca-input-xkb)
+    Checking gorca-input-inject v0.0.0 (<repo>/crates/gorca-input-inject)
     Checking wit-parser v0.261.0
-    Checking gorca-braille-brlapi v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-braille-brlapi)
-    Checking gorca-core v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-core)
+    Checking gorca-braille-brlapi v0.0.0 (<repo>/crates/gorca-braille-brlapi)
+    Checking gorca-core v0.0.0 (<repo>/crates/gorca-core)
     Checking half v2.7.1
    Compiling wit-component v0.258.3
     Checking ciborium-ll v0.2.2
@@ -243,18 +243,18 @@
    Compiling wasmtime-internal-wit-bindgen v49.0.3
     Checking zbus v5.19.0
     Checking wasmtime-environ v49.0.3
-    Checking gorca-dbus v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-dbus)
+    Checking gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
     Checking atspi v0.30.0
-    Checking b1-fakeapp v0.0.0 (<repo>/.claude/worktrees/m8-review/tests/harness/b1/fakeapp)
-    Checking gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-bench-b2)
-    Checking gorca-doc-source-atspi v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-doc-source-atspi)
-    Checking gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-connector-atspi)
-    Checking gorca-input-mutter v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-input-mutter)
-    Checking gorca-bench v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-bench)
-    Checking gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-bench-b1)
-    Checking gorca-bench-web v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-bench-web)
+    Checking b1-fakeapp v0.0.0 (<repo>/tests/harness/b1/fakeapp)
+    Checking gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+    Checking gorca-doc-source-atspi v0.0.0 (<repo>/crates/gorca-doc-source-atspi)
+    Checking gorca-connector-atspi v0.0.0 (<repo>/crates/gorca-connector-atspi)
+    Checking gorca-input-mutter v0.0.0 (<repo>/crates/gorca-input-mutter)
+    Checking gorca-bench v0.0.0 (<repo>/crates/gorca-bench)
+    Checking gorca-bench-b1 v0.0.0 (<repo>/crates/gorca-bench-b1)
+    Checking gorca-bench-web v0.0.0 (<repo>/crates/gorca-bench-web)
     Checking cranelift-native v0.136.3
     Checking cranelift-frontend v0.136.3
-    Checking gorca-ext-host v0.0.0 (<repo>/.claude/worktrees/m8-review/crates/gorca-ext-host)
+    Checking gorca-ext-host v0.0.0 (<repo>/crates/gorca-ext-host)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 28.27s
 clippy rc=0

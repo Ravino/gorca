@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! The message template language of the catalogs.
 //!
 //! ```text

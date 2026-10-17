@@ -12,19 +12,19 @@
    Compiling regex-automata v0.4.18
    Compiling zvariant v5.15.0
    Compiling tokio-util v0.7.20
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-rt)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
    Compiling zbus_names v4.3.4
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-ingress)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
    Compiling regex v1.13.1
    Compiling ciborium v0.2.2
    Compiling zbus_macros v5.19.0
    Compiling tinytemplate v1.2.1
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-mirror)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
    Compiling criterion v0.8.2
    Compiling zbus v5.19.0
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-bench-b2)
-   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-bench)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-bench v0.0.0 (<repo>/crates/gorca-bench)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 9.70s
      Running unittests src/lib.rs (target/debug/deps/gorca_bench-d9b4cc8e8ca700ea)
 
@@ -87,10 +87,10 @@ test e2e::mock::tests::ssip_text_dot_framing_and_notification_is_opt_in ... ok
 
 test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.03s
 
-   Compiling gorca-daemon v0.0.0 (<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/crates/gorca-daemon)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
     Finished `release` profile [optimized + debuginfo] target(s) in 52.49s
-== reader <repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca built from 568474e0, tree at 568474e0
-== e2e m9r4-strict: reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca backend=voicego repeats=3 load=11.43 13.98 14.26 2/2646 1981126
+== reader <repo>/target/release/gorca built from 568474e0, tree at 568474e0
+== e2e m9r4-strict: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=11.43 13.98 14.26 2/2646 1981126
 -- round 1/3 K2 (load 11.43 13.98 14.26 2/2646 1981126)
 -- round 1/3 K3 (load 11.55 13.88 14.22 1/2677 1983557)
 -- round 1/3 K4 (load 12.91 14.02 14.26 5/2602 1984777)
@@ -119,7 +119,7 @@ test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; fin
 # topology_arms=lanes-rtx12
 # topology_expected=-
 # label=m9r4-strict
-# reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=3
 # samples_per_series=1200

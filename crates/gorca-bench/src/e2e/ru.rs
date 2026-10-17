@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! RU: whole-daemon resource usage (CPU, RSS, PSS, threads) under an event rate.
 //!
 //! `RU-<events/s>`: the reader idles, a storm of that rate floods another application's signals,

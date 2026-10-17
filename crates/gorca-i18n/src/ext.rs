@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Extension catalogs and message references.
 //!
 //! An extension ships its strings as `i18n/<lang>.msg` files (same format as the core catalogs)

@@ -1,5 +1,5 @@
-== reader <repo>/.claude/worktrees/agent-a12a85c2ca79d781a/target/release/gorca built from 932d611, tree at 932d611
-== e2e b5-lanes-sat-r2: reader=daemon:<repo>/.claude/worktrees/agent-a12a85c2ca79d781a/target/release/gorca backend=voicego repeats=1 load=19.02 18.93 14.92 23/3095 206440
+== reader <repo>/target/release/gorca built from 932d611, tree at 932d611
+== e2e b5-lanes-sat-r2: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=1 load=19.02 18.93 14.92 23/3095 206440
 -- round 1/1 L1 (load 19.02 18.93 14.92 22/3095 206440)
 2026-10-14T23:45:28.035746Z  INFO gorca_daemon::topology: lane placed lane=gorca-input tid=206492 granted=none via="-" pinned=None error=None
 2026-10-14T23:45:28.040927Z  INFO gorca_daemon::topology: lane placed lane=gorca-speech-io tid=206493 granted=none via="-" pinned=None error=None

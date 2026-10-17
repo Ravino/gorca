@@ -12,16 +12,16 @@
 # python=Python 3.13.5
 # build=release
 # label=b5v-single-idle-r2
-# reader=daemon:<repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/bench/b5/reader-cpu.sh
+# reader=daemon:<repo>/bench/b5/reader-cpu.sh
 # backend=voicego
 # repeats=1
 # samples_per_series=1200
 # l2_trials=400
 # quick=false
 # loadavg_end=60.06 55.68 51.93 1/3781 557873
-# reader_env=GORCA_CPU_OUT=<repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/bench/results/b5/verdict-r1/raw/idle/single/r2/cpu.txt GORCA_M1=1 GORCA_M4=1 GORCA_M4B=1 GORCA_TOPOLOGY_REPORT=<repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/bench/results/b5/verdict-r1/raw/idle/single/r2/rep.%p.json GORCA_RTKIT_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
+# reader_env=GORCA_CPU_OUT=<repo>/bench/results/b5/verdict-r1/raw/idle/single/r2/cpu.txt GORCA_M1=1 GORCA_M4=1 GORCA_M4B=1 GORCA_TOPOLOGY_REPORT=<repo>/bench/results/b5/verdict-r1/raw/idle/single/r2/rep.%p.json GORCA_RTKIT_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
 # gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
-# reader_args=<repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/target/release/gorca --impersonate-orca --topology=single
+# reader_args=<repo>/target/release/gorca --impersonate-orca --topology=single
 # ext_dir=none
 # extensions=none
 # note0=A1 first mismatch: wanted `Delete item 9?, dialog, Item 9 will be lost., Confirm 9, button`, got `Delete item 9?, dialog, Confirm 9, button`

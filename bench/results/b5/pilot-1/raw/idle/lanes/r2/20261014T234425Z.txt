@@ -12,14 +12,14 @@
 # python=Python 3.13.5
 # build=release
 # label=b5-lanes-idle-r2
-# reader=daemon:<repo>/.claude/worktrees/agent-a12a85c2ca79d781a/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=150
 # l2_trials=40
 # quick=true
 # loadavg_end=29.67 20.34 15.07 25/3246 197858
-# reader_env=GORCA_TOPOLOGY_REPORT=<repo>/.claude/worktrees/agent-a12a85c2ca79d781a/bench/results/b5/pilot-1/raw/idle/lanes/r2/rep.%p.json GORCA_RTKIT_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
+# reader_env=GORCA_TOPOLOGY_REPORT=<repo>/bench/results/b5/pilot-1/raw/idle/lanes/r2/rep.%p.json GORCA_RTKIT_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
 # gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
 # note0=K1: correlated by echoed character and time
 

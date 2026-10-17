@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-S=/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/f
-cd <repo>/.claude/worktrees/agent-a530b7dd65d1b4f2f
-. /tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/envw.sh
+S=/tmp/scratch/f
+cd <repo>
+. /tmp/scratch/envw.sh
 pids=()
 for i in $(seq 12); do yes >/dev/null & pids+=($!); done
 echo "${pids[*]}" > $S/hogs.pids

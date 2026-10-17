@@ -14,7 +14,7 @@
 # topology_arms=singlex6
 # topology_expected=single
 # label=f3-ctl1-single
-# reader=daemon:<repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=3
 # samples_per_series=1200

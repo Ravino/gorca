@@ -1,2 +1,2 @@
-== reader <repo>/.claude/worktrees/agent-ab8dc123ed2f390a2/bench/b5/reader-cpu.sh built from 1993580, tree at e185a10
+== reader <repo>/bench/b5/reader-cpu.sh built from 1993580, tree at e185a10
 Error: the reader binary was built from 1993580 but the tree is at e185a10: rebuild it (cargo build --release -p gorca-daemon) or pass --allow-stale-reader

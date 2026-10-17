@@ -42,13 +42,19 @@ Phase 2 (daily-driver reader)
   recall echo, review, and password prompts that stay silent.
 - Firefox: browse mode for web documents (virtual cursor, quick navigation by element type,
   tables, lists, landmarks, live regions, forms, browse and focus mode switching, say-all) and
-  ARIA names, roles, states and descriptions modelled on NVDA. Chromium: a test harness and
-  per-engine quirk rows only.
+  ARIA names, roles, states and descriptions modelled on NVDA.
 - Extension host on wasmtime with a WIT interface (`gorca-ext-api`), per-extension and
   per-application stores, CPU, memory and call-size limits, and a native fallback. The GNOME
   Shell policy and the terminal policy ship as WASM components.
 - Speech: language, output module and voice settings; punctuation levels and per-language symbol
-  tables (English, Russian); raised pitch for capital letters.
+  tables (English, Russian); combinable capital-letter indication (pitch, word, sound).
+- Chromium and Chrome support (M9): the same browse mode and quick navigation as Firefox, per-engine
+  quirk rows, accessibility tree woken by gorca itself, off-screen frames woken on scroll.
+- Message catalogue (`gorca-i18n`, M12a): every spoken string localised, English and Russian.
+- Firefox tab and address bar announcements.
+- Resource-usage measurements (`docs/reports/resource-usage.md`) and an add-on platform design
+  (ADR-0019, proposed).
+- `CONTRIBUTING.md` (DCO), `LICENSE-EXCEPTION` and licence files.
 - Runtime topology with real-time scheduling through rtkit and core pinning, selected
   automatically (`--topology`), chosen in a bake-off.
 - Model-based state tests for the reader's modes, and an acceptance gate runner
@@ -72,6 +78,8 @@ Phase 2 (daily-driver reader)
   fixed upstream in the separate voicego project.
 - Alt+Tab and Ctrl+Alt+Tab no longer say "unknown" when the Shell floods events; nameless
   buttons are named from their label relation.
+- Terminal flat review jumping to the line start while output streams: the cursor now follows its
+  line by content.
 - Stale terminal screen in flat review; terminal output not spoken until the first key after a
   focus change; terminal tracking that stayed degraded after the policy slot was busy; lost
   baseline read in the terminal extension.

@@ -1,9 +1,9 @@
-   Compiling gorca-output-api v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-output-api)
-   Compiling gorca-speech v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-speech)
-   Compiling gorca-core v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-core)
-   Compiling gorca-connector-atspi v0.0.0 (<repo>/.claude/worktrees/agent-a91eb163b53acf271/crates/gorca-connector-atspi)
+   Compiling gorca-output-api v0.0.0 (<repo>/crates/gorca-output-api)
+   Compiling gorca-speech v0.0.0 (<repo>/crates/gorca-speech)
+   Compiling gorca-core v0.0.0 (<repo>/crates/gorca-core)
+   Compiling gorca-connector-atspi v0.0.0 (<repo>/crates/gorca-connector-atspi)
     Finished `release` profile [optimized + debuginfo] target(s) in 18.83s
-     Running unittests src/lib.rs (/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/tgt/release/deps/gorca_connector_atspi-d6ba16c52add5457)
+     Running unittests src/lib.rs (/tmp/scratch/tgt/release/deps/gorca_connector_atspi-d6ba16c52add5457)
 
 running 20 tests
 test router::tests::a_burst_of_other_events_never_displaces_the_focus ... ok

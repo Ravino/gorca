@@ -4,7 +4,7 @@ description = "Message catalogs (ADR-0010): generated message ids, per-language 
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-license.workspace = true
+license = "MIT OR Apache-2.0"
 publish.workspace = true
 
 [dependencies]

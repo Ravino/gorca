@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! Message catalogs (ADR-0010).
 //!
 //! Every spoken, brailled or displayed string of gorca is a message id (`MsgId`, generated from

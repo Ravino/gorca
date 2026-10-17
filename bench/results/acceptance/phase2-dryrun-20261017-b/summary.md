@@ -1,6 +1,6 @@
 # Phase 2 acceptance: DRY RUN, NOT ACCEPTANCE DATA (gates FAIL)
 
-Mode: **DRY RUN (not acceptance), PARTIAL (m1 m6 m7)**. Run dir: `<repo>/.claude/worktrees/agent-a212e0b0695e3d0d9/bench/results/acceptance/phase2-dryrun-20261017-b`.
+Mode: **DRY RUN (not acceptance), PARTIAL (m1 m6 m7)**. Run dir: `<repo>/bench/results/acceptance/phase2-dryrun-20261017-b`.
 Resolved topology (from the reader reports): lanes-rtx1, lanes-rtx13, lanes-rtx26, lanes-rtx8.
 
 ## Steps

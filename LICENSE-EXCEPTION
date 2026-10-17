@@ -9,8 +9,8 @@ Components in Plugins" exception in NVDA's copying.txt).
 The gorca core is licensed under the GNU General Public License, version 3 or
 (at your option) any later version (see the file LICENSE). The files listed
 under "Extension SDK" below are licensed under MIT OR Apache-2.0 instead (see
-LICENSE-MIT and LICENSE-APACHE in crates/gorca-ext-api/) and are not affected
-by this document.
+LICENSE-MIT and LICENSE-APACHE in crates/gorca-ext-api/ and crates/gorca-i18n/)
+and are not affected by this document.
 
 Definitions
 
@@ -19,7 +19,8 @@ Definitions
 
   "Extension SDK" means the Rust crate gorca-ext-api (crates/gorca-ext-api/),
   including the WebAssembly Interface Type (WIT) files in
-  crates/gorca-ext-api/wit/, as published by the gorca authors under the
+  crates/gorca-ext-api/wit/, and the crate gorca-i18n (crates/gorca-i18n/) that
+  gorca-ext-api depends on, as published by the gorca authors under the
   licence MIT OR Apache-2.0.
 
   "Extension" means a WebAssembly component (or a work that is compiled to

@@ -1,6 +1,6 @@
 # Phase 2 acceptance: FAIL
 
-Mode: **ACCEPTANCE ATTEMPT, DEGRADED HOST (--force), PARTIAL (m1 m6)**. Run dir: `<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/bench/results/acceptance/phase2-20261017T040807Z`.
+Mode: **ACCEPTANCE ATTEMPT, DEGRADED HOST (--force), PARTIAL (m1 m6)**. Run dir: `<repo>/bench/results/acceptance/phase2-20261017T040807Z`.
 Resolved topology (from the reader reports): lanes-rtx24, lanes-rtx3, lanes-rtx38,singlex1.
 
 ## Steps

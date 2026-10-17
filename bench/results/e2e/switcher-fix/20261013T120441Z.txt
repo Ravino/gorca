@@ -12,7 +12,7 @@
 # python=Python 3.13.5
 # build=release
 # label=switcher-fix
-# reader=daemon:<repo>/.claude/worktrees/agent-a25dd59d116ccd4aa/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=1
 # samples_per_series=150

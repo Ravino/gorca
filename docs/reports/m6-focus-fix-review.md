@@ -2,7 +2,7 @@
 
 Reviewer verdict: **MERGE**, with one medium follow-up (F1) that should land before M6 is called done. The V1/VT gate failures are **not** a regression. They come from host load and reproduce on main at the same magnitude.
 
-Worktree: `<repo>/.claude/worktrees/m6-focus-review` (detached at 5c99628). Raw data is in `bench/results/e2e/rv-ab-{main,fix}-p{1..6}/` and `bench/results/e2e/m6-focus-review/`.
+Worktree: `<repo>` (detached at 5c99628). Raw data is in `bench/results/e2e/rv-ab-{main,fix}-p{1..6}/` and `bench/results/e2e/m6-focus-review/`.
 
 ## 1. Code review: can the change lose or duplicate typed echo?
 

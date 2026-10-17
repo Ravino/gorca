@@ -1,5 +1,5 @@
-== reader <repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/gorca built from 6a86749, tree at 6a86749
-== e2e acc-20261017T052201Z-m6-fake-a1: reader=daemon:<repo>/.claude/worktrees/agent-a442a2fa7ae77a061/target/release/gorca backend=voicego repeats=3 load=18.20 17.78 17.71 7/2748 131308
+== reader <repo>/target/release/gorca built from 6a86749, tree at 6a86749
+== e2e acc-20261017T052201Z-m6-fake-a1: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=18.20 17.78 17.71 7/2748 131308
 -- round 1/3 V1 (load 18.20 17.78 17.71 7/2748 131308)
 -- round 1/3 VT (load 22.17 19.42 18.33 13/2375 172235)
 -- round 1/3 VH (load 45.62 31.83 23.57 7/2539 254247)
@@ -30,5 +30,5 @@
 -- round 3/3 VW (load 16.36 19.06 21.48 5/3085 397715)
 -- round 3/3 V1 (load 14.77 18.43 21.20 7/3076 398750)
 -- round 3/3 VT (load 13.53 16.04 19.81 2/3091 408458)
-== wrote <repo>/.claude/worktrees/agent-a442a2fa7ae77a061/bench/results/acceptance/phase2-20261017T052201Z/m6/fake.a1/res/20261017T060649Z.{json,txt}
+== wrote <repo>/bench/results/acceptance/phase2-20261017T052201Z/m6/fake.a1/res/20261017T060649Z.{json,txt}
 == 4 gate(s) FAILED

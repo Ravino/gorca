@@ -26,7 +26,7 @@
    Compiling linux-raw-sys v0.12.1
    Compiling autocfg v1.5.1
    Compiling futures-io v0.3.34
-   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/agent-aeebce99e42aab241/crates/gorca-model)
+   Compiling gorca-model v0.0.0 (<repo>/crates/gorca-model)
    Compiling event-listener-strategy v0.5.4
    Compiling cfg-if v1.0.5
    Compiling rustversion v1.0.23
@@ -81,16 +81,16 @@
    Compiling tokio-util v0.7.20
    Compiling ciborium-ll v0.2.2
    Compiling ciborium v0.2.2
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-aeebce99e42aab241/crates/gorca-rt)
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-aeebce99e42aab241/crates/gorca-ingress)
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-aeebce99e42aab241/crates/gorca-mirror)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
    Compiling criterion v0.8.2
    Compiling zbus_names v4.3.4
    Compiling zbus_macros v5.19.0
    Compiling zbus v5.19.0
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-aeebce99e42aab241/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/agent-aeebce99e42aab241/crates/gorca-bench-b2)
-   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-aeebce99e42aab241/crates/gorca-bench)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-bench v0.0.0 (<repo>/crates/gorca-bench)
     Finished `test` profile [unoptimized + debuginfo] target(s) in 11.79s
      Running unittests src/lib.rs (target/debug/deps/gorca_bench-b4921a7a1562f132)
 
@@ -134,7 +134,7 @@ test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; fin
    Compiling smallvec v1.16.3
    Compiling event-listener v5.4.2
    Compiling futures-io v0.3.34
-   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/agent-aeebce99e42aab241/crates/gorca-model)
+   Compiling gorca-model v0.0.0 (<repo>/crates/gorca-model)
    Compiling indexmap v2.14.2
    Compiling event-listener-strategy v0.5.4
    Compiling linux-raw-sys v0.12.1
@@ -177,16 +177,16 @@ test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; fin
    Compiling zvariant v5.15.0
    Compiling zbus_names v4.3.4
    Compiling tokio-util v0.7.20
-   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-aeebce99e42aab241/crates/gorca-rt)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
    Compiling zbus_macros v5.19.0
-   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-aeebce99e42aab241/crates/gorca-ingress)
-   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-aeebce99e42aab241/crates/gorca-mirror)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
    Compiling zbus v5.19.0
-   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-aeebce99e42aab241/crates/gorca-dbus)
-   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/agent-aeebce99e42aab241/crates/gorca-bench-b2)
-   Compiling gorca-bench v0.0.0 (<repo>/.claude/worktrees/agent-aeebce99e42aab241/crates/gorca-bench)
+   Compiling gorca-dbus v0.0.0 (<repo>/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-bench v0.0.0 (<repo>/crates/gorca-bench)
     Finished `release` profile [optimized + debuginfo] target(s) in 20.99s
-== e2e pw-review-r2-l4/pw2-r1: reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/bin/gorca-pw2 backend=voicego repeats=5 load=11.85 9.04 10.67 9/2324 365018
+== e2e pw-review-r2-l4/pw2-r1: reader=daemon:/tmp/scratch/bin/gorca-pw2 backend=voicego repeats=5 load=11.85 9.04 10.67 9/2324 365018
 -- round 1/5 L4 (load 11.85 9.04 10.67 11/2324 365018)
 2026-10-13T17:00:54.963125Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego
 2026-10-13T17:00:54.963879Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
@@ -351,7 +351,7 @@ test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; fin
 # python=Python 3.13.5
 # build=release
 # label=pw-review-r2-l4/pw2-r1
-# reader=daemon:/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/bin/gorca-pw2
+# reader=daemon:/tmp/scratch/bin/gorca-pw2
 # backend=voicego
 # repeats=5
 # samples_per_series=1200
