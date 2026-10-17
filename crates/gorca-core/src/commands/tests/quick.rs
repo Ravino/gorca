@@ -308,6 +308,6 @@ fn battery_is_a_desktop_request_and_the_answer_is_localised() {
     f.reader.cmd.republish();
     assert_eq!(
         ans(&mut f, Some(info), newer),
-        ["82 процентов, разряжается, осталось 3 ч 5 мин"]
+        ["82 процента, разряжается, осталось 3 ч 5 мин"]
     );
 }
