@@ -1,24 +1,27 @@
 //! Mirroring the virtual browse selection into the page (NVDA copies its own buffer; gorca lets
 //! the browser copy, which keeps the formatting and needs no clipboard of ours).
 //!
-//! The virtual selection is a range of flat-text offsets. The page selects through AT-SPI
-//! `Text.SetSelection` on a *hypertext*: a container's text with one U+FFFC for every embedded
-//! child, offsets in UTF-16 units. The mirror splits that text into leaves (`StaticText` nodes),
-//! so a flat range becomes spans `(container, start, end)` in those hypertext offsets.
+//! The virtual selection is a range of flat-text offsets. The *atoms* it contains are the text
+//! scalars and the images: they are what a DOM selection can hold, and they form one contiguous
+//! interval (block breaks, cell gaps and the markers of empty controls have no DOM counterpart).
+//! The page selects through AT-SPI `Text.SetSelection` on a *hypertext*: a container's text with
+//! one U+FFFC for every embedded child. The mirror splits that text into leaves (`StaticText`
+//! nodes) and objects (images), so an atom interval becomes spans `(container, start, end)` in
+//! hypertext offsets, and the same interval as two points for engines that select across objects.
 //!
-//! The spans here are engine-neutral: `end` is exclusive and exact. What an engine does with an
-//! end offset that names an embedded child differs (Firefox 153 ESR ends the range after the child
-//! when the end offset *is* the child's character; Blink takes it as exclusive), so each span
-//! also says what its end touches (`SelSpan`), and the document source adapts it
-//! (`gorca-doc-source-atspi`, measured in `docs/reports/ctrl-c-passthrough.md`).
+//! The spans here are engine-neutral: `end` is exclusive and exact, offsets come in UTF-16 units
+//! (Gecko) and in scalars (Blink). What an engine does with an end offset that names an embedded
+//! child differs, so each span also says what its end touches (`SelSpan`), and the document source
+//! adapts it (`gorca-doc-source-atspi`; measurements in `docs/reports/ctrl-c-passthrough.md`,
+//! model and proofs in `docs/reports/selection-mapping-math.md`).
 //!
-//! A range whose ends sit in different containers is planned two ways: `spans`, the exact legs
-//! (tail of the start branch, whole blocks between, head of the end branch), and `snap`, one
-//! range on the common ancestor that rounds nested ends out to whole children. The source
-//! applies `spans` where the engine keeps several ranges and `snap` where it keeps one.
+//! A range whose ends sit in different containers is planned three ways: `doc_range`, the exact
+//! interval (one call on Blink), `spans`, the exact legs (tail of the start branch, whole blocks
+//! between, head of the end branch, for engines that keep several ranges), and `snap`, one range
+//! on the common ancestor that rounds nested ends out to whole children (engines that keep one).
 
 use gorca_doc::web::{NodeFlags, WebDoc};
-use gorca_model::{DocNodeId, Role, SelSpan};
+use gorca_model::{DocNodeId, DocRange, Role, SelSpan};
 
 /// How to select a flat range in the page.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -27,11 +30,23 @@ pub struct Plan {
     pub spans: Vec<SelSpan<DocNodeId>>,
     /// The single-range alternative on the common ancestor.
     pub snap: SelSpan<DocNodeId>,
-    /// The container of the first leaf: when the engine focuses it, the selection steals focus.
+    /// The exact atom interval as two points.
+    pub doc_range: DocRange<DocNodeId>,
+    /// The container of the first atom: when the engine focuses it, the selection steals focus.
     pub start_container: DocNodeId,
-    /// Flat offset where the selected part of the first leaf ends: a caller that must not start
-    /// in that leaf's container plans again from here.
+    /// Flat offset where the selected part of the first atom ends: a caller that must not start
+    /// in that atom's container plans again from here.
     pub first_end: u32,
+    /// Gecko cannot take this exactly: a range ends right before a hypertext child it continues
+    /// into (the child comes along), or several ranges are joined with no separator.
+    pub gecko_lossy: bool,
+}
+
+/// Offsets in a container's hypertext: UTF-16 units and scalars.
+type Off = (u32, u32);
+
+fn add(a: Off, b: Off) -> Off {
+    (a.0 + b.0, a.1 + b.1)
 }
 
 fn is_leaf(d: &WebDoc, id: DocNodeId) -> bool {
@@ -40,39 +55,60 @@ fn is_leaf(d: &WebDoc, id: DocNodeId) -> bool {
         && d.child_count(id) == Some(0)
 }
 
+/// An embedded object with no text of its own: an image (its flat text is the U+FFFC marker).
+fn is_object(d: &WebDoc, id: DocNodeId) -> bool {
+    d.node(id)
+        .is_some_and(|v| v.role == Role::Image && v.text == Some("\u{FFFC}"))
+        && d.child_count(id) == Some(0)
+}
+
+fn is_atom(d: &WebDoc, id: DocNodeId) -> bool {
+    is_leaf(d, id) || is_object(d, id)
+}
+
 fn units(c: char) -> u32 {
     u32::try_from(c.len_utf16()).unwrap_or(1)
 }
 
-fn utf16_prefix(t: &str, scalars: u32) -> u32 {
-    t.chars().take(scalars as usize).map(units).sum()
+/// The offsets after the first `scalars` scalars of `t`.
+fn prefix(t: &str, scalars: u32) -> Off {
+    let u = t.chars().take(scalars as usize).map(units).sum();
+    (
+        u,
+        scalars.min(u32::try_from(t.chars().count()).unwrap_or(u32::MAX)),
+    )
 }
 
 /// What `id` adds to its parent's hypertext: its text for a leaf, one embedded character else.
-fn contrib(d: &WebDoc, id: DocNodeId) -> u32 {
+fn contrib(d: &WebDoc, id: DocNodeId) -> Off {
     match d.node(id) {
-        Some(v) if is_leaf(d, id) => v.text.map_or(0, |t| t.chars().map(units).sum()),
-        Some(_) | None => 1,
+        Some(v) if is_leaf(d, id) => v.text.map_or((0, 0), |t| {
+            (
+                t.chars().map(units).sum(),
+                u32::try_from(t.chars().count()).unwrap_or(u32::MAX),
+            )
+        }),
+        Some(_) | None => (1, 1),
     }
 }
 
-/// Hypertext offset of the start of `child` in its parent.
-fn pos(d: &WebDoc, parent: DocNodeId, child: DocNodeId) -> u32 {
+/// Hypertext offsets of the start of `child` in its parent.
+fn pos(d: &WebDoc, parent: DocNodeId, child: DocNodeId) -> Off {
     d.children(parent)
         .take_while(|c| *c != child)
-        .map(|c| contrib(d, c))
-        .sum()
+        .fold((0, 0), |a, c| add(a, contrib(d, c)))
 }
 
-fn hyper_len(d: &WebDoc, parent: DocNodeId) -> u32 {
-    d.children(parent).map(|c| contrib(d, c)).sum()
+fn hyper_len(d: &WebDoc, parent: DocNodeId) -> Off {
+    d.children(parent)
+        .fold((0, 0), |a, c| add(a, contrib(d, c)))
 }
 
-/// The child of `p` whose hypertext contains offset `idx`, with its start offset.
+/// The child of `p` whose hypertext contains UTF-16 offset `idx`, with its start offset.
 fn child_at(d: &WebDoc, p: DocNodeId, idx: u32) -> Option<(DocNodeId, u32)> {
     let mut start = 0;
     for c in d.children(p) {
-        let end = start + contrib(d, c);
+        let end = start + contrib(d, c).0;
         if idx < end {
             return Some((c, start));
         }
@@ -82,16 +118,17 @@ fn child_at(d: &WebDoc, p: DocNodeId, idx: u32) -> Option<(DocNodeId, u32)> {
 }
 
 /// A span `start..end` of `node` with what its end touches.
-fn span(d: &WebDoc, node: DocNodeId, start: u32, end: u32) -> SelSpan<DocNodeId> {
-    let last = end.checked_sub(1).and_then(|i| child_at(d, node, i));
-    let next = child_at(d, node, end);
-    let end_on_child = last.is_some_and(|(c, _)| !is_leaf(d, c));
-    let child_follows = next.is_some_and(|(c, _)| !is_leaf(d, c));
+fn span(d: &WebDoc, node: DocNodeId, start: Off, end: Off) -> SelSpan<DocNodeId> {
+    let last = end.0.checked_sub(1).and_then(|i| child_at(d, node, i));
+    let next = child_at(d, node, end.0);
+    let end_on_child = last.is_some_and(|(c, _)| !is_atom(d, c));
+    let end_on_object = last.is_some_and(|(c, _)| is_object(d, c));
+    let child_follows = next.is_some_and(|(c, _)| !is_atom(d, c));
     let trim_ws = last.is_some_and(|(c, cs)| {
         is_leaf(d, c)
             && d.node(c).and_then(|v| v.text).is_some_and(|t| {
                 let mut at = cs;
-                let target = end - 1;
+                let target = end.0 - 1;
                 t.chars()
                     .find(|ch| {
                         let here = at;
@@ -103,8 +140,10 @@ fn span(d: &WebDoc, node: DocNodeId, start: u32, end: u32) -> SelSpan<DocNodeId>
     });
     SelSpan {
         node,
-        range: start..end,
+        range: start.0..end.0,
+        range_cp: start.1..end.1,
         end_on_child,
+        end_on_object,
         child_follows,
         trim_ws,
     }
@@ -120,17 +159,43 @@ fn ancestors(d: &WebDoc, from: DocNodeId) -> Vec<DocNodeId> {
     v
 }
 
-/// A text leaf met by the range, with the scalar offsets of the range inside its text.
+/// True when `id` or an ancestor is a password field: its text is never mirrored or copied.
+fn secret(d: &WebDoc, id: DocNodeId) -> bool {
+    let mut cur = Some(id);
+    for _ in 0..64 {
+        let Some(n) = cur else { return false };
+        if d.node(n).is_some_and(|v| v.role == Role::PasswordEntry) {
+            return true;
+        }
+        cur = d.parent(n);
+    }
+    false
+}
+
+/// An atom met by the range, with the scalar offsets of the range inside its text.
 struct Hit {
     id: DocNodeId,
+    object: bool,
     from: u32,
     to: u32,
     scalars: u32,
-    /// Flat offset just after the selected part of the leaf.
+    /// Flat offset just after the selected part of the atom.
     end_flat: u32,
 }
 
-fn leaves(d: &WebDoc, lo: u32, hi: u32) -> Option<(Hit, Hit)> {
+impl Hit {
+    /// Hypertext offsets inside the atom after `k` scalars.
+    fn off(&self, d: &WebDoc, k: u32) -> Off {
+        if self.object {
+            return (k, k);
+        }
+        d.node(self.id)
+            .and_then(|v| v.text)
+            .map_or((0, 0), |t| prefix(t, k))
+    }
+}
+
+fn atoms(d: &WebDoc, lo: u32, hi: u32) -> Option<(Hit, Hit)> {
     let (n0, _) = d.at_offset(lo)?;
     let mut first: Option<Hit> = None;
     let mut last: Option<Hit> = None;
@@ -140,18 +205,26 @@ fn leaves(d: &WebDoc, lo: u32, hi: u32) -> Option<(Hit, Hit)> {
             break;
         }
         let v = d.node(id)?;
-        if v.role == Role::PasswordEntry {
-            // Never mirror (and so never copy) a password field: the range stops before it.
-            break;
-        }
-        if v.flags.contains(NodeFlags::HIDDEN) || !is_leaf(d, id) {
+        let leaf = is_leaf(d, id);
+        let object = !leaf && is_object(d, id);
+        if v.flags.contains(NodeFlags::HIDDEN) || !(leaf || object) {
+            if v.role == Role::PasswordEntry {
+                // Never mirror (and so never copy) a password field: the range stops before it.
+                break;
+            }
             continue;
         }
-        let text = v.text?;
+        if secret(d, id) {
+            break;
+        }
         let lead = u32::from(
             v.flags.contains(NodeFlags::BREAK_BEFORE) || v.flags.contains(NodeFlags::CELL_SEP),
         );
-        let n = u32::try_from(text.chars().count()).unwrap_or(u32::MAX);
+        let n = if object {
+            1
+        } else {
+            u32::try_from(v.text?.chars().count()).unwrap_or(u32::MAX)
+        };
         let ts = start + lead;
         if ts + n <= lo {
             continue;
@@ -161,104 +234,114 @@ fn leaves(d: &WebDoc, lo: u32, hi: u32) -> Option<(Hit, Hit)> {
         if to == 0 || from >= to {
             continue;
         }
-        if first.is_none() {
-            first = Some(Hit {
-                id,
-                from,
-                to,
-                scalars: n,
-                end_flat: ts + to,
-            });
-        }
-        last = Some(Hit {
+        let mk = || Hit {
             id,
+            object,
             from,
             to,
             scalars: n,
             end_flat: ts + to,
-        });
+        };
+        if first.is_none() {
+            first = Some(mk());
+        }
+        last = Some(mk());
     }
     Some((first?, last?))
 }
 
-/// Plan the page selection of the flat range `[lo, hi)`. `None` when there is nothing to select.
-/// A password field ends the range before it.
+/// Plan the page selection of the flat range `[lo, hi)`. `None` when it holds no atom. A password
+/// field ends the range before it.
 pub fn plan(d: &WebDoc, lo: u32, hi: u32) -> Option<Plan> {
     if lo >= hi {
         return None;
     }
-    let (f, l) = leaves(d, lo, hi)?;
-    let f_text = d.node(f.id)?.text?;
-    let l_text = d.node(l.id)?.text?;
+    let (f, l) = atoms(d, lo, hi)?;
     let f_par = d.parent(f.id)?;
     let l_par = d.parent(l.id)?;
-    let s_in = |p: DocNodeId| pos(d, p, f.id) + utf16_prefix(f_text, f.from);
-    let e_in = |p: DocNodeId| pos(d, p, l.id) + utf16_prefix(l_text, l.to);
+    let s_in = |p: DocNodeId| add(pos(d, p, f.id), f.off(d, f.from));
+    let e_in = |p: DocNodeId| add(pos(d, p, l.id), l.off(d, l.to));
+    let doc_range = DocRange {
+        start: (f_par, s_in(f_par).1),
+        end: (l_par, e_in(l_par).1),
+    };
 
-    if f_par == l_par {
+    let (spans, snap, gecko_lossy) = if f_par == l_par {
         let sp = span(d, f_par, s_in(f_par), e_in(f_par));
-        return Some(Plan {
-            spans: vec![sp.clone()],
-            snap: sp,
-            start_container: f_par,
-            first_end: f.end_flat,
-        });
+        let lossy = single_lossy(d, &sp);
+        (vec![sp.clone()], sp, lossy)
+    } else {
+        // The common ancestor of the two containers, and the children of it on each side.
+        let chain_f = ancestors(d, f_par);
+        let chain_l = ancestors(d, l_par);
+        let c = *chain_f.iter().find(|a| chain_l.contains(a))?;
+        let x_s = child_toward(d, &chain_f, c, f.id);
+        let x_e = child_toward(d, &chain_l, c, l.id);
+        let snap_s = if f_par == c { s_in(c) } else { pos(d, c, x_s) };
+        let snap_e = if l_par == c {
+            e_in(c)
+        } else {
+            add(pos(d, c, x_e), (1, 1))
+        };
+        let snap = span(d, c, snap_s, snap_e);
+        // Whole blocks at both ends: the rounded-out range is exact, and one range keeps the
+        // line breaks between blocks (separate ranges are joined with nothing).
+        let whole_start = f_par == c || (f.from == 0 && first_atom(d, x_s) == Some(f.id));
+        let whole_end = l_par == c || (l.to == l.scalars && last_atom(d, x_e) == Some(l.id));
+        if whole_start && whole_end {
+            let lossy = single_lossy(d, &snap);
+            (vec![snap.clone()], snap, lossy)
+        } else {
+            let legs = exact_legs(
+                d,
+                (&f, &l),
+                (&chain_f, &chain_l),
+                (c, x_s, x_e),
+                (whole_start, whole_end),
+            );
+            (legs, snap, true)
+        }
+    };
+    let mut spans = spans;
+    // Only the end of the whole selection may drop a trailing space: where two legs meet the
+    // space is real text ("See li" must not become "Seeli").
+    let last_ix = spans.len().saturating_sub(1);
+    for (i, s) in spans.iter_mut().enumerate() {
+        if i != last_ix {
+            s.trim_ws = false;
+        }
     }
-
-    // The common ancestor of the two containers, and the children of it on each side.
-    let chain_f = ancestors(d, f_par);
-    let chain_l = ancestors(d, l_par);
-    let c = *chain_f.iter().find(|a| chain_l.contains(a))?;
-    let x_s = child_toward(d, &chain_f, c, f.id);
-    let x_e = child_toward(d, &chain_l, c, l.id);
-
-    let snap_s = if f_par == c { s_in(c) } else { pos(d, c, x_s) };
-    let snap_e = if l_par == c {
-        e_in(c)
-    } else {
-        pos(d, c, x_e) + 1
-    };
-    let snap = span(d, c, snap_s, snap_e);
-
-    // Whole blocks at both ends: the rounded-out range is exact, and one range keeps the line
-    // breaks between blocks (separate ranges are joined with nothing).
-    let whole_start = f_par == c || (f.from == 0 && first_leaf(d, x_s) == Some(f.id));
-    let whole_end = l_par == c || (l.to == l.scalars && last_leaf(d, x_e) == Some(l.id));
-    let spans = if whole_start && whole_end {
-        vec![snap.clone()]
-    } else {
-        exact_legs(
-            d,
-            &f,
-            &l,
-            (f_text, l_text),
-            (&chain_f, &chain_l),
-            (c, x_s, x_e),
-            (whole_start, whole_end),
-        )
-    };
     Some(Plan {
         spans,
         snap,
+        doc_range,
         start_container: f_par,
         first_end: f.end_flat,
+        gecko_lossy,
     })
 }
 
-fn first_leaf(d: &WebDoc, from: DocNodeId) -> Option<DocNodeId> {
+/// A single range is inexact on Gecko when it ends right before a hypertext child at a letter
+/// (the child comes along), or ends on an image at the very end of its container.
+fn single_lossy(d: &WebDoc, sp: &SelSpan<DocNodeId>) -> bool {
+    (sp.child_follows && !sp.trim_ws)
+        || (sp.end_on_object && sp.range.end >= hyper_len(d, sp.node).0)
+}
+
+fn first_atom(d: &WebDoc, from: DocNodeId) -> Option<DocNodeId> {
     let mut cur = from;
     loop {
-        if is_leaf(d, cur) {
+        if is_atom(d, cur) {
             return Some(cur);
         }
         cur = d.first_child(cur)?;
     }
 }
 
-fn last_leaf(d: &WebDoc, from: DocNodeId) -> Option<DocNodeId> {
+fn last_atom(d: &WebDoc, from: DocNodeId) -> Option<DocNodeId> {
     let mut cur = from;
     loop {
-        if is_leaf(d, cur) {
+        if is_atom(d, cur) {
             return Some(cur);
         }
         cur = d.children(cur).last()?;
@@ -278,8 +361,8 @@ fn child_toward(d: &WebDoc, chain: &[DocNodeId], c: DocNodeId, leaf: DocNodeId) 
         .unwrap_or(leaf)
 }
 
-fn push_span(d: &WebDoc, node: DocNodeId, s: u32, e: u32, out: &mut Vec<SelSpan<DocNodeId>>) {
-    if s < e {
+fn push_span(d: &WebDoc, node: DocNodeId, s: Off, e: Off, out: &mut Vec<SelSpan<DocNodeId>>) {
+    if s.0 < e.0 {
         out.push(span(d, node, s, e));
     }
 }
@@ -287,43 +370,48 @@ fn push_span(d: &WebDoc, node: DocNodeId, s: u32, e: u32, out: &mut Vec<SelSpan<
 /// The exact legs: the tail of the start branch, the blocks between, the head of the end branch.
 fn exact_legs(
     d: &WebDoc,
-    f: &Hit,
-    l: &Hit,
-    texts: (&str, &str),
+    hits: (&Hit, &Hit),
     chains: (&[DocNodeId], &[DocNodeId]),
     ends: (DocNodeId, DocNodeId, DocNodeId),
     whole: (bool, bool),
 ) -> Vec<SelSpan<DocNodeId>> {
-    let (f_text, l_text) = texts;
+    let (f, l) = hits;
     let (chain_f, chain_l) = chains;
     let (c, x_s, x_e) = ends;
     let (whole_start, whole_end) = whole;
     let f_par = chain_f[0];
     let l_par = chain_l[0];
+    let one = (1, 1);
     let mut out: Vec<SelSpan<DocNodeId>> = Vec::new();
-    // Start branch: the tail of the first leaf's container, then the tail of each ancestor
+    // Start branch: the tail of the first atom's container, then the tail of each ancestor
     // below the common one.
     if f_par != c && !whole_start {
-        let s0 = pos(d, f_par, f.id) + utf16_prefix(f_text, f.from);
+        let s0 = add(pos(d, f_par, f.id), f.off(d, f.from));
         push_span(d, f_par, s0, hyper_len(d, f_par), &mut out);
         let mut child = f_par;
         for a in chain_f.iter().skip(1).take_while(|a| **a != c) {
-            push_span(d, *a, pos(d, *a, child) + 1, hyper_len(d, *a), &mut out);
+            push_span(
+                d,
+                *a,
+                add(pos(d, *a, child), one),
+                hyper_len(d, *a),
+                &mut out,
+            );
             child = *a;
         }
     }
     // Between: from after the start side to before the end side, in the common ancestor.
     let mid_s = if f_par == c {
-        pos(d, c, f.id) + utf16_prefix(f_text, f.from)
+        add(pos(d, c, f.id), f.off(d, f.from))
     } else if whole_start {
         pos(d, c, x_s)
     } else {
-        pos(d, c, x_s) + 1
+        add(pos(d, c, x_s), one)
     };
     let mid_e = if l_par == c {
-        pos(d, c, l.id) + utf16_prefix(l_text, l.to)
+        add(pos(d, c, l.id), l.off(d, l.to))
     } else if whole_end {
-        pos(d, c, x_e) + 1
+        add(pos(d, c, x_e), one)
     } else {
         pos(d, c, x_e)
     };
@@ -331,15 +419,26 @@ fn exact_legs(
     // End branch, innermost first here and reversed so the spans stay in document order.
     let mut tails: Vec<SelSpan<DocNodeId>> = Vec::new();
     if l_par != c && !whole_end {
-        let e0 = pos(d, l_par, l.id) + utf16_prefix(l_text, l.to);
-        push_span(d, l_par, 0, e0, &mut tails);
+        let e0 = add(pos(d, l_par, l.id), l.off(d, l.to));
+        push_span(d, l_par, (0, 0), e0, &mut tails);
         let mut child = l_par;
         for a in chain_l.iter().skip(1).take_while(|a| **a != c) {
-            push_span(d, *a, 0, pos(d, *a, child), &mut tails);
+            push_span(d, *a, (0, 0), pos(d, *a, child), &mut tails);
             child = *a;
         }
     }
     tails.reverse();
     out.extend(tails);
     out
+}
+
+/// Test helper: the end offset Gecko takes for a span (the same rule as the source's
+/// `gecko_range`; kept in step by `v6_*`).
+#[cfg(test)]
+pub(crate) fn tests_gecko_end(sp: &SelSpan<DocNodeId>) -> u32 {
+    if (sp.end_on_child || (sp.child_follows && sp.trim_ws)) && sp.range.end > sp.range.start {
+        sp.range.end - 1
+    } else {
+        sp.range.end
+    }
 }

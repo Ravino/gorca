@@ -107,6 +107,8 @@ pub enum DocCtl {
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SelOutcome {
     Done,
+    /// Applied, but the page selection is not exactly the virtual one (the copy may differ).
+    Approximate,
     /// The source cannot select in this document (no text path, no selection support).
     NotSupported,
     /// Refused, timed out, node gone or the action queue was full.
@@ -652,7 +654,9 @@ fn spawn_action(
                     src_of(d, s.node).map(|node| gorca_model::SelSpan {
                         node,
                         range: s.range.clone(),
+                        range_cp: s.range_cp.clone(),
                         end_on_child: s.end_on_child,
+                        end_on_object: s.end_on_object,
                         child_follows: s.child_follows,
                         trim_ws: s.trim_ws,
                     })
@@ -660,7 +664,17 @@ fn spawn_action(
                 let spans = spec.spans.iter().map(map).collect::<Option<Vec<_>>>()?;
                 let snap = map(&spec.snap)?;
                 let root = src_of(d, spec.root)?;
-                Some(gorca_model::SelectionSpec { root, spans, snap })
+                let doc_range = gorca_model::DocRange {
+                    start: (src_of(d, spec.doc_range.start.0)?, spec.doc_range.start.1),
+                    end: (src_of(d, spec.doc_range.end.0)?, spec.doc_range.end.1),
+                };
+                Some(gorca_model::SelectionSpec {
+                    root,
+                    spans,
+                    snap,
+                    doc_range,
+                    gecko_lossy: spec.gecko_lossy,
+                })
             });
             let Some(mapped) = mapped else {
                 fail(a);
@@ -705,6 +719,7 @@ fn spawn_action(
         if let Some(req) = select_req {
             let outcome = match result {
                 Some(Ok(())) => SelOutcome::Done,
+                Some(Err(SourceError::Approximate)) => SelOutcome::Approximate,
                 Some(Err(SourceError::NotSupported)) => SelOutcome::NotSupported,
                 Some(Err(_)) | None => SelOutcome::Failed,
             };

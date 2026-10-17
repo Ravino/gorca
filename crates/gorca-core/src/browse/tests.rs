@@ -2318,6 +2318,198 @@ fn a_selection_that_starts_inside_a_link_is_cleared_not_mirrored() {
     );
 }
 
+// ---- selection mapping vectors (docs/reports/selection-mapping-math.md V2..V8, S-7) ------------
+
+/// A document from nodes and parent -> children edges (ids as in `src`).
+fn doc_of(nodes: Vec<SrcNode>, edges: &[(u64, &[u64])]) -> gorca_doc::web::DocRead {
+    let (mut w, read) = channel(11);
+    let mut tr = Translator::new();
+    let mut deltas = vec![
+        DocDelta::Reset {
+            root: SrcNodeId(1),
+            nav_id: 1,
+        },
+        DocDelta::Upsert(nodes),
+    ];
+    deltas.extend(edges.iter().map(|(p, ks)| kids(*p, ks)));
+    deltas.push(DocDelta::Settled { batch: 1 });
+    tr.apply(&mut w, deltas).unwrap();
+    w.publish();
+    read
+}
+
+fn root() -> SrcNode {
+    block(src(1, Role::DocumentWeb, Some(1001)))
+}
+
+/// The flat offset `local` scalars into the first node whose text is `text`, or of the image.
+fn flat_at(d: &gorca_doc::web::WebDoc, text: &str, local: u32) -> u32 {
+    let id = d
+        .preorder()
+        .find(|id| {
+            d.node(*id).is_some_and(|v| {
+                if text.is_empty() {
+                    v.role == Role::Image
+                } else {
+                    v.text == Some(text)
+                }
+            })
+        })
+        .expect(text);
+    let lead = u32::from(d.node(id).is_some_and(|v| {
+        v.flags.contains(gorca_doc::web::NodeFlags::BREAK_BEFORE)
+            || v.flags.contains(gorca_doc::web::NodeFlags::CELL_SEP)
+    }));
+    d.offset_of(id).expect("offset") + lead + local
+}
+
+#[test]
+fn v2_a_range_into_a_link_keeps_the_space_where_two_legs_meet() {
+    // "See " + link("link text") + " end": the copy of "See li" must not become "Seeli".
+    let read = doc_of(
+        vec![
+            root(),
+            block(src(2, Role::Paragraph, Some(1002))),
+            run(3, "See "),
+            src(4, Role::Link, Some(1004)),
+            run(5, "link text"),
+            run(6, " end"),
+        ],
+        &[(1, &[2]), (2, &[3, 4, 6]), (4, &[5])],
+    );
+    let p = read.with(|d| {
+        super::selmirror::plan(d, flat_at(d, "See ", 0), flat_at(d, "link text", 2)).expect("plan")
+    });
+    assert_eq!(p.spans.len(), 2, "{:?}", p.spans);
+    assert_eq!(p.spans[0].range, 0..4);
+    assert!(p.spans[0].child_follows);
+    assert!(
+        !p.spans[0].trim_ws,
+        "the space before the link is real text here"
+    );
+    assert_eq!(p.spans[1].range, 0..2);
+    assert!(
+        p.gecko_lossy,
+        "Gecko takes the whole link: the source reports it"
+    );
+}
+
+#[test]
+fn v3_a_range_into_a_nested_list_is_the_item_tail_and_the_nested_head_only() {
+    let read = doc_of(
+        vec![
+            root(),
+            src(2, Role::List, Some(1002)),
+            src(3, Role::ListItem, Some(1003)),
+            run(4, "Item"),
+            src(5, Role::List, Some(1005)),
+            src(6, Role::ListItem, Some(1006)),
+            run(7, "nested"),
+        ],
+        &[(1, &[2]), (2, &[3]), (3, &[4, 5]), (5, &[6]), (6, &[7])],
+    );
+    let p = read.with(|d| {
+        super::selmirror::plan(d, flat_at(d, "Item", 2), flat_at(d, "nested", 3)).expect("plan")
+    });
+    let r: Vec<_> = p.spans.iter().map(|s| s.range.clone()).collect();
+    assert_eq!(r, vec![2..4, 0..3], "no whole sub-list, nothing twice");
+    assert!(p.gecko_lossy);
+}
+
+#[test]
+fn v6_a_range_that_ends_on_an_image_includes_it() {
+    let read = doc_of(
+        vec![
+            root(),
+            block(src(2, Role::Paragraph, Some(1002))),
+            run(3, "Logo "),
+            src(4, Role::Image, Some(1004)),
+            block(src(5, Role::Paragraph, Some(1005))),
+            run(6, "Next"),
+        ],
+        &[(1, &[2, 5]), (2, &[3, 4]), (5, &[6])],
+    );
+    let p = read.with(|d| {
+        super::selmirror::plan(d, flat_at(d, "Logo ", 0), flat_at(d, "", 0) + 1).expect("plan")
+    });
+    assert_eq!(p.spans.len(), 1);
+    assert_eq!(p.spans[0].range, 0..6, "five letters and the image");
+    assert!(p.spans[0].end_on_object && !p.spans[0].end_on_child);
+    // Ending after the image is exact for Gecko (it is not hypertext); at the very end of the
+    // container the engine may refuse it, which the plan reports as lossy.
+    assert_eq!(crate::browse::selmirror::tests_gecko_end(&p.spans[0]), 6);
+    assert!(p.gecko_lossy);
+}
+
+#[test]
+fn v7_a_range_of_only_an_image_is_planned() {
+    let read = doc_of(
+        vec![
+            root(),
+            block(src(2, Role::Paragraph, Some(1002))),
+            run(3, "a "),
+            src(4, Role::Image, Some(1004)),
+            run(5, " b"),
+        ],
+        &[(1, &[2]), (2, &[3, 4, 5])],
+    );
+    let p = read.with(|d| {
+        let at = flat_at(d, "", 0);
+        super::selmirror::plan(d, at, at + 1).expect("plan")
+    });
+    assert_eq!(p.spans.len(), 1);
+    assert_eq!(p.spans[0].range, 2..3);
+}
+
+#[test]
+fn v8_blink_offsets_are_scalars_and_gecko_offsets_are_utf16() {
+    let read = doc_of(
+        vec![
+            root(),
+            block(src(2, Role::Paragraph, Some(1002))),
+            run(3, "x\u{1F600}y alpha"),
+        ],
+        &[(1, &[2]), (2, &[3])],
+    );
+    let p = read.with(|d| {
+        super::selmirror::plan(
+            d,
+            flat_at(d, "x\u{1F600}y alpha", 4),
+            flat_at(d, "x\u{1F600}y alpha", 9),
+        )
+        .expect("plan")
+    });
+    assert_eq!(p.spans[0].range, 5..10, "UTF-16: the emoji takes two units");
+    assert_eq!(p.spans[0].range_cp, 4..9, "scalars");
+    assert_eq!(p.doc_range.start.1, 4);
+    assert_eq!(p.doc_range.end.1, 9);
+}
+
+#[test]
+fn s7_text_of_a_password_field_is_never_mirrored_even_when_the_range_starts_inside_it() {
+    let read = doc_of(
+        vec![
+            root(),
+            block(src(2, Role::Paragraph, Some(1002))),
+            run(3, "pre "),
+            src(4, Role::PasswordEntry, Some(1004)),
+            run(5, "secret"),
+            run(6, " post"),
+        ],
+        &[(1, &[2]), (2, &[3, 4, 6]), (4, &[5])],
+    );
+    read.with(|d| {
+        // Starting inside the field: nothing.
+        assert!(
+            super::selmirror::plan(d, flat_at(d, "secret", 1), flat_at(d, " post", 3)).is_none()
+        );
+        // Spanning it: the range stops before the field.
+        let p =
+            super::selmirror::plan(d, flat_at(d, "pre ", 0), flat_at(d, " post", 3)).expect("plan");
+        assert_eq!(p.spans.last().expect("a span").range.end, 4);
+    });
+}
+
 #[test]
 fn a_selection_starting_in_a_link_is_not_mirrored_because_the_browser_would_focus_it() {
     let mut r = tab_rig();

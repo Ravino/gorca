@@ -2405,6 +2405,8 @@ impl Reader {
             root,
             spans: plan.spans.clone(),
             snap: plan.snap.clone(),
+            doc_range: plan.doc_range.clone(),
+            gecko_lossy: plan.gecko_lossy,
         };
         let Some(first) = plan.spans.first().map(|s| s.node) else {
             return;
@@ -2587,7 +2589,7 @@ impl Reader {
         match b.sync {
             NativeSync::Probing { req: r } if r == req => {
                 b.sync = NativeSync::Idle;
-                if outcome == SelOutcome::Done {
+                if matches!(outcome, SelOutcome::Done | SelOutcome::Approximate) {
                     b.model = SelectionModel::Native;
                     let has_sel = b.sel.is_some();
                     if has_sel {
@@ -2600,8 +2602,13 @@ impl Reader {
             }
             NativeSync::Pending { req: r } if r == req => {
                 b.sync = NativeSync::Idle;
-                if outcome != SelOutcome::Done {
-                    self.say_queued(t(M::WebSelectionNotSet), fx);
+                match outcome {
+                    SelOutcome::Done => {}
+                    // Applied, but the browser's copy may differ from what was heard.
+                    SelOutcome::Approximate => self.say_queued(t(M::WebSelectionIncomplete), fx),
+                    SelOutcome::NotSupported | SelOutcome::Failed => {
+                        self.say_queued(t(M::WebSelectionNotSet), fx);
+                    }
                 }
             }
             NativeSync::Idle | NativeSync::Pending { .. } | NativeSync::Probing { .. } => {}

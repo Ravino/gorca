@@ -78,10 +78,10 @@ pub struct SourceConfig {
     pub dormant_marks: usize,
 }
 
-/// The hypertext range Gecko takes for `sp` (Firefox 153 ESR, measured): an end offset that names an
-/// embedded child includes it, so a range that ends on a child names the child (`end - 1`), and a
-/// range that ends right before a child leaves out its white space (`end - 1`) or takes the child
-/// along.
+/// The hypertext range Gecko takes for `sp` (Firefox 153 ESR, measured): an end offset that names
+/// an embedded hypertext child includes it, so a range that ends on such a child names the child
+/// (`end - 1`), and a range that ends right before one leaves out its white space (`end - 1`) or
+/// takes the child along. An image is not hypertext: ending after it needs no adjustment.
 pub(crate) fn gecko_range(sp: &gorca_model::SelSpan<SrcNodeId>) -> std::ops::Range<u32> {
     let end = sp.range.end;
     let end = if (sp.end_on_child || (sp.child_follows && sp.trim_ws)) && end > sp.range.start {
@@ -1613,9 +1613,14 @@ impl AtspiDocSource {
         Ok(wire::parse_u32(m.body().data().bytes()).unwrap_or(0) != 0)
     }
 
-    /// Mirror a page selection. Blink keeps one range and reads an end offset as exclusive, so
-    /// it gets the single rounded-out range; Gecko adds ranges, so it gets the exact ones, and
-    /// the single range when it refuses a second. Never leaves a half set.
+    /// Mirror a page selection.
+    ///
+    /// Blink takes the exact interval in one call (`Document.SetTextSelections`, ATK 2.52+,
+    /// offsets in scalars) and keeps a single range with exclusive ends, so when the call
+    /// answers false the rounded-out single range is the fallback. Gecko adds ranges, so it gets
+    /// the exact legs (UTF-16 offsets, ends adapted by `gecko_range`), and the single range when
+    /// it refuses a second. A plan that had to fall back, or that Gecko cannot take exactly, ends
+    /// `Approximate`. Never leaves a half set.
     async fn select(
         &self,
         live: &Live,
@@ -1624,11 +1629,30 @@ impl AtspiDocSource {
     ) -> Result<(), SourceError> {
         let blink = self.config.quirks.selection_single_exclusive;
         let root = Self::path_of(live, spec.root);
-        if !blink
-            && let Some(root) = root.as_deref()
+        if let Some(root) = root.as_deref() {
+            self.drop_extra_ranges(root, deadline).await?;
+        }
+        let mut approximate = false;
+        if blink {
+            if let (Some(root), Some(start), Some(end)) = (
+                root.as_deref(),
+                Self::path_of(live, spec.doc_range.start.0),
+                Self::path_of(live, spec.doc_range.end.0),
+            ) && self
+                .set_text_selections(
+                    root,
+                    (&start, spec.doc_range.start.1),
+                    (&end, spec.doc_range.end.1),
+                    deadline,
+                )
+                .await?
+            {
+                return Ok(());
+            }
+            approximate = true;
+        } else if let Some(root) = root.as_deref()
             && !spec.spans.is_empty()
         {
-            self.drop_extra_ranges(root, deadline).await?;
             let mut all = true;
             for (i, sp) in spec.spans.iter().enumerate() {
                 let Some(p) = Self::path_of(live, sp.node) else {
@@ -1642,23 +1666,74 @@ impl AtspiDocSource {
                 }
             }
             if all {
-                return Ok(());
+                return if spec.gecko_lossy {
+                    Err(SourceError::Approximate)
+                } else {
+                    Ok(())
+                };
             }
+            self.drop_extra_ranges(root, deadline).await?;
+            approximate = true;
         }
         let sp = &spec.snap;
         let path = Self::path_of(live, sp.node).ok_or(SourceError::NotSupported)?;
-        if let Some(root) = root.as_deref() {
-            self.drop_extra_ranges(root, deadline).await?;
-        }
         let range = if blink {
-            sp.range.clone()
+            sp.range_cp.clone()
         } else {
             gecko_range(sp)
         };
         if self.range_call(&path, true, &range, deadline).await? {
-            Ok(())
+            if approximate || spec.gecko_lossy {
+                Err(SourceError::Approximate)
+            } else {
+                Ok(())
+            }
         } else {
             Err(SourceError::Refused)
+        }
+    }
+
+    /// `Document.SetTextSelections` with one range from `start` to `end` (object path and offset
+    /// in scalars each). The bus name inside an object reference is ignored by Chromium
+    /// (measured), the path is what counts.
+    async fn set_text_selections(
+        &self,
+        document: &str,
+        start: (&str, u32),
+        end: (&str, u32),
+        deadline: Deadline,
+    ) -> Result<bool, SourceError> {
+        use zbus::zvariant::ObjectPath;
+        let name = self.app.bus_name();
+        let (Ok(a), Ok(b)) = (ObjectPath::try_from(start.0), ObjectPath::try_from(end.0)) else {
+            return Ok(false);
+        };
+        let range = vec![(
+            (name.clone(), a),
+            i32::try_from(start.1).unwrap_or(0),
+            (name, b),
+            i32::try_from(end.1).unwrap_or(0),
+            true,
+        )];
+        let m = self
+            .app
+            .call(
+                self.app.next_lane(),
+                deadline,
+                document,
+                "org.a11y.atspi.Document",
+                "SetTextSelections",
+                &(range,),
+            )
+            .await;
+        match m {
+            Ok(m) => Ok(wire::parse_u32(m.body().data().bytes()).unwrap_or(0) != 0),
+            // An engine without the method (Gecko, ATK older than 2.52) answers an error: not a
+            // failure of the request, the caller falls back.
+            Err(e) => {
+                tracing::debug!(error = %e, "SetTextSelections unavailable; using one range");
+                Ok(false)
+            }
         }
     }
 
@@ -1708,6 +1783,8 @@ mod selection_tests {
     ) -> SelSpan<SrcNodeId> {
         SelSpan {
             node: SrcNodeId(1),
+            range_cp: r.clone(),
+            end_on_object: false,
             range: r,
             end_on_child,
             child_follows,
@@ -1723,6 +1800,10 @@ mod selection_tests {
         assert_eq!(gecko_range(&sp(0..5, false, true, true)), 0..4);
         // A letter before the child stays, and the child comes along (nothing else is possible).
         assert_eq!(gecko_range(&sp(0..5, false, true, false)), 0..5);
+        // An image is not hypertext: ending after it needs no adjustment.
+        let mut img = sp(0..6, false, false, false);
+        img.end_on_object = true;
+        assert_eq!(gecko_range(&img), 0..6);
         assert_eq!(gecko_range(&sp(6..24, false, false, false)), 6..24);
     }
 }

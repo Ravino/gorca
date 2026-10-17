@@ -128,8 +128,7 @@ check("E5 two paragraphs, blocks whole", copy(), "Alpha bravo link inside charli
 
 key(CTRL, A)
 all_text = copy()
-check("E6 Ctrl+A skips the leading link (it would take focus) and stops before the password field", all_text.strip().split("\n")[0], "Heading one",
-      chromium_known="Blink ignores a range that ends right before an <input>")
+check("E6 Ctrl+A skips the leading link (it would take focus) and stops before the password field", all_text.strip().split("\n")[0], "Heading one")
 print("   Ctrl+A text:", repr(all_text), flush=True)
 
 top(); key(DOWN); key(RIGHT); key(RIGHT); key(SHIFT, DOWN)

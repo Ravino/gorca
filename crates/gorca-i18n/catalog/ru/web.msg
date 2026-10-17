@@ -41,6 +41,7 @@ web-native-selection-on = выделение страницы
 web-native-selection-off = виртуальное выделение
 web-selection-unavailable = выделение страницы здесь недоступно
 web-selection-not-set = выделение страницы не установлено
+web-selection-incomplete = выделение страницы неполное
 web-single-letter-on = навигация одной буквой включена
 web-single-letter-off = навигация одной буквой выключена
 web-no-container = не в контейнере

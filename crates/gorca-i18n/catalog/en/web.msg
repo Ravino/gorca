@@ -41,6 +41,7 @@ web-native-selection-on = page selection
 web-native-selection-off = virtual selection
 web-selection-unavailable = page selection not available here
 web-selection-not-set = page selection not set
+web-selection-incomplete = page selection incomplete
 web-single-letter-on = single letter navigation on
 web-single-letter-off = single letter navigation off
 web-no-container = Not in a container

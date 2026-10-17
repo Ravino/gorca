@@ -132,20 +132,33 @@ pub enum DocAction {
     ClearSelection,
 }
 
-/// One hypertext range of a page selection: `start..end`, `end` exclusive and exact. The three
-/// flags say what the end touches, because engines read an end offset that names an embedded
-/// child differently (Firefox ends the range after the child, Blink excludes it): the source
-/// adapts, the mirror stays engine-neutral.
+/// One hypertext range of a page selection: `range` in UTF-16 units (Gecko's unit) and
+/// `range_cp` in Unicode scalars (Blink's), `end` exclusive and exact. The flags say what the
+/// end touches, because engines read an end offset that names an embedded child differently
+/// (Firefox ends the range after a hypertext child and before an object, Blink excludes both):
+/// the source adapts, the mirror stays engine-neutral.
+#[allow(clippy::struct_excessive_bools)] // four independent facts about one range end
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SelSpan<N> {
     pub node: N,
     pub range: Range<u32>,
-    /// The last selected character is an embedded child.
+    pub range_cp: Range<u32>,
+    /// The last selected character is an embedded hypertext child (a link, a list item).
     pub end_on_child: bool,
-    /// The character at `end` is an embedded child.
+    /// The last selected character is an embedded object that has no text (an image).
+    pub end_on_object: bool,
+    /// The character at `end` is an embedded hypertext child.
     pub child_follows: bool,
     /// The last selected character is white space (leaving it out names the same words).
     pub trim_ws: bool,
+}
+
+/// The exact atom interval as two points, for engines that take one range across objects
+/// (`Document.SetTextSelections`): `(object, offset in scalars)` for the start and the end.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DocRange<N> {
+    pub start: (N, u32),
+    pub end: (N, u32),
 }
 
 /// A page selection as hypertext ranges: `spans` are exact (one range each, in document order),
@@ -157,6 +170,12 @@ pub struct SelectionSpec<N> {
     pub root: N,
     pub spans: Vec<SelSpan<N>>,
     pub snap: SelSpan<N>,
+    /// The exact interval as two points (see [`DocRange`]).
+    pub doc_range: DocRange<N>,
+    /// Gecko cannot select this exactly (a leg ends inside a hypertext child it continues
+    /// into, or several ranges are joined with no separator): the copy may differ from what
+    /// was heard. The source reports `Approximate` when it applied such a plan.
+    pub gecko_lossy: bool,
 }
 
 /// Fallback caret bookmark when a node no longer joins (IR-7): `(ordinal, context hash)`,

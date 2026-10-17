@@ -171,3 +171,31 @@ an `<input>` as the next sibling is ignored by Blink; `(0,6)` and `(0,4)` work).
   Virtual copies nothing new, and that Native copies again after the probe.
 * Not done: S1 (Chromium `Document.SetTextSelections`, would fix Ctrl+A before an `<input>`; Chromium
   rows stay 7/9 with E6 an XFAIL) and moving the Firefox focus rule out of core into the source.
+
+## Update 4: mapping fixes from the math review (`docs/reports/selection-mapping-math.md`)
+
+* S-1 units: spans carry both `range` (UTF-16, Gecko) and `range_cp` (scalars, Blink); Blink uses
+  `range_cp` (vector V8).
+* S-2 Chromium: the exact atom interval goes through `org.a11y.atspi.Document.SetTextSelections`
+  (`a((so)i(so)ib)`, one call, offsets in scalars); measured on Chromium 154: exact across blocks,
+  the bus name inside an object reference is ignored (the path counts), a reversed range is
+  refused (start first, `start_is_active` true). The single rounded-out range stays as the
+  fallback (answer false or error). With it every `selcopy` row passes on Chromium, Ctrl+A before an
+  `<input>` included (it was 7/9).
+* S-3: `trim_ws` survives only on the last leg of a plan; where two legs meet the space is real text
+  (V2: "See li" stays "See li" in the plan; Gecko then takes the whole link, which is reported).
+* S-4: nested lists plan the item tail and the nested head only (V3), flagged lossy for Gecko.
+* S-5/S-6: images are atoms. `end_on_object` ends after an image with no `-1` (Gecko), a range of
+  only an image is planned (V6, V7); an image at the very end of its container is flagged lossy
+  (the engine may refuse it, unverified).
+* S-7: a password field is checked on the ancestors of every atom, so a range that starts inside it
+  is not planned, and a range spanning it stops before it.
+* S-10 was a stale reading of the working tree: `clear_selection` already used `RemoveSelection` only.
+* Exactness: the plan carries `gecko_lossy` (a leg ends in front of a hypertext child it continues
+  into, a letter-end before a link, several ranges joined with no separator, an image at the end of
+  its container). The source answers `Approximate` when it applied such a plan or had to fall back;
+  the Reader receives `SelOutcome::Approximate`, says "page selection incomplete" (queued) and keeps
+  the fact for a later Auto mode. No clipboard writer was added.
+* Not done: lifting through intermediate levels (S-8/S-9: fewer legs), the container
+  character-count cross-check (S-11), the secret-category count in the treap (S-7 perf), the
+  echo state machine (nothing listens to `selection-changed` today).
