@@ -316,6 +316,24 @@ fn re_tracking_on_every_key_while_reads_fail_starts_no_timer_chains() {
     ]);
 }
 
+/// The extension's `ArmTimer` milliseconds and the Reader's clock share one origin: a timer fired
+/// exactly at the instant the Reader armed reaches the session as a tick (`Tracked.due`), so after
+/// a typing session every armed deadline has been consumed and none is left re-arming.
+#[test]
+fn every_deadline_the_terminal_session_armed_is_consumed_by_its_own_tick() {
+    let mut s = Sim::new(true);
+    s.focus_to(TERM, true, 0);
+    s.settle(2000);
+    for k in ['l', 's'] {
+        s.type_key(KeyKind::Letter(k), Modifiers::empty());
+        s.settle(1);
+    }
+    s.type_key(KeyKind::Enter, Modifiers::empty());
+    s.settle(10_000);
+    assert!(s.timers.is_empty());
+    assert!(s.r.term_snapshot(key(TERM)).is_some());
+}
+
 /// One key that leaves review on a terminal without a baseline starts exactly one tracking (and so one baseline read): the key
 /// path re-tracks it, and `text_mode_changed` must not track it a second time (that would drop
 /// the read in flight).
