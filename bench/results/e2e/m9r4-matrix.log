@@ -11,3 +11,15 @@
    exit 0
 == 12:56:52 strict end head 568474e0 dirty=0 load 5.61 8.43 11.58 1/2173 1997238 avail_GiB 15
 == 12:56:52 cr-m7 start head 568474e0 dirty=0 load 5.61 8.43 11.58 7/2173 1997263 avail_GiB 15
+   exit 0
+== 13:15:56 cr-m7 end head bfbb3295 dirty=0 load 7.03 8.10 8.63 5/2375 2034714 avail_GiB 14
+== 13:15:56 cr-typing start head bfbb3295 dirty=0 load 7.03 8.10 8.63 10/2384 2034748 avail_GiB 14
+   exit 1
+== 13:55:20 cr-typing end head bfbb3295 dirty=0 load 8.39 7.30 7.87 1/2453 2128488 avail_GiB 15
+== 13:55:20 cr-m8 start head bfbb3295 dirty=0 load 8.39 7.30 7.87 1/2453 2128513 avail_GiB 15
+   exit 0
+== 14:19:16 cr-m8 end head bfbb3295 dirty=0 load 5.23 6.92 7.33 1/2045 2163597 avail_GiB 15
+== 14:19:17 ff-m7 start head bfbb3295 dirty=0 load 5.23 6.92 7.33 1/2045 2163622 avail_GiB 15
+   exit 0
+== 14:39:34 ff-m7 end head bfbb3295 dirty=0 load 8.52 8.21 7.75 3/2025 2191427 avail_GiB 15
+== 14:39:34 ff-typing start head bfbb3295 dirty=0 load 8.52 8.21 7.75 2/2025 2191452 avail_GiB 15
