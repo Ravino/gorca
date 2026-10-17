@@ -305,6 +305,15 @@ fn ctrl_right_speaks_the_word_and_home_the_character() {
 }
 
 #[test]
+fn an_editable_combo_box_is_tracked_like_a_text_field_and_a_plain_one_is_not() {
+    // Firefox's address bar is an editable combo box.
+    let editable = snap(Role::ComboBox, StateSet::EDITABLE | StateSet::FOCUSABLE);
+    assert!(super::trackable(&editable).is_some_and(|k| k.editable));
+    let plain = snap(Role::ComboBox, StateSet::FOCUSABLE);
+    assert!(super::trackable(&plain).is_none());
+}
+
+#[test]
 fn a_space_and_the_end_of_text_have_names() {
     let mut g = rig();
     g.entry("a b", 0);
@@ -2476,6 +2485,147 @@ fn the_readers_own_words_and_plain_names_are_left_alone() {
     assert_eq!(t, ["a, b.", "Кнопка OK"]);
 }
 
+/// M9 review probes (FCE1 on Chromium): the focus that switches browse -> focus mode tracks the
+/// contenteditable and, in the same turn, `text_mode_changed` dirties the window, so the
+/// prefetch reply is stale and `hosts` is never learned. If the browser's caret-placing event
+/// was handled before the focus (separate lanes), nothing else fetches a window of the root.
+mod probe_m9r {
+    use super::*;
+
+    fn focus_rich(g: &mut Rig, flip: bool) {
+        let s = snap(
+            Role::TextEntry,
+            StateSet::EDITABLE | StateSet::FOCUSED | StateSet::MULTILINE,
+        );
+        if flip {
+            g.r.text.was_active = false;
+        }
+        let mut fx = ReaderEffects::new();
+        g.r.now = g.now();
+        g.r.text_track(&s, &mut fx);
+        g.r.text_after(&mut fx);
+        let f = fetches(&fx);
+        let (req, _) = f[0];
+        let _ = g.reply(
+            req,
+            Reply::Window(TextWindowFill {
+                base: 0,
+                text: Arc::from("\u{FFFC}\u{FFFC}"),
+                len: 2,
+                caret: Some(0),
+            }),
+        );
+    }
+
+    fn right_into_paragraph(flip: bool) -> (bool, Option<NodeKey>) {
+        let mut g = rig();
+        let p = leaf(96);
+        focus_rich(&mut g, flip);
+        g.advance(1000);
+        let mut fx = g.key(RIGHT, 0, NONE);
+        g.advance(3);
+        fx.extend(g.caret_on(p, 1));
+        fx.extend(g.tick(30));
+        let fetched_p = fetches(&fx).iter().any(|(_, op)| match op {
+            TextOp::Window { node, .. } | TextOp::AtOffset { node, .. } => *node == p,
+            _ => false,
+        });
+        (fetched_p, g.r.text.caret.tracked().map(|t| t.node))
+    }
+
+    #[test]
+    fn probe_m9r_control_no_mode_flip_follows_the_paragraph() {
+        let (fetched, node) = right_into_paragraph(false);
+        assert!(
+            fetched && node == Some(leaf(96)),
+            "control: {fetched} {node:?}"
+        );
+    }
+
+    #[test]
+    fn probe_m9r_mode_flip_in_the_focus_turn_loses_the_paragraph() {
+        let (fetched, node) = right_into_paragraph(true);
+        assert!(
+            fetched && node == Some(leaf(96)),
+            "after the browse->focus flip in the focus turn, Right in the paragraph is ignored: fetched={fetched} tracked={node:?}"
+        );
+    }
+
+    /// Chromium places the caret of the contenteditable (on its paragraph) before the focus
+    /// that switches the mode is handled: the event is kept, and is handled as soon as the
+    /// field's window says the root hosts paragraphs.
+    #[test]
+    fn probe_m9r_a_caret_event_before_the_focus_is_not_lost() {
+        let mut g = rig();
+        let p = leaf(96);
+        g.r.mode = crate::mode::Mode::InputHelp {
+            resume: crate::mode::BaseMode::Focus,
+        };
+        g.r.text.was_active = false;
+        let early = g.caret_on(p, 0);
+        assert!(fetches(&early).is_empty());
+        g.r.mode = crate::mode::Mode::Focus;
+        let s = snap(
+            Role::TextEntry,
+            StateSet::EDITABLE | StateSet::FOCUSED | StateSet::MULTILINE,
+        );
+        let mut fx = ReaderEffects::new();
+        g.r.now = g.now();
+        g.r.text_track(&s, &mut fx);
+        g.r.text_after(&mut fx);
+        let (req, _) = fetches(&fx)[0];
+        let fx = g.reply(
+            req,
+            Reply::Window(TextWindowFill {
+                base: 0,
+                text: Arc::from("\u{FFFC}\u{FFFC}"),
+                len: 2,
+                caret: Some(0),
+            }),
+        );
+        let on_p = fetches(&fx).iter().any(|(_, op)| match op {
+            TextOp::Window { node, .. } | TextOp::AtOffset { node, .. } => *node == p,
+            _ => false,
+        });
+        assert!(on_p, "the early caret event retargets to the paragraph");
+        assert_eq!(g.r.text.caret.tracked().map(|t| t.node), Some(p));
+    }
+
+    /// Firefox: the caret event of the paragraph comes while the root's window is still in
+    /// flight (so `hosts` is unknown): it is replayed when the reply arrives, and the caret of
+    /// the paragraph is the tracked one before any key.
+    #[test]
+    fn probe_m9r_a_caret_event_while_the_window_is_in_flight_is_replayed() {
+        let mut g = rig();
+        let p = leaf(96);
+        let s = snap(
+            Role::TextEntry,
+            StateSet::EDITABLE | StateSet::FOCUSED | StateSet::MULTILINE,
+        );
+        let mut fx = ReaderEffects::new();
+        g.r.now = g.now();
+        g.r.text_track(&s, &mut fx);
+        g.r.text_after(&mut fx);
+        let (req, _) = fetches(&fx)[0];
+        let early = g.caret_on(p, 0);
+        assert!(fetches(&early).is_empty());
+        let fx = g.reply(
+            req,
+            Reply::Window(TextWindowFill {
+                base: 0,
+                text: Arc::from("\u{FFFC}\u{FFFC}"),
+                len: 2,
+                caret: Some(0),
+            }),
+        );
+        let on_p = fetches(&fx).iter().any(|(_, op)| match op {
+            TextOp::Window { node, .. } | TextOp::AtOffset { node, .. } => *node == p,
+            _ => false,
+        });
+        assert!(on_p, "the early caret event retargets to the paragraph");
+    }
+}
+
 #[test]
 fn a_description_is_symbol_processed_once_and_still_follows_the_pause() {
     use crate::browse::present::{Item, segments};
@@ -2500,7 +2650,7 @@ fn a_description_is_symbol_processed_once_and_still_follows_the_pause() {
     // A second pass changes nothing (no double processing).
     let again = g.r.symbolize(said.clone());
     assert_eq!(again.segments, said.segments);
-    let v = gorca_speech::Verbalizer.verbalize(&said);
+    let v = gorca_speech::Verbalizer.verbalize(&said, gorca_speech::CapitalFx::default());
     assert_eq!(&*v.text, "Search, edit. C plus plus 50 percent");
 }
 
@@ -2579,4 +2729,43 @@ fn lone_modifiers_do_not_end_review_and_generic_echo_is_localised() {
     h.r.cmd.republish();
     assert_eq!(spoken(&h.typed(' ')), ["пробел"]);
     assert_eq!(spoken(&h.typed('!')).len(), 1);
+}
+
+// A typed key that replaces a selection: Gecko sends a delete and a caret move and no insert.
+// The key's expectation must not outlive that, or the next key's insert is spoken as text.
+fn replace_selection_then_type(role: Role, gap_ms: u64, gecko: bool) -> Vec<String> {
+    let mut g = rig();
+    if gecko {
+        g.r.dir.set_text_insert_slack(node().app, 2);
+    }
+    g.track(
+        role,
+        StateSet::EDITABLE | StateSet::FOCUSED,
+        "http://host/a",
+        13,
+    );
+    let mut said = Vec::new();
+    said.extend(spoken(&g.typed('1')));
+    g.advance(5);
+    said.extend(spoken(&g.delete(0, Some("http://host/a"), 13)));
+    said.extend(spoken(&g.caret(1)));
+    g.advance(gap_ms);
+    said.extend(spoken(&g.tick(0)));
+    said.extend(spoken(&g.typed('2')));
+    g.advance(5);
+    said.extend(spoken(&g.insert(1, "2")));
+    said.extend(spoken(&g.caret(2)));
+    said.extend(spoken(&g.tick(300)));
+    said
+}
+
+#[test]
+fn a_key_that_replaced_a_selection_leaves_no_expectation_for_the_next_insert() {
+    for role in [Role::TextEntry, Role::ComboBox] {
+        for (gap, gecko) in [(2200, true), (300, true), (2200, false)] {
+            let said = replace_selection_then_type(role, gap, gecko);
+            let twos = said.iter().filter(|s| s.as_str() == "2").count();
+            assert_eq!(twos, 1, "{role:?} gap {gap} gecko {gecko}: {said:?}");
+        }
+    }
 }

@@ -309,6 +309,8 @@ struct Seen {
     t_ns: u64,
     /// The first integer of the event (a caret event's offset).
     d1: i32,
+    /// The event's own name (`member:detail`), for the trace of `GORCA_TAP_TRACE=1`.
+    what: String,
 }
 
 pub(super) const FOCUS: u8 = 1;
@@ -316,6 +318,8 @@ pub(super) const LOAD: u8 = 2;
 pub(super) const CARET: u8 = 3;
 pub(super) const TEXT: u8 = 4;
 pub(super) const SEL: u8 = 5;
+/// Trace-only kinds (recorded when `GORCA_TAP_TRACE=1`): window events, property changes, other states.
+const TRACE: u8 = 6;
 
 #[derive(Debug)]
 pub(super) struct EventTap {
@@ -345,6 +349,17 @@ impl EventTap {
             "type='signal',interface='org.a11y.atspi.Event.Object',member='TextSelectionChanged'",
         ] {
             c.add_match(rule, Duration::from_secs(5))?;
+        }
+        let trace = std::env::var("GORCA_TAP_TRACE").is_ok_and(|v| v == "1");
+        if trace {
+            for rule in [
+                "type='signal',interface='org.a11y.atspi.Event.Window'",
+                "type='signal',interface='org.a11y.atspi.Event.Object',member='PropertyChange'",
+                "type='signal',interface='org.a11y.atspi.Event.Object',member='ChildrenChanged'",
+                "type='signal',interface='org.a11y.atspi.Event.Object',member='SelectionChanged'",
+            ] {
+                c.add_match(rule, Duration::from_secs(5))?;
+            }
         }
         c.stream.set_read_timeout(Some(Duration::from_millis(20)))?;
         let stop = Arc::new(AtomicBool::new(false));
@@ -389,6 +404,7 @@ impl EventTap {
                                             Some("org.a11y.atspi.Event.Object"),
                                             "TextSelectionChanged",
                                         ) => SEL,
+                                        _ if trace => TRACE,
                                         _ => 0,
                                     };
                                     if kind != 0 {
@@ -399,6 +415,10 @@ impl EventTap {
                                                 path: p.to_owned(),
                                                 t_ns: t,
                                                 d1: event_head(m.body).map_or(-1, |(_, d)| d),
+                                                what: format!(
+                                                    "{member}:{}",
+                                                    event_head(m.body).map_or("", |(d, _)| d)
+                                                ),
                                             },
                                         );
                                     }
@@ -456,7 +476,40 @@ impl EventTap {
         let skip = seen.len().saturating_sub(n);
         seen.iter()
             .skip(skip)
-            .map(|e| format!("{} {}", e.kind, e.path))
+            .map(|e| format!("{} {} {}", e.kind, e.path, e.what))
+            .collect()
+    }
+
+    /// The path of the last event of `kind`.
+    pub(super) fn last_path(&self, kind: u8) -> Option<String> {
+        let seen = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
+        seen.iter()
+            .rev()
+            .find(|e| e.kind == kind)
+            .map(|e| e.path.clone())
+    }
+
+    /// How many events were seen so far (a mark for [`EventTap::since`]).
+    pub(super) fn len(&self) -> usize {
+        self.seen
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .len()
+    }
+
+    /// The events after mark `from`, as "kind path member:detail" strings.
+    pub(super) fn since(&self, from: usize) -> Vec<String> {
+        let seen = self.seen.lock().unwrap_or_else(PoisonError::into_inner);
+        seen.iter()
+            .skip(from)
+            .map(|e| {
+                format!(
+                    "{} {} {}",
+                    e.kind,
+                    e.path.rsplit('/').next().unwrap_or(""),
+                    e.what
+                )
+            })
             .collect()
     }
 
@@ -510,6 +563,9 @@ pub(super) struct Web {
     /// A focus or mode change may still be changing the grab set: wait before the next key.
     pub(super) unsettled: bool,
     pub(super) bus: String,
+    /// Browser launch to the document appearing on the a11y bus, ms (M9 CR-WAKE: with only
+    /// `IsEnabled` set, Chromium shows a document after the reader's wake call).
+    pub(super) doc_arrival_ms: f64,
     /// The reader's presentation log of this run (`--bench-present-log`), kept for a loss dump.
     pub(super) present_log: Option<PathBuf>,
 }
@@ -576,6 +632,16 @@ impl Web {
         settings: &str,
     ) -> Result<(Self, DocRef)> {
         let env = m1_env(host);
+        // M9 `GORCA_M9_BROWSER_FIRST=1`: the browser is up (and has registered on the a11y bus)
+        // before the reader starts, as when the user starts gorca with Chrome already open.
+        let browser_first = std::env::var("GORCA_M9_BROWSER_FIRST").is_ok_and(|v| v == "1");
+        let mut early = if browser_first {
+            let b = Firefox::launch(&env, "a", urls)?;
+            std::thread::sleep(Duration::from_secs(6));
+            Some(b)
+        } else {
+            None
+        };
         // The presentation log of the run: copied next to the results when a trial is lost.
         static RUNS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let run_no = RUNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -609,7 +675,10 @@ impl Web {
         }
         let tap = EventTap::start(&env.a11y_addr)?;
         let ax = JsonProc::spawn(&host.harness_dir.join("../web/m7/ax.py"), &[])?;
-        let ff = Firefox::launch(&env, "a", urls)?;
+        let ff = match early.take() {
+            Some(b) => b,
+            None => Firefox::launch(&env, "a", urls)?,
+        };
         let mut w = Self {
             ff,
             ax,
@@ -619,12 +688,15 @@ impl Web {
             unsettled: false,
             present_log,
             bus: String::new(),
+            doc_arrival_ms: 0.0,
         };
+        let launched = std::time::Instant::now();
         let r = w.ax.request(
             "find_doc",
             &format!("\"title\":\"{title}\",\"timeout_ms\":60000"),
             Duration::from_secs(70),
         )?;
+        w.doc_arrival_ms = launched.elapsed().as_secs_f64() * 1e3;
         w.bus = json_str(&r, "bus").context("no bus in find_doc reply")?;
         let doc = DocRef {
             path: json_str(&r, "path").context("no path")?,
@@ -908,6 +980,17 @@ pub(super) fn check(
     }
 }
 
+/// M9: a word a line is made of is spoken once (Blink repeats a text leaf in its parent's text).
+fn once(fails: &mut Vec<String>, what: &str, heard: &Result<(String, f64)>, word: &str) {
+    if let Ok((text, _)) = heard
+        && text.matches(word).count() > 1
+    {
+        fails.push(format!(
+            "{what}: {word:?} is spoken more than once in {text:?}"
+        ));
+    }
+}
+
 /// B0: the walkthrough of the M7a acceptance paragraph, on `article.html`.
 pub fn b0(
     host: &HostEnv,
@@ -920,8 +1003,16 @@ pub fn b0(
     }
     let (mut w, doc) = Web::start(host, reader, flavor, &[article(host)?], "M7 Article")?;
     let mut fails: Vec<String> = Vec::new();
+    out.x("doc_arrival_ms", w.doc_arrival_ms, "ms");
     // Entering the page: the title and the first line, after "browse mode".
     w.prime(&doc)?;
+    out.notes.push(format!(
+        "before entry: {:?}",
+        speaks_since(&w, 0)
+            .into_iter()
+            .map(|s| s.1)
+            .collect::<Vec<_>>()
+    ));
     let mark = w.mark();
     w.focus(&doc.path)?;
     let heard = w.speech(mark, Duration::from_secs(5), |t| {
@@ -934,11 +1025,17 @@ pub fn b0(
             .map(|s| s.1)
             .collect::<Vec<_>>()
     ));
-    if heard.is_none() {
+    // Chromium announces the page by itself when its window activates, so the focus above is
+    // not a change: the first line was spoken before it.
+    let before = speaks_since(&w, 0)
+        .iter()
+        .any(|s| s.1.contains("Gorca article"));
+    if heard.is_none() && !(chromium_selected() && before) {
         fails.push("entry: the first line was not spoken".into());
     }
     let g = |x: &str| x.len() > 3;
     let r = w.press_and_hear(DOWN, 0, g);
+    once(&mut fails, "Down", &r, "This is the first paragraph");
     check(out, &mut fails, "Down", r, &["This is the first paragraph"]);
     let any = |x: &str| !x.is_empty();
     let r = w.press_and_hear(RIGHT, 0, any);
@@ -946,6 +1043,7 @@ pub fn b0(
     let r = w.press_and_hear(RIGHT, CTRL, any);
     check(out, &mut fails, "Ctrl+Right", r, &[]);
     let r = w.press_and_hear(KEY_H, 0, g);
+    once(&mut fails, "H", &r, "Introduction");
     check(
         out,
         &mut fails,
@@ -972,6 +1070,7 @@ pub fn b0(
         &["heading level 2", "Introduction"],
     );
     let r = w.press_and_hear(KEY_K, 0, g);
+    once(&mut fails, "K", &r, "details below");
     check(out, &mut fails, "K", r, &["link"]);
     // A form field by focus (Tab's effect): focus mode, typing would work, Escape returns.
     let field = w.find(&doc.path, "entry", "")?;

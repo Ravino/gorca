@@ -483,7 +483,9 @@ impl Hub {
     }
 
     fn on_doc_ended(&mut self, doc: DocId, app: AppId, now: Instant) {
-        self.tokens.remove(&doc);
+        if let Some((_, token)) = self.tokens.remove(&doc) {
+            token.cancel();
+        }
         self.cfg.docs.remove(doc);
         if let Some(a) = self.apps.get_mut(&app) {
             a.last_doc_end = Some(now);

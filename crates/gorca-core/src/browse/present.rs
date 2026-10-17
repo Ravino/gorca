@@ -9,6 +9,7 @@
 //! FT-6) is spoken as its role, state and value. Containers (lists, tables, landmarks) are the
 //! field diff of M7b and are not announced here.
 
+use gorca_i18n::{MsgId as M, msg, t};
 use std::sync::Arc;
 
 use gorca_doc::web::{Cat, NodeFlags, NodeView, WebDoc};
@@ -114,18 +115,18 @@ fn role_phrase(v: &NodeView<'_>) -> String {
         w.to_owned()
     } else if v.role == Role::Link {
         if st.contains(StateSet::VISITED) {
-            "visited link".to_owned()
+            t(M::WebVisitedLink).to_owned()
         } else {
-            "link".to_owned()
+            v.role.spoken().to_owned()
         }
     } else if v.role == Role::Heading {
         if (1..=6).contains(&v.level) {
-            format!("heading level {}", v.level)
+            msg!(WebHeadingLevel, n = v.level)
         } else {
-            "heading".to_owned()
+            v.role.spoken().to_owned()
         }
     } else if v.role == Role::Image {
-        "graphic".to_owned()
+        t(M::WebGraphic).to_owned()
     } else {
         v.role.spoken().to_owned()
     }
@@ -162,42 +163,33 @@ fn push_states(v: &NodeView<'_>, out: &mut Vec<Item>) {
 }
 
 /// The ARIA landmark kind of a landmark node, spoken before the word "landmark".
-fn landmark_kind(v: &NodeView<'_>) -> &'static str {
+fn landmark_kind(v: &NodeView<'_>) -> M {
     let attr = |k| {
         v.meta
             .and_then(|m| m.attrs.iter().find(|(a, _)| *a == k).map(|(_, x)| &**x))
     };
     let from_role = attr(web_attrs::XML_ROLES).and_then(|r| {
         r.split_ascii_whitespace().find_map(|t| match t {
-            "banner" => Some("banner"),
-            "main" => Some("main"),
-            "navigation" => Some("navigation"),
-            "search" => Some("search"),
-            "complementary" => Some("complementary"),
-            "contentinfo" => Some("content info"),
-            "form" => Some("form"),
-            "region" => Some("region"),
+            "banner" => Some(M::WebLandmarkBanner),
+            "main" => Some(M::WebLandmarkMain),
+            "navigation" => Some(M::WebLandmarkNavigation),
+            "search" => Some(M::WebLandmarkSearch),
+            "complementary" => Some(M::WebLandmarkComplementary),
+            "contentinfo" => Some(M::WebLandmarkContentInfo),
+            "form" => Some(M::WebLandmarkForm),
+            "region" => Some(M::WebLandmarkRegion),
             _ => None,
         })
     });
     from_role.unwrap_or_else(|| match attr(web_attrs::TAG) {
-        Some("main") => "main",
-        Some("nav") => "navigation",
-        Some("aside") => "complementary",
-        Some("header") => "banner",
-        Some("footer") => "content info",
-        Some("form") => "form",
-        _ => "region",
+        Some("main") => M::WebLandmarkMain,
+        Some("nav") => M::WebLandmarkNavigation,
+        Some("aside") => M::WebLandmarkComplementary,
+        Some("header") => M::WebLandmarkBanner,
+        Some("footer") => M::WebLandmarkContentInfo,
+        Some("form") => M::WebLandmarkForm,
+        _ => M::WebLandmarkRegion,
     })
-}
-
-/// "1 item" / "3 items".
-fn counted(n: usize, one: &str, many: &str) -> String {
-    if n == 1 {
-        format!("1 {one}")
-    } else {
-        format!("{n} {many}")
-    }
 }
 
 /// Rows and columns of a table node, from the tree (rows are `Row` descendants through at most
@@ -252,38 +244,31 @@ fn container_items(doc: &WebDoc, v: &NodeView<'_>, id: DocNodeId) -> Option<Vec<
             .children(id)
             .filter(|c| doc.node(*c).is_some_and(|x| x.role == Role::ListItem))
             .count();
-        out.push(Item::Role(format!(
-            "list with {}",
-            counted(n, "item", "items")
-        )));
+        out.push(Item::Role(msg!(WebListWith, n = n)));
     } else if v.cats.intersects(Cat::TABLE) {
         let (r, c) = table_dims(doc, id);
         if let Some(n) = name {
             out.push(Item::Name(n.to_owned()));
         }
-        out.push(Item::Role(format!(
-            "table with {} and {}",
-            counted(c, "column", "columns"),
-            counted(r, "row", "rows")
-        )));
+        out.push(Item::Role(msg!(WebTableWith, c = c, r = r)));
     } else if v.cats.intersects(Cat::BLOCKQUOTE) {
-        out.push(Item::Role("block quote".to_owned()));
+        out.push(Item::Role(t(M::WebBlockQuote).to_owned()));
     } else if v.cats.intersects(Cat::ANY_LANDMARK) {
         let kind = landmark_kind(v);
-        let region = v.flags.contains(NodeFlags::REGION) || kind == "region";
+        let region = v.flags.contains(NodeFlags::REGION) || kind == M::WebLandmarkRegion;
         if let Some(n) = name {
             out.push(Item::Name(n.to_owned()));
         }
-        out.push(Item::Role(if region || kind == "form" {
-            kind.to_owned()
+        out.push(Item::Role(if region || kind == M::WebLandmarkForm {
+            t(kind).to_owned()
         } else {
-            format!("{kind} landmark")
+            msg!(WebLandmark, kind = t(kind))
         }));
     } else if v.cats.intersects(Cat::DIALOG) {
         if let Some(n) = name {
             out.push(Item::Name(n.to_owned()));
         }
-        out.push(Item::Role("dialog".to_owned()));
+        out.push(Item::Role(t(M::RoleDialog).to_owned()));
     } else if v.cats.intersects(Cat::EMBEDDED) {
         // role=application, or an <object>/<embed> (both are ATK_ROLE_EMBEDDED).
         let application = v.meta.is_some_and(|m| {
@@ -296,9 +281,9 @@ fn container_items(doc: &WebDoc, v: &NodeView<'_>, id: DocNodeId) -> Option<Vec<
         }
         out.push(Item::Role(
             if application {
-                "application"
+                t(M::RoleApplication)
             } else {
-                "embedded object"
+                t(M::WebEmbeddedObject)
             }
             .to_owned(),
         ));
@@ -370,9 +355,9 @@ fn enter_items(v: &NodeView<'_>, out: &mut Vec<Item>) {
     // link or a heading says only whether it is expanded and which one is current.
     if matches!(v.role, Role::Link | Role::Heading) {
         if st.contains(StateSet::EXPANDED) {
-            out.push(Item::State("expanded"));
+            out.push(Item::State(t(M::StateExpanded)));
         } else if st.contains(StateSet::COLLAPSED) {
-            out.push(Item::State("collapsed"));
+            out.push(Item::State(t(M::StateCollapsed)));
         }
         if let Some(c) = aria::current_word(&node_of(v)) {
             out.push(Item::State(c));
@@ -401,10 +386,10 @@ fn marker_items(v: &NodeView<'_>, out: &mut Vec<Item>) {
     out.push(Item::Role(role_phrase(v)));
     push_states(v, out);
     if matches!(v.role, Role::TextEntry | Role::PasswordEntry) {
-        out.push(Item::State("blank"));
+        out.push(Item::State(t(M::WebBlank)));
     }
     if v.role == Role::Image && v.name.is_none_or(str::is_empty) {
-        out.insert(0, Item::State("unlabeled"));
+        out.insert(0, Item::State(t(M::WebUnlabeled)));
     }
     // What is wrong with an invalid field is said with it, in a line as well as on a hit.
     if let Some(e) = aria::error_text(&node_of(v)) {
@@ -469,11 +454,11 @@ fn leaving_items(doc: &WebDoc, from: u32, to: u32) -> Vec<Item> {
     for _ in 0..64 {
         let Some(v) = doc.node(cur) else { break };
         let word = if v.cats.intersects(Cat::TABLE) {
-            Some("table")
+            Some(M::WebOutOfTable)
         } else if v.role == Role::List && v.cats.intersects(Cat::LIST) {
-            Some("list")
+            Some(M::WebOutOfList)
         } else if v.cats.intersects(Cat::BLOCKQUOTE) {
-            Some("block quote")
+            Some(M::WebOutOfBlockQuote)
         } else {
             None
         };
@@ -482,7 +467,7 @@ fn leaving_items(doc: &WebDoc, from: u32, to: u32) -> Vec<Item> {
             && node_holds(doc, cur, from)
             && !node_holds(doc, cur, to)
         {
-            out.push(Item::Role(format!("out of {w}")));
+            out.push(Item::Role(t(w).to_owned()));
         }
         match doc.parent(cur) {
             Some(p) => cur = p,
@@ -593,9 +578,9 @@ pub fn segments(items: &[Item], o: VerbalizeOpts) -> SmallVec<[Segment; 4]> {
             };
             // A capital read alone gets the capital pitch (`speech.caps = "pitch"`).
             let capital = matches!(i, Item::Char(_))
-                && o.caps == gorca_speech::Caps::Pitch
-                && text.chars().count() == 1
-                && text.chars().all(char::is_uppercase);
+                && o.caps.marks()
+                && t.chars().count() == 1
+                && t.chars().all(char::is_uppercase);
             (!text.is_empty()).then(|| Segment {
                 text: Arc::from(text),
                 kind: match i.kind() {
@@ -663,7 +648,7 @@ pub fn describe_node_from(doc: &WebDoc, id: DocNodeId, from: Option<u32>) -> Vec
         items = pre;
     }
     if !announced_here && v.role == Role::Separator {
-        items.insert(0, Item::Role("separator".to_owned()));
+        items.insert(0, Item::Role(t(M::RoleSeparator).to_owned()));
     }
     // A form control alone on its range is a marker: it has no label of its own in the flat
     // text, so its accessible name leads (NVDA: "Search term edit blank").
@@ -682,12 +667,21 @@ pub fn describe_node_from(doc: &WebDoc, id: DocNodeId, from: Option<u32>) -> Vec
     // A frame (a nested document) and an article are announced by what they are, then by name.
     let mut pre: Vec<Item> = Vec::new();
     if v.flags.contains(NodeFlags::FRAME) {
-        pre.push(Item::Role("frame".to_owned()));
-        if let Some(n) = v.name.filter(|n| !n.is_empty()) {
+        pre.push(Item::Role(t(M::WebFrame).to_owned()));
+        // Blink exposes the iframe element (an object of no mapped role, named by its title
+        // attribute) above the frame's document, whose own name is the page title inside: the
+        // frame is announced by the title the author gave it.
+        let holder = doc
+            .parent(id)
+            .and_then(|p| doc.node(p))
+            .filter(|p| p.role == Role::Unknown)
+            .and_then(|p| p.name)
+            .filter(|n| !n.is_empty());
+        if let Some(n) = holder.or(v.name.filter(|n| !n.is_empty())) {
             pre.push(Item::Name(n.to_owned()));
         }
     } else if v.flags.contains(NodeFlags::ARTICLE) {
-        pre.push(Item::Role("article".to_owned()));
+        pre.push(Item::Role(t(M::WebArticle).to_owned()));
     }
     if !pre.is_empty() {
         pre.append(&mut items);
@@ -1202,7 +1196,7 @@ mod tests {
         use gorca_speech::{Caps, Lang, Punct};
         VerbalizeOpts {
             punct: Punct::Some,
-            caps: Caps::Pitch,
+            caps: Caps::PITCH,
             lang: Lang::En,
         }
     }
@@ -1212,7 +1206,7 @@ mod tests {
         use gorca_speech::{Caps, Lang, Punct};
         let o = |punct, lang| VerbalizeOpts {
             punct,
-            caps: Caps::Pitch,
+            caps: Caps::PITCH,
             lang,
         };
         let items = [

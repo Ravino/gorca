@@ -1,0 +1,10 @@
+2026-10-16T22:33:03.206577Z  INFO gorca_phase: phase="locate" wall_ms=3.957993
+2026-10-16T22:33:03.206654Z  INFO gorca_phase: phase="create" wall_ms=0.00293
+2026-10-16T22:33:03.247283Z  INFO gorca_phase: phase="fetch" total_ms=40.554838000000004 warm_ms=27.294807000000002 frontier_ms=0.089403 get_tree_ms=8.570993000000001 roles_ms=2.027133 states_ms=0.623269 text_ms=1.8048179999999998 assemble_ms=0.020932 heaviest_get_tree_ms=6.2700000000000005 calls=521 tree_bytes=48203 nodes=206
+2026-10-16T22:33:03.247667Z  INFO gorca_phase: phase="translate" wall_ms=0.15309699999999998 nodes=207
+2026-10-16T22:33:46.310658Z  INFO gorca_phase: phase="locate" wall_ms=2.789553
+2026-10-16T22:33:46.310746Z  INFO gorca_phase: phase="create" wall_ms=0.0033799999999999998
+2026-10-16T22:33:46.344932Z  INFO gorca_phase: phase="fetch" total_ms=34.147694 warm_ms=27.484032 frontier_ms=0.077019 get_tree_ms=1.714917 roles_ms=2.629134 states_ms=0.76532 text_ms=1.2669300000000001 assemble_ms=0.036578 heaviest_get_tree_ms=0.7240000000000001 calls=342 tree_bytes=31396 nodes=139
+2026-10-16T22:33:46.345311Z  INFO gorca_phase: phase="translate" wall_ms=0.13813399999999998 nodes=139
+2026-10-16T22:33:57.072147Z  WARN gorca_input_mutter::source: keyboard monitor lost; retrying error=the key stream ended backoff=100ms
+2026-10-16T22:33:57.072912Z  WARN gorca_connector_atspi::connector: could not read org.a11y.Status to restore it error=D-Bus error: I/O error: Broken pipe (os error 32)

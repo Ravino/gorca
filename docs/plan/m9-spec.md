@@ -1,6 +1,6 @@
-# M9 specification (draft): Chromium and Chrome at the same browse-mode level as Firefox
+# M9 specification (final): Chromium and Chrome at the same browse-mode level as Firefox
 
-Status: draft from the prep run of 2026-10-16 (web-a11y-engineer). Facts and numbers: `docs/reports/m9-baseline.md`. Inputs: `docs/plan/phase-2.md` M9,
+Status: final after the implementation of 2026-10-17 (web-a11y-engineer; report `docs/reports/m9-impl.md`). Section 6 is the as-built state; sections 1 to 5 are the original plan. Facts and numbers: `docs/reports/m9-baseline.md`. Inputs: `docs/plan/phase-2.md` M9,
 ADR-0003 (WF-4: AT-SPI only, no CDP), ADR-0008 (core engine, connector quirk rows as data, Chromium product rules in an extension), `docs/plan/m8-spec.md`
 (the parity matrix and the 318-step corpus are the acceptance corpus for M9 too).
 
@@ -67,3 +67,25 @@ Rig facts for Chromium: the first key into a freshly activated window is eaten b
 | D-2 | `orca` identity for Chromium's `kScreenReader` mode: set argv/comm `orca` in the daemon, or document `--force-renderer-accessibility`? | Measure first (item 11); do not impersonate by process name until the difference is shown, because a running real Orca is detected the same way |
 | D-3 | Ship Chromium support with out-of-process iframes silent? | Yes, with a visible "frame, no content" and a filed Chromium bug; most pages' primary content is the top document |
 | D-4 | Browser matrix for the gates: Chrome for Testing + Debian chromium only | Yes; Chrome stable by hand once per release |
+
+## 6. As built (2026-10-17)
+
+| Item | State |
+|---|---|
+| 1 wake call | done: connector `Caller::wake` at first sight (row `needs_wake_call`); document 25 to 40 ms after the reader starts with Chrome already open, 0.65 to 0.9 s after launch otherwise; `M9_AT=isenabled` is the harness default; scenario CR-WAKE = `M9_BROWSER_FIRST=1` (B0 + BAR1) |
+| 2 static leaves | done: `RunLayer::dropping_static_children`, config `quirks.static_leaves_repeat_text`; unit tests; B0 once-checks |
+| 3 typing echo | row `text_insert_slack` 2 plus the zero-length-delete repair in the drain (FE2 doubles 1 to 3 per run -> 0 in 5 repeats) |
+| 4 tree arrival | not changed (progressive first block exists); settle window `page_events_settle_ms` added so the tree built for the wake call is not a page load |
+| 5 anchors | done by M8 (`web_caret`, gated by our click); passes on Chromium |
+| 6 first announce places the cursor | done (`web_place_first_line`) |
+| 7 iframes | root cause found and worked around: off-screen cross-process frames are not serialized until scrolled into view; the source scrolls them in and back (`wake_offscreen_frames`); frame named by its title; frame document focus not announced. 17/17 M8-IF steps PASS. Chromium bug report not filed (no network): reproduction in the report |
+| 8 dialog name, popup Escape | dialog name by M8; FP1 passes on Chromium when the popup is opened with F4 (Alt+Down released Alt starts a Chromium menu gesture that swallows the next key: rig reproduction, not gorca) |
+| 9 tab switch / title suffix | not done (ext-chromium product rule) |
+| 10 name-from rule | not needed (no visible effect after item 2); row kept as a guard |
+| 11 kScreenReader | measured: no difference on the corpus; decision D-2 below |
+| 12 Chromium UI probes | not done |
+| 13 event-rate gates | not done |
+
+Decisions: D-1 wake at first sight of every Chromium-toolkit application (adopted). D-2 no process-name impersonation; `--force-renderer-accessibility` is a comparison aid only (adopted, measured). D-3 frames ship with the scroll-in workaround (adopted). D-4 matrix CfT + Debian chromium: only CfT 153 was run on the final head.
+
+Open: FCE1 loses ~15 keys in one of three repeats when it follows FS2/FSA (browser stall, not understood); Chromium browser UI; tab-switch announcement; Debian chromium re-run.

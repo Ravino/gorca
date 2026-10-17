@@ -331,54 +331,56 @@ pub fn keypad_digit_keysym(nav: u32) -> Option<u32> {
     }
 }
 
-/// Spoken name of a key, for learn mode: `T`, `F12`, `Page Up`.
+/// Spoken name of a key, for learn mode: `T`, `F12`, `Page Up`, in the UI language.
 pub fn spoken_key_name(keysym: u32, unichar: u32) -> String {
+    use gorca_i18n::MsgId as M;
     let named = match keysym {
-        0xff08 => "backspace",
-        0xff09 | 0xfe20 => "tab",
-        0xff0d => "enter",
-        0xff1b => "escape",
-        0x20 => "space",
-        0xff50 => "home",
-        0xff51 => "left",
-        0xff52 => "up",
-        0xff53 => "right",
-        0xff54 => "down",
-        0xff55 => "page up",
-        0xff56 => "page down",
-        0xff57 => "end",
-        0xff63 => "insert",
-        0xffff => "delete",
-        0xff8d => "keypad enter",
-        0xffab => "keypad plus",
-        0xffad => "keypad minus",
-        0xffaa => "keypad multiply",
-        0xffaf => "keypad divide",
+        0xff08 => Some(M::KeyBackspace),
+        0xff09 | 0xfe20 => Some(M::KeyTab),
+        0xff0d => Some(M::KeyEnter),
+        0xff1b => Some(M::KeyEscape),
+        0x20 => Some(M::KeySpace),
+        0xff50 => Some(M::KeyHome),
+        0xff51 => Some(M::KeyLeft),
+        0xff52 => Some(M::KeyUp),
+        0xff53 => Some(M::KeyRight),
+        0xff54 => Some(M::KeyDown),
+        0xff55 => Some(M::KeyPageUp),
+        0xff56 => Some(M::KeyPageDown),
+        0xff57 => Some(M::KeyEnd),
+        0xff63 => Some(M::KeyInsert),
+        0xffff => Some(M::KeyDelete),
+        0xff8d => Some(M::KeyKeypadEnter),
+        0xffab => Some(M::KeyKeypadPlus),
+        0xffad => Some(M::KeyKeypadMinus),
+        0xffaa => Some(M::KeyKeypadMultiply),
+        0xffaf => Some(M::KeyKeypadDivide),
         0xff95..=0xff9f => return keypad(keysym),
-        0xffe1 | 0xffe2 => "shift",
-        0xffe3 | 0xffe4 => "control",
-        0xffe9 | 0xffea => "alt",
-        0xffeb | 0xffec => "super",
-        0xffe5 => "caps lock",
-        0xff67 => "menu",
-        _ => "",
+        0xffe1 | 0xffe2 => Some(M::KeyShift),
+        0xffe3 | 0xffe4 => Some(M::KeyControl),
+        0xffe9 | 0xffea => Some(M::KeyAlt),
+        0xffeb | 0xffec => Some(M::KeySuper),
+        0xffe5 => Some(M::KeyCapsLock),
+        0xff67 => Some(M::KeyMenu),
+        _ => None,
     };
-    if !named.is_empty() {
-        return named.to_owned();
+    if let Some(id) = named {
+        return gorca_i18n::t(id).to_owned();
     }
     if (0xffbe..=0xffd9).contains(&keysym) {
-        return format!("f {}", keysym - 0xffbd);
+        return gorca_i18n::msg!(KeyF, n = keysym - 0xffbd);
     }
     char::from_u32(unichar)
         .filter(|c| !c.is_control())
         .or_else(|| char::from_u32(keysym).filter(char::is_ascii_graphic))
         .map_or_else(
-            || format!("key {keysym:x}"),
+            || gorca_i18n::msg!(KeyUnknown, code = format!("{keysym:x}").as_str()),
             |c| c.to_uppercase().to_string(),
         )
 }
 
 fn keypad(keysym: u32) -> String {
+    use gorca_i18n::MsgId as M;
     let n = match keysym {
         0xff95 => "7",
         0xff96 => "4",
@@ -390,10 +392,10 @@ fn keypad(keysym: u32) -> String {
         0xff9c => "1",
         0xff9d => "5",
         0xff9e => "0",
-        0xff9f => "decimal",
-        _ => "key",
+        0xff9f => gorca_i18n::t(M::KeyKeypadDecimal),
+        _ => gorca_i18n::t(M::KeyKeypadOther),
     };
-    format!("keypad {n}")
+    gorca_i18n::msg!(KeyKeypad, key = n)
 }
 
 #[cfg(test)]

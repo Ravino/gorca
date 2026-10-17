@@ -190,6 +190,18 @@ impl FailoverClient {
                     index_marks: false,
                     audio_progress: false,
                     ssml: false,
+                    // TODO(ADR-0017/M13, cue sink): `speech.caps = ["sound"]` does not play on any
+                    // real backend yet, for two independent reasons:
+                    // 1. this facade has fixed caps, so the lane drops the cue even while
+                    //    speech-dispatcher is active (forward the active backend's flag, or let
+                    //    the cue sink own sounds);
+                    // 2. on SSIP the SOUND_ICON and the SPEAK after it are both `text` priority,
+                    //    and speech-dispatcher's `stop_priority_except_first(SPD_TEXT)` cancels
+                    //    the icon when the SPEAK is queued (refs/speech-dispatcher
+                    //    src/server/speaking.c, resolve_priorities). voicego aliases
+                    //    SOUND_ICON to a SPEAK of the icon name.
+                    // The config loader warns when "sound" is selected.
+                    sound_icons: false,
                 },
                 shared,
                 events: erx,
@@ -624,6 +636,7 @@ mod tests {
                 text: Arc::from("x"),
                 lang: None,
                 pitch_delta: 0,
+                cue: None,
             },
             voice: VoiceRef::Default,
             marks: false,

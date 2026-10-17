@@ -1,0 +1,57 @@
+# Text layer: field messages, selection, formatting information (text/*, terminal.rs, live regions).
+
+text-not-in-field = not in a text field
+text-not-available-mode = not available in this mode
+text-no-formatting = no formatting information
+text-formatting-unavailable = formatting not available here
+text-no-selection = no selection
+text-chars-selected = {n} characters selected
+live-updates-in = {total} updates in {name}
+live-updates = {total} updates
+focus-unknown = unknown
+
+format-point = {s} point
+format-bold = bold
+format-italic = italic
+format-underline = underline
+format-strike = strikethrough
+format-superscript = superscript
+format-subscript = subscript
+format-colour-on = {fg} on {bg}
+format-text-colour = {c} text
+format-bg-colour = {c} background
+format-aligned = aligned {a}
+format-language = language {l}
+format-align-left = left
+format-align-right = right
+format-align-center = center
+format-align-justify = justify
+
+colour-black = black
+colour-white = white
+colour-red = red
+colour-green = green
+colour-blue = blue
+colour-yellow = yellow
+colour-cyan = cyan
+colour-magenta = magenta
+colour-gray = gray
+colour-light-gray = light gray
+colour-dark-red = dark red
+colour-olive = olive
+colour-navy = navy
+colour-purple = purple
+colour-teal = teal
+colour-lime = lime
+colour-orange = orange
+colour-brown = brown
+colour-pink = pink
+colour-unknown = unknown
+text-new-line = new line
+text-and-more = and {n} more
+text-chars = {n} character{n#|s}
+text-all-selected = all selected, {count}
+text-selected = selected
+text-unselected = unselected
+text-count-selected = {count} selected
+text-count-unselected = {count} unselected

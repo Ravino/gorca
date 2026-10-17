@@ -366,8 +366,13 @@ fn apply_key(section: &str, key: &str, v: &Item, s: &mut Settings, diags: &mut V
             }
         }
         ("speech", "caps") => {
-            if let Some(p) = read_enum(v, &path, Caps::parse, Caps::NAMES, diags) {
-                s.speech.caps = p;
+            if let Some(c) = read_caps(v, &path, diags) {
+                s.speech.caps = c;
+            }
+        }
+        ("speech", "caps_pitch_change") => {
+            if let Some(n) = read_int(v, &path, 0, 100, diags) {
+                s.speech.caps_pitch_change = u8::try_from(n).unwrap_or(30);
             }
         }
         ("verbosity", "level") => {
@@ -484,6 +489,57 @@ fn read_str_list(v: &Item, path: &str, diags: &mut Vec<Diag>) -> Option<Vec<Stri
         }
     }
     Some(out)
+}
+
+/// `speech.caps`: a list of `pitch`, `sound` and `word` (any case). A single string still reads
+/// (those three and the old `say` and `off`). Anything invalid (a wrong type, an unknown name)
+/// reports a problem and keeps the default, so a typo never silences the indication; `[]` and
+/// `"off"` turn it off on purpose.
+fn read_caps(v: &Item, path: &str, diags: &mut Vec<Diag>) -> Option<Caps> {
+    let mut caps = Caps::OFF;
+    let mut bad = false;
+    let mut name = |text: Option<&str>, span: Option<(u32, u32)>, diags: &mut Vec<Diag>| {
+        let known = text.is_some_and(|t| caps.add(&t.to_ascii_lowercase()));
+        if known {
+            return;
+        }
+        bad = true;
+        diags.push(Diag::error(
+            path,
+            span,
+            match text {
+                Some(t) => DiagMsg::UnknownEnum {
+                    value: t.to_owned(),
+                    allowed: Caps::NAMES,
+                },
+                None => DiagMsg::WrongType {
+                    expected: "a list of strings",
+                },
+            },
+        ));
+    };
+    if let Some(arr) = v.as_array() {
+        for e in arr {
+            let span = e.span().map(|r| (clamp_u32(r.start), clamp_u32(r.end)));
+            name(e.as_str(), span, diags);
+        }
+    } else {
+        name(v.as_str(), span_of(v), diags);
+    }
+    if bad {
+        return None;
+    }
+    if caps.sound {
+        diags.push(Diag::warning(
+            path,
+            span_of(v),
+            DiagMsg::Other(
+                "\"sound\" does not play yet on any speech backend (planned with the audio cue sink); the other options work"
+                    .to_owned(),
+            ),
+        ));
+    }
+    Some(caps)
 }
 
 fn read_modifiers(v: &Item, path: &str, diags: &mut Vec<Diag>) -> Option<Vec<String>> {
@@ -828,13 +884,71 @@ mod tests {
     }
 
     #[test]
+    fn caps_reads_a_list_of_independent_options() {
+        let c = |t: &str| load_text(t);
+        let l = c("[speech]\ncaps = [\"pitch\", \"sound\", \"word\"]\n");
+        assert!(
+            l.diags
+                .iter()
+                .all(|d| d.severity == crate::Severity::Warning),
+            "{:?}",
+            l.diags
+        );
+        assert_eq!(l.settings.speech.caps.names(), ["pitch", "sound", "word"]);
+        let l = c("[speech]\ncaps = [\"word\", \"sound\"]\n");
+        assert_eq!(l.settings.speech.caps.names(), ["sound", "word"]);
+        let l = c("[speech]\ncaps = []\n");
+        assert!(l.diags.is_empty() && !l.settings.speech.caps.any());
+        // The values of the old single-choice setting still read.
+        let l = c("[speech]\ncaps = \"say\"\n");
+        assert_eq!(l.settings.speech.caps.names(), ["word"]);
+        let l = c("[speech]\ncaps = \"off\"\n");
+        assert!(l.diags.is_empty() && !l.settings.speech.caps.any());
+        let l = c("[speech]\ncaps = \"pitch\"\n");
+        assert_eq!(l.settings.speech.caps, Caps::PITCH);
+        // Names read in any case.
+        let l = c("[speech]\ncaps = [\"Pitch\", \"WORD\"]\n");
+        assert!(l.diags.is_empty(), "{:?}", l.diags);
+        assert_eq!(l.settings.speech.caps.names(), ["pitch", "word"]);
+        let l = c("[speech]\ncaps = \"Pitch\"\n");
+        assert_eq!(l.settings.speech.caps, Caps::PITCH);
+        // Anything invalid keeps the default and says so: indication is never silenced by a typo.
+        for bad in ["3", "\"loud\"", "[\"lod\"]", "[\"pitch\", \"loud\"]", "[1]"] {
+            let l = c(&format!("[speech]\ncaps = {bad}\n"));
+            assert_eq!(l.diags.len(), 1, "{bad}: {:?}", l.diags);
+            assert!(l.diags[0].to_string().contains("using the default"));
+            assert_eq!(l.settings.speech.caps, Caps::PITCH, "{bad}");
+        }
+        let l = c("[speech]\ncaps = [\"pitch\", \"loud\"]\n");
+        assert!(l.diags[0].to_string().contains("loud"));
+    }
+
+    #[test]
+    fn sound_is_accepted_with_a_warning_that_it_does_not_play_yet() {
+        let l = load_text("[speech]\ncaps = [\"pitch\", \"sound\"]\n");
+        assert_eq!(l.diags.len(), 1);
+        assert_eq!(l.diags[0].severity, crate::Severity::Warning);
+        assert!(l.diags[0].to_string().contains("does not play yet"));
+        assert!(l.settings.speech.caps.sound && l.settings.speech.caps.pitch);
+    }
+
+    #[test]
+    fn caps_pitch_change_is_a_percent() {
+        let l = load_text("[speech]\ncaps_pitch_change = 12\n");
+        assert_eq!(l.settings.speech.caps_pitch_change, 12);
+        assert_eq!(Settings::default().speech.caps_pitch_change, 30);
+        let l = load_text("[speech]\ncaps_pitch_change = 101\n");
+        assert_eq!(l.diags.len(), 1);
+    }
+
+    #[test]
     fn every_setting_row_is_read() {
         // Setting every key to a non-default value must change `Settings`, so a row without a
         // matching arm in `apply_key` is caught.
         let text = "\
 [keyboard]\npreset=\"orca\"\nlayout=\"laptop\"\nmodifiers=[\"Insert\"]\ncaps_lock_layout_guard=false\n\
 multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_control=false\npause_speech_on_shift=false\n\
-[keymap]\nreplace_preset=true\n[speech]\nrate=10\npitch=11\nvolume=12\nrate_step=7\nvoice=\"x\"\nlanguage=\"ru\"\noutput_module=\"rhvoice\"\nbackend=\"ssip\"\npunctuation=\"all\"\ncaps=\"say\"\n\
+[keymap]\nreplace_preset=true\n[speech]\nrate=10\npitch=11\nvolume=12\nrate_step=7\nvoice=\"x\"\nlanguage=\"ru\"\noutput_module=\"rhvoice\"\nbackend=\"ssip\"\npunctuation=\"all\"\ncaps=[\"word\"]\ncaps_pitch_change=10\n\
 [echo]\ntyped_characters=false\ntyped_words=true\ncommand_keys=true\ninserted_text=false\n\
 [text]\nsay_all_moves_caret=false\ncaret_edge_ms=50\ncaret_late_ms=300\n[browse]\nsay_all_on_load=false\ndescription_pause=false\n\
 [terminal]\nsettle_ms=40\nburst_lines=20\nprompt_markers=[\"> \"]\nprompt_regex=\"^x\"\nsecret_regex=\"y$\"\n[verbosity]\nlevel=\"brief\"\nconfirmations=\"brief\"\n";
@@ -858,7 +972,7 @@ multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_
         assert_eq!(l.settings.speech.language, "ru");
         assert_eq!(l.settings.speech.output_module, "rhvoice");
         assert_eq!(l.settings.speech.backend, Backend::Ssip);
-        assert_eq!(SETTINGS.len(), 36);
+        assert_eq!(SETTINGS.len(), 37);
     }
 
     #[test]

@@ -1,0 +1,65 @@
+# M9 final matrix
+== 00:05:17 cr-m7 start head ebead6e load 20.49 18.69 16.65 29/2226 2788426 mem_avail_GiB 14.8
+   psi memory: some avg10=0.11 avg60=0.35 avg300=0.74 total=2925566665 full avg10=0.10 avg60=0.29 avg300=0.62 total=2396656023 
+   psi cpu: some avg10=1.75 avg60=5.94 avg300=6.15 total=33373125981
+   exit 0
+== 00:25:42 cr-m7 end head ebead6e load 10.54 11.91 14.13 5/2075 2869256 mem_avail_GiB 16.8
+   psi memory: some avg10=0.00 avg60=0.03 avg300=0.49 total=2936862848 full avg10=0.00 avg60=0.03 avg300=0.48 total=2407515047 
+   psi cpu: some avg10=0.56 avg60=0.65 avg300=0.97 total=33416179227
+== 00:25:42 cr-typing start head ebead6e load 10.54 11.91 14.13 9/2075 2869264 mem_avail_GiB 16.8
+   psi memory: some avg10=0.00 avg60=0.03 avg300=0.49 total=2936862848 full avg10=0.00 avg60=0.03 avg300=0.48 total=2407515047 
+   psi cpu: some avg10=0.56 avg60=0.65 avg300=0.97 total=33416179248
+   exit 1
+== 01:04:41 cr-typing end head ebead6e load 6.66 8.78 10.51 1/2126 3046000 mem_avail_GiB 16.9
+   psi memory: some avg10=0.00 avg60=0.02 avg300=0.22 total=2949596468 full avg10=0.00 avg60=0.02 avg300=0.20 total=2419274595 
+   psi cpu: some avg10=0.00 avg60=0.04 avg300=0.54 total=33482437716
+== 01:04:41 cr-m8 start head ebead6e load 6.66 8.78 10.51 1/2126 3046008 mem_avail_GiB 16.9
+   psi memory: some avg10=0.00 avg60=0.02 avg300=0.22 total=2949596468 full avg10=0.00 avg60=0.02 avg300=0.20 total=2419274595 
+   psi cpu: some avg10=0.00 avg60=0.04 avg300=0.54 total=33482437716
+   exit 0
+== 01:21:25 cr-m8 end head ebead6e load 7.10 10.15 10.38 1/2094 3130987 mem_avail_GiB 17.1
+   psi memory: some avg10=0.14 avg60=0.29 avg300=0.31 total=2952577515 full avg10=0.14 avg60=0.27 avg300=0.27 total=2421947567 
+   psi cpu: some avg10=0.00 avg60=0.54 avg300=2.25 total=33512823991
+== 01:21:25 cr-first start head ebead6e load 7.10 10.15 10.38 1/2094 3130995 mem_avail_GiB 17.1
+   psi memory: some avg10=0.14 avg60=0.29 avg300=0.31 total=2952577515 full avg10=0.14 avg60=0.27 avg300=0.27 total=2421947567 
+   psi cpu: some avg10=0.00 avg60=0.54 avg300=2.25 total=33512823991
+   exit 0
+== 01:22:59 cr-first end head ebead6e load 4.98 8.59 9.80 1/2125 3136583 mem_avail_GiB 17.1
+   psi memory: some avg10=0.08 avg60=0.19 avg300=0.27 total=2952905965 full avg10=0.08 avg60=0.18 avg300=0.25 total=2422272561 
+   psi cpu: some avg10=0.00 avg60=0.13 avg300=1.63 total=33513152519
+== 01:22:59 ff-m7 start head ebead6e load 4.98 8.59 9.80 1/2125 3136591 mem_avail_GiB 17.1
+   psi memory: some avg10=0.08 avg60=0.19 avg300=0.27 total=2952905965 full avg10=0.08 avg60=0.18 avg300=0.25 total=2422272561 
+   psi cpu: some avg10=0.00 avg60=0.13 avg300=1.63 total=33513152519
+   exit 0
+== 01:43:18 ff-m7 end head ebead6e load 9.67 9.26 9.64 2/2513 3197303 mem_avail_GiB 16.6
+   psi memory: some avg10=0.00 avg60=0.09 avg300=0.08 total=2956674474 full avg10=0.00 avg60=0.09 avg300=0.08 total=2425959184 
+   psi cpu: some avg10=0.00 avg60=0.17 avg300=0.31 total=33525463513
+== 01:43:18 ff-typing start head ebead6e load 9.67 9.26 9.64 4/2513 3197311 mem_avail_GiB 16.6
+   psi memory: some avg10=0.00 avg60=0.09 avg300=0.08 total=2956674474 full avg10=0.00 avg60=0.09 avg300=0.08 total=2425959184 
+   psi cpu: some avg10=0.00 avg60=0.17 avg300=0.31 total=33525463541
+   exit 1
+== 02:23:13 ff-typing end head ebead6e load 6.64 7.50 8.09 2/2123 3265884 mem_avail_GiB 16.7
+   psi memory: some avg10=0.00 avg60=0.00 avg300=0.00 total=2958617785 full avg10=0.00 avg60=0.00 avg300=0.00 total=2427886673 
+   psi cpu: some avg10=0.04 avg60=0.02 avg300=0.00 total=33537370632
+== 02:23:13 ff-m8 start head ebead6e load 6.64 7.50 8.09 2/2123 3265892 mem_avail_GiB 16.7
+   psi memory: some avg10=0.00 avg60=0.00 avg300=0.00 total=2958617785 full avg10=0.00 avg60=0.00 avg300=0.00 total=2427886673 
+   psi cpu: some avg10=0.04 avg60=0.02 avg300=0.00 total=33537370632
+   exit 0
+== 02:42:16 ff-m8 end head ebead6e load 14.13 10.10 8.77 7/2083 3324786 mem_avail_GiB 14.3
+   psi memory: some avg10=0.00 avg60=0.00 avg300=0.00 total=2959573678 full avg10=0.00 avg60=0.00 avg300=0.00 total=2428835077 
+   psi cpu: some avg10=0.53 avg60=0.38 avg300=0.18 total=33544582226
+== 02:42:16 strict-k start head ebead6e load 14.13 10.10 8.77 7/2083 3324794 mem_avail_GiB 14.3
+   psi memory: some avg10=0.00 avg60=0.00 avg300=0.00 total=2959573678 full avg10=0.00 avg60=0.00 avg300=0.00 total=2428835077 
+   psi cpu: some avg10=0.53 avg60=0.38 avg300=0.18 total=33544582508
+   exit 0
+== 02:57:42 strict-k end head ebead6e load 13.52 15.73 13.85 2/2267 3434670 mem_avail_GiB 16.6
+   psi memory: some avg10=1.06 avg60=0.64 avg300=0.41 total=2967743311 full avg10=1.06 avg60=0.64 avg300=0.38 total=2436074218 
+   psi cpu: some avg10=1.07 avg60=1.07 avg300=4.59 total=33598008417
+== 02:57:42 strict-r1 start head ebead6e load 13.52 15.73 13.85 2/2267 3434678 mem_avail_GiB 16.6
+   psi memory: some avg10=1.06 avg60=0.64 avg300=0.41 total=2967743311 full avg10=1.06 avg60=0.64 avg300=0.38 total=2436074218 
+   psi cpu: some avg10=1.07 avg60=1.07 avg300=4.59 total=33598008618
+   exit 0
+== 02:57:44 strict-r1 end head ebead6e load 13.52 15.73 13.85 8/2553 3435269 mem_avail_GiB 16.0
+   psi memory: some avg10=0.87 avg60=0.62 avg300=0.41 total=2967812641 full avg10=0.87 avg60=0.62 avg300=0.38 total=2436142800 
+   psi cpu: some avg10=0.87 avg60=1.03 avg300=4.56 total=33598029622
+# done

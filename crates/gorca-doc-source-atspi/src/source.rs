@@ -40,12 +40,15 @@ use crate::identity::{IdentityMap, MatchStats, SibInfo, Sig};
 use crate::p2p::AppConn;
 use crate::roles;
 use crate::runs::RunLayer;
+use crate::wake;
 use crate::wire::{self, AttrInterner, PathKey};
 
 const ACCESSIBLE: &str = "org.a11y.atspi.Accessible";
 const PROPERTIES: &str = "org.freedesktop.DBus.Properties";
 const TEXT: &str = "org.a11y.atspi.Text";
 const COMPONENT: &str = "org.a11y.atspi.Component";
+/// Frames woken per document, polls of one frame and the gap between them.
+const WAKE_FRAMES_MAX: usize = 12;
 const ACTION: &str = "org.a11y.atspi.Action";
 
 #[derive(Clone, Debug)]
@@ -69,10 +72,37 @@ pub struct SourceConfig {
     /// Split container text into run leaves (TX-1, FT-2). Needs `fetch.text == All` to do
     /// anything; off for the B-6 harness, which compares against raw fetches.
     pub runs: bool,
-    /// Chromium reorders keyed lists without an event (`SourceCaps::silent_reorders`).
-    pub silent_reorders: bool,
+    /// What this engine's AT-SPI tree needs on top of the generic build (data from the
+    /// connector's quirk table, never decided here from a name).
+    pub quirks: EngineQuirks,
     /// Events that did not fit while dormant, after which a wake rebuilds from scratch anyway.
     pub dormant_marks: usize,
+}
+
+/// Engine quirks of the tree the source reads (Blink today).
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+pub struct EngineQuirks {
+    /// Chromium reorders keyed lists without an event (`SourceCaps::silent_reorders`).
+    pub silent_reorders: bool,
+    /// Blink: `static` children repeat the text the parent's hypertext already holds (connector
+    /// quirk row `Toolkit::text_leaf_children_repeat_parent_text`), so the run layer drops them.
+    pub static_leaves_repeat_text: bool,
+    /// Blink renders (and so serializes) a cross-process iframe only while it intersects the
+    /// viewport: an `internal frame` that is empty and not showing has its content as soon as it
+    /// is scrolled into view. The source scrolls each such frame into view once, then back
+    /// (`docs/reports/m9-impl.md`, iframes).
+    pub wake_offscreen_frames: bool,
+}
+
+impl EngineQuirks {
+    /// Every Blink quirk on, none otherwise.
+    pub fn blink(on: bool) -> Self {
+        Self {
+            silent_reorders: on,
+            static_leaves_repeat_text: on,
+            wake_offscreen_frames: on,
+        }
+    }
 }
 
 impl SourceConfig {
@@ -85,7 +115,7 @@ impl SourceConfig {
             },
             text_unit,
             runs: true,
-            silent_reorders: chromium,
+            quirks: EngineQuirks::blink(chromium),
             ..Self::default()
         }
     }
@@ -104,7 +134,7 @@ impl Default for SourceConfig {
             use_dom_id: true,
             first_nodes: 400,
             runs: false,
-            silent_reorders: false,
+            quirks: EngineQuirks::default(),
             dormant_marks: 100_000,
         }
     }
@@ -255,7 +285,7 @@ impl DocSource for AtspiDocSource {
                 | ActionCaps::SET_SELECTION,
             // The object path validated by a DOM id and a signature is the heuristic key.
             join_keys: JoinKeyCaps::EXACT | JoinKeyCaps::HEURISTIC,
-            silent_reorders: self.config.silent_reorders,
+            silent_reorders: self.config.quirks.silent_reorders,
         }
     }
 
@@ -366,6 +396,9 @@ struct Live {
     /// Transport key of every object the source has seen, by the hash the drain computes.
     locals: HashMap<LocalId, PathKey>,
     activity: Activity,
+    /// Empty frames found by the build (`wake_offscreen_frames`) and the nodes the wake takes
+    /// its scroll reference from.
+    wake: wake::WakePlan,
 }
 
 /// The one place deltas leave the source: run synthesis, then the sink, then `Settled` (AM-4).
@@ -485,12 +518,18 @@ impl AtspiDocSource {
             root_errors: 0,
             root_key: None,
             out: Pusher {
-                runs: (self.config.runs && self.config.fetch.text == TextPolicy::All)
-                    .then(RunLayer::new),
+                runs: (self.config.runs && self.config.fetch.text == TextPolicy::All).then(|| {
+                    if self.config.quirks.static_leaves_repeat_text {
+                        RunLayer::dropping_static_children()
+                    } else {
+                        RunLayer::new()
+                    }
+                }),
                 batch: 0,
             },
             locals: HashMap::new(),
             activity: Activity::Awake,
+            wake: wake::WakePlan::default(),
         };
 
         // Build. A failed block fetch is the one hard error: nothing to mirror.
@@ -576,6 +615,7 @@ impl AtspiDocSource {
             }
         }
 
+        self.wake_frames(&mut live, &ctx.shutdown);
         let mut events_open = true;
         let mut ctx_events_open = true;
         loop {
@@ -647,6 +687,9 @@ impl AtspiDocSource {
     ) {
         live.ident.load_parts(docs);
         live.root_key = docs.first().and_then(|d| d.keys.first().copied());
+        if self.config.quirks.wake_offscreen_frames {
+            Self::note_sleeping_frames(live, docs);
+        }
         let nodes: usize = docs.iter().map(|d| d.block.node_count()).sum();
         let mut timings = docs[0].timings.clone();
         timings.total = t_attach.elapsed();
@@ -681,6 +724,59 @@ impl AtspiDocSource {
             }
             self.metrics.set_first_block(t_attach.elapsed(), nodes);
         }
+    }
+
+    /// Remember the empty `internal frame`s of the blocks (at most [`WAKE_FRAMES_MAX`]) and the
+    /// first nodes of the page, one of which the wake measures the scroll position with.
+    fn note_sleeping_frames(live: &mut Live, docs: &[&FetchedDoc]) {
+        /// ATSPI_ROLE_INTERNAL_FRAME.
+        const INTERNAL_FRAME: u32 = 28;
+        let mut ref_keys: Vec<PathKey> = Vec::new();
+        for d in docs {
+            for i in 0..d.block.nodes.len() {
+                let (Some(&raw), Some(&count), Some(&key)) =
+                    (d.raw_roles.get(i), d.child_counts.get(i), d.keys.get(i))
+                else {
+                    continue;
+                };
+                if raw != INTERNAL_FRAME {
+                    // Any role will do (a heading or a paragraph measures a scroll as well as
+                    // a link): the task asks the node's real state, the block holds only the
+                    // plain default for roles that are not stateful.
+                    if i > 0 && ref_keys.len() < wake::REFS_MAX {
+                        ref_keys.push(key);
+                    }
+                    continue;
+                }
+                if count == 0
+                    && live.wake.frames.len() < WAKE_FRAMES_MAX
+                    && let Some(p) = live.paths.path_of(key)
+                {
+                    live.wake.frames.push(p);
+                }
+            }
+        }
+        if !live.wake.frames.is_empty() {
+            live.wake.refs = ref_keys
+                .into_iter()
+                .filter_map(|k| live.paths.path_of(k))
+                .collect();
+        }
+    }
+
+    /// Start the one-off task that scrolls every sleeping frame into view and back. It ends
+    /// with the document (`shutdown`).
+    fn wake_frames(&self, live: &mut Live, shutdown: &gorca_rt::CancellationToken) {
+        let plan = std::mem::take(&mut live.wake);
+        if plan.frames.is_empty() {
+            return;
+        }
+        tokio::spawn(wake::run(
+            Arc::clone(&self.app),
+            plan,
+            self.config.call_timeout,
+            shutdown.clone(),
+        ));
     }
 
     fn call_deadline(&self) -> Deadline {

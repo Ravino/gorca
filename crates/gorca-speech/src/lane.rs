@@ -30,7 +30,7 @@ use gorca_rt::{EpochCell, Notify, TaskSet, mpsc};
 
 use crate::queue::{FIFO_CAPACITY, SpeechQueue};
 use crate::state::{SpeechEffect, SpeechMsg, SpeechState, UttMeta};
-use crate::verbalize::Verbalizer;
+use crate::verbalize::{CapitalFx, Verbalizer};
 
 /// Speech control, applied by the lane before the utterances that follow it (ADR-0005 6.2).
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -39,6 +39,8 @@ pub enum SpeechControl {
     SetParams(VoiceParams),
     /// Language, output module and voice; also re-sent after a reconnect.
     SetVoice(VoiceSetup),
+    /// The pitch change and the sound of a capital letter spoken alone.
+    SetCapitals(CapitalFx),
     Pause,
     Resume,
     /// While muted, new utterances are dropped at `submit`. Utterances already submitted are
@@ -69,6 +71,8 @@ pub struct LaneConfig {
     pub voice_params: Option<VoiceParams>,
     /// Re-sent after a reconnect, before `voice_params`.
     pub voice_setup: Option<VoiceSetup>,
+    /// What a `SegmentKind::Capital` utterance gets on top of its text.
+    pub capital: CapitalFx,
 }
 
 impl Default for LaneConfig {
@@ -78,6 +82,7 @@ impl Default for LaneConfig {
             down_poll: Duration::from_millis(25),
             voice_params: None,
             voice_setup: None,
+            capital: CapitalFx::default(),
         }
     }
 }
@@ -538,6 +543,7 @@ impl Lane {
                 self.cfg.voice_setup = Some(v.clone());
                 self.send(SpeechCmd::Configure(v), None);
             }
+            SpeechControl::SetCapitals(fx) => self.cfg.capital = fx,
             SpeechControl::Pause => self.feed(SpeechMsg::Pause),
             SpeechControl::Resume => self.feed(SpeechMsg::Resume),
             // Applied at `submit`; nothing to do on the lane.
@@ -564,10 +570,18 @@ impl Lane {
         }
     }
 
+    /// The capital effects this client can carry out: a sound icon only where the server plays
+    /// one (otherwise it would be spoken as a word or lost).
+    fn capital_fx(&self) -> CapitalFx {
+        let mut fx = self.cfg.capital;
+        fx.cue &= self.client.caps().sound_icons;
+        fx
+    }
+
     fn voice_cmd(&self, u: &Utterance) -> SpeechCmd {
         SpeechCmd::Speak {
             id: u.id,
-            text: self.verbalizer.verbalize(u),
+            text: self.verbalizer.verbalize(u, self.capital_fx()),
             voice: VoiceRef::Default,
             marks: false,
         }
@@ -1056,6 +1070,59 @@ mod tests {
         let cmds = ctl.cmds();
         assert_eq!(cmds[0], SpeechCmd::SetParams(p));
         assert!(matches!(&cmds[1], SpeechCmd::Speak { .. }));
+    }
+
+    fn capital_utt(id: u64, epoch: u64) -> Utterance {
+        let mut u = utt(id, epoch, Prio::Interrupt, "A");
+        u.segments[0].kind = SegmentKind::Capital;
+        u
+    }
+
+    fn pitch_and_cue(ctl: &FakeCtl) -> Vec<(i8, Option<gorca_output_api::Cue>)> {
+        ctl.cmds()
+            .iter()
+            .filter_map(|c| match c {
+                SpeechCmd::Speak { text, .. } => Some((text.pitch_delta, text.cue)),
+                SpeechCmd::Replace { then, .. } => match &**then {
+                    SpeechCmd::Speak { text, .. } => Some((text.pitch_delta, text.cue)),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn a_capital_gets_the_effects_set_before_it_and_the_cue_only_where_it_can_play() {
+        use gorca_output_api::Cue;
+        // A server that cannot play sound icons: the pitch stays, the cue is dropped.
+        let (h, ctl, epoch, _t) = start(true, ClientHealth::Ready);
+        h.control(SpeechControl::SetCapitals(CapitalFx {
+            pitch_delta: 12,
+            cue: true,
+        }));
+        let e = epoch.advance();
+        h.submit(capital_utt(1, e.0));
+        assert!(eventually(WAIT, || !ctl.cmds().is_empty()).await);
+        assert_eq!(pitch_and_cue(&ctl), [(12, None)]);
+        // One that can: both reach it.
+        let (client, ctl) = crate::fake::fake_client_with_sound_icons(ClientHealth::Ready);
+        let epoch = Arc::new(EpochCell::new());
+        let mut tasks = TaskSet::new(gorca_rt::CancellationToken::new());
+        let h = SpeechLane::spawn(
+            &mut tasks,
+            Arc::clone(&epoch),
+            Box::new(client),
+            LaneConfig::default(),
+        );
+        h.control(SpeechControl::SetCapitals(CapitalFx {
+            pitch_delta: 0,
+            cue: true,
+        }));
+        let e = epoch.advance();
+        h.submit(capital_utt(1, e.0));
+        assert!(eventually(WAIT, || !ctl.cmds().is_empty()).await);
+        assert_eq!(pitch_and_cue(&ctl), [(0, Some(Cue::Capital))]);
     }
 
     #[tokio::test]

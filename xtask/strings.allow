@@ -1,0 +1,125 @@
+# PR-7 allow-list (see xtask/src/strings.rs): string literals in the speech paths that are NOT
+# user-facing messages: log and debug text, protocol names, attribute values, match patterns and
+# internal ids. Format: `repo/path.rs | literal as written`; `repo/path.rs | *` allows a file.
+# Adding a line here is a review decision: user-facing text belongs in the message catalog.
+#
+# Whole files: test-only modules (`#[cfg(test)] mod`), the presentation log (JSON keys), the
+# daemon's command line and RT setup (developer-facing text on stderr, not speech) and the
+# extension manifest parser (diagnostics for extension authors).
+#
+# Known gap, tracked for M14: settings and keymap diagnostics (compile.rs, config_task.rs) are read
+# out by settings.report_problems in English; they quote paths and values. The rest below is not
+# speech: log text, internal ids, match patterns, protocol names.
+crates/gorca-core/src/browse/latency.rs | *
+crates/gorca-core/src/present/log.rs | *
+crates/gorca-core/src/present/window/m4b_rereview_probes.rs | *
+crates/gorca-core/src/present/window/m4b_review_probes.rs | *
+crates/gorca-core/src/statemodel/mod.rs | *
+crates/gorca-core/src/statemodel/world.rs | *
+crates/gorca-daemon/src/cli.rs | *
+crates/gorca-daemon/src/main.rs | *
+crates/gorca-daemon/src/rtkit.rs | *
+crates/gorca-daemon/src/topology.rs | *
+crates/gorca-ext-host/src/manifest_file.rs | *
+crates/gorca-core/src/browse/present.rs | \u{FFFC}
+crates/gorca-core/src/commands/compile.rs | unknown key name
+crates/gorca-core/src/commands/compile.rs | extension default chord not bound: the chord is already in use
+crates/gorca-core/src/commands/compile.rs | extension `{}` default chord `{chord}`
+crates/gorca-core/src/commands/info.rs | node {} of application {}, role {}, {}, {} ancestors known, {} states, name {}
+crates/gorca-core/src/commands/info.rs | no listed
+crates/gorca-core/src/commands/keys.rs | focused node never presented: presenting it again at a key
+crates/gorca-core/src/ext.rs | default chord `{0}` must use the gorca modifier (an extension never grabs a plain key)
+crates/gorca-core/src/present/flow.rs | focus event
+crates/gorca-core/src/review/build.rs | unexpected reply kind
+crates/gorca-core/src/review/build.rs | review expand
+crates/gorca-core/src/review/build.rs | review build round
+crates/gorca-core/src/review/build.rs | review model built
+crates/gorca-core/src/runtime.rs | Core::with_ext must run before anything clones the shared state
+crates/gorca-core/src/runtime.rs | unexpected reply kind
+crates/gorca-core/src/terminal.rs | verification code
+crates/gorca-core/src/terminal.rs | contrase\u{f1}a
+crates/gorca-core/src/terminal.rs | \u{43f}\u{430}\u{440}\u{43e}\u{43b}
+crates/gorca-core/src/terminal.rs | \u{441}\u{435}\u{43a}\u{440}\u{435}\u{442}
+crates/gorca-core/src/terminal.rs | \u{43a}\u{43e}\u{434}\u{43e}\u{432}\u{430}\u{44f} \u{444}\u{440}\u{430}\u{437}\u{430}
+crates/gorca-core/src/terminal.rs | \u{43a}\u{43e}\u{434} \u{43f}\u{43e}\u{434}\u{442}\u{432}\u{435}\u{440}\u{436}\u{434}\u{435}\u{43d}\u{438}\u{44f}
+crates/gorca-core/src/terminal.rs | \u{43f}\u{438}\u{43d}-\u{43a}\u{43e}\u{434}
+crates/gorca-core/src/terminal.rs | \u{43f}\u{438}\u{43d}\u{43a}\u{43e}\u{434}
+crates/gorca-core/src/terminal.rs | insert at {offset} len {len} payload {}
+crates/gorca-core/src/terminal.rs | delete at {offset} len {len}
+crates/gorca-core/src/terminal.rs | caret {o}
+crates/gorca-core/src/terminal.rs | screen {} chars caret {caret:?}
+crates/gorca-core/src/terminal.rs | screen failed
+crates/gorca-core/src/terminal.rs | node or app gone
+crates/gorca-core/src/text/mod.rs | app not followed
+crates/gorca-core/src/text/mod.rs | text object focused
+crates/gorca-core/src/text/mod.rs | not trackable
+crates/gorca-core/src/text/mod.rs | tracked object gone
+crates/gorca-daemon/src/config_task.rs | line {line}, {d}
+crates/gorca-daemon/src/config_task.rs | the settings loader failed, using defaults
+crates/gorca-daemon/src/config_task.rs | layout keysyms left out of the grabs (also typed by an unbound key of another layout)
+crates/gorca-daemon/src/config_task.rs | settings file is bad; keeping the last good settings
+crates/gorca-daemon/src/config_task.rs | no settings file path is known\n
+crates/gorca-daemon/src/config_task.rs | no problems
+crates/gorca-daemon/src/config_task.rs | no file, using the defaults
+crates/gorca-daemon/src/input.rs | input lane statistics
+crates/gorca-daemon/src/lib.rs | GORCA_LOG
+crates/gorca-daemon/src/lib.rs | installing tracing subscriber: {e}
+crates/gorca-daemon/src/lib.rs | installing SIGINT handler
+crates/gorca-daemon/src/lib.rs | installing SIGTERM handler
+crates/gorca-daemon/src/lib.rs | installing SIGUSR1 handler
+crates/gorca-daemon/src/lib.rs | no socket path is known
+crates/gorca-daemon/src/lib.rs | gorca started
+crates/gorca-daemon/src/power.rs | IsPresent
+crates/gorca-daemon/src/power.rs | Percentage
+crates/gorca-daemon/src/power.rs | State
+crates/gorca-daemon/src/power.rs | TimeToFull
+crates/gorca-daemon/src/power.rs | TimeToEmpty
+crates/gorca-daemon/src/terminal_policy.rs | the native terminal policy panicked; it starts over{}
+crates/gorca-daemon/src/terminal_policy.rs |  and is now off
+crates/gorca-daemon/src/wire.rs | keyboard monitoring is off: it needs org.gnome.Orca.KeyboardMonitor, which is only \
+crates/gorca-ext-host/src/host.rs | cannot start wasmtime: {e:#}
+crates/gorca-ext-host/src/host.rs | cannot load component: {e:#}
+crates/gorca-ext-host/src/host.rs | extension `{}`: a native factory needs `backend = \"native\"`
+crates/gorca-ext-host/src/host.rs | extension `{}` is already loaded
+crates/gorca-ext-host/src/host.rs | more than {MAX_EXTENSIONS} extensions
+crates/gorca-ext-host/src/host.rs | manifest too large
+crates/gorca-ext-host/src/host.rs | native extensions are linked in by the daemon, not loaded from a directory
+crates/gorca-ext-host/src/host.rs | component too large
+crates/gorca-ext-host/src/host.rs | extension host stopped
+crates/gorca-ext-host/src/instance.rs | trap: {m}
+crates/gorca-ext-host/src/instance.rs | panic: {m}
+crates/gorca-ext-host/src/instance.rs | native hook ran {d:?}, over its limit
+crates/gorca-ext-host/src/native.rs | non-string panic payload
+crates/gorca-ext-host/src/slot.rs | extension disabled for every application after repeated failures
+crates/gorca-ext-host/src/slot.rs | extension slot busy: hook calls skipped while a command or rebuild holds it
+crates/gorca-ext-host/src/slot.rs | extension fault: {fault}; the instance is reset
+crates/gorca-ext-host/src/slot.rs | extension disabled for this application after repeated faults
+crates/gorca-ext-host/src/wasm.rs | host work budget exhausted
+crates/gorca-ext-host/src/wasm.rs | cannot refuel: {e:#}
+crates/gorca-input-api/src/keys.rs | Insert
+crates/gorca-input-api/src/keys.rs | KP_Insert
+crates/gorca-input-api/src/keys.rs | Caps_Lock
+crates/gorca-speech/src/failover.rs | deadline exceeded
+crates/gorca-speech/src/verbalize.rs | абвгдеёжзийклмнопрстуфхцчшщъыьэюя
+crates/gorca-text/src/seg.rs | акад
+crates/gorca-text/src/seg.rs | гг
+crates/gorca-text/src/seg.rs | доц
+crates/gorca-text/src/seg.rs | им
+crates/gorca-text/src/seg.rs | проф
+crates/gorca-text/src/seg.rs | ул
+crates/gorca-text/src/seg.rs | гр
+crates/gorca-text/src/seg.rs | пр
+crates/gorca-text/src/seg.rs | рис
+crates/gorca-text/src/seg.rs | св
+crates/gorca-text/src/seg.rs | стр
+crates/gorca-text/src/seg.rs | тов
+extensions/ext-vte/src/prompt.rs | verification code
+extensions/ext-vte/src/prompt.rs | contrase\u{f1}a
+extensions/ext-vte/src/prompt.rs | \u{43f}\u{430}\u{440}\u{43e}\u{43b}[\u{44c}\u{44f}\u{435}\u{44e}\u{438}\u{439}\u{44b}]*
+extensions/ext-vte/src/prompt.rs | \u{43f}\u{430}\u{440}\u{43e}\u{43b}\u{44c}\u{43d}\u{430}\u{44f} \u{444}\u{440}\u{430}\u{437}\u{430}
+extensions/ext-vte/src/prompt.rs | \u{43a}\u{43e}\u{434}\u{43e}\u{432}\u{430}\u{44f} \u{444}\u{440}\u{430}\u{437}\u{430}
+extensions/ext-vte/src/prompt.rs | \u{43a}\u{43e}\u{434} \u{43f}\u{43e}\u{434}\u{442}\u{432}\u{435}\u{440}\u{436}\u{434}\u{435}\u{43d}\u{438}\u{44f}
+extensions/ext-vte/src/prompt.rs | \u{441}\u{435}\u{43a}\u{440}\u{435}\u{442}\u{43d}[\u{430}-\u{44f}]*
+extensions/ext-vte/src/prompt.rs | \u{43f}\u{438}\u{43d}-?\u{43a}\u{43e}\u{434}
+extensions/ext-vte/src/prompt.rs | [^:?\u{ff1a}\u{ff1f}]{0,60}[:?\u{ff1a}\u{ff1f}]\s*$
+crates/gorca-core/src/doc_actor/translate.rs | \u{FFFC}

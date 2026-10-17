@@ -628,7 +628,7 @@ impl SpeechClient for SsipClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gorca_output_api::{Verbalized, VoiceParams, VoiceRef};
+    use gorca_output_api::{Cue, Verbalized, VoiceParams, VoiceRef};
     use gorca_testkit::MockSpeechServer;
     use std::time::Instant;
 
@@ -649,6 +649,7 @@ mod tests {
                 text: Arc::from(text),
                 lang: None,
                 pitch_delta: 0,
+                cue: None,
             },
             voice: VoiceRef::Default,
             marks: false,
@@ -968,6 +969,7 @@ mod tests {
                 text: Arc::from("A"),
                 lang: None,
                 pitch_delta: 30,
+                cue: None,
             },
             voice: VoiceRef::Default,
             marks: false,
@@ -983,6 +985,50 @@ mod tests {
         let restored = at("SET self PITCH 10").unwrap();
         let first_speak = v.iter().position(|x| x == "SPEAK").unwrap();
         assert!(raised < first_speak && first_speak < restored, "{v:?}");
+        drop(c);
+        drop(srv);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[tokio::test]
+    async fn a_capital_cue_is_a_sound_icon_and_does_not_disturb_the_event_tracking() {
+        let d = tmp("cue");
+        let srv = MockSpeechServer::start_ssip(&d).await.unwrap();
+        srv.set_speak_time(Duration::from_millis(5));
+        let mut c = connect(&srv).await;
+        c.submit(SpeechCmd::SetParams(VoiceParams {
+            rate: 0,
+            pitch: 100,
+            volume: 0,
+        }))
+        .unwrap();
+        c.submit(SpeechCmd::Speak {
+            id: UttId(1),
+            text: Verbalized {
+                text: Arc::from("A"),
+                lang: None,
+                pitch_delta: 30,
+                cue: Some(Cue::Capital),
+            },
+            voice: VoiceRef::Default,
+            marks: false,
+        })
+        .unwrap();
+        until(&mut c, SpeechEvent::Ended(UttId(1))).await;
+        // The message after it is tracked as usual and the pitch is back at the base.
+        c.submit(speak(2, "b")).unwrap();
+        until(&mut c, SpeechEvent::Ended(UttId(2))).await;
+        assert_eq!(srv.spoken(), ["A", "b"]);
+        let v = srv.verbs();
+        let icon = v.iter().position(|x| x == "SOUND_ICON capital").unwrap();
+        let speak_at = v.iter().position(|x| x == "SPEAK").unwrap();
+        assert!(icon < speak_at, "{v:?}");
+        // Pitch 100 has no room above: the capital goes to 70 and back to 100.
+        assert!(v.iter().any(|x| x == "SET self PITCH 70"), "{v:?}");
+        assert_eq!(
+            v.iter().rev().find(|x| x.contains("PITCH")).unwrap(),
+            "SET self PITCH 100"
+        );
         drop(c);
         drop(srv);
         let _ = std::fs::remove_dir_all(&d);

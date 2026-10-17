@@ -1,0 +1,5 @@
+2026-10-16T20:08:26.338520Z  INFO gorca_phase: phase="locate" wall_ms=34.013402
+2026-10-16T20:08:26.338604Z  INFO gorca_phase: phase="create" wall_ms=0.007374
+2026-10-16T20:08:26.379070Z  INFO gorca_phase: phase="fetch" total_ms=40.384088 warm_ms=32.689555 frontier_ms=0.16927 get_tree_ms=3.550983 roles_ms=1.133267 states_ms=1.452124 text_ms=1.1373259999999998 assemble_ms=0.008279 heaviest_get_tree_ms=1.873 calls=112 tree_bytes=7493 nodes=34
+2026-10-16T20:08:26.379424Z  INFO gorca_phase: phase="translate" wall_ms=0.122722 nodes=34
+2026-10-16T20:08:32.310976Z  INFO gorca_phase: phase="locate" wall_ms=73.794456

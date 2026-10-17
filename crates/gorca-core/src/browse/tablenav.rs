@@ -3,6 +3,7 @@
 //! cell, speak the cell with the header that changed, say a row or a column. Everything reads one
 //! published `WebDoc`; no IPC.
 
+use gorca_i18n::{MsgId as M, t};
 use std::time::Instant;
 
 use gorca_doc::web::table::{self, CellRef};
@@ -59,7 +60,7 @@ fn text_of(doc: &WebDoc, id: DocNodeId) -> String {
 /// A cell's speech: its content, or "blank".
 fn cell_items(doc: &WebDoc, cell: DocNodeId, from: Option<u32>) -> Vec<Item> {
     let Some(a) = cursor::content_start(doc, cell) else {
-        return vec![Item::Text("blank".to_owned())];
+        return vec![Item::Text(t(M::WebBlank).to_owned())];
     };
     let end = doc
         .subtree_text_range(cell)
@@ -72,7 +73,7 @@ fn cell_items(doc: &WebDoc, cell: DocNodeId, from: Option<u32>) -> Vec<Item> {
     };
     items.retain(|i| !i.text().trim().is_empty());
     if items.is_empty() {
-        items.push(Item::Text("blank".to_owned()));
+        items.push(Item::Text(t(M::WebBlank).to_owned()));
     }
     items
 }
@@ -133,8 +134,8 @@ impl Reader {
                     now + super::commands::SCROLL_DEBOUNCE,
                 ));
             }
-            Err(TableEdge::NotInCell) => self.say("Not in a table cell", fx),
-            Err(TableEdge::Edge) => self.say("Edge of table", fx),
+            Err(TableEdge::NotInCell) => self.say(t(M::WebNotInCell), fx),
+            Err(TableEdge::Edge) => self.say(t(M::WebTableEdge), fx),
         }
     }
 
@@ -171,7 +172,7 @@ impl Reader {
         });
         match items {
             Some(items) => self.web_speak(&items, fx),
-            None => self.say("Not in a table cell", fx),
+            None => self.say(t(M::WebNotInCell), fx),
         }
     }
 }

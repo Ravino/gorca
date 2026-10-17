@@ -378,6 +378,32 @@ impl Caller {
             .await
     }
 
+    /// Quirk row `blink-wake-call` ([`crate::Toolkit::needs_wake_call`]): one `GetAttributes` and
+    /// one `GetRelationSet` on the application root. Both are reads; their only effect is that
+    /// Chromium learns an AT uses the tree and builds the web content tree. Best effort: the
+    /// replies are ignored. Returns whether either call was answered.
+    pub async fn wake(&self, deadline: Deadline) -> bool {
+        let (a, r) = tokio::join!(
+            self.call(
+                &self.bus_name,
+                deadline,
+                ROOT_PATH,
+                ACCESSIBLE,
+                "GetAttributes",
+                &()
+            ),
+            self.call(
+                &self.bus_name,
+                deadline,
+                ROOT_PATH,
+                ACCESSIBLE,
+                "GetRelationSet",
+                &()
+            )
+        );
+        a.is_ok() || r.is_ok()
+    }
+
     /// Toolkit and application name of the app root, for `AppInfo` (best effort).
     pub async fn app_info(&self, deadline: Deadline) -> Option<(String, String)> {
         let (toolkit, name) = tokio::join!(

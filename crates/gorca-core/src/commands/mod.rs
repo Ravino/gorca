@@ -23,8 +23,8 @@ pub use handlers::PASS_TIMEOUT;
 pub use spec::{Availability, CmdSpec, CommandTable, ContextMask, Milestone};
 pub(crate) use state::CmdState;
 pub use state::{
-    ConfigRequest, ControlMsg, InputNotice, LoadCause, LoadedSettings, LocalTime, SaveResult,
-    SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels, WallClock,
+    CapitalLevels, ConfigRequest, ControlMsg, InputNotice, LoadCause, LoadedSettings, LocalTime,
+    SaveResult, SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels, WallClock,
 };
 pub use table::CoreCmd;
 

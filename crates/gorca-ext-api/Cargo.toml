@@ -8,6 +8,7 @@ license = "MIT OR Apache-2.0"
 publish.workspace = true
 
 [dependencies]
+gorca-i18n = { workspace = true }
 
 # The component build of an extension (wasm32 only). Native builds and the host never link it.
 [target.'cfg(target_arch = "wasm32")'.dependencies]

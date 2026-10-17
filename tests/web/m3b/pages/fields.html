@@ -46,10 +46,10 @@ document.getElementById('lines').value = L;
 var S = '';
 for (var j = 0; j < 200; j++) S += 'Sentence number ' + String(j).padStart(4, '0') + ' is here. ';
 document.getElementById('say').value = S;
-// A combo box that opens with Alt+Down and closes with Escape, as a page's own widget does.
+// A combo box that opens with Alt+Down (or F4) and closes with Escape, as a page's own widget does.
 var combo = document.getElementById('combo');
 combo.addEventListener('keydown', function (e) {
-  if (e.key === 'ArrowDown' && e.altKey) {
+  if ((e.key === 'ArrowDown' && e.altKey) || e.key === 'F4') {
     combo.setAttribute('aria-expanded', 'true');
     e.preventDefault();
   } else if (e.key === 'Escape' && combo.getAttribute('aria-expanded') === 'true') {

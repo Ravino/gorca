@@ -41,6 +41,21 @@ pub mod terminal;
 
 pub use api::*;
 
+/// Message references and extension catalogs (ADR-0010). An extension never writes user-facing
+/// prose: it ships `i18n/<lang>.msg` files under its own name and returns a reference built with
+/// [`i18n::msg`] wherever the ABI takes a text; the core resolves it in the UI language.
+pub mod i18n {
+    pub use gorca_i18n::Lang;
+    pub use gorca_i18n::ext::{
+        is_reference, register, resolve, unregister_extension as unregister,
+    };
+
+    /// A reference to message `key` of extension `ns` with named arguments.
+    pub fn msg(ns: &str, key: &str, args: &[(&str, &str)]) -> String {
+        gorca_i18n::ext::encode(ns, key, args)
+    }
+}
+
 /// Export `$ty` (which must be [`Hooks`] and `Default`) as the extension component.
 ///
 /// In the component build (`wasm32`) this exports the WIT `hooks` interface. In a native build it

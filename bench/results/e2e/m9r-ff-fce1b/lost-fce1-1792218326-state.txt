@@ -1,0 +1,59 @@
+834852054974855 said "M3b Fields — Mozilla Firefox, M3b Fields, document"
+834852091030894 said "browse mode, heading level 1, Fields"
+834852539974142 said "M3b Fields — Mozilla Firefox, panel"
+834853935567519 said "focus mode, Editable region:, edit"
+834854994284696 said "n"
+834855000257427 said "One 😀 two"
+834855209888146 said "space"
+834855313174750 said "t"
+834855535937492 said "w"
+834855633979858 said "o"
+834855883514744 said "blank"
+834855955570414 said "Т"
+834856209719753 said "р"
+834856276801616 said "и"
+834856530360705 said "x"
+834856740852489 said "y"
+834856796201767 said "y"
+834856950214976 said "x"
+834857079068670 said "One 😀 two"
+bus 4 /org/a11y/atspi/accessible/62
+bus 4 /org/a11y/atspi/accessible/58
+bus 4 /org/a11y/atspi/accessible/60
+bus 2 /org/a11y/atspi/accessible/68
+bus 4 /org/a11y/atspi/accessible/58
+bus 4 /org/a11y/atspi/accessible/58
+bus 2 /org/a11y/atspi/accessible/70
+bus 2 /org/a11y/atspi/accessible/72
+bus 2 /org/a11y/atspi/accessible/73
+bus 2 /org/a11y/atspi/accessible/78
+bus 2 /org/a11y/atspi/accessible/79
+bus 2 /org/a11y/atspi/accessible/80
+bus 1 /org/a11y/atspi/accessible/70
+bus 1 /org/a11y/atspi/accessible/70
+bus 3 /org/a11y/atspi/accessible/88
+bus 1 /org/a11y/atspi/accessible/121
+bus 1 /org/a11y/atspi/accessible/87
+bus 1 /org/a11y/atspi/accessible/87
+bus 3 /org/a11y/atspi/accessible/105
+bus 3 /org/a11y/atspi/accessible/105
+bus 3 /org/a11y/atspi/accessible/105
+bus 3 /org/a11y/atspi/accessible/105
+bus 3 /org/a11y/atspi/accessible/105
+bus 3 /org/a11y/atspi/accessible/105
+bus 3 /org/a11y/atspi/accessible/105
+bus 3 /org/a11y/atspi/accessible/105
+bus 3 /org/a11y/atspi/accessible/105
+bus 3 /org/a11y/atspi/accessible/105
+bus 3 /org/a11y/atspi/accessible/106
+bus 3 /org/a11y/atspi/accessible/106
+bus 3 /org/a11y/atspi/accessible/106
+bus 4 /org/a11y/atspi/accessible/106
+bus 3 /org/a11y/atspi/accessible/106
+bus 4 /org/a11y/atspi/accessible/106
+bus 3 /org/a11y/atspi/accessible/106
+bus 4 /org/a11y/atspi/accessible/106
+bus 3 /org/a11y/atspi/accessible/106
+bus 4 /org/a11y/atspi/accessible/106
+bus 3 /org/a11y/atspi/accessible/106
+bus 3 /org/a11y/atspi/accessible/105

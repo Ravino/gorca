@@ -20,6 +20,8 @@
 #                   orca       poke + a decoy process with argv[0]=orca (Chromium's /proc scan)
 #                   force      --force-renderer-accessibility
 #   M9_ARGS       extra Chromium arguments
+#   M9_BROWSER_FIRST=1  start the browser before the reader (scenario CR-WAKE: gorca starts with
+#                 Chrome already open; BAR1's "page already open" check is only valid this way)
 #   M7_KEEP=1     keep the compositor world's temp dir
 # Chromium runs with a throw-away profile that is deleted when the browser stops.
 set -u
@@ -35,8 +37,10 @@ fi
 [ -x "$CHR" ] || { echo "no Chromium found: set M9_CHROMIUM" >&2; exit 2; }
 export GORCA_M7_BROWSER=chromium
 export GORCA_M7_CHROMIUM=$CHR
-export GORCA_M9_AT=${M9_AT:-poke}
+export GORCA_M9_AT=${M9_AT:-isenabled}
 export GORCA_M9_CHROMIUM_ARGS=${M9_ARGS:-}
+# M9_BROWSER_FIRST=1: the browser starts before the reader (CR-WAKE: Chrome already open)
+[ -z "${M9_BROWSER_FIRST:-}" ] || export GORCA_M9_BROWSER_FIRST=$M9_BROWSER_FIRST
 # gorca writes IsEnabled only; the harness must not set ScreenReaderEnabled either
 export GORCA_HARNESS_SCREEN_READER=0
 case "$KIND" in
@@ -47,6 +51,8 @@ case "$KIND" in
     exec "$ROOT/tests/web/m7/run_m7.sh" --probe /usr/bin/python3 "$ROOT/tests/web/m9/probe_at.py" "$MODE" "$PAGE" "$TITLE" ;;
   probe-load)
     exec "$ROOT/tests/web/m7/run_m7.sh" --probe /usr/bin/python3 "$ROOT/tests/web/m9/probe_load.py" "$@" ;;
+  probe-scn)
+    exec "$ROOT/tests/web/m7/run_m7.sh" --probe /usr/bin/python3 "$ROOT/tests/web/m9/probe_scn.py" "$@" ;;
   probe-typing)
     exec "$ROOT/tests/web/m7/run_m7.sh" --probe /usr/bin/python3 "$ROOT/tests/web/m9/probe_typing.py" "$@" ;;
   *) echo "usage: $0 m7|m8|probe ..." >&2; exit 64 ;;

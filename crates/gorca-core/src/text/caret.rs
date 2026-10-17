@@ -14,6 +14,7 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use gorca_i18n::{MsgId as M, msg};
 use gorca_input_api::{ClipOp, KeyUnit, TextDir, TextKey};
 use gorca_model::{
     Epoch, NodeKey, Prio, TextGranularity, TextSelections, TextUnitAt, TextWindowFill,
@@ -410,6 +411,10 @@ pub struct Tracked {
     /// An insert that was spoken as unexplained text, for a late key that explains it.
     flushed_ins: Option<HeldIns>,
     held_del: Option<HeldDel>,
+    /// A delete that no erase key explains arrived while a typed key was waiting for its
+    /// insert: the key may have replaced a selection (Gecko reports a delete and a caret move
+    /// and no insert at all). The caret event that follows settles the key's expectation.
+    replaced: Option<Instant>,
     /// The window revision each outstanding request was issued under.
     revs: SmallVec<[(TextReqId, u64); 8]>,
 }
@@ -452,6 +457,7 @@ impl Tracked {
             held_ins: None,
             flushed_ins: None,
             held_del: None,
+            replaced: None,
             revs: SmallVec::new(),
         }
     }
@@ -996,6 +1002,12 @@ impl CaretState {
             }
             CaretState::Fetching { t, .. } => CaretState::Idle { t }.on_caret(off, cx),
             CaretState::Idle { mut t } => {
+                // The typed key replaced a selection: its delete and this caret move are all
+                // there will be, so its expectation must not wait for an insert (it would
+                // make a later key's insert "unexplained" and be spoken twice).
+                if t.replaced.take().is_some_and(|at| cx.now <= at + ABSORB) {
+                    let _ = t.expect.forget(1, cx.now_ms);
+                }
                 if t.is_own_move(off, cx.now) || t.absorbs(off, cx.now) {
                     t.caret = Some(off);
                     cx.stats.caret_absorbed += 1;
@@ -1771,7 +1783,7 @@ fn echo_typed(t: &mut Tracked, ch: char, epoch: Epoch, claimed: Claim, cx: &mut 
     }
     let mut pieces: SmallVec<[Piece; 2]> = SmallVec::new();
     if ch == '\n' {
-        pieces.push(Piece::phrase("new line"));
+        pieces.push(Piece::phrase(gorca_i18n::t(M::TextNewLine)));
     } else {
         pieces.push(Piece::unit(How::Char, ch.to_string()));
     }
@@ -1806,6 +1818,7 @@ fn insert(
         alt: None,
         until: cx.now + ABSORB,
     });
+    t.replaced = None;
     let paste = matches!(slot, Some((TextKey::Clipboard(ClipOp::Paste), ..)));
     let source = if paste {
         InsertSource::Paste
@@ -1939,7 +1952,7 @@ fn speak_inserted(
     let mut pieces: SmallVec<[Piece; 2]> = SmallVec::new();
     pieces.push(Piece::unit(How::Text, text.to_owned()));
     if more > 0 {
-        pieces.push(Piece::phrase(&format!("and {more} more")));
+        pieces.push(Piece::phrase(&msg!(TextAndMore, n = more)));
     }
     t.last_insert_say = Some(cx.now);
     let sp = t.spoken(pieces, Reason::Inserted(source), epoch, prio);
@@ -2133,6 +2146,9 @@ fn delete(
                 text: d,
                 at: cx.now,
             });
+            if t.expect.newest_age_ms(cx.now_ms).is_some_and(|age| age <= ABSORB_MS) {
+                t.replaced = Some(cx.now);
+            }
         }
         return false;
     };
@@ -2164,11 +2180,7 @@ fn visible_count(win: &TextWindow, r: &Range<u32>) -> u32 {
 }
 
 fn count_phrase(n: u32) -> String {
-    if n == 1 {
-        "1 character".to_owned()
-    } else {
-        format!("{n} characters")
-    }
+    msg!(TextChars, n = n)
 }
 
 /// SL-3: speak what became selected and what was unselected.
@@ -2195,16 +2207,19 @@ fn speak_selection(
         if whole && (all_requested || delta.added_len() == t.win.len().unwrap_or(0)) {
             let n = t.win.len().unwrap_or(0);
             let n = visible_count(&t.win, &(0..n));
-            pieces.push(Piece::phrase(&format!("all selected, {}", count_phrase(n))));
+            pieces.push(Piece::phrase(&msg!(
+                TextAllSelected,
+                count = &count_phrase(n)
+            )));
         } else {
-            push_changed(&t.win, &delta.added, &t.sel, "selected", &mut pieces);
+            push_changed(&t.win, &delta.added, &t.sel, true, &mut pieces);
         }
     }
     if !delta.removed.is_empty() {
         if !pieces.is_empty() {
             pieces.push(Piece::phrase(","));
         }
-        push_changed(&t.win, &delta.removed, &old, "unselected", &mut pieces);
+        push_changed(&t.win, &delta.removed, &old, false, &mut pieces);
     }
     let s = t.spoken(pieces, Reason::Selection, epoch, Prio::Interrupt);
     cx.say(s);
@@ -2215,7 +2230,7 @@ fn push_changed(
     win: &TextWindow,
     ranges: &[Range<u32>],
     set: &[(Range<u32>, Arc<str>)],
-    word: &str,
+    selected: bool,
     pieces: &mut SmallVec<[Piece; 2]>,
 ) {
     let total = ranges
@@ -2236,9 +2251,20 @@ fn push_changed(
     match texts {
         Some(texts) if total <= MAX_SPOKEN => {
             pieces.push(Piece::unit(How::Text, texts.join(" ")));
-            pieces.push(Piece::phrase(word));
+            pieces.push(Piece::phrase(gorca_i18n::t(if selected {
+                M::TextSelected
+            } else {
+                M::TextUnselected
+            })));
         }
-        Some(_) | None => pieces.push(Piece::phrase(&format!("{} {word}", count_phrase(total)))),
+        Some(_) | None => {
+            let count = count_phrase(total);
+            pieces.push(Piece::phrase(&if selected {
+                msg!(TextCountSelected, count = &count)
+            } else {
+                msg!(TextCountUnselected, count = &count)
+            }));
+        }
     }
 }
 

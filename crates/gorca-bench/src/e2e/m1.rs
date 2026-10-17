@@ -101,7 +101,7 @@ fn gate_open(host: &HostEnv, id: &str, out: &mut RunOut) -> Result<bool> {
     Ok(false)
 }
 
-struct Chord {
+pub(super) struct Chord {
     modifier: K,
     key: K,
 }
@@ -131,7 +131,7 @@ impl Typist {
 
 /// One chord: modifier down, key down, key up, modifier up. Returns the key-down emit time and
 /// whether Mutter consumed the key-down.
-fn chord(rig: &mut Rig, ty: &mut Typist, c: &Chord) -> Result<(u64, bool)> {
+pub(super) fn chord(rig: &mut Rig, ty: &mut Typist, c: &Chord) -> Result<(u64, bool)> {
     ty.t_ms += CHORD_GAP_MS;
     let m = rig
         .mutter
@@ -198,7 +198,7 @@ pub(super) fn m1_rig(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor) -> Res
 
 /// What a series does before each chord.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-enum Before {
+pub(super) enum Before {
     Nothing,
     /// Move focus to a fresh node and press at once: the answer needs a fetch (cache cold).
     FocusFresh,
@@ -206,7 +206,7 @@ enum Before {
 
 /// Run `n` chords, score key-down emit to the first SPEAK after it (the answer; the speech of
 /// the previous action is cancelled by the epoch of the key).
-fn chord_series(
+pub(super) fn chord_series(
     rig: &mut Rig,
     out: &mut RunOut,
     metric: &str,
@@ -214,6 +214,7 @@ fn chord_series(
     n: usize,
     seed: u64,
     before: Before,
+    hook: Option<&mut dyn FnMut(&mut Rig)>,
 ) -> Result<()> {
     let mut rng = Rng::new(seed);
     let mut ty = Typist::new();
@@ -236,6 +237,9 @@ fn chord_series(
         pause(&mut rng, 8, 16);
     }
     std::thread::sleep(Duration::from_millis(400));
+    if let Some(h) = hook {
+        h(rig);
+    }
     let recs = rig.mock.since(mark);
     let spoken: Vec<u64> = speaks(&recs).map(|(r, _)| r.t_ns).collect();
     let mut lat = Vec::with_capacity(n);
@@ -279,7 +283,7 @@ fn chord_series(
 }
 
 /// `info.time_date`: zero IPC, always speaks.
-fn time_chord() -> Chord {
+pub(super) fn time_chord() -> Chord {
     Chord {
         modifier: INSERT,
         key: F12,
@@ -307,6 +311,7 @@ pub fn k2(
         size.n,
         seed,
         Before::Nothing,
+        None,
     )
 }
 
@@ -336,6 +341,7 @@ pub fn k2s(
         size.n,
         seed,
         Before::Nothing,
+        None,
     );
     storm.stop.store(true, std::sync::atomic::Ordering::Release);
     let fr = storm
@@ -366,7 +372,7 @@ pub fn k3(
         modifier: INSERT,
         key: TAB,
     };
-    chord_series(&mut rig, out, "k3_ms", &c, size.n, seed, Before::FocusFresh)
+    chord_series(&mut rig, out, "k3_ms", &c, size.n, seed, Before::FocusFresh, None)
 }
 
 fn forger_command(rig: &Rig, args: &[&str]) -> std::process::Command {

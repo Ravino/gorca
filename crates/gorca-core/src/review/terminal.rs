@@ -3,9 +3,9 @@
 //!
 //! The terminal extension holds the visible screen (ADR-0001 T-2); a review key reads a line
 //! model built from that snapshot, with no IPC. One zone per screen row, rows in order, the
-//! row's text as the zone's text. The model is rebuilt when the snapshot's generation changes,
-//! and the cursor is re-anchored by row (a screen is a grid, so "the same row" is the same place
-//! after a scroll), never by source offset.
+//! row's text as the zone's text. The model is rebuilt when the screen text changes (a caret-only
+//! generation keeps it), and the cursor follows its line by content (ADR-0018, `flat::carry_terminal`),
+//! never by visible row: a screen that scrolls under a streaming program must not move the cursor.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -16,6 +16,7 @@ use gorca_ext_api::terminal::TermSnapshot;
 use gorca_model::{AppId, NodeKey, Rect};
 use smallvec::SmallVec;
 
+use super::cursor::ReviewPos;
 use super::model::{
     Completeness, Line, LineModel, LineSource, ReviewLimits, TruncWhy, Zone, ZoneKind,
     next_model_id,
@@ -23,7 +24,28 @@ use super::model::{
 use crate::reader::{Reader, ReaderEffects};
 
 /// Height of one synthetic row (only the ordering matters).
-const ROW_H: i32 = 16;
+pub(super) const ROW_H: i32 = 16;
+
+/// FNV-1a of the whole screen text.
+fn hash_text(s: &str) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in s.bytes() {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x0100_0000_01b3);
+    }
+    h
+}
+
+/// The one-line model of a terminal line that scrolled off the screen (`built_rev` 0: it is
+/// never the screen's current model).
+pub(super) fn held_model(app: AppId, node: NodeKey, text: &str, now: Instant) -> LineModel {
+    let snap = TermSnapshot {
+        text: text.to_owned(),
+        caret: 0,
+        generation: 0,
+    };
+    terminal_model(app, node, &snap, &ReviewLimits::default(), now)
+}
 
 /// Build the line model of `snap`, the screen of terminal `node`.
 pub fn terminal_model(
@@ -116,14 +138,29 @@ impl Reader {
         fx: &mut ReaderEffects,
     ) -> Option<Arc<LineModel>> {
         let snap = self.term_snapshot(nav)?;
+        let text_hash = hash_text(&snap.text);
         if let Some(m) = self
             .review
             .cur
             .as_ref()
             .filter(|m| m.source == LineSource::Terminal && m.surface == nav)
-            && m.built_rev == snap.generation
         {
-            return Some(Arc::clone(m));
+            // The same screen generation, or a new one with the same text (a caret-only change,
+            // an event that changed nothing): the model stands. The caret row matters only to a
+            // cursor that is not anchored yet.
+            let same_text =
+                m.built_rev == snap.generation || self.review.term_text == Some((m.id, text_hash));
+            let anchored = matches!(
+                self.cursor().map(|c| c.pos),
+                Some(ReviewPos::Screen(Some(_)))
+            );
+            let caret_row = Rows::new(&snap.text).locate(snap.caret).0;
+            let focus_ok = anchored
+                || m.focus_line
+                    .is_none_or(|l| l as usize == caret_row.min(m.lines.len().saturating_sub(1)));
+            if same_text && focus_ok {
+                return Some(Arc::clone(m));
+            }
         }
         let m = Arc::new(terminal_model(
             nav.app,
@@ -132,8 +169,27 @@ impl Reader {
             &self.review.limits,
             now,
         ));
+        self.review.term_text = Some((m.id, text_hash));
         self.install_model(&m, now, fx);
         Some(m)
+    }
+
+    /// The screen read that was answered after a review key spoke from the held screen: the
+    /// model is rebuilt now, so that a line that turns out to be different is corrected (RV-1)
+    /// instead of waiting for the next key.
+    pub(super) fn term_review_refresh(&mut self, fx: &mut ReaderEffects) {
+        let Some(m) = self
+            .review
+            .cur
+            .as_ref()
+            .filter(|m| m.source == LineSource::Terminal)
+        else {
+            return;
+        };
+        if self.review.rr_check.is_some() {
+            let (nav, now) = (m.surface, self.now);
+            self.term_review_model(nav, now, fx);
+        }
     }
 }
 

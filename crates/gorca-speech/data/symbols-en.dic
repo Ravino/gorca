@@ -6,36 +6,6 @@
 #   symbol: one character, "U+XXXX", the literal "...", or "@id" for a complex rule or word.
 #   level: none (always spoken), some, most, all, char (only when one character is read).
 #   preserve: never (default), always (keep the mark for prosody), norep (keep it when not named).
-@word.blank	blank
-@word.object	object
-@word.cap	cap
-@level.none	none
-@level.some	some
-@level.most	most
-@level.all	all
-@word.confirm	punctuation {}
-@word.lock.caps	Caps Lock
-@word.lock.num	Num Lock
-@word.lock.scroll	Scroll Lock
-@word.lock.on	{} on
-@word.lock.off	{} off
-@word.history.secret	password
-@word.history.empty	no speech history
-@word.history.oldest	oldest
-@word.history.newest	newest
-@word.sleep.on	sleep mode on
-@word.sleep.off	sleep mode off
-@word.battery.none	no battery
-@word.battery.unavailable	battery status unavailable
-@word.battery.percent	{} percent
-@word.battery.charging	charging
-@word.battery.discharging	discharging
-@word.battery.full	fully charged
-@word.battery.empty	empty
-@word.battery.pending	waiting to charge
-@word.battery.time	{} remaining
-@word.battery.hm	{} h {} min
-@word.battery.m	{} min
 @sentence.dot	dot	all	always
 @sentence.bang	bang	all	always
 @sentence.question	question	all	always

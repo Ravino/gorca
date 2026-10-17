@@ -119,6 +119,7 @@ mod tests {
                 text: Arc::from("x"),
                 lang: None,
                 pitch_delta: 0,
+                cue: None,
             },
             voice: VoiceRef::Default,
             marks: false,

@@ -417,7 +417,7 @@ impl Session {
 
     fn say_command(&self, cmd: &str, out: &mut Vec<TermAction>) {
         if cmd.trim().is_empty() {
-            self.say(out, "blank", Unit::Text, Urgency::Key);
+            self.say(out, &crate::blank(), Unit::Text, Urgency::Key);
         } else {
             self.say(out, cmd.trim_end(), Unit::Line, Urgency::Key);
         }
@@ -1230,7 +1230,7 @@ impl Session {
         match (text, unit) {
             (Some(t), Unit::Char) => self.say(out, &t, Unit::Char, Urgency::Key),
             (Some(t), _) => self.say(out, &t, Unit::Word, Urgency::Key),
-            (None, _) => self.say(out, "blank", Unit::Text, Urgency::Key),
+            (None, _) => self.say(out, &crate::blank(), Unit::Text, Urgency::Key),
         }
     }
 
@@ -1249,7 +1249,7 @@ impl Session {
     fn say_line(&self, s: &Screen, row: usize, out: &mut Vec<TermAction>) {
         let line = s.line(row).trim_end();
         if line.trim().is_empty() {
-            self.say(out, "blank", Unit::Text, Urgency::Queued);
+            self.say(out, &crate::blank(), Unit::Text, Urgency::Queued);
         } else {
             self.say(out, line, Unit::Line, Urgency::Queued);
         }

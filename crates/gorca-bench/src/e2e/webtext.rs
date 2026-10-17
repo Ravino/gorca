@@ -24,6 +24,8 @@
 //! | BAR1 | a page loads: title, then it reads itself; a key stops it | `bar_failures`, `bar_start_ms` (information) |
 //! | BL1 | quick navigation on the Russian layout, Shift+digit on both | `bl_failures` |
 //! | FR1 | frame and article quick navigation on a page with an iframe | `fr_failures` |
+//! | UB1 | address bar: Ctrl+L, typing, BackSpace, Down/Up through the suggestions, Escape (loopback pages) | `ub_failures` (gate 0: a web mode word in the browser interface, or a silent step) |
+//! | TB1 | three tabs, Ctrl+Tab and Ctrl+Shift+Tab | `tb_failures` (gate 0: every switch says the new title), `tb1_ms` |
 //!
 //! Everything is skipped unless `--reader-env GORCA_M7=1` and the private compositor are there
 //! (`tests/web/m7/run_m7.sh`).
@@ -46,7 +48,7 @@ use super::web::{
 /// The scenario ids of this module, in the order of a full run.
 pub const IDS: &[&str] = &[
     "FC1h", "FC1", "FE1", "FCE2", "FE2", "FS2", "FSA1", "FSA3", "FCE1", "FT1", "FP1", "BSA1",
-    "BAR1", "BL1", "FR1",
+    "BAR1", "BL1", "FR1", "TB1", "UB1",
 ];
 
 /// The reader does not read pages by itself (the M7a keys-by-line scenarios), or does (the
@@ -82,6 +84,8 @@ pub fn run(
         "BAR1" => bar1(host, reader, flavor, out),
         "BL1" => bl1(host, reader, flavor, out),
         "FR1" => fr1(host, reader, flavor, out),
+        "TB1" => tb1(host, reader, flavor, out),
+        "UB1" => ub1(host, reader, flavor, out),
         other => bail!("unknown web text scenario {other}"),
     }
 }
@@ -1454,8 +1458,14 @@ fn fp1(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor, out: &mut RunOut) ->
     let mut f = Ft::open(host, reader, flavor, "fields.html", "M3b Fields", CFG_QUIET)?;
     let mut fails: Vec<String> = Vec::new();
     let path = f.enter_role("combo box", "Combo")?;
-    // Alt+Down opens the popup (the page's own widget).
-    let (_, took) = f.key(DOWN, 0, ALT)?;
+    // Alt+Down opens the popup (the page's own widget). Chromium treats the release of Alt as
+    // a menu-bar gesture and the next key (our Escape) never reaches the page, so there the
+    // page's F4 opens it instead.
+    let (_, took) = if chromium_selected() {
+        f.key(k(62, 0xffc1), 0, 0)?
+    } else {
+        f.key(DOWN, 0, ALT)?
+    };
     if took {
         fails.push("Alt+Down was swallowed".into());
     }
@@ -1633,10 +1643,20 @@ fn bar1(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor, out: &mut RunOut) -
         woken: false,
     };
     // gorca attached to a page that was already open: no load happened, so nothing reads.
+    // Exception (M9 review L-2): Chromium started after the reader (the default order of the
+    // Chromium rig; `GORCA_M9_BROWSER_FIRST=1` is the already-open case) opens its page in its
+    // first seconds: a fresh launch whose first page is the user's, so it must read itself.
+    let fresh_launch = std::env::var("GORCA_M7_BROWSER").is_ok_and(|v| v == "chromium")
+        && !std::env::var("GORCA_M9_BROWSER_FIRST").is_ok_and(|v| v == "1");
     f.w.prime(&doc)?;
     sleep(2500);
     let quiet: Vec<(u64, String)> = f.heard(0);
-    if quiet.iter().any(|(_, t)| paragraph_no(t).is_some()) {
+    let read_itself = quiet.iter().any(|(_, t)| paragraph_no(t).is_some());
+    if fresh_launch && !read_itself {
+        fails.push(format!(
+            "the first page of a freshly launched browser was not read: {quiet:?}"
+        ));
+    } else if !fresh_launch && read_itself {
         fails.push(format!(
             "a page that was already open read itself: {quiet:?}"
         ));
@@ -1822,5 +1842,184 @@ fn step(
         ));
     }
     sleep(150);
+    Ok(())
+}
+
+/// TB1: three tabs; Ctrl+Tab and Ctrl+Shift+Tab. Every switch must say the new page's title.
+fn tb1(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor, out: &mut RunOut) -> Result<()> {
+    let dir = super::web::pages_dir(host);
+    let urls: Vec<String> = ["tab-a.html", "tab-b.html", "tab-c.html"]
+        .iter()
+        .map(|n| file_url(&dir.join(n)))
+        .collect::<Result<_>>()?;
+    // Firefox shows the last URL it was given.
+    let (w, doc) = Web::start_cfg(host, reader, flavor, &urls, "Tab Gamma", CFG_QUIET)?;
+    let mut f = Ft {
+        w,
+        doc: doc.clone(),
+        woken: false,
+    };
+    f.w.prime(&doc)?;
+    sleep(1500);
+    // Alt+1 selects the first tab, so the walk starts from a known place.
+    f.w.ff.keys(&[56, 2]);
+    sleep(1500);
+    let tab = k(15, 0xff09);
+    let steps: [(u32, &str); 5] = [
+        (CONTROL, "Tab Beta"),
+        (CONTROL, "Tab Gamma"),
+        (CONTROL | SHIFT, "Tab Beta"),
+        (CONTROL | SHIFT, "Tab Alpha"),
+        (CONTROL | SHIFT, "Tab Gamma"),
+    ];
+    let mut fails: Vec<String> = Vec::new();
+    for (state, want) in steps {
+        let mark = f.w.mark();
+        let ev0 = f.w.tap.len();
+        let t0 = super::mono::now_ns();
+        let (_, took) = f.key(tab, 0, state)?;
+        out.notes
+            .push(format!("TB1 Tab state {state:#x} took={took}"));
+        sleep(2500);
+        let heard = f.heard(mark);
+        out.notes.push(format!("TB1 -> {want}: heard {heard:?}"));
+        out.notes
+            .push(format!("TB1 events {:?}", f.w.tap.since(ev0)));
+        match heard.iter().find(|(_, t)| t.contains(want)) {
+            Some((t, _)) => out.x("tb1_ms", ms(t.saturating_sub(t0)), "ms"),
+            None => fails.push(format!("{want}: not announced; heard {heard:?}")),
+        }
+    }
+    out.x("tb_failures", fails.len() as f64, "failures");
+    for x in &fails {
+        out.notes.push(format!("TB1 FAIL {x}"));
+    }
+    Ok(())
+}
+
+/// A child process of ours, killed (by its own pid) when the scenario ends.
+struct KillOnDrop(std::process::Child);
+
+impl Drop for KillOnDrop {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+/// UB1: the address bar. Ctrl+L, typing a prefix of an open page's title and URL, then the
+/// suggestions with Down. Records what is spoken per step (information; `ub_failures` counts the
+/// steps that said nothing at all).
+fn ub1(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor, out: &mut RunOut) -> Result<()> {
+    let dir = super::web::pages_dir(host);
+    // The pages come from a loopback origin, so the address bar has an origin to complete
+    // inline ("12" -> "127.0.0.1:PORT/"): `file://` history is never autofilled.
+    let port = {
+        let l = std::net::TcpListener::bind("127.0.0.1:0")?;
+        l.local_addr()?.port()
+    };
+    let _server = KillOnDrop(
+        std::process::Command::new(super::apps::PYTHON)
+            .args([
+                "-m",
+                "http.server",
+                &port.to_string(),
+                "--bind",
+                "127.0.0.1",
+            ])
+            .arg("--directory")
+            .arg(&dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()?,
+    );
+    sleep(700);
+    let urls: Vec<String> = ["tab-a.html", "tab-b.html", "tab-c.html"]
+        .iter()
+        .map(|n| format!("http://127.0.0.1:{port}/{n}"))
+        .collect();
+    let (w, doc) = Web::start_cfg(host, reader, flavor, &urls, "Tab Gamma", CFG_QUIET)?;
+    let mut f = Ft {
+        w,
+        doc: doc.clone(),
+        woken: false,
+    };
+    f.w.prime(&doc)?;
+    sleep(2500);
+    // Firefox's first keyboard input moves the focus through a panel once (see `focus_field`).
+    f.w.ff.keys(&[42]);
+    sleep(900);
+    f.w.focus(&doc.path)?;
+    sleep(800);
+    let letter = |c: char| -> K {
+        let (code, sym) = match c {
+            't' => (20u16, 0x74u32),
+            'a' => (30, 0x61),
+            'b' => (48, 0x62),
+            'f' => (33, 0x66),
+            'i' => (23, 0x69),
+            'l' => (38, 0x6c),
+            'e' => (18, 0x65),
+            _ => (57, 0x20),
+        };
+        k(code, sym)
+    };
+    let digit = |c: char| -> K {
+        match c {
+            '2' => k(3, 0x32),
+            '7' => k(8, 0x37),
+            _ => k(2, 0x31),
+        }
+    };
+    let mut steps: Vec<(String, Vec<K>, u32, u32)> = Vec::new();
+    steps.push(("Ctrl+L".into(), vec![letter('l')], CONTROL, 0));
+    for c in ['1', '2', '7'] {
+        steps.push((format!("type {c}"), vec![digit(c)], 0, c as u32));
+    }
+    steps.push(("BackSpace".into(), vec![BACKSPACE], 0, 0));
+    for n in 0..3 {
+        steps.push((format!("Down {n}"), vec![DOWN], 0, 0));
+    }
+    steps.push(("Up".into(), vec![UP], 0, 0));
+    steps.push(("Escape".into(), vec![ESCAPE], 0, 0));
+    let mut silent = 0u32;
+    for (name, keys, state, uni) in steps {
+        let mark = f.w.mark();
+        let ev0 = f.w.tap.len();
+        for key in keys {
+            f.key(key, uni, state)?;
+        }
+        sleep(2200);
+        let heard = f.heard(mark);
+        if let Some(path) = f.w.tap.last_path(super::web::FOCUS) {
+            let bus = f.w.bus.clone();
+            let ask = |f: &mut Ft, cmd: &str| {
+                f.w.ax
+                    .request(
+                        cmd,
+                        &format!("\"bus\":\"{bus}\",\"path\":\"{path}\""),
+                        Duration::from_secs(5),
+                    )
+                    .unwrap_or_default()
+            };
+            let text = ask(&mut f, "text");
+            let sel = ask(&mut f, "selection");
+            out.notes
+                .push(format!("UB1 {name}: focused text {text} selection {sel}"));
+        }
+        out.notes.push(format!("UB1 {name}: heard {heard:?}"));
+        out.notes
+            .push(format!("UB1 {name}: events {:?}", f.w.tap.since(ev0)));
+        // The address bar is the browser's own interface: no web mode word belongs there, and
+        // every step is answered.
+        let said_mode = heard
+            .iter()
+            .any(|(_, t)| t.contains("focus mode") || t.contains("browse mode"));
+        if said_mode || heard.is_empty() {
+            silent += 1;
+            out.notes.push(format!("UB1 FAIL {name}: heard {heard:?}"));
+        }
+    }
+    out.x("ub_failures", f64::from(silent), "steps");
     Ok(())
 }

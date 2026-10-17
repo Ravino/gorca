@@ -26,7 +26,7 @@ pub use doc::{
 };
 pub use event::{
     AppInfo, AppLifecycle, CaretOrigin, ConnectorKind, DocKind, LazyText, NodeEvent, Politeness,
-    RawEvent, RawMsg, TextDelta, WindowKind,
+    RawEvent, RawMsg, TextDelta, WebEngine, WindowKind,
 };
 pub use geometry::{Point, Rect};
 pub use ids::{AppId, ConnectorId, Epoch, LocalId, NodeKey, ReqId, UttId};

@@ -79,11 +79,20 @@ fn kind(k: ext_gnome_shell::SegmentKind) -> SegmentKind {
     }
 }
 
+/// An extension text in the UI language: a message reference of the extension's catalog is
+/// resolved, a literal passes through.
+fn resolve(text: &str) -> String {
+    gorca_i18n::ext::resolve_for(text, gorca_i18n::language(), "ext-gnome-shell").into_owned()
+}
+
 impl AppPolicy for ShellPolicy {
     fn decide(&self, f: &PolicyFacts<'_>) -> PolicyVerdict {
         if self.faults.load(Ordering::Relaxed) >= DISABLE_AFTER {
             return PolicyVerdict::Default;
         }
+        // Application text never reads as a message reference (ADR-0010).
+        let name = f.name.map(gorca_i18n::ext::sanitize);
+        let description = f.description.map(gorca_i18n::ext::sanitize);
         let facts = Facts {
             moment: match f.moment {
                 PolicyMoment::Focus => Moment::Focus,
@@ -93,8 +102,8 @@ impl AppPolicy for ShellPolicy {
             },
             role: ext_role(f.role),
             states: f.states.bits(),
-            name: f.name,
-            description: f.description,
+            name: name.as_deref(),
+            description: description.as_deref(),
             range: f
                 .range
                 .map(|(current, min, max)| Range { current, min, max }),
@@ -102,12 +111,12 @@ impl AppPolicy for ShellPolicy {
         match catch_unwind(AssertUnwindSafe(|| decide(&facts))) {
             Ok(Verdict::Default) => PolicyVerdict::Default,
             Ok(Verdict::Silence) => PolicyVerdict::Silence,
-            Ok(Verdict::Value(v)) => PolicyVerdict::Value(v),
+            Ok(Verdict::Value(v)) => PolicyVerdict::Value(resolve(&v)),
             Ok(Verdict::Notice) => PolicyVerdict::Notice,
             Ok(Verdict::Say(segs)) => PolicyVerdict::Say(
                 segs.into_iter()
                     .map(|s| Segment {
-                        text: s.text.into(),
+                        text: resolve(&s.text).into(),
                         kind: kind(s.kind),
                     })
                     .collect(),
@@ -139,6 +148,7 @@ mod tests {
 
     #[test]
     fn the_shell_window_claim_is_silenced_and_a_unit_slider_speaks_percent() {
+        ext_gnome_shell::register_catalogs();
         let p = ShellPolicy::default();
         assert_eq!(p.decide(&facts(Role::Window, None)), PolicyVerdict::Silence);
         assert_eq!(

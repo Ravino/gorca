@@ -116,10 +116,10 @@ impl NavMove {
     /// What the user hears when the move has nowhere to go (NVDA's wording).
     pub fn empty_text(self) -> &'static str {
         match self {
-            NavMove::Parent => "No containing object",
-            NavMove::FirstChild => "No objects inside",
-            NavMove::Next | NavMove::NextInFlow => "No next",
-            NavMove::Prev | NavMove::PrevInFlow => "No previous",
+            NavMove::Parent => gorca_i18n::t(gorca_i18n::MsgId::NavNoParent),
+            NavMove::FirstChild => gorca_i18n::t(gorca_i18n::MsgId::NavNoChild),
+            NavMove::Next | NavMove::NextInFlow => gorca_i18n::t(gorca_i18n::MsgId::NavNoNext),
+            NavMove::Prev | NavMove::PrevInFlow => gorca_i18n::t(gorca_i18n::MsgId::NavNoPrev),
         }
     }
 }

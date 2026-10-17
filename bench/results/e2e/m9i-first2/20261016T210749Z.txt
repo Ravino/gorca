@@ -1,0 +1,48 @@
+# e2e m9i-first2
+# utc=2026-10-16T21:07:49Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=22.20 18.28 15.57 5/2416 2066209
+# git_rev=6edead7
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx2
+# topology_expected=-
+# label=m9i-first2
+# reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=22.20 18.28 15.57 5/2416 2066206
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info GORCA_TOPOLOGY_REPORT=bench/results/e2e/m9i-first2/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=before entry: ["M7 Article, document", "browse mode, heading level 1, Gorca article"]
+# note1=entry: []
+# note2=Down: "This is the first paragraph of the article. It has a, link, second page link, and some more text after it." (0.44 ms)
+# note3=Right: "h" (0.16 ms)
+# note4=Ctrl+Right: "is" (0.15 ms)
+# note5=H: "heading level 2, Introduction" (0.08 ms)
+# note6=2: "heading level 2, Details" (0.07 ms)
+# note7=H at the last heading: "no next heading" (0.08 ms)
+# note8=Shift+H: "heading level 2, Introduction" (0.09 ms)
+# note9=K: "link, details below" (0.07 ms)
+# note10=Escape: "browse mode, Your name, edit, blank, button, Send" (0.39 ms)
+# note11=Tab onto a link: "second page link, link"
+# note12=after Enter: ["M7 Second, document"]
+# note13=BAR1 FAIL a page that was already open read itself: [(801391365630930, "M7b Long article, document"), (801391406278497, "browse mode"), (801392907396000, "heading level 1, The long article"), (801392916087007, "heading level 2, Part 1"), (801392928106421, "Paragraph 1 starts here."), (801392936114628, "It has a, link, link number 1, and a second sentence."), (801392944083839, "The third sentence ends it."), (801392956100429, "Paragraph 2 starts here."), (801393084146284, "It has a, link, link number 2, and a second sentence."), (801393216147661, "The third sentence ends it."), (801393348152444, "Paragraph 3 starts here."), (801393476128109, "It has a, link, link number 3, and a second sentence."), (801393608214370, "The third sentence ends it."), (801393740107642, "Paragraph 4 starts here."), (801393868092654, "It has a, link, link number 4, and a second sentence."), (801393996120538, "The third sentence ends it."), (801394124113040, "Paragraph 5 starts here."), (801394252096169, "It has a, link, link number 5, and a second sentence."), (801394384153695, "The third sentence ends it."), (801394512142763, "Paragraph 6 starts here."), (801394644150814, "It has a, link, link number 6, and a second sentence."), (801394772114647, "The third sentence ends it."), (801394904136309, "Paragraph 7 starts here."), (801395032100618, "It has a, link, link number 7, and a second sentence."), (801395160102577, "The third sentence ends it."), (801395288107879, "Paragraph 8 starts here."), (801395416142262, "It has a, link, link number 8, and a second sentence."), (801395544104237, "The third sentence ends it."), (801395676211672, "Paragraph 9 starts here.")]
+
+metric                     bus                median          min          max  n op    threshold  res   note
+B0.doc_arrival_ms          daemon/voicego         28.8         28.8         28.8  1                  info   [ms]
+B0.web_failures            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checks]
+BAR1.bar_failures          daemon/voicego            1            1            1  1 <=            0  FAIL  gated on the max over repeats [checks]
+BAR1.bar_start_ms          daemon/voicego        430.8        430.8        430.8  1                  info   [ms]

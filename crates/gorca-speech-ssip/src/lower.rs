@@ -2,7 +2,7 @@
 //! Pure SSIP lowering: command lines, dot-stuffed data blocks, handshake, capabilities.
 
 use gorca_model::Prio;
-use gorca_output_api::{SpeechCaps, SpeechCmd, VoiceParams, VoiceRef};
+use gorca_output_api::{SpeechCaps, SpeechCmd, VoiceParams, VoiceRef, raised_pitch};
 
 /// S-3: the writer queue holds 4 commands.
 pub const WRITER_QUEUE: usize = 4;
@@ -22,6 +22,7 @@ impl SsipTransportCaps {
             index_marks: true,
             audio_progress: false,
             ssml: true,
+            sound_icons: true,
         }
     }
 }
@@ -43,15 +44,6 @@ fn priority_name(p: Prio) -> &'static str {
         Prio::Progress => "progress",
         Prio::Notification => "notification",
     }
-}
-
-/// The pitch to speak with for a `pitch_delta`, or `None` when the voice pitch is left alone.
-pub fn raised_pitch(base: i8, delta: i8) -> Option<i8> {
-    if delta == 0 {
-        return None;
-    }
-    let p = base.saturating_add(delta).clamp(-100, 100);
-    (p != base).then_some(p)
 }
 
 /// Dot-stuff and terminate the body (RFC 821 style, as SSIP does). Newlines are normalised
@@ -96,6 +88,11 @@ pub fn lower(cmd: &SpeechCmd, prio: Prio, base_pitch: i8) -> Vec<SsipOut> {
             }
             if *marks {
                 out.push(SsipOut::Line("SET self SSML_MODE on\r\n".to_owned()));
+            }
+            // The cue is its own queued message ahead of the text: `225` for it is answered by a
+            // `Simple` expectation and its events carry an id nobody tracks.
+            if let Some(cue) = text.cue {
+                out.push(SsipOut::Line(format!("SOUND_ICON {}\r\n", cue.icon_name())));
             }
             let raised = raised_pitch(base_pitch, text.pitch_delta);
             if let Some(p) = raised {
@@ -147,7 +144,7 @@ pub fn handshake(client_name: &str) -> Vec<SsipOut> {
 mod tests {
     use super::*;
     use gorca_model::UttId;
-    use gorca_output_api::{Verbalized, VoiceSetup};
+    use gorca_output_api::{Cue, Verbalized, VoiceSetup};
     use std::sync::Arc;
 
     fn speak(text: &str) -> SpeechCmd {
@@ -157,6 +154,7 @@ mod tests {
                 text: Arc::from(text),
                 lang: None,
                 pitch_delta: 0,
+                cue: None,
             },
             voice: VoiceRef::Default,
             marks: false,
@@ -188,6 +186,7 @@ mod tests {
                 text: Arc::from("A"),
                 lang: None,
                 pitch_delta: 30,
+                cue: None,
             },
             voice: VoiceRef::Default,
             marks: false,
@@ -203,10 +202,79 @@ mod tests {
                 "SET self PITCH 10\r\n"
             ]
         );
-        // At the top of the range there is nothing to raise.
-        assert_eq!(raised_pitch(100, 30), None);
-        assert_eq!(raised_pitch(90, 30), Some(100));
         assert_eq!(raised_pitch(0, 0), None);
+    }
+
+    fn capital(delta: i8, cue: Option<Cue>) -> SpeechCmd {
+        SpeechCmd::Speak {
+            id: UttId(4),
+            text: Verbalized {
+                text: Arc::from("B"),
+                lang: None,
+                pitch_delta: delta,
+                cue,
+            },
+            voice: VoiceRef::Default,
+            marks: false,
+        }
+    }
+
+    #[test]
+    fn a_capital_at_the_top_of_the_pitch_range_goes_below_the_base() {
+        // The user's configured pitch 100 is wire 100: a clamped raise would be no change.
+        let out = lower(&capital(30, None), Prio::Text, 100);
+        assert_eq!(
+            lines(&out),
+            [
+                "SET self PRIORITY text\r\n",
+                "SET self PITCH 70\r\n",
+                "SPEAK\r\n",
+                "B\r\n.\r\n",
+                "SET self PITCH 100\r\n"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_cue_is_a_sound_icon_ahead_of_the_text() {
+        let out = lower(&capital(0, Some(Cue::Capital)), Prio::Text, 0);
+        assert_eq!(
+            lines(&out),
+            [
+                "SET self PRIORITY text\r\n",
+                "SOUND_ICON capital\r\n",
+                "SPEAK\r\n",
+                "B\r\n.\r\n"
+            ]
+        );
+        // With a pitch change too: the icon, then the raised text, then the base again.
+        let out = lower(&capital(30, Some(Cue::Capital)), Prio::Text, 0);
+        assert_eq!(
+            lines(&out),
+            [
+                "SET self PRIORITY text\r\n",
+                "SOUND_ICON capital\r\n",
+                "SET self PITCH 30\r\n",
+                "SPEAK\r\n",
+                "B\r\n.\r\n",
+                "SET self PITCH 0\r\n"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_replacing_capital_restores_the_base_pitch_as_its_last_line() {
+        // The raise and the restore are one lowered unit: whatever the server does with the
+        // STOP, the pitch cannot stay raised.
+        let cmd = SpeechCmd::Replace {
+            stop: UttId(1),
+            then: Box::new(capital(30, None)),
+        };
+        let out = lower(&cmd, Prio::Interrupt, 20);
+        let l = lines(&out);
+        assert_eq!(l.first(), Some(&"STOP self\r\n"));
+        assert_eq!(l.last(), Some(&"SET self PITCH 20\r\n"));
+        assert!(l.contains(&"SET self PITCH 50\r\n"));
     }
 
     #[test]
@@ -235,6 +303,7 @@ mod tests {
                 text: Arc::from("x"),
                 lang: None,
                 pitch_delta: 0,
+                cue: None,
             },
             voice: VoiceRef::Named(Arc::from("male1")),
             marks: true,

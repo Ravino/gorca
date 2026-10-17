@@ -5,17 +5,26 @@
 mod deps;
 mod envrule;
 mod ext;
+mod strings;
 
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
-        Some("deps") => match (deps::run(), envrule::run()) {
-            (Ok(true), Ok(true)) => ExitCode::SUCCESS,
-            (Ok(_), Ok(_)) => ExitCode::FAILURE,
-            (Err(e), _) | (_, Err(e)) => {
+        Some("deps") => match (deps::run(), envrule::run(), strings::run(false)) {
+            (Ok(true), Ok(true), Ok(true)) => ExitCode::SUCCESS,
+            (Ok(_), Ok(_), Ok(_)) => ExitCode::FAILURE,
+            (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => {
                 eprintln!("xtask deps: {e:#}");
+                ExitCode::from(2)
+            }
+        },
+        Some("strings") => match strings::run(args.next().as_deref() == Some("--update")) {
+            Ok(true) => ExitCode::SUCCESS,
+            Ok(false) => ExitCode::FAILURE,
+            Err(e) => {
+                eprintln!("xtask strings: {e:#}");
                 ExitCode::from(2)
             }
         },
@@ -29,12 +38,12 @@ fn main() -> ExitCode {
         },
         Some(other) => {
             eprintln!(
-                "unknown xtask command `{other}`\n\nusage: cargo xtask deps | build-ext [--dest DIR]"
+                "unknown xtask command `{other}`\n\nusage: cargo xtask deps | strings [--update] | build-ext [--dest DIR]"
             );
             ExitCode::from(2)
         }
         None => {
-            eprintln!("usage: cargo xtask deps | build-ext [--dest DIR]");
+            eprintln!("usage: cargo xtask deps | strings [--update] | build-ext [--dest DIR]");
             ExitCode::from(2)
         }
     }

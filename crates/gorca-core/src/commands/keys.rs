@@ -35,13 +35,13 @@ impl Reader {
                 // for a real command chord, never for a modifier or an unbound key.
                 if committed.is_some() && intent.kind == gorca_input_api::PressKind::Press {
                     self.cmd.ambiguous_cues += 1;
-                    self.say("again", fx);
+                    self.say(gorca_i18n::t(gorca_i18n::MsgId::KeyAgain), fx);
                 }
             }
             KeyClass::ModifierPassThrough => {
                 // LM-5: the double tap still reaches the application in learn mode.
                 if matches!(self.mode, Mode::InputHelp { .. }) {
-                    self.say("gorca key passed to application", fx);
+                    self.say(gorca_i18n::t(gorca_i18n::MsgId::KeyGorcaPassed), fx);
                 }
             }
             KeyClass::PassToApp => {
@@ -62,7 +62,7 @@ impl Reader {
                     && (!key_echo_is_action(&text) || self.cmd.effective.echo.command_keys)
                 {
                     let id = self.utt_id();
-                    let said = key_echo_spoken(&text, &self.text.verbalizer, self.verbalize_opts());
+                    let said = key_echo_spoken(&text, &self.text.verbalizer, self.char_opts());
                     let mut u = key_echo(&said, id, intent.epoch);
                     self.mark_capital(&mut u);
                     fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));

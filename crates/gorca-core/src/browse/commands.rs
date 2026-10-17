@@ -3,6 +3,7 @@
 //! sections 7 and 8). Everything on a key's path to speech reads one published `WebDoc` and
 //! sends nothing but fire-and-forget effects afterwards (BI-1, BI-2).
 
+use gorca_i18n::{MsgId as M, t};
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -53,6 +54,9 @@ const CLICK_FOCUS_WINDOW: Duration = Duration::from_millis(800);
 const SELECT_SPEAK_CAP: u32 = 300;
 /// A mode word waits this long for the utterance it belongs to.
 /// A document focus this soon after our own click or Enter is the click's own.
+/// How long the speech of a frame document that took the focus waits for the focus to move on
+/// into the frame before the stop is announced.
+const FRAME_FOCUS_DEFER: Duration = Duration::from_millis(250);
 const REFOCUS_SILENT_WINDOW: Duration = Duration::from_millis(2000);
 const WORD_TTL: Duration = Duration::from_millis(600);
 /// The line that follows a document's focus utterance waits for a cold fetch this long (M4).
@@ -152,308 +156,358 @@ const SELECT: &[(CoreCmd, Move)] = &[
 ];
 
 /// The quick-navigation commands that are implemented: direction, category, spoken name.
-const QUICKNAV: &[(CoreCmd, Dir, Cat, &str)] = &[
+const QUICKNAV: &[(CoreCmd, Dir, Cat, M)] = &[
     (
         CoreCmd::QuicknavNextHeading,
         Dir::Next,
         Cat::HEADING,
-        "heading",
+        M::WebNoNextHeading,
     ),
     (
         CoreCmd::QuicknavPrevHeading,
         Dir::Prev,
         Cat::HEADING,
-        "heading",
+        M::WebNoPrevHeading,
     ),
     (
         CoreCmd::QuicknavNextHeading1,
         Dir::Next,
         Cat::HEADING_1,
-        "heading level 1",
+        M::WebNoNextHeading1,
     ),
     (
         CoreCmd::QuicknavPrevHeading1,
         Dir::Prev,
         Cat::HEADING_1,
-        "heading level 1",
+        M::WebNoPrevHeading1,
     ),
     (
         CoreCmd::QuicknavNextHeading2,
         Dir::Next,
         Cat::HEADING_2,
-        "heading level 2",
+        M::WebNoNextHeading2,
     ),
     (
         CoreCmd::QuicknavPrevHeading2,
         Dir::Prev,
         Cat::HEADING_2,
-        "heading level 2",
+        M::WebNoPrevHeading2,
     ),
     (
         CoreCmd::QuicknavNextHeading3,
         Dir::Next,
         Cat::HEADING_3,
-        "heading level 3",
+        M::WebNoNextHeading3,
     ),
     (
         CoreCmd::QuicknavPrevHeading3,
         Dir::Prev,
         Cat::HEADING_3,
-        "heading level 3",
+        M::WebNoPrevHeading3,
     ),
     (
         CoreCmd::QuicknavNextHeading4,
         Dir::Next,
         Cat::HEADING_4,
-        "heading level 4",
+        M::WebNoNextHeading4,
     ),
     (
         CoreCmd::QuicknavPrevHeading4,
         Dir::Prev,
         Cat::HEADING_4,
-        "heading level 4",
+        M::WebNoPrevHeading4,
     ),
     (
         CoreCmd::QuicknavNextHeading5,
         Dir::Next,
         Cat::HEADING_5,
-        "heading level 5",
+        M::WebNoNextHeading5,
     ),
     (
         CoreCmd::QuicknavPrevHeading5,
         Dir::Prev,
         Cat::HEADING_5,
-        "heading level 5",
+        M::WebNoPrevHeading5,
     ),
     (
         CoreCmd::QuicknavNextHeading6,
         Dir::Next,
         Cat::HEADING_6,
-        "heading level 6",
+        M::WebNoNextHeading6,
     ),
     (
         CoreCmd::QuicknavPrevHeading6,
         Dir::Prev,
         Cat::HEADING_6,
-        "heading level 6",
+        M::WebNoPrevHeading6,
     ),
-    (CoreCmd::QuicknavNextLink, Dir::Next, Cat::LINK, "link"),
-    (CoreCmd::QuicknavPrevLink, Dir::Prev, Cat::LINK, "link"),
+    (
+        CoreCmd::QuicknavNextLink,
+        Dir::Next,
+        Cat::LINK,
+        M::WebNoNextLink,
+    ),
+    (
+        CoreCmd::QuicknavPrevLink,
+        Dir::Prev,
+        Cat::LINK,
+        M::WebNoPrevLink,
+    ),
     (
         CoreCmd::QuicknavNextVisited,
         Dir::Next,
         Cat::LINK_VISITED,
-        "visited link",
+        M::WebNoNextVisitedLink,
     ),
     (
         CoreCmd::QuicknavPrevVisited,
         Dir::Prev,
         Cat::LINK_VISITED,
-        "visited link",
+        M::WebNoPrevVisitedLink,
     ),
     (
         CoreCmd::QuicknavNextUnvisited,
         Dir::Next,
         Cat::LINK_UNVISITED,
-        "unvisited link",
+        M::WebNoNextUnvisitedLink,
     ),
     (
         CoreCmd::QuicknavPrevUnvisited,
         Dir::Prev,
         Cat::LINK_UNVISITED,
-        "unvisited link",
+        M::WebNoPrevUnvisitedLink,
     ),
     (
         CoreCmd::QuicknavNextFormField,
         Dir::Next,
         Cat::FORM_FIELD,
-        "form field",
+        M::WebNoNextFormField,
     ),
     (
         CoreCmd::QuicknavPrevFormField,
         Dir::Prev,
         Cat::FORM_FIELD,
-        "form field",
+        M::WebNoPrevFormField,
     ),
-    (CoreCmd::QuicknavNextList, Dir::Next, Cat::LIST, "list"),
-    (CoreCmd::QuicknavPrevList, Dir::Prev, Cat::LIST, "list"),
+    (
+        CoreCmd::QuicknavNextList,
+        Dir::Next,
+        Cat::LIST,
+        M::WebNoNextList,
+    ),
+    (
+        CoreCmd::QuicknavPrevList,
+        Dir::Prev,
+        Cat::LIST,
+        M::WebNoPrevList,
+    ),
     (
         CoreCmd::QuicknavNextListItem,
         Dir::Next,
         Cat::LIST_ITEM,
-        "list item",
+        M::WebNoNextListItem,
     ),
     (
         CoreCmd::QuicknavPrevListItem,
         Dir::Prev,
         Cat::LIST_ITEM,
-        "list item",
+        M::WebNoPrevListItem,
     ),
     (
         CoreCmd::QuicknavNextButton,
         Dir::Next,
         Cat::BUTTON,
-        "button",
+        M::WebNoNextButton,
     ),
     (
         CoreCmd::QuicknavPrevButton,
         Dir::Prev,
         Cat::BUTTON,
-        "button",
+        M::WebNoPrevButton,
     ),
     (
         CoreCmd::QuicknavNextEdit,
         Dir::Next,
         Cat::EDIT,
-        "edit field",
+        M::WebNoNextEditField,
     ),
     (
         CoreCmd::QuicknavPrevEdit,
         Dir::Prev,
         Cat::EDIT,
-        "edit field",
+        M::WebNoPrevEditField,
     ),
     (
         CoreCmd::QuicknavNextSeparator,
         Dir::Next,
         Cat::SEPARATOR,
-        "separator",
+        M::WebNoNextSeparator,
     ),
     (
         CoreCmd::QuicknavPrevSeparator,
         Dir::Prev,
         Cat::SEPARATOR,
-        "separator",
+        M::WebNoPrevSeparator,
     ),
     (
         CoreCmd::QuicknavNextRadio,
         Dir::Next,
         Cat::RADIO,
-        "radio button",
+        M::WebNoNextRadioButton,
     ),
     (
         CoreCmd::QuicknavPrevRadio,
         Dir::Prev,
         Cat::RADIO,
-        "radio button",
+        M::WebNoPrevRadioButton,
     ),
     (
         CoreCmd::QuicknavNextCombobox,
         Dir::Next,
         Cat::COMBOBOX,
-        "combo box",
+        M::WebNoNextComboBox,
     ),
     (
         CoreCmd::QuicknavPrevCombobox,
         Dir::Prev,
         Cat::COMBOBOX,
-        "combo box",
+        M::WebNoPrevComboBox,
     ),
     (
         CoreCmd::QuicknavNextCheckbox,
         Dir::Next,
         Cat::CHECKBOX,
-        "check box",
+        M::WebNoNextCheckBox,
     ),
     (
         CoreCmd::QuicknavPrevCheckbox,
         Dir::Prev,
         Cat::CHECKBOX,
-        "check box",
+        M::WebNoPrevCheckBox,
     ),
     (
         CoreCmd::QuicknavNextGraphic,
         Dir::Next,
         Cat::GRAPHIC,
-        "graphic",
+        M::WebNoNextGraphic,
     ),
     (
         CoreCmd::QuicknavPrevGraphic,
         Dir::Prev,
         Cat::GRAPHIC,
-        "graphic",
+        M::WebNoPrevGraphic,
     ),
     (
         CoreCmd::QuicknavNextBlockquote,
         Dir::Next,
         Cat::BLOCKQUOTE,
-        "block quote",
+        M::WebNoNextBlockQuote,
     ),
     (
         CoreCmd::QuicknavPrevBlockquote,
         Dir::Prev,
         Cat::BLOCKQUOTE,
-        "block quote",
+        M::WebNoPrevBlockQuote,
     ),
     (
         CoreCmd::QuicknavNextLandmark,
         Dir::Next,
         Cat::ANY_LANDMARK,
-        "landmark",
+        M::WebNoNextLandmark,
     ),
     (
         CoreCmd::QuicknavPrevLandmark,
         Dir::Prev,
         Cat::ANY_LANDMARK,
-        "landmark",
+        M::WebNoPrevLandmark,
     ),
     (
         CoreCmd::QuicknavNextEmbedded,
         Dir::Next,
         Cat::EMBEDDED_OR_DIALOG,
-        "embedded object",
+        M::WebNoNextEmbeddedObject,
     ),
     (
         CoreCmd::QuicknavPrevEmbedded,
         Dir::Prev,
         Cat::EMBEDDED_OR_DIALOG,
-        "embedded object",
+        M::WebNoPrevEmbeddedObject,
     ),
-    (CoreCmd::QuicknavNextTable, Dir::Next, Cat::TABLE, "table"),
-    (CoreCmd::QuicknavPrevTable, Dir::Prev, Cat::TABLE, "table"),
+    (
+        CoreCmd::QuicknavNextTable,
+        Dir::Next,
+        Cat::TABLE,
+        M::WebNoNextTable,
+    ),
+    (
+        CoreCmd::QuicknavPrevTable,
+        Dir::Prev,
+        Cat::TABLE,
+        M::WebNoPrevTable,
+    ),
     (
         CoreCmd::QuicknavNextAnnotation,
         Dir::Next,
         Cat::ANNOTATION,
-        "annotation",
+        M::WebNoNextAnnotation,
     ),
     (
         CoreCmd::QuicknavPrevAnnotation,
         Dir::Prev,
         Cat::ANNOTATION,
-        "annotation",
+        M::WebNoPrevAnnotation,
     ),
-    (CoreCmd::QuicknavNextError, Dir::Next, Cat::ERROR, "error"),
-    (CoreCmd::QuicknavPrevError, Dir::Prev, Cat::ERROR, "error"),
+    (
+        CoreCmd::QuicknavNextError,
+        Dir::Next,
+        Cat::ERROR,
+        M::WebNoNextError,
+    ),
+    (
+        CoreCmd::QuicknavPrevError,
+        Dir::Prev,
+        Cat::ERROR,
+        M::WebNoPrevError,
+    ),
     (
         CoreCmd::QuicknavNextParagraph,
         Dir::Next,
         Cat::TEXT_BLOCK,
-        "paragraph",
+        M::WebNoNextParagraph,
     ),
     (
         CoreCmd::QuicknavPrevParagraph,
         Dir::Prev,
         Cat::TEXT_BLOCK,
-        "paragraph",
+        M::WebNoPrevParagraph,
     ),
-    (CoreCmd::QuicknavNextFrame, Dir::Next, Cat::FRAME, "frame"),
-    (CoreCmd::QuicknavPrevFrame, Dir::Prev, Cat::FRAME, "frame"),
+    (
+        CoreCmd::QuicknavNextFrame,
+        Dir::Next,
+        Cat::FRAME,
+        M::WebNoNextFrame,
+    ),
+    (
+        CoreCmd::QuicknavPrevFrame,
+        Dir::Prev,
+        Cat::FRAME,
+        M::WebNoPrevFrame,
+    ),
     (
         CoreCmd::QuicknavNextArticle,
         Dir::Next,
         Cat::ARTICLE,
-        "article",
+        M::WebNoNextArticle,
     ),
     (
         CoreCmd::QuicknavPrevArticle,
         Dir::Prev,
         Cat::ARTICLE,
-        "article",
+        M::WebNoPrevArticle,
     ),
 ];
 
-fn quicknav(c: CoreCmd) -> Option<(Dir, Cat, &'static str)> {
+fn quicknav(c: CoreCmd) -> Option<(Dir, Cat, M)> {
     QUICKNAV
         .iter()
         .find(|(cmd, ..)| *cmd == c)
@@ -864,6 +918,23 @@ impl Reader {
         }
     }
 
+    /// Put the cursor on the first line of the page (the line an entry speaks).
+    fn web_place_first_line(&mut self, doc: DocId) {
+        let Some(b) = self.web.as_mut() else { return };
+        let Some(h) = b.docs.get(doc) else { return };
+        let max_line = b.settings.max_line;
+        let placed = h.read.with(|d| match cursor::first_line(d, max_line) {
+            Mv::Landed { off, .. } => cursor::cursor_at(d, off).map(|c| (c, off)),
+            Mv::Edge(_) => None,
+        });
+        if let Some((cur, off)) = placed {
+            b.last_off = off;
+            if let WebMode::Browse { cur: c, .. } = &mut b.mode {
+                *c = cur;
+            }
+        }
+    }
+
     // ---- focus ----------------------------------------------------------------------------
 
     /// Keep `popup_open` true to the field in focus mode, and the grab set with it: Escape is
@@ -927,6 +998,20 @@ impl Reader {
             {
                 b.suppress_focus = Some(node);
             }
+            // A nested document taking the focus on its way to its content (Chromium focuses the
+            // frame's document before the link inside it): the page is browsed, not announced
+            // frame by frame.
+            if matches!(b.mode, WebMode::Browse { .. })
+                && h.read.with(|d| {
+                    d.node(id)
+                        .is_some_and(|v| v.cats.intersects(gorca_doc::web::Cat::FRAME))
+                })
+            {
+                b.suppress_focus = Some(node);
+                let due = self.now + FRAME_FOCUS_DEFER;
+                b.frame_focus = Some((node, due));
+                fx.push(ReaderEffect::ArmTimer(due));
+            }
             let passes = forms::passes_through(role, states, Reason::Focus);
             let application = forms::is_application(role);
             let last_before = match b.mode {
@@ -937,6 +1022,15 @@ impl Reader {
                 | WebMode::Browse { .. }
                 | WebMode::Focus { .. } => None,
             };
+            // The focus moved into another document than the one we were in (a tab switch, a
+            // window switch, or a return from the browser chrome to a different page) and lands
+            // on something inside it: the page's title leads, as when the document itself is
+            // focused. A document that is still loading announces itself on adoption.
+            let switched = self.web.as_ref().is_some_and(|b| {
+                b.active != Some(doc)
+                    && b.suppress_focus != Some(node)
+                    && !matches!(b.mode, WebMode::Loading { .. })
+            });
             self.web_activate(doc, fx);
             self.web_apply(
                 WebEv::FocusIn {
@@ -971,6 +1065,9 @@ impl Reader {
             }
             self.web_dialog_lead(doc, id, last_before);
             self.web_listbox_lead(doc, id, last_before);
+            if switched {
+                self.web_document_lead(doc, id);
+            }
             self.web_refresh_popup(fx);
             // The cursor jumped with the focus: Tab availability changed with it (R-5), and no
             // scroll timer is armed to notice.
@@ -980,6 +1077,17 @@ impl Reader {
         // IR-3: the join missed. Browse keys must never be grabbed while focus may be in a
         // field we have not mirrored, so this is `Loading` (grabs off) until it is resolved.
         if b.web_apps.contains(&node.app) {
+            // The browser's own interface (address bar, its suggestion list, tab strip, menus):
+            // the whole ancestor chain is known and holds no document, so the focus is not in
+            // web content and must neither wait for a document nor say a mode word.
+            if self.outside_every_document(node) {
+                if let Some(b) = self.web.as_mut() {
+                    b.focus_node = None;
+                }
+                self.web_apply(WebEv::FocusAway, fx, false);
+                return;
+            }
+            let Some(b) = self.web.as_mut() else { return };
             b.counters.join_misses += 1;
             let (editable, known) = match self.dir.lookup(node) {
                 Lookup::Hit(snap) => (
@@ -1007,6 +1115,26 @@ impl Reader {
             }
             self.web_apply(WebEv::FocusAway, fx, false);
         }
+    }
+
+    /// True when every ancestor of `node` up to the top is in the directory and none is a
+    /// document: the node is in an application's own interface, not in web content. Any gap in
+    /// the chain gives false (unknown), so a cold web node keeps the Loading path.
+    fn outside_every_document(&self, node: NodeKey) -> bool {
+        let mut cur = node;
+        for _ in 0..32 {
+            let Some(sn) = self.dir.lookup(cur).hit() else {
+                return false;
+            };
+            if matches!(sn.role, Role::DocumentWeb | Role::Document) {
+                return false;
+            }
+            match sn.parent {
+                Some(p) => cur = p,
+                None => return sn.role == Role::Application,
+            }
+        }
+        false
     }
 
     /// M8b: the snapshot of a web node with what only the document mirror knows (the attribute
@@ -1204,6 +1332,30 @@ impl Reader {
         }
     }
 
+    /// Focus moved into another document (a tab or window switch) onto a node inside it: the
+    /// page title leads the focus speech. Focus on the document itself speaks its own name.
+    fn web_document_lead(&mut self, doc: DocId, id: DocNodeId) -> bool {
+        let Some(b) = self.web.as_mut() else {
+            return false;
+        };
+        let Some(h) = b.docs.get(doc) else {
+            return false;
+        };
+        let title = h.read.with(|d| {
+            if d.root() == Some(id) || is_document(d, id) {
+                return None;
+            }
+            title_of(d)
+        });
+        let Some(title) = title else {
+            return false;
+        };
+        let mut lead = vec![Item::Lead(title)];
+        lead.extend(b.pending_tail.take().map(|(t, _)| t).unwrap_or_default());
+        b.pending_tail = Some((lead, self.now));
+        true
+    }
+
     /// Focus entered a dialog (its name and role lead the focus speech, once): the dialog around
     /// `id` does not hold the cursor's previous place.
     fn web_dialog_lead(&mut self, doc: DocId, id: DocNodeId, before: Option<DocNodeId>) -> bool {
@@ -1242,7 +1394,7 @@ impl Reader {
                     if let Some(name) = v.name.filter(|n| !n.is_empty()) {
                         out.push(Item::Lead(name.to_owned()));
                     }
-                    out.push(Item::Lead("dialog".to_owned()));
+                    out.push(Item::Lead(t(M::RoleDialog).to_owned()));
                     return Some((n, out));
                 }
                 cur = d.parent(n);
@@ -1299,7 +1451,7 @@ impl Reader {
                     if let Some(name) = v.name.filter(|n| !n.is_empty()) {
                         out.push(Item::Lead(name.to_owned()));
                     }
-                    out.push(Item::Lead("list box".to_owned()));
+                    out.push(Item::Lead(t(M::WebListBox).to_owned()));
                     return Some(out);
                 }
                 cur = d.parent(n);
@@ -1436,7 +1588,7 @@ impl Reader {
             DocNotice::FocusFailed { doc } => {
                 // The grabbed Tab asked for a focus the page refused: say so (R-6).
                 if self.web.as_ref().is_some_and(|b| b.mode.doc() == Some(doc)) {
-                    self.say("can't move focus there", fx);
+                    self.say(t(M::WebCantMoveFocus), fx);
                 }
             }
             DocNotice::Gone { doc } => {
@@ -1475,6 +1627,9 @@ impl Reader {
                     let (role, states) = h.read.with(|d| role_states(d, id));
                     (id, forms::passes_through(role, states, Reason::Focus))
                 });
+                // A document the focus was not in before (the first visit of a tab): the page
+                // title leads when the focus sits inside it rather than on its root.
+                let switched = b.active != Some(doc);
                 self.web_activate(doc, fx);
                 self.web_apply(
                     WebEv::FirstUseful {
@@ -1489,8 +1644,31 @@ impl Reader {
                 let at_root = focus_node.is_some_and(|(n, _)| n == root);
                 let at_top = focus_node.is_none();
                 self.web_place(doc, focus_node.map_or(root, |(n, _)| n));
-                let spoke = self.web_speak_entry(doc, at_top || at_root, at_top, fx);
                 if at_top || at_root {
+                    // The first line is about to be spoken: the cursor sits on it, so that Down
+                    // reads the line after it (Chromium announces the page by itself when its
+                    // window activates, with no focus event of ours to place the cursor).
+                    self.web_place_first_line(doc);
+                }
+                // The focus utterance went out before the page was known, without its title:
+                // say the mode word, the title and the focus again in one piece, worded as the
+                // focus presenter words it (it replaces the first, short utterance).
+                let titled = match focus_node {
+                    Some((n, _)) if switched && n != root => self.web.as_ref().and_then(|b| {
+                        b.docs.get(doc)?.read.with(|d| {
+                            Some((title_of(d)?, present::describe_node(d, n)))
+                        })
+                    }),
+                    Some(_) | None => None,
+                };
+                let spoke = match titled {
+                    Some((title, items)) => {
+                        self.web_speak_cold_focus(focus, title, &items, fx);
+                        true
+                    }
+                    None => self.web_speak_entry(doc, at_top || at_root, at_top, fx),
+                };
+                if (at_top || at_root) && !self.dir.is_settling(app, self.now) {
                     self.web_auto_read(doc, spoke, fx);
                 }
             }
@@ -1509,8 +1687,11 @@ impl Reader {
                         true,
                     );
                     self.web_place(doc, root);
+                    self.web_place_first_line(doc);
                     let spoke = self.web_speak_entry(doc, true, true, fx);
-                    self.web_auto_read(doc, spoke, fx);
+                    if !self.dir.is_settling(app, self.now) {
+                        self.web_auto_read(doc, spoke, fx);
+                    }
                 }
             }
             WebMode::Browse { .. } | WebMode::Focus { .. } => {}
@@ -1553,6 +1734,43 @@ impl Reader {
         let spoke = !items.is_empty() || self.web_has_word();
         self.web_speak(&items, fx);
         spoke
+    }
+
+    /// The first visit of a tab: the focus presented before the page was mirrored is spoken
+    /// again with the mode word and the page title in front, in the focus presenter's wording
+    /// (`items`, the mirror's wording, only when that presentation is gone).
+    fn web_speak_cold_focus(
+        &mut self,
+        focus: NodeKey,
+        title: String,
+        items: &[Item],
+        fx: &mut ReaderEffects,
+    ) {
+        let presented = self.presented.clone().filter(|p| p.node == focus);
+        let Some(p) = presented else {
+            let mut all = vec![Item::Lead(title)];
+            all.extend(items.iter().cloned());
+            self.web_speak(&all, fx);
+            return;
+        };
+        let word = self.web_take_word();
+        let id = self.utt_id();
+        let mut u = self
+            .presenters
+            .present(crate::PresentContext::Focus, &p.snap, id, self.epoch.current());
+        u.prio = Prio::Interrupt;
+        u.may_refine = true;
+        let front = word.into_iter().map(Arc::<str>::from).chain([Arc::from(title)]);
+        for (at, text) in front.enumerate() {
+            u.segments.insert(
+                at,
+                Segment {
+                    text,
+                    kind: SegmentKind::Text,
+                },
+            );
+        }
+        fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
     }
 
     /// Is a mode word waiting for the next utterance?
@@ -1660,6 +1878,7 @@ impl Reader {
         let Some(h) = b.docs.get(doc) else { return };
         let (role, states) = h.read.with(|d| role_states(d, id));
         let passes = forms::passes_through(role, states, Reason::Focus);
+        let switched = b.active != Some(doc);
         self.web_activate(doc, fx);
         self.web_apply(
             WebEv::FocusIn {
@@ -1676,7 +1895,9 @@ impl Reader {
         }
         let dialog = self.web_dialog_lead(doc, id, None);
         let listbox = self.web_listbox_lead(doc, id, None);
-        if !inline && (dialog || listbox) {
+        // A tab whose document exists but whose focused node joined late: its title leads too.
+        let titled = switched && self.web_document_lead(doc, id);
+        if !inline && (dialog || listbox || titled) {
             // The focus was already spoken without its lead: say the lead now; whatever else
             // waits for the next utterance (the first line of a document) stays.
             let tail = self.web_take_tail();
@@ -1693,7 +1914,38 @@ impl Reader {
     }
 
     /// Timers: a document that is slow to mirror, and the debounced scroll (LP-6).
+    /// The deadline of a swallowed frame-document focus (`Browse::frame_focus`): when the frame
+    /// document is still what was presented last and nothing newer happened (no focus moved
+    /// into the frame, no key), the Tab stop is announced like any other focus.
+    fn web_frame_focus_timer(&mut self, now: Instant, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_mut() else { return };
+        let Some((node, due)) = b.frame_focus else {
+            return;
+        };
+        if now < due {
+            fx.push(ReaderEffect::ArmTimer(due));
+            return;
+        }
+        b.frame_focus = None;
+        if b.suppress_focus == Some(node) {
+            b.suppress_focus = None;
+        }
+        let Some(p) = self.presented.clone() else {
+            return;
+        };
+        if p.node != node || p.epoch != self.epoch.current() {
+            return;
+        }
+        let id = self.utt_id();
+        let u = self
+            .presenters
+            .present(crate::PresentContext::Focus, &p.snap, id, p.epoch);
+        self.log_presentation(&u, &p.snap, crate::PresentSource::MissReply, None);
+        fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+    }
+
     pub(crate) fn web_timer(&mut self, now: Instant, fx: &mut ReaderEffects) {
+        self.web_frame_focus_timer(now, fx);
         self.web_auto_read_timer(fx);
         let Some(b) = self.web.as_mut() else { return };
         let mut sync_tabs = false;
@@ -1857,7 +2109,7 @@ impl Reader {
             WebMode::Browse { doc, cur, .. } => Some((doc, cur, b.settings.max_line)),
             WebMode::Loading { .. } => {
                 b.counters.still_loading += 1;
-                self.say("loading", fx);
+                self.say(t(M::WebLoading), fx);
                 None
             }
             WebMode::Focus { .. } | WebMode::Inactive => None,
@@ -1872,7 +2124,7 @@ impl Reader {
         fx: &mut ReaderEffects,
     ) {
         if self.web.is_none() {
-            self.say("browse mode is not available", fx);
+            self.say(t(M::WebBrowseUnavailable), fx);
             return;
         }
         if let Some(b) = self.web.as_mut() {
@@ -1911,8 +2163,8 @@ impl Reader {
                 Dir::Prev
             };
             self.web_not_link_block(dir, now, fx);
-        } else if let Some((dir, cat, name)) = quicknav(c) {
-            self.web_quicknav(dir, cat, name, now, fx);
+        } else if let Some((dir, cat, none)) = quicknav(c) {
+            self.web_quicknav(dir, cat, none, now, fx);
         } else if let Some((_, mv)) = CURSOR.iter().find(|(cmd, _)| *cmd == c) {
             self.web_cursor_cmd(*mv, false, now, fx);
         } else if let Some((_, mv)) = SELECT.iter().find(|(cmd, _)| *cmd == c) {
@@ -1928,7 +2180,7 @@ impl Reader {
             WebMode::Browse { doc, cur, .. } => (doc, Some(cur.node)),
             WebMode::Focus { doc, .. } => (doc, None),
             WebMode::Inactive | WebMode::Loading { .. } => {
-                self.say("not in a web page", fx);
+                self.say(t(M::WebNotInPage), fx);
                 return;
             }
         };
@@ -2072,7 +2324,7 @@ impl Reader {
                         return Outcome::Nothing;
                     };
                     let items = match kind {
-                        Kind::Char if blank => vec![Item::Text("blank".to_owned())],
+                        Kind::Char if blank => vec![Item::Text(t(M::WebBlank).to_owned())],
                         Kind::Char => single_char(d, &speak, Some(off0)),
                         Kind::Word => trim_items(present::describe_from(
                             d,
@@ -2115,14 +2367,18 @@ impl Reader {
                     }
                     let text = span.split_whitespace().collect::<Vec<_>>().join(" ");
                     let text = if text.is_empty() {
-                        "blank".to_owned()
+                        t(M::WebBlank).to_owned()
                     } else {
                         text
                     };
                     self.web_speak(
                         &[
                             Item::Text(text),
-                            Item::State(if growing { "selected" } else { "unselected" }),
+                            Item::State(if growing {
+                                t(M::StateSelected)
+                            } else {
+                                t(M::WebUnselected)
+                            }),
                         ],
                         fx,
                     );
@@ -2137,8 +2393,8 @@ impl Reader {
                     b.counters.edges += 1;
                 }
                 let w = match e {
-                    Edge::Top => "top",
-                    Edge::Bottom => "bottom",
+                    Edge::Top => t(M::WebTop),
+                    Edge::Bottom => t(M::WebBottom),
                 };
                 self.say(w, fx);
             }
@@ -2167,7 +2423,13 @@ impl Reader {
         if let Some(b) = self.web.as_mut() {
             b.sel = Some((0, last));
         }
-        self.web_speak(&[Item::Text("all".to_owned()), Item::State("selected")], fx);
+        self.web_speak(
+            &[
+                Item::Text(t(M::WebAll).to_owned()),
+                Item::State(t(M::StateSelected)),
+            ],
+            fx,
+        );
         self.web_native_selection(doc, 0, last, fx);
         fx.push(ReaderEffect::ArmTimer(now + SCROLL_DEBOUNCE));
     }
@@ -2316,8 +2578,8 @@ impl Reader {
             }));
         } else {
             let w = match dir {
-                Dir::Next => "no next focusable element",
-                Dir::Prev => "no previous focusable element",
+                Dir::Next => t(M::WebNoNextFocusable),
+                Dir::Prev => t(M::WebNoPrevFocusable),
             };
             self.say(w, fx);
         }
@@ -2326,7 +2588,7 @@ impl Reader {
     /// gorca+Shift+F10: the page's own selection follows the virtual one, or stops following.
     fn web_native_selection_toggle(&mut self, fx: &mut ReaderEffects) {
         if self.web.as_ref().is_none_or(|b| b.mode.doc().is_none()) {
-            self.say("native selection is only available on web pages", fx);
+            self.say(t(M::WebNativeSelectionWebOnly), fx);
             return;
         }
         let Some(b) = self.web.as_mut() else { return };
@@ -2346,9 +2608,9 @@ impl Reader {
         }
         self.say(
             if on {
-                "native selection on"
+                t(M::WebNativeSelectionOn)
             } else {
-                "native selection off"
+                t(M::WebNativeSelectionOff)
             },
             fx,
         );
@@ -2364,9 +2626,9 @@ impl Reader {
         }
         self.say(
             if on {
-                "single letter navigation on"
+                t(M::WebSingleLetterOn)
             } else {
-                "single letter navigation off"
+                t(M::WebSingleLetterOff)
             },
             fx,
         );
@@ -2418,8 +2680,8 @@ impl Reader {
                 self.web_speak(&items, fx);
                 fx.push(ReaderEffect::ArmTimer(now + SCROLL_DEBOUNCE));
             }
-            Out::NoContainer => self.say("Not in a container", fx),
-            Out::Bottom => self.say("bottom", fx),
+            Out::NoContainer => self.say(t(M::WebNoContainer), fx),
+            Out::Bottom => self.say(t(M::WebBottom), fx),
         }
     }
 
@@ -2468,18 +2730,11 @@ impl Reader {
             self.web_speak(&items, fx);
             fx.push(ReaderEffect::ArmTimer(now + SCROLL_DEBOUNCE));
         } else {
-            self.say("no more text after a block of links", fx);
+            self.say(t(M::WebNoMoreTextAfterLinks), fx);
         }
     }
 
-    fn web_quicknav(
-        &mut self,
-        dir: Dir,
-        cat: Cat,
-        name: &'static str,
-        now: Instant,
-        fx: &mut ReaderEffects,
-    ) {
+    fn web_quicknav(&mut self, dir: Dir, cat: Cat, none: M, now: Instant, fx: &mut ReaderEffects) {
         let Some((doc, cur, _)) = self.browse_ctx(fx) else {
             return;
         };
@@ -2506,11 +2761,7 @@ impl Reader {
             self.web_speak(&items, fx);
             fx.push(ReaderEffect::ArmTimer(now + SCROLL_DEBOUNCE));
         } else {
-            let w = match dir {
-                Dir::Next => "next",
-                Dir::Prev => "previous",
-            };
-            self.say(&format!("no {w} {name}"), fx);
+            self.say(t(none), fx);
         }
     }
 }

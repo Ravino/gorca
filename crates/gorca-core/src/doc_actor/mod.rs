@@ -553,6 +553,9 @@ async fn run(
     // Retire: no key may outlive its document.
     a.retire();
     directory.remove(doc);
+    // A task the source detached (the frame wake) holds a clone of this token: abort_all does
+    // not reach it, so the document's end cancels it.
+    src_shutdown.cancel();
     src_task.abort_all();
     actions.abort_all();
     // `Gone` must arrive: wait for room (bounded), after the notices queued before it.

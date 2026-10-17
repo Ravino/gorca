@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Key echo and plain messages.
 
+use gorca_i18n::MsgId as M;
 use gorca_input_api::Modifiers;
 use gorca_model::{Epoch, Prio, SegmentKind, UttId, Utterance};
 use smallvec::SmallVec;
 
 use super::utterance::seg;
+
+/// The internal echo text of the space key (an id, not spoken: `key_echo_spoken` names it).
+const ECHO_SPACE: &str = "space";
 
 /// Modifiers that turn a key press into a command or shortcut. Orca never echoes a key pressed
 /// together with Alt or Control (`typing_echo_presenter.should_echo_keyboard_event`); Super is
@@ -28,7 +32,7 @@ pub fn key_echo_text(unichar: u32, keysym: u32, modifiers: Modifiers) -> Option<
         0xff09 | 0xfe20 => Some("tab"),
         0xff1b => Some("escape"),
         0xffff => Some("delete"),
-        0x20 => Some("space"),
+        0x20 => Some(ECHO_SPACE),
         _ => None,
     };
     if let Some(n) = named {
@@ -56,7 +60,7 @@ pub fn key_echo_text(unichar: u32, keysym: u32, modifiers: Modifiers) -> Option<
 /// rather than the character it types (a letter, a digit, a symbol, "space")? Names are command
 /// keys: they are spoken only when `echo.command_keys` is on.
 pub fn key_echo_is_action(text: &str) -> bool {
-    text != "space" && text.chars().nth(1).is_some()
+    text != ECHO_SPACE && text.chars().nth(1).is_some()
 }
 
 /// What a key echo text is said as: a typed character or "space" is named like a character read
@@ -67,27 +71,25 @@ pub fn key_echo_spoken(
     v: &gorca_speech::Verbalizer,
     o: gorca_speech::VerbalizeOpts,
 ) -> String {
-    if text == "space" {
+    if text == ECHO_SPACE {
         return v.unit(" ", gorca_speech::How::Char, &o);
     }
     if !key_echo_is_action(text) {
         return v.unit(text, gorca_speech::How::Char, &o);
     }
-    if o.lang == gorca_speech::Lang::Ru {
-        let ru = match text {
-            "enter" => Some("ввод"),
-            "backspace" => Some("удалить назад"),
-            "tab" => Some("табуляция"),
-            "escape" => Some("выход"),
-            "delete" => Some("удалить"),
-            _ => None,
-        };
-        if let Some(n) = ru {
-            return n.to_owned();
-        }
-        if let Some(n) = text.strip_prefix("f ") {
-            return format!("эф {n}");
-        }
+    let named = match text {
+        "enter" => Some(M::EchoEnter),
+        "backspace" => Some(M::EchoBackspace),
+        "tab" => Some(M::EchoTab),
+        "escape" => Some(M::EchoEscape),
+        "delete" => Some(M::EchoDelete),
+        _ => None,
+    };
+    if let Some(id) = named {
+        return gorca_i18n::t_in(o.lang, id).to_owned();
+    }
+    if let Some(n) = text.strip_prefix("f ") {
+        return gorca_i18n::tf_in(o.lang, M::EchoF, &[("n", n.into())]);
     }
     text.to_owned()
 }

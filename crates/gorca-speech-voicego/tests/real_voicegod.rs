@@ -21,6 +21,7 @@ fn speak(id: u64, text: &str) -> SpeechCmd {
             text: Arc::from(text),
             lang: None,
             pitch_delta: 0,
+            cue: None,
         },
         voice: VoiceRef::Default,
         marks: false,

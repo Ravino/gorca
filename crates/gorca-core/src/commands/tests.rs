@@ -1000,9 +1000,9 @@ fn the_punctuation_cycle_is_confirmed_in_the_speech_language() {
     f.reader.cmd.file.speech.language = "ru".to_owned();
     f.reader.cmd.republish();
     let fx = f.run(CoreCmd::SpeechPunctuationCycle, 1);
-    assert_eq!(spoken(&fx), ["пунктуация вся"]);
+    assert_eq!(spoken(&fx), ["пунктуация: вся"]);
     let fx = f.run(CoreCmd::SpeechPunctuationCycle, 1);
-    assert_eq!(spoken(&fx), ["пунктуация без пунктуации"]);
+    assert_eq!(spoken(&fx), ["пунктуация: нет"]);
     let fx = f.run(CoreCmd::SpeechPunctuationCycle, 1);
-    assert_eq!(spoken(&fx), ["пунктуация немного"]);
+    assert_eq!(spoken(&fx), ["пунктуация: некоторая"]);
 }

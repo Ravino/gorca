@@ -1,0 +1,3 @@
+exit=0 topo=lanes-rt level=typ round=1
+load_before=18.55 17.49 16.53 21/2105 3196923 background_cpu_busy_pct=99 load_after=23.31 18.94 17.06 27/2168 3202319
+mem_available_mb_before=15660 after=14954

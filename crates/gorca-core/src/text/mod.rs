@@ -16,6 +16,7 @@ pub mod formatting;
 pub mod native;
 pub mod say_all;
 
+use gorca_i18n::{MsgId as M, msg, t};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
@@ -146,6 +147,9 @@ pub struct TextCounters {
     pub retargets: u64,
 }
 
+/// How long a caret event that arrived in browse mode stays valid for the focus that follows.
+const EARLY_CARET_WINDOW: std::time::Duration = std::time::Duration::from_millis(1500);
+
 /// The Reader's text state.
 #[derive(Debug)]
 pub struct TextState {
@@ -164,6 +168,10 @@ pub struct TextState {
     format_req: Option<(TextReqId, Epoch)>,
     /// Was the layer active (focus or pass-through mode) after the previous message?
     was_active: bool,
+    /// A new tracking started in the current turn (its window prefetch is current).
+    tracked_this_turn: bool,
+    /// The latest caret event that arrived while the layer was inactive (browse mode).
+    early_caret: Option<(NodeKey, u32, Instant)>,
     /// The terminal arm (M6).
     pub(crate) term: crate::terminal::TermState,
     out: Vec<Out>,
@@ -183,6 +191,8 @@ impl TextState {
             sensitive_utt: None,
             format_req: None,
             was_active: true,
+            tracked_this_turn: false,
+            early_caret: None,
             term: crate::terminal::TermState::default(),
             out: Vec::new(),
         }
@@ -205,10 +215,10 @@ fn punct(p: gorca_config::Punct) -> VPunct {
 }
 
 fn caps(c: gorca_config::Caps) -> VCaps {
-    match c {
-        gorca_config::Caps::Pitch => VCaps::Pitch,
-        gorca_config::Caps::Say => VCaps::Say,
-        gorca_config::Caps::Off => VCaps::Off,
+    VCaps {
+        pitch: c.pitch,
+        sound: c.sound,
+        word: c.word,
     }
 }
 
@@ -238,7 +248,10 @@ fn trackable(snap: &NodeSnapshot) -> Option<Kind> {
     let editable = snap.states.contains(StateSet::EDITABLE);
     let text_role = match snap.role {
         Role::TextEntry | Role::PasswordEntry => true,
-        Role::Document | Role::DocumentWeb | Role::Paragraph | Role::Unknown => editable,
+        // An editable combo box is a text field with a popup (Firefox's address bar is one).
+        Role::Document | Role::DocumentWeb | Role::Paragraph | Role::Unknown | Role::ComboBox => {
+            editable
+        }
         Role::Application
         | Role::Window
         | Role::Dialog
@@ -257,7 +270,6 @@ fn trackable(snap: &NodeSnapshot) -> Option<Kind> {
         | Role::ToggleButton
         | Role::CheckBox
         | Role::RadioButton
-        | Role::ComboBox
         | Role::SpinButton
         | Role::Slider
         | Role::ProgressBar
@@ -459,9 +471,20 @@ impl Reader {
         u
     }
 
+    /// The options for a single character that `mark_capital` will mark: the capital word is
+    /// left out, `mark_capital` puts it before the letter.
+    pub(crate) fn char_opts(&self) -> VerbalizeOpts {
+        let mut o = self.verbalize_opts();
+        o.caps.word = false;
+        o
+    }
+
     /// Verbalise one piece of text speech (VB-4: on the Reader, never on the speech lane).
     pub(crate) fn speak_pieces(&self, pieces: &[caret::Piece]) -> String {
-        let o = self.verbalize_opts();
+        self.speak_pieces_with(pieces, self.verbalize_opts())
+    }
+
+    fn speak_pieces_with(&self, pieces: &[caret::Piece], o: VerbalizeOpts) -> String {
         let mut text = String::new();
         for p in pieces {
             if !text.is_empty() {
@@ -479,15 +502,19 @@ impl Reader {
     }
 
     fn text_utterance(&mut self, s: &Spoken) -> Utterance {
-        let text = self.speak_pieces(&s.pieces);
+        // A single character (typed, a character move, an erasure): a capital gets its
+        // indication.
+        let single_char =
+            matches!(s.pieces.as_slice(), [p] if p.how == Some(How::Char) && p.spell == Spell::No);
+        let text = if single_char {
+            self.speak_pieces_with(&s.pieces, self.char_opts())
+        } else {
+            self.speak_pieces(&s.pieces)
+        };
         let id = self.utt_id();
         let mut u = message(&text, id, s.epoch);
         u.prio = s.prio;
-        // A single character (typed, a character move, an erasure): a capital gets its pitch.
-        if let [p] = s.pieces.as_slice()
-            && p.how == Some(How::Char)
-            && p.spell == Spell::No
-        {
+        if single_char {
             self.mark_capital(&mut u);
         }
         // Typing echo is not kept in the speech history.
@@ -527,13 +554,19 @@ impl Reader {
         }
         self.term_untrack("text object focused");
         match trackable(snap) {
-            Some(kind) => self.text_step(
-                In::Track {
-                    node: snap.key,
-                    kind,
-                },
-                fx,
-            ),
+            Some(kind) => {
+                let was_off = self.text.caret.is_off();
+                self.text_step(
+                    In::Track {
+                        node: snap.key,
+                        kind,
+                    },
+                    fx,
+                );
+                if was_off && !self.text.caret.is_off() {
+                    self.text.tracked_this_turn = true;
+                }
+            }
             None => self.text_untrack("not trackable"),
         }
     }
@@ -541,6 +574,7 @@ impl Reader {
     /// Focus moved on (or the object is gone): forget the window, zeroing it for a secret one.
     pub(crate) fn text_untrack(&mut self, why: &'static str) {
         self.term_untrack(why);
+        self.text.early_caret = None;
         self.text_untrack_caret();
     }
 
@@ -652,8 +686,18 @@ impl Reader {
                 }
                 if self.term_is(node) {
                     self.term_caret(offset, fx);
-                } else if self.text_active() && self.text_accepts(node, Some(offset), fx) {
+                } else if !self.text_active() {
+                    // Chromium places the caret of a contenteditable before the focus (and so
+                    // the switch to focus mode) is handled: keep the event for the moment the
+                    // window of the field is known (`replay_early_caret`).
+                    self.text.early_caret = Some((node, offset, self.now));
+                } else if self.text_accepts(node, Some(offset), fx) {
+                    self.text.early_caret = None;
                     self.text_step(In::Caret { offset }, fx);
+                } else if self.awaiting_hosts(node) {
+                    // The window of the rich editable's root is still on its way (it says
+                    // whether the paragraphs are its own): keep the event for `hosts`.
+                    self.text.early_caret = Some((node, offset, self.now));
                 }
             }
             TextMsg::Edit { node, delta } => {
@@ -684,6 +728,14 @@ impl Reader {
             TextMsg::Fetched { req, epoch, result } => self.on_text_fetched(req, epoch, result, fx),
             TextMsg::Progress(p) => self.say_all_progress(p, fx),
         }
+    }
+
+    /// An editable root is tracked, has not yet learned whether it hosts paragraphs, and
+    /// `node` is another node of the same application.
+    fn awaiting_hosts(&self, node: NodeKey) -> bool {
+        self.text.caret.tracked().is_some_and(|t| {
+            t.kind.editable && !t.hosts && t.node != node && t.root.app == node.app
+        })
     }
 
     /// Does an event of `node` belong to the tracked object? The node itself, yes. In a rich
@@ -804,6 +856,27 @@ impl Reader {
             ) => Err(()),
         };
         self.text_step(In::Fetched { req, result: r }, fx);
+        self.replay_early_caret(fx);
+    }
+
+    /// The caret event of a rich editable that came before its focus (see `on_text`) is
+    /// handled once the fill of the root says it hosts embedded objects: the same as if the
+    /// browser had sent it after the focus.
+    fn replay_early_caret(&mut self, fx: &mut ReaderEffects) {
+        let Some((node, offset, at)) = self.text.early_caret else {
+            return;
+        };
+        if self.now.saturating_duration_since(at) > EARLY_CARET_WINDOW {
+            self.text.early_caret = None;
+            return;
+        }
+        let ready = self.text.caret.tracked().is_some_and(|t| t.hosts);
+        if ready {
+            self.text.early_caret = None;
+            if self.text_active() && self.text_accepts(node, Some(offset), fx) {
+                self.text_step(In::Caret { offset }, fx);
+            }
+        }
     }
 
     pub(crate) fn text_timer(&mut self, fx: &mut ReaderEffects) {
@@ -844,7 +917,7 @@ impl Reader {
             return;
         }
         if self.text.caret.is_off() || !self.text_active() {
-            self.say("not in a text field", fx);
+            self.say(t(M::TextNotInField), fx);
             return;
         }
         self.text_step(In::Say { say, spell, epoch }, fx);
@@ -858,7 +931,7 @@ impl Reader {
         if self.text_active() {
             return true;
         }
-        self.say("not available in this mode", fx);
+        self.say(t(M::TextNotAvailableMode), fx);
         false
     }
 
@@ -868,7 +941,7 @@ impl Reader {
             return;
         }
         let Some(t) = self.text.caret.tracked() else {
-            self.say("not in a text field", fx);
+            self.say(t(M::TextNotInField), fx);
             return;
         };
         let at = t.caret.unwrap_or(0);
@@ -900,22 +973,22 @@ impl Reader {
             Ok(Reply::Format(f)) => {
                 let d = formatting::describe(&f);
                 if d.is_empty() {
-                    "no formatting information".to_owned()
+                    t(M::TextNoFormatting).to_owned()
                 } else {
                     d
                 }
             }
             Ok(Reply::Window(_) | Reply::Unit(_) | Reply::Selections(_) | Reply::Done) => {
-                "no formatting information".to_owned()
+                t(M::TextNoFormatting).to_owned()
             }
-            Err(BackendError::NotSupported) => "formatting not available here".to_owned(),
+            Err(BackendError::NotSupported) => t(M::TextFormattingUnavailable).to_owned(),
             Err(
                 BackendError::Timeout
                 | BackendError::Gone
                 | BackendError::Busy
                 | BackendError::Protocol(_)
                 | BackendError::Unresolved,
-            ) => "no formatting information".to_owned(),
+            ) => t(M::TextNoFormatting).to_owned(),
         };
         let id = self.utt_id();
         let mut u = message(&text, id, epoch);
@@ -928,7 +1001,7 @@ impl Reader {
             return;
         }
         let Some(t) = self.text.caret.tracked() else {
-            self.say("not in a text field", fx);
+            self.say(t(M::TextNotInField), fx);
             return;
         };
         let secret = t.kind.secret;
@@ -936,12 +1009,12 @@ impl Reader {
         let pieces = match sel {
             None => vec![caret::Piece {
                 how: None,
-                text: "no selection".to_owned(),
+                text: gorca_i18n::t(M::TextNoSelection).to_owned(),
                 spell: Spell::No,
             }],
             Some((text, n)) if text.is_empty() => vec![caret::Piece {
                 how: None,
-                text: format!("{n} characters selected"),
+                text: msg!(TextCharsSelected, n = n),
                 spell: Spell::No,
             }],
             Some((text, _)) => vec![caret::Piece {
@@ -972,7 +1045,7 @@ impl Reader {
             return;
         }
         let Some(t) = self.text.caret.tracked() else {
-            self.say("not in a text field", fx);
+            self.say(t(M::TextNotInField), fx);
             return;
         };
         let from = t.caret.unwrap_or(0);
@@ -1189,7 +1262,9 @@ impl Reader {
         if self.text.say_all.stopped_by(self.epoch.current()) {
             self.say_all_finish(false, fx);
         }
-        self.text_mode_changed(fx);
+        let fresh = std::mem::take(&mut self.text.tracked_this_turn);
+        self.text_mode_changed(fresh, fx);
+        self.text.tracked_this_turn = false;
     }
 
     /// The text layer works in focus and pass-through mode only; events that arrive in browse
@@ -1198,7 +1273,11 @@ impl Reader {
     /// field that got the focus while the mode was browse starts being tracked now (M7a: Enter
     /// on a field focuses it and switches to focus mode in the same breath; Insert+Space
     /// switches by hand on a field that already has the focus).
-    fn text_mode_changed(&mut self, fx: &mut ReaderEffects) {
+    ///
+    /// `fresh_track`: the tracking started in this very turn, so its window request is already
+    /// current; dirtying it would discard the reply that carries the structural facts (does the
+    /// root host embedded objects) every later paragraph event depends on.
+    fn text_mode_changed(&mut self, fresh_track: bool, fx: &mut ReaderEffects) {
         let active = self.text_active();
         if active == self.text.was_active {
             return;
@@ -1213,6 +1292,7 @@ impl Reader {
         let snap = self.presented.as_ref().map(|p| Arc::clone(&p.snap));
         match (self.text.caret.is_off(), snap) {
             (true, Some(s)) if s.states.contains(StateSet::FOCUSED) => self.text_track(&s, fx),
+            (false, _) if fresh_track => {}
             (false, _) => self.text_step(In::Dirty, fx),
             (true, _) => {}
         }

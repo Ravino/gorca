@@ -1,0 +1,64 @@
+# e2e ru-single-100000-r1
+# utc=2026-10-17T17:32:27Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=16.73 18.47 17.33 5/2288 3251069
+# git_rev=b0caf12b
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=singlex1
+# topology_expected=-
+# label=ru-single-100000-r1
+# reader=daemon:<repo>/.claude/worktrees/agent-aad69142db3796c20/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=16.73 18.47 17.33 5/2288 3251066
+# reader_env=GORCA_M1=1 GORCA_M4=1 GORCA_M4B=1 GORCA_TOPOLOGY_REPORT=<repo>/.claude/worktrees/agent-aad69142db3796c20/bench/results/resource-usage/full1/raw/single/100000/r1/rep.%p.json GORCA_RTKIT_BUS_ADDRESS=unix:path=/run/dbus/system_bus_socket
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca --topology=single
+# ext_dir=none
+# extensions=none
+# note0=k2_ms: first SPEAK between a command key and the next one (700 spoken for 700 chords)
+# note1=k2_ms: 0 chords without a SPEAK in their window; reader counters: submitted 731, spoken 731, superseded 0, stale 0, inbox 0, received by the server 731
+# note2=raw samples: <repo>/.claude/worktrees/agent-aad69142db3796c20/bench/results/resource-usage/full1/raw/single/100000/r1/RU-100000-3246888.csv
+# note3=RU-100000: reader pid 3246888, steady window 4.5..13.8 s, storm stop 13.8 s, 129 samples
+
+metric                     bus                median          min          max  n op    threshold  res   note
+RU-100000.cpu_pct_1s_windows.n daemon/voicego            9            9            9  1                  info   [samples]
+RU-100000.cpu_pct_1s_windows.p50 daemon/voicego         87.3         87.3         87.3  1                  info   [ms]
+RU-100000.cpu_pct_1s_windows.p95 daemon/voicego        101.0        101.0        101.0  1                  info   [ms]
+RU-100000.cpu_pct_1s_windows.p99 daemon/voicego        101.0        101.0        101.0  1                  info   [ms]
+RU-100000.cpu_pct_1s_windows.p999 daemon/voicego        101.0        101.0        101.0  1                  info   [ms]
+RU-100000.cpu_pct_1s_windows.max daemon/voicego        101.0        101.0        101.0  1                  info   [ms]
+RU-100000.k2_ms.n          daemon/voicego          700          700          700  1                  info   [samples]
+RU-100000.k2_ms.p50        daemon/voicego        0.182        0.182        0.182  1                  info   [ms]
+RU-100000.k2_ms.p95        daemon/voicego        0.316        0.316        0.316  1                  info   [ms]
+RU-100000.k2_ms.p99        daemon/voicego        0.399        0.399        0.399  1                  info   [ms]
+RU-100000.k2_ms.p999       daemon/voicego        0.739        0.739        0.739  1                  info   [ms]
+RU-100000.k2_ms.max        daemon/voicego        0.742        0.742        0.742  1                  info   [ms]
+RU-100000.after_cpu_pct    daemon/voicego        0.356        0.356        0.356  1                  info   [% of one core]
+RU-100000.after_rss_mib    daemon/voicego         15.4         15.4         15.4  1                  info   [MiB]
+RU-100000.idle_cpu_pct     daemon/voicego        0.712        0.712        0.712  1                  info   [% of one core]
+RU-100000.late             daemon/voicego            0            0            0  1                  info   [events]
+RU-100000.lost             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+RU-100000.not_consumed     daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [events]
+RU-100000.peak_pss_mib     daemon/voicego         13.0         13.0         13.0  1                  info   [MiB]
+RU-100000.peak_rss_hwm_mib daemon/voicego         15.4         15.4         15.4  1                  info   [MiB]
+RU-100000.pre_pss_mib      daemon/voicego         12.4         12.4         12.4  1                  info   [MiB]
+RU-100000.pre_rss_mib      daemon/voicego         14.7         14.7         14.7  1                  info   [MiB]
+RU-100000.recovery_cpu_s   daemon/voicego            0            0            0  1                  info   [s (cap 12)]
+RU-100000.steady_cpu_pct   daemon/voicego         89.5         89.5         89.5  1                  info   [% of one core]
+RU-100000.steady_pss_avg_mib daemon/voicego         12.8         12.8         12.8  1                  info   [MiB]
+RU-100000.steady_rss_avg_mib daemon/voicego         15.2         15.2         15.2  1                  info   [MiB]
+RU-100000.storm_achieved_eps daemon/voicego       100000       100000       100000  1                  info   [ev/s]
+RU-100000.storm_max_lag_ms daemon/voicego        1.310        1.310        1.310  1                  info   [ms]
+RU-100000.superseded       daemon/voicego            0            0            0  1                  info   [events]
+RU-100000.threads_max      daemon/voicego           23           23           23  1                  info   [threads]

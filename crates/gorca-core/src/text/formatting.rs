@@ -3,29 +3,30 @@
 //! (ADR-0007 M3b). The connector has already mapped the toolkit's attribute names to
 //! [`TextFormat`]; this is only wording.
 
+use gorca_i18n::{MsgId as M, msg, t};
 use gorca_model::{ScriptPosition, TextFormat};
 
 /// The sixteen HTML colours plus orange, brown and pink: names a listener knows.
-const COLOURS: &[(&str, [u8; 3])] = &[
-    ("black", [0, 0, 0]),
-    ("white", [255, 255, 255]),
-    ("red", [255, 0, 0]),
-    ("green", [0, 128, 0]),
-    ("blue", [0, 0, 255]),
-    ("yellow", [255, 255, 0]),
-    ("cyan", [0, 255, 255]),
-    ("magenta", [255, 0, 255]),
-    ("gray", [128, 128, 128]),
-    ("light gray", [192, 192, 192]),
-    ("dark red", [128, 0, 0]),
-    ("olive", [128, 128, 0]),
-    ("navy", [0, 0, 128]),
-    ("purple", [128, 0, 128]),
-    ("teal", [0, 128, 128]),
-    ("lime", [0, 255, 0]),
-    ("orange", [255, 165, 0]),
-    ("brown", [139, 69, 19]),
-    ("pink", [255, 192, 203]),
+const COLOURS: &[(M, [u8; 3])] = &[
+    (M::ColourBlack, [0, 0, 0]),
+    (M::ColourWhite, [255, 255, 255]),
+    (M::ColourRed, [255, 0, 0]),
+    (M::ColourGreen, [0, 128, 0]),
+    (M::ColourBlue, [0, 0, 255]),
+    (M::ColourYellow, [255, 255, 0]),
+    (M::ColourCyan, [0, 255, 255]),
+    (M::ColourMagenta, [255, 0, 255]),
+    (M::ColourGray, [128, 128, 128]),
+    (M::ColourLightGray, [192, 192, 192]),
+    (M::ColourDarkRed, [128, 0, 0]),
+    (M::ColourOlive, [128, 128, 0]),
+    (M::ColourNavy, [0, 0, 128]),
+    (M::ColourPurple, [128, 0, 128]),
+    (M::ColourTeal, [0, 128, 128]),
+    (M::ColourLime, [0, 255, 0]),
+    (M::ColourOrange, [255, 165, 0]),
+    (M::ColourBrown, [139, 69, 19]),
+    (M::ColourPink, [255, 192, 203]),
 ];
 
 /// The name of the colour nearest to `rgb`.
@@ -39,7 +40,7 @@ pub fn colour_name(rgb: [u8; 3]) -> &'static str {
     COLOURS
         .iter()
         .min_by_key(|(_, c)| dist(c))
-        .map_or("unknown", |(n, _)| *n)
+        .map_or(t(M::ColourUnknown), |(n, _)| t(*n))
 }
 
 /// The words for `f`, most useful first: font, size, emphasis, script, colours, alignment,
@@ -50,36 +51,47 @@ pub fn describe(f: &TextFormat) -> String {
         parts.push(n.to_string());
     }
     if let Some(s) = &f.size {
-        parts.push(format!("{s} point"));
+        parts.push(msg!(FormatPoint, s = s.to_string().as_str()));
     }
     if f.bold {
-        parts.push("bold".to_owned());
+        parts.push(t(M::FormatBold).to_owned());
     }
     if f.italic {
-        parts.push("italic".to_owned());
+        parts.push(t(M::FormatItalic).to_owned());
     }
     if f.underline {
-        parts.push("underline".to_owned());
+        parts.push(t(M::FormatUnderline).to_owned());
     }
     if f.strike {
-        parts.push("strikethrough".to_owned());
+        parts.push(t(M::FormatStrike).to_owned());
     }
     match f.position {
         ScriptPosition::Baseline => {}
-        ScriptPosition::Superscript => parts.push("superscript".to_owned()),
-        ScriptPosition::Subscript => parts.push("subscript".to_owned()),
+        ScriptPosition::Superscript => parts.push(t(M::FormatSuperscript).to_owned()),
+        ScriptPosition::Subscript => parts.push(t(M::FormatSubscript).to_owned()),
     }
     match (f.fg, f.bg) {
-        (Some(fg), Some(bg)) => parts.push(format!("{} on {}", colour_name(fg), colour_name(bg))),
-        (Some(fg), None) => parts.push(format!("{} text", colour_name(fg))),
-        (None, Some(bg)) => parts.push(format!("{} background", colour_name(bg))),
+        (Some(fg), Some(bg)) => parts.push(msg!(
+            FormatColourOn,
+            fg = colour_name(fg),
+            bg = colour_name(bg)
+        )),
+        (Some(fg), None) => parts.push(msg!(FormatTextColour, c = colour_name(fg))),
+        (None, Some(bg)) => parts.push(msg!(FormatBgColour, c = colour_name(bg))),
         (None, None) => {}
     }
     if let Some(a) = &f.align {
-        parts.push(format!("aligned {a}"));
+        let a: &str = match &**a {
+            "left" => t(M::FormatAlignLeft),
+            "right" => t(M::FormatAlignRight),
+            "center" => t(M::FormatAlignCenter),
+            "justify" => t(M::FormatAlignJustify),
+            other => other,
+        };
+        parts.push(msg!(FormatAligned, a = a));
     }
     if let Some(l) = &f.lang {
-        parts.push(format!("language {l}"));
+        parts.push(msg!(FormatLanguage, l = &**l));
     }
     parts.join(", ")
 }

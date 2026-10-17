@@ -42,6 +42,7 @@ pub mod m4b;
 pub mod m6;
 pub mod mock;
 pub mod mono;
+pub mod ru;
 pub mod runner;
 pub mod scenarios;
 pub mod stub;

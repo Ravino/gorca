@@ -15,6 +15,7 @@
 //! of one terminal widget live in connector data (`Toolkit::text_unit`, the `Screen` query that
 //! avoids VTE's unreliable character count).
 
+use gorca_i18n::{MsgId as M, t};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -500,12 +501,60 @@ impl Reader {
         self.term_step(TermInput::Caret(offset), fx);
     }
 
+    /// Count the rows an edit scrolled off the top of the screen, for review's anchor (ADR-0018).
+    fn term_note_scroll(&mut self, delta: &TextDelta) {
+        // Only a delete at the top of the screen can be a scroll: no snapshot (a call into the
+        // extension) for anything else.
+        match delta {
+            TextDelta::Delete { offset: 0, .. } => {}
+            TextDelta::Replaced { .. } => {
+                self.review.scroll.exact = false;
+                return;
+            }
+            TextDelta::Insert { .. } | TextDelta::Delete { .. } => return,
+        }
+        let snap = self
+            .text
+            .term
+            .tracked
+            .as_ref()
+            .map(|t| t.node)
+            .and_then(|n| self.term_snapshot(n));
+        let hint = &mut self.review.scroll;
+        let Some(snap) = snap.filter(|s| hint.serial == s.generation >> 32) else {
+            hint.exact = false;
+            return;
+        };
+        match delta {
+            TextDelta::Delete { offset: 0, len, .. } => {
+                if *len as usize >= snap.text.chars().count() {
+                    // The whole screen went: nothing survives to be counted.
+                    hint.exact = false;
+                } else {
+                    let gone = snap.text.chars().take(*len as usize);
+                    let rows = gone.filter(|c| *c == '\n').count();
+                    hint.rows = hint
+                        .rows
+                        .saturating_add(u32::try_from(rows).unwrap_or(u32::MAX));
+                }
+            }
+            TextDelta::Replaced { .. } => hint.exact = false,
+            TextDelta::Insert { .. } | TextDelta::Delete { .. } => {}
+        }
+    }
+
     pub(crate) fn term_edit(&mut self, delta: TextDelta, fx: &mut ReaderEffects) {
+        if matches!(self.mode, crate::mode::Mode::Review { .. }) {
+            self.term_note_scroll(&delta);
+        } else {
+            self.review.scroll.exact = false;
+        }
         let edit = match delta {
             TextDelta::Insert { offset, len, text } => TermEdit::Insert {
                 offset,
                 len,
-                text: crate::text::decode(text.as_ref()),
+                text: crate::text::decode(text.as_ref())
+                    .map(|t| gorca_i18n::ext::sanitize(&t).into_owned()),
             },
             TextDelta::Delete { offset, len, .. } => TermEdit::Delete { offset, len },
             TextDelta::Replaced { .. } => TermEdit::Replaced,
@@ -516,6 +565,7 @@ impl Reader {
     /// Events were lost upstream: the extension must read the screen again.
     pub(crate) fn term_events_lost(&mut self, fx: &mut ReaderEffects) {
         if self.term_tracked() {
+            self.review.scroll.exact = false;
             self.text.term.reads.events_lost += 1;
             self.term_step(TermInput::Edit(TermEdit::Replaced), fx);
         }
@@ -543,7 +593,8 @@ impl Reader {
                     self.text.term.secret_hold = true;
                 }
                 TermInput::Screen {
-                    text: w.text.to_string(),
+                    // Application text: never a message reference (ADR-0010).
+                    text: gorca_i18n::ext::sanitize(&w.text).into_owned(),
                     caret: w.caret,
                 }
             }
@@ -580,7 +631,7 @@ impl Reader {
         let node = self.text.term.tracked.as_ref().map(|t| t.node);
         let snap = node.and_then(|n| self.term_snapshot(n));
         let (Some(snap), true) = (snap, self.text_active()) else {
-            self.say("not in a text field", fx);
+            self.say(t(M::TextNotInField), fx);
             return;
         };
         let (unit, how) = match say {
@@ -649,6 +700,12 @@ impl Reader {
                     sensitive,
                 } => {
                     if speak && !(silent_typed && unit == Unit::Char && urgency == Urgency::Key) {
+                        let was_ref = gorca_i18n::ext::is_reference(&text);
+                        let text = gorca_i18n::ext::resolve(&text, gorca_i18n::language());
+                        if was_ref && text.is_empty() {
+                            // A reference that resolved to nothing is silent, not "blank".
+                            continue;
+                        }
                         let u = self.term_utterance(&text, unit, urgency, sensitive);
                         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
                     }
@@ -756,7 +813,12 @@ impl Reader {
             Unit::Line => How::Line,
             Unit::Text => How::Text,
         };
-        let said = self.text.verbalizer.unit(text, how, &self.verbalize_opts());
+        let opts = if unit == Unit::Char {
+            self.char_opts()
+        } else {
+            self.verbalize_opts()
+        };
+        let said = self.text.verbalizer.unit(text, how, &opts);
         let id = self.utt_id();
         let (epoch, prio) = match urgency {
             Urgency::Key => (

@@ -102,7 +102,7 @@ impl Replay {
                     sensitive: _,
                 } => self.said.push(Said {
                     at: self.now,
-                    text,
+                    text: ext_vte::english(&text),
                     unit,
                     urgency,
                 }),

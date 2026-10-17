@@ -161,6 +161,10 @@ impl SpeechOut for LaneOut {
     fn control(&self, ctl: SpeechCtl) {
         self.0.control(match ctl {
             SpeechCtl::SetParams(l) => SpeechControl::SetParams(voice_params(l)),
+            SpeechCtl::SetCapitals(c) => SpeechControl::SetCapitals(gorca_speech::CapitalFx {
+                pitch_delta: capital_pitch_delta(c.pitch_percent),
+                cue: c.cue,
+            }),
             SpeechCtl::Pause => SpeechControl::Pause,
             SpeechCtl::Resume => SpeechControl::Resume,
             SpeechCtl::Mute(m) => SpeechControl::Mute(m),
@@ -178,6 +182,12 @@ fn voice_params(l: gorca_core::VoiceLevels) -> VoiceParams {
         pitch: centred(l.pitch),
         volume: i8::try_from(i16::from(l.volume) - 100).unwrap_or(0),
     }
+}
+
+/// `speech.caps_pitch_change` is in steps of the 0 to 100 pitch setting (NVDA's
+/// `capPitchChange`); the wire scale has two units per step.
+fn capital_pitch_delta(percent: u8) -> i8 {
+    i8::try_from((u16::from(percent.min(50)) * 2).min(100)).unwrap_or(100)
 }
 
 fn unavailable(name: &'static str) -> Arc<dyn SpeechBackend> {
@@ -234,9 +244,13 @@ fn speech_plan(opts: &Options) -> (Vec<Arc<dyn SpeechBackend>>, FailoverMode) {
 
 fn notice_text(n: FailoverNotice) -> String {
     match n {
-        FailoverNotice::Fallback { from, to } => format!("{from} unavailable, using {to}"),
-        FailoverNotice::Restored { backend } => format!("{backend} restored"),
-        FailoverNotice::Unavailable => "speech service unavailable".to_owned(),
+        FailoverNotice::Fallback { from, to } => {
+            gorca_i18n::msg!(SpeechFallback, from = from, to = to)
+        }
+        FailoverNotice::Restored { backend } => gorca_i18n::msg!(SpeechRestored, backend = backend),
+        FailoverNotice::Unavailable => {
+            gorca_i18n::t(gorca_i18n::MsgId::SpeechUnavailable).to_owned()
+        }
     }
 }
 
@@ -386,6 +400,10 @@ async fn run_inner(
         core = core.with_fill_policy(p);
     }
     // Extensions first: their commands must be known before the settings are compiled.
+    // The first-party extensions' message catalogs: registered up front from the embedded copies.
+    // They are built-in namespaces: the files next to a WASM component never replace them.
+    ext_gnome_shell::register_catalogs();
+    ext_vte::register_catalogs();
     let (mut core, shell_in_host, terminal_in_host) = wire::wire_ext(core, &opts).await;
     // The terminal policy (ADR-0008 amendment 1): the `ext-vte` WASM component when the extension
     // host loaded it, else the native build of the same source behind the core's `TermProvider`.
@@ -547,5 +565,18 @@ mod tests {
             let r = tokio::time::timeout(Duration::from_secs(5), h).await;
             assert!(matches!(r, Ok(Ok(Ok(())))), "{r:?}");
         });
+    }
+}
+
+#[cfg(test)]
+mod capital_tests {
+    use super::capital_pitch_delta;
+
+    #[test]
+    fn the_capital_change_is_two_wire_units_per_pitch_step_and_stays_in_range() {
+        assert_eq!(capital_pitch_delta(0), 0);
+        assert_eq!(capital_pitch_delta(30), 60);
+        assert_eq!(capital_pitch_delta(50), 100);
+        assert_eq!(capital_pitch_delta(100), 100);
     }
 }

@@ -138,23 +138,103 @@ fn a_typed_capital_is_marked_for_pitch_a_lower_case_letter_is_not() {
     assert_eq!(kinds(&fx), [SegmentKind::Capital]);
 }
 
-#[test]
-fn capital_say_mode_speaks_the_word_and_off_does_nothing() {
-    let mut f = fixture();
-    f.reader.cmd.file.speech.caps = gorca_config::Caps::Say;
+fn set_caps(f: &mut Fx, names: &[&str]) {
+    let mut c = gorca_config::Caps::OFF;
+    for n in names {
+        assert!(c.add(n), "{n}");
+    }
+    f.reader.cmd.file.speech.caps = c;
     f.reader.cmd.republish();
-    assert_eq!(spoken(&typed(&mut f, 'B', Modifiers::SHIFT)), ["cap B"]);
+}
+
+#[test]
+fn capital_word_mode_speaks_the_word_and_off_does_nothing() {
+    let mut f = fixture();
+    set_caps(&mut f, &["word"]);
+    // The word alone leaves the kind alone: no pitch, no sound.
+    let fx = typed(&mut f, 'B', Modifiers::SHIFT);
+    assert_eq!(spoken(&fx), ["cap B"]);
+    assert_eq!(kinds(&fx), [SegmentKind::Said]);
     f.reader.cmd.file.speech.language = "ru".to_owned();
     f.reader.cmd.republish();
     assert_eq!(
         spoken(&typed(&mut f, 'B', Modifiers::SHIFT)),
         ["заглавная B"]
     );
-    f.reader.cmd.file.speech.caps = gorca_config::Caps::Off;
-    f.reader.cmd.republish();
+    set_caps(&mut f, &[]);
     let fx = typed(&mut f, 'B', Modifiers::SHIFT);
     assert_eq!(spoken(&fx), ["B"]);
     assert_eq!(kinds(&fx), [SegmentKind::Said]);
+}
+
+#[test]
+fn capital_options_combine_independently() {
+    let mut f = fixture();
+    for (names, text, kind) in [
+        (&["pitch"][..], "B", SegmentKind::Capital),
+        (&["sound"], "B", SegmentKind::Capital),
+        (&["pitch", "sound"], "B", SegmentKind::Capital),
+        (&["word", "sound"], "cap B", SegmentKind::Capital),
+        (&["word", "pitch"], "cap B", SegmentKind::Capital),
+        (&["pitch", "sound", "word"], "cap B", SegmentKind::Capital),
+        (&["word"], "cap B", SegmentKind::Said),
+        (&[], "B", SegmentKind::Said),
+    ] {
+        set_caps(&mut f, names);
+        let fx = typed(&mut f, 'B', Modifiers::SHIFT);
+        assert_eq!(
+            (spoken(&fx), kinds(&fx)),
+            (vec![text.to_owned()], vec![kind]),
+            "{names:?}"
+        );
+    }
+}
+
+#[test]
+fn the_capital_effects_reach_the_speech_lane_when_they_change() {
+    use crate::commands::{CapitalLevels, SpeechCtl};
+    let mut f = fixture();
+    let c = |fx: &ReaderEffects| {
+        ctls(fx)
+            .into_iter()
+            .filter_map(|c| match c {
+                SpeechCtl::SetCapitals(l) => Some(l),
+                SpeechCtl::SetParams(_)
+                | SpeechCtl::Pause
+                | SpeechCtl::Resume
+                | SpeechCtl::Mute(_) => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let mut fx = ReaderEffects::new();
+    f.reader.send_levels(&mut fx);
+    assert!(c(&fx).is_empty(), "defaults are what the lane starts with");
+    set_caps(&mut f, &["sound"]);
+    f.reader.cmd.file.speech.caps_pitch_change = 45;
+    f.reader.cmd.republish();
+    let mut fx = ReaderEffects::new();
+    f.reader.send_levels(&mut fx);
+    assert_eq!(
+        c(&fx),
+        [CapitalLevels {
+            pitch_percent: 0,
+            cue: true
+        }]
+    );
+    set_caps(&mut f, &["pitch", "sound"]);
+    let mut fx = ReaderEffects::new();
+    f.reader.send_levels(&mut fx);
+    assert_eq!(
+        c(&fx),
+        [CapitalLevels {
+            pitch_percent: 45,
+            cue: true
+        }]
+    );
+    // Sent once.
+    let mut fx = ReaderEffects::new();
+    f.reader.send_levels(&mut fx);
+    assert!(c(&fx).is_empty());
 }
 
 /// Speech made outside a key press, as the Reader hands it on: recorded in the history.
@@ -309,6 +389,6 @@ fn battery_is_a_desktop_request_and_the_answer_is_localised() {
     f.reader.cmd.republish();
     assert_eq!(
         ans(&mut f, Some(info), newer),
-        ["82 процентов, разряжается, осталось 3 ч 5 мин"]
+        ["82 процента, разряжается, осталось 3 ч 5 мин"]
     );
 }

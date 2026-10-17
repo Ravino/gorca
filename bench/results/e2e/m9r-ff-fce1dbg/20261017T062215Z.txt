@@ -1,0 +1,57 @@
+# e2e m9r-ff-fce1dbg
+# utc=2026-10-17T06:22:15Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=13.96 19.45 19.49 3/2610 601793
+# git_rev=bd4b400
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx8
+# topology_expected=-
+# label=m9r-ff-fce1dbg
+# reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca
+# backend=voicego
+# repeats=8
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=13.96 19.45 19.49 3/2610 601790
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=info,gorca_text=debug GORCA_TOPOLOGY_REPORT=bench/results/e2e/m9r-ff-fce1dbg/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=FCE1 lost #5: wanted "t", key to next key 160.9 ms, heard []
+# note1=FCE1 lost #6: wanted "w", key to next key 161.6 ms, heard [+286.1ms "w", +292.4ms "o"]
+# note2=FCE1 lost #15: wanted "x", key to next key 160.5 ms, heard [+288.5ms "One 😀 two"]
+# note3=FCE1 event source /org/a11y/atspi/accessible/111: {"ok":true,"role":"paragraph","name":"","event":"reply","id":8}
+# note4=FCE1 event source /org/a11y/atspi/accessible/110: {"ok":true,"role":"paragraph","name":"","event":"reply","id":9}
+# note5=FCE1 stray speech "object" at +101.5 ms after key #0
+# note6=FCE1 stray speech "object" at +101.5 ms after key #1
+# note7=FCE1 stray speech "object" at +101.4 ms after key #2
+# note8=FCE1 stray speech "object" at +101.7 ms after key #3
+# note9=FCE1 lost #0: wanted "n", key to next key 160.5 ms, heard [+101.5ms "object", +262.0ms "object"]
+# note10=FCE1 lost #1: wanted "e", key to next key 160.5 ms, heard [+101.5ms "object", +261.9ms "object"]
+# note11=FCE1 lost #2: wanted "space", key to next key 160.6 ms, heard [+101.4ms "object", +262.4ms "object", +319.5ms "n"]
+# note12=FCE1 lost #3: wanted "😀", key to next key 160.9 ms, heard [+101.7ms "object", +158.8ms "n", +161.2ms "😀", +171.2ms "space"]
+# note13=FCE1 lost #5: wanted "t", key to next key 160.5 ms, heard [+222.8ms "t", +228.6ms "w"]
+# note14=FCE1 event source /org/a11y/atspi/accessible/104: {"ok":true,"role":"paragraph","name":"","event":"reply","id":8}
+# note15=FCE1 event source /org/a11y/atspi/accessible/103: {"ok":true,"role":"paragraph","name":"","event":"reply","id":9}
+
+metric                     bus                median          min          max  n op    threshold  res   note
+FCE1.fce1_ms.n             daemon/voicego           17           15           17  8                  info   [samples]
+FCE1.fce1_ms.p50           daemon/voicego        0.151        0.129        0.186  8                  info   [ms]
+FCE1.fce1_ms.p95           daemon/voicego        0.714        0.563        128.2  8                  info   [ms]
+FCE1.fce1_ms.p99           daemon/voicego        0.978        0.809        269.6  8                  info   [ms]
+FCE1.fce1_ms.p999          daemon/voicego        0.978        0.809        269.6  8                  info   [ms]
+FCE1.fce1_ms.max           daemon/voicego        0.978        0.809        269.6  8                  info   [ms]
+FCE1.fc_double             daemon/voicego            0            0            0  8 <=            0  PASS  gated on the max over repeats [keys]
+FCE1.fc_extra              daemon/voicego            0            0            4  8 <=            0  FAIL  gated on the max over repeats [speeches]
+FCE1.fc_late               daemon/voicego            0            0            3  8 <=            0  FAIL  gated on the max over repeats [speeches]
+FCE1.ft_failures           daemon/voicego            0            0            1  8 <=            0  FAIL  gated on the max over repeats [checks]
+FCE1.lost                  daemon/voicego            0            0            2  8 <=            0  FAIL  gated on the max over repeats [keys]

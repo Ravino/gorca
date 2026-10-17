@@ -5,6 +5,8 @@
 //! means flipping its `available` here, moving its variant out of `planned_cmds!`, and adding
 //! its handler arm in `handlers.rs`.
 
+use gorca_i18n::MsgId as M;
+
 use super::spec::{Availability, CmdSpec, ContextMask, Milestone};
 
 /// Closed set of core commands. Exhaustive `match`, no wildcard (ADR-0001 section 11 rule 6).
@@ -577,7 +579,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: true,
-        help: "stop speech",
+        help: M::CmdSpeechStop,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechPauseToggle,
@@ -587,7 +589,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: false,
         input_help_bypass: false,
-        help: "pause or resume speech",
+        help: M::CmdSpeechPauseToggle,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechModeCycle,
@@ -597,7 +599,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "turn speech on or off",
+        help: M::CmdSpeechModeCycle,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRepeatLast,
@@ -607,7 +609,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "repeat the last spoken text",
+        help: M::CmdSpeechRepeatLast,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRingNext,
@@ -617,7 +619,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "select the next voice setting",
+        help: M::CmdSpeechRingNext,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRingPrev,
@@ -627,7 +629,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "select the previous voice setting",
+        help: M::CmdSpeechRingPrev,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRingInc,
@@ -637,7 +639,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "increase the selected voice setting",
+        help: M::CmdSpeechRingInc,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRingDec,
@@ -647,7 +649,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "decrease the selected voice setting",
+        help: M::CmdSpeechRingDec,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRingIncLarge,
@@ -657,7 +659,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "increase the selected voice setting by a large step",
+        help: M::CmdSpeechRingIncLarge,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRingDecLarge,
@@ -667,7 +669,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "decrease the selected voice setting by a large step",
+        help: M::CmdSpeechRingDecLarge,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRateUp,
@@ -677,7 +679,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "increase speech rate",
+        help: M::CmdSpeechRateUp,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechRateDown,
@@ -687,7 +689,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "decrease speech rate",
+        help: M::CmdSpeechRateDown,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechPitchUp,
@@ -697,7 +699,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "increase speech pitch",
+        help: M::CmdSpeechPitchUp,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechPitchDown,
@@ -707,7 +709,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "decrease speech pitch",
+        help: M::CmdSpeechPitchDown,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechVolumeUp,
@@ -717,7 +719,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "increase speech volume",
+        help: M::CmdSpeechVolumeUp,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechVolumeDown,
@@ -727,7 +729,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "decrease speech volume",
+        help: M::CmdSpeechVolumeDown,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechCopyLast,
@@ -737,7 +739,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "copy the last spoken text",
+        help: M::CmdSpeechCopyLast,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechPunctuationCycle,
@@ -747,7 +749,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "cycle the punctuation level",
+        help: M::CmdSpeechPunctuationCycle,
     },
     CmdSpec {
         cmd: CoreCmd::InfoWhereAmI,
@@ -757,7 +759,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 3,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the focused object and its surroundings; twice for details, three times to spell the name",
+        help: M::CmdInfoWhereAmI,
     },
     CmdSpec {
         cmd: CoreCmd::InfoWindowTitle,
@@ -767,7 +769,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 3,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the window title; twice to spell it",
+        help: M::CmdInfoWindowTitle,
     },
     CmdSpec {
         cmd: CoreCmd::InfoTimeDate,
@@ -777,7 +779,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 2,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the time; twice for the date",
+        help: M::CmdInfoTimeDate,
     },
     CmdSpec {
         cmd: CoreCmd::InfoCurrentLine,
@@ -787,7 +789,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 3,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the current line",
+        help: M::CmdInfoCurrentLine,
     },
     CmdSpec {
         cmd: CoreCmd::InfoSelection,
@@ -797,7 +799,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the selected text",
+        help: M::CmdInfoSelection,
     },
     CmdSpec {
         cmd: CoreCmd::InfoFormatting,
@@ -807,7 +809,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "report text formatting",
+        help: M::CmdInfoFormatting,
     },
     CmdSpec {
         cmd: CoreCmd::InfoStatusBar,
@@ -817,7 +819,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 2,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the status bar",
+        help: M::CmdInfoStatusBar,
     },
     CmdSpec {
         cmd: CoreCmd::InfoReadWindow,
@@ -827,7 +829,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "read the whole window",
+        help: M::CmdInfoReadWindow,
     },
     CmdSpec {
         cmd: CoreCmd::InfoBattery,
@@ -837,7 +839,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the battery state",
+        help: M::CmdInfoBattery,
     },
     CmdSpec {
         cmd: CoreCmd::InfoFocusShortcut,
@@ -847,7 +849,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the shortcut of the focused object",
+        help: M::CmdInfoFocusShortcut,
     },
     CmdSpec {
         cmd: CoreCmd::InfoClipboard,
@@ -857,7 +859,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the clipboard text",
+        help: M::CmdInfoClipboard,
     },
     CmdSpec {
         cmd: CoreCmd::InfoLinkDestination,
@@ -867,7 +869,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the link destination",
+        help: M::CmdInfoLinkDestination,
     },
     CmdSpec {
         cmd: CoreCmd::InfoDetails,
@@ -877,7 +879,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "report details of the object",
+        help: M::CmdInfoDetails,
     },
     CmdSpec {
         cmd: CoreCmd::EchoTypedCharsToggle,
@@ -887,7 +889,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "toggle speaking typed characters",
+        help: M::CmdEchoTypedCharsToggle,
     },
     CmdSpec {
         cmd: CoreCmd::EchoTypedWordsToggle,
@@ -897,7 +899,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "toggle speaking typed words",
+        help: M::CmdEchoTypedWordsToggle,
     },
     CmdSpec {
         cmd: CoreCmd::EchoCommandKeysToggle,
@@ -907,7 +909,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "toggle speaking command keys",
+        help: M::CmdEchoCommandKeysToggle,
     },
     CmdSpec {
         cmd: CoreCmd::VerbosityCycle,
@@ -917,7 +919,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "cycle the verbosity level",
+        help: M::CmdVerbosityCycle,
     },
     CmdSpec {
         cmd: CoreCmd::InputLearnModeToggle,
@@ -927,7 +929,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: true,
-        help: "turn learn mode on or off",
+        help: M::CmdInputLearnModeToggle,
     },
     CmdSpec {
         cmd: CoreCmd::InputPassNextKey,
@@ -937,7 +939,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "send the next key to the application",
+        help: M::CmdInputPassNextKey,
     },
     CmdSpec {
         cmd: CoreCmd::InputSleepToggle,
@@ -947,7 +949,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "turn sleep mode on or off for this application",
+        help: M::CmdInputSleepToggle,
     },
     CmdSpec {
         cmd: CoreCmd::SettingsReload,
@@ -957,7 +959,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "reload the settings file and discard unsaved changes",
+        help: M::CmdSettingsReload,
     },
     CmdSpec {
         cmd: CoreCmd::SettingsSave,
@@ -967,7 +969,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "save the current settings",
+        help: M::CmdSettingsSave,
     },
     CmdSpec {
         cmd: CoreCmd::SettingsReportProblems,
@@ -977,7 +979,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "report problems found in the settings file",
+        help: M::CmdSettingsReportProblems,
     },
     CmdSpec {
         cmd: CoreCmd::DebugNodeInfo,
@@ -987,7 +989,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "report debug information about the focused object",
+        help: M::CmdDebugNodeInfo,
     },
     CmdSpec {
         cmd: CoreCmd::DebugAppInfo,
@@ -997,7 +999,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "report debug information about the application",
+        help: M::CmdDebugAppInfo,
     },
     CmdSpec {
         cmd: CoreCmd::GorcaQuit,
@@ -1007,7 +1009,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 2,
         interrupts: true,
         input_help_bypass: false,
-        help: "quit the screen reader",
+        help: M::CmdGorcaQuit,
     },
     CmdSpec {
         cmd: CoreCmd::TextSayAll,
@@ -1017,7 +1019,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "read from here to the end",
+        help: M::CmdTextSayAll,
     },
     CmdSpec {
         cmd: CoreCmd::TextSayChar,
@@ -1027,7 +1029,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the current character",
+        help: M::CmdTextSayChar,
     },
     CmdSpec {
         cmd: CoreCmd::TextSayWord,
@@ -1037,7 +1039,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the current word",
+        help: M::CmdTextSayWord,
     },
     CmdSpec {
         cmd: CoreCmd::TextSayLine,
@@ -1047,7 +1049,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the current line",
+        help: M::CmdTextSayLine,
     },
     CmdSpec {
         cmd: CoreCmd::TextSpellChar,
@@ -1057,7 +1059,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "spell the current character",
+        help: M::CmdTextSpellChar,
     },
     CmdSpec {
         cmd: CoreCmd::TextSpellWord,
@@ -1067,7 +1069,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "spell the current word",
+        help: M::CmdTextSpellWord,
     },
     CmdSpec {
         cmd: CoreCmd::TextSpellLine,
@@ -1077,7 +1079,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "spell the current line",
+        help: M::CmdTextSpellLine,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewPrevLine,
@@ -1087,7 +1089,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor to the previous line",
+        help: M::CmdReviewPrevLine,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewCurLine,
@@ -1097,7 +1099,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 3,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the review line",
+        help: M::CmdReviewCurLine,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewNextLine,
@@ -1107,7 +1109,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor to the next line",
+        help: M::CmdReviewNextLine,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewPrevWord,
@@ -1117,7 +1119,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor to the previous word",
+        help: M::CmdReviewPrevWord,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewCurWord,
@@ -1127,7 +1129,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 3,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the review word",
+        help: M::CmdReviewCurWord,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewNextWord,
@@ -1137,7 +1139,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor to the next word",
+        help: M::CmdReviewNextWord,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewPrevChar,
@@ -1147,7 +1149,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor to the previous character",
+        help: M::CmdReviewPrevChar,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewCurChar,
@@ -1157,7 +1159,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 3,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the review character",
+        help: M::CmdReviewCurChar,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewNextChar,
@@ -1167,7 +1169,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor to the next character",
+        help: M::CmdReviewNextChar,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewTop,
@@ -1177,7 +1179,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor to the top",
+        help: M::CmdReviewTop,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewBottom,
@@ -1187,7 +1189,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor to the bottom",
+        help: M::CmdReviewBottom,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewStartOfLine,
@@ -1197,7 +1199,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor to the start of the line",
+        help: M::CmdReviewStartOfLine,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewEndOfLine,
@@ -1207,7 +1209,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor to the end of the line",
+        help: M::CmdReviewEndOfLine,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewPrevPage,
@@ -1217,7 +1219,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor up a page",
+        help: M::CmdReviewPrevPage,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewNextPage,
@@ -1227,7 +1229,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor down a page",
+        help: M::CmdReviewNextPage,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewSayAll,
@@ -1237,7 +1239,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "read from the review cursor",
+        help: M::CmdReviewSayAll,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewModeNext,
@@ -1247,7 +1249,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "switch to the next review mode",
+        help: M::CmdReviewModeNext,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewModePrev,
@@ -1257,7 +1259,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "switch to the previous review mode",
+        help: M::CmdReviewModePrev,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewToFocus,
@@ -1267,7 +1269,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor to the focus",
+        help: M::CmdReviewToFocus,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewMoveFocus,
@@ -1277,7 +1279,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the focus to the review cursor",
+        help: M::CmdReviewMoveFocus,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewActivate,
@@ -1287,7 +1289,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "activate the object under the review cursor",
+        help: M::CmdReviewActivate,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewStartOfSelection,
@@ -1297,7 +1299,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor to the start of the selection",
+        help: M::CmdReviewStartOfSelection,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewEndOfSelection,
@@ -1307,7 +1309,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor to the end of the selection",
+        help: M::CmdReviewEndOfSelection,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewCopyMark,
@@ -1317,7 +1319,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "mark the review start for copying",
+        help: M::CmdReviewCopyMark,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewCopy,
@@ -1327,7 +1329,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "copy from the mark to the review cursor",
+        help: M::CmdReviewCopy,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewToggle,
@@ -1337,7 +1339,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "turn review mode on or off",
+        help: M::CmdReviewToggle,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewCaretFollowsToggle,
@@ -1347,7 +1349,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "toggle the caret following the review cursor",
+        help: M::CmdReviewCaretFollowsToggle,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewFocusFollowsToggle,
@@ -1357,7 +1359,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "toggle the review cursor following the focus",
+        help: M::CmdReviewFocusFollowsToggle,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewSimpleToggle,
@@ -1367,7 +1369,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "toggle simple review, which skips layout-only objects",
+        help: M::CmdReviewSimpleToggle,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewAbove,
@@ -1377,7 +1379,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor to the zone above",
+        help: M::CmdReviewAbove,
     },
     CmdSpec {
         cmd: CoreCmd::ReviewBelow,
@@ -1387,7 +1389,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the review cursor to the zone below",
+        help: M::CmdReviewBelow,
     },
     CmdSpec {
         cmd: CoreCmd::ObjectCurrent,
@@ -1397,7 +1399,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 2,
         interrupts: true,
         input_help_bypass: false,
-        help: "report the current object",
+        help: M::CmdObjectCurrent,
     },
     CmdSpec {
         cmd: CoreCmd::ObjectParent,
@@ -1407,7 +1409,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the parent object",
+        help: M::CmdObjectParent,
     },
     CmdSpec {
         cmd: CoreCmd::ObjectFirstChild,
@@ -1417,7 +1419,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the first child object",
+        help: M::CmdObjectFirstChild,
     },
     CmdSpec {
         cmd: CoreCmd::ObjectNext,
@@ -1427,7 +1429,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next object",
+        help: M::CmdObjectNext,
     },
     CmdSpec {
         cmd: CoreCmd::ObjectPrev,
@@ -1437,7 +1439,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous object",
+        help: M::CmdObjectPrev,
     },
     CmdSpec {
         cmd: CoreCmd::ObjectNextInFlow,
@@ -1447,7 +1449,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next object in reading order",
+        help: M::CmdObjectNextInFlow,
     },
     CmdSpec {
         cmd: CoreCmd::ObjectPrevInFlow,
@@ -1457,7 +1459,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous object in reading order",
+        help: M::CmdObjectPrevInFlow,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseToggle,
@@ -1467,7 +1469,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "toggle between browse mode and focus mode",
+        help: M::CmdBrowseToggle,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSingleLetterToggle,
@@ -1477,7 +1479,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "toggle single letter navigation",
+        help: M::CmdBrowseSingleLetterToggle,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseElementsList,
@@ -1487,7 +1489,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "list elements of the document",
+        help: M::CmdBrowseElementsList,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseFind,
@@ -1497,7 +1499,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "find text in the document",
+        help: M::CmdBrowseFind,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseFindNext,
@@ -1507,7 +1509,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "find the next match",
+        help: M::CmdBrowseFindNext,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseFindPrev,
@@ -1517,7 +1519,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "find the previous match",
+        help: M::CmdBrowseFindPrev,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseRefresh,
@@ -1527,7 +1529,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "refresh the document",
+        help: M::CmdBrowseRefresh,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseLiveRegionsToggle,
@@ -1537,7 +1539,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "toggle live region announcements",
+        help: M::CmdBrowseLiveRegionsToggle,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseActivate,
@@ -1547,7 +1549,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "activate the object",
+        help: M::CmdBrowseActivate,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseContainerStart,
@@ -1557,7 +1559,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the start of the container",
+        help: M::CmdBrowseContainerStart,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseContainerEnd,
@@ -1567,7 +1569,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the end of the container",
+        help: M::CmdBrowseContainerEnd,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseEscape,
@@ -1577,7 +1579,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "return from focus mode to browse mode",
+        help: M::CmdBrowseEscape,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorNextLine,
@@ -1587,7 +1589,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the virtual cursor to the next line",
+        help: M::CmdBrowseCursorNextLine,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorPrevLine,
@@ -1597,7 +1599,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the virtual cursor to the previous line",
+        help: M::CmdBrowseCursorPrevLine,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorNextChar,
@@ -1607,7 +1609,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the virtual cursor to the next character",
+        help: M::CmdBrowseCursorNextChar,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorPrevChar,
@@ -1617,7 +1619,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the virtual cursor to the previous character",
+        help: M::CmdBrowseCursorPrevChar,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorNextWord,
@@ -1627,7 +1629,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the virtual cursor to the next word",
+        help: M::CmdBrowseCursorNextWord,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorPrevWord,
@@ -1637,7 +1639,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the virtual cursor to the previous word",
+        help: M::CmdBrowseCursorPrevWord,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorLineStart,
@@ -1647,7 +1649,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the virtual cursor to the start of the line",
+        help: M::CmdBrowseCursorLineStart,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorLineEnd,
@@ -1657,7 +1659,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the virtual cursor to the end of the line",
+        help: M::CmdBrowseCursorLineEnd,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorTop,
@@ -1667,7 +1669,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the virtual cursor to the top of the document",
+        help: M::CmdBrowseCursorTop,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorBottom,
@@ -1677,7 +1679,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the virtual cursor to the bottom of the document",
+        help: M::CmdBrowseCursorBottom,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorPageUp,
@@ -1687,7 +1689,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the virtual cursor up one page",
+        help: M::CmdBrowseCursorPageUp,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorPageDown,
@@ -1697,7 +1699,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move the virtual cursor down one page",
+        help: M::CmdBrowseCursorPageDown,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading,
@@ -1707,7 +1709,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next heading",
+        help: M::CmdQuicknavNextHeading,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading,
@@ -1717,7 +1719,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous heading",
+        help: M::CmdQuicknavPrevHeading,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading1,
@@ -1727,7 +1729,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next heading1",
+        help: M::CmdQuicknavNextHeading1,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading1,
@@ -1737,7 +1739,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous heading1",
+        help: M::CmdQuicknavPrevHeading1,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading2,
@@ -1747,7 +1749,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next heading2",
+        help: M::CmdQuicknavNextHeading2,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading2,
@@ -1757,7 +1759,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous heading2",
+        help: M::CmdQuicknavPrevHeading2,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading3,
@@ -1767,7 +1769,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next heading3",
+        help: M::CmdQuicknavNextHeading3,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading3,
@@ -1777,7 +1779,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous heading3",
+        help: M::CmdQuicknavPrevHeading3,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading4,
@@ -1787,7 +1789,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next heading4",
+        help: M::CmdQuicknavNextHeading4,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading4,
@@ -1797,7 +1799,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous heading4",
+        help: M::CmdQuicknavPrevHeading4,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading5,
@@ -1807,7 +1809,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next heading5",
+        help: M::CmdQuicknavNextHeading5,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading5,
@@ -1817,7 +1819,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous heading5",
+        help: M::CmdQuicknavPrevHeading5,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading6,
@@ -1827,7 +1829,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next heading6",
+        help: M::CmdQuicknavNextHeading6,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading6,
@@ -1837,7 +1839,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous heading6",
+        help: M::CmdQuicknavPrevHeading6,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading7,
@@ -1847,7 +1849,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next heading7",
+        help: M::CmdQuicknavNextHeading7,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading7,
@@ -1857,7 +1859,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous heading7",
+        help: M::CmdQuicknavPrevHeading7,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading8,
@@ -1867,7 +1869,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next heading8",
+        help: M::CmdQuicknavNextHeading8,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading8,
@@ -1877,7 +1879,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous heading8",
+        help: M::CmdQuicknavPrevHeading8,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextHeading9,
@@ -1887,7 +1889,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next heading9",
+        help: M::CmdQuicknavNextHeading9,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevHeading9,
@@ -1897,7 +1899,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous heading9",
+        help: M::CmdQuicknavPrevHeading9,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextLink,
@@ -1907,7 +1909,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next link",
+        help: M::CmdQuicknavNextLink,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevLink,
@@ -1917,7 +1919,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous link",
+        help: M::CmdQuicknavPrevLink,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextVisited,
@@ -1927,7 +1929,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next visited",
+        help: M::CmdQuicknavNextVisited,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevVisited,
@@ -1937,7 +1939,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous visited",
+        help: M::CmdQuicknavPrevVisited,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextUnvisited,
@@ -1947,7 +1949,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next unvisited",
+        help: M::CmdQuicknavNextUnvisited,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevUnvisited,
@@ -1957,7 +1959,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous unvisited",
+        help: M::CmdQuicknavPrevUnvisited,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextFormField,
@@ -1967,7 +1969,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next form field",
+        help: M::CmdQuicknavNextFormField,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevFormField,
@@ -1977,7 +1979,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous form field",
+        help: M::CmdQuicknavPrevFormField,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextList,
@@ -1987,7 +1989,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next list",
+        help: M::CmdQuicknavNextList,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevList,
@@ -1997,7 +1999,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous list",
+        help: M::CmdQuicknavPrevList,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextListItem,
@@ -2007,7 +2009,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next list item",
+        help: M::CmdQuicknavNextListItem,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevListItem,
@@ -2017,7 +2019,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous list item",
+        help: M::CmdQuicknavPrevListItem,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextButton,
@@ -2027,7 +2029,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next button",
+        help: M::CmdQuicknavNextButton,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevButton,
@@ -2037,7 +2039,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous button",
+        help: M::CmdQuicknavPrevButton,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextEdit,
@@ -2047,7 +2049,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next edit",
+        help: M::CmdQuicknavNextEdit,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevEdit,
@@ -2057,7 +2059,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous edit",
+        help: M::CmdQuicknavPrevEdit,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextFrame,
@@ -2067,7 +2069,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next frame",
+        help: M::CmdQuicknavNextFrame,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevFrame,
@@ -2077,7 +2079,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous frame",
+        help: M::CmdQuicknavPrevFrame,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextSeparator,
@@ -2087,7 +2089,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next separator",
+        help: M::CmdQuicknavNextSeparator,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevSeparator,
@@ -2097,7 +2099,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous separator",
+        help: M::CmdQuicknavPrevSeparator,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextRadio,
@@ -2107,7 +2109,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next radio",
+        help: M::CmdQuicknavNextRadio,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevRadio,
@@ -2117,7 +2119,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous radio",
+        help: M::CmdQuicknavPrevRadio,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextCombobox,
@@ -2127,7 +2129,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next combobox",
+        help: M::CmdQuicknavNextCombobox,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevCombobox,
@@ -2137,7 +2139,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous combobox",
+        help: M::CmdQuicknavPrevCombobox,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextCheckbox,
@@ -2147,7 +2149,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next checkbox",
+        help: M::CmdQuicknavNextCheckbox,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevCheckbox,
@@ -2157,7 +2159,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous checkbox",
+        help: M::CmdQuicknavPrevCheckbox,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextGraphic,
@@ -2167,7 +2169,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next graphic",
+        help: M::CmdQuicknavNextGraphic,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevGraphic,
@@ -2177,7 +2179,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous graphic",
+        help: M::CmdQuicknavPrevGraphic,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextBlockquote,
@@ -2187,7 +2189,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next blockquote",
+        help: M::CmdQuicknavNextBlockquote,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevBlockquote,
@@ -2197,7 +2199,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous blockquote",
+        help: M::CmdQuicknavPrevBlockquote,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextNotLinkBlock,
@@ -2207,7 +2209,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next not link block",
+        help: M::CmdQuicknavNextNotLinkBlock,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevNotLinkBlock,
@@ -2217,7 +2219,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous not link block",
+        help: M::CmdQuicknavPrevNotLinkBlock,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextLandmark,
@@ -2227,7 +2229,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next landmark",
+        help: M::CmdQuicknavNextLandmark,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevLandmark,
@@ -2237,7 +2239,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous landmark",
+        help: M::CmdQuicknavPrevLandmark,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextEmbedded,
@@ -2247,7 +2249,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next embedded",
+        help: M::CmdQuicknavNextEmbedded,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevEmbedded,
@@ -2257,7 +2259,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous embedded",
+        help: M::CmdQuicknavPrevEmbedded,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextAnnotation,
@@ -2267,7 +2269,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next annotation",
+        help: M::CmdQuicknavNextAnnotation,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevAnnotation,
@@ -2277,7 +2279,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous annotation",
+        help: M::CmdQuicknavPrevAnnotation,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextError,
@@ -2287,7 +2289,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next error",
+        help: M::CmdQuicknavNextError,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevError,
@@ -2297,7 +2299,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous error",
+        help: M::CmdQuicknavPrevError,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextParagraph,
@@ -2307,7 +2309,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next paragraph",
+        help: M::CmdQuicknavNextParagraph,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevParagraph,
@@ -2317,7 +2319,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous paragraph",
+        help: M::CmdQuicknavPrevParagraph,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextTable,
@@ -2327,7 +2329,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next table",
+        help: M::CmdQuicknavNextTable,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevTable,
@@ -2337,7 +2339,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous table",
+        help: M::CmdQuicknavPrevTable,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextClickable,
@@ -2347,7 +2349,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next clickable",
+        help: M::CmdQuicknavNextClickable,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevClickable,
@@ -2357,7 +2359,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous clickable",
+        help: M::CmdQuicknavPrevClickable,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextSlider,
@@ -2367,7 +2369,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next slider",
+        help: M::CmdQuicknavNextSlider,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevSlider,
@@ -2377,7 +2379,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous slider",
+        help: M::CmdQuicknavPrevSlider,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextArticle,
@@ -2387,7 +2389,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next article",
+        help: M::CmdQuicknavNextArticle,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevArticle,
@@ -2397,7 +2399,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous article",
+        help: M::CmdQuicknavPrevArticle,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextGrouping,
@@ -2407,7 +2409,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next grouping",
+        help: M::CmdQuicknavNextGrouping,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevGrouping,
@@ -2417,7 +2419,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous grouping",
+        help: M::CmdQuicknavPrevGrouping,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextTab,
@@ -2427,7 +2429,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next tab",
+        help: M::CmdQuicknavNextTab,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevTab,
@@ -2437,7 +2439,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous tab",
+        help: M::CmdQuicknavPrevTab,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextFigure,
@@ -2447,7 +2449,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next figure",
+        help: M::CmdQuicknavNextFigure,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevFigure,
@@ -2457,7 +2459,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous figure",
+        help: M::CmdQuicknavPrevFigure,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextMenuItem,
@@ -2467,7 +2469,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next menu item",
+        help: M::CmdQuicknavNextMenuItem,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevMenuItem,
@@ -2477,7 +2479,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous menu item",
+        help: M::CmdQuicknavPrevMenuItem,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextToggleButton,
@@ -2487,7 +2489,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next toggle button",
+        help: M::CmdQuicknavNextToggleButton,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevToggleButton,
@@ -2497,7 +2499,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous toggle button",
+        help: M::CmdQuicknavPrevToggleButton,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextProgressBar,
@@ -2507,7 +2509,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next progress bar",
+        help: M::CmdQuicknavNextProgressBar,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevProgressBar,
@@ -2517,7 +2519,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous progress bar",
+        help: M::CmdQuicknavPrevProgressBar,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextMath,
@@ -2527,7 +2529,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next math",
+        help: M::CmdQuicknavNextMath,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevMath,
@@ -2537,7 +2539,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous math",
+        help: M::CmdQuicknavPrevMath,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextLiveRegion,
@@ -2547,7 +2549,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next live region",
+        help: M::CmdQuicknavNextLiveRegion,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevLiveRegion,
@@ -2557,7 +2559,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous live region",
+        help: M::CmdQuicknavPrevLiveRegion,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextLastLiveRegion,
@@ -2567,7 +2569,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next last live region",
+        help: M::CmdQuicknavNextLastLiveRegion,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevLastLiveRegion,
@@ -2577,7 +2579,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous last live region",
+        help: M::CmdQuicknavPrevLastLiveRegion,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextSameStyle,
@@ -2587,7 +2589,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next same style",
+        help: M::CmdQuicknavNextSameStyle,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevSameStyle,
@@ -2597,7 +2599,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous same style",
+        help: M::CmdQuicknavPrevSameStyle,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextDifferentStyle,
@@ -2607,7 +2609,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next different style",
+        help: M::CmdQuicknavNextDifferentStyle,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevDifferentStyle,
@@ -2617,7 +2619,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous different style",
+        help: M::CmdQuicknavPrevDifferentStyle,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavNextReference,
@@ -2627,7 +2629,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next reference",
+        help: M::CmdQuicknavNextReference,
     },
     CmdSpec {
         cmd: CoreCmd::QuicknavPrevReference,
@@ -2637,7 +2639,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous reference",
+        help: M::CmdQuicknavPrevReference,
     },
     CmdSpec {
         cmd: CoreCmd::TableNextRow,
@@ -2647,7 +2649,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "table: next row",
+        help: M::CmdTableNextRow,
     },
     CmdSpec {
         cmd: CoreCmd::TablePrevRow,
@@ -2657,7 +2659,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "table: previous row",
+        help: M::CmdTablePrevRow,
     },
     CmdSpec {
         cmd: CoreCmd::TableNextColumn,
@@ -2667,7 +2669,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "table: next column",
+        help: M::CmdTableNextColumn,
     },
     CmdSpec {
         cmd: CoreCmd::TablePrevColumn,
@@ -2677,7 +2679,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "table: previous column",
+        help: M::CmdTablePrevColumn,
     },
     CmdSpec {
         cmd: CoreCmd::TableFirstRow,
@@ -2687,7 +2689,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "table: first row",
+        help: M::CmdTableFirstRow,
     },
     CmdSpec {
         cmd: CoreCmd::TableLastRow,
@@ -2697,7 +2699,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "table: last row",
+        help: M::CmdTableLastRow,
     },
     CmdSpec {
         cmd: CoreCmd::TableFirstColumn,
@@ -2707,7 +2709,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "table: first column",
+        help: M::CmdTableFirstColumn,
     },
     CmdSpec {
         cmd: CoreCmd::TableLastColumn,
@@ -2717,7 +2719,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "table: last column",
+        help: M::CmdTableLastColumn,
     },
     CmdSpec {
         cmd: CoreCmd::TableSayRow,
@@ -2727,7 +2729,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "table: read the row",
+        help: M::CmdTableSayRow,
     },
     CmdSpec {
         cmd: CoreCmd::TableSayColumn,
@@ -2737,7 +2739,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "table: read the column",
+        help: M::CmdTableSayColumn,
     },
     CmdSpec {
         cmd: CoreCmd::TableSayAllRow,
@@ -2747,7 +2749,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "table: read all of the row",
+        help: M::CmdTableSayAllRow,
     },
     CmdSpec {
         cmd: CoreCmd::TableSayAllColumn,
@@ -2757,7 +2759,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "table: read all of the column",
+        help: M::CmdTableSayAllColumn,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectNextChar,
@@ -2767,7 +2769,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "extend the selection by a character",
+        help: M::CmdBrowseSelectNextChar,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectPrevChar,
@@ -2777,7 +2779,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "shrink or extend the selection back by a character",
+        help: M::CmdBrowseSelectPrevChar,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectNextWord,
@@ -2787,7 +2789,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "extend the selection by a word",
+        help: M::CmdBrowseSelectNextWord,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectPrevWord,
@@ -2797,7 +2799,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "extend the selection back by a word",
+        help: M::CmdBrowseSelectPrevWord,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectNextLine,
@@ -2807,7 +2809,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "extend the selection down a line",
+        help: M::CmdBrowseSelectNextLine,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectPrevLine,
@@ -2817,7 +2819,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "extend the selection up a line",
+        help: M::CmdBrowseSelectPrevLine,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectLineStart,
@@ -2827,7 +2829,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "select to the start of the line",
+        help: M::CmdBrowseSelectLineStart,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectLineEnd,
@@ -2837,7 +2839,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "select to the end of the line",
+        help: M::CmdBrowseSelectLineEnd,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectTop,
@@ -2847,7 +2849,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "select to the start of the document",
+        help: M::CmdBrowseSelectTop,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectBottom,
@@ -2857,7 +2859,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "select to the end of the document",
+        help: M::CmdBrowseSelectBottom,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectPageUp,
@@ -2867,7 +2869,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "select up one page",
+        help: M::CmdBrowseSelectPageUp,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectPageDown,
@@ -2877,7 +2879,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "select down one page",
+        help: M::CmdBrowseSelectPageDown,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseSelectAll,
@@ -2887,7 +2889,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "select the whole document",
+        help: M::CmdBrowseSelectAll,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorNextParagraph,
@@ -2897,7 +2899,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next paragraph",
+        help: M::CmdBrowseCursorNextParagraph,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorPrevParagraph,
@@ -2907,7 +2909,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous paragraph",
+        help: M::CmdBrowseCursorPrevParagraph,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorNextSentence,
@@ -2917,7 +2919,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the next sentence",
+        help: M::CmdBrowseCursorNextSentence,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseCursorPrevSentence,
@@ -2927,7 +2929,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "move to the previous sentence",
+        help: M::CmdBrowseCursorPrevSentence,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseTabNext,
@@ -2937,7 +2939,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "focus the next focusable element after the browse cursor",
+        help: M::CmdBrowseTabNext,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseTabPrev,
@@ -2947,7 +2949,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "focus the previous focusable element before the browse cursor",
+        help: M::CmdBrowseTabPrev,
     },
     CmdSpec {
         cmd: CoreCmd::BrowseNativeSelectionToggle,
@@ -2957,7 +2959,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "toggle native selection mode",
+        help: M::CmdBrowseNativeSelectionToggle,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechHistoryPrev,
@@ -2967,7 +2969,7 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "read the previous spoken text from the speech history",
+        help: M::CmdSpeechHistoryPrev,
     },
     CmdSpec {
         cmd: CoreCmd::SpeechHistoryNext,
@@ -2977,6 +2979,6 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         max_press: 1,
         interrupts: true,
         input_help_bypass: false,
-        help: "read the next spoken text from the speech history",
+        help: M::CmdSpeechHistoryNext,
     },
 ];
