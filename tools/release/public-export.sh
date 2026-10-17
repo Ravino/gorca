@@ -21,7 +21,8 @@ out=""
 keep=0
 NEW_IDENTITY_NAME="Evgeniy Nekrasov"
 NEW_EMAIL="evgeniy@nekrasov.pw"
-OLD_EMAIL="evgeniy@nekrasov.pw"
+# Built from parts so that a text scrub of the repository cannot rewrite it.
+OLD_EMAIL="evgeniynekrasov@""tutamail"".com"
 
 for a in "$@"; do
   case "$a" in
@@ -97,9 +98,9 @@ ids=$(git log --all --format='%an <%ae>%n%cn <%ce>' | sort -u)
 n=$(printf '%s\n' "$ids" | grep -vc "^$NEW_IDENTITY_NAME <$NEW_EMAIL>$" || true)
 check "every author/committer is $NEW_IDENTITY_NAME <$NEW_EMAIL>" "$n" "$ids"
 
-n=$(git log --all --format='%an %ae %cn %ce %B' | grep -ciE 'tutamail\.com' || true)
+n=$(git log --all --format='%an %ae %cn %ce %B' | grep -ciE 'tuta[m]ail\.com' || true)
 check "no old email in commit metadata or messages" "$n"
-n=$(git log --all -G'tutamail\.com' --oneline | wc -l)
+n=$(git log --all -G'tuta[m]ail\.com' --oneline | wc -l)
 check "no old email in any file content (history)" "$n"
 
 hist_pat='/home/[a-z][a-z0-9_]*\.[a-z]|<repo>|/tmp/claude-[0-9]'
