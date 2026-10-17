@@ -2580,4 +2580,38 @@ mod probe_m9r {
         assert!(on_p, "the early caret event retargets to the paragraph");
         assert_eq!(g.r.text.caret.tracked().map(|t| t.node), Some(p));
     }
+
+    /// Firefox: the caret event of the paragraph comes while the root's window is still in
+    /// flight (so `hosts` is unknown): it is replayed when the reply arrives, and the caret of
+    /// the paragraph is the tracked one before any key.
+    #[test]
+    fn probe_m9r_a_caret_event_while_the_window_is_in_flight_is_replayed() {
+        let mut g = rig();
+        let p = leaf(96);
+        let s = snap(
+            Role::TextEntry,
+            StateSet::EDITABLE | StateSet::FOCUSED | StateSet::MULTILINE,
+        );
+        let mut fx = ReaderEffects::new();
+        g.r.now = g.now();
+        g.r.text_track(&s, &mut fx);
+        g.r.text_after(&mut fx);
+        let (req, _) = fetches(&fx)[0];
+        let early = g.caret_on(p, 0);
+        assert!(fetches(&early).is_empty());
+        let fx = g.reply(
+            req,
+            Reply::Window(TextWindowFill {
+                base: 0,
+                text: Arc::from("\u{FFFC}\u{FFFC}"),
+                len: 2,
+                caret: Some(0),
+            }),
+        );
+        let on_p = fetches(&fx).iter().any(|(_, op)| match op {
+            TextOp::Window { node, .. } | TextOp::AtOffset { node, .. } => *node == p,
+            _ => false,
+        });
+        assert!(on_p, "the early caret event retargets to the paragraph");
+    }
 }

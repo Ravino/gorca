@@ -647,7 +647,12 @@ impl Reader {
                     // window of the field is known (`replay_early_caret`).
                     self.text.early_caret = Some((node, offset, self.now));
                 } else if self.text_accepts(node, Some(offset), fx) {
+                    self.text.early_caret = None;
                     self.text_step(In::Caret { offset }, fx);
+                } else if self.awaiting_hosts(node) {
+                    // The window of the rich editable's root is still on its way (it says
+                    // whether the paragraphs are its own): keep the event for `hosts`.
+                    self.text.early_caret = Some((node, offset, self.now));
                 }
             }
             TextMsg::Edit { node, delta } => {
@@ -678,6 +683,14 @@ impl Reader {
             TextMsg::Fetched { req, epoch, result } => self.on_text_fetched(req, epoch, result, fx),
             TextMsg::Progress(p) => self.say_all_progress(p, fx),
         }
+    }
+
+    /// An editable root is tracked, has not yet learned whether it hosts paragraphs, and
+    /// `node` is another node of the same application.
+    fn awaiting_hosts(&self, node: NodeKey) -> bool {
+        self.text.caret.tracked().is_some_and(|t| {
+            t.kind.editable && !t.hosts && t.node != node && t.root.app == node.app
+        })
     }
 
     /// Does an event of `node` belong to the tracked object? The node itself, yes. In a rich
