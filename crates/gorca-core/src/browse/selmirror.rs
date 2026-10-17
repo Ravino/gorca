@@ -255,7 +255,23 @@ fn atoms(d: &WebDoc, lo: u32, hi: u32) -> Option<(Hit, Hit)> {
 
 /// Plan the page selection of the flat range `[lo, hi)`. `None` when it holds no atom. A password
 /// field ends the range before it.
+#[cfg(test)]
 pub fn plan(d: &WebDoc, lo: u32, hi: u32) -> Option<Plan> {
+    plan_with(d, lo, hi, &|_, _| false)
+}
+
+/// Like [`plan`], for an engine that focuses the container a range starts in when it is focusable
+/// and not focused yet (Firefox, `TextLeafRange::SetSelection`): `risky` names such containers.
+/// A leg other than the first that starts in one is left out, and the leg before it ends in front
+/// of the child, which the engine takes whole: the selection grows to the end of that child
+/// (`gecko_lossy`) instead of moving system focus (BM-2). The first leg is the caller's to
+/// refuse (`Plan::start_container`).
+pub fn plan_with(
+    d: &WebDoc,
+    lo: u32,
+    hi: u32,
+    risky: &dyn Fn(&WebDoc, DocNodeId) -> bool,
+) -> Option<Plan> {
     if lo >= hi {
         return None;
     }
@@ -306,6 +322,14 @@ pub fn plan(d: &WebDoc, lo: u32, hi: u32) -> Option<Plan> {
         }
     };
     let mut spans = spans;
+    let before = spans.len();
+    let mut kept = 0;
+    spans.retain(|s| {
+        let keep = kept == 0 || !start_leaf_parent(d, s).is_some_and(|p| risky(d, p));
+        kept += 1;
+        keep
+    });
+    let gecko_lossy = gecko_lossy || spans.len() != before;
     // Only the end of the whole selection may drop a trailing space: where two legs meet the
     // space is real text ("See li" must not become "Seeli").
     let last_ix = spans.len().saturating_sub(1);
@@ -329,6 +353,18 @@ pub fn plan(d: &WebDoc, lo: u32, hi: u32) -> Option<Plan> {
 fn single_lossy(d: &WebDoc, sp: &SelSpan<DocNodeId>) -> bool {
     (sp.child_follows && !sp.trim_ws)
         || (sp.end_on_object && sp.range.end >= hyper_len(d, sp.node).0)
+}
+
+/// The container of the leaf a span starts in: the engine focuses that one, which is `span.node`
+/// when the start offset names a text leaf or an image there, and a descendant when it names a
+/// hypertext child (the start resolves to the child's first atom).
+fn start_leaf_parent(d: &WebDoc, sp: &SelSpan<DocNodeId>) -> Option<DocNodeId> {
+    let (child, _) = child_at(d, sp.node, sp.range.start)?;
+    if is_atom(d, child) {
+        return Some(sp.node);
+    }
+    let a = first_atom(d, child)?;
+    d.parent(a)
 }
 
 fn first_atom(d: &WebDoc, from: DocNodeId) -> Option<DocNodeId> {

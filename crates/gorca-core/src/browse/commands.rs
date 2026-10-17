@@ -2369,17 +2369,19 @@ impl Reader {
                 // Select-all may skip leading text whose container is focusable (a skip
                 // link); any other selection that would start there is not mirrored.
                 let all = lo == 0 && hi >= d.text_len();
+                // Firefox focuses the container that holds the start of a selection range when
+                // it is focusable (a link, and the document itself for text directly in the
+                // body) and not focused yet: that would move system focus (BM-2).
+                let risky = |d: &WebDoc, n: DocNodeId| {
+                    Some(n) != focused
+                        && d.node(n).is_some_and(|v| {
+                            v.cats.intersects(Cat::FOCUSABLE) && !v.cats.intersects(Cat::FRAME)
+                        })
+                };
                 let mut from = lo;
                 for _ in 0..8 {
-                    let p = super::selmirror::plan(d, from, hi)?;
-                    // Firefox focuses the container that holds the start of a selection when
-                    // it is focusable (a link, and the document itself for text directly in
-                    // the body) and not focused yet: that would move system focus (BM-2).
-                    let risky = Some(p.start_container) != focused
-                        && d.node(p.start_container).is_some_and(|v| {
-                            v.cats.intersects(Cat::FOCUSABLE) && !v.cats.intersects(Cat::FRAME)
-                        });
-                    if !risky {
+                    let p = super::selmirror::plan_with(d, from, hi, &risky)?;
+                    if !risky(d, p.start_container) {
                         return Some(p);
                     }
                     if !all || p.first_end >= hi {
@@ -2396,7 +2398,7 @@ impl Reader {
             if had_sel {
                 // Nothing the page can take (a link start, a password field): Ctrl+C would
                 // copy a stale clipboard, so say so (ADR-0021 S-1).
-                self.say_queued(t(M::WebSelectionNotSet), fx);
+                self.web_selection_notice(M::WebSelectionNotSet, fx);
             }
             return;
         };
@@ -2428,6 +2430,7 @@ impl Reader {
     fn web_native_clear(&mut self, fx: &mut ReaderEffects) {
         let Some(b) = self.web.as_mut() else { return };
         b.sync = NativeSync::Idle;
+        b.sel_notified = false;
         if let Some((doc, node)) = b.native_sel_node.take() {
             fx.push(ReaderEffect::Web(WebEffect::Act {
                 doc,
@@ -2574,6 +2577,15 @@ impl Reader {
         }));
     }
 
+    /// A notice about the page selection, spoken once per selection burst.
+    fn web_selection_notice(&mut self, msg: M, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_mut() else { return };
+        if std::mem::replace(&mut b.sel_notified, true) {
+            return;
+        }
+        self.say_queued(t(msg), fx);
+    }
+
     /// The result of a selection request: the probe of the switch, or a mirror of the range.
     fn web_selection_done(
         &mut self,
@@ -2605,9 +2617,11 @@ impl Reader {
                 match outcome {
                     SelOutcome::Done => {}
                     // Applied, but the browser's copy may differ from what was heard.
-                    SelOutcome::Approximate => self.say_queued(t(M::WebSelectionIncomplete), fx),
+                    SelOutcome::Approximate => {
+                        self.web_selection_notice(M::WebSelectionIncomplete, fx);
+                    }
                     SelOutcome::NotSupported | SelOutcome::Failed => {
-                        self.say_queued(t(M::WebSelectionNotSet), fx);
+                        self.web_selection_notice(M::WebSelectionNotSet, fx);
                     }
                 }
             }

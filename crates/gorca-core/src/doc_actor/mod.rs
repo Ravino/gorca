@@ -499,6 +499,7 @@ async fn run(
     let mut src_task: JoinSet<Result<(), SourceError>> = JoinSet::new();
     src_task.spawn(source.attach(ctx));
     let mut actions: JoinSet<()> = JoinSet::new();
+    let mut sel_chain: Option<oneshot::Receiver<()>> = None;
     let mut a = Actor {
         spec_doc: doc,
         app,
@@ -572,7 +573,12 @@ async fn run(
                     }
                     DocCtl::Select { req, node, act } => {
                         if actions.len() < MAX_ACTIONS {
-                            spawn_action(&mut actions, &a, node, act, Some(req));
+                            // One selection at a time, in request order (ADR-0021 I-3): this
+                            // one waits for the previous to finish, so a clear can never
+                            // overtake the set it follows.
+                            let (done, next) = oneshot::channel();
+                            let prev = sel_chain.replace(next);
+                            spawn_action(&mut actions, &a, node, act, Some((req, prev, done)));
                         } else {
                             let _ = a.notices.try_send(DocNotice::SelectionDone {
                                 doc: a.spec_doc,
@@ -625,8 +631,9 @@ fn spawn_action(
     a: &Actor,
     node: DocNodeId,
     act: DocAction,
-    select_req: Option<u32>,
+    select: Option<(u32, Option<oneshot::Receiver<()>>, oneshot::Sender<()>)>,
 ) {
+    let select_req = select.as_ref().map(|(r, _, _)| *r);
     // A selection request always gets an answer, also when it cannot even be sent.
     let fail = |a: &Actor| {
         if let Some(req) = select_req {
@@ -694,6 +701,15 @@ fn spawn_action(
     let doc = a.spec_doc;
     let is_focus = matches!(act, DocAction::Focus);
     set.spawn(async move {
+        // Wait for the selection request before this one; `done` is dropped at the end, which
+        // releases the next one in line (also when this task is aborted).
+        let (prev, _done) = match select {
+            Some((_, prev, done)) => (prev, Some(done)),
+            None => (None, None),
+        };
+        if let Some(prev) = prev {
+            let _ = prev.await;
+        }
         let (reply, rx) = oneshot::channel();
         let deadline = Deadline(Instant::now() + ACTION_DEADLINE);
         let sent = req

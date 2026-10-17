@@ -94,6 +94,15 @@ top(); key(SHIFT, END); time.sleep(0.4)
 key(DOWN); time.sleep(1.2)
 check("F1 select, then a plain move: focus unchanged (a skip link must not take it)", focused(), before)
 
+# R3: a selection that grows from plain text into a link must not focus the link either (Firefox
+# focuses the link a range starts in; the leg inside the link is left out instead).
+doc_focus = focused()
+top(); key(DOWN)
+for _ in range(3):
+    key(CTRL, SHIFT, RIGHT)
+time.sleep(0.8)
+check("F3 selecting from plain text into a link: focus unchanged", focused(), doc_focus)
+
 # Text directly in <body> starts in the document, which is focusable: with focus on a link the
 # selection must not be mirrored (it would focus the document).
 top(); key(TAB); time.sleep(0.8)

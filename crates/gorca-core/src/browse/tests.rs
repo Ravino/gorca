@@ -2486,6 +2486,43 @@ fn v8_blink_offsets_are_scalars_and_gecko_offsets_are_utf16() {
 }
 
 #[test]
+fn r3_a_range_that_grows_into_a_link_does_not_start_a_leg_inside_the_link() {
+    // "• " + link("First link") + " after": Shift+Right x4 from the start ends inside the link.
+    let mut link = src(4, Role::Link, Some(1004));
+    link.states |= StateSet::FOCUSABLE;
+    let read = doc_of(
+        vec![
+            root(),
+            block(src(2, Role::ListItem, Some(1002))),
+            run(3, "\u{2022} "),
+            link,
+            run(5, "First link"),
+            run(6, " after"),
+        ],
+        &[(1, &[2]), (2, &[3, 4, 6]), (4, &[5])],
+    );
+    let risky = |d: &gorca_doc::web::WebDoc, n: DocNodeId| {
+        d.node(n)
+            .is_some_and(|v| v.cats.intersects(gorca_doc::web::Cat::FOCUSABLE))
+            && Some(n) != d.root()
+    };
+    let p = read.with(|d| {
+        super::selmirror::plan_with(
+            d,
+            flat_at(d, "\u{2022} ", 0),
+            flat_at(d, "First link", 3),
+            &risky,
+        )
+        .expect("plan")
+    });
+    // The head leg inside the link would focus it: it is left out, the leg before it ends in
+    // front of the link (the engine takes the link whole) and the plan says it is lossy.
+    assert_eq!(p.spans.len(), 1, "{:?}", p.spans);
+    assert_eq!(p.spans[0].range, 0..2);
+    assert!(p.spans[0].child_follows && p.gecko_lossy);
+}
+
+#[test]
 fn s7_text_of_a_password_field_is_never_mirrored_even_when_the_range_starts_inside_it() {
     let read = doc_of(
         vec![

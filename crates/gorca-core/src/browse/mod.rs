@@ -571,6 +571,9 @@ pub struct BrowseState {
     pub sync: NativeSync,
     /// Counter of selection requests; a result for an older one is ignored.
     pub sel_req: u32,
+    /// A "page selection not set / incomplete" notice was spoken for the current selection:
+    /// once per burst, not once per Shift+arrow (ADR-0021).
+    pub sel_notified: bool,
     /// When the page selection is next brought up to date with `sel` (debounced).
     pub sel_due: Option<Instant>,
     /// The text node whose page selection we set last: it is cleared when the virtual range
@@ -644,6 +647,7 @@ impl BrowseState {
             model: SelectionModel::Native,
             sync: NativeSync::Idle,
             sel_req: 0,
+            sel_notified: false,
             sel_due: None,
             native_sel_node: None,
             lead_dialog: None,

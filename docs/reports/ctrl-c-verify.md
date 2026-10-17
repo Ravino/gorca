@@ -193,3 +193,59 @@ safe (less text, never focus moves). Track it in the report's open list.
 
 ## Gates (round 2)
 4 threads. `cargo fmt --check` clean; `cargo clippy --workspace --all-targets -D warnings` clean; `cargo test --workspace` 2182 passed, 0 failed; `xtask strings` ok (318 literals, 102 allowed). Leftover grep for RemoteDesktop/SelectionWrite/EnableClipboard in core, daemon, input-mutter, doc-source-atspi: none.
+
+---
+
+# Round 3 (head ad3d4044)
+
+## Verdict: MERGE AFTER FIXES (one must-fix, measured)
+
+R2-1 (RemoveSelection clear) and R2-2 (focused-container guard) are fixed; rows F1/F2 hold. Results
+come back to the Reader with stale requests ignored by `req`; the Reader never awaits; the source
+runs the calls in order under one action deadline.
+
+## R3-1 (high, must-fix, reproduced in Firefox) A later span inside a link still moves focus
+The focus guard in `web_mirror_selection` checks only `plan.start_container`. On Firefox the
+source sends one `SetSelection`/`AddSelection` per span (`source.rs` `select`), and each call
+reaches `TextLeafRange::SetSelection(.., aSetFocus = true)`, which focuses the parent of *that*
+span's first leaf when it is focusable (`refs/firefox/accessible/base/TextLeafRange.cpp:2458-2465`).
+A selection that starts outside a link and grows into it therefore focuses the link.
+
+Measured (private shell, debug gorca at ad3d4044, rig in
+`/tmp/-www-a11y/3849ba02-d3b2-4b42-8c27-d952cfa36771/scratchpad/selprobe`, page
+`<ul><li><a>First link text here</a> after one</li>...`): from the list item start, Shift+Right x6.
+Firefox speaks `'F, selected'` and then, 63 ms later, **`'First link text here, link'`** (a focus
+event, the same signature as the round-2 skip-link bug). Chromium, same keys: no focus utterance.
+Fix: apply the guard to the first leaf of every span (not only the first), or on Gecko use one
+`SetSelection` on the document with `doc_range` (only the start leaf's parent can take focus), and
+fall back to "page selection not set" when a span's container is focusable and unfocused. Add a
+`selcopy` row: select from plain text into a link, focus must not change.
+
+## Spoken notices: no noise measured
+Same probe, both browsers. Plain text (6 x Shift+Right), Shift+End plus Shift+Down x2 across blocks,
+selecting into a link, and Ctrl+Shift+Right x4 across inline formatting gave no "page selection not
+set" and no "incomplete" utterances. Only "selected" echoes were spoken. (The guard did not refuse in
+these rows, so the per-burst rate of the not-set notice was not exercised. ADR-0021 asks for "once
+per burst". Today it is once per mirror, so a selection that starts inside an unfocused link says
+"page selection not set" on every Shift+arrow press at typing speed. Low; latch it per selection.)
+
+## Other
+* Low: `spawn_action` sends each request from its own task. Two selection requests (or a select and a
+  clear) less than one scheduling quantum apart could reach the source out of order and leave a
+  stale page selection. The 40 ms debounce makes this unlikely. ADR-0021 I-3 (one mirror in flight
+  per document) would remove it.
+* Chromium `Document.SetTextSelections`: Blink `AXSelection::Select`
+  (`refs/chromium/third_party/blink/renderer/modules/accessibility/ax_selection.cc:396-448`) focuses
+  only an atomic text field that holds the selection, and sets the selection with `SetSelectionBy::kUser`
+  (fires `selectstart`/`selectionchange`). `FrameSelection` is not in refs, so scroll-on-select is
+  unverified. Measured: no focus change in the probe or in F1/F2.
+* Chromium Ctrl+A before an `<input>`: acceptable as a known issue (fails safe). The implementer
+  reports SetTextSelections fixes it.
+* `git merge-tree --write-tree main HEAD`: one conflict, `docs/decisions.md` (append-only lines),
+  trivial. commands.rs and tests.rs auto-merge. Main now carries ADR-0021 (proposed). The branch
+  follows its S1 model except I-3 and the once-per-burst announcement.
+
+## Gates (round 3, ad3d4044, full)
+4 threads, memory checked. `cargo fmt --check` clean. `cargo clippy --workspace --all-targets -D
+warnings` clean. `cargo test --workspace` 2191 passed, 0 failed. `xtask strings` ok (318 literals,
+102 allowed). Incremental cleared afterwards.
