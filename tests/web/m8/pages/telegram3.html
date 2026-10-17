@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>M8 Telegram dynamic buttons</title>
+<style>
+  .tgico::before { content: "\e900"; font-family: serif; }
+  .btn { display: inline-flex; width: 40px; height: 40px; background: #3390ec; color: #fff; }
+</style>
+</head>
+<body>
+<p>Start of chat.</p>
+<div id="chat"></div>
+<p>End of chat.</p>
+<script>
+  // A framework mounts the chat after load: nodes arrive as DOM insertions, some labels are set
+  // by a later prop update, one button is replaced by a fresh node (a re-render).
+  const chat = document.getElementById('chat');
+  function mk(tag, role, label, inner, late) {
+    const e = document.createElement(tag);
+    if (role) e.setAttribute('role', role);
+    e.setAttribute('tabindex', '0');
+    e.className = 'btn';
+    e.innerHTML = inner;
+    if (late) setTimeout(() => e.setAttribute('aria-label', label), 400);
+    else e.setAttribute('aria-label', label);
+    return e;
+  }
+  setTimeout(() => {
+    const row = document.createElement('div');
+    row.appendChild(mk('div', 'button', 'Dyn send', '<svg width="24" height="24"><path d="M8 5v14l11-7z"/></svg>', false));
+    row.appendChild(mk('span', 'button', 'Dyn attach', '<i class="tgico"></i>', false));
+    row.appendChild(mk('div', 'button', 'Dyn late label', '<i class="tgico"></i>', true));
+    chat.appendChild(row);
+    const p = document.createElement('p');
+    p.textContent = 'Message text between.';
+    chat.appendChild(p);
+    const w = mk('div', 'button', 'Dyn wrapper', '<button aria-label="Dyn inner"><i class="tgico"></i></button>', false);
+    chat.appendChild(w);
+  }, 300);
+  // A re-render replaces the first button with a new node.
+  setTimeout(() => {
+    const first = chat.querySelector('.btn');
+    if (first) first.replaceWith(mk('div', 'button', 'Dyn replaced', '<svg width="24" height="24"><path d="M8 5v14l11-7z"/></svg>', false));
+  }, 900);
+</script>
+</body>
+</html>

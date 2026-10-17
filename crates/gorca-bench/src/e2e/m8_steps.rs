@@ -1036,6 +1036,39 @@ fn fls() -> Vec<Step> {
     ]
 }
 
+/// Custom ARIA buttons (div/span role=button with an aria-label and only an icon inside): Tab, B
+/// and the plain arrow keys must each say the label once, with the role once (field report
+/// 2026-10-18).
+fn tg2() -> Vec<Step> {
+    let mut v = vec![top("T2.top0"), pos("T2.tab.0", Act::AppKeys(&[15]))];
+    for (i, id) in ["T2.tab.1", "T2.tab.2", "T2.tab.3", "T2.tab.4", "T2.tab.5", "T2.tab.6", "T2.tab.7", "T2.tab.8", "T2.tab.9", "T2.tab.10", "T2.tab.11", "T2.tab.12", "T2.tab.13", "T2.tab.14", "T2.tab.15", "T2.tab.16", "T2.tab.17", "T2.tab.18", "T2.tab.19", "T2.tab.20", "T2.tab.21", "T2.tab.22", "T2.tab.23", "T2.tab.24", "T2.tab.25", "T2.tab.26", "T2.tab.27"].into_iter().enumerate() {
+        v.push(s(id, P1, "Tab onto the next custom button", Act::AppKeys(&[15]), &["@@"]).win(1500));
+        let _ = i;
+    }
+    v.push(top("T2.top"));
+    for id in ["T2.d.1", "T2.d.2", "T2.d.3", "T2.d.4", "T2.d.5", "T2.d.6", "T2.d.7", "T2.d.8", "T2.d.9", "T2.d.10", "T2.d.11", "T2.d.12", "T2.d.13", "T2.d.14", "T2.d.15", "T2.d.16", "T2.d.17", "T2.d.18", "T2.d.19", "T2.d.20", "T2.d.21", "T2.d.22", "T2.d.23", "T2.d.24", "T2.d.25", "T2.d.26", "T2.d.27", "T2.d.28", "T2.d.29", "T2.d.30", "T2.d.31", "T2.d.32", "T2.d.33", "T2.d.34", "T2.d.35", "T2.d.36", "T2.d.37", "T2.d.38", "T2.d.39", "T2.d.40", "T2.d.41", "T2.d.42", "T2.d.43"] {
+        v.push(s(id, P1, "Down: the next line", Act::Key(DOWN, 0), &["@@"]).win(1500));
+    }
+    v.push(top("T2.top2"));
+    for id in ["T2.b.1", "T2.b.2", "T2.b.3", "T2.b.4", "T2.b.5", "T2.b.6", "T2.b.7", "T2.b.8", "T2.b.9", "T2.b.10", "T2.b.11", "T2.b.12", "T2.b.13", "T2.b.14", "T2.b.15", "T2.b.16", "T2.b.17", "T2.b.18", "T2.b.19", "T2.b.20", "T2.b.21", "T2.b.22"] {
+        v.push(s(id, P1, "B: the next button", n('b'), &["@@"]).win(1500));
+    }
+    v
+}
+
+/// The same custom buttons mounted by a script after load (a framework render).
+fn tg3() -> Vec<Step> {
+    let mut v = vec![Step::setup("T3.wait", "let the page mount its chat", Act::Wait(2500)), top("T3.top0"), pos("T3.tab.0", Act::AppKeys(&[15]))];
+    for id in ["T3.tab.1", "T3.tab.2", "T3.tab.3", "T3.tab.4", "T3.tab.5"] {
+        v.push(s(id, P1, "Tab onto the next custom button", Act::AppKeys(&[15]), &["@@"]).win(1500));
+    }
+    v.push(top("T3.top"));
+    for id in ["T3.d.1", "T3.d.2", "T3.d.3", "T3.d.4", "T3.d.5", "T3.d.6", "T3.d.7", "T3.d.8", "T3.d.9"] {
+        v.push(s(id, P1, "Down: the next line", Act::Key(DOWN, 0), &["@@"]).win(1500));
+    }
+    v
+}
+
 /// Every scenario, in run order.
 pub fn scenarios() -> Vec<Scenario> {
     let sc = |id, area, page, title, body| Scenario { id, area, page, title, body, xfail: None };
@@ -1064,6 +1097,8 @@ pub fn scenarios() -> Vec<Scenario> {
         sc("M8-TG", "Telegram voice message: Tab and B name the same button", "telegram.html", "M8 Telegram voice message", Body::Steps(tg)),
         sc("M8-FL", "flat review over a web page", "news.html", "M8 News article", Body::Steps(fl)),
         sc("M8-FLS", "flat review on a long scrolled page", "longscroll.html", "M8 Long scrolled page", Body::Steps(fls)),
+        sc("M8-TG2", "custom ARIA buttons: Tab, B and arrows", "telegram2.html", "M8 Telegram custom buttons", Body::Steps(tg2)),
+        sc("M8-TG3", "custom ARIA buttons mounted after load", "telegram3.html", "M8 Telegram dynamic buttons", Body::Steps(tg3)),
         sc("M8-RDESC", "review: description flood", "../../m8b/review/r_desc.html", "M8b Review Desc", Body::Steps(rv_desc)),
         sc("M8-RNAME", "review: name flood", "../../m8b/review/r_name.html", "M8b Review Name", Body::Steps(rv_name)),
         sc("M8-RINV", "review: invalid flood", "../../m8b/review/r_invalid.html", "M8b Review Invalid", Body::Steps(rv_inv)),

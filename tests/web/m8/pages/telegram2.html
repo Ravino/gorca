@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>M8 Telegram custom buttons</title>
+<style>
+  .tgico::before { content: "\e900"; font-family: serif; }
+  .btn { display: inline-flex; width: 40px; height: 40px; background: #3390ec; color: #fff; }
+</style>
+</head>
+<body>
+<p>Start of chat.</p>
+
+<!-- C1: div role=button, aria-label, an svg icon inside (no text at all). -->
+<div class="btn" role="button" tabindex="0" aria-label="Send message"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+
+<p>Between one and two.</p>
+
+<!-- C2: span role=button, aria-label, icon-font glyph from CSS content. -->
+<span class="btn tgico" role="button" tabindex="0" aria-label="Attach file"></span>
+
+<p>Between two and three.</p>
+
+<!-- C3: div role=button, aria-label, an icon-font glyph as real text content. -->
+<div class="btn" role="button" tabindex="0" aria-label="Mute chat"><i class="tgico" aria-hidden="true">&#xe900;</i></div>
+
+<p>Between three and four.</p>
+
+<!-- C4: div role=button, aria-label, an empty-alt image inside. -->
+<div class="btn" role="button" tabindex="0" aria-label="Emoji picker"><img alt="" width="24" height="24" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"></div>
+
+<p>Between four and five.</p>
+
+<!-- C5: div role=button with real text and an aria-label that differs (control: label wins). -->
+<div class="btn" role="button" tabindex="0" aria-label="Reply to Alice">Reply</div>
+
+<p>Between five and six.</p>
+
+<!-- C6: a native button with an aria-label and an svg (the control case). -->
+<button class="btn" aria-label="Voice call"><svg width="24" height="24" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+
+<p>Row of icon buttons follows.</p>
+
+<!-- C7: a composer row: adjacent icon-only custom buttons, nothing else in the row. -->
+<div class="row" id="row7"><div class="btn" role="button" tabindex="0" aria-label="Row emoji"><i class="tgico"></i></div><div class="btn" role="button" tabindex="0" aria-label="Row attach"><svg width="24" height="24"><path d="M8 5v14l11-7z"/></svg></div><span class="btn" role="button" tabindex="0" aria-label="Row mic"><i class="tgico"></i></span></div>
+
+<p>Nested roles follow.</p>
+
+<!-- C8: role=button wrapping an svg with its own role=img and aria-label. -->
+<div class="btn" role="button" tabindex="0" aria-label="Nested img outer"><svg role="img" aria-label="Nested img inner" width="24" height="24"><path d="M8 5v14l11-7z"/></svg></div>
+
+<!-- C9: role=button wrapping a native button (a ripple wrapper). -->
+<div class="btn" role="button" tabindex="0" aria-label="Wrapped outer"><button aria-label="Wrapped inner"><i class="tgico"></i></button></div>
+
+<!-- C10: a list item that is the button, with a role=img icon span inside. -->
+<ul><li role="button" tabindex="0" aria-label="List button"><span role="img" aria-label="List icon"><i class="tgico"></i></span></li></ul>
+
+<!-- C11: role=button around a link-like text span and an icon. -->
+<div class="btn" role="button" tabindex="0" aria-label="Mixed label"><span>Mixed text</span><i class="tgico"></i></div>
+
+<p>More shapes follow.</p>
+
+<!-- C12: role=button, aria-label, no tabindex (click handler only), icon only. -->
+<div class="btn" role="button" aria-label="No tabindex"><i class="tgico"></i></div>
+
+<!-- C13: role=button inside a link. -->
+<a href="#x"><span class="btn" role="button" aria-label="In link"><i class="tgico"></i></span></a>
+
+<!-- C14: role=button with both aria-label and title. -->
+<div class="btn" role="button" tabindex="0" aria-label="Label and title" title="The tooltip"><i class="tgico"></i></div>
+
+<!-- C15: role=button named by aria-labelledby to a visually hidden element. -->
+<span id="hid15" hidden>Hidden labelled</span>
+<div class="btn" role="button" tabindex="0" aria-labelledby="hid15"><i class="tgico"></i></div>
+
+<!-- C16: role=button, aria-label, inside a toolbar, display:contents wrapper. -->
+<div role="toolbar" aria-label="Chat tools"><div style="display:contents"><div class="btn" role="button" tabindex="0" aria-label="Toolbar one"><svg width="24" height="24"><path d="M8 5v14l11-7z"/></svg></div></div></div>
+
+<!-- C17: aria-label on a role=button with an empty paragraph-like child and a time. -->
+<div class="btn" role="button" tabindex="0" aria-label="Label with time"><span></span><span class="time">10:41</span></div>
+
+<!-- C18: role=button where the icon child is a canvas. -->
+<div class="btn" role="button" tabindex="0" aria-label="Canvas icon"><canvas width="24" height="24"></canvas></div>
+
+<p>Empty controls follow.</p>
+
+<!-- C19: role=button, aria-label, no content at all (icon is a CSS background image). -->
+<div class="btn" role="button" tabindex="0" aria-label="Empty div"></div>
+
+<!-- C20: the same as a span. -->
+<span class="btn" role="button" tabindex="0" aria-label="Empty span"></span>
+
+<!-- C21: an empty one between two texts on one line. -->
+<p>Inline <span role="button" tabindex="0" aria-label="Empty inline" style="display:inline-block;width:20px;height:20px;background:#3390ec"></span> after.</p>
+
+<p>Hidden-icon controls follow.</p>
+
+<!-- C22: role=button, aria-label, the icon is an aria-hidden svg (the usual icon-button shape). -->
+<div class="btn" role="button" tabindex="0" aria-label="Hidden svg"><svg aria-hidden="true" width="24" height="24"><path d="M8 5v14l11-7z"/></svg></div>
+
+<!-- C23: native button, aria-label, aria-hidden svg. -->
+<button class="btn" aria-label="Native hidden svg"><svg aria-hidden="true" width="24" height="24"><path d="M8 5v14l11-7z"/></svg></button>
+
+<!-- C24: role=button whose only child is an aria-hidden icon font element. -->
+<span class="btn" role="button" tabindex="0" aria-label="Hidden icon font"><i class="tgico" aria-hidden="true"></i></span>
+
+<!-- C25: svg with a title child inside role=button with aria-label. -->
+<div class="btn" role="button" tabindex="0" aria-label="Svg title button"><svg width="24" height="24"><title>Svg inner title</title><path d="M8 5v14l11-7z"/></svg></div>
+
+<p>End of chat.</p>
+</body>
+</html>
