@@ -25,7 +25,7 @@ use gorca_doc_source_api::{
     JoinKeyCaps, SourceCaps, SourceError, SourceKind, web_attrs,
 };
 use gorca_model::{
-    DocDelta, LocalId, NodeEvent, PropMask, Role, SrcNode, SrcNodeId, StateSet, TextEdit, TextUnit,
+    DocDelta, LocalId, NodeEvent, PropMask, Role, SrcNode, SrcNodeId, TextEdit, TextUnit,
 };
 use gorca_rt::{BoxFuture, Deadline, mpsc};
 use smallvec::SmallVec;
@@ -38,6 +38,7 @@ use crate::fetch::{
 use crate::identity::{IdentityMap, MatchStats, SibInfo, Sig};
 use crate::p2p::AppConn;
 use crate::roles;
+use crate::wake;
 use crate::runs::RunLayer;
 use crate::wire::{self, AttrInterner, PathKey};
 
@@ -47,8 +48,6 @@ const TEXT: &str = "org.a11y.atspi.Text";
 const COMPONENT: &str = "org.a11y.atspi.Component";
 /// Frames woken per document, polls of one frame and the gap between them.
 const WAKE_FRAMES_MAX: usize = 12;
-const WAKE_FRAME_POLLS: u32 = 12;
-const WAKE_FRAME_POLL: Duration = Duration::from_millis(60);
 const ACTION: &str = "org.a11y.atspi.Action";
 
 #[derive(Clone, Debug)]
@@ -355,10 +354,9 @@ struct Live {
     /// Transport key of every object the source has seen, by the hash the drain computes.
     locals: HashMap<LocalId, PathKey>,
     activity: Activity,
-    /// Empty frames outside the viewport found by the build (`wake_offscreen_frames`) and the
-    /// first node in view, where the page is scrolled back to afterwards.
-    sleeping_frames: Vec<String>,
-    scroll_back: Option<String>,
+    /// Empty frames found by the build (`wake_offscreen_frames`) and the nodes the wake takes
+    /// its scroll reference from.
+    wake: wake::WakePlan,
 }
 
 /// The one place deltas leave the source: run synthesis, then the sink, then `Settled` (AM-4).
@@ -470,8 +468,7 @@ impl AtspiDocSource {
             },
             locals: HashMap::new(),
             activity: Activity::Awake,
-            sleeping_frames: Vec::new(),
-            scroll_back: None,
+            wake: wake::WakePlan::default(),
         };
 
         // Build. A failed block fetch is the one hard error: nothing to mirror.
@@ -557,7 +554,7 @@ impl AtspiDocSource {
             }
         }
 
-        self.wake_frames(&mut live);
+        self.wake_frames(&mut live, &ctx.shutdown);
         let mut events_open = true;
         let mut ctx_events_open = true;
         loop {
@@ -668,100 +665,57 @@ impl AtspiDocSource {
         }
     }
 
-    /// Remember the empty, not showing `internal frame`s of the blocks (at most
-    /// [`WAKE_FRAMES_MAX`]) and the first node in view.
+    /// Remember the empty `internal frame`s of the blocks (at most [`WAKE_FRAMES_MAX`]) and the
+    /// first nodes of the page, one of which the wake measures the scroll position with.
     fn note_sleeping_frames(live: &mut Live, docs: &[&FetchedDoc]) {
         /// ATSPI_ROLE_INTERNAL_FRAME.
         const INTERNAL_FRAME: u32 = 28;
+        let mut ref_keys: Vec<PathKey> = Vec::new();
         for d in docs {
-            for (i, n) in d.block.nodes.iter().enumerate() {
+            for i in 0..d.block.nodes.len() {
                 let (Some(&raw), Some(&count), Some(&key)) =
                     (d.raw_roles.get(i), d.child_counts.get(i), d.keys.get(i))
                 else {
                     continue;
                 };
-                // `internal frame` is not a stateful role: its state in the block is the plain
-                // default. The task asks for the real one.
-                if live.scroll_back.is_none()
-                    && i > 0
-                    && roles::is_stateful(raw)
-                    && n.states.contains(StateSet::SHOWING)
-                {
-                    live.scroll_back = live.paths.path_of(key);
+                if raw != INTERNAL_FRAME {
+                    // Any role will do (a heading or a paragraph measures a scroll as well as
+                    // a link): the task asks the node's real state, the block holds only the
+                    // plain default for roles that are not stateful.
+                    if i > 0 && ref_keys.len() < wake::REFS_MAX {
+                        ref_keys.push(key);
+                    }
+                    continue;
                 }
-                if raw == INTERNAL_FRAME
-                    && count == 0
-                    && live.sleeping_frames.len() < WAKE_FRAMES_MAX
+                if count == 0
+                    && live.wake.frames.len() < WAKE_FRAMES_MAX
                     && let Some(p) = live.paths.path_of(key)
                 {
-                    live.sleeping_frames.push(p);
+                    live.wake.frames.push(p);
                 }
             }
+        }
+        if !live.wake.frames.is_empty() {
+            live.wake.refs = ref_keys
+                .into_iter()
+                .filter_map(|k| live.paths.path_of(k))
+                .collect();
         }
     }
 
-    /// Start the one-off task that scrolls every sleeping frame into view and back.
-    fn wake_frames(&self, live: &mut Live) {
-        let frames = std::mem::take(&mut live.sleeping_frames);
-        let back = live.scroll_back.take();
-        if frames.is_empty() {
+    /// Start the one-off task that scrolls every sleeping frame into view and back. It ends
+    /// with the document (`shutdown`).
+    fn wake_frames(&self, live: &mut Live, shutdown: &gorca_rt::CancellationToken) {
+        let plan = std::mem::take(&mut live.wake);
+        if plan.frames.is_empty() {
             return;
         }
-        let app = Arc::clone(&self.app);
-        let timeout = self.config.call_timeout;
-        tokio::spawn(async move {
-            let (mut woke, mut scrolled) = (0usize, 0usize);
-            for f in &frames {
-                let dl = Deadline(Instant::now() + timeout);
-                // Only a frame that is not in view sleeps.
-                let showing = app
-                    .call(app.next_lane(), dl, f, ACCESSIBLE, "GetState", &())
-                    .await
-                    .ok()
-                    .and_then(|m| wire::parse_state(m.body().data().bytes()).ok())
-                    .is_some_and(|st| st & (1 << roles::state_bit::SHOWING) != 0);
-                if showing {
-                    continue;
-                }
-                let dl = Deadline(Instant::now() + timeout);
-                if app
-                    .call(app.next_lane(), dl, f, COMPONENT, "ScrollTo", &(6u32,))
-                    .await
-                    .is_err()
-                {
-                    continue;
-                }
-                scrolled += 1;
-                // The frame's renderer needs a frame or two to serialize its tree.
-                for _ in 0..WAKE_FRAME_POLLS {
-                    tokio::time::sleep(WAKE_FRAME_POLL).await;
-                    let dl = Deadline(Instant::now() + timeout);
-                    let kids = app
-                        .call(app.next_lane(), dl, f, ACCESSIBLE, "GetChildren", &())
-                        .await
-                        .ok()
-                        .and_then(|m| wire::parse_children(m.body().data().bytes()).ok())
-                        .map_or(0, |k| k.len());
-                    if kids > 0 {
-                        woke += 1;
-                        break;
-                    }
-                }
-            }
-            if scrolled > 0
-                && let Some(b) = back
-            {
-                let dl = Deadline(Instant::now() + timeout);
-                let _ = app
-                    .call(app.next_lane(), dl, &b, COMPONENT, "ScrollTo", &(0u32,))
-                    .await;
-            }
-            tracing::debug!(
-                frames = frames.len(),
-                woke,
-                "offscreen frames scrolled into view"
-            );
-        });
+        tokio::spawn(wake::run(
+            Arc::clone(&self.app),
+            plan,
+            self.config.call_timeout,
+            shutdown.clone(),
+        ));
     }
 
     fn call_deadline(&self) -> Deadline {
