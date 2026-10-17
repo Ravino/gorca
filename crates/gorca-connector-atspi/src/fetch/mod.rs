@@ -54,6 +54,10 @@ const TEXT: &str = "org.a11y.atspi.Text";
 const PROPS: &str = "org.freedesktop.DBus.Properties";
 /// `ATSPI_RELATION_LABELLED_BY`.
 const RELATION_LABELLED_BY: u32 = 2;
+/// `ATSPI_RELATION_ERROR_MESSAGE`.
+const RELATION_ERROR_MESSAGE: u32 = 21;
+/// Most characters read from an error message target.
+const ERROR_TEXT_CHARS: i32 = 400;
 /// Characters of an entry's text that are fetched for the focus presentation.
 const ENTRY_TEXT_CHARS: i32 = 1024;
 

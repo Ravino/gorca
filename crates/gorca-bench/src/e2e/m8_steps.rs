@@ -854,10 +854,10 @@ fn wg() -> Vec<Step> {
 fn ho() -> Vec<Step> {
     vec![
         top("HO.top"),
-        s("HO.h", P0, "H: the page is navigable at all", n('h'), &[]).win(1500),
+        s("HO.h", P0, "H: the page is navigable at all", n('h'), &[]).chars(8000).win(1500),
         s("HO.cycle", P0, "E: a field in a describedby / errormessage cycle is named and spoken once", n('e'), &["cycle one, edit"]).max(2).win(1500),
-        s("HO.fan", P0, "B: a button with 10,000 label targets speaks a bounded name", rep('b', 2), &["button"]).win(2500),
-        s("HO.big", P0, "B: a megabyte aria-label is clipped, not spoken whole", n('b'), &["button"]).win(2500),
+        s("HO.fan", P0, "B: a button with 10,000 label targets speaks a bounded name", rep('b', 2), &["button"]).chars(16000).win(2500),
+        s("HO.big", P0, "B: a megabyte aria-label is clipped, not spoken whole", n('b'), &["button"]).chars(8000).win(2500),
         s("HO.sentinel", P0, "B again: the sentinel after all of it", n('b'), &["button, sentinel button"]).win(2500),
         s("HO.key", P0, "Down still answers at once", Act::Key(DOWN, 0), &[]).max(2).win(1000),
     ]

@@ -122,6 +122,14 @@ async fn fetch_node(
         raw.child_count = Some(clip_child_count(i64::from(n)));
         have |= PropMask::CHILDREN;
     }
+    if want.contains(PropMask::NAME)
+        && states.contains(StateSet::INVALID)
+        && gorca_doc_source_api::takes_error_text(core_role)
+    {
+        // M8b: the error message of a focused invalid control is read with the focus, however
+        // many other invalid controls the page has (the document fetch bounds its own reads).
+        raw.error_text = c.error_text_of(path, dl).await;
+    }
     if want.contains(PropMask::VALUE) {
         raw.value = value_for(cx, core_role, states, path, dl).await;
         have |= PropMask::VALUE;

@@ -1039,7 +1039,18 @@ impl Reader {
                 {
                     c.name = Some(Arc::from(n));
                 }
+                // An error text the focus fetch just read is fresher than the mirror's (and the
+                // only one for an invalid field past the source's per-fetch cap).
+                let fetched = snap
+                    .attrs
+                    .iter()
+                    .find(|(k, _)| *k == gorca_doc_source_api::web_attrs::ERROR_TEXT)
+                    .cloned();
                 c.attrs.clone_from(&m.attrs);
+                if let Some((k, t)) = fetched {
+                    c.attrs.retain(|(a, _)| *a != k);
+                    c.attrs.push((k, t));
+                }
                 if c.description.is_none() {
                     c.description.clone_from(&m.description);
                 }
@@ -1098,6 +1109,17 @@ impl Reader {
             }
             let name = v.name.filter(|n| !n.is_empty())?;
             let meta = v.meta?;
+            // An invalid control whose error text the mirror lacks (the source reads a bounded
+            // number per fetch) takes the full focus fetch, which reads it (M8b).
+            if meta.states.contains(StateSet::INVALID)
+                && gorca_doc_source_api::takes_error_text(v.role)
+                && !meta
+                    .attrs
+                    .iter()
+                    .any(|(k, _)| *k == gorca_doc_source_api::web_attrs::ERROR_TEXT)
+            {
+                return None;
+            }
             let mut have = PropMask::NAME | PropMask::ROLE | PropMask::STATES;
             // A password's value is never spoken, not even from the mirror.
             let value = meta.value.clone().filter(|_| v.role != Role::PasswordEntry);

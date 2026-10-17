@@ -56,12 +56,19 @@ pub struct AppConn {
     p2p: bool,
     rr: AtomicUsize,
     warm: AtomicBool,
+    /// Set once the relations cache domain of the application has been woken (`WebQuirks`).
+    relations_warm: tokio::sync::OnceCell<()>,
     max_tree_us: AtomicU64,
     max_tree_nodes: AtomicU64,
     pub connect_time: Duration,
 }
 
 impl AppConn {
+    /// The once-per-connection cell of the relations warm-up (see `extras::warm_relations`).
+    pub(crate) fn relations_warm(&self) -> &tokio::sync::OnceCell<()> {
+        &self.relations_warm
+    }
+
     /// Resolve the app's P2P address over `bus` and open the pool. Any failure to get a usable
     /// socket degrades to the bus connection (`is_p2p() == false`), never to an error, unless
     /// the bus call itself fails.
@@ -78,6 +85,7 @@ impl AppConn {
                 p2p: true,
                 rr: AtomicUsize::new(0),
                 warm: AtomicBool::new(false),
+                relations_warm: tokio::sync::OnceCell::new(),
                 max_tree_us: AtomicU64::new(0),
                 max_tree_nodes: AtomicU64::new(0),
                 connect_time: t0.elapsed(),
@@ -88,6 +96,7 @@ impl AppConn {
                 p2p: false,
                 rr: AtomicUsize::new(0),
                 warm: AtomicBool::new(false),
+                relations_warm: tokio::sync::OnceCell::new(),
                 max_tree_us: AtomicU64::new(0),
                 max_tree_nodes: AtomicU64::new(0),
                 connect_time: t0.elapsed(),
@@ -169,6 +178,7 @@ impl AppConn {
             p2p: true,
             rr: AtomicUsize::new(0),
             warm: AtomicBool::new(false),
+            relations_warm: tokio::sync::OnceCell::new(),
             max_tree_us: AtomicU64::new(0),
             max_tree_nodes: AtomicU64::new(0),
             connect_time: Duration::ZERO,

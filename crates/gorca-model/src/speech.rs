@@ -16,18 +16,17 @@ pub enum Prio {
     Notification,
 }
 
-/// A segment whose text starts with this is set off from the one before it by a sentence break
-/// instead of the comma that joins segments (M8b: a description is said after a short pause,
-/// like NVDA's separate description sequence). The prefix is the only carrier, so no speech
-/// interface changes; `browse.description_pause = false` strips it before speaking.
-pub const PAUSE: &str = ". ";
-
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SegmentKind {
     Text,
     Role,
     State,
     Value,
+    /// An accessible description (`aria-describedby`): set off from the words before it by a
+    /// sentence break instead of the comma that joins segments, like NVDA's separate description
+    /// sequence (M8b). `browse.description_pause = false` turns it into plain `Text`. Carried as a
+    /// kind, never as characters of the text, so page text that starts with ". " is untouched.
+    Description,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

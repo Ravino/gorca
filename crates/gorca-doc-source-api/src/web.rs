@@ -28,7 +28,7 @@
 //!   in-place `Upsert`, not `Removed` + new id (identity ladder variant C, ADR-0003 section 5).
 //!   `Removed` therefore means "this logical item is gone".
 
-use gorca_model::{AttrKey, DocDelta, SrcNode, SrcNodeId};
+use gorca_model::{AttrKey, DocDelta, Role, SrcNode, SrcNodeId};
 use smallvec::SmallVec;
 
 /// Well-known attribute keys (stable across sources).
@@ -203,6 +203,23 @@ impl TreeBlock {
 }
 
 /// True for keys a source allocated itself.
+/// Roles whose invalid state is announced with their error message. Containers (a form that
+/// holds an invalid field) are marked invalid by Gecko too and say nothing.
+pub fn takes_error_text(role: Role) -> bool {
+    matches!(
+        role,
+        Role::TextEntry
+            | Role::PasswordEntry
+            | Role::ComboBox
+            | Role::CheckBox
+            | Role::RadioButton
+            | Role::SpinButton
+            | Role::Slider
+            | Role::ToggleButton
+            | Role::Button
+    )
+}
+
 pub fn is_dynamic(key: AttrKey) -> bool {
     key.0 >= web_attrs::FIRST_DYNAMIC
 }

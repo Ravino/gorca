@@ -141,7 +141,13 @@ pub struct PathTable {
     other: HashMap<u64, Box<str>>,
     by_str: HashMap<Box<str>, u64>,
     next: u64,
+    /// `aria-errormessage` target -> the invalid fields that show its text. A change of the
+    /// target's text re-reads those fields (M8b). Bounded by `MAX_ERROR_TARGETS`.
+    error_targets: HashMap<PathKey, SmallVec<[PathKey; 2]>>,
 }
+
+/// Remembered error message targets (a long-lived SPA must not grow without bound).
+const MAX_ERROR_TARGETS: usize = 1024;
 
 impl PathTable {
     pub fn intern(&mut self, path: &str) -> PathKey {
@@ -156,6 +162,24 @@ impl PathTable {
         self.other.insert(k, path.into());
         self.by_str.insert(path.into(), k);
         PathKey(k)
+    }
+
+    /// Remember that `field` shows the text of `target`.
+    pub fn note_error_target(&mut self, target: PathKey, field: PathKey) {
+        if self.error_targets.len() >= MAX_ERROR_TARGETS
+            && !self.error_targets.contains_key(&target)
+        {
+            self.error_targets.clear();
+        }
+        let v = self.error_targets.entry(target).or_default();
+        if !v.contains(&field) {
+            v.push(field);
+        }
+    }
+
+    /// The invalid fields that show the text of `target`.
+    pub fn error_fields(&self, target: PathKey) -> &[PathKey] {
+        self.error_targets.get(&target).map_or(&[], |v| &v[..])
     }
 
     pub fn path_of(&self, k: PathKey) -> Option<String> {
@@ -272,7 +296,7 @@ pub async fn fetch_forest(
 #[allow(clippy::too_many_arguments)]
 async fn complete(
     conn: &Arc<AppConn>,
-    paths: &PathTable,
+    paths: &mut PathTable,
     mut nodes: Vec<RawNode>,
     mut child_counts: Vec<i32>,
     starts: Vec<usize>,
@@ -392,11 +416,13 @@ async fn complete(
                 .take(MAX_ERROR_TEXTS)
                 .collect();
             if !want.is_empty() {
-                let paths: Vec<String> = want.iter().map(|i| targets[*i].clone()).collect();
-                let res = crate::extras::error_texts(conn, paths, deadline).await;
+                let want_paths: Vec<String> = want.iter().map(|i| targets[*i].clone()).collect();
+                let res = crate::extras::error_texts(conn, want_paths, opts.quirks, deadline).await;
                 tm.calls += want.len() as u64 * 2;
                 for (i, t) in want.into_iter().zip(res) {
-                    if let Some(t) = t {
+                    if let Some((target, t)) = t {
+                        let tk = paths.intern(&target);
+                        paths.note_error_target(tk, nodes[i].path);
                         error_text.insert(i, t);
                     }
                 }
@@ -1062,6 +1088,21 @@ mod tests {
         let nodes = vec![rn(0), rn(0)];
         let counts = vec![0, 0];
         assert!(rebuild_children(&nodes, &counts).is_err());
+    }
+
+    #[test]
+    fn error_targets_map_to_their_fields_and_stay_bounded() {
+        let mut t = PathTable::default();
+        let (target, f1, f2) = (PathKey(7), PathKey(8), PathKey(9));
+        t.note_error_target(target, f1);
+        t.note_error_target(target, f1);
+        t.note_error_target(target, f2);
+        assert_eq!(t.error_fields(target), [f1, f2]);
+        assert!(t.error_fields(PathKey(1)).is_empty());
+        for i in 0..(MAX_ERROR_TARGETS as u64 + 5) {
+            t.note_error_target(PathKey(1000 + i), f1);
+        }
+        assert!(t.error_targets.len() <= MAX_ERROR_TARGETS);
     }
 
     #[test]

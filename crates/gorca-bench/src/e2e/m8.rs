@@ -145,6 +145,9 @@ pub(super) struct Step {
     pub exact: Option<&'static str>,
     /// At most this many utterances in the window.
     pub max_say: Option<usize>,
+    /// At most this many characters spoken in the whole step (a hostile page's megabyte name
+    /// must be clipped, never read whole).
+    pub max_chars: Option<usize>,
     /// At least this many (the reader must answer).
     pub min_say: Option<usize>,
     /// `Some(false)`: the key must reach the application (not consumed).
@@ -178,6 +181,7 @@ impl Step {
             extra_why: "",
             exact: None,
             max_say: None,
+            max_chars: None,
             min_say: None,
             consumed: None,
             no_focus_events: false,
@@ -217,6 +221,12 @@ impl Step {
     #[must_use]
     pub fn max(mut self, n: usize) -> Self {
         self.max_say = Some(n);
+        self
+    }
+
+    #[must_use]
+    pub fn chars(mut self, n: usize) -> Self {
+        self.max_chars = Some(n);
         self
     }
 
@@ -367,6 +377,9 @@ fn judge(st: &Step, utterances: &[String], consumed: bool, focus_events: usize) 
         && st.not.iter().all(|t| !heard.contains(&norm(t)))
         && st.exact.is_none_or(|e| heard == norm(e))
         && st.max_say.is_none_or(|m| utterances.len() <= m)
+        && st
+            .max_chars
+            .is_none_or(|m| utterances.iter().map(|u| u.chars().count()).sum::<usize>() <= m)
         && st.min_say.is_none_or(|m| utterances.len() >= m)
         && st.consumed.is_none_or(|c| c == consumed)
         && (!st.no_focus_events || focus_events == 0);
@@ -568,7 +581,8 @@ fn run_step(w: &mut Web, doc: &DocRef, sc: &'static str, st: &Step) -> StepRes {
         t_emit = arrival;
     }
     let mark = mark_before;
-    let early = st.not.is_empty() && st.max_say.is_none() && !st.say.is_empty();
+    let early =
+        st.not.is_empty() && st.max_say.is_none() && st.max_chars.is_none() && !st.say.is_empty();
     let end = Instant::now() + Duration::from_millis(st.window_ms);
     let mut quiet_since = Instant::now();
     let mut seen = 0usize;
@@ -892,6 +906,14 @@ mod tests {
             ),
             Status::XPass
         );
+    }
+
+    #[test]
+    fn a_character_cap_fails_a_name_read_whole() {
+        let s = Step::new("T.c", P0, "w", Act::Wait(0), &["button"]).chars(100);
+        assert_eq!(judge(&s, &said(&["button"]), true, 0), Status::Pass);
+        let whole = "A".repeat(1 << 20) + " button";
+        assert_eq!(judge(&s, &[whole], true, 0), Status::Fail);
     }
 
     #[test]

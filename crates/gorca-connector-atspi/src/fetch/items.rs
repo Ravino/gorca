@@ -173,6 +173,7 @@ fn build(items: Vec<Item>, app: AppId, app_bus: &str, max_nodes: usize) -> Decod
             state_words: it.states.into_iter().take(2).collect(),
             name: Some(clip(&it.name, MAX_TEXT_BYTES).to_owned()),
             description: Some(clip(&it.description, MAX_TEXT_BYTES).to_owned()),
+            error_text: None,
             value: None,
             parent,
             child_count: Some(clip_child_count(i64::from(it.children))),

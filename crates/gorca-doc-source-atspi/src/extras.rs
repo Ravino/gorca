@@ -35,21 +35,29 @@ pub struct WebQuirks {
     /// author-given name is its text with the list marker in front (`• Documents`, `1. First`).
     /// The marker is drawn by CSS, not content: the source drops it from the name.
     pub strip_list_marker: bool,
+    /// Row `gecko-relations-warm-up`: Gecko activates its relations cache domain on the first
+    /// `GetRelationSet` it gets and answers that one with an empty set. The source asks once per
+    /// connection, waits a moment and only then reads the relations of many nodes. Blink answers
+    /// from the first call.
+    pub warm_relations: bool,
 }
 
 impl WebQuirks {
     pub const GECKO: WebQuirks = WebQuirks {
         read_only_when_not_editable: true,
         strip_list_marker: true,
+        warm_relations: true,
     };
     pub const BLINK: WebQuirks = WebQuirks {
         read_only_when_not_editable: false,
         strip_list_marker: false,
+        warm_relations: false,
     };
     /// No engine rows (toolkits the source does not know).
     pub const NONE: WebQuirks = WebQuirks {
         read_only_when_not_editable: false,
         strip_list_marker: false,
+        warm_relations: false,
     };
 
     /// Normalise the name of a node (`authored`: the author gave the name, so it is kept).
@@ -105,50 +113,59 @@ pub fn without_list_marker(s: &str) -> &str {
     s
 }
 
-/// Roles whose invalid state is announced with their error message. Containers (a form that
-/// holds an invalid field) are marked invalid by Gecko too and say nothing.
-pub fn takes_error_text(role: Role) -> bool {
-    matches!(
-        role,
-        Role::TextEntry
-            | Role::PasswordEntry
-            | Role::ComboBox
-            | Role::CheckBox
-            | Role::RadioButton
-            | Role::SpinButton
-            | Role::Slider
-            | Role::ToggleButton
-            | Role::Button
-    )
-}
+pub use gorca_doc_source_api::takes_error_text;
 
 /// Most characters requested from an error message target (a page can point `aria-errormessage`
 /// at a whole article).
 const ERROR_TEXT_CHARS: i32 = 400;
 
-/// The text of the `aria-errormessage` target of `path`, if it has one: the relation target's
-/// `Text`, else its name. `None` when there is no such relation or no text.
-pub async fn error_text(conn: &AppConn, path: &str, deadline: Deadline) -> Option<Arc<str>> {
-    let lane = conn.next_lane();
-    // Gecko activates its relations cache domain on the first query and answers that one with an
-    // empty set: ask again once after a moment.
-    let mut target = None;
-    for attempt in 0..2 {
-        let m = conn
-            .call(lane, deadline, path, ACCESSIBLE, "GetRelationSet", &())
-            .await
-            .ok()?;
-        let rels = wire::parse_relations(m.body().data().bytes()).ok()?;
-        target = rels
-            .into_iter()
-            .find(|(t, _)| *t == RELATION_ERROR_MESSAGE)
-            .and_then(|(_, ts)| ts.into_iter().next())
-            .map(|(_, p)| p);
-        if target.is_some() || attempt == 1 {
-            break;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+/// The longest the relations warm-up waits for Gecko to build its relations cache.
+const WARM_WAIT: std::time::Duration = std::time::Duration::from_millis(150);
+
+/// Row `gecko-relations-warm-up`, once per connection: one `GetRelationSet` on `path` whose answer
+/// is ignored, then a wait of at most [`WARM_WAIT`] (never past `deadline`). Concurrent callers
+/// share the one warm-up. A no-op for engines without the row.
+pub async fn warm_relations(conn: &AppConn, path: &str, quirks: WebQuirks, deadline: Deadline) {
+    if !quirks.warm_relations {
+        return;
     }
+    conn.relations_warm()
+        .get_or_init(|| async {
+            let _ = conn
+                .call(
+                    conn.next_lane(),
+                    deadline,
+                    path,
+                    ACCESSIBLE,
+                    "GetRelationSet",
+                    &(),
+                )
+                .await;
+            let left = deadline.remaining(std::time::Instant::now());
+            tokio::time::sleep(WARM_WAIT.min(left)).await;
+        })
+        .await;
+}
+
+/// The text of the `aria-errormessage` target of `path`, if it has one: the relation target's
+/// `Text`, else its name. `None` when there is no such relation or no text. Never sleeps: the
+/// engine warm-up is [`warm_relations`], done by the caller before it reads many nodes.
+pub async fn error_text(
+    conn: &AppConn,
+    path: &str,
+    deadline: Deadline,
+) -> Option<(String, Arc<str>)> {
+    let lane = conn.next_lane();
+    let m = conn
+        .call(lane, deadline, path, ACCESSIBLE, "GetRelationSet", &())
+        .await
+        .ok()?;
+    let rels = wire::parse_relations(m.body().data().bytes()).ok()?;
+    let target = rels
+        .into_iter()
+        .find(|(t, _)| *t == RELATION_ERROR_MESSAGE)
+        .and_then(|(_, ts)| ts.into_iter().next())
+        .map(|(_, p)| p);
     let target = target.as_deref()?;
     // The end offset is bounded in the request (and never past the end of the text, which Gecko
     // refuses), so a huge target cannot make a huge reply.
@@ -198,7 +215,7 @@ pub async fn error_text(conn: &AppConn, path: &str, deadline: Deadline) -> Optio
     };
     let text = text.replace('\u{FFFC}', "").replace('\n', " ");
     let text = limits::clip_str(text.trim(), limits::MAX_DESCRIPTION_BYTES);
-    (!text.is_empty()).then(|| Arc::from(text))
+    (!text.is_empty()).then(|| (target.to_owned(), Arc::from(text)))
 }
 
 /// `error_text` for many nodes, concurrently, inside the caller's deadline (the fetch's own:
@@ -207,14 +224,18 @@ pub async fn error_text(conn: &AppConn, path: &str, deadline: Deadline) -> Optio
 pub async fn error_texts(
     conn: &Arc<AppConn>,
     paths: Vec<String>,
+    quirks: WebQuirks,
     deadline: Deadline,
-) -> Vec<Option<Arc<str>>> {
+) -> Vec<Option<(String, Arc<str>)>> {
+    if let Some(first) = paths.first() {
+        warm_relations(conn, first, quirks, deadline).await;
+    }
     let mut set = tokio::task::JoinSet::new();
     for (i, p) in paths.into_iter().enumerate() {
         let conn = Arc::clone(conn);
         set.spawn(async move { (i, error_text(&conn, &p, deadline).await) });
     }
-    let mut out: Vec<Option<Arc<str>>> = vec![None; set.len()];
+    let mut out: Vec<Option<(String, Arc<str>)>> = vec![None; set.len()];
     while let Some(r) = set.join_next().await {
         if let Ok((i, t)) = r
             && let Some(slot) = out.get_mut(i)

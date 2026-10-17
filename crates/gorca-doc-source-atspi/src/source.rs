@@ -281,11 +281,29 @@ fn map_fetch(e: &FetchError) -> SourceError {
 }
 
 /// `(raw role, raw state bits, name, attributes)` of one object.
-type ReadTuple = (u32, u64, Option<Arc<str>>, Vec<(String, String)>);
+///
+/// The last element is the `aria-errormessage` target the error text came from, if any.
+type ReadTuple = (
+    u32,
+    u64,
+    Option<Arc<str>>,
+    Vec<(String, String)>,
+    Option<String>,
+);
+
+/// Error texts one re-read batch fetches (a toggle storm over hundreds of invalid fields must
+/// not turn into hundreds of relation round trips; a focused field reads its own on focus).
+const MAX_REREAD_ERROR_TEXTS: usize = 16;
 
 /// Re-read role, state, name, attributes and description of one object (five pipelined calls),
 /// plus the error message of an invalid control (M8b).
-async fn read_node_raw(app: &AppConn, path: &str, dl: Deadline) -> Option<ReadTuple> {
+async fn read_node_raw(
+    app: &AppConn,
+    path: &str,
+    dl: Deadline,
+    quirks: crate::extras::WebQuirks,
+    error_budget: &std::sync::atomic::AtomicUsize,
+) -> Option<ReadTuple> {
     let lane = app.next_lane();
     let role = app.call(lane, dl, path, ACCESSIBLE, "GetRole", &());
     let state = app.call(lane + 1, dl, path, ACCESSIBLE, "GetState", &());
@@ -318,13 +336,18 @@ async fn read_node_raw(app: &AppConn, path: &str, dl: Deadline) -> Option<ReadTu
         attrs.push(("description".to_owned(), d.to_string()));
     }
     let invalid = state & (1u64 << roles::state_bit::INVALID_ENTRY) != 0;
+    let mut target = None;
     if invalid
         && crate::extras::takes_error_text(roles::map_role(role))
-        && let Some(t) = crate::extras::error_text(app, path, dl).await
+        && error_budget.fetch_add(1, std::sync::atomic::Ordering::Relaxed) < MAX_REREAD_ERROR_TEXTS
     {
-        attrs.push(("error-text".to_owned(), t.to_string()));
+        crate::extras::warm_relations(app, path, quirks, dl).await;
+        if let Some((tp, t)) = crate::extras::error_text(app, path, dl).await {
+            attrs.push(("error-text".to_owned(), t.to_string()));
+            target = Some(tp);
+        }
     }
-    Some((role, state, name, attrs))
+    Some((role, state, name, attrs, target))
 }
 
 /// Mutable per-document state of the running source.
@@ -427,6 +450,25 @@ fn note(live: &mut Live, e: &AtspiEvent) {
         live.root_errors = ROOT_ERROR_LIMIT;
     }
     live.dirty.note(e);
+    // The text an invalid field shows lives in another node (`aria-errormessage`): when that
+    // node's text or name changes, the fields are re-read too.
+    if matches!(
+        e.kind,
+        crate::events::EventKind::TextChanged { .. }
+            | crate::events::EventKind::NameChanged
+            | crate::events::EventKind::ChildAdded { .. }
+            | crate::events::EventKind::ChildRemoved { .. }
+    ) && !live.paths.error_fields(e.path).is_empty()
+    {
+        let fields: Vec<PathKey> = live.paths.error_fields(e.path).to_vec();
+        for f in fields {
+            live.dirty.note(&AtspiEvent {
+                path: f,
+                kind: crate::events::EventKind::DescriptionChanged,
+                at: e.at,
+            });
+        }
+    }
 }
 
 /// Root list failures before the source gives up the document.
@@ -670,12 +712,15 @@ impl AtspiDocSource {
     ) -> Vec<(SrcNodeId, Option<ReadTuple>)> {
         let targets = Arc::new(targets);
         let cursor = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let error_budget = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let quirks = self.config.fetch.quirks;
         let workers = (self.app.lanes() * 4).min(targets.len()).max(1);
         let mut tasks = Vec::with_capacity(workers);
         for _ in 0..workers {
             let app = Arc::clone(&self.app);
             let targets = Arc::clone(&targets);
             let cursor = Arc::clone(&cursor);
+            let error_budget = Arc::clone(&error_budget);
             let timeout = self.config.call_timeout;
             tasks.push(tokio::spawn(async move {
                 let mut out = Vec::new();
@@ -685,7 +730,10 @@ impl AtspiDocSource {
                         break;
                     };
                     let dl = Deadline(Instant::now() + timeout);
-                    out.push((*id, read_node_raw(&app, path, dl).await));
+                    out.push((
+                        *id,
+                        read_node_raw(&app, path, dl, quirks, &error_budget).await,
+                    ));
                 }
                 out
             }));
@@ -725,7 +773,7 @@ impl AtspiDocSource {
         id_fresh: bool,
         local: Option<gorca_model::LocalId>,
     ) -> (SrcNode, SibInfo) {
-        let (raw_role, state, name, attrs) = read;
+        let (raw_role, state, name, attrs, _) = read;
         let role = roles::map_role(raw_role);
         let authored = attrs
             .iter()
@@ -865,6 +913,12 @@ impl AtspiDocSource {
                     continue;
                 };
                 rec.props_refreshed += 1;
+                if let Some(t) = &read.4 {
+                    let tk = live.paths.intern(t);
+                    if let Some(f) = live.ident.path_of(id) {
+                        live.paths.note_error_target(tk, f);
+                    }
+                }
                 let local = live
                     .ident
                     .path_of(id)

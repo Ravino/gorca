@@ -180,11 +180,19 @@ pub fn state_words(n: &Node<'_>, unavailable: bool, focus: bool) -> SmallVec<[&'
     let st = n.states;
     let kind = n.kind();
     let mut out: SmallVec<[&'static str; 6]> = SmallVec::new();
+    // States NVDA sorts after `required` and `invalid entry` (bit values 44 to 50 of its `State`).
+    let mut late: SmallVec<[&'static str; 3]> = SmallVec::new();
     if unavailable {
         out.push("unavailable");
     }
     // NVDA drops `selected` for list, tree and menu items (selection follows the focus there);
     // a tab says it.
+    // NVDA's `_processNegativeStates` never says "not selected" for a menu item.
+    let menu_item = n.role == Role::MenuItem
+        || matches!(
+            kind,
+            Kind::MenuItem | Kind::MenuItemCheckBox | Kind::MenuItemRadio
+        );
     let quiet_selected = matches!(n.role, Role::ListItem | Role::TreeItem | Role::MenuItem)
         || matches!(
             kind,
@@ -194,6 +202,7 @@ pub fn state_words(n: &Node<'_>, unavailable: bool, focus: bool) -> SmallVec<[&'
         out.push("selected");
     } else if focus
         && quiet_selected
+        && !menu_item
         && !st.contains(StateSet::SELECTED)
         && st.contains(StateSet::SELECTABLE | StateSet::FOCUSABLE)
     {
@@ -205,7 +214,7 @@ pub fn state_words(n: &Node<'_>, unavailable: bool, focus: bool) -> SmallVec<[&'
     }
     let mixed = st.contains(StateSet::MIXED);
     match n.check_style() {
-        CheckStyle::OnOff => out.push(if st.contains(StateSet::CHECKED) {
+        CheckStyle::OnOff => late.push(if st.contains(StateSet::CHECKED) {
             "on"
         } else {
             "off"
@@ -217,13 +226,15 @@ pub fn state_words(n: &Node<'_>, unavailable: bool, focus: bool) -> SmallVec<[&'
         } else {
             "not checked"
         }),
-        CheckStyle::Pressed => out.push(if mixed {
-            "half pressed"
-        } else if st.contains(StateSet::PRESSED) || st.contains(StateSet::CHECKED) {
-            "pressed"
-        } else {
-            "not pressed"
-        }),
+        CheckStyle::Pressed => {
+            if mixed {
+                late.push("half pressed");
+            } else if st.contains(StateSet::PRESSED) || st.contains(StateSet::CHECKED) {
+                out.push("pressed");
+            } else {
+                out.push("not pressed");
+            }
+        }
         CheckStyle::None => {
             if st.contains(StateSet::PRESSED) {
                 out.push("pressed");
@@ -232,7 +243,7 @@ pub fn state_words(n: &Node<'_>, unavailable: bool, focus: bool) -> SmallVec<[&'
                 out.push("checked");
             }
             if mixed && n.role == Role::ProgressBar {
-                out.push("indeterminate");
+                late.push("indeterminate");
             }
         }
     }
@@ -254,7 +265,12 @@ pub fn state_words(n: &Node<'_>, unavailable: bool, focus: bool) -> SmallVec<[&'
         }
     }
     if let Some(p) = popup {
-        out.push(p);
+        // `submenu` is HASPOPUP (13); the dialog, grid, list and tree kinds are 47 to 50.
+        if p == "submenu" {
+            out.push(p);
+        } else {
+            late.push(p);
+        }
     }
     if st.contains(StateSet::REQUIRED) {
         out.push("required");
@@ -262,6 +278,7 @@ pub fn state_words(n: &Node<'_>, unavailable: bool, focus: bool) -> SmallVec<[&'
     if st.contains(StateSet::INVALID) && n.role != Role::Landmark && n.role != Role::Panel {
         out.push("invalid entry");
     }
+    out.extend(late);
     out
 }
 
@@ -317,8 +334,8 @@ pub fn error_text<'a>(n: &Node<'a>) -> Option<&'a str> {
 /// `browse.description_pause = false`: the description follows the other words like any segment.
 pub fn strip_pause(u: &mut gorca_model::Utterance) {
     for seg in &mut u.segments {
-        if let Some(rest) = seg.text.strip_prefix(gorca_model::PAUSE) {
-            seg.text = Arc::from(rest);
+        if seg.kind == gorca_model::SegmentKind::Description {
+            seg.kind = gorca_model::SegmentKind::Text;
         }
     }
 }
