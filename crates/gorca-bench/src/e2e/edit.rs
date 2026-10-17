@@ -651,13 +651,25 @@ fn start_native(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor, t: Target) 
                 &[],
                 "ed-app",
             )?,
-            Target::TextEditor => spawn_app(
-                host,
-                "/usr/bin/gnome-text-editor",
-                &["--standalone".to_owned()],
-                &[],
-                "ed-app",
-            )?,
+            Target::TextEditor => {
+                // Text Editor restores the drafts of the previous run from its data dir: every
+                // start gets a fresh one so repeats begin with an empty document.
+                let root =
+                    std::env::var("GORCA_HARNESS_DIR").context("GORCA_HARNESS_DIR not set")?;
+                let nanos = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.as_nanos());
+                let data = PathBuf::from(root).join(format!("xdg-data-{nanos}"));
+                std::fs::create_dir_all(&data)?;
+                let data = data.display().to_string();
+                spawn_app(
+                    host,
+                    "/usr/bin/gnome-text-editor",
+                    &["--standalone".to_owned()],
+                    &[("XDG_DATA_HOME", data.as_str())],
+                    "ed-app",
+                )?
+            }
             Target::Terminal | Target::Web(_) => bail!("not a native GUI target"),
         };
         n.apps.push(app);
