@@ -209,19 +209,14 @@ impl Reader {
         if seg.kind != SegmentKind::Said {
             return;
         }
-        // The verbalizer may have put the word there already (`word` in the options it got).
-        let cap = table(self).cap();
-        let has_word = seg
-            .text
-            .strip_prefix(cap)
-            .and_then(|r| r.strip_prefix(' '))
-            .filter(|r| is_single_capital(r));
-        if has_word.is_none() && !is_single_capital(&seg.text) {
+        // The text is the bare letter: the callers verbalize with `char_opts`, which leaves the
+        // word to this function (so it is added once, whatever the table says about a letter).
+        if !is_single_capital(&seg.text) {
             return;
         }
         let caps = self.cmd.effective.speech.caps;
-        if caps.word && has_word.is_none() {
-            let said = format!("{cap} {}", seg.text);
+        if caps.word {
+            let said = format!("{} {}", table(self).cap(), seg.text);
             seg.text = Arc::from(said);
         }
         if caps.pitch || caps.sound {

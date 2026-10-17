@@ -46,8 +46,9 @@ impl Verbalized {
     }
 }
 
-/// The pitch change of a spoken capital (NVDA `capPitchChange` is 30).
-pub const CAPITAL_PITCH_DELTA: i8 = 30;
+/// The default pitch change of a spoken capital on the wire scale (-100..100): NVDA's
+/// `capPitchChange` of 30 on its 0..100 pitch scale is 30 steps, 60 wire units.
+pub const CAPITAL_PITCH_DELTA: i8 = 60;
 
 /// The pitch to speak with for a `pitch_delta` on top of the voice's `base` pitch (wire scale,
 /// -100..100), or `None` when the voice pitch is left alone.

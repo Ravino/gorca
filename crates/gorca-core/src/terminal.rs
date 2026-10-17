@@ -764,7 +764,12 @@ impl Reader {
             Unit::Line => How::Line,
             Unit::Text => How::Text,
         };
-        let said = self.text.verbalizer.unit(text, how, &self.verbalize_opts());
+        let opts = if unit == Unit::Char {
+            self.char_opts()
+        } else {
+            self.verbalize_opts()
+        };
+        let said = self.text.verbalizer.unit(text, how, &opts);
         let id = self.utt_id();
         let (epoch, prio) = match urgency {
             Urgency::Key => (

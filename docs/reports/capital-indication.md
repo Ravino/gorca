@@ -80,3 +80,21 @@ drops the cue when the client reports `sound_icons = false`.
 
 Touched in `crates/gorca-core/src/quick.rs` (`mark_capital` only), `text/mod.rs` (the `caps`
 conversion), `browse/present.rs` (two lines). Nothing in `commands/keys.rs`.
+
+## Review fixes (2026-10-17, after `capital-indication-verify.md`)
+
+- F-2: an invalid `speech.caps` (wrong type, unknown name, even one bad item in a list) now
+  reports a problem and keeps the default `["pitch"]`; names are case-insensitive; `[]` and
+  `"off"` still mean off on purpose.
+- F-1 (option b): **`sound` is not working yet.** It is accepted, the config loader emits a
+  warning when it is selected, and `config-reference.md` says so. Two root causes, recorded as
+  a TODO in `gorca-speech/src/failover.rs`: (1) the failover facade has fixed caps, so the lane
+  drops the cue even on speech-dispatcher; (2) on SSIP the `SOUND_ICON` and the `SPEAK` that
+  follows are both `text` priority and speech-dispatcher's `stop_priority_except_first` cancels
+  the icon. voicego aliases `SOUND_ICON` to a `SPEAK` of the name. Planned with the cue sink
+  (ADR-0017/M13).
+- F-3: `caps_pitch_change` is in steps of the 0 to 100 pitch setting, as in NVDA; the daemon
+  maps one step to two wire units (default 30 is +60 on the wire, clamped to 100).
+- F-4: character echo (key echo, text layer, terminal) is verbalised with `char_opts`, which
+  leaves the capital word out; `mark_capital` is the only place that adds it, so it no longer
+  parses the text for the word.

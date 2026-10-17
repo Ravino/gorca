@@ -365,8 +365,8 @@ pub struct SpeechSettings {
     pub backend: Backend,
     pub punctuation: Punct,
     pub caps: Caps,
-    /// How far a capital's pitch moves from the voice's, in percent of the pitch range
-    /// (NVDA `capPitchChange`); used with "pitch" in `caps`.
+    /// How far a capital's pitch moves from the voice's, in steps of the 0 to 100 pitch
+    /// setting (NVDA `capPitchChange`); used with "pitch" in `caps`.
     pub caps_pitch_change: u8,
 }
 
@@ -910,12 +910,12 @@ static DOCS: &[(&str, &str, &str)] = &[
     (
         "speech",
         "caps",
-        "How a capital letter spoken alone is announced: any of \"pitch\", \"sound\" (earcon) and \"word\" (\"cap\" before the letter), for example [\"pitch\", \"sound\"]; [] is none.",
+        "How a capital letter spoken alone is announced: any of \"pitch\", \"word\" (\"cap\" before the letter) and \"sound\" (earcon; not working yet, planned with the audio cue sink), for example [\"pitch\", \"word\"]; [] is none.",
     ),
     (
         "speech",
         "caps_pitch_change",
-        "How far the pitch of a capital moves from the voice, in percent of the pitch range (needs \"pitch\" in caps).",
+        "How far the pitch of a capital moves from the voice, in steps of the 0 to 100 pitch setting like NVDA (needs \"pitch\" in caps).",
     ),
     ("echo", "typed_characters", "Speak each typed character."),
     ("echo", "typed_words", "Speak each typed word."),

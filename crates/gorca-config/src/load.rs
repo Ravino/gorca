@@ -365,7 +365,9 @@ fn apply_key(section: &str, key: &str, v: &Item, s: &mut Settings, diags: &mut V
             }
         }
         ("speech", "caps") => {
-            s.speech.caps = read_caps(v, &path, diags);
+            if let Some(c) = read_caps(v, &path, diags) {
+                s.speech.caps = c;
+            }
         }
         ("speech", "caps_pitch_change") => {
             if let Some(n) = read_int(v, &path, 0, 100, diags) {
@@ -488,28 +490,32 @@ fn read_str_list(v: &Item, path: &str, diags: &mut Vec<Diag>) -> Option<Vec<Stri
     Some(out)
 }
 
-/// `speech.caps`: a list of `pitch`, `sound` and `word`. A single string still reads (those
-/// three and the old `say` and `off`).
-fn read_caps(v: &Item, path: &str, diags: &mut Vec<Diag>) -> Caps {
+/// `speech.caps`: a list of `pitch`, `sound` and `word` (any case). A single string still reads
+/// (those three and the old `say` and `off`). Anything invalid (a wrong type, an unknown name)
+/// reports a problem and keeps the default, so a typo never silences the indication; `[]` and
+/// `"off"` turn it off on purpose.
+fn read_caps(v: &Item, path: &str, diags: &mut Vec<Diag>) -> Option<Caps> {
     let mut caps = Caps::OFF;
-    let mut name = |text: Option<&str>, span: Option<(u32, u32)>, diags: &mut Vec<Diag>| match text
-    {
-        Some(t) if caps.add(t) => {}
-        Some(t) => diags.push(Diag::error(
+    let mut bad = false;
+    let mut name = |text: Option<&str>, span: Option<(u32, u32)>, diags: &mut Vec<Diag>| {
+        let known = text.is_some_and(|t| caps.add(&t.to_ascii_lowercase()));
+        if known {
+            return;
+        }
+        bad = true;
+        diags.push(Diag::error(
             path,
             span,
-            DiagMsg::UnknownEnum {
-                value: t.to_owned(),
-                allowed: Caps::NAMES,
+            match text {
+                Some(t) => DiagMsg::UnknownEnum {
+                    value: t.to_owned(),
+                    allowed: Caps::NAMES,
+                },
+                None => DiagMsg::WrongType {
+                    expected: "a list of strings",
+                },
             },
-        )),
-        None => diags.push(Diag::error(
-            path,
-            span,
-            DiagMsg::WrongType {
-                expected: "a list of strings",
-            },
-        )),
+        ));
     };
     if let Some(arr) = v.as_array() {
         for e in arr {
@@ -519,7 +525,20 @@ fn read_caps(v: &Item, path: &str, diags: &mut Vec<Diag>) -> Caps {
     } else {
         name(v.as_str(), span_of(v), diags);
     }
-    caps
+    if bad {
+        return None;
+    }
+    if caps.sound {
+        diags.push(Diag::warning(
+            path,
+            span_of(v),
+            DiagMsg::Other(
+                "\"sound\" does not play yet on any speech backend (planned with the audio cue sink); the other options work"
+                    .to_owned(),
+            ),
+        ));
+    }
+    Some(caps)
 }
 
 fn read_modifiers(v: &Item, path: &str, diags: &mut Vec<Diag>) -> Option<Vec<String>> {
@@ -880,12 +899,30 @@ mod tests {
         assert!(l.diags.is_empty() && !l.settings.speech.caps.any());
         let l = c("[speech]\ncaps = \"pitch\"\n");
         assert_eq!(l.settings.speech.caps, Caps::PITCH);
-        // A wrong name is reported and the rest of the list still counts.
+        // Names read in any case.
+        let l = c("[speech]\ncaps = [\"Pitch\", \"WORD\"]\n");
+        assert!(l.diags.is_empty(), "{:?}", l.diags);
+        assert_eq!(l.settings.speech.caps.names(), ["pitch", "word"]);
+        let l = c("[speech]\ncaps = \"Pitch\"\n");
+        assert_eq!(l.settings.speech.caps, Caps::PITCH);
+        // Anything invalid keeps the default and says so: indication is never silenced by a typo.
+        for bad in ["3", "\"loud\"", "[\"lod\"]", "[\"pitch\", \"loud\"]", "[1]"] {
+            let l = c(&format!("[speech]\ncaps = {bad}\n"));
+            assert_eq!(l.diags.len(), 1, "{bad}: {:?}", l.diags);
+            assert!(l.diags[0].to_string().contains("using the default"));
+            assert_eq!(l.settings.speech.caps, Caps::PITCH, "{bad}");
+        }
         let l = c("[speech]\ncaps = [\"pitch\", \"loud\"]\n");
-        assert_eq!(l.diags.len(), 1);
         assert!(l.diags[0].to_string().contains("loud"));
-        let l = c("[speech]\ncaps = 3\n");
+    }
+
+    #[test]
+    fn sound_is_accepted_with_a_warning_that_it_does_not_play_yet() {
+        let l = load_text("[speech]\ncaps = [\"pitch\", \"sound\"]\n");
         assert_eq!(l.diags.len(), 1);
+        assert_eq!(l.diags[0].severity, crate::Severity::Warning);
+        assert!(l.diags[0].to_string().contains("does not play yet"));
+        assert!(l.settings.speech.caps.sound && l.settings.speech.caps.pitch);
     }
 
     #[test]

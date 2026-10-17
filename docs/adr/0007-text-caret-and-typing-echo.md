@@ -605,7 +605,7 @@ Settings (`gorca-config`, schema version bump):
 | `echo.inserted_text` | true | TE-3 |
 | `speech.punctuation` | `"some"` | VB-1 |
 | `speech.caps` | `["pitch"]` | any of `pitch` / `sound` / `word` (the old `"say"` = `word`, `"off"` = `[]`) |
-| `speech.caps_pitch_change` | 30 | percent of the pitch range (amended 2026-10-17) |
+| `speech.caps_pitch_change` | 30 | steps of the 0 to 100 pitch setting, like NVDA (amended 2026-10-17) |
 | `text.say_all_moves_caret` | true | §11 |
 | `text.caret_edge_ms` | 100 | CR-3 |
 | `text.caret_late_ms` | 400 | CR-3b |

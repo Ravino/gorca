@@ -459,9 +459,20 @@ impl Reader {
         u
     }
 
+    /// The options for a single character that `mark_capital` will mark: the capital word is
+    /// left out, `mark_capital` puts it before the letter.
+    pub(crate) fn char_opts(&self) -> VerbalizeOpts {
+        let mut o = self.verbalize_opts();
+        o.caps.word = false;
+        o
+    }
+
     /// Verbalise one piece of text speech (VB-4: on the Reader, never on the speech lane).
     pub(crate) fn speak_pieces(&self, pieces: &[caret::Piece]) -> String {
-        let o = self.verbalize_opts();
+        self.speak_pieces_with(pieces, self.verbalize_opts())
+    }
+
+    fn speak_pieces_with(&self, pieces: &[caret::Piece], o: VerbalizeOpts) -> String {
         let mut text = String::new();
         for p in pieces {
             if !text.is_empty() {
@@ -479,15 +490,19 @@ impl Reader {
     }
 
     fn text_utterance(&mut self, s: &Spoken) -> Utterance {
-        let text = self.speak_pieces(&s.pieces);
+        // A single character (typed, a character move, an erasure): a capital gets its
+        // indication.
+        let single_char =
+            matches!(s.pieces.as_slice(), [p] if p.how == Some(How::Char) && p.spell == Spell::No);
+        let text = if single_char {
+            self.speak_pieces_with(&s.pieces, self.char_opts())
+        } else {
+            self.speak_pieces(&s.pieces)
+        };
         let id = self.utt_id();
         let mut u = message(&text, id, s.epoch);
         u.prio = s.prio;
-        // A single character (typed, a character move, an erasure): a capital gets its pitch.
-        if let [p] = s.pieces.as_slice()
-            && p.how == Some(How::Char)
-            && p.spell == Spell::No
-        {
+        if single_char {
             self.mark_capital(&mut u);
         }
         // Typing echo is not kept in the speech history.
