@@ -145,6 +145,9 @@ pub struct TextCounters {
     pub retargets: u64,
 }
 
+/// How long a caret event that arrived in browse mode stays valid for the focus that follows.
+const EARLY_CARET_WINDOW: std::time::Duration = std::time::Duration::from_millis(1500);
+
 /// The Reader's text state.
 #[derive(Debug)]
 pub struct TextState {
@@ -163,6 +166,10 @@ pub struct TextState {
     format_req: Option<(TextReqId, Epoch)>,
     /// Was the layer active (focus or pass-through mode) after the previous message?
     was_active: bool,
+    /// A new tracking started in the current turn (its window prefetch is current).
+    tracked_this_turn: bool,
+    /// The latest caret event that arrived while the layer was inactive (browse mode).
+    early_caret: Option<(NodeKey, u32, Instant)>,
     /// The terminal arm (M6).
     pub(crate) term: crate::terminal::TermState,
     out: Vec<Out>,
@@ -182,6 +189,8 @@ impl TextState {
             sensitive_utt: None,
             format_req: None,
             was_active: true,
+            tracked_this_turn: false,
+            early_caret: None,
             term: crate::terminal::TermState::default(),
             out: Vec::new(),
         }
@@ -500,13 +509,19 @@ impl Reader {
         }
         self.term_untrack("text object focused");
         match trackable(snap) {
-            Some(kind) => self.text_step(
-                In::Track {
-                    node: snap.key,
-                    kind,
-                },
-                fx,
-            ),
+            Some(kind) => {
+                let was_off = self.text.caret.is_off();
+                self.text_step(
+                    In::Track {
+                        node: snap.key,
+                        kind,
+                    },
+                    fx,
+                );
+                if was_off && !self.text.caret.is_off() {
+                    self.text.tracked_this_turn = true;
+                }
+            }
             None => self.text_untrack("not trackable"),
         }
     }
@@ -514,6 +529,7 @@ impl Reader {
     /// Focus moved on (or the object is gone): forget the window, zeroing it for a secret one.
     pub(crate) fn text_untrack(&mut self, why: &'static str) {
         self.term_untrack(why);
+        self.text.early_caret = None;
         self.text_untrack_caret();
     }
 
@@ -625,7 +641,12 @@ impl Reader {
                 }
                 if self.term_is(node) {
                     self.term_caret(offset, fx);
-                } else if self.text_active() && self.text_accepts(node, Some(offset), fx) {
+                } else if !self.text_active() {
+                    // Chromium places the caret of a contenteditable before the focus (and so
+                    // the switch to focus mode) is handled: keep the event for the moment the
+                    // window of the field is known (`replay_early_caret`).
+                    self.text.early_caret = Some((node, offset, self.now));
+                } else if self.text_accepts(node, Some(offset), fx) {
                     self.text_step(In::Caret { offset }, fx);
                 }
             }
@@ -777,6 +798,27 @@ impl Reader {
             ) => Err(()),
         };
         self.text_step(In::Fetched { req, result: r }, fx);
+        self.replay_early_caret(fx);
+    }
+
+    /// The caret event of a rich editable that came before its focus (see `on_text`) is
+    /// handled once the fill of the root says it hosts embedded objects: the same as if the
+    /// browser had sent it after the focus.
+    fn replay_early_caret(&mut self, fx: &mut ReaderEffects) {
+        let Some((node, offset, at)) = self.text.early_caret else {
+            return;
+        };
+        if self.now.saturating_duration_since(at) > EARLY_CARET_WINDOW {
+            self.text.early_caret = None;
+            return;
+        }
+        let ready = self.text.caret.tracked().is_some_and(|t| t.hosts);
+        if ready {
+            self.text.early_caret = None;
+            if self.text_active() && self.text_accepts(node, Some(offset), fx) {
+                self.text_step(In::Caret { offset }, fx);
+            }
+        }
     }
 
     pub(crate) fn text_timer(&mut self, fx: &mut ReaderEffects) {
@@ -1162,7 +1204,9 @@ impl Reader {
         if self.text.say_all.stopped_by(self.epoch.current()) {
             self.say_all_finish(false, fx);
         }
-        self.text_mode_changed(fx);
+        let fresh = std::mem::take(&mut self.text.tracked_this_turn);
+        self.text_mode_changed(fresh, fx);
+        self.text.tracked_this_turn = false;
     }
 
     /// The text layer works in focus and pass-through mode only; events that arrive in browse
@@ -1171,7 +1215,11 @@ impl Reader {
     /// field that got the focus while the mode was browse starts being tracked now (M7a: Enter
     /// on a field focuses it and switches to focus mode in the same breath; Insert+Space
     /// switches by hand on a field that already has the focus).
-    fn text_mode_changed(&mut self, fx: &mut ReaderEffects) {
+    ///
+    /// `fresh_track`: the tracking started in this very turn, so its window request is already
+    /// current; dirtying it would discard the reply that carries the structural facts (does the
+    /// root host embedded objects) every later paragraph event depends on.
+    fn text_mode_changed(&mut self, fresh_track: bool, fx: &mut ReaderEffects) {
         let active = self.text_active();
         if active == self.text.was_active {
             return;
@@ -1186,6 +1234,7 @@ impl Reader {
         let snap = self.presented.as_ref().map(|p| Arc::clone(&p.snap));
         match (self.text.caret.is_off(), snap) {
             (true, Some(s)) if s.states.contains(StateSet::FOCUSED) => self.text_track(&s, fx),
+            (false, _) if fresh_track => {}
             (false, _) => self.text_step(In::Dirty, fx),
             (true, _) => {}
         }
