@@ -239,7 +239,6 @@ cmd-browse-cursor-prev-sentence = move to the previous sentence
 cmd-browse-tab-next = focus the next focusable element after the browse cursor
 cmd-browse-tab-prev = focus the previous focusable element before the browse cursor
 cmd-browse-native-selection-toggle = toggle native selection mode
-cmd-browse-copy = copy the selected text of the page to the clipboard
 cmd-speech-history-prev = read the previous spoken text from the speech history
 cmd-speech-history-next = read the next spoken text from the speech history
 info-window = {name} {role}

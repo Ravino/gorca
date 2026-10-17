@@ -65,37 +65,84 @@ levels), and that Control_L/Control_R are never gorca modifiers.
 29+46), release gorca binary `<repo>/target/release/gorca --impersonate-orca` in the private world
 only.
 
-## Update: browse-mode copy implemented (user clarified: fails only in Firefox)
+## Update 2: browse-mode copy, the shipped design (user: Ctrl+C fails only in Firefox)
 
-The user selects with the virtual cursor in Firefox, so the cause is the browse-mode gap above.
-Fix, NVDA parity (`script_copyToClipboard`): Ctrl+C in browse mode copies the virtual selection to the
-system clipboard and says "copied to clipboard".
+The user selects with gorca's browse keys in Firefox. The virtual selection was never the
+page's, so the browser's Ctrl+C copied nothing. Fixed by mirroring the virtual selection into
+the page with AT-SPI `Text.SetSelection` and letting the browser copy: the formatting is kept,
+no clipboard of ours exists, and Ctrl+C is **never grabbed** (the regression test above stands
+without exceptions). Nothing is spoken on Ctrl+C (like NVDA when the application copies).
 
-* New command `browse.copy`, bound to `ctrl+c` in the browse table of both NVDA presets (Orca presets
-  have no browse selection). The chord is grabbed **only while a virtual selection exists**
-  (`ModeKeys.copy`, `copy_grabs`, `current_grabs`, synced when the cursor settles like the Tab grab);
-  without a selection Ctrl+C reaches the page untouched. Focus mode, review mode and every other
-  application never grab it (regression test above, with `browse.copy` as the single exception).
-* `ReaderEffect::Web(WebEffect::Copy(ClipText))` -> bounded channel (`Core::take_clipboard_requests`)
-  -> daemon task `wire_clipboard` -> `gorca_input_mutter::clipboard::run`. `ClipText` hides its text in
-  `Debug`; copied text is never logged. The Reader never waits: speech confirms at once.
-* Clipboard backend: a Mutter `org.gnome.Mutter.RemoteDesktop` session with `EnableClipboard`
-  (mime types text/plain;charset=utf-8, text/plain, UTF8_STRING) then `Start`; Mutter emits
-  `SelectionTransfer(mime, serial)` on paste, we answer `SelectionWrite(serial)` -> pipe fd ->
-  `SelectionWriteDone`. No portal prompt (same as key injection). The session lives only while our text
-  is the clipboard: a newer copy replaces it, `SelectionOwnerChanged(session-is-owner=false)` or
-  `Closed` ends it. Every D-Bus call and the pipe write have a 2 s deadline.
-  Interface contract: `refs/mutter/data/dbus-interfaces/org.gnome.Mutter.RemoteDesktop.xml`.
-* select-all now stores a half-open range `(0, len)` so the last character is copied.
+### Rejected: a RemoteDesktop clipboard session (first attempt, reverted)
 
-Verified on real Mutter 48.7 (private shell, `examples/clip_probe` + GTK4 entry + RemoteDesktop Ctrl+V):
-pasted text equals the copied text, repeated pastes served by the same session
-(`pastedrive.sh` in the scratchpad `cc/`). Occasional lost injected Ctrl presses in that rig are the
-rig's, not the owner's (a re-run pastes). Not run: a Firefox end-to-end (m8 rig is heavy and the host
-was loaded); `RD.copy.say` in the m8 corpus still reads the clipboard with `gorca+C`, which is not
-implemented, so its xfail stands. Unit tests: `browse::tests::ctrl_c_copies_the_virtual_selection_and_is_grabbed_only_while_one_exists`,
-`select_all_then_copy_takes_the_whole_text`.
+`org.gnome.Mutter.RemoteDesktop` `EnableClipboard` + `Start` + `SelectionTransfer` worked
+(pasted text equalled the copied text on Mutter 48.7), but `Start` registers a remote-access
+handle and GNOME Shell 48.7 shows the "Stop Screen Sharing" indicator for as long as our text is
+the clipboard (reviewer finding F-1, `docs/reports/ctrl-c-verify.md`; clicking it empties the
+clipboard). Unacceptable for a blind user. Also rejected: portal clipboard (consent dialog, same
+indicator), data-control (absent in Mutter 48). A Shell-extension `St.Clipboard` helper
+(`org.gorca.ShellHelper`, P-14) stays a later option for text the browser cannot copy.
+Findings F-2..F-5 of the review belonged to that backend and are gone with it; F-6 and F-7 are
+fixed below.
 
-Open: the session is created at copy time; if Mutter's RemoteDesktop service is denied on the user's
-setup the copy logs a warning (`clipboard: copy failed`) but still says "copied". Failure feedback to
-the Reader is a follow-up.
+### How it works
+
+* `crates/gorca-core/src/browse/selmirror.rs` turns the flat-text range into hypertext spans
+  (container node, UTF-16 offsets): the mirror's `StaticText` run leaves are the container's text
+  parts, every other child is one U+FFFC. A range inside one container is one exact span. A
+  range across containers gets exact legs (tail of the start branch, whole blocks between, head
+  of the end branch) and a single rounded-out alternative on the common ancestor; whole blocks at
+  both ends collapse to that single range (it is exact, and one range keeps the line breaks).
+* The Reader schedules the mirror 40 ms after the last selection change (one update for a held
+  Shift+arrow) and sends one `DocAction::SetSelection` (never awaited; the doc actor rewrites the
+  ids to the source's). A plain cursor move sends `ClearSelection`, so the page never keeps a
+  stale selection. `gorca+Shift+F10` still switches the mirror off (it is on by default now).
+* `AtspiDocSource` (`select`) drops stale extra ranges through the **document's** hypertext
+  (`GetNSelections` counts the ranges that intersect the object it is asked on, so asking a
+  paragraph undercounts: observed as ranges of an earlier selection surviving), then applies the
+  ranges, all under the action deadline. Gecko gets the exact spans (adding ranges); Blink gets the
+  single range with exclusive ends (`EngineQuirks::selection_single_exclusive`). A refused
+  `AddSelection` falls back to the single range. Engine reading of the spans lives in
+  `gecko_range` (connector side), not in core.
+* A selection whose first leaf sits in a focusable container (a link) is not mirrored: Firefox
+  focuses that container (`TextLeafRange::SetSelection`, `aSetFocus`), which would move system
+  focus (BM-2). A password field ends the range before it (F-7).
+* F-6: a selecting move that ends on the last character of a line (Shift+End) or of the text
+  (Ctrl+A) stores the active end one past the cursor, and the next selecting move starts from
+  that end, so Shift+End includes the last character and Shift+Left takes back exactly one.
+
+### Measured (private shell, real Mutter 48.7, Firefox 153 ESR and Chromium 154, ssip log + clipboard read)
+
+Firefox `Text.SetSelection` on hypertexts, then Ctrl+C (`/tmp` scratch rig, summarised):
+
+| Request | Result |
+|---|---|
+| inside one paragraph `(2,10)` | exact |
+| document `(2,4)` over children p2..p4 | p2, p3, p4 whole, `\n\n` between: an end offset that is an embedded child's character **includes the child**; `(1,1)` selects child 1 |
+| paragraph `(6,12)` with a link starting at 12 | `bravo link inside`: the link comes along (the end offset is its character); `(6,13)` the same |
+| end = `len` of a container ending with a leaf | exact; of one ending with an embedded child: invalid, use `len-1` |
+| `AddSelection` second range | works; the copy joins ranges with **no** separator (`delta.Echo`) |
+| `SetSelection(0,..)` | replaces range 0 only; extras need `RemoveSelection` |
+
+`tests/web/selcopy/run.sh` (new) drives gorca (browse mode) + the browser + RemoteDesktop key
+injection and reads the clipboard back through a RemoteDesktop session without a window
+(`wl-paste` steals focus and makes gorca re-enter the document):
+
+Firefox: 9 of 9 rows pass: Shift+End on a heading (`Heading one`), on a paragraph with a link,
+two words before a link (`Alpha bravo`), one and two paragraphs, Ctrl+A (stops before the
+password field, the page text with its line breaks), paste into the page's text field equals the
+copy. Chromium 7 of 9: E3/E5 differ only by a trailing space or blank line (Blink keeps exact,
+exclusive ends); **Ctrl+A fails** when the range ends right before a text field (doc `(0,5)` with
+an `<input>` as the next sibling is ignored by Blink; `(0,6)` and `(0,4)` work). Not mitigated.
+
+### Known limits
+
+* Firefox: a range ending exactly before a link at a letter (no space) takes the link along.
+  A range with different containers at its ends and a partial block at one end is several ranges
+  and the copy glues them without a separator (`...delta.Echo`) unless both ends are whole
+  blocks; the single-range alternative is used where an engine keeps one range (Blink).
+* Selecting inside a link does not mirror (BM-2); copying link text needs focus mode or the
+  link's own commands.
+* Chromium: the Ctrl+A-before-a-field case above.
+* The mirror needs the page to be the browser's active document; background tabs are not
+  selected.

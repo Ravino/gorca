@@ -253,7 +253,6 @@ pub enum CoreCmd {
     BrowseNativeSelectionToggle,
     SpeechHistoryPrev,
     SpeechHistoryNext,
-    BrowseCopy,
 }
 
 /// Pattern matching every command that is declared but not implemented yet.
@@ -321,7 +320,7 @@ macro_rules! planned_cmds {
 pub(crate) use planned_cmds;
 
 /// Number of commands.
-pub const COUNT: usize = 242;
+pub const COUNT: usize = 241;
 
 impl CoreCmd {
     /// Every command, in discriminant order.
@@ -567,7 +566,6 @@ impl CoreCmd {
         CoreCmd::BrowseNativeSelectionToggle,
         CoreCmd::SpeechHistoryPrev,
         CoreCmd::SpeechHistoryNext,
-        CoreCmd::BrowseCopy,
     ];
 }
 
@@ -2981,15 +2979,5 @@ pub(super) static SPECS: [CmdSpec; COUNT] = [
         interrupts: true,
         input_help_bypass: false,
         help: M::CmdSpeechHistoryNext,
-    },
-    CmdSpec {
-        cmd: CoreCmd::BrowseCopy,
-        name: "browse.copy",
-        available: Availability::Implemented,
-        contexts: ContextMask::BROWSE_ONLY,
-        max_press: 1,
-        interrupts: true,
-        input_help_bypass: false,
-        help: M::CmdBrowseCopy,
     },
 ];

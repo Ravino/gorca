@@ -223,9 +223,6 @@ const HEALTH_TICK: Duration = Duration::from_millis(250);
 const HEALTH_QUEUE: usize = 32;
 const REGISTRAR_QUEUE: usize = 64;
 const CONFIG_QUEUE: usize = 8;
-/// Pending clipboard copies; a newer copy replaces an older one, so a full queue drops the new one
-/// only when the owner is stuck.
-const CLIPBOARD_QUEUE: usize = 4;
 
 struct Shared {
     epoch: Arc<EpochCell>,
@@ -244,8 +241,6 @@ struct Shared {
     /// The grab set (with its lookup context) the keyboard source should apply; latest wins.
     grabs: Arc<watch::Sender<GrabSet>>,
     config: mpsc::Sender<ConfigRequest>,
-    /// Text for the system clipboard (browse-mode copy); taken by the daemon's clipboard owner.
-    clipboard: mpsc::Sender<String>,
     /// Builds the fill policy of each new app (R0 unless the daemon chooses another).
     policy: Arc<dyn Fn() -> Box<dyn FillPolicy> + Send + Sync>,
     limits: FillLimits,
@@ -286,7 +281,6 @@ pub struct Core {
     registrars: Vec<(ConnectorId, mpsc::Receiver<RegistrarRequest>)>,
     budget: Arc<SlotBudget>,
     config_rx: Option<mpsc::Receiver<ConfigRequest>>,
-    clipboard_rx: Option<mpsc::Receiver<String>>,
     hub_rx: Option<mpsc::Receiver<HubMsg>>,
 }
 
@@ -304,7 +298,6 @@ impl Core {
         let budget = SlotBudget::new(cfg.slot_budget);
         let (grabs, _) = watch::channel(GrabSet::default());
         let (config, config_rx) = mpsc::channel(CONFIG_QUEUE);
-        let (clipboard, clipboard_rx) = mpsc::channel(CLIPBOARD_QUEUE);
         let (hub, hub_rx) = hub_channel();
         Self {
             cfg,
@@ -322,7 +315,6 @@ impl Core {
                 settings: Arc::new(ArcSwap::from_pointee(Settings::default())),
                 grabs: Arc::new(grabs),
                 config,
-                clipboard,
                 policy: Arc::new(|| Box::new(NullPolicy)),
                 limits: FillLimits::default(),
                 mirror_budget: MirrorBudget::global(),
@@ -344,7 +336,6 @@ impl Core {
             registrars: Vec::new(),
             budget,
             config_rx: Some(config_rx),
-            clipboard_rx: Some(clipboard_rx),
             hub_rx: Some(hub_rx),
         }
     }
@@ -491,11 +482,6 @@ impl Core {
     }
 
     /// Requests for the config task (`settings.reload`, `settings.save`). Taken once.
-    /// The copies browse mode asks for, for the daemon's clipboard owner. Once.
-    pub fn take_clipboard_requests(&mut self) -> Option<mpsc::Receiver<String>> {
-        self.clipboard_rx.take()
-    }
-
     pub fn take_config_requests(&mut self) -> Option<mpsc::Receiver<ConfigRequest>> {
         self.config_rx.take()
     }
@@ -523,7 +509,6 @@ impl Core {
             budget,
             config_rx: _,
             hub_rx,
-            clipboard_rx: _clipboard_rx,
         } = self;
         let mut tasks = TaskSet::new(shutdown.child_token());
         let (fetch_tx, fetch_rx) = mpsc::channel::<FetchJob>(FETCH_QUEUE);
@@ -1275,11 +1260,6 @@ fn exec_web(shared: &Shared, w: WebEffect) {
                 && h.ctl.try_send(DocCtl::Act { node, act }).is_err()
             {
                 bump(&shared.web.counters.controls_dropped);
-            }
-        }
-        WebEffect::Copy(text) => {
-            if shared.clipboard.try_send(text.0).is_err() {
-                tracing::warn!("clipboard queue full or closed; dropped a copy");
             }
         }
     }

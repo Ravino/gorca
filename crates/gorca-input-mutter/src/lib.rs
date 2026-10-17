@@ -23,7 +23,6 @@
 mod monitor;
 mod source;
 
-pub mod clipboard;
 pub use monitor::{
     AUTHORIZE_DEADLINE, GRAB_DEADLINE, GRAB_RETRIES, GrabSetState, MonitorEffect, MonitorMsg,
     MonitorState, Notice, RequestNameReply, SETTLE, StepCtx, lost_backoff,

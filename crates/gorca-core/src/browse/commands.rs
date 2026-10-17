@@ -43,21 +43,6 @@ pub enum WebEffect {
         node: DocNodeId,
         act: DocAction,
     },
-    /// Put this text on the system clipboard (browse-mode copy, NVDA parity). The daemon owns
-    /// the clipboard; the Reader never waits for it.
-    Copy(ClipText),
-}
-
-/// Text bound for the clipboard. Its `Debug` hides the text: copied text is never logged.
-#[derive(Clone, Eq, PartialEq)]
-pub struct ClipText(pub String);
-
-impl std::fmt::Debug for ClipText {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ClipText")
-            .field("bytes", &self.0.len())
-            .finish()
-    }
 }
 
 /// How long after the cursor's node vanished a re-render may still move the cursor back.
@@ -77,6 +62,9 @@ const WORD_TTL: Duration = Duration::from_millis(600);
 const TAIL_TTL: Duration = Duration::from_secs(2);
 /// A late first line (the mirror was empty at focus time) is still spoken within this window.
 const ENTRY_WAIT: Duration = Duration::from_secs(2);
+/// The page selection follows the virtual one this long after the last change, so a held
+/// Shift+arrow sets it once; short, so a Ctrl+C right after the keys finds it in place.
+const SEL_DEBOUNCE: Duration = Duration::from_millis(40);
 /// Held cursor keys scroll the page once per this interval (LP-6).
 pub(super) const SCROLL_DEBOUNCE: Duration = Duration::from_millis(150);
 /// Focus in a document the mirror does not know yet waits this long (browse design 7.3).
@@ -89,6 +77,9 @@ enum Outcome {
     Moved {
         cur: WebCursor,
         off: u32,
+        /// The active end of a selection: `off`, or one past it when the move ended on the last
+        /// character of a line (End), so that character is inside the range.
+        active: u32,
         /// Where the cursor was (the active end of a selection being extended).
         from: u32,
         items: Vec<Item>,
@@ -589,25 +580,6 @@ fn modal_scope(d: &WebDoc, mut node: DocNodeId) -> Option<DocNodeId> {
     None
 }
 
-/// The nearest focusable node from `node` up to, but not including, the document (which every
-/// engine reports as focusable). An embedded document (`Cat::FRAME`) is not one: its content is
-/// reached through its own focusable elements, and a frame is never a Tab stop (R-4, R-5).
-fn focusable_around(d: &WebDoc, node: DocNodeId) -> Option<DocNodeId> {
-    let root = d.root();
-    let mut n = node;
-    for _ in 0..64 {
-        if Some(n) != root
-            && d.node(n).is_some_and(|v| {
-                v.cats.intersects(Cat::FOCUSABLE) && !v.cats.intersects(Cat::FRAME)
-            })
-        {
-            return Some(n);
-        }
-        n = d.parent(n)?;
-    }
-    None
-}
-
 /// The document itself (or an embedded one): focus on it is not a move onto a control.
 fn is_document(d: &WebDoc, node: DocNodeId) -> bool {
     d.root() == Some(node) || d.node(node).is_some_and(|v| v.role == Role::DocumentWeb)
@@ -716,16 +688,6 @@ impl Reader {
             }
             if !prev {
                 for c in &self.keys.tab_prev {
-                    set.chords.remove(c);
-                }
-            }
-            // browse.copy: Ctrl+C is ours only while there is a virtual selection to copy.
-            let has_sel = self.web.as_ref().is_some_and(|w| w.sel.is_some());
-            if let Some(w) = self.web.as_ref() {
-                w.copy_grab.set(has_sel);
-            }
-            if !has_sel {
-                for c in &self.keys.copy {
                     set.chords.remove(c);
                 }
             }
@@ -1846,6 +1808,15 @@ impl Reader {
         self.web_auto_read_timer(fx);
         let Some(b) = self.web.as_mut() else { return };
         let mut sync_tabs = false;
+        let mut sync_sel = false;
+        if let Some(due) = b.sel_due {
+            if due <= now {
+                b.sel_due = None;
+                sync_sel = true;
+            } else {
+                fx.push(ReaderEffect::ArmTimer(due));
+            }
+        }
         if let Some((due, doc, node, _)) = b.scroll_due {
             if due <= now {
                 b.scroll_due = None;
@@ -1899,6 +1870,9 @@ impl Reader {
                 );
                 self.web_place(doc, root);
             }
+        }
+        if sync_sel {
+            self.web_mirror_selection(fx);
         }
         if sync_tabs {
             self.web_sync_tab_grabs(fx);
@@ -2043,8 +2017,6 @@ impl Reader {
             self.web_tab(Dir::Prev, fx);
         } else if c == CoreCmd::BrowseNativeSelectionToggle {
             self.web_native_selection_toggle(fx);
-        } else if c == CoreCmd::BrowseCopy {
-            self.web_copy(fx);
         } else if c == CoreCmd::BrowseSingleLetterToggle {
             self.web_single_letter_toggle(fx);
         } else if matches!(
@@ -2176,6 +2148,9 @@ impl Reader {
         }
         b.last_off = off;
         b.sel = None;
+        if b.native_sel_node.is_some() && b.native_selection {
+            b.sel_due = Some(now + SEL_DEBOUNCE);
+        }
         b.cursor_from = CursorFrom::Own;
         b.counters.moves += 1;
         b.scroll_due = Some((now + SCROLL_DEBOUNCE, doc, cur.node, cur.local));
@@ -2195,8 +2170,17 @@ impl Reader {
         let Some(h) = b.docs.get(doc) else { return };
         let last = b.last_off;
         let page = b.settings.lines_per_page;
+        let sel_now = b.sel;
         let outcome = h.read.with(|d| {
-            let off = cursor::offset_of(d, cur).unwrap_or_else(|| last.min(d.text_len()));
+            let at = cursor::offset_of(d, cur).unwrap_or_else(|| last.min(d.text_len()));
+            // A selection that ended on the last character of a line (End, Ctrl+A) has its
+            // active end one past the cursor: the next selecting move starts from that end.
+            let off = match sel_now {
+                Some((_, act)) if select && act == at.saturating_add(1) && act <= d.text_len() => {
+                    act
+                }
+                Some(_) | None => at,
+            };
             let off0 = off;
             let (mv, kind) = match mv_kind {
                 Move::Line(dir) => (cursor::line(d, max_line, off, dir), Kind::Line),
@@ -2233,11 +2217,17 @@ impl Reader {
                         )),
                         Kind::Line => present::describe_from(d, speak.start, speak.end, Some(off0)),
                     };
-                    let (lo, hi) = (off0.min(off), off0.max(off));
+                    let active = if select && matches!(mv_kind, Move::LineEnd) {
+                        off.saturating_add(1)
+                    } else {
+                        off
+                    };
+                    let (lo, hi) = (off0.min(active), off0.max(active));
                     let span = d.text_in(lo, hi.min(lo.saturating_add(SELECT_SPEAK_CAP)));
                     Outcome::Moved {
                         cur,
                         off,
+                        active,
                         from: off0,
                         items,
                         span,
@@ -2249,6 +2239,7 @@ impl Reader {
             Outcome::Moved {
                 cur,
                 off,
+                active,
                 from,
                 items,
                 span,
@@ -2260,9 +2251,9 @@ impl Reader {
                     .map_or(from, |(a, _)| a);
                 self.web_set_cursor(doc, cur, off, now);
                 if select {
-                    let growing = off.abs_diff(anchor) >= from.abs_diff(anchor);
+                    let growing = active.abs_diff(anchor) >= from.abs_diff(anchor);
                     if let Some(b) = self.web.as_mut() {
-                        b.sel = (off != anchor).then_some((anchor, off));
+                        b.sel = (active != anchor).then_some((anchor, active));
                     }
                     let text = span.split_whitespace().collect::<Vec<_>>().join(" ");
                     let text = if text.is_empty() {
@@ -2281,7 +2272,7 @@ impl Reader {
                         ],
                         fx,
                     );
-                    self.web_native_selection(doc, anchor, off, fx);
+                    self.web_sel_changed(now, fx);
                 } else {
                     self.web_speak(&items, fx);
                 }
@@ -2320,7 +2311,8 @@ impl Reader {
         };
         self.web_set_cursor(doc, cu, last, now);
         if let Some(b) = self.web.as_mut() {
-            // Half open like every other range: the last character is inside it.
+            // The cursor sits on the last character; the range includes it (see `web_cursor_cmd`:
+            // an active end one past the cursor is the end of the line or of the text).
             b.sel = Some((0, last.saturating_add(1)));
         }
         self.web_speak(
@@ -2330,46 +2322,70 @@ impl Reader {
             ],
             fx,
         );
-        self.web_native_selection(doc, 0, last, fx);
+        self.web_sel_changed(now, fx);
         fx.push(ReaderEffect::ArmTimer(now + SCROLL_DEBOUNCE));
     }
 
-    /// Native selection mode (D-3): mirror the virtual range into the page's own selection so
-    /// its Ctrl+C copies it. Only when the mode is on and both ends lie in one text node that is
-    /// not inside a focusable element (an engine may focus the element that gets a selection,
-    /// which would move system focus, BM-2). Anything else clears what we set before, so the
-    /// page never keeps a stale selection.
-    fn web_native_selection(&mut self, doc: DocId, a: u32, b_off: u32, fx: &mut ReaderEffects) {
+    /// The virtual selection changed: bring the page's own selection up to date a moment later
+    /// (one update for a burst of keys), so the browser's Ctrl+C copies it.
+    fn web_sel_changed(&mut self, now: Instant, fx: &mut ReaderEffects) {
+        let Some(b) = self.web.as_mut() else { return };
+        if !b.native_selection {
+            return;
+        }
+        let due = now + SEL_DEBOUNCE;
+        b.sel_due = Some(due);
+        fx.push(ReaderEffect::ArmTimer(due));
+    }
+
+    /// Mirror `sel` into the page: one deadline-bounded action to the document's source, never
+    /// awaited. A range the page cannot take (a password field, a focusable container whose
+    /// selection would move system focus, BM-2) clears what we set before instead, so the page
+    /// never keeps a stale selection for its Ctrl+C to copy.
+    fn web_mirror_selection(&mut self, fx: &mut ReaderEffects) {
         let Some(b) = self.web.as_ref() else { return };
         if !b.native_selection {
             return;
         }
+        let WebMode::Browse { doc, .. } = b.mode else {
+            return;
+        };
         let Some(h) = b.docs.get(doc) else { return };
-        let target = h.read.with(|d| {
-            let (n1, l1) = d.at_offset(a)?;
-            let (n2, l2) = d.at_offset(b_off)?;
-            let inside_focusable = focusable_around(d, n1).is_some();
-            (n1 == n2 && !inside_focusable).then(|| (n1, l1.min(l2)..l1.max(l2)))
+        let range = b.sel.map(|(a, e)| (a.min(e), a.max(e)));
+        let root = h.read.with(WebDoc::root);
+        let plan = range.and_then(|(lo, hi)| {
+            h.read.with(|d| {
+                let p = super::selmirror::plan(d, lo, hi)?;
+                // Firefox focuses the container that holds the start of a selection when it
+                // is focusable (a link): that would move system focus (BM-2).
+                let risky = Some(p.start_container) != d.root()
+                    && d.node(p.start_container).is_some_and(|v| {
+                        v.cats.intersects(Cat::FOCUSABLE) && !v.cats.intersects(Cat::FRAME)
+                    });
+                (!risky).then_some(p)
+            })
         });
-        let prev = self.web.as_ref().and_then(|b| b.native_sel_node);
-        match target {
-            Some((node, range)) => {
-                if let Some((pd, pn)) = prev
-                    && (pd, pn) != (doc, node)
-                {
-                    self.web_native_clear(fx);
-                }
-                if let Some(b) = self.web.as_mut() {
-                    b.native_sel_node = Some((doc, node));
-                }
-                fx.push(ReaderEffect::Web(WebEffect::Act {
-                    doc,
-                    node,
-                    act: DocAction::SetSelection(range),
-                }));
-            }
-            None => self.web_native_clear(fx),
+        let Some(plan) = plan else {
+            self.web_native_clear(fx);
+            return;
+        };
+        let Some(root) = root else { return };
+        let spec = gorca_model::SelectionSpec {
+            root,
+            spans: plan.spans.clone(),
+            snap: plan.snap.clone(),
+        };
+        let Some(first) = plan.spans.first().map(|s| s.node) else {
+            return;
+        };
+        if let Some(b) = self.web.as_mut() {
+            b.native_sel_node = Some((doc, root));
         }
+        fx.push(ReaderEffect::Web(WebEffect::Act {
+            doc,
+            node: first,
+            act: DocAction::SetSelection(spec),
+        }));
     }
 
     /// Collapse the page selection we set earlier, if any.
@@ -2379,7 +2395,7 @@ impl Reader {
             fx.push(ReaderEffect::Web(WebEffect::Act {
                 doc,
                 node,
-                act: DocAction::SetSelection(0..0),
+                act: DocAction::ClearSelection,
             }));
         }
     }
@@ -2446,45 +2462,16 @@ impl Reader {
         })
     }
 
-    /// Offer Tab to the key grab only in the directions that have a target, and Ctrl+C only
-    /// while a virtual selection exists; one grab-set update when either changes (the cursor
-    /// settled, 150 ms after the last move).
+    /// Offer Tab to the key grab only in the directions that have a target; one grab-set update
+    /// when that changes (the cursor settled, 150 ms after the last move).
     fn web_sync_tab_grabs(&mut self, fx: &mut ReaderEffects) {
         if !matches!(self.mode, Mode::Browse { .. }) {
             return;
         }
         let now_avail = self.web_tab_targets();
         let Some(b) = self.web.as_ref() else { return };
-        if b.tab_grab.get() != now_avail || b.copy_grab.get() != b.sel.is_some() {
+        if b.tab_grab.get() != now_avail {
             fx.push(ReaderEffect::SetGrabSet(self.current_grabs()));
-        }
-    }
-
-    /// Ctrl+C in browse mode (NVDA `script_copyToClipboard`): the virtual selection is not the
-    /// page's, so the page's own copy would find nothing. The text goes to the clipboard through
-    /// the daemon; the confirmation is spoken at once, the transfer never blocks the Reader.
-    fn web_copy(&mut self, fx: &mut ReaderEffects) {
-        /// Longest copy, in characters: a whole huge page is bounded, not refused.
-        const COPY_CAP: u32 = 4_000_000;
-        let Some((doc, _, _)) = self.browse_ctx(fx) else {
-            return;
-        };
-        let Some(b) = self.web.as_ref() else { return };
-        let range = b.sel.map(|(a, e)| (a.min(e), a.max(e)));
-        let text = range.and_then(|(lo, hi)| {
-            let h = b.docs.get(doc)?;
-            let text = h.read.with(|d| {
-                let hi = hi.min(d.text_len()).min(lo.saturating_add(COPY_CAP));
-                d.text_in(lo, hi)
-            });
-            (!text.is_empty()).then_some(text)
-        });
-        match text {
-            Some(text) => {
-                fx.push(ReaderEffect::Web(WebEffect::Copy(ClipText(text))));
-                self.say(t(M::WebCopied), fx);
-            }
-            None => self.say(t(M::WebCopyNoSelection), fx),
         }
     }
 
@@ -2514,7 +2501,8 @@ impl Reader {
         }
     }
 
-    /// gorca+Shift+F10: the page's own selection follows the virtual one, or stops following.
+    /// gorca+Shift+F10: the page's own selection stops following the virtual one, or follows again
+    /// (it follows by default, so the browser's Ctrl+C copies what browse mode selected).
     fn web_native_selection_toggle(&mut self, fx: &mut ReaderEffects) {
         if self.web.as_ref().is_none_or(|b| b.mode.doc().is_none()) {
             self.say(t(M::WebNativeSelectionWebOnly), fx);
@@ -2523,14 +2511,10 @@ impl Reader {
         let Some(b) = self.web.as_mut() else { return };
         b.native_selection = !b.native_selection;
         let on = b.native_selection;
-        let sel = b.sel;
-        let doc = match b.mode {
-            WebMode::Browse { doc, .. } => Some(doc),
-            WebMode::Inactive | WebMode::Loading { .. } | WebMode::Focus { .. } => None,
-        };
+        let has_sel = b.sel.is_some();
         if on {
-            if let (Some(doc), Some((a, e))) = (doc, sel) {
-                self.web_native_selection(doc, a, e, fx);
+            if has_sel {
+                self.web_mirror_selection(fx);
             }
         } else {
             self.web_native_clear(fx);

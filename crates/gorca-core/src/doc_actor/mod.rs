@@ -582,10 +582,40 @@ fn flush_all(a: &mut Actor, deltas: &mut DeltaReceiver) -> bool {
 
 /// IR-5: the action goes to the source that declared it, by the source's own node id.
 fn spawn_action(set: &mut JoinSet<()>, a: &Actor, node: DocNodeId, act: DocAction) {
-    let src = a
-        .read
-        .with(|d| d.node(node).and_then(|v| v.meta).and_then(|m| m.src));
+    let src_of = |d: &gorca_doc::web::WebDoc, n: DocNodeId| {
+        d.node(n).and_then(|v| v.meta).and_then(|m| m.src)
+    };
+    let src = a.read.with(|d| src_of(d, node));
     let Some(src) = src else { return };
+    // A page selection names core nodes; the source knows its own ids. A span whose node has no
+    // source id (a synthetic container) cannot be addressed, so the whole request is dropped.
+    let act = match act {
+        DocAction::SetSelection(spec) => {
+            let mapped = a.read.with(|d| {
+                let map = |s: &gorca_model::SelSpan<DocNodeId>| {
+                    src_of(d, s.node).map(|node| gorca_model::SelSpan {
+                        node,
+                        range: s.range.clone(),
+                        end_on_child: s.end_on_child,
+                        child_follows: s.child_follows,
+                        trim_ws: s.trim_ws,
+                    })
+                };
+                let spans = spec.spans.iter().map(map).collect::<Option<Vec<_>>>()?;
+                let snap = map(&spec.snap)?;
+                let root = src_of(d, spec.root)?;
+                Some(gorca_model::SelectionSpec { root, spans, snap })
+            });
+            let Some(mapped) = mapped else { return };
+            DocAction::SetSourceSelection(mapped)
+        }
+        other @ (DocAction::Focus
+        | DocAction::Click
+        | DocAction::ScrollIntoView
+        | DocAction::SetCaret(_)
+        | DocAction::SetSourceSelection(_)
+        | DocAction::ClearSelection) => other,
+    };
     let req = a.requests.clone();
     let notices = a.notices.clone();
     let doc = a.spec_doc;

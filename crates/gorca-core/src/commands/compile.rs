@@ -374,15 +374,6 @@ pub fn tab_grabs(km: &CompiledKeymap, table: &KeysymTable) -> (Vec<Chord>, Vec<C
     (of("browse.tab_next"), of("browse.tab_prev"))
 }
 
-/// The chords of `browse.copy`: grabbed only while a virtual selection exists, so the page's own
-/// Ctrl+C keeps working without one.
-pub fn copy_grabs(km: &CompiledKeymap, table: &KeysymTable) -> Vec<Chord> {
-    grabs_where(km, ModeKind::Browse, table, |b| {
-        CoreCmd::from_id(b.cmd).is_some_and(|c| c == CoreCmd::BrowseCopy)
-    })
-    .plain
-}
-
 /// The chords bound to `browse.escape`, for the auto-focus-mode grab set.
 pub fn escape_grabs(km: &CompiledKeymap, table: &KeysymTable) -> Vec<Chord> {
     let esc = CoreCmd::BrowseEscape.id();
@@ -707,11 +698,7 @@ mod tests {
                     "Ctrl must not be a gorca modifier: {mods:x?}"
                 );
                 for mode in [ModeKind::Focus, ModeKind::Review, ModeKind::Browse] {
-                    // `browse.copy` (Ctrl+C) is the one deliberate exception: the Reader grabs
-                    // it only while a virtual selection exists (`copy_grabs`), so the page keeps
-                    // its own copy otherwise (tests in `browse::tests`).
-                    let copy = CoreCmd::BrowseCopy.id();
-                    let g = grabs_where(&c.keymap, mode, &table, |b| b.cmd != copy);
+                    let g = grabs_where(&c.keymap, mode, &table, |_| true);
                     for ch in g.plain.iter().chain(g.exact.iter()) {
                         let m = ch.modifiers.without_locks();
                         let ctrl_only = m.contains(Modifiers::CONTROL)
@@ -819,8 +806,6 @@ mod tests {
                         "browse.tab_next",
                         "browse.tab_prev",
                         "browse.native_selection_toggle",
-                        // Orca has no browse-mode selection, so nothing to copy.
-                        "browse.copy",
                         // Orca moves cell by cell and reads a row or a column; it has no
                         // first/last row or column and no say-all of a row.
                         "table.first_row",

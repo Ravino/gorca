@@ -239,7 +239,6 @@ cmd-browse-cursor-prev-sentence = перейти к предыдущему пр�
 cmd-browse-tab-next = перейти к следующему элементу с фокусом после курсора просмотра
 cmd-browse-tab-prev = перейти к предыдущему элементу с фокусом перед курсором просмотра
 cmd-browse-native-selection-toggle = включить или выключить системное выделение
-cmd-browse-copy = скопировать выделенный текст страницы в буфер обмена
 cmd-speech-history-prev = прочитать предыдущую фразу из истории речи
 cmd-speech-history-next = прочитать следующую фразу из истории речи
 info-window = {role} {name}

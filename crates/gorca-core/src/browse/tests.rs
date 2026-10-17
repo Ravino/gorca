@@ -1967,18 +1967,7 @@ fn acts(fx: &ReaderEffects) -> Vec<(DocAction, DocNodeId)> {
         .iter()
         .filter_map(|w| match w {
             WebEffect::Act { node, act, .. } => Some((act.clone(), *node)),
-            WebEffect::Ensure { .. } | WebEffect::Activity { .. } | WebEffect::Copy(_) => None,
-        })
-        .collect()
-}
-
-/// The texts browse mode asked the daemon to put on the clipboard.
-fn copies(fx: &ReaderEffects) -> Vec<String> {
-    effects_web(fx)
-        .iter()
-        .filter_map(|w| match w {
-            WebEffect::Copy(t) => Some(t.0.clone()),
-            WebEffect::Ensure { .. } | WebEffect::Activity { .. } | WebEffect::Act { .. } => None,
+            WebEffect::Ensure { .. } | WebEffect::Activity { .. } => None,
         })
         .collect()
 }
@@ -2071,127 +2060,204 @@ fn tab_is_grabbed_only_in_the_directions_that_have_a_target() {
     assert_eq!(spoken(&fx), ["no next focusable element"]);
 }
 
+/// The first `SetSelection` the effects carry: its exact spans as `(range)` per container.
+fn selections(fx: &ReaderEffects) -> Vec<gorca_model::SelectionSpec<DocNodeId>> {
+    acts(fx)
+        .into_iter()
+        .filter_map(|(a, _)| match a {
+            DocAction::SetSelection(spec) => Some(spec),
+            DocAction::Focus
+            | DocAction::Click
+            | DocAction::ScrollIntoView
+            | DocAction::SetCaret(_)
+            | DocAction::SetSourceSelection(_)
+            | DocAction::ClearSelection => None,
+        })
+        .collect()
+}
+
+fn cleared(fx: &ReaderEffects) -> bool {
+    acts(fx)
+        .iter()
+        .any(|(a, _)| matches!(a, DocAction::ClearSelection))
+}
+
 #[test]
-fn virtual_selection_never_touches_the_page_unless_native_mode_is_on() {
+fn the_page_selection_follows_the_virtual_one_so_the_browsers_ctrl_c_copies_it() {
     let mut r = tab_rig();
     r.focus(1002);
     settle(&mut r);
-    let mut seen = Vec::new();
-    for _ in 0..3 {
-        seen.extend(acts(&r.key(CoreCmd::BrowseSelectNextChar)));
-    }
-    seen.extend(acts(&r.key(CoreCmd::BrowseSelectAll)));
-    assert!(
-        !seen
-            .iter()
-            .any(|(a, _)| matches!(a, DocAction::SetSelection(_))),
-        "default: virtual only {seen:?}"
-    );
-    // gorca+Shift+F10 turns the mirror on; a range inside one text node is set.
-    let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
-    assert_eq!(spoken(&fx), ["native selection on"]);
     r.key(CoreCmd::BrowseCursorTop);
-    let _ = r.key(CoreCmd::BrowseSelectNextChar);
-    let fx = r.key(CoreCmd::BrowseSelectNextChar);
-    assert!(
-        acts(&fx)
-            .iter()
-            .any(|(a, _)| matches!(a, DocAction::SetSelection(_))),
-        "{:?}",
-        acts(&fx)
-    );
-    // Extending over a node boundary (a range in two nodes) clears the page selection.
-    let mut later = Vec::new();
-    for _ in 0..20 {
-        later.extend(acts(&r.key(CoreCmd::BrowseSelectNextChar)));
+    // A held Shift+Right sets the page selection once, after the debounce.
+    let mut early = Vec::new();
+    for _ in 0..3 {
+        early.extend(selections(&r.key(CoreCmd::BrowseSelectNextChar)));
     }
-    assert!(
-        later
-            .iter()
-            .any(|(a, _)| matches!(a, DocAction::SetSelection(range) if range.is_empty())),
-        "a range over several nodes leaves no stale page selection: {later:?}"
-    );
-    // A plain move drops the range: nothing of ours stays selected (checked after the timer).
-    let fx = r.key(CoreCmd::BrowseCursorTop);
-    let mut moved = acts(&fx);
-    moved.extend(acts(&settle(&mut r)));
-    assert!(
-        !moved
-            .iter()
-            .any(|(a, _)| matches!(a, DocAction::SetSelection(range) if !range.is_empty())),
-        "{moved:?}"
-    );
+    assert!(early.is_empty(), "nothing before the debounce: {early:?}");
+    let sel = selections(&settle(&mut r));
+    assert_eq!(sel.len(), 1, "{sel:?}");
+    assert_eq!(sel[0].spans.len(), 1);
+    assert_eq!(sel[0].spans[0].range, 0..3, "Wel");
+    // A plain move drops the virtual range, so the page's selection is cleared.
+    r.key(CoreCmd::BrowseCursorNextLine);
+    assert!(cleared(&settle(&mut r)), "no stale page selection");
+    // gorca+Shift+F10 stops the mirror.
     let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
     assert_eq!(spoken(&fx), ["native selection off"]);
+    r.key(CoreCmd::BrowseCursorTop);
+    r.key(CoreCmd::BrowseSelectNextChar);
+    assert!(selections(&settle(&mut r)).is_empty());
+    let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
+    assert_eq!(spoken(&fx), ["native selection on"]);
 }
 
-fn ctrl_c() -> gorca_input_api::Chord {
-    gorca_input_api::Chord {
-        keysym: 0x63,
-        modifiers: Modifiers::CONTROL,
-    }
-}
-
-/// NVDA parity: Ctrl+C in browse mode copies the virtual selection and says so. The chord is
-/// grabbed only while a selection exists, so the page keeps its own Ctrl+C otherwise.
 #[test]
-fn ctrl_c_copies_the_virtual_selection_and_is_grabbed_only_while_one_exists() {
+fn select_all_mirrors_the_whole_text_and_never_a_clipboard_write() {
     let mut r = tab_rig();
-    r.reader.keys.quick_nav.push(ctrl_c());
-    r.reader.keys.copy = vec![ctrl_c()];
-    r.focus(1002);
-    let fx = settle(&mut r);
-    if let Some(g) = last_grabs(&fx) {
-        assert!(
-            !g.contains(0x63, Modifiers::CONTROL),
-            "no selection: no grab"
-        );
-    }
-    // Nothing selected: the command says so and copies nothing.
-    let fx = r.key(CoreCmd::BrowseCopy);
-    assert!(copies(&fx).is_empty());
-    assert_eq!(spoken(&fx), ["nothing selected"]);
-    // Select, let the cursor settle: Ctrl+C is ours now.
-    for _ in 0..3 {
-        r.key(CoreCmd::BrowseSelectNextChar);
-    }
-    let fx = settle(&mut r);
-    let g = last_grabs(&fx).expect("the grab set follows the selection");
-    assert!(g.contains(0x63, Modifiers::CONTROL));
-    let fx = r.key(CoreCmd::BrowseCopy);
-    let got = copies(&fx);
-    assert_eq!(got.len(), 1, "{got:?}");
-    assert!(!got[0].is_empty());
-    assert_eq!(spoken(&fx), ["copied to clipboard"]);
-    // A plain move drops the selection and gives Ctrl+C back to the page.
-    r.key(CoreCmd::BrowseCursorNextLine);
-    let fx = settle(&mut r);
-    let g = last_grabs(&fx).expect("the grab set follows the selection");
-    assert!(!g.contains(0x63, Modifiers::CONTROL));
-}
-
-/// Select all copies the whole document text, last character included.
-#[test]
-fn select_all_then_copy_takes_the_whole_text() {
-    let mut r = tab_rig();
-    r.reader.keys.copy = vec![ctrl_c()];
     r.focus(1002);
     settle(&mut r);
     r.key(CoreCmd::BrowseSelectAll);
-    let fx = r.key(CoreCmd::BrowseCopy);
-    let got = copies(&fx);
-    assert_eq!(got.len(), 1);
-    let doc_text = r
-        .reader
-        .web
-        .as_ref()
-        .and_then(|b| {
-            b.docs
-                .get(DocId(1))
-                .map(|h| h.read.with(|d| d.text_in(0, d.text_len())))
-        })
-        .expect("document text");
-    assert_eq!(got[0], doc_text);
+    let sel = selections(&settle(&mut r));
+    assert_eq!(sel.len(), 1);
+    // The whole text is whole blocks at both ends: one range on the document, from the heading
+    // through the last paragraph (an end that names a child includes it).
+    let spans = &sel[0].spans;
+    assert_eq!(spans.len(), 1, "{spans:?}");
+    assert_eq!(spans[0].range, 0..4);
+}
+
+#[test]
+fn shift_end_and_select_all_include_the_last_character_and_shift_left_takes_back_one() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    r.key(CoreCmd::BrowseCursorTop);
+    // Shift+End selects the whole first line, "Welcome": the last character is inside.
+    let fx = r.key(CoreCmd::BrowseSelectLineEnd);
+    assert!(
+        spoken(&fx).iter().any(|s| s.contains("Welcome")),
+        "{:?}",
+        spoken(&fx)
+    );
+    let sel = selections(&settle(&mut r));
+    assert_eq!(sel[0].spans[0].range, 0..7, "Welcome");
+    // Shift+Left takes back exactly the last character.
+    r.key(CoreCmd::BrowseSelectPrevChar);
+    let sel = selections(&settle(&mut r));
+    assert_eq!(sel[0].spans[0].range, 0..6, "Welcom");
+    // Ctrl+A, then Shift+Left: the whole text minus the last character.
+    r.key(CoreCmd::BrowseSelectAll);
+    settle(&mut r);
+    let len = r
+        .docs
+        .get(DocId(1))
+        .expect("document")
+        .read
+        .with(gorca_doc::web::WebDoc::text_len);
+    let sel = |r: &Rig| r.reader.web.as_ref().and_then(|b| b.sel);
+    assert_eq!(
+        sel(&r),
+        Some((0, len)),
+        "the whole text, last character included"
+    );
+    r.key(CoreCmd::BrowseSelectPrevChar);
+    assert_eq!(sel(&r), Some((0, len - 1)), "one character less");
+}
+
+/// The text a plan selects, read back from the mirror the way the browser would join it.
+fn plan_of(
+    r: &Rig,
+    from_text: &str,
+    from_local: u32,
+    to_text: &str,
+    to_local: u32,
+) -> super::selmirror::Plan {
+    r.docs.get(DocId(1)).expect("document").read.with(|d| {
+        let find = |t: &str| {
+            d.preorder()
+                .find(|id| d.node(*id).is_some_and(|v| v.text == Some(t)))
+                .expect(t)
+        };
+        let lo = d.offset_of(find(from_text)).expect("offset") + from_local;
+        let hi = d.offset_of(find(to_text)).expect("offset") + to_local;
+        super::selmirror::plan(d, lo, hi).expect("a plan")
+    })
+}
+
+fn ranges(p: &super::selmirror::Plan) -> Vec<std::ops::Range<u32>> {
+    p.spans.iter().map(|s| s.range.clone()).collect()
+}
+
+#[test]
+fn a_range_inside_one_container_is_one_exact_span_across_a_link() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    // "ead the docs n" of "Read " + link("the docs") + " now.": hypertext "Read \u{fffc} now."
+    let p = plan_of(&r, "Read ", 1, " now.", 3);
+    assert_eq!(ranges(&p), vec![1..9]);
+    assert_eq!(p.snap.range, 1..9);
+}
+
+#[test]
+fn a_range_across_blocks_is_exact_legs_and_has_a_rounded_out_alternative() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    // From "lcome" of the heading to "Read" of the paragraph: tail, head.
+    let p = plan_of(&r, "Welcome", 2, "Read ", 3);
+    assert_eq!(ranges(&p), vec![2..7, 0..3]);
+    // The alternative is one range on the document, whole children at the nested ends.
+    assert_eq!(p.snap.range, 0..2);
+    assert!(p.snap.end_on_child);
+    // To "Last" of the last paragraph: the blocks between ride in one range.
+    let p = plan_of(&r, "Welcome", 2, "Last line", 4);
+    assert_eq!(ranges(&p), vec![2..7, 1..3, 0..4]);
+}
+
+#[test]
+fn a_range_that_ends_at_a_link_says_so_and_a_space_before_it_can_be_left_out() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    // "Read " is followed by the link: the span is exact (0..5) and tells the source that a
+    // child follows and that the last character is white space; the source decides.
+    let p = plan_of(&r, "Read ", 0, "Read ", 5);
+    assert_eq!(ranges(&p), vec![0..5]);
+    assert!(p.spans[0].child_follows && p.spans[0].trim_ws && !p.spans[0].end_on_child);
+}
+
+#[test]
+fn a_selection_that_starts_inside_a_link_is_cleared_not_mirrored() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    r.key(CoreCmd::QuicknavNextLink);
+    settle(&mut r);
+    r.key(CoreCmd::BrowseSelectNextChar);
+    r.key(CoreCmd::BrowseSelectNextChar);
+    let fx = settle(&mut r);
+    assert!(
+        selections(&fx).is_empty(),
+        "no selection that would focus the link"
+    );
+}
+
+#[test]
+fn a_selection_starting_in_a_link_is_not_mirrored_because_the_browser_would_focus_it() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    let link_container = r.docs.get(DocId(1)).expect("document").read.with(|d| {
+        let run = d
+            .preorder()
+            .find(|id| d.node(*id).is_some_and(|v| v.text == Some("the docs")))
+            .expect("run");
+        let lo = d.offset_of(run).expect("offset");
+        let p = super::selmirror::plan(d, lo, lo + 3).expect("a plan");
+        (p.start_container, d.parent(run))
+    });
+    assert_eq!(Some(link_container.0), link_container.1);
 }
 
 // ---- review round 1: M-4 live speech expires and spends the owner's budget ---------------------

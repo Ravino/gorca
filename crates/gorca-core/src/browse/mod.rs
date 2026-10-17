@@ -14,6 +14,7 @@ pub mod cursor;
 pub mod forms;
 pub mod present;
 pub mod sayall;
+pub mod selmirror;
 pub mod tablenav;
 
 use std::collections::{HashMap, HashSet};
@@ -558,9 +559,6 @@ pub struct BrowseState {
     /// only while the mirror has a focusable target in that direction. Written by
     /// `current_grabs`, the one place every pushed set is built, so it cannot go stale (R-2).
     pub tab_grab: std::cell::Cell<(bool, bool)>,
-    /// Whether the last built grab set held Ctrl+C (`browse.copy`): only while `sel` is set, so
-    /// the page keeps its own copy otherwise.
-    pub copy_grab: std::cell::Cell<bool>,
     /// The web node that has system focus, and whether the browse cursor was last put there by a
     /// focus change (NVDA `_lastCaretMoveWasFocus`, #5227). While the cursor is on or inside the
     /// focused node, or came from a focus change, Tab belongs to the browser (R-5).
@@ -569,6 +567,8 @@ pub struct BrowseState {
     /// Native selection mode (gorca+Shift+F10, D-3): the page's own selection follows the
     /// virtual one. Off by default; the virtual selection never touches the page.
     pub native_selection: bool,
+    /// When the page selection is next brought up to date with `sel` (debounced).
+    pub sel_due: Option<Instant>,
     /// The text node whose page selection we set last: it is cleared when the virtual range
     /// moves elsewhere or goes away, so the page never keeps a stale selection.
     pub native_sel_node: Option<(DocId, DocNodeId)>,
@@ -612,10 +612,10 @@ impl BrowseState {
             click_target: None,
             sel: None,
             tab_grab: std::cell::Cell::new((true, true)),
-            copy_grab: std::cell::Cell::new(true),
             focus_node: None,
             cursor_from: CursorFrom::Own,
-            native_selection: false,
+            native_selection: true,
+            sel_due: None,
             native_sel_node: None,
             lead_dialog: None,
         }

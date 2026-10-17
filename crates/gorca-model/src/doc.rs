@@ -122,7 +122,41 @@ pub enum DocAction {
     Click,
     ScrollIntoView,
     SetCaret(u32),
-    SetSelection(Range<u32>),
+    /// Select these hypertext ranges in the page (core side: ids are [`DocNodeId`]; the doc actor
+    /// rewrites it to [`DocAction::SetSourceSelection`] before the source sees it).
+    SetSelection(SelectionSpec<DocNodeId>),
+    /// The same with the source's own node ids.
+    SetSourceSelection(SelectionSpec<SrcNodeId>),
+    /// Collapse the page selection set earlier (and drop extra ranges); `node` is a container
+    /// that held it.
+    ClearSelection,
+}
+
+/// One hypertext range of a page selection: `start..end`, `end` exclusive and exact. The three
+/// flags say what the end touches, because engines read an end offset that names an embedded
+/// child differently (Firefox ends the range after the child, Blink excludes it): the source
+/// adapts, the mirror stays engine-neutral.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SelSpan<N> {
+    pub node: N,
+    pub range: Range<u32>,
+    /// The last selected character is an embedded child.
+    pub end_on_child: bool,
+    /// The character at `end` is an embedded child.
+    pub child_follows: bool,
+    /// The last selected character is white space (leaving it out names the same words).
+    pub trim_ws: bool,
+}
+
+/// A page selection as hypertext ranges: `spans` are exact (one range each, in document order),
+/// `snap` is the single-range alternative for engines that keep one range.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SelectionSpec<N> {
+    /// The document node: the browser keeps its ranges per document, and only the document's
+    /// hypertext counts and removes all of them.
+    pub root: N,
+    pub spans: Vec<SelSpan<N>>,
+    pub snap: SelSpan<N>,
 }
 
 /// Fallback caret bookmark when a node no longer joins (IR-7): `(ordinal, context hash)`,
