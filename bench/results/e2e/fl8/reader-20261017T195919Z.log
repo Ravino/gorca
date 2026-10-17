@@ -1,0 +1,183 @@
+2026-10-17T19:59:21.588608Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884403424716238205) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:59:26.223804Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169213291806728967) } parent_children=Count(29) kids=29 truncated=false complete=true
+2026-10-17T19:59:26.223969Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=1
+2026-10-17T19:59:26.228977Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888324283181681731) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-17T19:59:26.233384Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887339120762993900) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.233506Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888323183670053520) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-17T19:59:26.234367Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888339676344476685) } parent_children=Count(10) kids=10 truncated=false complete=true
+2026-10-17T19:59:26.234392Z DEBUG gorca_core::review::build: review build round misses=4 ok=4 nodes=6
+2026-10-17T19:59:26.236048Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885387487623297825) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.236102Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885384189088413192) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.237672Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887338021251365689) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:59:26.238845Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887334722716481056) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-17T19:59:26.238866Z DEBUG gorca_core::review::build: review build round misses=5 ok=4 nodes=21
+2026-10-17T19:59:26.240109Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885381990065156770) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.240123Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883548004669679272) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.241336Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886352858832677858) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.242260Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885383089576784981) } parent_children=Count(5) kids=5 truncated=false complete=true
+2026-10-17T19:59:26.242316Z DEBUG gorca_core::review::build: review build round misses=4 ok=4 nodes=26
+2026-10-17T19:59:26.243864Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883555701251076749) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.243894Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=32
+2026-10-17T19:59:26.247842Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884402325204609994) } parent_children=Count(6) kids=6 truncated=false complete=true
+2026-10-17T19:59:26.247895Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=33
+2026-10-17T19:59:26.250976Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882563941762619652) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-17T19:59:26.251266Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882565041274247863) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-17T19:59:26.251417Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882554046157965753) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-17T19:59:26.252442Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882552946646337542) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:59:26.252458Z DEBUG gorca_core::review::build: review build round misses=4 ok=4 nodes=38
+2026-10-17T19:59:26.253989Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4851313257452337068) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:59:26.255214Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4881565585204393289) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.256414Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4851314356963965279) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.258126Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4881562286669508656) } parent_children=Count(16) kids=16 truncated=false complete=true
+2026-10-17T19:59:26.258209Z DEBUG gorca_core::review::build: review build round misses=7 ok=4 nodes=49
+2026-10-17T19:59:26.260685Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4881569983250906133) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-17T19:59:26.261179Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4315191387683870518) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-17T19:59:26.263409Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4851308859405824224) } parent_children=Count(6) kids=6 truncated=false complete=true
+2026-10-17T19:59:26.265040Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4881568883739277922) } parent_children=Count(6) kids=6 truncated=false complete=true
+2026-10-17T19:59:26.265068Z DEBUG gorca_core::review::build: review build round misses=15 ok=4 nodes=70
+2026-10-17T19:59:26.266006Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4851325352080247389) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.266089Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4840756846311964732) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.266148Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4840759045335221154) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.266167Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4840754647288708310) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.266176Z DEBUG gorca_core::review::build: review build round misses=21 ok=4 nodes=86
+2026-10-17T19:59:26.267108Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4840752448265451888) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.267142Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4840767841428246842) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.267151Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4315192487195498729) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.267486Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849335236033563929) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.267504Z DEBUG gorca_core::review::build: review build round misses=17 ok=4 nodes=90
+2026-10-17T19:59:26.270940Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849339634080076773) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:59:26.271869Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4881566684716021500) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.271982Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849337435056820351) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.272137Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4881574381297418977) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-17T19:59:26.272168Z DEBUG gorca_core::review::build: review build round misses=13 ok=4 nodes=94
+2026-10-17T19:59:26.273729Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849338534568448562) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.273736Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4849340733591704984) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.273787Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4846534779917078187) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.274742Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848376461893953162) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-17T19:59:26.274762Z DEBUG gorca_core::review::build: review build round misses=12 ok=4 nodes=101
+2026-10-17T19:59:26.276715Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848370964335812107) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.276733Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848377561405581373) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-17T19:59:26.277939Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848375362382324951) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:59:26.279686Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848373163359068529) } parent_children=Count(5) kids=5 truncated=false complete=true
+2026-10-17T19:59:26.279738Z DEBUG gorca_core::review::build: review build round misses=8 ok=4 nodes=108
+2026-10-17T19:59:26.281697Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4847522141359022440) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.282113Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4852307215964050587) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:59:26.282122Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4852311614010563431) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:59:26.282138Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4847515544289253174) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:59:26.282149Z DEBUG gorca_core::review::build: review build round misses=9 ok=4 nodes=119
+2026-10-17T19:59:26.284344Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4848368765312555685) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-17T19:59:26.284361Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4851309958917452435) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:59:26.284379Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4853158237964096676) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:59:26.284710Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4881563386181136867) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-17T19:59:26.284726Z DEBUG gorca_core::review::build: review build round misses=5 ok=4 nodes=129
+2026-10-17T19:59:26.287199Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4316038011637403763) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-17T19:59:26.287722Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4853156038940840254) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-17T19:59:26.287978Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4841755202870191095) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-17T19:59:26.287997Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4841740909219024352) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-17T19:59:26.288027Z DEBUG gorca_core::review::build: review build round misses=8 ok=4 nodes=141
+2026-10-17T19:59:26.289271Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4853150541382699199) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.289288Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4850326995522021026) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.289303Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4850324796498764604) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.289408Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4316039111149031974) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.289421Z DEBUG gorca_core::review::build: review build round misses=8 ok=4 nodes=156
+2026-10-17T19:59:26.290736Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4315195785730383362) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.290820Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4315193586707126940) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.290872Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4315200183776896206) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-17T19:59:26.291012Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4850320398452251760) } parent_children=Count(5) kids=5 truncated=false complete=true
+2026-10-17T19:59:26.291027Z DEBUG gorca_core::review::build: review build round misses=4 ok=4 nodes=160
+2026-10-17T19:59:26.291866Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("Politics", Some(Rect { x: 200, y: 255, w: 53, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.291939Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("￼￼￼￼￼￼", Some(Rect { x: 0, y: 85, w: 1280, h: 683 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.291948Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("Skip to main content", Some(Rect { x: 160, y: 85, w: 155, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.292003Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("World", Some(Rect { x: 200, y: 232, w: 45, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.292104Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some((" The Daily Gorca", Some(Rect { x: 160, y: 193, w: 146, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.292368Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("• ￼", Some(Rect { x: 185, y: 283, w: 15, h: 15 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.292402Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("• ￼", Some(Rect { x: 185, y: 260, w: 15, h: 15 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.292466Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("• ￼", Some(Rect { x: 185, y: 237, w: 15, h: 15 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.292526Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("Business", Some(Rect { x: 200, y: 278, w: 66, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.292647Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("Technology", Some(Rect { x: 200, y: 301, w: 86, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.292707Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("Science", Some(Rect { x: 200, y: 324, w: 56, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.292752Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.292954Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("• ￼", Some(Rect { x: 185, y: 329, w: 15, h: 15 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.292967Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("• ￼", Some(Rect { x: 185, y: 306, w: 15, h: 15 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.293119Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("Sport", Some(Rect { x: 200, y: 347, w: 41, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.293150Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("Search", Some(Rect { x: 160, y: 386, w: 51, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.293385Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("Technology", Some(Rect { x: 200, y: 450, w: 86, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.293472Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("• ￼", Some(Rect { x: 185, y: 352, w: 15, h: 15 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.293613Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("Screen readers learn to keep u", Some(Rect { x: 160, y: 556, w: 960, h: 45 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.293664Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("Technology", Some(Rect { x: 160, y: 512, w: 960, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.293746Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("1. ￼", Some(Rect { x: 182, y: 450, w: 18, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.293889Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("A new generation of assistive ", Some(Rect { x: 160, y: 623, w: 960, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.293912Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("2. Accessibility", Some(Rect { x: 182, y: 473, w: 18, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.293966Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("By ￼, Technology editor", Some(Rect { x: 160, y: 662, w: 960, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.294071Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("Ada Lovelace", Some(Rect { x: 183, y: 662, w: 98, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.294124Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("￼ · 6 min read", Some(Rect { x: 160, y: 701, w: 960, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.294327Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("14 October 2026, 09:30", Some(Rect { x: 160, y: 701, w: 174, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.294398Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("Share by email", Some(Rect { x: 200, y: 740, w: 110, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.294878Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("Copy link", Some(Rect { x: 200, y: 763, w: 68, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.294898Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("A reader at work. Photograph: ", Some(Rect { x: 200, y: 1131, w: 880, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.295046Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("• ￼", Some(Rect { x: 185, y: 740, w: 125, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.295072Z DEBUG gorca_core::review::build: review lines ok n=1 first=Some(("• ￼", Some(Rect { x: 185, y: 763, w: 83, h: 23 }))) trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.295222Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.295232Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.295489Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.295538Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.295755Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.295935Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.296031Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.296108Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.296215Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.296282Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.296470Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.296608Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.296825Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.296897Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.297054Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.297109Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.297198Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.297204Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.297589Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.297599Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.297789Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.297925Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.298089Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.298097Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.298189Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.298198Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.298393Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.298425Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.298513Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.298563Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.298989Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.299001Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.299300Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.299311Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.299554Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.299829Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.300208Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.300218Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.300344Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.301257Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.301304Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.301312Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.301389Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.301465Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.301627Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.301728Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.301880Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.302260Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.302400Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.302408Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.302573Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.302580Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.302835Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.302857Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.302904Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.303061Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.303087Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.303102Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: 0, y: 0, w: 1280, h: 768 }
+2026-10-17T19:59:26.303117Z DEBUG gorca_core::review::build: review texts texts=90 asked=90 got=90
+2026-10-17T19:59:26.303338Z DEBUG gorca_core::review::build: review model built lines=6 zones=22 completeness=Complete still_missing=[]
+2026-10-17T19:59:50.344479Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: -10000, y: -10000, w: 20000, h: 20000 }
+2026-10-17T19:59:50.344524Z DEBUG gorca_core::review::build: review texts texts=1 asked=1 got=1
+2026-10-17T19:59:50.344544Z DEBUG gorca_core::review::build: review model built lines=1 zones=1 completeness=GeometryFallback still_missing=[]
+2026-10-17T19:59:53.362410Z DEBUG gorca_core::review::build: review lines ok n=0 first=None trunc=false clip=Rect { x: -10000, y: -10000, w: 20000, h: 20000 }

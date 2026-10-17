@@ -1,0 +1,49 @@
+# e2e-m8 fl10
+# utc=2026-10-17T20:03:14Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=10.99 14.81 15.88 18/2348 3978006
+# git_rev=2e4ca740
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=fl10
+# reader=daemon:<repo>/.claude/worktrees/agent-a006f03fcecc9742b/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# quick=false
+# loadavg_before=10.25 15.06 15.99 2/2426 3974424
+# loadavg_end=10.99 14.81 15.88 19/2348 3978003
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-FL FL.cur P1 FAIL: heard "M8 News article document Account menu button collapsed" 
+# note1=M8-FL FL.top2 P1 FAIL: heard "Menu Bar toolbar" 
+# note2=M8-FL FL.next1 P1 FAIL: heard "Close button" 
+# note3=M8-FL FL.next2 P1 FAIL: heard "Browser tabs toolbar Firefox View toggle button M8 News article Open a new tab (Ctrl plus T) tab list Close tab button Open a new tab (Ctrl plus T) button List all tabs button Close button" 
+# note4=M8-FL FL.next3 P1 FAIL: heard "Navigation toolbar Back button unavailable Forward button unavailable Reload button View site information button Search or enter address combo box collapsed Enter Reader View button Bookmark this page (Ctrl plus D) button Account button Ext~" 
+# note5=M8-FL FL.next4 P1 FAIL: heard "toolbar" 
+# note6=M8-FL FL.next5 P1 FAIL: heard "Skip to main content" 
+# note7=M8-FL FL.word P1 FAIL: heard "to" 
+# note8=M8-FL FL.char P1 FAIL: heard "o" 
+# note9=M8-FL FL.end P1 FAIL: heard "Breadcrumb Comments (3) A reader at work. Photograph: Staff The latency problem landmark" 
+# note10=M8-FL FL.prev P1 FAIL: heard "Share this article list bullet Copy link" 
+# note11=M8-FL FL.tofocus P1 FAIL: heard "M8 News article, document" 
+# note12=M8-FL FL.mode P1 FAIL: heard "M8 News article, document" 
+# note13=M8-FL FL.obj P1 FAIL: heard "Skip to main content, link" 
+# note14=M8-FL FL.objn P1 FAIL: heard "Cookie consent, dialog" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-FL.fail                 daemon/voicego           15           15           15  1 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-FL.gap                  daemon/voicego            0            0            0  1                  info  core ok, NVDA extras missing [steps]
+M8-FL.p0_not_pass          daemon/voicego            0            0            0  1                  info   [steps]
+M8-FL.pass                 daemon/voicego            1            1            1  1                  info   [steps]
+M8-FL.steps                daemon/voicego           16           16           16  1                  info   [steps]
+M8-FL.xfail                daemon/voicego            0            0            0  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-FL.xpass                daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]
