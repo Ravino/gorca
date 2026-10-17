@@ -126,3 +126,31 @@ repeat (median 0; known E2 load flake). VV (real gnome-terminal): 24 PASS, 0 FAI
 (`vt_extra` max 2, `vt_missing` max 2 in one repeat, load 20; the same shape failed before this change at load 15),
 rerun `fv-vt2`: 0/0/0 PASS. Not shown: whether the late-caret replacement adds an extra utterance under extreme load
 (one extra speech replaces the old one at the speech lane, but `vt_extra` counts it).
+
+## Round 2 fixes (third and fourth merge of main)
+
+* **Terminal edge timer, single utterance.** A motion key now waits for its caret event: the unit at the caret is
+  spoken early (`EDGE_MS` 100 ms) only when the key provably cannot move (backward: the caret is at or before the
+  end of the prompt; forward: nothing but blanks behind the caret and below it), otherwise after `EDGE_SLOW_MS`
+  (240 ms) if the event never came. A caret event 100-240 ms late is the only answer ("b", not "a" then "b"). Tests:
+  `a_slow_caret_event_is_the_only_answer_to_a_key_that_can_move`, `a_key_that_cannot_move_speaks_at_the_short_edge_time`.
+* **Removed text.** `Exp::Removed` compares the spoken text with the whole document (the script selects everything
+  with Ctrl+Home, Shift+Down ... Ctrl+Shift+End) with line breaks as blanks; native editors pass it, the two
+  contenteditable targets are `known_failing`.
+* **ED-G3E intermittent (1 of 8 in an earlier run).** Not reproduced in 10 loops x 3 repeats with the reader's
+  `gorca_text` debug trace (`bench/results/e2e/g3e-repro/`, host load 16), nor in the later full matrices (`fx`, `fy`:
+  0 gated failures). The trace of a Ctrl+A shows the sequence key, selection event, `Selections` fetch, `say`, and a second
+  selection event ~500 ms later that is ignored. The candidate cause, "selection events are ignored during any fetch",
+  only applies while a unit fetch (line, paragraph) is in flight; the step before Ctrl+A is a Shift+Home whose fetch
+  is itself a selection fetch (the pre-existing branch), so the candidate cannot be shown to apply. Classified as an
+  unreproduced load flake (1 in ~40 repeats); the failing row is kept in `fv-n.log` of that run.
+
+Gates on the final merged tree: fmt, clippy `--all-targets -D warnings`, `cargo xtask deps`/`strings`/`build-ext` ok;
+`cargo test --workspace --no-fail-fast`: 2231 passed, 0 failed, 17 ignored. e2e on the merged binary (labels `fx-*`,
+`fy-*`, host load 8-25 from other agents): ED native and terminal 0 gated failures (twice); UB1 passed in `fy-m7`
+(`fx-m7`: 6 silent steps in one of 3 repeats, load flake); FC1/FE1 `fc_double` max 1 in one repeat of each run (Firefox
+double echo, known flake class); VV 24 PASS (`fy-vv`; `fx-vv`: `vv_screen_failures` max 1 in one repeat); M3 24 PASS with
+E2 `e2_missing` max 25 and `e2_wrong` max 3 in one repeat (median 0; E2 is the known load flake of M3, see the
+`m3-flake*` results on main); VT fails in one of three repeats in about half of the runs on this host (`fv-vt`,
+`fy-vt`; passes in `fv-vt2`, `fx-vt`) and so does main's own terminal work (`retrack-final-VT` max 3, `retrack-VT-full`
+max 3, `retrack-VT` max 1): not attributable to this branch.
