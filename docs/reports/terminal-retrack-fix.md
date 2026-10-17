@@ -46,3 +46,30 @@ the re-read because `read_ok` is set by any answered read.
 - e2e (real VTE rig, --quick): VS pass (vs_stale/drift/silent 0). VT: all functional gates pass,
   `vt_ms.p99` 3.291 vs gate 3 ms FAIL (--quick, host shared with other agents; not repeated, no
   baseline comparison run). VD: killed by the 290 s / 590 s sandbox time limit, no verdict.
+
+## Follow-up: remaining statemodel ids, VT/VD reruns
+- `term-silent-after-review` (real, user-facing): leaving review by a key re-tracked the terminal in
+  `text_mode_changed`, which restarted the session after the key had already reached it, losing the
+  history-recall expectation and speaking the stale line plus the diff ("me at box: $ cmb", "d2" instead of
+  "cmd2"). Fix: `Reader::term_resume` keeps a live tracked session and has it re-read the screen
+  (`term_events_lost`); only an untracked/stand-in/no-baseline terminal is tracked afresh. Regression
+  `history_recall_after_review_is_spoken`. Removed from `KNOWN`; `review-kept` was already fixed and is removed
+  too (KNOWN is empty).
+- `review-drift`: the invariant was too loose, not the anchor code. Background output (`TermAsync`) replaced the
+  whole screen, the line under the cursor no longer existed, and the cursor went to the new prompt line. The
+  invariant said "line on screen" but tested the *new* line. It now also requires the old line to be on the
+  screen (`review_screen_has_line`). With the old line present the cursor must still stay (covered by the
+  existing scroll/shift regressions). Regression `review_by_character_stays_on_its_line_while_the_terminal_answers_late`
+  documents the case.
+- Strict 50k x 40: seeds 1, 100000, 777777, 2000000, 3000000 all clean. One 20k x 150 run (seed 5000000)
+  finds `not-tracked` (seed 5014211: OpenDialog, reads fail, CloseDialog refocus, OpenDialog, reads work, type ','
+  in the dialog entry). It reproduces unchanged on base 10ab9f6f; it is an entry/dialog tracking race, not
+  terminal; not fixed.
+- VT without --quick on the real rig (3 repeats, `bench/results/e2e/retrack-VT-full`): vt_ms.p99 median
+  0.485 ms (max of repeats 1.68), PASS (gate 3 ms). main's latest VT results (m6-gates-r3, m6fix-fake):
+  0.514 / 0.485. The earlier 3.29 ms was the single-sample --quick run at load average 20.
+- VD: `GORCA_VD_ROUNDS` is read by the e2e host, not the reader, so `--reader-env` does not shorten it (the
+  4 "chunk" runs are each a full 8-round run, ~4 min, under the limit). All four, and a run with the main
+  binaries (`retrack-VD-main`), show the same single failing step in round 2 (tab switch): the typed
+  `echo 5` arrives garbled ("5 5 5 echo") at the shell, a rig key-ordering artifact that is identical on
+  main; every other round and the baseline are clean.
