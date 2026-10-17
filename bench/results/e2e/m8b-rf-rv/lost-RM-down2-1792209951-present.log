@@ -1,0 +1,4 @@
+{"redaction_key":"1c36cad6b9ef5275765609b6dc5e1adc"}
+{"t_ns":826477373388970,"utt_id":1,"epoch":1,"app_bus":":1.9","path":"/org/a11y/atspi/accessible/71","key":"1:1:43c5da093de7685b","source":"miss_reply","role":"document_web","states":["focused","showing","visible"],"name":"M8b Review Names","value":null,"may_refine":false,"refines":null}
+{"t_ns":826477671162886,"utt_id":3,"epoch":2,"app_bus":":1.9","path":"/org/a11y/atspi/accessible/93","key":"1:1:43becc093de131e3","source":"stale","role":"link","states":["enabled","focusable","sensitive","showing","visible"],"name":"Read article Card title","value":null,"may_refine":true,"refines":null}
+{"t_ns":826477957134860,"utt_id":4,"epoch":3,"app_bus":":1.9","path":"/org/a11y/atspi/accessible/71","key":"1:1:43c5da093de7685b","source":"hit","role":"document_web","states":["enabled","focusable","focused","sensitive","showing","visible"],"name":"M8b Review Names","value":null,"may_refine":true,"refines":null}

@@ -63,3 +63,20 @@ problem (M9 prep), so browse-line steps outside M8b are not meaningful there.
 - A GTK switch (`ATSPI_ROLE_SWITCH`) still maps to "toggle button" on the desktop (unchanged on purpose).
 - Incident: I ran a stale script from the shared scratchpad that edited `crates/gorca-config/src/settings.rs` in another agent's worktree
   (`agent-a5e2c09b05d747ca3`), inserting a duplicate block; I removed exactly that block again and verified one `static DOCS` and one test of each name remain. That agent should re-run its build.
+
+## Review fixes (reviewer report `docs/reports/m8b-review.md`, regression tests from its probes)
+
+| Finding | Fix |
+|---|---|
+| M-1 error text lost past the 64th invalid field | The AT-SPI connector's focus fetch reads the `error-message` target of a focused invalid control (`Caller::error_text_of`, same-app targets only, clamped end offset); `web_focus_snapshot` declines the mirror shortcut when an invalid control has no error text, and `web_overlay` keeps the fetched text over the mirror's. The source remembers target -> fields (`PathTable::error_targets`, bounded 1024) and re-reads the fields when the target's text, name or children change (r_invalid `RI.focus3` second error passes). |
+| L-1 150 ms sleep everywhere | `WebQuirks.warm_relations` (row `gecko-relations-warm-up`, Gecko only): one warm-up `GetRelationSet` per connection (`OnceCell`), wait at most 150 ms and never past the deadline; `error_text` never sleeps; single-node re-reads read at most 16 error texts per batch. |
+| L-2 `". "` text prefix | `SegmentKind::Description`; the verbalizer joins it with ". ", `description_pause=false` turns it into `Text`. `PAUSE` is gone; page text ". Dot" is spoken whole (`RM.down3`, verbalizer test). |
+| L-3 names | heading with `aria-label` speaks the label; check box and radio named by `aria-label` are named in browse lines (same-line label dedupes); tree item keeps its content (NVDA `nameIsContent`). |
+| L-4 | no "not selected" for menu items (role or kind). |
+| L-5 | NVDA bit order: `half pressed`, `on/off`, `opens dialog/grid/list/tree` after `required` and `invalid entry`; `submenu` stays before. |
+| L-6 | `Step::chars(n)` caps spoken characters; HO.h/fan/big assert it (unit test: a megabyte name fails the step). |
+
+Review scenario fixes: the reviewer's `RD.*`/`RN.*` step ids clashed with the reading scenario (renamed `RVD.*`/`RVN.*`); `RI.focus1` expected the first error text but the page changes it at 3 s (now expects "error", `RI.focus3` the second); `RM.cb.line`/`RM.down*` expected a wrong line order (now the observed order; Blink differences are gaps).
+
+Gates (head after the fix commits, load 8 to 24, disk trimmed to one profile): fmt, clippy `-D warnings`, `cargo xtask deps` ok; unit tests ok (one run showed `gorca-rt sched::this_process_lists_itself_as_other` failing under load, passes on rerun). `m8b-rf-final-full` Firefox whole corpus plus BWG/BFB/BHO and the review scenarios, 3 repeats: all gates pass. `m8b-rf-final-chromium2` M8b and review scenarios, 3 repeats: pass (line-order gaps). `m8b-rf-shell` A1 N1: pass. `m8b-rf-strict` K2 K3 R1 strict `--impersonate-orca`: first run `K3.lost` 1 in one repeat at load 15 (kept, `m8b-rf-strict`), rerun `m8b-rf-strict2`: lost 0, pass. Earlier failing runs kept (`m8b-rf-full`, `m8b-rf-rv`, `m8b-rf-final-chromium`, and the m7 runs refused by a stale reader hash).
+Note: `gorca-daemon/build.rs` did not re-embed the commit hash after commits in this worktree; touch it before an m7 run.
