@@ -18,7 +18,7 @@ use crate::WebEffect;
 use crate::commands::CoreCmd;
 use crate::directory::MirrorDirectory;
 use crate::doc_actor::translate::Translator;
-use crate::doc_actor::{DocCtl, DocHandle, DocNotice};
+use crate::doc_actor::{DocCtl, DocHandle, DocNotice, SelOutcome};
 use crate::mode::{Mode, ModeKeys};
 use crate::reader::{Reader, ReaderEffect, ReaderEffects, ReaderMsg};
 use gorca_model::DocAction;
@@ -1967,7 +1967,9 @@ fn acts(fx: &ReaderEffects) -> Vec<(DocAction, DocNodeId)> {
     effects_web(fx)
         .iter()
         .filter_map(|w| match w {
-            WebEffect::Act { node, act, .. } => Some((act.clone(), *node)),
+            WebEffect::Act { node, act, .. } | WebEffect::Select { node, act, .. } => {
+                Some((act.clone(), *node))
+            }
             WebEffect::Ensure { .. } | WebEffect::Activity { .. } => None,
         })
         .collect()
@@ -2061,58 +2063,506 @@ fn tab_is_grabbed_only_in_the_directions_that_have_a_target() {
     assert_eq!(spoken(&fx), ["no next focusable element"]);
 }
 
+/// The first `SetSelection` the effects carry: its exact spans as `(range)` per container.
+fn selections(fx: &ReaderEffects) -> Vec<gorca_model::SelectionSpec<DocNodeId>> {
+    acts(fx)
+        .into_iter()
+        .filter_map(|(a, _)| match a {
+            DocAction::SetSelection(spec) => Some(spec),
+            DocAction::Focus
+            | DocAction::Click
+            | DocAction::ScrollIntoView
+            | DocAction::SetCaret(_)
+            | DocAction::SetSourceSelection(_)
+            | DocAction::ClearSelection => None,
+        })
+        .collect()
+}
+
+fn cleared(fx: &ReaderEffects) -> bool {
+    acts(fx)
+        .iter()
+        .any(|(a, _)| matches!(a, DocAction::ClearSelection))
+}
+
 #[test]
-fn virtual_selection_never_touches_the_page_unless_native_mode_is_on() {
+fn the_page_selection_follows_the_virtual_one_so_the_browsers_ctrl_c_copies_it() {
     let mut r = tab_rig();
     r.focus(1002);
     settle(&mut r);
-    let mut seen = Vec::new();
-    for _ in 0..3 {
-        seen.extend(acts(&r.key(CoreCmd::BrowseSelectNextChar)));
-    }
-    seen.extend(acts(&r.key(CoreCmd::BrowseSelectAll)));
-    assert!(
-        !seen
-            .iter()
-            .any(|(a, _)| matches!(a, DocAction::SetSelection(_))),
-        "default: virtual only {seen:?}"
-    );
-    // gorca+Shift+F10 turns the mirror on; a range inside one text node is set.
-    let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
-    assert_eq!(spoken(&fx), ["native selection on"]);
     r.key(CoreCmd::BrowseCursorTop);
-    let _ = r.key(CoreCmd::BrowseSelectNextChar);
-    let fx = r.key(CoreCmd::BrowseSelectNextChar);
-    assert!(
-        acts(&fx)
-            .iter()
-            .any(|(a, _)| matches!(a, DocAction::SetSelection(_))),
-        "{:?}",
-        acts(&fx)
-    );
-    // Extending over a node boundary (a range in two nodes) clears the page selection.
-    let mut later = Vec::new();
-    for _ in 0..20 {
-        later.extend(acts(&r.key(CoreCmd::BrowseSelectNextChar)));
+    // A held Shift+Right sets the page selection once, after the debounce.
+    let mut early = Vec::new();
+    for _ in 0..3 {
+        early.extend(selections(&r.key(CoreCmd::BrowseSelectNextChar)));
     }
-    assert!(
-        later
-            .iter()
-            .any(|(a, _)| matches!(a, DocAction::SetSelection(range) if range.is_empty())),
-        "a range over several nodes leaves no stale page selection: {later:?}"
-    );
-    // A plain move drops the range: nothing of ours stays selected (checked after the timer).
-    let fx = r.key(CoreCmd::BrowseCursorTop);
-    let mut moved = acts(&fx);
-    moved.extend(acts(&settle(&mut r)));
-    assert!(
-        !moved
-            .iter()
-            .any(|(a, _)| matches!(a, DocAction::SetSelection(range) if !range.is_empty())),
-        "{moved:?}"
-    );
+    assert!(early.is_empty(), "nothing before the debounce: {early:?}");
+    let sel = selections(&settle(&mut r));
+    assert_eq!(sel.len(), 1, "{sel:?}");
+    assert_eq!(sel[0].spans.len(), 1);
+    assert_eq!(sel[0].spans[0].range, 0..3, "Wel");
+    // A plain move drops the virtual range, so the page's selection is cleared.
+    r.key(CoreCmd::BrowseCursorNextLine);
+    assert!(cleared(&settle(&mut r)), "no stale page selection");
+    // gorca+Shift+F10 switches to the virtual selection: the page is left alone.
     let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
-    assert_eq!(spoken(&fx), ["native selection off"]);
+    assert_eq!(spoken(&fx), ["virtual selection"]);
+    r.key(CoreCmd::BrowseCursorTop);
+    r.key(CoreCmd::BrowseSelectNextChar);
+    assert!(selections(&settle(&mut r)).is_empty());
+    // Back to the page selection: the document is probed first, and "page selection" is said
+    // only when the probe succeeds (S-4).
+    let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
+    assert!(
+        spoken(&fx).is_empty(),
+        "nothing is claimed before the probe answers"
+    );
+    let req = last_select_req(&fx).expect("a probe");
+    let fx = r
+        .reader
+        .handle(selection_done(req, SelOutcome::Done), r.now);
+    assert_eq!(spoken(&fx), ["page selection"]);
+}
+
+fn last_select_req(fx: &ReaderEffects) -> Option<u32> {
+    effects_web(fx).into_iter().rev().find_map(|w| match w {
+        WebEffect::Select { req, .. } => Some(req),
+        WebEffect::Ensure { .. } | WebEffect::Activity { .. } | WebEffect::Act { .. } => None,
+    })
+}
+
+fn selection_done(req: u32, outcome: SelOutcome) -> ReaderMsg {
+    ReaderMsg::Doc(DocNotice::SelectionDone {
+        doc: DocId(1),
+        req,
+        outcome,
+    })
+}
+
+#[test]
+fn a_document_that_cannot_select_keeps_the_virtual_selection_and_says_so() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    r.key(CoreCmd::BrowseNativeSelectionToggle);
+    let fx = r.key(CoreCmd::BrowseNativeSelectionToggle);
+    let req = last_select_req(&fx).expect("a probe");
+    let fx = r
+        .reader
+        .handle(selection_done(req, SelOutcome::NotSupported), r.now);
+    assert_eq!(spoken(&fx), ["page selection not available here"]);
+    // Still virtual: a selection writes nothing to the page.
+    r.key(CoreCmd::BrowseCursorTop);
+    r.key(CoreCmd::BrowseSelectNextChar);
+    assert!(selections(&settle(&mut r)).is_empty());
+}
+
+#[test]
+fn a_mirror_that_fails_is_known_and_a_stale_answer_is_ignored() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    r.key(CoreCmd::BrowseCursorTop);
+    r.key(CoreCmd::BrowseSelectNextChar);
+    let fx = settle(&mut r);
+    let req = last_select_req(&fx).expect("a mirror request");
+    // An answer for an older request changes nothing.
+    let stale = r.reader.handle(
+        selection_done(req.wrapping_sub(1), SelOutcome::Failed),
+        r.now,
+    );
+    assert!(spoken(&stale).is_empty());
+    let fx = r
+        .reader
+        .handle(selection_done(req, SelOutcome::Failed), r.now);
+    assert_eq!(spoken(&fx), ["page selection not set"]);
+}
+
+#[test]
+fn select_all_mirrors_the_whole_text_and_never_a_clipboard_write() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    r.key(CoreCmd::BrowseSelectAll);
+    let sel = selections(&settle(&mut r));
+    assert_eq!(sel.len(), 1);
+    // The whole text is whole blocks at both ends: one range on the document, from the heading
+    // through the last paragraph (an end that names a child includes it).
+    let spans = &sel[0].spans;
+    assert_eq!(spans.len(), 1, "{spans:?}");
+    assert_eq!(spans[0].range, 0..4);
+}
+
+#[test]
+fn shift_end_and_select_all_include_the_last_character_and_shift_left_takes_back_one() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    r.key(CoreCmd::BrowseCursorTop);
+    // Shift+End selects the whole first line, "Welcome": the last character is inside.
+    let fx = r.key(CoreCmd::BrowseSelectLineEnd);
+    assert!(
+        spoken(&fx).iter().any(|s| s.contains("Welcome")),
+        "{:?}",
+        spoken(&fx)
+    );
+    let sel = selections(&settle(&mut r));
+    assert_eq!(sel[0].spans[0].range, 0..7, "Welcome");
+    // Shift+Left takes back exactly the last character.
+    r.key(CoreCmd::BrowseSelectPrevChar);
+    let sel = selections(&settle(&mut r));
+    assert_eq!(sel[0].spans[0].range, 0..6, "Welcom");
+    // Ctrl+A, then Shift+Left: the whole text minus the last character.
+    r.key(CoreCmd::BrowseSelectAll);
+    settle(&mut r);
+    let len = r
+        .docs
+        .get(DocId(1))
+        .expect("document")
+        .read
+        .with(gorca_doc::web::WebDoc::text_len);
+    let sel = |r: &Rig| r.reader.web.as_ref().and_then(|b| b.sel);
+    assert_eq!(
+        sel(&r),
+        Some((0, len)),
+        "the whole text, last character included"
+    );
+    r.key(CoreCmd::BrowseSelectPrevChar);
+    assert_eq!(sel(&r), Some((0, len - 1)), "one character less");
+}
+
+/// The text a plan selects, read back from the mirror the way the browser would join it.
+fn plan_of(
+    r: &Rig,
+    from_text: &str,
+    from_local: u32,
+    to_text: &str,
+    to_local: u32,
+) -> super::selmirror::Plan {
+    r.docs.get(DocId(1)).expect("document").read.with(|d| {
+        let find = |t: &str| {
+            d.preorder()
+                .find(|id| d.node(*id).is_some_and(|v| v.text == Some(t)))
+                .expect(t)
+        };
+        let lo = d.offset_of(find(from_text)).expect("offset") + from_local;
+        let hi = d.offset_of(find(to_text)).expect("offset") + to_local;
+        super::selmirror::plan(d, lo, hi).expect("a plan")
+    })
+}
+
+fn ranges(p: &super::selmirror::Plan) -> Vec<std::ops::Range<u32>> {
+    p.spans.iter().map(|s| s.range.clone()).collect()
+}
+
+#[test]
+fn a_range_inside_one_container_is_one_exact_span_across_a_link() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    // "ead the docs n" of "Read " + link("the docs") + " now.": hypertext "Read \u{fffc} now."
+    let p = plan_of(&r, "Read ", 1, " now.", 3);
+    assert_eq!(ranges(&p), vec![1..9]);
+    assert_eq!(p.snap.range, 1..9);
+}
+
+#[test]
+fn a_range_across_blocks_is_exact_legs_and_has_a_rounded_out_alternative() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    // From "lcome" of the heading to "Read" of the paragraph: tail, head.
+    let p = plan_of(&r, "Welcome", 2, "Read ", 3);
+    assert_eq!(ranges(&p), vec![2..7, 0..3]);
+    // The alternative is one range on the document, whole children at the nested ends.
+    assert_eq!(p.snap.range, 0..2);
+    assert!(p.snap.end_on_child);
+    // To "Last" of the last paragraph: the blocks between ride in one range.
+    let p = plan_of(&r, "Welcome", 2, "Last line", 4);
+    assert_eq!(ranges(&p), vec![2..7, 1..3, 0..4]);
+}
+
+#[test]
+fn a_range_that_ends_at_a_link_says_so_and_a_space_before_it_can_be_left_out() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    // "Read " is followed by the link: the span is exact (0..5) and tells the source that a
+    // child follows and that the last character is white space; the source decides.
+    let p = plan_of(&r, "Read ", 0, "Read ", 5);
+    assert_eq!(ranges(&p), vec![0..5]);
+    // A caller that must not start in the first leaf's container plans again from its end.
+    let at = r.docs.get(DocId(1)).expect("document").read.with(|d| {
+        let id = d
+            .preorder()
+            .find(|id| d.node(*id).is_some_and(|v| v.text == Some("Read ")))
+            .expect("run");
+        d.offset_of(id).expect("offset")
+    });
+    assert_eq!(p.first_end, at + 5);
+    assert!(p.spans[0].child_follows && p.spans[0].trim_ws && !p.spans[0].end_on_child);
+}
+
+#[test]
+fn a_selection_that_starts_inside_a_link_is_cleared_not_mirrored() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    r.key(CoreCmd::QuicknavNextLink);
+    settle(&mut r);
+    r.key(CoreCmd::BrowseSelectNextChar);
+    r.key(CoreCmd::BrowseSelectNextChar);
+    let fx = settle(&mut r);
+    assert!(
+        selections(&fx).is_empty(),
+        "no selection that would focus the link"
+    );
+}
+
+// ---- selection mapping vectors (docs/reports/selection-mapping-math.md V2..V8, S-7) ------------
+
+/// A document from nodes and parent -> children edges (ids as in `src`).
+fn doc_of(nodes: Vec<SrcNode>, edges: &[(u64, &[u64])]) -> gorca_doc::web::DocRead {
+    let (mut w, read) = channel(11);
+    let mut tr = Translator::new();
+    let mut deltas = vec![
+        DocDelta::Reset {
+            root: SrcNodeId(1),
+            nav_id: 1,
+        },
+        DocDelta::Upsert(nodes),
+    ];
+    deltas.extend(edges.iter().map(|(p, ks)| kids(*p, ks)));
+    deltas.push(DocDelta::Settled { batch: 1 });
+    tr.apply(&mut w, deltas).unwrap();
+    w.publish();
+    read
+}
+
+fn root() -> SrcNode {
+    block(src(1, Role::DocumentWeb, Some(1001)))
+}
+
+/// The flat offset `local` scalars into the first node whose text is `text`, or of the image.
+fn flat_at(d: &gorca_doc::web::WebDoc, text: &str, local: u32) -> u32 {
+    let id = d
+        .preorder()
+        .find(|id| {
+            d.node(*id).is_some_and(|v| {
+                if text.is_empty() {
+                    v.role == Role::Image
+                } else {
+                    v.text == Some(text)
+                }
+            })
+        })
+        .expect(text);
+    let lead = u32::from(d.node(id).is_some_and(|v| {
+        v.flags.contains(gorca_doc::web::NodeFlags::BREAK_BEFORE)
+            || v.flags.contains(gorca_doc::web::NodeFlags::CELL_SEP)
+    }));
+    d.offset_of(id).expect("offset") + lead + local
+}
+
+#[test]
+fn v2_a_range_into_a_link_keeps_the_space_where_two_legs_meet() {
+    // "See " + link("link text") + " end": the copy of "See li" must not become "Seeli".
+    let read = doc_of(
+        vec![
+            root(),
+            block(src(2, Role::Paragraph, Some(1002))),
+            run(3, "See "),
+            src(4, Role::Link, Some(1004)),
+            run(5, "link text"),
+            run(6, " end"),
+        ],
+        &[(1, &[2]), (2, &[3, 4, 6]), (4, &[5])],
+    );
+    let p = read.with(|d| {
+        super::selmirror::plan(d, flat_at(d, "See ", 0), flat_at(d, "link text", 2)).expect("plan")
+    });
+    assert_eq!(p.spans.len(), 2, "{:?}", p.spans);
+    assert_eq!(p.spans[0].range, 0..4);
+    assert!(p.spans[0].child_follows);
+    assert!(
+        !p.spans[0].trim_ws,
+        "the space before the link is real text here"
+    );
+    assert_eq!(p.spans[1].range, 0..2);
+    assert!(
+        p.gecko_lossy,
+        "Gecko takes the whole link: the source reports it"
+    );
+}
+
+#[test]
+fn v3_a_range_into_a_nested_list_is_the_item_tail_and_the_nested_head_only() {
+    let read = doc_of(
+        vec![
+            root(),
+            src(2, Role::List, Some(1002)),
+            src(3, Role::ListItem, Some(1003)),
+            run(4, "Item"),
+            src(5, Role::List, Some(1005)),
+            src(6, Role::ListItem, Some(1006)),
+            run(7, "nested"),
+        ],
+        &[(1, &[2]), (2, &[3]), (3, &[4, 5]), (5, &[6]), (6, &[7])],
+    );
+    let p = read.with(|d| {
+        super::selmirror::plan(d, flat_at(d, "Item", 2), flat_at(d, "nested", 3)).expect("plan")
+    });
+    let r: Vec<_> = p.spans.iter().map(|s| s.range.clone()).collect();
+    assert_eq!(r, vec![2..4, 0..3], "no whole sub-list, nothing twice");
+    assert!(p.gecko_lossy);
+}
+
+#[test]
+fn v6_a_range_that_ends_on_an_image_includes_it() {
+    let read = doc_of(
+        vec![
+            root(),
+            block(src(2, Role::Paragraph, Some(1002))),
+            run(3, "Logo "),
+            src(4, Role::Image, Some(1004)),
+            block(src(5, Role::Paragraph, Some(1005))),
+            run(6, "Next"),
+        ],
+        &[(1, &[2, 5]), (2, &[3, 4]), (5, &[6])],
+    );
+    let p = read.with(|d| {
+        super::selmirror::plan(d, flat_at(d, "Logo ", 0), flat_at(d, "", 0) + 1).expect("plan")
+    });
+    assert_eq!(p.spans.len(), 1);
+    assert_eq!(p.spans[0].range, 0..6, "five letters and the image");
+    assert!(p.spans[0].end_on_object && !p.spans[0].end_on_child);
+    // Ending after the image is exact for Gecko (it is not hypertext); at the very end of the
+    // container the engine may refuse it, which the plan reports as lossy.
+    assert_eq!(crate::browse::selmirror::tests_gecko_end(&p.spans[0]), 6);
+    assert!(p.gecko_lossy);
+}
+
+#[test]
+fn v7_a_range_of_only_an_image_is_planned() {
+    let read = doc_of(
+        vec![
+            root(),
+            block(src(2, Role::Paragraph, Some(1002))),
+            run(3, "a "),
+            src(4, Role::Image, Some(1004)),
+            run(5, " b"),
+        ],
+        &[(1, &[2]), (2, &[3, 4, 5])],
+    );
+    let p = read.with(|d| {
+        let at = flat_at(d, "", 0);
+        super::selmirror::plan(d, at, at + 1).expect("plan")
+    });
+    assert_eq!(p.spans.len(), 1);
+    assert_eq!(p.spans[0].range, 2..3);
+}
+
+#[test]
+fn v8_blink_offsets_are_scalars_and_gecko_offsets_are_utf16() {
+    let read = doc_of(
+        vec![
+            root(),
+            block(src(2, Role::Paragraph, Some(1002))),
+            run(3, "x\u{1F600}y alpha"),
+        ],
+        &[(1, &[2]), (2, &[3])],
+    );
+    let p = read.with(|d| {
+        super::selmirror::plan(
+            d,
+            flat_at(d, "x\u{1F600}y alpha", 4),
+            flat_at(d, "x\u{1F600}y alpha", 9),
+        )
+        .expect("plan")
+    });
+    assert_eq!(p.spans[0].range, 5..10, "UTF-16: the emoji takes two units");
+    assert_eq!(p.spans[0].range_cp, 4..9, "scalars");
+    assert_eq!(p.doc_range.start.1, 4);
+    assert_eq!(p.doc_range.end.1, 9);
+}
+
+#[test]
+fn r3_a_range_that_grows_into_a_link_does_not_start_a_leg_inside_the_link() {
+    // "• " + link("First link") + " after": Shift+Right x4 from the start ends inside the link.
+    let mut link = src(4, Role::Link, Some(1004));
+    link.states |= StateSet::FOCUSABLE;
+    let read = doc_of(
+        vec![
+            root(),
+            block(src(2, Role::ListItem, Some(1002))),
+            run(3, "\u{2022} "),
+            link,
+            run(5, "First link"),
+            run(6, " after"),
+        ],
+        &[(1, &[2]), (2, &[3, 4, 6]), (4, &[5])],
+    );
+    let risky = |d: &gorca_doc::web::WebDoc, n: DocNodeId| {
+        d.node(n)
+            .is_some_and(|v| v.cats.intersects(gorca_doc::web::Cat::FOCUSABLE))
+            && Some(n) != d.root()
+    };
+    let p = read.with(|d| {
+        super::selmirror::plan_with(
+            d,
+            flat_at(d, "\u{2022} ", 0),
+            flat_at(d, "First link", 3),
+            &risky,
+        )
+        .expect("plan")
+    });
+    // The head leg inside the link would focus it: it is left out, the leg before it ends in
+    // front of the link (the engine takes the link whole) and the plan says it is lossy.
+    assert_eq!(p.spans.len(), 1, "{:?}", p.spans);
+    assert_eq!(p.spans[0].range, 0..2);
+    assert!(p.spans[0].child_follows && p.gecko_lossy);
+}
+
+#[test]
+fn s7_text_of_a_password_field_is_never_mirrored_even_when_the_range_starts_inside_it() {
+    let read = doc_of(
+        vec![
+            root(),
+            block(src(2, Role::Paragraph, Some(1002))),
+            run(3, "pre "),
+            src(4, Role::PasswordEntry, Some(1004)),
+            run(5, "secret"),
+            run(6, " post"),
+        ],
+        &[(1, &[2]), (2, &[3, 4, 6]), (4, &[5])],
+    );
+    read.with(|d| {
+        // Starting inside the field: nothing.
+        assert!(
+            super::selmirror::plan(d, flat_at(d, "secret", 1), flat_at(d, " post", 3)).is_none()
+        );
+        // Spanning it: the range stops before the field.
+        let p =
+            super::selmirror::plan(d, flat_at(d, "pre ", 0), flat_at(d, " post", 3)).expect("plan");
+        assert_eq!(p.spans.last().expect("a span").range.end, 4);
+    });
+}
+
+#[test]
+fn a_selection_starting_in_a_link_is_not_mirrored_because_the_browser_would_focus_it() {
+    let mut r = tab_rig();
+    r.focus(1002);
+    settle(&mut r);
+    let link_container = r.docs.get(DocId(1)).expect("document").read.with(|d| {
+        let run = d
+            .preorder()
+            .find(|id| d.node(*id).is_some_and(|v| v.text == Some("the docs")))
+            .expect("run");
+        let lo = d.offset_of(run).expect("offset");
+        let p = super::selmirror::plan(d, lo, lo + 3).expect("a plan");
+        (p.start_container, d.parent(run))
+    });
+    assert_eq!(Some(link_container.0), link_container.1);
 }
 
 // ---- review round 1: M-4 live speech expires and spends the owner's budget ---------------------

@@ -653,6 +653,68 @@ mod tests {
         }
     }
 
+    /// Ctrl+C and the other clipboard and undo shortcuts of applications are never grabbed, in
+    /// any mode, preset, layout or keyboard layout (a Cyrillic keysym included): the grab set
+    /// would swallow them before the application sees them. Ctrl alone is never a grabbed
+    /// modifier either (it is only watched for "stop speech"). Learn mode (`grab_all`) is the
+    /// one deliberate exception and is not a chord set.
+    #[test]
+    fn app_clipboard_shortcuts_are_never_grabbed_and_ctrl_is_not_a_grab_modifier() {
+        let keys = ["c", "x", "v", "z", "y", "insert", "delete"];
+        let table = us_ru();
+        let mut protected: Vec<u32> = Vec::new();
+        for name in keys {
+            let code = static_keycode(name).expect(name);
+            for shift in [false, true] {
+                protected.extend(table.syms(code, shift));
+                protected.extend(KeysymTable::us_sym(code, shift));
+            }
+        }
+        // The Russian layout types Cyrillic on the C and V keys (es, em): the keysym tables of
+        // a real session do, so cover them explicitly as well.
+        for (code, lower, upper) in [(46, 0x6d3, 0x6f3), (47, 0x6d7, 0x6f7)] {
+            let mut t = KeysymTable::us();
+            t.insert(code, false, lower);
+            t.insert(code, true, upper);
+            for shift in [false, true] {
+                protected.extend(t.syms(code, shift));
+            }
+        }
+        for preset in ["nvda", "orca"] {
+            for layout in ["desktop", "laptop"] {
+                let c = compiled(&format!(
+                    "[keyboard]\npreset=\"{preset}\"\nlayout=\"{layout}\"\n"
+                ));
+                let loaded = load(
+                    Some(&format!(
+                        "[keyboard]\npreset=\"{preset}\"\nlayout=\"{layout}\"\n"
+                    )),
+                    &Presets::builtin(),
+                );
+                let (mods, _) = gorca_modifiers(&loaded.settings, &PlatformFacts::default());
+                // Control_L, Control_R
+                assert!(
+                    !mods.iter().any(|m| matches!(*m, 0xffe3 | 0xffe4)),
+                    "Ctrl must not be a gorca modifier: {mods:x?}"
+                );
+                for mode in [ModeKind::Focus, ModeKind::Review, ModeKind::Browse] {
+                    let g = grabs_where(&c.keymap, mode, &table, |_| true);
+                    for ch in g.plain.iter().chain(g.exact.iter()) {
+                        let m = ch.modifiers.without_locks();
+                        let ctrl_only = m.contains(Modifiers::CONTROL)
+                            && !m.intersects(Modifiers::MOD1 | Modifiers::MOD4);
+                        assert!(
+                            !(ctrl_only && protected.contains(&ch.keysym)),
+                            "{preset} {layout} {mode:?}: grabs {:#x} with {m:?}, an application \
+                             shortcut",
+                            ch.keysym
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     /// The preset oracle (docs/design/modes.md 5): both presets bind every M1 command that has a
     /// chord in the source screen reader. Watched gestures (stop, pause) have none.
     #[test]

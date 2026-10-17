@@ -45,7 +45,7 @@ use crate::app_actor::{AppActor, FILL_QUEUE, FillMsg, ReaderLinks, TextLink, Web
 use crate::browse::commands::WebEffect;
 use crate::commands::{ConfigRequest, SpeechCtl};
 use crate::directory::MirrorDirectory;
-use crate::doc_actor::{DocCounters, DocCtl, DocDirectory, WebJoin};
+use crate::doc_actor::{DocCounters, DocCtl, DocDirectory, DocNotice, SelOutcome, WebJoin};
 use crate::doc_registry::{HubCfg, HubMsg, HubTx, hub_channel, run_hub};
 use crate::health::{AppHealth, HealthEffect, HealthMsg};
 use crate::mode::ModeKeys;
@@ -1253,6 +1253,27 @@ fn exec_web(shared: &Shared, w: WebEffect) {
                 if h.ctl.try_send(DocCtl::Activity(a)).is_err() {
                     bump(&shared.web.counters.controls_dropped);
                 }
+            }
+        }
+        WebEffect::Select {
+            doc,
+            node,
+            act,
+            req,
+        } => {
+            let sent = shared
+                .web
+                .docs
+                .get(doc)
+                .is_some_and(|h| h.ctl.try_send(DocCtl::Select { req, node, act }).is_ok());
+            if !sent {
+                bump(&shared.web.counters.controls_dropped);
+                // The Reader waits for this request: say it failed.
+                let _ = shared.senders.docs.try_send(DocNotice::SelectionDone {
+                    doc,
+                    req,
+                    outcome: SelOutcome::Failed,
+                });
             }
         }
         WebEffect::Act { doc, node, act } => {
