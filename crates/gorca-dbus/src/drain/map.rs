@@ -360,7 +360,20 @@ pub fn map_signal(
         }
         ("Object", "TextChanged") => {
             let h = parse_head(v)?;
-            let (offset, len) = (non_negative(h.d1), non_negative(h.d2));
+            let (mut offset, mut len) = (non_negative(h.d1), non_negative(h.d2));
+            if h.detail.starts_with("delete")
+                && len == 0
+                && let AnyData::Str(s) = h.any
+                && !s.is_empty()
+            {
+                // Chromium now and then reports a delete as (end of the removed text, 0) with
+                // the removed text attached (M9, FE2 on Chrome for Testing 153: about 1 % of the
+                // Backspaces). A zero length with text is not an event: the text says how much
+                // went, and it ended at `offset`.
+                let n = u32::try_from(s.chars().count()).unwrap_or(u32::MAX);
+                len = n;
+                offset = offset.saturating_sub(n);
+            }
             if h.detail.starts_with("insert") {
                 out.push(NodeEvent::TextChanged {
                     node,
@@ -594,6 +607,38 @@ mod tests {
             e[0],
             NodeEvent::TextChanged {
                 delta: TextDelta::Delete { text: None, .. },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn a_zero_length_delete_with_text_is_the_text_that_ended_at_the_offset() {
+        // Chromium: delete(302, 0) with "y" attached, the caret then at 301.
+        let b = body("delete", 302, 0, "s", b"\x01\0\0\0y\0");
+        let e = run("org.a11y.atspi.Event.Object", "TextChanged", "/x/1", &b);
+        assert!(matches!(
+            e[0],
+            NodeEvent::TextChanged {
+                delta: TextDelta::Delete {
+                    offset: 301,
+                    len: 1,
+                    ..
+                },
+                ..
+            }
+        ));
+        // A well-formed delete is left alone.
+        let b = body("delete", 301, 1, "s", b"\x01\0\0\0y\0");
+        let e = run("org.a11y.atspi.Event.Object", "TextChanged", "/x/1", &b);
+        assert!(matches!(
+            e[0],
+            NodeEvent::TextChanged {
+                delta: TextDelta::Delete {
+                    offset: 301,
+                    len: 1,
+                    ..
+                },
                 ..
             }
         ));

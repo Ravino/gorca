@@ -160,6 +160,10 @@ impl SpeechOut for LaneOut {
     fn control(&self, ctl: SpeechCtl) {
         self.0.control(match ctl {
             SpeechCtl::SetParams(l) => SpeechControl::SetParams(voice_params(l)),
+            SpeechCtl::SetCapitals(c) => SpeechControl::SetCapitals(gorca_speech::CapitalFx {
+                pitch_delta: capital_pitch_delta(c.pitch_percent),
+                cue: c.cue,
+            }),
             SpeechCtl::Pause => SpeechControl::Pause,
             SpeechCtl::Resume => SpeechControl::Resume,
             SpeechCtl::Mute(m) => SpeechControl::Mute(m),
@@ -177,6 +181,12 @@ fn voice_params(l: gorca_core::VoiceLevels) -> VoiceParams {
         pitch: centred(l.pitch),
         volume: i8::try_from(i16::from(l.volume) - 100).unwrap_or(0),
     }
+}
+
+/// `speech.caps_pitch_change` is in steps of the 0 to 100 pitch setting (NVDA's
+/// `capPitchChange`); the wire scale has two units per step.
+fn capital_pitch_delta(percent: u8) -> i8 {
+    i8::try_from((u16::from(percent.min(50)) * 2).min(100)).unwrap_or(100)
 }
 
 fn unavailable(name: &'static str) -> Arc<dyn SpeechBackend> {
@@ -554,5 +564,18 @@ mod tests {
             let r = tokio::time::timeout(Duration::from_secs(5), h).await;
             assert!(matches!(r, Ok(Ok(Ok(())))), "{r:?}");
         });
+    }
+}
+
+#[cfg(test)]
+mod capital_tests {
+    use super::capital_pitch_delta;
+
+    #[test]
+    fn the_capital_change_is_two_wire_units_per_pitch_step_and_stays_in_range() {
+        assert_eq!(capital_pitch_delta(0), 0);
+        assert_eq!(capital_pitch_delta(30), 60);
+        assert_eq!(capital_pitch_delta(50), 100);
+        assert_eq!(capital_pitch_delta(100), 100);
     }
 }

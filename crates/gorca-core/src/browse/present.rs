@@ -577,9 +577,9 @@ pub fn segments(items: &[Item], o: VerbalizeOpts) -> SmallVec<[Segment; 4]> {
             };
             // A capital read alone gets the capital pitch (`speech.caps = "pitch"`).
             let capital = matches!(i, Item::Char(_))
-                && o.caps == gorca_speech::Caps::Pitch
-                && text.chars().count() == 1
-                && text.chars().all(char::is_uppercase);
+                && o.caps.marks()
+                && t.chars().count() == 1
+                && t.chars().all(char::is_uppercase);
             (!text.is_empty()).then(|| Segment {
                 text: Arc::from(text),
                 kind: match i.kind() {
@@ -667,7 +667,16 @@ pub fn describe_node_from(doc: &WebDoc, id: DocNodeId, from: Option<u32>) -> Vec
     let mut pre: Vec<Item> = Vec::new();
     if v.flags.contains(NodeFlags::FRAME) {
         pre.push(Item::Role(t(M::WebFrame).to_owned()));
-        if let Some(n) = v.name.filter(|n| !n.is_empty()) {
+        // Blink exposes the iframe element (an object of no mapped role, named by its title
+        // attribute) above the frame's document, whose own name is the page title inside: the
+        // frame is announced by the title the author gave it.
+        let holder = doc
+            .parent(id)
+            .and_then(|p| doc.node(p))
+            .filter(|p| p.role == Role::Unknown)
+            .and_then(|p| p.name)
+            .filter(|n| !n.is_empty());
+        if let Some(n) = holder.or(v.name.filter(|n| !n.is_empty())) {
             pre.push(Item::Name(n.to_owned()));
         }
     } else if v.flags.contains(NodeFlags::ARTICLE) {
@@ -1186,7 +1195,7 @@ mod tests {
         use gorca_speech::{Caps, Lang, Punct};
         VerbalizeOpts {
             punct: Punct::Some,
-            caps: Caps::Pitch,
+            caps: Caps::PITCH,
             lang: Lang::En,
         }
     }
@@ -1196,7 +1205,7 @@ mod tests {
         use gorca_speech::{Caps, Lang, Punct};
         let o = |punct, lang| VerbalizeOpts {
             punct,
-            caps: Caps::Pitch,
+            caps: Caps::PITCH,
             lang,
         };
         let items = [

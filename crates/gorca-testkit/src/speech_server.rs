@@ -432,6 +432,12 @@ impl Conn {
                 self.send("230 OK RECEIVING DATA\r\n").await;
                 return Next::Data;
             }
+            // A sound icon is a queued message of its own; nothing is synthesised for it.
+            "SOUND_ICON" => {
+                let id = self.shared.next_msg.fetch_add(1, Ordering::AcqRel);
+                self.send(&format!("225-{id}\r\n225 OK MESSAGE QUEUED\r\n"))
+                    .await;
+            }
             "STOP" | "CANCEL" => {
                 let code = if verb == "STOP" {
                     "210 OK STOPPED"

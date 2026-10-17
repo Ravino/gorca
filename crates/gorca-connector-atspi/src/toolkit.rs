@@ -1,7 +1,7 @@
 //! Toolkit normalisation keys (ADR-0001 section 5.6). Quirks that more than one consumer needs
 //! live in tables keyed by `AppInfo.toolkit`, never in ad-hoc code.
 
-use gorca_model::{EditQuirks, TextUnit, WordLanding};
+use gorca_model::{EditQuirks, TextUnit, WebEngine, WordLanding};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Toolkit {
@@ -22,7 +22,18 @@ impl Toolkit {
         let a = app_name.to_ascii_lowercase();
         if a.contains("firefox") || a.contains("thunderbird") || t == "gecko" {
             Toolkit::Firefox
-        } else if a.contains("chrom") || a.contains("electron") || t == "chromium" {
+        } else if t == "chromium"
+            || [
+                "chrom",
+                "electron",
+                "brave",
+                "msedge",
+                "microsoft-edge",
+                "vivaldi",
+            ]
+            .iter()
+            .any(|n| a.contains(n))
+        {
             Toolkit::Chromium
         } else if a.contains("gnome-terminal") || a.contains("ptyxis") || a.contains("kgx") {
             Toolkit::Vte
@@ -105,6 +116,19 @@ impl Toolkit {
 }
 
 impl Toolkit {
+    /// The web engine behind this toolkit (`AppInfo::web_engine`): picks the document source
+    /// and its quirks. Chromium's `ToolkitName` is the same for Chrome, Edge, Brave and every
+    /// Electron app, so the name sniffing in [`Toolkit::classify`] is only the fallback.
+    pub fn web_engine(self) -> WebEngine {
+        match self {
+            Toolkit::Firefox => WebEngine::Gecko,
+            Toolkit::Chromium => WebEngine::Blink,
+            Toolkit::Gtk3 | Toolkit::Gtk4 | Toolkit::Qt | Toolkit::Vte | Toolkit::Other => {
+                WebEngine::None
+            }
+        }
+    }
+
     /// Quirk row `blink-wake-call` (M9, `docs/reports/m9-baseline.md` section 2): Chromium builds
     /// the accessibility tree of web content only after an AT used `GetAttributes` or
     /// `GetRelationSet` on one of its objects (`AtkGetAttributes` / `AtkRefRelationSet` in
@@ -113,6 +137,22 @@ impl Toolkit {
     /// the application root when it first sees an application of this toolkit.
     pub fn needs_wake_call(self) -> bool {
         matches!(self, Toolkit::Chromium)
+    }
+
+    /// Quirk row `blink-tree-load-complete` (M9): how long after the application appeared a
+    /// `document:load-complete` still belongs to the tree being created for the wake-up call
+    /// (`AppInfo::page_events_settle_ms`). Measured: the first events follow the wake call within
+    /// about a second; a 100k-node page needs longer, hence the generous bound.
+    pub fn page_events_settle_ms(self) -> u32 {
+        match self {
+            Toolkit::Chromium => 3000,
+            Toolkit::Firefox
+            | Toolkit::Gtk3
+            | Toolkit::Gtk4
+            | Toolkit::Qt
+            | Toolkit::Vte
+            | Toolkit::Other => 0,
+        }
     }
 
     /// Quirk row `blink-static-leaves` (M9): Chromium exposes every text run as a `static` child
@@ -210,12 +250,40 @@ mod tests {
             assert!(!t.needs_wake_call());
             assert!(!t.text_leaf_children_repeat_parent_text());
             assert_eq!(t.name_source_attribute(), None);
+            assert_eq!(t.page_events_settle_ms(), 0);
         }
         assert!(Toolkit::Chromium.needs_wake_call());
         assert!(Toolkit::Chromium.text_leaf_children_repeat_parent_text());
         assert_eq!(Toolkit::Chromium.name_source_attribute(), Some("name-from"));
+        assert!(Toolkit::Chromium.page_events_settle_ms() >= 1000);
         // Chrome and Electron classify as Chromium, so they get the rows.
         assert!(Toolkit::classify("", "Google Chrome for Testing").needs_wake_call());
         assert!(Toolkit::classify("Chromium", "slack").needs_wake_call());
+    }
+
+    #[test]
+    fn every_blink_embedder_gets_the_blink_engine_and_its_quirks() {
+        // Chromium reports the same `ToolkitName` for all of them; the name is only a fallback.
+        for (t, a) in [
+            ("Chromium", "chrome"),
+            ("Chromium", "Microsoft Edge"),
+            ("Chromium", "Brave"),
+            ("Chromium", "slack"),
+            ("Chromium", "code"),
+            ("", "msedge"),
+            ("", "brave-browser"),
+            ("", "Electron"),
+            ("", "chromium-browser"),
+        ] {
+            let c = Toolkit::classify(t, a);
+            assert_eq!(c, Toolkit::Chromium, "{t:?} {a:?}");
+            assert_eq!(c.web_engine(), WebEngine::Blink);
+            assert!(c.text_leaf_children_repeat_parent_text());
+        }
+        assert_eq!(
+            Toolkit::classify("Gecko", "x").web_engine(),
+            WebEngine::Gecko
+        );
+        assert_eq!(Toolkit::classify("gtk4", "x").web_engine(), WebEngine::None);
     }
 }

@@ -38,7 +38,7 @@ use gorca_output_api::queue::admit;
 use gorca_output_api::track::{Block, Expect, MsgTracker, classify};
 use gorca_output_api::{
     ClientHealth, SpeechCaps, SpeechClient, SpeechCmd, SpeechEvent, SubmitError, Verbalized,
-    VoiceParams,
+    VoiceParams, raised_pitch,
 };
 use gorca_rt::{CancellationToken, Deadline, Notify, TaskSet, mpsc, with_deadline};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -111,6 +111,7 @@ pub fn caps() -> SpeechCaps {
         index_marks: false,
         audio_progress: false,
         ssml: false,
+        sound_icons: false,
     }
 }
 
@@ -195,15 +196,6 @@ impl Shared {
     fn is_down(&self) -> bool {
         health_from_u8(self.health.load(Ordering::Acquire)) == ClientHealth::Down
     }
-}
-
-/// The pitch to speak with for a `pitch_delta`, or `None` when the voice pitch is left alone.
-fn raised_pitch(base: i8, delta: i8) -> Option<i8> {
-    if delta == 0 {
-        return None;
-    }
-    let p = base.saturating_add(delta).clamp(-100, 100);
-    (p != base).then_some(p)
 }
 
 fn push_frame(out: &mut Vec<u8>, payload: &[u8]) {
@@ -571,10 +563,53 @@ mod tests {
                 text: Arc::from(text),
                 lang: None,
                 pitch_delta: 0,
+                cue: None,
             },
             voice: VoiceRef::Default,
             marks: false,
         }
+    }
+
+    /// The user's pitch 100 left no room for a raise (the capital sounded like any letter): it
+    /// goes below the base instead, the base is restored in the same write, and the cue is not
+    /// sent (voicego would speak the icon name).
+    #[tokio::test]
+    async fn a_capital_at_top_pitch_goes_below_and_the_base_is_restored() {
+        let d = tmp("capv");
+        let srv = MockSpeechServer::start_voicego(&d).await.unwrap();
+        srv.set_speak_time(Duration::from_millis(5));
+        let mut c = connect(&srv).await;
+        c.submit(SpeechCmd::SetParams(VoiceParams {
+            rate: 0,
+            pitch: 100,
+            volume: 0,
+        }))
+        .unwrap();
+        c.submit(SpeechCmd::Speak {
+            id: UttId(1),
+            text: Verbalized {
+                text: Arc::from("A"),
+                lang: None,
+                pitch_delta: 30,
+                cue: Some(gorca_output_api::Cue::Capital),
+            },
+            voice: VoiceRef::Default,
+            marks: false,
+        })
+        .unwrap();
+        until(&mut c, SpeechEvent::Ended(UttId(1))).await;
+        c.submit(speak(2, "b")).unwrap();
+        until(&mut c, SpeechEvent::Ended(UttId(2))).await;
+        assert_eq!(srv.spoken(), ["A", "b"]);
+        let v = srv.verbs();
+        let low = v.iter().position(|x| x == "SET self PITCH 70").unwrap();
+        let speak_at = v.iter().position(|x| x == "SPEAK 1").unwrap();
+        let back = v.iter().rposition(|x| x == "SET self PITCH 100").unwrap();
+        assert!(low < speak_at && speak_at < back, "{v:?}");
+        assert!(!v.iter().any(|x| x.contains("SOUND_ICON")), "{v:?}");
+        drop(c);
+        drop(srv);
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     fn replace(stop: u64, id: u64, text: &str) -> SpeechCmd {

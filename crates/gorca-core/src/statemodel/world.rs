@@ -885,6 +885,30 @@ impl Sim {
         self.emit(TERM, Some(TextDelta::Replaced { text: None }), Some(c));
     }
 
+    /// A program streams a line of output above the prompt and the screen scrolls by one row
+    /// (the first row leaves): the lines that stay keep their text.
+    pub fn terminal_scroll_output(&mut self) {
+        let Some(b) = self.w.bufs.get_mut(&TERM) else {
+            return;
+        };
+        let old_len = b.text.len();
+        let tail = old_len.saturating_sub(self.w.prompt);
+        let text: String = b.text.iter().collect();
+        let mut lines: Vec<String> = text.split('\n').map(str::to_owned).collect();
+        if lines.len() >= 3 {
+            lines.remove(0);
+        }
+        self.w.history += 1;
+        let last = lines.pop().unwrap_or_default();
+        lines.push(format!("flood {}", self.w.history));
+        lines.push(last);
+        b.text = lines.join("\n").chars().collect();
+        b.caret = b.text.len();
+        let c = b.caret;
+        self.w.prompt = c.saturating_sub(tail);
+        self.emit(TERM, Some(TextDelta::Replaced { text: None }), Some(c));
+    }
+
     /// Output the shell prints on its own (a background job, a prompt refresh).
     pub fn terminal_async_output(&mut self) {
         let Some(b) = self.w.bufs.get_mut(&TERM) else {

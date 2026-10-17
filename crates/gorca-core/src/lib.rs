@@ -58,11 +58,11 @@ pub use browse::{
 pub use builtin_ext::AppProfile;
 pub use builtin_ext::{AppPolicy, PolicyFacts, PolicyMoment, PolicyVerdict};
 pub use commands::{
-    Availability, CmdSpec, CommandTable, Compiled, ConfigRequest, ContextMask, ControlMsg, CoreCmd,
-    InputNotice, LoadCause, LoadedSettings, LocalTime, Milestone, PASS_TIMEOUT, PlatformFacts,
-    SaveResult, SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels, WallClock, browse_grabs,
-    chord_grabs, command_id, compile, compile_with, escape_grabs, gorca_modifiers, grab_collisions,
-    lane_settings, letter_grabs, tab_grabs,
+    Availability, CapitalLevels, CmdSpec, CommandTable, Compiled, ConfigRequest, ContextMask,
+    ControlMsg, CoreCmd, InputNotice, LoadCause, LoadedSettings, LocalTime, Milestone,
+    PASS_TIMEOUT, PlatformFacts, SaveResult, SettingsMsg, SpeechCtl, SystemWallClock, VoiceLevels,
+    WallClock, browse_grabs, chord_grabs, command_id, compile, compile_with, escape_grabs,
+    gorca_modifiers, grab_collisions, lane_settings, letter_grabs, tab_grabs,
 };
 pub use directory::{MirrorDirectory, Owner};
 pub use doc_actor::{

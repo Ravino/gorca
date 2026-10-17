@@ -84,6 +84,38 @@ impl TextUnits for SimpleUnits {
     }
 }
 
+/// Units of terminal review (ADR-0018): words by the rule caret navigation uses (`gorca_text`
+/// TL-1: a word keeps its trailing spaces, each punctuation mark is a word), so that a review
+/// word and a caret word agree in the same terminal line; characters as [`SimpleUnits`]. A run
+/// of spaces alone is not a word to stop on.
+#[derive(Copy, Clone, Debug, Default)]
+pub struct TermUnits;
+
+impl TextUnits for TermUnits {
+    fn units(&self, text: &str, unit: Unit) -> Ranges {
+        if unit == Unit::Char {
+            return SimpleUnits.units(text, unit);
+        }
+        let chars: Vec<char> = text.chars().collect();
+        let mut out = Ranges::new();
+        let mut i = 0usize;
+        while i < chars.len() {
+            let r = gorca_text::seg::word_range(&chars, i);
+            if r.end <= i {
+                break;
+            }
+            if chars[r.clone()].iter().any(|c| !c.is_whitespace()) {
+                out.push(
+                    u32::try_from(r.start).unwrap_or(u32::MAX)
+                        ..u32::try_from(r.end).unwrap_or(u32::MAX),
+                );
+            }
+            i = r.end;
+        }
+        out
+    }
+}
+
 /// The substring of `text` for the scalar range `r`.
 pub fn slice(text: &str, r: &Range<u32>) -> String {
     text.chars()
@@ -137,6 +169,28 @@ mod tests {
         assert_eq!(u.at("ab  cd", 1, Unit::Word), Some(0..2));
         assert_eq!(u.at("ab  cd", 2, Unit::Word), Some(4..6));
         assert_eq!(u.at("ab  cd", 6, Unit::Word), None);
+    }
+
+    #[test]
+    fn terminal_words_follow_the_caret_word_rule() {
+        let u = TermUnits;
+        let w = u.units("ls -l --color=auto", Unit::Word);
+        let words: Vec<String> = w.iter().map(|r| slice("ls -l --color=auto", r)).collect();
+        assert_eq!(
+            words,
+            ["ls ", "-", "l ", "-", "-", "color", "=", "auto"],
+            "punctuation marks are words of their own"
+        );
+        let t = "  a/b";
+        assert_eq!(
+            u.units(t, Unit::Word)
+                .iter()
+                .map(|r| slice(t, r))
+                .collect::<Vec<_>>(),
+            ["a", "/", "b"].map(String::from),
+            "leading spaces are not a word to stop on"
+        );
+        assert_eq!(u.units("e\u{301}x", Unit::Char).as_slice(), &[0..2, 2..3]);
     }
 
     #[test]

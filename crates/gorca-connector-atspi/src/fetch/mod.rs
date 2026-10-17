@@ -272,6 +272,7 @@ impl AppServer {
         let mut verified = self.verified_shell;
         let mut shell_rx = self.shell_rx.clone();
         let mut known: Option<(String, String)> = None;
+        let mut settle_ms = 0u32;
         if !verified && let Some(rx) = &shell_rx {
             verified = is_the_shell(*rx.borrow(), self.identity);
         }
@@ -292,7 +293,19 @@ impl AppServer {
                     // An application that cannot be identified is still announced (with no
                     // toolkit or name): the reader and the policies know it exists.
                     let (toolkit, app_name) = found.unwrap_or_default();
-                    announce_info(&port, &toolkit, &app_name, verified);
+                    settle_ms = settle_window_ms(&toolkit, &app_name, self.identity).await;
+                    announce_info(&port, &toolkit, &app_name, verified, settle_ms);
+                    // Quirk row `blink-wake-call`: once, at first sight (a re-announcement
+                    // after Shell verification does not repeat it).
+                    if Toolkit::classify(&toolkit, &app_name).needs_wake_call() {
+                        let (caller, clock) = (self.caller.clone(), self.clock.clone());
+                        inflight.spawn(async move {
+                            let deadline =
+                                Deadline::for_class(&clock, gorca_rt::BudgetClass::Startup);
+                            let answered = caller.wake(deadline).await;
+                            tracing::debug!(answered, "wake call sent to an application whose tree needs it");
+                        });
+                    }
                     // Announced and served: policies that fill at readiness start here (once;
                     // a later announcement only refines the identity).
                     let _ = port.lifecycle(AppLifecycle::Ready);
@@ -310,7 +323,7 @@ impl AppServer {
                         // Announce again: the profile, the dump eligibility and the protection
                         // follow the verified identity.
                         if let Some((t, n)) = &known {
-                            announce_info(&port, t, n, true);
+                            announce_info(&port, t, n, true, settle_ms);
                         }
                     }
                 }
@@ -372,7 +385,13 @@ impl AppServer {
     }
 }
 
-fn announce_info(port: &AppPort, toolkit: &str, app_name: &str, verified_shell: bool) {
+fn announce_info(
+    port: &AppPort,
+    toolkit: &str,
+    app_name: &str,
+    verified_shell: bool,
+    settle_ms: u32,
+) {
     let class = Toolkit::classify(toolkit, app_name);
     tracing::debug!(app = ?port.app, ?class, "application identified");
     let info = AppInfo {
@@ -387,6 +406,8 @@ fn announce_info(port: &AppPort, toolkit: &str, app_name: &str, verified_shell: 
         text_unit: class.text_unit(),
         text_insert_slack: class.text_insert_slack(),
         edit_quirks: class.edit_quirks(),
+        page_events_settle_ms: settle_ms,
+        web_engine: class.web_engine(),
         root: Some(NodeKey {
             app: port.app,
             local: gorca_dbus::drain::local_id(ROOT_PATH),
@@ -394,6 +415,36 @@ fn announce_info(port: &AppPort, toolkit: &str, app_name: &str, verified_shell: 
     };
     // Informational: a full control queue is not worth retrying.
     let _ = port.lifecycle(AppLifecycle::Appeared(info));
+}
+
+/// The quirk row `blink-tree-load-complete` for an application that just appeared, except that
+/// an application that was started by the user while the reader ran, moments ago (inside the
+/// window itself), has no tree built for our wake-up call from an earlier page: the first page
+/// it opens is the user's, and its `load-complete` is a real load that gets the auto-read (M9
+/// review L-2).
+async fn settle_window_ms(toolkit: &str, app_name: &str, identity: Option<(u32, u64)>) -> u32 {
+    let ms = Toolkit::classify(toolkit, app_name).page_events_settle_ms();
+    if ms == 0 {
+        return 0;
+    }
+    let Some((_, start)) = identity else {
+        return ms;
+    };
+    let own = crate::proc::own_start_ticks();
+    match crate::proc::age_ms_async(start).await {
+        Some(age) if is_fresh_launch(start, own, age, ms) => {
+            tracing::debug!(age, "freshly launched application: no tree-creation window");
+            0
+        }
+        Some(_) | None => ms,
+    }
+}
+
+/// An application that started while we were running (an application that was already there
+/// when the reader started, even a moment before, shows a page the user opened earlier) and
+/// less than `window_ms` ago.
+fn is_fresh_launch(start: u64, own_start: Option<u64>, age_ms: u64, window_ms: u32) -> bool {
+    own_start.is_some_and(|own| start >= own) && age_ms < u64::from(window_ms)
 }
 
 /// Admission by class (section 7, MA-8): Interactive may take any free slot; Prefetch and
@@ -593,5 +644,28 @@ mod admission_tests {
             "Prefetch is not Background"
         );
         assert!(class_admitted(C::Interactive, 1, BACKGROUND_MAX));
+    }
+}
+
+#[cfg(test)]
+mod settle_window_tests {
+    use super::is_fresh_launch;
+
+    #[test]
+    fn only_an_app_that_started_after_the_reader_and_moments_ago_has_no_window() {
+        assert!(is_fresh_launch(500, Some(400), 1000, 3000));
+        assert!(
+            is_fresh_launch(400, Some(400), 0, 3000),
+            "same tick counts as after"
+        );
+        assert!(
+            !is_fresh_launch(399, Some(400), 1000, 3000),
+            "older than the reader"
+        );
+        assert!(
+            !is_fresh_launch(500, Some(400), 3000, 3000),
+            "outside the window"
+        );
+        assert!(!is_fresh_launch(500, None, 10, 3000), "own start unknown");
     }
 }

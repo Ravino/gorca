@@ -198,22 +198,29 @@ fn is_single_capital(s: &str) -> bool {
 impl Reader {
     // ---- capitals -------------------------------------------------------------------------
 
-    /// A capital letter spoken alone (typed, or a character move): `speech.caps = "pitch"`
-    /// marks the utterance for a raised pitch, `"say"` puts the word "cap" before the letter.
+    /// A capital letter spoken alone (typed, or a character move). `speech.caps` is any
+    /// combination: `word` puts "cap" before the letter here, `pitch` and `sound` mark the
+    /// utterance (`SegmentKind::Capital`) and the speech lane adds the pitch change and the
+    /// sound icon the settings ask for.
     pub(crate) fn mark_capital(&self, u: &mut Utterance) {
         let [seg] = u.segments.as_mut_slice() else {
             return;
         };
-        if seg.kind != SegmentKind::Said || !is_single_capital(&seg.text) {
+        if seg.kind != SegmentKind::Said {
             return;
         }
-        match self.cmd.effective.speech.caps {
-            gorca_config::Caps::Pitch => seg.kind = SegmentKind::Capital,
-            gorca_config::Caps::Say => {
-                let said = format!("{} {}", table(self).cap(), seg.text);
-                seg.text = Arc::from(said);
-            }
-            gorca_config::Caps::Off => {}
+        // The text is the bare letter: the callers verbalize with `char_opts`, which leaves the
+        // word to this function (so it is added once, whatever the table says about a letter).
+        if !is_single_capital(&seg.text) {
+            return;
+        }
+        let caps = self.cmd.effective.speech.caps;
+        if caps.word {
+            let said = format!("{} {}", table(self).cap(), seg.text);
+            seg.text = Arc::from(said);
+        }
+        if caps.pitch || caps.sound {
+            seg.kind = SegmentKind::Capital;
         }
     }
 

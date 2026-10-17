@@ -8,7 +8,7 @@
 //! overflow, so a flooding page degrades only its own document.
 
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use gorca_doc_source_api::DocEvent;
 use gorca_model::{AppId, AppInfo, AppLifecycle, DocKind, NodeEvent};
@@ -32,6 +32,8 @@ pub(super) struct DocRouter {
     /// Events dropped because a document's queue was full (EF-2).
     pub dropped: u64,
     pub routed: u64,
+    /// `load-complete` events before this are the tree's creation (see `lifecycle`).
+    settle_until: std::sync::OnceLock<Instant>,
 }
 
 impl DocRouter {
@@ -42,16 +44,27 @@ impl DocRouter {
             seq: 0,
             dropped: 0,
             routed: 0,
+            settle_until: std::sync::OnceLock::new(),
         }
     }
 
     /// Lifecycle messages go to the registry (warm-up and document creation).
     pub fn lifecycle(&self, l: &AppLifecycle) {
         let msg = match l {
-            AppLifecycle::Appeared(info) => HubMsg::Appeared {
-                app: self.app,
-                info: Box::new(AppInfo::clone(info)),
-            },
+            AppLifecycle::Appeared(info) => {
+                // Connector quirk: `load-complete` right after the application appeared is the
+                // creation of the tree, not a page load (`AppInfo::page_events_settle_ms`).
+                if info.page_events_settle_ms > 0 {
+                    let _ = self.settle_until.set(
+                        Instant::now()
+                            + Duration::from_millis(u64::from(info.page_events_settle_ms)),
+                    );
+                }
+                HubMsg::Appeared {
+                    app: self.app,
+                    info: Box::new(AppInfo::clone(info)),
+                }
+            }
             AppLifecycle::Ready => HubMsg::Ready { app: self.app },
             AppLifecycle::Gone => HubMsg::Gone { app: self.app },
         };
@@ -66,6 +79,9 @@ impl DocRouter {
                     node,
                     kind: DocKind::LoadComplete | DocKind::Reload,
                 } => {
+                    if self.settle_until.get().is_some_and(|t| now < *t) {
+                        continue;
+                    }
                     let _ = self.link.hub.try_send(HubMsg::Loaded { node: *node });
                 }
                 NodeEvent::ChildrenChanged { node }

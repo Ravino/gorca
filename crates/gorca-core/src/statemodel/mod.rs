@@ -23,6 +23,12 @@
 //!   tracks are answered (a key that moves nothing speaks the unit at the caret), and
 //!   `caret-unit` by the character the caret is on, also when the widgets behave like GTK4's
 //!   (`Op::Gtk4`: no caret event for typed text, a selection event behind every move).
+//! * `review-drift`  a terminal review word or character move whose line is still on the screen
+//!   stays on that line unless it runs past the line's end (ADR-0018 I1/I4).
+//! * `review-reset`  a word or character move inside a terminal line lands on the next unit of
+//!   that line, from the offset the cursor had, not from the line start (I2).
+//! * `review-wait`   a terminal review move with a held screen speaks within the step: it never
+//!   suspends on a screen read (I5).
 //! * `epoch`          the epoch never goes back and no utterance carries a future epoch.
 //!
 //! Runs: `GORCA_STATE_CASES` sequences (default 500; CI), `GORCA_STATE_SEED`, `GORCA_STATE_LEN`
@@ -114,6 +120,8 @@ pub(crate) enum Op {
     Cmd(CoreCmd, u8),
     Tick(u64),
     TermAsync,
+    /// Streaming output scrolls the terminal screen by one row.
+    TermScroll,
     Notify,
     ExtSpeech(bool),
     LoseEvents(bool),
@@ -229,7 +237,7 @@ fn gen_key(g: &mut Rng) -> KeyKind {
 
 pub(crate) fn gen_step(g: &mut Rng) -> Step {
     let dt = g.pick(&[1, 5, 20, 40, 80, 200, 600, 1700, 2600]);
-    let op = match g.below(106) {
+    let op = match g.below(110) {
         0..=37 => {
             let m = match g.below(12) {
                 0 => Modifiers::CONTROL,
@@ -263,6 +271,7 @@ pub(crate) fn gen_step(g: &mut Rng) -> Step {
         98 => Op::Hung,
         99 => Op::Revive(g.pick(&NODES)),
         104..=105 => Op::Gtk4(g.below(2) == 0),
+        106..=109 => Op::TermScroll,
         _ => Op::Ext(g.pick(&[ExtState::Absent, ExtState::Healthy, ExtState::Busy])),
     };
     Step { dt, op }
@@ -413,6 +422,7 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
             }
         );
         let echo = s.r.cmd.effective.echo.clone();
+        let probe_before = s.r.review_probe();
         match st.op {
             Op::Focus {
                 node,
@@ -459,6 +469,10 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
             Op::TermAsync => {
                 s.terminal_async_output();
                 s.settle(250);
+            }
+            Op::TermScroll => {
+                s.terminal_scroll_output();
+                s.settle(30);
             }
             Op::Notify => s.announce(),
             Op::ExtSpeech(b) => s.ext_speech(b),
@@ -708,6 +722,59 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
                     }
                 }
             }
+            Op::Cmd(
+                c @ (CoreCmd::ReviewNextWord
+                | CoreCmd::ReviewPrevWord
+                | CoreCmd::ReviewNextChar
+                | CoreCmd::ReviewPrevChar),
+                _,
+            ) => {
+                if matches!(mode_before, Mode::Review { .. })
+                    && matches!(mode_after, Mode::Review { .. })
+                    && s.r.term_snapshot(key(TERM)).is_some()
+                {
+                    // review-wait
+                    if s.r.review_waits_for_terminal() {
+                        bail!(
+                            "review-wait",
+                            format!("{c:?} suspended on a screen read with a held screen")
+                        );
+                    }
+                    if clean
+                        && let (Some((t0, o0, _)), Some((t1, o1, on_screen))) =
+                            (probe_before.as_ref(), s.r.review_probe())
+                    {
+                        use crate::review::segment::{Dir, TermUnits, TextUnits, Unit};
+                        let (unit, dir) = match c {
+                            CoreCmd::ReviewNextWord => (Unit::Word, Dir::Fwd),
+                            CoreCmd::ReviewPrevWord => (Unit::Word, Dir::Back),
+                            CoreCmd::ReviewNextChar => (Unit::Char, Dir::Fwd),
+                            _ => (Unit::Char, Dir::Back),
+                        };
+                        // The unit this move has to land on while the line has room for it.
+                        let room = TermUnits.next(t0, *o0, unit, dir);
+                        // review-drift: the line is on the screen, the move had room in it,
+                        // yet the cursor is on another line.
+                        if t1 != *t0 && on_screen && room.is_some() {
+                            bail!(
+                                "review-drift",
+                                format!("{c:?} at {o0} of {t0:?} ended on {t1:?} at {o1}")
+                            );
+                        }
+                        // review-reset: on the same line the cursor lands on that unit, not
+                        // on the one after the line start.
+                        if t1 == *t0
+                            && let Some(r) = room
+                            && r.start != o1
+                        {
+                            bail!(
+                                "review-reset",
+                                format!("{c:?} at {o0} of {t0:?} landed on {o1}, want {}", r.start)
+                            );
+                        }
+                    }
+                }
+            }
             Op::Remove(_)
             | Op::OpenDialog
             | Op::CloseDialog { .. }
@@ -715,6 +782,7 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
             | Op::Cmd(..)
             | Op::Tick(_)
             | Op::TermAsync
+            | Op::TermScroll
             | Op::Notify
             | Op::ExtSpeech(_)
             | Op::LoseEvents(_)

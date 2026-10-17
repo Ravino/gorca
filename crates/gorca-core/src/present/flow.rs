@@ -670,7 +670,7 @@ impl Reader {
         }
     }
 
-    fn log_presentation(
+    pub(crate) fn log_presentation(
         &self,
         u: &Utterance,
         snap: &Arc<NodeSnapshot>,

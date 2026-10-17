@@ -66,7 +66,7 @@ export GORCA_M7_CBUS=$CBUS
 echo "private compositor: $GORCA_M7_WAYLAND" >&2
 
 # --- the AT-SPI world -----------------------------------------------------------------------
-export GORCA_PASSTHROUGH="GORCA_E2E_READER_LOG GORCA_M7_WAYLAND GORCA_M7_CBUS GORCA_M7_FIREFOX GORCA_E2E_SCRIPTS MOZ_ENABLE_WAYLAND GORCA_M7_BROWSER GORCA_M7_CHROMIUM GORCA_M9_AT GORCA_M9_CHROMIUM_ARGS"
+export GORCA_PASSTHROUGH="GORCA_E2E_READER_LOG GORCA_M7_WAYLAND GORCA_M7_CBUS GORCA_M7_FIREFOX GORCA_E2E_SCRIPTS MOZ_ENABLE_WAYLAND GORCA_M7_BROWSER GORCA_M7_CHROMIUM GORCA_M9_AT GORCA_M9_CHROMIUM_ARGS GORCA_M9_BROWSER_FIRST"
 export GORCA_M7_FIREFOX=${M7_FIREFOX:-firefox}
 export MOZ_ENABLE_WAYLAND=1
 export GORCA_E2E_SCRIPTS=$ROOT/tests/harness
@@ -81,5 +81,5 @@ mkdir -p "bench/results/e2e/$LABEL"
 export GORCA_E2E_READER_LOG=$ROOT/bench/results/e2e/$LABEL/reader-$(date -u +%Y%m%dT%H%M%SZ).log
 tests/harness/run-isolated.sh target/release/e2e run --label "$LABEL" \
   --reader "daemon:$ROOT/target/release/gorca,--impersonate-orca" \
-  --reader-env GORCA_M7=1 --reader-env NO_COLOR=1 --reader-env RUST_LOG=warn,gorca_phase=info "$@"
+  --reader-env GORCA_M7=1 --reader-env NO_COLOR=1 --reader-env RUST_LOG=${M7_RUST_LOG:-warn,gorca_phase=info} "$@"
 exit $?

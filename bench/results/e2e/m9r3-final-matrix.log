@@ -1,0 +1,19 @@
+# M9 review-fix matrix
+== 09:40:52 m9r3-final-cr-m7 start head eff0ad4 dirty=0 load 6.88 6.66 7.69 14/2031 1139129 mem_avail_GiB 15.6
+   exit 0
+== 10:00:58 m9r3-final-cr-m7 end head eff0ad4c dirty=0 load 7.45 7.44 7.31 6/2413 1184590 mem_avail_GiB 15.2
+== 10:00:58 m9r3-final-cr-typing start head eff0ad4c dirty=0 load 7.45 7.44 7.31 4/2414 1184614 mem_avail_GiB 15.1
+   exit 1
+== 10:40:35 m9r3-final-cr-typing end head eff0ad4c dirty=0 load 6.30 9.25 9.97 6/2111 1349077 mem_avail_GiB 14.8
+== 10:40:35 m9r3-final-cr-m8 start head eff0ad4c dirty=0 load 6.30 9.25 9.97 4/2110 1349100 mem_avail_GiB 14.8
+   exit 0
+== 11:04:25 m9r3-final-cr-m8 end head eff0ad4c dirty=0 load 9.82 10.87 10.58 5/2165 1459718 mem_avail_GiB 15.5
+== 11:04:25 m9r3-final-ff-m7 start head eff0ad4c dirty=0 load 9.82 10.87 10.58 6/2165 1459741 mem_avail_GiB 15.5
+   exit 1
+== 11:24:56 m9r3-final-ff-m7 end head eff0ad4c dirty=0 load 9.03 12.12 12.53 1/2170 1576158 mem_avail_GiB 15.6
+== 11:24:56 m9r3-final-ff-typing start head eff0ad4c dirty=0 load 9.03 12.12 12.53 1/2170 1576181 mem_avail_GiB 15.6
+   exit 1
+== 12:05:02 m9r3-final-ff-typing end head 82329a7e dirty=4 load 12.73 14.22 12.03 2/2523 1739082 mem_avail_GiB 15.5
+== 12:05:02 m9r3-final-ff-m8 start head 82329a7e dirty=4 load 12.73 14.22 12.03 1/2523 1739105 mem_avail_GiB 15.5
+   exit 1
+== 12:32:59 m9r3-final-ff-m8 end head 568474e0 dirty=6 load 11.50 12.88 13.22 3/2963 1908096 mem_avail_GiB 14.9

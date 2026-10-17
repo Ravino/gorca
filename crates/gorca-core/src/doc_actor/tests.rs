@@ -280,3 +280,82 @@ fn the_join_replaces_and_removes_only_its_own_keys() {
     j.remove(nk(1), DocId(2));
     assert!(j.get(nk(1)).is_none());
 }
+
+/// A source that detaches a task holding its shutdown token (the frame wake does), then ends.
+struct DetachingSource {
+    stopped: Arc<std::sync::atomic::AtomicBool>,
+    end: tokio::sync::oneshot::Receiver<()>,
+}
+
+impl gorca_doc_source_api::DocSource for DetachingSource {
+    fn kind(&self) -> gorca_doc_source_api::SourceKind {
+        gorca_doc_source_api::SourceKind::Atspi
+    }
+
+    fn caps(&self) -> gorca_doc_source_api::SourceCaps {
+        ScriptedDocSource::new().0.caps()
+    }
+
+    fn attach(
+        self: Box<Self>,
+        ctx: gorca_doc_source_api::DocSourceCtx,
+    ) -> gorca_rt::BoxFuture<'static, Result<(), gorca_doc_source_api::SourceError>> {
+        Box::pin(async move {
+            let ctx = ctx;
+            let token = ctx.shutdown.clone();
+            let stopped = Arc::clone(&self.stopped);
+            tokio::spawn(async move {
+                token.cancelled().await;
+                stopped.store(true, Ordering::SeqCst);
+            });
+            let _ = self.end.await;
+            Ok(())
+        })
+    }
+}
+
+#[tokio::test]
+async fn a_task_the_source_detached_stops_when_the_document_ends() {
+    let stopped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (end_tx, end) = tokio::sync::oneshot::channel();
+    let join = Arc::new(WebJoin::new());
+    let docs = Arc::new(DocDirectory::new());
+    let (ntx, mut notices) = mpsc::channel(32);
+    let shutdown = CancellationToken::new();
+    let (handle, fut) = prepare(DocActorSpec {
+        doc: DocId(7),
+        app: app(),
+        root: nk(11),
+        source: Box::new(DetachingSource {
+            stopped: Arc::clone(&stopped),
+            end,
+        }),
+        join,
+        directory: Arc::clone(&docs),
+        notices: ntx,
+        shutdown: shutdown.clone(),
+        counters: Arc::new(DocCounters::default()),
+    });
+    docs.insert(handle.clone());
+    let task = tokio::spawn(fut);
+    end_tx.send(()).unwrap();
+    // The document ends while the app, and so the actor's own shutdown, lives on.
+    while let Some(n) = notices.recv().await {
+        if n == (DocNotice::Gone { doc: DocId(7) }) {
+            break;
+        }
+    }
+    let _ = task.await;
+    drop(handle);
+    for _ in 0..100 {
+        if stopped.load(Ordering::SeqCst) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(
+        stopped.load(Ordering::SeqCst),
+        "the detached task outlived its document"
+    );
+    assert!(!shutdown.is_cancelled());
+}

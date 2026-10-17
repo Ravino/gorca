@@ -79,6 +79,16 @@ struct Container {
 #[derive(Debug, Default)]
 pub struct RunLayer {
     containers: HashMap<SrcNodeId, Container>,
+    /// Blink: `static` children repeat the text the parent's hypertext already holds
+    /// (`Toolkit::text_leaf_children_repeat_parent_text`): their ids are dropped from the child
+    /// lists so that the runs are the only text leaves.
+    drop_static_kids: bool,
+    static_ids: std::collections::HashSet<SrcNodeId>,
+    /// `static` nodes an earlier batch already sent to the mirror (removed when they turn out
+    /// to repeat their parent's text).
+    sent_static: std::collections::HashSet<SrcNodeId>,
+    /// `static` nodes found to repeat their parent's text: they get no container and no runs.
+    dead_static: std::collections::HashSet<SrcNodeId>,
 }
 
 fn split_parts(text: &str) -> Vec<Arc<str>> {
@@ -102,6 +112,14 @@ impl RunLayer {
         Self::default()
     }
 
+    /// A layer for an engine whose text leaves are real children (Blink).
+    pub fn dropping_static_children() -> Self {
+        Self {
+            drop_static_kids: true,
+            ..Self::default()
+        }
+    }
+
     /// Number of containers tracked (tests, metrics).
     pub fn tracked(&self) -> usize {
         self.containers.len()
@@ -119,10 +137,24 @@ impl RunLayer {
             match d {
                 DocDelta::Reset { root, nav_id } => {
                     self.containers.clear();
+                    self.static_ids.clear();
+                    self.sent_static.clear();
+                    self.dead_static.clear();
                     head.push(DocDelta::Reset { root, nav_id });
                 }
                 DocDelta::Upsert(mut nodes) => {
+                    if self.drop_static_kids {
+                        for n in &nodes {
+                            if n.role == Role::StaticText && !is_run(n.id) {
+                                self.static_ids.insert(n.id);
+                            }
+                        }
+                    }
                     for n in &mut nodes {
+                        if self.dead_static.contains(&n.id) {
+                            n.text = None;
+                            continue;
+                        }
                         let c = self.containers.entry(n.id).or_default();
                         c.parts = match n.text.take() {
                             Some(t) if !t.is_empty() => split_parts(&clean_text(&t)),
@@ -137,6 +169,7 @@ impl RunLayer {
                     c.kids = Some(children.to_vec());
                     c.dirty = true;
                 }
+                DocDelta::Text { node, .. } if self.dead_static.contains(&node) => {}
                 DocDelta::Text { node, edit } => match edit {
                     TextEdit::Replace(t) => {
                         let c = self.containers.entry(node).or_default();
@@ -153,6 +186,9 @@ impl RunLayer {
                     for id in &ids {
                         // The runs leave with their container's subtree.
                         self.containers.remove(id);
+                        self.static_ids.remove(id);
+                        self.sent_static.remove(id);
+                        self.dead_static.remove(id);
                     }
                     removed.extend(ids);
                 }
@@ -161,8 +197,39 @@ impl RunLayer {
         }
         let mut lists: Vec<DocDelta> = Vec::new();
         let mut gone: Vec<SrcNodeId> = Vec::new();
-        self.flush(&mut upserts, &mut lists, &mut gone);
+        let mut dropped: Vec<SrcNodeId> = Vec::new();
+        self.flush(&mut upserts, &mut lists, &mut gone, &mut dropped);
         removed.extend(gone);
+        if self.drop_static_kids {
+            // The `static` children that repeat their parent's text never join the mirror: they
+            // are cut from this batch, and removed if an earlier batch already carried them.
+            let mut dropped: std::collections::HashSet<SrcNodeId> = dropped.into_iter().collect();
+            // Their own runs go with them.
+            let mut dead_runs: std::collections::HashSet<SrcNodeId> =
+                std::collections::HashSet::new();
+            for id in &dropped {
+                if let Some(c) = self.containers.remove(id) {
+                    dead_runs.extend(c.runs.iter().map(|(r, _)| *r));
+                }
+                self.dead_static.insert(*id);
+            }
+            upserts.retain(|n| !dropped.contains(&n.id) && !dead_runs.contains(&n.id));
+            lists.retain(
+                |d| !matches!(d, DocDelta::Children { parent, .. } if dropped.contains(parent)),
+            );
+            removed.extend(dead_runs.iter().copied());
+            dropped.extend(dead_runs);
+            for n in &upserts {
+                if self.static_ids.contains(&n.id) {
+                    self.sent_static.insert(n.id);
+                }
+            }
+            for id in dropped {
+                if self.sent_static.remove(&id) {
+                    removed.push(id);
+                }
+            }
+        }
         let mut out = head;
         if !upserts.is_empty() {
             out.push(DocDelta::Upsert(upserts));
@@ -181,6 +248,7 @@ impl RunLayer {
         upserts: &mut Vec<SrcNode>,
         lists: &mut Vec<DocDelta>,
         gone: &mut Vec<SrcNodeId>,
+        dropped: &mut Vec<SrcNodeId>,
     ) {
         for (parent, c) in &mut self.containers {
             if !c.dirty {
@@ -188,7 +256,26 @@ impl RunLayer {
             }
             c.dirty = false;
             let parts = &c.parts;
-            let kids: &[SrcNodeId] = c.kids.as_deref().unwrap_or(&[]);
+            let filtered: Vec<SrcNodeId>;
+            let kids: &[SrcNodeId] = if self.drop_static_kids && !parts.is_empty() {
+                filtered = c
+                    .kids
+                    .as_deref()
+                    .unwrap_or(&[])
+                    .iter()
+                    .copied()
+                    .filter(|k| {
+                        let is_static = self.static_ids.contains(k);
+                        if is_static {
+                            dropped.push(*k);
+                        }
+                        !is_static
+                    })
+                    .collect();
+                &filtered
+            } else {
+                c.kids.as_deref().unwrap_or(&[])
+            };
             let mut children: Vec<SrcNodeId> = Vec::with_capacity(parts.len() + kids.len());
             let mut runs: Vec<(SrcNodeId, Arc<str>)> = Vec::new();
             for (i, part) in parts.iter().enumerate() {
@@ -340,6 +427,74 @@ mod tests {
         assert_eq!(up[0].id, run);
         assert_eq!(up[0].text.as_deref(), Some("beta"));
         assert!(children_of(&edited, 1).is_none(), "list did not change");
+    }
+
+    fn static_node(id: u64, text: &str) -> SrcNode {
+        SrcNode {
+            role: Role::StaticText,
+            ..node(id, Some(text))
+        }
+    }
+
+    #[test]
+    fn blink_static_children_that_repeat_the_parent_text_are_dropped() {
+        // A paragraph "Go \u{FFFC} now" with children [static "Go ", link "here", static " now"]:
+        // the Blink shape. Only the runs and the link may remain.
+        let mut l = RunLayer::dropping_static_children();
+        let out = l.process(vec![
+            DocDelta::Upsert(vec![node(1, Some("Go \u{FFFC} now"))]),
+            DocDelta::Upsert(vec![
+                static_node(2, "Go "),
+                node(3, Some("here")),
+                static_node(4, " now"),
+            ]),
+            DocDelta::Children {
+                parent: SrcNodeId(1),
+                children: kids(&[2, 3, 4]),
+            },
+            DocDelta::Settled { batch: 1 },
+        ]);
+        let list = children_of(&out, 1).unwrap_or_default();
+        assert_eq!(list.len(), 3, "run, link, run: {list:?}");
+        assert!(is_run(list[0]) && list[1] == SrcNodeId(3) && is_run(list[2]));
+        let up = upserted(&out);
+        assert!(
+            up.iter()
+                .all(|n| n.id != SrcNodeId(2) && n.id != SrcNodeId(4))
+        );
+        // Heading: Text "Title", one static child with the same text.
+        let out = l.process(vec![
+            DocDelta::Upsert(vec![node(10, Some("Title")), static_node(11, "Title")]),
+            DocDelta::Children {
+                parent: SrcNodeId(10),
+                children: kids(&[11]),
+            },
+        ]);
+        let list = children_of(&out, 10).unwrap_or_default();
+        assert_eq!(list.len(), 1);
+        assert!(is_run(list[0]));
+        let up = upserted(&out);
+        assert_eq!(
+            up.iter()
+                .filter(|n| n.text.as_deref() == Some("Title"))
+                .count(),
+            1,
+            "the text is in exactly one node"
+        );
+    }
+
+    #[test]
+    fn a_static_child_alone_keeps_its_text_when_the_parent_has_none() {
+        let mut l = RunLayer::dropping_static_children();
+        let out = l.process(vec![
+            DocDelta::Upsert(vec![node(1, None), static_node(2, "text")]),
+            DocDelta::Children {
+                parent: SrcNodeId(1),
+                children: kids(&[2]),
+            },
+        ]);
+        assert_eq!(children_of(&out, 1), Some(vec![SrcNodeId(2)]));
+        assert!(children_of(&out, 2).is_some_and(|c| c.len() == 1 && is_run(c[0])));
     }
 
     #[test]

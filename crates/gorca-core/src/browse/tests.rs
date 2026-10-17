@@ -1723,6 +1723,92 @@ fn quick_navigation_finds_articles_and_frames_and_names_them() {
     assert_eq!(spoken(&fx), ["no previous frame"]);
 }
 
+/// A frame document (a nested `DocumentWeb`, local 1030) joined to the page of the rig.
+fn with_frame(r: &mut Rig) {
+    r.focus(1002);
+    let mut frame = block(src(30, Role::DocumentWeb, Some(1030)));
+    frame.name = Some(Arc::from("Ad frame"));
+    let out =
+        r.tr.apply(
+            &mut r.writer,
+            vec![
+                DocDelta::Upsert(vec![frame, run(31, "Inside the frame")]),
+                kids(1, &[2, 4, 9, 11, 13, 30]),
+                kids(30, &[31]),
+                DocDelta::Settled { batch: 2 },
+            ],
+        )
+        .unwrap();
+    r.writer.publish();
+    for (l, id) in out.join_add {
+        r.join.set(
+            NodeKey {
+                app: app(),
+                local: l,
+            },
+            (DocId(1), id),
+        );
+    }
+    r.mirror.apply(
+        SnapshotBatch {
+            nodes: vec![snap(
+                1030,
+                Role::DocumentWeb,
+                "Ad frame",
+                StateSet::FOCUSABLE,
+            )],
+            ..Default::default()
+        },
+        ApplyOrigin::Push,
+    );
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed {
+            doc: DocId(1),
+            rev: 2,
+        }),
+        r.now,
+    );
+}
+
+#[test]
+fn a_frame_document_on_the_way_to_its_content_stays_silent() {
+    // Chromium focuses the frame's document, then the link inside it: one announcement.
+    let mut r = rig();
+    with_frame(&mut r);
+    let fx = r.focus(1030);
+    assert!(
+        spoken(&fx).is_empty(),
+        "the frame stop is deferred: {:?}",
+        spoken(&fx)
+    );
+    let fx = r.focus(1006);
+    assert_eq!(spoken(&fx), ["the docs link"]);
+    r.now += Duration::from_millis(400);
+    let fx = r.reader.handle(ReaderMsg::Timer, r.now);
+    assert!(
+        spoken(&fx).is_empty(),
+        "the deferred frame speech is cancelled: {:?}",
+        spoken(&fx)
+    );
+}
+
+#[test]
+fn a_tab_stop_on_a_frame_document_is_announced_when_nothing_follows() {
+    // Firefox stops Tab on the frame document itself: the stop speaks the frame (L-1).
+    let mut r = rig();
+    with_frame(&mut r);
+    let fx = r.focus(1030);
+    assert!(spoken(&fx).is_empty());
+    r.now += Duration::from_millis(400);
+    let fx = r.reader.handle(ReaderMsg::Timer, r.now);
+    let said = spoken(&fx);
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(
+        said[0].contains("Ad frame"),
+        "the frame title is spoken: {said:?}"
+    );
+}
+
 #[test]
 fn the_load_complete_of_another_document_does_not_start_the_read() {
     // Review F-8: an iframe (or another tab) of the same browser finished loading a moment
