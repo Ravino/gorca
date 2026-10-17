@@ -41,11 +41,11 @@ Enter 2	new line
 type last	l | a | s | t | space | l | i | n | e
 Up	papa quebec
 Up 2	kilo lima mike november oscar
-Up 3	foxtot golf hotel india juliet
+Up 3	foxtrot golf hotel india juliet
 Down	kilo lima mike november oscar
-Ctrl+Up	alpha bravo charlie delta echo foxtot golf hotel india juliet kilo lima mike november oscar papa quebec
-Ctrl+Up 2	alpha bravo charlie delta echo foxtot golf hotel india juliet kilo lima mike november oscar papa quebec
-Ctrl+Down	alpha bravo charlie delta echo foxtot golf hotel india juliet kilo lima mike november oscar papa quebec
+Ctrl+Up	alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec
+Ctrl+Up 2	alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec
+Ctrl+Down	alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec
 Ctrl+Home	one two
 Ctrl+End	last line
 PageUp	one two
@@ -55,6 +55,6 @@ Shift+Down	one two selected
 Shift+Down 2	alpha bravo charlie delta echo selected
 Shift+Up	alpha bravo charlie delta echo unselected
 Ctrl+Shift+Down	alpha bravo charlie delta echo selected
-Ctrl+Shift+End	foxtot golf hotel india juliet kilo lima mike november oscar papa quebec\nlast line selected
-BackSpace selection	one two\nalpha bravo charlie delta echo foxtot golf hotel india juliet kilo lima mike november oscar papa quebec\nlast line
-Ctrl+Z	one two\nalpha bravo charlie delta echo foxtot golf hotel india juliet kilo lima mike november oscar papa quebec\nlast line
+Ctrl+Shift+End	foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec\nlast line selected
+BackSpace selection	one two\nalpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec\nlast line
+Ctrl+Z	one two\nalpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec\nlast line

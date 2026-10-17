@@ -1,39 +1,39 @@
 type	h | e | l | l | o | comma | space | b | r | a | v | e | space | w | o | r | l | d
 Left	d
-Right	blank
-Home	h
-Left at start	h
+Right	space
+Home	a
+Left at start	blank
 End	blank
-Right at end	blank
-Ctrl+Left 1	world
-Ctrl+Left 2	brave
-Ctrl+Left 3	,
-Ctrl+Left 4 at start	hello
-Ctrl+Right 1	hello
-Ctrl+Right 2	,
-Ctrl+Right 3	brave
-Ctrl+Right 4 at end	world
-BackSpace	d
-Delete at end	
-Home 2	h
-Delete	h
-Shift+Right	e selected
-Shift+Right 2	l selected
-Shift+Left	l unselected
-Shift+Left 2	e unselected
-Ctrl+Shift+Right	ello selected
-Ctrl+Shift+Left	ello unselected
-Shift+End	all selected, 16 characters
-Shift+Home	ello, brave worl unselected
-Ctrl+A	all selected, 16 characters
+Right at end	a
+Ctrl+Left 1	two
+Ctrl+Left 2	one
+Ctrl+Left 3	one
+Ctrl+Left 4 at start	one
+Ctrl+Right 1	one
+Ctrl+Right 2	two
+Ctrl+Right 3	alpha
+Ctrl+Right 4 at end	secondhello
+BackSpace	o
+Delete at end	comma
+Home 2	a
+Delete	a
+Shift+Right	l selected
+Shift+Right 2	p selected
+Shift+Left	p unselected
+Shift+Left 2	l unselected
+Ctrl+Shift+Right	lpha selected
+Ctrl+Shift+Left	lpha unselected
+Shift+End	lpha secondhell brave world charlie delta echo foxtrot golf hotel india selected
+Shift+Home	lpha secondhell brave world charlie delta echo foxtrot golf hotel india unselected
+Ctrl+A	all selected, 138 characters
 Right collapses	blank
 End 2	blank
-Ctrl+BackSpace	worl
+Ctrl+BackSpace	line
 Ctrl+Delete at end	
-Home 3	e
-Ctrl+Delete	ello
-select all	all selected, 8 characters
-clear	, brave
+Home 3	l
+Ctrl+Delete	last
+select all	all selected, 130 characters
+clear	one two\nlpha secondhell brave world charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec\n
 type line 1	o | n | e | space | t | w | o
 Enter	new line
 type paragraph	a | l | p | h | a | space | b | r | a | v | o | space | c | h | a | r | l | i | e | space | d | e | l | t | a | space | e | c | h | o | space | f | o | x | t | r | o | t | space | g | o | l | f | space | h | o | t | e | l | space | i | n | d | i | a | space | j | u | l | i | e | t | space | k | i | l | o | space | l | i | m | a | space | m | i | k | e | space | n | o | v | e | m | b | e | r | space | o | s | c | a | r | space | p | a | p | a | space | q | u | e | b | e | c

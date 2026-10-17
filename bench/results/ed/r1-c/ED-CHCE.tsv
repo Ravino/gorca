@@ -35,9 +35,9 @@ Ctrl+Delete	ello
 select all	all selected, 8 characters
 clear	
 type line 1	o | n | e | space | t | w | o
-Enter	new line | blank
+Enter	new line
 type paragraph	a | l | p | h | a | space | b | r | a | v | o | space | c | h | a | r | l | i | e | space | d | e | l | t | a | space | e | c | h | o | space | f | o | x | t | r | o | t | space | g | o | l | f | space | h | o | t | e | l | space | i | n | d | i | a | space | j | u | l | i | e | t | space | k | i | l | o | space | l | i | m | a | space | m | i | k | e | space | n | o | v | e | m | b | e | r | space | o | s | c | a | r | space | p | a | p | a | space | q | u | e | b | e | c
-Enter 2	new line | blank
+Enter 2	new line
 type last	l | a | s | t | space | l | i | n | e
 Up	oscar papa quebec
 Up 2	hotel india juliet kilo lima mike november
@@ -56,5 +56,5 @@ Shift+Down 2	hotel india juliet kilo lima mike november
 Shift+Up	alpha bravo charlie delta echo foxtrot golf
 Ctrl+Shift+Down	last line
 Ctrl+Shift+End	last line
-BackSpace selection	
+BackSpace selection	one two | blank | blank
 Ctrl+Z	one two
