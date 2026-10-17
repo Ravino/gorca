@@ -43,6 +43,8 @@ mod quick;
 mod reader;
 mod review;
 mod runtime;
+#[cfg(test)]
+mod statemodel;
 mod terminal;
 mod text;
 
