@@ -385,7 +385,10 @@ fn a_slow_caret_event_is_the_only_answer_to_a_key_that_can_move() {
     let mut r = Rig::new();
     r.focus("$ abc def", 2);
     r.key(TermKey::CharRight);
-    assert!(texts(&r.wait(120)).is_empty(), "the edge timer must not read the old caret");
+    assert!(
+        texts(&r.wait(120)).is_empty(),
+        "the edge timer must not read the old caret"
+    );
     assert_eq!(texts(&r.feed(TermInput::Caret(3))), vec!["b".to_owned()]);
     assert!(texts(&r.wait(300)).is_empty(), "spoken once");
     // The caret event never comes (a lost move): the long timer speaks the unit at the caret.

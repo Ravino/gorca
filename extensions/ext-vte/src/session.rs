@@ -434,7 +434,8 @@ impl Session {
             Dir::Back => self.prompt.end(line).is_some_and(|pe| col <= pe),
             Dir::Forward => {
                 col as usize >= line.trim_end().chars().count()
-                    && (row + 1..self.live.line_count()).all(|r| self.live.line(r).trim().is_empty())
+                    && (row + 1..self.live.line_count())
+                        .all(|r| self.live.line(r).trim().is_empty())
             }
         }
     }

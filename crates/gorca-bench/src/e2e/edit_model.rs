@@ -266,9 +266,13 @@ mod tests {
     #[test]
     fn backspace_over_a_selection_must_speak_the_removed_text() {
         let t = Target::Gtk4Text;
+        let doc = format!("one two\n{PARA}\nlast line");
         assert_eq!(
-            check(t, false, "BackSpace selection", &g(&["one two"])),
+            check(t, false, "BackSpace selection", &g(&[&doc])),
             Some(Ok(()))
+        );
+        assert!(
+            check(t, false, "BackSpace selection", &g(&["one two"])).is_some_and(|r| r.is_err())
         );
         assert!(check(t, false, "BackSpace selection", &g(&["blank"])).is_some_and(|r| r.is_err()));
         assert!(check(t, false, "BackSpace selection", &g(&[])).is_some_and(|r| r.is_err()));
