@@ -898,6 +898,55 @@ fn fb() -> Vec<Step> {
     ]
 }
 
+// ---- reviewer probes (M8b review, not for merge) ----
+fn rv_desc() -> Vec<Step> {
+    vec![
+        top("RD.top"),
+        s("RD.h", P0, "H x2: the page after 300 megabyte descriptions", rep('h', 2), &["after desc"]).win(4000),
+        s("RD.b", P0, "B: sentinel", n('b'), &["sentinel button"]).win(3000),
+        s("RD.focus", P0, "Focus a described button: bounded description", Act::Focus(role::PUSH_BUTTON, "Btn 5"), &["btn 5, button"]).win(3000),
+    ]
+}
+fn rv_name() -> Vec<Step> {
+    vec![
+        top("RN.top"),
+        s("RN.h", P0, "H x2: the page after 300 megabyte names", rep('h', 2), &["after name"]).win(4000),
+        s("RN.b", P0, "B: sentinel", n('b'), &["sentinel button"]).win(3000),
+    ]
+}
+fn rv_inv() -> Vec<Step> {
+    vec![
+        top("RI.top"),
+        s("RI.h", P0, "H x2 with 500 invalid fields and 100 toggling", rep('h', 2), &["after invalid"]).win(4000),
+        s("RI.focus1", P0, "Focus probe field: first error", Act::Focus(role::ENTRY, "Probe field"), &["probe field, edit", "invalid entry", "first error"]).win(3000),
+        esc("RI.e1"),
+        pos("RI.wait", Act::Wait(3500)),
+        s("RI.focus2", P0, "Focus sentinel then probe again: the changed error text", Act::Focus(role::PUSH_BUTTON, "Sentinel"), &["sentinel"]).win(3000),
+        esc("RI.e2"),
+        s("RI.focus3", P0, "Probe again: second error", Act::Focus(role::ENTRY, "Probe field"), &["second error"]).win(3000),
+        esc("RI.e3"),
+        s("RI.key", P0, "Down answers at once under the toggle storm", Act::Key(DOWN, 0), &[]).win(1000),
+    ]
+}
+fn rv_names() -> Vec<Step> {
+    vec![
+        top("RM.top"),
+        s("RM.hid", P0, "B: icon button labelled by a hidden span", n('b'), &["button, hidden label text"]),
+        s("RM.cb", P0, "X: aria-label check box (no visible label)", n('x'), &["subscribe box"]),
+        s("RM.cb.line", P0, "line of the check box", Act::Key(DOWN, 0), &["subscribe box"]),
+        top("RM.top2"),
+        s("RM.h", P0, "H: heading with aria-label (NVDA: label replaces content)", n('h'), &["short heading label"]),
+        s("RM.h2", P0, "H: next heading", n('h'), &["after names"]),
+        top("RM.top3"),
+        s("RM.k", P0, "K: card link with aria-label", n('k'), &["link, read article card title"]).not(&["card teaser text"]),
+        s("RM.down1", P0, "Down from the card link", Act::Key(DOWN, 0), &[]),
+        s("RM.down2", P0, "Down again", Act::Key(DOWN, 0), &[]),
+        s("RM.down3", P0, "Down again", Act::Key(DOWN, 0), &[]),
+        s("RM.down4", P0, "Down again", Act::Key(DOWN, 0), &["dot leading paragraph"]),
+        s("RM.tree", P0, "Focus tree item with aria-label", Act::Focus(role::TREE_ITEM, "Item label"), &["item label, tree view item"]),
+    ]
+}
+
 /// Every scenario, in run order.
 pub fn scenarios() -> Vec<Scenario> {
     let sc = |id, area, page, title, body| Scenario { id, area, page, title, body, xfail: None };
@@ -923,6 +972,10 @@ pub fn scenarios() -> Vec<Scenario> {
         sc("M8-BWG", "ARIA widgets: names, roles, states", "../../m8b/pages/widgets.html", "M8b Widgets", Body::Steps(wg)),
         sc("M8-BFB", "ARIA forms: invalid, described, required, read only", "../../m8b/pages/forms.html", "M8b Forms", Body::Steps(fb)),
         sc("M8-BHO", "hostile ARIA: cycles, fan-out, megabyte strings", "../../m8b/pages/hostile.html", "M8b Hostile", Body::Steps(ho)),
+        sc("M8-RDESC", "review: description flood", "../../m8b/review/r_desc.html", "M8b Review Desc", Body::Steps(rv_desc)),
+        sc("M8-RNAME", "review: name flood", "../../m8b/review/r_name.html", "M8b Review Name", Body::Steps(rv_name)),
+        sc("M8-RINV", "review: invalid flood", "../../m8b/review/r_invalid.html", "M8b Review Invalid", Body::Steps(rv_inv)),
+        sc("M8-RNAMES", "review: names", "../../m8b/review/r_names.html", "M8b Review Names", Body::Steps(rv_names)),
         Scenario {
             id: "M8-PF1",
             area: "W1 at 100k nodes: H / Shift+H p99 5 ms",

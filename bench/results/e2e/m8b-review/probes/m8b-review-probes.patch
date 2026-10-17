@@ -1,0 +1,216 @@
+diff --git a/crates/gorca-bench/src/e2e/m8_steps.rs b/crates/gorca-bench/src/e2e/m8_steps.rs
+index 883b74b..c842670 100644
+--- a/crates/gorca-bench/src/e2e/m8_steps.rs
++++ b/crates/gorca-bench/src/e2e/m8_steps.rs
+@@ -898,6 +898,55 @@ fn fb() -> Vec<Step> {
+     ]
+ }
+ 
++// ---- reviewer probes (M8b review, not for merge) ----
++fn rv_desc() -> Vec<Step> {
++    vec![
++        top("RD.top"),
++        s("RD.h", P0, "H x2: the page after 300 megabyte descriptions", rep('h', 2), &["after desc"]).win(4000),
++        s("RD.b", P0, "B: sentinel", n('b'), &["sentinel button"]).win(3000),
++        s("RD.focus", P0, "Focus a described button: bounded description", Act::Focus(role::PUSH_BUTTON, "Btn 5"), &["btn 5, button"]).win(3000),
++    ]
++}
++fn rv_name() -> Vec<Step> {
++    vec![
++        top("RN.top"),
++        s("RN.h", P0, "H x2: the page after 300 megabyte names", rep('h', 2), &["after name"]).win(4000),
++        s("RN.b", P0, "B: sentinel", n('b'), &["sentinel button"]).win(3000),
++    ]
++}
++fn rv_inv() -> Vec<Step> {
++    vec![
++        top("RI.top"),
++        s("RI.h", P0, "H x2 with 500 invalid fields and 100 toggling", rep('h', 2), &["after invalid"]).win(4000),
++        s("RI.focus1", P0, "Focus probe field: first error", Act::Focus(role::ENTRY, "Probe field"), &["probe field, edit", "invalid entry", "first error"]).win(3000),
++        esc("RI.e1"),
++        pos("RI.wait", Act::Wait(3500)),
++        s("RI.focus2", P0, "Focus sentinel then probe again: the changed error text", Act::Focus(role::PUSH_BUTTON, "Sentinel"), &["sentinel"]).win(3000),
++        esc("RI.e2"),
++        s("RI.focus3", P0, "Probe again: second error", Act::Focus(role::ENTRY, "Probe field"), &["second error"]).win(3000),
++        esc("RI.e3"),
++        s("RI.key", P0, "Down answers at once under the toggle storm", Act::Key(DOWN, 0), &[]).win(1000),
++    ]
++}
++fn rv_names() -> Vec<Step> {
++    vec![
++        top("RM.top"),
++        s("RM.hid", P0, "B: icon button labelled by a hidden span", n('b'), &["button, hidden label text"]),
++        s("RM.cb", P0, "X: aria-label check box (no visible label)", n('x'), &["subscribe box"]),
++        s("RM.cb.line", P0, "line of the check box", Act::Key(DOWN, 0), &["subscribe box"]),
++        top("RM.top2"),
++        s("RM.h", P0, "H: heading with aria-label (NVDA: label replaces content)", n('h'), &["short heading label"]),
++        s("RM.h2", P0, "H: next heading", n('h'), &["after names"]),
++        top("RM.top3"),
++        s("RM.k", P0, "K: card link with aria-label", n('k'), &["link, read article card title"]).not(&["card teaser text"]),
++        s("RM.down1", P0, "Down from the card link", Act::Key(DOWN, 0), &[]),
++        s("RM.down2", P0, "Down again", Act::Key(DOWN, 0), &[]),
++        s("RM.down3", P0, "Down again", Act::Key(DOWN, 0), &[]),
++        s("RM.down4", P0, "Down again", Act::Key(DOWN, 0), &["dot leading paragraph"]),
++        s("RM.tree", P0, "Focus tree item with aria-label", Act::Focus(role::TREE_ITEM, "Item label"), &["item label, tree view item"]),
++    ]
++}
++
+ /// Every scenario, in run order.
+ pub fn scenarios() -> Vec<Scenario> {
+     let sc = |id, area, page, title, body| Scenario { id, area, page, title, body, xfail: None };
+@@ -923,6 +972,10 @@ pub fn scenarios() -> Vec<Scenario> {
+         sc("M8-BWG", "ARIA widgets: names, roles, states", "../../m8b/pages/widgets.html", "M8b Widgets", Body::Steps(wg)),
+         sc("M8-BFB", "ARIA forms: invalid, described, required, read only", "../../m8b/pages/forms.html", "M8b Forms", Body::Steps(fb)),
+         sc("M8-BHO", "hostile ARIA: cycles, fan-out, megabyte strings", "../../m8b/pages/hostile.html", "M8b Hostile", Body::Steps(ho)),
++        sc("M8-RDESC", "review: description flood", "../../m8b/review/r_desc.html", "M8b Review Desc", Body::Steps(rv_desc)),
++        sc("M8-RNAME", "review: name flood", "../../m8b/review/r_name.html", "M8b Review Name", Body::Steps(rv_name)),
++        sc("M8-RINV", "review: invalid flood", "../../m8b/review/r_invalid.html", "M8b Review Invalid", Body::Steps(rv_inv)),
++        sc("M8-RNAMES", "review: names", "../../m8b/review/r_names.html", "M8b Review Names", Body::Steps(rv_names)),
+         Scenario {
+             id: "M8-PF1",
+             area: "W1 at 100k nodes: H / Shift+H p99 5 ms",
+diff --git a/crates/gorca-core/src/browse/present.rs b/crates/gorca-core/src/browse/present.rs
+index d5b59f4..0fd4d33 100644
+--- a/crates/gorca-core/src/browse/present.rs
++++ b/crates/gorca-core/src/browse/present.rs
+@@ -1172,4 +1172,98 @@ mod tests {
+         assert_eq!(char_name('\n'), "blank");
+         assert_eq!(char_name('x'), "x");
+     }
++
++    mod probe_m8b {
++// Reviewer probes for M8b browse presentation. Insert as `mod probe_m8b { ... }` at the end of
++// `mod tests` in crates/gorca-core/src/browse/present.rs (needs `use super::*;`).
++use super::*;
++
++fn blk2() -> NodeFlags {
++    NodeFlags::BLOCK | NodeFlags::BREAK_BEFORE
++}
++
++// P1: a check box named only by aria-label (no visible label). NVDA renders the name
++// (gecko_ia2.cpp nameIsContent for check/radio when the label is not visible).
++#[test]
++fn probe_checkbox_aria_label_in_line() {
++    let cb = SubtreeSpec::leaf(
++        aria_node(
++            Role::CheckBox,
++            StateSet::ENABLED | StateSet::FOCUSABLE,
++            &[(web_attrs::EXPLICIT_NAME, "true"), (web_attrs::TAG, "input")],
++            None,
++        )
++        .name("Subscribe box")
++        .flags(blk2())
++        .text("\u{FFFC}"),
++    );
++    let d = doc_of(vec![cb]);
++    eprintln!("P1 line: {}", line_of(&d, 1));
++    assert!(line_of(&d, 1).contains("Subscribe box"), "{}", line_of(&d, 1));
++}
++
++// P2: a heading with aria-label. NVDA: heading is nameIsContent, the label replaces content.
++#[test]
++fn probe_heading_aria_label() {
++    let h = SubtreeSpec::with_children(
++        aria_node(
++            Role::Heading,
++            StateSet::ENABLED,
++            &[(web_attrs::EXPLICIT_NAME, "true"), (web_attrs::TAG, "h2"), (web_attrs::LEVEL, "2")],
++            None,
++        )
++        .name("Short heading label")
++        .flags(blk2()),
++        vec![txt("Long visible heading content")],
++    );
++    let d = doc_of(vec![h]);
++    eprintln!("P2 line: {}", line_of(&d, 1));
++    assert!(line_of(&d, 1).contains("Short heading label"), "{}", line_of(&d, 1));
++}
++
++// P4: a tree item with aria-label. NVDA's nameIsContent list has no outline item: content stays.
++#[test]
++fn probe_tree_item_aria_label() {
++    let ti = SubtreeSpec::with_children(
++        aria_node(
++            Role::TreeItem,
++            StateSet::ENABLED,
++            &[(web_attrs::EXPLICIT_NAME, "true"), (web_attrs::TAG, "li"), (web_attrs::XML_ROLES, "treeitem")],
++            None,
++        )
++        .name("Item label")
++        .flags(blk2()),
++        vec![txt("Item content")],
++    );
++    let d = doc_of(vec![ti]);
++    eprintln!("P4 line: {}", line_of(&d, 1));
++}
++
++// P5: page text that starts with the PAUSE prefix. With description_pause=false the strip
++// removes it from content too.
++#[test]
++fn probe_pause_prefix_collides_with_content() {
++    let p = SubtreeSpec::with_children(leaf(Role::Paragraph).flags(blk2()), vec![txt(". Dot leading paragraph")]);
++    let d = doc_of(vec![p]);
++    let s = d.line_start(1).unwrap();
++    let (_, e) = d.line_range(s);
++    let segs = segments(&describe(&d, s, e));
++    let mut u = gorca_model::Utterance {
++        id: gorca_model::UttId(1),
++        segments: segs,
++        lang: None,
++        epoch: gorca_model::Epoch(1),
++        prio: gorca_model::Prio::Interrupt,
++        may_refine: false,
++        survives_focus_change: false,
++        ttl_secs: 0,
++        refines: None,
++    };
++    eprintln!("P5 before: {:?}", u.segments.iter().map(|s| s.text.to_string()).collect::<Vec<_>>());
++    crate::aria::strip_pause(&mut u);
++    eprintln!("P5 after strip: {:?}", u.segments.iter().map(|s| s.text.to_string()).collect::<Vec<_>>());
++    assert!(u.segments.iter().any(|s| s.text.starts_with(". Dot")), "content altered");
++}
++
++    }
+ }
+diff --git a/crates/gorca-core/src/present/utterance.rs b/crates/gorca-core/src/present/utterance.rs
+index e3ebb8a..886f6d1 100644
+--- a/crates/gorca-core/src/present/utterance.rs
++++ b/crates/gorca-core/src/present/utterance.rs
+@@ -781,4 +781,37 @@ mod change_tests {
+             "native rows keep it"
+         );
+     }
++
++    mod probe_m8b {
++// Reviewer probes for M8b focus speech. Insert as `mod probe_m8b { ... }` at the end of
++// `mod change_tests` in crates/gorca-core/src/present/utterance.rs.
++use super::*;
++
++// P6: a Firefox chrome / XUL menu item (Gecko gives chrome elements a `tag` too) that is
++// selectable and focusable but not selected. NVDA never says "not selected" for MENUITEM.
++#[test]
++fn probe_menu_item_not_selected() {
++    let mut n = snap("Bookmarks", StateSet::SELECTABLE | StateSet::FOCUSABLE, None);
++    n.role = Role::MenuItem;
++    n.attrs = vec![(gorca_doc_source_api::web_attrs::TAG, Arc::<str>::from("menuitem"))].into_iter().collect();
++    let t = texts(&present_focus(&n, UttId(1), Epoch(1)));
++    eprintln!("P6: {t:?}");
++    assert!(!t.contains(&"not selected".to_owned()), "{t:?}");
++}
++
++// P7: NVDA state order: HASPOPUP_DIALOG (bit 47) after REQUIRED (15) and INVALID (17);
++// ON (46) after REQUIRED.
++#[test]
++fn probe_state_order() {
++    let mut n = snap("Pick", StateSet::REQUIRED | StateSet::HAS_POPUP | StateSet::COLLAPSED, None);
++    n.role = Role::Button;
++    n.attrs = vec![
++        (gorca_doc_source_api::web_attrs::TAG, Arc::<str>::from("button")),
++        (gorca_doc_source_api::web_attrs::HASPOPUP, Arc::<str>::from("dialog")),
++    ].into_iter().collect();
++    let t = texts(&present_focus(&n, UttId(1), Epoch(1)));
++    eprintln!("P7: {t:?}");
++}
++
++    }
+ }

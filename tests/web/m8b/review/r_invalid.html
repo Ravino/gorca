@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>M8b Review Invalid</title></head>
+<body>
+<h1>Review invalid flood</h1>
+<div id="host"></div>
+<h2>After invalid</h2>
+<input id="probe" type="text" aria-label="Probe field" aria-invalid="true" aria-errormessage="perr">
+<div id="perr">First error</div>
+<button id="sentinel">Sentinel button</button>
+<script>
+const host = document.getElementById('host');
+const fields = [];
+for (let i = 0; i < 500; i++) { const e = document.createElement('input'); e.type = 'text'; e.setAttribute('aria-label', 'Bad ' + i); e.setAttribute('aria-invalid', 'true'); host.appendChild(e); fields.push(e); }
+let t = 0;
+setInterval(() => { t++; for (let i = 0; i < 100; i++) fields[i].setAttribute('aria-invalid', (t % 2) ? 'false' : 'true'); }, 30);
+setTimeout(() => { document.getElementById('perr').textContent = 'Second error'; }, 3000);
+</script>
+</body></html>
