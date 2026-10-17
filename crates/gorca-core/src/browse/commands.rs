@@ -607,6 +607,27 @@ fn is_ancestor_or_self(d: &WebDoc, anc: DocNodeId, node: DocNodeId) -> bool {
     false
 }
 
+/// The visible text of a node's subtree as a one-line label (whitespace collapsed, icon glyphs
+/// dropped, capped), or `None` when it holds none: the name a control without an accessible
+/// name has in browse mode.
+fn subtree_label(d: &WebDoc, id: DocNodeId) -> Option<String> {
+    const CAP: u32 = 160;
+    let (a, b) = d.subtree_text_range(id)?;
+    if a >= b {
+        return None;
+    }
+    let mut raw = String::new();
+    d.read_text(a, b.min(a.saturating_add(CAP)), &mut raw);
+    let raw: String = raw
+        .chars()
+        .filter(|c| {
+            !gorca_model::text::is_icon_glyph(*c) && !gorca_model::text::is_object_marker(*c)
+        })
+        .collect();
+    let label = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!crate::present::name_is_blank(Some(&label))).then_some(label)
+}
+
 fn title_of(d: &WebDoc) -> Option<String> {
     d.root()
         .and_then(|r| d.node(r))
@@ -1149,11 +1170,28 @@ impl Reader {
         h.read
             .with(|d| {
                 let v = d.node(id)?;
-                let m = v.meta?;
-                if m.attrs.is_empty() {
+                // Name parity with browse mode: a control the engine left without a name (or
+                // named by an icon glyph) takes the text the document holds for it, which is
+                // what a quick-nav move onto it reads.
+                // A combo box or any control with a value would say its value as its name.
+                let fill = (crate::present::needs_name(snap.role)
+                    && snap.role != Role::ComboBox
+                    && snap.value.is_none()
+                    && crate::present::name_is_blank(snap.name.as_deref()))
+                .then(|| subtree_label(d, id))
+                .flatten();
+                let meta = v.meta.filter(|m| !m.attrs.is_empty());
+                if meta.is_none() && fill.is_none() {
                     return None;
                 }
                 let mut c = (**snap).clone();
+                if let Some(f) = fill {
+                    c.name = Some(Arc::from(f));
+                }
+                // No attributes to merge: only a filled name changes the snapshot.
+                let Some(m) = meta else {
+                    return Some(Arc::new(c));
+                };
                 // The engine's name of a list or tree item carries the list marker; the document
                 // mirror's does not (web source quirk row).
                 if matches!(v.role, Role::ListItem | Role::TreeItem)

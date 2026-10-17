@@ -950,14 +950,16 @@ impl AppActor {
                 if mask.contains(PropMask::VALUE) && self.focus != Some(*node) {
                     self.route_level(*node, route);
                 }
+                // A name change rides along: the Reader speaks it only within a short window after
+                // the focus (a label a page sets after the focus event).
                 if self.focus == Some(*node)
-                    && mask.intersects(PropMask::STATES | PropMask::VALUE)
+                    && mask.intersects(PropMask::STATES | PropMask::VALUE | PropMask::NAME)
                     && !s1_sent.contains(node)
                 {
                     s1_sent.push(*node);
                     if self.send_focus(FocusLaneMsg::StateChanged {
                         node: *node,
-                        mask: *mask & (PropMask::STATES | PropMask::VALUE),
+                        mask: *mask & (PropMask::STATES | PropMask::VALUE | PropMask::NAME),
                     }) {
                         route.forwarded_to_focus_lane += 1;
                     } else {
