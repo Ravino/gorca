@@ -139,3 +139,26 @@ ADR-0018 decision 4, but user-visible; confirm with the user.
    Caret navigation and typing echo paths are untouched apart from the per-edit cost in M2 (review mode
    only) and a flag write in focus mode. `spoken()` trims trailing spaces for every flat review model,
    a no-op for `SimpleUnits` words.
+
+## Round 2 (head dd0e4253): MERGE
+
+Re-verified on 2026-10-17. The same probes were appended to `review/tests.rs`, run, and removed again
+(the file is restored and the branch is unchanged).
+
+| Finding | Status | Evidence (probe output on dd0e4253) |
+|---|---|---|
+| H1 | Fixed | P1: `["old 2"]`, then after the read `["new 9"]`, CurLine `["new 9"]`. P2: after the read `["newer 10"]`. Both rewritten tests use their original inputs again. |
+| H2 | Fixed | P3: the correction says `["prog 20 percent"]` with the cursor at (1,0), the same line. New test `live_review_the_correction_speaks_the_line_the_cursor_is_on`. |
+| M1 | Fixed | P4: CurLine `["ccc"]` at (2,1). The scroll count is used only when the content agrees with it (`flat.rs`, `shift_score` > 0 or the anchor's text at the shifted row). The coalescing note (Delete+Insert in one batch becomes Replaced, so the exact path depends on timing) still stands as information. |
+| M2 | Fixed | `term_note_scroll` returns before any snapshot unless the delta is `Delete{offset 0}`. |
+
+P5 to P8 are unchanged; P8 still speaks exactly once per key.
+
+Gates: `cargo fmt --check` clean; `clippy --workspace --all-targets -D warnings` clean. `cargo test --workspace`
+was run three times. Run 1 had one failing test binary (cargo stopped there: 1278 passed, 1 failed; the
+name was not captured). Runs 2 and 3 were clean (run 3: 2141 passed, 0 failed). Treat it as an
+unidentified flake under load average ~11 and watch for it. `target/*/incremental` was cleared afterwards.
+
+Remaining low items (not blocking): the `best_shift` doc comment now sits above `shift_score` (rustdoc
+merges the two comments); the VS "line above later" gate is loose (L1); state-model coverage gaps (L2);
+the word-stop change needs user confirmation (L3); M3 follow-ups stay open.
