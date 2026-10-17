@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! The editing model: what every step of the matrix script (`edit.rs`) must speak, and where a
 //! target deliberately differs (docs/reports/unified-editing.md section 3).
 //!

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //! ED: the editing matrix (docs/reports/unified-editing.md, user request 2026-10-17).
 //!
 //! The same scripted key sequences run in every editor the user meets, with the real reader

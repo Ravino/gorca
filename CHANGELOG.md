@@ -32,6 +32,10 @@ Phase 2 (daily-driver reader)
   speech, speech rate, volume, pause and mute controls, learn mode, TOML settings with hot reload
   (`gorca config check`, `config defaults`, `config print-default`).
 - Mirror: per-application object cache with invalidation and focus-window prefetch.
+- Unified editing model: one shared caret and word presenter with per-toolkit quirk rows for
+  GTK3/GTK4 entries and text views, gedit, GNOME Text Editor, Firefox and Chromium editables and
+  the terminal; a late terminal caret event is spoken as one utterance. Known issue: Backspace
+  over a selection in a web contenteditable does not speak the removed text.
 - Native text: caret, word, line and character echo, typing echo, selection, say-all; Firefox
   text fields and rich editables.
 - Review: object navigation and flat review, with a numpad layout and a laptop layout.

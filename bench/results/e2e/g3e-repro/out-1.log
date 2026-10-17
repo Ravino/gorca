@@ -1,6 +1,6 @@
 private compositor: /tmp/gorca-ed.X1O8tA/x/gorca-ed-3890816
-== reader <repo>/.claude/worktrees/agent-a12af19ad0bb6b976/target/release/gorca built from 57ba3087, tree at 57ba3087
-== e2e g3e-1: reader=daemon:<repo>/.claude/worktrees/agent-a12af19ad0bb6b976/target/release/gorca backend=voicego repeats=3 load=13.70 15.15 15.01 11/2724 3891376
+== reader <repo>/target/release/gorca built from 57ba3087, tree at 57ba3087
+== e2e g3e-1: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=13.70 15.15 15.01 11/2724 3891376
 -- round 1/3 ED-G3E (load 13.70 15.15 15.01 11/2724 3891376)
 -- round 2/3 ED-G3E (load 12.95 14.79 14.90 6/2685 3893043)
 -- round 3/3 ED-G3E (load 13.10 14.61 14.83 4/2974 3895335)
@@ -20,7 +20,7 @@ private compositor: /tmp/gorca-ed.X1O8tA/x/gorca-ed-3890816
 # topology_arms=lanes-rtx3
 # topology_expected=-
 # label=g3e-1
-# reader=daemon:<repo>/.claude/worktrees/agent-a12af19ad0bb6b976/target/release/gorca
+# reader=daemon:<repo>/target/release/gorca
 # backend=voicego
 # repeats=3
 # samples_per_series=1200

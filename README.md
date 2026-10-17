@@ -47,6 +47,10 @@ Phase 1 (focus reader, speech, event ingress, test harness) and most of Phase 2 
   data in a TOML file with hot reload.
 - Text: caret, word and line echo, typing echo, selection and say-all in native text fields,
   Firefox editables included.
+- Unified editing: one caret and word presenter for GTK3 and GTK4 entries and text views, gedit,
+  GNOME Text Editor, Firefox and Chromium editables and the terminal, with per-toolkit quirk rows.
+  A late terminal caret event is spoken as a single utterance. Known issue: Backspace over a
+  selection in a web contenteditable does not speak the removed text.
 - Review: object navigation and flat review.
 - GNOME Shell and desktop: window, dialog and notification speech, Alt+Tab, on-screen display,
   lock keys, battery and clock.
