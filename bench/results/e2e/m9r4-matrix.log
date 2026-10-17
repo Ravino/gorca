@@ -1,0 +1,7 @@
+== 12:08:17 build start head 82329a7e dirty=0 load 13.63 14.05 12.36 6/2781 1755007 avail_GiB 15
+   exit 0
+== 12:09:17 build end head 82329a7e dirty=0 load 18.07 15.03 12.80 36/2686 1759245 avail_GiB 15
+== 12:09:17 seq-cr start head 82329a7e dirty=0 load 18.07 15.03 12.80 36/2686 1759270 avail_GiB 15
+   exit 1
+== 12:26:12 seq-cr end head 82329a7e dirty=0 load 13.63 14.31 13.54 7/3434 1861996 avail_GiB 12
+== 12:26:12 seq-ff start head 82329a7e dirty=0 load 13.63 14.31 13.54 7/3434 1862021 avail_GiB 12

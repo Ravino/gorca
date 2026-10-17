@@ -1,0 +1,8 @@
+== host: load 13.63 14.31 13.54 5/3435 1862031 ==
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.27s
+private compositor: /tmp/gorca-m7c.g340LL/x/gorca-m7-1862025
+== reader <repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca built from 82329a7e, tree at 82329a7e
+== e2e m9r4-seq-ff: reader=daemon:<repo>/.claude/worktrees/agent-a5bd784f7a1f0f564/target/release/gorca backend=voicego repeats=5 load=13.10 14.19 13.50 4/3592 1862363
+-- round 1/5 FS2 (load 13.10 14.19 13.50 9/3592 1862363)
+kill: (-1862422): No such process
+-- round 1/5 FSA1 (load 13.24 14.22 13.62 2/3443 1883799)
