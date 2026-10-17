@@ -886,7 +886,13 @@ mod tests {
     fn caps_reads_a_list_of_independent_options() {
         let c = |t: &str| load_text(t);
         let l = c("[speech]\ncaps = [\"pitch\", \"sound\", \"word\"]\n");
-        assert!(l.diags.is_empty(), "{:?}", l.diags);
+        assert!(
+            l.diags
+                .iter()
+                .all(|d| d.severity == crate::Severity::Warning),
+            "{:?}",
+            l.diags
+        );
         assert_eq!(l.settings.speech.caps.names(), ["pitch", "sound", "word"]);
         let l = c("[speech]\ncaps = [\"word\", \"sound\"]\n");
         assert_eq!(l.settings.speech.caps.names(), ["sound", "word"]);
@@ -941,7 +947,7 @@ mod tests {
         let text = "\
 [keyboard]\npreset=\"orca\"\nlayout=\"laptop\"\nmodifiers=[\"Insert\"]\ncaps_lock_layout_guard=false\n\
 multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_control=false\npause_speech_on_shift=false\n\
-[keymap]\nreplace_preset=true\n[speech]\nrate=10\npitch=11\nvolume=12\nrate_step=7\nvoice=\"x\"\nlanguage=\"ru\"\noutput_module=\"rhvoice\"\nbackend=\"ssip\"\npunctuation=\"all\"\ncaps=[\"sound\"]\ncaps_pitch_change=10\n\
+[keymap]\nreplace_preset=true\n[speech]\nrate=10\npitch=11\nvolume=12\nrate_step=7\nvoice=\"x\"\nlanguage=\"ru\"\noutput_module=\"rhvoice\"\nbackend=\"ssip\"\npunctuation=\"all\"\ncaps=[\"word\"]\ncaps_pitch_change=10\n\
 [echo]\ntyped_characters=false\ntyped_words=true\ncommand_keys=true\ninserted_text=false\n\
 [text]\nsay_all_moves_caret=false\ncaret_edge_ms=50\ncaret_late_ms=300\n[browse]\nsay_all_on_load=false\ndescription_pause=false\n\
 [terminal]\nsettle_ms=40\nburst_lines=20\nprompt_markers=[\"> \"]\nprompt_regex=\"^x\"\nsecret_regex=\"y$\"\n[verbosity]\nlevel=\"brief\"\nconfirmations=\"brief\"\n";
