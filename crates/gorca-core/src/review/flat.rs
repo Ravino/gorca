@@ -1,6 +1,7 @@
 //! Moves of the flat-review position over a [`LineModel`] (ADR-0006 6.9, 4.2). Pure index
 //! arithmetic over immutable data: no IPC, no locks, which is what makes R1 hold.
 
+use gorca_i18n::{MsgId as M, t};
 use gorca_model::NodeKey;
 
 use super::cursor::{FlatPos, ZoneAnchor};
@@ -76,7 +77,7 @@ fn global(model: &LineModel, pos: &FlatPos) -> Option<u32> {
 pub fn line_text(model: &LineModel, line: u32) -> String {
     match model.lines.get(line as usize) {
         Some(l) if !l.text.trim().is_empty() => l.text.to_string(),
-        Some(_) | None => "blank".to_owned(),
+        Some(_) | None => t(M::WordBlank).to_owned(),
     }
 }
 
@@ -167,7 +168,14 @@ fn unit_move(
     fwd: bool,
 ) -> FlatOut {
     let Some(g) = global(model, pos) else {
-        return boundary(pos, if fwd { "Bottom" } else { "Top" });
+        return boundary(
+            pos,
+            if fwd {
+                t(M::ReviewBottom)
+            } else {
+                t(M::ReviewTop)
+            },
+        );
     };
     let here = model.zones.get(g as usize);
     let in_zone = here.and_then(|z| {
@@ -190,13 +198,27 @@ fn unit_move(
             .and_then(|p| last_unit_before(model, units, p, unit)),
     };
     let Some((tg, r)) = target else {
-        return boundary(pos, if fwd { "Bottom" } else { "Top" });
+        return boundary(
+            pos,
+            if fwd {
+                t(M::ReviewBottom)
+            } else {
+                t(M::ReviewTop)
+            },
+        );
     };
     let (Some(z), Some(p)) = (
         model.zones.get(tg as usize),
         pos_of_global(model, tg, r.start),
     ) else {
-        return boundary(pos, if fwd { "Bottom" } else { "Top" });
+        return boundary(
+            pos,
+            if fwd {
+                t(M::ReviewBottom)
+            } else {
+                t(M::ReviewTop)
+            },
+        );
     };
     let said = slice(&z.text, &r);
     FlatOut {
@@ -237,15 +259,25 @@ fn to_line(model: &LineModel, pos: &FlatPos, line: Option<u32>, edge: &'static s
 pub fn flat_step(model: &LineModel, pos: &FlatPos, mv: FlatMove, units: &dyn TextUnits) -> FlatOut {
     let last = u32::try_from(model.lines.len().saturating_sub(1)).unwrap_or(0);
     match mv {
-        FlatMove::PrevLine => to_line(model, pos, pos.line.checked_sub(1), "Top"),
+        FlatMove::PrevLine => to_line(model, pos, pos.line.checked_sub(1), t(M::ReviewTop)),
         FlatMove::NextLine => to_line(
             model,
             pos,
             (pos.line < last).then_some(pos.line + 1),
-            "Bottom",
+            t(M::ReviewBottom),
         ),
-        FlatMove::Top => to_line(model, pos, (!model.is_empty()).then_some(0), "Top"),
-        FlatMove::Bottom => to_line(model, pos, (!model.is_empty()).then_some(last), "Bottom"),
+        FlatMove::Top => to_line(
+            model,
+            pos,
+            (!model.is_empty()).then_some(0),
+            t(M::ReviewTop),
+        ),
+        FlatMove::Bottom => to_line(
+            model,
+            pos,
+            (!model.is_empty()).then_some(last),
+            t(M::ReviewBottom),
+        ),
         FlatMove::CurLine => FlatOut {
             said: line_text(model, pos.line),
             pos: *pos,
@@ -259,7 +291,7 @@ pub fn flat_step(model: &LineModel, pos: &FlatPos, mv: FlatMove, units: &dyn Tex
         FlatMove::CurChar => current_unit(model, pos, units, Unit::Char),
         FlatMove::StartOfLine => match pos_at(model, pos.line, 0, 0) {
             Some(p) => current_unit(model, &p, units, Unit::Char),
-            None => boundary(pos, "Top"),
+            None => boundary(pos, t(M::ReviewTop)),
         },
         FlatMove::EndOfLine => {
             let n = model
@@ -272,7 +304,7 @@ pub fn flat_step(model: &LineModel, pos: &FlatPos, mv: FlatMove, units: &dyn Tex
             });
             match pos_at(model, pos.line, z, len.saturating_sub(1)) {
                 Some(p) => current_unit(model, &p, units, Unit::Char),
-                None => boundary(pos, "Bottom"),
+                None => boundary(pos, t(M::ReviewBottom)),
             }
         }
     }

@@ -90,8 +90,8 @@ pub enum ModeWord {
 impl ModeWord {
     pub fn words(self) -> &'static str {
         match self {
-            ModeWord::Browse => "browse mode",
-            ModeWord::Focus => "focus mode",
+            ModeWord::Browse => gorca_i18n::t(gorca_i18n::MsgId::WebModeBrowse),
+            ModeWord::Focus => gorca_i18n::t(gorca_i18n::MsgId::WebModeFocus),
         }
     }
 }

@@ -112,7 +112,7 @@ impl Rig {
 fn says(acts: &[TermAction]) -> Vec<(String, Urgency)> {
     acts.iter()
         .filter_map(|a| match a {
-            TermAction::Say { text, urgency, .. } => Some((text.clone(), *urgency)),
+            TermAction::Say { text, urgency, .. } => Some((crate::english(text), *urgency)),
             TermAction::FetchScreen | TermAction::ArmTimer(_) | TermAction::ClaimKey => None,
         })
         .collect()

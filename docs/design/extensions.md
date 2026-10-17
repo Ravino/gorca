@@ -123,7 +123,7 @@ verified_shell = false                # true: only the connector-verified Shell,
 [[keymap]]
 command = "say_prompt"                # ext.ext_vte.say_prompt
 id = 1                                # what the command hook receives
-help = "say the shell prompt"         # learn mode
+help = "say-prompt"                    # learn mode: a key of the extension's i18n/<lang>.msg (ADR-0010); a literal is accepted until WIT 1.0
 contexts = ["focus"]                  # focus | global | browse | review
 chord = "gorca+shift+p"               # optional default, bound in the first context
 max_press = 1

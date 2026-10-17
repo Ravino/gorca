@@ -1,0 +1,100 @@
+# Role words (coarse roles of the object model), ARIA role words (NVDA labels) and state words.
+# Key prefix: role-, aria-, state-.
+
+role-unknown =
+role-application = application
+role-window = window
+role-dialog = dialog
+role-panel = panel
+role-document = document
+role-heading = heading
+role-paragraph = paragraph
+role-link = link
+role-image = image
+role-list = list
+role-list-item = list item
+role-table = table
+role-row = row
+role-cell = cell
+role-column-header = column header
+role-row-header = row header
+role-button = button
+role-toggle-button = toggle button
+role-check-box = check box
+role-radio-button = radio button
+role-combo-box = combo box
+role-text-entry = edit
+role-password-entry = password edit
+role-spin-button = spin button
+role-slider = slider
+role-progress-bar = progress bar
+role-menu = menu
+role-menu-bar = menu bar
+role-menu-item = menu item
+role-popover = popover
+role-tab = tab
+role-tab-list = tab list
+role-tree = tree
+role-tree-item = tree item
+role-toolbar = toolbar
+role-status-bar = status bar
+role-separator = separator
+role-label = label
+role-static-text = text
+role-terminal = terminal
+role-landmark = landmark
+role-alert = alert
+
+# ARIA roles whose word differs from the coarse role (NVDA `controlTypes/role.py` labels).
+aria-switch = switch
+aria-tab = tab
+aria-tab-list = tab control
+aria-tab-panel = property page
+aria-tree = tree view
+aria-tree-item = tree view item
+aria-menu = menu
+aria-menu-bar = menu bar
+aria-menu-item = menu item
+aria-check-menu-item = check menu item
+aria-radio-menu-item = radio menu item
+aria-toolbar = tool bar
+aria-group = grouping
+
+# State words (NVDA `controlTypes/state.py` labels).
+state-unavailable = unavailable
+state-selected = selected
+state-not-selected = not selected
+state-busy = busy
+state-pressed = pressed
+state-not-pressed = not pressed
+state-half-pressed = half pressed
+state-checked = checked
+state-not-checked = not checked
+state-half-checked = half checked
+state-read-only = read only
+state-expanded = expanded
+state-collapsed = collapsed
+state-not-expanded = not expanded
+state-required = required
+state-invalid-entry = invalid entry
+state-indeterminate = indeterminate
+state-on = on
+state-off = off
+state-submenu = submenu
+state-opens-dialog = opens dialog
+state-opens-grid = opens grid
+state-opens-list = opens list
+state-opens-tree = opens tree
+state-has-popup = has popup
+# A state flipped off: `{word}` is the state word ("not unavailable" is never said for
+# unavailable; the verbaliser of the language may translate the negation per word).
+state-not = not {word}
+state-current = current
+state-current-page = current page
+state-current-step = current step
+state-current-location = current location
+state-current-date = current date
+state-current-time = current time
+state-level = level {l}
+state-available = not unavailable
+state-valid = not invalid entry

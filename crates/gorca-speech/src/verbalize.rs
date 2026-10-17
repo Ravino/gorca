@@ -91,11 +91,27 @@ fn without_phantoms(s: &str) -> std::borrow::Cow<'_, str> {
     }
 }
 
-const PHONETIC: [&str; 26] = [
-    "alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet",
-    "kilo", "lima", "mike", "november", "oscar", "papa", "quebec", "romeo", "sierra", "tango",
-    "uniform", "victor", "whiskey", "x-ray", "yankee", "zulu",
-];
+/// The Cyrillic letters in the order of the `spell-cyrillic` message.
+const CYRILLIC: &str = "абвгдеёжзийклмнопрстуфхцчшщъыьэюя";
+
+/// The phonetic word of `c` (a Latin letter from `spell-latin`, a Russian letter from
+/// `spell-cyrillic`), if the language has one. The words of a message are separated by `|`.
+fn phonetic_word(c: char, lang: gorca_i18n::Lang) -> Option<&'static str> {
+    use gorca_i18n::MsgId as M;
+    let lower = c.to_lowercase().next().unwrap_or(c);
+    let (list, idx) = if lower.is_ascii_lowercase() {
+        (
+            gorca_i18n::t_in(lang, M::SpellLatin),
+            usize::from(lower as u8 - b'a'),
+        )
+    } else {
+        (
+            gorca_i18n::t_in(lang, M::SpellCyrillic),
+            CYRILLIC.chars().position(|x| x == lower)?,
+        )
+    };
+    list.split('|').nth(idx).filter(|w| !w.is_empty())
+}
 
 impl Verbalizer {
     pub fn verbalize(&self, u: &Utterance) -> Verbalized {
@@ -189,17 +205,18 @@ impl Verbalizer {
         }
         let mut parts: Vec<String> = Vec::new();
         for c in s.chars() {
-            let lower = c.to_ascii_lowercase();
-            let part = if phonetic && lower.is_ascii_lowercase() {
-                let idx = usize::from(lower as u8 - b'a');
-                PHONETIC
-                    .get(idx)
-                    .map_or_else(String::new, |p| (*p).to_owned())
+            let word = if phonetic {
+                phonetic_word(c, o.lang)
+            } else {
+                None
+            };
+            let part = if let Some(w) = word {
+                w.to_owned()
             } else {
                 let mut buf = [0u8; 4];
                 Self::one_char(c.encode_utf8(&mut buf), *o)
             };
-            if c.is_uppercase() && o.caps == Caps::Say && phonetic {
+            if c.is_uppercase() && o.caps == Caps::Say && word.is_some() {
                 parts.push(format!("{} {part}", t.cap()));
             } else {
                 parts.push(part);

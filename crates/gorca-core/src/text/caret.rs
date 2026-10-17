@@ -13,6 +13,7 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use gorca_i18n::{MsgId as M, msg};
 use gorca_input_api::{ClipOp, KeyUnit, TextDir, TextKey};
 use gorca_model::{
     Epoch, NodeKey, Prio, TextGranularity, TextSelections, TextUnitAt, TextWindowFill,
@@ -1770,7 +1771,7 @@ fn echo_typed(t: &mut Tracked, ch: char, epoch: Epoch, claimed: Claim, cx: &mut 
     }
     let mut pieces: SmallVec<[Piece; 2]> = SmallVec::new();
     if ch == '\n' {
-        pieces.push(Piece::phrase("new line"));
+        pieces.push(Piece::phrase(gorca_i18n::t(M::TextNewLine)));
     } else {
         pieces.push(Piece::unit(How::Char, ch.to_string()));
     }
@@ -1938,7 +1939,7 @@ fn speak_inserted(
     let mut pieces: SmallVec<[Piece; 2]> = SmallVec::new();
     pieces.push(Piece::unit(How::Text, text.to_owned()));
     if more > 0 {
-        pieces.push(Piece::phrase(&format!("and {more} more")));
+        pieces.push(Piece::phrase(&msg!(TextAndMore, n = more)));
     }
     t.last_insert_say = Some(cx.now);
     let sp = t.spoken(pieces, Reason::Inserted(source), epoch, prio);
@@ -2163,11 +2164,7 @@ fn visible_count(win: &TextWindow, r: &Range<u32>) -> u32 {
 }
 
 fn count_phrase(n: u32) -> String {
-    if n == 1 {
-        "1 character".to_owned()
-    } else {
-        format!("{n} characters")
-    }
+    msg!(TextChars, n = n)
 }
 
 /// SL-3: speak what became selected and what was unselected.
@@ -2194,16 +2191,19 @@ fn speak_selection(
         if whole && (all_requested || delta.added_len() == t.win.len().unwrap_or(0)) {
             let n = t.win.len().unwrap_or(0);
             let n = visible_count(&t.win, &(0..n));
-            pieces.push(Piece::phrase(&format!("all selected, {}", count_phrase(n))));
+            pieces.push(Piece::phrase(&msg!(
+                TextAllSelected,
+                count = &count_phrase(n)
+            )));
         } else {
-            push_changed(&t.win, &delta.added, &t.sel, "selected", &mut pieces);
+            push_changed(&t.win, &delta.added, &t.sel, true, &mut pieces);
         }
     }
     if !delta.removed.is_empty() {
         if !pieces.is_empty() {
             pieces.push(Piece::phrase(","));
         }
-        push_changed(&t.win, &delta.removed, &old, "unselected", &mut pieces);
+        push_changed(&t.win, &delta.removed, &old, false, &mut pieces);
     }
     let s = t.spoken(pieces, Reason::Selection, epoch, Prio::Interrupt);
     cx.say(s);
@@ -2214,7 +2214,7 @@ fn push_changed(
     win: &TextWindow,
     ranges: &[Range<u32>],
     set: &[(Range<u32>, Arc<str>)],
-    word: &str,
+    selected: bool,
     pieces: &mut SmallVec<[Piece; 2]>,
 ) {
     let total = ranges
@@ -2235,9 +2235,20 @@ fn push_changed(
     match texts {
         Some(texts) if total <= MAX_SPOKEN => {
             pieces.push(Piece::unit(How::Text, texts.join(" ")));
-            pieces.push(Piece::phrase(word));
+            pieces.push(Piece::phrase(gorca_i18n::t(if selected {
+                M::TextSelected
+            } else {
+                M::TextUnselected
+            })));
         }
-        Some(_) | None => pieces.push(Piece::phrase(&format!("{} {word}", count_phrase(total)))),
+        Some(_) | None => {
+            let count = count_phrase(total);
+            pieces.push(Piece::phrase(&if selected {
+                msg!(TextCountSelected, count = &count)
+            } else {
+                msg!(TextCountUnselected, count = &count)
+            }));
+        }
     }
 }
 

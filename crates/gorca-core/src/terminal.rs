@@ -14,6 +14,7 @@
 //! of one terminal widget live in connector data (`Toolkit::text_unit`, the `Screen` query that
 //! avoids VTE's unreliable character count).
 
+use gorca_i18n::{MsgId as M, t};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -504,7 +505,8 @@ impl Reader {
             TextDelta::Insert { offset, len, text } => TermEdit::Insert {
                 offset,
                 len,
-                text: crate::text::decode(text.as_ref()),
+                text: crate::text::decode(text.as_ref())
+                    .map(|t| gorca_i18n::ext::sanitize(&t).into_owned()),
             },
             TextDelta::Delete { offset, len, .. } => TermEdit::Delete { offset, len },
             TextDelta::Replaced { .. } => TermEdit::Replaced,
@@ -542,7 +544,8 @@ impl Reader {
                     self.text.term.secret_hold = true;
                 }
                 TermInput::Screen {
-                    text: w.text.to_string(),
+                    // Application text: never a message reference (ADR-0010).
+                    text: gorca_i18n::ext::sanitize(&w.text).into_owned(),
                     caret: w.caret,
                 }
             }
@@ -579,7 +582,7 @@ impl Reader {
         let node = self.text.term.tracked.as_ref().map(|t| t.node);
         let snap = node.and_then(|n| self.term_snapshot(n));
         let (Some(snap), true) = (snap, self.text_active()) else {
-            self.say("not in a text field", fx);
+            self.say(t(M::TextNotInField), fx);
             return;
         };
         let (unit, how) = match say {
@@ -648,6 +651,12 @@ impl Reader {
                     sensitive,
                 } => {
                     if speak && !(silent_typed && unit == Unit::Char && urgency == Urgency::Key) {
+                        let was_ref = gorca_i18n::ext::is_reference(&text);
+                        let text = gorca_i18n::ext::resolve(&text, gorca_i18n::language());
+                        if was_ref && text.is_empty() {
+                            // A reference that resolved to nothing is silent, not "blank".
+                            continue;
+                        }
                         let u = self.term_utterance(&text, unit, urgency, sensitive);
                         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
                     }

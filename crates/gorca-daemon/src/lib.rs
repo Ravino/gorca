@@ -233,9 +233,13 @@ fn speech_plan(opts: &Options) -> (Vec<Arc<dyn SpeechBackend>>, FailoverMode) {
 
 fn notice_text(n: FailoverNotice) -> String {
     match n {
-        FailoverNotice::Fallback { from, to } => format!("{from} unavailable, using {to}"),
-        FailoverNotice::Restored { backend } => format!("{backend} restored"),
-        FailoverNotice::Unavailable => "speech service unavailable".to_owned(),
+        FailoverNotice::Fallback { from, to } => {
+            gorca_i18n::msg!(SpeechFallback, from = from, to = to)
+        }
+        FailoverNotice::Restored { backend } => gorca_i18n::msg!(SpeechRestored, backend = backend),
+        FailoverNotice::Unavailable => {
+            gorca_i18n::t(gorca_i18n::MsgId::SpeechUnavailable).to_owned()
+        }
     }
 }
 
@@ -385,6 +389,10 @@ async fn run_inner(
         core = core.with_fill_policy(p);
     }
     // Extensions first: their commands must be known before the settings are compiled.
+    // The first-party extensions' message catalogs: registered up front from the embedded copies.
+    // They are built-in namespaces: the files next to a WASM component never replace them.
+    ext_gnome_shell::register_catalogs();
+    ext_vte::register_catalogs();
     let (mut core, shell_in_host, terminal_in_host) = wire::wire_ext(core, &opts).await;
     // The terminal policy (ADR-0008 amendment 1): the `ext-vte` WASM component when the extension
     // host loaded it, else the native build of the same source behind the core's `TermProvider`.

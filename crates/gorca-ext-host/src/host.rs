@@ -57,6 +57,8 @@ pub struct ExtHostBuilder {
     reports: Vec<LoadReport>,
     bind_errors: Vec<String>,
     skip: Vec<String>,
+    /// Catalog namespaces this host registered (unregistered when the host stops).
+    catalogs: Vec<String>,
 }
 
 impl ExtHostBuilder {
@@ -176,7 +178,16 @@ impl ExtHostBuilder {
                         return Err("component too large".to_owned());
                     }
                     let bytes = std::fs::read(&mpath).map_err(|e| e.to_string())?;
-                    self.add_wasm(manifest, &bytes)
+                    // The extension's texts are registered only once it is accepted: a
+                    // duplicate, a broken or an unloadable extension never touches the registry.
+                    let name = manifest.name.clone();
+                    self.add_wasm(manifest, &bytes)?;
+                    if let Some(ns) =
+                        register_catalogs(path.parent().unwrap_or(Path::new(".")), &name)
+                    {
+                        self.catalogs.push(ns);
+                    }
+                    Ok(())
                 }
             }
         })();
@@ -219,6 +230,7 @@ impl ExtHostBuilder {
             engine: self.engine,
             reports: self.reports,
             bind_errors: self.bind_errors,
+            catalogs: self.catalogs,
         }
     }
 }
@@ -246,7 +258,8 @@ fn spawn_worker(
                         let r = slot.call(HookKind::Command, true, |i| i.command(local));
                         slot.end_command();
                         if let Some(api::CommandResult::Speak(segs)) = r {
-                            let text = gorca_core::segments_text(&segments_from_ext(segs));
+                            let text =
+                                gorca_core::segments_text(&segments_from_ext(slot.name(), segs));
                             if !text.is_empty()
                                 && slot.allow_speech()
                                 && let Some(s) = sink.get()
@@ -287,6 +300,8 @@ pub struct ExtHost {
     engine: Option<Arc<ExtEngine>>,
     reports: Vec<LoadReport>,
     bind_errors: Vec<String>,
+    /// Catalog namespaces this host registered (unregistered when it stops).
+    catalogs: Vec<String>,
 }
 
 impl std::fmt::Debug for ExtHost {
@@ -308,6 +323,7 @@ impl ExtHost {
             reports: Vec::new(),
             bind_errors: Vec::new(),
             skip: Vec::new(),
+            catalogs: Vec::new(),
         }
     }
 
@@ -366,7 +382,7 @@ impl ExtHost {
                     name: name.clone(),
                     ext: m.name.clone(),
                     local: k.local_id,
-                    help: k.help.clone(),
+                    help: help_text(&m.name, &k.help),
                     contexts: ContextMask::of(&k.contexts),
                     max_press: k.max_press,
                     interrupts: k.interrupts,
@@ -401,6 +417,9 @@ impl Drop for ExtHost {
                 commands_dropped = st.commands_dropped,
                 "extension host stopped"
             );
+        }
+        for ns in &self.catalogs {
+            gorca_i18n::ext::unregister_extension(ns);
         }
         // The apps hold clones of the sender, so the queue cannot close by itself: ask the worker
         // to stop. It flushes the settings on the way out.
@@ -600,7 +619,7 @@ impl AppExt for AppExts {
                     slot.record_decision(kind, Decision::Consume);
                     // Over its speech budget the rewrite still consumes the event, silently.
                     if slot.allow_speech() {
-                        ExtVerdict::Rewrite(segments_from_ext(s))
+                        ExtVerdict::Rewrite(segments_from_ext(slot.name(), s))
                     } else {
                         ExtVerdict::Suppress
                     }
@@ -649,7 +668,7 @@ impl AppExt for AppExts {
             };
             // Never block the Reader: a busy slot is "no opinion".
             if let Some(Some(segs)) = slot.call(HookKind::Present, false, |i| i.present(n, pctx)) {
-                let segs = segments_from_ext(segs);
+                let segs = segments_from_ext(slot.name(), segs);
                 if !segs.is_empty() {
                     return Some(segs);
                 }
@@ -674,13 +693,14 @@ impl AppExt for AppExts {
                 api::PolicyVerdict::Silence => return Some(PolicyVerdict::Silence),
                 api::PolicyVerdict::Notice => return Some(PolicyVerdict::Notice),
                 api::PolicyVerdict::Value(t) => {
+                    let t = gorca_i18n::ext::resolve_for(&t, gorca_i18n::language(), slot.name());
                     let t: String = t.chars().take(MAX_SEGMENT_CHARS).collect();
                     if !t.is_empty() {
                         return Some(PolicyVerdict::Value(t));
                     }
                 }
                 api::PolicyVerdict::Say(s) => {
-                    let segs = segments_from_ext(s);
+                    let segs = segments_from_ext(slot.name(), s);
                     if !segs.is_empty() {
                         return Some(PolicyVerdict::Say(segs));
                     }
@@ -735,6 +755,88 @@ impl AppExt for AppExts {
     }
 }
 
+/// The largest catalog file read from an extension directory.
+const MAX_CATALOG_BYTES: u64 = gorca_i18n::ext::MAX_CATALOG_BYTES as u64;
+
+/// Read a catalog file without ever blocking or reading without bound: the file is opened
+/// non-blocking (a FIFO or device cannot hang the open), must be a regular file, and at most
+/// [`MAX_CATALOG_BYTES`] are read; a larger file is refused. `None` for anything else.
+pub(crate) fn read_catalog_file(path: &Path) -> Option<String> {
+    use std::io::Read as _;
+    use std::os::unix::fs::OpenOptionsExt as _;
+    let f = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(path)
+        .ok()?;
+    let meta = f.metadata().ok()?;
+    if !meta.is_file() {
+        tracing::warn!(path = %path.display(), "extension catalog is not a regular file; skipped");
+        return None;
+    }
+    if meta.len() > MAX_CATALOG_BYTES {
+        tracing::warn!(path = %path.display(), "extension catalog too large; skipped");
+        return None;
+    }
+    let mut buf = Vec::new();
+    f.take(MAX_CATALOG_BYTES + 1).read_to_end(&mut buf).ok()?;
+    if buf.len() as u64 > MAX_CATALOG_BYTES {
+        tracing::warn!(path = %path.display(), "extension catalog too large; skipped");
+        return None;
+    }
+    String::from_utf8(buf).ok()
+}
+
+/// Register the message catalogs of an accepted extension: `<dir>/i18n/<lang>.msg` for every
+/// language the core has a catalog for. A missing or broken file is skipped (the extension then
+/// speaks its English text, or the key). A namespace that is already taken is refused: an
+/// extension never replaces the core's or another extension's texts. Returns the namespace when
+/// it was registered, so that the host can unregister it when it stops.
+fn register_catalogs(dir: &Path, ns: &str) -> Option<String> {
+    let texts: Vec<(gorca_i18n::Lang, String)> = gorca_i18n::Lang::ALL
+        .into_iter()
+        .filter_map(|lang| {
+            let path = dir.join("i18n").join(format!("{}.msg", lang.code()));
+            read_catalog_file(&path).map(|t| (lang, t))
+        })
+        .collect();
+    if texts.is_empty() {
+        return None;
+    }
+    let files: Vec<(gorca_i18n::Lang, &str)> =
+        texts.iter().map(|(l, t)| (*l, t.as_str())).collect();
+    match gorca_i18n::ext::register_extension(ns, &files) {
+        Ok(errs) => {
+            for e in errs {
+                tracing::warn!(ext = ns, "extension catalog: {e}");
+            }
+            Some(ns.to_owned())
+        }
+        Err(e) => {
+            // Expected for the first-party extensions: the daemon registered their embedded copy.
+            tracing::info!(ext = ns, "extension catalog not registered: {e}");
+            None
+        }
+    }
+}
+
+/// The learn-mode description of an extension command: a catalog key of the extension
+/// (lower-case kebab) becomes a message reference resolved in the UI language; any other text is
+/// a literal (accepted until WIT 1.0, ADR-0010).
+fn help_text(ns: &str, help: &str) -> String {
+    let key = !help.is_empty()
+        && help.split('-').all(|p| {
+            !p.is_empty()
+                && p.chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+        });
+    if key {
+        gorca_i18n::ext::encode(ns, help, &[])
+    } else {
+        help.to_owned()
+    }
+}
+
 #[cfg(test)]
 mod busy_tests {
     use super::{event_kind, repeats_when_busy};
@@ -756,5 +858,46 @@ mod busy_tests {
         ] {
             assert_eq!(repeats_when_busy(event_kind(&e)), repeats, "{e:?}");
         }
+    }
+}
+
+#[cfg(test)]
+mod catalog_file_tests {
+    use super::{MAX_CATALOG_BYTES, read_catalog_file};
+
+    fn dir(name: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("gorca-catfile-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    #[test]
+    fn a_regular_file_is_read_and_an_oversized_one_refused() {
+        let d = dir("size");
+        std::fs::write(d.join("ok.msg"), "a = b\n").unwrap();
+        assert_eq!(
+            read_catalog_file(&d.join("ok.msg")).as_deref(),
+            Some("a = b\n")
+        );
+        let big = "#".repeat(usize::try_from(MAX_CATALOG_BYTES).unwrap() + 1);
+        std::fs::write(d.join("big.msg"), big).unwrap();
+        assert_eq!(read_catalog_file(&d.join("big.msg")), None);
+        assert_eq!(read_catalog_file(&d.join("missing.msg")), None);
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn a_fifo_is_refused_without_blocking() {
+        let d = dir("fifo");
+        let p = d.join("en.msg");
+        let ok = std::process::Command::new("mkfifo")
+            .arg(&p)
+            .status()
+            .is_ok_and(|s| s.success());
+        if ok {
+            assert_eq!(read_catalog_file(&p), None);
+        }
+        let _ = std::fs::remove_dir_all(d);
     }
 }
