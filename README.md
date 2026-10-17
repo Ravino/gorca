@@ -1,12 +1,19 @@
 # gorca
 
-gorca is a screen reader for Linux, written in Rust. It targets the GNOME desktop on Wayland and is
+*GO, Read, CArry on.*
+
+gorca (Gorca Orchestrates Real-time Concurrent Accessibility) is a screen reader for Linux, written in Rust. It targets the GNOME desktop on Wayland and is
 meant to be a fast, stable replacement for Orca: it runs on an async event loop with explicit state
 machines and is designed to stay responsive when the desktop or an application misbehaves.
 
 **Status: pre-release.** Phase 2 of the roadmap is nearly complete (see [Status](#status)). It is
 developed and tested on a single Debian 13 machine. Expect rough edges, no packages, and settings
 and interfaces that can still change. Braille is not implemented yet.
+
+### About the name
+
+The name is a recursive backronym: Gorca Orchestrates Real-time Concurrent Accessibility. The tagline
+"GO, Read, CArry on" is the playful reading of the same letters.
 
 ## Goals
 

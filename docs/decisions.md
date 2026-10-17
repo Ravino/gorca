@@ -1,5 +1,8 @@
 # Decision log
 
+Commit hashes cited in this log and in `reports/` refer to the pre-publication history; the public
+history was rewritten for export, so those hashes do not exist in it.
+
 | Date | Decision | Reference |
 |---|---|---|
 | 2026-10-12 | Core language: Rust (tokio, zbus, atspi); Go/Python/C for tooling | chat; ADR-0001 pending |
