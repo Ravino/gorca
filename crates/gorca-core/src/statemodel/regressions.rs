@@ -330,5 +330,5 @@ fn a_key_leaving_review_on_a_cold_terminal_starts_one_tracking() {
     let started = s.r.term_trackings();
     s.type_key(KeyKind::Letter('x'), Modifiers::empty());
     let now = s.r.term_trackings();
-    assert_eq!(now - started, 1, "trackings started by one key");
+    assert_eq!(now - started, 1);
 }
