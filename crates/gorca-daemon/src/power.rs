@@ -8,6 +8,7 @@ use std::time::Duration;
 use gorca_core::{BatteryState, PowerInfo, PowerSource};
 use gorca_rt::BoxFuture;
 
+const SYSTEM_BUS: &str = "unix:path=/run/dbus/system_bus_socket";
 const DEST: &str = "org.freedesktop.UPower";
 const PATH: &str = "/org/freedesktop/UPower/devices/DisplayDevice";
 const IFACE: &str = "org.freedesktop.UPower.Device";
@@ -32,7 +33,10 @@ pub(crate) fn state_of(code: u32) -> BatteryState {
 pub(crate) struct UPower;
 
 async fn read_once() -> Option<PowerInfo> {
-    let conn = tokio::time::timeout(CALL, zbus::Connection::system())
+    // The standard system bus socket, by explicit address (the environment is read only in
+    // `main.rs`, xtask rule 8); UPower lives on the system bus only.
+    let builder = zbus::connection::Builder::address(SYSTEM_BUS).ok()?;
+    let conn = tokio::time::timeout(CALL, builder.build())
         .await
         .ok()?
         .ok()?;

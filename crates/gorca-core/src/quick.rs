@@ -84,7 +84,19 @@ pub(crate) struct SpeechHistory {
     cursor: Option<usize>,
 }
 
+/// History is memory only; it is wiped when the Reader ends.
+impl Drop for SpeechHistory {
+    fn drop(&mut self) {
+        self.items.clear();
+    }
+}
+
 impl SpeechHistory {
+    #[cfg(test)]
+    pub(crate) fn items_len(&self) -> usize {
+        self.items.len()
+    }
+
     pub(crate) fn push(&mut self, u: Utterance) {
         if self.items.len() == HISTORY_CAP {
             self.items.pop_front();
@@ -352,13 +364,29 @@ impl Reader {
         if skip {
             return;
         }
+        // Anything said while a password field or a terminal secret prompt is in hand, and
+        // anything marked sensitive, is kept as a placeholder, never as its text.
         let secret = self.text.sensitive_utt;
+        let in_secret =
+            self.term_secret_held() || self.text.caret.tracked().is_some_and(|t| t.kind.secret);
         for e in fx.iter() {
-            if let ReaderEffect::Speak(s) = e {
-                let id = s.utterance.id;
-                if secret != Some(id) && !echo.contains(&id) && !s.utterance.segments.is_empty() {
-                    self.cmd.quick.history.push(s.utterance.clone());
-                }
+            let ReaderEffect::Speak(s) = e else { continue };
+            let id = s.utterance.id;
+            if echo.contains(&id) || s.utterance.segments.is_empty() {
+                continue;
+            }
+            if in_secret || secret == Some(id) {
+                let mut u = s.utterance.clone();
+                let word = table(self).word("history.secret");
+                u.segments.clear();
+                u.segments.push(gorca_model::Segment {
+                    text: Arc::from(word),
+                    kind: SegmentKind::Said,
+                });
+                u.lang = None;
+                self.cmd.quick.history.push(u);
+            } else {
+                self.cmd.quick.history.push(s.utterance.clone());
             }
         }
     }

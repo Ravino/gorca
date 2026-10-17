@@ -16,6 +16,7 @@
 @word.lock.scroll	Scroll Lock
 @word.lock.on	{} on
 @word.lock.off	{} off
+@word.history.secret	password
 @word.history.empty	no speech history
 @word.history.oldest	oldest
 @word.history.newest	newest

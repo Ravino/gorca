@@ -13,6 +13,7 @@
 @word.lock.scroll	Scroll Lock
 @word.lock.on	{} включён
 @word.lock.off	{} выключен
+@word.history.secret	пароль
 @word.history.empty	история речи пуста
 @word.history.oldest	самое старое
 @word.history.newest	самое новое

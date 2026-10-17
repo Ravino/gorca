@@ -685,6 +685,11 @@ impl Reader {
         });
     }
 
+    /// Is a terminal secret prompt holding (everything spoken is sensitive)?
+    pub(crate) fn term_secret_held(&self) -> bool {
+        self.text.term.secret_hold
+    }
+
     fn term_utterance(
         &mut self,
         text: &str,
