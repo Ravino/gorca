@@ -1184,3 +1184,155 @@ fn a_password_prompt_deep_in_a_big_cyrillic_screen_is_secret() {
     assert!(r.s.secret);
     assert!(r.s.pending.is_empty(), "a secret is not kept");
 }
+
+// ---- history recall under many redraw shapes --------------------------------------------------
+
+/// A readline terminal: `hist` rows above the prompt, a prompt, the command, wrapped at `w`
+/// columns, on a screen of `h` rows. The prompt stays on the bottom row once the screen is full.
+struct Tty {
+    w: usize,
+    h: usize,
+    hist: Vec<String>,
+}
+
+const PROMPT: &str = "me@box:~$ ";
+
+impl Tty {
+    /// The screen text (every row plus a newline, blank rows included) and the caret offset.
+    fn render(&self, cmd: &str) -> (String, u32) {
+        let line: Vec<char> = format!("{PROMPT}{cmd}").chars().collect();
+        let mut rows = self.hist.clone();
+        for ch in line.chunks(self.w) {
+            rows.push(ch.iter().collect());
+        }
+        let last = rows.len() - 1;
+        let drop = rows.len().saturating_sub(self.h);
+        let caret_row = (last - drop).min(self.h - 1);
+        let mut shown: Vec<String> = rows.into_iter().skip(drop).collect();
+        while shown.len() < self.h {
+            shown.push(String::new());
+        }
+        let mut off = 0u32;
+        let mut text = String::new();
+        for (i, r) in shown.iter().enumerate() {
+            let r = r.trim_end();
+            let n = r.chars().count() as u32;
+            if i < caret_row {
+                off += n + 1;
+            } else if i == caret_row {
+                off += n;
+            }
+            text.push_str(r);
+            text.push('\n');
+        }
+        (text, off)
+    }
+}
+
+/// The events VTE sends for one redraw, in one of several shapes.
+fn redraw_events(old: &str, new: &str, shape: u8, caret: u32) -> Vec<TermInput> {
+    let mut ev = Vec::new();
+    let o: Vec<char> = old.chars().collect();
+    let n: Vec<char> = new.chars().collect();
+    match shape {
+        0 => ev.push(TermInput::Edit(TermEdit::Replaced)),
+        1 => {
+            ev.push(TermInput::Edit(TermEdit::Delete {
+                offset: 0,
+                len: o.len() as u32,
+            }));
+            ev.push(TermInput::Edit(TermEdit::Insert {
+                offset: 0,
+                len: n.len() as u32,
+                text: Some(new.to_owned()),
+            }));
+        }
+        _ => {
+            let m = o.len().min(n.len());
+            let mut head = 0;
+            while head < m && o[head] == n[head] {
+                head += 1;
+            }
+            let mut tl = 0;
+            while tl < m - head && o[o.len() - 1 - tl] == n[n.len() - 1 - tl] {
+                tl += 1;
+            }
+            let del = o.len() - head - tl;
+            let ins: String = n[head..n.len() - tl].iter().collect();
+            if del > 0 {
+                ev.push(TermInput::Edit(TermEdit::Delete {
+                    offset: head as u32,
+                    len: del as u32,
+                }));
+            }
+            if !ins.is_empty() {
+                ev.push(TermInput::Edit(TermEdit::Insert {
+                    offset: head as u32,
+                    len: ins.chars().count() as u32,
+                    text: Some(ins),
+                }));
+            }
+        }
+    }
+    ev.push(TermInput::Caret(caret));
+    ev
+}
+
+const RECALL_CMDS: [&str; 10] = [
+    "ls",
+    "git status",
+    "git commit -m \"a fairly long message that wraps past the width\"",
+    "echo \u{43f}\u{440}\u{438}\u{432}\u{435}\u{442} \u{43c}\u{438}\u{440}",
+    "cat /etc/passwd /etc/group /etc/hosts /etc/fstab /etc/os-release /etc/issue /etc/motd",
+    "x",
+    "",
+    "ls -l",
+    "lsa",
+    "ls -la /usr/share/doc/some/very/long/path/that/keeps/going/and/going/and/going/on/and/on",
+];
+
+/// One recall of `to` over `from` on a screen with `hist_len` rows of output, in redraw `shape`.
+fn recall_says(hist_len: usize, shape: u8, from: &str, to: &str) -> Vec<String> {
+    let tty = Tty {
+        w: 40,
+        h: 10,
+        hist: (0..hist_len).map(|k| format!("out {k}")).collect(),
+    };
+    let (s0, c0) = tty.render(from);
+    let (s1, c1) = tty.render(to);
+    let mut r = Rig::new();
+    r.focus(&s0, c0);
+    r.key(TermKey::LineUp);
+    r.screen = s1.clone();
+    r.caret = c1;
+    let mut acts = Vec::new();
+    for e in redraw_events(&s0, &s1, shape, c1) {
+        r.now += 1;
+        acts.extend(r.feed(e));
+    }
+    acts.extend(r.wait(31));
+    acts.extend(r.wait(100));
+    texts(&acts)
+}
+
+#[test]
+fn history_recall_is_spoken_once_in_every_redraw_shape() {
+    let mut fails = Vec::new();
+    for hist_len in [0usize, 3, 9, 30] {
+        for shape in 0..3u8 {
+            for (i, from) in RECALL_CMDS.iter().enumerate() {
+                for to in RECALL_CMDS.iter().skip(i + 1).chain(RECALL_CMDS.iter().take(i)) {
+                    if from == to {
+                        continue;
+                    }
+                    let t = recall_says(hist_len, shape, from, to);
+                    let want = if to.is_empty() { "blank" } else { to };
+                    if t != vec![want.to_owned()] {
+                        fails.push(format!("h{hist_len} s{shape} {from:?} -> {to:?}: {t:?}"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(fails.is_empty(), "{} failures:\n{}", fails.len(), fails.join("\n"));
+}
