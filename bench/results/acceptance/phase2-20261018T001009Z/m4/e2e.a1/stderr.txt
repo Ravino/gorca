@@ -1,0 +1,9 @@
+== reader <repo>/target/release/gorca built from 1308ae05, tree at 1308ae05
+== e2e acc-20261018T001009Z-m4-e2e-a1: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=4.78 4.04 4.96 1/1986 852980
+-- round 1/3 A1 (load 4.78 4.04 4.96 1/1986 852980)
+-- round 1/3 N1 (load 4.15 4.01 4.87 2/1997 853624)
+-- round 2/3 N1 (load 5.04 4.26 4.90 1/1998 854035)
+-- round 2/3 A1 (load 4.57 4.27 4.86 2/1997 854577)
+-- round 3/3 A1 (load 3.56 4.01 4.71 2/2002 855469)
+-- round 3/3 N1 (load 5.32 4.41 4.78 2/2001 856272)
+== wrote <repo>/bench/results/acceptance/phase2-20261018T001009Z/m4/e2e.a1/res/20261018T011122Z.{json,txt}

@@ -1,0 +1,109 @@
+== phase2 acceptance: ACCEPTANCE
+mode=ACCEPTANCE
+utc=2026-10-18T00:10:09Z
+git_rev=1308ae05 dirty_tracked_files=0 branch=main
+kernel=7.1.8+deb13-rt-amd64 cpus=16
+loadavg=3.00 4.72 7.25 3/1940 818044
+psi_memory_some_avg10=0.30 psi_memory_full_avg10=0.30
+psi_cpu_some_avg10=0.00 psi_io_some_avg10=1.88
+mem_available_mb=14800
+governor=performance 
+rtkit MaxRealtimePriority: i 20 
+rtkit RTTimeUSecMax: x 200000 
+topology: shipped default (--topology=auto); expected arm: lanes-rt (gated by e2e --expect-topology)
+repeats=3 quick=no suites=m1 m3 m4 m6 m7 m8 m9 storm x1 b1
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=1
+  idle C3_ACPI latency=1048us disabled=1
+  load: 3.00 4.72 7.25 3/1935 818084
+== build (release, CARGO_BUILD_JOBS=4)
+
+######## suite m1
+== m1/e2e attempt 1  load 6.01 5.48 7.17 2/1969 821747  cap 5400s
+   -> ok (exit 0, 830 s)
+
+######## suite m3
+== m3/e2e attempt 1  load 6.18 5.56 6.30 1/1951 831142  cap 5400s
+   -> FAIL (exit 1, 2246 s)
+   stderr: -- round 3/3 PW (load 3.92 3.81 4.93 2/1983 852383)
+   stderr: -- round 3/3 C1 (load 3.60 3.75 4.90 1/1989 852472)
+   stderr: -- round 3/3 C1h (load 4.44 3.93 4.94 1/1987 852627)
+   stderr: == wrote <repo>/bench/results/acceptance/phase2-20261018T001009Z/m3/e2e.a1/res/20261018T010353Z.{json,txt}
+   stderr: == 1 gate(s) FAILED
+
+######## suite m4
+== m4/e2e attempt 1  load 4.78 4.04 4.96 1/1971 852923  cap 2400s
+   -> ok (exit 0, 449 s)
+
+######## suite m6
+== m6/fake attempt 1  load 5.88 4.72 4.86 1/1993 857069  cap 7200s
+   -> ok (exit 0, 2610 s)
+== m6/vv attempt 1  load 3.71 5.27 5.86 1/2086 884059  cap 3600s
+   -> FAIL (exit 1, 371 s)
+   stderr: -- round 1/3 VV (load 3.71 5.27 5.86 3/2251 884356)
+   stderr: -- round 2/3 VV (load 7.23 5.65 5.89 1/2267 885718)
+   stderr: -- round 3/3 VV (load 6.96 5.80 5.90 1/2244 886982)
+   stderr: == wrote <repo>/bench/results/acceptance/phase2-20261018T001009Z/m6/vv.a1/res/20261018T020102Z.{json,txt}
+   stderr: == 2 gate(s) FAILED
+
+######## suite m7
+== m7/firefox attempt 1  load 6.66 5.76 5.84 1/2081 888399  cap 7200s
+   -> ok (exit 0, 3658 s)
+
+######## suite m8
+== m8/firefox attempt 1  load 4.72 4.57 4.47 1/2138 949069  cap 9000s
+   -> ok (exit 0, 2096 s)
+
+######## suite m9
+== m9/chromium-m7 attempt 1  load 5.92 5.81 5.27 1/2096 1003639  cap 7200s
+   -> ok (exit 0, 3427 s)
+== m9/chromium-m8 attempt 1  load 4.40 4.48 4.68 1/2204 1053124  cap 9000s
+   -> FAIL (exit 1, 1896 s)
+   stderr: kill: (-1090672): No such process
+   stderr: -- round 3/3 M8-TB (load 4.45 5.04 4.88 1/2343 1091098)
+   stderr: kill: (-1091173): No such process
+   stderr: == wrote <repo>/bench/results/acceptance/phase2-20261018T001009Z/m9/chromium-m8.a1/res/20261018T050539Z.{json,txt} and -steps.md
+   stderr: == 2 gate(s) FAILED
+
+######## suite storm
+== storm/e2e attempt 1  load 4.50 5.03 4.88 1/2193 1091577  cap 5400s
+   -> ok (exit 0, 622 s)
+
+######## suite x1
+== x1/hooks attempt 1  load 6.22 6.26 5.54 1/2168 1097637  cap 1800s
+   -> ok (exit 0, 38 s)
+
+######## suite b1
+== b1/judge-quick attempt 1  load 4.72 5.87 5.44 2/2158 1097984  cap 5400s
+   -> FAIL (exit 124, 5400 s)
+   stderr: 2026-10-18T06:46:41.198273Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+   stderr: 2026-10-18T06:46:41.198276Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0, review_syncs: 0, retracked_on_key: 0 }
+   stderr: 2026-10-18T06:46:41.201343Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 2, focus_requests: 10, fetch_ok: 19, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 9, utterances: 10, reader_restarts: 0 }
+   stderr: 2026-10-18T06:46:41.201368Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 10, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+   stderr: 2026-10-18T06:46:41.201573Z  INFO gorca_daemon: gorca stopped
+# Phase 2 acceptance: FAIL
+
+Mode: **ACCEPTANCE**. Run dir: `<repo>/bench/results/acceptance/phase2-20261018T001009Z`.
+Resolved topology (from the reader reports): lanes-rtx24, lanes-rtx3, lanes-rtx30, lanes-rtx39, lanes-rtx45, lanes-rtx6, lanes-rtx87.
+
+## Steps
+
+| step | result | attempt | wall | load1 min-max | mem PSI max | gated rows | FAIL rows | notes |
+|---|---|---|---|---|---|---|---|---|
+| m1/e2e | PASS | a1 | 830 s | 4.0-8.3 | 0.720 | 31 | 0 | - |
+| m3/e2e | FAIL | a1 | 2246 s | 2.4-9.8 | 4.600 | 37 | 1 | exit 1; 1 gate rows FAIL |
+| m4/e2e | PASS | a1 | 449 s | 2.9-6.0 | 1.360 | 8 | 0 | - |
+| m6/fake | PASS | a1 | 2610 s | 2.5-9.8 | 7.270 | 45 | 0 | - |
+| m6/vv | FAIL | a1 | 371 s | 3.0-7.6 | 0.740 | 24 | 2 | exit 1; 2 gate rows FAIL |
+| m7/firefox | PASS | a1 | 3658 s | 2.5-8.5 | 2.960 | 77 | 0 | - |
+| m8/firefox | PASS | a1 | 2096 s | 3.5-8.3 | 2.750 | 46 | 0 | - |
+| m9/chromium-m7 | PASS | a1 | 3427 s | 2.2-10.5 | 2.810 | 77 | 0 | - |
+| m9/chromium-m8 | FAIL | a1 | 1896 s | 3.0-9.5 | 2.340 | 46 | 2 | exit 1; 2 gate rows FAIL |
+| storm/e2e | PASS | a1 | 622 s | 4.1-8.6 | 0.360 | 30 | 0 | - |
+| x1/hooks | PASS | a1 | 38 s | 4.7-6.2 | 0 | 19 | 0 | - |
+| b1/judge-quick | FAIL | a1 | 5400 s | 0.3-8.5 | 1.920 | 0 | 0 | exit 124 |
+summary: <repo>/bench/results/acceptance/phase2-20261018T001009Z/summary.md (exit 1)
+quiet-host restored

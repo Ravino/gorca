@@ -1,0 +1,14 @@
+suite=m8
+step=firefox
+attempt=1
+kind=e2e
+exit=0
+label=acc-20261018T001009Z-m8-firefox-a1
+start=1792292522
+end=1792294618
+seconds=2096
+load_start=4.72 4.57 4.47 1/2138 949069
+load_end=5.92 5.81 5.27 2/2096 1003632
+governor=performance 
+git_rev=1308ae05
+cap_seconds=9000

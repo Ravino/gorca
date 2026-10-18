@@ -1,0 +1,14 @@
+suite=m9
+step=chromium-m7
+attempt=1
+kind=e2e
+exit=0
+label=acc-20261018T001009Z-m9-chromium-m7-a1
+start=1792294618
+end=1792298045
+seconds=3427
+load_start=5.92 5.81 5.27 1/2096 1003639
+load_end=4.40 4.48 4.68 1/2204 1053117
+governor=performance 
+git_rev=1308ae05
+cap_seconds=7200

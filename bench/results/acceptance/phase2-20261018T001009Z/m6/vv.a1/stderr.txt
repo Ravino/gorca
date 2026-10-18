@@ -1,0 +1,8 @@
+private compositor: /tmp/gorca-vte.8RsXVY/x/gorca-vte-884064
+== reader <repo>/target/release/gorca built from 1308ae05, tree at 1308ae05
+== e2e acc-20261018T001009Z-m6-vv-a1: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=3.71 5.27 5.86 3/2251 884356
+-- round 1/3 VV (load 3.71 5.27 5.86 3/2251 884356)
+-- round 2/3 VV (load 7.23 5.65 5.89 1/2267 885718)
+-- round 3/3 VV (load 6.96 5.80 5.90 1/2244 886982)
+== wrote <repo>/bench/results/acceptance/phase2-20261018T001009Z/m6/vv.a1/res/20261018T020102Z.{json,txt}
+== 2 gate(s) FAILED

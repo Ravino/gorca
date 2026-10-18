@@ -1,0 +1,1 @@
+   tests/web/m8/run_m8.sh acc-20261018T001009Z-m8-firefox-a1 --repeats 3 --out <repo>/bench/results/acceptance/phase2-20261018T001009Z/m8/firefox.a1/res

@@ -1,0 +1,1 @@
+   bash -c for i in $(seq 1 3); do target/release/examples/x1 100000 >"$0/x1-run$i.tsv" 2>"$0/x1-run$i.stderr" || exit $?; done <repo>/bench/results/acceptance/phase2-20261018T001009Z/x1/hooks.a1
