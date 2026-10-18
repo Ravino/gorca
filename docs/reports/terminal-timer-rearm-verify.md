@@ -88,3 +88,39 @@ speaks at the boundary in `cue` mode would pass. Assert that `f.heard(mark)` is 
 ## Not substantiated
 The VV x30 result was not rerun here (it needs the live rig). 0/30 against a 1/25 base rate is weak
 evidence, as the report itself says.
+
+## Round 2 (delta d05ef2e8..3871555b, main 176e5773 merged in), 2026-10-19
+
+Verdict: **MERGE**. F-1, F-2, F-3 and F-4 are fixed and verified. F-5 is retracted: FE2's `None`
+branch (webtext.rs, "wanted silence") already fails when anything is spoken.
+
+- The P1-P3 probes are now tests in terminal/tests.rs:
+  `a_key_during_the_watch_read_does_not_wedge_the_watch`,
+  `a_charged_timeout_does_not_make_the_watch_spin` and
+  `the_watch_reply_of_an_unfocused_terminal_does_not_speak_its_title`. All three pass.
+- Gates at 3871555b:
+  - fmt --check: clean.
+  - clippy `--workspace --all-targets -D warnings`: clean.
+  - `cargo test --workspace` (4 threads, load 11): rc=0, 126 result lines ok.
+- Strict statemodel, 50k cases, seed 1, release build:
+  - Branch: only `cue-on-move` fails (1/50000, seed 20858).
+  - Mutation with the F-1 stale-to-`Failed` line removed: `term-protection-lost` fails 3/50000
+    (first seed 32599). The new liveness invariant does catch F-1.
+- `cue-on-move` is pre-existing, not caused by this branch. Its `#[ignore]`d regression
+  `home_after_lost_events_gives_no_boundary_cue_when_the_caret_moved` was run against main's
+  `present/flow.rs` (176e5773) with `term_protection_watch` disabled. It still fails with
+  "Home in 5 moved the caret and gave a boundary cue".
+  Note: `KNOWN` in statemodel/mod.rs is empty, so the documented long run
+  (`GORCA_STATE_CASES=50000`) is red even without STRICT. Add `"cue-on-move"` to `KNOWN` until
+  it is fixed.
+- The VV x40 failure "a new tab: its output before any key" (heard only "blank") predates this
+  branch. The same step failed with the same signature at main 89c225c on 2026-10-16
+  (`bench/results/e2e/main-new-step/20261016T023226Z.txt`: "Terminal, Terminal, terminal", "blank",
+  load 11). The watch only reads state and cannot blank a fresh tab's output. I did not rerun
+  VV x20: it needs a release rebuild plus about 2 min per repeat (the x40 run took 84 min), and
+  load was 14.
+- Residual (low, not blocking):
+  - VV x30 and x40 ran on ffcb2be6, before the main merge, which brought input-mutter changes.
+    No VV run exists at 3871555b.
+  - The stale-reply rule turns any stale `StateChange` reply for the reconfirm node into `Failed`,
+    including a stale S1 read. At worst that allows one extra read in flight.
