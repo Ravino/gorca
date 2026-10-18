@@ -873,6 +873,43 @@ enum Act {
     End,
 }
 
+/// What a movement key that cannot move the caret must speak, from `[editing] boundary`.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum BoundaryExpect {
+    /// `cue` (the default; a silent placeholder until sounds exist) or `off`: nothing is said.
+    Silent,
+    /// `say`: the word `start` or `end` (a single-line field).
+    Say,
+}
+
+/// The boundary behaviour `cfg` (a config file text) selects; the default is `cue`.
+fn boundary_expect(cfg: &str) -> BoundaryExpect {
+    let say = cfg
+        .lines()
+        .find(|l| l.trim_start().starts_with("boundary"))
+        .is_some_and(|l| l.contains("say"));
+    if say {
+        BoundaryExpect::Say
+    } else {
+        BoundaryExpect::Silent
+    }
+}
+
+/// The expectation of a movement key: `at_new_caret()` when the caret moved, the boundary
+/// behaviour (`word`, or silence) when it could not.
+fn boundary_or(
+    stuck: bool,
+    word: &str,
+    mode: BoundaryExpect,
+    at_new_caret: impl FnOnce() -> String,
+) -> Option<String> {
+    match (stuck, mode) {
+        (false, _) => Some(at_new_caret()),
+        (true, BoundaryExpect::Say) => Some(word.to_owned()),
+        (true, BoundaryExpect::Silent) => None,
+    }
+}
+
 /// FE2: a randomised session in an input, checked against a model of its text.
 fn fe2(
     host: &HostEnv,
@@ -886,6 +923,8 @@ fn fe2(
     let path = f.enter("Session")?;
     // The field's own accessible: the label above is a sibling, the entry is what `enter` found.
     let mut rng = Rng::new(seed ^ 0xE2);
+    // What a key that cannot move the caret must do follows the configured `[editing] boundary`.
+    let boundary = boundary_expect(CFG_QUIET);
     let n = size.n.clamp(100, 700);
     let mut text: Vec<char> = Vec::new();
     let mut caret = 0usize;
@@ -948,20 +987,24 @@ fn fe2(
                 Some("\u{436}".to_owned())
             }
             Act::Left => {
+                let stuck = caret == 0;
                 caret = caret.saturating_sub(1);
-                Some(at_char(&text, caret))
+                boundary_or(stuck, "start", boundary, || at_char(&text, caret))
             }
             Act::Right => {
+                let stuck = caret >= text.len();
                 caret = (caret + 1).min(text.len());
-                Some(at_char(&text, caret))
+                boundary_or(stuck, "end", boundary, || at_char(&text, caret))
             }
             Act::Home => {
+                let stuck = caret == 0;
                 caret = 0;
-                Some(at_char(&text, caret))
+                boundary_or(stuck, "start", boundary, || at_char(&text, caret))
             }
             Act::End => {
+                let stuck = caret >= text.len();
                 caret = text.len();
-                Some(at_char(&text, caret))
+                boundary_or(stuck, "end", boundary, || at_char(&text, caret))
             }
         };
         let mark = f.w.mark();
@@ -2036,4 +2079,48 @@ fn ub1(host: &HostEnv, reader: &ReaderSpec, flavor: Flavor, out: &mut RunOut) ->
     }
     out.x("ub_failures", f64::from(silent), "steps");
     Ok(())
+}
+
+#[cfg(test)]
+mod fe2_boundary_tests {
+    use super::*;
+
+    #[test]
+    fn the_default_and_cue_are_silent_and_say_speaks_the_word() {
+        assert_eq!(boundary_expect(CFG_QUIET), BoundaryExpect::Silent);
+        assert_eq!(
+            boundary_expect("[editing]\nboundary = \"cue\"\n"),
+            BoundaryExpect::Silent
+        );
+        assert_eq!(
+            boundary_expect("[editing]\nboundary = \"off\"\n"),
+            BoundaryExpect::Silent
+        );
+        assert_eq!(
+            boundary_expect("[editing]\nboundary = \"say\"\n"),
+            BoundaryExpect::Say
+        );
+        assert_eq!(
+            boundary_expect("[editing]\nboundary = [\"cue\", \"say\"]\n"),
+            BoundaryExpect::Say
+        );
+    }
+
+    #[test]
+    fn a_stuck_key_follows_the_mode_and_a_moving_key_names_the_character() {
+        let ch = || "x".to_owned();
+        assert_eq!(boundary_or(true, "start", BoundaryExpect::Silent, ch), None);
+        assert_eq!(
+            boundary_or(true, "end", BoundaryExpect::Say, ch),
+            Some("end".to_owned())
+        );
+        assert_eq!(
+            boundary_or(false, "end", BoundaryExpect::Say, ch),
+            Some("x".to_owned())
+        );
+        assert_eq!(
+            boundary_or(false, "end", BoundaryExpect::Silent, ch),
+            Some("x".to_owned())
+        );
+    }
 }

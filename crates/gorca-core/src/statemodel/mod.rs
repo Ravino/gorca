@@ -857,6 +857,18 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
             | Op::Revive(_)
             | Op::Hung => {}
         }
+        // term-unwatched: a tracked terminal whose application has not earned the protection
+        // gets no text events from its app actor, so it must always have a pending re-read of
+        // the focus state (the watch). Without one it is silent until a key (terminal-timer-rearm.md).
+        if s.r.term_unwatched() {
+            bail!(
+                "term-unwatched",
+                format!(
+                    "after {:?} the tracked terminal is unprotected and nothing re-reads its focus state",
+                    st.op
+                ),
+            );
+        }
     }
     None
 }

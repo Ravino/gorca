@@ -882,3 +882,93 @@ fn a_key_after_a_focus_that_never_finished_presents_it_again_once() {
     let fx = h.typed('l');
     assert_eq!(fetches(&fx), 0);
 }
+
+// ---- protection: a tracked terminal always has a way to get its text events -------------------
+
+fn is_state_read(e: &ReaderEffect) -> bool {
+    matches!(
+        e,
+        ReaderEffect::Fetch {
+            kind: crate::FetchKind::StateChange,
+            ..
+        }
+    )
+}
+
+impl Rig {
+    fn state_reply(&mut self, focused: bool) -> ReaderEffects {
+        let mut s = (*term_snap()).clone();
+        if !focused {
+            s.states = StateSet::SHOWING | StateSet::VISIBLE;
+        }
+        self.msg(ReaderMsg::Reply(crate::QueryReply {
+            node: node(),
+            epoch: self.epoch.current(),
+            kind: crate::FetchKind::StateChange,
+            result: Ok(Arc::new(s)),
+        }))
+    }
+}
+
+/// The kept trace of the VV Alt+Tab flake (docs/reports/terminal-timer-rearm.md): the terminal is
+/// tracked and presented, the application never earned the protection (the real VTE says
+/// `FOCUSED` after it announced the focus), so the app actor drops every text event and the
+/// terminal is silent until a key re-reads the state. A timer must re-read the state on a
+/// backoff until a `FOCUSED` reply earns it.
+#[test]
+fn an_unprotected_tracked_terminal_rereads_its_focus_state_until_it_earns_the_protection() {
+    let mut g = rig();
+    let published = Arc::new(gorca_rt::FocusedApp::new());
+    g.r.focused_app = Some(Arc::clone(&published));
+    g.focus("me@box:~$ ", 10);
+    g.hold_focus_on_terminal();
+    assert!(g.r.term_tracked());
+    // Any message arms the first re-read.
+    let fx = g.tick(1);
+    assert!(!timers(&fx).is_empty(), "a watch timer is armed: {fx:?}");
+    // Not due yet: nothing is read.
+    let fx = g.tick(50);
+    assert!(!fx.iter().any(is_state_read));
+    // Due: the state is read once; a reply without FOCUSED (the VTE is not there yet) leaves the
+    // read open for the next attempt, which comes later.
+    let fx = g.tick(120);
+    assert_eq!(fx.iter().filter(|e| is_state_read(e)).count(), 1, "{fx:?}");
+    assert!(!timers(&fx).is_empty(), "the next attempt is armed");
+    let fx = g.state_reply(false);
+    assert!(!fx.iter().any(is_state_read));
+    assert_eq!(published.get(), None);
+    let fx = g.tick(100);
+    assert!(!fx.iter().any(is_state_read), "backed off: {fx:?}");
+    let fx = g.tick(300);
+    assert_eq!(fx.iter().filter(|e| is_state_read(e)).count(), 1, "{fx:?}");
+    // One read in flight at a time: a timer while it is unanswered asks nothing.
+    let fx = g.tick(3000);
+    assert!(!fx.iter().any(is_state_read), "{fx:?}");
+    // FOCUSED earns the protection; the watch is over.
+    g.state_reply(true);
+    assert_eq!(published.get(), Some(node().app));
+    let fx = g.tick(5000);
+    assert!(!fx.iter().any(is_state_read));
+    assert!(timers(&fx).is_empty(), "nothing left to watch: {fx:?}");
+    assert!(g.r.terminal_reads().protection_reads >= 2);
+}
+
+/// A protected terminal costs nothing, and neither does one nobody tracks.
+#[test]
+fn a_protected_or_untracked_terminal_arms_no_protection_watch() {
+    let mut g = rig();
+    let published = Arc::new(gorca_rt::FocusedApp::new());
+    published.publish(node().app);
+    g.r.focused_app = Some(Arc::clone(&published));
+    g.focus("$ ", 2);
+    g.hold_focus_on_terminal();
+    let fx = g.tick(1);
+    assert!(timers(&fx).is_empty(), "{fx:?}");
+    g.r.text_untrack("test");
+    published.demote();
+    let fx = g.tick(1000);
+    assert!(
+        timers(&fx).is_empty() && !fx.iter().any(is_state_read),
+        "{fx:?}"
+    );
+}

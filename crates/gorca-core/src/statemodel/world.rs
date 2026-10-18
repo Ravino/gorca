@@ -234,6 +234,7 @@ impl Sim {
         }
         let r = r
             .with_text_dropped(Arc::clone(&dropped))
+            .with_focused(Arc::new(gorca_rt::FocusedApp::new()))
             .with_ext(Arc::new(FaultExt {
                 state: Arc::clone(&ext),
             }));
