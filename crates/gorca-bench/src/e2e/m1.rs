@@ -883,6 +883,11 @@ pub fn k4(
         "chords",
     );
     out.x("k4_wall_s", elapsed, "s");
+    out.x(
+        "null_walk",
+        f64::from(mutter(&mut rig)?.grab_state()?.null_walk),
+        "walks",
+    );
     Ok(())
 }
 
@@ -1081,6 +1086,7 @@ pub fn k4r(
     out.x("precondition_dirty", precondition_dirty as f64, "rounds");
     out.x("key_unbalanced", unbalanced as f64, "keys");
     out.x("k4r_wall_s", elapsed, "s");
+    out.x("null_walk", f64::from(state.null_walk), "walks");
     Ok(())
 }
 

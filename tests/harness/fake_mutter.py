@@ -52,9 +52,9 @@ Grab semantics (M1 test support; ADR-0001 section 7.3 K-1/K-2/K-6). A port of re
     `set_autorepeat_guard` switches the emulation to that fixed behaviour for comparison.
     A repeat does not update the xkb state (state != AUTOREPEAT_VALUE guard in 48.7 too).
   * Not emulated: xkb state tracking (the test supplies `state`), duplicate-press dropping
-    (button_count), and Mutter's NULL dereference in rebuild_all_grabbed_modifiers when a second
-    client that never called SetKeyGrabs exists (only one client may own
-    org.gnome.Orca.KeyboardMonitor anyway).
+    (button_count). Mutter's 48.7 NULL dereference in rebuild_all_grabbed_modifiers (a grabber
+    that never called SetKeyGrabs, e.g. Watch/Grab/Ungrab first) cannot crash the fake; it is
+    counted in `stats`/`grab_state` as `null_walk`, which K4 and K4r export and gate at 0.
 
   {"cmd":"key", ..., "time_ms":<optional event time, default CLOCK_MONOTONIC ms>}
       reply adds notified, consumed, first_click, passed (the app received it)
@@ -154,7 +154,7 @@ class Manager(dbus.service.Object):
         self.all_grabbed_modifiers = set()
         self.grabbed_keypresses = set()
         self.app_log = []
-        self.stats = {"calls": 0, "denied": 0, "keys": 0}
+        self.stats = {"calls": 0, "denied": 0, "keys": 0, "null_walk": 0}
         # Keys XKB believes are down. meta_seat_impl_notify_key_in_impl skips
         # xkb_state_update_key for events that is_a11y_modifier_first_click ignores, so a press
         # that passed followed by a release that is ignored leaves the key down for good (the
@@ -177,14 +177,21 @@ class Manager(dbus.service.Object):
 
     def drop(self, name):
         """key_grabber_bus_name_vanished_callback"""
-        if self.grabbers.pop(name, None) is not None:
+        g = self.grabbers.pop(name, None)
+        if g is not None and g.modifiers is not None:  # the vanished callback checks ->modifiers
             self.rebuild_modifiers()
 
     def rebuild_modifiers(self):
         """rebuild_all_grabbed_modifiers + set_a11y_modifiers (a11y-modifiers-changed)"""
         mods = set()
         for g in self.grabbers.values():
-            mods.update(g.modifiers or ())
+            if g.modifiers is None:
+                # Mutter 48.7 dereferences grabber->modifiers->len here: SIGSEGV of the shell.
+                # A grabber that exists but never called SetKeyGrabs (only Watch/Grab/Ungrab)
+                # is the trigger. The emulation counts it; tests assert the count stays 0.
+                self.stats["null_walk"] += 1
+                continue
+            mods.update(g.modifiers)
         self.all_grabbed_modifiers = mods
         self.seat.grabbed_modifiers = set(mods)
 
@@ -335,7 +342,8 @@ class Manager(dbus.service.Object):
         return {"grab_all": int(bool(g and g.grab_all)),
                 "n_modifiers": len(g.modifiers or ()) if g else 0,
                 "applied": self.applied, "held": len(self.grabbed_keypresses),
-                "xkb_down": len(self.xkb_down), "xkb_first": min(self.xkb_down, default=0)}
+                "xkb_down": len(self.xkb_down), "xkb_first": min(self.xkb_down, default=0),
+                "null_walk": self.stats["null_walk"]}
 
     def dump(self):
         return {
