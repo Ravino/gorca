@@ -92,6 +92,10 @@ const KEY_E: K = K {
 };
 const CONTROL: u32 = 4;
 const SHIFT: u32 = 1;
+const KEY_D: K = K {
+    code: 40,
+    sym: 0x64,
+};
 const KEY_U: K = K {
     code: 30,
     sym: 0x75,
@@ -3076,13 +3080,19 @@ fn vd_perturb(v: &mut V, n: usize, cbus: &str) -> Result<&'static str> {
             "second app window, Alt+Tab back"
         }
         2 => {
-            v.term.open_tab("exec bash --norc -i")?;
+            // The tab comes from Ctrl+Shift+T inside the focused window (as in VV tabs). A tab
+            // opened with `gnome-terminal --tab` from outside lands in a NEW window on the private
+            // compositor, so the window has one tab, the tab accelerators are disabled and
+            // Ctrl+PageUp/PageDown reach bash as "\e[5;5~" (acceptance fix, see
+            // docs/reports/acceptance-fixes.md).
+            v.chord(&[CTRL_L, SHIFT_L], KEY_T, 0, CONTROL | SHIFT, &[29, 42, 20])?;
             std::thread::sleep(Duration::from_secs(3));
             v.chord(&[CTRL_L], PAGE_UP, 0, CONTROL, &[29, 104])?;
             std::thread::sleep(Duration::from_millis(1200));
             v.chord(&[CTRL_L], PAGE_DOWN, 0, CONTROL, &[29, 109])?;
             std::thread::sleep(Duration::from_millis(1200));
-            v.chord(&[CTRL_L], PAGE_UP, 0, CONTROL, &[29, 104])?;
+            // Close the extra tab again (Ctrl+D at its empty prompt) so rounds do not pile up tabs.
+            v.chord(&[CTRL_L], KEY_D, 0, CONTROL, &[29, 32])?;
             std::thread::sleep(Duration::from_millis(1200));
             "tab switch"
         }

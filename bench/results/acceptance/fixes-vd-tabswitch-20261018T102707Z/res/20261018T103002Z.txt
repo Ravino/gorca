@@ -1,0 +1,36 @@
+# e2e vd-tabfix
+# utc=2026-10-18T10:30:02Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=12.07 11.19 8.07 4/2375 1298115
+# git_rev=2a017ed3
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx1
+# topology_expected=-
+# label=vd-tabfix
+# reader=daemon:<repo>/.claude/worktrees/agent-ac00585ae6937e472/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=12.07 11.19 8.07 2/2375 1298112
+# reader_env=GORCA_M6=1 GORCA_M6_STRICT=1 GORCA_M6_REAL=1 NO_COLOR=1 GORCA_TOPOLOGY_REPORT=bench/results/acceptance/fixes-vd-tabswitch-20261018T102707Z/res/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=VD round 0 (idle 20 s): 0 failing steps
+# note1=VD round 1 (second app window, Alt+Tab back): 0 failing steps
+# note2=VD round 2 (tab switch): 0 failing steps
+
+metric                     bus                median          min          max  n op    threshold  res   note
+VD.vd_bad_rounds           daemon/voicego            0            0            0  1                  info   [rounds]
+VD.vd_base_failures        daemon/voicego            0            0            0  1                  info   [steps]
+VD.vd_failures             daemon/voicego            0            0            0  1                  info   [steps]

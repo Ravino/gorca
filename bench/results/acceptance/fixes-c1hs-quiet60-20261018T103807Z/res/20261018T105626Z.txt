@@ -1,0 +1,39 @@
+# e2e c1hs-quiet60
+# utc=2026-10-18T10:56:26Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=14.38 15.62 13.74 5/2430 1404783
+# git_rev=2a017ed3
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx60
+# topology_expected=lanes-rt
+# label=c1hs-quiet60
+# reader=daemon:<repo>/.claude/worktrees/agent-ac00585ae6937e472/target/release/gorca
+# backend=voicego
+# repeats=60
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=14.38 15.62 13.74 4/2430 1404780
+# reader_env=GORCA_M3=1 GORCA_M3_STRICT=1 NO_COLOR=1 GORCA_TOPOLOGY_REPORT=bench/results/acceptance/fixes-c1hs-quiet60-20261018T103807Z/res/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=C1h: app caret-event emit to SPEAK of the character, from the window
+
+metric                     bus                median          min          max  n op    threshold  res   note
+C1hs.c1hs_ms.n             daemon/voicego         1200         1200         1200 60                  info   [samples]
+C1hs.c1hs_ms.p50           daemon/voicego        0.193        0.140        0.605 60                  info   [ms]
+C1hs.c1hs_ms.p95           daemon/voicego        0.904        0.255        1.661 60                  info   [ms]
+C1hs.c1hs_ms.p99           daemon/voicego        1.052        0.332        3.057 60 <=            4  PASS   [ms]
+C1hs.c1hs_ms.p999          daemon/voicego        1.657        0.905        8.412 60                  info   [ms]
+C1hs.c1hs_ms.max           daemon/voicego        2.352        0.921         15.4 60                  info   [ms]
+C1hs.c1h_ipc_calls         daemon/voicego            0            0            0 60 <=            0  PASS  gated on the max over repeats [calls]
+C1hs.lost                  daemon/voicego            0            0            0 60 <=            0  PASS  gated on the max over repeats [events]

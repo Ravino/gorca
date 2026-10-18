@@ -319,6 +319,48 @@ pub(super) fn lost_notes(id: &str, probes: &[Probe], spoken: &[(u64, String)]) -
     notes
 }
 
+/// Every speech-server record (SPEAK, CANCEL, END) around the first lost probe, relative to that
+/// probe's key, plus each neighbouring probe's emit time. A lost character is either never
+/// presented or presented and cancelled before it was sent; this tells the two apart.
+pub(super) fn lost_context(id: &str, probes: &[Probe], recs: &[Rec]) -> Option<String> {
+    let spoken: Vec<(u64, String)> = texts(recs);
+    let first = probes.iter().enumerate().find_map(|(i, p)| {
+        let end = probes.get(i + 1).map_or(u64::MAX, |n| n.t_key);
+        let hit = spoken
+            .iter()
+            .any(|(t, s)| *t >= p.t_key && *t < end && *s == p.expect);
+        (!hit).then_some(i)
+    })?;
+    let t0 = probes[first].t_key;
+    let rel = |t: u64| (t as f64 - t0 as f64) / 1e6;
+    let lo = first.saturating_sub(2);
+    let hi = (first + 8).min(probes.len());
+    let mut events: Vec<(u64, String)> = Vec::new();
+    for (i, p) in probes.iter().enumerate().take(hi).skip(lo) {
+        events.push((p.t_key, format!("key#{i}")));
+        events.push((p.t_ev, format!("emit#{i}({})", p.expect)));
+    }
+    let (t_lo, t_hi) = (probes[lo].t_key, probes[hi - 1].t_key + 40_000_000);
+    for r in recs.iter().filter(|r| r.t_ns >= t_lo && r.t_ns <= t_hi) {
+        let what = match &r.kind {
+            Kind::Connected => "connected".to_owned(),
+            Kind::Speak { text, .. } => format!("SPEAK({text})"),
+            Kind::Cancel { verb, had_speech } => format!("CANCEL({verb},had={had_speech})"),
+            Kind::End => "END".to_owned(),
+        };
+        events.push((r.t_ns, what));
+    }
+    events.sort_by_key(|e| e.0);
+    let line: Vec<String> = events
+        .iter()
+        .map(|(t, w)| format!("{:+.2}ms {w}", rel(*t)))
+        .collect();
+    Some(format!(
+        "{id} timeline around first lost #{first}: {}",
+        line.join(" | ")
+    ))
+}
+
 fn n_of(size: Size, cap: usize) -> usize {
     size.n.min(cap)
 }
@@ -444,9 +486,13 @@ fn c1h_run(
     }
     std::thread::sleep(Duration::from_millis(300));
     let (total, _) = app_calls(&mut s.app, false)?;
-    let spoken = texts(&s.rig.mock.since(mark));
+    let recs = s.rig.mock.since(mark);
+    let spoken = texts(&recs);
     let (lat, lost, _) = score(&probes, &spoken, true);
     out.notes.extend(lost_notes("C1h", &probes, &spoken));
+    if lost > 0 {
+        out.notes.extend(lost_context("C1h", &probes, &recs));
+    }
     out.s(if storm { "c1hs_ms" } else { "c1h_ms" }, lat);
     out.x("lost", lost as f64, "events");
     out.x("c1h_ipc_calls", total as f64, "calls");

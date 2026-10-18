@@ -225,12 +225,17 @@ pub const GATES: &[Gate] = &[
         "hung model: L1 p99 of the other apps",
     ),
     g(
+        // Not a gate: nothing in the harness produces this value (the walk's `hung` app is not
+        // the focused app when it stalls, and the announcement is a message, not a node
+        // presentation, so the run directory has no timestamp for it). A permanently empty
+        // bold row made every b1 run unrankable. The behaviour is covered functionally by the
+        // M-4 test in crates/gorca-daemon/tests/e2e.rs and the Reader/commands unit tests.
         "B1-L4.announce",
         "walk",
         "ms",
-        Cmp::MedianAtMost,
+        Cmp::Rank,
         500.0,
-        "hung model: 'not responding' spoken within",
+        "hung model: 'not responding' spoken within (informational, no producer)",
     ),
     g(
         "B1-STEP.max_us",

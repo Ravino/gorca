@@ -190,6 +190,20 @@ if [ "$quiet" = 1 ]; then
 fi
 
 # ---- build, once ---------------------------------------------------------------------------
+# Resume across commits: the binaries are rebuilt only when a product path changed since the rev
+# they were built from. Commits touching only bench/, docs/, tests/ or .claude/ (result commits,
+# runner fixes) neither force a rebuild nor trip the stale-reader check (e2e reads
+# GORCA_E2E_ALLOW_STALE_READER); the rev each attempt ran against is in meta.txt (reader_rev, git_rev).
+READER_REV=$("$ROOT/target/release/gorca" --version 2>/dev/null | awk '{print $2}')
+if [ "$build" = 1 ] && [ "$resume" = 1 ] && [ -n "$READER_REV" ] \
+   && git rev-parse -q --verify "$READER_REV^{commit}" >/dev/null; then
+  changed=$(git diff --name-only "$READER_REV" HEAD -- . ':!bench' ':!docs' ':!tests' ':!.claude' | wc -l)
+  if [ "$changed" = 0 ]; then
+    echo "== resume: only bench/docs/tests/.claude changed since reader rev $READER_REV; no rebuild, stale-reader check relaxed"
+    build=0
+    export GORCA_E2E_ALLOW_STALE_READER=1
+  fi
+fi
 if [ "$build" = 1 ]; then
   if [ "$(mem_avail_kb)" -lt $((6 * 1024 * 1024)) ] && [ "$force" = 0 ] && [ "$dry" = 0 ]; then
     echo "phase2: less than 6 GB available, refusing to build" >&2; exit 2
@@ -207,7 +221,8 @@ fi
 for b in target/release/gorca target/release/e2e target/release/e2e-m8; do
   [ -x "$b" ] || { echo "phase2: missing $b (build first)" >&2; exit 2; }
 done
-echo "git_rev_built=$(git rev-parse --short HEAD) binary=$(sha256sum target/release/gorca | cut -c1-16) mtime=$(stat -c %y target/release/gorca)" >>"$out/host.txt"
+READER_REV=$("$ROOT/target/release/gorca" --version 2>/dev/null | awk '{print $2}')
+echo "git_rev_built=$(git rev-parse --short HEAD) reader_rev=$READER_REV binary=$(sha256sum target/release/gorca | cut -c1-16) mtime=$(stat -c %y target/release/gorca)" >>"$out/host.txt"
 
 # ---- step runner ---------------------------------------------------------------------------
 STATUS=$out/status.tsv
@@ -264,7 +279,7 @@ run_step() {
     echo "suite=$suite"; echo "step=$step"; echo "attempt=$n"; echo "kind=$kind"; echo "exit=$rc"
     echo "label=$LABEL"; echo "start=$t0"; echo "end=$t1"; echo "seconds=$((t1 - t0))"
     echo "load_start=$l0"; echo "load_end=$(cat /proc/loadavg)"; echo "governor=$(gov)"
-    echo "git_rev=$(git rev-parse --short HEAD)"; echo "cap_seconds=$cap"
+    echo "git_rev=$(git rev-parse --short HEAD)"; echo "reader_rev=$READER_REV"; echo "cap_seconds=$cap"
   } >"$DIR/meta.txt"
   printf '%s\t%s\t%s\t%s\t%s\n' "$suite" "$step" "$n" "$rc" "$res" >>"$STATUS"
   echo "   -> $res (exit $rc, $((t1 - t0)) s)"
