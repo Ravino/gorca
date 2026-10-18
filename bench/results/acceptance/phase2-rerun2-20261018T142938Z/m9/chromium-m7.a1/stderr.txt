@@ -1,0 +1,168 @@
+   Compiling ext-vte v0.0.0 (<repo>/extensions/ext-vte)
+   Compiling ext-gnome-shell v0.0.0 (<repo>/extensions/ext-gnome-shell)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
+    Finished `release` profile [optimized + debuginfo] target(s) in 53.44s
+private compositor: /tmp/gorca-m7c.zCatSW/x/gorca-m7-2150226
+== reader <repo>/target/release/gorca built from ded46eac, tree at ded46eac
+== e2e acc-20261018T142938Z-m9-chromium-m7-a1: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=4.51 4.41 3.97 1/2201 2151191
+-- round 1/3 B0 (load 4.51 4.41 3.97 1/2201 2151191)
+kill: (-2151266): No such process
+-- round 1/3 W1 (load 4.49 4.41 3.97 1/2225 2151532)
+kill: (-2151608): No such process
+-- round 1/3 BR1 (load 3.50 4.17 3.92 1/2202 2152203)
+kill: (-2152279): No such process
+-- round 1/3 BR2 (load 3.15 3.96 3.90 1/2168 2153877)
+kill: (-2153952): No such process
+-- round 1/3 W2 (load 3.14 3.94 3.90 1/2166 2154215)
+kill: (-2154290): No such process
+-- round 1/3 W2b (load 2.97 3.89 3.88 1/2168 2154499)
+kill: (-2154574): No such process
+kill: (-2154899): No such process
+kill: (-2155271): No such process
+kill: (-2155595): No such process
+kill: (-2155940): No such process
+kill: (-2156262): No such process
+-- round 1/3 W3 (load 3.97 4.00 3.92 1/2190 2156525)
+kill: (-2156600): No such process
+-- round 1/3 FM1 (load 4.71 4.17 3.97 1/2163 2156899)
+kill: (-2156974): No such process
+-- round 1/3 FM2 (load 3.77 3.99 3.92 1/2190 2157349)
+kill: (-2157424): No such process
+-- round 1/3 FC1h (load 4.24 4.09 3.96 1/2159 2157863)
+kill: (-2157938): No such process
+-- round 1/3 FC1 (load 3.00 3.73 3.84 1/2183 2158738)
+kill: (-2158813): No such process
+-- round 1/3 FE1 (load 4.01 3.94 3.91 1/2179 2159301)
+kill: (-2159377): No such process
+-- round 1/3 FE2 (load 5.02 4.20 4.00 1/2195 2160143)
+kill: (-2160219): No such process
+-- round 1/3 FS2 (load 4.70 4.13 3.99 1/2156 2161724)
+kill: (-2161799): No such process
+-- round 1/3 FSA1 (load 4.74 4.64 4.21 1/2180 2162922)
+kill: (-2162999): No such process
+-- round 1/3 FSA3 (load 5.25 4.76 4.27 1/2154 2163438)
+kill: (-2163513): No such process
+-- round 1/3 FCE1 (load 4.33 4.59 4.23 1/2157 2163884)
+kill: (-2163960): No such process
+-- round 1/3 FCE2 (load 4.44 4.62 4.24 1/2154 2164263)
+kill: (-2164338): No such process
+-- round 1/3 FT1 (load 3.40 4.31 4.17 2/2166 2165171)
+kill: (-2165246): No such process
+-- round 1/3 FP1 (load 3.23 4.22 4.15 1/2158 2165539)
+kill: (-2165622): No such process
+-- round 1/3 BSA1 (load 3.30 4.20 4.14 2/2161 2165911)
+kill: (-2165987): No such process
+-- round 1/3 BAR1 (load 2.65 3.90 4.04 1/2193 2166518)
+kill: (-2166602): No such process
+-- round 1/3 BL1 (load 2.55 3.83 4.02 1/2186 2166858)
+kill: (-2166933): No such process
+-- round 1/3 FR1 (load 2.67 3.84 4.02 1/2189 2167166)
+kill: (-2167242): No such process
+-- round 2/3 W1 (load 2.47 3.73 3.98 1/2191 2167520)
+kill: (-2167597): No such process
+-- round 2/3 BR1 (load 2.00 3.38 3.84 1/2185 2168160)
+kill: (-2168242): No such process
+-- round 2/3 BR2 (load 2.62 2.95 3.59 1/2148 2169688)
+kill: (-2169763): No such process
+-- round 2/3 W2 (load 3.96 3.22 3.67 1/2143 2170030)
+kill: (-2170105): No such process
+-- round 2/3 W2b (load 3.96 3.22 3.67 4/2209 2170432)
+kill: (-2170521): No such process
+kill: (-2170939): No such process
+kill: (-2171290): No such process
+kill: (-2171620): No such process
+kill: (-2171950): No such process
+kill: (-2172282): No such process
+-- round 2/3 W3 (load 4.97 3.62 3.78 1/2153 2172540)
+kill: (-2172615): No such process
+-- round 2/3 FM1 (load 5.32 3.78 3.84 1/2158 2172905)
+kill: (-2172980): No such process
+-- round 2/3 FM2 (load 5.67 4.03 3.92 1/2182 2173368)
+kill: (-2173447): No such process
+-- round 2/3 FC1h (load 5.04 4.08 3.94 1/2153 2173890)
+kill: (-2173967): No such process
+-- round 2/3 FC1 (load 4.32 4.05 3.94 1/2162 2174737)
+kill: (-2174813): No such process
+-- round 2/3 FE1 (load 4.26 4.05 3.94 1/2182 2175281)
+kill: (-2175356): No such process
+-- round 2/3 FE2 (load 4.63 4.18 3.99 1/2158 2176051)
+kill: (-2176126): No such process
+-- round 2/3 FS2 (load 2.58 3.40 3.72 1/2159 2177567)
+kill: (-2177645): No such process
+-- round 2/3 FSA1 (load 4.58 3.93 3.88 1/2151 2178937)
+kill: (-2179018): No such process
+-- round 2/3 FSA3 (load 4.58 4.03 3.91 1/2160 2179442)
+kill: (-2179529): No such process
+-- round 2/3 FCE1 (load 4.20 4.00 3.91 1/2145 2179939)
+kill: (-2180015): No such process
+-- round 2/3 FCE2 (load 6.23 4.47 4.06 1/2192 2180349)
+kill: (-2180427): No such process
+-- round 2/3 FT1 (load 5.53 4.68 4.17 1/2163 2181166)
+kill: (-2181242): No such process
+-- round 2/3 FP1 (load 5.32 4.66 4.17 2/2157 2181537)
+kill: (-2181617): No such process
+-- round 2/3 BSA1 (load 5.29 4.69 4.19 1/2164 2181891)
+kill: (-2181967): No such process
+-- round 2/3 BAR1 (load 3.48 4.32 4.09 1/2191 2182516)
+kill: (-2182599): No such process
+-- round 2/3 BL1 (load 3.17 4.22 4.06 1/2200 2182846)
+kill: (-2182921): No such process
+-- round 2/3 FR1 (load 3.15 4.20 4.06 1/2172 2183163)
+kill: (-2183239): No such process
+-- round 2/3 B0 (load 3.06 4.15 4.04 1/2165 2183508)
+kill: (-2183583): No such process
+-- round 3/3 BR1 (load 3.63 4.24 4.07 2/2174 2183825)
+kill: (-2183900): No such process
+-- round 3/3 BR2 (load 2.26 3.55 3.85 1/2187 2185234)
+kill: (-2185310): No such process
+-- round 3/3 W2 (load 3.10 3.70 3.89 1/2194 2185570)
+kill: (-2185645): No such process
+-- round 3/3 W2b (load 3.41 3.75 3.91 1/2156 2185857)
+kill: (-2185932): No such process
+kill: (-2186309): No such process
+kill: (-2186642): No such process
+kill: (-2186966): No such process
+kill: (-2187301): No such process
+kill: (-2187635): No such process
+-- round 3/3 W3 (load 5.44 4.19 4.05 4/2192 2187881)
+kill: (-2187960): No such process
+-- round 3/3 FM1 (load 5.66 4.28 4.08 2/2188 2188433)
+kill: (-2188510): No such process
+-- round 3/3 FM2 (load 5.20 4.28 4.08 1/2162 2188864)
+kill: (-2188939): No such process
+-- round 3/3 FC1h (load 6.55 4.73 4.24 1/2189 2189585)
+kill: (-2189660): No such process
+-- round 3/3 FC1 (load 4.54 4.42 4.17 1/2195 2190446)
+kill: (-2190521): No such process
+-- round 3/3 FE1 (load 4.37 4.38 4.16 1/2198 2191025)
+kill: (-2191100): No such process
+-- round 3/3 FE2 (load 4.51 4.40 4.19 1/2193 2191825)
+kill: (-2191901): No such process
+-- round 3/3 FS2 (load 4.69 4.48 4.25 2/2185 2193298)
+kill: (-2193373): No such process
+-- round 3/3 FSA1 (load 3.68 4.25 4.21 1/2174 2194356)
+kill: (-2194431): No such process
+-- round 3/3 FSA3 (load 4.60 4.39 4.25 1/2138 2195055)
+kill: (-2195132): No such process
+-- round 3/3 FCE1 (load 4.57 4.39 4.25 1/2144 2195696)
+kill: (-2195771): No such process
+-- round 3/3 FCE2 (load 4.52 4.41 4.26 1/2184 2196110)
+kill: (-2196185): No such process
+-- round 3/3 FT1 (load 4.03 4.26 4.22 1/2181 2196970)
+kill: (-2197049): No such process
+-- round 3/3 FP1 (load 3.99 4.24 4.22 1/2161 2197336)
+kill: (-2197412): No such process
+-- round 3/3 BSA1 (load 3.84 4.20 4.20 2/2160 2197699)
+kill: (-2197778): No such process
+-- round 3/3 BAR1 (load 2.84 3.86 4.08 1/2162 2198283)
+kill: (-2198358): No such process
+-- round 3/3 BL1 (load 3.40 3.95 4.11 1/2195 2198658)
+kill: (-2198733): No such process
+-- round 3/3 FR1 (load 3.29 3.91 4.10 2/2196 2198960)
+kill: (-2199037): No such process
+-- round 3/3 B0 (load 3.74 3.97 4.11 1/2196 2199318)
+kill: (-2199393): No such process
+-- round 3/3 W1 (load 3.68 3.95 4.11 1/2190 2199631)
+kill: (-2199709): No such process
+== wrote <repo>/bench/results/acceptance/phase2-rerun2-20261018T142938Z/m9/chromium-m7.a1/res/20261018T165744Z.{json,txt}
+== 1 gate(s) FAILED

@@ -1,0 +1,15 @@
+suite=m9
+step=chromium-m8
+attempt=1
+kind=e2e
+exit=0
+label=acc-20261018T142938Z-m9-chromium-m8-a1
+start=1792342667
+end=1792344538
+seconds=1871
+load_start=3.99 3.98 4.10 1/2023 2200448
+load_end=2.69 3.41 3.89 1/2014 2240491
+governor=performance 
+git_rev=ded46eac
+reader_rev=ded46eac
+cap_seconds=9000

@@ -1,0 +1,62 @@
+# e2e rerun-ff-fe2
+# utc=2026-10-18T17:58:55Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=4.66 2.69 2.19 1/2141 2261579
+# git_rev=ded46eac
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx1
+# topology_expected=lanes-rt
+# label=rerun-ff-fe2
+# reader=daemon:<repo>/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=4.66 2.69 2.19 1/2141 2261576
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info GORCA_M7_STRICT=1 GORCA_TOPOLOGY_REPORT=bench/results/acceptance/rerun-ff-fe2-20261018T175539Z/res/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=FE2 #73 End: nothing said, wanted "blank"
+# note1=FE2 #159 Right: nothing said, wanted "blank"
+# note2=FE2 #166 Right: nothing said, wanted "blank"
+# note3=FE2 #167 End: nothing said, wanted "blank"
+# note4=FE2 #221 Right: nothing said, wanted "blank"
+# note5=FE2 #281 Left: nothing said, wanted "z"
+# note6=FE2 #288 Home: nothing said, wanted "n"
+# note7=FE2 #354 Right: nothing said, wanted "blank"
+# note8=FE2 #385 Right: nothing said, wanted "blank"
+# note9=FE2 #389 Right: nothing said, wanted "blank"
+# note10=FE2 #390 Right: nothing said, wanted "blank"
+# note11=FE2 #428 Right: nothing said, wanted "blank"
+# note12=FE2 #432 Right: nothing said, wanted "blank"
+# note13=FE2 #448 Right: nothing said, wanted "blank"
+# note14=FE2 #454 Right: nothing said, wanted "blank"
+# note15=FE2 #456 Right: nothing said, wanted "blank"
+# note16=FE2 #474 Right: nothing said, wanted "blank"
+# note17=FE2 #548 End: nothing said, wanted "blank"
+# note18=FE2 #550 Right: nothing said, wanted "blank"
+# note19=FE2 #621 End: nothing said, wanted "blank"
+# note20=FE2 #623 Left: nothing said, wanted "o"
+# note21=FE2 #624 Home: nothing said, wanted "o"
+# note22=FE2 #625 Left: nothing said, wanted "o"
+# note23=FE2 #652 Home: nothing said, wanted "i"
+# note24=FE2 first actions: Letter('w') at caret 0 of 0 | Left at caret 1 of 1 | Cyr at caret 0 of 1 | Space at caret 1 of 2 | Letter('q') at caret 2 of 3 | Letter('c') at caret 3 of 4 | Letter('m') at caret 4 of 5 | Back at caret 5 of 6 | Letter('z') at caret 4 of 5 | Letter('w') at caret 5 of 6 | Left at caret 6 of 7 | Letter('g') at caret 5 of 7 | Space at caret 6 of 8 | Letter('q') at caret 7 of 9
+
+metric                     bus                median          min          max  n op    threshold  res   note
+FE2.e2_double              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_keyname             daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_missing             daemon/voicego           24           24           24  1 <=            0  FAIL  gated on the max over repeats [actions]
+FE2.e2_resync              daemon/voicego            0            0            0  1 <=            3  PASS  FE2 actions the page did not apply (not scored) [actions]
+FE2.e2_swallowed           daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+FE2.e2_wrong               daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [actions]
+FE2.ft_failures            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checks]

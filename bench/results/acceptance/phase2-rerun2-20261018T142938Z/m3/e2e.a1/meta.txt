@@ -1,0 +1,15 @@
+suite=m3
+step=e2e
+attempt=1
+kind=e2e
+exit=0
+label=acc-20261018T142938Z-m3-e2e-a1
+start=1792333890
+end=1792336135
+seconds=2245
+load_start=6.92 4.87 6.10 1/2036 2099558
+load_end=3.72 3.41 3.95 4/2005 2120207
+governor=performance 
+git_rev=ded46eac
+reader_rev=ded46eac
+cap_seconds=5400

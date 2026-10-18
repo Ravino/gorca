@@ -1,0 +1,33 @@
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/crates/gorca-bench-b2)
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
+   Compiling gorca-bench v0.0.0 (<repo>/crates/gorca-bench)
+    Finished `release` profile [optimized + debuginfo] target(s) in 52.39s
+installed <repo>/target/debug/extensions/ext-gnome-shell/ext_gnome_shell.wasm
+installed <repo>/target/release/extensions/ext-gnome-shell/ext_gnome_shell.wasm
+installed <repo>/target/debug/extensions/ext-vte/ext_vte.wasm
+installed <repo>/target/release/extensions/ext-vte/ext_vte.wasm
+   Compiling gorca-i18n v0.0.0 (<repo>/crates/gorca-i18n)
+   Compiling gorca-ext-api v0.0.0 (<repo>/crates/gorca-ext-api)
+   Compiling ext-test v0.0.0 (<repo>/extensions/ext-test)
+    Finished `release` profile [optimized + debuginfo] target(s) in 1.47s
+   Compiling gorca-i18n v0.0.0 (<repo>/crates/gorca-i18n)
+   Compiling gorca-config v0.0.0 (<repo>/crates/gorca-config)
+   Compiling gorca-model v0.0.0 (<repo>/crates/gorca-model)
+   Compiling gorca-ext-api v0.0.0 (<repo>/crates/gorca-ext-api)
+   Compiling gorca-rt v0.0.0 (<repo>/crates/gorca-rt)
+   Compiling gorca-text v0.0.0 (<repo>/crates/gorca-text)
+   Compiling gorca-ingress v0.0.0 (<repo>/crates/gorca-ingress)
+   Compiling gorca-connector-api v0.0.0 (<repo>/crates/gorca-connector-api)
+   Compiling gorca-doc-source-api v0.0.0 (<repo>/crates/gorca-doc-source-api)
+   Compiling gorca-output-api v0.0.0 (<repo>/crates/gorca-output-api)
+   Compiling gorca-mirror v0.0.0 (<repo>/crates/gorca-mirror)
+   Compiling gorca-input-api v0.0.0 (<repo>/crates/gorca-input-api)
+   Compiling gorca-speech v0.0.0 (<repo>/crates/gorca-speech)
+   Compiling gorca-doc v0.0.0 (<repo>/crates/gorca-doc)
+   Compiling gorca-core v0.0.0 (<repo>/crates/gorca-core)
+   Compiling ext-vte v0.0.0 (<repo>/extensions/ext-vte)
+   Compiling ext-gnome-shell v0.0.0 (<repo>/extensions/ext-gnome-shell)
+   Compiling ext-test v0.0.0 (<repo>/extensions/ext-test)
+   Compiling gorca-testkit v0.0.0 (<repo>/crates/gorca-testkit)
+   Compiling gorca-ext-host v0.0.0 (<repo>/crates/gorca-ext-host)
+    Finished `release` profile [optimized + debuginfo] target(s) in 53.94s

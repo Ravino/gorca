@@ -1,0 +1,23 @@
+== reader <repo>/target/release/gorca built from ded46eac, tree at ded46eac
+== e2e rerun-c1hs-x20: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=20 load=5.13 2.86 2.26 1/2016 2261938
+-- round 1/20 C1hs (load 5.13 2.86 2.26 1/2016 2261938)
+-- round 2/20 C1hs (load 5.53 3.06 2.33 2/2053 2262320)
+-- round 3/20 C1hs (load 6.58 3.46 2.48 2/2049 2262462)
+-- round 4/20 C1hs (load 7.60 3.84 2.62 2/2014 2262607)
+-- round 5/20 C1hs (load 9.57 4.53 2.87 2/2017 2262759)
+-- round 6/20 C1hs (load 9.59 4.87 3.02 3/2045 2262932)
+-- round 7/20 C1hs (load 9.61 5.11 3.13 3/2049 2263088)
+-- round 8/20 C1hs (load 10.29 5.59 3.33 2/1984 2263228)
+-- round 9/20 C1hs (load 9.41 5.62 3.38 2/1981 2263377)
+-- round 10/20 C1hs (load 9.47 5.88 3.51 3/1991 2263529)
+-- round 11/20 C1hs (load 8.90 5.99 3.60 2/2028 2263715)
+-- round 12/20 C1hs (load 8.39 6.03 3.65 3/2023 2263956)
+-- round 13/20 C1hs (load 10.21 6.58 3.89 2/2019 2264223)
+-- round 14/20 C1hs (load 10.28 6.85 4.03 6/2024 2264381)
+-- round 15/20 C1hs (load 10.35 7.03 4.14 2/1996 2264698)
+-- round 16/20 C1hs (load 9.10 6.97 4.18 2/2025 2264872)
+-- round 17/20 C1hs (load 8.02 6.87 4.21 2/2019 2265014)
+-- round 18/20 C1hs (load 7.29 6.76 4.22 2/1984 2265161)
+-- round 19/20 C1hs (load 7.58 6.86 4.30 2/2029 2265355)
+-- round 20/20 C1hs (load 8.56 7.12 4.43 4/1990 2265493)
+== wrote bench/results/acceptance/rerun-c1hs-x20-20261018T175903Z/res/20261018T180506Z.{json,txt}

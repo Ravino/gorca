@@ -1,0 +1,25 @@
+== phase2 acceptance: ACCEPTANCE, PARTIAL (m3 m6 m9 b1)
+mode=ACCEPTANCE, PARTIAL (m3 m6 m9 b1)
+utc=2026-10-18T14:25:25Z
+git_rev=ded46eac dirty_tracked_files=0 branch=main
+kernel=7.1.8+deb13-rt-amd64 cpus=16
+loadavg=4.85 6.69 7.40 2/2004 2095523
+psi_memory_some_avg10=0.00 psi_memory_full_avg10=0.00
+psi_cpu_some_avg10=0.50 psi_io_some_avg10=0.02
+mem_available_mb=14418
+governor=performance 
+rtkit MaxRealtimePriority: i 20 
+rtkit RTTimeUSecMax: x 200000 
+topology: shipped default (--topology=auto); expected arm: lanes-rt (gated by e2e --expect-topology)
+repeats=3 quick=no suites=m3 m6 m9 b1
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=0
+  idle C3_ACPI latency=1048us disabled=0
+  load: 4.85 6.69 7.40 3/2006 2095568
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! HOST NOT QUIET: load average 4.85 > 4
+!! refusing to start (pause the other agents, or --force / --dry-run)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

@@ -1,0 +1,40 @@
+# e2e rerun-c1hs-x20
+# utc=2026-10-18T18:05:06Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=9.00 7.31 4.55 2/1997 2265648
+# git_rev=ded46eac
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx20
+# topology_expected=lanes-rt
+# label=rerun-c1hs-x20
+# reader=daemon:<repo>/target/release/gorca
+# backend=voicego
+# repeats=20
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=9.00 7.31 4.55 2/1997 2265645
+# reader_env=GORCA_M3=1 GORCA_M3_STRICT=1 NO_COLOR=1 GORCA_TOPOLOGY_REPORT=bench/results/acceptance/rerun-c1hs-x20-20261018T175903Z/res/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=C1h: app caret-event emit to SPEAK of the character, from the window
+
+metric                     bus                median          min          max  n op    threshold  res   note
+C1hs.c1hs_ms.n             daemon/voicego         1200         1200         1200 20                  info   [samples]
+C1hs.c1hs_ms.p50           daemon/voicego        0.145        0.125        0.161 20                  info   [ms]
+C1hs.c1hs_ms.p95           daemon/voicego        0.465        0.237        0.764 20                  info   [ms]
+C1hs.c1hs_ms.p99           daemon/voicego        0.789        0.293        0.901 20 <=            4  PASS   [ms]
+C1hs.c1hs_ms.p999          daemon/voicego        0.948        0.383        1.481 20                  info   [ms]
+C1hs.c1hs_ms.max           daemon/voicego        0.987        0.398        3.091 20                  info   [ms]
+C1hs.c1h_ipc_calls         daemon/voicego            0            0            0 20 <=            0  PASS  gated on the max over repeats [calls]
+C1hs.lost                  daemon/voicego            0            0            0 20 <=            0  PASS  gated on the max over repeats [events]
+

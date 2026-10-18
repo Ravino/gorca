@@ -1,0 +1,15 @@
+suite=b1
+step=judge-quick
+attempt=1
+kind=b1
+exit=0
+label=acc-20261018T142938Z-b1-judge-quick-a1
+start=1792344538
+end=1792346099
+seconds=1561
+load_start=2.69 3.41 3.89 1/2014 2240499
+load_end=0.58 1.03 1.70 5/1984 2259393
+governor=performance 
+git_rev=ded46eac
+reader_rev=ded46eac
+cap_seconds=5400

@@ -117,3 +117,66 @@ bench/acceptance/phase2.sh --quiet-host                  # full run, about 6.5 h
 bench/acceptance/phase2.sh --resume <dir> --quiet-host   # reruns failed steps as attempt N+1
 bench/acceptance/soak_m6.sh --secs 3600 --quiet-host     # the 1 h soak; default 28800 is the 8 h one
 ```
+
+## Re-acceptance after the fix round (2026-10-18)
+
+Code: main `ded46eac` (reader `gorca ded46eac`, rebuilt by the runner; product code identical to `98f5e539`).
+Command: `bench/acceptance/phase2.sh --only m3,m6,m9,b1 --quiet-host` (3 repeats, shipped `auto` topology,
+lanes-rt arms). Run dir `bench/results/acceptance/phase2-rerun2-20261018T142938Z/` (the earlier
+`phase2-rerun-20261018T142525Z` attempt was refused by the runner: load1 4.85 > 4, nothing ran).
+Host: owner's desktop running, quiet-host on (performance governor, C2/C3 off) and reverted (`quiet-host.sh off`,
+C3 `disable=0`, governor performance as found). load1 per step 0.3-7.8, MemAvailable ~14 GB, memory PSI some avg10
+max 5.0 (m3), swap 16 of 23 GB used before and after (the host swaps private processes out; no OOM, no growth).
+
+### Per-gate result against the first run
+| suite | first run | re-run | notes |
+|---|---|---|---|
+| m3 | a1 FAIL (C1hs.lost 5), a4 PASS | **PASS a1**, 37 gated rows | C1 p99 0.605 ms (gate 15), C1h 0.266 (3), C1hs 0.288 (4), lost 0 |
+| m6 fake | PASS | **PASS a1**, 45 rows | V1 32.6 (35, includes the 30 ms settle) |
+| m6 vv | a1 FAIL (focus/screen 1), a4 PASS | **PASS a1**, 24 rows | key p99 0.437 (3), flood key 0.500 (4), stop 0.06 (2), aborts 0 |
+| m9 Chromium m7 | PASS | **FAIL a1**: `FE2.e2_missing` 30 on every repeat | class: expectation, below |
+| m9 Chromium m8 | FAIL (M8-FL 3, M8-FLS 1) | **PASS a1**, 46 rows | the Chromium flat-review fix (`635f0f8b`, `43c7fea2`) closed it |
+| b1 judge-quick | FAIL (timeout, fidelity, L4.announce) | **PASS a1**, 23 rows | fidelity failed attempts 1-2 (p50 delta 0.645 and 0.374 ms, load 2-6) and passed on a retry: the retry added in the fix round is doing its job; `L4.announce` is a ranking row now |
+
+### Remaining failure: m9 Chromium m7 FE2.e2_missing = 30 (EXPECTATION, not a regression of behaviour)
+Deterministic: median 30 = max 30 in all 3 repeats, always the same shape ("FE2 #4 End: nothing said, wanted
+"blank""; also Left/Right at the edges). FE2 expects a spoken "blank" at the start/end of the field. The editing polish
+batch deliberately changed the boundary default to `boundary = "cue"`, i.e. a silent cue until sounds exist
+(`docs/decisions.md` 2026-10-18, `docs/reports/editing-polish.md` section 3, `editing-polish-verify.md` line 35
+"Boundary keys in Firefox ... are now silent, as designed"). The FE2 model in
+`crates/gorca-bench/src/e2e/webtext.rs` was not updated (the ED model was, in `dc5df9bf`). It is not Chromium-specific:
+Firefox FE2 on the same build fails the same way (`bench/results/acceptance/rerun-ff-fe2-20261018T175539Z`, 1 repeat,
+`End`/`Right` "nothing said, wanted blank"). It passed in the first run only because the polish commits came after it.
+So a full phase2 run would also fail Firefox m7 FE2. Fix (not done here, no product or harness code was changed):
+make FE2 treat a boundary key as expected-silent when `boundary = "cue"` (or run it with `boundary = "repeat"`).
+Everything else in FE2 passes (double 0, wrong 0, keyname 0, swallowed 0, resync 0).
+
+### Flake loops (x20 each, quiet-host on, reader `ded46eac`, load1 5-9 at start)
+| flake | before | after the fix round (this section) |
+|---|---|---|
+| m3 C1hs.lost | 1 of 6 repeats (acceptance a1/a4); 0 of 80 at load 10-14; 6 of 20 under 8 busy loops | **0 of 3 (acceptance) + 0 of 20** (`rerun-c1hs-x20-20261018T175903Z`): lost 0, c1hs p99 median 0.789 ms (min 0.293, max 0.901), p95 0.465, p50 0.145 |
+| m6/vv Alt+Tab quiet step | 1 of 3 + 1 of 3, 1 of 20, 1 of ~7 (about 4 of 33) | **1 of 20 + 0 of 3** (`rerun-vv-x20-20261018T180539Z`; with the 12 clean repeats of `fixes-vv-fixed`: 1 of 35) |
+
+C1hs: no product change was made, so 0 of 23 is the same distribution as the earlier 0 of 80: the flake stays
+a rare (about 1 in 86) delivery stall that appears under CPU contention; the gate is correct and not relaxed. The reader
+log was empty on the clean runs (the default level logs nothing per event), so nothing new about bus vs reader.
+
+vv: the Return-drop rig fix did NOT remove the failure. The kept failing repeat
+(`rerun-vv-x20-20261018T180539Z/keep/*FAILED*`, 1.5 MB reader trace and presentation log) differs from the earlier
+capture: this time the command line was typed (offsets 17 to 39, 60 ms apart) and the caret moved to 40 about 150 ms
+after the last character (the second Return reached the terminal, the line was executed), the Alt+Tab focus handling
+was normal (untrack, track serial 8, screen of 61 chars, `Say` of 14 chars), and then **the reader saw nothing from the
+terminal for the next 9 s**: after the tick at 18:08:56.43 there is no further `terminal input` of any kind, no edit or
+caret event, no tick, although `sleep 8 ; echo focusc` should have printed at about 18:09:01. The timer chain that
+re-polls the screen ended with that tick (the track at 56.03 returned `Say` without `ArmTimer`). This is the open
+follow-up "terminal silent after Alt+Tab until the first key" (`docs/reports/m6-impl.md`) after all, so the earlier
+"rig only" classification is wrong or at best incomplete: the dropped Return explained one captured repeat, not the
+failure family. Classification: **flake, product suspect, pre-existing** (seen at the M6 merge, so not a regression of this
+fix round); rate about 3 to 12 percent per repeat, not distinguishable before and after with these counts.
+Suggested next step (rust-engineer, with the kept trace): why the terminal actor stops arming its poll timer
+after two focus events two seconds apart (serials 7 and 8), and whether the AT-SPI text-changed subscription survives a re-track.
+
+### Verdict
+Gates that failed in the first run: m3 C1hs and m6/vv flakes (both pass in the re-run, vv still flakes at about 1 in 20 in
+the loop), m9 Chromium m8 FL/FLS (fixed), b1 (fixed). New failure: FE2 boundary expectation (stale test model, trivial
+harness fix). No latency regression: every p99 is at least 4x inside its gate. The 8 h soak was not started.

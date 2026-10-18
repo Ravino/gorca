@@ -1,0 +1,8 @@
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.13s
+private compositor: /tmp/gorca-m7c.MplYi7/x/gorca-m7-2259984
+== reader <repo>/target/release/gorca built from ded46eac, tree at ded46eac
+== e2e rerun-ff-fe2: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=1 load=0.69 1.02 1.66 1/2134 2260280
+-- round 1/1 FE2 (load 0.69 1.02 1.66 1/2134 2260280)
+kill: (-2260355): No such process
+== wrote bench/results/acceptance/rerun-ff-fe2-20261018T175539Z/res/20261018T175855Z.{json,txt}
+== 1 gate(s) FAILED
