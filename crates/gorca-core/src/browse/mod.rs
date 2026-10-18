@@ -489,6 +489,15 @@ impl Default for BrowseSettings {
     }
 }
 
+/// See [`BrowseState::activated_node`].
+#[derive(Copy, Clone, Debug)]
+pub struct ActivatedNode {
+    pub cursor: gorca_model::DocNodeId,
+    pub target: gorca_model::DocNodeId,
+    pub role: gorca_model::Role,
+    pub at: Instant,
+}
+
 /// What last put the browse cursor where it is.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum CursorFrom {
@@ -568,6 +577,10 @@ pub struct BrowseState {
     /// Where position restore put the cursor after the node the user was on vanished: the
     /// next Enter on exactly this node announces the new item instead of clicking it.
     pub displaced: Option<gorca_model::DocNodeId>,
+    /// The node we last clicked: the cursor node it was clicked from, the control itself, its
+    /// role, and when. Only a relabel of exactly this control right after the click is the
+    /// click's answer and not a swap.
+    pub activated_node: Option<ActivatedNode>,
     /// Content signature of the node under the cursor when the user last left it there: a
     /// change under an unmoved cursor (the page re-used the node for another item) displaces it.
     pub cursor_sig: Option<(gorca_model::DocNodeId, u64)>,
@@ -638,6 +651,7 @@ impl BrowseState {
             last_off: 0,
             restore_until: None,
             displaced: None,
+            activated_node: None,
             cursor_sig: None,
             single_letter: true,
             scroll_due: None,

@@ -64,8 +64,6 @@ const SELECT_SPEAK_CAP: u32 = 300;
 /// How long the speech of a frame document that took the focus waits for the focus to move on
 /// into the frame before the stop is announced.
 const FRAME_FOCUS_DEFER: Duration = Duration::from_millis(250);
-/// A content change under the cursor this soon after our own click is the click's answer.
-const ACTIVATED_QUIET: Duration = Duration::from_secs(5);
 const REFOCUS_SILENT_WINDOW: Duration = Duration::from_millis(2000);
 const WORD_TTL: Duration = Duration::from_millis(600);
 /// The line that follows a document's focus utterance waits for a cold fetch this long (M4).
@@ -1922,11 +1920,19 @@ impl Reader {
                 // The node under the cursor survived but now holds other content: the page
                 // re-used it for another item (the identity pass pairs a removed row with its
                 // neighbour). The user has not seen this item.
-                // Never for the item the user just activated: its relabel (Play to Pause) is
-                // the answer to the click, not a swap.
-                let just_activated = b
-                    .activated
-                    .is_some_and(|t| self.now.saturating_duration_since(t) < ACTIVATED_QUIET);
+                // The relabel of the control the user just clicked (Play to Pause, Show more to
+                // Show less) is the answer to the click, not a swap: same cursor node, same
+                // control, same role, a toggle-like control, and only for a moment. Anything
+                // else under the cursor, a different node, a changed role, a link, a late
+                // change, is displacement and costs the next Enter its click.
+                let just_activated = b.activated_node.is_some_and(|a| {
+                    self.now.saturating_duration_since(a.at) < super::CARET_FOLLOW
+                        && a.cursor == cur.node
+                        && h.read.with(|dd| {
+                            let (role, st) = role_states(dd, a.target);
+                            dd.is_attached(a.target) && role == a.role && toggle_like(role, st)
+                        })
+                });
                 if !just_activated
                     && let Some((n, sig)) = b.cursor_sig
                     && n == cur.node
@@ -2433,6 +2439,7 @@ impl Reader {
             let (role, states) = role_states(d, n);
             Some((
                 n,
+                role,
                 forms::passes_through(role, states, Reason::Activate),
                 matches!(
                     role,
@@ -2440,7 +2447,7 @@ impl Reader {
                 ),
             ))
         });
-        let Some((node, passes, checkable)) = target else {
+        let Some((node, target_role, passes, checkable)) = target else {
             return;
         };
         if passes {
@@ -2450,6 +2457,12 @@ impl Reader {
         } else {
             if let Some(b) = self.web.as_mut() {
                 b.activated = Some(self.now);
+                b.activated_node = Some(super::ActivatedNode {
+                    cursor: cur.node,
+                    target: node,
+                    role: target_role,
+                    at: self.now,
+                });
                 // The click focuses a check box: its focus speech would announce the state it
                 // had before the click. The new state is what the user wants to hear.
                 b.click_target = checkable.then_some((node, self.now));
@@ -3100,4 +3113,12 @@ fn content_sig(d: &WebDoc, n: DocNodeId) -> Option<u64> {
     v.name.hash(&mut h);
     v.text.hash(&mut h);
     Some(h.finish())
+}
+
+/// A control whose label may legitimately flip when it is pressed.
+fn toggle_like(role: Role, states: StateSet) -> bool {
+    matches!(
+        role,
+        Role::Button | Role::ToggleButton | Role::CheckBox | Role::RadioButton
+    ) || states.intersects(StateSet::PRESSED | StateSet::CHECKED | StateSet::EXPANDED)
 }

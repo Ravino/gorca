@@ -101,6 +101,27 @@ gorca now keeps the same caret behavior and, unlike NVDA, says so when the item 
   first step under load 11 to 19, one of two repeats). It should have been kept; I removed it in
   error and will not repeat that. Everything else of those runs is recorded above.
 
+## Review round r2 fixes
+
+* R2-1 (own toggle eats Enter) with the security tightening: a content change under the cursor
+  is exempt from "displaced" only when it is the relabel of exactly the control we just clicked:
+  same cursor node, same control node, same role, a toggle-like control (button, toggle, check
+  box, radio, or pressed/checked/expanded), and within `CARET_FOLLOW` (700 ms) of the click.
+  Any other change (a different node swapped in, a role change, a link, a late change) still
+  marks the cursor displaced, so a page cannot redirect the next Enter silently. Tests:
+  `a_toggle_relabelled_after_the_users_own_click_clicks_again`,
+  `a_different_node_swapped_in_within_the_window_is_displacement`,
+  `the_clicked_control_changing_role_is_displacement_and_costs_the_click`,
+  `a_link_relabel_after_a_click_is_displacement`, `a_late_relabel_of_the_clicked_toggle_is_displacement`.
+  E2E `CL.tog.1..3`: Enter three times on a self-relabelling button clicks three times.
+* R2-2: the cursor content is noted after focus-driven placements too (and the mark is cleared).
+* R2-3: any command but Enter, a focus move and a document going away clear the mark.
+* R2-4: the one-shot unit test now asserts the second Enter does not announce again (the cursor
+  lands on plain text there; the click after an announcement is asserted by
+  `a_swap_after_a_focus_placement_is_announced_not_clicked`).
+* Runs: `r3-cl` (M8-CL x3, 21 steps, 0 failures) and `r3-nav` (TG, TG2, TG3, QN, SPA, APP, AF, BWG,
+  0 failures).
+
 ## Not done / risks
 
 * The stale title was not reproduced; only the contract and fallback are tested.

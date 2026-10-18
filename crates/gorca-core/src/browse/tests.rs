@@ -3139,16 +3139,91 @@ fn relabel_link(r: &mut Rig, name: &str, rev: u64) {
     );
 }
 
+/// Turn the page's link node into another kind of control, before anything is clicked.
+fn make_control(r: &mut Rig, role: Role, name: &str, rev: u64) {
+    let mut n = src(6, role, Some(1006));
+    n.states |= StateSet::FOCUSABLE;
+    n.name = Some(Arc::from(name));
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            DocDelta::Upsert(vec![n, run(7, name)]),
+            DocDelta::Settled { batch: rev },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed { doc: DocId(1), rev }),
+        r.now,
+    );
+}
+
 #[test]
 fn a_toggle_relabelled_after_the_users_own_click_clicks_again() {
     let mut r = rig();
+    make_control(&mut r, Role::Button, "Play", 3);
     r.focus(1006);
     assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
-    relabel_link(&mut r, "Pause", 3);
+    make_control(&mut r, Role::Button, "Pause", 4);
     let fx = r.key(CoreCmd::BrowseActivate);
     assert!(
         click_of(&fx),
         "second Enter on the user's own toggle clicks"
+    );
+}
+
+#[test]
+fn the_clicked_control_changing_role_is_displacement_and_costs_the_click() {
+    let mut r = rig();
+    make_control(&mut r, Role::Button, "Play", 3);
+    r.focus(1006);
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+    // Same node, but now a different kind of control: not the toggle the user pressed.
+    make_control(&mut r, Role::Link, "Buy now", 4);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(
+        !click_of(&fx),
+        "an unseen control is announced, not clicked"
+    );
+    assert!(!spoken(&fx).is_empty());
+}
+
+#[test]
+fn a_link_relabel_after_a_click_is_displacement() {
+    let mut r = rig();
+    r.focus(1006);
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+    relabel_link(&mut r, "Elsewhere", 3);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(!click_of(&fx));
+}
+
+#[test]
+fn a_different_node_swapped_in_within_the_window_is_displacement() {
+    let mut r = rig();
+    make_control(&mut r, Role::Button, "Play", 3);
+    r.focus(1006);
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+    // The page removes the control and the cursor settles on content that was never read.
+    drop_cursor_paragraph(&mut r, 4);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(!click_of(&fx));
+    assert!(!spoken(&fx).is_empty(), "the new place is announced");
+}
+
+#[test]
+fn a_late_relabel_of_the_clicked_toggle_is_displacement() {
+    let mut r = rig();
+    make_control(&mut r, Role::Button, "Play", 3);
+    r.focus(1006);
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+    r.now += super::CARET_FOLLOW + Duration::from_millis(50);
+    make_control(&mut r, Role::Button, "Pause", 4);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(
+        !click_of(&fx),
+        "outside the window the change is not the click's answer"
     );
 }
 

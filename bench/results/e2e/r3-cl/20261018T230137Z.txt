@@ -1,0 +1,34 @@
+# e2e-m8 r3-cl
+# utc=2026-10-18T23:01:36Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=8.06 12.80 14.25 2/2107 3327190
+# git_rev=3768a05f
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=r3-cl
+# reader=daemon:<repo>/.claude/worktrees/agent-a6afeefd1474b60fc/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# quick=false
+# loadavg_before=17.31 15.37 15.13 5/2329 3320152
+# loadavg_end=8.06 12.80 14.25 1/2107 3327187
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-CL.fail                 daemon/voicego            0            0            0  3 <=            0  PASS  steps that fail and are not marked expected-fail [steps]
+M8-CL.gap                  daemon/voicego            0            0            0  3                  info  core ok, NVDA extras missing [steps]
+M8-CL.p0_not_pass          daemon/voicego            0            0            0  3                  info   [steps]
+M8-CL.pass                 daemon/voicego           21           21           21  3                  info   [steps]
+M8-CL.steps                daemon/voicego           21           21           21  3                  info   [steps]
+M8-CL.xfail                daemon/voicego            0            0            0  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-CL.xpass                daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]
