@@ -309,7 +309,7 @@ b_x1() {
 }
 b_b1() {
   CMD=(bench/b1/run-all.sh "$LABEL" --arm "main:$ROOT/target/release/gorca:$(git rev-parse --short HEAD)"
-       --out "$DIR/res" $quick)
+       --out "$DIR/res" --quick)
 }
 
 # ---- run -----------------------------------------------------------------------------------
