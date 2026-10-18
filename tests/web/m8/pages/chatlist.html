@@ -19,7 +19,8 @@
   <button type="button" id="rr-gone">Re-render drop</button>
   <button type="button" id="rr-focus">Re-render focused</button>
   <button type="button" id="retitle">Retitle later</button>
-  <button type="button" id="tog">Silence</button>
+  <button type="button" id="tog" aria-pressed="false">Silence</button>
+  <button type="button" id="del">Delete</button>
 </header>
 <h1>Chats</h1>
 <ul id="chats" aria-label="Chat list"></ul>
@@ -102,7 +103,16 @@ document.getElementById("tog").onclick = (e) => {
   silenced++;
   const on = b.textContent === "Silence";
   b.textContent = on ? "Resume" : "Silence";
+  b.setAttribute("aria-pressed", on ? "true" : "false");
   status.textContent = (on ? "Silenced" : "Resumed") + " (" + silenced + ")";
+};
+// A button that becomes a different action (Delete to Confirm delete): no pressed state flips.
+let dels = 0;
+document.getElementById("del").onclick = (e) => {
+  const b = e.currentTarget;
+  dels++;
+  if (b.textContent === "Delete") { b.textContent = "Confirm delete"; status.textContent = "Delete asked (" + dels + ")"; }
+  else { b.textContent = "Delete"; status.textContent = "Deleted (" + dels + ")"; }
 };
 paint();
 </script>

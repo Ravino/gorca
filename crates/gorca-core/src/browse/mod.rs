@@ -495,6 +495,8 @@ pub struct ActivatedNode {
     pub cursor: gorca_model::DocNodeId,
     pub target: gorca_model::DocNodeId,
     pub role: gorca_model::Role,
+    /// Its pressed, checked and expanded states when we clicked it.
+    pub toggles: gorca_model::StateSet,
     pub at: Instant,
 }
 

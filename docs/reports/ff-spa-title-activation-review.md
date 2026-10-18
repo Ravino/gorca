@@ -196,3 +196,22 @@ the second Enter is never checked. Assert the Click.
 Chromium parity: the logic lives in the core and the shared AT-SPI source, so it applies to both
 browsers. The in-place reuse path (R2-2) is exactly Chromium's unkeyed rewrite, so Chromium is the
 browser more exposed to R2-2.
+
+## r3: 09090190 (2026-10-19)
+
+Gates: fmt and clippy clean, 2331 tests passed / 0 failed, `xtask strings` ok. `git merge-tree 70b0dd2d 09090190`:
+one conflict, in `.claude/agent-memory/web-a11y-engineer/MEMORY.md` (an index append, trivial). R2-2, R2-3 and R2-4
+are fixed.
+
+### R3-1 (medium): a relabel to a different action is exempt from displacement and not announced
+`toggle_like` (commands.rs, end of file) treats every `Button` as toggle-like. Probe
+`docs/reports/ff-spa-title-activation-review-r3-probe.patch`: Enter on "Delete" clicks, and the
+page relabels it "Confirm delete" within 700 ms. The browse path says nothing (`relabel announced=[]`)
+and the second Enter clicks (`clicked=true spoken=[]`). The focus lane announces a name-only change
+only within `NAME_FOLLOW_WINDOW` (2 s) after a *focus event* on that node (`present/flow.rs`
+`on_state_changed`). So the relabel is heard only when the click itself moved the focus. A button
+that was already focused (Tab, then Enter) relabels in silence.
+Fix: record the target's PRESSED/CHECKED/EXPANDED at activation. Exempt only when one of them flipped
+by the time the relabel lands. A name change with no state flip marks the node displaced. Plain
+"Play/Pause" buttons without `aria-pressed` then cost one extra Enter, which is the safe direction.
+Add the probe as a test.

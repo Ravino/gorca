@@ -1143,6 +1143,12 @@ fn cl() -> Vec<Step> {
         s("CL.tog.1", P0, "Enter on the toggle clicks it", key0(ENTER), &["Silenced"]).win(1500),
         s("CL.tog.2", P0, "Enter again clicks again (the relabel is the answer to our click, not a swap)", key0(ENTER), &["Resumed"]).win(1500),
         s("CL.tog.3", P0, "and a third time", key0(ENTER), &["Silenced"]).win(1500),
+        // A button turns into a different action: the user must hear it before the second Enter.
+        top("CL.del.top"),
+        pos("CL.del.focus", Act::Focus(role::PUSH_BUTTON, "Delete")),
+        s("CL.del.1", P0, "Enter on Delete clicks it", key0(ENTER), &["Delete asked"]).win(1500),
+        s("CL.del.2", P0, "Enter again: the button is now Confirm delete; it is announced, not clicked blind", key0(ENTER), &["Confirm delete"]).not(&["Deleted"]).win(1500),
+        s("CL.del.3", P0, "Enter once more clicks the confirmed action", key0(ENTER), &["Deleted"]).win(1500),
         // The page changes its title by a timer while the cursor is elsewhere (an unread badge).
         top("CL.ttl.top"),
         Step::setup("CL.ttl.click", "ask the page to retitle itself in 1.2 s", Act::Do(role::PUSH_BUTTON, "Retitle later")),

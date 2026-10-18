@@ -1922,7 +1922,9 @@ impl Reader {
                 // neighbour). The user has not seen this item.
                 // The relabel of the control the user just clicked (Play to Pause, Show more to
                 // Show less) is the answer to the click, not a swap: same cursor node, same
-                // control, same role, a toggle-like control, and only for a moment. Anything
+                // control, same role, one of its pressed, checked or expanded states actually flipped,
+                // and only for a moment (a name change without a state flip, "Delete" to
+                // "Confirm delete", is a different action and is announced). Anything
                 // else under the cursor, a different node, a changed role, a link, a late
                 // change, is displacement and costs the next Enter its click.
                 let just_activated = b.activated_node.is_some_and(|a| {
@@ -1930,7 +1932,9 @@ impl Reader {
                         && a.cursor == cur.node
                         && h.read.with(|dd| {
                             let (role, st) = role_states(dd, a.target);
-                            dd.is_attached(a.target) && role == a.role && toggle_like(role, st)
+                            dd.is_attached(a.target)
+                                && role == a.role
+                                && (st & TOGGLE_STATES) != a.toggles
                         })
                 });
                 if !just_activated
@@ -2440,6 +2444,7 @@ impl Reader {
             Some((
                 n,
                 role,
+                states & TOGGLE_STATES,
                 forms::passes_through(role, states, Reason::Activate),
                 matches!(
                     role,
@@ -2447,7 +2452,7 @@ impl Reader {
                 ),
             ))
         });
-        let Some((node, target_role, passes, checkable)) = target else {
+        let Some((node, target_role, toggles, passes, checkable)) = target else {
             return;
         };
         if passes {
@@ -2461,6 +2466,7 @@ impl Reader {
                     cursor: cur.node,
                     target: node,
                     role: target_role,
+                    toggles,
                     at: self.now,
                 });
                 // The click focuses a check box: its focus speech would announce the state it
@@ -3115,10 +3121,7 @@ fn content_sig(d: &WebDoc, n: DocNodeId) -> Option<u64> {
     Some(h.finish())
 }
 
-/// A control whose label may legitimately flip when it is pressed.
-fn toggle_like(role: Role, states: StateSet) -> bool {
-    matches!(
-        role,
-        Role::Button | Role::ToggleButton | Role::CheckBox | Role::RadioButton
-    ) || states.intersects(StateSet::PRESSED | StateSet::CHECKED | StateSet::EXPANDED)
-}
+/// The states a toggle flips when it is pressed.
+const TOGGLE_STATES: StateSet = StateSet::PRESSED
+    .union(StateSet::CHECKED)
+    .union(StateSet::EXPANDED);

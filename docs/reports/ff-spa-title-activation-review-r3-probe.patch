@@ -1,0 +1,33 @@
+diff --git a/crates/gorca-core/src/browse/tests.rs b/crates/gorca-core/src/browse/tests.rs
+index aad67d92..644920ed 100644
+--- a/crates/gorca-core/src/browse/tests.rs
++++ b/crates/gorca-core/src/browse/tests.rs
+@@ -3252,3 +3252,28 @@ fn a_displacement_is_spent_by_moving_the_cursor() {
+     );
+     assert!(r.reader.web.as_ref().is_some_and(|b| b.displaced.is_none()));
+ }
++
++// REVIEW PROBE r3 (not for merge): a button relabels to a different action right after the click.
++#[test]
++fn probe_review_r3_delete_to_confirm_relabel() {
++    let mut r = rig();
++    let mut b = src(6, Role::Button, Some(1006));
++    b.states |= StateSet::FOCUSABLE;
++    b.name = Some(Arc::from("Delete"));
++    r.tr.apply(&mut r.writer, vec![DocDelta::Upsert(vec![b, run(7, "Delete")]), DocDelta::Settled { batch: 2 }]).unwrap();
++    r.writer.publish();
++    r.reader.handle(ReaderMsg::Doc(DocNotice::Changed { doc: DocId(1), rev: 2 }), r.now);
++    r.focus(1006);
++    let fx = r.key(CoreCmd::BrowseActivate);
++    assert!(effects_web(&fx).iter().any(|a| matches!(a, WebEffect::Act { act: DocAction::Click, .. })));
++    let mut b = src(6, Role::Button, Some(1006));
++    b.states |= StateSet::FOCUSABLE;
++    b.name = Some(Arc::from("Confirm delete"));
++    r.tr.apply(&mut r.writer, vec![DocDelta::Upsert(vec![b, run(7, "Confirm delete")]), DocDelta::Settled { batch: 3 }]).unwrap();
++    r.writer.publish();
++    let fx = r.reader.handle(ReaderMsg::Doc(DocNotice::Changed { doc: DocId(1), rev: 3 }), r.now);
++    eprintln!("PROBE relabel announced={:?}", spoken(&fx));
++    let fx = r.key(CoreCmd::BrowseActivate);
++    let clicked = effects_web(&fx).iter().any(|a| matches!(a, WebEffect::Act { act: DocAction::Click, .. }));
++    eprintln!("PROBE second enter clicked={clicked} spoken={:?}", spoken(&fx));
++}
