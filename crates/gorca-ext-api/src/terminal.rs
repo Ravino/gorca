@@ -242,6 +242,20 @@ pub enum TermAction {
     ArmTimer(Ms),
     /// The key was handled: the generic key echo stays silent.
     ClaimKey,
+    /// A movement key could not move the caret: the host plays the boundary cue.
+    Cue,
+}
+
+/// What a key that cannot move the caret does (`[editing] boundary`).
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub enum BoundaryMode {
+    /// Ask the host for the boundary cue ([`TermAction::Cue`]).
+    #[default]
+    Cue,
+    /// Speak the unit at the caret again.
+    Repeat,
+    /// Nothing.
+    Silent,
 }
 
 // The text may be a typed password: only its length is shown.
@@ -263,6 +277,7 @@ impl std::fmt::Debug for TermAction {
             TermAction::FetchScreen => f.write_str("FetchScreen"),
             TermAction::ArmTimer(t) => f.debug_tuple("ArmTimer").field(t).finish(),
             TermAction::ClaimKey => f.write_str("ClaimKey"),
+            TermAction::Cue => f.write_str("Cue"),
         }
     }
 }
@@ -290,6 +305,8 @@ pub struct TermConfig {
     /// How coarse a word is when the terminal reads one; `None` lets the extension choose
     /// ([`DEFAULT_WORD_LEVEL`]).
     pub word_level: Option<WordLevel>,
+    /// What Left, Right, Home and End do when they cannot move the caret.
+    pub boundary: BoundaryMode,
 }
 
 impl Default for TermConfig {
@@ -307,6 +324,7 @@ impl Default for TermConfig {
             burst_tail: 3,
             max_output_chars: 600,
             word_level: None,
+            boundary: BoundaryMode::Cue,
         }
     }
 }
@@ -468,18 +486,64 @@ fn is_joiner(c: char) -> bool {
     matches!(c, '-' | '.' | '=' | ':' | '@' | '~')
 }
 
+/// Does `s[p]` continue the cluster that `s[p - 1]` is in? The SDK has no segmentation crate, so
+/// this is the part of UAX #29 that matters on a terminal line: combining marks, variation
+/// selectors, skin-tone modifiers, the zero-width joiner and the scalar it joins, a pair of
+/// regional indicators, and Gecko's phantom U+FEFF. `gorca-text` runs the real algorithm; the
+/// shared vectors keep the two together.
+fn joins_prev(s: &[char], p: usize) -> bool {
+    if p == 0 {
+        return false;
+    }
+    let c = s[p];
+    let u = c as u32;
+    if is_mark(c)
+        || matches!(u, 0x200C | 0x200D | 0xFE00..=0xFE0F | 0x1F3FB..=0x1F3FF | 0xE0100..=0xE01EF | 0xFEFF)
+    {
+        return true;
+    }
+    if s[p - 1] == '\u{200D}' && !c.is_whitespace() && u > 0x7F {
+        return true;
+    }
+    if (0x1F1E6..=0x1F1FF).contains(&u) {
+        // The second of a pair: an odd number of regional indicators in front, with the
+        // cluster start of the run at an even distance.
+        let n = s[..p]
+            .iter()
+            .rev()
+            .take_while(|x| (0x1F1E6..=0x1F1FF).contains(&(**x as u32)))
+            .count();
+        return n % 2 == 1;
+    }
+    false
+}
+
 /// The word containing `s[i]`, with its trailing blanks; leading blanks belong to the word before
-/// them (see [`WordLevel`] for what stays together).
+/// them (see [`WordLevel`] for what stays together). A word never ends inside a cluster.
 pub fn word_range_level(s: &[char], i: usize, level: WordLevel) -> std::ops::Range<usize> {
     if s.is_empty() {
         return 0..0;
     }
-    let i = i.min(s.len() - 1);
-    let word_at = |p: usize| p < s.len() && class(s[p]) == Class::Word;
-    // Are the characters at `a` and `a + 1` in the same run?
-    let same = |a: usize| -> bool {
-        let b = a + 1;
-        let (ca, cb) = (class(s[a]), class(s[b]));
+    // Everything below works on cluster starts, like `gorca-text`.
+    let next = |p: usize| {
+        let mut e = p + 1;
+        while e < s.len() && joins_prev(s, e) {
+            e += 1;
+        }
+        e
+    };
+    let prev = |p: usize| {
+        let mut q = p - 1;
+        while q > 0 && joins_prev(s, q) {
+            q -= 1;
+        }
+        q
+    };
+    let cls = |p: usize| class(s[p]);
+    let word_at = |p: usize| p < s.len() && cls(p) == Class::Word;
+    // Are the clusters starting at `a` and at `b = next(a)` in the same run?
+    let same = |a: usize, b: usize| -> bool {
+        let (ca, cb) = (cls(a), cls(b));
         match level {
             WordLevel::Fine => ca == cb && ca != Class::Punct,
             WordLevel::Coarse => (ca == Class::Space) == (cb == Class::Space),
@@ -491,43 +555,50 @@ pub fn word_range_level(s: &[char], i: usize, level: WordLevel) -> std::ops::Ran
                 if ca == Class::Word && cb == Class::Word {
                     true
                 } else if ca == Class::Word && is_joiner(y) {
-                    word_at(b + 1)
+                    word_at(next(b))
                 } else if is_joiner(x) && cb == Class::Word {
                     true
                 } else {
                     x == '-'
                         && y == '-'
-                        && !(a > 0 && (word_at(a - 1) || s[a - 1] == '-'))
-                        && word_at(b + 1)
+                        && !(a > 0 && (word_at(prev(a)) || s[prev(a)] == '-'))
+                        && word_at(next(b))
                 }
             }
         }
     };
     let run_start = |p: usize| {
         let mut q = p;
-        while q > 0 && same(q - 1) {
-            q -= 1;
+        while q > 0 && same(prev(q), q) {
+            q = prev(q);
         }
         q
     };
     let run_end = |p: usize| {
         let mut e = p;
-        while e + 1 < s.len() && same(e) {
-            e += 1;
+        loop {
+            let n = next(e);
+            if n >= s.len() || !same(e, n) {
+                return n;
+            }
+            e = n;
         }
-        e + 1
     };
-    match class(s[i]) {
+    let mut i = i.min(s.len() - 1);
+    while i > 0 && joins_prev(s, i) {
+        i -= 1;
+    }
+    match cls(i) {
         Class::Space => {
             let a = run_start(i);
             let b = run_end(i);
-            if a > 0 { run_start(a - 1)..b } else { a..b }
+            if a > 0 { run_start(prev(a))..b } else { a..b }
         }
         Class::Word | Class::Punct => {
             let a = run_start(i);
             let mut b = run_end(i);
-            while b < s.len() && class(s[b]) == Class::Space {
-                b += 1;
+            while b < s.len() && cls(b) == Class::Space {
+                b = next(b);
             }
             a..b
         }
@@ -624,6 +695,28 @@ pub const WORD_LEVEL_VECTORS: &[(&str, WordLevel, &str)] = &[
     ),
     ("Привет, как-дела?", WordLevel::Coarse, "Привет, |как-дела?"),
     ("", WordLevel::Medium, ""),
+    // Clusters stay whole: a ZWJ sequence, a flag, a skin tone, a combining mark.
+    (
+        "\u{1F468}\u{200D}\u{1F469} x-y",
+        WordLevel::Fine,
+        "\u{1F468}\u{200D}\u{1F469} |x|-|y",
+    ),
+    (
+        "\u{1F468}\u{200D}\u{1F469} x-y",
+        WordLevel::Medium,
+        "\u{1F468}\u{200D}\u{1F469} |x-y",
+    ),
+    (
+        "\u{1F1F7}\u{1F1FA}\u{1F1E9}\u{1F1EA} a",
+        WordLevel::Fine,
+        "\u{1F1F7}\u{1F1FA}|\u{1F1E9}\u{1F1EA} |a",
+    ),
+    (
+        "\u{1F44D}\u{1F3FD} ok",
+        WordLevel::Medium,
+        "\u{1F44D}\u{1F3FD} |ok",
+    ),
+    ("e\u{301}x-y", WordLevel::Medium, "e\u{301}x-y"),
 ];
 
 /// Shared test vectors of the word model: `(line, caret before, caret after, spoken)`, where an

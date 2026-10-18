@@ -440,3 +440,33 @@ fn the_character_that_leaves_review_is_echoed_with_a_current_epoch() {
         }
     }
 }
+
+/// Typeahead after review: the input lane stamped both presses before the Reader ran the first,
+/// which left review. Neither echo may be older than the epoch of the newest key.
+#[test]
+fn two_keys_typed_ahead_after_review_are_both_echoed_with_current_epochs() {
+    for node in [TERM, ENTRY] {
+        let mut s = Sim::new(true);
+        s.focus_to(node, true, 0);
+        s.settle(3000);
+        s.command(CoreCmd::ReviewCurLine, 1);
+        s.settle(3000);
+        s.spoken.clear();
+        s.type_keys_ahead(&[KeyKind::Letter('x'), KeyKind::Letter('y')]);
+        s.settle(1000);
+        // x is older than the newest press by design (y interrupts it); y must be current.
+        assert!(
+            s.spoken.iter().any(|u| u.text == "x"),
+            "node {node}: x echoed"
+        );
+        let Some(y) = s.spoken.iter().find(|u| u.text == "y") else {
+            panic!("node {node}: y was not echoed");
+        };
+        assert!(
+            y.epoch >= s.epoch.current(),
+            "node {node}: the echo of y (epoch {:?}) is stale, current {:?}",
+            y.epoch,
+            s.epoch.current()
+        );
+    }
+}

@@ -89,7 +89,11 @@ macro_rules! export_extension {
 /// The WIT source of the extension world.
 pub const WIT_SOURCE: &str = include_str!("../wit/gorca-ext.wit");
 /// `package` line of [`WIT_SOURCE`].
-pub const WIT_PACKAGE: &str = "gorca:ext@0.2.0";
+///
+/// Pre-1.0 versions carry no ABI promise (ADR-0019 V-1): a component built against an older
+/// package does not instantiate against a newer host and is rebuilt. 0.3.0 added `term-config.word-level`,
+/// `term-config.boundary` and `term-action.cue`.
+pub const WIT_PACKAGE: &str = "gorca:ext@0.3.0";
 
 /// CPU limit for `on-event` and `present` (milliseconds).
 pub const LIMIT_HOOK_MS: u32 = 2;
@@ -116,7 +120,7 @@ mod tests {
         assert_eq!(format!("{}:{}", name.namespace, name.name), "gorca:ext");
         assert_eq!(
             name.version.as_ref().map(ToString::to_string).as_deref(),
-            Some("0.2.0")
+            Some("0.3.0")
         );
         assert!(WIT_SOURCE.contains(WIT_PACKAGE));
         let world = resolve

@@ -632,6 +632,7 @@ fn term_action_to_api(a: wtm::TermAction) -> api::terminal::TermAction {
         wtm::TermAction::FetchScreen => A::FetchScreen,
         wtm::TermAction::ArmTimer(t) => A::ArmTimer(t),
         wtm::TermAction::ClaimKey => A::ClaimKey,
+        wtm::TermAction::Cue => A::Cue,
     }
 }
 
@@ -789,6 +790,11 @@ impl HookInstance for WasmInstance {
                 api::terminal::WordLevel::Medium => wtm::WordLevel::Medium,
                 api::terminal::WordLevel::Coarse => wtm::WordLevel::Coarse,
             }),
+            boundary: match cfg.boundary {
+                api::terminal::BoundaryMode::Cue => wtm::BoundaryMode::Cue,
+                api::terminal::BoundaryMode::Repeat => wtm::BoundaryMode::Repeat,
+                api::terminal::BoundaryMode::Silent => wtm::BoundaryMode::Silent,
+            },
         };
         self.call_term(|t, s| t.call_configure(s, &cfg))
     }

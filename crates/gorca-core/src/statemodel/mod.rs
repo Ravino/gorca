@@ -438,6 +438,9 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
         let focus_before = s.w.focus;
         let pre = settled(&s);
         let tracked_pre = pre.is_some_and(|n| tracking_ok(&s, n).is_ok());
+        // The world caret of every buffer before the step: a boundary cue is only right for a key
+        // that moved nothing.
+        let carets_pre: Vec<(u64, usize)> = s.w.bufs.iter().map(|(n, b)| (*n, b.caret)).collect();
         let presented_before = matches!(
             s.r.focus(),
             FocusState::Focused {
@@ -610,7 +613,18 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
                             .filter(|u| u.prio == Prio::Interrupt && !u.text.is_empty())
                             .map(|u| u.text.as_str())
                             .collect();
-                        // A key that moved nothing is answered by the boundary cue.
+                        // A key that moved nothing is answered by the boundary cue, and a key that
+                        // did move the caret is never answered by one.
+                        let moved = carets_pre
+                            .iter()
+                            .find(|(b, _)| *b == n)
+                            .is_some_and(|(_, c)| s.w.bufs.get(&n).is_some_and(|b| b.caret != *c));
+                        if moved && !s.cues.is_empty() {
+                            bail!(
+                                "cue-on-move",
+                                format!("{k:?} in {n} moved the caret and gave a boundary cue"),
+                            );
+                        }
                         if said.is_empty() && s.cues.is_empty() {
                             bail!(
                                 "caret-silent",

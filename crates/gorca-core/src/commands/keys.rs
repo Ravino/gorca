@@ -12,7 +12,7 @@ use crate::present::{key_echo, key_echo_is_action, key_echo_spoken, key_echo_tex
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 
 impl Reader {
-    pub(crate) fn on_key(&mut self, mut intent: KeyIntent, now: Instant, fx: &mut ReaderEffects) {
+    pub(crate) fn on_key(&mut self, intent: KeyIntent, now: Instant, fx: &mut ReaderEffects) {
         // E-4: adopt the epoch carried by the key press so the utterance answering it is never
         // cancelled by that same key press.
         self.epoch.observe(intent.epoch);
@@ -46,11 +46,7 @@ impl Reader {
             }
             KeyClass::PassToApp => {
                 self.pass_key_seen(&intent, fx);
-                if self.review_left_by_key(&intent, fx) {
-                    // Leaving review advanced the epoch: the echo of this very key is as new
-                    // as that, or the speech lane would drop it as stale.
-                    intent.epoch = self.epoch.current();
-                }
+                self.review_left_by_key(&intent, fx);
                 self.focus_audit_on_key(&intent, fx);
                 // The text layer speaks typed characters and erasures of an editable object
                 // itself (ADR-0007 TE-1, TE-5): the generic echo would double them.
@@ -79,18 +75,19 @@ impl Reader {
     /// A key press that goes to the application ends review: the user is typing into the focused
     /// object, so the text layer (typed-character echo, erasures, caret) must own the key again
     /// instead of the generic key echo naming it. Review resumes at the focus on its next
-    /// command (ADR-0006 4.1). Lone modifiers never leave review. True when review was left.
-    fn review_left_by_key(&mut self, intent: &KeyIntent, fx: &mut ReaderEffects) -> bool {
+    /// command (ADR-0006 4.1). Lone modifiers never leave review. The key's own press has already
+    /// advanced the epoch (and cancelled the review speech), so leaving does not advance it a
+    /// second time: that made the echo of this key, or of a key typed right after it, stale.
+    fn review_left_by_key(&mut self, intent: &KeyIntent, fx: &mut ReaderEffects) {
         if !intent.event.pressed
             || !matches!(self.mode, Mode::Review { .. })
             || (0xffe1..=0xffee).contains(&intent.event.keysym)
         {
-            return false;
+            return;
         }
         self.review_cancel_pending();
-        self.on_mode(crate::mode::ModeMsg::ExitReview, fx);
+        self.on_mode_epoch(crate::mode::ModeMsg::ExitReview, false, fx);
         self.text_resync_after_review(fx);
-        true
     }
 
     /// A key that is going to the application reaches a Reader whose picture of the focus may

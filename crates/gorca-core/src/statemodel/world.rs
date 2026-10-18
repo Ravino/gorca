@@ -699,6 +699,18 @@ impl Sim {
     /// The key reaches the application (class `PassToApp`), then the application reacts.
     pub fn type_key(&mut self, k: KeyKind, mods: Modifiers) {
         let epoch = self.epoch.advance();
+        self.type_key_stamped(k, mods, epoch);
+    }
+
+    /// Typeahead: the input lane stamps every press before the Reader has handled the first.
+    pub fn type_keys_ahead(&mut self, ks: &[KeyKind]) {
+        let stamped: Vec<_> = ks.iter().map(|k| (*k, self.epoch.advance())).collect();
+        for (k, epoch) in stamped {
+            self.type_key_stamped(k, Modifiers::empty(), epoch);
+        }
+    }
+
+    fn type_key_stamped(&mut self, k: KeyKind, mods: Modifiers, epoch: gorca_model::Epoch) {
         let at = self.now();
         let (keysym, unichar) = k.sym();
         self.handle(ReaderMsg::Key(KeyIntent {

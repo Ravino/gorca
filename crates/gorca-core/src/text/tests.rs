@@ -3176,14 +3176,14 @@ fn undo_and_redo_are_confirmed_by_a_text_change_once_per_key() {
     g.entry("hello world", 11);
     let fx = clip_key(&mut g, "z", false);
     assert!(spoken(&fx).is_empty(), "no evidence yet");
-    // An undo that deletes and inserts again says "undo" once and does not read the text.
+    // An undo that deletes and inserts again says "undo" once, then reads what came back.
     assert_eq!(spoken(&g.delete(6, Some("world"), 5)), ["undo"]);
-    assert!(spoken(&g.insert(6, "there")).is_empty());
+    assert_eq!(spoken(&g.insert(6, "there")), ["there"]);
     assert!(spoken(&g.tick(300)).is_empty());
     // Redo: Ctrl+Y and Ctrl+Shift+Z.
     g.advance(1000);
     let _ = clip_key(&mut g, "y", false);
-    assert_eq!(spoken(&g.insert(6, "again")), ["redo"]);
+    assert_eq!(spoken(&g.insert(6, "again")), ["redo, again"]);
     g.advance(1000);
     let _ = clip_key(&mut g, "z", true);
     assert_eq!(spoken(&g.delete(6, Some("again"), 5)), ["redo"]);
@@ -3261,4 +3261,67 @@ fn a_read_only_text_is_not_cut_pasted_or_undone() {
     g.advance(1000);
     let _ = clip_key(&mut g, "z", false);
     assert!(spoken(&g.insert(0, "x")).iter().all(|s| s != "undo"));
+}
+
+#[test]
+fn a_password_field_is_never_claimed_copied_and_its_cut_and_paste_text_is_not_read() {
+    let mut g = rig();
+    g.track(
+        Role::PasswordEntry,
+        StateSet::EDITABLE | StateSet::FOCUSED,
+        "hunter2x",
+        8,
+    );
+    select(&mut g, 0..6, "hunter");
+    g.advance(1000);
+    assert!(spoken(&clip_key(&mut g, "c", false)).is_empty());
+    let _ = clip_key(&mut g, "x", false);
+    let said = spoken(&g.delete(0, Some("hunter"), 6));
+    assert_eq!(said, ["cut"], "{said:?}");
+    g.advance(1000);
+    let _ = clip_key(&mut g, "v", false);
+    let said = spoken(&g.insert(0, "correct horse"));
+    assert_eq!(said, ["pasted"], "{said:?}");
+}
+
+#[test]
+fn gecko_s_placeholder_after_a_cut_and_the_caret_on_it_are_the_cuts() {
+    // ED-FFCE shape: Delete{0,5}, Insert{0,1} (an empty block's placeholder), caret at 0.
+    for placeholder in ["\n", "\u{fffc}", " "] {
+        let mut g = rig();
+        g.area("brave", 5);
+        let _ = clip_key(&mut g, "x", false);
+        assert_eq!(spoken(&g.delete(0, Some("brave"), 5)), ["cut, brave"]);
+        g.advance(20);
+        let fx = g.insert(0, placeholder);
+        assert!(spoken(&fx).is_empty(), "{placeholder:?}: {:?}", spoken(&fx));
+        let fx = g.caret(0);
+        assert!(spoken(&fx).is_empty(), "{placeholder:?}: {:?}", spoken(&fx));
+        assert!(spoken(&g.tick(400)).is_empty());
+    }
+    // Text typed later at the same offset is spoken as before.
+    let mut g = rig();
+    g.area("brave", 5);
+    let _ = clip_key(&mut g, "x", false);
+    let _ = g.delete(0, Some("brave"), 5);
+    g.advance(1000);
+    assert!(!spoken(&g.insert(0, "z")).is_empty() || !spoken(&g.tick(300)).is_empty());
+}
+
+#[test]
+fn an_edit_long_after_an_undo_key_is_not_the_undos() {
+    // GTK 3 has no undo: Ctrl+Z changes nothing, and an autocomplete 300 ms later is its own.
+    let mut g = rig();
+    g.entry("hello", 5);
+    let _ = clip_key(&mut g, "z", false);
+    g.advance(300);
+    let said = spoken(&g.insert(5, " there"));
+    assert!(said.iter().all(|s| !s.starts_with("undo")), "{said:?}");
+    // The same for a paste key with an empty clipboard.
+    let mut g = rig();
+    g.entry("hello", 5);
+    let _ = clip_key(&mut g, "v", false);
+    g.advance(300);
+    let said = spoken(&g.insert(5, " from a script"));
+    assert!(said.iter().all(|s| !s.starts_with("pasted")), "{said:?}");
 }

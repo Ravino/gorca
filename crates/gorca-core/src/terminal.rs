@@ -337,6 +337,11 @@ impl Reader {
             prompt_markers: s.prompt_markers.clone(),
             prompt_regex: s.prompt_regex.clone(),
             secret_regex: s.secret_regex.clone(),
+            boundary: match self.cmd.effective.editing.boundary {
+                gorca_config::BoundaryMode::Cue => gorca_ext_api::terminal::BoundaryMode::Cue,
+                gorca_config::BoundaryMode::Repeat => gorca_ext_api::terminal::BoundaryMode::Repeat,
+                gorca_config::BoundaryMode::Silent => gorca_ext_api::terminal::BoundaryMode::Silent,
+            },
             word_level: match self.cmd.effective.editing.word {
                 gorca_config::WordLevel::Auto => None,
                 gorca_config::WordLevel::Fine => Some(gorca_ext_api::terminal::WordLevel::Fine),
@@ -799,6 +804,12 @@ impl Reader {
         for a in acts {
             match a {
                 TermAction::ClaimKey => claimed = true,
+                TermAction::Cue => {
+                    if speak {
+                        self.text.stats.boundary_cues += 1;
+                        fx.push(ReaderEffect::Cue(gorca_output_api::CueId::Boundary));
+                    }
+                }
                 TermAction::Say {
                     text,
                     unit,

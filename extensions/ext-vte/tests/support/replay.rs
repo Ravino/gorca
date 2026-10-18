@@ -110,7 +110,7 @@ impl Replay {
                 TermAction::ArmTimer(t) => {
                     self.tick_due = Some(self.tick_due.map_or(t, |d| d.min(t)));
                 }
-                TermAction::ClaimKey => {}
+                TermAction::ClaimKey | TermAction::Cue => {}
             }
         }
     }

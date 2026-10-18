@@ -34,6 +34,16 @@ impl Rig {
         }
     }
 
+    /// A session that reads the unit again at a boundary (`[editing] boundary = "repeat"`).
+    fn repeating() -> Self {
+        let mut r = Self::new();
+        r.s = Session::new(&TermConfig {
+            boundary: gorca_ext_api::terminal::BoundaryMode::Repeat,
+            ..TermConfig::default()
+        });
+        r
+    }
+
     fn feed(&mut self, input: TermInput) -> Vec<TermAction> {
         let mut out = Vec::new();
         self.s.step(self.now, input, &mut out);
@@ -114,7 +124,10 @@ fn says(acts: &[TermAction]) -> Vec<(String, Urgency)> {
     acts.iter()
         .filter_map(|a| match a {
             TermAction::Say { text, urgency, .. } => Some((crate::english(text), *urgency)),
-            TermAction::FetchScreen | TermAction::ArmTimer(_) | TermAction::ClaimKey => None,
+            TermAction::FetchScreen
+            | TermAction::ArmTimer(_)
+            | TermAction::ClaimKey
+            | TermAction::Cue => None,
         })
         .collect()
 }
@@ -393,7 +406,7 @@ fn a_word_motion_that_ends_at_the_end_of_the_line_speaks_the_last_word() {
 
 #[test]
 fn a_motion_key_that_moves_nothing_speaks_the_unit_at_the_caret_after_the_edge_time() {
-    let mut r = Rig::new();
+    let mut r = Rig::repeating();
     r.focus("$ abc def", 2);
     // Left at the start of the command (readline does not move): no caret event.
     r.key(TermKey::CharLeft);
@@ -414,7 +427,7 @@ fn a_motion_key_that_moves_nothing_speaks_the_unit_at_the_caret_after_the_edge_t
 fn a_slow_caret_event_is_the_only_answer_to_a_key_that_can_move() {
     // Over a slow link the caret event comes 100-250 ms after the key. The key could move the
     // caret, so nothing is said for the old position: exactly one utterance, the new unit.
-    let mut r = Rig::new();
+    let mut r = Rig::repeating();
     r.focus("$ abc def", 2);
     r.key(TermKey::CharRight);
     assert!(
@@ -432,11 +445,11 @@ fn a_slow_caret_event_is_the_only_answer_to_a_key_that_can_move() {
 #[test]
 fn a_key_that_cannot_move_speaks_at_the_short_edge_time() {
     // Left at the start of the command and Right behind the last character move nothing.
-    let mut r = Rig::new();
+    let mut r = Rig::repeating();
     r.focus("$ abc", 2);
     r.key(TermKey::CharLeft);
     assert_eq!(texts(&r.wait(110)), vec!["a".to_owned()]);
-    let mut r = Rig::new();
+    let mut r = Rig::repeating();
     r.focus("$ abc", 5);
     r.key(TermKey::CharRight);
     assert_eq!(texts(&r.wait(110)), vec!["blank".to_owned()]);
@@ -473,7 +486,7 @@ fn left_on_a_wrapped_row_that_looks_like_a_prompt_is_not_a_cannot_move_edge() {
 
 #[test]
 fn left_at_the_start_of_a_command_below_output_still_speaks_at_the_short_edge_time() {
-    let mut r = Rig::new();
+    let mut r = Rig::repeating();
     r.focus("a long line of output\n$ abc", 24);
     r.key(TermKey::CharLeft);
     assert_eq!(texts(&r.wait(110)), vec!["a".to_owned()]);
@@ -1103,7 +1116,7 @@ impl Rig {
                 TermAction::ArmTimer(t) => {
                     self.tick_due = Some(self.tick_due.map_or(*t, |d| d.min(*t)));
                 }
-                TermAction::Say { .. } | TermAction::ClaimKey => {}
+                TermAction::Say { .. } | TermAction::ClaimKey | TermAction::Cue => {}
             }
         }
         all.extend(acts);
@@ -1649,4 +1662,43 @@ fn recall_to_a_blank_line_below_older_prompts_says_blank_not_the_output() {
     r.key(TermKey::LineUp);
     let a = r.repaint(&format!("{above}me@box:~$ ls"), 52);
     assert_eq!(texts(&a), vec!["ls".to_owned()]);
+}
+
+fn cues(acts: &[TermAction]) -> usize {
+    acts.iter().filter(|a| matches!(a, TermAction::Cue)).count()
+}
+
+#[test]
+fn a_key_that_cannot_move_gives_the_boundary_cue_by_default() {
+    let mut r = Rig::new();
+    r.focus("$ abc", 2);
+    r.key(TermKey::CharLeft);
+    let a = r.wait(50);
+    assert!(texts(&a).is_empty() && cues(&a) == 0, "not yet");
+    let a = r.wait(60);
+    assert!(texts(&a).is_empty(), "the character is not read again");
+    assert_eq!(cues(&a), 1);
+    r.focus("$ abc", 5);
+    r.key(TermKey::CharRight);
+    let a = r.wait(110);
+    assert!(texts(&a).is_empty());
+    assert_eq!(cues(&a), 1);
+    // A move that happens is spoken, with no cue.
+    r.key(TermKey::CharLeft);
+    let a = r.feed(TermInput::Caret(4));
+    assert_eq!(texts(&a), vec!["c".to_owned()]);
+    assert_eq!(cues(&a) + cues(&r.wait(300)), 0);
+}
+
+#[test]
+fn a_silent_boundary_gives_neither_speech_nor_cue() {
+    let mut r = Rig::new();
+    r.s = Session::new(&TermConfig {
+        boundary: gorca_ext_api::terminal::BoundaryMode::Silent,
+        ..TermConfig::default()
+    });
+    r.focus("$ abc", 2);
+    r.key(TermKey::CharLeft);
+    let a = r.wait(300);
+    assert!(texts(&a).is_empty() && cues(&a) == 0);
 }

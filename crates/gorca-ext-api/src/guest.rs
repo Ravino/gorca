@@ -312,6 +312,7 @@ fn term_action_to_wit(a: tm::TermAction) -> wtm::TermAction {
         tm::TermAction::FetchScreen => wtm::TermAction::FetchScreen,
         tm::TermAction::ArmTimer(t) => wtm::TermAction::ArmTimer(t),
         tm::TermAction::ClaimKey => wtm::TermAction::ClaimKey,
+        tm::TermAction::Cue => wtm::TermAction::Cue,
     }
 }
 
@@ -337,6 +338,11 @@ impl<T: Hooks + Default + 'static> wtm::Guest for Adapter<T> {
                 wtm::WordLevel::Medium => tm::WordLevel::Medium,
                 wtm::WordLevel::Coarse => tm::WordLevel::Coarse,
             }),
+            boundary: match cfg.boundary {
+                wtm::BoundaryMode::Cue => tm::BoundaryMode::Cue,
+                wtm::BoundaryMode::Repeat => tm::BoundaryMode::Repeat,
+                wtm::BoundaryMode::Silent => tm::BoundaryMode::Silent,
+            },
         };
         with_terminal::<T, _>(|t| t.configure(&cfg));
     }
