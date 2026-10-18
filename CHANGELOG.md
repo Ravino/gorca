@@ -103,8 +103,10 @@ Phase 2 (daily-driver reader)
   close, and grabs change only when needed. Details in `docs/reports/shell-segfault-20261019.md`.
 - The terminal no longer goes silent after Alt+Tab.
 - Firefox single-page applications: Enter no longer activates a stale or wrong node after the
-  page re-renders. If the cursor was displaced, the first Enter announces the target instead of
-  activating it, and gorca+T falls back to the page title.
+  page re-renders. If the item under the browse cursor was replaced or relabelled (other than a
+  toggle whose pressed, checked or expanded state flipped), the first Enter announces it instead
+  of activating it; the next Enter activates. A click is retried only when the target is
+  unambiguous. gorca+T falls back to the last known window title.
 - voicego stability (stop and speak race, panic containment, sink reopen and fast-fail open),
   fixed upstream in the separate voicego project.
 - Alt+Tab and Ctrl+Alt+Tab no longer say "unknown" when the Shell floods events; nameless
