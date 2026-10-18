@@ -78,3 +78,20 @@ Residual risk: FL.end/FL.prev assert page-not-chrome rather than a named row, be
 fmt; `clippy --workspace --all-targets -D warnings`; `cargo test --workspace` all pass except the two known
 environmental `gorca-daemon/tests/shell_parity.rs` tests (`wasm32-wasip2` not installed); `cargo xtask strings` ok.
 Result dirs of this work: `bench/results/e2e/cfl0..cfl15` (Chromium, cfl0 = the failing baseline), `ffl3..ffl15` (Firefox).
+
+## Review fixes (chromium-flat-review-verify.md)
+
+* **M-1.** `lines_of` retries only `Busy` (4 tries, stops when the build's soft deadline is spent). A
+  `Timeout` is asked once and marks the model `Truncated(Deadline)`: four class deadlines in a row would have
+  counted as three timeouts and made a slow-but-working app "hung". Tests:
+  `a_busy_app_is_asked_again_for_its_lines`, `a_timeout_on_lines_is_not_retried_and_marks_the_model_truncated`,
+  `busy_retries_stop_at_the_build_budget`.
+* **M-2.** Saved pages carry the parent's child count; a resume re-reads the last saved child together with the
+  next page (range starts one early) and starts again at page 0 if the count differs or that child is not the
+  same. Tests: `a_list_that_grows_between_passes_is_read_again_from_the_start` (600 -> 601, new first child,
+  no duplicates), `a_list_reordered_between_passes_is_read_again_from_the_start`.
+* **Known limitation.** The Chromium screen-coordinate quirk assumes the toplevel's origin is (0,0) so that
+  `Component.GetExtents(WINDOW)` equals screen coordinates. Verified on native Wayland only; Electron or
+  XWayland sessions, where the window origin is known and non-zero, may put text rows off by that origin.
+  A cheap correction (not done): compare one node's `Text` and `Component` extents and use the difference
+  as the offset.
