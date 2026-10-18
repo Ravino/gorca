@@ -303,6 +303,9 @@ pub fn script(t: Target) -> Vec<Step> {
             st("clip: Ctrl+V", KEY_V.ctrl()),
             st("clip: Ctrl+Z", KEY_Z.ctrl()),
             st("clip: Ctrl+Y", KEY_Y.ctrl()),
+            // The undo may have left an empty or a selected document: put some text back for
+            // the steps that follow (they select all of it).
+            typed("clip: restore", "xy"),
         ]);
     }
     if std::env::var("GORCA_ED_PHASE").as_deref() == Ok("multi") {

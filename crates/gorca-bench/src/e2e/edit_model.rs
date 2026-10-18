@@ -57,6 +57,9 @@ pub enum Exp {
     Unselected,
     /// A selection across blocks of a contenteditable: one utterance, `selected` is not required.
     BlockSelection,
+    /// Silence (the boundary cue: the key could not move the caret on this toolkit) or the
+    /// inner expectation (the caret moved).
+    OrSilent(Box<Exp>),
     /// One utterance that starts with this (`cut, ` or `pasted, ` and the text).
     Prefixed(&'static str),
     /// Any non-empty speech.
@@ -105,6 +108,11 @@ fn has_undo(t: Target) -> bool {
     !matches!(t, Target::Gtk3Entry | Target::Gtk3Text)
 }
 
+/// Is Ctrl+Y bound to redo? gedit only has Ctrl+Shift+Z; the key does nothing there.
+fn has_redo_key(t: Target) -> bool {
+    has_undo(t) && t != Target::Gedit
+}
+
 fn editable(t: Target) -> bool {
     t == Target::Web(WebField::Editable)
 }
@@ -118,7 +126,10 @@ pub fn expect(t: Target, chromium: bool, step: &str) -> Option<Exp> {
         "Left" => ex(&["d"]),
         // A key that cannot move the caret gives the boundary cue, which is silent speech.
         "Right at end" | "Left at start" => Exp::Silent,
-        "Right" | "End" | "Right collapses" | "End 2" => ex(&["blank"]),
+        // After a select-all the caret may already be at the end: the key then collapses the
+        // selection and moves nothing.
+        "Right collapses" | "End 2" => Exp::OrSilent(Box::new(ex(&["blank"]))),
+        "Right" | "End" => ex(&["blank"]),
         "Home" | "Home 2" => ex(&["h"]),
         "Ctrl+Left 1" => ex(&["world"]),
         "Ctrl+Left 2" => ex(&["brave"]),
@@ -156,8 +167,9 @@ pub fn expect(t: Target, chromium: bool, step: &str) -> Option<Exp> {
         "clip: Ctrl+V" => Exp::Prefixed("pasted, "),
         // GTK 3 entries and text views have no undo: nothing changes, nothing is claimed.
         "clip: Ctrl+Z" if has_undo(t) => ex(&["undo"]),
-        "clip: Ctrl+Y" if has_undo(t) => ex(&["redo"]),
+        "clip: Ctrl+Y" if has_redo_key(t) => ex(&["redo"]),
         "clip: Ctrl+Z" | "clip: Ctrl+Y" => Exp::Silent,
+        "clip: restore" => Exp::Some,
         // The multi-line phase.
         "select all" => Exp::SelectAll,
         "type line 1" => names("one two"),
@@ -165,7 +177,8 @@ pub fn expect(t: Target, chromium: bool, step: &str) -> Option<Exp> {
         "type last" => names("last line"),
         "Enter" | "Enter 2" => ex(&["new line"]),
         "Up" | "Up 2" | "Down" => Exp::Line,
-        "Ctrl+Up" | "Ctrl+Up 2" | "Ctrl+Down" => Exp::Para,
+        "Ctrl+Up 2" => Exp::OrSilent(Box::new(Exp::Para)),
+        "Ctrl+Up" | "Ctrl+Down" => Exp::Para,
         "Ctrl+Home" | "Ctrl+Home 2" | "PageUp" => ex(&["one two"]),
         "Ctrl+End" | "PageDown" => ex(&["last line"]),
         "Shift+Down" | "Shift+Down 2" | "Ctrl+Shift+Down" if editable(t) => Exp::BlockSelection,
@@ -205,6 +218,21 @@ fn one(got: &[String]) -> Result<&str, String> {
 pub fn check(t: Target, chromium: bool, step: &str, got: &[String]) -> Option<Result<(), String>> {
     let e = expect(t, chromium, step)?;
     let r = match &e {
+        Exp::OrSilent(inner) => {
+            if got.is_empty() {
+                Ok(())
+            } else {
+                check_exp(inner, got)
+            }
+        }
+        _ => check_exp(&e, got),
+    };
+    Some(r)
+}
+
+fn check_exp(e: &Exp, got: &[String]) -> Result<(), String> {
+    match e {
+        Exp::OrSilent(inner) => check_exp(inner, got),
         Exp::Exact(v) => {
             if v == got {
                 Ok(())
@@ -278,8 +306,7 @@ pub fn check(t: Target, chromium: bool, step: &str, got: &[String]) -> Option<Re
             }
         }),
         Exp::BlockSelection => one(got).map(|_| ()),
-    };
-    Some(r)
+    }
 }
 
 #[cfg(test)]

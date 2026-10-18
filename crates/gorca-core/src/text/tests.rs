@@ -477,6 +477,26 @@ fn up_on_the_first_line_of_a_text_view_is_a_cue_not_the_whole_line_again() {
 }
 
 #[test]
+fn a_caret_event_that_reports_no_move_is_the_same_boundary() {
+    // GTK 4 text views send a caret event for a key that moved nothing.
+    for (b, cue, say) in [
+        (gorca_config::BoundaryMode::Cue, true, false),
+        (gorca_config::BoundaryMode::Silent, false, false),
+        (gorca_config::BoundaryMode::Repeat, false, true),
+    ] {
+        let mut g = rig();
+        boundary(&mut g, b);
+        g.entry("hello", 0);
+        let _ = g.key(LEFT, 0, NONE);
+        let fx = g.caret(0);
+        assert_eq!(!cues(&fx).is_empty(), cue, "{b:?}");
+        assert_eq!(!spoken(&fx).is_empty(), say, "{b:?}");
+        // The key's slot is spent: the edge timer has nothing left to say.
+        assert!(spoken(&g.tick(300)).is_empty() && cues(&g.tick(300)).is_empty());
+    }
+}
+
+#[test]
 fn a_key_that_moves_nothing_speaks_the_unit_at_the_caret_after_the_edge_time() {
     let mut g = rig();
     boundary(&mut g, gorca_config::BoundaryMode::Repeat);

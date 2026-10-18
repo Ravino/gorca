@@ -433,6 +433,7 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
         }
         s.settle(st.dt);
         s.spoken.clear();
+        s.cues.clear();
         let mode_before = s.r.mode();
         let focus_before = s.w.focus;
         let pre = settled(&s);
@@ -609,7 +610,8 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
                             .filter(|u| u.prio == Prio::Interrupt && !u.text.is_empty())
                             .map(|u| u.text.as_str())
                             .collect();
-                        if said.is_empty() {
+                        // A key that moved nothing is answered by the boundary cue.
+                        if said.is_empty() && s.cues.is_empty() {
                             bail!(
                                 "caret-silent",
                                 format!("{k:?} in {n} (gtk4: {}) was not answered", s.gtk4),
@@ -618,6 +620,7 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
                         let at = s.w.bufs.get(&n).and_then(|b| b.text.get(b.caret).copied());
                         // (After lost events the window is stale: the layer cannot know the character.)
                         if let Some(c) = at.filter(|c| c.is_alphanumeric())
+                            && !said.is_empty()
                             && s.dropped.load(Ordering::Relaxed) == 0
                             && !said.iter().any(|t| *t == c.to_string())
                         {

@@ -131,7 +131,7 @@ inserted_text = true
 announce_clipboard = true
 # What an arrow or Home/End key does when the caret cannot move: a boundary cue (silent until sounds exist), read the unit again, or nothing. (one of "cue", "repeat" or "silent")
 boundary = "cue"
-# How coarse a word is: fine (letters and digits, each punctuation mark apart), medium (option tokens like --color=auto, identifiers and path segments stay whole), coarse (everything between blanks); auto lets the application decide (terminals use medium). (one of "auto", "fine", "medium" or "coarse")
+# How coarse a word is: fine (letters and digits, each punctuation mark apart), medium (option tokens like --color=auto, identifiers and file names stay whole; slashes and other punctuation separate), coarse (everything between blanks); auto lets the application decide (terminals use medium). (one of "auto", "fine", "medium" or "coarse")
 word = "auto"
 
 [text]

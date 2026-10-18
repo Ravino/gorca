@@ -1146,6 +1146,12 @@ impl CaretState {
                             late_until,
                         };
                     }
+                    if t.caret == Some(off) {
+                        // The application reported a caret event for a key that moved nothing
+                        // (GTK 4 text views do): the same boundary as no event at all.
+                        cx.stats.caret_edge += 1;
+                        return at_boundary(t, unit, off, epoch, cx);
+                    }
                     cx.stats.caret_correlated += 1;
                     let say = say_of(unit);
                     let reason = Reason::CaretMove {
@@ -1538,18 +1544,7 @@ impl CaretState {
                             until: late_until,
                         });
                         match t.caret {
-                            Some(at) => match cx.cfg.boundary {
-                                Boundary::Repeat => {
-                                    let say = say_of(unit);
-                                    present(t, say, at, Reason::Boundary, epoch, cx)
-                                }
-                                Boundary::Cue => {
-                                    cx.stats.boundary_cues += 1;
-                                    cx.out.push(Out::Cue(gorca_output_api::CueId::Boundary));
-                                    CaretState::Idle { t }
-                                }
-                                Boundary::Silent => CaretState::Idle { t },
-                            },
+                            Some(at) => at_boundary(t, unit, at, epoch, cx),
                             None => CaretState::Idle { t },
                         }
                     }
@@ -1601,6 +1596,25 @@ impl CaretState {
                 fail(t, want, epoch, cx)
             }
         }
+    }
+}
+
+/// A movement key that could not move the caret (CR-3): what `[editing] boundary` says.
+fn at_boundary(
+    t: Box<Tracked>,
+    unit: KeyUnit,
+    at: u32,
+    epoch: Epoch,
+    cx: &mut Ctx<'_>,
+) -> CaretState {
+    match cx.cfg.boundary {
+        Boundary::Repeat => present(t, say_of(unit), at, Reason::Boundary, epoch, cx),
+        Boundary::Cue => {
+            cx.stats.boundary_cues += 1;
+            cx.out.push(Out::Cue(gorca_output_api::CueId::Boundary));
+            CaretState::Idle { t }
+        }
+        Boundary::Silent => CaretState::Idle { t },
     }
 }
 
