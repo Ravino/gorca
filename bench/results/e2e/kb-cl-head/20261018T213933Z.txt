@@ -1,0 +1,40 @@
+# e2e kb-cl-head
+# utc=2026-10-18T21:39:33Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=20.15 19.66 17.83 5/1678 2924230
+# git_rev=3c05e863
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx1
+# topology_expected=-
+# label=kb-cl-head
+# reader=daemon:<repo>/.claude/worktrees/agent-aa129b307e9aa1778/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=20.15 19.66 17.83 7/1678 2924227
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info GORCA_TOPOLOGY_REPORT=bench/results/e2e/kb-cl-head/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+
+metric                     bus                median          min          max  n op    threshold  res   note
+CL.cl_ms.n                 daemon/voicego          150          150          150  1                  info   [samples]
+CL.cl_ms.p50               daemon/voicego        0.393        0.393        0.393  1                  info   [ms]
+CL.cl_ms.p95               daemon/voicego        0.646        0.646        0.646  1                  info   [ms]
+CL.cl_ms.p99               daemon/voicego        0.810        0.810        0.810  1 <=            5  PASS   [ms]
+CL.cl_ms.p999              daemon/voicego        0.893        0.893        0.893  1                  info   [ms]
+CL.cl_ms.max               daemon/voicego        0.893        0.893        0.893  1                  info   [ms]
+CL.cl_direction_wrong      daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [checks]
+CL.late_cl_ms              daemon/voicego            0            0            0  1                  info   [keys]
+CL.lost_cl_ms              daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
+CL.not_consumed            daemon/voicego            0            0            0  1 <=            0  PASS  gated on the max over repeats [keys]
