@@ -166,8 +166,8 @@ pub fn expect(t: Target, chromium: bool, step: &str) -> Option<Exp> {
         "clip: Ctrl+X" => Exp::Prefixed("cut, "),
         "clip: Ctrl+V" => Exp::Prefixed("pasted, "),
         // GTK 3 entries and text views have no undo: nothing changes, nothing is claimed.
-        "clip: Ctrl+Z" if has_undo(t) => ex(&["undo"]),
-        "clip: Ctrl+Y" if has_redo_key(t) => ex(&["redo"]),
+        "clip: Ctrl+Z" if has_undo(t) => Exp::Prefixed("undo"),
+        "clip: Ctrl+Y" if has_redo_key(t) => Exp::Prefixed("redo"),
         "clip: Ctrl+Z" | "clip: Ctrl+Y" => Exp::Silent,
         "clip: restore" => Exp::Some,
         // The multi-line phase.
