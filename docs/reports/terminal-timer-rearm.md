@@ -53,3 +53,12 @@ clean 30 is about 30 percent); the unit test is the stronger evidence.
 ## Open
 - The demote path is not proven by a trace; if the flake returns, run with `RUST_LOG=gorca_core=debug`
   and look for `protection_reads` in the terminal counters.
+
+## Review round (terminal-timer-rearm-verify.md)
+- F-1 fixed: a stale StateChange reply for the reconfirm node turns Asked/Retried into Failed (flow.rs on_reply). Test `a_key_during_the_watch_read_does_not_wedge_the_watch`.
+- F-2 fixed: a reply without FOCUSED for a terminal says nothing (title changes). Test `the_watch_reply_of_an_unfocused_terminal_does_not_speak_its_title`.
+- F-3 fixed: a charged timeout arms no timer, other skipped attempts back off. Test `a_charged_timeout_does_not_make_the_watch_spin`.
+- F-4: `Op::LateFocused` withholds FOCUSED for 400 ms after a focus; invariants `term-watch-stalled` (watch overdue > 300 ms) and `term-protection-lost` (6 attempts, healthy fetches, still unprotected). Mutation check: with the F-1 fix disabled the strict 50k run (seed 1) reports `term-protection-lost`; with it, clean for this id.
+- F-5: not changed. The `None` expectation of FE2 already asserts silence (`wanted silence, said ...` counts as e2_wrong), so a speaking boundary key in cue mode fails.
+- New, unrelated finding: the changed op mix exposes `cue-on-move` (strict 50k seeds 1 and 777777; Home in an area after lost events moves the caret and gives a cue). Ignored regression `home_after_lost_events_gives_no_boundary_cue_when_the_caret_moved`; not fixed here.
+- VV x40 (`bench/results/acceptance/term-rearm-vv-x40`, reader 367687d4+fixes, load1 11-24, no quiet-host): 1 failing repeat of 40, and it is `VV a new tab: its output before any key` (heard only "blank"), not the Alt+Tab quiet step, which passed 40 of 40. The reader log is empty, so the cause is unknown; the earlier x30 (load 6-9) was 0 of 30.
