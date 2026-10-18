@@ -241,8 +241,6 @@ pub(crate) struct CmdState {
     pub told_held: bool,
     pub told_lost: bool,
     pub told_caps: bool,
-    /// The Num Lock hint for the keypad Insert modifier was spoken (once per run).
-    pub told_numlock: bool,
     pub told_unavailable: bool,
     /// Ambiguous command chords answered with "again" (never executed).
     pub ambiguous_cues: u64,
@@ -286,7 +284,6 @@ impl CmdState {
             told_held: false,
             told_lost: false,
             told_caps: false,
-            told_numlock: false,
             told_unavailable: false,
             ambiguous_cues: 0,
             quick: crate::quick::QuickState::default(),

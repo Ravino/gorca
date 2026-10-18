@@ -74,11 +74,6 @@ pub fn modifier_key(name: &str) -> Option<&'static ModifierKey> {
     MODIFIER_KEYS.iter().find(|m| m.name == name)
 }
 
-/// The table row of a modifier keysym (`sym::INSERT`, `sym::KP_INSERT`, `sym::CAPS_LOCK`).
-pub fn modifier_by_keysym(keysym: u32) -> Option<&'static ModifierKey> {
-    MODIFIER_KEYS.iter().find(|m| m.keysym == keysym)
-}
-
 /// Keysym of a gorca modifier name from the settings (`Insert`, `KP_Insert`, `Caps_Lock`).
 pub fn modifier_keysym(name: &str) -> Option<u32> {
     modifier_key(name).map(|m| m.keysym)

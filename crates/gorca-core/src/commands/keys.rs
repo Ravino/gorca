@@ -21,6 +21,21 @@ impl Reader {
             l.reader_ack.fetch_add(1, Ordering::AcqRel);
         }
         self.observe_locks(&intent, fx);
+        // Diagnostics for keyboard reports (`RUST_LOG=gorca_keys=debug`): only gorca modifiers,
+        // lock keys and keypad keys, never letters, so a log cannot leak typed text.
+        let ev = &intent.event;
+        if is_diagnostic_key(ev.keysym, &self.keys.modifiers) {
+            tracing::debug!(
+                target: "gorca_keys",
+                keycode = ev.keycode,
+                keysym = format_args!("{:#x}", ev.keysym),
+                pressed = ev.pressed,
+                state = format_args!("{:#x}", ev.modifiers.bits()),
+                kind = ?intent.kind,
+                class = ?intent.class,
+                "key"
+            );
+        }
         match intent.class {
             KeyClass::Command(cmd) | KeyClass::Watched(cmd) => {
                 self.run_command(cmd, &intent, now, fx);
@@ -46,7 +61,6 @@ impl Reader {
             }
             KeyClass::PassToApp => {
                 self.pass_key_seen(&intent, fx);
-                self.numlock_hint(&intent, fx);
                 if self.review_left_by_key(&intent, fx) {
                     // With `interrupt = "never"` the press did not advance the epoch, so leaving
                     // review did (to purge the queued review speech): this key's echo takes it.
@@ -165,3 +179,28 @@ impl Reader {
 const REPRESENT_AFTER: std::time::Duration = std::time::Duration::from_millis(1500);
 /// The shortest time between two such presentations.
 const REPRESENT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Keys whose events may be logged for keyboard diagnostics: the configured gorca modifiers,
+/// Shift, Control, Alt, Super, the lock keys and the keypad (`KP_*`). Never text keys.
+fn is_diagnostic_key(keysym: u32, gorca_modifiers: &[u32]) -> bool {
+    gorca_modifiers.contains(&keysym)
+        || gorca_input_api::is_modifier_keysym(keysym)
+        || (0xff80..=0xffbf).contains(&keysym)
+        || keysym == gorca_input_api::sym::INSERT
+}
+
+#[cfg(test)]
+mod diag_tests {
+    use super::is_diagnostic_key;
+
+    #[test]
+    fn only_modifiers_locks_and_keypad_keys_are_logged() {
+        assert!(is_diagnostic_key(0xff9e, &[]), "KP_Insert");
+        assert!(is_diagnostic_key(0xffb0, &[]), "KP_0");
+        assert!(is_diagnostic_key(0xffe5, &[]), "Caps_Lock");
+        assert!(is_diagnostic_key(0xff63, &[]), "Insert");
+        assert!(is_diagnostic_key(0x6b, &[0x6b]), "a configured modifier");
+        assert!(!is_diagnostic_key(0x61, &[0xff63]), "letters never");
+        assert!(!is_diagnostic_key(0x30, &[]), "digit row never");
+    }
+}

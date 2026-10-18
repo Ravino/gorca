@@ -1231,6 +1231,32 @@ pub fn cl(
         w.press(KEY_H, 0)?;
         std::thread::sleep(Duration::from_millis(30));
     }
+    // Direction: with Caps Lock on, H goes to the next heading and Shift+H to the previous one
+    // (the headings of the page are "Item N heading"). An inversion would still speak "heading".
+    let item = |t: &str| -> Option<u32> {
+        let rest = t.split("Item ").nth(1)?;
+        rest.split_whitespace().next()?.parse().ok()
+    };
+    let mut wrong = 0u64;
+    let at = |w: &mut Web, k: K, st: u32| -> Result<Option<u32>> {
+        std::thread::sleep(Duration::from_millis(150));
+        Ok(w.press_and_hear(k, st, |t| t.contains("Item "))
+            .ok()
+            .and_then(|(t, _)| item(&t)))
+    };
+    let base = at(&mut w, KEY_H_CAP, LOCK)?;
+    let next = at(&mut w, KEY_H_CAP, LOCK)?;
+    let back = at(&mut w, KEY_H, SHIFT | LOCK)?;
+    match (base, next, back) {
+        (Some(a), Some(b), Some(c)) if b == a + 1 && c == a => {}
+        other => {
+            wrong += 1;
+            out.notes.push(format!(
+                "cl direction: H, H, Shift+H spoke items {other:?}, wanted n, n+1, n"
+            ));
+        }
+    }
+    out.x("cl_direction_wrong", wrong as f64, "checks");
     key_series(
         &mut w,
         out,

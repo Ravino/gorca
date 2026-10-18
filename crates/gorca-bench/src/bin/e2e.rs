@@ -243,6 +243,7 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "stale"
                     | "lost_w1_ms"
                     | "lost_cl_ms"
+                    | "cl_direction_wrong"
                     | "km_passthrough_wrong"
                     | "lost_br1_ms"
                     | "lost_br1c_ms"

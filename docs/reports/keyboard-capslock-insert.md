@@ -75,9 +75,8 @@ delivers `KP_Insert` (65438, keycode 90) press and release to the application an
 modifier, so every press types `0` at once, single or double. The log of that run shows `0`, `00`, `000`
 for three presses. Num Lock on a laptop is the only path I found that produces a digit from this key.
 
-**Change.** gorca now says once per run, when keypad zero arrives as `KP_0` with Num Lock on while the
-keypad Insert is a configured modifier: "Num Lock is on, so keypad zero types a digit and is not the
-gorca key. Turn Num Lock off to use it" (en and ru; `numlock_hint`, tests in `tests/numlock.rs`).
+**Change.** None in behaviour (a spoken Num Lock hint was added and removed again after review: it fired
+for ordinary number entry).
 The lane tests pin both sides (`the_double_tap_of_the_keypad_insert_passes_the_key_itself`): Num Lock
 off gives swallowed, swallowed, `ModifierPassThrough` with keysym KP_Insert; Num Lock on gives
 `PassToApp` for every event. e2e `KM` asserts that after a double tap the application received exactly
@@ -102,9 +101,48 @@ and needs an evdev trace from the laptop (`evtest`).
 - gorca keeps no Num Lock or Caps Lock state: it reads the Mod2 and Lock bits of each `KeyEvent`
   (Mutter's own state), so there is no cache to go stale at startup or after a Shell restart. The lock
   announcements come from the same bits.
-- The one-time Num Lock hint stays: it fires only for keycode 90 arriving as `KP_0` with Mod2 while the
-  keypad Insert is a modifier, in the catalogue (en, ru), and is the only evidence available when the
-  user is sure Num Lock was off (then the hint never fires and the cause is outside gorca).
+- The Num Lock hint was removed after review (F-1): it fired for ordinary numpad typing with Num Lock on.
+
+## Owner evidence (Num Lock off, double tap types "0") and what was tried
+
+New facts from the owner: Num Lock is off; a single numpad Ins is fine; a fast double tap types "0" in
+gedit; holding numpad Ins makes gorca speak the stuck-modifier hint (so Mutter 48.7's stale entry is live
+on that machine).
+
+Reproduction attempts, all in the private headless Shell with a real `gorca --impersonate-orca` and a
+real `gedit --standalone` (text read back through AT-SPI), RemoteDesktop keyboard, Shell's own IBus
+(`ibus-daemon` is started by the Shell, so the text-input path is the production one):
+- double tap with 80, 150, 250 and 50 ms gaps, with and without a preceding 1 s hold (stale entry
+  armed), repeated: gedit text never contains "0"; the application receives `KP_Insert` (keycode 90,
+  65438) and nothing else (`bench/results/e2e/kb-km3`, KM).
+- GTK3 and GTK4 text views, GTK IBus module on and off: same.
+- Mutter source (`refs/mutter`): the pass-through is not a replay or a virtual device. `notify_key_in_impl`
+  builds the event from the real xkb state (`xkb_state_key_get_one_sym`) before updating it; the second
+  press of a grabbed modifier is simply not flagged `A11Y_MODIFIER_FIRST_CLICK`, so
+  `meta_a11y_manager_notify_clients` returns FALSE and the event is queued like any key. IBus forwards
+  (`clutter_input_method_forward_key`) re-emit with the keyval IBus supplies. No code path in Mutter or
+  gorca turns keycode 90 at level 1 into `KP_0`. gorca has no pass-through mechanism of its own
+  (`KeyInjector` is a stub; `ModifierPassThrough` only drives the learn-mode notice).
+- Because the first press is swallowed, a single tap never shows the application's own Num Lock view.
+  Only the passed second press does. A client whose idea of Num Lock differs from Mutter's (for example a
+  window that kept a stale `wl_keyboard.modifiers` state, or an IBus engine with its own state) would show
+  exactly this symptom: single tap silent, double tap "0". Unverified; the rig cannot produce the mismatch.
+
+Because no fix can be justified without the real event stream, gorca now logs the relevant keys on demand
+(`RUST_LOG=gorca_keys=debug`: gorca modifiers, Shift/Control/Alt/Super, lock keys and keypad keys only,
+never letters). Trace for the owner (read-only, nothing is grabbed, the live session is not touched):
+
+1. `libinput list-devices | grep -B1 -A3 -i keyboard` to find the keyboard's `/dev/input/eventN`.
+2. In one terminal: `sudo evtest /dev/input/eventN` (no `--grab`), and press numpad Ins twice quickly.
+   Note whether anything besides `KEY_KP0` (code 82) appears (a `KEY_LEFTSHIFT` or `KEY_NUMLOCK` around
+   the press is the signature of keyboard firmware emulating the keypad).
+3. In another terminal: `sudo libinput debug-events --show-keycodes` for the same gesture (it shows what
+   Mutter receives, also read-only).
+4. gorca side: start gorca with `RUST_LOG=warn,gorca_keys=debug` and read `journalctl --user -u gorca -f`
+   (or its stderr); each modifier/keypad event prints keycode, keysym, state (Mod2 = `0x10` means Num
+   Lock on), press kind and class. A passed second press shows `ModifierPassThrough` with keysym `0xff9e`;
+   a `0xffb0` keysym or state `0x10` there would prove a Num Lock mismatch in Mutter itself.
+5. In gedit (or `wev`), the keyval the application saw: `wev` prints `sym: KP_Insert` vs `KP_0`.
 
 ## Gates
 

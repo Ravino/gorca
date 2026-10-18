@@ -33,8 +33,8 @@ pub use keymap::{
 };
 pub use keys::{
     KeyResolver, KeysymTable, MODIFIER_KEYS, ModifierKey, StaticResolver, is_control,
-    is_modifier_keysym, is_shift, keypad_digit_keysym, keysym_of_code, modifier_by_keysym,
-    modifier_key, modifier_keysym, spoken_key_name, static_keycode, static_keysym, sym,
+    is_modifier_keysym, is_shift, keypad_digit_keysym, keysym_of_code, modifier_key,
+    modifier_keysym, spoken_key_name, static_keycode, static_keysym, sym,
 };
 pub use lane::{HELP_IDLE, HELP_STALL, InputLane, LaneAlert, LaneOut, LaneStats, SHIFT_TAP_MAX};
 pub use mutter_model::{Ev, Replica, Timing, Verdict};

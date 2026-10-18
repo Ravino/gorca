@@ -46,7 +46,6 @@ input-key-kp-insert = Insert на цифровой клавиатуре
 input-key-caps-lock = Caps Lock
 input-key-gorca = клавиша gorca
 input-caps-dropped = Caps Lock занята другой функцией, поэтому клавиша gorca — Insert
-input-numlock-keypad-insert = Включён Num Lock, поэтому ноль на цифровой панели вводит цифру и не является клавишей gorca. Выключите Num Lock, чтобы использовать её
 mod-gorca = горка
 mod-control = контрол
 mod-alt = альт

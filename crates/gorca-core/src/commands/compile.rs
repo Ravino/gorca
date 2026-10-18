@@ -1203,6 +1203,68 @@ mod tests {
         assert!(swallowed(&set, 0x40, Modifiers::SHIFT | lock), "Shift+2");
     }
 
+    /// Caps Lock is not Shift: through the lane, over the Browse grab set and the real keymap, `H`
+    /// with the lock goes to the next heading and `Shift+H` (arriving as lower case `h`) to the
+    /// previous one, exactly as with the lock off.
+    #[test]
+    fn caps_lock_does_not_invert_the_quick_navigation_direction() {
+        use gorca_input_api::{GrabView, KeyClass, LaneLinks};
+        let c = compiled("[keyboard]\npreset=\"nvda\"\nlayout=\"desktop\"\n");
+        let (plain, exact) = browse_grabs(&c.keymap, &KeysymTable::us());
+        let keys = crate::mode::ModeKeys {
+            modifiers: c.keymap.modifiers.clone(),
+            quick_nav: plain,
+            exact,
+            ..crate::mode::ModeKeys::default()
+        };
+        let set = crate::mode::Mode::Browse {
+            doc: gorca_model::DocId(1),
+            sticky: false,
+        }
+        .grab_set(&keys);
+        let links = LaneLinks::new();
+        links.keymap.store(std::sync::Arc::new(c.keymap));
+        links.view.store(std::sync::Arc::new(GrabView {
+            committed_gen: 1,
+            committed: std::sync::Arc::new(set),
+            wanted_gen: None,
+            wanted: None,
+        }));
+        let t0 = std::time::Instant::now();
+        let mut lane = gorca_input_api::InputLane::new(
+            links,
+            std::sync::Arc::new(gorca_rt::EpochCell::new()),
+            t0,
+        );
+        let next = CoreCmd::QuicknavNextHeading.id();
+        let prev = CoreCmd::QuicknavPrevHeading.id();
+        let mut t = 1000u64;
+        let mut go = |keysym: u32, mods: Modifiers| {
+            t += 300;
+            let ev = |pressed| gorca_input_api::KeyEvent {
+                keycode: 43,
+                keysym,
+                unichar: 0,
+                modifiers: mods,
+                pressed,
+            };
+            let at = |ms: u64| t0 + std::time::Duration::from_millis(ms);
+            let class = lane.on_key(ev(true), at(t)).intent.class;
+            lane.on_key(ev(false), at(t + 50));
+            class
+        };
+        let lock = Modifiers::LOCK;
+        assert_eq!(go(0x68, Modifiers::empty()), KeyClass::Command(next));
+        assert_eq!(go(0x48, Modifiers::SHIFT), KeyClass::Command(prev));
+        assert_eq!(go(0x48, lock), KeyClass::Command(next), "Caps Lock, H");
+        assert_eq!(
+            go(0x68, Modifiers::SHIFT | lock),
+            KeyClass::Command(prev),
+            "Caps Lock, Shift+H"
+        );
+        assert_eq!(go(0x48, lock | Modifiers::MOD2), KeyClass::Command(next));
+    }
+
     #[test]
     fn caps_lock_on_the_russian_layout_grabs_the_other_case_cyrillic_keysym() {
         let set = browse_set(&us_ru());

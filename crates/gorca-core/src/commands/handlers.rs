@@ -10,10 +10,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use gorca_config::Confirmations;
-use gorca_input_api::{
-    CmdId, KeyIntent, Modifiers, PressKind, is_modifier_keysym, keypad_digit_keysym,
-    modifier_by_keysym, spoken_key_name, sym,
-};
+use gorca_input_api::{CmdId, KeyIntent, PressKind, is_modifier_keysym, spoken_key_name};
 use gorca_mirror::fill::{DemandOutcome, DemandWhy};
 use gorca_model::{Epoch, Lookup, NodeKey, NodeSnapshot, Prio, PropMask};
 use gorca_rt::BudgetClass;
@@ -744,27 +741,6 @@ impl Reader {
             self.cmd.told_caps = true;
             self.announce(t(M::InputCapsDropped), fx);
         }
-    }
-
-    /// Keypad zero with Num Lock on while the keypad Insert is a gorca modifier: the key types
-    /// a digit (the user hears "0" or sees it typed), so say once why nothing else happens.
-    pub(crate) fn numlock_hint(&mut self, intent: &KeyIntent, fx: &mut ReaderEffects) {
-        let ev = &intent.event;
-        let Some(kp) = modifier_by_keysym(sym::KP_INSERT) else {
-            return;
-        };
-        if self.cmd.told_numlock
-            || !ev.pressed
-            || intent.kind != PressKind::Press
-            || ev.keycode != kp.keycode
-            || Some(ev.keysym) != keypad_digit_keysym(kp.keysym)
-            || !ev.modifiers.contains(Modifiers::MOD2)
-            || !self.keys.modifiers.contains(&kp.keysym)
-        {
-            return;
-        }
-        self.cmd.told_numlock = true;
-        self.announce(t(M::InputNumlockKeypadInsert), fx);
     }
 
     /// Pass-next-key ends on the first non-modifier press, or after the timeout.
