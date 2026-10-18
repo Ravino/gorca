@@ -111,6 +111,7 @@ impl Toolkit {
             | Toolkit::Qt
             | Toolkit::Other => EditQuirks {
                 word_landing: WordLanding::End,
+                text_leaves_repeat_parent: self.text_leaf_children_repeat_parent_text(),
             },
         }
     }
@@ -161,6 +162,16 @@ impl Toolkit {
     /// no U+FFFC for it), so a text-leaf rebuild that appends children after the parent's runs
     /// reads every heading, link and label twice. Gecko keeps text only in the container.
     pub fn text_leaf_children_repeat_parent_text(self) -> bool {
+        matches!(self, Toolkit::Chromium)
+    }
+
+    /// Quirk row `blink-text-extents-frame` (docs/reports/chromium-flat-review.md): in Chromium
+    /// `Text.GetRangeExtents(.., WINDOW)` is relative to the web content, not to the toplevel
+    /// window, so it lies the height of the browser's own toolbar (143 px in the test rig) above
+    /// `Component.GetExtents(WINDOW)` of the same text. `SCREEN` agrees with the component
+    /// extents (the window origin is (0, 0) under Wayland, where a client cannot know it).
+    /// Gecko's window coordinates agree with its component extents.
+    pub fn text_extents_use_screen_coords(self) -> bool {
         matches!(self, Toolkit::Chromium)
     }
 

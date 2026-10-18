@@ -1213,6 +1213,8 @@ fn spawn_desktop(set: &mut JoinSet<()>, shared: &Arc<Shared>, d: crate::present:
                 clock: shared.clock.clone(),
                 next_req: Arc::clone(&shared.next_req),
                 limits: crate::review::ReviewLimits::default(),
+                static_leaves_repeat: shared.mirrors.edit_quirks(app).text_leaves_repeat_parent,
+                partial_pages: Default::default(),
             })
         }
         _ => None,
@@ -1347,6 +1349,8 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
                 clock: shared.clock.clone(),
                 next_req: Arc::clone(&shared.next_req),
                 limits: crate::review::ReviewLimits::default(),
+                static_leaves_repeat: shared.mirrors.edit_quirks(app).text_leaves_repeat_parent,
+                partial_pages: Default::default(),
             })
         }
         _ => None,

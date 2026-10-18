@@ -161,6 +161,8 @@ fn fake(script: Script) -> Fake {
             clock: Clock::System,
             next_req: Arc::new(AtomicU64::new(1)),
             limits: ReviewLimits::default(),
+            static_leaves_repeat: false,
+            partial_pages: Default::default(),
         },
     }
 }
@@ -282,7 +284,7 @@ fn spec(prev: Option<Arc<super::LineModel>>, dirty: Option<Arc<[NodeKey]>>) -> B
 #[tokio::test]
 async fn expanding_a_node_makes_its_child_list_known_and_brings_extents() {
     let f = fake(form(5));
-    expand(&f.io, key(2), BudgetClass::Interactive, true)
+    expand(&f.io, key(2), BudgetClass::Interactive, true, None)
         .await
         .unwrap();
     let Lookup::Hit(v) = f.io.mirror.view(key(2)) else {
@@ -592,4 +594,62 @@ async fn f7_a_deep_surface_is_built_completely() {
     .unwrap();
     assert_eq!(m.completeness, Completeness::Complete);
     assert_eq!(&*m.lines[0].text, "deep button");
+}
+
+/// R2-1: the pages after the first are not asked for once the build's soft deadline has passed.
+#[tokio::test]
+async fn child_paging_stops_when_the_build_budget_is_used_up() {
+    let f = fake(form(600));
+    let late = std::time::Instant::now();
+    expand(&f.io, key(2), BudgetClass::Interactive, true, Some(late))
+        .await
+        .unwrap();
+    assert_eq!(
+        f.requests.load(Ordering::Relaxed),
+        2,
+        "one Fetch and the first page only"
+    );
+    let Lookup::Hit(v) = f.io.mirror.view(key(2)) else {
+        panic!("parent missing")
+    };
+    assert!(
+        !matches!(&v.snap.children, ChildList::Known(_)),
+        "an incomplete list must not be recorded as known"
+    );
+    assert!(matches!(f.io.mirror.view(key(3 + 255)), Lookup::Hit(_)));
+    assert!(matches!(f.io.mirror.view(key(3 + 256)), Lookup::Miss));
+    // The next pass of the same task resumes behind the pages already read, and reads one more
+    // page even when its time is up (or a slow app would never get past the first pages).
+    expand(&f.io, key(2), BudgetClass::Interactive, true, Some(late))
+        .await
+        .unwrap();
+    assert_eq!(
+        f.requests.load(Ordering::Relaxed),
+        2 + 2,
+        "a Fetch and the second page"
+    );
+    assert!(matches!(f.io.mirror.view(key(3 + 256)), Lookup::Hit(_)));
+    let far = std::time::Instant::now() + Duration::from_secs(30);
+    expand(&f.io, key(2), BudgetClass::Interactive, true, Some(far))
+        .await
+        .unwrap();
+    assert_eq!(
+        f.requests.load(Ordering::Relaxed),
+        2 + 2 + 2,
+        "a Fetch and the page that was left, not the first page again"
+    );
+    let Lookup::Hit(v) = f.io.mirror.view(key(2)) else {
+        panic!("parent missing")
+    };
+    assert!(matches!(&v.snap.children, ChildList::Known(k) if k.len() == 600));
+    // Without a deadline the whole list is read, page after page.
+    let g = fake(form(600));
+    expand(&g.io, key(2), BudgetClass::Interactive, true, None)
+        .await
+        .unwrap();
+    assert_eq!(g.requests.load(Ordering::Relaxed), 4);
+    let Lookup::Hit(v) = g.io.mirror.view(key(2)) else {
+        panic!("parent missing")
+    };
+    assert!(matches!(&v.snap.children, ChildList::Known(k) if k.len() == 600));
 }

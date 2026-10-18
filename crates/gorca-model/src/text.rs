@@ -62,6 +62,10 @@ pub enum WordLanding {
 pub struct EditQuirks {
     /// Where Ctrl+Right lands (see [`WordLanding`]).
     pub word_landing: WordLanding,
+    /// Blink: every text run is also a `static` child that repeats the text its parent's own
+    /// `Text` already holds. Text readers (flat review) skip such children so a line is not said
+    /// twice. Gecko keeps text in the container only.
+    pub text_leaves_repeat_parent: bool,
 }
 
 /// Core text queries. Text is not part of the node snapshot.
