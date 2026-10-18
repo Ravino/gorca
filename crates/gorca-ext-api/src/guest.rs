@@ -338,10 +338,10 @@ impl<T: Hooks + Default + 'static> wtm::Guest for Adapter<T> {
                 wtm::WordLevel::Medium => tm::WordLevel::Medium,
                 wtm::WordLevel::Coarse => tm::WordLevel::Coarse,
             }),
-            boundary: match cfg.boundary {
-                wtm::BoundaryMode::Cue => tm::BoundaryMode::Cue,
-                wtm::BoundaryMode::Repeat => tm::BoundaryMode::Repeat,
-                wtm::BoundaryMode::Silent => tm::BoundaryMode::Silent,
+            boundary: tm::BoundaryMode {
+                cue: cfg.boundary.cue,
+                say: cfg.boundary.say,
+                repeat: cfg.boundary.repeat,
             },
         };
         with_terminal::<T, _>(|t| t.configure(&cfg));

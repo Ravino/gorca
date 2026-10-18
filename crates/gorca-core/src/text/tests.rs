@@ -439,7 +439,7 @@ fn a_key_that_moves_nothing_gives_a_boundary_cue_and_no_speech_by_default() {
 #[test]
 fn a_silent_boundary_says_and_plays_nothing() {
     let mut g = rig();
-    boundary(&mut g, gorca_config::BoundaryMode::Silent);
+    boundary(&mut g, gorca_config::BoundaryMode::OFF);
     g.entry("hello", 0);
     let _ = g.key(LEFT, 0, NONE);
     g.advance(150);
@@ -464,7 +464,7 @@ fn up_on_the_first_line_of_a_text_view_is_a_cue_not_the_whole_line_again() {
     assert_eq!(cues(&fx), [gorca_output_api::CueId::Boundary]);
     // The old behaviour is an option.
     let mut g = rig();
-    boundary(&mut g, gorca_config::BoundaryMode::Repeat);
+    boundary(&mut g, gorca_config::BoundaryMode::REPEAT);
     g.area("first line here\nsecond", 3);
     let _ = g.key(UP, 0, NONE);
     g.advance(150);
@@ -480,9 +480,9 @@ fn up_on_the_first_line_of_a_text_view_is_a_cue_not_the_whole_line_again() {
 fn a_caret_event_that_reports_no_move_is_the_same_boundary() {
     // GTK 4 text views send a caret event for a key that moved nothing.
     for (b, cue, say) in [
-        (gorca_config::BoundaryMode::Cue, true, false),
-        (gorca_config::BoundaryMode::Silent, false, false),
-        (gorca_config::BoundaryMode::Repeat, false, true),
+        (gorca_config::BoundaryMode::CUE, true, false),
+        (gorca_config::BoundaryMode::OFF, false, false),
+        (gorca_config::BoundaryMode::REPEAT, false, true),
     ] {
         let mut g = rig();
         boundary(&mut g, b);
@@ -499,7 +499,7 @@ fn a_caret_event_that_reports_no_move_is_the_same_boundary() {
 #[test]
 fn a_key_that_moves_nothing_speaks_the_unit_at_the_caret_after_the_edge_time() {
     let mut g = rig();
-    boundary(&mut g, gorca_config::BoundaryMode::Repeat);
+    boundary(&mut g, gorca_config::BoundaryMode::REPEAT);
     g.entry("hello", 0);
     let fx = g.key(LEFT, 0, NONE);
     assert!(spoken(&fx).is_empty());
@@ -2486,14 +2486,14 @@ fn right_arrow_walks_a_cyrillic_entry_to_the_end_and_back_to_offset_zero() {
 #[test]
 fn keys_at_the_edges_that_move_nothing_still_speak_the_character_when_asked_to() {
     let mut g = rig();
-    boundary(&mut g, gorca_config::BoundaryMode::Repeat);
+    boundary(&mut g, gorca_config::BoundaryMode::REPEAT);
     g.entry("ab", 2);
     let _ = g.key(RIGHT, 0, NONE);
     g.advance(150);
     let fx = g.tick(0);
     assert_eq!(spoken(&fx), ["blank"], "Right at the end: boundary, blank");
     let mut g = rig();
-    boundary(&mut g, gorca_config::BoundaryMode::Repeat);
+    boundary(&mut g, gorca_config::BoundaryMode::REPEAT);
     g.entry("ab", 0);
     let _ = g.key(LEFT, 0, NONE);
     g.advance(150);
@@ -3324,4 +3324,148 @@ fn an_edit_long_after_an_undo_key_is_not_the_undos() {
     g.advance(300);
     let said = spoken(&g.insert(5, " from a script"));
     assert!(said.iter().all(|s| !s.starts_with("pasted")), "{said:?}");
+}
+
+fn replaced(g: &mut Rig) -> ReaderEffects {
+    g.msg(ReaderMsg::Text(TextMsg::Edit {
+        node: node(),
+        delta: gorca_model::TextDelta::Replaced { text: None },
+    }))
+}
+
+#[test]
+fn a_cut_or_paste_reported_as_a_replace_is_confirmed_once_and_its_caret_is_silent() {
+    // Firefox contenteditable, second shape: Replaced, then a caret event.
+    for (letter, want) in [("x", "cut"), ("v", "pasted")] {
+        let mut g = rig();
+        g.area("brave", 5);
+        let _ = clip_key(&mut g, letter, false);
+        assert_eq!(spoken(&replaced(&mut g)), [want]);
+        let fx = g.caret(0);
+        assert!(spoken(&fx).is_empty(), "{want}: {:?}", spoken(&fx));
+        assert!(spoken(&g.tick(400)).is_empty());
+    }
+}
+
+#[test]
+fn a_redo_that_deletes_then_leaves_a_placeholder_and_a_caret_says_redo_once() {
+    let mut g = rig();
+    g.area("brave", 5);
+    let _ = clip_key(&mut g, "y", false);
+    assert_eq!(spoken(&g.delete(0, Some("brave"), 5)), ["redo"]);
+    assert!(spoken(&g.insert(0, "\n")).is_empty());
+    assert!(spoken(&g.caret(0)).is_empty());
+}
+
+fn said_at_boundary(
+    mode: gorca_config::BoundaryMode,
+    area: bool,
+    text: &str,
+    caret: u32,
+    key: u32,
+) -> (Vec<String>, usize) {
+    let mut g = rig();
+    boundary(&mut g, mode);
+    if area {
+        g.area(text, caret);
+    } else {
+        g.entry(text, caret);
+    }
+    let _ = g.key(key, 0, NONE);
+    g.advance(150);
+    let fx = g.tick(0);
+    (spoken(&fx), cues(&fx).len())
+}
+
+#[test]
+fn the_boundary_says_start_end_top_or_bottom() {
+    use gorca_config::BoundaryMode as B;
+    let say = B::SAY;
+    // A single-line entry: its edges are the start and the end.
+    assert_eq!(
+        said_at_boundary(say, false, "ab", 0, LEFT),
+        (vec!["start".to_owned()], 0)
+    );
+    assert_eq!(
+        said_at_boundary(say, false, "ab", 2, 0xff53),
+        (vec!["end".to_owned()], 0)
+    );
+    // A text view: Left, Right, Up and Down stop at the top or bottom of the text; Home and End
+    // at the start or end of the line.
+    let t = "one\ntwo";
+    assert_eq!(
+        said_at_boundary(say, true, t, 0, UP),
+        (vec!["top".to_owned()], 0)
+    );
+    assert_eq!(
+        said_at_boundary(say, true, t, 0, LEFT),
+        (vec!["top".to_owned()], 0)
+    );
+    assert_eq!(
+        said_at_boundary(say, true, t, 7, 0xff54),
+        (vec!["bottom".to_owned()], 0)
+    );
+    assert_eq!(
+        said_at_boundary(say, true, t, 7, 0xff53),
+        (vec!["bottom".to_owned()], 0)
+    );
+    assert_eq!(
+        said_at_boundary(say, true, t, 4, 0xff50),
+        (vec!["start".to_owned()], 0)
+    );
+    assert_eq!(
+        said_at_boundary(say, true, t, 7, 0xff57),
+        (vec!["end".to_owned()], 0)
+    );
+}
+
+#[test]
+fn every_boundary_mode_does_what_it_says() {
+    use gorca_config::BoundaryMode as B;
+    let both = B {
+        cue: true,
+        say: true,
+        repeat: false,
+    };
+    assert_eq!(said_at_boundary(B::OFF, false, "ab", 0, LEFT), (vec![], 0));
+    assert_eq!(said_at_boundary(B::CUE, false, "ab", 0, LEFT), (vec![], 1));
+    assert_eq!(
+        said_at_boundary(B::SAY, false, "ab", 0, LEFT),
+        (vec!["start".to_owned()], 0)
+    );
+    assert_eq!(
+        said_at_boundary(both, false, "ab", 0, LEFT),
+        (vec!["start".to_owned()], 1)
+    );
+    assert_eq!(
+        said_at_boundary(B::REPEAT, false, "ab", 0, LEFT),
+        (vec!["a".to_owned()], 0)
+    );
+    // Repeat with the others: the cue, the word, then the unit.
+    let all = B {
+        repeat: true,
+        ..both
+    };
+    assert_eq!(
+        said_at_boundary(all, false, "ab", 0, LEFT),
+        (vec!["start".to_owned(), "a".to_owned()], 1)
+    );
+}
+
+#[test]
+fn the_boundary_words_are_localised() {
+    use gorca_i18n::Lang;
+    let _guard = gorca_i18n::scoped(Lang::Ru);
+    let mut g = rig();
+    boundary(&mut g, gorca_config::BoundaryMode::SAY);
+    g.area("one\ntwo", 0);
+    let _ = g.key(UP, 0, NONE);
+    g.advance(150);
+    assert_eq!(spoken(&g.tick(0)), ["начало текста"]);
+    let mut g = rig();
+    boundary(&mut g, gorca_config::BoundaryMode::SAY);
+    g.entry("ab", 2);
+    let _ = g.key(0xff53, 0, NONE);
+    g.advance(150);
+    assert_eq!(spoken(&g.tick(0)), ["конец"]);
 }

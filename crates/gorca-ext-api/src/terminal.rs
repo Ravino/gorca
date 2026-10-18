@@ -246,16 +246,28 @@ pub enum TermAction {
     Cue,
 }
 
-/// What a key that cannot move the caret does (`[editing] boundary`).
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
-pub enum BoundaryMode {
+/// What a key that cannot move the caret does (`[editing] boundary`): any of the options, none
+/// at all is silence.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+// Three independent switches, as in the file.
+#[allow(clippy::struct_excessive_bools)]
+pub struct BoundaryMode {
     /// Ask the host for the boundary cue ([`TermAction::Cue`]).
-    #[default]
-    Cue,
+    pub cue: bool,
+    /// Say "start" or "end".
+    pub say: bool,
     /// Speak the unit at the caret again.
-    Repeat,
-    /// Nothing.
-    Silent,
+    pub repeat: bool,
+}
+
+impl Default for BoundaryMode {
+    fn default() -> Self {
+        Self {
+            cue: true,
+            say: false,
+            repeat: false,
+        }
+    }
 }
 
 // The text may be a typed password: only its length is shown.
@@ -324,7 +336,7 @@ impl Default for TermConfig {
             burst_tail: 3,
             max_output_chars: 600,
             word_level: None,
-            boundary: BoundaryMode::Cue,
+            boundary: BoundaryMode::default(),
         }
     }
 }

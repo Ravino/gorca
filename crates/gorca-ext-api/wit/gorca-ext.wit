@@ -214,11 +214,12 @@ interface terminal {
     cue,
   }
 
-  /// What a key that cannot move the caret does (`[editing] boundary`, added in 0.3.0).
-  enum boundary-mode {
-    cue,
-    repeat,
-    silent,
+  /// What a key that cannot move the caret does (`[editing] boundary`, added in 0.3.0): any of
+  /// the three, none at all is silence.
+  record boundary-mode {
+    cue: bool,
+    say: bool,
+    repeat: bool,
   }
 
   /// How coarse a word is (docs/config-reference.md, `[editing] word`).

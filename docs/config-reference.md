@@ -47,10 +47,14 @@ voice = ""                    # optional, a voice name from your voicego engine
   confirm it). The keys themselves are never grabbed: they always reach the application. In
   browse mode Ctrl+C is the selection-model copy and is not affected.
 - `boundary` is what an arrow, Home or End key does when the caret cannot move, at the start or
-  end of a line or field. `"cue"` (the default) plays a short boundary cue through the cue sink;
-  until the sound theme exists the cue is silent, so a boundary key says nothing. `"repeat"` is the
-  old behaviour (read the character, word or line under the caret again) and `"silent"` does
-  nothing at all.
+  end of a line or field. Like `[speech] caps` it is a list of independent options:
+  `"cue"` (the default) asks the cue sink for a short boundary sound (until the sound theme
+  exists the cue is silent, so a boundary key says nothing); `"say"` speaks a short word, "start"
+  or "end" for Home, End and any key in a one-line field, "top" or "bottom" for the other keys
+  of a text view (Russian: "начало", "конец", "начало текста", "конец текста"). Write them
+  together as `["cue", "say"]` or `"cue+say"`; `"off"` or `[]` does nothing. `"repeat"` is the
+  old behaviour (read the character, word or line under the caret again) and may be combined
+  too. Terminals honour the setting the same way (start and end only).
 - `word` is how coarse a word is when a word is read (Ctrl+Left and Ctrl+Right, the current-word
   commands, terminal review). `"fine"` is the caret word rule: letters, digits and `_` are a word,
   every other character a word of its own, so `--color=auto` has five stops. `"medium"` keeps

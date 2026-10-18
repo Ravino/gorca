@@ -17,7 +17,7 @@ use gorca_ext_api::terminal::{
     TerminalHooks, Unit, Urgency,
 };
 
-use gorca_ext_api::terminal::{BoundaryMode, DEFAULT_WORD_LEVEL, WordLevel, word_at, word_motion};
+use gorca_ext_api::terminal::{DEFAULT_WORD_LEVEL, WordLevel, word_at, word_motion};
 
 use crate::prompt::Prompt;
 use crate::screen::{Diff, DiffBuf, Screen, diff, diff_with};
@@ -486,14 +486,22 @@ impl Session {
                 break;
             }
             self.motions.pop_front();
-            match self.cfg.boundary {
-                BoundaryMode::Repeat => {
-                    let (row, col) = self.live.locate(self.caret);
-                    self.say_at(&self.live, row, col, unit, None, out);
-                }
-                // The key moved nothing: the setting decides what the boundary is.
-                BoundaryMode::Cue => out.push(TermAction::Cue),
-                BoundaryMode::Silent => {}
+            // The key moved nothing: the setting decides what the boundary is.
+            let b = self.cfg.boundary;
+            if b.cue {
+                out.push(TermAction::Cue);
+            }
+            if b.say {
+                let key = match dir {
+                    Dir::Back => "boundary-start",
+                    Dir::Forward => "boundary-end",
+                };
+                let word = gorca_ext_api::i18n::msg(crate::NAME, key, &[]);
+                self.say(out, &word, Unit::Text, Urgency::Key);
+            }
+            if b.repeat {
+                let (row, col) = self.live.locate(self.caret);
+                self.say_at(&self.live, row, col, unit, None, out);
             }
         }
     }

@@ -790,10 +790,10 @@ impl HookInstance for WasmInstance {
                 api::terminal::WordLevel::Medium => wtm::WordLevel::Medium,
                 api::terminal::WordLevel::Coarse => wtm::WordLevel::Coarse,
             }),
-            boundary: match cfg.boundary {
-                api::terminal::BoundaryMode::Cue => wtm::BoundaryMode::Cue,
-                api::terminal::BoundaryMode::Repeat => wtm::BoundaryMode::Repeat,
-                api::terminal::BoundaryMode::Silent => wtm::BoundaryMode::Silent,
+            boundary: wtm::BoundaryMode {
+                cue: cfg.boundary.cue,
+                say: cfg.boundary.say,
+                repeat: cfg.boundary.repeat,
             },
         };
         self.call_term(|t, s| t.call_configure(s, &cfg))

@@ -38,7 +38,11 @@ impl Rig {
     fn repeating() -> Self {
         let mut r = Self::new();
         r.s = Session::new(&TermConfig {
-            boundary: gorca_ext_api::terminal::BoundaryMode::Repeat,
+            boundary: gorca_ext_api::terminal::BoundaryMode {
+                cue: false,
+                say: false,
+                repeat: true,
+            },
             ..TermConfig::default()
         });
         r
@@ -1694,11 +1698,40 @@ fn a_key_that_cannot_move_gives_the_boundary_cue_by_default() {
 fn a_silent_boundary_gives_neither_speech_nor_cue() {
     let mut r = Rig::new();
     r.s = Session::new(&TermConfig {
-        boundary: gorca_ext_api::terminal::BoundaryMode::Silent,
+        boundary: gorca_ext_api::terminal::BoundaryMode {
+            cue: false,
+            say: false,
+            repeat: false,
+        },
         ..TermConfig::default()
     });
     r.focus("$ abc", 2);
     r.key(TermKey::CharLeft);
     let a = r.wait(300);
     assert!(texts(&a).is_empty() && cues(&a) == 0);
+}
+
+#[test]
+fn the_terminal_boundary_can_say_start_and_end_with_or_without_the_cue() {
+    for cue in [false, true] {
+        let mut r = Rig::new();
+        r.s = Session::new(&TermConfig {
+            boundary: gorca_ext_api::terminal::BoundaryMode {
+                cue,
+                say: true,
+                repeat: false,
+            },
+            ..TermConfig::default()
+        });
+        r.focus("$ abc", 2);
+        r.key(TermKey::CharLeft);
+        let a = r.wait(110);
+        assert_eq!(texts(&a), vec!["start".to_owned()]);
+        assert_eq!(cues(&a), usize::from(cue));
+        r.focus("$ abc", 5);
+        r.key(TermKey::CharRight);
+        let a = r.wait(110);
+        assert_eq!(texts(&a), vec!["end".to_owned()]);
+        assert_eq!(cues(&a), usize::from(cue));
+    }
 }

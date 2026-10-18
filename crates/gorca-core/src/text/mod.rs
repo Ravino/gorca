@@ -128,6 +128,8 @@ pub struct TextCounters {
     pub caret_edge: u64,
     /// Boundary cues asked for (a movement key that could not move the caret, `boundary = "cue"`).
     pub boundary_cues: u64,
+    /// Boundary words spoken (`boundary` with "say").
+    pub boundary_said: u64,
     /// "copied", "cut" (apart from the cut text), "pasted" (apart from the pasted text), "undo"
     /// and "redo" confirmations spoken.
     pub clipboard_spoken: u64,
@@ -377,10 +379,10 @@ impl Reader {
             edge: std::time::Duration::from_millis(u64::from(s.text.caret_edge_ms)),
             late: std::time::Duration::from_millis(u64::from(s.text.caret_late_ms)),
             announce_clipboard: s.editing.announce_clipboard,
-            boundary: match s.editing.boundary {
-                gorca_config::BoundaryMode::Cue => caret::Boundary::Cue,
-                gorca_config::BoundaryMode::Repeat => caret::Boundary::Repeat,
-                gorca_config::BoundaryMode::Silent => caret::Boundary::Silent,
+            boundary: caret::Boundary {
+                cue: s.editing.boundary.cue,
+                say: s.editing.boundary.say,
+                repeat: s.editing.boundary.repeat,
             },
         }
     }

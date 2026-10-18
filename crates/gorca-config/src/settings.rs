@@ -154,34 +154,83 @@ impl Confirmations {
 }
 
 /// What a movement key that cannot move the caret does (the start or end of a line or field).
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
-pub enum BoundaryMode {
+/// Independent options like `speech.caps`: `["cue", "say"]`, or the strings `off`, `cue`, `say`,
+/// `cue+say` and the older `repeat`.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+// Three independent switches that are separate entries of one list in the file.
+#[allow(clippy::struct_excessive_bools)]
+pub struct BoundaryMode {
     /// A boundary cue (a short sound once the cue sink exists; silent until then).
-    #[default]
-    Cue,
+    pub cue: bool,
+    /// A short word for the edge: "start", "end", "top", "bottom".
+    pub say: bool,
     /// Read the unit under the caret again (the behaviour before the cue existed).
-    Repeat,
-    /// Say nothing.
-    Silent,
+    pub repeat: bool,
+}
+
+impl Default for BoundaryMode {
+    fn default() -> Self {
+        BoundaryMode::CUE
+    }
 }
 
 impl BoundaryMode {
-    pub const NAMES: &'static str = "\"cue\", \"repeat\" or \"silent\"";
+    pub const NAMES: &'static str = "\"off\", \"cue\", \"say\", \"cue+say\" or \"repeat\"";
+    pub const OFF: BoundaryMode = BoundaryMode {
+        cue: false,
+        say: false,
+        repeat: false,
+    };
+    pub const CUE: BoundaryMode = BoundaryMode {
+        cue: true,
+        ..BoundaryMode::OFF
+    };
+    pub const SAY: BoundaryMode = BoundaryMode {
+        say: true,
+        ..BoundaryMode::OFF
+    };
+    pub const REPEAT: BoundaryMode = BoundaryMode {
+        repeat: true,
+        ..BoundaryMode::OFF
+    };
 
-    pub fn parse(s: &str) -> Option<Self> {
-        match s {
-            "cue" => Some(BoundaryMode::Cue),
-            "repeat" => Some(BoundaryMode::Repeat),
-            "silent" => Some(BoundaryMode::Silent),
-            _ => None,
+    /// Add the option named `s` (`cue+say` adds both; `off`, `none` and `silent` add nothing).
+    /// `false` for an unknown name.
+    pub fn add(&mut self, s: &str) -> bool {
+        for part in s.split('+') {
+            match part.trim() {
+                "cue" => self.cue = true,
+                "say" => self.say = true,
+                "repeat" => self.repeat = true,
+                "off" | "none" | "silent" => {}
+                _ => return false,
+            }
         }
+        true
     }
 
-    pub fn name(self) -> &'static str {
-        match self {
-            BoundaryMode::Cue => "cue",
-            BoundaryMode::Repeat => "repeat",
-            BoundaryMode::Silent => "silent",
+    /// The option names, in the order of the file.
+    pub fn names(self) -> Vec<&'static str> {
+        let mut v = Vec::with_capacity(3);
+        if self.cue {
+            v.push("cue");
+        }
+        if self.say {
+            v.push("say");
+        }
+        if self.repeat {
+            v.push("repeat");
+        }
+        v
+    }
+
+    /// The setting as one string (`off`, `cue`, `cue+say`, ...).
+    pub fn name(self) -> String {
+        let n = self.names();
+        if n.is_empty() {
+            "off".to_owned()
+        } else {
+            n.join("+")
         }
     }
 }
@@ -498,7 +547,7 @@ impl Default for EditingSettings {
     fn default() -> Self {
         Self {
             announce_clipboard: true,
-            boundary: BoundaryMode::Cue,
+            boundary: BoundaryMode::CUE,
             word: WordLevel::Auto,
         }
     }
@@ -844,12 +893,7 @@ pub static SETTINGS: &[SettingDef] = &[
     row("echo", "command_keys", SettingType::Bool, "false"),
     row("echo", "inserted_text", SettingType::Bool, "true"),
     row("editing", "announce_clipboard", SettingType::Bool, "true"),
-    row(
-        "editing",
-        "boundary",
-        SettingType::Enum(BoundaryMode::NAMES),
-        "\"cue\"",
-    ),
+    row("editing", "boundary", SettingType::StrList, "\"cue\""),
     row(
         "editing",
         "word",
@@ -1041,7 +1085,7 @@ static DOCS: &[(&str, &str, &str)] = &[
     (
         "editing",
         "boundary",
-        "What an arrow or Home/End key does when the caret cannot move: a boundary cue (silent until sounds exist), read the unit again, or nothing.",
+        "What an arrow, Home or End key does when the caret cannot move: any of \"cue\" (a boundary sound; silent until sounds exist) and \"say\" (a short word: start, end, top, bottom), for example [\"cue\", \"say\"]; [] or \"off\" is nothing; \"repeat\" reads the unit under the caret again.",
     ),
     (
         "editing",

@@ -62,3 +62,7 @@ text-cut = cut
 text-pasted = pasted
 text-undo = undo
 text-redo = redo
+text-boundary-start = start
+text-boundary-end = end
+text-boundary-top = top
+text-boundary-bottom = bottom

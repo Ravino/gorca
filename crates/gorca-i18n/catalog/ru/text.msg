@@ -62,3 +62,7 @@ text-cut = вырезано
 text-pasted = вставлено
 text-undo = отмена
 text-redo = повтор
+text-boundary-start = начало
+text-boundary-end = конец
+text-boundary-top = начало текста
+text-boundary-bottom = конец текста

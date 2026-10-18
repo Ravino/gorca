@@ -83,13 +83,23 @@ pub struct Cfg {
 
 /// What a movement key does when the caret cannot move (CR-3): the setting `[editing] boundary`.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum Boundary {
+// Three independent switches, as in the file.
+#[allow(clippy::struct_excessive_bools)]
+pub struct Boundary {
     /// A boundary cue through the cue sink (silent until sounds exist).
-    Cue,
+    pub cue: bool,
+    /// A short word for the edge: start, end, top, bottom.
+    pub say: bool,
     /// Speak the unit at the caret again.
-    Repeat,
-    /// Nothing.
-    Silent,
+    pub repeat: bool,
+}
+
+impl Boundary {
+    pub const CUE: Boundary = Boundary {
+        cue: true,
+        say: false,
+        repeat: false,
+    };
 }
 
 impl Default for Cfg {
@@ -101,7 +111,7 @@ impl Default for Cfg {
             edge: Duration::from_millis(100),
             late: Duration::from_millis(400),
             announce_clipboard: true,
-            boundary: Boundary::Cue,
+            boundary: Boundary::CUE,
         }
     }
 }
@@ -454,6 +464,9 @@ pub struct Tracked {
     /// Where a confirmed cut left the text, and until when Gecko's follow-up belongs to it: a
     /// one-scalar placeholder insert at that offset and the caret that lands on it.
     cut_at: Option<(u32, Instant)>,
+    /// Until when a caret event belongs to a clipboard edit just confirmed (Gecko reports a cut
+    /// or paste as a wholesale replace, then moves the caret).
+    clip_caret: Option<Instant>,
     /// The insert being handled was read together with its "undo" or "redo".
     clip_quiet: bool,
     /// The key epoch whose undo or redo has been confirmed already (one "undo" per key, however
@@ -505,6 +518,7 @@ impl Tracked {
             replaced: None,
             cut_at: None,
             clip_quiet: false,
+            clip_caret: None,
             clip_epoch: None,
             revs: SmallVec::new(),
         }
@@ -1114,6 +1128,11 @@ impl CaretState {
                 if t.caret == Some(off) {
                     return CaretState::Idle { t };
                 }
+                if t.clip_caret.take().is_some_and(|u| cx.now <= u) {
+                    // The caret that follows a confirmed clipboard edit is its own.
+                    t.caret = Some(off);
+                    return CaretState::Idle { t };
+                }
                 if let Some(l) = t.late
                     && cx.now <= l.until
                     && let TextKey::Move {
@@ -1166,7 +1185,7 @@ impl CaretState {
                         // The application reported a caret event for a key that moved nothing
                         // (GTK 4 text views do): the same boundary as no event at all.
                         cx.stats.caret_edge += 1;
-                        return at_boundary(t, unit, off, epoch, cx);
+                        return at_boundary(t, (unit, dir), off, epoch, cx);
                     }
                     cx.stats.caret_correlated += 1;
                     let say = say_of(unit);
@@ -1240,6 +1259,22 @@ impl CaretState {
             !matches!(key, TextKey::Clipboard(_))
                 || cx.now <= clip_deadline(*late_until, cx.cfg.late.max(cx.cfg.edge))
         });
+        // A cut or a paste reported as a wholesale replace (Gecko): the change is the evidence.
+        if let Some((TextKey::Clipboard(op @ (ClipOp::Cut | ClipOp::Paste)), epoch, ..)) = slot
+            && matches!(e, Edit::Replaced)
+            && cx.cfg.announce_clipboard
+            && t.kind.editable
+            && t.clip_epoch != Some(epoch)
+        {
+            t.clip_epoch = Some(epoch);
+            t.clip_caret = Some(cx.now + CLIP_WINDOW);
+            let m = if op == ClipOp::Cut {
+                msg!(TextCut)
+            } else {
+                msg!(TextPasted)
+            };
+            say_clip(&mut t, m, epoch, cx);
+        }
         // Undo and redo are vouched for by the text changing, whatever the change was. An
         // insert is read too (what came back); the insert path below must not read it again.
         if let Some((TextKey::Clipboard(op @ (ClipOp::Undo | ClipOp::Redo)), epoch, ..)) = slot
@@ -1253,6 +1288,11 @@ impl CaretState {
             } else {
                 msg!(TextRedo)
             };
+            t.clip_caret = Some(cx.now + CLIP_WINDOW);
+            if let Edit::Delete { offset, .. } = &e {
+                // The placeholder Gecko inserts where an undo or redo emptied a block.
+                t.cut_at = Some((*offset, cx.now + CUT_TAIL));
+            }
             match &e {
                 Edit::Insert {
                     text: Some(s), len, ..
@@ -1578,6 +1618,7 @@ impl CaretState {
                 match key {
                     TextKey::Move {
                         unit,
+                        dir,
                         select: false,
                         ..
                     } => {
@@ -1587,7 +1628,7 @@ impl CaretState {
                             until: late_until,
                         });
                         match t.caret {
-                            Some(at) => at_boundary(t, unit, at, epoch, cx),
+                            Some(at) => at_boundary(t, (unit, dir), at, epoch, cx),
                             None => CaretState::Idle { t },
                         }
                     }
@@ -1645,20 +1686,36 @@ impl CaretState {
 /// A movement key that could not move the caret (CR-3): what `[editing] boundary` says.
 fn at_boundary(
     t: Box<Tracked>,
-    unit: KeyUnit,
+    key: (KeyUnit, TextDir),
     at: u32,
     epoch: Epoch,
     cx: &mut Ctx<'_>,
 ) -> CaretState {
-    match cx.cfg.boundary {
-        Boundary::Repeat => present(t, say_of(unit), at, Reason::Boundary, epoch, cx),
-        Boundary::Cue => {
-            cx.stats.boundary_cues += 1;
-            cx.out.push(Out::Cue(gorca_output_api::CueId::Boundary));
-            CaretState::Idle { t }
-        }
-        Boundary::Silent => CaretState::Idle { t },
+    let b = cx.cfg.boundary;
+    if b.cue {
+        cx.stats.boundary_cues += 1;
+        cx.out.push(Out::Cue(gorca_output_api::CueId::Boundary));
     }
+    if b.say {
+        // A line-edge key stops at the start or end of the line (the whole text in a
+        // single-line field); every other key can only stop at the top or bottom of the text.
+        let line = key.0 == KeyUnit::LineEdge || !t.kind.multiline;
+        let word = match (line, key.1) {
+            (true, TextDir::Prev) => msg!(TextBoundaryStart),
+            (true, TextDir::Next) => msg!(TextBoundaryEnd),
+            (false, TextDir::Prev) => msg!(TextBoundaryTop),
+            (false, TextDir::Next) => msg!(TextBoundaryBottom),
+        };
+        let mut pieces: SmallVec<[Piece; 2]> = SmallVec::new();
+        pieces.push(Piece::phrase(word));
+        let s = t.spoken(pieces, Reason::Boundary, epoch, Prio::Interrupt);
+        cx.say(s);
+        cx.stats.boundary_said += 1;
+    }
+    if b.repeat {
+        return present(t, say_of(key.0), at, Reason::Boundary, epoch, cx);
+    }
+    CaretState::Idle { t }
 }
 
 /// The last moment an edit still belongs to a clipboard or undo key whose slot ends at
