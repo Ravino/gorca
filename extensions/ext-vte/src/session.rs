@@ -432,13 +432,44 @@ impl Session {
         let (row, col) = self.live.locate(self.caret);
         let line = self.live.line(row);
         match dir {
-            Dir::Back => self.prompt.end(line).is_some_and(|pe| col <= pe),
+            // Only the first row of the command, with nothing below it, has a start the caret
+            // cannot go behind: a `# comment` row of an editor, or the `> out.txt` row a long
+            // command wrapped onto, matches a prompt marker and is neither.
+            Dir::Back => {
+                self.prompt.end(line).is_some_and(|pe| col <= pe)
+                    && !self.continues_command(row)
+                    && self.blank_below(row)
+            }
             Dir::Forward => {
-                col as usize >= line.trim_end().chars().count()
-                    && (row + 1..self.live.line_count())
-                        .all(|r| self.live.line(r).trim().is_empty())
+                col as usize >= line.trim_end().chars().count() && self.blank_below(row)
             }
         }
+    }
+
+    /// Are all rows below `row` of the live screen blank?
+    fn blank_below(&self, row: usize) -> bool {
+        (row + 1..self.live.line_count()).all(|r| self.live.line(r).trim().is_empty())
+    }
+
+    /// Is `row` the continuation of a command that wrapped from a row above? The rows above are
+    /// full rows (the terminal's width is the longest row on the screen) up to one with a prompt.
+    fn continues_command(&self, row: usize) -> bool {
+        let width = (0..self.live.line_count())
+            .map(|r| self.live.line(r).chars().count())
+            .max()
+            .unwrap_or(0);
+        let mut r = row;
+        while r > 0 && row - r < WRAP_ROWS_MAX {
+            let above = self.live.line(r - 1);
+            if above.chars().count() != width {
+                return false;
+            }
+            if self.prompt.end(above).is_some() {
+                return true;
+            }
+            r -= 1;
+        }
+        false
     }
 
     fn edge_ready(&self) -> bool {

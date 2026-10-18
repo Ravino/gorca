@@ -412,6 +412,43 @@ fn a_key_that_cannot_move_speaks_at_the_short_edge_time() {
 }
 
 #[test]
+fn left_on_a_comment_line_of_an_editor_is_not_a_cannot_move_edge() {
+    // vim shows `# comment` rows: the "# " is no prompt. Rows below the caret row are not blank,
+    // so Left can move; the late caret event is the only answer (reviewer probe, round 3).
+    let mut r = Rig::new();
+    r.focus("# comment\nsecond line", 2);
+    r.key(TermKey::CharLeft);
+    assert!(
+        texts(&r.wait(120)).is_empty(),
+        "the edge timer must not read the old caret"
+    );
+    assert_eq!(texts(&r.feed(TermInput::Caret(1))).len(), 1);
+    assert!(texts(&r.wait(300)).is_empty(), "spoken once");
+}
+
+#[test]
+fn left_on_a_wrapped_row_that_looks_like_a_prompt_is_not_a_cannot_move_edge() {
+    // The command wrapped: its second row starts with `> out.txt`, which matches the "> " marker.
+    let mut r = Rig::new();
+    r.focus("$ echo aaa\n> out.txt", 12);
+    r.key(TermKey::CharLeft);
+    assert!(
+        texts(&r.wait(120)).is_empty(),
+        "the edge timer must not read the old caret"
+    );
+    assert_eq!(texts(&r.feed(TermInput::Caret(11))), vec![">".to_owned()]);
+    assert!(texts(&r.wait(300)).is_empty(), "spoken once");
+}
+
+#[test]
+fn left_at_the_start_of_a_command_below_output_still_speaks_at_the_short_edge_time() {
+    let mut r = Rig::new();
+    r.focus("a long line of output\n$ abc", 24);
+    r.key(TermKey::CharLeft);
+    assert_eq!(texts(&r.wait(110)), vec!["a".to_owned()]);
+}
+
+#[test]
 fn a_caret_without_a_key_is_silent() {
     let mut r = Rig::new();
     r.focus("$ abc", 5);
