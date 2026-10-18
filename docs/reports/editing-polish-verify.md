@@ -117,3 +117,61 @@ author's report.
 
 Probes were temporary (in `text/tests.rs`, `statemodel/regressions.rs` and `gorca-text/tests/`) and
 have been reverted.
+
+## Round 2 (head 3dcf9163, 2026-10-18)
+
+Gates rerun with 4 jobs: fmt clean, clippy `-D warnings` clean, `cargo test --workspace` 2289 passed /
+0 failed / 17 ignored, `xtask deps` ok (328 literals, 109 allowed), `build-ext` rebuilds both components.
+Incremental caches cleared afterwards.
+
+Verdict: **MERGE after a rebase onto main.** No must-fix items remain in the code.
+
+### Merge-tree vs current main: CONFLICTS (blocking the merge itself, trivial to resolve)
+Main now has the Chromium flat review merge (`eb6edfbf`), and `git merge-tree --write-tree HEAD main`
+reports 3 conflicts:
+- `crates/gorca-model/src/text.rs`: both sides add a field to `EditQuirks` (`word_level` here,
+  `text_leaves_repeat_parent` on main). Keep both.
+- `crates/gorca-connector-atspi/src/toolkit.rs:114`: the same struct literal. Keep both fields.
+- `docs/decisions.md`: adjacent rows.
+After resolving, rerun clippy and the tests: main's `EditQuirks` literals may need `word_level`, or
+`..Default::default()`.
+
+### (1) F-1 rework: can stale speech survive the exit from review?
+`review_left_by_key` now calls `on_mode_epoch(ExitReview, advance = false)`. Probe (statemodel; review a
+line, then one key press reaches a terminal):
+- `keyboard.interrupt = "non-modifier"` (the default): the review utterance at Epoch(3) is invalid
+  after the key at Epoch(4). It is cancelled, and the echo is current. The new regression
+  `two_keys_typed_ahead_after_review_are_both_echoed_with_current_epochs` covers typing ahead.
+- `keyboard.interrupt = "never"`: the lane does not advance the epoch at the press, and the Reader no
+  longer does either, so the review utterance stays **valid** (`Epoch(3)`, current `Epoch(3)`). The echo
+  (Prio::Interrupt, `gorca-speech/src/state.rs:247`) replaces the utterance being spoken. Any further
+  queued review utterance of the same epoch plays after the echo; before this branch, leaving review
+  purged it.
+  (Low.) Fix: pass `advance = (keyboard.interrupt == Never)`. The Reader knows the policy
+  (`compile.rs:105`).
+- An edge with the default policy: review speech produced from a reply that the Reader handles after the
+  key was stamped but before the key message takes `current()`, which is the key's epoch, so it is not
+  stale. The echo replaces it if it is being spoken; if it is queued, it plays after the echo. This needs
+  a reply landing inside the typeahead window. Info only.
+
+### (2) WIT 0.3.0
+- `package gorca:ext@0.3.0` and `WIT_PACKAGE` agree (a test asserts it).
+- `build-ext` rebuilt `ext-vte` and `ext-gnome-shell`. `term_parity` loads the component and passes, and
+  so do the hostile and ext host tests.
+- A 0.2.0 component (for example main's `target/release/extensions/ext-vte/ext_vte.wasm`) no longer
+  links. The host counts that as `instantiate_failures` (`gorca-ext-host/src/slot.rs:233`) and does not
+  crash; I did not exercise this.
+- Doc nit: ADR-0008 (line 327) plans the web hooks for 0.3, and ADR-0019 still names 0.2.0 as the
+  current contract. Update both, or note that 0.3.0 was taken by the editing settings.
+
+### (3) Boundary "say" wording and placement
+`caret.rs:1700-1708`:
+- "start"/"end" for Home/End (a line edge), and for every key in a one-line field;
+- "top"/"bottom" for the other keys of a text view (Up on the first line, Ctrl+Home, Left at the very
+  start, Page keys);
+- ru: начало / конец / начало текста / конец текста.
+
+This is sensible and close to NVDA. One wrinkle (Low): `cue+say+repeat` and `say+repeat` emit two
+Interrupt utterances in a row, and the second replaces the first in the lane (`state.rs:247`). The word
+"start" is cut off by the repeated unit. Join them into one utterance ("start, h"), or document that
+`say` and `repeat` do not combine.
