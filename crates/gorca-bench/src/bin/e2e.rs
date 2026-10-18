@@ -233,6 +233,7 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "stuck_not_healed"
                     | "rs_failures"
                     | "restore_failed"
+                    | "null_walk"
                     | "grab_state_wrong"
                     | "held_keys"
                     | "xkb_stuck"

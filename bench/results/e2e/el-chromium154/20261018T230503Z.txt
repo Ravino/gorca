@@ -1,0 +1,45 @@
+# e2e-m8 el-chromium154
+# utc=2026-10-18T23:05:03Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=13.04 13.01 14.06 14/2486 3349506
+# git_rev=176e5773
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=el-chromium154
+# reader=daemon:<repo>/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# quick=false
+# loadavg_before=10.19 12.48 13.91 6/2322 3346026
+# loadavg_end=13.04 13.01 14.06 11/2486 3349503
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-QN QN.h.edge.prev2 P0 FAIL: heard "heading level 4, Heading four first" 
+# note1=M8-QN QN.k.1 P0 FAIL: heard "link, inline link one" 
+# note2=M8-QN QN.k.2 P0 FAIL: heard "link, inline link two | no next link | no next link" 
+# note3=M8-QN QN.k.3 P0 FAIL: heard "link, inline link one" 
+# note4=M8-QN QN.k.edge.next P0 FAIL: heard "link, inline link two" 
+# note5=M8-QN QN.k.edge.prev P0 FAIL: heard "link, inline link one" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-QN.key_ms.n             daemon/voicego            4            4            4  1                  info   [samples]
+M8-QN.key_ms.p50           daemon/voicego        0.597        0.597        0.597  1                  info   [ms]
+M8-QN.key_ms.p95           daemon/voicego        0.603        0.603        0.603  1                  info   [ms]
+M8-QN.key_ms.p99           daemon/voicego        0.603        0.603        0.603  1 <=            5  PASS   [ms]
+M8-QN.key_ms.max           daemon/voicego        0.603        0.603        0.603  1                  info   [ms]
+M8-QN.fail                 daemon/voicego            6            6            6  1 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-QN.gap                  daemon/voicego            0            0            0  1                  info  core ok, NVDA extras missing [steps]
+M8-QN.p0_not_pass          daemon/voicego            6            6            6  1                  info   [steps]
+M8-QN.pass                 daemon/voicego            7            7            7  1                  info   [steps]
+M8-QN.steps                daemon/voicego           13           13           13  1                  info   [steps]
+M8-QN.xfail                daemon/voicego            0            0            0  1                  info  expected-fail steps that fail (gap table) [steps]
+M8-QN.xpass                daemon/voicego            0            0            0  1                  info  expected-fail steps that pass: remove their xf() mark [steps]

@@ -25,8 +25,8 @@ mod monitor;
 mod source;
 
 pub use monitor::{
-    AUTHORIZE_DEADLINE, GRAB_DEADLINE, GRAB_RETRIES, GrabSetState, MonitorEffect, MonitorMsg,
-    MonitorState, Notice, RequestNameReply, SETTLE, StepCtx, lost_backoff,
+    AUTHORIZE_DEADLINE, GRAB_DEADLINE, GrabSetState, MonitorEffect, MonitorMsg, MonitorState,
+    Notice, RequestNameReply, SETTLE, StepCtx, lost_backoff,
 };
 pub use source::{MutterKeySource, NameReply, decode_key_event};
 

@@ -258,7 +258,7 @@ impl Reader {
     /// Whether the application of `node` has not earned the protection yet (and `node` is a real
     /// focus, not a switcher selection). The grace of the previous application does not count:
     /// it ends, and only publishing makes the application current.
-    fn protection_unearned(&self, node: NodeKey) -> bool {
+    pub(crate) fn protection_unearned(&self, node: NodeKey) -> bool {
         self.selection_node != Some(node)
             && self
                 .focused_app
@@ -312,8 +312,18 @@ impl Reader {
         use gorca_connector_api::BackendError as E;
         let Err(e) = &r.result else {
             if self.reconfirm.node() == Some(r.node) {
-                // Answered: asked once per focus change, whatever the state says.
-                self.reconfirm = Reconfirm::Asked(r.node);
+                // Answered. A reply that shows the node FOCUSED earns the protection (the
+                // caller); one that does not leaves the read open for the terminal watch
+                // (`term_protection_watch`), which asks again on a backoff.
+                let focused = r
+                    .result
+                    .as_ref()
+                    .is_ok_and(|n| n.states.contains(StateSet::FOCUSED));
+                self.reconfirm = if focused {
+                    Reconfirm::Asked(r.node)
+                } else {
+                    Reconfirm::Failed(r.node, self.now)
+                };
             }
             return false;
         };
@@ -345,7 +355,7 @@ impl Reader {
         }
     }
 
-    fn ask_state(&mut self, node: NodeKey, fx: &mut ReaderEffects) {
+    pub(crate) fn ask_state(&mut self, node: NodeKey, fx: &mut ReaderEffects) {
         tracing::debug!(?node, "focus reconfirm: reading the state");
         self.reconfirm = Reconfirm::Asked(node);
         self.counters.focus_reconfirms += 1;
@@ -713,6 +723,14 @@ impl Reader {
         // E-3: results from a worker with an older epoch are dropped by whoever receives them.
         if r.epoch < self.epoch.current() {
             self.stale_replies_dropped += 1;
+            // A key press advances the shared epoch while a reconfirm read is in flight: its
+            // reply is dropped, and the read must not stay `Asked` for good (neither the terminal
+            // watch nor a key would ever ask again). The node's state is simply still unknown.
+            if r.kind == FetchKind::StateChange
+                && matches!(self.reconfirm, Reconfirm::Asked(n) | Reconfirm::Retried(n) if n == r.node)
+            {
+                self.reconfirm = Reconfirm::Failed(r.node, self.now);
+            }
             return;
         }
         if matches!(r.kind, FetchKind::Focus | FetchKind::Revalidate)
@@ -1114,6 +1132,11 @@ impl Reader {
             && let Some(f) = &self.focused_app
         {
             f.publish(r.node.app);
+        }
+        // A terminal that is not (yet) focused says nothing of its own title-like name changing
+        // (`on_state_changed` keeps that silent too): the watch reads it only for `FOCUSED`.
+        if p.snap.role == Role::Terminal && !new.states.contains(StateSet::FOCUSED) {
+            return;
         }
         let new = &self.spoken_snapshot(new);
         let ch = changed(&p.snap, new, skip_states(p.ctx));
