@@ -60,7 +60,7 @@ Phase 1 (focus reader, speech, event ingress, test harness) and most of Phase 2 
   autocomplete), and browse mode with structural quick navigation, tables, live regions, forms and
   focus-mode switching, and ARIA names, roles, states and descriptions modelled on NVDA.
 - Chromium and Chrome: browse mode on the same web engine as Firefox, with per-engine quirk rows.
-  gorca wakes the browser's accessibility tree itself. Known issues are listed in
+  gorca wakes the browser's accessibility tree itself, and flat review works. Known issues are listed in
   `docs/reports/m9-fixround-verify.md`.
 - Speech: punctuation levels and per-language symbol tables (English and Russian), capital
   letters announced by any combination of pitch, the word "cap" and a sound (the sound is not

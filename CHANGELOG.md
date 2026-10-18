@@ -59,6 +59,15 @@ Phase 2 (daily-driver reader)
   accessible name.
 - Web semantics: icon-only buttons reachable in browse mode, mixed (half-checked) checkboxes.
 - Browse-mode selection model: the page selection is mirrored so that Ctrl+C copies it.
+- Chromium and Chrome flat review (text extents in screen coordinates, repeated static leaves
+  skipped, container names on their first child row).
+- Editing polish: the key that leaves review is echoed in terminals and fields; clipboard and
+  undo confirmations are spoken only when the application confirms them; boundary indication is
+  combinable (off, cue, say) like capital-letter indication; word-granularity levels; extension
+  interface `gorca:ext@0.3.0`.
+- Terminal focus-protection watch: while a terminal is unprotected its focus is re-confirmed,
+  and a stale reply fails over instead of being trusted.
+- Acceptance harness fixes (resume across commits, Chromium and Firefox rigs).
 - Resource-usage measurements (`docs/reports/resource-usage.md`) and an add-on platform design
   (ADR-0019, proposed); ADR-0021 (copy) and ADR-0022 (semantic model) are planned.
 - `CONTRIBUTING.md` (DCO), `LICENSE-EXCEPTION` and licence files.
@@ -81,6 +90,21 @@ Phase 2 (daily-driver reader)
 
 ### Fixed
 
+- Caps Lock no longer breaks single-letter browse navigation: the quick-navigation grabs also
+  cover the opposite-case keysym of every letter, including Cyrillic.
+- Insert, KP_Insert and Caps Lock now behave as one gorca modifier, so the same chord runs the
+  same command with any of them under every lock state. The double tap passes the modifier key
+  itself, and keypad zero types `0` only with Num Lock on.
+- Key and typed-text diagnostics are redacted: logs no longer contain typed characters or keypad
+  digits.
+- Protection against a GNOME Shell (Mutter 48.7) crash that a reader reconnect could trigger:
+  `SetKeyGrabs` is sent first on every new keyboard-monitor connection, a slow reply is retried
+  on the same connection instead of counting as lost, reconnects wait for the old connection to
+  close, and grabs change only when needed. Details in `docs/reports/shell-segfault-20261019.md`.
+- The terminal no longer goes silent after Alt+Tab.
+- Firefox single-page applications: Enter no longer activates a stale or wrong node after the
+  page re-renders. If the cursor was displaced, the first Enter announces the target instead of
+  activating it, and gorca+T falls back to the page title.
 - voicego stability (stop and speak race, panic containment, sink reopen and fast-fail open),
   fixed upstream in the separate voicego project.
 - Alt+Tab and Ctrl+Alt+Tab no longer say "unknown" when the Shell floods events; nameless
