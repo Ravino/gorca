@@ -723,6 +723,14 @@ impl Reader {
         // E-3: results from a worker with an older epoch are dropped by whoever receives them.
         if r.epoch < self.epoch.current() {
             self.stale_replies_dropped += 1;
+            // A key press advances the shared epoch while a reconfirm read is in flight: its
+            // reply is dropped, and the read must not stay `Asked` for good (neither the terminal
+            // watch nor a key would ever ask again). The node's state is simply still unknown.
+            if r.kind == FetchKind::StateChange
+                && matches!(self.reconfirm, Reconfirm::Asked(n) | Reconfirm::Retried(n) if n == r.node)
+            {
+                self.reconfirm = Reconfirm::Failed(r.node, self.now);
+            }
             return;
         }
         if matches!(r.kind, FetchKind::Focus | FetchKind::Revalidate)
@@ -1124,6 +1132,11 @@ impl Reader {
             && let Some(f) = &self.focused_app
         {
             f.publish(r.node.app);
+        }
+        // A terminal that is not (yet) focused says nothing of its own title-like name changing
+        // (`on_state_changed` keeps that silent too): the watch reads it only for `FOCUSED`.
+        if p.snap.role == Role::Terminal && !new.states.contains(StateSet::FOCUSED) {
+            return;
         }
         let new = &self.spoken_snapshot(new);
         let ch = changed(&p.snap, new, skip_states(p.ctx));

@@ -1,0 +1,21 @@
+2026-10-18T19:11:22.750332Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T19:11:22.756245Z  INFO gorca_phase: phase="locate" wall_ms=5.691115
+2026-10-18T19:11:22.756286Z  INFO gorca_phase: phase="create" wall_ms=0.003015
+2026-10-18T19:11:22.789001Z  INFO gorca_phase: phase="fetch" total_ms=32.679535 warm_ms=29.750237 frontier_ms=0.04276 get_tree_ms=0.759797 roles_ms=0.880143 states_ms=0.305665 text_ms=0.839129 assemble_ms=0.012242999999999999 heaviest_get_tree_ms=0.383 calls=174 tree_bytes=15360 nodes=58
+2026-10-18T19:11:22.789216Z  INFO gorca_phase: phase="translate" wall_ms=0.115271 nodes=66
+2026-10-18T19:11:23.125565Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T19:11:24.526566Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T19:14:09.689080Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T19:14:09.691186Z  INFO gorca_phase: phase="locate" wall_ms=1.948436
+2026-10-18T19:14:09.691214Z  INFO gorca_phase: phase="create" wall_ms=0.0019709999999999997
+2026-10-18T19:14:09.723741Z  INFO gorca_phase: phase="fetch" total_ms=32.477842 warm_ms=29.221513 frontier_ms=0.115231 get_tree_ms=1.0594860000000001 roles_ms=0.546665 states_ms=0.243432 text_ms=1.0853300000000001 assemble_ms=0.030114 heaviest_get_tree_ms=0.35 calls=174 tree_bytes=15360 nodes=58
+2026-10-18T19:14:09.724366Z  INFO gorca_phase: phase="translate" wall_ms=0.256435 nodes=66
+2026-10-18T19:14:19.659991Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T19:14:21.057878Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T19:17:01.916672Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T19:17:01.921100Z  INFO gorca_phase: phase="locate" wall_ms=4.254721
+2026-10-18T19:17:01.921170Z  INFO gorca_phase: phase="create" wall_ms=0.004167
+2026-10-18T19:17:01.953868Z  INFO gorca_phase: phase="fetch" total_ms=32.640571 warm_ms=29.459762 frontier_ms=0.040428 get_tree_ms=1.316566 roles_ms=0.671182 states_ms=0.26977 text_ms=0.7673829999999999 assemble_ms=0.014206 heaviest_get_tree_ms=0.36900000000000005 calls=174 tree_bytes=15360 nodes=58
+2026-10-18T19:17:01.954138Z  INFO gorca_phase: phase="translate" wall_ms=0.103301 nodes=66
+2026-10-18T19:17:11.864082Z  INFO gorca_phase: phase="web_focus" hit=true
+2026-10-18T19:17:13.262489Z  INFO gorca_phase: phase="web_focus" hit=true

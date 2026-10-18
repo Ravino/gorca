@@ -203,6 +203,10 @@ pub(super) struct Sim {
     /// Replies held back (a slow application), delivered at the start of the next step.
     pub held: Vec<ReaderMsg>,
     pub hold_replies: bool,
+    /// `FOCUSED` is withheld from the first 400 ms after a focus (the real VTE).
+    pub late_focused: bool,
+    /// When the world focus last moved (world ms).
+    pub focus_at: u64,
     pub fail_fetches: Option<BackendError>,
     /// While true the application's text events never reach the Reader (a flood overflow).
     pub lose_events: bool,
@@ -270,6 +274,8 @@ impl Sim {
             native,
             held: Vec::new(),
             hold_replies: false,
+            late_focused: false,
+            focus_at: 0,
             fail_fetches: None,
             lose_events: false,
             failed_reads: false,
@@ -298,7 +304,7 @@ impl Sim {
         if n == AREA {
             states |= StateSet::MULTILINE;
         }
-        if focused {
+        if focused && !(self.late_focused && self.at.saturating_sub(self.focus_at) < 400) {
             states |= StateSet::FOCUSED;
         }
         let have = PropMask::PRESENT | PropMask::CHILDREN | PropMask::PARENT | PropMask::BOUNDS;
@@ -580,6 +586,7 @@ impl Sim {
         }
         let old = self.w.focus;
         self.w.focus = Some(n);
+        self.focus_at = self.at;
         let mut touched = vec![n];
         touched.extend(old);
         self.sync_mirror(&touched);

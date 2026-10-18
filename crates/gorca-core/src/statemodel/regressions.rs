@@ -501,3 +501,47 @@ fn with_interrupt_never_leaving_review_still_purges_and_the_echo_is_current() {
         );
     }
 }
+
+/// term-protection-lost: the toolkit says `FOCUSED` late; the terminal must regain the protection.
+#[test]
+fn a_terminal_whose_toolkit_says_focused_late_regains_the_protection() {
+    let q = |dt: u64, op: Op| Step { dt, op };
+    expect_clean(&[
+        q(1, Op::WasmDeployment),
+        q(1, Op::Ext(ExtState::Absent)),
+        q(1, Op::LateFocused(true)),
+        q(
+            1,
+            Op::Focus {
+                node: TERM,
+                prelude: None,
+                dups: 0,
+            },
+        ),
+        q(600, Op::Cmd(CoreCmd::InfoWhereAmI, 1)),
+        q(1700, Op::Type(KeyKind::Letter('z'), Modifiers::empty())),
+        q(1, Op::Ext(ExtState::Healthy)),
+        q(600, Op::Cmd(CoreCmd::ReviewCurChar, 1)),
+    ]);
+}
+
+/// cue-on-move (found by the strict 50k run, seed 1, after `LateFocused` changed the op mix; the
+/// sequence does not touch a terminal): `Home` in an entry after lost events moved the caret and
+/// also gave the boundary cue. Not part of the terminal-timer-rearm change; waits for its fix.
+#[test]
+#[ignore = "pre-existing editing bug (cue-on-move after lost events), see terminal-timer-rearm.md"]
+fn home_after_lost_events_gives_no_boundary_cue_when_the_caret_moved() {
+    let q = |op: Op| Step { dt: 1, op };
+    expect_clean(&[
+        q(Op::Focus {
+            node: 3,
+            prelude: None,
+            dups: 0,
+        }),
+        q(Op::LoseEvents(true)),
+        q(Op::Type(KeyKind::Tab, Modifiers::empty())),
+        q(Op::Type(KeyKind::Letter('a'), Modifiers::empty())),
+        q(Op::LoseEvents(false)),
+        q(Op::Type(KeyKind::Home, Modifiers::empty())),
+    ]);
+}

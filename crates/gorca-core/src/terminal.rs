@@ -798,6 +798,8 @@ impl Reader {
             return;
         }
         let now = self.now;
+        // A charged timeout bars every read until the next key (B-1 RR-1): wake nobody for it.
+        let barred = self.timeout_charged;
         let w = match self.text.term.protect {
             Some(w) if w.node == node => w,
             _ => {
@@ -807,22 +809,22 @@ impl Reader {
                     due: now + PROTECT_FIRST,
                 };
                 self.text.term.protect = Some(w);
-                fx.push(ReaderEffect::ArmTimer(w.due));
+                if !barred {
+                    fx.push(ReaderEffect::ArmTimer(w.due));
+                }
                 return;
             }
         };
         if now < w.due {
             return;
         }
-        let may_ask = matches!(self.reconfirm, Reconfirm::Idle | Reconfirm::Failed(..))
-            && !self.timeout_charged;
-        let attempts = if may_ask {
+        let may_ask = matches!(self.reconfirm, Reconfirm::Idle | Reconfirm::Failed(..)) && !barred;
+        if may_ask {
             self.text.term.reads.protection_reads += 1;
             self.ask_state(node, fx);
-            w.attempts.saturating_add(1)
-        } else {
-            w.attempts
-        };
+        }
+        // Back off on every attempt, asked or skipped.
+        let attempts = w.attempts.saturating_add(1);
         let wait = PROTECT_FIRST
             .saturating_mul(1u32.checked_shl(attempts).unwrap_or(u32::MAX))
             .min(PROTECT_MAX);
@@ -832,7 +834,9 @@ impl Reader {
             due: now + wait,
         };
         self.text.term.protect = Some(next);
-        fx.push(ReaderEffect::ArmTimer(next.due));
+        if !barred {
+            fx.push(ReaderEffect::ArmTimer(next.due));
+        }
     }
 
     /// Test probe for the state model: a tracked, presented terminal whose application has not
@@ -845,6 +849,31 @@ impl Reader {
         self.presented.as_ref().is_some_and(|p| p.node == t.node)
             && self.protection_unearned(t.node)
             && self.text.term.protect.is_none_or(|w| w.node != t.node)
+    }
+
+    /// Test probe: no timeout is charged to the focus (a charged one bars the watch's reads).
+    #[cfg(test)]
+    pub(crate) fn timeout_charged_probe(&self) -> bool {
+        !self.timeout_charged
+    }
+
+    /// Test probe: how long the protection watch is overdue (ms) and its attempts so far.
+    #[cfg(test)]
+    pub(crate) fn term_watch_probe(&self) -> Option<(u64, u32)> {
+        let w = self.text.term.protect?;
+        let over = self.now.saturating_duration_since(w.due).as_millis();
+        Some((u64::try_from(over).unwrap_or(u64::MAX), w.attempts))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn protection_debug(&self) -> String {
+        format!(
+            "protect {:?}, reconfirm {:?}, presented {}, now-ish {:?}",
+            self.text.term.protect,
+            self.reconfirm,
+            self.presented.is_some(),
+            self.focus
+        )
     }
 
     pub(crate) fn term_timer(&mut self, fx: &mut ReaderEffects) {
