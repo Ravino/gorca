@@ -123,3 +123,44 @@ on standard layouts.
 - **The hint:** fires at most once per run (`CmdState::told_numlock`). It needs `PressKind::Press`,
   keycode 90 and the `KP_0` keysym, and it is silent when `KP_Insert` is not a modifier. The trigger
   condition is the problem (F-1), not repetition.
+
+## Delta review b21ca599..dcc7b92d (2026-10-19)
+
+**Verdict: MERGE WITH FIXES.** D-2 is small and belongs in this branch. D-1 is pre-existing on main but
+inside the scope of the security fix.
+
+- **F-1 resolved.** The Num Lock hint, its catalogue strings, `told_numlock` and `modifier_by_keysym` are
+  removed.
+- **F-2 resolved.** `caps_lock_does_not_invert_the_quick_navigation_direction` is a unit test. CL now
+  gates `cl_direction_wrong`; at 3c05e863 with a clean tree it measured 0, `lost` 0, `not_consumed` 0
+  and p99 0.81 ms. d9cc6247 changes only the logging after that.
+- **Gates at dcc7b92d** (own target dir, then deleted): `fmt --check` ok, `clippy -D warnings` ok,
+  `cargo test --workspace` 126 test result lines with 0 failed, `xtask strings` `ok (335 literals, 116 allowed)`.
+- **KM e2e at dcc7b92d** (git_dirty=false, load about 15; `bench/results/e2e/rv-km-head/`):
+  - p99: insert 0.80 ms, kp_insert 0.76 ms, caps_lock 0.84 ms (max over 3 repeats 3.36 ms, gate 5).
+  - `km_passthrough_wrong` 0, `lost` 0, `not_consumed` 0. All PASS.
+- **Allowlist.** The three new entries are a debug message, another debug message and the
+  `modifier_key("KP_Insert")` identifier. None is user-facing, so all three are legitimate.
+
+### D-1 (Medium, pre-existing on main): typed characters reach the debug log
+
+`crates/gorca-core/src/text/mod.rs:660` has
+`tracing::debug!(target: "gorca_text", key = ?key, "text key")`. `TextKey` derives `Debug`, so
+`Typed { ch: 'x' }` logs every character typed in an editable object. Password fields are not excluded:
+`text_active` has no protected-role check. With `RUST_LOG=debug` or `gorca_text=debug`, a log contains
+the passwords typed. The keysym redaction in d9cc6247 is therefore not complete.
+
+**Fix:** log only the variant, or give `TextKey` a redacting `Debug`, as `LazyText` already does (its
+`Debug` prints only the byte count). Add a test that `format!("{:?}", TextKey::Typed{..})` holds no
+character.
+
+### D-2 (Low): the Num Lock diagnostic line itself names the digit
+
+`keys.rs` `Diag::ModifierKeyWithNumLock` is emitted only for keycode 90 arriving as `KP_0` with Mod2.
+So every "modifier key, numlock on" line, with its timestamp, means "keypad 0 was typed": the count and
+timing of zeros in a PIN leak, although the keysym is omitted.
+
+**Fix:** emit it at most once per run, or drop it.
+
+`Diag::Modifier` also logs every Shift press. That reveals the timing of capital letters, which is low
+risk; consider leaving Shift and Control out.

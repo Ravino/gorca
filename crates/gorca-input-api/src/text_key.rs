@@ -38,7 +38,7 @@ pub enum ClipOp {
 }
 
 /// What a key does to a text field.
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub enum TextKey {
     /// A caret movement; `select` when Shift is held.
     Move {
@@ -58,6 +58,29 @@ pub enum TextKey {
         word: bool,
     },
     Clipboard(ClipOp),
+}
+
+/// Debug output never contains the typed character: a log of `Typed { ch }` would record every
+/// key of a password field. Only the variant is printed, like `LazyText`.
+impl std::fmt::Debug for TextKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TextKey::Move { unit, dir, select } => f
+                .debug_struct("Move")
+                .field("unit", unit)
+                .field("dir", dir)
+                .field("select", select)
+                .finish(),
+            TextKey::SelectAll => f.write_str("SelectAll"),
+            TextKey::Typed { .. } => f.write_str("Typed { .. }"),
+            TextKey::Erase { dir, word } => f
+                .debug_struct("Erase")
+                .field("dir", dir)
+                .field("word", word)
+                .finish(),
+            TextKey::Clipboard(op) => f.debug_tuple("Clipboard").field(op).finish(),
+        }
+    }
 }
 
 const HOME: u32 = 0xff50;
@@ -200,6 +223,24 @@ fn printable(unichar: u32) -> Option<TextKey> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A log of text keys (`tracing` prints them with `{:?}`) must not record typed characters.
+    #[test]
+    fn debug_output_never_contains_the_typed_character() {
+        for ch in ['q', '7', 'Ж', ' ', '\n', '$'] {
+            let shown = format!("{:?} {:#?}", TextKey::Typed { ch }, TextKey::Typed { ch });
+            assert!(!shown.contains(ch) || ch == ' ' || ch == '\n', "{shown}");
+            assert!(shown.contains("Typed"), "{shown}");
+        }
+        assert_eq!(format!("{:?}", TextKey::Typed { ch: 'x' }), "Typed { .. }");
+        // Other variants stay readable for diagnostics.
+        assert!(format!("{:?}", TextKey::SelectAll).contains("SelectAll"));
+        let erase = TextKey::Erase {
+            dir: TextDir::Prev,
+            word: true,
+        };
+        assert!(format!("{erase:?}").contains("Erase"));
+    }
 
     fn ev(keysym: u32, unichar: u32, modifiers: Modifiers) -> KeyEvent {
         KeyEvent {

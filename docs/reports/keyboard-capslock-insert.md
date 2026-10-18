@@ -129,9 +129,9 @@ real `gedit --standalone` (text read back through AT-SPI), RemoteDesktop keyboar
   exactly this symptom: single tap silent, double tap "0". Unverified; the rig cannot produce the mismatch.
 
 Because no fix can be justified without the real event stream, gorca now logs the relevant keys on demand
-(`RUST_LOG=gorca_keys=debug`: only non-printable modifier keys are named, that is Insert, KP_Insert, Caps
-Lock, Shift, Control, Alt, Super; no letter, digit or keypad key is ever logged, and the keypad Insert key
-arriving as a digit with Num Lock on is logged as "modifier key, numlock on" without keycode or keysym).
+(`RUST_LOG=gorca_keys=debug`: only the configured gorca modifiers Insert, KP_Insert and Caps Lock are named;
+Shift, Control, letters, digits and every keypad key are never logged, and a keypad Insert key that
+arrives as a digit is not logged at all, since that would record each typed numpad 0).
 Trace for the owner (read-only, nothing is grabbed, the live session is not touched):
 
 1. `libinput list-devices | grep -B1 -A3 -i keyboard` to find the keyboard's `/dev/input/eventN`.
@@ -142,9 +142,24 @@ Trace for the owner (read-only, nothing is grabbed, the live session is not touc
    Mutter receives, also read-only).
 4. gorca side: start gorca with `RUST_LOG=warn,gorca_keys=debug` and read `journalctl --user -u gorca -f`
    (or its stderr); each modifier event prints keycode, keysym, state (Mod2 = `0x10` means Num Lock on),
-   press kind and class. A passed second press shows `ModifierPassThrough` with keysym `0xff9e`; a line
-   "modifier key, numlock on" instead proves Mutter reported the key as a digit (a Num Lock mismatch).
+   press kind and class. A passed second press shows `ModifierPassThrough` with keysym `0xff9e`; a digit
+   keysym is not logged, so a Num Lock mismatch shows as the absence of any line for that key.
 5. In gedit (or `wev`), the keyval the application saw: `wev` prints `sym: KP_Insert` vs `KP_0`.
+
+## Owner result (after the trace)
+
+`evtest` on the real keyboard shows a clean `KEY_KP0` (no Shift or Num Lock emulation). The old live
+build predicted Mutter's stuck modifier for KP_Insert twice during the test. After the session restart
+the "0" no longer reproduces, which fits stale Mutter or client state that outlived the old Shell and
+not a gorca pass-through. Nothing more is changed for it beyond the autorepeat tests and the
+stuck-modifier hint that already exist.
+
+## Typed-text logging
+
+`TextKey` has a redacting `Debug` (`Typed { .. }`, like `LazyText`), so the `gorca_text` debug line no
+longer records typed characters; a test pins it. The other tracing of text paths was checked: edit
+deltas use `LazyText`, window and unit replies log character counts, and no tracing macro prints a
+`KeyEvent` or `KeyIntent`.
 
 ## Gates
 
