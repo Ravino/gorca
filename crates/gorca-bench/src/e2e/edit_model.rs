@@ -57,6 +57,8 @@ pub enum Exp {
     Unselected,
     /// A selection across blocks of a contenteditable: one utterance, `selected` is not required.
     BlockSelection,
+    /// One utterance that starts with this (`cut, ` or `pasted, ` and the text).
+    Prefixed(&'static str),
     /// Any non-empty speech.
     Some,
     /// The text that was removed (checklist row 25): the whole document, which the script selected
@@ -98,6 +100,11 @@ fn gecko(t: Target, chromium: bool) -> bool {
     matches!(t, Target::Web(_)) && !chromium
 }
 
+/// Does the toolkit's text widget undo and redo?
+fn has_undo(t: Target) -> bool {
+    !matches!(t, Target::Gtk3Entry | Target::Gtk3Text)
+}
+
 fn editable(t: Target) -> bool {
     t == Target::Web(WebField::Editable)
 }
@@ -109,19 +116,23 @@ pub fn expect(t: Target, chromium: bool, step: &str) -> Option<Exp> {
     Some(match step {
         "type" => names(LINE),
         "Left" => ex(&["d"]),
-        "Right" | "End" | "Right at end" | "Right collapses" | "End 2" => ex(&["blank"]),
-        "Home" | "Left at start" | "Home 2" => ex(&["h"]),
+        // A key that cannot move the caret gives the boundary cue, which is silent speech.
+        "Right at end" | "Left at start" => Exp::Silent,
+        "Right" | "End" | "Right collapses" | "End 2" => ex(&["blank"]),
+        "Home" | "Home 2" => ex(&["h"]),
         "Ctrl+Left 1" => ex(&["world"]),
         "Ctrl+Left 2" => ex(&["brave"]),
         "Ctrl+Left 3" if punct => ex(&[","]),
-        "Ctrl+Left 3" | "Ctrl+Left 4 at start" => ex(&["hello"]),
+        "Ctrl+Left 3" => ex(&["hello"]),
+        "Ctrl+Left 4 at start" if punct => ex(&["hello"]),
+        "Ctrl+Left 4 at start" => Exp::Silent,
         "Ctrl+Right 1" => ex(&["hello"]),
         "Ctrl+Right 2" if punct => ex(&[","]),
         "Ctrl+Right 2" => ex(&["brave"]),
         "Ctrl+Right 3" if punct => ex(&["brave"]),
         "Ctrl+Right 3" => ex(&["world"]),
         "Ctrl+Right 4 at end" if punct => ex(&["world"]),
-        "Ctrl+Right 4 at end" => ex(&["blank"]),
+        "Ctrl+Right 4 at end" => Exp::Silent,
         "BackSpace" => ex(&["d"]),
         "Delete at end" | "Ctrl+Delete at end" => Exp::Silent,
         "Delete" => ex(&["h"]),
@@ -139,6 +150,14 @@ pub fn expect(t: Target, chromium: bool, step: &str) -> Option<Exp> {
         "Home 3" => ex(&["e"]),
         "Ctrl+Delete" if comma_along => ex(&["ello,"]),
         "Ctrl+Delete" => ex(&["ello"]),
+        "clip: select all" => Exp::SelectAll,
+        "clip: Ctrl+C" => ex(&["copied"]),
+        "clip: Ctrl+X" => Exp::Prefixed("cut, "),
+        "clip: Ctrl+V" => Exp::Prefixed("pasted, "),
+        // GTK 3 entries and text views have no undo: nothing changes, nothing is claimed.
+        "clip: Ctrl+Z" if has_undo(t) => ex(&["undo"]),
+        "clip: Ctrl+Y" if has_undo(t) => ex(&["redo"]),
+        "clip: Ctrl+Z" | "clip: Ctrl+Y" => Exp::Silent,
         // The multi-line phase.
         "select all" => Exp::SelectAll,
         "type line 1" => names("one two"),
@@ -200,6 +219,13 @@ pub fn check(t: Target, chromium: bool, step: &str, got: &[String]) -> Option<Re
                 Err("(want silence)".to_owned())
             }
         }
+        Exp::Prefixed(p) => one(got).and_then(|s| {
+            if s.starts_with(p) {
+                Ok(())
+            } else {
+                Err(format!("(want {p:?} and the text)"))
+            }
+        }),
         Exp::Some => {
             if got.iter().any(|s| !s.trim().is_empty()) {
                 Ok(())
@@ -282,6 +308,32 @@ mod tests {
             "BackSpace selection"
         ));
         assert!(!known_failing(t, "BackSpace selection"));
+    }
+
+    #[test]
+    fn clipboard_steps_follow_the_toolkits_undo() {
+        let c = |t, step, got: &[&str]| check(t, false, step, &g(got));
+        assert_eq!(
+            c(Target::Gtk4Text, "clip: Ctrl+C", &["copied"]),
+            Some(Ok(()))
+        );
+        assert_eq!(
+            c(Target::Gtk4Text, "clip: Ctrl+X", &["cut, hello"]),
+            Some(Ok(()))
+        );
+        assert!(matches!(
+            c(Target::Gtk4Text, "clip: Ctrl+V", &["hello"]),
+            Some(Err(_))
+        ));
+        assert_eq!(
+            c(Target::Gtk4Entry, "clip: Ctrl+Z", &["undo"]),
+            Some(Ok(()))
+        );
+        assert_eq!(c(Target::Gtk3Entry, "clip: Ctrl+Z", &[]), Some(Ok(())));
+        assert!(matches!(
+            c(Target::Gtk3Entry, "clip: Ctrl+Y", &["redo"]),
+            Some(Err(_))
+        ));
     }
 
     #[test]

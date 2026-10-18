@@ -128,6 +128,9 @@ pub struct TextCounters {
     pub caret_edge: u64,
     /// Boundary cues asked for (a movement key that could not move the caret, `boundary = "cue"`).
     pub boundary_cues: u64,
+    /// "copied", "cut" (apart from the cut text), "pasted" (apart from the pasted text), "undo"
+    /// and "redo" confirmations spoken.
+    pub clipboard_spoken: u64,
     pub caret_uncorrelated: u64,
     pub typed_echoed: u64,
     /// Text keys of any kind that reached the machine, and of those the typed characters.
@@ -548,6 +551,7 @@ impl Reader {
             gorca_text::echo::Reason::Typed
                 | gorca_text::echo::Reason::TypedWord
                 | gorca_text::echo::Reason::Erased
+                | gorca_text::echo::Reason::Clipboard
         ) {
             self.cmd.quick.echo_ids.push(id);
         }

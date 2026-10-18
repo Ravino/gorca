@@ -651,7 +651,11 @@ fn paste_is_spoken_as_the_inserted_text() {
     let fx = g.key_code(v, 0x76, 0, Modifiers::CONTROL);
     assert!(spoken(&fx).is_empty());
     let fx = g.insert(2, "pasted words");
-    assert_eq!(spoken(&fx), ["pasted words"], "TE-3");
+    assert_eq!(
+        spoken(&fx),
+        ["pasted, pasted words"],
+        "TE-3 and the confirmation"
+    );
     assert!(spoken(&g.caret(14)).is_empty());
 }
 
@@ -2986,4 +2990,255 @@ fn a_key_that_replaced_a_selection_leaves_no_expectation_for_the_next_insert() {
             assert_eq!(twos, 1, "{role:?} gap {gap} gecko {gecko}: {said:?}");
         }
     }
+}
+
+// ---- clipboard and undo confirmations -------------------------------------------------------
+
+fn clip_key(g: &mut Rig, letter: &str, shift: bool) -> ReaderEffects {
+    let code = static_keycode(letter).unwrap_or(0);
+    let mods = if shift {
+        Modifiers::CONTROL | Modifiers::SHIFT
+    } else {
+        Modifiers::CONTROL
+    };
+    g.key_code(code, u32::from(letter.as_bytes()[0]), 0, mods)
+}
+
+fn announce(g: &mut Rig, on: bool) {
+    std::sync::Arc::make_mut(&mut g.r.cmd.effective)
+        .editing
+        .announce_clipboard = on;
+}
+
+/// A mouse selection of `r` (text `t`) that the machine has fetched and now knows.
+fn select(g: &mut Rig, r: std::ops::Range<u32>, t: &str) {
+    let f = fetches(&g.selection_event());
+    assert_eq!(f.len(), 1, "one selection fetch");
+    let _ = g.reply(
+        f[0].0,
+        Reply::Selections(TextSelections {
+            ranges: vec![(r, Arc::from(t))],
+        }),
+    );
+}
+
+#[test]
+fn copy_is_confirmed_only_when_a_selection_exists() {
+    let mut g = rig();
+    g.entry("hello world", 0);
+    // Nothing selected: Ctrl+C copies nothing, and nothing is claimed.
+    assert!(spoken(&clip_key(&mut g, "c", false)).is_empty());
+    select(&mut g, 6..11, "world");
+    g.advance(1000);
+    let fx = clip_key(&mut g, "c", false);
+    assert_eq!(spoken(&fx), ["copied"]);
+    // Copying leaves the selection alone: again.
+    g.advance(1000);
+    assert_eq!(spoken(&clip_key(&mut g, "c", false)), ["copied"]);
+    // Ctrl+Insert is a copy as well.
+    g.advance(1000);
+    assert_eq!(spoken(&g.key(0xff63, 0, Modifiers::CONTROL)), ["copied"]);
+    assert_eq!(g.r.text_counters().clipboard_spoken, 3);
+}
+
+#[test]
+fn copy_after_the_selection_collapsed_is_silent() {
+    let mut g = rig();
+    g.entry("hello world", 0);
+    select(&mut g, 0..5, "hello");
+    // An arrow key collapses the selection.
+    let _ = g.key(0xff53, 0, NONE);
+    let _ = g.caret(5);
+    g.advance(1000);
+    assert!(spoken(&clip_key(&mut g, "c", false)).is_empty());
+}
+
+#[test]
+fn copy_is_silent_when_the_setting_is_off() {
+    let mut g = rig();
+    announce(&mut g, false);
+    g.entry("hello world", 0);
+    select(&mut g, 6..11, "world");
+    g.advance(1000);
+    assert!(spoken(&clip_key(&mut g, "c", false)).is_empty());
+}
+
+#[test]
+fn cut_is_confirmed_by_the_deletion() {
+    let mut g = rig();
+    g.entry("hello world", 11);
+    let fx = clip_key(&mut g, "x", false);
+    assert!(spoken(&fx).is_empty(), "nothing yet: no evidence");
+    let fx = g.delete(6, Some("world"), 5);
+    assert_eq!(spoken(&fx), ["cut, world"]);
+    // Nothing was selected: Ctrl+X removes nothing and says nothing.
+    let mut g = rig();
+    g.entry("hello world", 11);
+    let _ = clip_key(&mut g, "x", false);
+    assert!(spoken(&g.tick(100)).is_empty());
+    assert!(spoken(&g.tick(500)).is_empty());
+}
+
+#[test]
+fn a_cut_that_beat_its_key_is_confirmed_too() {
+    let mut g = rig();
+    g.entry("hello world", 11);
+    assert!(spoken(&g.delete(6, Some("world"), 5)).is_empty(), "held");
+    assert_eq!(spoken(&clip_key(&mut g, "x", false)), ["cut, world"]);
+}
+
+#[test]
+fn a_long_cut_is_counted_and_a_cut_without_text_is_still_vouched_for() {
+    let mut g = rig();
+    g.entry(&"x".repeat(2000), 2000);
+    let _ = clip_key(&mut g, "x", false);
+    let fx = g.delete(0, Some(&"x".repeat(1500)), 1500);
+    assert_eq!(spoken(&fx), ["cut, 1500 characters"]);
+    let mut g = rig();
+    g.entry("hello world", 11);
+    let _ = clip_key(&mut g, "x", false);
+    // No text in the event and none in the window: the deletion is still the evidence.
+    let fx = g.msg(ReaderMsg::Text(TextMsg::Edit {
+        node: node(),
+        delta: gorca_model::TextDelta::Delete {
+            offset: 6,
+            len: 5,
+            text: None,
+        },
+    }));
+    assert_eq!(spoken(&fx), ["cut, world"], "the window still held it");
+}
+
+#[test]
+fn shift_delete_is_a_cut() {
+    let mut g = rig();
+    g.entry("hello", 5);
+    let _ = g.key(0xffff, 0x7f, Modifiers::SHIFT);
+    assert_eq!(spoken(&g.delete(0, Some("hello"), 5)), ["cut, hello"]);
+}
+
+#[test]
+fn paste_is_confirmed_by_the_insert_and_still_reads_the_text() {
+    let mut g = rig();
+    g.entry("ab", 2);
+    let fx = clip_key(&mut g, "v", false);
+    assert!(spoken(&fx).is_empty(), "no evidence yet");
+    let fx = g.insert(2, "some words");
+    assert_eq!(spoken(&fx), ["pasted, some words"]);
+    assert!(spoken(&g.caret(12)).is_empty());
+    // An empty clipboard inserts nothing: silence, not "pasted".
+    let mut g = rig();
+    g.entry("ab", 2);
+    let _ = clip_key(&mut g, "v", false);
+    assert!(spoken(&g.tick(100)).is_empty());
+    assert!(spoken(&g.tick(500)).is_empty());
+}
+
+#[test]
+fn a_short_paste_that_beat_its_key_is_confirmed() {
+    let mut g = rig();
+    g.entry("ab", 2);
+    assert!(spoken(&g.insert(2, "xyz")).is_empty(), "held for its key");
+    assert_eq!(spoken(&clip_key(&mut g, "v", false)), ["pasted, xyz"]);
+}
+
+#[test]
+fn shift_insert_is_a_paste() {
+    let mut g = rig();
+    g.entry("ab", 2);
+    let _ = g.key(0xff63, 0, Modifiers::SHIFT);
+    assert_eq!(spoken(&g.insert(2, "long enough")), ["pasted, long enough"]);
+}
+
+#[test]
+fn undo_and_redo_are_confirmed_by_a_text_change_once_per_key() {
+    let mut g = rig();
+    g.entry("hello world", 11);
+    let fx = clip_key(&mut g, "z", false);
+    assert!(spoken(&fx).is_empty(), "no evidence yet");
+    // An undo that deletes and inserts again says "undo" once and does not read the text.
+    assert_eq!(spoken(&g.delete(6, Some("world"), 5)), ["undo"]);
+    assert!(spoken(&g.insert(6, "there")).is_empty());
+    assert!(spoken(&g.tick(300)).is_empty());
+    // Redo: Ctrl+Y and Ctrl+Shift+Z.
+    g.advance(1000);
+    let _ = clip_key(&mut g, "y", false);
+    assert_eq!(spoken(&g.insert(6, "again")), ["redo"]);
+    g.advance(1000);
+    let _ = clip_key(&mut g, "z", true);
+    assert_eq!(spoken(&g.delete(6, Some("again"), 5)), ["redo"]);
+}
+
+#[test]
+fn an_undo_that_changes_nothing_is_silent() {
+    let mut g = rig();
+    g.entry("hello", 5);
+    let _ = clip_key(&mut g, "z", false);
+    assert!(spoken(&g.tick(100)).is_empty());
+    assert!(spoken(&g.tick(500)).is_empty());
+    assert!(spoken(&g.selection_event()).is_empty());
+}
+
+#[test]
+fn a_replaced_text_vouches_for_an_undo() {
+    let mut g = rig();
+    g.entry("hello", 5);
+    let _ = clip_key(&mut g, "z", false);
+    let fx = g.msg(ReaderMsg::Text(TextMsg::Edit {
+        node: node(),
+        delta: gorca_model::TextDelta::Replaced { text: None },
+    }));
+    assert_eq!(spoken(&fx), ["undo"]);
+}
+
+#[test]
+fn with_the_setting_off_the_old_speech_stays() {
+    let mut g = rig();
+    announce(&mut g, false);
+    g.entry("ab", 2);
+    let _ = clip_key(&mut g, "v", false);
+    assert_eq!(spoken(&g.insert(2, "pasted words")), ["pasted words"]);
+    let mut g = rig();
+    announce(&mut g, false);
+    g.entry("hello world", 11);
+    let _ = clip_key(&mut g, "x", false);
+    assert_eq!(spoken(&g.delete(6, Some("world"), 5)), ["world"]);
+    let mut g = rig();
+    announce(&mut g, false);
+    g.entry("hello", 5);
+    let _ = clip_key(&mut g, "z", false);
+    assert_eq!(
+        spoken(&g.insert(5, "!")),
+        ["bang"],
+        "an undo read as new text, as before"
+    );
+}
+
+#[test]
+fn clipboard_confirmations_are_localised() {
+    use gorca_i18n::Lang;
+    let _guard = gorca_i18n::scoped(Lang::Ru);
+    let mut g = rig();
+    std::sync::Arc::make_mut(&mut g.r.cmd.effective)
+        .speech
+        .language = "ru".to_owned();
+    g.entry("hello world", 11);
+    let _ = clip_key(&mut g, "z", false);
+    assert_eq!(spoken(&g.delete(6, Some("world"), 5)), ["отмена"]);
+}
+
+#[test]
+fn a_read_only_text_is_not_cut_pasted_or_undone() {
+    let mut g = rig();
+    g.track(Role::TextEntry, StateSet::FOCUSED, "hello", 5);
+    let _ = clip_key(&mut g, "x", false);
+    assert!(
+        spoken(&g.delete(0, Some("hello"), 5))
+            .iter()
+            .all(|s| !s.starts_with("cut")),
+        "no confirmation"
+    );
+    g.advance(1000);
+    let _ = clip_key(&mut g, "z", false);
+    assert!(spoken(&g.insert(0, "x")).iter().all(|s| s != "undo"));
 }
