@@ -1,0 +1,12 @@
+{
+  "meta": {"utc": "2026-10-18T21:54:06Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "9.32 11.84 14.61 10/1631 2988636", "git_rev": "b9ef9030", "git_dirty": "true", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "label": "cl-r2", "reader": "daemon:<repo>/.claude/worktrees/agent-a6afeefd1474b60fc/target/release/gorca", "backend": "voicego", "repeats": "5", "samples_per_series": "1200", "quick": "false", "loadavg_before": "19.00 16.83 16.76 5/1684 2978292", "loadavg_end": "9.32 11.84 14.61 11/1634 2988633", "gates": "fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats", "reader_args": "--impersonate-orca", "ext_dir": "none", "extensions": "none", "note0": "M8-CL CL.gone.enter P0 FAIL: heard \"Dave, lunch?, link | Opened chat Dave (7)\" "},
+  "rows": [
+    {"id": "M8-CL.fail", "scenario": "M8-CL", "bus": "daemon/voicego", "value": 1, "min": 1, "max": 1, "runs": 5, "unit": "steps", "op": "<=", "threshold": 0, "verdict": "FAIL", "note": "steps that fail and are not marked expected-fail"},
+    {"id": "M8-CL.gap", "scenario": "M8-CL", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 5, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": "core ok, NVDA extras missing"},
+    {"id": "M8-CL.p0_not_pass", "scenario": "M8-CL", "bus": "daemon/voicego", "value": 1, "min": 1, "max": 1, "runs": 5, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-CL.pass", "scenario": "M8-CL", "bus": "daemon/voicego", "value": 17, "min": 17, "max": 17, "runs": 5, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-CL.steps", "scenario": "M8-CL", "bus": "daemon/voicego", "value": 18, "min": 18, "max": 18, "runs": 5, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "M8-CL.xfail", "scenario": "M8-CL", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 5, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": "expected-fail steps that fail (gap table)"},
+    {"id": "M8-CL.xpass", "scenario": "M8-CL", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 5, "unit": "steps", "op": "", "threshold": null, "verdict": "info", "note": "expected-fail steps that pass: remove their xf() mark"}
+  ]
+}

@@ -656,10 +656,11 @@ fn spawn_action(
     let Some(src) = src else {
         fail(a);
         if matches!(act, DocAction::Click) {
-            // A node the source never issued an id for (a synthetic container) is not there.
+            // A node the source never issued an id for (a synthetic container) cannot be
+            // clicked; it never existed, so it is not "gone".
             let _ = a.notices.try_send(DocNotice::ActionFailed {
                 doc: a.spec_doc,
-                gone: true,
+                gone: false,
             });
         }
         return;
@@ -745,8 +746,13 @@ fn spawn_action(
         if is_focus && !ok {
             let _ = notices.try_send(DocNotice::FocusFailed { doc });
         }
-        if is_click && !ok {
-            let gone = matches!(result, Some(Err(SourceError::Gone)));
+        // A click that timed out may still run (a busy page works through its queue): say
+        // nothing rather than claim it failed. Definite answers are spoken.
+        if is_click
+            && let Some(Err(e)) = &result
+            && !matches!(e, SourceError::Timeout)
+        {
+            let gone = matches!(e, SourceError::Gone);
             let _ = notices.try_send(DocNotice::ActionFailed { doc, gone });
         }
         if let Some(req) = select_req {

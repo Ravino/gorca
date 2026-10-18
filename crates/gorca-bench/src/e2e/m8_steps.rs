@@ -1158,7 +1158,8 @@ fn cl() -> Vec<Step> {
         pos("CL.gone.k3", n('k')),
         pos("CL.gone.k4", n('k')),
         s("CL.gone.wait", P0, "The page drops Bob", Act::Wait(1800), &[]).win(2200),
-        s("CL.gone.enter", P0, "Enter after the item under the cursor was removed: the cursor settled on a live neighbour, so its chat opens or the item is said to be gone; never Bob, never the menu", key0(ENTER), &[]).not(&["Account menu", "Opened chat Bob"]).min(1).win(1500),
+        s("CL.gone.enter", P0, "Enter after the item under the cursor was removed: the new item is spoken and nothing is clicked (the cursor moved while the user was idle)", key0(ENTER), &[]).not(&["Account menu", "Opened chat"]).min(1).win(1500),
+        s("CL.gone.enter2", P0, "Second Enter: the item the cursor now sits on opens, never Bob and never the menu", key0(ENTER), &["Opened chat"]).not(&["Account menu", "Opened chat Bob"]).win(1500),
     ]
 }
 

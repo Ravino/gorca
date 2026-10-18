@@ -1,0 +1,87 @@
+977328768225231 said "M8 Chats — Mozilla Firefox, M8 Chats, document"
+977328801690671 said "browse mode, banner landmark, button, Account menu, button, Re-render same, button, Re-render bump, button, Re-render insert, button, Re-render drop, button, Re-render focused"
+977329054472459 said "Alice, see you soon, link"
+977329827040359 said "out of list, banner landmark, button, Account menu, button, Re-render same, button, Re-render bump, button, Re-render insert, button, Re-render drop, button, Re-render focused"
+977330147876222 said "Alice, see you soon, link"
+977331076864956 said "Opened chat Alice (1)"
+977332610222421 said "Alice - M8 Chats — Mozilla Firefox"
+977334147988319 said "Re-render same, button"
+977336314425502 said "Bob, ok, link"
+977336659596979 said "Opened chat Bob (2)"
+977338208511172 said "Bob - M8 Chats — Mozilla Firefox"
+977338815310084 said "out of list, banner landmark, button, Account menu, button, Re-render same, button, Re-render bump, button, Re-render insert, button, Re-render drop, button, Re-render focused"
+977339128433927 said "Re-render same, button"
+977339602439892 said "link, Alice, see you soon"
+977343962567041 said "Alice, see you soon, link"
+977344057624961 said "Opened chat Alice (3)"
+977345940850853 said "out of list, banner landmark, button, Account menu, button, Re-render same, button, Re-render bump, button, Re-render insert, button, Re-render drop, button, Re-render focused"
+977346250064819 said "Re-render bump, button"
+977346725442532 said "link, Alice, see you soon"
+977347076072467 said "link, Bob, ok"
+977351435988619 said "Bob, ok, link"
+977351531365744 said "Opened chat Bob (4)"
+977353067850937 said "Bob - M8 Chats — Mozilla Firefox"
+977353675130307 said "out of list, banner landmark, button, Account menu, button, Re-render same, button, Re-render bump, button, Re-render insert, button, Re-render drop, button, Re-render focused"
+977353982692084 said "Re-render insert, button"
+977354457385620 said "link, Carol, new message 70"
+977354807880452 said "link, Alice, see you soon"
+977355158683887 said "link, Bob, ok"
+977359516984258 said "Bob, ok, link"
+977359595307378 said "Opened chat Bob (5)"
+977361496581419 said "out of list, banner landmark, button, Account menu, button, Re-render same, button, Re-render bump, button, Re-render insert, button, Re-render drop, button, Re-render focused"
+977361806761317 said "Retitle later, button"
+977362278409021 said "link, Zed, hello"
+977364429833192 said "Inbox (1) - M8 Chats — Mozilla Firefox"
+977365034639274 said "out of list, banner landmark, button, Account menu, button, Re-render same, button, Re-render bump, button, Re-render insert, button, Re-render drop, button, Re-render focused"
+977365345436289 said "Re-render focused, button"
+977366612042281 said "Bob, ok, link"
+977369021511878 said "Bob, ok, link"
+977369121711648 said "Opened chat Bob (6)"
+977370996368782 said "out of list, banner landmark, button, Account menu, button, Re-render same, button, Re-render bump, button, Re-render insert, button, Re-render drop, button, Re-render focused"
+977371303332955 said "Re-render drop, button"
+977371775101409 said "link, Zed, hello"
+977372125857792 said "link, Carol, new message 70"
+977372476595374 said "link, Alice, see you soon"
+977372827607454 said "link, Dave, lunch?"
+977377183653532 said "Dave, lunch?, link"
+977377278061507 said "Opened chat Dave (7)"
+bus 1 /org/a11y/atspi/accessible/64 Focus:
+bus 1 /org/a11y/atspi/accessible/64 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/91 Focus:
+bus 1 /org/a11y/atspi/accessible/91 StateChanged:focused
+bus 4 /org/a11y/atspi/accessible/50 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/50 TextChanged:insert/system
+bus 1 /org/a11y/atspi/accessible/64 Focus:
+bus 1 /org/a11y/atspi/accessible/64 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/90 Focus:
+bus 1 /org/a11y/atspi/accessible/90 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/156 Focus:
+bus 1 /org/a11y/atspi/accessible/156 StateChanged:focused
+bus 4 /org/a11y/atspi/accessible/82 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/83 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/83 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/82 TextChanged:insert/system
+bus 1 /org/a11y/atspi/accessible/64 Focus:
+bus 1 /org/a11y/atspi/accessible/64 StateChanged:focused
+bus 3 /org/a11y/atspi/accessible/162 TextCaretMoved:
+bus 4 /org/a11y/atspi/accessible/84 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/84 TextChanged:insert/system
+bus 1 /org/a11y/atspi/accessible/172 Focus:
+bus 1 /org/a11y/atspi/accessible/172 StateChanged:focused
+bus 4 /org/a11y/atspi/accessible/50 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/50 TextChanged:insert/system
+bus 1 /org/a11y/atspi/accessible/64 Focus:
+bus 1 /org/a11y/atspi/accessible/64 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/89 Focus:
+bus 1 /org/a11y/atspi/accessible/89 StateChanged:focused
+bus 4 /org/a11y/atspi/accessible/82 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/83 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/83 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/82 TextChanged:insert/system
+bus 3 /org/a11y/atspi/accessible/178 TextCaretMoved:
+bus 4 /org/a11y/atspi/accessible/84 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/84 TextChanged:insert/system
+bus 1 /org/a11y/atspi/accessible/184 Focus:
+bus 1 /org/a11y/atspi/accessible/184 StateChanged:focused
+bus 4 /org/a11y/atspi/accessible/50 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/50 TextChanged:insert/system

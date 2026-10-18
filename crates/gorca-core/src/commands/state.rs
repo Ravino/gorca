@@ -235,6 +235,9 @@ pub(crate) struct CmdState {
     pub paused: bool,
     pub last_spoken: Option<Utterance>,
     pub pending: Option<PendingInfo>,
+    /// The last window title that was read, with the application it belongs to: the answer
+    /// when a later read finds no window at all (a chain with a gap, a fetch that failed).
+    pub last_title: Option<(gorca_model::AppId, String)>,
     pub pass_deadline: Option<Instant>,
     pub links: Option<Arc<LaneLinks>>,
     pub clock: Arc<dyn WallClock>,
@@ -270,6 +273,7 @@ impl CmdState {
             paused: false,
             last_spoken: None,
             pending: None,
+            last_title: None,
             pass_deadline: None,
             links: None,
             clock: Arc::new(SystemWallClock),

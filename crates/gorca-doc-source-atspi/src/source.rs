@@ -357,6 +357,15 @@ type ReadTuple = (
     Option<String>,
 );
 
+/// How many children of `parent` have exactly this signature (role, tag, name).
+fn twin_count(live: &Live, parent: SrcNodeId, sig: &crate::identity::Sig) -> usize {
+    live.ident.children_of(parent).map_or(0, |kids| {
+        kids.iter()
+            .filter(|k| live.ident.info_of(**k).is_some_and(|i| i.sig == *sig))
+            .count()
+    })
+}
+
 /// How many ancestors an action whose target is gone refreshes at most.
 const REFRESH_LEVELS: usize = 4;
 
@@ -1584,11 +1593,16 @@ impl AtspiDocSource {
         act: &DocAction,
         deadline: Deadline,
     ) -> Result<(), SourceError> {
-        let Some(before) = live.ident.info_of(node).map(|i| i.sig.clone()) else {
+        let Some(before) = live.ident.info_of(node).cloned() else {
             return Err(SourceError::Gone);
         };
         let old_path = live.ident.path_of(node);
-        let mut parent = live.ident.parent_of(node);
+        let old_parent = live.ident.parent_of(node);
+        // Siblings that look the same as the target before the refresh: with more than one, the
+        // identity ladder pairs them in sibling order and a removal above the target shifts the
+        // pairing by one, so the match proves nothing.
+        let twins_before = old_parent.map_or(0, |p| twin_count(live, p, &before.sig));
+        let mut parent = old_parent;
         for _ in 0..REFRESH_LEVELS {
             let Some(par) = parent else { break };
             if self.revalidate(live, ctx, par, deadline).await.is_ok() {
@@ -1597,14 +1611,28 @@ impl AtspiDocSource {
             // The parent is gone too: go up.
             parent = live.ident.parent_of(par);
         }
-        let same = live.ident.info_of(node).is_some_and(|i| {
-            i.sig.role == before.role && i.sig.name.is_some() && i.sig.name == before.name
-        });
+        let Some(after) = live.ident.info_of(node).cloned() else {
+            return Err(SourceError::Gone);
+        };
         let moved = live
             .ident
             .path_of(node)
             .is_some_and(|p| Some(p) != old_path);
-        if same && moved {
+        let same_sig = after.sig.role == before.sig.role
+            && after.sig.name.is_some()
+            && after.sig.name == before.sig.name;
+        // Unambiguous: the page's own DOM id says it is the same element, or the signature is
+        // unique among the siblings both before and after.
+        let same_dom_id = before.dom_id.is_some()
+            && before.dom_id_fresh
+            && after.dom_id == before.dom_id
+            && after.dom_id_fresh;
+        let unique = twins_before == 1
+            && live
+                .ident
+                .parent_of(node)
+                .is_some_and(|p| twin_count(live, p, &after.sig) == 1);
+        if same_sig && moved && (same_dom_id || unique) {
             self.action(live, node, act, deadline).await
         } else {
             Err(SourceError::Gone)

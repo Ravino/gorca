@@ -1008,16 +1008,40 @@ impl Reader {
                 b.suppress_focus = Some(node);
                 return;
             }
-            // The focus fell from a control of this very document to the document itself while
-            // we browse it: the page destroyed the focused node (a framework re-rendering its
-            // list) and the browser parked the focus on the document. That is not a return to
-            // the page. The cursor stays where the user is, nothing is announced; moving it to
-            // the top would turn the next Enter into a click on whatever comes first on the
-            // page (the account menu).
-            let lost_to_document = matches!(b.mode, WebMode::Browse { doc: d, .. } if d == doc)
-                && prev_focus.is_some_and(|(pd, pid)| pd == doc && pid != id)
-                && h.read.with(|d| d.root() == Some(id));
-            if lost_to_document {
+            // The focus fell onto the document itself while we browse it with the cursor on live
+            // content of that document, and nothing of ours caused it: the page destroyed the
+            // focused node (a framework re-rendering its list) and the browser parked the focus
+            // on the document. That is not a return to the page. The cursor stays where the user
+            // is and nothing is announced; moving it to the top would turn the next Enter into
+            // a click on whatever comes first on the page (the account menu). Decided from the
+            // cursor, not from the focus history, which a loaded host coalesces or reorders.
+            // When the cursor's own node is gone (a route change replaced the view) the old
+            // behaviour applies: announce the document, start at its top.
+            let on_root = h.read.with(|d| d.root() == Some(id));
+            let cursor_live = match b.mode {
+                WebMode::Browse { doc: d, cur, .. } if d == doc && b.active == Some(doc) => {
+                    b.displaced != Some(cur.node)
+                        && h.read.with(|dd| {
+                            cur.node != id
+                                && dd.is_attached(cur.node)
+                                && dd.root() != Some(cur.node)
+                        })
+                }
+                WebMode::Inactive
+                | WebMode::Loading { .. }
+                | WebMode::Browse { .. }
+                | WebMode::Focus { .. } => false,
+            };
+            let prev_in_doc = prev_focus.is_some_and(|(pd, pid)| pd == doc && pid != id);
+            if on_root {
+                tracing::info!(
+                    target: "gorca_phase",
+                    phase = "web_focus_root",
+                    keep_cursor = cursor_live,
+                    prev_focus_in_doc = prev_in_doc,
+                );
+            }
+            if on_root && cursor_live {
                 b.suppress_focus = Some(node);
                 return;
             }
@@ -1856,6 +1880,25 @@ impl Reader {
     }
 
     fn web_changed(&mut self, doc: DocId, fx: &mut ReaderEffects) {
+        self.web_changed_inner(doc, fx);
+        self.note_cursor_sig();
+    }
+
+    /// Remember what is under the browse cursor now, to notice a later silent replacement.
+    pub(super) fn note_cursor_sig(&mut self) {
+        let Some(b) = self.web.as_mut() else { return };
+        let WebMode::Browse { doc, cur, .. } = b.mode else {
+            b.cursor_sig = None;
+            return;
+        };
+        let sig = b
+            .docs
+            .get(doc)
+            .and_then(|h| h.read.with(|d| content_sig(d, cur.node)));
+        b.cursor_sig = sig.map(|s| (cur.node, s));
+    }
+
+    fn web_changed_inner(&mut self, doc: DocId, fx: &mut ReaderEffects) {
         self.web_refresh_popup(fx);
         self.web_late_entry(doc, fx);
         let Some(b) = self.web.as_mut() else { return };
@@ -1867,6 +1910,23 @@ impl Reader {
                 // was lost the offset is re-applied, so the cursor settles on the same place in
                 // the new content (position restore, ADR-0003 10.3).
                 let Some(h) = b.docs.get(doc) else { return };
+                // The node under the cursor survived but now holds other content: the page
+                // re-used it for another item (the identity pass pairs a removed row with its
+                // neighbour). The user has not seen this item.
+                if let Some((n, sig)) = b.cursor_sig
+                    && n == cur.node
+                    && h.read
+                        .with(|dd| content_sig(dd, n).is_some_and(|now| now != sig))
+                {
+                    b.displaced = Some(n);
+                }
+                tracing::debug!(
+                    target: "gorca_phase",
+                    phase = "web_changed",
+                    cur = ?cur.node,
+                    sig_node = ?b.cursor_sig.map(|(n, _)| n),
+                    attached = h.read.with(|dd| dd.is_attached(cur.node)),
+                );
                 let last = b.last_off;
                 let now = self.now;
                 let window = b
@@ -1887,6 +1947,9 @@ impl Reader {
                     && let WebMode::Browse { cur, .. } = &mut b.mode
                 {
                     *cur = c;
+                    // The page took the node the user was on and the cursor settled on
+                    // another: the next Enter says where it is before it clicks.
+                    b.displaced = Some(c.node);
                 }
             }
             WebMode::Focus { .. } | WebMode::Browse { .. } | WebMode::Inactive => {}
@@ -2205,10 +2268,15 @@ impl Reader {
     pub(crate) fn browse_command(
         &mut self,
         c: CoreCmd,
-        _rep: u8,
+        rep: u8,
         now: Instant,
         fx: &mut ReaderEffects,
     ) {
+        self.browse_command_inner(c, rep, now, fx);
+        self.note_cursor_sig();
+    }
+
+    fn browse_command_inner(&mut self, c: CoreCmd, _rep: u8, now: Instant, fx: &mut ReaderEffects) {
         if self.web.is_none() {
             self.say(t(M::WebBrowseUnavailable), fx);
             return;
@@ -2315,6 +2383,23 @@ impl Reader {
         let Some((doc, cur, _)) = self.browse_ctx(fx) else {
             return;
         };
+        if let Some(b) = self.web.as_ref() {
+            tracing::debug!(
+                target: "gorca_phase",
+                phase = "web_activate",
+                cur = ?cur.node,
+                displaced = ?b.displaced,
+                sig_node = ?b.cursor_sig.map(|(n, _)| n),
+            );
+        }
+        if let Some(b) = self.web.as_mut()
+            && b.displaced.take() == Some(cur.node)
+        {
+            // The item the user was on is gone; the cursor now sits on a neighbour. Say which
+            // one before anything is clicked; a second Enter activates it.
+            self.web_speak_line_here(fx);
+            return;
+        }
         let Some(b) = self.web.as_ref() else { return };
         let Some(h) = b.docs.get(doc) else { return };
         let target = h.read.with(|d| {
@@ -2982,4 +3067,16 @@ impl Reader {
             self.say(t(none), fx);
         }
     }
+}
+
+/// What the node holds, as a number: its structural signature plus its name and text, so a node
+/// the page re-used for other content changes it.
+fn content_sig(d: &WebDoc, n: DocNodeId) -> Option<u64> {
+    use std::hash::{Hash, Hasher};
+    let v = d.node(n)?;
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    v.sig.hash(&mut h);
+    v.name.hash(&mut h);
+    v.text.hash(&mut h);
+    Some(h.finish())
 }

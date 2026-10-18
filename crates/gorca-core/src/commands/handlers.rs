@@ -605,11 +605,24 @@ impl Reader {
         let level = self.cmd.effective.verbosity.level;
         let text = match kind {
             PendingKind::WhereAmI => info::where_am_i(&chain, repeat, level),
-            PendingKind::WindowTitle => match info::window_title(&chain) {
-                Some(t) if repeat >= 2 => info::spell(&t),
-                Some(t) => t,
-                None => t(M::WindowTitleUnavailable).to_owned(),
-            },
+            PendingKind::WindowTitle => {
+                let app = snap.key.app;
+                let title = info::window_title(&chain).inspect(|t| {
+                    self.cmd.last_title = Some((app, t.clone()));
+                });
+                let title = title.or_else(|| {
+                    self.cmd
+                        .last_title
+                        .as_ref()
+                        .filter(|(a, _)| *a == app)
+                        .map(|(_, t)| t.clone())
+                });
+                match title {
+                    Some(t) if repeat >= 2 => info::spell(&t),
+                    Some(t) => t,
+                    None => t(M::WindowTitleUnavailable).to_owned(),
+                }
+            }
             PendingKind::NodeInfo => info::node_info(&chain),
         };
         self.say_app(&text, fx);
@@ -636,7 +649,20 @@ impl Reader {
                 self.answer_or_refetch(p.kind, p.repeat, &snap, fx);
             }
             Some(snap) => self.answer_node(p.kind, p.repeat, &snap, fx),
-            None => self.say(t(M::AppNotResponding), fx),
+            None => {
+                // No snapshot at all: the last title read for this application still beats
+                // "not responding" for a window title.
+                let last = self
+                    .cmd
+                    .last_title
+                    .as_ref()
+                    .filter(|(a, _)| *a == p.node.app && p.kind == PendingKind::WindowTitle)
+                    .map(|(_, t)| t.clone());
+                match last {
+                    Some(t) => self.say_app(&t, fx),
+                    None => self.say(t(M::AppNotResponding), fx),
+                }
+            }
         }
         true
     }

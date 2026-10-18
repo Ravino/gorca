@@ -62,7 +62,7 @@ function paint() {
 }
 // Re-renders run 1200 ms after the click on the button that asks for them, so a step can put the
 // cursor in the list first (a click on the button moves focus to it).
-function later(f) { setTimeout(f, 1200); }
+function later(f, ms) { setTimeout(f, ms || 1200); }
 document.getElementById("menu").onclick = () => { status.textContent = "Account menu opened"; };
 document.getElementById("rr-same").onclick = () => later(paint);
 document.getElementById("rr-bump").onclick = () => later(() => {
@@ -71,16 +71,16 @@ document.getElementById("rr-bump").onclick = () => later(() => {
   c.preview = "new message " + Date.now() % 100;
   chats.unshift(c);
   paint();
-});
+}, 2000);
 document.getElementById("rr-insert").onclick = () => later(() => {
   chats.unshift({ id: "zed" + chats.length, name: "Zed", preview: "hello" });
   paint();
-});
+}, 2600);
 document.getElementById("rr-gone").onclick = () => later(() => {
   // The chat list is rebuilt without Bob: whatever pointed at Bob is gone.
   chats = chats.filter((c) => c.id !== "bob");
   paint();
-});
+}, 3500);
 // The page focuses a chat and re-renders the list in the same task, as a framework does when a
 // store update lands while the user is on an item: the focused node is destroyed and the
 // browser moves the focus to the document.

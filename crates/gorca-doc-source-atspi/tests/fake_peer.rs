@@ -1736,3 +1736,37 @@ async fn a_click_never_lands_on_another_element_when_the_node_is_gone() {
     b.shutdown.cancel();
     let _ = b.task.await;
 }
+
+#[tokio::test]
+async fn duplicate_names_are_ambiguous_so_the_click_is_refused_not_shifted() {
+    let (fake, conn) = Fake::start(2).await;
+    let (doc, ul, lis) = fake.list(3).await;
+    for li in &lis {
+        fake.rename(*li, "Reply");
+    }
+    let mut b = start_browse(fake, conn, doc).await;
+    let first = until_settled(&mut b).await;
+    let ids: Vec<SrcNodeId> = upserts_of(&first)
+        .iter()
+        .filter(|n| n.name.as_deref() == Some("Reply"))
+        .map(|n| n.id)
+        .collect();
+    assert_eq!(ids.len(), 3);
+    // The page drops the first reply and re-renders the other two as new objects without DOM
+    // ids. The user is on the second reply, which is now the first of the two new ones; the
+    // identity ladder pairs duplicates in sibling order, so it cannot be told from the third.
+    let f1 = b.fake.node(raw::LIST_ITEM, "Reply", "li", None).await;
+    let f2 = b.fake.node(raw::LIST_ITEM, "Reply", "li", None).await;
+    b.fake.set_children(ul, vec![f1, f2]);
+    for li in &lis {
+        b.fake.unregister(*li).await;
+    }
+    let r = click(&b, ids[1]).await;
+    assert!(
+        matches!(r, Err(gorca_doc_source_api::SourceError::Gone)),
+        "{r:?}"
+    );
+    assert!(b.fake.tree.lock().unwrap().acted.is_empty());
+    b.shutdown.cancel();
+    let _ = b.task.await;
+}

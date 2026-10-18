@@ -71,13 +71,38 @@ gorca now keeps the same caret behavior and, unlike NVDA, says so when the item 
   under re-render, bump to top, insert at top, focus destroyed (`CL.foc.enter`), item removed,
   title after open, title after a timer retitle.
 
+## Review round r1 fixes (reviewer: ff-spa-title-activation-review.md)
+
+* F-0 (flaky keep-cursor): the rule no longer depends on having seen the earlier focus on the
+  link. A focus on the document root while browsing it keeps the cursor when the cursor sits on a
+  live non-root node of that document and was not just displaced. The decision is logged
+  (`web_focus_root keep_cursor=.. prev_focus_in_doc=..`). `M8-CL` ran 20 repeats at load 9 to 28
+  (labels `cl-r2`..`cl-r5`); `CL.foc.enter` never failed. Mechanism of the one earlier failure is
+  still unverified (the log did not record `prev_focus`); the new rule does not need it.
+* F-1 (duplicate names): the retry now needs an unambiguous match: same fresh DOM id, or exactly
+  one sibling with the same (role, tag, name) before and after. The reviewer's three-"Reply"
+  probe is a regression test (`duplicate_names_are_ambiguous_so_the_click_is_refused_not_shifted`).
+* F-2 (removed item, Enter clicks a neighbour): the cursor is marked displaced when position
+  restore moves it off a vanished node, or when the node under an unmoved cursor now holds other
+  content (the identity pass pairs a removed row with its neighbour, which is what really happened
+  in the rig: Bob's node became Dave's). The first Enter then speaks the new item and clicks
+  nothing; the second Enter clicks. E2E `CL.gone.enter` / `CL.gone.enter2` (the page now re-renders
+  after the cursor is placed; before, the key presses outlasted the 1.2 s timer and the test
+  navigated onto the neighbour itself). "That item is gone" end to end cannot be provoked in the
+  rig, because the mirror heals before the click; it is covered by `fake_peer.rs` and the
+  `a_failed_click_is_said_never_silent` unit test.
+* F-3 (route change): when the cursor's node was displaced, a document focus is announced and the
+  cursor starts at the top as before (`a_document_focus_after_the_cursor_node_vanished_...`).
+* F-0b (title unavailable): the last title read per application is the fallback when the chain
+  has no window or the fetch yields no snapshot.
+* F-5/F-6: a timed-out click says nothing; a node without a source id says "can't activate", not
+  "gone".
+* F-4: the removed `cl-title-nofix` run held one failing step (`CL.fresh.focus` silent on a cold
+  first step under load 11 to 19, one of two repeats). It should have been kept; I removed it in
+  error and will not repeat that. Everything else of those runs is recorded above.
+
 ## Not done / risks
 
 * The stale title was not reproduced; only the contract and fallback are tested.
-* A removed item under the cursor lets position restore settle the cursor on a neighbour (as
-  NVDA does); Enter then opens that neighbour. The "gone" message is for the case the source
-  itself proves the node dead.
-* `CL.fresh.focus` was silent once on a cold first step in one run (rig warm-up, same as other
-  first steps under load 11 to 16); not a product signal.
-* Two experiment result dirs (`cl-title-nofix*`, passing old-code runs plus one cold-start flake)
-  were removed after their numbers were recorded above.
+* Text that changes under an unmoved cursor (a live counter in a link) also makes the next Enter
+  announce first; the cost is one extra Enter, the benefit is never clicking unseen content.

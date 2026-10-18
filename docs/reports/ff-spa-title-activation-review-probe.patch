@@ -1,0 +1,48 @@
+diff --git a/crates/gorca-doc-source-atspi/tests/fake_peer.rs b/crates/gorca-doc-source-atspi/tests/fake_peer.rs
+index b793d720..9b71ef7a 100644
+--- a/crates/gorca-doc-source-atspi/tests/fake_peer.rs
++++ b/crates/gorca-doc-source-atspi/tests/fake_peer.rs
+@@ -1736,3 +1736,43 @@ async fn a_click_never_lands_on_another_element_when_the_node_is_gone() {
+     b.shutdown.cancel();
+     let _ = b.task.await;
+ }
++
++// REVIEW PROBE (not for merge): duplicate names in one list.
++#[tokio::test]
++async fn probe_review_duplicate_names_retry_clicks_the_neighbour() {
++    let (fake, conn) = Fake::start(2).await;
++    let (doc, ul, lis) = fake.list(3).await;
++    for li in &lis {
++        fake.rename(*li, "Reply");
++    }
++    let mut b = start_browse(fake, conn, doc).await;
++    let first = until_settled(&mut b).await;
++    let ids: Vec<SrcNodeId> = upserts_of(&first)
++        .iter()
++        .filter(|n| n.name.as_deref() == Some("Reply"))
++        .map(|n| n.id)
++        .collect();
++    assert_eq!(ids.len(), 3);
++    for id in &ids {
++        click(&b, *id).await.unwrap();
++    }
++    assert_eq!(b.fake.tree.lock().unwrap().acted, lis, "id order = tree order");
++    b.fake.tree.lock().unwrap().acted.clear();
++    // The page drops the first reply and re-renders the other two as new objects (no DOM ids).
++    let f1 = b.fake.node(raw::LIST_ITEM, "Reply", "li", None).await;
++    let f2 = b.fake.node(raw::LIST_ITEM, "Reply", "li", None).await;
++    b.fake.set_children(ul, vec![f1, f2]);
++    for li in &lis {
++        b.fake.unregister(*li).await;
++    }
++    // The user is on the second reply (old lis[1], now f1).
++    let r = click(&b, ids[1]).await;
++    let acted = b.fake.tree.lock().unwrap().acted.clone();
++    eprintln!("PROBE r={r:?} acted={acted:?} f1={f1} f2={f2}");
++    assert!(
++        acted.is_empty() || acted == vec![f1],
++        "clicked a different element: {acted:?} (f1={f1}, f2={f2})"
++    );
++    b.shutdown.cancel();
++    let _ = b.task.await;
++}

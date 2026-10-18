@@ -565,6 +565,12 @@ pub struct BrowseState {
     /// focused node, or came from a focus change, Tab belongs to the browser (R-5).
     pub focus_node: Option<(DocId, DocNodeId)>,
     pub cursor_from: CursorFrom,
+    /// Where position restore put the cursor after the node the user was on vanished: the
+    /// next Enter on exactly this node announces the new item instead of clicking it.
+    pub displaced: Option<gorca_model::DocNodeId>,
+    /// Content signature of the node under the cursor when the user last left it there: a
+    /// change under an unmoved cursor (the page re-used the node for another item) displaces it.
+    pub cursor_sig: Option<(gorca_model::DocNodeId, u64)>,
     /// Which selection Ctrl+C copies (gorca+Shift+F10, ADR-0021): `Native` mirrors the virtual
     /// selection into the page, `Virtual` leaves the page alone. `Native` is the default.
     pub model: SelectionModel,
@@ -631,6 +637,8 @@ impl BrowseState {
             counters: BrowseCounters::default(),
             last_off: 0,
             restore_until: None,
+            displaced: None,
+            cursor_sig: None,
             single_letter: true,
             scroll_due: None,
             loaded: HashMap::new(),

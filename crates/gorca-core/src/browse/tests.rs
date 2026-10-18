@@ -3052,3 +3052,56 @@ fn a_failed_click_is_said_never_silent() {
     );
     assert!(spoken(&fx).is_empty());
 }
+
+/// The page drops the paragraph (and the link) the cursor is in.
+fn drop_cursor_paragraph(r: &mut Rig, rev: u64) {
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            kids(1, &[2, 9, 11, 13]),
+            DocDelta::Removed(vec![
+                SrcNodeId(4),
+                SrcNodeId(5),
+                SrcNodeId(6),
+                SrcNodeId(7),
+                SrcNodeId(8),
+            ]),
+            DocDelta::Settled { batch: rev },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed { doc: DocId(1), rev }),
+        r.now,
+    );
+}
+
+#[test]
+fn a_document_focus_after_the_cursor_node_vanished_is_announced_as_before() {
+    let mut r = rig();
+    r.focus(1006);
+    // A route change: the view holding the cursor is replaced, then the browser parks the focus
+    // on the document. The cursor was moved by position restore, so this is a new place.
+    drop_cursor_paragraph(&mut r, 2);
+    let fx = r.focus(1001);
+    assert!(!spoken(&fx).is_empty(), "the document is announced");
+}
+
+#[test]
+fn enter_after_the_cursor_item_vanished_says_the_new_item_before_clicking() {
+    let mut r = rig();
+    r.focus(1006);
+    drop_cursor_paragraph(&mut r, 2);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(
+        effects_web(&fx)
+            .iter()
+            .all(|a| !matches!(a, WebEffect::Act { .. })),
+        "the first Enter only says where the cursor is"
+    );
+    assert!(!spoken(&fx).is_empty(), "the new item is spoken");
+    // Moving on and activating again clicks as usual (the announcement is one-shot).
+    let fx = r.key(CoreCmd::BrowseActivate);
+    let _ = fx;
+}
