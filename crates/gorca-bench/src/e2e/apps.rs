@@ -227,6 +227,8 @@ pub struct GrabState {
     pub xkb_down: u32,
     /// Lowest keycode among them (debugging).
     pub xkb_first: u32,
+    /// Times the emulated Mutter walked a grabber without modifiers (its 48.7 NULL dereference).
+    pub null_walk: u32,
 }
 
 /// Mutter's verdict on one emulated key event (`fake_mutter.py` `key` reply).
@@ -416,6 +418,7 @@ impl FakeMutter {
             held: json_num(&r, "held").unwrap_or(0.0) as u32,
             xkb_down: json_num(&r, "xkb_down").unwrap_or(0.0) as u32,
             xkb_first: json_num(&r, "xkb_first").unwrap_or(0.0) as u32,
+            null_walk: json_num(&r, "null_walk").unwrap_or(0.0) as u32,
         })
     }
 

@@ -1,0 +1,59 @@
+# e2e rv-km-head
+# utc=2026-10-18T22:14:13Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=15.15 15.70 15.46 3/2123 3097316
+# git_rev=dcc7b92d
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx9
+# topology_expected=-
+# label=rv-km-head
+# reader=daemon:<repo>/.claude/worktrees/rv-kb-target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=15.15 15.70 15.46 2/2123 3097313
+# reader_env=GORCA_M1=1 GORCA_TOPOLOGY_REPORT=bench/results/e2e/rv-km-head/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=km_insert_ms: first SPEAK between a command key and the next one (301 spoken for 300 chords)
+# note1=km_insert_ms: 0 chords without a SPEAK in their window; reader counters: submitted 333, spoken 333, superseded 0, stale 0, inbox 0, received by the server 333
+# note2=km_kp_insert_ms: first SPEAK between a command key and the next one (301 spoken for 300 chords)
+# note3=km_kp_insert_ms: 0 chords without a SPEAK in their window; reader counters: submitted 333, spoken 333, superseded 0, stale 0, inbox 0, received by the server 333
+# note4=km_caps_lock_ms: first SPEAK between a command key and the next one (300 spoken for 300 chords)
+# note5=km_caps_lock_ms: 0 chords without a SPEAK in their window; reader counters: submitted 332, spoken 332, superseded 0, stale 0, inbox 0, received by the server 332
+
+metric                     bus                median          min          max  n op    threshold  res   note
+KM.km_caps_lock_ms.n       daemon/voicego          300          300          300  3                  info   [samples]
+KM.km_caps_lock_ms.p50     daemon/voicego        0.284        0.139        0.485  3                  info   [ms]
+KM.km_caps_lock_ms.p95     daemon/voicego        0.757        0.328        1.170  3                  info   [ms]
+KM.km_caps_lock_ms.p99     daemon/voicego        0.835        0.459        3.363  3 <=            5  PASS   [ms]
+KM.km_caps_lock_ms.p999    daemon/voicego        0.870        0.609        4.377  3                  info   [ms]
+KM.km_caps_lock_ms.max     daemon/voicego        0.870        0.609        4.377  3                  info   [ms]
+KM.km_insert_ms.n          daemon/voicego          300          300          300  3                  info   [samples]
+KM.km_insert_ms.p50        daemon/voicego        0.222        0.133        0.491  3                  info   [ms]
+KM.km_insert_ms.p95        daemon/voicego        0.680        0.412        0.775  3                  info   [ms]
+KM.km_insert_ms.p99        daemon/voicego        0.799        0.558        0.931  3 <=            5  PASS   [ms]
+KM.km_insert_ms.p999       daemon/voicego        0.869        0.613        1.106  3                  info   [ms]
+KM.km_insert_ms.max        daemon/voicego        0.869        0.613        1.106  3                  info   [ms]
+KM.km_kp_insert_ms.n       daemon/voicego          300          300          300  3                  info   [samples]
+KM.km_kp_insert_ms.p50     daemon/voicego        0.354        0.137        0.418  3                  info   [ms]
+KM.km_kp_insert_ms.p95     daemon/voicego        0.660        0.390        0.812  3                  info   [ms]
+KM.km_kp_insert_ms.p99     daemon/voicego        0.756        0.519        2.021  3 <=            5  PASS   [ms]
+KM.km_kp_insert_ms.p999    daemon/voicego        1.217        0.640        4.230  3                  info   [ms]
+KM.km_kp_insert_ms.max     daemon/voicego        1.217        0.640        4.230  3                  info   [ms]
+KM.km_passthrough_wrong    daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [modifiers]
+KM.late                    daemon/voicego            0            0            0  9                  info   [events]
+KM.lost                    daemon/voicego            0            0            0  9 <=            0  PASS  gated on the max over repeats [events]
+KM.not_consumed            daemon/voicego            0            0            0  9 <=            0  PASS  gated on the max over repeats [events]
+KM.superseded              daemon/voicego            0            0            0  9                  info   [events]

@@ -5,15 +5,15 @@ use gorca_input_api::GrabSet;
 
 /// `WatchKeyboard` deadline (section 7.3 table: 500 ms).
 pub const AUTHORIZE_DEADLINE: Duration = Duration::from_millis(500);
-/// `SetKeyGrabs` deadline (200 ms).
-pub const GRAB_DEADLINE: Duration = Duration::from_millis(200);
+/// `SetKeyGrabs` deadline. A slow Shell (host under load, main-loop stalls of seconds) is not a
+/// lost one: a timeout retries the same generation on the same connection, and the input lane
+/// never waits on it (it keeps classifying against the last committed set).
+pub const GRAB_DEADLINE: Duration = Duration::from_secs(3);
 /// P-7 (measured): the `SetKeyGrabs` reply is the barrier, grabs are active once it returns; one
 /// millisecond of guard after the reply is enough.
 pub const SETTLE: Duration = Duration::from_millis(1);
-/// "Pending (retry x2) then Lost".
-pub const GRAB_RETRIES: u8 = 2;
 
-const LOST_MIN: Duration = Duration::from_millis(250);
+const LOST_MIN: Duration = Duration::from_secs(1);
 const LOST_MAX: Duration = Duration::from_secs(5);
 
 /// Reply to `RequestName("org.gnome.Orca.KeyboardMonitor", flags = 0)`.
@@ -99,7 +99,12 @@ pub enum MonitorMsg {
     GrabsOk {
         generation: u32,
     },
+    /// The call hit its deadline: the manager is slow, not gone. Retried, never fatal.
     GrabsTimeout {
+        generation: u32,
+    },
+    /// The call failed with an error reply or a broken connection: the session is over.
+    GrabsFailed {
         generation: u32,
     },
     SettleElapsed {
@@ -175,6 +180,14 @@ fn authorizing(ctx: &StepCtx) -> (MonitorState, Vec<MonitorEffect>) {
 }
 
 impl MonitorState {
+    /// The state of a connection whose first `SetKeyGrabs` was acknowledged before
+    /// `WatchKeyboard` (the order that keeps every grabber's `modifiers` non-NULL in Mutter).
+    pub fn watching_with(set: GrabSet) -> MonitorState {
+        MonitorState::Watching {
+            grabs: GrabSetState::Committed { generation: 0, set },
+        }
+    }
+
     /// Initial state and the first effect: request the name.
     pub fn start() -> (MonitorState, Vec<MonitorEffect>) {
         (
@@ -224,6 +237,7 @@ fn unauthorized(
         | MonitorMsg::SetGrabSet(_)
         | MonitorMsg::GrabsOk { .. }
         | MonitorMsg::GrabsTimeout { .. }
+        | MonitorMsg::GrabsFailed { .. }
         | MonitorMsg::SettleElapsed { .. }
         | MonitorMsg::RetryTimer => (same, vec![]),
     }
@@ -262,6 +276,7 @@ fn authorizing_step(
         | MonitorMsg::SetGrabSet(_)
         | MonitorMsg::GrabsOk { .. }
         | MonitorMsg::GrabsTimeout { .. }
+        | MonitorMsg::GrabsFailed { .. }
         | MonitorMsg::SettleElapsed { .. }
         | MonitorMsg::RetryTimer => (same, vec![]),
     }
@@ -300,6 +315,8 @@ fn watching(
                 (MonitorState::Watching { grabs }, vec![])
             }
         },
+        // Slow is not lost: ask again for the same generation, as often as it takes. The
+        // session ends only on a manager restart, a lost name or a real error.
         MonitorMsg::GrabsTimeout { generation } => match grabs {
             GrabSetState::Pending {
                 committed,
@@ -307,26 +324,28 @@ fn watching(
                 retries,
                 ..
             } if wanted.0 == generation => {
-                if retries < GRAB_RETRIES {
-                    let e = vec![MonitorEffect::SendGrabs {
-                        generation,
-                        set: wanted.1.clone(),
-                    }];
-                    (
-                        MonitorState::Watching {
-                            grabs: GrabSetState::Pending {
-                                committed,
-                                wanted,
-                                sent_at: ctx.now,
-                                retries: retries + 1,
-                            },
+                let e = vec![MonitorEffect::SendGrabs {
+                    generation,
+                    set: wanted.1.clone(),
+                }];
+                (
+                    MonitorState::Watching {
+                        grabs: GrabSetState::Pending {
+                            committed,
+                            wanted,
+                            sent_at: ctx.now,
+                            retries: retries.saturating_add(1),
                         },
-                        e,
-                    )
-                } else {
-                    lost(ctx, 1)
-                }
+                    },
+                    e,
+                )
             }
+            GrabSetState::Pending { .. } | GrabSetState::Committed { .. } => {
+                (MonitorState::Watching { grabs }, vec![])
+            }
+        },
+        MonitorMsg::GrabsFailed { generation } => match grabs {
+            GrabSetState::Pending { ref wanted, .. } if wanted.0 == generation => lost(ctx, 1),
             GrabSetState::Pending { .. } | GrabSetState::Committed { .. } => {
                 (MonitorState::Watching { grabs }, vec![])
             }
@@ -431,6 +450,7 @@ fn lost_step(
         | MonitorMsg::SetGrabSet(_)
         | MonitorMsg::GrabsOk { .. }
         | MonitorMsg::GrabsTimeout { .. }
+        | MonitorMsg::GrabsFailed { .. }
         | MonitorMsg::SettleElapsed { .. } => (same, vec![]),
     }
 }
@@ -613,11 +633,11 @@ mod tests {
     }
 
     #[test]
-    fn reply_timeout_retries_twice_then_loses_the_monitor() {
+    fn reply_timeout_retries_the_same_generation_for_ever_and_never_loses_the_monitor() {
         let t = Instant::now();
         let s = watching_committed(t);
         let (mut s, _) = s.step(MonitorMsg::SetGrabSet(set(1)), &ctx(t));
-        for _ in 0..GRAB_RETRIES {
+        for _ in 0..50 {
             let (n, e) = s.step(MonitorMsg::GrabsTimeout { generation: 1 }, &ctx(t));
             assert_eq!(
                 e,
@@ -626,11 +646,82 @@ mod tests {
                     set: set(1)
                 }]
             );
+            assert!(matches!(n, MonitorState::Watching { .. }));
             s = n;
         }
-        let (s, e) = s.step(MonitorMsg::GrabsTimeout { generation: 1 }, &ctx(t));
+        // The late ack still commits it.
+        let (s, e) = s.step(MonitorMsg::GrabsOk { generation: 1 }, &ctx(t));
+        assert!(matches!(
+            e[0],
+            MonitorEffect::ArmSettle { generation: 1, .. }
+        ));
+        let (s, _) = s.step(MonitorMsg::SettleElapsed { generation: 1 }, &ctx(t));
+        assert_eq!(
+            s,
+            MonitorState::Watching {
+                grabs: GrabSetState::Committed {
+                    generation: 1,
+                    set: set(1)
+                }
+            }
+        );
+    }
+
+    #[test]
+    fn a_timeout_of_a_superseded_generation_resends_nothing() {
+        let t = Instant::now();
+        let s = watching_committed(t);
+        let (s, _) = s.step(MonitorMsg::SetGrabSet(set(1)), &ctx(t));
+        let (s, _) = s.step(MonitorMsg::SetGrabSet(set(2)), &ctx(t));
+        let (s2, e) = s
+            .clone()
+            .step(MonitorMsg::GrabsTimeout { generation: 1 }, &ctx(t));
+        assert_eq!(e, vec![]);
+        assert_eq!(s2, s, "latest wins; the stale timeout changes nothing");
+        // The newest one retries with the newest set.
+        let (_, e) = s.step(MonitorMsg::GrabsTimeout { generation: 2 }, &ctx(t));
+        assert_eq!(
+            e,
+            vec![MonitorEffect::SendGrabs {
+                generation: 2,
+                set: set(2)
+            }]
+        );
+    }
+
+    #[test]
+    fn a_failed_call_of_the_wanted_generation_ends_the_session_but_a_stale_one_does_not() {
+        let t = Instant::now();
+        let s = watching_committed(t);
+        let (s, _) = s.step(MonitorMsg::SetGrabSet(set(1)), &ctx(t));
+        let (s, _) = s.step(MonitorMsg::SetGrabSet(set(2)), &ctx(t));
+        let (s2, e) = s
+            .clone()
+            .step(MonitorMsg::GrabsFailed { generation: 1 }, &ctx(t));
+        assert_eq!((s2, e), (s.clone(), vec![]));
+        let (s, e) = s.step(MonitorMsg::GrabsFailed { generation: 2 }, &ctx(t));
         assert!(matches!(s, MonitorState::Lost { attempt: 1, .. }));
         assert!(matches!(e[0], MonitorEffect::ArmRetry { .. }));
+    }
+
+    #[test]
+    fn a_connection_starts_committed_with_the_set_applied_before_watch() {
+        let t = Instant::now();
+        let s = MonitorState::watching_with(set(7));
+        let (s2, e) = s.clone().step(MonitorMsg::SetGrabSet(set(7)), &ctx(t));
+        assert_eq!(
+            (s2, e),
+            (s.clone(), vec![]),
+            "the same set is not sent again"
+        );
+        let (_, e) = s.step(MonitorMsg::SetGrabSet(set(8)), &ctx(t));
+        assert_eq!(
+            e,
+            vec![MonitorEffect::SendGrabs {
+                generation: 1,
+                set: set(8)
+            }]
+        );
     }
 
     #[test]
@@ -662,8 +753,8 @@ mod tests {
 
     #[test]
     fn lost_backoff_grows_to_five_seconds() {
-        assert_eq!(lost_backoff(1), Duration::from_millis(250));
-        assert_eq!(lost_backoff(2), Duration::from_millis(500));
+        assert_eq!(lost_backoff(1), Duration::from_secs(1));
+        assert_eq!(lost_backoff(2), Duration::from_secs(2));
         assert_eq!(lost_backoff(10), Duration::from_secs(5));
     }
 }

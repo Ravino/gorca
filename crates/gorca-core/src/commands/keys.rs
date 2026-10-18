@@ -21,6 +21,22 @@ impl Reader {
             l.reader_ack.fetch_add(1, Ordering::AcqRel);
         }
         self.observe_locks(&intent, fx);
+        // Diagnostics for keyboard reports (`RUST_LOG=gorca_keys=debug`). Only the gorca
+        // modifiers (Insert, KP_Insert, Caps_Lock) are named; every other key, printable or not,
+        // is never logged, so a log cannot leak typed text, a PIN or the timing of capitals.
+        let ev = &intent.event;
+        if is_logged_key(ev.keysym, &self.keys.modifiers) {
+            tracing::debug!(
+                target: "gorca_keys",
+                keycode = ev.keycode,
+                keysym = format_args!("{:#x}", ev.keysym),
+                pressed = ev.pressed,
+                state = format_args!("{:#x}", ev.modifiers.bits()),
+                kind = ?intent.kind,
+                class = ?intent.class,
+                "modifier key"
+            );
+        }
         match intent.class {
             KeyClass::Command(cmd) | KeyClass::Watched(cmd) => {
                 self.run_command(cmd, &intent, now, fx);
@@ -164,3 +180,46 @@ impl Reader {
 const REPRESENT_AFTER: std::time::Duration = std::time::Duration::from_millis(1500);
 /// The shortest time between two such presentations.
 const REPRESENT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// May the keyboard diagnostics name this key? Only the configured gorca modifiers (Insert,
+/// KP_Insert, Caps_Lock): non-printable keysyms, so a log cannot leak typed text, a PIN or the
+/// timing of capitals. Shift, Control and every printable or keypad key stay anonymous.
+fn is_logged_key(keysym: u32, gorca_modifiers: &[u32]) -> bool {
+    use gorca_input_api::MODIFIER_KEYS;
+    MODIFIER_KEYS
+        .iter()
+        .any(|m| m.keysym == keysym && gorca_modifiers.contains(&keysym))
+}
+
+#[cfg(test)]
+mod diag_tests {
+    use super::is_logged_key;
+
+    const MODS: [u32; 3] = [0xff63, 0xff9e, 0xffe5];
+
+    #[test]
+    fn only_the_gorca_modifiers_are_named() {
+        for ks in MODS {
+            assert!(is_logged_key(ks, &MODS), "{ks:#x}");
+        }
+        // Not configured, so not named.
+        assert!(!is_logged_key(0xff9e, &[0xff63]));
+        // Shift and Control reveal capitals and shortcuts.
+        for ks in [0xffe1, 0xffe2, 0xffe3, 0xffe4, 0xffe9, 0xffeb, 0xff7f] {
+            assert!(!is_logged_key(ks, &MODS), "{ks:#x}");
+        }
+    }
+
+    /// No printable or keypad keysym reaches the diagnostic log, whatever the configuration.
+    #[test]
+    fn no_printable_keysym_reaches_the_log() {
+        for keysym in (0x20..=0xff).chain(0xff80..=0xffbf) {
+            if keysym == 0xff9e {
+                continue; // KP_Insert: the keypad Insert modifier itself
+            }
+            assert!(!is_logged_key(keysym, &MODS), "{keysym:#x}");
+            // Even a printable key configured as a modifier by mistake stays anonymous.
+            assert!(!is_logged_key(keysym, &[keysym]), "{keysym:#x} as modifier");
+        }
+    }
+}

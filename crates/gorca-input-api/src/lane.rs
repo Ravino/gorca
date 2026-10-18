@@ -831,6 +831,90 @@ mod tests {
         assert_eq!(hold_insert(&mut r, 8000, 900), [INS]);
     }
 
+    /// A rig whose grab set holds Insert, the keypad Insert and Caps Lock.
+    fn rig_all_modifiers() -> Rig {
+        let r = rig();
+        let mut g = GrabSet::default();
+        for m in crate::keys::MODIFIER_KEYS {
+            g.modifiers.insert(m.keysym);
+        }
+        r.links.view.store(Arc::new(GrabView {
+            committed_gen: 2,
+            committed: Arc::new(g),
+            wanted_gen: None,
+            wanted: None,
+        }));
+        r
+    }
+
+    /// Keyboard report, items 2 and 3: autorepeat of a held modifier is never a double tap, never
+    /// arms the pass-through, and the modifier stays held for a chord pressed during the repeats.
+    #[test]
+    fn autorepeat_of_a_held_modifier_is_no_double_tap_and_the_chord_still_runs() {
+        for m in crate::keys::MODIFIER_KEYS {
+            if !m.autorepeats {
+                continue;
+            }
+            let mut r = rig_all_modifiers();
+            let none = Modifiers::empty();
+            let t0 = 1000;
+            assert_eq!(
+                r.class(m.keycode, m.keysym, true, t0),
+                KeyClass::Swallowed,
+                "{}: the first press",
+                m.name
+            );
+            // First repeat after the repeat delay, then every 30 ms, like the keyboard.
+            let mut t = 500;
+            while t < 700 {
+                let c = r.class(m.keycode, m.keysym, true, t0 + t);
+                assert!(
+                    !matches!(c, KeyClass::ModifierPassThrough | KeyClass::Command(_)),
+                    "{}: a repeat at {t} ms is {c:?}",
+                    m.name
+                );
+                t += 30;
+            }
+            // The chord key pressed while the modifier is still down (and repeating).
+            let o = r.key(KC_T, T, true, t0 + 720, none);
+            assert!(
+                matches!(o.intent.class, KeyClass::Command(_) | KeyClass::Swallowed),
+                "{}: chord during repeats is {:?}",
+                m.name,
+                o.intent.class
+            );
+            assert!(
+                o.intent
+                    .chord
+                    .is_some_and(|c| c.mods.contains(Modifiers::GORCA)),
+                "{}: the modifier is still held during repeats",
+                m.name
+            );
+            // Nothing the lane reports is ever a pass-through of another key.
+            assert_ne!(o.intent.event.keysym, 0xffb0);
+        }
+    }
+
+    /// A fast tap followed by a hold: the second press is the real double tap, its repeats are not.
+    #[test]
+    fn a_double_tap_then_hold_passes_once_and_repeats_do_not_pass_again() {
+        let mut r = rig_all_modifiers();
+        let (code, sym) = (90, crate::keys::sym::KP_INSERT);
+        assert_eq!(r.class(code, sym, true, 1000), KeyClass::Swallowed);
+        assert_eq!(r.class(code, sym, false, 1040), KeyClass::Swallowed);
+        assert_eq!(
+            r.class(code, sym, true, 1160),
+            KeyClass::ModifierPassThrough
+        );
+        let mut passes = 0;
+        for i in 0..20 {
+            if r.class(code, sym, true, 1160 + 500 + 30 * i) == KeyClass::ModifierPassThrough {
+                passes += 1;
+            }
+        }
+        assert_eq!(passes, 0, "repeats never count as a pass-through");
+    }
+
     #[test]
     fn a_short_hold_is_not_stuck() {
         let mut r = rig();

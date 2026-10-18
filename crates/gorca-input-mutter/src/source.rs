@@ -14,6 +14,7 @@
 //! loop retries within about a second and the grabs are re-sent. Notices go to the user once.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::Duration;
 
 use futures_lite::StreamExt;
@@ -32,9 +33,24 @@ use crate::{MANAGER_NAME, MANAGER_PATH, MONITOR_INTERFACE, ORCA_MONITOR_NAME};
 
 /// `DBUS_NAME_FLAG_DO_NOT_QUEUE`: never wait in line behind a running Orca.
 const DO_NOT_QUEUE: u32 = 4;
-const BACKOFF_MIN: Duration = Duration::from_millis(100);
-/// Short on purpose: after a shell restart the keyboard must be back within about two seconds.
-const BACKOFF_MAX: Duration = Duration::from_secs(1);
+/// Never reconnect sooner than this after a session ended. Mutter handles the calls a dead
+/// connection left queued, and its vanish, on its main loop; a new registration overlapping that
+/// tail is how the 48.7 NULL dereference was reached (docs/reports/shell-segfault-20261019.md).
+const BACKOFF_MIN: Duration = Duration::from_secs(1);
+const BACKOFF_MAX: Duration = Duration::from_secs(4);
+/// After the manager changed owner (a new Mutter process has no tail of our old connection) or
+/// our name moved: nothing to wait for, the first SetKeyGrabs keeps the grabber safe.
+const FAST_RETRY: Duration = Duration::from_millis(100);
+/// The old connection must be gone before the next one is made.
+const CLOSE_DEADLINE: Duration = Duration::from_millis(500);
+const METHOD_TIMEOUT: Duration = Duration::from_secs(10);
+const _: () = assert!(GRAB_DEADLINE.as_millis() < METHOD_TIMEOUT.as_millis());
+/// One `Peer.Ping` of the manager before a registration.
+const PING_DEADLINE: Duration = Duration::from_secs(1);
+/// Give up on a manager that does not answer pings for this long (the session ends, backoff).
+const PING_BUDGET: Duration = Duration::from_secs(20);
+/// The first `SetKeyGrabs` of a connection is retried on the same connection for this long.
+const INITIAL_GRABS_BUDGET: Duration = Duration::from_secs(30);
 /// While another screen reader holds the name, look again this often.
 const HELD_RETRY: Duration = Duration::from_secs(5);
 /// Results of in-flight calls waiting for the session loop.
@@ -78,6 +94,8 @@ enum Attempt {
     NameLost,
     #[error("the grab set could not be applied")]
     GrabsFailed,
+    #[error("the keyboard manager does not answer")]
+    ManagerUnresponsive,
 }
 
 /// The `KeyEvent` signal body `(b u u u q)`: released, state, keysym, unichar, keycode.
@@ -179,8 +197,14 @@ impl KeySource for MutterKeySource {
                         HELD_RETRY
                     }
                     Err(e) => {
-                        tracing::warn!(error = %e, ?backoff, "keyboard monitor lost; retrying");
-                        backoff
+                        if watching {
+                            // It worked until now: this is a new trouble, not a flapping one.
+                            backoff = BACKOFF_MIN;
+                        }
+                        let fast = matches!(e, Attempt::ManagerGone | Attempt::NameLost);
+                        let wait = if fast { FAST_RETRY } else { backoff };
+                        tracing::warn!(error = %e, ?wait, "keyboard monitor lost; retrying");
+                        wait
                     }
                     Ok(()) => return Ok(()),
                 };
@@ -188,7 +212,7 @@ impl KeySource for MutterKeySource {
                     () = ctx.shutdown.cancelled() => return Ok(()),
                     () = tokio::time::sleep(wait) => {}
                 }
-                backoff = if started.elapsed() > Duration::from_secs(30) {
+                backoff = if watching || started.elapsed() > Duration::from_secs(30) {
                     BACKOFF_MIN
                 } else {
                     (backoff * 2).min(BACKOFF_MAX)
@@ -361,6 +385,9 @@ fn rule(
     Ok(b.build())
 }
 
+/// One session: connect, run [`session_inner`], and close the connection before returning, so
+/// the next session never overlaps this one's tail of queued calls in Mutter. Everything that
+/// holds a clone of the connection lives in the inner function and is gone when it returns.
 async fn session(
     src: &MutterKeySource,
     ctx: &KeySourceCtx,
@@ -372,13 +399,31 @@ async fn session(
     let builder = zbus::connection::Builder::address(src.session_address.as_str())
         .map_err(DbusError::Zbus)?
         .max_queued(MAX_QUEUED)
-        .method_timeout(Duration::from_secs(2));
+        // Only a backstop: every call carries its own, shorter, deadline. It must stay above
+        // GRAB_DEADLINE, or zbus reports a slow manager as an I/O error and the session restarts.
+        .method_timeout(METHOD_TIMEOUT);
     let conn = with_deadline(deadline, builder.build()).await?;
+    let r = session_inner(src, ctx, &conn, told_lost, watching).await;
+    if tokio::time::timeout(CLOSE_DEADLINE, conn.graceful_shutdown())
+        .await
+        .is_err()
+    {
+        tracing::warn!("the old keyboard-monitor connection did not close in time");
+    }
+    r
+}
 
+async fn session_inner(
+    src: &MutterKeySource,
+    ctx: &KeySourceCtx,
+    conn: &zbus::Connection,
+    told_lost: &mut bool,
+    watching: &mut bool,
+) -> Result<(), Attempt> {
     // ID-1: ask for the name without queueing, so a running Orca is never displaced.
     let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);
     let msg = call_method(
-        &conn,
+        conn,
         deadline,
         "org.freedesktop.DBus",
         "/org/freedesktop/DBus",
@@ -404,7 +449,7 @@ async fn session(
         deadline,
         zbus::MessageStream::for_match_rule(
             rule(MANAGER_NAME, MONITOR_INTERFACE, "KeyEvent", None)?,
-            &conn,
+            conn,
             Some(MAX_QUEUED),
         ),
     )
@@ -419,7 +464,7 @@ async fn session(
                 "NameOwnerChanged",
                 Some(MANAGER_NAME),
             )?,
-            &conn,
+            conn,
             Some(64),
         ),
     )
@@ -433,7 +478,7 @@ async fn session(
                 "NameOwnerChanged",
                 Some(ORCA_MONITOR_NAME),
             )?,
-            &conn,
+            conn,
             Some(64),
         ),
     )
@@ -443,7 +488,7 @@ async fn session(
     // after the owner subscriptions, so a replace in between is seen, never missed (F4).
     let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);
     let reply = call_method(
-        &conn,
+        conn,
         deadline,
         BUS_DAEMON,
         "/org/freedesktop/DBus",
@@ -461,9 +506,25 @@ async fn session(
     if owner_moved(&mut gate, &mut owners, MANAGER_NAME).await {
         return Err(Attempt::ManagerGone);
     }
+    // The manager process must answer a plain round trip before we register (it answers on a
+    // worker thread, so this does not prove its main loop runs; see ping_manager).
+    ping_manager(conn, ctx).await?;
+
+    // INVARIANT: every grabber gorca ever has in Mutter has non-NULL `modifiers`. Mutter
+    // creates a grabber (modifiers = NULL) on the first Watch/Unwatch/Grab/Ungrab/SetKeyGrabs
+    // from a bus name, and only SetKeyGrabs allocates the array (even for an empty set). The
+    // rebuild loop run by any later SetKeyGrabs, or by the vanish of a grabber that had
+    // modifiers, dereferences it unchecked (48.7, meta-a11y-manager.c:122). Calls of one
+    // connection are handled in order, so SetKeyGrabs is the first call of the connection and
+    // nothing else is sent until it has been acknowledged.
+    let initial =
+        initial_grabs(conn, ctx, &mut gate, &mut owners, &mut own_name, &mut keys).await?;
+    // A fresh grabber is not grabbing the keyboard.
+    let applied_all = Arc::new(WholeGrab::new(false));
+
     let deadline = Deadline::for_class(&ctx.clock, BudgetClass::Startup);
     call_method(
-        &conn,
+        conn,
         deadline,
         MANAGER_NAME,
         MANAGER_PATH,
@@ -479,22 +540,22 @@ async fn session(
     *watching = true;
     if let Some(l) = &src.links {
         // F3: the lane forgets what it knew of the previous connection.
-        l.session.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        l.session.fetch_add(1, Ordering::AcqRel);
     }
     if *told_lost {
         *told_lost = false;
         src.notify(Notice::KeyboardRestored);
     }
 
-    let now = std::time::Instant::now();
-    let sctx = StepCtx { now };
-    let (state, _) = MonitorState::start();
-    // The name is ours and WatchKeyboard answered: the machine is Watching.
-    let (state, _) = state.step(
-        MonitorMsg::NameReply(crate::monitor::RequestNameReply::PrimaryOwner),
-        &sctx,
-    );
-    let (mut state, effects) = state.step(MonitorMsg::WatchOk, &sctx);
+    // The grabs are applied already: the machine starts Watching with them committed, and the
+    // mode's current set (which may have moved on meanwhile) is requested right away.
+    // Learn mode may already be on: its whole-keyboard grab is not applied yet, so the machine
+    // starts with it off and the first ApplyModeGrabs sends it like any other change (same
+    // deadlines, same retries).
+    let mut committed = initial;
+    committed.grab_all = false;
+    let mut state = MonitorState::watching_with(committed);
+    let effects = vec![MonitorEffect::ApplyModeGrabs];
 
     let (res_tx, mut results) = mpsc::channel::<MonitorMsg>(CALL_RESULTS);
     let mut calls: JoinSet<()> = JoinSet::new();
@@ -511,7 +572,7 @@ async fn session(
     let mut down: Vec<Down> = Vec::new();
     let mut key_overflows = 0u64;
     // F2: grab mutations are strictly ordered: one in flight, the newest wanted set queued.
-    let mut writer = GrabWriter::default();
+    let mut writer = GrabWriter::new(applied_all);
 
     let mut pending: Vec<MonitorEffect> = effects;
     loop {
@@ -519,7 +580,7 @@ async fn session(
         while let Some(e) = pending.pop() {
             exec(
                 e,
-                &conn,
+                conn,
                 &grabs,
                 settle,
                 &res_tx,
@@ -621,7 +682,15 @@ async fn session(
             }
             Some(m) = results.recv() => {
                 if let Some((generation, set)) = writer.done() {
-                    spawn_grab_call(&mut calls, &conn, &res_tx, &ctx.clock, generation, set);
+                    spawn_grab_call(
+                        &mut calls,
+                        conn,
+                        &res_tx,
+                        &ctx.clock,
+                        &writer.applied_all,
+                        generation,
+                        set,
+                    );
                 }
                 m
             }
@@ -638,16 +707,15 @@ async fn session(
             Some(r) = calls.join_next(), if !calls.is_empty() => {
                 // A call task that panicked never reported: treat it as a failed attempt so the
                 // machine does not wait for ever.
-                match (r.is_err(), writer.inflight) {
-                    (true, Some(generation)) => {
-                        // Nothing queued behind the dead call may be sent later: it would land
-                        // after a newer set and leave Mutter with the older one.
-                        writer.inflight = None;
-                        writer.queued = None;
-                        MonitorMsg::GrabsTimeout { generation }
-                    }
-                    _ => continue,
+                if r.is_err() {
+                    // Nothing queued behind the dead call may be sent later: it would land
+                    // after a newer set and leave Mutter with the older one. Ask for the mode's
+                    // current set again under a fresh generation, whatever the dead one was.
+                    writer.inflight = None;
+                    writer.queued = None;
+                    pending.push(MonitorEffect::ApplyModeGrabs);
                 }
+                continue;
             }
         };
         let (next, effects) = state.step(
@@ -829,9 +897,49 @@ fn publish(
 struct GrabWriter {
     inflight: Option<u32>,
     queued: Option<(u32, GrabSet)>,
+    /// Whether Mutter has this connection grabbing the whole keyboard (last acknowledged
+    /// Grab/UngrabKeyboard). Grab and Ungrab are sent only when the wanted state differs.
+    applied_all: Arc<WholeGrab>,
+}
+
+/// What Mutter has for this connection's whole-keyboard grab: off, on, or unknown (a Grab or
+/// Ungrab was sent and not acknowledged; Mutter may still apply it later, so the next set
+/// always sends the call it wants instead of trusting the last known value).
+#[derive(Debug, Default)]
+struct WholeGrab(AtomicU8);
+
+impl WholeGrab {
+    const UNKNOWN: u8 = 2;
+
+    fn new(on: bool) -> Self {
+        Self(AtomicU8::new(u8::from(on)))
+    }
+
+    /// Must `want` be sent?
+    fn needs(&self, want: bool) -> bool {
+        self.0.load(Ordering::Acquire) != u8::from(want)
+    }
+
+    /// A call is about to go out.
+    fn sending(&self) {
+        self.0.store(Self::UNKNOWN, Ordering::Release);
+    }
+
+    /// The call was acknowledged.
+    fn acked(&self, want: bool) {
+        self.0.store(u8::from(want), Ordering::Release);
+    }
 }
 
 impl GrabWriter {
+    fn new(applied_all: Arc<WholeGrab>) -> Self {
+        Self {
+            inflight: None,
+            queued: None,
+            applied_all,
+        }
+    }
+
     /// A set to send now, if none is in flight; otherwise it waits (replacing an older waiter).
     fn submit(&mut self, generation: u32, set: GrabSet) -> Option<(u32, GrabSet)> {
         if self.inflight.is_some() {
@@ -852,59 +960,181 @@ impl GrabWriter {
     }
 }
 
-/// `SetKeyGrabs` then `GrabKeyboard` or `UngrabKeyboard`, back to back in one task, so nothing
-/// can interleave between the two calls of one set.
+/// `SetKeyGrabs`, then `GrabKeyboard` or `UngrabKeyboard` only if the whole-keyboard grab has to
+/// change, back to back in one task, so nothing can interleave between the two calls of one set.
+///
+/// A timeout is not a loss (the machine retries the generation on the same connection); any
+/// other failure is.
 fn spawn_grab_call(
     calls: &mut JoinSet<()>,
     conn: &zbus::Connection,
     tx: &mpsc::Sender<MonitorMsg>,
     clock: &gorca_rt::Clock,
+    applied_all: &Arc<WholeGrab>,
     generation: u32,
     set: GrabSet,
 ) {
     let conn = conn.clone();
     let tx = tx.clone();
     let clock = clock.clone();
+    let applied_all = Arc::clone(applied_all);
     calls.spawn(async move {
-        let deadline = Deadline::after(&clock, GRAB_DEADLINE);
-        let wire = set.to_wire();
-        let mut r = call_method(
-            &conn,
-            deadline,
+        let r = send_grab_set(&conn, &clock, &applied_all, &set).await;
+        let msg = match r.map_err(|b| *b) {
+            Ok(()) => MonitorMsg::GrabsOk { generation },
+            Err((call, DbusError::Timeout)) => {
+                tracing::warn!(generation, call, "grab call timed out; the manager is slow");
+                MonitorMsg::GrabsTimeout { generation }
+            }
+            Err((call, e)) => {
+                tracing::warn!(error = %e, generation, call, "grab call failed");
+                MonitorMsg::GrabsFailed { generation }
+            }
+        };
+        let _ = tx.send(msg).await;
+    });
+}
+
+/// The error carries the name of the call that failed.
+async fn send_grab_set(
+    conn: &zbus::Connection,
+    clock: &gorca_rt::Clock,
+    applied_all: &WholeGrab,
+    set: &GrabSet,
+) -> Result<(), Box<(&'static str, DbusError)>> {
+    let wire = set.to_wire();
+    call_method(
+        conn,
+        Deadline::after(clock, GRAB_DEADLINE),
+        MANAGER_NAME,
+        MANAGER_PATH,
+        MONITOR_INTERFACE,
+        "SetKeyGrabs",
+        &wire,
+    )
+    .await
+    .map_err(|e| Box::new(("SetKeyGrabs", e)))?;
+    // Learn mode grabs the whole keyboard (LM-1); every other set releases it. Sent when the
+    // state is not known to be the wanted one: after a timed-out call it is unknown, because
+    // Mutter still applies a call it received late.
+    if applied_all.needs(set.grab_all) {
+        let name = if set.grab_all {
+            "GrabKeyboard"
+        } else {
+            "UngrabKeyboard"
+        };
+        applied_all.sending();
+        call_method(
+            conn,
+            Deadline::after(clock, GRAB_DEADLINE),
+            MANAGER_NAME,
+            MANAGER_PATH,
+            MONITOR_INTERFACE,
+            name,
+            &(),
+        )
+        .await
+        .map_err(|e| Box::new((name, e)))?;
+        applied_all.acked(set.grab_all);
+    }
+    Ok(())
+}
+
+/// `Peer.Ping` of the manager until it answers. GDBus answers `Peer` on its worker thread, so
+/// this proves the process is not stopped and the bus name is served, NOT that Mutter's main
+/// loop is running (measured: ping 23 ms while a method call waited 3.5 s). The crash guard is
+/// the SetKeyGrabs-first order, not this ping. Ends the session if the manager changes owner or
+/// stays silent for [`PING_BUDGET`].
+async fn ping_manager(conn: &zbus::Connection, ctx: &KeySourceCtx) -> Result<(), Attempt> {
+    let started = tokio::time::Instant::now();
+    loop {
+        let r = call_method(
+            conn,
+            Deadline::after(&ctx.clock, PING_DEADLINE),
+            MANAGER_NAME,
+            MANAGER_PATH,
+            "org.freedesktop.DBus.Peer",
+            "Ping",
+            &(),
+        )
+        .await;
+        match r {
+            Ok(_) => return Ok(()),
+            Err(DbusError::Timeout) => {}
+            Err(e) => return Err(e.into()),
+        }
+        if started.elapsed() > PING_BUDGET {
+            return Err(Attempt::ManagerUnresponsive);
+        }
+    }
+}
+
+/// The first `SetKeyGrabs` of a connection. A timeout is "slow", not "lost": the call is sent
+/// again on the same connection with the newest wanted set (latest wins) until it is
+/// acknowledged, the manager restarts, our name goes, or [`INITIAL_GRABS_BUDGET`] runs out.
+/// Key events that arrive meanwhile (grabs are live once Mutter applied the call) are stale by
+/// the time we could handle them and are discarded.
+async fn initial_grabs(
+    conn: &zbus::Connection,
+    ctx: &KeySourceCtx,
+    gate: &mut Gate,
+    owners: &mut zbus::MessageStream,
+    own_name: &mut zbus::MessageStream,
+    keys: &mut zbus::MessageStream,
+) -> Result<GrabSet, Attempt> {
+    let started = tokio::time::Instant::now();
+    loop {
+        let want = ctx.grabs.borrow().clone();
+        let wire = want.to_wire();
+        let call = call_method(
+            conn,
+            Deadline::after(&ctx.clock, GRAB_DEADLINE),
             MANAGER_NAME,
             MANAGER_PATH,
             MONITOR_INTERFACE,
             "SetKeyGrabs",
             &wire,
-        )
-        .await;
-        if r.is_ok() {
-            // Learn mode grabs the whole keyboard (LM-1); every other set releases it.
-            let deadline = Deadline::after(&clock, GRAB_DEADLINE);
-            r = call_method(
-                &conn,
-                deadline,
-                MANAGER_NAME,
-                MANAGER_PATH,
-                MONITOR_INTERFACE,
-                if set.grab_all {
-                    "GrabKeyboard"
-                } else {
-                    "UngrabKeyboard"
+        );
+        tokio::pin!(call);
+        let r = loop {
+            tokio::select! {
+                r = &mut call => break r,
+                m = owners.next() => match m {
+                    None => return Err(Attempt::StreamEnded),
+                    Some(Ok(m)) if gate.owner_change(&m, MANAGER_NAME).is_some() => {
+                        return Err(Attempt::ManagerGone);
+                    }
+                    Some(Ok(_) | Err(_)) => {}
                 },
-                &(),
-            )
-            .await;
-        }
-        let msg = match r {
-            Ok(_) => MonitorMsg::GrabsOk { generation },
-            Err(e) => {
-                tracing::warn!(error = %e, generation, "SetKeyGrabs failed");
-                MonitorMsg::GrabsTimeout { generation }
+                m = own_name.next() => match m {
+                    None => return Err(Attempt::StreamEnded),
+                    Some(Ok(m)) => {
+                        if let Some((_, new)) = gate.owner_change(&m, ORCA_MONITOR_NAME)
+                            && new.is_empty()
+                        {
+                            return Err(Attempt::NameLost);
+                        }
+                    }
+                    Some(Err(_)) => {}
+                },
+                m = keys.next() => {
+                    if m.is_none() {
+                        return Err(Attempt::StreamEnded);
+                    }
+                }
             }
         };
-        let _ = tx.send(msg).await;
-    });
+        match r {
+            Ok(_) => {
+                return Ok(want);
+            }
+            Err(DbusError::Timeout) if started.elapsed() < INITIAL_GRABS_BUDGET => {
+                tracing::warn!("first SetKeyGrabs timed out; the manager is slow, asking again");
+            }
+            Err(DbusError::Timeout) => return Err(Attempt::GrabsFailed),
+            Err(e) => return Err(e.into()),
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -924,7 +1154,15 @@ fn exec(
     match e {
         MonitorEffect::SendGrabs { generation, set } => {
             if let Some((generation, set)) = writer.submit(generation, set) {
-                spawn_grab_call(calls, conn, res_tx, &ctx.clock, generation, set);
+                spawn_grab_call(
+                    calls,
+                    conn,
+                    res_tx,
+                    &ctx.clock,
+                    &writer.applied_all,
+                    generation,
+                    set,
+                );
             }
         }
         MonitorEffect::ArmSettle { generation, after } => {
@@ -1261,6 +1499,28 @@ mod tests {
         assert!(w.done().is_none(), "nothing left, the writer is idle");
         assert!(w.inflight.is_none());
         assert_eq!(w.submit(4, set(4)).map(|(g, _)| g), Some(4));
+    }
+
+    #[test]
+    fn a_late_grab_never_leaves_the_keyboard_grabbed() {
+        // Learn mode on: GrabKeyboard is sent and times out. Mutter applies it late.
+        let w = WholeGrab::new(false);
+        assert!(w.needs(true));
+        w.sending();
+        // (timeout: no ack) learn mode ends: the Ungrab must go out although the last
+        // acknowledged state was "off".
+        assert!(w.needs(false), "unknown state resends Ungrab");
+        assert!(w.needs(true), "and Grab");
+        w.sending();
+        w.acked(false);
+        assert!(!w.needs(false), "known off: nothing to send");
+        assert!(w.needs(true));
+    }
+
+    #[test]
+    fn a_fresh_connection_is_known_not_grabbing() {
+        let w = WholeGrab::new(false);
+        assert!(!w.needs(false), "no UngrabKeyboard on a fresh grabber");
     }
 
     #[test]
