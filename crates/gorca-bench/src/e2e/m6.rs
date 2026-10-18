@@ -92,6 +92,10 @@ const KEY_E: K = K {
 };
 const CONTROL: u32 = 4;
 const SHIFT: u32 = 1;
+const KEY_D: K = K {
+    code: 40,
+    sym: 0x64,
+};
 const KEY_U: K = K {
     code: 30,
     sym: 0x75,
@@ -2336,12 +2340,23 @@ pub fn vv(
     );
     out.notes.extend(std::mem::take(&mut c.notes));
     // Keep the reader's trace and the presentation log for a diagnosis (`GORCA_VV_KEEP_DIR`).
+    // A repeat that failed a step keeps its own files (suffix: monotonic ns), so a loop of
+    // repeats cannot overwrite the evidence of the one that failed; with GORCA_VV_KEEP_ALL every
+    // repeat is kept.
     if let Some(dir) = std::env::var_os("GORCA_VV_KEEP_DIR") {
-        let dir = std::path::PathBuf::from(dir);
-        let _ = std::fs::create_dir_all(&dir);
-        for f in [&err_path, &present_path] {
-            if let Some(name) = f.file_name() {
-                let _ = std::fs::copy(f, dir.join(name));
+        let failed = c.failures > failures_before;
+        if failed || flag(host, "GORCA_VV_KEEP_ALL") {
+            let dir = std::path::PathBuf::from(dir);
+            let _ = std::fs::create_dir_all(&dir);
+            let tag = format!(
+                "{}{}",
+                super::mono::now_ns(),
+                if failed { "-FAILED" } else { "" }
+            );
+            for f in [&err_path, &present_path] {
+                if let Some(name) = f.file_name() {
+                    let _ = std::fs::copy(f, dir.join(format!("{tag}-{}", name.to_string_lossy())));
+                }
             }
         }
     }
@@ -2728,6 +2743,13 @@ fn vv_focus(v: &mut V, c: &mut Check) -> Result<()> {
                 std::thread::sleep(Duration::from_millis(60));
             }
         }
+        v.term.rd_line("key 28");
+        // The headless RemoteDesktop keyboard occasionally drops a key: a captured failing VV
+        // repeat shows the command line typed (caret at its end, no event for Return) and the
+        // shell never ran it, so "focusc" was never printed. A second Return is harmless when
+        // the first one worked (the shell reads an empty line after `sleep`), and runs the
+        // command when it did not (acceptance-fixes.md).
+        std::thread::sleep(Duration::from_millis(150));
         v.term.rd_line("key 28");
     };
     let got = v.said_during(2500, |v| {
@@ -3123,13 +3145,19 @@ fn vd_perturb(v: &mut V, n: usize, cbus: &str) -> Result<&'static str> {
             "second app window, Alt+Tab back"
         }
         2 => {
-            v.term.open_tab("exec bash --norc -i")?;
+            // The tab comes from Ctrl+Shift+T inside the focused window (as in VV tabs). A tab
+            // opened with `gnome-terminal --tab` from outside lands in a NEW window on the private
+            // compositor, so the window has one tab, the tab accelerators are disabled and
+            // Ctrl+PageUp/PageDown reach bash as "\e[5;5~" (acceptance fix, see
+            // docs/reports/acceptance-fixes.md).
+            v.chord(&[CTRL_L, SHIFT_L], KEY_T, 0, CONTROL | SHIFT, &[29, 42, 20])?;
             std::thread::sleep(Duration::from_secs(3));
             v.chord(&[CTRL_L], PAGE_UP, 0, CONTROL, &[29, 104])?;
             std::thread::sleep(Duration::from_millis(1200));
             v.chord(&[CTRL_L], PAGE_DOWN, 0, CONTROL, &[29, 109])?;
             std::thread::sleep(Duration::from_millis(1200));
-            v.chord(&[CTRL_L], PAGE_UP, 0, CONTROL, &[29, 104])?;
+            // Close the extra tab again (Ctrl+D at its empty prompt) so rounds do not pile up tabs.
+            v.chord(&[CTRL_L], KEY_D, 0, CONTROL, &[29, 32])?;
             std::thread::sleep(Duration::from_millis(1200));
             "tab switch"
         }

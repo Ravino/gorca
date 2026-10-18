@@ -28,12 +28,23 @@ cargo test -p gorca-bench-b1 --offline
 # Authoritative runs: the full +-20 % service-time fidelity check (H-10(a)). The result goes into
 # the run's host meta (`fidelity`); a failure marks the run INVALID (see b1.rs).
 export B1_STRICT=1
-if fid_out=$(cargo test -p b1-fakeapp --test fidelity --offline 2>&1); then
-  export B1_FIDELITY=pass
-else
+# The check measures sleep/wake accuracy of the fake app, so a single scheduler or cpuidle hiccup
+# on a shared desktop can fail it (seen: one INVALID in three runs on a quiet host). Bounded retry:
+# up to B1_FIDELITY_TRIES attempts (default 3); every attempt is logged and the run is valid only if
+# one attempt passes cleanly; the verdict string lists how many attempts it took.
+fid_tries=${B1_FIDELITY_TRIES:-3}
+B1_FIDELITY="fail"
+for ((fi = 1; fi <= fid_tries; fi++)); do
+  if fid_out=$(cargo test -p b1-fakeapp --test fidelity --offline 2>&1); then
+    if [ "$fi" = 1 ]; then B1_FIDELITY=pass; else B1_FIDELITY="pass (attempt $fi of $fid_tries)"; fi
+    break
+  fi
   echo "$fid_out" | tail -20
-  export B1_FIDELITY="fail: $(echo "$fid_out" | grep -m1 'model off' | tr -d '"' || true)"
-fi
+  B1_FIDELITY="fail: $(echo "$fid_out" | grep -m1 'model off' | tr -d '"' || true) (after $fi attempts)"
+  echo "== fidelity attempt $fi failed${B1_FIDELITY:+: $B1_FIDELITY}"
+  sleep 2
+done
+export B1_FIDELITY
 echo "== fidelity: $B1_FIDELITY =="
 cargo build --release -p gorca-bench-b1 --bins --offline
 # The walk driver and the fake app (H-3, H-2), next to each other in target/release.

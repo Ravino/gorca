@@ -1,0 +1,3 @@
+private compositor: /tmp/gorca-vte.pMfSH2/x/gorca-vte-1450095
+== reader <repo>/.claude/worktrees/agent-ac00585ae6937e472/target/release/gorca built from 2a017ed3, tree at be7e37f6
+Error: the reader binary was built from 2a017ed3 but the tree is at be7e37f6: rebuild it (cargo build --release -p gorca-daemon) or pass --allow-stale-reader

@@ -1,0 +1,54 @@
+== host: load 12.10 10.33 9.86 13/2255 1772528 governor performance  ==
+
+running 34 tests
+test host::tests::quiet_host_rules ... ok
+test limits::tests::ids_are_unique_and_gates_have_thresholds ... FAILED
+test msgs::tests::a_sv_parser_reads_integers_and_skips_strings ... ok
+test limits::tests::spec_numbers ... ok
+test msgs::tests::cross_check_tolerance_is_one_percent_of_the_larger ... ok
+test msgs::tests::msgs_formula_and_rates ... ok
+test rundir::tests::rss_growth_needs_the_full_window ... ok
+test rundir::tests::idle_reports_the_worst_app ... ok
+test rundir::tests::scripted_shortfall_and_signal_mismatch_invalidate ... ok
+test rundir::tests::walk_run_end_to_end_on_hand_made_logs ... ok
+test runner::tests::a_missing_bold_gate_fails_instead_of_passing_silently ... ok
+test runner::tests::arm_parsing ... ok
+test runner::tests::cold_path_is_compared_with_r0 ... ok
+test runner::tests::invalid_runs_are_excluded_and_reported ... ok
+test runner::tests::median_gate_ignores_one_bad_repeat_but_zero_gates_do_not ... ok
+test runner::tests::per_model_ff_ids_resolve_to_the_ff_gate ... ok
+test runner::tests::schedule_rotates_and_balances_positions ... ok
+test step::tests::json_is_parseable_and_has_the_gate_field ... ok
+test verdict::tests::a_refine_before_the_audio_can_start_is_a_correction_but_not_an_audible_one ... ok
+test verdict::tests::a_secret_field_is_judged_through_the_keyed_tag_of_the_log_header ... ok
+test step::tests::scenarios_hit_the_caps ... ok
+test verdict::tests::an_s1_line_is_a_state_change_with_its_own_latency_and_never_answers_a_focus ... ok
+test verdict::tests::clean_revisit_and_hit_rates ... ok
+test verdict::tests::correct_when_name_matches_current_version ... ok
+test verdict::tests::followup_within_500ms_is_late_after_that_stale ... ok
+test verdict::tests::lost_superseded_and_spoken_focus_lines ... ok
+test verdict::tests::mutation_inside_the_window_makes_both_values_valid ... ok
+test verdict::tests::orphan_followups_and_bad_input_are_reported ... ok
+test verdict::tests::refine_replacing_it_is_refined ... ok
+test verdict::tests::refine_with_a_wrong_value_or_epoch_does_not_save_it ... ok
+test verdict::tests::stale_when_old_name_is_spoken_and_never_corrected ... ok
+test verdict::tests::states_compare_as_sets_and_ignore_the_focus_ring ... ok
+test verdict::tests::unconstrained_fields_match_anything_but_history_is_enforced ... ok
+test step::tests::noop_is_far_below_the_gate_and_a_slow_subject_is_caught ... ok
+
+failures:
+
+---- limits::tests::ids_are_unique_and_gates_have_thresholds stdout ----
+
+thread 'limits::tests::ids_are_unique_and_gates_have_thresholds' (1778109) panicked at crates/gorca-bench-b1/src/limits.rs:291:13:
+assertion `left == right` failed: B1-L4.announce
+  left: true
+ right: false
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    limits::tests::ids_are_unique_and_gates_have_thresholds
+
+test result: FAILED. 33 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

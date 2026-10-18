@@ -1302,6 +1302,7 @@ impl MirrorWriter {
 
     /// Debug builds verify the counters after every mutation of a small mirror.
     #[inline]
+    #[cfg_attr(not(debug_assertions), allow(clippy::unused_self))]
     fn debug_check(&self) {
         #[cfg(debug_assertions)]
         if self.shared.live.load(Ordering::Relaxed) + self.shared.tombstones.load(Ordering::Relaxed)

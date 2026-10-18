@@ -1,0 +1,33 @@
+{
+  "meta": {"utc": "2026-10-18T13:42:21Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "cpus_allowed": "0-15", "governor": "performance x16", "deep_idle_states": "none enabled", "loadavg_start": "8.18 7.79 7.57 3/2040 1944798", "quiet_host": "no: load average 8.18 >= 1", "harness_git_rev": "9296446e", "harness_git_dirty": "true", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "dbus_daemon": "D-Bus Message Bus Daemon 1.16.2", "build": "release", "arm_rev.main": "2a017ed3", "label": "fixes-b1", "plan": "walk=1,ff=1,idle=1,big=1,step=3", "loadavg_end": "8.18 7.79 7.57 2/2040 1944795", "schedule": "round-robin over arms, rotated by one each round", "loadavg_start_run": "4.98 5.13 6.45 11/2052 1843027", "fidelity": "pass", "run_status": "valid"},
+  "rows": [
+    {"id": "B1-RSS.big", "scenario": "big", "bus": "main", "value": 3.25390625, "min": 3.25390625, "max": 3.25390625, "runs": 1, "unit": "MiB", "op": "<=", "threshold": 128, "verdict": "PASS", "note": ""},
+    {"id": "B1-RUNS.invalid", "scenario": "big", "bus": "main", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "runs", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "B1-FF.p99@files", "scenario": "ff", "bus": "main", "value": 4.463319, "min": 4.463319, "max": 4.463319, "runs": 1, "unit": "ms", "op": "<=", "threshold": 15, "verdict": "PASS", "note": ""},
+    {"id": "B1-FF.p99@files-big", "scenario": "ff", "bus": "main", "value": 1.324269, "min": 1.324269, "max": 1.324269, "runs": 1, "unit": "ms", "op": "<=", "threshold": 15, "verdict": "PASS", "note": ""},
+    {"id": "B1-FF.p99@gtk3", "scenario": "ff", "bus": "main", "value": 3.129587, "min": 3.129587, "max": 3.129587, "runs": 1, "unit": "ms", "op": "<=", "threshold": 15, "verdict": "PASS", "note": ""},
+    {"id": "B1-FF.p99@settings", "scenario": "ff", "bus": "main", "value": 6.498586, "min": 6.498586, "max": 6.498586, "runs": 1, "unit": "ms", "op": "<=", "threshold": 15, "verdict": "PASS", "note": ""},
+    {"id": "B1-FF.p99@shell", "scenario": "ff", "bus": "main", "value": 10.394429, "min": 10.394429, "max": 10.394429, "runs": 1, "unit": "ms", "op": "<=", "threshold": 15, "verdict": "PASS", "note": ""},
+    {"id": "B1-RUNS.invalid", "scenario": "ff", "bus": "main", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "runs", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "B1-MSG.idle", "scenario": "idle", "bus": "main", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "calls/s/app", "op": "<=", "threshold": 0.5, "verdict": "PASS", "note": ""},
+    {"id": "B1-RUNS.invalid", "scenario": "idle", "bus": "main", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "runs", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "B1-RUNS.invalid", "scenario": "step", "bus": "main", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "runs", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "B1-STEP.max_us", "scenario": "step", "bus": "main", "value": 16.951, "min": 16.062, "max": 17.676, "runs": 3, "unit": "us", "op": "<=", "threshold": 250, "verdict": "PASS", "note": ""},
+    {"id": "B1-CPU.focus_us", "scenario": "walk", "bus": "main", "value": 8766.773037178264, "min": 8766.773037178264, "max": 8766.773037178264, "runs": 1, "unit": "us", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "B1-HIT.all", "scenario": "walk", "bus": "main", "value": 0.82697807435653, "min": 0.82697807435653, "max": 0.82697807435653, "runs": 1, "unit": "ratio", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "B1-HIT.ancestry", "scenario": "walk", "bus": "main", "value": 1, "min": 1, "max": 1, "runs": 1, "unit": "ratio", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "B1-HIT.revisit", "scenario": "walk", "bus": "main", "value": 0.9557926829268293, "min": 0.9557926829268293, "max": 0.9557926829268293, "runs": 1, "unit": "ratio", "op": ">=", "threshold": 0.95, "verdict": "PASS", "note": ""},
+    {"id": "B1-L1c.p99", "scenario": "walk", "bus": "main", "value": 7.144018, "min": 7.144018, "max": 7.144018, "runs": 1, "unit": "ms", "op": "<=", "threshold": 15, "verdict": "PASS", "note": ""},
+    {"id": "B1-L1h.p99", "scenario": "walk", "bus": "main", "value": 1.069193, "min": 1.069193, "max": 1.069193, "runs": 1, "unit": "ms", "op": "<=", "threshold": 2, "verdict": "PASS", "note": ""},
+    {"id": "B1-L3.lost", "scenario": "walk", "bus": "main", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "count", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "B1-L4.p99", "scenario": "walk", "bus": "main", "value": 4.542343, "min": 4.542343, "max": 4.542343, "runs": 1, "unit": "ms", "op": "<=", "threshold": 15, "verdict": "PASS", "note": ""},
+    {"id": "B1-LOST@walk", "scenario": "walk", "bus": "main", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "count", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "B1-M6", "scenario": "walk", "bus": "main", "value": 0.029551954242135366, "min": 0.029551954242135366, "max": 0.029551954242135366, "runs": 1, "unit": "ratio", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "B1-M6.audible", "scenario": "walk", "bus": "main", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "ratio", "op": "<=", "threshold": 0.009999999999999778, "verdict": "PASS", "note": ""},
+    {"id": "B1-MSG.l3", "scenario": "walk", "bus": "main", "value": 0.010314758755562682, "min": 0.010314758755562682, "max": 0.010314758755562682, "runs": 1, "unit": "calls/s", "op": "<=", "threshold": 500, "verdict": "PASS", "note": ""},
+    {"id": "B1-MSG.walk", "scenario": "walk", "bus": "main", "value": 114.04461098422426, "min": 114.04461098422426, "max": 114.04461098422426, "runs": 1, "unit": "msgs/s", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "B1-RUNS.invalid", "scenario": "walk", "bus": "main", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "runs", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "B1-S1.p99", "scenario": "walk", "bus": "main", "value": 2.983901, "min": 2.983901, "max": 2.983901, "runs": 1, "unit": "ms", "op": "<=", "threshold": 5, "verdict": "PASS", "note": ""},
+    {"id": "B1-STALE@walk", "scenario": "walk", "bus": "main", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "count", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"}
+  ]
+}

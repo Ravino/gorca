@@ -473,7 +473,11 @@ fn main() -> Result<()> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(if quick { 1 } else { 3 });
     let reader = parse_reader(&arg_value(&args, "--reader").unwrap_or_else(|| "stub".to_owned()))?;
-    check_reader_rev(&reader, args.iter().any(|a| a == "--allow-stale-reader"))?;
+    check_reader_rev(
+        &reader,
+        args.iter().any(|a| a == "--allow-stale-reader")
+            || std::env::var_os("GORCA_E2E_ALLOW_STALE_READER").is_some_and(|v| v == "1"),
+    )?;
     let flavor = arg_value(&args, "--backend")
         .map(|s| Flavor::parse(&s).context("--backend must be voicego or ssip"))
         .transpose()?

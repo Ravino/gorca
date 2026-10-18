@@ -1,0 +1,23 @@
+== reader <repo>/.claude/worktrees/agent-ac00585ae6937e472/target/release/gorca built from 2a017ed3, tree at 2a017ed3
+== e2e c1hs-base: reader=daemon:<repo>/.claude/worktrees/agent-ac00585ae6937e472/target/release/gorca backend=voicego repeats=20 load=10.18 10.82 8.00 9/2280 1298471
+-- round 1/20 C1hs (load 10.18 10.82 8.00 8/2280 1298471)
+-- round 2/20 C1hs (load 12.72 11.35 8.24 6/2271 1298841)
+-- round 3/20 C1hs (load 13.85 11.68 8.39 6/2275 1299225)
+-- round 4/20 C1hs (load 13.21 11.71 8.47 4/2455 1299917)
+-- round 5/20 C1hs (load 12.88 11.73 8.55 3/2635 1300731)
+-- round 6/20 C1hs (load 12.79 11.79 8.64 3/2625 1301233)
+-- round 7/20 C1hs (load 13.02 11.88 8.72 5/2263 1304550)
+-- round 8/20 C1hs (load 13.24 12.01 8.83 4/2268 1305798)
+-- round 9/20 C1hs (load 13.33 12.10 8.93 2/2253 1306195)
+-- round 10/20 C1hs (load 13.38 12.19 9.03 4/2265 1309493)
+-- round 11/20 C1hs (load 14.96 12.59 9.21 6/2266 1311113)
+-- round 12/20 C1hs (load 14.84 12.72 9.32 6/2223 1311600)
+-- round 13/20 C1hs (load 15.58 13.04 9.50 7/2226 1311795)
+-- round 14/20 C1hs (load 15.37 13.15 9.61 4/2250 1312140)
+-- round 15/20 C1hs (load 15.42 13.28 9.71 3/2381 1312824)
+-- round 16/20 C1hs (load 14.69 13.24 9.78 5/2379 1313333)
+-- round 17/20 C1hs (load 14.37 13.30 9.87 7/2603 1314004)
+-- round 18/20 C1hs (load 12.94 13.04 9.84 2/2618 1314457)
+-- round 19/20 C1hs (load 13.47 13.16 9.95 5/2596 1314919)
+-- round 20/20 C1hs (load 13.14 13.12 10.01 2/2203 1315178)
+== wrote bench/results/acceptance/fixes-c1hs-base-20261018T103017Z/res/20261018T103632Z.{json,txt}

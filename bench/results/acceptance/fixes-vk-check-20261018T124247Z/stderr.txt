@@ -1,0 +1,5 @@
+private compositor: /tmp/gorca-vte.0WDa43/x/gorca-vte-1755431
+== reader <repo>/.claude/worktrees/agent-ac00585ae6937e472/target/release/gorca built from 2a017ed3, tree at b43875a3
+== e2e vk-check: reader=daemon:<repo>/.claude/worktrees/agent-ac00585ae6937e472/target/release/gorca backend=voicego repeats=1 load=11.65 9.41 9.59 2/2381 1755763
+-- round 1/1 VK (load 11.65 9.41 9.59 5/2381 1755763)
+== wrote bench/results/acceptance/fixes-vk-check-20261018T124247Z/res/20261018T124634Z.{json,txt}

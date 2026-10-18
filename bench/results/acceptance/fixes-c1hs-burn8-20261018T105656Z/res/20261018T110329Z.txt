@@ -1,0 +1,59 @@
+# e2e c1hs-burn8
+# utc=2026-10-18T11:03:29Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=34.51 26.10 18.83 17/2276 1420881
+# git_rev=2a017ed3
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx20
+# topology_expected=lanes-rt
+# label=c1hs-burn8
+# reader=daemon:<repo>/.claude/worktrees/agent-ac00585ae6937e472/target/release/gorca
+# backend=voicego
+# repeats=20
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=34.51 26.10 18.83 16/2276 1420878
+# reader_env=GORCA_M3=1 GORCA_M3_STRICT=1 NO_COLOR=1 GORCA_TOPOLOGY_REPORT=bench/results/acceptance/fixes-c1hs-burn8-20261018T105656Z/res/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=C1h: app caret-event emit to SPEAK of the character, from the window
+# note1=C1h lost #321: wanted "k", key to next key 25.7 ms, heard [+28.8ms "k", +36.6ms "l"]
+# note2=C1h timeline around first lost #321: -25.47ms key#319 | -24.39ms emit#319(i) | -20.19ms SPEAK(i) | -15.08ms END | -11.25ms key#320 | -10.66ms emit#320(j) | -5.03ms SPEAK(j) | +0.00ms key#321 | +0.99ms CANCEL(STOP,had=true) | +4.19ms emit#321(k) | +25.72ms key#322 | +28.76ms SPEAK(k) | +29.01ms emit#322(l) | +36.59ms CANCEL(STOP,had=true) | +36.59ms SPEAK(l) | +40.73ms END | +43.60ms key#323 | +43.96ms emit#323(m) | +44.52ms SPEAK(m) | +48.71ms END | +53.25ms key#324 | +53.83ms emit#324(n) | +54.50ms SPEAK(n) | +60.73ms END | +62.77ms key#325 | +63.55ms emit#325(o) | +64.36ms SPEAK(o) | +72.16ms key#326 | +72.29ms CANCEL(STOP,had=true) | +72.52ms emit#326(p) | +73.26ms SPEAK(p) | +80.73ms END | +83.46ms key#327 | +83.96ms emit#327(q) | +84.48ms SPEAK(q) | +88.72ms END | +100.12ms key#328 | +100.45ms emit#328(r) | +101.24ms SPEAK(r) | +108.72ms END | +111.08ms SPEAK(s) | +116.74ms END | +122.14ms SPEAK(t) | +128.72ms END | +138.57ms SPEAK(u)
+# note3=C1h lost #960: wanted "z", key to next key 12.5 ms, heard [+26.0ms "z"]
+# note4=C1h lost #961: wanted "a", key to next key 17.1 ms, heard [+13.5ms "z", +18.3ms "a", +26.2ms "b"]
+# note5=C1h timeline around first lost #960: -36.53ms key#958 | -33.11ms emit#958(x) | -32.33ms SPEAK(x) | -25.24ms END | -15.86ms key#959 | -14.99ms emit#959(y) | -14.07ms SPEAK(y) | -9.25ms END | +0.00ms key#960 | +2.53ms emit#960(z) | +12.51ms key#961 | +14.95ms emit#961(a) | +26.04ms SPEAK(z) | +29.65ms key#962 | +30.72ms emit#962(b) | +30.80ms CANCEL(STOP,had=true) | +30.80ms SPEAK(a) | +38.73ms CANCEL(STOP,had=true) | +38.73ms SPEAK(b) | +43.05ms key#963 | +43.40ms CANCEL(STOP,had=true) | +43.89ms emit#963(c) | +45.21ms SPEAK(c) | +50.75ms END | +56.81ms key#964 | +57.79ms emit#964(d) | +60.26ms SPEAK(d) | +66.78ms END | +66.92ms key#965 | +69.77ms emit#965(e) | +72.44ms SPEAK(e) | +81.19ms key#966 | +81.93ms emit#966(f) | +82.73ms CANCEL(STOP,had=true) | +83.21ms SPEAK(f) | +93.87ms key#967 | +95.27ms CANCEL(STOP,had=true) | +95.54ms emit#967(g) | +97.92ms SPEAK(g) | +102.79ms END | +116.45ms SPEAK(h) | +122.77ms END
+# note6=C1h lost #68: wanted "r", key to next key 9.7 ms, heard [+19.2ms "s"]
+# note7=C1h lost #145: wanted "q", key to next key 14.7 ms, heard [+16.8ms "r"]
+# note8=C1h timeline around first lost #68: -21.30ms key#66 | -21.18ms CANCEL(STOP,had=true) | -21.04ms emit#66(p) | -18.55ms SPEAK(p) | -10.43ms key#67 | -10.27ms CANCEL(STOP,had=true) | -10.05ms emit#67(q) | -8.63ms SPEAK(q) | -3.72ms END | +0.00ms key#68 | +0.40ms emit#68(r) | +9.74ms key#69 | +10.02ms emit#69(s) | +19.19ms SPEAK(s) | +20.32ms key#70 | +20.48ms CANCEL(STOP,had=true) | +20.66ms emit#70(t) | +21.52ms SPEAK(t) | +28.27ms END | +32.83ms key#71 | +33.15ms emit#71(u) | +34.43ms SPEAK(u) | +42.23ms key#72 | +42.40ms CANCEL(STOP,had=true) | +42.56ms emit#72(v) | +45.45ms SPEAK(v) | +50.84ms key#73 | +51.00ms CANCEL(STOP,had=true) | +51.19ms emit#73(w) | +52.66ms SPEAK(w) | +60.27ms END | +62.87ms key#74 | +63.54ms emit#74(x) | +64.77ms SPEAK(x) | +72.26ms END | +73.39ms key#75 | +73.68ms emit#75(y) | +76.60ms SPEAK(y) | +85.46ms CANCEL(STOP,had=true) | +87.39ms SPEAK(z) | +92.26ms END | +101.03ms SPEAK(a) | +108.27ms END
+# note9=C1h lost #46: wanted "v", key to next key 14.8 ms, heard [+19.5ms "v", +25.9ms "w"]
+# note10=C1h lost #48: wanted "x", key to next key 9.8 ms, heard [+10.0ms "x", +10.8ms "y"]
+# note11=C1h lost #56: wanted "f", key to next key 15.7 ms, heard [+16.1ms "f", +24.6ms "g"]
+# note12=C1h lost #253: wanted "u", key to next key 9.0 ms, heard [+9.4ms "u", +19.2ms "v"]
+# note13=C1h lost #280: wanted "v", key to next key 32.5 ms, heard [+44.3ms "v"]
+# note14=C1h timeline around first lost #46: -39.32ms key#44 | -38.24ms CANCEL(STOP,had=true) | -33.22ms emit#44(t) | -27.54ms SPEAK(t) | -16.75ms END | -15.28ms key#45 | -14.89ms emit#45(u) | -12.30ms SPEAK(u) | -0.74ms END | +0.00ms key#46 | +2.98ms emit#46(v) | +14.76ms key#47 | +15.12ms emit#47(w) | +19.47ms SPEAK(v) | +25.91ms CANCEL(STOP,had=true) | +25.91ms SPEAK(w) | +30.16ms key#48 | +30.58ms emit#48(x) | +31.22ms CANCEL(STOP,had=true) | +39.93ms key#49 | +40.15ms SPEAK(x) | +40.22ms CANCEL(STOP,had=true) | +40.32ms emit#49(y) | +40.95ms SPEAK(y) | +47.25ms END | +54.92ms key#50 | +55.29ms emit#50(z) | +57.66ms SPEAK(z) | +63.25ms END | +66.49ms key#51 | +66.92ms emit#51(a) | +71.55ms SPEAK(a) | +80.71ms key#52 | +82.18ms emit#52(b) | +82.57ms CANCEL(STOP,had=true) | +83.32ms SPEAK(b) | +91.27ms END | +94.61ms key#53 | +94.93ms emit#53(c) | +98.29ms SPEAK(c) | +107.55ms END | +123.07ms SPEAK(d) | +128.20ms END
+# note15=C1h lost #361: wanted "y", key to next key 10.4 ms, heard [+21.6ms "z"]
+# note16=C1h lost #363: wanted "a", key to next key 10.7 ms, heard [+26.6ms "b"]
+# note17=C1h lost #365: wanted "c", key to next key 17.2 ms, heard []
+# note18=C1h lost #366: wanted "d", key to next key 12.0 ms, heard []
+# note19=C1h lost #367: wanted "e", key to next key 17.2 ms, heard [+28.3ms "f"]
+# note20=C1h timeline around first lost #361: -27.48ms key#359 | -27.26ms CANCEL(STOP,had=true) | -27.06ms emit#359(w) | -26.44ms SPEAK(w) | -21.43ms END | -11.86ms key#360 | -11.17ms emit#360(x) | -9.05ms SPEAK(x) | -1.41ms END | +0.00ms key#361 | +0.47ms emit#361(y) | +10.36ms key#362 | +10.82ms emit#362(z) | +21.61ms SPEAK(z) | +23.42ms key#363 | +23.70ms CANCEL(STOP,had=true) | +23.93ms emit#363(a) | +34.13ms key#364 | +35.84ms emit#364(b) | +50.00ms SPEAK(b) | +53.51ms key#365 | +53.77ms CANCEL(STOP,had=true) | +54.01ms emit#365(c) | +70.67ms key#366 | +71.18ms emit#366(d) | +82.67ms key#367 | +85.86ms emit#367(e) | +99.92ms key#368 | +103.93ms emit#368(f) | +110.93ms SPEAK(f) | +115.94ms CANCEL(STOP,had=true) | +126.96ms SPEAK(g) | +131.30ms CANCEL(STOP,had=true) | +133.32ms SPEAK(h)
+
+metric                     bus                median          min          max  n op    threshold  res   note
+C1hs.c1hs_ms.n             daemon/voicego         1200         1152         1200 20                  info   [samples]
+C1hs.c1hs_ms.p50           daemon/voicego        0.819        0.166        2.208 20                  info   [ms]
+C1hs.c1hs_ms.p95           daemon/voicego        2.342        0.759        7.735 20                  info   [ms]
+C1hs.c1hs_ms.p99           daemon/voicego        3.568        1.457         11.2 20 <=            4  PASS   [ms]
+C1hs.c1hs_ms.p999          daemon/voicego        5.557        2.763         13.8 20                  info   [ms]
+C1hs.c1hs_ms.max           daemon/voicego        7.783        2.904         23.5 20                  info   [ms]
+C1hs.c1h_ipc_calls         daemon/voicego            0            0            0 20 <=            0  PASS  gated on the max over repeats [calls]
+C1hs.lost                  daemon/voicego            0            0           48 20 <=            0  FAIL  gated on the max over repeats [events]
