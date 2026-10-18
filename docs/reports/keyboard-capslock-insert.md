@@ -129,8 +129,10 @@ real `gedit --standalone` (text read back through AT-SPI), RemoteDesktop keyboar
   exactly this symptom: single tap silent, double tap "0". Unverified; the rig cannot produce the mismatch.
 
 Because no fix can be justified without the real event stream, gorca now logs the relevant keys on demand
-(`RUST_LOG=gorca_keys=debug`: gorca modifiers, Shift/Control/Alt/Super, lock keys and keypad keys only,
-never letters). Trace for the owner (read-only, nothing is grabbed, the live session is not touched):
+(`RUST_LOG=gorca_keys=debug`: only non-printable modifier keys are named, that is Insert, KP_Insert, Caps
+Lock, Shift, Control, Alt, Super; no letter, digit or keypad key is ever logged, and the keypad Insert key
+arriving as a digit with Num Lock on is logged as "modifier key, numlock on" without keycode or keysym).
+Trace for the owner (read-only, nothing is grabbed, the live session is not touched):
 
 1. `libinput list-devices | grep -B1 -A3 -i keyboard` to find the keyboard's `/dev/input/eventN`.
 2. In one terminal: `sudo evtest /dev/input/eventN` (no `--grab`), and press numpad Ins twice quickly.
@@ -139,9 +141,9 @@ never letters). Trace for the owner (read-only, nothing is grabbed, the live ses
 3. In another terminal: `sudo libinput debug-events --show-keycodes` for the same gesture (it shows what
    Mutter receives, also read-only).
 4. gorca side: start gorca with `RUST_LOG=warn,gorca_keys=debug` and read `journalctl --user -u gorca -f`
-   (or its stderr); each modifier/keypad event prints keycode, keysym, state (Mod2 = `0x10` means Num
-   Lock on), press kind and class. A passed second press shows `ModifierPassThrough` with keysym `0xff9e`;
-   a `0xffb0` keysym or state `0x10` there would prove a Num Lock mismatch in Mutter itself.
+   (or its stderr); each modifier event prints keycode, keysym, state (Mod2 = `0x10` means Num Lock on),
+   press kind and class. A passed second press shows `ModifierPassThrough` with keysym `0xff9e`; a line
+   "modifier key, numlock on" instead proves Mutter reported the key as a digit (a Num Lock mismatch).
 5. In gedit (or `wev`), the keyval the application saw: `wev` prints `sym: KP_Insert` vs `KP_0`.
 
 ## Gates

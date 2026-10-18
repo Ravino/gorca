@@ -21,11 +21,13 @@ impl Reader {
             l.reader_ack.fetch_add(1, Ordering::AcqRel);
         }
         self.observe_locks(&intent, fx);
-        // Diagnostics for keyboard reports (`RUST_LOG=gorca_keys=debug`): only gorca modifiers,
-        // lock keys and keypad keys, never letters, so a log cannot leak typed text.
+        // Diagnostics for keyboard reports (`RUST_LOG=gorca_keys=debug`). Only non-printable
+        // modifier keys are named; a printable key (letters, digits, the keypad) is never logged
+        // with its identity, so a log cannot leak typed text or a PIN.
         let ev = &intent.event;
-        if is_diagnostic_key(ev.keysym, &self.keys.modifiers) {
-            tracing::debug!(
+        match diagnostic_key(ev.keycode, ev.keysym, ev.modifiers, &self.keys.modifiers) {
+            Diag::None => {}
+            Diag::Modifier => tracing::debug!(
                 target: "gorca_keys",
                 keycode = ev.keycode,
                 keysym = format_args!("{:#x}", ev.keysym),
@@ -33,8 +35,15 @@ impl Reader {
                 state = format_args!("{:#x}", ev.modifiers.bits()),
                 kind = ?intent.kind,
                 class = ?intent.class,
-                "key"
-            );
+                "modifier key"
+            ),
+            Diag::ModifierKeyWithNumLock => tracing::debug!(
+                target: "gorca_keys",
+                pressed = ev.pressed,
+                kind = ?intent.kind,
+                class = ?intent.class,
+                "modifier key, numlock on"
+            ),
         }
         match intent.class {
             KeyClass::Command(cmd) | KeyClass::Watched(cmd) => {
@@ -180,27 +189,103 @@ const REPRESENT_AFTER: std::time::Duration = std::time::Duration::from_millis(15
 /// The shortest time between two such presentations.
 const REPRESENT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
 
-/// Keys whose events may be logged for keyboard diagnostics: the configured gorca modifiers,
-/// Shift, Control, Alt, Super, the lock keys and the keypad (`KP_*`). Never text keys.
-fn is_diagnostic_key(keysym: u32, gorca_modifiers: &[u32]) -> bool {
-    gorca_modifiers.contains(&keysym)
-        || gorca_input_api::is_modifier_keysym(keysym)
-        || (0xff80..=0xffbf).contains(&keysym)
-        || keysym == gorca_input_api::sym::INSERT
+/// What the keyboard diagnostics log may say about a key.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum Diag {
+    /// Nothing: the key is printable or not a modifier.
+    None,
+    /// A non-printable modifier key, by identity (Insert, KP_Insert, Caps_Lock, Shift, Control, ...).
+    Modifier,
+    /// The physical key of the keypad Insert arriving as a keypad digit (Num Lock on): logged
+    /// without keycode and keysym, since they would name the digit.
+    ModifierKeyWithNumLock,
+}
+
+/// Decide what may be logged. Printable keys (letters, digits, the whole keypad) are never named,
+/// so a log cannot leak typed text or a PIN. Only the configured gorca modifiers and the
+/// non-printable modifier keysyms (`0xff00` and up) are identified.
+fn diagnostic_key(
+    keycode: u16,
+    keysym: u32,
+    state: gorca_input_api::Modifiers,
+    gorca_modifiers: &[u32],
+) -> Diag {
+    use gorca_input_api::{Modifiers, keypad_digit_keysym, modifier_key};
+    let non_printable = keysym >= 0xff00;
+    let keypad = (0xff80..=0xffbf).contains(&keysym);
+    let identity = non_printable
+        && !keypad
+        && (gorca_modifiers.contains(&keysym) || gorca_input_api::is_modifier_keysym(keysym));
+    // KP_Insert is a keypad keysym but a modifier of this run: it may be named.
+    let kp_insert = modifier_key("KP_Insert");
+    if identity
+        || kp_insert.is_some_and(|m| m.keysym == keysym && gorca_modifiers.contains(&keysym))
+    {
+        return Diag::Modifier;
+    }
+    if let Some(m) = kp_insert
+        && gorca_modifiers.contains(&m.keysym)
+        && keycode == m.keycode
+        && Some(keysym) == keypad_digit_keysym(m.keysym)
+        && state.contains(Modifiers::MOD2)
+    {
+        return Diag::ModifierKeyWithNumLock;
+    }
+    Diag::None
 }
 
 #[cfg(test)]
 mod diag_tests {
-    use super::is_diagnostic_key;
+    use super::{Diag, diagnostic_key};
+    use gorca_input_api::Modifiers;
+
+    const MODS: [u32; 3] = [0xff63, 0xff9e, 0xffe5];
 
     #[test]
-    fn only_modifiers_locks_and_keypad_keys_are_logged() {
-        assert!(is_diagnostic_key(0xff9e, &[]), "KP_Insert");
-        assert!(is_diagnostic_key(0xffb0, &[]), "KP_0");
-        assert!(is_diagnostic_key(0xffe5, &[]), "Caps_Lock");
-        assert!(is_diagnostic_key(0xff63, &[]), "Insert");
-        assert!(is_diagnostic_key(0x6b, &[0x6b]), "a configured modifier");
-        assert!(!is_diagnostic_key(0x61, &[0xff63]), "letters never");
-        assert!(!is_diagnostic_key(0x30, &[]), "digit row never");
+    fn only_non_printable_modifier_keys_are_named() {
+        let none = Modifiers::empty();
+        assert_eq!(diagnostic_key(90, 0xff9e, none, &MODS), Diag::Modifier);
+        assert_eq!(diagnostic_key(118, 0xff63, none, &MODS), Diag::Modifier);
+        assert_eq!(diagnostic_key(66, 0xffe5, none, &MODS), Diag::Modifier);
+        assert_eq!(diagnostic_key(50, 0xffe1, none, &MODS), Diag::Modifier);
+        // The keypad Insert key with Num Lock on is a digit: logged without its identity.
+        assert_eq!(
+            diagnostic_key(90, 0xffb0, Modifiers::MOD2, &MODS),
+            Diag::ModifierKeyWithNumLock
+        );
+    }
+
+    /// No printable keysym reaches the diagnostic log with its identity: every Latin-1 and keypad
+    /// printable keysym, with and without the modifiers configured, gives `Diag::None` (the one
+    /// exception is the keypad Insert key itself, covered above and logged without a keysym).
+    #[test]
+    fn no_printable_keysym_reaches_the_log() {
+        for keysym in (0x20..=0xff).chain(0xff80..=0xffbf) {
+            // KP_Insert (0xff9e) is the configured modifier, not a printable key.
+            if keysym == 0xff9e {
+                continue;
+            }
+            for keycode in [10u16, 38, 82, 90, 91] {
+                for mods in [&MODS[..], &[]] {
+                    for state in [Modifiers::empty(), Modifiers::MOD2, Modifiers::LOCK] {
+                        let d = diagnostic_key(keycode, keysym, state, mods);
+                        let allowed = d == Diag::ModifierKeyWithNumLock
+                            && keycode == 90
+                            && keysym == 0xffb0
+                            && state.contains(Modifiers::MOD2)
+                            && !mods.is_empty();
+                        assert!(
+                            d == Diag::None || allowed,
+                            "{keysym:#x} on {keycode} with {state:?} is {d:?}"
+                        );
+                    }
+                }
+            }
+        }
+        // A printable key configured as a modifier by mistake is still not named.
+        assert_eq!(
+            diagnostic_key(38, 0x61, Modifiers::empty(), &[0x61]),
+            Diag::None
+        );
     }
 }

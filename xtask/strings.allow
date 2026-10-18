@@ -134,3 +134,6 @@ extensions/ext-vte/src/prompt.rs | \u{43a}\u{43e}\u{434} \u{43f}\u{43e}\u{434}\u
 extensions/ext-vte/src/prompt.rs | \u{441}\u{435}\u{43a}\u{440}\u{435}\u{442}\u{43d}[\u{430}-\u{44f}]*
 extensions/ext-vte/src/prompt.rs | \u{43f}\u{438}\u{43d}-?\u{43a}\u{43e}\u{434}
 extensions/ext-vte/src/prompt.rs | [^:?\u{ff1a}\u{ff1f}]{0,60}[:?\u{ff1a}\u{ff1f}]\s*$
+crates/gorca-core/src/commands/keys.rs | modifier key
+crates/gorca-core/src/commands/keys.rs | modifier key, numlock on
+crates/gorca-core/src/commands/keys.rs | KP_Insert
