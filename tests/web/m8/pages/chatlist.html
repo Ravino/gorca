@@ -19,6 +19,7 @@
   <button type="button" id="rr-gone">Re-render drop</button>
   <button type="button" id="rr-focus">Re-render focused</button>
   <button type="button" id="retitle">Retitle later</button>
+  <button type="button" id="tog">Silence</button>
 </header>
 <h1>Chats</h1>
 <ul id="chats" aria-label="Chat list"></ul>
@@ -94,6 +95,15 @@ let unread = 0;
 document.getElementById("retitle").onclick = () => later(() => {
   document.title = "Inbox (" + (++unread) + ") - M8 Chats";
 });
+// A toggle that relabels itself in answer to the click (Play to Pause): two Enters, two clicks.
+let silenced = 0;
+document.getElementById("tog").onclick = (e) => {
+  const b = e.currentTarget;
+  silenced++;
+  const on = b.textContent === "Silence";
+  b.textContent = on ? "Resume" : "Silence";
+  status.textContent = (on ? "Silenced" : "Resumed") + " (" + silenced + ")";
+};
 paint();
 </script>
 </body>

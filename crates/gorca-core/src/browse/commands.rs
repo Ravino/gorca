@@ -64,6 +64,8 @@ const SELECT_SPEAK_CAP: u32 = 300;
 /// How long the speech of a frame document that took the focus waits for the focus to move on
 /// into the frame before the stop is announced.
 const FRAME_FOCUS_DEFER: Duration = Duration::from_millis(250);
+/// A content change under the cursor this soon after our own click is the click's answer.
+const ACTIVATED_QUIET: Duration = Duration::from_secs(5);
 const REFOCUS_SILENT_WINDOW: Duration = Duration::from_millis(2000);
 const WORD_TTL: Duration = Duration::from_millis(600);
 /// The line that follows a document's focus utterance waits for a cold fetch this long (M4).
@@ -1125,6 +1127,12 @@ impl Reader {
             // The cursor jumped with the focus: Tab availability changed with it (R-5), and no
             // scroll timer is armed to notice.
             self.web_sync_tab_grabs(fx);
+            // A focus move is a new place: nothing is displaced, and what is under the cursor now
+            // is what the user heard.
+            if let Some(b) = self.web.as_mut() {
+                b.displaced = None;
+            }
+            self.note_cursor_sig();
             return;
         }
         // IR-3: the join missed. Browse keys must never be grabbed while focus may be in a
@@ -1684,6 +1692,7 @@ impl Reader {
             }
             DocNotice::Gone { doc } => {
                 if let Some(b) = self.web.as_mut() {
+                    b.displaced = None;
                     b.saved.remove(&doc);
                     if b.active == Some(doc) {
                         b.active = None;
@@ -1913,7 +1922,13 @@ impl Reader {
                 // The node under the cursor survived but now holds other content: the page
                 // re-used it for another item (the identity pass pairs a removed row with its
                 // neighbour). The user has not seen this item.
-                if let Some((n, sig)) = b.cursor_sig
+                // Never for the item the user just activated: its relabel (Play to Pause) is
+                // the answer to the click, not a swap.
+                let just_activated = b
+                    .activated
+                    .is_some_and(|t| self.now.saturating_duration_since(t) < ACTIVATED_QUIET);
+                if !just_activated
+                    && let Some((n, sig)) = b.cursor_sig
                     && n == cur.node
                     && h.read
                         .with(|dd| content_sig(dd, n).is_some_and(|now| now != sig))
@@ -2273,6 +2288,12 @@ impl Reader {
         fx: &mut ReaderEffects,
     ) {
         self.browse_command_inner(c, rep, now, fx);
+        // Any command but Enter is the user moving or reading: a displacement mark is spent.
+        if c != CoreCmd::BrowseActivate
+            && let Some(b) = self.web.as_mut()
+        {
+            b.displaced = None;
+        }
         self.note_cursor_sig();
     }
 

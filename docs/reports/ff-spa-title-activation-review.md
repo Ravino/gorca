@@ -140,3 +140,59 @@ missed the focused node and the ancestry has a gap (old path), or the new window
 `answer_node` re-walked an ancestry that broke under load. Not reproduced, cause unverified. Fix:
 when the window fetch fails or yields no title, use the last good cached title. The cache fallback
 exists only on the error branch today. Add a counter or log line for which branch answered.
+
+## r2: delta b9ef9030..55c33be6 (2026-10-19)
+
+Gates on 55c33be6: fmt clean, clippy `-D warnings` clean, `cargo test --workspace` 2309 passed / 0 failed,
+`xtask strings` ok. `git merge-tree main 55c33be6` (main = e1a55350): the only conflict is `docs/decisions.md`
+(a trivial append).
+
+E2E (load 10-14): `rv2-cl` M8-CL x3 had 0 failures. `rv2-nav` M8-TG, TG2, TG3, QN, SPA, APP, AF and BWG
+ran once each with 0 failures (only the known XFAILs).
+
+Status of the r1 items:
+- F-0: fixed. Keeping the cursor now depends on the cursor's state, and the decision is logged as
+  `web_focus_root`. I did not re-run 20 repeats myself.
+- F-1: fixed. The retry needs a fresh DOM id or a signature that is unique among the siblings
+  before and after. The regression test is `duplicate_names_are_ambiguous_so_the_click_is_refused_not_shifted`.
+- F-3: fixed (the unit test passes).
+- F-0b, F-5, F-6: fixed.
+- F-2: fixed for removal, but the new mechanism has the defects below.
+
+Probes are in `docs/reports/ff-spa-title-activation-review-r2-probe.patch`. They are not for merge.
+
+### R2-1 (high): the user's own toggle eats the next Enter
+`browse/commands.rs` `web_changed_inner` (~1913) marks the cursor `displaced` on any change of the
+content signature under the cursor. The signature hashes sig, name and text. When a page relabels
+the button the user just activated (Play to Pause on a Telegram voice message, "Show more" to "Show
+less", "Follow" to "Following"), the next Enter only re-reads the line and does not click. Probe
+`probe_review_toggle_label_change_does_not_eat_the_next_enter`: `second enter clicked=false
+spoken=["Read link Pause now."]`. Every relabelling toggle needs two presses, and so does a list item
+with a live timestamp or preview. M8 has no step that presses Enter twice on a toggle, so the e2e
+runs pass.
+Fix: never displace a node the user activated within the last few seconds (`b.activated`, or keep the
+activated node id). Optionally, only displace when the role changes or when the name changes and the
+old name now belongs to another live sibling, that is, the item really moved.
+
+### R2-2 (medium): a swap is missed when the cursor was placed by a focus move
+`cursor_sig` is refreshed only after `web_changed` and `browse_command`. A focus move (Tab, or a page
+`focus()`) places the cursor through `web_on_focus`/`web_place` without refreshing it. If the page
+then reuses that node for another item (Chromium unkeyed rewrite, or IL-3b pairing), `n == cur.node`
+fails, nothing is displaced, and Enter silently clicks the new item. Probe
+`probe_review_swap_after_focus_placement_is_noticed`: `swap clicked=true spoken=[]` for a focused
+link renamed to "Dave".
+Fix: call `note_cursor_sig()` after every cursor placement, or at the end of each `Reader::handle`
+pass that touched web state.
+
+### R2-3 (low-medium): `displaced` is never cleared except by Enter
+After a displacement the user can arrow away and back. The mark survives and the next Enter
+re-reads the line instead of clicking. The probe showed the mark consumed after NextLine/PrevLine.
+Fix: clear `displaced` on any user cursor move, and on a mode or document change.
+
+### R2-4 (low): a vacuous assertion
+`enter_after_the_cursor_item_vanished_says_the_new_item_before_clicking` ends with `let _ = fx;`, so
+the second Enter is never checked. Assert the Click.
+
+Chromium parity: the logic lives in the core and the shared AT-SPI source, so it applies to both
+browsers. The in-place reuse path (R2-2) is exactly Chromium's unkeyed rewrite, so Chromium is the
+browser more exposed to R2-2.

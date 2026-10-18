@@ -3103,5 +3103,77 @@ fn enter_after_the_cursor_item_vanished_says_the_new_item_before_clicking() {
     assert!(!spoken(&fx).is_empty(), "the new item is spoken");
     // Moving on and activating again clicks as usual (the announcement is one-shot).
     let fx = r.key(CoreCmd::BrowseActivate);
-    let _ = fx;
+    // The cursor now sits on plain text: nothing to click, and nothing is announced twice.
+    assert!(spoken(&fx).is_empty(), "the announcement is one-shot");
+}
+
+fn click_of(fx: &ReaderEffects) -> bool {
+    effects_web(fx).iter().any(|a| {
+        matches!(
+            a,
+            WebEffect::Act {
+                act: DocAction::Click,
+                ..
+            }
+        )
+    })
+}
+
+/// The page re-uses the link node for another item (new name and text).
+fn relabel_link(r: &mut Rig, name: &str, rev: u64) {
+    let mut link = src(6, Role::Link, Some(1006));
+    link.states |= StateSet::FOCUSABLE;
+    link.name = Some(Arc::from(name));
+    r.tr.apply(
+        &mut r.writer,
+        vec![
+            DocDelta::Upsert(vec![link, run(7, name)]),
+            DocDelta::Settled { batch: rev },
+        ],
+    )
+    .unwrap();
+    r.writer.publish();
+    r.reader.handle(
+        ReaderMsg::Doc(DocNotice::Changed { doc: DocId(1), rev }),
+        r.now,
+    );
+}
+
+#[test]
+fn a_toggle_relabelled_after_the_users_own_click_clicks_again() {
+    let mut r = rig();
+    r.focus(1006);
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+    relabel_link(&mut r, "Pause", 3);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(
+        click_of(&fx),
+        "second Enter on the user's own toggle clicks"
+    );
+}
+
+#[test]
+fn a_swap_after_a_focus_placement_is_announced_not_clicked() {
+    let mut r = rig();
+    r.focus(1006);
+    relabel_link(&mut r, "Dave", 3);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(!click_of(&fx), "the unseen item is not clicked");
+    assert!(!spoken(&fx).is_empty(), "it is spoken instead");
+    assert!(click_of(&r.key(CoreCmd::BrowseActivate)));
+}
+
+#[test]
+fn a_displacement_is_spent_by_moving_the_cursor() {
+    let mut r = rig();
+    r.focus(1006);
+    drop_cursor_paragraph(&mut r, 2);
+    r.key(CoreCmd::BrowseCursorNextLine);
+    r.key(CoreCmd::BrowseCursorPrevLine);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    assert!(
+        spoken(&fx).is_empty(),
+        "Enter does not re-announce after the user moved"
+    );
+    assert!(r.reader.web.as_ref().is_some_and(|b| b.displaced.is_none()));
 }

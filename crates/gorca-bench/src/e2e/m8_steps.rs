@@ -1137,6 +1137,12 @@ fn cl() -> Vec<Step> {
         pos("CL.ins.k3", n('k')),
         s("CL.ins.wait", P0, "The page inserts Zed at the top", Act::Wait(1800), &[]).win(2200),
         s("CL.ins.enter", P0, "Enter opens the item the cursor was on (the third chat, Bob), not the new top item", key0(ENTER), &["Opened chat Bob"]).not(&["Account menu", "Opened chat Zed"]).win(1500),
+        // A toggle relabels itself in answer to the user's own click: Enter twice clicks twice.
+        top("CL.tog.top"),
+        pos("CL.tog.focus", Act::Focus(role::PUSH_BUTTON, "Silence")),
+        s("CL.tog.1", P0, "Enter on the toggle clicks it", key0(ENTER), &["Silenced"]).win(1500),
+        s("CL.tog.2", P0, "Enter again clicks again (the relabel is the answer to our click, not a swap)", key0(ENTER), &["Resumed"]).win(1500),
+        s("CL.tog.3", P0, "and a third time", key0(ENTER), &["Silenced"]).win(1500),
         // The page changes its title by a timer while the cursor is elsewhere (an unread badge).
         top("CL.ttl.top"),
         Step::setup("CL.ttl.click", "ask the page to retitle itself in 1.2 s", Act::Do(role::PUSH_BUTTON, "Retitle later")),
