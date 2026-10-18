@@ -66,26 +66,26 @@ New scenario `VK` (`crates/gorca-bench/src/e2e/m6.rs`) and driver `bench/accepta
 real gnome-terminal-server in private sessions for the whole run; rounds of the VD disturbances (idle, second
 app + Alt+Tab, tab switch, notifications, bell, overview, Alt+Tab storm, search bar, context menu) plus
 ordinary bash use, and a `yes`/`seq` flood with typed keys and Ctrl+C every third round (flooding producer).
-One TSV line per round. Requested 28800 s; stopped by SIGTERM to its own process group at 4130 s
-(79 rounds, 26 floods); quiet-host reverted. Results are labeled `LABEL.txt`.
+One TSV line per round. Requested 28800 s; stopped by SIGTERM to its own process group at 4374 s
+(83 rounds, 27 floods); quiet-host reverted. Results are labeled `LABEL.txt`.
 
 * **Aborts: 0** `gnome-terminal-server` exits, 0 reader deaths, 0 flood runs without the prompt returning
-  (26 of 26 prompts back). `vte-server.err` criticals were not counted (the scenario did not finish).
+  (27 of 27 prompts back). `vte-server.err` criticals were not counted (the scenario did not finish).
 * Flood key latency (gorca-side, mock speech): median of per-flood p50 0.31 ms, worst single key 0.79 ms
   (gate for VV flood keys 4 ms); stop-on-Ctrl+C worst 0.1 ms (gate 2 ms).
-* CPU: reader 3948 ticks (39 s) in 4130 s, i.e. about 1% of a core including the floods.
+* CPU: reader about 3950 ticks (40 s) in 4374 s, i.e. about 1% of a core including the floods.
 * RSS: reader 100.5 -> 88.9 MB over the first 11 rounds (+0.5 MB), then both processes were paged out by the host
   at round 11 (reader 8.6 MB, server 12.2 MB RSS in the same line, CPU ticks continuous, MemAvailable +900 MB;
-  swap in use) and RSS then crept 12.7 -> 13.3 MB over 67 rounds. RSS is therefore NOT a clean series; VK now also
+  swap in use) and RSS then crept 12.7 -> 13.3 MB over 70 rounds. RSS is therefore NOT a clean series; VK now also
   logs `VmSwap` (`reader_swap_kb`, `server_swap_kb`) for the 8 h run. No growth trend visible in the 1 h window.
   Threads constant at 51.
-* VD steps: 3 failing steps in 79 rounds, all in the "tab switch" round (rounds 2, 12, 22; the opening
+* VD steps: 3 failing steps in 83 rounds, all in the "tab switch" round (rounds 2, 12, 22; the opening
   disturbances are replaced after round 30). Also reproduced in a plain 3-round `VD` check
   (`bench/results/acceptance/vd-tabswitch-check-b-*`): after Ctrl+PageUp/PageDown bash receives "5;5~"
   ("bash: 5 5 5 echo: command not found"), i.e. the headless gnome-terminal did not take Ctrl+PageUp as the tab
   accelerator and the key went to the shell as an escape sequence. Probably a rig limit, not the reader; it
   is not a gate (VD is informational) but should be confirmed.
-* 1 h is not 8 h: the zero-abort gate of the plan is NOT yet proven; only "no abort in 1.15 h and 26 floods".
+* 1 h is not 8 h: the zero-abort gate of the plan is NOT yet proven; only "no abort in 1.2 h and 27 floods".
 
 ## FIX LIST (priority order)
 1. **Chromium flat review (M8-FL/FLS, 4 steps)**: extend the `711fb314` fix so review current/next/previous/bottom

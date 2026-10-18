@@ -81,3 +81,4 @@ elapsed_s	round	perturb	reader_rss_kb	reader_threads	reader_ticks	server_rss_kb	
 4222	79	idle_60_s	12676	51	4077	29000	46668	14236	3	0	-	0	NaN	NaN	NaN	1	1	1
 4302	80	idle_20_s	12664	51	4260	28956	48373	14141	3	0	yes	38	0.47	0.78	0.00	1	1	1
 4338	81	Alt+Tab_storm	12664	51	4346	28956	48413	14214	3	0	-	0	NaN	NaN	NaN	1	1	1
+4374	82	Alt+Tab_storm	12664	51	4434	28956	48457	14265	3	0	-	0	NaN	NaN	NaN	1	1	1
