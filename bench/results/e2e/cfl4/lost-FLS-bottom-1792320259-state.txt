@@ -1,0 +1,8 @@
+936773136299083 said "M8 Long scrolled page - Google Chrome for Testing, M8 Long scrolled page, document"
+936773239828997 said "browse mode, heading level 1, Long page start"
+936784380668349 said "Long page start"
+936784909358881 said "M8 Long scrolled page document"
+936787531808328 said "M8 Long scrolled page document"
+bus 2 /org/a11y/atspi/accessible/10 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/205 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/205 StateChanged:focused

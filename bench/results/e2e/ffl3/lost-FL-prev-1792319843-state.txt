@@ -1,0 +1,42 @@
+936363049076568 said "Cookie consent, dialog"
+936366219750860 said "M8 News article — Mozilla Firefox, M8 News article, document"
+936366260488047 said "browse mode, link, Skip to main content"
+936366508054533 said "Skip to main content, link"
+936366803195336 said "M8 News article, document, link, Skip to main content"
+936367278382478 said "Skip to main content"
+936367579672738 said "heading level 1, Screen readers learn to keep up with the modern web"
+936367774767367 said "M8 News article document Skip to main content"
+936369206257560 said "Menu Bar toolbar"
+936369557347799 said "Close button"
+936369908565718 said "Browser tabs toolbar Firefox View toggle button M8 News article Open a new tab (Ctrl plus T) tab list Close tab button Open a new tab (Ctrl plus T) button List all tabs button Close button"
+936370259807784 said "Navigation toolbar Back button unavailable Forward button unavailable Reload button View site information button Search or enter address combo box collapsed Enter Reader View button Bookmark this page (Ctrl plus D) button Account button Extensions button Firefox button"
+936370610973783 said "toolbar"
+936370962392920 said "M8 News article document Skip to main content"
+936371086357036 said "News"
+936371437597631 said "e"
+936371788956969 said "bullet Copy link"
+936373291294054 said "Share this article list bullet Share by email"
+bus 4 /org/a11y/atspi/accessible/2 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/57 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/58 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/59 TextChanged:insert
+bus 4 /org/a11y/atspi/accessible/58 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/58 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/57 TextChanged:insert/system
+bus 4 /org/a11y/atspi/accessible/61 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/57 TextChanged:delete/system
+bus 4 /org/a11y/atspi/accessible/57 TextChanged:insert/system
+bus 2 /org/a11y/atspi/accessible/64 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/69 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/70 LoadComplete:
+bus 4 /org/a11y/atspi/accessible/58 TextChanged:insert/system
+bus 2 /org/a11y/atspi/accessible/72 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/73 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/74 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/75 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/64 Focus:
+bus 1 /org/a11y/atspi/accessible/64 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/84 Focus:
+bus 1 /org/a11y/atspi/accessible/84 StateChanged:focused
+bus 1 /org/a11y/atspi/accessible/64 Focus:
+bus 1 /org/a11y/atspi/accessible/64 StateChanged:focused

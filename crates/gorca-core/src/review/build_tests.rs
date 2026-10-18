@@ -162,7 +162,7 @@ fn fake(script: Script) -> Fake {
             next_req: Arc::new(AtomicU64::new(1)),
             limits: ReviewLimits::default(),
             static_leaves_repeat: false,
-            partial_pages: Default::default(),
+            partial_pages: Arc::default(),
         },
     }
 }

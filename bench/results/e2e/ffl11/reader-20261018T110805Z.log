@@ -1,0 +1,279 @@
+2026-10-18T11:08:18.959643Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169213291806728967) } parent_children=Count(29) kids=29 truncated=false complete=true
+2026-10-18T11:08:18.959753Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=1
+2026-10-18T11:08:18.964450Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888324283181681731) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-18T11:08:18.967847Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887339120762993900) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:08:18.968324Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888323183670053520) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-18T11:08:18.969618Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888339676344476685) } parent_children=Count(10) kids=10 truncated=false complete=true
+2026-10-18T11:08:18.969662Z DEBUG gorca_core::review::build: review build round misses=4 ok=4 nodes=6
+2026-10-18T11:08:18.971039Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887334722716481056) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:08:18.971102Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887335822228109267) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:08:18.972105Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887349016367647799) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-18T11:08:18.973077Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887341319786250322) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-18T11:08:18.973100Z DEBUG gorca_core::review::build: review build round misses=5 ok=4 nodes=21
+2026-10-18T11:08:18.974747Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884390230576699673) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:08:18.974907Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885385288600041403) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:08:18.975653Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886355057855934280) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:08:18.976883Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885381990065156770) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-18T11:08:18.976951Z DEBUG gorca_core::review::build: review build round misses=4 ok=4 nodes=26
+2026-10-18T11:08:18.977909Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883552402716192116) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:08:18.977938Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=31
+2026-10-18T11:08:18.980684Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883551303204563905) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-18T11:08:18.980726Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=32
+2026-10-18T11:08:19.081339Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882557344692850386) } parent_children=Count(1502) kids=512 truncated=false complete=false
+2026-10-18T11:08:19.081592Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=33
+2026-10-18T11:08:19.081708Z TRACE gorca_core::review::build: review line i=0 top=0 bottom=0 text=Menu Bar toolbar
+2026-10-18T11:08:19.081716Z TRACE gorca_core::review::build: review zone kind=Name text=Menu Bar toolbar rect=None
+2026-10-18T11:08:19.081721Z TRACE gorca_core::review::build: review line i=1 top=-12 bottom=12 text=Close button
+2026-10-18T11:08:19.081723Z TRACE gorca_core::review::build: review zone kind=Object text=Close button rect=Some(Rect { x: 1240, y: -12, w: 40, h: 24 })
+2026-10-18T11:08:19.081739Z TRACE gorca_core::review::build: review line i=2 top=0 bottom=44 text=Browser tabs toolbar Firefox View toggle button M8 Long scrolled page Open a new tab (Ctrl+T) tab list Close tab button Open a new tab (Ctrl+T) button List all tabs button Close button
+2026-10-18T11:08:19.081746Z TRACE gorca_core::review::build: review zone kind=Name text=Browser tabs toolbar rect=Some(Rect { x: 0, y: 0, w: 1280, h: 44 })
+2026-10-18T11:08:19.081748Z TRACE gorca_core::review::build: review zone kind=Object text=Firefox View toggle button rect=Some(Rect { x: 0, y: 0, w: 40, h: 44 })
+2026-10-18T11:08:19.081752Z TRACE gorca_core::review::build: review zone kind=Name text=M8 Long scrolled page Open a new tab (Ctrl+T) tab list rect=Some(Rect { x: 40, y: 10, w: 1120, h: 24 })
+2026-10-18T11:08:19.081755Z TRACE gorca_core::review::build: review zone kind=Object text=Close tab button rect=Some(Rect { x: 246, y: 10, w: 18, h: 24 })
+2026-10-18T11:08:19.081760Z TRACE gorca_core::review::build: review zone kind=Object text=Open a new tab (Ctrl+T) button rect=Some(Rect { x: 270, y: 0, w: 40, h: 44 })
+2026-10-18T11:08:19.081764Z TRACE gorca_core::review::build: review zone kind=Object text=List all tabs button rect=Some(Rect { x: 1160, y: 0, w: 40, h: 44 })
+2026-10-18T11:08:19.081767Z TRACE gorca_core::review::build: review zone kind=Object text=Close button rect=Some(Rect { x: 1240, y: 0, w: 40, h: 44 })
+2026-10-18T11:08:19.081769Z TRACE gorca_core::review::build: review line i=3 top=44 bottom=84 text=Navigation toolbar Back button unavailable Forward button unavailable Reload button View site information button Search or enter address combo box collapsed Bookmark this page (Ctrl+D) button Account button Extensions button Firefox button
+2026-10-18T11:08:19.081772Z TRACE gorca_core::review::build: review zone kind=Name text=Navigation toolbar rect=Some(Rect { x: 0, y: 44, w: 1280, h: 40 })
+2026-10-18T11:08:19.081774Z TRACE gorca_core::review::build: review zone kind=Object text=Back button unavailable rect=Some(Rect { x: 0, y: 44, w: 42, h: 40 })
+2026-10-18T11:08:19.081776Z TRACE gorca_core::review::build: review zone kind=Object text=Forward button unavailable rect=Some(Rect { x: 42, y: 44, w: 36, h: 40 })
+2026-10-18T11:08:19.081779Z TRACE gorca_core::review::build: review zone kind=Object text=Reload button rect=Some(Rect { x: 78, y: 44, w: 36, h: 40 })
+2026-10-18T11:08:19.081781Z TRACE gorca_core::review::build: review zone kind=Object text=View site information button rect=Some(Rect { x: 225, y: 50, w: 28, h: 28 })
+2026-10-18T11:08:19.081783Z TRACE gorca_core::review::build: review zone kind=Object text=Search or enter address combo box collapsed rect=Some(Rect { x: 260, y: 54, w: 767, h: 20 })
+2026-10-18T11:08:19.081785Z TRACE gorca_core::review::build: review zone kind=Object text=Bookmark this page (Ctrl+D) button rect=Some(Rect { x: 1027, y: 50, w: 28, h: 28 })
+2026-10-18T11:08:19.081787Z TRACE gorca_core::review::build: review zone kind=Object text=Account button rect=Some(Rect { x: 1166, y: 44, w: 36, h: 40 })
+2026-10-18T11:08:19.081789Z TRACE gorca_core::review::build: review zone kind=Object text=Extensions button rect=Some(Rect { x: 1202, y: 44, w: 36, h: 40 })
+2026-10-18T11:08:19.081845Z TRACE gorca_core::review::build: review zone kind=Object text=Firefox button rect=Some(Rect { x: 1238, y: 44, w: 42, h: 40 })
+2026-10-18T11:08:19.081862Z TRACE gorca_core::review::build: review line i=4 top=0 bottom=0 text=toolbar
+2026-10-18T11:08:19.081865Z TRACE gorca_core::review::build: review zone kind=Object text=toolbar rect=None
+2026-10-18T11:08:19.081869Z TRACE gorca_core::review::build: review line i=5 top=85 bottom=768 text=M8 Long scrolled page document
+2026-10-18T11:08:19.081873Z TRACE gorca_core::review::build: review zone kind=Object text=M8 Long scrolled page document rect=Some(Rect { x: 0, y: 85, w: 1280, h: 683 })
+2026-10-18T11:08:19.081877Z DEBUG gorca_core::review::build: review model built lines=6 zones=21 completeness=Truncated(Deadline) still_missing=[Expand(NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882557344692850386) })]
+2026-10-18T11:08:19.303918Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882557344692850386) } parent_children=Count(1502) kids=1502 truncated=false complete=true
+2026-10-18T11:08:19.304693Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=33
+2026-10-18T11:08:19.306613Z TRACE gorca_core::review::build: review line i=0 top=0 bottom=0 text=Menu Bar toolbar
+2026-10-18T11:08:19.306638Z TRACE gorca_core::review::build: review zone kind=Name text=Menu Bar toolbar rect=None
+2026-10-18T11:08:19.306644Z TRACE gorca_core::review::build: review line i=1 top=-12 bottom=12 text=Close button
+2026-10-18T11:08:19.306661Z TRACE gorca_core::review::build: review zone kind=Object text=Close button rect=Some(Rect { x: 1240, y: -12, w: 40, h: 24 })
+2026-10-18T11:08:19.306666Z TRACE gorca_core::review::build: review line i=2 top=0 bottom=44 text=Browser tabs toolbar Firefox View toggle button M8 Long scrolled page Open a new tab (Ctrl+T) tab list Close tab button Open a new tab (Ctrl+T) button List all tabs button Close button
+2026-10-18T11:08:19.306671Z TRACE gorca_core::review::build: review zone kind=Name text=Browser tabs toolbar rect=Some(Rect { x: 0, y: 0, w: 1280, h: 44 })
+2026-10-18T11:08:19.306673Z TRACE gorca_core::review::build: review zone kind=Object text=Firefox View toggle button rect=Some(Rect { x: 0, y: 0, w: 40, h: 44 })
+2026-10-18T11:08:19.306675Z TRACE gorca_core::review::build: review zone kind=Name text=M8 Long scrolled page Open a new tab (Ctrl+T) tab list rect=Some(Rect { x: 40, y: 10, w: 1120, h: 24 })
+2026-10-18T11:08:19.306677Z TRACE gorca_core::review::build: review zone kind=Object text=Close tab button rect=Some(Rect { x: 246, y: 10, w: 18, h: 24 })
+2026-10-18T11:08:19.306678Z TRACE gorca_core::review::build: review zone kind=Object text=Open a new tab (Ctrl+T) button rect=Some(Rect { x: 270, y: 0, w: 40, h: 44 })
+2026-10-18T11:08:19.306680Z TRACE gorca_core::review::build: review zone kind=Object text=List all tabs button rect=Some(Rect { x: 1160, y: 0, w: 40, h: 44 })
+2026-10-18T11:08:19.306682Z TRACE gorca_core::review::build: review zone kind=Object text=Close button rect=Some(Rect { x: 1240, y: 0, w: 40, h: 44 })
+2026-10-18T11:08:19.306684Z TRACE gorca_core::review::build: review line i=3 top=44 bottom=84 text=Navigation toolbar Back button unavailable Forward button unavailable Reload button View site information button Search or enter address combo box collapsed Bookmark this page (Ctrl+D) button Account button Extensions button Firefox button
+2026-10-18T11:08:19.306687Z TRACE gorca_core::review::build: review zone kind=Name text=Navigation toolbar rect=Some(Rect { x: 0, y: 44, w: 1280, h: 40 })
+2026-10-18T11:08:19.306689Z TRACE gorca_core::review::build: review zone kind=Object text=Back button unavailable rect=Some(Rect { x: 0, y: 44, w: 42, h: 40 })
+2026-10-18T11:08:19.306700Z TRACE gorca_core::review::build: review zone kind=Object text=Forward button unavailable rect=Some(Rect { x: 42, y: 44, w: 36, h: 40 })
+2026-10-18T11:08:19.306714Z TRACE gorca_core::review::build: review zone kind=Object text=Reload button rect=Some(Rect { x: 78, y: 44, w: 36, h: 40 })
+2026-10-18T11:08:19.306734Z TRACE gorca_core::review::build: review zone kind=Object text=View site information button rect=Some(Rect { x: 225, y: 50, w: 28, h: 28 })
+2026-10-18T11:08:19.306739Z TRACE gorca_core::review::build: review zone kind=Object text=Search or enter address combo box collapsed rect=Some(Rect { x: 260, y: 54, w: 767, h: 20 })
+2026-10-18T11:08:19.306749Z TRACE gorca_core::review::build: review zone kind=Object text=Bookmark this page (Ctrl+D) button rect=Some(Rect { x: 1027, y: 50, w: 28, h: 28 })
+2026-10-18T11:08:19.306756Z TRACE gorca_core::review::build: review zone kind=Object text=Account button rect=Some(Rect { x: 1166, y: 44, w: 36, h: 40 })
+2026-10-18T11:08:19.306764Z TRACE gorca_core::review::build: review zone kind=Object text=Extensions button rect=Some(Rect { x: 1202, y: 44, w: 36, h: 40 })
+2026-10-18T11:08:19.306770Z TRACE gorca_core::review::build: review zone kind=Object text=Firefox button rect=Some(Rect { x: 1238, y: 44, w: 42, h: 40 })
+2026-10-18T11:08:19.306779Z TRACE gorca_core::review::build: review line i=4 top=0 bottom=0 text=toolbar
+2026-10-18T11:08:19.306786Z TRACE gorca_core::review::build: review zone kind=Object text=toolbar rect=None
+2026-10-18T11:08:19.306795Z TRACE gorca_core::review::build: review line i=5 top=63 bottom=86 text=Filler paragraph number 1484
+2026-10-18T11:08:19.306801Z TRACE gorca_core::review::build: review zone kind=Text { src: 0..28 } text=Filler paragraph number 1484 rect=Some(Rect { x: 8, y: 63, w: 1264, h: 23 })
+2026-10-18T11:08:19.306810Z TRACE gorca_core::review::build: review line i=6 top=102 bottom=125 text=Filler paragraph number 1485
+2026-10-18T11:08:19.306817Z TRACE gorca_core::review::build: review zone kind=Text { src: 0..28 } text=Filler paragraph number 1485 rect=Some(Rect { x: 8, y: 102, w: 1264, h: 23 })
+2026-10-18T11:08:19.306825Z TRACE gorca_core::review::build: review line i=7 top=141 bottom=164 text=Filler paragraph number 1486
+2026-10-18T11:08:19.306831Z TRACE gorca_core::review::build: review zone kind=Text { src: 0..28 } text=Filler paragraph number 1486 rect=Some(Rect { x: 8, y: 141, w: 1264, h: 23 })
+2026-10-18T11:08:19.306842Z TRACE gorca_core::review::build: review line i=8 top=180 bottom=203 text=Filler paragraph number 1487
+2026-10-18T11:08:19.306849Z TRACE gorca_core::review::build: review zone kind=Text { src: 0..28 } text=Filler paragraph number 1487 rect=Some(Rect { x: 8, y: 180, w: 1264, h: 23 })
+2026-10-18T11:08:19.306856Z TRACE gorca_core::review::build: review line i=9 top=219 bottom=242 text=Filler paragraph number 1488
+2026-10-18T11:08:19.306862Z TRACE gorca_core::review::build: review zone kind=Text { src: 0..28 } text=Filler paragraph number 1488 rect=Some(Rect { x: 8, y: 219, w: 1264, h: 23 })
+2026-10-18T11:08:19.306871Z TRACE gorca_core::review::build: review line i=10 top=85 bottom=768 text=M8 Long scrolled page document
+2026-10-18T11:08:19.306877Z TRACE gorca_core::review::build: review zone kind=Name text=M8 Long scrolled page document rect=Some(Rect { x: 0, y: 85, w: 1280, h: 683 })
+2026-10-18T11:08:19.306885Z TRACE gorca_core::review::build: review line i=11 top=691 bottom=725 text=Final heading marker heading
+2026-10-18T11:08:19.306893Z TRACE gorca_core::review::build: review zone kind=Object text=Final heading marker heading rect=Some(Rect { x: 8, y: 691, w: 1264, h: 34 })
+2026-10-18T11:08:19.306901Z DEBUG gorca_core::review::build: review model built lines=12 zones=27 completeness=Complete still_missing=[]
+2026-10-18T11:08:42.617355Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169211092783472545) } parent_children=Count(29) kids=29 truncated=false complete=true
+2026-10-18T11:08:42.617588Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=1
+2026-10-18T11:08:42.619854Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888339676344476685) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-18T11:08:42.621797Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887341319786250322) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:08:42.622098Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888338576832848474) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-18T11:08:42.624200Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887339120762993900) } parent_children=Count(10) kids=10 truncated=false complete=true
+2026-10-18T11:08:42.624258Z DEBUG gorca_core::review::build: review build round misses=4 ok=4 nodes=6
+2026-10-18T11:08:42.625735Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887334722716481056) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:08:42.625750Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887335822228109267) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:08:42.626748Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886350659809421436) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-18T11:08:42.627559Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169213291806728967) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-18T11:08:42.627585Z DEBUG gorca_core::review::build: review build round misses=5 ok=4 nodes=21
+2026-10-18T11:08:42.629011Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887336921739737478) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:08:42.629125Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884390230576699673) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:08:42.629816Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885386388111669614) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:08:42.630276Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887338021251365689) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-18T11:08:42.630292Z DEBUG gorca_core::review::build: review build round misses=4 ok=4 nodes=26
+2026-10-18T11:08:42.631113Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883551303204563905) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:08:42.631141Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=31
+2026-10-18T11:08:42.634056Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884402325204609994) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-18T11:08:42.634092Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=32
+2026-10-18T11:08:42.755218Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882555145669593964) } parent_children=Count(1502) kids=768 truncated=false complete=false
+2026-10-18T11:08:42.755779Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=33
+2026-10-18T11:08:42.755908Z TRACE gorca_core::review::build: review line i=0 top=0 bottom=0 text=Menu Bar toolbar
+2026-10-18T11:08:42.755915Z TRACE gorca_core::review::build: review zone kind=Name text=Menu Bar toolbar rect=None
+2026-10-18T11:08:42.755921Z TRACE gorca_core::review::build: review line i=1 top=-12 bottom=12 text=Close button
+2026-10-18T11:08:42.755926Z TRACE gorca_core::review::build: review zone kind=Object text=Close button rect=Some(Rect { x: 1240, y: -12, w: 40, h: 24 })
+2026-10-18T11:08:42.755930Z TRACE gorca_core::review::build: review line i=2 top=0 bottom=44 text=Browser tabs toolbar Firefox View toggle button M8 Long scrolled page Open a new tab (Ctrl+T) tab list Close tab button Open a new tab (Ctrl+T) button List all tabs button Close button
+2026-10-18T11:08:42.755934Z TRACE gorca_core::review::build: review zone kind=Name text=Browser tabs toolbar rect=Some(Rect { x: 0, y: 0, w: 1280, h: 44 })
+2026-10-18T11:08:42.755939Z TRACE gorca_core::review::build: review zone kind=Object text=Firefox View toggle button rect=Some(Rect { x: 0, y: 0, w: 40, h: 44 })
+2026-10-18T11:08:42.755941Z TRACE gorca_core::review::build: review zone kind=Name text=M8 Long scrolled page Open a new tab (Ctrl+T) tab list rect=Some(Rect { x: 40, y: 10, w: 1120, h: 24 })
+2026-10-18T11:08:42.755945Z TRACE gorca_core::review::build: review zone kind=Object text=Close tab button rect=Some(Rect { x: 246, y: 10, w: 18, h: 24 })
+2026-10-18T11:08:42.755949Z TRACE gorca_core::review::build: review zone kind=Object text=Open a new tab (Ctrl+T) button rect=Some(Rect { x: 270, y: 0, w: 40, h: 44 })
+2026-10-18T11:08:42.755952Z TRACE gorca_core::review::build: review zone kind=Object text=List all tabs button rect=Some(Rect { x: 1160, y: 0, w: 40, h: 44 })
+2026-10-18T11:08:42.755956Z TRACE gorca_core::review::build: review zone kind=Object text=Close button rect=Some(Rect { x: 1240, y: 0, w: 40, h: 44 })
+2026-10-18T11:08:42.755960Z TRACE gorca_core::review::build: review line i=3 top=44 bottom=84 text=Navigation toolbar Back button unavailable Forward button unavailable Reload button View site information button Search or enter address combo box collapsed Bookmark this page (Ctrl+D) button Account button Extensions button Firefox button
+2026-10-18T11:08:42.755964Z TRACE gorca_core::review::build: review zone kind=Name text=Navigation toolbar rect=Some(Rect { x: 0, y: 44, w: 1280, h: 40 })
+2026-10-18T11:08:42.755968Z TRACE gorca_core::review::build: review zone kind=Object text=Back button unavailable rect=Some(Rect { x: 0, y: 44, w: 42, h: 40 })
+2026-10-18T11:08:42.755972Z TRACE gorca_core::review::build: review zone kind=Object text=Forward button unavailable rect=Some(Rect { x: 42, y: 44, w: 36, h: 40 })
+2026-10-18T11:08:42.755975Z TRACE gorca_core::review::build: review zone kind=Object text=Reload button rect=Some(Rect { x: 78, y: 44, w: 36, h: 40 })
+2026-10-18T11:08:42.755978Z TRACE gorca_core::review::build: review zone kind=Object text=View site information button rect=Some(Rect { x: 225, y: 50, w: 28, h: 28 })
+2026-10-18T11:08:42.755983Z TRACE gorca_core::review::build: review zone kind=Object text=Search or enter address combo box collapsed rect=Some(Rect { x: 260, y: 54, w: 767, h: 20 })
+2026-10-18T11:08:42.755986Z TRACE gorca_core::review::build: review zone kind=Object text=Bookmark this page (Ctrl+D) button rect=Some(Rect { x: 1027, y: 50, w: 28, h: 28 })
+2026-10-18T11:08:42.755989Z TRACE gorca_core::review::build: review zone kind=Object text=Account button rect=Some(Rect { x: 1166, y: 44, w: 36, h: 40 })
+2026-10-18T11:08:42.755993Z TRACE gorca_core::review::build: review zone kind=Object text=Extensions button rect=Some(Rect { x: 1202, y: 44, w: 36, h: 40 })
+2026-10-18T11:08:42.755997Z TRACE gorca_core::review::build: review zone kind=Object text=Firefox button rect=Some(Rect { x: 1238, y: 44, w: 42, h: 40 })
+2026-10-18T11:08:42.756001Z TRACE gorca_core::review::build: review line i=4 top=0 bottom=0 text=toolbar
+2026-10-18T11:08:42.756007Z TRACE gorca_core::review::build: review zone kind=Object text=toolbar rect=None
+2026-10-18T11:08:42.756012Z TRACE gorca_core::review::build: review line i=5 top=85 bottom=768 text=M8 Long scrolled page document
+2026-10-18T11:08:42.756015Z TRACE gorca_core::review::build: review zone kind=Object text=M8 Long scrolled page document rect=Some(Rect { x: 0, y: 85, w: 1280, h: 683 })
+2026-10-18T11:08:42.756018Z DEBUG gorca_core::review::build: review model built lines=6 zones=21 completeness=Truncated(Deadline) still_missing=[Expand(NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882555145669593964) })]
+2026-10-18T11:08:42.872512Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882555145669593964) } parent_children=Count(1502) kids=1502 truncated=false complete=true
+2026-10-18T11:08:42.873378Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=33
+2026-10-18T11:08:42.874893Z TRACE gorca_core::review::build: review line i=0 top=0 bottom=0 text=Menu Bar toolbar
+2026-10-18T11:08:42.874903Z TRACE gorca_core::review::build: review zone kind=Name text=Menu Bar toolbar rect=None
+2026-10-18T11:08:42.874911Z TRACE gorca_core::review::build: review line i=1 top=-12 bottom=12 text=Close button
+2026-10-18T11:08:42.874913Z TRACE gorca_core::review::build: review zone kind=Object text=Close button rect=Some(Rect { x: 1240, y: -12, w: 40, h: 24 })
+2026-10-18T11:08:42.874917Z TRACE gorca_core::review::build: review line i=2 top=0 bottom=44 text=Browser tabs toolbar Firefox View toggle button M8 Long scrolled page Open a new tab (Ctrl+T) tab list Close tab button Open a new tab (Ctrl+T) button List all tabs button Close button
+2026-10-18T11:08:42.874920Z TRACE gorca_core::review::build: review zone kind=Name text=Browser tabs toolbar rect=Some(Rect { x: 0, y: 0, w: 1280, h: 44 })
+2026-10-18T11:08:42.874923Z TRACE gorca_core::review::build: review zone kind=Object text=Firefox View toggle button rect=Some(Rect { x: 0, y: 0, w: 40, h: 44 })
+2026-10-18T11:08:42.874927Z TRACE gorca_core::review::build: review zone kind=Name text=M8 Long scrolled page Open a new tab (Ctrl+T) tab list rect=Some(Rect { x: 40, y: 10, w: 1120, h: 24 })
+2026-10-18T11:08:42.874930Z TRACE gorca_core::review::build: review zone kind=Object text=Close tab button rect=Some(Rect { x: 246, y: 10, w: 18, h: 24 })
+2026-10-18T11:08:42.874933Z TRACE gorca_core::review::build: review zone kind=Object text=Open a new tab (Ctrl+T) button rect=Some(Rect { x: 270, y: 0, w: 40, h: 44 })
+2026-10-18T11:08:42.874937Z TRACE gorca_core::review::build: review zone kind=Object text=List all tabs button rect=Some(Rect { x: 1160, y: 0, w: 40, h: 44 })
+2026-10-18T11:08:42.874940Z TRACE gorca_core::review::build: review zone kind=Object text=Close button rect=Some(Rect { x: 1240, y: 0, w: 40, h: 44 })
+2026-10-18T11:08:42.874943Z TRACE gorca_core::review::build: review line i=3 top=44 bottom=84 text=Navigation toolbar Back button unavailable Forward button unavailable Reload button View site information button Search or enter address combo box collapsed Bookmark this page (Ctrl+D) button Account button Extensions button Firefox button
+2026-10-18T11:08:42.874946Z TRACE gorca_core::review::build: review zone kind=Name text=Navigation toolbar rect=Some(Rect { x: 0, y: 44, w: 1280, h: 40 })
+2026-10-18T11:08:42.874949Z TRACE gorca_core::review::build: review zone kind=Object text=Back button unavailable rect=Some(Rect { x: 0, y: 44, w: 42, h: 40 })
+2026-10-18T11:08:42.874952Z TRACE gorca_core::review::build: review zone kind=Object text=Forward button unavailable rect=Some(Rect { x: 42, y: 44, w: 36, h: 40 })
+2026-10-18T11:08:42.874956Z TRACE gorca_core::review::build: review zone kind=Object text=Reload button rect=Some(Rect { x: 78, y: 44, w: 36, h: 40 })
+2026-10-18T11:08:42.874959Z TRACE gorca_core::review::build: review zone kind=Object text=View site information button rect=Some(Rect { x: 225, y: 50, w: 28, h: 28 })
+2026-10-18T11:08:42.874963Z TRACE gorca_core::review::build: review zone kind=Object text=Search or enter address combo box collapsed rect=Some(Rect { x: 260, y: 54, w: 767, h: 20 })
+2026-10-18T11:08:42.874971Z TRACE gorca_core::review::build: review zone kind=Object text=Bookmark this page (Ctrl+D) button rect=Some(Rect { x: 1027, y: 50, w: 28, h: 28 })
+2026-10-18T11:08:42.874987Z TRACE gorca_core::review::build: review zone kind=Object text=Account button rect=Some(Rect { x: 1166, y: 44, w: 36, h: 40 })
+2026-10-18T11:08:42.874990Z TRACE gorca_core::review::build: review zone kind=Object text=Extensions button rect=Some(Rect { x: 1202, y: 44, w: 36, h: 40 })
+2026-10-18T11:08:42.874993Z TRACE gorca_core::review::build: review zone kind=Object text=Firefox button rect=Some(Rect { x: 1238, y: 44, w: 42, h: 40 })
+2026-10-18T11:08:42.874996Z TRACE gorca_core::review::build: review line i=4 top=0 bottom=0 text=toolbar
+2026-10-18T11:08:42.874999Z TRACE gorca_core::review::build: review zone kind=Object text=toolbar rect=None
+2026-10-18T11:08:42.875002Z TRACE gorca_core::review::build: review line i=5 top=63 bottom=86 text=Filler paragraph number 1484
+2026-10-18T11:08:42.875006Z TRACE gorca_core::review::build: review zone kind=Text { src: 0..28 } text=Filler paragraph number 1484 rect=Some(Rect { x: 8, y: 63, w: 1264, h: 23 })
+2026-10-18T11:08:42.875010Z TRACE gorca_core::review::build: review line i=6 top=102 bottom=125 text=Filler paragraph number 1485
+2026-10-18T11:08:42.875013Z TRACE gorca_core::review::build: review zone kind=Text { src: 0..28 } text=Filler paragraph number 1485 rect=Some(Rect { x: 8, y: 102, w: 1264, h: 23 })
+2026-10-18T11:08:42.875016Z TRACE gorca_core::review::build: review line i=7 top=141 bottom=164 text=Filler paragraph number 1486
+2026-10-18T11:08:42.875019Z TRACE gorca_core::review::build: review zone kind=Text { src: 0..28 } text=Filler paragraph number 1486 rect=Some(Rect { x: 8, y: 141, w: 1264, h: 23 })
+2026-10-18T11:08:42.875022Z TRACE gorca_core::review::build: review line i=8 top=180 bottom=203 text=Filler paragraph number 1487
+2026-10-18T11:08:42.875025Z TRACE gorca_core::review::build: review zone kind=Text { src: 0..28 } text=Filler paragraph number 1487 rect=Some(Rect { x: 8, y: 180, w: 1264, h: 23 })
+2026-10-18T11:08:42.875027Z TRACE gorca_core::review::build: review line i=9 top=219 bottom=242 text=Filler paragraph number 1488
+2026-10-18T11:08:42.875031Z TRACE gorca_core::review::build: review zone kind=Text { src: 0..28 } text=Filler paragraph number 1488 rect=Some(Rect { x: 8, y: 219, w: 1264, h: 23 })
+2026-10-18T11:08:42.875034Z TRACE gorca_core::review::build: review line i=10 top=85 bottom=768 text=M8 Long scrolled page document
+2026-10-18T11:08:42.875037Z TRACE gorca_core::review::build: review zone kind=Name text=M8 Long scrolled page document rect=Some(Rect { x: 0, y: 85, w: 1280, h: 683 })
+2026-10-18T11:08:42.875040Z TRACE gorca_core::review::build: review line i=11 top=691 bottom=725 text=Final heading marker heading
+2026-10-18T11:08:42.875043Z TRACE gorca_core::review::build: review zone kind=Object text=Final heading marker heading rect=Some(Rect { x: 8, y: 691, w: 1264, h: 34 })
+2026-10-18T11:08:42.875046Z DEBUG gorca_core::review::build: review model built lines=12 zones=27 completeness=Complete still_missing=[]
+2026-10-18T11:09:05.831066Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169211092783472545) } parent_children=Count(29) kids=29 truncated=false complete=true
+2026-10-18T11:09:05.831237Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=1
+2026-10-18T11:09:05.833563Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888339676344476685) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-18T11:09:05.835015Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887341319786250322) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:09:05.835254Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4888338576832848474) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-18T11:09:05.836228Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887339120762993900) } parent_children=Count(10) kids=10 truncated=false complete=true
+2026-10-18T11:09:05.836248Z DEBUG gorca_core::review::build: review build round misses=4 ok=4 nodes=6
+2026-10-18T11:09:05.837658Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887335822228109267) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:09:05.837683Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4887334722716481056) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:09:05.838834Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4886347361274536803) } parent_children=Count(3) kids=3 truncated=false complete=true
+2026-10-18T11:09:05.839735Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(5169213291806728967) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-18T11:09:05.839790Z DEBUG gorca_core::review::build: review build round misses=5 ok=4 nodes=21
+2026-10-18T11:09:05.841059Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885390786158182458) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:09:05.841234Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4884400126181353572) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:09:05.841689Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885384189088413192) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:09:05.842594Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4885391885669810669) } parent_children=Count(4) kids=4 truncated=false complete=true
+2026-10-18T11:09:05.842636Z DEBUG gorca_core::review::build: review build round misses=4 ok=4 nodes=26
+2026-10-18T11:09:05.843343Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883551303204563905) } parent_children=Count(1) kids=1 truncated=false complete=true
+2026-10-18T11:09:05.843387Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=31
+2026-10-18T11:09:05.846843Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4883549104181307483) } parent_children=Count(2) kids=2 truncated=false complete=true
+2026-10-18T11:09:05.846882Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=32
+2026-10-18T11:09:05.950707Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882555145669593964) } parent_children=Count(1502) kids=768 truncated=false complete=false
+2026-10-18T11:09:05.951021Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=33
+2026-10-18T11:09:05.951152Z TRACE gorca_core::review::build: review line i=0 top=0 bottom=0 text=Menu Bar toolbar
+2026-10-18T11:09:05.951159Z TRACE gorca_core::review::build: review zone kind=Name text=Menu Bar toolbar rect=None
+2026-10-18T11:09:05.951165Z TRACE gorca_core::review::build: review line i=1 top=-12 bottom=12 text=Close button
+2026-10-18T11:09:05.951174Z TRACE gorca_core::review::build: review zone kind=Object text=Close button rect=Some(Rect { x: 1240, y: -12, w: 40, h: 24 })
+2026-10-18T11:09:05.951194Z TRACE gorca_core::review::build: review line i=2 top=0 bottom=44 text=Browser tabs toolbar Firefox View toggle button M8 Long scrolled page Open a new tab (Ctrl+T) tab list Close tab button Open a new tab (Ctrl+T) button List all tabs button Close button
+2026-10-18T11:09:05.951197Z TRACE gorca_core::review::build: review zone kind=Name text=Browser tabs toolbar rect=Some(Rect { x: 0, y: 0, w: 1280, h: 44 })
+2026-10-18T11:09:05.951200Z TRACE gorca_core::review::build: review zone kind=Object text=Firefox View toggle button rect=Some(Rect { x: 0, y: 0, w: 40, h: 44 })
+2026-10-18T11:09:05.951205Z TRACE gorca_core::review::build: review zone kind=Name text=M8 Long scrolled page Open a new tab (Ctrl+T) tab list rect=Some(Rect { x: 40, y: 10, w: 1120, h: 24 })
+2026-10-18T11:09:05.951208Z TRACE gorca_core::review::build: review zone kind=Object text=Close tab button rect=Some(Rect { x: 246, y: 10, w: 18, h: 24 })
+2026-10-18T11:09:05.951210Z TRACE gorca_core::review::build: review zone kind=Object text=Open a new tab (Ctrl+T) button rect=Some(Rect { x: 270, y: 0, w: 40, h: 44 })
+2026-10-18T11:09:05.951213Z TRACE gorca_core::review::build: review zone kind=Object text=List all tabs button rect=Some(Rect { x: 1160, y: 0, w: 40, h: 44 })
+2026-10-18T11:09:05.951218Z TRACE gorca_core::review::build: review zone kind=Object text=Close button rect=Some(Rect { x: 1240, y: 0, w: 40, h: 44 })
+2026-10-18T11:09:05.951220Z TRACE gorca_core::review::build: review line i=3 top=44 bottom=84 text=Navigation toolbar Back button unavailable Forward button unavailable Reload button View site information button Search or enter address combo box collapsed Bookmark this page (Ctrl+D) button Account button Extensions button Firefox button
+2026-10-18T11:09:05.951226Z TRACE gorca_core::review::build: review zone kind=Name text=Navigation toolbar rect=Some(Rect { x: 0, y: 44, w: 1280, h: 40 })
+2026-10-18T11:09:05.951228Z TRACE gorca_core::review::build: review zone kind=Object text=Back button unavailable rect=Some(Rect { x: 0, y: 44, w: 42, h: 40 })
+2026-10-18T11:09:05.951232Z TRACE gorca_core::review::build: review zone kind=Object text=Forward button unavailable rect=Some(Rect { x: 42, y: 44, w: 36, h: 40 })
+2026-10-18T11:09:05.951234Z TRACE gorca_core::review::build: review zone kind=Object text=Reload button rect=Some(Rect { x: 78, y: 44, w: 36, h: 40 })
+2026-10-18T11:09:05.951241Z TRACE gorca_core::review::build: review zone kind=Object text=View site information button rect=Some(Rect { x: 225, y: 50, w: 28, h: 28 })
+2026-10-18T11:09:05.951243Z TRACE gorca_core::review::build: review zone kind=Object text=Search or enter address combo box collapsed rect=Some(Rect { x: 260, y: 54, w: 767, h: 20 })
+2026-10-18T11:09:05.951246Z TRACE gorca_core::review::build: review zone kind=Object text=Bookmark this page (Ctrl+D) button rect=Some(Rect { x: 1027, y: 50, w: 28, h: 28 })
+2026-10-18T11:09:05.951248Z TRACE gorca_core::review::build: review zone kind=Object text=Account button rect=Some(Rect { x: 1166, y: 44, w: 36, h: 40 })
+2026-10-18T11:09:05.951250Z TRACE gorca_core::review::build: review zone kind=Object text=Extensions button rect=Some(Rect { x: 1202, y: 44, w: 36, h: 40 })
+2026-10-18T11:09:05.951254Z TRACE gorca_core::review::build: review zone kind=Object text=Firefox button rect=Some(Rect { x: 1238, y: 44, w: 42, h: 40 })
+2026-10-18T11:09:05.951258Z TRACE gorca_core::review::build: review line i=4 top=0 bottom=0 text=toolbar
+2026-10-18T11:09:05.951261Z TRACE gorca_core::review::build: review zone kind=Object text=toolbar rect=None
+2026-10-18T11:09:05.951265Z TRACE gorca_core::review::build: review line i=5 top=85 bottom=768 text=M8 Long scrolled page document
+2026-10-18T11:09:05.951268Z TRACE gorca_core::review::build: review zone kind=Object text=M8 Long scrolled page document rect=Some(Rect { x: 0, y: 85, w: 1280, h: 683 })
+2026-10-18T11:09:05.951274Z DEBUG gorca_core::review::build: review model built lines=6 zones=21 completeness=Truncated(Deadline) still_missing=[Expand(NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882555145669593964) })]
+2026-10-18T11:09:06.050906Z DEBUG gorca_core::review::build: review expand node=NodeKey { app: AppId { connector: ConnectorId(1), serial: 1 }, local: LocalId(4882555145669593964) } parent_children=Count(1502) kids=1502 truncated=false complete=true
+2026-10-18T11:09:06.051717Z DEBUG gorca_core::review::build: review build round misses=1 ok=1 nodes=33
+2026-10-18T11:09:06.052985Z TRACE gorca_core::review::build: review line i=0 top=0 bottom=0 text=Menu Bar toolbar
+2026-10-18T11:09:06.052997Z TRACE gorca_core::review::build: review zone kind=Name text=Menu Bar toolbar rect=None
+2026-10-18T11:09:06.053001Z TRACE gorca_core::review::build: review line i=1 top=-12 bottom=12 text=Close button
+2026-10-18T11:09:06.053003Z TRACE gorca_core::review::build: review zone kind=Object text=Close button rect=Some(Rect { x: 1240, y: -12, w: 40, h: 24 })
+2026-10-18T11:09:06.053007Z TRACE gorca_core::review::build: review line i=2 top=0 bottom=44 text=Browser tabs toolbar Firefox View toggle button M8 Long scrolled page Open a new tab (Ctrl+T) tab list Close tab button Open a new tab (Ctrl+T) button List all tabs button Close button
+2026-10-18T11:09:06.053009Z TRACE gorca_core::review::build: review zone kind=Name text=Browser tabs toolbar rect=Some(Rect { x: 0, y: 0, w: 1280, h: 44 })
+2026-10-18T11:09:06.053011Z TRACE gorca_core::review::build: review zone kind=Object text=Firefox View toggle button rect=Some(Rect { x: 0, y: 0, w: 40, h: 44 })
+2026-10-18T11:09:06.053013Z TRACE gorca_core::review::build: review zone kind=Name text=M8 Long scrolled page Open a new tab (Ctrl+T) tab list rect=Some(Rect { x: 40, y: 10, w: 1120, h: 24 })
+2026-10-18T11:09:06.053016Z TRACE gorca_core::review::build: review zone kind=Object text=Close tab button rect=Some(Rect { x: 246, y: 10, w: 18, h: 24 })
+2026-10-18T11:09:06.053024Z TRACE gorca_core::review::build: review zone kind=Object text=Open a new tab (Ctrl+T) button rect=Some(Rect { x: 270, y: 0, w: 40, h: 44 })
+2026-10-18T11:09:06.053027Z TRACE gorca_core::review::build: review zone kind=Object text=List all tabs button rect=Some(Rect { x: 1160, y: 0, w: 40, h: 44 })
+2026-10-18T11:09:06.053029Z TRACE gorca_core::review::build: review zone kind=Object text=Close button rect=Some(Rect { x: 1240, y: 0, w: 40, h: 44 })
+2026-10-18T11:09:06.053031Z TRACE gorca_core::review::build: review line i=3 top=44 bottom=84 text=Navigation toolbar Back button unavailable Forward button unavailable Reload button View site information button Search or enter address combo box collapsed Bookmark this page (Ctrl+D) button Account button Extensions button Firefox button
+2026-10-18T11:09:06.053034Z TRACE gorca_core::review::build: review zone kind=Name text=Navigation toolbar rect=Some(Rect { x: 0, y: 44, w: 1280, h: 40 })
+2026-10-18T11:09:06.053038Z TRACE gorca_core::review::build: review zone kind=Object text=Back button unavailable rect=Some(Rect { x: 0, y: 44, w: 42, h: 40 })
+2026-10-18T11:09:06.053042Z TRACE gorca_core::review::build: review zone kind=Object text=Forward button unavailable rect=Some(Rect { x: 42, y: 44, w: 36, h: 40 })
+2026-10-18T11:09:06.053045Z TRACE gorca_core::review::build: review zone kind=Object text=Reload button rect=Some(Rect { x: 78, y: 44, w: 36, h: 40 })
+2026-10-18T11:09:06.053048Z TRACE gorca_core::review::build: review zone kind=Object text=View site information button rect=Some(Rect { x: 225, y: 50, w: 28, h: 28 })
+2026-10-18T11:09:06.053052Z TRACE gorca_core::review::build: review zone kind=Object text=Search or enter address combo box collapsed rect=Some(Rect { x: 260, y: 54, w: 767, h: 20 })
+2026-10-18T11:09:06.053061Z TRACE gorca_core::review::build: review zone kind=Object text=Bookmark this page (Ctrl+D) button rect=Some(Rect { x: 1027, y: 50, w: 28, h: 28 })
+2026-10-18T11:09:06.053063Z TRACE gorca_core::review::build: review zone kind=Object text=Account button rect=Some(Rect { x: 1166, y: 44, w: 36, h: 40 })
+2026-10-18T11:09:06.053072Z TRACE gorca_core::review::build: review zone kind=Object text=Extensions button rect=Some(Rect { x: 1202, y: 44, w: 36, h: 40 })
+2026-10-18T11:09:06.053086Z TRACE gorca_core::review::build: review zone kind=Object text=Firefox button rect=Some(Rect { x: 1238, y: 44, w: 42, h: 40 })
+2026-10-18T11:09:06.053089Z TRACE gorca_core::review::build: review line i=4 top=0 bottom=0 text=toolbar
+2026-10-18T11:09:06.053094Z TRACE gorca_core::review::build: review zone kind=Object text=toolbar rect=None
+2026-10-18T11:09:06.053096Z TRACE gorca_core::review::build: review line i=5 top=63 bottom=86 text=Filler paragraph number 1484
+2026-10-18T11:09:06.053102Z TRACE gorca_core::review::build: review zone kind=Text { src: 0..28 } text=Filler paragraph number 1484 rect=Some(Rect { x: 8, y: 63, w: 1264, h: 23 })
+2026-10-18T11:09:06.053104Z TRACE gorca_core::review::build: review line i=6 top=102 bottom=125 text=Filler paragraph number 1485
+2026-10-18T11:09:06.053109Z TRACE gorca_core::review::build: review zone kind=Text { src: 0..28 } text=Filler paragraph number 1485 rect=Some(Rect { x: 8, y: 102, w: 1264, h: 23 })
+2026-10-18T11:09:06.053112Z TRACE gorca_core::review::build: review line i=7 top=141 bottom=164 text=Filler paragraph number 1486
+2026-10-18T11:09:06.053117Z TRACE gorca_core::review::build: review zone kind=Text { src: 0..28 } text=Filler paragraph number 1486 rect=Some(Rect { x: 8, y: 141, w: 1264, h: 23 })
+2026-10-18T11:09:06.053119Z TRACE gorca_core::review::build: review line i=8 top=180 bottom=203 text=Filler paragraph number 1487
+2026-10-18T11:09:06.053124Z TRACE gorca_core::review::build: review zone kind=Text { src: 0..28 } text=Filler paragraph number 1487 rect=Some(Rect { x: 8, y: 180, w: 1264, h: 23 })
+2026-10-18T11:09:06.053126Z TRACE gorca_core::review::build: review line i=9 top=219 bottom=242 text=Filler paragraph number 1488
+2026-10-18T11:09:06.053131Z TRACE gorca_core::review::build: review zone kind=Text { src: 0..28 } text=Filler paragraph number 1488 rect=Some(Rect { x: 8, y: 219, w: 1264, h: 23 })
+2026-10-18T11:09:06.053133Z TRACE gorca_core::review::build: review line i=10 top=85 bottom=768 text=M8 Long scrolled page document
+2026-10-18T11:09:06.053138Z TRACE gorca_core::review::build: review zone kind=Name text=M8 Long scrolled page document rect=Some(Rect { x: 0, y: 85, w: 1280, h: 683 })
+2026-10-18T11:09:06.053140Z TRACE gorca_core::review::build: review line i=11 top=691 bottom=725 text=Final heading marker heading
+2026-10-18T11:09:06.053146Z TRACE gorca_core::review::build: review zone kind=Object text=Final heading marker heading rect=Some(Rect { x: 8, y: 691, w: 1264, h: 34 })
+2026-10-18T11:09:06.053149Z DEBUG gorca_core::review::build: review model built lines=12 zones=27 completeness=Complete still_missing=[]

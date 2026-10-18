@@ -1,0 +1,8 @@
+936895106390504 said "M8 Long scrolled page, document"
+936895216931141 said "browse mode, heading level 1, Long page start"
+936895990916857 said "Long page start"
+936896473536964 said "M8 Long scrolled page document"
+936899141722374 said "M8 Long scrolled page document"
+bus 2 /org/a11y/atspi/accessible/6 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/7 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/7 StateChanged:focused

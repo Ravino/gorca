@@ -298,4 +298,21 @@ mod tests {
         );
         assert_eq!(Toolkit::classify("gtk4", "x").web_engine(), WebEngine::None);
     }
+
+    #[test]
+    fn only_blink_has_the_review_text_quirks() {
+        assert!(Toolkit::Chromium.text_extents_use_screen_coords());
+        assert!(Toolkit::Chromium.edit_quirks().text_leaves_repeat_parent);
+        for t in [
+            Toolkit::Firefox,
+            Toolkit::Gtk3,
+            Toolkit::Gtk4,
+            Toolkit::Qt,
+            Toolkit::Vte,
+            Toolkit::Other,
+        ] {
+            assert!(!t.text_extents_use_screen_coords());
+            assert!(!t.edit_quirks().text_leaves_repeat_parent);
+        }
+    }
 }

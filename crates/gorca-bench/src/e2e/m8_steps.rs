@@ -1008,17 +1008,19 @@ fn fl() -> Vec<Step> {
     vec![
         top("FL.top"),
         s("FL.h", P1, "H: the browse cursor on the first heading", n('h'), &["Screen readers learn"]),
-        s("FL.cur", P1, "Review current line (screen review starts at the focus)", Act::Key(KP_UP, 0), &["News article", "Account menu"]).win(1500),
-        pos("FL.top2", Act::Key(KP_HOME, SHIFT)),
-        pos("FL.next1", Act::Key(KP_PRIOR, 0)),
-        pos("FL.next2", Act::Key(KP_PRIOR, 0)),
-        pos("FL.next3", Act::Key(KP_PRIOR, 0)),
-        pos("FL.next4", Act::Key(KP_PRIOR, 0)),
-        s("FL.next5", P1, "Review next line", Act::Key(KP_PRIOR, 0), &["Skip to main content"]).win(1500),
+        s("FL.cur", P1, "Review current line (screen review starts at the focus)", Act::Key(KP_UP, 0), &["News article", "Skip to main content"]).win(1500),
+        // Reading order down the page, row by row, on any engine's layout (the rows above the
+        // document differ: Firefox and Chromium have different chrome).
+        s("FL.next1", P1, "Review next line: the site header row", Act::Key(KP_PRIOR, 0), &["Daily Gorca"]).win(1500),
+        s("FL.next2", P1, "Review next line: the first section link", Act::Key(KP_PRIOR, 0), &["Sections", "World"]).win(1500),
+        s("FL.next3", P1, "Review next line", Act::Key(KP_PRIOR, 0), &["Politics"]).win(1500),
+        s("FL.next4", P1, "Review next line", Act::Key(KP_PRIOR, 0), &["Business"]).win(1500),
+        s("FL.next5", P1, "Review next line", Act::Key(KP_PRIOR, 0), &["Technology"]).win(1500),
+        s("FL.back", P1, "Review previous line goes back up the list", Act::Key(KP_HOME, 0), &["Business"]).win(1500),
         pos("FL.word", Act::Key(KP_RIGHT, 0)),
         pos("FL.char", Act::Key(KP_NEXT, 0)),
-        s("FL.end", P1, "Review bottom", Act::Key(KP_PRIOR, SHIFT), &["Breadcrumb"]).win(1500),
-        s("FL.prev", P1, "Review previous line", Act::Key(KP_HOME, 0), &["Copy link"]).win(1500),
+        s("FL.end", P1, "Review bottom: a row of the page, not the browser chrome", Act::Key(KP_PRIOR, SHIFT), &[]).min(1).not(&["toolbar", "tab list", "Address and search", "Open tab in split"]).win(1500),
+        s("FL.prev", P1, "Review previous line from the bottom: still page content", Act::Key(KP_HOME, 0), &[]).min(1).not(&["toolbar", "tab list", "Address and search", "Open tab in split"]).win(1500),
         pos("FL.tofocus", Act::Chord(INSERT, KP_SUB, 0)),
         pos("FL.mode", Act::Chord(INSERT, KP_HOME, 0)),
         pos("FL.obj", Act::Chord(INSERT, KP_DOWN, 0)),
@@ -1033,7 +1035,9 @@ fn fls() -> Vec<Step> {
         top("FLS.top"),
         pos("FLS.cur", Act::Key(KP_UP, 0)),
         Step::setup("FLS.wait", "the model build carries on past its first deadline", Act::Wait(2500)),
-        s("FLS.bottom", P1, "Review bottom: the last lines on screen, not the chrome", Act::Key(KP_PRIOR, SHIFT), &["Final heading marker"]).win(3000),
+        s("FLS.bottom", P1, "Review bottom: the last line of the page, not the chrome", Act::Key(KP_PRIOR, SHIFT), &["The very last line"]).win(3000),
+        s("FLS.up", P1, "Review previous line: the heading above it", Act::Key(KP_HOME, 0), &["Final heading marker"]).win(1500),
+        s("FLS.up2", P1, "Review previous line: the paragraph above the heading", Act::Key(KP_HOME, 0), &["Filler paragraph number 1499"]).win(1500),
     ]
 }
 

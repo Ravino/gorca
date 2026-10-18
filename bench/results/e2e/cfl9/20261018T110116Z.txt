@@ -1,0 +1,48 @@
+# e2e-m8 cfl9
+# utc=2026-10-18T11:01:16Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=26.73 20.92 16.29 17/2414 1416903
+# git_rev=2a017ed3
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# label=cfl9
+# reader=daemon:<repo>/.claude/worktrees/agent-a5693fce30a10ab7a/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# quick=false
+# loadavg_before=23.60 18.34 15.01 10/2501 1411269
+# loadavg_end=26.73 20.92 16.29 15/2414 1416900
+# gates=fail==0 in every repeat; key p99<=5ms, mode p99<=15ms, live p99<=100ms; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=M8-FL FL.cur P1 FAIL: heard "M8 News article document Skip to main content link" 
+# note1=M8-FL FL.next5 P1 FAIL: heard "Politics link" 
+# note2=M8-FL FL.end P1 FAIL: heard "14 October 2026, 09:30" 
+# note3=M8-FL FL.prev P1 FAIL: heard "Ada Lovelace link" 
+# note4=M8-FLS FLS.bottom P1 FAIL: heard "M8 Long scrolled page document" 
+# note5=M8-FLS FLS.bottom P1 FAIL: heard "The very last line" 
+# note6=M8-FL FL.cur P1 FAIL: heard "M8 News article document" 
+
+metric                     bus                median          min          max  n op    threshold  res   note
+M8-FL.fail                 daemon/voicego            4            4            4  3 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-FL.gap                  daemon/voicego            0            0            0  3                  info  core ok, NVDA extras missing [steps]
+M8-FL.p0_not_pass          daemon/voicego            0            0            0  3                  info   [steps]
+M8-FL.pass                 daemon/voicego            2            2            2  3                  info   [steps]
+M8-FL.steps                daemon/voicego            6            6            6  3                  info   [steps]
+M8-FL.xfail                daemon/voicego            0            0            0  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-FL.xpass                daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]
+M8-FLS.fail                daemon/voicego            1            1            1  3 <=            0  FAIL  steps that fail and are not marked expected-fail [steps]
+M8-FLS.gap                 daemon/voicego            0            0            0  3                  info  core ok, NVDA extras missing [steps]
+M8-FLS.p0_not_pass         daemon/voicego            0            0            0  3                  info   [steps]
+M8-FLS.pass                daemon/voicego            0            0            0  3                  info   [steps]
+M8-FLS.steps               daemon/voicego            1            1            1  3                  info   [steps]
+M8-FLS.xfail               daemon/voicego            0            0            0  3                  info  expected-fail steps that fail (gap table) [steps]
+M8-FLS.xpass               daemon/voicego            0            0            0  3                  info  expected-fail steps that pass: remove their xf() mark [steps]

@@ -436,13 +436,30 @@ async fn serve_miss(
     }
 }
 
-/// Visible lines of `node` inside `clip`, `None` when the app cannot say.
-async fn lines_of(
-    io: ReviewIo,
-    node: NodeKey,
-    clip: Rect,
-    class: BudgetClass,
-) -> (NodeKey, Option<Arc<[TextLine]>>) {
+/// Attempts at one node's lines when the app is busy (its request slots are taken).
+const LINES_TRIES: usize = 4;
+
+/// What [`lines_of`] found: the lines, `None` when the app cannot say, and whether it only failed
+/// for now (busy or too slow), so the node is worth asking again.
+type LinesAnswer = (NodeKey, Option<Arc<[TextLine]>>, bool);
+
+/// Visible lines of `node` inside `clip`. A busy app is asked again a few times: a model built
+/// while eight such requests are in flight must not lose the rows whose request was refused.
+async fn lines_of(io: ReviewIo, node: NodeKey, clip: Rect, class: BudgetClass) -> LinesAnswer {
+    let mut last = (node, None, false);
+    for attempt in 0..LINES_TRIES {
+        if attempt > 0 {
+            tokio::time::sleep(Duration::from_millis(5 * attempt as u64)).await;
+        }
+        last = lines_once(&io, node, clip, class).await;
+        if !last.2 {
+            break;
+        }
+    }
+    last
+}
+
+async fn lines_once(io: &ReviewIo, node: NodeKey, clip: Rect, class: BudgetClass) -> LinesAnswer {
     let q = TextQuery::VisibleLines {
         node,
         clip,
@@ -462,9 +479,14 @@ async fn lines_of(
                         .any(|c| !c.is_whitespace() && c != '\u{FFFC}')
                 })
                 .collect();
-            (node, Some(Arc::from(lines)))
+            (node, Some(Arc::from(lines)), false)
         }
-        Ok(_) | Err(_) => (node, None),
+        Ok(_) => (node, None, false),
+        Err(e) => {
+            tracing::debug!(?node, error = ?e, "review text lines failed");
+            let transient = matches!(e, BackendError::Busy | BackendError::Timeout);
+            (node, None, transient)
+        }
     }
 }
 
@@ -568,17 +590,15 @@ pub async fn build_model(io: &ReviewIo, spec: BuildSpec) -> Result<Arc<LineModel
                     collected.text_clips.get(k).copied().unwrap_or(clip),
                     spec.class,
                 ))
-                    as std::pin::Pin<
-                        Box<
-                            dyn std::future::Future<Output = (NodeKey, Option<Arc<[TextLine]>>)>
-                                + Send,
-                        >,
-                    >
+                    as std::pin::Pin<Box<dyn std::future::Future<Output = LinesAnswer> + Send>>
             })
             .collect();
-        for (k, l) in bounded(jobs, io.limits.in_flight).await {
+        for (k, l, transient) in bounded(jobs, io.limits.in_flight).await {
             if let Some(l) = l {
                 lines.insert(k, l);
+            } else if transient {
+                // Not "complete": the continuation asks for this node again.
+                truncated.get_or_insert(TruncWhy::Deadline);
             }
         }
     }
@@ -716,7 +736,7 @@ pub async fn revalidate(io: &ReviewIo, probe: Vec<ProbeItem>, clip: Rect) -> RrV
     let mut text_changed = false;
     for p in &probe {
         let Some(old) = &p.lines else { continue };
-        let (_, fresh) = lines_of(io.clone(), p.node, clip, class).await;
+        let (_, fresh, _) = lines_of(io.clone(), p.node, clip, class).await;
         if let Some(fresh) = fresh {
             any_ok = true;
             let same = fresh.len() == old.len()

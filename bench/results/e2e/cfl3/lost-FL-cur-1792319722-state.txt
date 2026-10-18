@@ -1,0 +1,10 @@
+936249761194610 said "M8 News article - Google Chrome for Testing, M8 News article, document"
+936249810745874 said "browse mode, link, Skip to main content"
+936251983789307 said "Skip to main content"
+936252283901806 said "heading level 1, Screen readers learn to keep up with the modern web"
+936252537690788 said "M8 News article document Skip to main content link"
+bus 2 /org/a11y/atspi/accessible/10 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/11 LoadComplete:
+bus 1 /org/a11y/atspi/accessible/11 StateChanged:focused
+bus 2 /org/a11y/atspi/accessible/10 LoadComplete:
+bus 2 /org/a11y/atspi/accessible/11 LoadComplete:
