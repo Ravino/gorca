@@ -320,6 +320,22 @@ fn map_dbus(e: &DbusError) -> SourceError {
     }
 }
 
+/// Like [`map_dbus`] for a call that targets one object: a bus error that says the object does
+/// not exist (the browser released it, the page replaced the node) is `Gone`, which the caller
+/// may answer by re-resolving the node.
+fn map_target_err(e: &DbusError) -> SourceError {
+    if let DbusError::Zbus(z) = e {
+        let text = z.to_string();
+        if text.contains("UnknownObject")
+            || text.contains("Defunct")
+            || text.contains("NoSuchObject")
+        {
+            return SourceError::Gone;
+        }
+    }
+    map_dbus(e)
+}
+
 fn map_fetch(e: &FetchError) -> SourceError {
     match e {
         FetchError::Dbus(d) => map_dbus(d),
@@ -340,6 +356,9 @@ type ReadTuple = (
     Vec<(String, String)>,
     Option<String>,
 );
+
+/// How many ancestors an action whose target is gone refreshes at most.
+const REFRESH_LEVELS: usize = 4;
 
 /// Error texts one re-read batch fetches (a toggle storm over hundreds of invalid fields must
 /// not turn into hundreds of relation round trips; a focused field reads its own on focus).
@@ -1290,7 +1309,14 @@ impl AtspiDocSource {
                 deadline,
                 reply,
             } => {
-                let r = self.action(live, node, &act, deadline).await;
+                let mut r = self.action(live, node, &act, deadline).await;
+                if matches!(r, Err(SourceError::Gone))
+                    && matches!(act, DocAction::Click | DocAction::Focus)
+                {
+                    r = self
+                        .reresolve_and_retry(live, ctx, node, &act, deadline)
+                        .await;
+                }
                 let _ = reply.send(r);
             }
             DocRequest::Revalidate {
@@ -1503,7 +1529,7 @@ impl AtspiDocSource {
             .ident
             .path_of(node)
             .and_then(|p| live.paths.path_of(p))
-            .ok_or(SourceError::NotSupported)?;
+            .ok_or(SourceError::Gone)?;
         let lane = self.app.next_lane();
         let r = match act {
             DocAction::Focus => {
@@ -1512,7 +1538,7 @@ impl AtspiDocSource {
                     .app
                     .call(lane, deadline, &path, COMPONENT, "GrabFocus", &())
                     .await
-                    .map_err(|e| map_dbus(&e))?;
+                    .map_err(|e| map_target_err(&e))?;
                 return match wire::parse_u32(m.body().data().bytes()) {
                     Ok(0) => Err(SourceError::Refused),
                     Ok(_) | Err(_) => Ok(()),
@@ -1542,7 +1568,47 @@ impl AtspiDocSource {
             }
             DocAction::SetSelection(_) => return Err(SourceError::NotSupported),
         };
-        r.map(|_| ()).map_err(|e| map_dbus(&e))
+        r.map(|_| ()).map_err(|e| map_target_err(&e))
+    }
+
+    /// An action found its target gone: the page replaced the node and the events have not
+    /// reached the mirror yet. Refresh the target's parents (the same `GetChildren` + identity
+    /// pass an event would run), and repeat the action only if the logical node continues in a
+    /// live object with the same role and name. Anything else is `Gone`: an action is never
+    /// redirected to a different element.
+    async fn reresolve_and_retry(
+        &mut self,
+        live: &mut Live,
+        ctx: &DocSourceCtx,
+        node: SrcNodeId,
+        act: &DocAction,
+        deadline: Deadline,
+    ) -> Result<(), SourceError> {
+        let Some(before) = live.ident.info_of(node).map(|i| i.sig.clone()) else {
+            return Err(SourceError::Gone);
+        };
+        let old_path = live.ident.path_of(node);
+        let mut parent = live.ident.parent_of(node);
+        for _ in 0..REFRESH_LEVELS {
+            let Some(par) = parent else { break };
+            if self.revalidate(live, ctx, par, deadline).await.is_ok() {
+                break;
+            }
+            // The parent is gone too: go up.
+            parent = live.ident.parent_of(par);
+        }
+        let same = live.ident.info_of(node).is_some_and(|i| {
+            i.sig.role == before.role && i.sig.name.is_some() && i.sig.name == before.name
+        });
+        let moved = live
+            .ident
+            .path_of(node)
+            .is_some_and(|p| Some(p) != old_path);
+        if same && moved {
+            self.action(live, node, act, deadline).await
+        } else {
+            Err(SourceError::Gone)
+        }
     }
 
     fn path_of(live: &Live, node: SrcNodeId) -> Option<String> {

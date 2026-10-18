@@ -2996,3 +2996,59 @@ fn a_focus_in_the_browsers_own_interface_neither_waits_for_a_document_nor_says_a
         spoken(&fx)
     );
 }
+
+#[test]
+fn focus_falling_to_the_document_keeps_the_cursor_and_enter_still_clicks_the_item() {
+    let mut r = rig();
+    r.focus(1006);
+    let before = r.mode();
+    assert!(matches!(before, WebMode::Browse { .. }));
+    // The page re-rendered its list under the focused link: the browser parks the focus on the
+    // document. Nothing is announced and the cursor does not go to the top of the page.
+    let fx = r.focus(1001);
+    assert!(spoken(&fx).is_empty(), "{:?}", spoken(&fx));
+    assert_eq!(r.mode(), before);
+    let fx = r.key(CoreCmd::BrowseActivate);
+    let acts = effects_web(&fx);
+    assert!(
+        acts.iter().any(|a| matches!(
+            a,
+            WebEffect::Act {
+                act: DocAction::Click,
+                ..
+            }
+        )),
+        "{acts:?}"
+    );
+}
+
+#[test]
+fn a_failed_click_is_said_never_silent() {
+    let mut r = rig();
+    r.focus(1006);
+    let fx = r.reader.handle(
+        ReaderMsg::Doc(DocNotice::ActionFailed {
+            doc: DocId(1),
+            gone: true,
+        }),
+        r.now,
+    );
+    assert_eq!(spoken(&fx), ["that item is gone"]);
+    let fx = r.reader.handle(
+        ReaderMsg::Doc(DocNotice::ActionFailed {
+            doc: DocId(1),
+            gone: false,
+        }),
+        r.now,
+    );
+    assert_eq!(spoken(&fx), ["can't activate that"]);
+    // Another document's failure is not ours to speak.
+    let fx = r.reader.handle(
+        ReaderMsg::Doc(DocNotice::ActionFailed {
+            doc: DocId(9),
+            gone: true,
+        }),
+        r.now,
+    );
+    assert!(spoken(&fx).is_empty());
+}

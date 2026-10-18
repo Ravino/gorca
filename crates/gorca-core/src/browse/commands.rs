@@ -984,6 +984,7 @@ impl Reader {
     pub(crate) fn web_on_focus(&mut self, node: NodeKey, fx: &mut ReaderEffects) {
         let Some(b) = self.web.as_mut() else { return };
         b.entry_wait = None;
+        let prev_focus = b.focus_node;
         let hit = b.join.get(node);
         tracing::info!(target: "gorca_phase", phase = "web_focus", hit = hit.is_some());
         if let Some((doc, id)) = hit
@@ -1004,6 +1005,19 @@ impl Reader {
                     self.now.saturating_duration_since(t) <= REFOCUS_SILENT_WINDOW
                 });
             if browsing_here && h.read.with(|d| d.root() == Some(id)) {
+                b.suppress_focus = Some(node);
+                return;
+            }
+            // The focus fell from a control of this very document to the document itself while
+            // we browse it: the page destroyed the focused node (a framework re-rendering its
+            // list) and the browser parked the focus on the document. That is not a return to
+            // the page. The cursor stays where the user is, nothing is announced; moving it to
+            // the top would turn the next Enter into a click on whatever comes first on the
+            // page (the account menu).
+            let lost_to_document = matches!(b.mode, WebMode::Browse { doc: d, .. } if d == doc)
+                && prev_focus.is_some_and(|(pd, pid)| pd == doc && pid != id)
+                && h.read.with(|d| d.root() == Some(id));
+            if lost_to_document {
                 b.suppress_focus = Some(node);
                 return;
             }
@@ -1624,6 +1638,24 @@ impl Reader {
                 // The grabbed Tab asked for a focus the page refused: say so (R-6).
                 if self.web.as_ref().is_some_and(|b| b.mode.doc() == Some(doc)) {
                     self.say(t(M::WebCantMoveFocus), fx);
+                }
+            }
+            DocNotice::ActionFailed { doc, gone } => {
+                // The click did nothing. Say why, never leave Enter silent. (The source already
+                // refreshed the parents of a node that was gone, so the mirror catches up.)
+                if let Some(b) = self.web.as_mut()
+                    && b.mode.doc() == Some(doc)
+                {
+                    b.activated = None;
+                    b.click_target = None;
+                    self.say(
+                        t(if gone {
+                            M::WebItemGone
+                        } else {
+                            M::WebCantActivate
+                        }),
+                        fx,
+                    );
                 }
             }
             DocNotice::Gone { doc } => {

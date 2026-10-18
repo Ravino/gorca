@@ -76,6 +76,10 @@ pub enum SourceError {
     /// The object answered but declined (a `GrabFocus` that returned false).
     #[error("request refused")]
     Refused,
+    /// The object the request names no longer exists (the page replaced it) and could not be
+    /// matched to a live one by identity: nothing was done to any other object.
+    #[error("target object is gone")]
+    Gone,
     /// A page selection was applied, but not exactly as asked (the engine rounded it).
     #[error("applied approximately")]
     Approximate,

@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use gorca_config::Confirmations;
 use gorca_input_api::{CmdId, KeyIntent, PressKind, is_modifier_keysym, spoken_key_name};
 use gorca_mirror::fill::{DemandOutcome, DemandWhy};
-use gorca_model::{Epoch, Lookup, NodeKey, NodeSnapshot, Prio, PropMask};
+use gorca_model::{Epoch, Lookup, NodeKey, NodeSnapshot, Prio, PropMask, Role};
 use gorca_rt::BudgetClass;
 
 use super::info;
@@ -532,7 +532,7 @@ impl Reader {
             });
         }
         match self.dir.lookup(node) {
-            Lookup::Hit(snap) => self.answer_node(kind, repeat, &snap, fx),
+            Lookup::Hit(snap) => self.answer_or_refetch(kind, repeat, &snap, fx),
             Lookup::Miss => {
                 let epoch = self.epoch.current();
                 self.cmd.pending = Some(PendingInfo {
@@ -540,6 +540,7 @@ impl Reader {
                     node,
                     repeat,
                     epoch,
+                    window: false,
                 });
                 fx.push(ReaderEffect::Fetch {
                     node,
@@ -551,6 +552,45 @@ impl Reader {
             }
             Lookup::Gone => self.say(t(M::FocusGone), fx),
         }
+    }
+
+    /// `info.window_title` re-reads the window itself (one Interactive fetch, bounded by the
+    /// connector's deadline; the cached name answers when it times out). The title of a page
+    /// changes without the frame's name being re-read, so the mirror copy may be arbitrarily
+    /// old. Every other command answers from the snapshot at hand.
+    fn answer_or_refetch(
+        &mut self,
+        kind: PendingKind,
+        repeat: u8,
+        snap: &Arc<NodeSnapshot>,
+        fx: &mut ReaderEffects,
+    ) {
+        if kind == PendingKind::WindowTitle {
+            let chain = info::ancestry(&self.dir, snap);
+            if let Some(w) = chain
+                .iter()
+                .find(|n| matches!(n.role, Role::Window | Role::Dialog))
+            {
+                let epoch = self.epoch.current();
+                let node = w.key;
+                self.cmd.pending = Some(PendingInfo {
+                    kind,
+                    node,
+                    repeat,
+                    epoch,
+                    window: true,
+                });
+                fx.push(ReaderEffect::Fetch {
+                    node,
+                    mask: PropMask::PRESENT,
+                    class: BudgetClass::Interactive,
+                    epoch,
+                    kind: crate::reader::FetchKind::Info,
+                });
+                return;
+            }
+        }
+        self.answer_node(kind, repeat, snap, fx);
     }
 
     /// Finish a node-based command from a snapshot (mirror hit, or the fetch reply).
@@ -590,7 +630,11 @@ impl Reader {
             return false;
         }
         self.cmd.pending = None;
+        // A fetch that failed answers from the cache: a possibly old title beats silence.
         match result.or_else(|| self.dir.lookup(node).hit()) {
+            Some(snap) if p.kind == PendingKind::WindowTitle && !p.window => {
+                self.answer_or_refetch(p.kind, p.repeat, &snap, fx);
+            }
             Some(snap) => self.answer_node(p.kind, p.repeat, &snap, fx),
             None => self.say(t(M::AppNotResponding), fx),
         }

@@ -137,6 +137,10 @@ pub enum DocNotice {
     /// A focus request on a node of this document failed (refused, timed out, gone): the key
     /// that asked (a grabbed Tab) must not stay silent.
     FocusFailed { doc: DocId },
+    /// A click on a node of this document did nothing: the node is gone (`gone`, the page
+    /// replaced it and no live object continues it) or the page did not take the action. The
+    /// key that asked must not stay silent.
+    ActionFailed { doc: DocId, gone: bool },
     /// A live region changed (ADR-0003 13): already classified, deduplicated and rate-limited by
     /// the document, so the Reader only decides whether this document is the one in front.
     Live { doc: DocId, msg: LiveMsg },
@@ -651,6 +655,13 @@ fn spawn_action(
     let src = a.read.with(|d| src_of(d, node));
     let Some(src) = src else {
         fail(a);
+        if matches!(act, DocAction::Click) {
+            // A node the source never issued an id for (a synthetic container) is not there.
+            let _ = a.notices.try_send(DocNotice::ActionFailed {
+                doc: a.spec_doc,
+                gone: true,
+            });
+        }
         return;
     };
     // A page selection names core nodes; the source knows its own ids. A span whose node has no
@@ -701,6 +712,7 @@ fn spawn_action(
     let notices = a.notices.clone();
     let doc = a.spec_doc;
     let is_focus = matches!(act, DocAction::Focus);
+    let is_click = matches!(act, DocAction::Click);
     set.spawn(async move {
         // Wait for the selection request before this one; `done` is dropped at the end, which
         // releases the next one in line (also when this task is aborted).
@@ -732,6 +744,10 @@ fn spawn_action(
         let ok = matches!(result, Some(Ok(())));
         if is_focus && !ok {
             let _ = notices.try_send(DocNotice::FocusFailed { doc });
+        }
+        if is_click && !ok {
+            let gone = matches!(result, Some(Err(SourceError::Gone)));
+            let _ = notices.try_send(DocNotice::ActionFailed { doc, gone });
         }
         if let Some(req) = select_req {
             let outcome = match result {

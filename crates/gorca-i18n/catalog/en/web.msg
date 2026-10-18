@@ -48,3 +48,5 @@ web-no-container = Not in a container
 web-no-more-text-after-links = no more text after a block of links
 web-not-in-cell = Not in a table cell
 web-table-edge = Edge of table
+web-item-gone = that item is gone
+web-cant-activate = can't activate that

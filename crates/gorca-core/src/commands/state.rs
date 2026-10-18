@@ -167,6 +167,10 @@ pub(crate) struct PendingInfo {
     pub node: NodeKey,
     pub repeat: u8,
     pub epoch: gorca_model::Epoch,
+    /// `node` is the window itself, fetched fresh for `info.window_title`: the mirror's copy of
+    /// a window name can be as old as the last event that named it (a page changes its title
+    /// without the frame announcing it).
+    pub window: bool,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

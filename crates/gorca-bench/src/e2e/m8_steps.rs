@@ -1098,6 +1098,70 @@ fn tg3() -> Vec<Step> {
     v
 }
 
+/// Chat list that the page re-renders (`chatlist.html`): activation must reach the live element
+/// the user is on, the window title must follow the page, and a chat that is gone must be said,
+/// never replaced by another element (the account menu is the first focusable control).
+fn cl() -> Vec<Step> {
+    let churn = |id: &'static str, label: &'static str| Step::setup(id, "ask the page to re-render the chat list in 1.2 s", Act::Do(role::PUSH_BUTTON, label));
+    vec![
+        top("CL.top"),
+        // Fresh page: the baseline that already worked.
+        s("CL.fresh.focus", P0, "Focus on a chat link (what Tab ends in): browse mode, link", Act::Focus(role::LINK, "Alice"), &["Alice", "link"]).not(&["focus mode"]),
+        s("CL.fresh.enter", P0, "Enter opens the chat that has the focus", key0(ENTER), &["Opened chat Alice"]).not(&["Account menu"]).win(1500),
+        s("CL.fresh.title", P0, "gorca+T: the window title the page just set, not the one from load time", gorca(ch('t')), &["Alice - M8 Chats"]).not(&["M8 Chats Account"]).win(1500),
+        // After a re-render with identical content: all old nodes are gone.
+        churn("CL.same.rr", "Re-render same"),
+        Step::setup("CL.same.wait", "the page re-renders", Act::Wait(1800)),
+        s("CL.same.tab", P0, "Tab onto Bob", Act::Focus(role::LINK, "Bob"), &["Bob", "link"]),
+        s("CL.same.enter", P0, "Enter after the re-render opens Bob (the new node), not the menu", key0(ENTER), &["Opened chat Bob"]).not(&["Account menu"]).win(1500),
+        s("CL.same.title", P0, "gorca+T follows the title change", gorca(ch('t')), &["Bob - M8 Chats"]).win(1500),
+        // The browse cursor sits on a chat while the page re-renders under it.
+        top("CL.cur.top"),
+        churn("CL.cur.rr", "Re-render same"),
+        pos("CL.cur.k", n('k')),
+        s("CL.cur.wait", P0, "The page re-renders under the cursor", Act::Wait(1800), &[]).win(2200),
+        s("CL.cur.enter", P0, "Enter on the browse cursor opens the same chat in the new nodes", key0(ENTER), &["Opened chat"]).not(&["Account menu"]).win(1500),
+        // A chat moves to the top with a new preview: the cursor item is not the item at its old slot.
+        top("CL.bump.top"),
+        churn("CL.bump.rr", "Re-render bump"),
+        pos("CL.bump.k", n('k')),
+        pos("CL.bump.k2", n('k')),
+        s("CL.bump.wait", P0, "The page moves Carol to the top", Act::Wait(1800), &[]).win(2200),
+        s("CL.bump.enter", P0, "Enter opens the item the cursor was on (Bob), never Carol that took its slot", key0(ENTER), &["Opened chat Bob"]).not(&["Account menu", "Opened chat Carol"]).win(1500),
+        s("CL.bump.title", P0, "gorca+T: Bob's title", gorca(ch('t')), &["Bob - M8 Chats"]).win(1500),
+        // A new chat is inserted at the top.
+        top("CL.ins.top"),
+        churn("CL.ins.rr", "Re-render insert"),
+        pos("CL.ins.k", n('k')),
+        pos("CL.ins.k2", n('k')),
+        pos("CL.ins.k3", n('k')),
+        s("CL.ins.wait", P0, "The page inserts Zed at the top", Act::Wait(1800), &[]).win(2200),
+        s("CL.ins.enter", P0, "Enter opens the item the cursor was on (the third chat, Bob), not the new top item", key0(ENTER), &["Opened chat Bob"]).not(&["Account menu", "Opened chat Zed"]).win(1500),
+        // The page changes its title by a timer while the cursor is elsewhere (an unread badge).
+        top("CL.ttl.top"),
+        Step::setup("CL.ttl.click", "ask the page to retitle itself in 1.2 s", Act::Do(role::PUSH_BUTTON, "Retitle later")),
+        pos("CL.ttl.k", n('k')),
+        Step::setup("CL.ttl.wait", "the page sets its title", Act::Wait(1800)),
+        s("CL.ttl.say", P0, "gorca+T: the title the page set by a timer, with no focus or key in between", gorca(ch('t')), &["Inbox (1) - M8 Chats"]).win(1500),
+        // The page focuses an item and re-renders the list under that focus: the browser moves the
+        // focus to the document. The cursor stays on the item.
+        top("CL.foc.top"),
+        churn("CL.foc.rr", "Re-render focused"),
+        Step::setup("CL.foc.wait0", "the page focuses Bob (the focus is spoken)", Act::Wait(1700)),
+        Step::setup("CL.foc.wait", "the page re-renders the list under the focus", Act::Wait(1500)),
+        s("CL.foc.enter", P0, "Enter after the focused item was destroyed opens the same chat, not the account menu at the top of the page", key0(ENTER), &["Opened chat Bob"]).not(&["Account menu"]).win(1500),
+        // The item under the cursor is removed: say so, activate nothing.
+        top("CL.gone.top"),
+        churn("CL.gone.rr", "Re-render drop"),
+        pos("CL.gone.k", n('k')),
+        pos("CL.gone.k2", n('k')),
+        pos("CL.gone.k3", n('k')),
+        pos("CL.gone.k4", n('k')),
+        s("CL.gone.wait", P0, "The page drops Bob", Act::Wait(1800), &[]).win(2200),
+        s("CL.gone.enter", P0, "Enter after the item under the cursor was removed: the cursor settled on a live neighbour, so its chat opens or the item is said to be gone; never Bob, never the menu", key0(ENTER), &[]).not(&["Account menu", "Opened chat Bob"]).min(1).win(1500),
+    ]
+}
+
 /// Every scenario, in run order.
 pub fn scenarios() -> Vec<Scenario> {
     let sc = |id, area, page, title, body| Scenario { id, area, page, title, body, xfail: None };
@@ -1120,6 +1184,7 @@ pub fn scenarios() -> Vec<Scenario> {
         sc("M8-FORGE", "real-world: code forge repository page", "forge.html", "M8 Forge repository", Body::Steps(forge)),
         sc("M8-APP", "real-world: web app with dialogs", "webapp.html", "M8 Web app dialogs", Body::Steps(app)),
         sc("M8-SPA", "dynamic SPA updates", "spa.html", "M8 SPA", Body::Steps(spa)),
+        sc("M8-CL", "re-rendered chat list: activation and window title", "chatlist.html", "M8 Chats", Body::Steps(cl)),
         sc("M8-BWG", "ARIA widgets: names, roles, states", "../../m8b/pages/widgets.html", "M8b Widgets", Body::Steps(wg)),
         sc("M8-BFB", "ARIA forms: invalid, described, required, read only", "../../m8b/pages/forms.html", "M8b Forms", Body::Steps(fb)),
         sc("M8-BHO", "hostile ARIA: cycles, fan-out, megabyte strings", "../../m8b/pages/hostile.html", "M8b Hostile", Body::Steps(ho)),
