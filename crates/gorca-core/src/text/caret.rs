@@ -66,6 +66,8 @@ pub struct Kind {
 }
 
 /// Settings the machine reads.
+// Four independent switches read from separate settings; a state enum would not be clearer.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Copy, Clone, Debug)]
 pub struct Cfg {
     pub typed_chars: bool,
@@ -976,7 +978,7 @@ impl CaretState {
                 // Copying changes neither the text nor the selection, so nothing will confirm
                 // it: say so only when a selection is known to exist, and never otherwise.
                 if cx.cfg.announce_clipboard && !t.sel.is_empty() {
-                    say_clip(&mut t, &msg!(TextCopied), epoch, cx);
+                    say_clip(&mut t, msg!(TextCopied), epoch, cx);
                 }
                 CaretState::Idle { t }
             }
@@ -1223,7 +1225,7 @@ impl CaretState {
             } else {
                 msg!(TextRedo)
             };
-            say_clip(&mut t, &m, epoch, cx);
+            say_clip(&mut t, m, epoch, cx);
         }
         match e {
             Edit::Replaced => {
@@ -1933,7 +1935,7 @@ fn insert(
             && let Some((_, epoch, ..)) = slot
         {
             // The insert vouches for the paste even though the application sent no text.
-            say_clip(t, &msg!(TextPasted), epoch, cx);
+            say_clip(t, msg!(TextPasted), epoch, cx);
         }
         return;
     };
@@ -2352,7 +2354,7 @@ fn speak_cut(t: &mut Tracked, text: Option<String>, epoch: Epoch, cx: &mut Ctx<'
             pieces.push(Piece::unit(How::Text, text));
         }
     } else {
-        pieces.push(Piece::phrase(&msg!(TextCut)));
+        pieces.push(Piece::phrase(msg!(TextCut)));
     }
     let s = t.spoken(pieces, Reason::Clipboard, epoch, Prio::Interrupt);
     cx.say(s);

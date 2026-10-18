@@ -28,6 +28,7 @@ crates/gorca-core/src/commands/compile.rs | extension `{}` default chord `{chord
 crates/gorca-core/src/commands/info.rs | node {} of application {}, role {}, {}, {} ancestors known, {} states, name {}
 crates/gorca-core/src/commands/info.rs | no listed
 crates/gorca-core/src/commands/keys.rs | focused node never presented: presenting it again at a key
+crates/gorca-core/src/doc_actor/translate.rs | \u{FFFC}
 crates/gorca-core/src/ext.rs | default chord `{0}` must use the gorca modifier (an extension never grabs a plain key)
 crates/gorca-core/src/present/flow.rs | focus event
 crates/gorca-core/src/review/build.rs | unexpected reply kind
@@ -36,6 +37,10 @@ crates/gorca-core/src/review/build.rs | review build round
 crates/gorca-core/src/review/build.rs | review model built
 crates/gorca-core/src/runtime.rs | Core::with_ext must run before anything clones the shared state
 crates/gorca-core/src/runtime.rs | unexpected reply kind
+crates/gorca-core/src/statemodel/regressions.rs | {cmd:?} starts review
+crates/gorca-core/src/statemodel/regressions.rs | the key ends review
+crates/gorca-core/src/statemodel/regressions.rs | node {node} {cmd:?}: the typed character is echoed, got {said:?}
+crates/gorca-core/src/statemodel/regressions.rs | node {node} {cmd:?}: the echo (epoch {:?}) is stale, current {:?}
 crates/gorca-core/src/terminal.rs | verification code
 crates/gorca-core/src/terminal.rs | contrase\u{f1}a
 crates/gorca-core/src/terminal.rs | \u{43f}\u{430}\u{440}\u{43e}\u{43b}
@@ -122,4 +127,3 @@ extensions/ext-vte/src/prompt.rs | \u{43a}\u{43e}\u{434} \u{43f}\u{43e}\u{434}\u
 extensions/ext-vte/src/prompt.rs | \u{441}\u{435}\u{43a}\u{440}\u{435}\u{442}\u{43d}[\u{430}-\u{44f}]*
 extensions/ext-vte/src/prompt.rs | \u{43f}\u{438}\u{43d}-?\u{43a}\u{43e}\u{434}
 extensions/ext-vte/src/prompt.rs | [^:?\u{ff1a}\u{ff1f}]{0,60}[:?\u{ff1a}\u{ff1f}]\s*$
-crates/gorca-core/src/doc_actor/translate.rs | \u{FFFC}

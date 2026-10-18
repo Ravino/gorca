@@ -194,7 +194,8 @@ pub enum WordLevel {
     Auto,
     /// Letters and digits are a word, every punctuation mark is a word of its own.
     Fine,
-    /// Option tokens, identifiers and path segments stay whole; blanks and slashes separate.
+    /// Option tokens (`--color=auto`), identifiers and file names stay whole; blanks, slashes and
+    /// other punctuation separate.
     Medium,
     /// Everything between blanks is a word.
     Coarse,
@@ -1045,7 +1046,7 @@ static DOCS: &[(&str, &str, &str)] = &[
     (
         "editing",
         "word",
-        "How coarse a word is: fine (letters and digits, each punctuation mark apart), medium (option tokens like --color=auto, identifiers and path segments stay whole), coarse (everything between blanks); auto lets the application decide (terminals use medium).",
+        "How coarse a word is: fine (letters and digits, each punctuation mark apart), medium (option tokens like --color=auto, identifiers and file names stay whole; slashes and other punctuation separate), coarse (everything between blanks); auto lets the application decide (terminals use medium).",
     ),
     (
         "text",
