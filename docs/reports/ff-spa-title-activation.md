@@ -122,6 +122,18 @@ gorca now keeps the same caret behavior and, unlike NVDA, says so when the item 
 * Runs: `r3-cl` (M8-CL x3, 21 steps, 0 failures) and `r3-nav` (TG, TG2, TG3, QN, SPA, APP, AF, BWG,
   0 failures).
 
+## Review round r3 fix
+
+R3-1: the click records the target's pressed/checked/expanded states. A change under the cursor is
+exempt from "displaced" only if one of them flipped by the time it lands (plus the earlier
+conditions: same node and role, 700 ms). "Delete" to "Confirm delete" has no flip, so it is
+announced and the next Enter does not click blind (`a_relabel_to_another_action_without_a_state_flip_...`,
+e2e `CL.del.1..3`); a plain Play/Pause button without aria-pressed costs one extra Enter, the
+accepted safe direction. `CL.tog` now uses an `aria-pressed` toggle. Runs: `r4-cl3` (M8-CL x5, 24
+steps, 0 failures). `r4-cl` and `r4-cl2` are kept: the first used the wrong role for the Focus
+step, the second failed the toggle steps in 1 of 3 repeats (GrabFocus produced no focus event; a
+second Focus setup step was added and 5 clean repeats followed).
+
 ## Not done / risks
 
 * The stale title was not reproduced; only the contract and fallback are tested.
