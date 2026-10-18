@@ -76,7 +76,14 @@ After the fix: see the table below.
 | before (acceptance a1, a4) | 3 + 3 | 1 |
 | before (fixes-vv-dbg) | 20 | 1 |
 | before (fixes-vv-keep, stopped) | about 7 | 1 |
-| after (fixes-vv-fixed) | 12 | (see Result below) |
+| after (fixes-vv-fixed) | 12 | 0 (the old rate predicts 1.2 to 1.7 failures, so this is evidence, not proof) |
 
 ## Gates and verification
-(filled in below when finished)
+* VK check (`fixes-vk-check-20261018T124247Z`, 200 s): `soak.tsv` has `reader_swap_kb` / `server_swap_kb`; round 2
+  (tab switch) has `vd_fail_round` 0.
+* b1 judge-quick (`fixes-b1-quick-20261018T131728Z`, quiet-host, load 4-8): fidelity pass on attempt 1, arm `main`
+  rankable yes, no failing gate. An earlier run at load ~10 failed the fidelity check 3 of 3 attempts (p50 delta
+  0.64-0.72 ms vs the 0.6 ms limit): that is a load effect, not a flap, so the retry does not mask it; run b1 on a quiet host.
+* fmt clean; `clippy --workspace --all-targets -D warnings` and `clippy --release --workspace -D warnings` clean;
+  `cargo test --workspace` all `test result` lines 0 failed.
+* quiet-host was switched on for the runs and reverted (`quiet-host.sh off`, C2/C3 disable=0).

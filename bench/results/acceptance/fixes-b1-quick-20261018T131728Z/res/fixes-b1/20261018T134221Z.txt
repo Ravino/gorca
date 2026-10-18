@@ -1,0 +1,33 @@
+metric                     bus                median          min          max  n op    threshold  res   note
+B1-RSS.big                 main                3.254        3.254        3.254  1 <=          128  PASS   [MiB]
+B1-RUNS.invalid            main                    0            0            0  1 <=            0  PASS  gated on the max over repeats [runs]
+B1-FF.p99@files            main                4.463        4.463        4.463  1 <=           15  PASS   [ms]
+B1-FF.p99@files-big        main                1.324        1.324        1.324  1 <=           15  PASS   [ms]
+B1-FF.p99@gtk3             main                3.130        3.130        3.130  1 <=           15  PASS   [ms]
+B1-FF.p99@settings         main                6.499        6.499        6.499  1 <=           15  PASS   [ms]
+B1-FF.p99@shell            main                 10.4         10.4         10.4  1 <=           15  PASS   [ms]
+B1-RUNS.invalid            main                    0            0            0  1 <=            0  PASS  gated on the max over repeats [runs]
+B1-MSG.idle                main                    0            0            0  1 <=        0.500  PASS   [calls/s/app]
+B1-RUNS.invalid            main                    0            0            0  1 <=            0  PASS  gated on the max over repeats [runs]
+B1-RUNS.invalid            main                    0            0            0  1 <=            0  PASS  gated on the max over repeats [runs]
+B1-STEP.max_us             main                 17.0         16.1         17.7  3 <=          250  PASS   [us]
+B1-CPU.focus_us            main                 8767         8767         8767  1                  info   [us]
+B1-HIT.all                 main                0.827        0.827        0.827  1                  info   [ratio]
+B1-HIT.ancestry            main                    1            1            1  1                  info   [ratio]
+B1-HIT.revisit             main                0.956        0.956        0.956  1 >=        0.950  PASS   [ratio]
+B1-L1c.p99                 main                7.144        7.144        7.144  1 <=           15  PASS   [ms]
+B1-L1h.p99                 main                1.069        1.069        1.069  1 <=            2  PASS   [ms]
+B1-L3.lost                 main                    0            0            0  1 <=            0  PASS  gated on the max over repeats [count]
+B1-L4.p99                  main                4.542        4.542        4.542  1 <=           15  PASS   [ms]
+B1-LOST@walk               main                    0            0            0  1 <=            0  PASS  gated on the max over repeats [count]
+B1-M6                      main                0.030        0.030        0.030  1                  info   [ratio]
+B1-M6.audible              main                    0            0            0  1 <=        0.010  PASS   [ratio]
+B1-MSG.l3                  main                0.010        0.010        0.010  1 <=          500  PASS   [calls/s]
+B1-MSG.walk                main                114.0        114.0        114.0  1                  info   [msgs/s]
+B1-RUNS.invalid            main                    0            0            0  1 <=            0  PASS  gated on the max over repeats [runs]
+B1-S1.p99                  main                2.984        2.984        2.984  1 <=            5  PASS   [ms]
+B1-STALE@walk              main                    0            0            0  1 <=            0  PASS  gated on the max over repeats [count]
+
+| arm | rankable | failing gates |
+|---|---|---|
+| main | yes | - |
