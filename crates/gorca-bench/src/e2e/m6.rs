@@ -2325,12 +2325,23 @@ pub fn vv(
     );
     out.notes.extend(std::mem::take(&mut c.notes));
     // Keep the reader's trace and the presentation log for a diagnosis (`GORCA_VV_KEEP_DIR`).
+    // A repeat that failed a step keeps its own files (suffix: monotonic ns), so a loop of
+    // repeats cannot overwrite the evidence of the one that failed; with GORCA_VV_KEEP_ALL every
+    // repeat is kept.
     if let Some(dir) = std::env::var_os("GORCA_VV_KEEP_DIR") {
-        let dir = std::path::PathBuf::from(dir);
-        let _ = std::fs::create_dir_all(&dir);
-        for f in [&err_path, &present_path] {
-            if let Some(name) = f.file_name() {
-                let _ = std::fs::copy(f, dir.join(name));
+        let failed = c.failures > failures_before;
+        if failed || flag(host, "GORCA_VV_KEEP_ALL") {
+            let dir = std::path::PathBuf::from(dir);
+            let _ = std::fs::create_dir_all(&dir);
+            let tag = format!(
+                "{}{}",
+                super::mono::now_ns(),
+                if failed { "-FAILED" } else { "" }
+            );
+            for f in [&err_path, &present_path] {
+                if let Some(name) = f.file_name() {
+                    let _ = std::fs::copy(f, dir.join(format!("{tag}-{}", name.to_string_lossy())));
+                }
             }
         }
     }
@@ -2685,6 +2696,13 @@ fn vv_focus(v: &mut V, c: &mut Check) -> Result<()> {
                 std::thread::sleep(Duration::from_millis(60));
             }
         }
+        v.term.rd_line("key 28");
+        // The headless RemoteDesktop keyboard occasionally drops a key: a captured failing VV
+        // repeat shows the command line typed (caret at its end, no event for Return) and the
+        // shell never ran it, so "focusc" was never printed. A second Return is harmless when
+        // the first one worked (the shell reads an empty line after `sleep`), and runs the
+        // command when it did not (acceptance-fixes.md).
+        std::thread::sleep(Duration::from_millis(150));
         v.term.rd_line("key 28");
     };
     let got = v.said_during(2500, |v| {

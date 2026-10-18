@@ -1,0 +1,10 @@
+private compositor: /tmp/gorca-vte.H4Sv4p/x/gorca-vte-1676551
+== reader <repo>/.claude/worktrees/agent-ac00585ae6937e472/target/release/gorca built from 2a017ed3, tree at c30cae1e
+== e2e vv-keep: reader=daemon:<repo>/.claude/worktrees/agent-ac00585ae6937e472/target/release/gorca backend=voicego repeats=30 load=10.38 13.09 13.41 4/3341 1677255
+-- round 1/30 VV (load 10.38 13.09 13.41 6/3341 1677255)
+-- round 2/30 VV (load 12.76 12.98 13.32 3/2871 1683764)
+-- round 3/30 VV (load 7.09 10.64 12.41 5/2388 1685442)
+-- round 4/30 VV (load 8.35 9.39 11.70 1/2398 1687341)
+-- round 5/30 VV (load 10.01 9.25 11.34 1/2354 1690394)
+-- round 6/30 VV (load 10.95 9.90 11.31 2/2370 1697905)
+-- round 7/30 VV (load 11.32 10.89 11.54 1/2394 1700855)
