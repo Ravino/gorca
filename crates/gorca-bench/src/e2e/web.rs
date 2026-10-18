@@ -7,6 +7,7 @@
 //! |---|---|---|
 //! | B0 | a scripted walk over `article.html`: focus the document, lines, headings, links, a form field, Escape, Enter on a link (a page load) | `web_failures` (gate 0); the transcript is in the notes |
 //! | W1 | alternating `H` / `Shift+H` on a 10k-node page | `w1_ms` key-down emit to SPEAK (gate p99 5 ms), `lost`, `not_consumed` |
+//! | CL | keyboard report: `H` and `Shift+H` with Caps Lock ON (XKB types `H` for the bare key and `h` for Shift+H) | `cl_ms` key-down emit to SPEAK (gate p99 5 ms), `lost_cl_ms`, `not_consumed` (gate 0: the letters must not reach the page) |
 //! | BR1 | `Down` / `Up`, then `Right` / `Left`, then `Ctrl+Right` / `Ctrl+Left` | `br1_ms`, `br1c_ms`, `br1w_ms` (gate p99 5 ms each), `lost` |
 //! | BR2 | held `Down` at 30 Hz for 3 s | `stale` (gate 0: a line spoken after the next key), `last_ok` (gate 1: the final line is spoken) |
 //! | W2b | focus enters a loaded, never visited 10k-node document | `w2b_ms` focus emit to the first line spoken (wall; gate 150 ms) |
@@ -84,6 +85,8 @@ pub(super) const KEY_2: K = K {
 };
 pub(super) const CTRL: u32 = 0x04;
 pub(super) const SHIFT: u32 = 0x01;
+/// The Caps Lock bit of a Mutter key state (`LOCK`).
+pub(super) const LOCK: u32 = 0x02;
 
 pub(super) fn gate_open(host: &HostEnv, id: &str, out: &mut RunOut) -> Result<bool> {
     let ready = flag(host, "GORCA_M7") && std::env::var_os("GORCA_M7_WAYLAND").is_some();
@@ -1202,6 +1205,37 @@ pub fn w1(
         out,
         "w1_ms",
         &[(KEY_H, 0), (KEY_H_CAP, SHIFT)],
+        size.n,
+        |_, t| t.contains("heading level"),
+    )
+}
+
+/// CL: W1 with Caps Lock on. Mutter reports the bare `H` key as the capital `H` (state LOCK) and
+/// `Shift+H` as the lower case `h` (state SHIFT|LOCK); both must stay grabbed quick-navigation
+/// keys, never reach the page or get echoed as letters.
+pub fn cl(
+    host: &HostEnv,
+    reader: &super::apps::ReaderSpec,
+    flavor: Flavor,
+    size: Size,
+    out: &mut RunOut,
+) -> Result<()> {
+    if !gate_open(host, "CL", out)? {
+        return Ok(());
+    }
+    let (mut w, _doc) = on_large(host, reader, flavor)?;
+    // Walk into the middle of the heading list with Caps Lock off; the series then types with the
+    // lock bit set, the state Mutter reports while the lock is on (the Caps Lock key itself is not
+    // pressed: the emulated Mutter takes the state as given).
+    for _ in 0..40 {
+        w.press(KEY_H, 0)?;
+        std::thread::sleep(Duration::from_millis(30));
+    }
+    key_series(
+        &mut w,
+        out,
+        "cl_ms",
+        &[(KEY_H_CAP, LOCK), (KEY_H, SHIFT | LOCK)],
         size.n,
         |_, t| t.contains("heading level"),
     )

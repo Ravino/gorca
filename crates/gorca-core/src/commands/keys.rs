@@ -46,6 +46,7 @@ impl Reader {
             }
             KeyClass::PassToApp => {
                 self.pass_key_seen(&intent, fx);
+                self.numlock_hint(&intent, fx);
                 if self.review_left_by_key(&intent, fx) {
                     // With `interrupt = "never"` the press did not advance the epoch, so leaving
                     // review did (to purge the queued review speech): this key's echo takes it.

@@ -1,0 +1,96 @@
+# Keyboard report: Caps Lock, Insert and the keypad Insert (2026-10-18)
+
+Three bugs from the daily user (laptop; Insert and/or Caps Lock as the gorca modifier; NVDA presets).
+
+## 1. Caps Lock ON breaks browse-mode quick navigation (fixed)
+
+**Root cause.** Quick-navigation keys are grabbed with `SetKeyGrabs` as `(keysym, modifier mask)`, and
+Mutter compares both for exact equality (`refs/mutter/src/backends/meta-a11y-manager.c`,
+`should_grab_keypress`). With Caps Lock on, XKB types `H` for the bare H key and `h` for Shift+H (the
+alphabetic key type maps Lock to the Shift level, and Shift+Lock back to the base level). gorca grabbed
+only `(h, none)` and `(H, Shift)`, each expanded with the Num Lock and Caps Lock mask variants, so
+`(H, Lock)` and `(h, Shift+Lock)` were never grabbed: the key was not swallowed, reached the page, and
+gorca echoed the capital letter. The input lane was already right: it matches by keycode and strips the
+lock bits (`ChordKey` never contains them), so Caps Lock was never treated as Shift there.
+
+**Fix.** `grabs_where` (`crates/gorca-core/src/commands/compile.rs`) adds the case partner of every
+keysym of a letter key (`KeysymTable::case_partner`: ASCII by rule, other scripts from pairs the XKB
+table builder records with `xkb_keysym_to_upper`, `crates/gorca-input-xkb`). Keys without case (digits,
+punctuation, keypad, arrows) are untouched. Only real Shift selects the reverse direction, since the lane
+looks chords up by keycode and the Shift bit.
+
+**Caps Lock as the gorca modifier.** Mutter ignores the first press of a grabbed modifier (no XKB update,
+so no toggle) and processes a double tap normally, so a double tap of Caps Lock toggles the lock, as in
+NVDA. That is how the lock gets switched on by accident for a Caps Lock user; gorca announces it
+(`quick.rs`). Nothing to change.
+
+**Evidence.**
+- Unit: `caps_lock_does_not_break_the_single_letter_quick_navigation_grabs`,
+  `caps_lock_on_the_russian_layout_grabs_the_other_case_cyrillic_keysym`,
+  `caps_lock_variants_add_only_case_partners` (compile.rs; they check the model and the wire form
+  against Mutter's exact rule), `caps_lock_swaps_the_case_of_ascii_letters_and_registered_pairs_only`
+  (keys.rs), `letter_keys_register_their_case_pairs_for_caps_lock` (xkb, real libxkbcommon).
+- e2e `CL` (`crates/gorca-bench/src/e2e/web.rs`, run with `tests/web/m7/run_m7.sh <label> --only CL`):
+  `H` with state Lock and `Shift+H` with Shift+Lock on a 10k-node page in a real Firefox.
+  With the fix: lost 0, not consumed 0, p99 0.98 ms (`bench/results/e2e/kb-cl/`).
+  **Negative control** (fix disabled, same binary otherwise): lost 150 of 150, not consumed 150 of 150
+  (`bench/results/e2e/kb-cl-negative/`, kept).
+
+## 2. Insert and Caps Lock are not always equivalent; Insert+F12 sometimes fails
+
+**Checked.** All three keys are in `keyboard.modifiers` by default and are grabbed in Focus, Review,
+Browse and learn mode (not in pass-next-key, by design). `gorca+f12` is one chord with the virtual GORCA
+bit, so which physical key is held does not matter to the keymap. In every preset and layout, the same
+chord runs the same command for Insert, KP_Insert and Caps Lock, with Caps Lock and Num Lock set or not,
+and repeated within 200 ms (`insert_keypad_insert_and_caps_lock_run_the_same_commands`). The modifiers
+are now one table (`MODIFIER_KEYS` in `gorca-input-api/src/keys.rs`: name, keysym, keycode, autorepeat),
+read by `modifier_keysym`, the notices and the tests; `every_modifier_key_is_grabbed_in_every_mode...`
+covers the grab sets. `km_*` in e2e `KM` measures the three at 0.8 to 0.9 ms p99.
+
+**The real differences are in Mutter, not in gorca's tables.**
+1. Insert and KP_Insert autorepeat, Caps Lock does not. Mutter 48.7 runs its double-tap rule for repeat
+   events, so holding Insert past the repeat delay while looking for F12 can leak repeats to the
+   application or leave a stale entry that swallows later keys (`docs/reports/live-keys-swallowed.md`,
+   detected and announced as "stuck" by the lane). Holding Caps Lock while reaching F12 is harmless. This
+   is the most likely cause of "Insert+F12 sometimes doesn't work" and matches Caps Lock working every
+   time. Mitigations: tap the modifier and press F12 while it is down without long holds; or
+   `modifiers = ["Caps_Lock"]`; the proper fix is the upstream `AUTOREPEAT_VALUE` guard.
+2. The keypad Insert is the modifier only with Num Lock off. With Num Lock on, the same key types `KP_0`,
+   which is a digit and not grabbed (ADR-0005 K-6a, same as NVDA and Orca). On a laptop with an embedded
+   keypad the Num Lock state is easy to change by accident, so "Insert" is then silently a digit.
+   Reading two Insert keycodes: Insert is 118 and KP_Insert is 90, both registered everywhere.
+
+Unverified: which of the two the user hit; I could not reproduce "sometimes" without the laptop.
+
+## 3. Numpad 0 types "0" on a quick double press (not reproducible with Num Lock off)
+
+**Where the pass-through happens.** gorca injects nothing (`gorca-input-inject` is a stub). The double
+tap is Mutter's: the second press of a grabbed modifier is "processed normally" and reaches the
+application as the same key. I verified this against the real Mutter 48 in a private headless Shell
+(`tests/shell/run_shell.sh`, RemoteDesktop keyboard, a real `gorca` daemon with `--impersonate-orca`
+on the private bus, GTK3 and GTK4 text views, with and without IBus): KP_Insert, Num Lock off, tap-tap
+delivers `KP_Insert` (65438, keycode 90) press and release to the application and no text.
+
+**What types "0".** With Num Lock **on**, the same key is `KP_0` (65456, state Mod2): it is not a grabbed
+modifier, so every press types `0` at once, single or double. The log of that run shows `0`, `00`, `000`
+for three presses. Num Lock on a laptop is the only path I found that produces a digit from this key.
+
+**Change.** gorca now says once per run, when keypad zero arrives as `KP_0` with Num Lock on while the
+keypad Insert is a configured modifier: "Num Lock is on, so keypad zero types a digit and is not the
+gorca key. Turn Num Lock off to use it" (en and ru; `numlock_hint`, tests in `tests/numlock.rs`).
+The lane tests pin both sides (`the_double_tap_of_the_keypad_insert_passes_the_key_itself`): Num Lock
+off gives swallowed, swallowed, `ModifierPassThrough` with keysym KP_Insert; Num Lock on gives
+`PassToApp` for every event. e2e `KM` asserts that after a double tap the application received exactly
+the second press and release of the modifier itself, for all three modifiers
+(`km_passthrough_wrong` = 0).
+
+**Not done.** Making the keypad Insert a modifier with Num Lock on (grabbing `KP_0`) would swallow every
+numpad zero for everyone who types numbers. It could be an opt-in setting; I did not add it. If the user
+confirms Num Lock was off, the cause is elsewhere (keyboard firmware emitting a fake Shift, IBus engine)
+and needs an evdev trace from the laptop (`evtest`).
+
+## Gates
+
+`cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`,
+`cargo xtask strings` (see the brief for results). Private-session tools used: `tests/shell/run_shell.sh`
+(real Shell), `bench/e2e/run.sh --only KM`, `tests/web/m7/run_m7.sh --only CL`.

@@ -150,7 +150,10 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     ("L1" | "L1s" | "L3-10k" | "L3-50k" | "L4", "l1_ms", "p99") => Some(L1_P99_MS),
                     ("K1" | "K1-50k", "k1_ms", "p99") => Some(L1_P99_MS),
                     ("L2" | "L2-50k", "l2_ms", "p99") => Some(L2_P99_MS),
-                    ("K2", "k2_ms", "p99") => Some(K2_P99_MS),
+                    ("K2", "k2_ms", "p99")
+                    | ("KM", "km_insert_ms" | "km_kp_insert_ms" | "km_caps_lock_ms", "p99") => {
+                        Some(K2_P99_MS)
+                    }
                     ("K2s", "k2s_ms", "p99") => Some(K2S_P99_MS),
                     ("K3", "k3_ms", "p99") => Some(K3_P99_MS),
                     ("R1", "r1_ms", "p99") => Some(R1_P99_MS),
@@ -159,6 +162,7 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                         Some(A1_P99_MS)
                     }
                     ("W1", "w1_ms", "p99")
+                    | ("CL", "cl_ms", "p99")
                     | ("BR1", "br1_ms" | "br1c_ms" | "br1w_ms", "p99")
                     | ("FM2", "fm2_ms", "p99") => Some(W1_P99_MS),
                     ("FM1", "fm1_ms" | "fm_grab_ms", "p99") | ("W3", "w3_ms", "p99") => {
@@ -238,6 +242,8 @@ fn rows(acc: &Acc, label: &str, scns: &[Scn]) -> Vec<Row> {
                     | "web_failures"
                     | "stale"
                     | "lost_w1_ms"
+                    | "lost_cl_ms"
+                    | "km_passthrough_wrong"
                     | "lost_br1_ms"
                     | "lost_br1c_ms"
                     | "lost_br1w_ms"

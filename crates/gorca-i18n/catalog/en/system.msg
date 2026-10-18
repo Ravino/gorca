@@ -46,6 +46,7 @@ input-key-kp-insert = Keypad Insert
 input-key-caps-lock = Caps Lock
 input-key-gorca = the gorca key
 input-caps-dropped = Caps Lock is used for something else, so the gorca key is Insert
+input-numlock-keypad-insert = Num Lock is on, so keypad zero types a digit and is not the gorca key. Turn Num Lock off to use it
 mod-gorca = gorca
 mod-control = control
 mod-alt = alt

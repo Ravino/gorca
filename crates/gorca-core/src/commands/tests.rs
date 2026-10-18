@@ -15,6 +15,7 @@ use gorca_rt::EpochCell;
 
 use super::*;
 
+mod numlock;
 mod quick;
 use crate::directory::MirrorDirectory;
 use crate::mode::{BaseMode, Mode, ModeKeys};
