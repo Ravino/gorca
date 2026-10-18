@@ -1,0 +1,5 @@
+private compositor: /tmp/gorca-vte.CCLzRv/x/gorca-vte-1205206
+== reader <repo>/target/release/gorca built from d3df0982, tree at d3df0982
+== e2e soak-m6-20261018T074802Z: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=1 load=6.46 3.58 2.91 1/2376 1205490
+-- round 1/1 VK (load 6.46 3.58 2.91 6/2376 1205490)
+== wrote <repo>/bench/results/acceptance/soak-m6-20261018T074802Z-smoke/res/20261018T075344Z.{json,txt}

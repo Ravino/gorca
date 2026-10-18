@@ -1,0 +1,7 @@
+elapsed_s	round	perturb	reader_rss_kb	reader_threads	reader_ticks	server_rss_kb	server_ticks	mem_avail_mb	vd_fail_total	vd_fail_round	flood	flood_keys	flood_key_p50_ms	flood_key_max_ms	stop_ms	prompt_ok	server_alive	reader_alive
+83	0	idle_20_s	101152	51	295	48648	92	14380	0	0	-	0	NaN	NaN	NaN	1	1	1
+122	1	second_app_window,_Alt+Tab_back	102108	51	392	48852	96	14673	0	0	-	0	NaN	NaN	NaN	1	1	1
+189	2	tab_switch	102312	51	578	53272	1735	14656	1	1	yes	38	0.58	1.00	0.22	1	1	1
+228	3	notifications	102384	51	668	51188	1773	14658	1	0	-	0	NaN	NaN	NaN	1	1	1
+263	4	bell	102464	51	761	51188	1814	14684	1	0	-	0	NaN	NaN	NaN	1	1	1
+327	5	overview_and_back	102736	51	943	51188	3774	14677	1	0	seq	38	0.43	0.91	0.69	1	1	1
