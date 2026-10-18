@@ -134,3 +134,22 @@ once; private `dbus-daemon --session --nofork --print-address=3`; drive
 `target/debug/examples/key_session <addr>` with `chord 1`, `all 1`, `all 0` 0.5 s later; read the
 fake's final `grab_all`. Ping probe: same fake, `gdbus call ... org.freedesktop.DBus.Peer.Ping`
 during the stall.
+
+## Delta r2: f90ca235..1fd02f45 — verdict MERGE
+
+| item | check | result |
+|---|---|---|
+| F-1 tri-state whole grab | new `tools/platform-probes/shell-segfault/late_grab.sh` (in-order fake, stalls 4 s on the first Grab or Ungrab, then learn mode toggles) | grab case ends `grab_all=false`, ungrab case ends `true`; PASS both. f90ca235 ended `true` in the grab case (r1). The warning names the call (`call="GrabKeyboard"`). |
+| F-2 fast reconnect | merged tree (main dbc4b11f + 1fd02f45), K4 x2 | restore_ms 100.0 / 110.2, restore_failed 0 |
+| F-4 null_walk | K4, K4r x2 | 0; KM x2 all PASS (p99 0.44-0.91 ms, lost 0, passthrough_wrong 0) |
+| F-5 | code read | JoinError re-requests the mode set via ApplyModeGrabs; Pending branch always mints a new generation |
+| F-6 | code read | learn-mode-at-connect goes through the normal SetKeyGrabs+GrabKeyboard path |
+| gates | fmt, clippy -D warnings (workspace, all targets), tests of gorca-input-mutter and gorca-bench lib | pass |
+
+Merge: `git merge-tree main 1fd02f45` conflicts only in `docs/decisions.md`. Results:
+`bench/results/e2e/nullmod-merge-km/`.
+
+Residual (low, follow-up): the null_walk gate is probably vacuous with a single client (a NULL walk
+needs a second grabber); a stronger fake check is "the first KeyboardMonitor call of every sender
+is SetKeyGrabs". `late_grab.sh` is not wired into CI. `inorder_fake.py` docstring still describes
+only the GrabKeyboard stall.
