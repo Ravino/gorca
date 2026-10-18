@@ -1,0 +1,5 @@
+private compositor: /tmp/gorca-vte.xd02gh/x/gorca-vte-1267093
+== reader <repo>/target/release/gorca built from 28c9aa47, tree at ee6db538
+== e2e vd-tabcheck: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=1 load=3.37 4.74 4.82 1/2552 1267380
+-- round 1/1 VD (load 3.37 4.74 4.82 1/2552 1267380)
+== wrote bench/results/acceptance/vd-tabswitch-check-b-20261018T101713Z/res/20261018T102009Z.{json,txt}

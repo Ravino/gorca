@@ -57,3 +57,84 @@ idle C3_ACPI latency=1048us disabled=1
 load: 2.40 2.17 2.04 1/2178 1149172
 git_rev_built=b63baa06 binary=321b3ed0d392dddf mtime=2026-10-18 05:01:57.471879776 +0300
 loadavg_end=2.46 2.14 2.45 2/2161 1201723 elapsed_s=3456
+---- resumed ----
+mode=ACCEPTANCE, PARTIAL (m1 m3 m4 m6 m7 m8 storm x1 b1)
+utc=2026-10-18T07:54:09Z
+git_rev=28c9aa47 dirty_tracked_files=0 branch=main
+kernel=7.1.8+deb13-rt-amd64 cpus=16
+loadavg=4.92 4.75 3.66 4/2183 1207457
+psi_memory_some_avg10=0.00 psi_memory_full_avg10=0.00
+psi_cpu_some_avg10=0.20 psi_io_some_avg10=0.19
+mem_available_mb=14900
+governor=performance 
+rtkit MaxRealtimePriority: i 20 
+rtkit RTTimeUSecMax: x 200000 
+topology: shipped default (--topology=auto); expected arm: lanes-rt (gated by e2e --expect-topology)
+repeats=3 quick=no suites=m1 m3 m4 m6 m7 m8 storm x1 b1
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=0
+  idle C3_ACPI latency=1048us disabled=0
+  load: 4.92 4.75 3.66 2/2186 1207498
+---- resumed ----
+mode=ACCEPTANCE, PARTIAL (m1 m3 m4 m6 m7 m8 storm x1 b1)
+utc=2026-10-18T07:55:17Z
+git_rev=28c9aa47 dirty_tracked_files=2 branch=main
+kernel=7.1.8+deb13-rt-amd64 cpus=16
+loadavg=2.66 4.16 3.54 2/2171 1207926
+psi_memory_some_avg10=0.00 psi_memory_full_avg10=0.00
+psi_cpu_some_avg10=0.08 psi_io_some_avg10=0.00
+mem_available_mb=15069
+governor=performance 
+rtkit MaxRealtimePriority: i 20 
+rtkit RTTimeUSecMax: x 200000 
+topology: shipped default (--topology=auto); expected arm: lanes-rt (gated by e2e --expect-topology)
+repeats=3 quick=no suites=m1 m3 m4 m6 m7 m8 storm x1 b1
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=0
+  idle C3_ACPI latency=1048us disabled=0
+  load: 2.66 4.16 3.54 2/2173 1207966
+after quiet-host on:
+governor: performance 
+idle POLL latency=0us disabled=0
+idle C1_ACPI latency=1us disabled=0
+idle C2_ACPI latency=127us disabled=1
+idle C3_ACPI latency=1048us disabled=1
+load: 2.66 4.16 3.54 1/2172 1208116
+git_rev_built=28c9aa47 binary=712744f52e6b10ad mtime=2026-10-18 10:47:59.393508922 +0300
+loadavg_end=1.55 1.49 2.12 1/2166 1220590 elapsed_s=1498
+---- resumed ----
+mode=ACCEPTANCE, PARTIAL (m3 m6)
+utc=2026-10-18T08:22:26Z
+git_rev=28c9aa47 dirty_tracked_files=5 branch=main
+kernel=7.1.8+deb13-rt-amd64 cpus=16
+loadavg=2.59 2.13 2.29 2/2181 1221786
+psi_memory_some_avg10=0.00 psi_memory_full_avg10=0.00
+psi_cpu_some_avg10=0.55 psi_io_some_avg10=0.00
+mem_available_mb=14869
+governor=performance 
+rtkit MaxRealtimePriority: i 20 
+rtkit RTTimeUSecMax: x 200000 
+topology: shipped default (--topology=auto); expected arm: lanes-rt (gated by e2e --expect-topology)
+repeats=3 quick=no suites=m3 m6
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=0
+  idle C3_ACPI latency=1048us disabled=0
+  load: 2.59 2.13 2.29 1/2183 1221826
+after quiet-host on:
+governor: performance 
+idle POLL latency=0us disabled=0
+idle C1_ACPI latency=1us disabled=0
+idle C2_ACPI latency=127us disabled=1
+idle C3_ACPI latency=1048us disabled=1
+load: 2.59 2.13 2.29 1/2182 1221980
+git_rev_built=28c9aa47 binary=3ca5c98205834944 mtime=2026-10-18 11:21:36.536463335 +0300
+loadavg_end=5.05 4.83 4.36 1/2165 1244103 elapsed_s=2615

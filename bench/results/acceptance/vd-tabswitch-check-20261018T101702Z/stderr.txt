@@ -1,0 +1,3 @@
+private compositor: /tmp/gorca-vte.oDvER4/x/gorca-vte-1266649
+== reader <repo>/target/release/gorca built from 28c9aa47, tree at ee6db538
+Error: the reader binary was built from 28c9aa47 but the tree is at ee6db538: rebuild it (cargo build --release -p gorca-daemon) or pass --allow-stale-reader

@@ -1,0 +1,1 @@
+1 h soak (partial): VK scenario run of 28800 s was stopped at 4130 s (79 rounds, 26 floods) by SIGTERM to its process group on the coordinator's instruction (owner: the 8 h soak runs in a later night window). soak.tsv is the per-round series; res/ has no summary rows because the scenario did not finish. quiet-host reverted (host.txt).

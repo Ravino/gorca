@@ -3459,7 +3459,7 @@ pub fn vk(
         use std::io::Write as _;
         let _ = writeln!(
             log,
-            "elapsed_s\tround\tperturb\treader_rss_kb\treader_threads\treader_ticks\tserver_rss_kb\tserver_ticks\tmem_avail_mb\tvd_fail_total\tvd_fail_round\tflood\tflood_keys\tflood_key_p50_ms\tflood_key_max_ms\tstop_ms\tprompt_ok\tserver_alive\treader_alive"
+            "elapsed_s\tround\tperturb\treader_rss_kb\treader_threads\treader_ticks\tserver_rss_kb\tserver_ticks\tmem_avail_mb\tvd_fail_total\tvd_fail_round\tflood\tflood_keys\tflood_key_p50_ms\tflood_key_max_ms\tstop_ms\tprompt_ok\tserver_alive\treader_alive\treader_swap_kb\tserver_swap_kb"
         );
     }
     let mut c = Check {
@@ -3532,7 +3532,7 @@ pub fn vk(
             use std::io::Write as _;
             let _ = writeln!(
                 log,
-                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{:.2}\t{:.2}\t{}\t{}\t{}",
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{:.2}\t{:.2}\t{}\t{}\t{}\t{}\t{}",
                 t_start.elapsed().as_secs(),
                 r,
                 what.replace(' ', "_"),
@@ -3552,6 +3552,8 @@ pub fn vk(
                 u8::from(fprompt),
                 u8::from(server_alive),
                 u8::from(reader_alive),
+                proc_kb(reader_pid, "VmSwap:"),
+                proc_kb(server_pid, "VmSwap:"),
             );
             let _ = log.flush();
         }

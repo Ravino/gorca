@@ -1,0 +1,7 @@
+private compositor: /tmp/gorca-vte.5Mrzk6/x/gorca-vte-1239402
+== reader <repo>/target/release/gorca built from 28c9aa47, tree at 28c9aa47
+== e2e acc-20261018T082226Z-m6-vv-a4: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=3.37 3.55 3.91 2/2336 1239700
+-- round 1/3 VV (load 3.37 3.55 3.91 2/2336 1239700)
+-- round 2/3 VV (load 4.69 3.81 3.95 1/2329 1241011)
+-- round 3/3 VV (load 8.37 5.04 4.35 1/2314 1242755)
+== wrote <repo>/bench/results/acceptance/phase2-20261018T001009Z/m6/vv.a4/res/20261018T090559Z.{json,txt}

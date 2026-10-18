@@ -14,3 +14,8 @@ m3	e2e	2	1	FAIL
 m6	vv	2	1	FAIL
 m9	chromium-m8	2	1	FAIL
 b1	judge-quick	2	1	FAIL
+m3	e2e	3	1	FAIL
+m6	vv	3	1	FAIL
+b1	judge-quick	3	1	FAIL
+m3	e2e	4	0	ok
+m6	vv	4	0	ok

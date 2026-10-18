@@ -1,0 +1,13 @@
+utc=20261018T090718Z secs=28800 flood_secs=25
+git_rev=28c9aa47 dirty_tracked_files=5
+kernel=7.1.8+deb13-rt-amd64 loadavg=2.21 4.02 4.11 1/2167 1244450
+mem_available_mb=15215
+governor=performance
+quiet-host on:
+governor: performance 
+idle POLL latency=0us disabled=0
+idle C1_ACPI latency=1us disabled=0
+idle C2_ACPI latency=127us disabled=1
+idle C3_ACPI latency=1048us disabled=1
+load: 2.21 4.02 4.11 2/2168 1244586
+quiet-host restored

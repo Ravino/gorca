@@ -1,0 +1,12 @@
+governor: performance 
+idle POLL latency=0us disabled=0
+idle C1_ACPI latency=1us disabled=0
+idle C2_ACPI latency=127us disabled=1
+idle C3_ACPI latency=1048us disabled=1
+load: 2.21 4.02 4.11 2/2169 1244569
+governor: performance 
+idle POLL latency=0us disabled=0
+idle C1_ACPI latency=1us disabled=0
+idle C2_ACPI latency=127us disabled=0
+idle C3_ACPI latency=1048us disabled=0
+load: 7.13 5.52 5.05 5/2384 1266086

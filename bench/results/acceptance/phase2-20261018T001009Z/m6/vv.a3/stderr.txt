@@ -1,0 +1,3 @@
+private compositor: /tmp/gorca-vte.qdi8oC/x/gorca-vte-1208279
+== reader <repo>/target/release/gorca built from d3df0982, tree at 28c9aa47
+Error: the reader binary was built from d3df0982 but the tree is at 28c9aa47: rebuild it (cargo build --release -p gorca-daemon) or pass --allow-stale-reader
