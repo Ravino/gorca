@@ -371,6 +371,27 @@ pub fn km(
                 "km {name}: the application received {log:?}, wanted {want:?}"
             ));
         }
+        // A held modifier autorepeats (Mutter 48.7 runs its double-tap rule for the repeats):
+        // whatever reaches the application is the modifier key itself, never another keysym, and
+        // one tap afterwards heals Mutter's stale entry. Caps Lock does not repeat.
+        if modifier.sym != 0xffe5 {
+            let m = mutter(&mut rig)?;
+            m.app_log(true)?;
+            m.hold(modifier.code, modifier.sym, 600_000, 900)?;
+            std::thread::sleep(Duration::from_millis(100));
+            let log = m.app_log(true)?;
+            if log
+                .iter()
+                .any(|(c, s, _)| *c != modifier.code || *s != modifier.sym)
+            {
+                wrong += 1;
+                out.notes.push(format!(
+                    "km {name}: a held modifier delivered another key to the application: {log:?}"
+                ));
+            }
+            m.key_ex(modifier.code, modifier.sym, 0, false, 610_000)?;
+            m.key_ex(modifier.code, modifier.sym, 0, true, 610_050)?;
+        }
         let chord = Chord { modifier, key: F12 };
         chord_series(
             &mut rig,

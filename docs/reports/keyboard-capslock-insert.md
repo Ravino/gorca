@@ -89,6 +89,23 @@ numpad zero for everyone who types numbers. It could be an opt-in setting; I did
 confirms Num Lock was off, the cause is elsewhere (keyboard firmware emitting a fake Shift, IBus engine)
 and needs an evdev trace from the laptop (`evtest`).
 
+## Autorepeat and Num Lock tracking (coordinator's hypothesis, checked)
+
+- The lane classifies a repeat (a press of a key already down) as `PressKind::Repeat`; for a gorca
+  modifier a repeat is only ever `Swallowed` or `PassToApp`, never `ModifierPassThrough`, and the replica
+  keeps the modifier in `down_mods`, so a chord pressed during repeats still carries the GORCA bit. Tests:
+  `autorepeat_of_a_held_modifier_is_no_double_tap_and_the_chord_still_runs` (Insert and KP_Insert) and
+  `a_double_tap_then_hold_passes_once_and_repeats_do_not_pass_again`. No code change was needed.
+- Pass-through never synthesises a key: `KeyInjector` has no implementation, nothing in the core sends
+  keys. e2e `KM` now also holds Insert and KP_Insert for 900 ms (repeats at 30 ms) and checks that
+  everything reaching the application is the modifier key itself (`km_passthrough_wrong` = 0).
+- gorca keeps no Num Lock or Caps Lock state: it reads the Mod2 and Lock bits of each `KeyEvent`
+  (Mutter's own state), so there is no cache to go stale at startup or after a Shell restart. The lock
+  announcements come from the same bits.
+- The one-time Num Lock hint stays: it fires only for keycode 90 arriving as `KP_0` with Mod2 while the
+  keypad Insert is a modifier, in the catalogue (en, ru), and is the only evidence available when the
+  user is sure Num Lock was off (then the hint never fires and the cause is outside gorca).
+
 ## Gates
 
 `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`,
