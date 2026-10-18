@@ -7,7 +7,7 @@
 //! geometry as `ext-vte`'s `Screen`, which a parity test there keeps in step). A text that ends
 //! in `'\n'` has no phantom last row; a caret at its end sits on the empty row after it.
 
-use crate::terminal::Unit;
+use crate::terminal::{Unit, WordLevel, word_at_level};
 
 /// Rows kept per screen (a hostile application cannot make the index unbounded).
 pub const MAX_ROWS: usize = 4096;
@@ -87,13 +87,13 @@ impl<'a> Rows<'a> {
 
 /// The character, word or line at scalar offset `caret` of a screen `text`: the unit a review or
 /// "say current" command reads. `None` for a blank position.
-pub fn unit_at(text: &str, caret: u32, unit: Unit) -> Option<String> {
+pub fn unit_at(text: &str, caret: u32, unit: Unit, level: WordLevel) -> Option<String> {
     let rows = Rows::new(text);
     let (row, col) = rows.locate(caret);
     let line = rows.line(row);
     match unit {
         Unit::Char => line.chars().nth(col as usize).map(String::from),
-        Unit::Word => word_at(line, col),
+        Unit::Word => word_at_level(line, col, level),
         Unit::Line | Unit::Text => {
             let t = line.trim_end();
             (!t.trim().is_empty()).then(|| t.to_owned())
@@ -151,9 +151,18 @@ mod tests {
     #[test]
     fn units_at_the_caret() {
         let t = "echo hello world\nsecond";
-        assert_eq!(unit_at(t, 5, Unit::Char).as_deref(), Some("h"));
-        assert_eq!(unit_at(t, 7, Unit::Word).as_deref(), Some("hello"));
-        assert_eq!(unit_at(t, 20, Unit::Line).as_deref(), Some("second"));
-        assert_eq!(unit_at("  \n", 1, Unit::Line), None);
+        assert_eq!(
+            unit_at(t, 5, Unit::Char, WordLevel::Coarse).as_deref(),
+            Some("h")
+        );
+        assert_eq!(
+            unit_at(t, 7, Unit::Word, WordLevel::Coarse).as_deref(),
+            Some("hello")
+        );
+        assert_eq!(
+            unit_at(t, 20, Unit::Line, WordLevel::Coarse).as_deref(),
+            Some("second")
+        );
+        assert_eq!(unit_at("  \n", 1, Unit::Line, WordLevel::Coarse), None);
     }
 }

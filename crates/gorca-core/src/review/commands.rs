@@ -24,7 +24,7 @@ use super::flat::{
 };
 use super::model::{Completeness, LineModel, LineSource};
 use super::objnav::{NavMove, NavOp, StepResult, step, step_degraded};
-use super::segment::{Dir, SimpleUnits, TermUnits, TextUnits, Unit, slice};
+use super::segment::{Dir, SimpleUnits, TextUnits, Unit, slice};
 use super::terminal::held_model;
 use super::validity::{Validity, validity};
 use super::{BuildRequest, OpState, ReviewMsg, RrCheck};
@@ -1008,7 +1008,7 @@ impl Reader {
             return Step::Done;
         };
         let out = if model.source == LineSource::Terminal {
-            flat_step(&model, &pos, mv, &TermUnits)
+            flat_step(&model, &pos, mv, &self.term_units())
         } else {
             flat_step(&model, &pos, mv, &SimpleUnits)
         };
@@ -1093,7 +1093,7 @@ impl Reader {
             FlatMove::PrevLine | FlatMove::NextLine | FlatMove::Top | FlatMove::Bottom
         );
         if intra {
-            let out = flat_step(held, &p, mv, &TermUnits);
+            let out = flat_step(held, &p, mv, &self.term_units());
             if !out.boundary {
                 let text = self.review_voice(mv, false, rep, &out.said);
                 self.say(&text, fx);
@@ -1111,7 +1111,7 @@ impl Reader {
         };
         let (pos, said, scrolled) = match mv {
             FlatMove::Top | FlatMove::Bottom => {
-                let o = flat_step(screen, &top, mv, &TermUnits);
+                let o = flat_step(screen, &top, mv, &self.term_units());
                 (o.pos, o.said, false)
             }
             FlatMove::PrevLine

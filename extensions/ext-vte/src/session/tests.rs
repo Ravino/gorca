@@ -349,6 +349,37 @@ fn a_word_motion_speaks_the_word_passed_without_its_punctuation() {
 }
 
 #[test]
+fn a_terminal_reads_medium_words_unless_the_user_chose_a_level() {
+    // readline's forward-word stops inside `--color=auto` (after "color"); the terminal default
+    // (medium) speaks the option token, the fine level the word passed.
+    let mut r = Rig::new();
+    r.focus("$ ls --color=auto x", 5);
+    r.key(TermKey::WordRight);
+    let a = r.feed(TermInput::Caret(12));
+    assert_eq!(texts(&a), vec!["--color=auto".to_owned()]);
+
+    let mut r = Rig::new();
+    r.s = Session::new(&TermConfig {
+        word_level: Some(gorca_ext_api::terminal::WordLevel::Fine),
+        ..TermConfig::default()
+    });
+    r.focus("$ ls --color=auto x", 5);
+    r.key(TermKey::WordRight);
+    let a = r.feed(TermInput::Caret(12));
+    assert_eq!(texts(&a), vec!["color".to_owned()]);
+
+    let mut r = Rig::new();
+    r.s = Session::new(&TermConfig {
+        word_level: Some(gorca_ext_api::terminal::WordLevel::Coarse),
+        ..TermConfig::default()
+    });
+    r.focus("$ ls --color=auto x", 5);
+    r.key(TermKey::WordRight);
+    let a = r.feed(TermInput::Caret(12));
+    assert_eq!(texts(&a), vec!["--color=auto".to_owned()]);
+}
+
+#[test]
 fn a_word_motion_that_ends_at_the_end_of_the_line_speaks_the_last_word() {
     let mut r = Rig::new();
     r.focus("$ echo hello, world", 7);

@@ -774,7 +774,7 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
                         && let (Some((t0, o0, _)), Some((t1, o1, on_screen))) =
                             (probe_before.as_ref(), s.r.review_probe())
                     {
-                        use crate::review::segment::{Dir, TermUnits, TextUnits, Unit};
+                        use crate::review::segment::{Dir, TextUnits, Unit};
                         let (unit, dir) = match c {
                             CoreCmd::ReviewNextWord => (Unit::Word, Dir::Fwd),
                             CoreCmd::ReviewPrevWord => (Unit::Word, Dir::Back),
@@ -782,7 +782,7 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
                             _ => (Unit::Char, Dir::Back),
                         };
                         // The unit this move has to land on while the line has room for it.
-                        let room = TermUnits.next(t0, *o0, unit, dir);
+                        let room = s.r.term_units().next(t0, *o0, unit, dir);
                         // review-drift: the line is (still) on the screen, the move had room in
                         // it, yet the cursor is on another line. A line the world no longer has
                         // was rewritten or replaced: the cursor may then be on the row the old

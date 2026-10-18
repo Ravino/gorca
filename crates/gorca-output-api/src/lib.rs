@@ -14,12 +14,14 @@
 //! Allowed dependencies: `gorca-model`, `gorca-rt`, `thiserror`. Never a transport crate.
 
 mod braille;
+mod cue;
 pub mod peer;
 pub mod queue;
 mod speech;
 pub mod track;
 
 pub use braille::{BrailleBackend, BrailleCaps, BrailleError, BrailleRegion};
+pub use cue::{CueCaps, CueError, CueId, CueSink, NullCueSink};
 pub use speech::{
     CAPITAL_PITCH_DELTA, ClientHealth, Cue, SpeechCaps, SpeechClient, SpeechCmd, SpeechErr,
     SpeechEvent, SubmitError, Verbalized, VoiceParams, VoiceRef, VoiceSetup, raised_pitch,

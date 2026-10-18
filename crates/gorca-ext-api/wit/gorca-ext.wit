@@ -212,6 +212,13 @@ interface terminal {
     claim-key,
   }
 
+  /// How coarse a word is (docs/config-reference.md, `[editing] word`).
+  enum word-level {
+    fine,
+    medium,
+    coarse,
+  }
+
   record term-config {
     settle-ms: u32,
     max-wait-ms: u32,
@@ -221,6 +228,8 @@ interface terminal {
     burst-lines: u32,
     burst-tail: u32,
     max-output-chars: u32,
+    /// None lets the extension choose.
+    word-level: option<word-level>,
   }
 
   record term-snapshot {

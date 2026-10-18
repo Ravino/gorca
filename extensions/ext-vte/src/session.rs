@@ -17,7 +17,7 @@ use gorca_ext_api::terminal::{
     TerminalHooks, Unit, Urgency,
 };
 
-use gorca_ext_api::terminal::{word_at, word_motion};
+use gorca_ext_api::terminal::{DEFAULT_WORD_LEVEL, WordLevel, word_at, word_motion};
 
 use crate::prompt::Prompt;
 use crate::screen::{Diff, DiffBuf, Screen, diff, diff_with};
@@ -1342,6 +1342,11 @@ impl Session {
         self.motions.push_back((unit, now, dir));
     }
 
+    /// How coarse a word is: the user's choice, else the terminal default (medium).
+    fn word_level(&self) -> WordLevel {
+        self.cfg.word_level.unwrap_or(DEFAULT_WORD_LEVEL)
+    }
+
     fn prune_motions(&mut self, now: Ms) {
         while self
             .motions
@@ -1368,7 +1373,7 @@ impl Session {
         let text = match unit {
             Unit::Word => {
                 let chars: Vec<char> = line.trim_end().chars().collect();
-                word_motion(&chars, from, col)
+                word_motion(&chars, from, col, self.word_level())
                     .map(|r| chars[r].iter().collect::<String>().trim().to_owned())
                     .filter(|w| !w.is_empty())
             }

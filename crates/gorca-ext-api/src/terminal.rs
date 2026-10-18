@@ -287,6 +287,9 @@ pub struct TermConfig {
     pub burst_tail: u32,
     /// Longest utterance of program output, in characters.
     pub max_output_chars: u32,
+    /// How coarse a word is when the terminal reads one; `None` lets the extension choose
+    /// ([`DEFAULT_WORD_LEVEL`]).
+    pub word_level: Option<WordLevel>,
 }
 
 impl Default for TermConfig {
@@ -303,6 +306,7 @@ impl Default for TermConfig {
             burst_lines: 40,
             burst_tail: 3,
             max_output_chars: 600,
+            word_level: None,
         }
     }
 }
@@ -363,26 +367,36 @@ pub trait TerminalHooks {
 /// `WordLanding::End`) applies to every other editor, in slice form so that an extension (which
 /// links only this crate) needs nothing else. `WORD_MOTION_VECTORS` is run by both crates, so the
 /// two cannot drift apart.
-pub fn word_motion(line: &[char], from: Option<u32>, at: u32) -> Option<std::ops::Range<usize>> {
+pub fn word_motion(
+    line: &[char],
+    from: Option<u32>,
+    at: u32,
+    level: WordLevel,
+) -> Option<std::ops::Range<usize>> {
     let at = at as usize;
     if let Some(f) = from.map(|f| f as usize).filter(|f| *f < at)
         && at > 0
-        && let Some(r) = word_passed(line, f, at)
+        && let Some(r) = word_passed(line, f, at, level)
     {
         return Some(r);
     }
-    (at < line.len()).then(|| word_range(line, at))
+    (at < line.len()).then(|| word_range_level(line, at, level))
 }
 
 /// The word passed by a forward move from `from` to `at`, if the move ended at the end of one.
-fn word_passed(line: &[char], from: usize, at: usize) -> Option<std::ops::Range<usize>> {
+fn word_passed(
+    line: &[char],
+    from: usize,
+    at: usize,
+    level: WordLevel,
+) -> Option<std::ops::Range<usize>> {
     let mut end = at;
     let mut first = true;
     loop {
         if end == 0 || end > line.len() {
             return None;
         }
-        let w = word_range(line, end - 1);
+        let w = word_range_level(line, end - 1, level);
         let kept = line[w.clone()]
             .iter()
             .collect::<String>()
@@ -424,33 +438,84 @@ fn class(c: char) -> Class {
     }
 }
 
-/// The word containing `s[i]`: a run of letters and digits, or one punctuation character, with
-/// its trailing blanks; leading blanks belong to the word before them.
-fn word_range(s: &[char], i: usize) -> std::ops::Range<usize> {
+/// How coarse a word is (the SDK's twin of `gorca_model::WordLevel`; `gorca-text` runs the same
+/// [`WORD_LEVEL_VECTORS`] against its own implementation, so the two cannot drift apart).
+///
+/// - `Fine`: a run of letters, digits and `_` is a word, every other character is a word of its
+///   own (`--color=auto` has five stops).
+/// - `Medium`: option tokens, identifiers and file names stay whole: the joiners `- . = : @ ~`
+///   keep the token characters on both sides together when a letter or digit follows them
+///   (`--color=auto`, `foo_bar`, `file.tar.gz`, `user@host`, `10:30`); a path separator is a
+///   word of its own (`/`, `usr`, `/`, `local`: the segments of a path are the stops); other
+///   punctuation is a word of its own, and so is a joiner with no letter after it (`end.`,
+///   `a - b`).
+/// - `Coarse`: everything between blanks is one word (Orca-like).
+///
+/// Every word keeps its trailing blanks, whatever the level.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub enum WordLevel {
+    #[default]
+    Fine,
+    Medium,
+    Coarse,
+}
+
+/// What a terminal reads as a word unless the user chose a level (`[editing] word = "auto"`):
+/// shell words are option tokens, paths and identifiers, which fine words chop into pieces.
+pub const DEFAULT_WORD_LEVEL: WordLevel = WordLevel::Medium;
+
+fn is_joiner(c: char) -> bool {
+    matches!(c, '-' | '.' | '=' | ':' | '@' | '~')
+}
+
+/// The word containing `s[i]`, with its trailing blanks; leading blanks belong to the word before
+/// them (see [`WordLevel`] for what stays together).
+pub fn word_range_level(s: &[char], i: usize, level: WordLevel) -> std::ops::Range<usize> {
     if s.is_empty() {
         return 0..0;
     }
     let i = i.min(s.len() - 1);
-    let run_start = |p: usize| {
-        let cl = class(s[p]);
-        let mut q = p;
-        if cl != Class::Punct {
-            while q > 0 && class(s[q - 1]) == cl {
-                q -= 1;
+    let word_at = |p: usize| p < s.len() && class(s[p]) == Class::Word;
+    // Are the characters at `a` and `a + 1` in the same run?
+    let same = |a: usize| -> bool {
+        let b = a + 1;
+        let (ca, cb) = (class(s[a]), class(s[b]));
+        match level {
+            WordLevel::Fine => ca == cb && ca != Class::Punct,
+            WordLevel::Coarse => (ca == Class::Space) == (cb == Class::Space),
+            WordLevel::Medium => {
+                if ca == Class::Space || cb == Class::Space {
+                    return ca == cb;
+                }
+                let (x, y) = (s[a], s[b]);
+                if ca == Class::Word && cb == Class::Word {
+                    true
+                } else if ca == Class::Word && is_joiner(y) {
+                    word_at(b + 1)
+                } else if is_joiner(x) && cb == Class::Word {
+                    true
+                } else {
+                    x == '-'
+                        && y == '-'
+                        && !(a > 0 && (word_at(a - 1) || s[a - 1] == '-'))
+                        && word_at(b + 1)
+                }
             }
+        }
+    };
+    let run_start = |p: usize| {
+        let mut q = p;
+        while q > 0 && same(q - 1) {
+            q -= 1;
         }
         q
     };
     let run_end = |p: usize| {
-        let cl = class(s[p]);
-        if cl == Class::Punct {
-            return p + 1;
-        }
         let mut e = p;
-        while e < s.len() && class(s[e]) == cl {
+        while e + 1 < s.len() && same(e) {
             e += 1;
         }
-        e
+        e + 1
     };
     match class(s[i]) {
         Class::Space => {
@@ -468,6 +533,98 @@ fn word_range(s: &[char], i: usize) -> std::ops::Range<usize> {
         }
     }
 }
+
+/// The word containing `line[col]`, or the one before when `col` is on a blank or behind the end,
+/// without its blanks; `None` for a blank line.
+pub fn word_at_level(line: &str, col: u32, level: WordLevel) -> Option<String> {
+    let chars: Vec<char> = line.chars().collect();
+    let mut i = col as usize;
+    if i >= chars.len() || chars[i].is_whitespace() {
+        let mut j = i.min(chars.len());
+        while j > 0 && chars[j - 1].is_whitespace() {
+            j -= 1;
+        }
+        if j == 0 {
+            return None;
+        }
+        i = j - 1;
+    }
+    let r = word_range_level(&chars, i, level);
+    let w: String = chars[r].iter().collect();
+    let w = w.trim();
+    (!w.is_empty()).then(|| w.to_owned())
+}
+
+/// Segment `line` into the words [`word_range_level`] gives, each with its trailing blanks:
+/// the segments tile the line.
+pub fn words_of(line: &[char], level: WordLevel) -> Vec<std::ops::Range<usize>> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < line.len() {
+        let r = word_range_level(line, i, level);
+        if r.end <= i {
+            break;
+        }
+        i = r.end;
+        out.push(r);
+    }
+    out
+}
+
+/// Shared test vectors of the word levels: `(line, level, the words joined by "|")`. Each word
+/// keeps its trailing blanks, so removing the bars gives back the line. Run by this crate and by
+/// `gorca-text` against `seg::word_range_level`, which must agree.
+#[doc(hidden)]
+pub const WORD_LEVEL_VECTORS: &[(&str, WordLevel, &str)] = &[
+    ("--color=auto", WordLevel::Fine, "-|-|color|=|auto"),
+    ("--color=auto", WordLevel::Medium, "--color=auto"),
+    ("--color=auto", WordLevel::Coarse, "--color=auto"),
+    (
+        "ls -l --color=auto /usr/local/bin",
+        WordLevel::Medium,
+        "ls |-l |--color=auto |/|usr|/|local|/|bin",
+    ),
+    (
+        "ls -l --color=auto /usr/local/bin",
+        WordLevel::Coarse,
+        "ls |-l |--color=auto |/usr/local/bin",
+    ),
+    ("foo_bar baz", WordLevel::Fine, "foo_bar |baz"),
+    ("foo_bar baz", WordLevel::Medium, "foo_bar |baz"),
+    ("foo-bar.baz qux", WordLevel::Fine, "foo|-|bar|.|baz |qux"),
+    ("foo-bar.baz qux", WordLevel::Medium, "foo-bar.baz |qux"),
+    ("foo-bar.baz qux", WordLevel::Coarse, "foo-bar.baz |qux"),
+    (
+        "tar xzf file.tar.gz",
+        WordLevel::Medium,
+        "tar |xzf |file.tar.gz",
+    ),
+    ("user@host:~/dir", WordLevel::Medium, "user@host|:|~|/|dir"),
+    (
+        "wait... then end.",
+        WordLevel::Medium,
+        "wait|.|.|. |then |end|.",
+    ),
+    ("a - b -- c", WordLevel::Medium, "a |- |b |-|- |c"),
+    ("x = -1", WordLevel::Medium, "x |= |-1"),
+    ("10:30 and 3.14", WordLevel::Medium, "10:30 |and |3.14"),
+    ("echo 'hi there'", WordLevel::Medium, "echo |'|hi |there|'"),
+    ("echo 'hi there'", WordLevel::Coarse, "echo |'hi |there'"),
+    ("  lead", WordLevel::Medium, "  |lead"),
+    ("  lead", WordLevel::Coarse, "  |lead"),
+    (
+        "Привет, как-дела?",
+        WordLevel::Fine,
+        "Привет|, |как|-|дела|?",
+    ),
+    (
+        "Привет, как-дела?",
+        WordLevel::Medium,
+        "Привет|, |как-дела|?",
+    ),
+    ("Привет, как-дела?", WordLevel::Coarse, "Привет, |как-дела?"),
+    ("", WordLevel::Medium, ""),
+];
 
 /// Shared test vectors of the word model: `(line, caret before, caret after, spoken)`, where an
 /// empty `spoken` is `blank`. Run by this crate and, as a dev-dependency check, by `gorca-text`
@@ -517,10 +674,46 @@ mod tests {
     }
 
     #[test]
+    fn word_level_vectors() {
+        for &(text, level, want) in WORD_LEVEL_VECTORS {
+            let chars: Vec<char> = text.chars().collect();
+            let got = words_of(&chars, level)
+                .into_iter()
+                .map(|r| chars[r].iter().collect::<String>())
+                .collect::<Vec<_>>()
+                .join("|");
+            assert_eq!(got, want, "{text:?} {level:?}");
+            assert_eq!(got.replace('|', ""), text, "the words tile {text:?}");
+        }
+    }
+
+    #[test]
+    fn word_at_by_level() {
+        let l = "ls --color=auto /usr";
+        assert_eq!(
+            word_at_level(l, 8, WordLevel::Fine).as_deref(),
+            Some("color")
+        );
+        assert_eq!(
+            word_at_level(l, 8, WordLevel::Medium).as_deref(),
+            Some("--color=auto")
+        );
+        assert_eq!(
+            word_at_level(l, 2, WordLevel::Medium).as_deref(),
+            Some("ls")
+        );
+        assert_eq!(
+            word_at_level(l, 40, WordLevel::Medium).as_deref(),
+            Some("usr")
+        );
+        assert_eq!(word_at_level("  ", 0, WordLevel::Medium), None);
+    }
+
+    #[test]
     fn word_motion_vectors() {
         for &(text, from, at, want) in WORD_MOTION_VECTORS {
             let chars: Vec<char> = text.chars().collect();
-            let got = word_motion(&chars, from, at)
+            let got = word_motion(&chars, from, at, WordLevel::Fine)
                 .map(|r| chars[r].iter().collect::<String>().trim().to_owned())
                 .unwrap_or_default();
             assert_eq!(got, want, "{text:?} {from:?} -> {at}");

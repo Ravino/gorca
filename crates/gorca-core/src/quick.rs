@@ -357,7 +357,8 @@ impl Reader {
             fx.retain(|e| match e {
                 ReaderEffect::Speak(s) => Some(s.utterance.id) == pass,
                 ReaderEffect::SayAllChunk { .. } => false,
-                ReaderEffect::Fetch { .. }
+                ReaderEffect::Cue(_)
+                | ReaderEffect::Fetch { .. }
                 | ReaderEffect::Demand { .. }
                 | ReaderEffect::FocusSettled { .. }
                 | ReaderEffect::QueryActiveWindowFocus

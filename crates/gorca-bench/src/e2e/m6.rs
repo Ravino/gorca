@@ -1589,11 +1589,7 @@ pub fn vr(
             feed(&mut t.app, &c.to_string())?;
             Ok(())
         })?;
-        expect(
-            &format!("typed after review {i}"),
-            &c.to_string(),
-            &got,
-        );
+        expect(&format!("typed after review {i}"), &c.to_string(), &got);
     }
     // A series of steps: latency and no IPC.
     let n = n_of(size, 400);

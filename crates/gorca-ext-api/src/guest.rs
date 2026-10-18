@@ -332,6 +332,11 @@ impl<T: Hooks + Default + 'static> wtm::Guest for Adapter<T> {
             burst_lines: cfg.burst_lines,
             burst_tail: cfg.burst_tail,
             max_output_chars: cfg.max_output_chars,
+            word_level: cfg.word_level.map(|l| match l {
+                wtm::WordLevel::Fine => tm::WordLevel::Fine,
+                wtm::WordLevel::Medium => tm::WordLevel::Medium,
+                wtm::WordLevel::Coarse => tm::WordLevel::Coarse,
+            }),
         };
         with_terminal::<T, _>(|t| t.configure(&cfg));
     }

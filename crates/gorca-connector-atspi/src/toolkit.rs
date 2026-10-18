@@ -2,7 +2,7 @@
 //! Toolkit normalisation keys (ADR-0001 section 5.6). Quirks that more than one consumer needs
 //! live in tables keyed by `AppInfo.toolkit`, never in ad-hoc code.
 
-use gorca_model::{EditQuirks, TextUnit, WebEngine, WordLanding};
+use gorca_model::{EditQuirks, TextUnit, WebEngine, WordLanding, WordLevel};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Toolkit {
@@ -111,6 +111,7 @@ impl Toolkit {
             | Toolkit::Qt
             | Toolkit::Other => EditQuirks {
                 word_landing: WordLanding::End,
+                word_level: WordLevel::Fine,
             },
         }
     }

@@ -304,6 +304,38 @@ fn ctrl_right_speaks_the_word_and_home_the_character() {
     assert_eq!(spoken(&fx), ["h"], "Home speaks the character at the caret");
 }
 
+fn word_back_with(level: gorca_config::WordLevel) -> Vec<String> {
+    let mut g = rig();
+    std::sync::Arc::make_mut(&mut g.r.cmd.effective)
+        .editing
+        .word = level;
+    g.entry("run --color=auto now", 17);
+    let _ = g.key(LEFT, 0, Modifiers::CONTROL);
+    spoken(&g.caret(4))
+}
+
+#[test]
+fn the_word_level_setting_decides_what_a_word_move_reads() {
+    use gorca_config::WordLevel;
+    // Ctrl+Left lands on the start of `--color=auto`: fine reads one dash, medium and coarse the
+    // whole option.
+    assert_eq!(
+        word_back_with(WordLevel::Auto),
+        word_back_with(WordLevel::Fine)
+    );
+    let fine = word_back_with(WordLevel::Fine);
+    assert_eq!(fine.len(), 1);
+    assert!(!fine[0].contains("color"), "{fine:?}");
+    for l in [WordLevel::Medium, WordLevel::Coarse] {
+        let said = word_back_with(l);
+        assert_eq!(said.len(), 1);
+        assert!(
+            said[0].contains("color") && said[0].contains("auto"),
+            "{l:?}: {said:?}"
+        );
+    }
+}
+
 #[test]
 fn an_editable_combo_box_is_tracked_like_a_text_field_and_a_plain_one_is_not() {
     // Firefox's address bar is an editable combo box.
@@ -366,9 +398,88 @@ fn a_single_line_entry_is_one_line_from_the_window() {
     assert!(fetches(&fx).is_empty());
 }
 
+fn cues(fx: &ReaderEffects) -> Vec<gorca_output_api::CueId> {
+    fx.iter()
+        .filter_map(|e| match e {
+            ReaderEffect::Cue(c) => Some(*c),
+            _ => None,
+        })
+        .collect()
+}
+
+fn boundary(g: &mut Rig, b: gorca_config::BoundaryMode) {
+    std::sync::Arc::make_mut(&mut g.r.cmd.effective)
+        .editing
+        .boundary = b;
+}
+
+#[test]
+fn a_key_that_moves_nothing_gives_a_boundary_cue_and_no_speech_by_default() {
+    let mut g = rig();
+    g.entry("hello", 0);
+    let fx = g.key(LEFT, 0, NONE);
+    assert!(spoken(&fx).is_empty() && cues(&fx).is_empty());
+    assert!(
+        fx.iter().any(|e| matches!(e, ReaderEffect::ArmTimer(_))),
+        "the edge timer is armed"
+    );
+    assert!(cues(&g.tick(50)).is_empty(), "not yet");
+    let fx = g.tick(60);
+    assert!(spoken(&fx).is_empty(), "the boundary is not read again");
+    assert_eq!(cues(&fx), [gorca_output_api::CueId::Boundary]);
+    assert_eq!(g.r.text_counters().caret_edge, 1);
+    assert_eq!(g.r.text_counters().boundary_cues, 1);
+    // CR-3b: a slow app's caret event still arrives and is spoken with the key's unit.
+    let fx = g.caret(1);
+    assert_eq!(spoken(&fx), ["e"]);
+    assert!(cues(&fx).is_empty());
+    assert_eq!(g.r.text_counters().caret_late, 1);
+}
+
+#[test]
+fn a_silent_boundary_says_and_plays_nothing() {
+    let mut g = rig();
+    boundary(&mut g, gorca_config::BoundaryMode::Silent);
+    g.entry("hello", 0);
+    let _ = g.key(LEFT, 0, NONE);
+    g.advance(150);
+    let fx = g.tick(0);
+    assert!(spoken(&fx).is_empty() && cues(&fx).is_empty());
+    assert_eq!(g.r.text_counters().boundary_cues, 0);
+    assert_eq!(
+        spoken(&g.caret(1)),
+        ["e"],
+        "a late caret event still speaks"
+    );
+}
+
+#[test]
+fn up_on_the_first_line_of_a_text_view_is_a_cue_not_the_whole_line_again() {
+    let mut g = rig();
+    g.area("first line here\nsecond", 3);
+    let _ = g.key(UP, 0, NONE);
+    g.advance(150);
+    let fx = g.tick(0);
+    assert!(spoken(&fx).is_empty(), "{:?}", spoken(&fx));
+    assert_eq!(cues(&fx), [gorca_output_api::CueId::Boundary]);
+    // The old behaviour is an option.
+    let mut g = rig();
+    boundary(&mut g, gorca_config::BoundaryMode::Repeat);
+    g.area("first line here\nsecond", 3);
+    let _ = g.key(UP, 0, NONE);
+    g.advance(150);
+    let fx = g.tick(0);
+    assert!(cues(&fx).is_empty());
+    assert!(
+        !spoken(&fx).is_empty() || !fetches(&fx).is_empty(),
+        "the line is read again"
+    );
+}
+
 #[test]
 fn a_key_that_moves_nothing_speaks_the_unit_at_the_caret_after_the_edge_time() {
     let mut g = rig();
+    boundary(&mut g, gorca_config::BoundaryMode::Repeat);
     g.entry("hello", 0);
     let fx = g.key(LEFT, 0, NONE);
     assert!(spoken(&fx).is_empty());
@@ -2349,14 +2460,16 @@ fn right_arrow_walks_a_cyrillic_entry_to_the_end_and_back_to_offset_zero() {
 }
 
 #[test]
-fn keys_at_the_edges_that_move_nothing_still_speak_the_character() {
+fn keys_at_the_edges_that_move_nothing_still_speak_the_character_when_asked_to() {
     let mut g = rig();
+    boundary(&mut g, gorca_config::BoundaryMode::Repeat);
     g.entry("ab", 2);
     let _ = g.key(RIGHT, 0, NONE);
     g.advance(150);
     let fx = g.tick(0);
     assert_eq!(spoken(&fx), ["blank"], "Right at the end: boundary, blank");
     let mut g = rig();
+    boundary(&mut g, gorca_config::BoundaryMode::Repeat);
     g.entry("ab", 0);
     let _ = g.key(LEFT, 0, NONE);
     g.advance(150);

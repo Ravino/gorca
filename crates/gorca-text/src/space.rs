@@ -5,6 +5,8 @@
 
 use std::ops::Range;
 
+use gorca_model::WordLevel;
+
 use crate::seg;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -126,11 +128,23 @@ pub trait TextSpace {
 pub struct CharsSpace<'a> {
     chars: &'a [char],
     max_line: u16,
+    word: WordLevel,
 }
 
 impl<'a> CharsSpace<'a> {
     pub fn new(chars: &'a [char], max_line: u16) -> Self {
-        Self { chars, max_line }
+        Self {
+            chars,
+            max_line,
+            word: WordLevel::Fine,
+        }
+    }
+
+    /// The same text with another word level (default: fine).
+    #[must_use]
+    pub fn with_word_level(mut self, word: WordLevel) -> Self {
+        self.word = word;
+        self
     }
 
     pub fn chars(&self) -> &'a [char] {
@@ -187,7 +201,7 @@ impl<'a> CharsSpace<'a> {
                 } else {
                     p.end
                 };
-                let r = seg::word_range(&s[p.start..content_end], at - p.start);
+                let r = seg::word_range_level(&s[p.start..content_end], at - p.start, self.word);
                 p.start + r.start..p.start + r.end
             }
             Unit::Sentence => {

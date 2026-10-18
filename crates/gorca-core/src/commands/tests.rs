@@ -147,7 +147,8 @@ fn spoken(fx: &ReaderEffects) -> Vec<String> {
                     .collect::<Vec<_>>()
                     .join(" "),
             ),
-            ReaderEffect::Fetch { .. }
+            ReaderEffect::Cue(_)
+            | ReaderEffect::Fetch { .. }
             | ReaderEffect::Demand { .. }
             | ReaderEffect::FocusSettled { .. }
             | ReaderEffect::QueryActiveWindowFocus
@@ -173,6 +174,7 @@ fn ctls(fx: &ReaderEffects) -> Vec<SpeechCtl> {
         .filter_map(|e| match e {
             ReaderEffect::SpeechCtl(c) => Some(*c),
             ReaderEffect::Speak(_)
+            | ReaderEffect::Cue(_)
             | ReaderEffect::Fetch { .. }
             | ReaderEffect::Demand { .. }
             | ReaderEffect::FocusSettled { .. }

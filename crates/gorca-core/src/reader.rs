@@ -185,6 +185,8 @@ pub enum ReaderMsg {
 #[derive(Clone, Debug)]
 pub enum ReaderEffect {
     Speak(SpeechIntent),
+    /// A short non-speech signal for the cue sink (a silent placeholder until sounds exist).
+    Cue(gorca_output_api::CueId),
     /// Query an app (Interactive), asked in `epoch`.
     Fetch {
         node: NodeKey,
@@ -838,7 +840,8 @@ mod tests {
                         .collect::<Vec<_>>()
                         .join(" "),
                 ),
-                ReaderEffect::Fetch { .. }
+                ReaderEffect::Cue(_)
+                | ReaderEffect::Fetch { .. }
                 | ReaderEffect::Demand { .. }
                 | ReaderEffect::FocusSettled { .. }
                 | ReaderEffect::QueryActiveWindowFocus
@@ -2048,6 +2051,7 @@ mod tests {
                 ReaderEffect::ReviewAct { .. } => "review-act",
                 ReaderEffect::Web(_) => "web",
                 ReaderEffect::Desktop(_) => "desktop",
+                ReaderEffect::Cue(_) => "cue",
                 ReaderEffect::TextFetch { .. } => "text-fetch",
                 ReaderEffect::SayAllChunk { .. } => "say-all-chunk",
             })
@@ -2058,7 +2062,8 @@ mod tests {
         fx.iter()
             .find_map(|e| match e {
                 ReaderEffect::Speak(s) => Some(s.utterance.clone()),
-                ReaderEffect::Fetch { .. }
+                ReaderEffect::Cue(_)
+                | ReaderEffect::Fetch { .. }
                 | ReaderEffect::Demand { .. }
                 | ReaderEffect::FocusSettled { .. }
                 | ReaderEffect::QueryActiveWindowFocus

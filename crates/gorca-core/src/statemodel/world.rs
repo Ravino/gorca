@@ -212,6 +212,8 @@ pub(super) struct Sim {
     /// behind every caret move (docs/reports/unified-editing.md).
     pub gtk4: bool,
     pub spoken: Vec<Spoke>,
+    /// Cues the Reader asked the cue sink for.
+    pub cues: Vec<gorca_output_api::CueId>,
     pub timers: Vec<Instant>,
 }
 
@@ -272,6 +274,7 @@ impl Sim {
             failed_reads: false,
             gtk4: false,
             spoken: Vec::new(),
+            cues: Vec::new(),
             timers: Vec::new(),
         };
         s.sync_mirror(&[WIN, ENTRY, BUTTON, TERM, AREA]);
@@ -401,6 +404,10 @@ impl Sim {
         match e {
             ReaderEffect::Speak(s) => {
                 self.speak(&s);
+                vec![]
+            }
+            ReaderEffect::Cue(c) => {
+                self.cues.push(c);
                 vec![]
             }
             ReaderEffect::SayAllChunk { intent, .. } => {

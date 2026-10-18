@@ -73,6 +73,21 @@ pub struct Cfg {
     pub inserted_text: bool,
     pub edge: Duration,
     pub late: Duration,
+    /// "copied", "cut", "pasted", "undo", "redo" after the clipboard and undo keys.
+    pub announce_clipboard: bool,
+    /// What a movement key that cannot move the caret does.
+    pub boundary: Boundary,
+}
+
+/// What a movement key does when the caret cannot move (CR-3): the setting `[editing] boundary`.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Boundary {
+    /// A boundary cue through the cue sink (silent until sounds exist).
+    Cue,
+    /// Speak the unit at the caret again.
+    Repeat,
+    /// Nothing.
+    Silent,
 }
 
 impl Default for Cfg {
@@ -83,6 +98,8 @@ impl Default for Cfg {
             inserted_text: true,
             edge: Duration::from_millis(100),
             late: Duration::from_millis(400),
+            announce_clipboard: true,
+            boundary: Boundary::Cue,
         }
     }
 }
@@ -154,6 +171,8 @@ impl std::fmt::Debug for Spoken {
 #[derive(Clone, Debug)]
 pub enum Out {
     Say(Spoken),
+    /// A non-speech cue (boundary).
+    Cue(gorca_output_api::CueId),
     Fetch {
         req: TextReqId,
         op: TextOp,
@@ -687,7 +706,7 @@ fn to_u32(n: usize) -> u32 {
 
 /// The text of `say` at `at`, from the window, or what must be fetched first.
 fn unit_text(t: &Tracked, say: Say, at: u32, q: EditQuirks) -> Lookup<(How, String)> {
-    let space = NativeText::new(&t.win, !t.kind.multiline);
+    let space = NativeText::new(&t.win, !t.kind.multiline).with_word_level(q.word_level);
     let presented = match say {
         Say::Word => tc::present_word(&space, t.word_from, at, q),
         Say::Char | Say::Line | Say::Paragraph => tc::present(&space, at, say),
@@ -1471,10 +1490,18 @@ impl CaretState {
                             until: late_until,
                         });
                         match t.caret {
-                            Some(at) => {
-                                let say = say_of(unit);
-                                present(t, say, at, Reason::Boundary, epoch, cx)
-                            }
+                            Some(at) => match cx.cfg.boundary {
+                                Boundary::Repeat => {
+                                    let say = say_of(unit);
+                                    present(t, say, at, Reason::Boundary, epoch, cx)
+                                }
+                                Boundary::Cue => {
+                                    cx.stats.boundary_cues += 1;
+                                    cx.out.push(Out::Cue(gorca_output_api::CueId::Boundary));
+                                    CaretState::Idle { t }
+                                }
+                                Boundary::Silent => CaretState::Idle { t },
+                            },
                             None => CaretState::Idle { t },
                         }
                     }

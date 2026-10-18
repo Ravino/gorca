@@ -784,6 +784,11 @@ impl HookInstance for WasmInstance {
             burst_lines: cfg.burst_lines,
             burst_tail: cfg.burst_tail,
             max_output_chars: cfg.max_output_chars,
+            word_level: cfg.word_level.map(|l| match l {
+                api::terminal::WordLevel::Fine => wtm::WordLevel::Fine,
+                api::terminal::WordLevel::Medium => wtm::WordLevel::Medium,
+                api::terminal::WordLevel::Coarse => wtm::WordLevel::Coarse,
+            }),
         };
         self.call_term(|t, s| t.call_configure(s, &cfg))
     }

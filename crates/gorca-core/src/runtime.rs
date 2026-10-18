@@ -129,6 +129,8 @@ pub struct CoreStats {
     pub fetch_refused: AtomicU64,
     pub stale_dropped: AtomicU64,
     pub utterances: AtomicU64,
+    /// Cues handed to the cue sink.
+    pub cues: AtomicU64,
     pub reader_restarts: AtomicU64,
 }
 
@@ -142,6 +144,7 @@ pub struct CoreStatsSnapshot {
     pub fetch_refused: u64,
     pub stale_dropped: u64,
     pub utterances: u64,
+    pub cues: u64,
     pub reader_restarts: u64,
 }
 
@@ -157,6 +160,7 @@ impl CoreStats {
             fetch_refused: g(&self.fetch_refused),
             stale_dropped: g(&self.stale_dropped),
             utterances: g(&self.utterances),
+            cues: g(&self.cues),
             reader_restarts: g(&self.reader_restarts),
         }
     }
@@ -232,6 +236,8 @@ struct Shared {
     apps: AppDirectory,
     senders: ReaderSenders,
     speech: Arc<dyn SpeechOut>,
+    /// Where non-speech cues go (the silent placeholder until sounds exist).
+    cues: Arc<dyn gorca_output_api::CueSink>,
     stats: Arc<CoreStats>,
     clock: Clock,
     next_req: Arc<AtomicU64>,
@@ -309,6 +315,7 @@ impl Core {
                 apps: AppDirectory::default(),
                 senders,
                 speech: Arc::new(NullSpeech),
+                cues: Arc::new(gorca_output_api::NullCueSink::default()),
                 stats: Arc::new(CoreStats::default()),
                 clock: Clock::System,
                 next_req: Arc::new(AtomicU64::new(1)),
@@ -385,6 +392,15 @@ impl Core {
     /// Document actor counters.
     pub fn doc_counters(&self) -> Arc<DocCounters> {
         Arc::clone(&self.shared.web.counters)
+    }
+
+    /// Use `cues` as the cue sink (default: the silent placeholder). Call before [`Core::run`].
+    #[must_use]
+    pub fn with_cues(mut self, cues: Arc<dyn gorca_output_api::CueSink>) -> Self {
+        if let Some(sh) = Arc::get_mut(&mut self.shared) {
+            sh.cues = cues;
+        }
+        self
     }
 
     /// Route utterances to `speech`. Call before [`Core::run`].
@@ -1093,6 +1109,12 @@ async fn reader_loop(
                     bump(&shared.stats.utterances);
                     shared.speech.submit(reader.symbolize(intent.utterance));
                 }
+                ReaderEffect::Cue(cue) => {
+                    // A missed cue is not worth a stall: the sink never blocks and errors drop.
+                    if shared.cues.play(cue).is_ok() {
+                        bump(&shared.stats.cues);
+                    }
+                }
                 ReaderEffect::Fetch {
                     node,
                     mask,
@@ -1323,6 +1345,7 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
         ReaderEffect::ReviewStatusBar { root, .. } => root.app,
         ReaderEffect::ReviewAct { act, .. } => action_node(act).app,
         ReaderEffect::Speak(_)
+        | ReaderEffect::Cue(_)
         | ReaderEffect::Fetch { .. }
         | ReaderEffect::Demand { .. }
         | ReaderEffect::FocusSettled { .. }
@@ -1461,6 +1484,7 @@ fn spawn_review(set: &mut JoinSet<()>, shared: &Arc<Shared>, e: ReaderEffect) {
             });
         }
         ReaderEffect::Speak(_)
+        | ReaderEffect::Cue(_)
         | ReaderEffect::Fetch { .. }
         | ReaderEffect::Demand { .. }
         | ReaderEffect::FocusSettled { .. }

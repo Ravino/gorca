@@ -12,6 +12,7 @@
 
 use std::ops::Range;
 
+use gorca_model::WordLevel;
 use unicode_segmentation::UnicodeSegmentation;
 
 /// Scalars looked at on each side of the index when the grapheme rules need context. A cluster
@@ -152,13 +153,27 @@ fn class(c: char) -> Class {
     }
 }
 
+/// The word containing `s[i]` (TL-1) at the fine level. See [`word_range_level`].
+pub fn word_range(s: &[char], i: usize) -> Range<usize> {
+    word_range_level(s, i, WordLevel::Fine)
+}
+
+/// A joiner keeps the token characters on both sides of it together at the medium level when a
+/// letter or digit follows it.
+fn is_joiner(c: char) -> bool {
+    matches!(c, '-' | '.' | '=' | ':' | '@' | '~')
+}
+
 /// The word containing `s[i]` (TL-1). `s` is one line: the caller clamps to hard lines.
 ///
-/// A word includes its trailing spaces (NVDA and Orca convention); each punctuation character,
-/// emoji or symbol is a word of its own (with its trailing spaces); leading spaces belong to the
+/// A word includes its trailing spaces (NVDA and Orca convention); leading spaces belong to the
 /// word before them, or form a word of their own at the start of the line. Combining marks
-/// continue the word they follow, so decomposed Cyrillic and Latin letters are not split.
-pub fn word_range(s: &[char], i: usize) -> Range<usize> {
+/// continue the word they follow, so decomposed Cyrillic and Latin letters are not split. What
+/// else stays in one word depends on `level` (see [`WordLevel`]): fine makes every punctuation
+/// character, emoji or symbol a word of its own; medium keeps option tokens, identifiers and
+/// file names together while every path separator is a word of its own; coarse takes everything
+/// between blanks.
+pub fn word_range_level(s: &[char], i: usize, level: WordLevel) -> Range<usize> {
     if s.is_empty() {
         return 0..0;
     }
@@ -166,26 +181,52 @@ pub fn word_range(s: &[char], i: usize) -> Range<usize> {
     let next = |p: usize| char_range(s, p).end;
     let prev = |p: usize| char_range(s, p - 1).start;
     let cls = |p: usize| class(s[p]);
-    let run_start = |p: usize| {
-        let cl = cls(p);
-        let mut q = p;
-        if cl != Class::Punct {
-            while q > 0 && cls(prev(q)) == cl {
-                q = prev(q);
+    let word_at = |p: usize| p < s.len() && cls(p) == Class::Word;
+    // Are the clusters starting at `a` and at `b = next(a)` in the same run?
+    let same = |a: usize, b: usize| -> bool {
+        let (ca, cb) = (cls(a), cls(b));
+        match level {
+            WordLevel::Fine => ca == cb && ca != Class::Punct,
+            WordLevel::Coarse => (ca == Class::Space) == (cb == Class::Space),
+            WordLevel::Medium => {
+                if ca == Class::Space || cb == Class::Space {
+                    return ca == cb;
+                }
+                let (x, y) = (s[a], s[b]);
+                let after_b = next(b);
+                if ca == Class::Word && cb == Class::Word {
+                    true
+                } else if ca == Class::Word && is_joiner(y) {
+                    // `foo-bar`, `a.b`, `user@host`: only when a letter follows the joiner.
+                    word_at(after_b)
+                } else if is_joiner(x) && cb == Class::Word {
+                    true
+                } else {
+                    // `--color`: the second dash of a leading pair, when a letter follows.
+                    x == '-'
+                        && y == '-'
+                        && !(a > 0 && (word_at(prev(a)) || s[prev(a)] == '-'))
+                        && word_at(after_b)
+                }
             }
+        }
+    };
+    let run_start = |p: usize| {
+        let mut q = p;
+        while q > 0 && same(prev(q), q) {
+            q = prev(q);
         }
         q
     };
     let run_end = |p: usize| {
-        let cl = cls(p);
-        if cl == Class::Punct {
-            return next(p);
-        }
         let mut e = p;
-        while e < s.len() && cls(e) == cl {
-            e = next(e);
+        loop {
+            let n = next(e);
+            if n >= s.len() || !same(e, n) {
+                return n;
+            }
+            e = n;
         }
-        e
     };
     let i = char_range(s, i.min(s.len() - 1)).start;
     match cls(i) {
@@ -514,5 +555,84 @@ mod tests {
             soft_lines(&s, 4).collect::<Vec<_>>(),
             vec![0..4, 4..8, 8..10]
         );
+    }
+}
+
+#[cfg(test)]
+mod level_tests {
+    use super::*;
+    use gorca_ext_api::terminal::{WORD_LEVEL_VECTORS, WordLevel as SdkLevel};
+
+    fn level(l: SdkLevel) -> WordLevel {
+        match l {
+            SdkLevel::Fine => WordLevel::Fine,
+            SdkLevel::Medium => WordLevel::Medium,
+            SdkLevel::Coarse => WordLevel::Coarse,
+        }
+    }
+
+    fn words(text: &str, l: WordLevel) -> String {
+        let c: Vec<char> = text.chars().collect();
+        let mut out: Vec<String> = Vec::new();
+        let mut i = 0;
+        while i < c.len() {
+            let r = word_range_level(&c, i, l);
+            assert!(r.end > i, "{text:?}: no progress at {i}");
+            out.push(c[r.clone()].iter().collect());
+            i = r.end;
+        }
+        out.join("|")
+    }
+
+    #[test]
+    fn the_levels_agree_with_the_extension_sdk_vectors() {
+        for &(text, l, want) in WORD_LEVEL_VECTORS {
+            assert_eq!(words(text, level(l)), want, "{text:?} {l:?}");
+        }
+    }
+
+    #[test]
+    fn fine_is_the_default_word_rule() {
+        for t in [
+            "--color=auto",
+            "Привет, как дела?",
+            "a  b",
+            "x.y/z",
+            "",
+            " ",
+        ] {
+            let c: Vec<char> = t.chars().collect();
+            for i in 0..=c.len() {
+                assert_eq!(word_range(&c, i), word_range_level(&c, i, WordLevel::Fine));
+            }
+        }
+    }
+
+    #[test]
+    fn color_auto_has_five_fine_stops_and_one_medium_one() {
+        assert_eq!(words("--color=auto", WordLevel::Fine).split('|').count(), 5);
+        assert_eq!(
+            words("--color=auto", WordLevel::Medium).split('|').count(),
+            1
+        );
+    }
+
+    #[test]
+    fn every_level_tiles_and_never_splits_a_cluster() {
+        let t = "e\u{301}x-ab\u{1F600}\u{FEFF} /p\u{301}ath --o=\u{1F468}\u{200D}\u{1F469} z";
+        let c: Vec<char> = t.chars().collect();
+        for l in [WordLevel::Fine, WordLevel::Medium, WordLevel::Coarse] {
+            let mut i = 0;
+            while i < c.len() {
+                let r = word_range_level(&c, i, l);
+                assert!(r.start <= i && r.end > i, "{l:?} {i}");
+                assert_eq!(char_range(&c, r.start).start, r.start, "{l:?} start");
+                assert!(
+                    r.end == c.len() || char_range(&c, r.end).start == r.end,
+                    "{l:?} end in a cluster"
+                );
+                i = r.end;
+            }
+        }
     }
 }
