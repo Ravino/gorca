@@ -1,0 +1,23 @@
+private compositor: /tmp/gorca-vte.0CZqao/x/gorca-vte-1478358
+== reader <repo>/.claude/worktrees/agent-ac00585ae6937e472/target/release/gorca built from 2a017ed3, tree at be7e37f6
+== e2e vv-dbg: reader=daemon:<repo>/.claude/worktrees/agent-ac00585ae6937e472/target/release/gorca backend=voicego repeats=20 load=14.64 10.22 11.69 7/2627 1479740
+-- round 1/20 VV (load 14.64 10.22 11.69 8/2627 1479740)
+-- round 2/20 VV (load 14.08 11.65 12.05 4/2412 1495786)
+-- round 3/20 VV (load 12.16 11.20 11.80 1/2624 1502784)
+-- round 4/20 VV (load 12.66 11.16 11.68 1/2576 1508341)
+-- round 5/20 VV (load 12.40 11.41 11.69 2/2499 1519003)
+-- round 6/20 VV (load 12.54 11.54 11.69 1/2483 1524770)
+-- round 7/20 VV (load 10.32 10.73 11.35 1/2474 1528732)
+-- round 8/20 VV (load 10.69 10.72 11.27 8/2381 1538037)
+-- round 9/20 VV (load 11.58 10.73 11.19 1/2452 1546219)
+-- round 10/20 VV (load 11.66 10.52 11.02 1/2539 1550653)
+-- round 11/20 VV (load 25.44 15.39 12.69 23/2415 1563436)
+-- round 12/20 VV (load 24.23 17.87 13.90 8/2409 1584408)
+-- round 13/20 VV (load 16.49 16.62 13.90 1/2941 1598578)
+-- round 14/20 VV (load 9.97 14.18 13.35 1/2466 1606078)
+-- round 15/20 VV (load 11.48 12.83 12.92 1/2361 1611395)
+-- round 16/20 VV (load 15.34 14.29 13.47 7/2506 1623517)
+-- round 17/20 VV (load 14.69 14.33 13.59 4/2498 1641366)
+-- round 18/20 VV (load 11.47 12.95 13.15 1/2526 1651101)
+-- round 19/20 VV (load 19.06 14.01 13.42 19/2373 1657985)
+-- round 20/20 VV (load 18.19 15.97 14.26 7/2359 1663512)

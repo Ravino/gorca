@@ -192,8 +192,8 @@ fi
 # ---- build, once ---------------------------------------------------------------------------
 # Resume across commits: the binaries are rebuilt only when a product path changed since the rev
 # they were built from. Commits touching only bench/, docs/, tests/ or .claude/ (result commits,
-# runner fixes) neither force a rebuild nor trip the stale-reader check (e2e reads
-# GORCA_E2E_ALLOW_STALE_READER); the rev each attempt ran against is in meta.txt (reader_rev, git_rev).
+# runner fixes) neither force a rebuild nor trip the stale-reader check (--allow-stale-reader is added to
+# TOPO); the rev each attempt ran against is in meta.txt (reader_rev, git_rev).
 READER_REV=$("$ROOT/target/release/gorca" --version 2>/dev/null | awk '{print $2}')
 if [ "$build" = 1 ] && [ "$resume" = 1 ] && [ -n "$READER_REV" ] \
    && git rev-parse -q --verify "$READER_REV^{commit}" >/dev/null; then
@@ -201,7 +201,7 @@ if [ "$build" = 1 ] && [ "$resume" = 1 ] && [ -n "$READER_REV" ] \
   if [ "$changed" = 0 ]; then
     echo "== resume: only bench/docs/tests/.claude changed since reader rev $READER_REV; no rebuild, stale-reader check relaxed"
     build=0
-    export GORCA_E2E_ALLOW_STALE_READER=1
+    relax_stale=1   # appended to TOPO below (TOPO reaches every e2e step but not e2e-m8; run-isolated strips env)
   fi
 fi
 if [ "$build" = 1 ]; then
@@ -233,6 +233,7 @@ E2E_REPEAT=(--repeats "$repeats")
 [ -n "$quick" ] && E2E_REPEAT+=("$quick")
 TOPO=()
 [ "$expect" != none ] && TOPO=(--expect-topology "$expect")
+[ "${relax_stale:-0}" = 1 ] && TOPO+=(--allow-stale-reader)
 flags() { local f=() n; for n in "$@"; do f+=(--reader-env "GORCA_$n=1" --reader-env "GORCA_${n}_STRICT=1"); done; printf '%s\n' "${f[@]}"; }
 
 step_ok() { grep -qP "^$1\t$2\t[0-9]+\t[0-9]+\tok$" "$STATUS"; }
