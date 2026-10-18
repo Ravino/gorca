@@ -136,6 +136,10 @@ const KEY_H: Key = key("h", 35, 0x68, 8);
 const KEY_S: Key = key("s", 31, 0x73, 19);
 const KEY_T: Key = key("t", 20, 0x74, 20);
 const KEY_Z: Key = key("z", 44, 0x7a, 26);
+const KEY_C: Key = key("c", 46, 0x63, 3);
+const KEY_X: Key = key("x", 45, 0x78, 24);
+const KEY_V: Key = key("v", 47, 0x76, 22);
+const KEY_Y: Key = key("y", 21, 0x79, 25);
 
 impl Key {
     const fn ctrl(mut self) -> Self {
@@ -291,6 +295,17 @@ pub fn script(t: Target) -> Vec<Step> {
             st("Ctrl+Delete at end", DEL.ctrl()),
             st("Home 3", HOME),
             st("Ctrl+Delete", DEL.ctrl()),
+            // The clipboard and undo keys (`[editing] announce_clipboard`): each confirms only
+            // what the text shows, so a toolkit without undo (GTK 3) stays silent.
+            st("clip: select all", KEY_A.ctrl()),
+            st("clip: Ctrl+C", KEY_C.ctrl()),
+            st("clip: Ctrl+X", KEY_X.ctrl()),
+            st("clip: Ctrl+V", KEY_V.ctrl()),
+            st("clip: Ctrl+Z", KEY_Z.ctrl()),
+            st("clip: Ctrl+Y", KEY_Y.ctrl()),
+            // The undo may have left an empty or a selected document: put some text back for
+            // the steps that follow (they select all of it).
+            typed("clip: restore", "xy"),
         ]);
     }
     if std::env::var("GORCA_ED_PHASE").as_deref() == Ok("multi") {

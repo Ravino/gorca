@@ -57,6 +57,16 @@ pub enum Exp {
     Unselected,
     /// A selection across blocks of a contenteditable: one utterance, `selected` is not required.
     BlockSelection,
+    /// Silence (the boundary cue: the key could not move the caret on this toolkit) or the
+    /// inner expectation (the caret moved).
+    OrSilent(Box<Exp>),
+    /// Either expectation.
+    Either(Box<Exp>, Box<Exp>),
+    /// The first utterance starts with this; what the edit brought back may follow (a web field
+    /// reports an undo as a replace and then an insert).
+    FirstPrefixed(&'static str),
+    /// One utterance that starts with this (`cut, ` or `pasted, ` and the text).
+    Prefixed(&'static str),
     /// Any non-empty speech.
     Some,
     /// The text that was removed (checklist row 25): the whole document, which the script selected
@@ -98,6 +108,16 @@ fn gecko(t: Target, chromium: bool) -> bool {
     matches!(t, Target::Web(_)) && !chromium
 }
 
+/// Does the toolkit's text widget undo and redo?
+fn has_undo(t: Target) -> bool {
+    !matches!(t, Target::Gtk3Entry | Target::Gtk3Text)
+}
+
+/// Is Ctrl+Y bound to redo? gedit only has Ctrl+Shift+Z; the key does nothing there.
+fn has_redo_key(t: Target) -> bool {
+    has_undo(t) && t != Target::Gedit
+}
+
 fn editable(t: Target) -> bool {
     t == Target::Web(WebField::Editable)
 }
@@ -109,19 +129,26 @@ pub fn expect(t: Target, chromium: bool, step: &str) -> Option<Exp> {
     Some(match step {
         "type" => names(LINE),
         "Left" => ex(&["d"]),
-        "Right" | "End" | "Right at end" | "Right collapses" | "End 2" => ex(&["blank"]),
-        "Home" | "Left at start" | "Home 2" => ex(&["h"]),
+        // A key that cannot move the caret gives the boundary cue, which is silent speech.
+        "Right at end" | "Left at start" => Exp::Silent,
+        // After a select-all the caret may already be at the end: the key then collapses the
+        // selection and moves nothing.
+        "Right collapses" | "End 2" => Exp::OrSilent(Box::new(ex(&["blank"]))),
+        "Right" | "End" => ex(&["blank"]),
+        "Home" | "Home 2" => ex(&["h"]),
         "Ctrl+Left 1" => ex(&["world"]),
         "Ctrl+Left 2" => ex(&["brave"]),
         "Ctrl+Left 3" if punct => ex(&[","]),
-        "Ctrl+Left 3" | "Ctrl+Left 4 at start" => ex(&["hello"]),
+        "Ctrl+Left 3" => ex(&["hello"]),
+        "Ctrl+Left 4 at start" if punct => ex(&["hello"]),
+        "Ctrl+Left 4 at start" => Exp::Silent,
         "Ctrl+Right 1" => ex(&["hello"]),
         "Ctrl+Right 2" if punct => ex(&[","]),
         "Ctrl+Right 2" => ex(&["brave"]),
         "Ctrl+Right 3" if punct => ex(&["brave"]),
         "Ctrl+Right 3" => ex(&["world"]),
         "Ctrl+Right 4 at end" if punct => ex(&["world"]),
-        "Ctrl+Right 4 at end" => ex(&["blank"]),
+        "Ctrl+Right 4 at end" => Exp::Silent,
         "BackSpace" => ex(&["d"]),
         "Delete at end" | "Ctrl+Delete at end" => Exp::Silent,
         "Delete" => ex(&["h"]),
@@ -139,14 +166,33 @@ pub fn expect(t: Target, chromium: bool, step: &str) -> Option<Exp> {
         "Home 3" => ex(&["e"]),
         "Ctrl+Delete" if comma_along => ex(&["ello,"]),
         "Ctrl+Delete" => ex(&["ello"]),
+        "clip: select all" => Exp::SelectAll,
+        "clip: Ctrl+C" => ex(&["copied"]),
+        "clip: Ctrl+X" => Exp::Prefixed("cut, "),
+        // Firefox in the private session often sends no edit event at all for the paste (the next
+        // Ctrl+Z brings the cut text back, so the paste did not happen): nothing is claimed.
+        "clip: Ctrl+V" if matches!(t, Target::Web(_)) => {
+            Exp::OrSilent(Box::new(Exp::Prefixed("pasted, ")))
+        }
+        "clip: Ctrl+V" => Exp::Prefixed("pasted, "),
+        // GTK 3 entries and text views have no undo: nothing changes, nothing is claimed.
+        "clip: Ctrl+Z" if has_undo(t) => Exp::FirstPrefixed("undo"),
+        "clip: Ctrl+Y" if has_redo_key(t) => Exp::FirstPrefixed("redo"),
+        "clip: Ctrl+Z" | "clip: Ctrl+Y" => Exp::Silent,
+        "clip: restore" => Exp::Some,
         // The multi-line phase.
+        // A contenteditable counts its own block: all of it selected reads as the text.
+        "select all" if editable(t) => {
+            Exp::Either(Box::new(Exp::SelectAll), Box::new(Exp::Selected))
+        }
         "select all" => Exp::SelectAll,
         "type line 1" => names("one two"),
         "type paragraph" => names(PARA),
         "type last" => names("last line"),
         "Enter" | "Enter 2" => ex(&["new line"]),
         "Up" | "Up 2" | "Down" => Exp::Line,
-        "Ctrl+Up" | "Ctrl+Up 2" | "Ctrl+Down" => Exp::Para,
+        "Ctrl+Up 2" => Exp::OrSilent(Box::new(Exp::Para)),
+        "Ctrl+Up" | "Ctrl+Down" => Exp::Para,
         "Ctrl+Home" | "Ctrl+Home 2" | "PageUp" => ex(&["one two"]),
         "Ctrl+End" | "PageDown" => ex(&["last line"]),
         "Shift+Down" | "Shift+Down 2" | "Ctrl+Shift+Down" if editable(t) => Exp::BlockSelection,
@@ -186,6 +232,29 @@ fn one(got: &[String]) -> Result<&str, String> {
 pub fn check(t: Target, chromium: bool, step: &str, got: &[String]) -> Option<Result<(), String>> {
     let e = expect(t, chromium, step)?;
     let r = match &e {
+        Exp::OrSilent(inner) => {
+            if got.is_empty() {
+                Ok(())
+            } else {
+                check_exp(inner, got)
+            }
+        }
+        _ => check_exp(&e, got),
+    };
+    Some(r)
+}
+
+fn check_exp(e: &Exp, got: &[String]) -> Result<(), String> {
+    match e {
+        Exp::OrSilent(inner) => check_exp(inner, got),
+        Exp::Either(a, b) => check_exp(a, got).or_else(|_| check_exp(b, got)),
+        Exp::FirstPrefixed(p) => {
+            if got.first().is_some_and(|s| s.starts_with(p)) {
+                Ok(())
+            } else {
+                Err(format!("(want {p:?} first)"))
+            }
+        }
         Exp::Exact(v) => {
             if v == got {
                 Ok(())
@@ -200,6 +269,13 @@ pub fn check(t: Target, chromium: bool, step: &str, got: &[String]) -> Option<Re
                 Err("(want silence)".to_owned())
             }
         }
+        Exp::Prefixed(p) => one(got).and_then(|s| {
+            if s.starts_with(p) {
+                Ok(())
+            } else {
+                Err(format!("(want {p:?} and the text)"))
+            }
+        }),
         Exp::Some => {
             if got.iter().any(|s| !s.trim().is_empty()) {
                 Ok(())
@@ -252,8 +328,7 @@ pub fn check(t: Target, chromium: bool, step: &str, got: &[String]) -> Option<Re
             }
         }),
         Exp::BlockSelection => one(got).map(|_| ()),
-    };
-    Some(r)
+    }
 }
 
 #[cfg(test)]
@@ -282,6 +357,32 @@ mod tests {
             "BackSpace selection"
         ));
         assert!(!known_failing(t, "BackSpace selection"));
+    }
+
+    #[test]
+    fn clipboard_steps_follow_the_toolkits_undo() {
+        let c = |t, step, got: &[&str]| check(t, false, step, &g(got));
+        assert_eq!(
+            c(Target::Gtk4Text, "clip: Ctrl+C", &["copied"]),
+            Some(Ok(()))
+        );
+        assert_eq!(
+            c(Target::Gtk4Text, "clip: Ctrl+X", &["cut, hello"]),
+            Some(Ok(()))
+        );
+        assert!(matches!(
+            c(Target::Gtk4Text, "clip: Ctrl+V", &["hello"]),
+            Some(Err(_))
+        ));
+        assert_eq!(
+            c(Target::Gtk4Entry, "clip: Ctrl+Z", &["undo"]),
+            Some(Ok(()))
+        );
+        assert_eq!(c(Target::Gtk3Entry, "clip: Ctrl+Z", &[]), Some(Ok(())));
+        assert!(matches!(
+            c(Target::Gtk3Entry, "clip: Ctrl+Y", &["redo"]),
+            Some(Err(_))
+        ));
     }
 
     #[test]

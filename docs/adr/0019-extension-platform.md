@@ -9,7 +9,7 @@ Milestone: M18 (M18a platform core, M18b SDK). Follow-up: ADR-0020 (packaging, s
 ## 1. Context
 
 The owner wants add-ons to extend any application and to build arbitrary features, with an add-on
-store later. The current contract (`crates/gorca-ext-api/wit/gorca-ext.wit`, `gorca:ext@0.2.0`) was
+store later. The current contract (`crates/gorca-ext-api/wit/gorca-ext.wit`, `gorca:ext@0.3.0`; 0.3.0 adds `term-config.word-level` (`[editing] word`), `term-config.boundary` (`[editing] boundary`) and `term-action.cue` (the boundary cue); pre-1.0 versions carry no ABI promise, so components are rebuilt against the new package) was
 built for first-party policy: one world, a closed `role` enum, nine event kinds, `command(id)` with no
 context and speech as its only effect, `fetch`/`text` declared but `not-supported`, a string KV, and a
 manifest with a name but no id, version, API range or permission rationale. The experimental

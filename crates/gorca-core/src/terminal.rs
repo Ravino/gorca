@@ -337,8 +337,41 @@ impl Reader {
             prompt_markers: s.prompt_markers.clone(),
             prompt_regex: s.prompt_regex.clone(),
             secret_regex: s.secret_regex.clone(),
+            boundary: gorca_ext_api::terminal::BoundaryMode {
+                cue: self.cmd.effective.editing.boundary.cue,
+                say: self.cmd.effective.editing.boundary.say,
+                repeat: self.cmd.effective.editing.boundary.repeat,
+            },
+            word_level: match self.cmd.effective.editing.word {
+                gorca_config::WordLevel::Auto => None,
+                gorca_config::WordLevel::Fine => Some(gorca_ext_api::terminal::WordLevel::Fine),
+                gorca_config::WordLevel::Medium => Some(gorca_ext_api::terminal::WordLevel::Medium),
+                gorca_config::WordLevel::Coarse => Some(gorca_ext_api::terminal::WordLevel::Coarse),
+            },
             ..TermConfig::default()
         }
+    }
+
+    /// How coarse a word is in a terminal: the user's `[editing] word`, else the terminal
+    /// extension's default (medium, `gorca_ext_api::terminal::DEFAULT_WORD_LEVEL`).
+    pub(crate) fn term_word_level(&self) -> gorca_model::WordLevel {
+        use gorca_ext_api::terminal::{DEFAULT_WORD_LEVEL, WordLevel as Sdk};
+        let level = match self.cmd.effective.editing.word {
+            gorca_config::WordLevel::Auto => DEFAULT_WORD_LEVEL,
+            gorca_config::WordLevel::Fine => Sdk::Fine,
+            gorca_config::WordLevel::Medium => Sdk::Medium,
+            gorca_config::WordLevel::Coarse => Sdk::Coarse,
+        };
+        match level {
+            Sdk::Fine => gorca_model::WordLevel::Fine,
+            Sdk::Medium => gorca_model::WordLevel::Medium,
+            Sdk::Coarse => gorca_model::WordLevel::Coarse,
+        }
+    }
+
+    /// The units of terminal review.
+    pub(crate) fn term_units(&self) -> crate::review::segment::TermUnits {
+        crate::review::segment::TermUnits(self.term_word_level())
     }
 
     /// The focus presentation of a terminal finished: track it and read its screen.
@@ -706,8 +739,13 @@ impl Reader {
             Say::Word => (Unit::Word, How::Word),
             Say::Line | Say::Paragraph => (Unit::Line, How::Line),
         };
-        let text =
-            gorca_ext_api::terminal::unit_at(&snap.text, snap.caret, unit).unwrap_or_default();
+        let level = match self.term_word_level() {
+            gorca_model::WordLevel::Fine => gorca_ext_api::terminal::WordLevel::Fine,
+            gorca_model::WordLevel::Medium => gorca_ext_api::terminal::WordLevel::Medium,
+            gorca_model::WordLevel::Coarse => gorca_ext_api::terminal::WordLevel::Coarse,
+        };
+        let text = gorca_ext_api::terminal::unit_at(&snap.text, snap.caret, unit, level)
+            .unwrap_or_default();
         let piece = crate::text::caret::Piece {
             how: Some(how),
             text,
@@ -766,6 +804,12 @@ impl Reader {
         for a in acts {
             match a {
                 TermAction::ClaimKey => claimed = true,
+                TermAction::Cue => {
+                    if speak {
+                        self.text.stats.boundary_cues += 1;
+                        fx.push(ReaderEffect::Cue(gorca_output_api::CueId::Boundary));
+                    }
+                }
                 TermAction::Say {
                     text,
                     unit,

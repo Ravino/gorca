@@ -24,5 +24,5 @@ pub mod sel;
 pub mod space;
 pub mod units;
 
-pub use gorca_model::{EditQuirks, WordLanding};
+pub use gorca_model::{EditQuirks, WordLanding, WordLevel};
 pub use space::{CharsSpace, Dir, Lookup, Need, Step, TextSpace, Unit};

@@ -205,6 +205,34 @@ try:
             lines.append("%s%s %r" % ("  " * dep, role(bus, p), name(bus, p)[:70]))
             q = [(c, dep + 1) for (b2, c) in kids(bus, p) if b2 == bus] + q
         res["lines"] = lines
+    elif kind == "geom":
+        # states and screen extents of every node (flat review needs them), text size
+        lines = []
+        q = [(doc, 0)]
+        while q and len(lines) < int(OPTS.get("max", "300")):
+            p, dep = q.pop(0)
+            ifs = safe(lambda: call(bus, p, ACC, "GetInterfaces")[0], [])
+            ext = safe(lambda: call(bus, p, "org.a11y.atspi.Component", "GetExtents", (0,), "(u)")[0]) \
+                if "org.a11y.atspi.Component" in ifs else None
+            ks = [c for (b2, c) in kids(bus, p) if b2 == bus]
+            txt = ""
+            if "org.a11y.atspi.Text" in ifs:
+                n = safe(lambda: prop(bus, p, "org.a11y.atspi.Text", "CharacterCount"), 0)
+                txt = " chars=%s %r" % (n, (safe(lambda: call(bus, p, "org.a11y.atspi.Text", "GetText", (0, 30), "(ii)")[0], "") or ""))
+            if "org.a11y.atspi.Text" in ifs and OPTS.get("textext"):
+                # Component extents and the extents of the first characters, in both coordinate
+                # types (0 screen, 1 window): do they agree?
+                tx = []
+                for ct in (0, 1):
+                    tx.append(safe(lambda: call(bus, p, "org.a11y.atspi.Text", "GetRangeExtents", (0, 1, ct), "(iiu)"), None))
+                    tx.append(safe(lambda: call(bus, p, "org.a11y.atspi.Component", "GetExtents", (ct,), "(u)")[0], None)
+                              if "org.a11y.atspi.Component" in ifs else None)
+                txt += " TXEXT[text-screen=%s comp-screen=%s text-window=%s comp-window=%s]" % tuple(tx)
+            lines.append("%s%s %r st=%s ext=%s kids=%d%s" % ("  " * dep, role(bus, p), name(bus, p)[:30],
+                         ",".join(x for x in states(bus, p) if x in ("showing", "visible", "focusable", "defunct")),
+                         ext, len(ks), txt))
+            q = [(c, dep + 1) for c in ks] + q
+        res["lines"] = lines
     elif kind == "frames":
         frames = []
         q = [doc]

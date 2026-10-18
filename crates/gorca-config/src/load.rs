@@ -10,8 +10,8 @@ use crate::diag::{Diag, DiagMsg, did_you_mean, fnv1a};
 use crate::keymap::{ContextName, LayerEntry, ResolvedKeymap, merge_layer};
 use crate::presets::Presets;
 use crate::settings::{
-    Backend, Caps, Confirmations, InterruptPolicy, Layout, Preset, Punct, SCHEMA, SETTINGS,
-    Settings, Verbosity, sections,
+    Backend, BoundaryMode, Caps, Confirmations, InterruptPolicy, Layout, Preset, Punct, SCHEMA,
+    SETTINGS, Settings, Verbosity, WordLevel, sections,
 };
 
 /// Files larger than this are ignored (ADR-0005 7.4).
@@ -323,6 +323,17 @@ fn apply_key(section: &str, key: &str, v: &Item, s: &mut Settings, diags: &mut V
         ("echo", "typed_words") => b(&mut s.echo.typed_words, diags),
         ("echo", "command_keys") => b(&mut s.echo.command_keys, diags),
         ("echo", "inserted_text") => b(&mut s.echo.inserted_text, diags),
+        ("editing", "announce_clipboard") => b(&mut s.editing.announce_clipboard, diags),
+        ("editing", "boundary") => {
+            if let Some(m) = read_boundary(v, &path, diags) {
+                s.editing.boundary = m;
+            }
+        }
+        ("editing", "word") => {
+            if let Some(w) = read_enum(v, &path, WordLevel::parse, WordLevel::NAMES, diags) {
+                s.editing.word = w;
+            }
+        }
         ("text", "say_all_moves_caret") => b(&mut s.text.say_all_moves_caret, diags),
         ("text", "caret_edge_ms") => {
             if let Some(n) = read_int(v, &path, 20, 1000, diags) {
@@ -540,6 +551,41 @@ fn read_caps(v: &Item, path: &str, diags: &mut Vec<Diag>) -> Option<Caps> {
         ));
     }
     Some(caps)
+}
+
+/// `editing.boundary`: a list of `cue`, `say` and `repeat`, or one of the strings `off`, `cue`,
+/// `say`, `cue+say`, `repeat`.
+fn read_boundary(v: &Item, path: &str, diags: &mut Vec<Diag>) -> Option<BoundaryMode> {
+    let mut mode = BoundaryMode::OFF;
+    let mut bad = false;
+    let mut name = |text: Option<&str>, span: Option<(u32, u32)>, diags: &mut Vec<Diag>| {
+        if text.is_some_and(|t| mode.add(&t.to_ascii_lowercase())) {
+            return;
+        }
+        bad = true;
+        diags.push(Diag::error(
+            path,
+            span,
+            match text {
+                Some(t) => DiagMsg::UnknownEnum {
+                    value: t.to_owned(),
+                    allowed: BoundaryMode::NAMES,
+                },
+                None => DiagMsg::WrongType {
+                    expected: "a list of strings",
+                },
+            },
+        ));
+    };
+    if let Some(arr) = v.as_array() {
+        for e in arr {
+            let span = e.span().map(|r| (clamp_u32(r.start), clamp_u32(r.end)));
+            name(e.as_str(), span, diags);
+        }
+    } else {
+        name(v.as_str(), span_of(v), diags);
+    }
+    (!bad).then_some(mode)
 }
 
 fn read_modifiers(v: &Item, path: &str, diags: &mut Vec<Diag>) -> Option<Vec<String>> {
@@ -942,6 +988,17 @@ mod tests {
     }
 
     #[test]
+    fn editing_defaults_and_bad_values() {
+        let d = Settings::default().editing;
+        assert!(d.announce_clipboard);
+        assert_eq!(d.boundary, BoundaryMode::CUE);
+        assert_eq!(d.word, WordLevel::Auto);
+        let l = load_text("[editing]\nboundary = \"loud\"\nword = \"huge\"\n");
+        assert_eq!(l.diags.len(), 2, "{:?}", l.diags);
+        assert_eq!(l.settings.editing, d);
+    }
+
+    #[test]
     fn every_setting_row_is_read() {
         // Setting every key to a non-default value must change `Settings`, so a row without a
         // matching arm in `apply_key` is caught.
@@ -950,7 +1007,7 @@ mod tests {
 multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_control=false\npause_speech_on_shift=false\n\
 [keymap]\nreplace_preset=true\n[speech]\nrate=10\npitch=11\nvolume=12\nrate_step=7\nvoice=\"x\"\nlanguage=\"ru\"\noutput_module=\"rhvoice\"\nbackend=\"ssip\"\npunctuation=\"all\"\ncaps=[\"word\"]\ncaps_pitch_change=10\n\
 [echo]\ntyped_characters=false\ntyped_words=true\ncommand_keys=true\ninserted_text=false\n\
-[text]\nsay_all_moves_caret=false\ncaret_edge_ms=50\ncaret_late_ms=300\n[browse]\nsay_all_on_load=false\ndescription_pause=false\n\
+[editing]\nannounce_clipboard=false\nboundary=[\"cue\",\"say\"]\nword=\"coarse\"\n[text]\nsay_all_moves_caret=false\ncaret_edge_ms=50\ncaret_late_ms=300\n[browse]\nsay_all_on_load=false\ndescription_pause=false\n\
 [terminal]\nsettle_ms=40\nburst_lines=20\nprompt_markers=[\"> \"]\nprompt_regex=\"^x\"\nsecret_regex=\"y$\"\n[verbosity]\nlevel=\"brief\"\nconfirmations=\"brief\"\n";
         let l = load_text(text);
         assert!(l.diags.is_empty(), "{:?}", l.diags);
@@ -972,7 +1029,17 @@ multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_
         assert_eq!(l.settings.speech.language, "ru");
         assert_eq!(l.settings.speech.output_module, "rhvoice");
         assert_eq!(l.settings.speech.backend, Backend::Ssip);
-        assert_eq!(SETTINGS.len(), 37);
+        assert_eq!(
+            l.settings.editing.boundary,
+            BoundaryMode {
+                cue: true,
+                say: true,
+                repeat: false
+            }
+        );
+        assert_eq!(l.settings.editing.word, WordLevel::Coarse);
+        assert!(!l.settings.editing.announce_clipboard);
+        assert_eq!(SETTINGS.len(), 40);
     }
 
     #[test]
@@ -982,5 +1049,41 @@ multi_press_ms=300\ndouble_tap_guard_ms=20\ninterrupt=\"never\"\nstop_speech_on_
         let b = load_text(t);
         assert_eq!(a.diags, b.diags);
         assert_eq!(a.hash, b.hash);
+    }
+}
+
+#[cfg(test)]
+mod boundary_tests {
+    use super::*;
+
+    fn b(text: &str) -> (BoundaryMode, usize) {
+        let l = load(Some(text), &crate::Presets::builtin());
+        (l.settings.editing.boundary, l.diags.len())
+    }
+
+    #[test]
+    fn boundary_reads_strings_and_lists() {
+        assert_eq!(b("[editing]\nboundary = \"off\"\n"), (BoundaryMode::OFF, 0));
+        assert_eq!(b("[editing]\nboundary = []\n"), (BoundaryMode::OFF, 0));
+        assert_eq!(b("[editing]\nboundary = \"cue\"\n"), (BoundaryMode::CUE, 0));
+        assert_eq!(b("[editing]\nboundary = \"say\"\n"), (BoundaryMode::SAY, 0));
+        assert_eq!(
+            b("[editing]\nboundary = \"repeat\"\n"),
+            (BoundaryMode::REPEAT, 0)
+        );
+        let both = BoundaryMode {
+            cue: true,
+            say: true,
+            repeat: false,
+        };
+        assert_eq!(b("[editing]\nboundary = \"cue+say\"\n"), (both, 0));
+        assert_eq!(b("[editing]\nboundary = [\"say\", \"cue\"]\n"), (both, 0));
+        assert_eq!(
+            b("[editing]\nboundary = \"silent\"\n"),
+            (BoundaryMode::OFF, 0)
+        );
+        assert_eq!(b("[editing]\nboundary = [\"cue\", \"loud\"]\n").1, 1);
+        assert_eq!(both.name(), "cue+say");
+        assert_eq!(BoundaryMode::OFF.name(), "off");
     }
 }

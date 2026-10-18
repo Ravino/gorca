@@ -41,4 +41,5 @@ pub use speech::{Prio, Segment, SegmentKind, Utterance};
 pub use text::{
     EditQuirks, MAX_SELECTION_TEXT, ScriptPosition, TextFormat, TextGranularity, TextLine,
     TextLines, TextQuery, TextSelections, TextUnit, TextUnitAt, TextWindowFill, WordLanding,
+    WordLevel,
 };

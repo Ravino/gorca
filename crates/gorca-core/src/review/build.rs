@@ -26,7 +26,7 @@ use gorca_rt::{BudgetClass, Clock, Deadline, mpsc, oneshot, with_deadline};
 use tokio::task::JoinSet;
 
 use super::cluster::{BuildInput, BuildNode, build_line_model, clip_of};
-use super::collect::{Miss, collect};
+use super::collect::{Miss, collect_with};
 use super::model::{LineModel, ReviewLimits, TruncWhy};
 use super::objnav::{NAV_MASK, NavOp, NavSource};
 use crate::app_actor::FillMsg;
@@ -91,6 +91,22 @@ pub struct ReviewIo {
     pub clock: Clock,
     pub next_req: Arc<AtomicU64>,
     pub limits: ReviewLimits,
+    /// The engine's text nodes repeat their text in `static` children (`EditQuirks`).
+    pub static_leaves_repeat: bool,
+    /// Pages of children that a build stopped reading at its deadline, per parent: the next pass
+    /// of the same task resumes after them instead of starting at the first page again.
+    pub partial_pages: PartialPages,
+}
+
+/// See [`ReviewIo::partial_pages`]. Shared by the clones of one task's `ReviewIo`.
+pub type PartialPages = Arc<std::sync::Mutex<HashMap<NodeKey, PartialKids>>>;
+
+/// The pages read so far and the child count of the parent when they were read: a resume that
+/// finds another count, or another child where the pages end, starts again at the first page.
+#[derive(Clone, Debug)]
+pub struct PartialKids {
+    pub total: Option<usize>,
+    pub nodes: Vec<Arc<gorca_model::NodeSnapshot>>,
 }
 
 /// The mirror as a [`NavSource`].
@@ -177,11 +193,16 @@ fn subtree(r: BackendReply) -> Result<SnapshotBatch, BackendError> {
 
 /// `node` and its children, applied to the mirror, with the node's child list `Known` when the
 /// reply covers all of them. One `Fetch` and one `ChildSnapshots` in flight together.
+///
+/// `until`: the build's soft deadline. The pages after the first are read one by one and each can
+/// take a full budget class on a slow app, so no further page is asked for once it has passed;
+/// the node then stays without a `Known` list and the build says it is truncated (R2-1).
 pub async fn expand(
     io: &ReviewIo,
     node: NodeKey,
     class: BudgetClass,
     bounds: bool,
+    until: Option<Instant>,
 ) -> Result<(), NavFetchError> {
     let want = if bounds {
         NAV_MASK | PropMask::BOUNDS
@@ -189,17 +210,39 @@ pub async fn expand(
         NAV_MASK
     };
     let issued = io.seq();
-    let (parent, kids) = tokio::join!(
-        io.call(class, BackendOp::Fetch { node, want }),
-        io.call(
-            class,
-            BackendOp::ChildSnapshots {
-                node,
-                range: 0..CHILD_PAGE,
-                want
-            }
-        )
-    );
+    // Pages an earlier pass stopped after (its deadline): resume behind them.
+    let resumed = io
+        .partial_pages
+        .lock()
+        .ok()
+        .and_then(|m| m.get(&node).cloned())
+        .filter(|p| !p.nodes.is_empty());
+    // A resumed call always reads one more page, whatever the clock says: the time before it
+    // went to the other misses of the pass, and a call that read nothing would loop forever.
+    let mut owed_page = resumed.is_some();
+    let saved_total = resumed.as_ref().map(|r| r.total);
+    let (parent, kids) = match resumed {
+        Some(prev) => {
+            let parent = io.call(class, BackendOp::Fetch { node, want }).await;
+            (
+                parent,
+                Ok(BackendReply::Subtree(SnapshotBatch::new(prev.nodes))),
+            )
+        }
+        None => {
+            tokio::join!(
+                io.call(class, BackendOp::Fetch { node, want }),
+                io.call(
+                    class,
+                    BackendOp::ChildSnapshots {
+                        node,
+                        range: 0..CHILD_PAGE,
+                        want
+                    }
+                )
+            )
+        }
+    };
     let parent = match parent {
         Ok(BackendReply::Node(n)) => n,
         Ok(_) => return Err(NavFetchError::Failed),
@@ -228,12 +271,33 @@ pub async fn expand(
         ChildList::Known(_) | ChildList::Unknown => None,
     };
     let page = CHILD_PAGE as usize;
-    let mut last_page_len = kids.nodes.len();
+    // The saved pages are only good while the list is the one they were read from: another
+    // count means children came or went (a shifted list repeats and loses entries).
+    let mut verify: Option<NodeKey> = None;
+    if let Some(saved) = saved_total {
+        if saved == total {
+            verify = kids.nodes.last().map(|n| n.key);
+        } else {
+            kids.nodes.clear();
+            owed_page = true;
+        }
+    }
+    let mut last_page_len = if kids.nodes.is_empty() || verify.is_some() {
+        page
+    } else if kids.nodes.len() % page == 0 {
+        page.min(kids.nodes.len())
+    } else {
+        kids.nodes.len() % page
+    };
     while last_page_len == page
         && kids.nodes.len() < MAX_CHILDREN
         && total.is_none_or(|t| kids.nodes.len() < t)
+        && (owed_page || until.is_none_or(|t| Instant::now() < t))
     {
-        let start = u32::try_from(kids.nodes.len()).unwrap_or(u32::MAX);
+        owed_page = false;
+        // A resume asks from the last saved child on and checks it is still where it was.
+        let from = kids.nodes.len() - usize::from(verify.is_some());
+        let start = u32::try_from(from).unwrap_or(u32::MAX);
         let more = io
             .call(
                 class,
@@ -246,12 +310,45 @@ pub async fn expand(
             .await
             .and_then(subtree);
         match more {
-            Ok(b) if !b.nodes.is_empty() => {
-                last_page_len = b.nodes.len();
+            Ok(mut b) if !b.nodes.is_empty() => {
+                if let Some(last) = verify.take() {
+                    if b.nodes.first().map(|n| n.key) != Some(last) {
+                        // The list moved under the saved pages: read it again from the start.
+                        kids.nodes.clear();
+                        last_page_len = page;
+                        owed_page = true;
+                        continue;
+                    }
+                    last_page_len = b.nodes.len();
+                    b.nodes.remove(0);
+                    if b.nodes.is_empty() {
+                        break;
+                    }
+                } else {
+                    last_page_len = b.nodes.len();
+                }
                 kids.truncated = b.truncated;
                 kids.nodes.extend(b.nodes);
             }
             Ok(_) | Err(_) => break,
+        }
+    }
+    // Stopped by the deadline with pages left: keep what was read for the next pass.
+    let unfinished = last_page_len == page
+        && kids.nodes.len() < MAX_CHILDREN
+        && total.is_none_or(|t| kids.nodes.len() < t)
+        && until.is_some_and(|t| Instant::now() >= t);
+    if let Ok(mut m) = io.partial_pages.lock() {
+        if unfinished {
+            m.insert(
+                node,
+                PartialKids {
+                    total,
+                    nodes: kids.nodes.clone(),
+                },
+            );
+        } else {
+            m.remove(&node);
         }
     }
     // A known count settles it (a strategy may flag `truncated` when it reads past the last
@@ -288,7 +385,7 @@ pub async fn expand(
 pub async fn nav_fetch(io: &ReviewIo, op: NavOp) -> Result<(), NavFetchError> {
     let class = BudgetClass::Interactive;
     match op {
-        NavOp::Children { node } => expand(io, node, class, false).await,
+        NavOp::Children { node } => expand(io, node, class, false, None).await,
         NavOp::Ancestry { node } => {
             let issued = io.seq();
             let r = io
@@ -361,9 +458,14 @@ async fn bounded<T: Send + 'static>(
 }
 
 /// Fetch one miss of a build.
-async fn serve_miss(io: ReviewIo, m: Miss, class: BudgetClass) -> Result<(), NavFetchError> {
+async fn serve_miss(
+    io: ReviewIo,
+    m: Miss,
+    class: BudgetClass,
+    until: Instant,
+) -> Result<(), NavFetchError> {
     match m {
-        Miss::Expand(n) => expand(&io, n, class, true).await,
+        Miss::Expand(n) => expand(&io, n, class, true, Some(until)).await,
         Miss::Node(n) | Miss::Bounds(n) => {
             let issued = io.seq();
             let r = io
@@ -381,13 +483,52 @@ async fn serve_miss(io: ReviewIo, m: Miss, class: BudgetClass) -> Result<(), Nav
     }
 }
 
-/// Visible lines of `node` inside `clip`, `None` when the app cannot say.
+/// Attempts at one node's lines when the app is busy (its request slots are taken).
+const LINES_TRIES: usize = 4;
+
+/// Why a node has no lines.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum LinesFail {
+    /// Nothing went wrong, or the app cannot say (not worth asking again).
+    No,
+    /// The app refused for now (its request slots are taken): asked again at once.
+    Busy,
+    /// No answer in time: not asked again in this pass (each try costs a class deadline, and
+    /// timeouts in a row make the app count as hung), the continuation tries later.
+    Slow,
+}
+
+/// What [`lines_of`] found: the lines, `None` when the app cannot say, and why.
+type LinesAnswer = (NodeKey, Option<Arc<[TextLine]>>, LinesFail);
+
+/// Visible lines of `node` inside `clip`. A busy app is asked again a few times while `until`
+/// (the build's soft deadline) allows: a model built while eight such requests are in flight must
+/// not lose the rows whose request was refused. A timeout is never retried.
 async fn lines_of(
     io: ReviewIo,
     node: NodeKey,
     clip: Rect,
     class: BudgetClass,
-) -> (NodeKey, Option<Arc<[TextLine]>>) {
+    until: Instant,
+) -> LinesAnswer {
+    let mut last = (node, None, LinesFail::No);
+    for attempt in 0..LINES_TRIES {
+        if attempt > 0 {
+            if Instant::now() >= until {
+                break;
+            }
+            let wait = 5 * u64::try_from(attempt).unwrap_or(1);
+            tokio::time::sleep(Duration::from_millis(wait)).await;
+        }
+        last = lines_once(&io, node, clip, class).await;
+        if last.2 != LinesFail::Busy {
+            break;
+        }
+    }
+    last
+}
+
+async fn lines_once(io: &ReviewIo, node: NodeKey, clip: Rect, class: BudgetClass) -> LinesAnswer {
     let q = TextQuery::VisibleLines {
         node,
         clip,
@@ -407,9 +548,21 @@ async fn lines_of(
                         .any(|c| !c.is_whitespace() && c != '\u{FFFC}')
                 })
                 .collect();
-            (node, Some(Arc::from(lines)))
+            (node, Some(Arc::from(lines)), LinesFail::No)
         }
-        Ok(_) | Err(_) => (node, None),
+        Ok(_) => (node, None, LinesFail::No),
+        Err(e) => {
+            tracing::debug!(?node, error = ?e, "review text lines failed");
+            let why = match e {
+                BackendError::Busy => LinesFail::Busy,
+                BackendError::Timeout => LinesFail::Slow,
+                BackendError::Gone
+                | BackendError::NotSupported
+                | BackendError::Protocol(_)
+                | BackendError::Unresolved => LinesFail::No,
+            };
+            (node, None, why)
+        }
     }
 }
 
@@ -432,7 +585,7 @@ pub async fn build_model(io: &ReviewIo, spec: BuildSpec) -> Result<Arc<LineModel
     let src = HandleSrc(&io.mirror);
     let mut truncated: Option<TruncWhy> = None;
     let mut last_error: Option<NavFetchError> = None;
-    let mut collected = collect(&src, spec.surface, io.limits);
+    let mut collected = collect_with(&src, spec.surface, io.limits, io.static_leaves_repeat);
     for _ in 0..MAX_ROUNDS {
         if collected.misses.is_empty() {
             break;
@@ -446,7 +599,7 @@ pub async fn build_model(io: &ReviewIo, spec: BuildSpec) -> Result<Arc<LineModel
             .iter()
             .map(|m| {
                 let (io, m, class) = (io.clone(), *m, spec.class);
-                Box::pin(serve_miss(io, m, class))
+                Box::pin(serve_miss(io, m, class, started + spec.budget))
                     as std::pin::Pin<
                         Box<dyn std::future::Future<Output = Result<(), NavFetchError>> + Send>,
                     >
@@ -463,7 +616,7 @@ pub async fn build_model(io: &ReviewIo, spec: BuildSpec) -> Result<Arc<LineModel
         if let Some(Err(e)) = results.into_iter().find(Result::is_err) {
             last_error = Some(e);
         }
-        collected = collect(&src, spec.surface, io.limits);
+        collected = collect_with(&src, spec.surface, io.limits, io.static_leaves_repeat);
         if !progressed {
             break;
         }
@@ -512,24 +665,23 @@ pub async fn build_model(io: &ReviewIo, spec: BuildSpec) -> Result<Arc<LineModel
                     *k,
                     collected.text_clips.get(k).copied().unwrap_or(clip),
                     spec.class,
+                    started + spec.budget,
                 ))
-                    as std::pin::Pin<
-                        Box<
-                            dyn std::future::Future<Output = (NodeKey, Option<Arc<[TextLine]>>)>
-                                + Send,
-                        >,
-                    >
+                    as std::pin::Pin<Box<dyn std::future::Future<Output = LinesAnswer> + Send>>
             })
             .collect();
-        for (k, l) in bounded(jobs, io.limits.in_flight).await {
+        for (k, l, why) in bounded(jobs, io.limits.in_flight).await {
             if let Some(l) = l {
                 lines.insert(k, l);
+            } else if why != LinesFail::No {
+                // Not "complete": the continuation asks for this node again.
+                truncated.get_or_insert(TruncWhy::Deadline);
             }
         }
     }
 
     let built_rev = io.mirror.revision();
-    let final_pass = collect(&src, spec.surface, io.limits);
+    let final_pass = collect_with(&src, spec.surface, io.limits, io.static_leaves_repeat);
     let nodes: Vec<BuildNode> = final_pass
         .nodes
         .into_iter()
@@ -552,6 +704,14 @@ pub async fn build_model(io: &ReviewIo, spec: BuildSpec) -> Result<Arc<LineModel
     }));
     match built {
         Ok(m) => {
+            if tracing::enabled!(tracing::Level::TRACE) {
+                for (i, l) in m.lines.iter().enumerate() {
+                    tracing::trace!(i, top = l.top, bottom = l.bottom, text = %l.text, "review line");
+                    for z in m.line_zones(i) {
+                        tracing::trace!(kind = ?z.kind, text = %z.text, rect = ?z.rect, "review zone");
+                    }
+                }
+            }
             tracing::debug!(
                 lines = m.lines.len(),
                 zones = m.zones.len(),
@@ -590,7 +750,7 @@ pub async fn find_status_bar(
     if bar.app != root.app {
         return Ok(None);
     }
-    expand(io, bar, BudgetClass::Interactive, false).await?;
+    expand(io, bar, BudgetClass::Interactive, false, None).await?;
     Ok(Some(bar))
 }
 
@@ -653,7 +813,7 @@ pub async fn revalidate(io: &ReviewIo, probe: Vec<ProbeItem>, clip: Rect) -> RrV
     let mut text_changed = false;
     for p in &probe {
         let Some(old) = &p.lines else { continue };
-        let (_, fresh) = lines_of(io.clone(), p.node, clip, class).await;
+        let (_, fresh, _) = lines_of(io.clone(), p.node, clip, class, Instant::now()).await;
         if let Some(fresh) = fresh {
             any_ok = true;
             let same = fresh.len() == old.len()

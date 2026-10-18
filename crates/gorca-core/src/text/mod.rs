@@ -126,6 +126,13 @@ pub struct TextCounters {
     pub caret_absorbed: u64,
     pub caret_late: u64,
     pub caret_edge: u64,
+    /// Boundary cues asked for (a movement key that could not move the caret, `boundary = "cue"`).
+    pub boundary_cues: u64,
+    /// Boundary words spoken (`boundary` with "say").
+    pub boundary_said: u64,
+    /// "copied", "cut" (apart from the cut text), "pasted" (apart from the pasted text), "undo"
+    /// and "redo" confirmations spoken.
+    pub clipboard_spoken: u64,
     pub caret_uncorrelated: u64,
     pub typed_echoed: u64,
     /// Text keys of any kind that reached the machine, and of those the typed characters.
@@ -371,6 +378,12 @@ impl Reader {
             inserted_text: s.echo.inserted_text,
             edge: std::time::Duration::from_millis(u64::from(s.text.caret_edge_ms)),
             late: std::time::Duration::from_millis(u64::from(s.text.caret_late_ms)),
+            announce_clipboard: s.editing.announce_clipboard,
+            boundary: caret::Boundary {
+                cue: s.editing.boundary.cue,
+                say: s.editing.boundary.say,
+                repeat: s.editing.boundary.repeat,
+            },
         }
     }
 
@@ -385,11 +398,18 @@ impl Reader {
             .caret
             .tracked()
             .map_or(0, |t| self.dir.text_insert_slack(t.root.app));
-        let quirks = self
+        let mut quirks = self
             .text
             .caret
             .tracked()
             .map_or_else(EditQuirks::default, |t| self.dir.edit_quirks(t.root.app));
+        // The user's `[editing] word` wins over the application's own default.
+        quirks.word_level = match self.cmd.effective.editing.word {
+            gorca_config::WordLevel::Auto => quirks.word_level,
+            gorca_config::WordLevel::Fine => gorca_model::WordLevel::Fine,
+            gorca_config::WordLevel::Medium => gorca_model::WordLevel::Medium,
+            gorca_config::WordLevel::Coarse => gorca_model::WordLevel::Coarse,
+        };
         let epoch_now = self.epoch.current();
         let mut out = std::mem::take(&mut self.text.out);
         out.clear();
@@ -417,8 +437,12 @@ impl Reader {
                 Out::Fetch { op, .. } => {
                     tracing::debug!(target: "gorca_text", ?op, "fetch");
                 }
+                Out::Cue(c) => {
+                    tracing::debug!(target: "gorca_text", cue = c.name(), "cue");
+                }
             }
             match o {
+                Out::Cue(c) => fx.push(ReaderEffect::Cue(c)),
                 Out::Say(s) => {
                     let u = self.text_utterance(&s);
                     fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
@@ -529,6 +553,7 @@ impl Reader {
             gorca_text::echo::Reason::Typed
                 | gorca_text::echo::Reason::TypedWord
                 | gorca_text::echo::Reason::Erased
+                | gorca_text::echo::Reason::Clipboard
         ) {
             self.cmd.quick.echo_ids.push(id);
         }

@@ -56,12 +56,38 @@ pub enum WordLanding {
     Start,
 }
 
+/// How coarse a word is: the generic text-unit option of `gorca-text` (`seg::word_range_level`).
+///
+/// - `Fine`: a run of letters, digits and `_` is a word, every other character is a word of its
+///   own (`--color=auto` has five stops).
+/// - `Medium`: token characters stay together with the joiners `- . = : @ ~` when a letter or
+///   digit follows them (`--color=auto`, `foo_bar`, `file.tar.gz`, `user@host`, `10:30`); a path
+///   separator is a word of its own, and so is other punctuation and a joiner with no letter
+///   after it (`end.`, `a - b`).
+/// - `Coarse`: everything between blanks is one word (Orca-like).
+///
+/// Every word keeps its trailing blanks, whatever the level.
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub enum WordLevel {
+    #[default]
+    Fine,
+    Medium,
+    Coarse,
+}
+
 /// Per-toolkit facts the shared editing presenter needs (ADR-0008: connector data, never a
 /// toolkit name tested in the core). One row per toolkit class, selected by the connector.
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
 pub struct EditQuirks {
     /// Where Ctrl+Right lands (see [`WordLanding`]).
     pub word_landing: WordLanding,
+    /// How coarse a word is for this application (see [`WordLevel`]); the user's `[editing]
+    /// word` setting wins over it.
+    pub word_level: WordLevel,
+    /// Blink: every text run is also a `static` child that repeats the text its parent's own
+    /// `Text` already holds. Text readers (flat review) skip such children so a line is not said
+    /// twice. Gecko keeps text in the container only.
+    pub text_leaves_repeat_parent: bool,
 }
 
 /// Core text queries. Text is not part of the node snapshot.

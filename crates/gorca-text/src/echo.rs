@@ -55,9 +55,14 @@ pub enum Reason {
     TypedWord,
     Erased,
     Inserted(InsertSource),
-    CaretMove { say: Say, correlated: bool },
+    CaretMove {
+        say: Say,
+        correlated: bool,
+    },
     Boundary,
     Selection,
+    /// "copied", "cut", "pasted", "undo" or "redo" after a clipboard or undo key.
+    Clipboard,
 }
 
 /// Fixed ring of the last [`RING`] typed characters.

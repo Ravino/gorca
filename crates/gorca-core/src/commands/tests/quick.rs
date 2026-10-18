@@ -94,7 +94,8 @@ fn kinds(fx: &ReaderEffects) -> Vec<SegmentKind> {
     fx.iter()
         .filter_map(|e| match e {
             ReaderEffect::Speak(s) => s.utterance.segments.first().map(|g| g.kind),
-            ReaderEffect::Fetch { .. }
+            ReaderEffect::Cue(_)
+            | ReaderEffect::Fetch { .. }
             | ReaderEffect::Demand { .. }
             | ReaderEffect::FocusSettled { .. }
             | ReaderEffect::QueryActiveWindowFocus

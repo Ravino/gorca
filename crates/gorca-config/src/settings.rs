@@ -153,6 +153,126 @@ impl Confirmations {
     }
 }
 
+/// What a movement key that cannot move the caret does (the start or end of a line or field).
+/// Independent options like `speech.caps`: `["cue", "say"]`, or the strings `off`, `cue`, `say`,
+/// `cue+say` and the older `repeat`.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+// Three independent switches that are separate entries of one list in the file.
+#[allow(clippy::struct_excessive_bools)]
+pub struct BoundaryMode {
+    /// A boundary cue (a short sound once the cue sink exists; silent until then).
+    pub cue: bool,
+    /// A short word for the edge: "start", "end", "top", "bottom".
+    pub say: bool,
+    /// Read the unit under the caret again (the behaviour before the cue existed).
+    pub repeat: bool,
+}
+
+impl Default for BoundaryMode {
+    fn default() -> Self {
+        BoundaryMode::CUE
+    }
+}
+
+impl BoundaryMode {
+    pub const NAMES: &'static str = "\"off\", \"cue\", \"say\", \"cue+say\" or \"repeat\"";
+    pub const OFF: BoundaryMode = BoundaryMode {
+        cue: false,
+        say: false,
+        repeat: false,
+    };
+    pub const CUE: BoundaryMode = BoundaryMode {
+        cue: true,
+        ..BoundaryMode::OFF
+    };
+    pub const SAY: BoundaryMode = BoundaryMode {
+        say: true,
+        ..BoundaryMode::OFF
+    };
+    pub const REPEAT: BoundaryMode = BoundaryMode {
+        repeat: true,
+        ..BoundaryMode::OFF
+    };
+
+    /// Add the option named `s` (`cue+say` adds both; `off`, `none` and `silent` add nothing).
+    /// `false` for an unknown name.
+    pub fn add(&mut self, s: &str) -> bool {
+        for part in s.split('+') {
+            match part.trim() {
+                "cue" => self.cue = true,
+                "say" => self.say = true,
+                "repeat" => self.repeat = true,
+                "off" | "none" | "silent" => {}
+                _ => return false,
+            }
+        }
+        true
+    }
+
+    /// The option names, in the order of the file.
+    pub fn names(self) -> Vec<&'static str> {
+        let mut v = Vec::with_capacity(3);
+        if self.cue {
+            v.push("cue");
+        }
+        if self.say {
+            v.push("say");
+        }
+        if self.repeat {
+            v.push("repeat");
+        }
+        v
+    }
+
+    /// The setting as one string (`off`, `cue`, `cue+say`, ...).
+    pub fn name(self) -> String {
+        let n = self.names();
+        if n.is_empty() {
+            "off".to_owned()
+        } else {
+            n.join("+")
+        }
+    }
+}
+
+/// How coarse a word is for word movement and word reading (`[editing] word`).
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub enum WordLevel {
+    /// The application decides (a terminal reads medium words, everything else fine ones).
+    #[default]
+    Auto,
+    /// Letters and digits are a word, every punctuation mark is a word of its own.
+    Fine,
+    /// Option tokens (`--color=auto`), identifiers and file names stay whole; blanks, slashes and
+    /// other punctuation separate.
+    Medium,
+    /// Everything between blanks is a word.
+    Coarse,
+}
+
+impl WordLevel {
+    pub const NAMES: &'static str = "\"auto\", \"fine\", \"medium\" or \"coarse\"";
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "auto" => Some(WordLevel::Auto),
+            "fine" => Some(WordLevel::Fine),
+            "medium" => Some(WordLevel::Medium),
+            "coarse" => Some(WordLevel::Coarse),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            WordLevel::Auto => "auto",
+            WordLevel::Fine => "fine",
+            WordLevel::Medium => "medium",
+            WordLevel::Coarse => "coarse",
+        }
+    }
+}
+
 /// How much punctuation is spoken (ADR-0007 VB-1).
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Hash)]
 pub enum Punct {
@@ -411,6 +531,28 @@ impl Default for EchoSettings {
     }
 }
 
+/// Editing feedback beyond the typed character (ADR-0007, the editing polish batch).
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EditingSettings {
+    /// "copied", "cut", "pasted", "undo" and "redo" after Ctrl+C, X, V, Z and Y in an editable
+    /// field, each only when the resulting event shows that it happened.
+    pub announce_clipboard: bool,
+    /// What a movement key does at the start or end of a line or field.
+    pub boundary: BoundaryMode,
+    /// How coarse a word is.
+    pub word: WordLevel,
+}
+
+impl Default for EditingSettings {
+    fn default() -> Self {
+        Self {
+            announce_clipboard: true,
+            boundary: BoundaryMode::CUE,
+            word: WordLevel::Auto,
+        }
+    }
+}
+
 /// Caret and text presentation (ADR-0007 section 12).
 #[derive(Clone, Debug, Eq, PartialEq)]
 // One switch and two durations; a state enum would not be clearer.
@@ -496,6 +638,7 @@ pub struct Settings {
     pub keyboard: KeyboardSettings,
     pub speech: SpeechSettings,
     pub echo: EchoSettings,
+    pub editing: EditingSettings,
     pub text: TextSettings,
     pub browse: BrowseSettings,
     pub terminal: TerminalSettings,
@@ -749,6 +892,14 @@ pub static SETTINGS: &[SettingDef] = &[
     row("echo", "typed_words", SettingType::Bool, "false"),
     row("echo", "command_keys", SettingType::Bool, "false"),
     row("echo", "inserted_text", SettingType::Bool, "true"),
+    row("editing", "announce_clipboard", SettingType::Bool, "true"),
+    row("editing", "boundary", SettingType::StrList, "\"cue\""),
+    row(
+        "editing",
+        "word",
+        SettingType::Enum(WordLevel::NAMES),
+        "\"auto\"",
+    ),
     row("text", "say_all_moves_caret", SettingType::Bool, "true"),
     row(
         "text",
@@ -925,6 +1076,21 @@ static DOCS: &[(&str, &str, &str)] = &[
         "echo",
         "inserted_text",
         "Speak text inserted by paste or autocomplete.",
+    ),
+    (
+        "editing",
+        "announce_clipboard",
+        "Say \"copied\", \"cut\", \"pasted\", \"undo\" or \"redo\" after Ctrl+C, X, V, Z or Y in an editable field, when the text shows that it happened (copy only with a selection).",
+    ),
+    (
+        "editing",
+        "boundary",
+        "What an arrow, Home or End key does when the caret cannot move: any of \"cue\" (a boundary sound; silent until sounds exist) and \"say\" (a short word: start, end, top, bottom), for example [\"cue\", \"say\"]; [] or \"off\" is nothing; \"repeat\" reads the unit under the caret again.",
+    ),
+    (
+        "editing",
+        "word",
+        "How coarse a word is: fine (letters and digits, each punctuation mark apart), medium (option tokens like --color=auto, identifiers and file names stay whole; slashes and other punctuation separate), coarse (everything between blanks); auto lets the application decide (terminals use medium).",
     ),
     (
         "text",
@@ -1129,6 +1295,7 @@ mod tests {
                 "keymap",
                 "speech",
                 "echo",
+                "editing",
                 "text",
                 "browse",
                 "terminal",

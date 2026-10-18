@@ -12,7 +12,7 @@ use crate::present::{key_echo, key_echo_is_action, key_echo_spoken, key_echo_tex
 use crate::reader::{Reader, ReaderEffect, ReaderEffects};
 
 impl Reader {
-    pub(crate) fn on_key(&mut self, intent: KeyIntent, now: Instant, fx: &mut ReaderEffects) {
+    pub(crate) fn on_key(&mut self, mut intent: KeyIntent, now: Instant, fx: &mut ReaderEffects) {
         // E-4: adopt the epoch carried by the key press so the utterance answering it is never
         // cancelled by that same key press.
         self.epoch.observe(intent.epoch);
@@ -46,7 +46,11 @@ impl Reader {
             }
             KeyClass::PassToApp => {
                 self.pass_key_seen(&intent, fx);
-                self.review_left_by_key(&intent, fx);
+                if self.review_left_by_key(&intent, fx) {
+                    // With `interrupt = "never"` the press did not advance the epoch, so leaving
+                    // review did (to purge the queued review speech): this key's echo takes it.
+                    intent.epoch = self.epoch.current().max(intent.epoch);
+                }
                 self.focus_audit_on_key(&intent, fx);
                 // The text layer speaks typed characters and erasures of an editable object
                 // itself (ADR-0007 TE-1, TE-5): the generic echo would double them.
@@ -75,17 +79,23 @@ impl Reader {
     /// A key press that goes to the application ends review: the user is typing into the focused
     /// object, so the text layer (typed-character echo, erasures, caret) must own the key again
     /// instead of the generic key echo naming it. Review resumes at the focus on its next
-    /// command (ADR-0006 4.1). Lone modifiers never leave review.
-    fn review_left_by_key(&mut self, intent: &KeyIntent, fx: &mut ReaderEffects) {
+    /// command (ADR-0006 4.1). Lone modifiers never leave review. The key's own press has already
+    /// advanced the epoch (and cancelled the review speech), so leaving does not advance it a
+    /// second time: that made the echo of this key, or of a key typed right after it, stale.
+    /// Only with `keyboard.interrupt = "never"` (the press advances nothing) does leaving
+    /// advance it, so that queued review speech is still purged; true then.
+    fn review_left_by_key(&mut self, intent: &KeyIntent, fx: &mut ReaderEffects) -> bool {
         if !intent.event.pressed
             || !matches!(self.mode, Mode::Review { .. })
             || (0xffe1..=0xffee).contains(&intent.event.keysym)
         {
-            return;
+            return false;
         }
+        let never = self.cmd.effective.keyboard.interrupt == gorca_config::InterruptPolicy::Never;
         self.review_cancel_pending();
-        self.on_mode(crate::mode::ModeMsg::ExitReview, fx);
+        self.on_mode_epoch(crate::mode::ModeMsg::ExitReview, never, fx);
         self.text_resync_after_review(fx);
+        never
     }
 
     /// A key that is going to the application reaches a Reader whose picture of the focus may

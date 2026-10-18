@@ -1581,6 +1581,20 @@ pub fn vr(
         Ok(())
     })?;
     expect("changed under the cursor", "changed line five", &got);
+    // The key that leaves review is the user typing: it ends review and is echoed (twice, once
+    // after a line and once after a character, and the shell's echo comes a frame later).
+    for (i, k) in [KP_CUR_LINE, KP_NEXT_CHAR].into_iter().enumerate() {
+        tap(&mut t, k, 0, 0)?;
+        std::thread::sleep(Duration::from_millis(250));
+        let c = if i == 0 { 'x' } else { 'y' };
+        let got = said_during(&mut t, 400, |t| {
+            type_key(t, c)?;
+            std::thread::sleep(Duration::from_millis(10));
+            feed(&mut t.app, &c.to_string())?;
+            Ok(())
+        })?;
+        expect(&format!("typed after review {i}"), &c.to_string(), &got);
+    }
     // A series of steps: latency and no IPC.
     let n = n_of(size, 400);
     let mut rng = Rng::new(seed);
@@ -2311,6 +2325,7 @@ pub fn vv(
     vv_password(&mut v, &mut c, out, &[&err_path, &present_path])?;
     vv_pager(&mut v, &mut c)?;
     vv_tabs(&mut v, &mut c)?;
+    vv_review_echo(&mut v, &mut c)?;
     let before_focus = c.failures;
     vv_focus(&mut v, &mut c)?;
     out.x(
@@ -2655,6 +2670,38 @@ fn vv_tabs(v: &mut V, c: &mut Check) -> Result<()> {
         heard(&got, "dollar") || heard(&got, "$"),
         &got,
     );
+    Ok(())
+}
+
+/// VV review echo: the key that leaves flat review is the user typing, so it both ends review and
+/// is echoed (owner report: the first character typed after review was silent; the echo carried
+/// the epoch from before the review ended and the speech lane dropped it as stale).
+fn vv_review_echo(v: &mut V, c: &mut Check) -> Result<()> {
+    for (i, review) in [KP_CUR_LINE, KP_NEXT_CHAR].into_iter().enumerate() {
+        let got = v.said_during(700, |v| {
+            v.reader_key(review)?;
+            Ok(())
+        })?;
+        c.expect(
+            &format!("review key {i} reads something"),
+            !got.is_empty(),
+            &got,
+        );
+        let ch = if i == 0 { 'q' } else { 'w' };
+        let got = v.said_during(1200, |v| {
+            v.type_char(ch)?;
+            Ok(())
+        })?;
+        c.expect(
+            &format!("the character typed after review {i} is echoed once"),
+            heard_count(&got, &ch.to_string()) == 1,
+            &got,
+        );
+        let _ = v.said_during(500, |v| {
+            v.press(BACKSPACE, 8, 0, &[14])?;
+            Ok(())
+        })?;
+    }
     Ok(())
 }
 

@@ -33,6 +33,38 @@ language = "ru"
 voice = ""                    # optional, a voice name from your voicego engine
 ```
 
+## Editing feedback
+
+`[editing]` tunes what gorca says around the caret and the clipboard.
+
+- `announce_clipboard = true` says "copied", "cut", "pasted", "undo" or "redo" (in the speech
+  language) after Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+Z and Ctrl+Y (also Ctrl+Insert, Shift+Delete,
+  Shift+Insert and Ctrl+Shift+Z) in an editable field. Each one is confirmed by what the text
+  does and never claimed without evidence: "cut" needs the selected text to be deleted, "pasted"
+  needs text to be inserted (and still reads it: "pasted, some words"), "undo" and "redo" need
+  the text to change (one confirmation per key, and nothing in a widget that cannot undo, such as
+  a GTK 3 entry), and "copied" needs a selection to exist (copying changes nothing that could
+  confirm it). The keys themselves are never grabbed: they always reach the application. In
+  browse mode Ctrl+C is the selection-model copy and is not affected.
+- `boundary` is what an arrow, Home or End key does when the caret cannot move, at the start or
+  end of a line or field. Like `[speech] caps` it is a list of independent options:
+  `"cue"` (the default) asks the cue sink for a short boundary sound (until the sound theme
+  exists the cue is silent, so a boundary key says nothing); `"say"` speaks a short word, "start"
+  or "end" for Home, End and any key in a one-line field, "top" or "bottom" for the other keys
+  of a text view (Russian: "начало", "конец", "начало текста", "конец текста"). Write them
+  together as `["cue", "say"]` or `"cue+say"`; `"off"` or `[]` does nothing. `"repeat"` is the
+  old behaviour (read the character, word or line under the caret again) and may be combined
+  too. Terminals honour the setting the same way (start and end only).
+- `word` is how coarse a word is when a word is read (Ctrl+Left and Ctrl+Right, the current-word
+  commands, terminal review). `"fine"` is the caret word rule: letters, digits and `_` are a word,
+  every other character a word of its own, so `--color=auto` has five stops. `"medium"` keeps
+  option tokens, identifiers and file names whole (`--color=auto`, `foo_bar`, `file.tar.gz`,
+  `user@host`, `10:30`; the joiners `- . = : @ ~` join when a letter or digit follows) while a
+  slash, a quote, a comma or a trailing dot stay words of their own. `"coarse"` is everything
+  between blanks. `"auto"` (the default) lets the application choose: a terminal reads medium
+  words, every other editor fine ones. The words move with the application's own caret keys; this
+  setting changes what is spoken, not where the caret lands.
+
 ## Default configuration
 
 ```toml
@@ -97,6 +129,14 @@ typed_words = false
 command_keys = false
 # Speak text inserted by paste or autocomplete. (true or false)
 inserted_text = true
+
+[editing]
+# Say "copied", "cut", "pasted", "undo" or "redo" after Ctrl+C, X, V, Z or Y in an editable field, when the text shows that it happened (copy only with a selection). (true or false)
+announce_clipboard = true
+# What an arrow, Home or End key does when the caret cannot move: any of "cue" (a boundary sound; silent until sounds exist) and "say" (a short word: start, end, top, bottom), for example ["cue", "say"]; [] or "off" is nothing; "repeat" reads the unit under the caret again. (list of strings)
+boundary = "cue"
+# How coarse a word is: fine (letters and digits, each punctuation mark apart), medium (option tokens like --color=auto, identifiers and file names stay whole; slashes and other punctuation separate), coarse (everything between blanks); auto lets the application decide (terminals use medium). (one of "auto", "fine", "medium" or "coarse")
+word = "auto"
 
 [text]
 # Say all moves the caret as it reads. (true or false)

@@ -17,7 +17,7 @@ use gorca_ext_api::terminal::{
     TerminalHooks, Unit, Urgency,
 };
 
-use gorca_ext_api::terminal::{word_at, word_motion};
+use gorca_ext_api::terminal::{DEFAULT_WORD_LEVEL, WordLevel, word_at, word_motion};
 
 use crate::prompt::Prompt;
 use crate::screen::{Diff, DiffBuf, Screen, diff, diff_with};
@@ -432,13 +432,44 @@ impl Session {
         let (row, col) = self.live.locate(self.caret);
         let line = self.live.line(row);
         match dir {
-            Dir::Back => self.prompt.end(line).is_some_and(|pe| col <= pe),
+            // Only the first row of the command, with nothing below it, has a start the caret
+            // cannot go behind: a `# comment` row of an editor, or the `> out.txt` row a long
+            // command wrapped onto, matches a prompt marker and is neither.
+            Dir::Back => {
+                self.prompt.end(line).is_some_and(|pe| col <= pe)
+                    && !self.continues_command(row)
+                    && self.blank_below(row)
+            }
             Dir::Forward => {
-                col as usize >= line.trim_end().chars().count()
-                    && (row + 1..self.live.line_count())
-                        .all(|r| self.live.line(r).trim().is_empty())
+                col as usize >= line.trim_end().chars().count() && self.blank_below(row)
             }
         }
+    }
+
+    /// Are all rows below `row` of the live screen blank?
+    fn blank_below(&self, row: usize) -> bool {
+        (row + 1..self.live.line_count()).all(|r| self.live.line(r).trim().is_empty())
+    }
+
+    /// Is `row` the continuation of a command that wrapped from a row above? The rows above are
+    /// full rows (the terminal's width is the longest row on the screen) up to one with a prompt.
+    fn continues_command(&self, row: usize) -> bool {
+        let width = (0..self.live.line_count())
+            .map(|r| self.live.line(r).chars().count())
+            .max()
+            .unwrap_or(0);
+        let mut r = row;
+        while r > 0 && row - r < WRAP_ROWS_MAX {
+            let above = self.live.line(r - 1);
+            if above.chars().count() != width {
+                return false;
+            }
+            if self.prompt.end(above).is_some() {
+                return true;
+            }
+            r -= 1;
+        }
+        false
     }
 
     fn edge_ready(&self) -> bool {
@@ -455,8 +486,23 @@ impl Session {
                 break;
             }
             self.motions.pop_front();
-            let (row, col) = self.live.locate(self.caret);
-            self.say_at(&self.live, row, col, unit, None, out);
+            // The key moved nothing: the setting decides what the boundary is.
+            let b = self.cfg.boundary;
+            if b.cue {
+                out.push(TermAction::Cue);
+            }
+            if b.say {
+                let key = match dir {
+                    Dir::Back => "boundary-start",
+                    Dir::Forward => "boundary-end",
+                };
+                let word = gorca_ext_api::i18n::msg(crate::NAME, key, &[]);
+                self.say(out, &word, Unit::Text, Urgency::Key);
+            }
+            if b.repeat {
+                let (row, col) = self.live.locate(self.caret);
+                self.say_at(&self.live, row, col, unit, None, out);
+            }
         }
     }
 
@@ -1311,6 +1357,11 @@ impl Session {
         self.motions.push_back((unit, now, dir));
     }
 
+    /// How coarse a word is: the user's choice, else the terminal default (medium).
+    fn word_level(&self) -> WordLevel {
+        self.cfg.word_level.unwrap_or(DEFAULT_WORD_LEVEL)
+    }
+
     fn prune_motions(&mut self, now: Ms) {
         while self
             .motions
@@ -1337,7 +1388,7 @@ impl Session {
         let text = match unit {
             Unit::Word => {
                 let chars: Vec<char> = line.trim_end().chars().collect();
-                word_motion(&chars, from, col)
+                word_motion(&chars, from, col, self.word_level())
                     .map(|r| chars[r].iter().collect::<String>().trim().to_owned())
                     .filter(|w| !w.is_empty())
             }

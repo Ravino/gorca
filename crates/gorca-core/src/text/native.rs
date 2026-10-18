@@ -240,11 +240,23 @@ pub struct NativeText<'a> {
     win: &'a TextWindow,
     /// A single-line entry: its only line is the whole text.
     single_line: bool,
+    word: gorca_text::WordLevel,
 }
 
 impl<'a> NativeText<'a> {
     pub fn new(win: &'a TextWindow, single_line: bool) -> Self {
-        Self { win, single_line }
+        Self {
+            win,
+            single_line,
+            word: gorca_text::WordLevel::Fine,
+        }
+    }
+
+    /// The same window with another word level.
+    #[must_use]
+    pub fn with_word_level(mut self, word: gorca_text::WordLevel) -> Self {
+        self.word = word;
+        self
     }
 
     /// Is `r` (relative to the window start) clear of the window's edges, unless the edge is
@@ -286,7 +298,7 @@ impl TextSpace for NativeText<'_> {
         }
         let rel = (at - w.base) as usize;
         // `max_line` 0: hard lines only; native `Line` never reaches CharsSpace.
-        let cs = CharsSpace::new(&w.chars, 0);
+        let cs = CharsSpace::new(&w.chars, 0).with_word_level(self.word);
         let Lookup::Ready(r) = cs.unit_at(to_u32(rel), unit) else {
             return Lookup::Need(Need::Window { around: at });
         };

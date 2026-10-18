@@ -86,11 +86,11 @@ impl TextUnits for SimpleUnits {
 }
 
 /// Units of terminal review (ADR-0018): words by the rule caret navigation uses (`gorca_text`
-/// TL-1: a word keeps its trailing spaces, each punctuation mark is a word), so that a review
-/// word and a caret word agree in the same terminal line; characters as [`SimpleUnits`]. A run
-/// of spaces alone is not a word to stop on.
-#[derive(Copy, Clone, Debug, Default)]
-pub struct TermUnits;
+/// TL-1: a word keeps its trailing spaces; what else stays in it depends on the word level the
+/// terminal reads with), so that a review word and a caret word agree in the same terminal line;
+/// characters as [`SimpleUnits`]. A run of spaces alone is not a word to stop on.
+#[derive(Copy, Clone, Debug)]
+pub struct TermUnits(pub gorca_model::WordLevel);
 
 impl TextUnits for TermUnits {
     fn units(&self, text: &str, unit: Unit) -> Ranges {
@@ -101,7 +101,7 @@ impl TextUnits for TermUnits {
         let mut out = Ranges::new();
         let mut i = 0usize;
         while i < chars.len() {
-            let r = gorca_text::seg::word_range(&chars, i);
+            let r = gorca_text::seg::word_range_level(&chars, i, self.0);
             if r.end <= i {
                 break;
             }
@@ -174,7 +174,7 @@ mod tests {
 
     #[test]
     fn terminal_words_follow_the_caret_word_rule() {
-        let u = TermUnits;
+        let u = TermUnits(gorca_model::WordLevel::Fine);
         let w = u.units("ls -l --color=auto", Unit::Word);
         let words: Vec<String> = w.iter().map(|r| slice("ls -l --color=auto", r)).collect();
         assert_eq!(
@@ -192,6 +192,26 @@ mod tests {
             "leading spaces are not a word to stop on"
         );
         assert_eq!(u.units("e\u{301}x", Unit::Char).as_slice(), &[0..2, 2..3]);
+    }
+
+    #[test]
+    fn terminal_words_by_level() {
+        let t = "ls -l --color=auto /usr/local";
+        let words = |l| -> Vec<String> {
+            TermUnits(l)
+                .units(t, Unit::Word)
+                .iter()
+                .map(|r| slice(t, r))
+                .collect()
+        };
+        assert_eq!(
+            words(gorca_model::WordLevel::Medium),
+            ["ls ", "-l ", "--color=auto ", "/", "usr", "/", "local"].map(String::from)
+        );
+        assert_eq!(
+            words(gorca_model::WordLevel::Coarse),
+            ["ls ", "-l ", "--color=auto ", "/usr/local"].map(String::from)
+        );
     }
 
     #[test]

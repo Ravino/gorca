@@ -396,3 +396,108 @@ fn a_key_leaving_review_on_a_cold_terminal_starts_one_tracking() {
     let now = s.r.term_trackings();
     assert_eq!(now - started, 1);
 }
+
+/// The key that leaves flat review must both end review and be echoed (owner report: the first
+/// typed character after review was silent in a terminal). Leaving review advances the epoch
+/// (`ModeEffect::AdvanceEpoch`), so the echo of the very key that left it carried an epoch the
+/// speech lane had already moved past: the lane dropped it as stale. The echo must be as new as
+/// the epoch the leaving made.
+#[test]
+fn the_character_that_leaves_review_is_echoed_with_a_current_epoch() {
+    for node in [TERM, ENTRY] {
+        for cmd in [
+            CoreCmd::ReviewCurLine,
+            CoreCmd::ReviewCurWord,
+            CoreCmd::ReviewCurChar,
+        ] {
+            let mut s = Sim::new(true);
+            s.focus_to(node, true, 0);
+            s.settle(3000);
+            s.command(cmd, 1);
+            s.settle(3000);
+            assert!(
+                matches!(s.r.mode(), Mode::Review { .. }),
+                "{cmd:?} starts review"
+            );
+            s.spoken.clear();
+            s.type_key(KeyKind::Letter('x'), Modifiers::empty());
+            s.settle(1000);
+            assert!(
+                !matches!(s.r.mode(), Mode::Review { .. }),
+                "the key ends review"
+            );
+            let echo = s.spoken.iter().find(|u| u.text == "x");
+            let Some(echo) = echo else {
+                let said: Vec<&str> = s.spoken.iter().map(|u| u.text.as_str()).collect();
+                panic!("node {node} {cmd:?}: the typed character is echoed, got {said:?}");
+            };
+            assert!(
+                echo.epoch >= s.epoch.current(),
+                "node {node} {cmd:?}: the echo (epoch {:?}) is stale, current {:?}",
+                echo.epoch,
+                s.epoch.current()
+            );
+        }
+    }
+}
+
+/// Typeahead after review: the input lane stamped both presses before the Reader ran the first,
+/// which left review. Neither echo may be older than the epoch of the newest key.
+#[test]
+fn two_keys_typed_ahead_after_review_are_both_echoed_with_current_epochs() {
+    for node in [TERM, ENTRY] {
+        let mut s = Sim::new(true);
+        s.focus_to(node, true, 0);
+        s.settle(3000);
+        s.command(CoreCmd::ReviewCurLine, 1);
+        s.settle(3000);
+        s.spoken.clear();
+        s.type_keys_ahead(&[KeyKind::Letter('x'), KeyKind::Letter('y')]);
+        s.settle(1000);
+        // x is older than the newest press by design (y interrupts it); y must be current.
+        assert!(
+            s.spoken.iter().any(|u| u.text == "x"),
+            "node {node}: x echoed"
+        );
+        let Some(y) = s.spoken.iter().find(|u| u.text == "y") else {
+            panic!("node {node}: y was not echoed");
+        };
+        assert!(
+            y.epoch >= s.epoch.current(),
+            "node {node}: the echo of y (epoch {:?}) is stale, current {:?}",
+            y.epoch,
+            s.epoch.current()
+        );
+    }
+}
+
+/// `keyboard.interrupt = "never"`: the press advances nothing, so leaving review advances the epoch
+/// itself (queued review speech is purged), and the echo of the key that left is current.
+#[test]
+fn with_interrupt_never_leaving_review_still_purges_and_the_echo_is_current() {
+    for node in [TERM, ENTRY] {
+        let mut s = Sim::new(true);
+        std::sync::Arc::make_mut(&mut s.r.cmd.effective)
+            .keyboard
+            .interrupt = gorca_config::InterruptPolicy::Never;
+        s.focus_to(node, true, 0);
+        s.settle(3000);
+        s.command(CoreCmd::ReviewCurLine, 1);
+        s.settle(3000);
+        s.spoken.clear();
+        let before = s.epoch.current();
+        s.type_key_stamped(KeyKind::Letter('x'), Modifiers::empty(), before);
+        s.settle(1000);
+        assert!(
+            s.epoch.current() > before,
+            "node {node}: the epoch advanced"
+        );
+        let Some(x) = s.spoken.iter().find(|u| u.text == "x") else {
+            panic!("node {node}: x was not echoed");
+        };
+        assert!(
+            x.epoch >= s.epoch.current(),
+            "node {node}: the echo is stale"
+        );
+    }
+}

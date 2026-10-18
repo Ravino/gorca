@@ -433,10 +433,14 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
         }
         s.settle(st.dt);
         s.spoken.clear();
+        s.cues.clear();
         let mode_before = s.r.mode();
         let focus_before = s.w.focus;
         let pre = settled(&s);
         let tracked_pre = pre.is_some_and(|n| tracking_ok(&s, n).is_ok());
+        // The world caret of every buffer before the step: a boundary cue is only right for a key
+        // that moved nothing.
+        let carets_pre: Vec<(u64, usize)> = s.w.bufs.iter().map(|(n, b)| (*n, b.caret)).collect();
         let presented_before = matches!(
             s.r.focus(),
             FocusState::Focused {
@@ -609,7 +613,19 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
                             .filter(|u| u.prio == Prio::Interrupt && !u.text.is_empty())
                             .map(|u| u.text.as_str())
                             .collect();
-                        if said.is_empty() {
+                        // A key that moved nothing is answered by the boundary cue, and a key that
+                        // did move the caret is never answered by one.
+                        let moved = carets_pre
+                            .iter()
+                            .find(|(b, _)| *b == n)
+                            .is_some_and(|(_, c)| s.w.bufs.get(&n).is_some_and(|b| b.caret != *c));
+                        if moved && !s.cues.is_empty() {
+                            bail!(
+                                "cue-on-move",
+                                format!("{k:?} in {n} moved the caret and gave a boundary cue"),
+                            );
+                        }
+                        if said.is_empty() && s.cues.is_empty() {
                             bail!(
                                 "caret-silent",
                                 format!("{k:?} in {n} (gtk4: {}) was not answered", s.gtk4),
@@ -618,6 +634,7 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
                         let at = s.w.bufs.get(&n).and_then(|b| b.text.get(b.caret).copied());
                         // (After lost events the window is stale: the layer cannot know the character.)
                         if let Some(c) = at.filter(|c| c.is_alphanumeric())
+                            && !said.is_empty()
                             && s.dropped.load(Ordering::Relaxed) == 0
                             && !said.iter().any(|t| *t == c.to_string())
                         {
@@ -774,7 +791,7 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
                         && let (Some((t0, o0, _)), Some((t1, o1, on_screen))) =
                             (probe_before.as_ref(), s.r.review_probe())
                     {
-                        use crate::review::segment::{Dir, TermUnits, TextUnits, Unit};
+                        use crate::review::segment::{Dir, TextUnits, Unit};
                         let (unit, dir) = match c {
                             CoreCmd::ReviewNextWord => (Unit::Word, Dir::Fwd),
                             CoreCmd::ReviewPrevWord => (Unit::Word, Dir::Back),
@@ -782,7 +799,7 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
                             _ => (Unit::Char, Dir::Back),
                         };
                         // The unit this move has to land on while the line has room for it.
-                        let room = TermUnits.next(t0, *o0, unit, dir);
+                        let room = s.r.term_units().next(t0, *o0, unit, dir);
                         // review-drift: the line is (still) on the screen, the move had room in
                         // it, yet the cursor is on another line. A line the world no longer has
                         // was rewritten or replaced: the cursor may then be on the row the old

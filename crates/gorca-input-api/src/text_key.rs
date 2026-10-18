@@ -29,6 +29,8 @@ pub enum KeyUnit {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum ClipOp {
+    /// Ctrl+C, Ctrl+Insert: changes nothing, so only the selection can vouch for it.
+    Copy,
     Paste,
     Cut,
     Undo,
@@ -150,11 +152,13 @@ pub fn classify(ev: &KeyEvent) -> Option<TextKey> {
             dir: TextDir::Prev,
             word: ctrl,
         }),
+        DELETE if shift && !ctrl => Some(TextKey::Clipboard(ClipOp::Cut)),
         DELETE => Some(TextKey::Erase {
             dir: TextDir::Next,
             word: ctrl,
         }),
         INSERT if shift && !ctrl => Some(TextKey::Clipboard(ClipOp::Paste)),
+        INSERT if ctrl && !shift => Some(TextKey::Clipboard(ClipOp::Copy)),
         RETURN | KP_ENTER if !ctrl => Some(TextKey::Typed { ch: '\n' }),
         // Tab inserts a tab in a text view; in an entry it moves the focus (the Reader knows).
         TAB if !ctrl => Some(TextKey::Typed { ch: '\t' }),
@@ -168,6 +172,8 @@ fn ctrl_letter(code: u16, shift: bool) -> Option<TextKey> {
     let is = |name: &str| static_keycode(name) == Some(code);
     if is("a") && !shift {
         Some(TextKey::SelectAll)
+    } else if is("c") && !shift {
+        Some(TextKey::Clipboard(ClipOp::Copy))
     } else if is("v") {
         Some(TextKey::Clipboard(ClipOp::Paste))
     } else if is("x") {
@@ -384,7 +390,35 @@ mod tests {
             classify(&code("y", c)),
             Some(TextKey::Clipboard(ClipOp::Redo))
         );
+        assert_eq!(
+            classify(&code("c", c)),
+            Some(TextKey::Clipboard(ClipOp::Copy))
+        );
+        assert_eq!(
+            classify(&code("c", c | Modifiers::SHIFT)),
+            None,
+            "Ctrl+Shift+C is no copy in a text field"
+        );
         assert_eq!(classify(&code("q", c)), None);
+    }
+
+    #[test]
+    fn the_insert_and_delete_clipboard_chords() {
+        assert_eq!(
+            classify(&ev(INSERT, 0, Modifiers::CONTROL)),
+            Some(TextKey::Clipboard(ClipOp::Copy))
+        );
+        assert_eq!(
+            classify(&ev(DELETE, 0x7f, Modifiers::SHIFT)),
+            Some(TextKey::Clipboard(ClipOp::Cut))
+        );
+        assert_eq!(
+            classify(&ev(DELETE, 0x7f, Modifiers::CONTROL)),
+            Some(TextKey::Erase {
+                dir: TextDir::Next,
+                word: true
+            })
+        );
     }
 
     #[test]

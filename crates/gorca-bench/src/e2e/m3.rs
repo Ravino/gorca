@@ -803,7 +803,7 @@ pub fn e2(
             paste_keys += 1;
             actions.push(Action {
                 t_key: t,
-                expect: w.to_owned(),
+                expect: format!("pasted, {w}"),
             });
             // The paste echo is built from the insert and its read-back, so it lands about one key gap
             // after the key. A newer key inside that gap makes it stale (E-2), which is right and

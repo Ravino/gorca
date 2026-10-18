@@ -212,6 +212,8 @@ pub(super) struct Sim {
     /// behind every caret move (docs/reports/unified-editing.md).
     pub gtk4: bool,
     pub spoken: Vec<Spoke>,
+    /// Cues the Reader asked the cue sink for.
+    pub cues: Vec<gorca_output_api::CueId>,
     pub timers: Vec<Instant>,
 }
 
@@ -272,6 +274,7 @@ impl Sim {
             failed_reads: false,
             gtk4: false,
             spoken: Vec::new(),
+            cues: Vec::new(),
             timers: Vec::new(),
         };
         s.sync_mirror(&[WIN, ENTRY, BUTTON, TERM, AREA]);
@@ -401,6 +404,10 @@ impl Sim {
         match e {
             ReaderEffect::Speak(s) => {
                 self.speak(&s);
+                vec![]
+            }
+            ReaderEffect::Cue(c) => {
+                self.cues.push(c);
                 vec![]
             }
             ReaderEffect::SayAllChunk { intent, .. } => {
@@ -692,6 +699,18 @@ impl Sim {
     /// The key reaches the application (class `PassToApp`), then the application reacts.
     pub fn type_key(&mut self, k: KeyKind, mods: Modifiers) {
         let epoch = self.epoch.advance();
+        self.type_key_stamped(k, mods, epoch);
+    }
+
+    /// Typeahead: the input lane stamps every press before the Reader has handled the first.
+    pub fn type_keys_ahead(&mut self, ks: &[KeyKind]) {
+        let stamped: Vec<_> = ks.iter().map(|k| (*k, self.epoch.advance())).collect();
+        for (k, epoch) in stamped {
+            self.type_key_stamped(k, Modifiers::empty(), epoch);
+        }
+    }
+
+    pub fn type_key_stamped(&mut self, k: KeyKind, mods: Modifiers, epoch: gorca_model::Epoch) {
         let at = self.now();
         let (keysym, unichar) = k.sym();
         self.handle(ReaderMsg::Key(KeyIntent {

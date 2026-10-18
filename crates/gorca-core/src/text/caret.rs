@@ -66,6 +66,8 @@ pub struct Kind {
 }
 
 /// Settings the machine reads.
+// Four independent switches read from separate settings; a state enum would not be clearer.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Copy, Clone, Debug)]
 pub struct Cfg {
     pub typed_chars: bool,
@@ -73,6 +75,31 @@ pub struct Cfg {
     pub inserted_text: bool,
     pub edge: Duration,
     pub late: Duration,
+    /// "copied", "cut", "pasted", "undo", "redo" after the clipboard and undo keys.
+    pub announce_clipboard: bool,
+    /// What a movement key that cannot move the caret does.
+    pub boundary: Boundary,
+}
+
+/// What a movement key does when the caret cannot move (CR-3): the setting `[editing] boundary`.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+// Three independent switches, as in the file.
+#[allow(clippy::struct_excessive_bools)]
+pub struct Boundary {
+    /// A boundary cue through the cue sink (silent until sounds exist).
+    pub cue: bool,
+    /// A short word for the edge: start, end, top, bottom.
+    pub say: bool,
+    /// Speak the unit at the caret again.
+    pub repeat: bool,
+}
+
+impl Boundary {
+    pub const CUE: Boundary = Boundary {
+        cue: true,
+        say: false,
+        repeat: false,
+    };
 }
 
 impl Default for Cfg {
@@ -83,6 +110,8 @@ impl Default for Cfg {
             inserted_text: true,
             edge: Duration::from_millis(100),
             late: Duration::from_millis(400),
+            announce_clipboard: true,
+            boundary: Boundary::CUE,
         }
     }
 }
@@ -154,6 +183,8 @@ impl std::fmt::Debug for Spoken {
 #[derive(Clone, Debug)]
 pub enum Out {
     Say(Spoken),
+    /// A non-speech cue (boundary).
+    Cue(gorca_output_api::CueId),
     Fetch {
         req: TextReqId,
         op: TextOp,
@@ -356,6 +387,14 @@ impl std::fmt::Debug for HeldDel {
     }
 }
 
+/// How long after a clipboard or undo key an edit still counts as its effect. Shorter than the
+/// slot of the other keys: an unrelated script edit or autocomplete a moment later must not be
+/// taken for the key's.
+const CLIP_WINDOW: Duration = Duration::from_millis(250);
+
+/// How long after a cut a placeholder insert at the cut offset is still the cut's.
+const CUT_TAIL: Duration = Duration::from_millis(300);
+
 /// How long a key may trail the insert it explains and still not be spoken twice.
 const CLAIM_SPOKEN: Duration = Duration::from_millis(150);
 
@@ -422,6 +461,17 @@ pub struct Tracked {
     /// insert: the key may have replaced a selection (Gecko reports a delete and a caret move
     /// and no insert at all). The caret event that follows settles the key's expectation.
     replaced: Option<Instant>,
+    /// Where a confirmed cut left the text, and until when Gecko's follow-up belongs to it: a
+    /// one-scalar placeholder insert at that offset and the caret that lands on it.
+    cut_at: Option<(u32, Instant)>,
+    /// Until when a caret event belongs to a clipboard edit just confirmed (Gecko reports a cut
+    /// or paste as a wholesale replace, then moves the caret).
+    clip_caret: Option<Instant>,
+    /// The insert being handled was read together with its "undo" or "redo".
+    clip_quiet: bool,
+    /// The key epoch whose undo or redo has been confirmed already (one "undo" per key, however
+    /// many edits it makes).
+    clip_epoch: Option<Epoch>,
     /// The window revision each outstanding request was issued under.
     revs: SmallVec<[(TextReqId, u64); 8]>,
 }
@@ -466,6 +516,10 @@ impl Tracked {
             flushed_ins: None,
             held_del: None,
             replaced: None,
+            cut_at: None,
+            clip_quiet: false,
+            clip_caret: None,
+            clip_epoch: None,
             revs: SmallVec::new(),
         }
     }
@@ -687,7 +741,7 @@ fn to_u32(n: usize) -> u32 {
 
 /// The text of `say` at `at`, from the window, or what must be fetched first.
 fn unit_text(t: &Tracked, say: Say, at: u32, q: EditQuirks) -> Lookup<(How, String)> {
-    let space = NativeText::new(&t.win, !t.kind.multiline);
+    let space = NativeText::new(&t.win, !t.kind.multiline).with_word_level(q.word_level);
     let presented = match say {
         Say::Word => tc::present_word(&space, t.word_from, at, q),
         Say::Char | Say::Line | Say::Paragraph => tc::present(&space, at, say),
@@ -948,6 +1002,16 @@ impl CaretState {
                 }
                 CaretState::Idle { t }
             }
+            TextKey::Clipboard(ClipOp::Copy) => {
+                t.late = None;
+                // Copying changes neither the text nor the selection, so nothing will confirm
+                // it: say so only when a selection is known to exist, and never otherwise.
+                // A password field refuses to copy, so nothing is claimed there.
+                if cx.cfg.announce_clipboard && !t.sel.is_empty() && !t.kind.secret {
+                    say_clip(&mut t, msg!(TextCopied), epoch, cx);
+                }
+                CaretState::Idle { t }
+            }
             TextKey::Move { .. }
             | TextKey::Erase { .. }
             | TextKey::SelectAll
@@ -955,6 +1019,24 @@ impl CaretState {
                 t.words.reset();
                 t.word_fallback = None;
                 t.late = None;
+                // The pasted text may have beaten its key by a few ms: it is the paste's.
+                if key == TextKey::Clipboard(ClipOp::Paste)
+                    && t.kind.editable
+                    && let Some(h) = t.held_ins.take()
+                {
+                    t.sel.clear();
+                    t.sel_quiet = Some(cx.now + cx.cfg.late);
+                    speak_inserted(
+                        &mut t,
+                        &h.text,
+                        h.more,
+                        InsertSource::Paste,
+                        true,
+                        (epoch, Prio::Interrupt),
+                        cx,
+                    );
+                    return CaretState::Idle { t };
+                }
                 // A key that is not a typed character does not explain the insert before it.
                 flush_held_insert(&mut t, cx);
                 if !matches!(key, TextKey::Move { select: true, .. }) {
@@ -967,7 +1049,8 @@ impl CaretState {
                     && let Some(h) = t.held_del.take()
                 {
                     cx.stats.delete_held_claimed += 1;
-                    speak_deleted(&mut t, h.text, epoch, cx);
+                    let cut = key == TextKey::Clipboard(ClipOp::Cut);
+                    speak_deleted(&mut t, h.text, epoch, cut, cx);
                     return CaretState::Idle { t };
                 }
                 let edge_at = cx.now + cx.cfg.edge;
@@ -1045,6 +1128,11 @@ impl CaretState {
                 if t.caret == Some(off) {
                     return CaretState::Idle { t };
                 }
+                if t.clip_caret.take().is_some_and(|u| cx.now <= u) {
+                    // The caret that follows a confirmed clipboard edit is its own.
+                    t.caret = Some(off);
+                    return CaretState::Idle { t };
+                }
                 if let Some(l) = t.late
                     && cx.now <= l.until
                     && let TextKey::Move {
@@ -1092,6 +1180,12 @@ impl CaretState {
                             edge_at,
                             late_until,
                         };
+                    }
+                    if t.caret == Some(off) {
+                        // The application reported a caret event for a key that moved nothing
+                        // (GTK 4 text views do): the same boundary as no event at all.
+                        cx.stats.caret_edge += 1;
+                        return at_boundary(t, (unit, dir), off, epoch, cx);
                     }
                     cx.stats.caret_correlated += 1;
                     let say = say_of(unit);
@@ -1160,6 +1254,67 @@ impl CaretState {
             }
         };
         let mut consumed = false;
+        // A clipboard or undo key explains edits only for a short while.
+        let slot = slot.filter(|(key, _, _, late_until)| {
+            !matches!(key, TextKey::Clipboard(_))
+                || cx.now <= clip_deadline(*late_until, cx.cfg.late.max(cx.cfg.edge))
+        });
+        // A cut or a paste reported as a wholesale replace (Gecko): the change is the evidence.
+        if let Some((TextKey::Clipboard(op @ (ClipOp::Cut | ClipOp::Paste)), epoch, ..)) = slot
+            && matches!(e, Edit::Replaced)
+            && cx.cfg.announce_clipboard
+            && t.kind.editable
+            && t.clip_epoch != Some(epoch)
+        {
+            t.clip_epoch = Some(epoch);
+            t.clip_caret = Some(cx.now + CLIP_WINDOW);
+            let m = if op == ClipOp::Cut {
+                msg!(TextCut)
+            } else {
+                msg!(TextPasted)
+            };
+            say_clip(&mut t, m, epoch, cx);
+        }
+        // Undo and redo are vouched for by the text changing, whatever the change was. An
+        // insert is read too (what came back); the insert path below must not read it again.
+        if let Some((TextKey::Clipboard(op @ (ClipOp::Undo | ClipOp::Redo)), epoch, ..)) = slot
+            && cx.cfg.announce_clipboard
+            && t.kind.editable
+            && t.clip_epoch != Some(epoch)
+        {
+            t.clip_epoch = Some(epoch);
+            let m = if op == ClipOp::Undo {
+                msg!(TextUndo)
+            } else {
+                msg!(TextRedo)
+            };
+            t.clip_caret = Some(cx.now + CLIP_WINDOW);
+            if let Edit::Delete { offset, .. } = &e {
+                // The placeholder Gecko inserts where an undo or redo emptied a block.
+                t.cut_at = Some((*offset, cx.now + CUT_TAIL));
+            }
+            match &e {
+                Edit::Insert {
+                    text: Some(s), len, ..
+                } if !is_structure(s) && !s.is_empty() && !t.kind.secret => {
+                    let n = *len;
+                    let mut pieces: SmallVec<[Piece; 2]> = SmallVec::new();
+                    pieces.push(Piece::phrase(&format!("{m},")));
+                    if n > MAX_SPOKEN {
+                        pieces.push(Piece::phrase(&count_phrase(n)));
+                    } else {
+                        pieces.push(Piece::unit(How::Text, s.clone()));
+                    }
+                    let sp = t.spoken(pieces, Reason::Clipboard, epoch, Prio::Interrupt);
+                    cx.say(sp);
+                    cx.stats.clipboard_spoken += 1;
+                    t.clip_quiet = true;
+                }
+                Edit::Insert { .. } | Edit::Delete { .. } | Edit::Replaced => {
+                    say_clip(&mut t, m, epoch, cx);
+                }
+            }
+        }
         match e {
             Edit::Replaced => {
                 t.win.invalidate();
@@ -1174,6 +1329,7 @@ impl CaretState {
                 consumed = delete(&mut t, offset, len, text, slot, cx);
             }
         }
+        t.clip_quiet = false;
         match slot {
             Some((key, epoch, edge_at, late_until)) if !consumed => CaretState::Awaiting {
                 t,
@@ -1462,6 +1618,7 @@ impl CaretState {
                 match key {
                     TextKey::Move {
                         unit,
+                        dir,
                         select: false,
                         ..
                     } => {
@@ -1471,10 +1628,7 @@ impl CaretState {
                             until: late_until,
                         });
                         match t.caret {
-                            Some(at) => {
-                                let say = say_of(unit);
-                                present(t, say, at, Reason::Boundary, epoch, cx)
-                            }
+                            Some(at) => at_boundary(t, (unit, dir), at, epoch, cx),
                             None => CaretState::Idle { t },
                         }
                     }
@@ -1527,6 +1681,62 @@ impl CaretState {
             }
         }
     }
+}
+
+/// A movement key that could not move the caret (CR-3): what `[editing] boundary` says.
+fn at_boundary(
+    t: Box<Tracked>,
+    key: (KeyUnit, TextDir),
+    at: u32,
+    epoch: Epoch,
+    cx: &mut Ctx<'_>,
+) -> CaretState {
+    let b = cx.cfg.boundary;
+    if b.cue {
+        cx.stats.boundary_cues += 1;
+        cx.out.push(Out::Cue(gorca_output_api::CueId::Boundary));
+    }
+    if b.say {
+        // A line-edge key stops at the start or end of the line (the whole text in a
+        // single-line field); every other key can only stop at the top or bottom of the text.
+        let line = key.0 == KeyUnit::LineEdge || !t.kind.multiline;
+        let word = match (line, key.1) {
+            (true, TextDir::Prev) => msg!(TextBoundaryStart),
+            (true, TextDir::Next) => msg!(TextBoundaryEnd),
+            (false, TextDir::Prev) => msg!(TextBoundaryTop),
+            (false, TextDir::Next) => msg!(TextBoundaryBottom),
+        };
+        cx.stats.boundary_said += 1;
+        if b.repeat {
+            // One utterance: a second one would interrupt the word.
+            let say = say_of(key.0);
+            if let Lookup::Ready((how, text)) = unit_text(&t, say, at, cx.quirks) {
+                let mut pieces: SmallVec<[Piece; 2]> = SmallVec::new();
+                pieces.push(Piece::phrase(&format!("{word},")));
+                pieces.push(Piece::unit(how, text));
+                let s = t.spoken(pieces, Reason::Boundary, epoch, Prio::Interrupt);
+                cx.say(s);
+                return CaretState::Idle { t };
+            }
+        }
+        let mut pieces: SmallVec<[Piece; 2]> = SmallVec::new();
+        pieces.push(Piece::phrase(word));
+        let s = t.spoken(pieces, Reason::Boundary, epoch, Prio::Interrupt);
+        cx.say(s);
+        return CaretState::Idle { t };
+    }
+    if b.repeat {
+        return present(t, say_of(key.0), at, Reason::Boundary, epoch, cx);
+    }
+    CaretState::Idle { t }
+}
+
+/// The last moment an edit still belongs to a clipboard or undo key whose slot ends at
+/// `late_until` (`slot` is the key time plus `slot_len`).
+fn clip_deadline(late_until: Instant, slot_len: Duration) -> Instant {
+    late_until
+        .checked_sub(slot_len)
+        .map_or(late_until, |key_at| key_at + CLIP_WINDOW)
 }
 
 fn now_before(now: Instant, deadline: Instant) -> bool {
@@ -1854,10 +2064,33 @@ fn insert(
         t.win.invalidate();
         cx.stats.window_dirty += 1;
         let _ = t.expect.forget(len as usize, cx.now_ms);
+        if paste
+            && cx.cfg.announce_clipboard
+            && t.kind.editable
+            && let Some((_, epoch, ..)) = slot
+        {
+            // The insert vouches for the paste even though the application sent no text.
+            say_clip(t, msg!(TextPasted), epoch, cx);
+        }
         return;
     };
     t.win.splice(offset, 0, &s);
     note_hosts(t, &s);
+    if let Some((at, until)) = t.cut_at.take()
+        && cx.now <= until
+        && offset == at
+        && len == 1
+        && s.chars().all(|c| c.is_whitespace() || c == '\u{FFFC}')
+    {
+        // Gecko puts a placeholder where a cut left an empty block, and moves the caret onto it:
+        // both are the cut's.
+        t.absorb = Some(Absorb {
+            at: offset,
+            alt: Some(offset.saturating_add(1)),
+            until: cx.now + ABSORB,
+        });
+        return;
+    }
     if is_structure(&s) {
         // A block was added to a rich editable: the window knows, there is nothing to say.
         return;
@@ -1945,6 +2178,10 @@ fn insert(
                     return;
                 }
             }
+            if std::mem::take(&mut t.clip_quiet) {
+                // "undo, <text>" or "redo, <text>" has said what happened.
+                return;
+            }
             let epoch_prio = match slot {
                 Some((_, e, ..)) if paste => (e, Prio::Interrupt),
                 Some(_) | None => (cx.epoch_now, Prio::Text),
@@ -1974,21 +2211,36 @@ fn speak_inserted(
         return false;
     }
     let mut pieces: SmallVec<[Piece; 2]> = SmallVec::new();
+    let confirm = paste && cx.cfg.announce_clipboard && t.kind.editable;
+    if confirm {
+        pieces.push(Piece::phrase(&format!("{},", msg!(TextPasted))));
+    }
     // Blanks that follow Return (auto-indent) are the indent of the new line: say how deep it is
     // instead of "blank".
     let indent = t
         .enter_at
         .filter(|a| cx.now.saturating_duration_since(*a) < INDENT_AFTER_ENTER)
         .and_then(|_| indent_phrase(text.trim_start_matches(['\n', '\r'])));
-    match indent {
-        Some(p) => pieces.push(Piece::phrase(&p)),
-        None => pieces.push(Piece::unit(How::Text, text.to_owned())),
-    }
-    if more > 0 {
-        pieces.push(Piece::phrase(&msg!(TextAndMore, n = more)));
+    if confirm && t.kind.secret {
+        // "pasted" only: the text that went into a password field is not read.
+        pieces.clear();
+        pieces.push(Piece::phrase(msg!(TextPasted)));
+    } else {
+        match indent {
+            Some(p) => pieces.push(Piece::phrase(&p)),
+            None => pieces.push(Piece::unit(How::Text, text.to_owned())),
+        }
+        if more > 0 {
+            pieces.push(Piece::phrase(&msg!(TextAndMore, n = more)));
+        }
     }
     t.last_insert_say = Some(cx.now);
-    let sp = t.spoken(pieces, Reason::Inserted(source), epoch, prio);
+    let reason = if confirm {
+        Reason::Clipboard
+    } else {
+        Reason::Inserted(source)
+    };
+    let sp = t.spoken(pieces, reason, epoch, prio);
     cx.say(sp);
     cx.stats.inserted_spoken += 1;
     true
@@ -2212,14 +2464,23 @@ fn delete(
         }
         return false;
     };
-    if let Some(d) = deleted.filter(|d| !d.is_empty()) {
-        speak_deleted(t, d, epoch, cx);
+    let cut = matches!(slot, Some((TextKey::Clipboard(ClipOp::Cut), ..)));
+    if cut && cx.cfg.announce_clipboard && t.kind.editable {
+        t.cut_at = Some((offset, cx.now + CUT_TAIL));
+        // The deletion is the evidence: "cut" even when the removed text could not be read.
+        speak_cut(t, deleted.filter(|d| !d.is_empty()), epoch, cx);
+    } else if let Some(d) = deleted.filter(|d| !d.is_empty()) {
+        speak_deleted(t, d, epoch, false, cx);
     }
     true
 }
 
 /// TE-5: the deleted text, spoken with the key's epoch.
-fn speak_deleted(t: &mut Tracked, text: String, epoch: Epoch, cx: &mut Ctx<'_>) {
+fn speak_deleted(t: &mut Tracked, text: String, epoch: Epoch, cut: bool, cx: &mut Ctx<'_>) {
+    if cut && cx.cfg.announce_clipboard && t.kind.editable {
+        speak_cut(t, Some(text), epoch, cx);
+        return;
+    }
     let how = if text.chars().count() == 1 {
         How::Char
     } else {
@@ -2228,6 +2489,38 @@ fn speak_deleted(t: &mut Tracked, text: String, epoch: Epoch, cx: &mut Ctx<'_>) 
     let s = t.one(how, text, Reason::Erased, epoch, Prio::Interrupt);
     cx.say(s);
     cx.stats.erased_spoken += 1;
+}
+
+/// "cut", then what went (a long text is counted, like a selection).
+fn speak_cut(t: &mut Tracked, text: Option<String>, epoch: Epoch, cx: &mut Ctx<'_>) {
+    let mut pieces: SmallVec<[Piece; 2]> = SmallVec::new();
+    // What a password field loses is never read.
+    let text = text.filter(|_| !t.kind.secret);
+    if let Some(text) = text {
+        let n = to_u32(text.chars().count());
+        pieces.push(Piece::phrase(&format!("{},", msg!(TextCut))));
+        if n > MAX_SPOKEN {
+            pieces.push(Piece::phrase(&count_phrase(n)));
+        } else if n == 1 {
+            pieces.push(Piece::unit(How::Char, text));
+        } else {
+            pieces.push(Piece::unit(How::Text, text));
+        }
+    } else {
+        pieces.push(Piece::phrase(msg!(TextCut)));
+    }
+    let s = t.spoken(pieces, Reason::Clipboard, epoch, Prio::Interrupt);
+    cx.say(s);
+    cx.stats.erased_spoken += 1;
+}
+
+/// A one-phrase confirmation of a clipboard or undo key.
+fn say_clip(t: &mut Tracked, phrase: &str, epoch: Epoch, cx: &mut Ctx<'_>) {
+    let mut pieces: SmallVec<[Piece; 2]> = SmallVec::new();
+    pieces.push(Piece::phrase(phrase));
+    let s = t.spoken(pieces, Reason::Clipboard, epoch, Prio::Interrupt);
+    cx.say(s);
+    cx.stats.clipboard_spoken += 1;
 }
 
 // ---- selection ---------------------------------------------------------------------------

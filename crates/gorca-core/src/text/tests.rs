@@ -304,6 +304,38 @@ fn ctrl_right_speaks_the_word_and_home_the_character() {
     assert_eq!(spoken(&fx), ["h"], "Home speaks the character at the caret");
 }
 
+fn word_back_with(level: gorca_config::WordLevel) -> Vec<String> {
+    let mut g = rig();
+    std::sync::Arc::make_mut(&mut g.r.cmd.effective)
+        .editing
+        .word = level;
+    g.entry("run --color=auto now", 17);
+    let _ = g.key(LEFT, 0, Modifiers::CONTROL);
+    spoken(&g.caret(4))
+}
+
+#[test]
+fn the_word_level_setting_decides_what_a_word_move_reads() {
+    use gorca_config::WordLevel;
+    // Ctrl+Left lands on the start of `--color=auto`: fine reads one dash, medium and coarse the
+    // whole option.
+    assert_eq!(
+        word_back_with(WordLevel::Auto),
+        word_back_with(WordLevel::Fine)
+    );
+    let fine = word_back_with(WordLevel::Fine);
+    assert_eq!(fine.len(), 1);
+    assert!(!fine[0].contains("color"), "{fine:?}");
+    for l in [WordLevel::Medium, WordLevel::Coarse] {
+        let said = word_back_with(l);
+        assert_eq!(said.len(), 1);
+        assert!(
+            said[0].contains("color") && said[0].contains("auto"),
+            "{l:?}: {said:?}"
+        );
+    }
+}
+
 #[test]
 fn an_editable_combo_box_is_tracked_like_a_text_field_and_a_plain_one_is_not() {
     // Firefox's address bar is an editable combo box.
@@ -366,9 +398,108 @@ fn a_single_line_entry_is_one_line_from_the_window() {
     assert!(fetches(&fx).is_empty());
 }
 
+fn cues(fx: &ReaderEffects) -> Vec<gorca_output_api::CueId> {
+    fx.iter()
+        .filter_map(|e| match e {
+            ReaderEffect::Cue(c) => Some(*c),
+            _ => None,
+        })
+        .collect()
+}
+
+fn boundary(g: &mut Rig, b: gorca_config::BoundaryMode) {
+    std::sync::Arc::make_mut(&mut g.r.cmd.effective)
+        .editing
+        .boundary = b;
+}
+
+#[test]
+fn a_key_that_moves_nothing_gives_a_boundary_cue_and_no_speech_by_default() {
+    let mut g = rig();
+    g.entry("hello", 0);
+    let fx = g.key(LEFT, 0, NONE);
+    assert!(spoken(&fx).is_empty() && cues(&fx).is_empty());
+    assert!(
+        fx.iter().any(|e| matches!(e, ReaderEffect::ArmTimer(_))),
+        "the edge timer is armed"
+    );
+    assert!(cues(&g.tick(50)).is_empty(), "not yet");
+    let fx = g.tick(60);
+    assert!(spoken(&fx).is_empty(), "the boundary is not read again");
+    assert_eq!(cues(&fx), [gorca_output_api::CueId::Boundary]);
+    assert_eq!(g.r.text_counters().caret_edge, 1);
+    assert_eq!(g.r.text_counters().boundary_cues, 1);
+    // CR-3b: a slow app's caret event still arrives and is spoken with the key's unit.
+    let fx = g.caret(1);
+    assert_eq!(spoken(&fx), ["e"]);
+    assert!(cues(&fx).is_empty());
+    assert_eq!(g.r.text_counters().caret_late, 1);
+}
+
+#[test]
+fn a_silent_boundary_says_and_plays_nothing() {
+    let mut g = rig();
+    boundary(&mut g, gorca_config::BoundaryMode::OFF);
+    g.entry("hello", 0);
+    let _ = g.key(LEFT, 0, NONE);
+    g.advance(150);
+    let fx = g.tick(0);
+    assert!(spoken(&fx).is_empty() && cues(&fx).is_empty());
+    assert_eq!(g.r.text_counters().boundary_cues, 0);
+    assert_eq!(
+        spoken(&g.caret(1)),
+        ["e"],
+        "a late caret event still speaks"
+    );
+}
+
+#[test]
+fn up_on_the_first_line_of_a_text_view_is_a_cue_not_the_whole_line_again() {
+    let mut g = rig();
+    g.area("first line here\nsecond", 3);
+    let _ = g.key(UP, 0, NONE);
+    g.advance(150);
+    let fx = g.tick(0);
+    assert!(spoken(&fx).is_empty(), "{:?}", spoken(&fx));
+    assert_eq!(cues(&fx), [gorca_output_api::CueId::Boundary]);
+    // The old behaviour is an option.
+    let mut g = rig();
+    boundary(&mut g, gorca_config::BoundaryMode::REPEAT);
+    g.area("first line here\nsecond", 3);
+    let _ = g.key(UP, 0, NONE);
+    g.advance(150);
+    let fx = g.tick(0);
+    assert!(cues(&fx).is_empty());
+    assert!(
+        !spoken(&fx).is_empty() || !fetches(&fx).is_empty(),
+        "the line is read again"
+    );
+}
+
+#[test]
+fn a_caret_event_that_reports_no_move_is_the_same_boundary() {
+    // GTK 4 text views send a caret event for a key that moved nothing.
+    for (b, cue, say) in [
+        (gorca_config::BoundaryMode::CUE, true, false),
+        (gorca_config::BoundaryMode::OFF, false, false),
+        (gorca_config::BoundaryMode::REPEAT, false, true),
+    ] {
+        let mut g = rig();
+        boundary(&mut g, b);
+        g.entry("hello", 0);
+        let _ = g.key(LEFT, 0, NONE);
+        let fx = g.caret(0);
+        assert_eq!(!cues(&fx).is_empty(), cue, "{b:?}");
+        assert_eq!(!spoken(&fx).is_empty(), say, "{b:?}");
+        // The key's slot is spent: the edge timer has nothing left to say.
+        assert!(spoken(&g.tick(300)).is_empty() && cues(&g.tick(300)).is_empty());
+    }
+}
+
 #[test]
 fn a_key_that_moves_nothing_speaks_the_unit_at_the_caret_after_the_edge_time() {
     let mut g = rig();
+    boundary(&mut g, gorca_config::BoundaryMode::REPEAT);
     g.entry("hello", 0);
     let fx = g.key(LEFT, 0, NONE);
     assert!(spoken(&fx).is_empty());
@@ -540,7 +671,11 @@ fn paste_is_spoken_as_the_inserted_text() {
     let fx = g.key_code(v, 0x76, 0, Modifiers::CONTROL);
     assert!(spoken(&fx).is_empty());
     let fx = g.insert(2, "pasted words");
-    assert_eq!(spoken(&fx), ["pasted words"], "TE-3");
+    assert_eq!(
+        spoken(&fx),
+        ["pasted, pasted words"],
+        "TE-3 and the confirmation"
+    );
     assert!(spoken(&g.caret(14)).is_empty());
 }
 
@@ -2349,14 +2484,16 @@ fn right_arrow_walks_a_cyrillic_entry_to_the_end_and_back_to_offset_zero() {
 }
 
 #[test]
-fn keys_at_the_edges_that_move_nothing_still_speak_the_character() {
+fn keys_at_the_edges_that_move_nothing_still_speak_the_character_when_asked_to() {
     let mut g = rig();
+    boundary(&mut g, gorca_config::BoundaryMode::REPEAT);
     g.entry("ab", 2);
     let _ = g.key(RIGHT, 0, NONE);
     g.advance(150);
     let fx = g.tick(0);
     assert_eq!(spoken(&fx), ["blank"], "Right at the end: boundary, blank");
     let mut g = rig();
+    boundary(&mut g, gorca_config::BoundaryMode::REPEAT);
     g.entry("ab", 0);
     let _ = g.key(LEFT, 0, NONE);
     g.advance(150);
@@ -2873,4 +3010,462 @@ fn a_key_that_replaced_a_selection_leaves_no_expectation_for_the_next_insert() {
             assert_eq!(twos, 1, "{role:?} gap {gap} gecko {gecko}: {said:?}");
         }
     }
+}
+
+// ---- clipboard and undo confirmations -------------------------------------------------------
+
+fn clip_key(g: &mut Rig, letter: &str, shift: bool) -> ReaderEffects {
+    let code = static_keycode(letter).unwrap_or(0);
+    let mods = if shift {
+        Modifiers::CONTROL | Modifiers::SHIFT
+    } else {
+        Modifiers::CONTROL
+    };
+    g.key_code(code, u32::from(letter.as_bytes()[0]), 0, mods)
+}
+
+fn announce(g: &mut Rig, on: bool) {
+    std::sync::Arc::make_mut(&mut g.r.cmd.effective)
+        .editing
+        .announce_clipboard = on;
+}
+
+/// A mouse selection of `r` (text `t`) that the machine has fetched and now knows.
+fn select(g: &mut Rig, r: std::ops::Range<u32>, t: &str) {
+    let f = fetches(&g.selection_event());
+    assert_eq!(f.len(), 1, "one selection fetch");
+    let _ = g.reply(
+        f[0].0,
+        Reply::Selections(TextSelections {
+            ranges: vec![(r, Arc::from(t))],
+        }),
+    );
+}
+
+#[test]
+fn copy_is_confirmed_only_when_a_selection_exists() {
+    let mut g = rig();
+    g.entry("hello world", 0);
+    // Nothing selected: Ctrl+C copies nothing, and nothing is claimed.
+    assert!(spoken(&clip_key(&mut g, "c", false)).is_empty());
+    select(&mut g, 6..11, "world");
+    g.advance(1000);
+    let fx = clip_key(&mut g, "c", false);
+    assert_eq!(spoken(&fx), ["copied"]);
+    // Copying leaves the selection alone: again.
+    g.advance(1000);
+    assert_eq!(spoken(&clip_key(&mut g, "c", false)), ["copied"]);
+    // Ctrl+Insert is a copy as well.
+    g.advance(1000);
+    assert_eq!(spoken(&g.key(0xff63, 0, Modifiers::CONTROL)), ["copied"]);
+    assert_eq!(g.r.text_counters().clipboard_spoken, 3);
+}
+
+#[test]
+fn copy_after_the_selection_collapsed_is_silent() {
+    let mut g = rig();
+    g.entry("hello world", 0);
+    select(&mut g, 0..5, "hello");
+    // An arrow key collapses the selection.
+    let _ = g.key(0xff53, 0, NONE);
+    let _ = g.caret(5);
+    g.advance(1000);
+    assert!(spoken(&clip_key(&mut g, "c", false)).is_empty());
+}
+
+#[test]
+fn copy_is_silent_when_the_setting_is_off() {
+    let mut g = rig();
+    announce(&mut g, false);
+    g.entry("hello world", 0);
+    select(&mut g, 6..11, "world");
+    g.advance(1000);
+    assert!(spoken(&clip_key(&mut g, "c", false)).is_empty());
+}
+
+#[test]
+fn cut_is_confirmed_by_the_deletion() {
+    let mut g = rig();
+    g.entry("hello world", 11);
+    let fx = clip_key(&mut g, "x", false);
+    assert!(spoken(&fx).is_empty(), "nothing yet: no evidence");
+    let fx = g.delete(6, Some("world"), 5);
+    assert_eq!(spoken(&fx), ["cut, world"]);
+    // Nothing was selected: Ctrl+X removes nothing and says nothing.
+    let mut g = rig();
+    g.entry("hello world", 11);
+    let _ = clip_key(&mut g, "x", false);
+    assert!(spoken(&g.tick(100)).is_empty());
+    assert!(spoken(&g.tick(500)).is_empty());
+}
+
+#[test]
+fn a_cut_that_beat_its_key_is_confirmed_too() {
+    let mut g = rig();
+    g.entry("hello world", 11);
+    assert!(spoken(&g.delete(6, Some("world"), 5)).is_empty(), "held");
+    assert_eq!(spoken(&clip_key(&mut g, "x", false)), ["cut, world"]);
+}
+
+#[test]
+fn a_long_cut_is_counted_and_a_cut_without_text_is_still_vouched_for() {
+    let mut g = rig();
+    g.entry(&"x".repeat(2000), 2000);
+    let _ = clip_key(&mut g, "x", false);
+    let fx = g.delete(0, Some(&"x".repeat(1500)), 1500);
+    assert_eq!(spoken(&fx), ["cut, 1500 characters"]);
+    let mut g = rig();
+    g.entry("hello world", 11);
+    let _ = clip_key(&mut g, "x", false);
+    // No text in the event and none in the window: the deletion is still the evidence.
+    let fx = g.msg(ReaderMsg::Text(TextMsg::Edit {
+        node: node(),
+        delta: gorca_model::TextDelta::Delete {
+            offset: 6,
+            len: 5,
+            text: None,
+        },
+    }));
+    assert_eq!(spoken(&fx), ["cut, world"], "the window still held it");
+}
+
+#[test]
+fn shift_delete_is_a_cut() {
+    let mut g = rig();
+    g.entry("hello", 5);
+    let _ = g.key(0xffff, 0x7f, Modifiers::SHIFT);
+    assert_eq!(spoken(&g.delete(0, Some("hello"), 5)), ["cut, hello"]);
+}
+
+#[test]
+fn paste_is_confirmed_by_the_insert_and_still_reads_the_text() {
+    let mut g = rig();
+    g.entry("ab", 2);
+    let fx = clip_key(&mut g, "v", false);
+    assert!(spoken(&fx).is_empty(), "no evidence yet");
+    let fx = g.insert(2, "some words");
+    assert_eq!(spoken(&fx), ["pasted, some words"]);
+    assert!(spoken(&g.caret(12)).is_empty());
+    // An empty clipboard inserts nothing: silence, not "pasted".
+    let mut g = rig();
+    g.entry("ab", 2);
+    let _ = clip_key(&mut g, "v", false);
+    assert!(spoken(&g.tick(100)).is_empty());
+    assert!(spoken(&g.tick(500)).is_empty());
+}
+
+#[test]
+fn a_short_paste_that_beat_its_key_is_confirmed() {
+    let mut g = rig();
+    g.entry("ab", 2);
+    assert!(spoken(&g.insert(2, "xyz")).is_empty(), "held for its key");
+    assert_eq!(spoken(&clip_key(&mut g, "v", false)), ["pasted, xyz"]);
+}
+
+#[test]
+fn shift_insert_is_a_paste() {
+    let mut g = rig();
+    g.entry("ab", 2);
+    let _ = g.key(0xff63, 0, Modifiers::SHIFT);
+    assert_eq!(spoken(&g.insert(2, "long enough")), ["pasted, long enough"]);
+}
+
+#[test]
+fn undo_and_redo_are_confirmed_by_a_text_change_once_per_key() {
+    let mut g = rig();
+    g.entry("hello world", 11);
+    let fx = clip_key(&mut g, "z", false);
+    assert!(spoken(&fx).is_empty(), "no evidence yet");
+    // An undo that deletes and inserts again says "undo" once, then reads what came back.
+    assert_eq!(spoken(&g.delete(6, Some("world"), 5)), ["undo"]);
+    assert_eq!(spoken(&g.insert(6, "there")), ["there"]);
+    assert!(spoken(&g.tick(300)).is_empty());
+    // Redo: Ctrl+Y and Ctrl+Shift+Z.
+    g.advance(1000);
+    let _ = clip_key(&mut g, "y", false);
+    assert_eq!(spoken(&g.insert(6, "again")), ["redo, again"]);
+    g.advance(1000);
+    let _ = clip_key(&mut g, "z", true);
+    assert_eq!(spoken(&g.delete(6, Some("again"), 5)), ["redo"]);
+}
+
+#[test]
+fn an_undo_that_changes_nothing_is_silent() {
+    let mut g = rig();
+    g.entry("hello", 5);
+    let _ = clip_key(&mut g, "z", false);
+    assert!(spoken(&g.tick(100)).is_empty());
+    assert!(spoken(&g.tick(500)).is_empty());
+    assert!(spoken(&g.selection_event()).is_empty());
+}
+
+#[test]
+fn a_replaced_text_vouches_for_an_undo() {
+    let mut g = rig();
+    g.entry("hello", 5);
+    let _ = clip_key(&mut g, "z", false);
+    let fx = g.msg(ReaderMsg::Text(TextMsg::Edit {
+        node: node(),
+        delta: gorca_model::TextDelta::Replaced { text: None },
+    }));
+    assert_eq!(spoken(&fx), ["undo"]);
+}
+
+#[test]
+fn with_the_setting_off_the_old_speech_stays() {
+    let mut g = rig();
+    announce(&mut g, false);
+    g.entry("ab", 2);
+    let _ = clip_key(&mut g, "v", false);
+    assert_eq!(spoken(&g.insert(2, "pasted words")), ["pasted words"]);
+    let mut g = rig();
+    announce(&mut g, false);
+    g.entry("hello world", 11);
+    let _ = clip_key(&mut g, "x", false);
+    assert_eq!(spoken(&g.delete(6, Some("world"), 5)), ["world"]);
+    let mut g = rig();
+    announce(&mut g, false);
+    g.entry("hello", 5);
+    let _ = clip_key(&mut g, "z", false);
+    assert_eq!(
+        spoken(&g.insert(5, "!")),
+        ["bang"],
+        "an undo read as new text, as before"
+    );
+}
+
+#[test]
+fn clipboard_confirmations_are_localised() {
+    use gorca_i18n::Lang;
+    let _guard = gorca_i18n::scoped(Lang::Ru);
+    let mut g = rig();
+    std::sync::Arc::make_mut(&mut g.r.cmd.effective)
+        .speech
+        .language = "ru".to_owned();
+    g.entry("hello world", 11);
+    let _ = clip_key(&mut g, "z", false);
+    assert_eq!(spoken(&g.delete(6, Some("world"), 5)), ["отмена"]);
+}
+
+#[test]
+fn a_read_only_text_is_not_cut_pasted_or_undone() {
+    let mut g = rig();
+    g.track(Role::TextEntry, StateSet::FOCUSED, "hello", 5);
+    let _ = clip_key(&mut g, "x", false);
+    assert!(
+        spoken(&g.delete(0, Some("hello"), 5))
+            .iter()
+            .all(|s| !s.starts_with("cut")),
+        "no confirmation"
+    );
+    g.advance(1000);
+    let _ = clip_key(&mut g, "z", false);
+    assert!(spoken(&g.insert(0, "x")).iter().all(|s| s != "undo"));
+}
+
+#[test]
+fn a_password_field_is_never_claimed_copied_and_its_cut_and_paste_text_is_not_read() {
+    let mut g = rig();
+    g.track(
+        Role::PasswordEntry,
+        StateSet::EDITABLE | StateSet::FOCUSED,
+        "hunter2x",
+        8,
+    );
+    select(&mut g, 0..6, "hunter");
+    g.advance(1000);
+    assert!(spoken(&clip_key(&mut g, "c", false)).is_empty());
+    let _ = clip_key(&mut g, "x", false);
+    let said = spoken(&g.delete(0, Some("hunter"), 6));
+    assert_eq!(said, ["cut"], "{said:?}");
+    g.advance(1000);
+    let _ = clip_key(&mut g, "v", false);
+    let said = spoken(&g.insert(0, "correct horse"));
+    assert_eq!(said, ["pasted"], "{said:?}");
+}
+
+#[test]
+fn gecko_s_placeholder_after_a_cut_and_the_caret_on_it_are_the_cuts() {
+    // ED-FFCE shape: Delete{0,5}, Insert{0,1} (an empty block's placeholder), caret at 0.
+    for placeholder in ["\n", "\u{fffc}", " "] {
+        let mut g = rig();
+        g.area("brave", 5);
+        let _ = clip_key(&mut g, "x", false);
+        assert_eq!(spoken(&g.delete(0, Some("brave"), 5)), ["cut, brave"]);
+        g.advance(20);
+        let fx = g.insert(0, placeholder);
+        assert!(spoken(&fx).is_empty(), "{placeholder:?}: {:?}", spoken(&fx));
+        let fx = g.caret(0);
+        assert!(spoken(&fx).is_empty(), "{placeholder:?}: {:?}", spoken(&fx));
+        assert!(spoken(&g.tick(400)).is_empty());
+    }
+    // Text typed later at the same offset is spoken as before.
+    let mut g = rig();
+    g.area("brave", 5);
+    let _ = clip_key(&mut g, "x", false);
+    let _ = g.delete(0, Some("brave"), 5);
+    g.advance(1000);
+    assert!(!spoken(&g.insert(0, "z")).is_empty() || !spoken(&g.tick(300)).is_empty());
+}
+
+#[test]
+fn an_edit_long_after_an_undo_key_is_not_the_undos() {
+    // GTK 3 has no undo: Ctrl+Z changes nothing, and an autocomplete 300 ms later is its own.
+    let mut g = rig();
+    g.entry("hello", 5);
+    let _ = clip_key(&mut g, "z", false);
+    g.advance(300);
+    let said = spoken(&g.insert(5, " there"));
+    assert!(said.iter().all(|s| !s.starts_with("undo")), "{said:?}");
+    // The same for a paste key with an empty clipboard.
+    let mut g = rig();
+    g.entry("hello", 5);
+    let _ = clip_key(&mut g, "v", false);
+    g.advance(300);
+    let said = spoken(&g.insert(5, " from a script"));
+    assert!(said.iter().all(|s| !s.starts_with("pasted")), "{said:?}");
+}
+
+fn replaced(g: &mut Rig) -> ReaderEffects {
+    g.msg(ReaderMsg::Text(TextMsg::Edit {
+        node: node(),
+        delta: gorca_model::TextDelta::Replaced { text: None },
+    }))
+}
+
+#[test]
+fn a_cut_or_paste_reported_as_a_replace_is_confirmed_once_and_its_caret_is_silent() {
+    // Firefox contenteditable, second shape: Replaced, then a caret event.
+    for (letter, want) in [("x", "cut"), ("v", "pasted")] {
+        let mut g = rig();
+        g.area("brave", 5);
+        let _ = clip_key(&mut g, letter, false);
+        assert_eq!(spoken(&replaced(&mut g)), [want]);
+        let fx = g.caret(0);
+        assert!(spoken(&fx).is_empty(), "{want}: {:?}", spoken(&fx));
+        assert!(spoken(&g.tick(400)).is_empty());
+    }
+}
+
+#[test]
+fn a_redo_that_deletes_then_leaves_a_placeholder_and_a_caret_says_redo_once() {
+    let mut g = rig();
+    g.area("brave", 5);
+    let _ = clip_key(&mut g, "y", false);
+    assert_eq!(spoken(&g.delete(0, Some("brave"), 5)), ["redo"]);
+    assert!(spoken(&g.insert(0, "\n")).is_empty());
+    assert!(spoken(&g.caret(0)).is_empty());
+}
+
+fn said_at_boundary(
+    mode: gorca_config::BoundaryMode,
+    area: bool,
+    text: &str,
+    caret: u32,
+    key: u32,
+) -> (Vec<String>, usize) {
+    let mut g = rig();
+    boundary(&mut g, mode);
+    if area {
+        g.area(text, caret);
+    } else {
+        g.entry(text, caret);
+    }
+    let _ = g.key(key, 0, NONE);
+    g.advance(150);
+    let fx = g.tick(0);
+    (spoken(&fx), cues(&fx).len())
+}
+
+#[test]
+fn the_boundary_says_start_end_top_or_bottom() {
+    use gorca_config::BoundaryMode as B;
+    let say = B::SAY;
+    // A single-line entry: its edges are the start and the end.
+    assert_eq!(
+        said_at_boundary(say, false, "ab", 0, LEFT),
+        (vec!["start".to_owned()], 0)
+    );
+    assert_eq!(
+        said_at_boundary(say, false, "ab", 2, 0xff53),
+        (vec!["end".to_owned()], 0)
+    );
+    // A text view: Left, Right, Up and Down stop at the top or bottom of the text; Home and End
+    // at the start or end of the line.
+    let t = "one\ntwo";
+    assert_eq!(
+        said_at_boundary(say, true, t, 0, UP),
+        (vec!["top".to_owned()], 0)
+    );
+    assert_eq!(
+        said_at_boundary(say, true, t, 0, LEFT),
+        (vec!["top".to_owned()], 0)
+    );
+    assert_eq!(
+        said_at_boundary(say, true, t, 7, 0xff54),
+        (vec!["bottom".to_owned()], 0)
+    );
+    assert_eq!(
+        said_at_boundary(say, true, t, 7, 0xff53),
+        (vec!["bottom".to_owned()], 0)
+    );
+    assert_eq!(
+        said_at_boundary(say, true, t, 4, 0xff50),
+        (vec!["start".to_owned()], 0)
+    );
+    assert_eq!(
+        said_at_boundary(say, true, t, 7, 0xff57),
+        (vec!["end".to_owned()], 0)
+    );
+}
+
+#[test]
+fn every_boundary_mode_does_what_it_says() {
+    use gorca_config::BoundaryMode as B;
+    let both = B {
+        cue: true,
+        say: true,
+        repeat: false,
+    };
+    assert_eq!(said_at_boundary(B::OFF, false, "ab", 0, LEFT), (vec![], 0));
+    assert_eq!(said_at_boundary(B::CUE, false, "ab", 0, LEFT), (vec![], 1));
+    assert_eq!(
+        said_at_boundary(B::SAY, false, "ab", 0, LEFT),
+        (vec!["start".to_owned()], 0)
+    );
+    assert_eq!(
+        said_at_boundary(both, false, "ab", 0, LEFT),
+        (vec!["start".to_owned()], 1)
+    );
+    assert_eq!(
+        said_at_boundary(B::REPEAT, false, "ab", 0, LEFT),
+        (vec!["a".to_owned()], 0)
+    );
+    // Repeat with the others: the cue, the word, then the unit.
+    let all = B {
+        repeat: true,
+        ..both
+    };
+    assert_eq!(
+        said_at_boundary(all, false, "ab", 0, LEFT),
+        (vec!["start, a".to_owned()], 1)
+    );
+}
+
+#[test]
+fn the_boundary_words_are_localised() {
+    use gorca_i18n::Lang;
+    let _guard = gorca_i18n::scoped(Lang::Ru);
+    let mut g = rig();
+    boundary(&mut g, gorca_config::BoundaryMode::SAY);
+    g.area("one\ntwo", 0);
+    let _ = g.key(UP, 0, NONE);
+    g.advance(150);
+    assert_eq!(spoken(&g.tick(0)), ["начало текста"]);
+    let mut g = rig();
+    boundary(&mut g, gorca_config::BoundaryMode::SAY);
+    g.entry("ab", 2);
+    let _ = g.key(0xff53, 0, NONE);
+    g.advance(150);
+    assert_eq!(spoken(&g.tick(0)), ["конец"]);
 }

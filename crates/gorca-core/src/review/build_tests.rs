@@ -53,6 +53,10 @@ struct Script {
     act_error: Option<BackendError>,
     status_bar: Option<NodeKey>,
     delay: Duration,
+    /// The next this many `VisibleLines` requests are refused as busy.
+    busy_lines: usize,
+    /// `VisibleLines` of these nodes never gets an answer in time.
+    slow_lines: HashSet<NodeKey>,
 }
 
 struct Fake {
@@ -117,8 +121,20 @@ fn fake(script: Script) -> Fake {
         while let Some(req) = rrx.recv().await {
             r2.fetch_add(1, Ordering::Relaxed);
             let (answer, delay) = {
-                let s = s2.lock().unwrap();
-                (answer(&s, &req.op), s.delay)
+                let mut s = s2.lock().unwrap();
+                let lines_of = match &req.op {
+                    BackendOp::Text(TextQuery::VisibleLines { node, .. }) => Some(*node),
+                    _ => None,
+                };
+                let forced = match lines_of {
+                    Some(_) if s.busy_lines > 0 => {
+                        s.busy_lines -= 1;
+                        Some(Err(BackendError::Busy))
+                    }
+                    Some(n) if s.slow_lines.contains(&n) => Some(Err(BackendError::Timeout)),
+                    _ => None,
+                };
+                (forced.or_else(|| answer(&s, &req.op)), s.delay)
             };
             match answer {
                 None => held.push(req),
@@ -161,6 +177,8 @@ fn fake(script: Script) -> Fake {
             clock: Clock::System,
             next_req: Arc::new(AtomicU64::new(1)),
             limits: ReviewLimits::default(),
+            static_leaves_repeat: false,
+            partial_pages: Arc::default(),
         },
     }
 }
@@ -282,7 +300,7 @@ fn spec(prev: Option<Arc<super::LineModel>>, dirty: Option<Arc<[NodeKey]>>) -> B
 #[tokio::test]
 async fn expanding_a_node_makes_its_child_list_known_and_brings_extents() {
     let f = fake(form(5));
-    expand(&f.io, key(2), BudgetClass::Interactive, true)
+    expand(&f.io, key(2), BudgetClass::Interactive, true, None)
         .await
         .unwrap();
     let Lookup::Hit(v) = f.io.mirror.view(key(2)) else {
@@ -592,4 +610,199 @@ async fn f7_a_deep_surface_is_built_completely() {
     .unwrap();
     assert_eq!(m.completeness, Completeness::Complete);
     assert_eq!(&*m.lines[0].text, "deep button");
+}
+
+/// R2-1: the pages after the first are not asked for once the build's soft deadline has passed.
+#[tokio::test]
+async fn child_paging_stops_when_the_build_budget_is_used_up() {
+    let f = fake(form(600));
+    let late = std::time::Instant::now();
+    expand(&f.io, key(2), BudgetClass::Interactive, true, Some(late))
+        .await
+        .unwrap();
+    assert_eq!(
+        f.requests.load(Ordering::Relaxed),
+        2,
+        "one Fetch and the first page only"
+    );
+    let Lookup::Hit(v) = f.io.mirror.view(key(2)) else {
+        panic!("parent missing")
+    };
+    assert!(
+        !matches!(&v.snap.children, ChildList::Known(_)),
+        "an incomplete list must not be recorded as known"
+    );
+    assert!(matches!(f.io.mirror.view(key(3 + 255)), Lookup::Hit(_)));
+    assert!(matches!(f.io.mirror.view(key(3 + 256)), Lookup::Miss));
+    // The next pass of the same task resumes behind the pages already read, and reads one more
+    // page even when its time is up (or a slow app would never get past the first pages).
+    expand(&f.io, key(2), BudgetClass::Interactive, true, Some(late))
+        .await
+        .unwrap();
+    assert_eq!(
+        f.requests.load(Ordering::Relaxed),
+        2 + 2,
+        "a Fetch and the second page"
+    );
+    assert!(matches!(f.io.mirror.view(key(3 + 256)), Lookup::Hit(_)));
+    let far = std::time::Instant::now() + Duration::from_secs(30);
+    expand(&f.io, key(2), BudgetClass::Interactive, true, Some(far))
+        .await
+        .unwrap();
+    assert_eq!(
+        f.requests.load(Ordering::Relaxed),
+        2 + 2 + 2,
+        "a Fetch and the page that was left, not the first page again"
+    );
+    let Lookup::Hit(v) = f.io.mirror.view(key(2)) else {
+        panic!("parent missing")
+    };
+    assert!(matches!(&v.snap.children, ChildList::Known(k) if k.len() == 600));
+    // Without a deadline the whole list is read, page after page.
+    let g = fake(form(600));
+    expand(&g.io, key(2), BudgetClass::Interactive, true, None)
+        .await
+        .unwrap();
+    assert_eq!(g.requests.load(Ordering::Relaxed), 4);
+    let Lookup::Hit(v) = g.io.mirror.view(key(2)) else {
+        panic!("parent missing")
+    };
+    assert!(matches!(&v.snap.children, ChildList::Known(k) if k.len() == 600));
+}
+
+fn text_page(label_lines: &str) -> Script {
+    let mut s = form(1);
+    let mut label = snap(9, Role::Label, "", Some(2), &[], rect(0, 100, 200, 40));
+    label.interfaces = Ifaces::TEXT;
+    s.nodes.insert(key(9), label);
+    if let Some(ChildList::Known(k)) = s.nodes.get_mut(&key(2)).map(|n| &mut n.children) {
+        k.push(key(9));
+    }
+    s.lines.insert(
+        key(9),
+        vec![TextLine {
+            range: 0..5,
+            text: Arc::from(label_lines),
+            rect: rect(0, 100, 200, 20),
+        }],
+    );
+    s
+}
+
+fn lines_requests(f: &Fake) -> usize {
+    // Requests that are not the walk's own: a Fetch and a ChildSnapshots per expanded node.
+    f.requests.load(Ordering::Relaxed)
+}
+
+/// M-1: a busy app is asked again and the row survives; the model is complete.
+#[tokio::test]
+async fn a_busy_app_is_asked_again_for_its_lines() {
+    let mut s = text_page("hello");
+    s.busy_lines = 2;
+    let f = fake(s);
+    let m = build_model(&f.io, spec(None, None)).await.unwrap();
+    assert!(m.lines.iter().any(|l| &*l.text == "hello"));
+    assert_eq!(m.completeness, Completeness::Complete);
+}
+
+/// M-1: a timeout is asked once (each try costs a class deadline and counts toward "hung"); the
+/// model says it is incomplete so that the continuation asks later.
+#[tokio::test]
+async fn a_timeout_on_lines_is_not_retried_and_marks_the_model_truncated() {
+    let mut s = text_page("hello");
+    s.slow_lines.insert(key(9));
+    let f = fake(s);
+    let before = lines_requests(&f);
+    let m = build_model(&f.io, spec(None, None)).await.unwrap();
+    let asked = lines_requests(&f) - before;
+    assert!(!m.lines.iter().any(|l| &*l.text == "hello"));
+    assert_eq!(m.completeness, Completeness::Truncated(TruncWhy::Deadline));
+    // The walk's own requests (2 nodes expanded) plus exactly one lines request.
+    let walk_only = {
+        let g = fake(text_page("hello"));
+        let b = lines_requests(&g);
+        build_model(&g.io, spec(None, None)).await.unwrap();
+        lines_requests(&g) - b
+    };
+    assert_eq!(
+        asked, walk_only,
+        "one lines request, as in the unfailed build"
+    );
+}
+
+/// M-1: busy retries stop when the build's budget is spent.
+#[tokio::test]
+async fn busy_retries_stop_at_the_build_budget() {
+    let mut s = text_page("hello");
+    s.busy_lines = 1_000;
+    let f = fake(s);
+    let mut sp = spec(None, None);
+    sp.budget = Duration::from_millis(1);
+    let t = Instant::now();
+    let _ = build_model(&f.io, sp).await;
+    assert!(t.elapsed() < Duration::from_millis(500));
+}
+
+fn reorder_children(f: &Fake, parent: u64, f_: impl FnOnce(&mut Vec<NodeKey>)) {
+    let mut s = f.script.lock().unwrap();
+    if let Some(ChildList::Known(k)) = s.nodes.get_mut(&key(parent)).map(|n| &mut n.children) {
+        let mut v: Vec<NodeKey> = k.iter().copied().collect();
+        f_(&mut v);
+        *k = v.into_iter().collect();
+    }
+}
+
+/// M-2: a child inserted at the front between two passes (600 -> 601): the saved pages are
+/// dropped and the list is read again, complete, without duplicates.
+#[tokio::test]
+async fn a_list_that_grows_between_passes_is_read_again_from_the_start() {
+    let f = fake(form(600));
+    let late = std::time::Instant::now();
+    expand(&f.io, key(2), BudgetClass::Interactive, true, Some(late))
+        .await
+        .unwrap();
+    {
+        let mut s = f.script.lock().unwrap();
+        let n = snap(900, Role::Button, "new", Some(2), &[], rect(0, 0, 100, 24));
+        s.nodes.insert(key(900), n);
+    }
+    reorder_children(&f, 2, |v| v.insert(0, key(900)));
+    let far = std::time::Instant::now() + Duration::from_secs(30);
+    expand(&f.io, key(2), BudgetClass::Interactive, true, Some(far))
+        .await
+        .unwrap();
+    let Lookup::Hit(v) = f.io.mirror.view(key(2)) else {
+        panic!("parent missing")
+    };
+    let ChildList::Known(k) = &v.snap.children else {
+        panic!("not known")
+    };
+    let uniq: HashSet<_> = k.iter().collect();
+    assert_eq!((k.len(), uniq.len()), (601, 601));
+    assert_eq!(k[0], key(900));
+}
+
+/// M-2: same count, but a different child where the saved pages end.
+#[tokio::test]
+async fn a_list_reordered_between_passes_is_read_again_from_the_start() {
+    let f = fake(form(600));
+    let late = std::time::Instant::now();
+    expand(&f.io, key(2), BudgetClass::Interactive, true, Some(late))
+        .await
+        .unwrap();
+    // The saved pages hold children 0..256; swap the last saved one with a later one.
+    reorder_children(&f, 2, |v| v.swap(255, 300));
+    let far = std::time::Instant::now() + Duration::from_secs(30);
+    expand(&f.io, key(2), BudgetClass::Interactive, true, Some(far))
+        .await
+        .unwrap();
+    let Lookup::Hit(v) = f.io.mirror.view(key(2)) else {
+        panic!("parent missing")
+    };
+    let ChildList::Known(k) = &v.snap.children else {
+        panic!("not known")
+    };
+    let uniq: HashSet<_> = k.iter().collect();
+    assert_eq!((k.len(), uniq.len()), (600, 600));
+    assert_eq!(k[255], key(3 + 300));
 }

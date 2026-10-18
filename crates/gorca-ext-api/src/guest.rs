@@ -312,6 +312,7 @@ fn term_action_to_wit(a: tm::TermAction) -> wtm::TermAction {
         tm::TermAction::FetchScreen => wtm::TermAction::FetchScreen,
         tm::TermAction::ArmTimer(t) => wtm::TermAction::ArmTimer(t),
         tm::TermAction::ClaimKey => wtm::TermAction::ClaimKey,
+        tm::TermAction::Cue => wtm::TermAction::Cue,
     }
 }
 
@@ -332,6 +333,16 @@ impl<T: Hooks + Default + 'static> wtm::Guest for Adapter<T> {
             burst_lines: cfg.burst_lines,
             burst_tail: cfg.burst_tail,
             max_output_chars: cfg.max_output_chars,
+            word_level: cfg.word_level.map(|l| match l {
+                wtm::WordLevel::Fine => tm::WordLevel::Fine,
+                wtm::WordLevel::Medium => tm::WordLevel::Medium,
+                wtm::WordLevel::Coarse => tm::WordLevel::Coarse,
+            }),
+            boundary: tm::BoundaryMode {
+                cue: cfg.boundary.cue,
+                say: cfg.boundary.say,
+                repeat: cfg.boundary.repeat,
+            },
         };
         with_terminal::<T, _>(|t| t.configure(&cfg));
     }

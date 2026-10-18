@@ -253,6 +253,7 @@ mod tests {
         let sp = CharsSpace::new(&c, 0);
         let q = EditQuirks {
             word_landing: WordLanding::Start,
+            ..EditQuirks::default()
         };
         assert_eq!(
             present_word(&sp, Some(0), 4, q),
