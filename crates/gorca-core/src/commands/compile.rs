@@ -425,10 +425,12 @@ fn grabs_where(
             KeyRef::Sym(s) => (None, None, Some(s)),
         };
         if let Some(s) = sym_direct {
-            plain.push(Chord {
-                keysym: s,
-                modifiers: mods,
-            });
+            for keysym in std::iter::once(s).chain(table.case_partner(s)) {
+                plain.push(Chord {
+                    keysym,
+                    modifiers: mods,
+                });
+            }
             continue;
         }
         let Some(nav) = code_sym else { continue };
@@ -460,6 +462,15 @@ fn grabs_where(
             let mut syms = table.syms(code, shift);
             if !syms.contains(&baseline) {
                 syms.push(baseline);
+            }
+            // Caps Lock swaps the case of a letter key (`h` arrives as `H`, `Shift+H` as `h`) and
+            // Mutter matches the keysym exactly: grab both cases, so single-letter navigation
+            // works with Caps Lock on (the lane matches by keycode and ignores the lock bits).
+            let partners: Vec<u32> = syms.iter().filter_map(|s| table.case_partner(*s)).collect();
+            for p in partners {
+                if !syms.contains(&p) {
+                    syms.push(p);
+                }
             }
             for keysym in syms {
                 // Browse mode swallows the unbound keys it shares a keysym with: in browse mode
@@ -1132,7 +1143,155 @@ mod tests {
         // Russian Shift+6 types a colon, Shift+4 a semicolon.
         t.insert(15, true, 0x3a);
         t.insert(13, true, 0x3b);
+        for (lower, upper) in [(0x6d2, 0x6f2), (0x6cf, 0x6ef), (0x6cc, 0x6ec)] {
+            t.insert_case_pair(lower, upper);
+        }
         t
+    }
+
+    /// The browse grab set as Mutter would see it: `SetKeyGrabs` with the compiled chords.
+    fn browse_set(table: &KeysymTable) -> gorca_input_api::GrabSet {
+        let c = compiled("[keyboard]\npreset=\"nvda\"\nlayout=\"desktop\"\n");
+        let (plain, exact) = browse_grabs(&c.keymap, table);
+        let mut set = gorca_input_api::GrabSet::default();
+        set.modifiers.extend([sym::INSERT, sym::KP_INSERT]);
+        set.chords.extend(plain);
+        set.exact.extend(exact);
+        set
+    }
+
+    fn swallowed(set: &gorca_input_api::GrabSet, keysym: u32, state: Modifiers) -> bool {
+        use gorca_input_api::{Ev, Replica};
+        let ev = Ev {
+            keysym,
+            pressed: true,
+            repeat: false,
+            state,
+            time_ms: 1_000,
+        };
+        // Mutter's exact-match rule on the wire form, not only the lane's lock-blind lookup.
+        let (_, strokes) = set.to_wire();
+        let wire = strokes.contains(&(keysym, state.bits()));
+        assert_eq!(
+            wire,
+            Replica::default().step(&ev, set, false).swallowed,
+            "the model and the wire form agree on {keysym:#x} {state:?}"
+        );
+        wire
+    }
+
+    /// Caps Lock on: XKB types `H` for the bare key and `h` for Shift+H, and Mutter matches the
+    /// keysym exactly, so the quick-navigation grab needs both cases (NVDA parity: Caps Lock is
+    /// not Shift for single-letter commands).
+    #[test]
+    fn caps_lock_does_not_break_the_single_letter_quick_navigation_grabs() {
+        let set = browse_set(&KeysymTable::us());
+        let lock = Modifiers::LOCK;
+        for (what, keysym, state) in [
+            ("h", 0x68, Modifiers::empty()),
+            ("Shift+h", 0x48, Modifiers::SHIFT),
+            ("h, Caps Lock", 0x48, lock),
+            ("Shift+h, Caps Lock", 0x68, Modifiers::SHIFT | lock),
+            ("h, Num Lock and Caps Lock", 0x48, lock | Modifiers::MOD2),
+            ("e, Caps Lock", 0x45, lock),
+            ("Shift+e, Caps Lock", 0x65, Modifiers::SHIFT | lock),
+        ] {
+            assert!(swallowed(&set, keysym, state), "{what} is a grabbed key");
+        }
+        // Keys without case are unchanged by Caps Lock.
+        assert!(swallowed(&set, 0x32, lock), "2 with Caps Lock");
+        assert!(swallowed(&set, 0x40, Modifiers::SHIFT | lock), "Shift+2");
+    }
+
+    /// Caps Lock is not Shift: through the lane, over the Browse grab set and the real keymap, `H`
+    /// with the lock goes to the next heading and `Shift+H` (arriving as lower case `h`) to the
+    /// previous one, exactly as with the lock off.
+    #[test]
+    fn caps_lock_does_not_invert_the_quick_navigation_direction() {
+        use gorca_input_api::{GrabView, KeyClass, LaneLinks};
+        let c = compiled("[keyboard]\npreset=\"nvda\"\nlayout=\"desktop\"\n");
+        let (plain, exact) = browse_grabs(&c.keymap, &KeysymTable::us());
+        let keys = crate::mode::ModeKeys {
+            modifiers: c.keymap.modifiers.clone(),
+            quick_nav: plain,
+            exact,
+            ..crate::mode::ModeKeys::default()
+        };
+        let set = crate::mode::Mode::Browse {
+            doc: gorca_model::DocId(1),
+            sticky: false,
+        }
+        .grab_set(&keys);
+        let links = LaneLinks::new();
+        links.keymap.store(std::sync::Arc::new(c.keymap));
+        links.view.store(std::sync::Arc::new(GrabView {
+            committed_gen: 1,
+            committed: std::sync::Arc::new(set),
+            wanted_gen: None,
+            wanted: None,
+        }));
+        let t0 = std::time::Instant::now();
+        let mut lane = gorca_input_api::InputLane::new(
+            links,
+            std::sync::Arc::new(gorca_rt::EpochCell::new()),
+            t0,
+        );
+        let next = CoreCmd::QuicknavNextHeading.id();
+        let prev = CoreCmd::QuicknavPrevHeading.id();
+        let mut t = 1000u64;
+        let mut go = |keysym: u32, mods: Modifiers| {
+            t += 300;
+            let ev = |pressed| gorca_input_api::KeyEvent {
+                keycode: 43,
+                keysym,
+                unichar: 0,
+                modifiers: mods,
+                pressed,
+            };
+            let at = |ms: u64| t0 + std::time::Duration::from_millis(ms);
+            let class = lane.on_key(ev(true), at(t)).intent.class;
+            lane.on_key(ev(false), at(t + 50));
+            class
+        };
+        let lock = Modifiers::LOCK;
+        assert_eq!(go(0x68, Modifiers::empty()), KeyClass::Command(next));
+        assert_eq!(go(0x48, Modifiers::SHIFT), KeyClass::Command(prev));
+        assert_eq!(go(0x48, lock), KeyClass::Command(next), "Caps Lock, H");
+        assert_eq!(
+            go(0x68, Modifiers::SHIFT | lock),
+            KeyClass::Command(prev),
+            "Caps Lock, Shift+H"
+        );
+        assert_eq!(go(0x48, lock | Modifiers::MOD2), KeyClass::Command(next));
+    }
+
+    #[test]
+    fn caps_lock_on_the_russian_layout_grabs_the_other_case_cyrillic_keysym() {
+        let set = browse_set(&us_ru());
+        assert!(
+            swallowed(&set, 0x6f2, Modifiers::LOCK),
+            "Cyrillic_ER, Caps Lock"
+        );
+        assert!(swallowed(&set, 0x6d2, Modifiers::SHIFT | Modifiers::LOCK));
+    }
+
+    /// Every grabbed letter has its other case grabbed under the same modifiers, and nothing
+    /// else is added.
+    #[test]
+    fn caps_lock_variants_add_only_case_partners() {
+        let c = compiled("[keyboard]\npreset=\"nvda\"\nlayout=\"desktop\"\n");
+        let (with, _) = browse_grabs(&c.keymap, &KeysymTable::us());
+        for ch in &with {
+            let letter = (0x41..=0x5a).contains(&ch.keysym) || (0x61..=0x7a).contains(&ch.keysym);
+            if letter {
+                let partner = ch.keysym ^ 0x20;
+                assert!(
+                    with.iter()
+                        .any(|o| o.keysym == partner && o.modifiers == ch.modifiers),
+                    "{ch:?} has no partner"
+                );
+            }
+        }
     }
 
     #[test]
@@ -1332,5 +1491,221 @@ mod tests {
             "the probe must exercise the multi-press chords, tried {tried}"
         );
         assert!(shadowed.is_empty(), "shadowed: {shadowed:#?}");
+    }
+
+    /// One lane over the real compiled keymap and the Focus-mode grab set of `text`.
+    struct LaneRig {
+        lane: gorca_input_api::InputLane,
+        t0: std::time::Instant,
+        cmd: gorca_input_api::CmdId,
+        chord_code: u16,
+        chord_sym: u32,
+    }
+
+    impl LaneRig {
+        /// `cmd_name` must be bound as `gorca+<key>` in the preset of `text`.
+        fn new(text: &str, cmd: CoreCmd) -> Option<Self> {
+            use gorca_input_api::{GrabView, LaneLinks};
+            let c = compiled(text);
+            let (code, _, _) = c
+                .keymap
+                .active_chords(ModeKind::Focus)
+                .into_iter()
+                .find(|(ck, p, b)| ck.mods == Modifiers::GORCA && *p == 1 && b.cmd == cmd.id())
+                .and_then(|(ck, p, b)| match ck.key {
+                    KeyRef::Code(code) => Some((code, p, b)),
+                    KeyRef::Sym(_) => None,
+                })?;
+            let (plain, exact) = chord_grabs(&c.keymap, ModeKind::Focus, &KeysymTable::us());
+            let keys = crate::mode::ModeKeys {
+                modifiers: c.keymap.modifiers.clone(),
+                commands: plain,
+                exact,
+                ..crate::mode::ModeKeys::default()
+            };
+            let set = crate::mode::Mode::Focus.grab_set(&keys);
+            let links = LaneLinks::new();
+            links.keymap.store(std::sync::Arc::new(c.keymap));
+            links.view.store(std::sync::Arc::new(GrabView {
+                committed_gen: 1,
+                committed: std::sync::Arc::new(set),
+                wanted_gen: None,
+                wanted: None,
+            }));
+            let t0 = std::time::Instant::now();
+            Some(Self {
+                lane: gorca_input_api::InputLane::new(
+                    links,
+                    std::sync::Arc::new(gorca_rt::EpochCell::new()),
+                    t0,
+                ),
+                t0,
+                cmd: cmd.id(),
+                chord_code: code,
+                chord_sym: keysym_of_code(code).unwrap_or(0),
+            })
+        }
+
+        fn key(
+            &mut self,
+            code: u16,
+            keysym: u32,
+            pressed: bool,
+            ms: u64,
+            mods: Modifiers,
+        ) -> gorca_input_api::KeyClass {
+            let ev = gorca_input_api::KeyEvent {
+                keycode: code,
+                keysym,
+                unichar: 0,
+                modifiers: mods,
+                pressed,
+            };
+            self.lane
+                .on_key(ev, self.t0 + std::time::Duration::from_millis(ms))
+                .intent
+                .class
+        }
+
+        /// Modifier down, chord key down and up, modifier up, from `t`. Returns the class of
+        /// the chord key press.
+        fn chord(
+            &mut self,
+            m: &gorca_input_api::ModifierKey,
+            t: u64,
+            lock: Modifiers,
+        ) -> gorca_input_api::KeyClass {
+            self.key(m.keycode, m.keysym, true, t, lock);
+            let class = self.key(self.chord_code, self.chord_sym, true, t + 60, lock);
+            self.key(self.chord_code, self.chord_sym, false, t + 90, lock);
+            self.key(m.keycode, m.keysym, false, t + 120, lock);
+            class
+        }
+    }
+
+    /// Insert, the keypad Insert and Caps Lock are one modifier: the same chord gives the same
+    /// command in every preset and layout, whatever the lock state, repeated or after a double tap.
+    #[test]
+    fn insert_keypad_insert_and_caps_lock_run_the_same_commands() {
+        use gorca_input_api::{KeyClass, MODIFIER_KEYS};
+        let mut covered = 0;
+        for preset in ["nvda", "orca"] {
+            for layout in ["desktop", "laptop"] {
+                let text = format!("[keyboard]\npreset=\"{preset}\"\nlayout=\"{layout}\"\n");
+                let Some(mut r) = LaneRig::new(&text, CoreCmd::InfoTimeDate) else {
+                    panic!("{preset}/{layout} binds no gorca+key time command");
+                };
+                let cmd = r.cmd;
+                let mut t = 10_000;
+                for m in &MODIFIER_KEYS {
+                    for lock in [
+                        Modifiers::empty(),
+                        Modifiers::LOCK,
+                        Modifiers::MOD2,
+                        Modifiers::LOCK | Modifiers::MOD2,
+                    ] {
+                        t += 2_000;
+                        let class = r.chord(m, t, lock);
+                        assert_eq!(
+                            class,
+                            KeyClass::Command(cmd),
+                            "{preset}/{layout}: {} with {lock:?}",
+                            m.name
+                        );
+                        covered += 1;
+                    }
+                    // Twice in quick succession (the second press follows within the double-tap
+                    // window of Mutter, but the chord key in between breaks the tap pair).
+                    t += 2_000;
+                    assert_eq!(r.chord(m, t, Modifiers::empty()), KeyClass::Command(cmd));
+                    assert_eq!(
+                        r.chord(m, t + 200, Modifiers::empty()),
+                        KeyClass::Command(cmd),
+                        "{preset}/{layout}: {} repeated within 200 ms",
+                        m.name
+                    );
+                }
+            }
+        }
+        assert_eq!(covered, 2 * 2 * MODIFIER_KEYS.len() * 4);
+    }
+
+    /// Bug 3 of the keyboard report. A double tap of the keypad Insert passes the modifier key
+    /// itself (Mutter does it; gorca injects nothing). With Num Lock on the key is `KP_0`, a digit,
+    /// and is the application's from the first press: the lane never calls it a modifier.
+    #[test]
+    fn the_double_tap_of_the_keypad_insert_passes_the_key_itself() {
+        use gorca_input_api::{KeyClass, MODIFIER_KEYS};
+        let kp = MODIFIER_KEYS[1];
+        assert_eq!(kp.name, "KP_Insert");
+        let text = "[keyboard]\npreset=\"nvda\"\n";
+        let mut r = LaneRig::new(text, CoreCmd::InfoTimeDate).expect("time chord");
+        let none = Modifiers::empty();
+        // Num Lock off: tap (swallowed), second press within the repeat delay passes.
+        assert_eq!(
+            r.key(kp.keycode, kp.keysym, true, 10_000, none),
+            KeyClass::Swallowed
+        );
+        assert_eq!(
+            r.key(kp.keycode, kp.keysym, false, 10_050, none),
+            KeyClass::Swallowed
+        );
+        assert_eq!(
+            r.key(kp.keycode, kp.keysym, true, 10_150, none),
+            KeyClass::ModifierPassThrough
+        );
+        assert_eq!(
+            r.key(kp.keycode, kp.keysym, false, 10_200, none),
+            KeyClass::PassToApp
+        );
+        // Num Lock on: the same physical key is the digit and every press is the application's.
+        for (i, down) in [true, false, true, false].into_iter().enumerate() {
+            assert_eq!(
+                r.key(
+                    kp.keycode,
+                    0xffb0,
+                    down,
+                    20_000 + 40 * i as u64,
+                    Modifiers::MOD2
+                ),
+                KeyClass::PassToApp,
+                "KP_0 event {i}"
+            );
+        }
+    }
+
+    /// Every modifier of the table is grabbed in every mode that keeps modifiers, and not in
+    /// pass-next-key.
+    #[test]
+    fn every_modifier_key_is_grabbed_in_every_mode_that_grabs_modifiers() {
+        use crate::mode::{Mode, ModeKeys};
+        use gorca_input_api::MODIFIER_KEYS;
+        let c = compiled("");
+        let (mods, _) = gorca_modifiers(
+            &load(None, &Presets::builtin()).settings,
+            &PlatformFacts::default(),
+        );
+        for m in &MODIFIER_KEYS {
+            assert!(mods.contains(&m.keysym), "{} is a default modifier", m.name);
+        }
+        let keys = ModeKeys {
+            modifiers: c.keymap.modifiers.clone(),
+            ..ModeKeys::default()
+        };
+        for mode in [
+            Mode::Focus,
+            Mode::Browse {
+                doc: gorca_model::DocId(1),
+                sticky: false,
+            },
+            Mode::InputHelp {
+                resume: crate::mode::BaseMode::Focus,
+            },
+        ] {
+            let set = mode.grab_set(&keys);
+            for m in &MODIFIER_KEYS {
+                assert!(set.modifiers.contains(&m.keysym), "{} in {mode:?}", m.name);
+            }
+        }
     }
 }

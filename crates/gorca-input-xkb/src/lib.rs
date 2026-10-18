@@ -51,6 +51,7 @@ type KeymapNew = unsafe extern "C" fn(*mut c_void, *const RuleNames, c_uint) -> 
 type NumLayouts = unsafe extern "C" fn(*mut c_void) -> c_uint;
 type NumLevels = unsafe extern "C" fn(*mut c_void, c_uint, c_uint) -> c_uint;
 type GetSyms = unsafe extern "C" fn(*mut c_void, c_uint, c_uint, c_uint, *mut *const u32) -> c_int;
+type ToUpper = unsafe extern "C" fn(u32) -> u32;
 
 /// `struct xkb_rule_names`.
 #[repr(C)]
@@ -72,6 +73,8 @@ struct Lib {
     num_layouts: NumLayouts,
     num_levels: NumLevels,
     get_syms: GetSyms,
+    /// `xkb_keysym_to_upper`: feeds the case pairs (absent in very old libraries).
+    to_upper: Option<ToUpper>,
 }
 
 impl std::fmt::Debug for Lib {
@@ -117,6 +120,7 @@ impl Lib {
                         num_layouts: sym(handle, b"xkb_keymap_num_layouts\0")?,
                         num_levels: sym(handle, b"xkb_keymap_num_levels_for_key\0")?,
                         get_syms: sym(handle, b"xkb_keymap_key_get_syms_by_level\0")?,
+                        to_upper: sym(handle, b"xkb_keysym_to_upper\0"),
                     })
                 })()
             };
@@ -212,6 +216,7 @@ fn add_keymap(lib: &Lib, map: *mut c_void, table: &mut KeysymTable) {
     for key in MIN_KEYCODE..=MAX_KEYCODE {
         // SAFETY: `map` is live; any keycode may be asked about (unknown keys have no levels).
         let levels = unsafe { (lib.num_levels)(map, key, 0) };
+        let mut level_syms = [0u32; 2];
         for level in 0..levels.min(2) {
             let mut syms: *const u32 = ptr::null();
             // SAFETY: `map` is live and `syms` is a valid out pointer.
@@ -228,6 +233,16 @@ fn add_keymap(lib: &Lib, map: *mut c_void, table: &mut KeysymTable) {
             };
             for s in found {
                 table.insert(code, level == 1, *s);
+            }
+            if let (Some(first), Some(slot)) = (found.first(), level_syms.get_mut(level as usize)) {
+                *slot = *first;
+            }
+        }
+        // A letter key: the shifted level is the upper case of the base level.
+        if let (Some(to_upper), [lower, upper]) = (lib.to_upper, level_syms) {
+            // SAFETY: a pure function of its argument (xkbcommon.h).
+            if lower != 0 && upper != lower && unsafe { to_upper(lower) } == upper {
+                table.insert_case_pair(lower, upper);
             }
         }
     }
@@ -293,6 +308,21 @@ mod tests {
         // Shift gives the capital letters of both.
         let up = t.syms(KEY_H, true);
         assert!(up.contains(&0x48) && up.len() == 2, "{up:x?}");
+    }
+
+    #[test]
+    fn letter_keys_register_their_case_pairs_for_caps_lock() {
+        if !have_xkb() {
+            return;
+        }
+        let t = table(&["us", "ru"]);
+        // Caps Lock turns h into H and Cyrillic_er into Cyrillic_ER (both ways).
+        assert_eq!(t.case_partner(0x68), Some(0x48));
+        assert_eq!(t.case_partner(CYRILLIC_ER), Some(0x6f2));
+        assert_eq!(t.case_partner(0x6f2), Some(CYRILLIC_ER));
+        // The digit row has no case: Shift+1 is not "the other case" of 1.
+        assert_eq!(t.case_partner(0x31), None);
+        assert_eq!(t.case_partner(0x21), None);
     }
 
     #[test]

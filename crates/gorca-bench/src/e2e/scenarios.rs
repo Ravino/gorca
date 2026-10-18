@@ -46,6 +46,8 @@ pub enum Scn {
     K1,
     K2,
     K2s,
+    /// Keyboard report: the three gorca modifiers are equivalent.
+    Km,
     K3,
     K4,
     K4r,
@@ -55,6 +57,8 @@ pub enum Scn {
     RS,
     B0,
     W1,
+    /// Keyboard report: quick navigation with Caps Lock on.
+    Cl,
     Br1,
     Br2,
     W2,
@@ -125,6 +129,7 @@ impl Scn {
             Self::K1 => "K1".into(),
             Self::K2 => "K2".into(),
             Self::K2s => "K2s".into(),
+            Self::Km => "KM".into(),
             Self::K3 => "K3".into(),
             Self::K4 => "K4".into(),
             Self::K4r => "K4r".into(),
@@ -134,6 +139,7 @@ impl Scn {
             Self::RS => "RS".into(),
             Self::B0 => "B0".into(),
             Self::W1 => "W1".into(),
+            Self::Cl => "CL".into(),
             Self::Br1 => "BR1".into(),
             Self::Br2 => "BR2".into(),
             Self::W2 => "W2".into(),
@@ -194,6 +200,7 @@ impl Scn {
             "K1" => Self::K1,
             "K2" => Self::K2,
             "K2s" => Self::K2s,
+            "KM" => Self::Km,
             "K3" => Self::K3,
             "K4" => Self::K4,
             "K4r" => Self::K4r,
@@ -203,6 +210,7 @@ impl Scn {
             "RS" => Self::RS,
             "B0" => Self::B0,
             "W1" => Self::W1,
+            "CL" => Self::Cl,
             "BR1" => Self::Br1,
             "BR2" => Self::Br2,
             "W2" => Self::W2,
@@ -264,11 +272,11 @@ impl Scn {
 
     pub fn all() -> Vec<Self> {
         [
-            "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K2s", "K3",
-            "K4", "K4r", "K4h", "R1", "R1s", "RS", "B0", "W1", "BR1", "BR2", "W2", "W2b", "W3",
-            "FM1", "FM2", "WD", "C1", "C1h", "C2", "C3", "E1", "E2", "E2f", "S2", "SA1", "SA2",
-            "SA3", "SA3a", "PW", "C1hs", "E1s", "V1", "VT", "VH", "V2", "V3", "VP", "VR", "VF",
-            "VB", "VW", "VV", "VS", "VD", "VK", "A1", "N1",
+            "F0", "L1", "L1s", "L2", "L3-10k", "L3-50k", "L4", "L4c", "K1", "K2", "K2s", "KM",
+            "K3", "K4", "K4r", "K4h", "R1", "R1s", "RS", "B0", "W1", "CL", "BR1", "BR2", "W2",
+            "W2b", "W3", "FM1", "FM2", "WD", "C1", "C1h", "C2", "C3", "E1", "E2", "E2f", "S2",
+            "SA1", "SA2", "SA3", "SA3a", "PW", "C1hs", "E1s", "V1", "VT", "VH", "V2", "V3", "VP",
+            "VR", "VF", "VB", "VW", "VV", "VS", "VD", "VK", "A1", "N1",
         ]
         .iter()
         .chain(super::webtext::IDS)
@@ -570,6 +578,7 @@ pub fn run(
         }
         Scn::K2 => super::m1::k2(host, reader, flavor, size, seed, &mut out)?,
         Scn::K2s => super::m1::k2s(host, reader, flavor, size, seed, &mut out)?,
+        Scn::Km => super::m1::km(host, reader, flavor, size, seed, &mut out)?,
         Scn::K3 => super::m1::k3(host, reader, flavor, size, seed, &mut out)?,
         Scn::K4 => super::m1::k4(host, reader, flavor, size, seed, &mut out)?,
         Scn::K4r => super::m1::k4r(host, reader, flavor, size, seed, &mut out)?,
@@ -580,6 +589,7 @@ pub fn run(
         Scn::Ru(r) => super::ru::ru(host, reader, flavor, *r, seed, &mut out)?,
         Scn::B0 => super::web::b0(host, reader, flavor, &mut out)?,
         Scn::W1 => super::web::w1(host, reader, flavor, size, &mut out)?,
+        Scn::Cl => super::web::cl(host, reader, flavor, size, &mut out)?,
         Scn::Br1 => super::web::br1(host, reader, flavor, size, &mut out)?,
         Scn::Br2 => super::web::br2(host, reader, flavor, &mut out)?,
         Scn::W2 => super::web::w2(host, reader, flavor, &mut out)?,
