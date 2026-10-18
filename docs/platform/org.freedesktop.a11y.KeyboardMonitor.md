@@ -110,3 +110,12 @@ Orca does not call D-Bus directly; it uses libatspi `AtspiDeviceA11yManager`
 * To pass a grabbed key through to the app, the only mechanism is injection (RemoteDesktop/EIS, see
   `libei-and-portals.md`). Prefer `WatchKeyboard` plus a minimal `SetKeyGrabs` set so most keys
   are never swallowed.
+
+## Mutter 48.7 NULL-modifiers crash and gorca's session order (2026-10-19)
+
+- `ensure_key_grabber()` creates a grabber with `modifiers == keystrokes == NULL` for ANY of Watch/Unwatch/Grab/Ungrab/SetKeyGrabs; only `handle_set_key_grabs()` allocates the arrays (an empty set gives empty, non-NULL arrays). `rebuild_all_grabbed_modifiers()` (run by every SetKeyGrabs and by the vanish of a grabber that had modifiers) dereferences `grabber->modifiers->len` unchecked: SIGSEGV of gnome-shell. Report: `docs/reports/shell-segfault-20261019.md`; upstream draft: `docs/reports/mutter-upstream-null-modifiers.md`.
+- gorca invariant (`crates/gorca-input-mutter/src/source.rs`): per connection the order is RequestName, subscriptions, GetNameOwner, `Peer.Ping` of the manager, `SetKeyGrabs` (current set; retried on the SAME connection on timeout, latest set wins), and only after its reply `WatchKeyboard` and, if learn mode is on, `GrabKeyboard`. Calls of one connection are handled in order, so every gorca grabber has non-NULL modifiers from its first moment.
+- `GrabKeyboard`/`UngrabKeyboard` are sent only when `grab_all` actually changes (tracked per connection).
+- A slow manager is not a lost one: `GRAB_DEADLINE` is 3 s, a timeout retries the same generation forever; a session ends only on manager owner change, name loss, stream end or a real error reply. Reconnects wait at least 1 s (backoff 1..4 s) after the old connection was closed (`graceful_shutdown`), and ping the manager before the next registration.
+- The zbus connection `method_timeout` must exceed every per-call deadline (now 10 s): at 2 s it reported a slow Shell as "I/O error: timed out" and restarted the session.
+- Regression rig: `tools/platform-probes/shell-segfault/regress.py` (modes stall, stall2, stallkeep, det, setg) drives gorca's real source (`cargo build -p gorca-input-mutter --example key_session`) inside `tests/shell/run_shell.sh`. The pre-change source crashed the private shell in stall2 (1/1), stall (1/2) and stallkeep (1/1).
