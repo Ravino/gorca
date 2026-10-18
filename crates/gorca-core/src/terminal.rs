@@ -55,6 +55,22 @@ pub struct TermState {
     next_serial: u64,
     /// The last on-demand re-tracking on a key (see `Reader::focus_audit_on_key`).
     retrack_at: Option<(NodeKey, Instant)>,
+    /// The re-reads of the focus state of a tracked terminal whose application has not earned the
+    /// protection (see `Reader::term_protection_watch`).
+    protect: Option<ProtectWatch>,
+}
+
+/// The backoff of the focus-state re-reads of an unprotected tracked terminal: its first
+/// attempt, and the longest wait between two.
+const PROTECT_FIRST: Duration = Duration::from_millis(150);
+const PROTECT_MAX: Duration = Duration::from_secs(2);
+
+/// The next focus-state re-read of the tracked terminal `node`, due at `due`.
+#[derive(Copy, Clone, Debug)]
+struct ProtectWatch {
+    node: NodeKey,
+    attempts: u32,
+    due: Instant,
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -69,6 +85,8 @@ pub struct TermReads {
     pub review_syncs: u64,
     /// Trackings restarted by a key press in the focused terminal that had lost its tracking.
     pub retracked_on_key: u64,
+    /// Focus-state re-reads started by the timer for a tracked terminal that was unprotected.
+    pub protection_reads: u64,
 }
 
 #[derive(Debug)]
@@ -756,6 +774,106 @@ impl Reader {
         let mut u = message(&said, id, epoch);
         u.prio = Prio::Interrupt;
         fx.push(ReaderEffect::Speak(SpeechIntent { utterance: u }));
+    }
+
+    /// A tracked terminal always has a way to get its text events: the app actor forwards them
+    /// only while the Reader has published the application as the focus owner, and a real VTE
+    /// says `FOCUSED` a moment after it announces the focus (a cache-served presentation or a
+    /// re-validation can also withdraw the protection). The single reconfirm read of a focus
+    /// change may land before the state is true, and then nothing but a key press asked again:
+    /// the terminal stayed silent after Alt+Tab until the first key. While a terminal is tracked
+    /// and its application has not earned the protection, the focus state is read again on a
+    /// backoff (150 ms doubling to 2 s). One read in flight, never while another timeout is
+    /// charged to this focus, and only a `FOCUSED` reply earns anything (fail closed).
+    pub(crate) fn term_protection_watch(&mut self, fx: &mut ReaderEffects) {
+        use crate::reader::Reconfirm;
+        let tracked = self.text.term.tracked.as_ref().map(|t| t.node);
+        let Some(node) = tracked else {
+            self.text.term.protect = None;
+            return;
+        };
+        let presented_here = self.presented.as_ref().is_some_and(|p| p.node == node);
+        if !presented_here || !self.protection_unearned(node) {
+            self.text.term.protect = None;
+            return;
+        }
+        let now = self.now;
+        // A charged timeout bars every read until the next key (B-1 RR-1): wake nobody for it.
+        let barred = self.timeout_charged;
+        let w = match self.text.term.protect {
+            Some(w) if w.node == node => w,
+            _ => {
+                let w = ProtectWatch {
+                    node,
+                    attempts: 0,
+                    due: now + PROTECT_FIRST,
+                };
+                self.text.term.protect = Some(w);
+                if !barred {
+                    fx.push(ReaderEffect::ArmTimer(w.due));
+                }
+                return;
+            }
+        };
+        if now < w.due {
+            return;
+        }
+        let may_ask = matches!(self.reconfirm, Reconfirm::Idle | Reconfirm::Failed(..)) && !barred;
+        if may_ask {
+            self.text.term.reads.protection_reads += 1;
+            self.ask_state(node, fx);
+        }
+        // Back off on every attempt, asked or skipped.
+        let attempts = w.attempts.saturating_add(1);
+        let wait = PROTECT_FIRST
+            .saturating_mul(1u32.checked_shl(attempts).unwrap_or(u32::MAX))
+            .min(PROTECT_MAX);
+        let next = ProtectWatch {
+            node,
+            attempts,
+            due: now + wait,
+        };
+        self.text.term.protect = Some(next);
+        if !barred {
+            fx.push(ReaderEffect::ArmTimer(next.due));
+        }
+    }
+
+    /// Test probe for the state model: a tracked, presented terminal whose application has not
+    /// earned the protection and that has no protection watch.
+    #[cfg(test)]
+    pub(crate) fn term_unwatched(&self) -> bool {
+        let Some(t) = &self.text.term.tracked else {
+            return false;
+        };
+        self.presented.as_ref().is_some_and(|p| p.node == t.node)
+            && self.protection_unearned(t.node)
+            && self.text.term.protect.is_none_or(|w| w.node != t.node)
+    }
+
+    /// Test probe: no timeout is charged to the focus (a charged one bars the watch's reads).
+    #[cfg(test)]
+    pub(crate) fn timeout_charged_probe(&self) -> bool {
+        !self.timeout_charged
+    }
+
+    /// Test probe: how long the protection watch is overdue (ms) and its attempts so far.
+    #[cfg(test)]
+    pub(crate) fn term_watch_probe(&self) -> Option<(u64, u32)> {
+        let w = self.text.term.protect?;
+        let over = self.now.saturating_duration_since(w.due).as_millis();
+        Some((u64::try_from(over).unwrap_or(u64::MAX), w.attempts))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn protection_debug(&self) -> String {
+        format!(
+            "protect {:?}, reconfirm {:?}, presented {}, now-ish {:?}",
+            self.text.term.protect,
+            self.reconfirm,
+            self.presented.is_some(),
+            self.focus
+        )
     }
 
     pub(crate) fn term_timer(&mut self, fx: &mut ReaderEffects) {

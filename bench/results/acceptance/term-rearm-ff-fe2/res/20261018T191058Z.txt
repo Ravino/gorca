@@ -1,0 +1,40 @@
+# e2e term-rearm-ff-fe2
+# utc=2026-10-18T19:10:58Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=4.28 4.26 4.18 1/2121 2316061
+# git_rev=9aabf7f6
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx3
+# topology_expected=-
+# label=term-rearm-ff-fe2
+# reader=daemon:<repo>/.claude/worktrees/agent-a7dde1d71b448c4f5/target/release/gorca
+# backend=voicego
+# repeats=3
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=4.28 4.26 4.18 1/2121 2316058
+# reader_env=GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info GORCA_TOPOLOGY_REPORT=bench/results/acceptance/term-rearm-ff-fe2/res/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=FE2 first actions: Letter('w') at caret 0 of 0 | Left at caret 1 of 1 | Cyr at caret 0 of 1 | Space at caret 1 of 2 | Letter('q') at caret 2 of 3 | Letter('c') at caret 3 of 4 | Letter('m') at caret 4 of 5 | Back at caret 5 of 6 | Letter('z') at caret 4 of 5 | Letter('w') at caret 5 of 6 | Left at caret 6 of 7 | Letter('g') at caret 5 of 7 | Space at caret 6 of 8 | Letter('q') at caret 7 of 9
+# note1=FE2 first actions: Emoji at caret 0 of 0 | Letter('s') at caret 1 of 1 | Letter('x') at caret 2 of 2 | Left at caret 3 of 3 | Space at caret 2 of 3 | Right at caret 3 of 4 | Letter('s') at caret 4 of 4 | Left at caret 5 of 5 | Back at caret 4 of 5 | Letter('w') at caret 3 of 4 | Letter('j') at caret 4 of 5 | Right at caret 5 of 6 | Letter('t') at caret 6 of 6 | Letter('l') at caret 7 of 7
+# note2=FE2 first actions: Back at caret 0 of 0 | Letter('r') at caret 0 of 0 | Emoji at caret 1 of 1 | Emoji at caret 2 of 2 | Letter('k') at caret 3 of 3 | Home at caret 4 of 4 | Back at caret 0 of 4 | Right at caret 0 of 4 | Back at caret 1 of 4 | Right at caret 0 of 3 | Letter('a') at caret 1 of 3 | Back at caret 2 of 4 | Letter('r') at caret 1 of 3 | Letter('l') at caret 2 of 4
+
+metric                     bus                median          min          max  n op    threshold  res   note
+FE2.e2_double              daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_keyname             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_missing             daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [actions]
+FE2.e2_resync              daemon/voicego            0            0            0  3 <=            3  PASS  FE2 actions the page did not apply (not scored) [actions]
+FE2.e2_swallowed           daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [keys]
+FE2.e2_wrong               daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [actions]
+FE2.ft_failures            daemon/voicego            0            0            0  3 <=            0  PASS  gated on the max over repeats [checks]

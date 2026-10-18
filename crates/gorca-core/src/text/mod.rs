@@ -1295,6 +1295,7 @@ impl Reader {
         }
         let fresh = std::mem::take(&mut self.text.tracked_this_turn);
         self.text_mode_changed(fresh, fx);
+        self.term_protection_watch(fx);
         self.text.tracked_this_turn = false;
     }
 

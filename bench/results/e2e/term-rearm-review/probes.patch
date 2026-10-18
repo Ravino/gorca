@@ -1,0 +1,83 @@
+diff --git a/crates/gorca-core/src/terminal/tests.rs b/crates/gorca-core/src/terminal/tests.rs
+index 9fc464a8..a04bdaba 100644
+--- a/crates/gorca-core/src/terminal/tests.rs
++++ b/crates/gorca-core/src/terminal/tests.rs
+@@ -972,3 +972,78 @@ fn a_protected_or_untracked_terminal_arms_no_protection_watch() {
+         "{fx:?}"
+     );
+ }
++
++// ---- REVIEW PROBES (temporary) ----
++fn probe_rig() -> (Rig, Arc<gorca_rt::FocusedApp>) {
++    let mut g = rig();
++    let published = Arc::new(gorca_rt::FocusedApp::new());
++    g.r.focused_app = Some(Arc::clone(&published));
++    g.focus("me@box:~$ ", 10);
++    g.hold_focus_on_terminal();
++    (g, published)
++}
++
++/// P1: a key press (input lane advances the shared epoch) while the watch read is in flight
++/// makes its reply stale: dropped by on_reply, Reconfirm stays Asked forever.
++#[test]
++fn probe_p1_stale_reply_wedges_watch() {
++    let (mut g, published) = probe_rig();
++    g.tick(1);
++    let fx = g.tick(200);
++    assert_eq!(fx.iter().filter(|e| is_state_read(e)).count(), 1);
++    let asked_epoch = g.epoch.current();
++    g.epoch.advance(); // a key press on the input lane
++    // The FOCUSED reply for the read comes back with the old epoch.
++    let mut s = (*term_snap()).clone();
++    s.states = StateSet::FOCUSED | StateSet::SHOWING;
++    g.msg(ReaderMsg::Reply(crate::QueryReply {
++        node: node(),
++        epoch: asked_epoch,
++        kind: crate::FetchKind::StateChange,
++        result: Ok(Arc::new(s)),
++    }));
++    assert_eq!(published.get(), None, "stale reply dropped");
++    let mut reads = 0;
++    for _ in 0..60 {
++        let fx = g.tick(1000);
++        reads += fx.iter().filter(|e| is_state_read(e)).count();
++    }
++    let fx = g.typed('x');
++    reads += fx.iter().filter(|e| is_state_read(e)).count();
++    eprintln!("PROBE P1 reads after stale drop over 60 s + key: {reads}, reconfirm={:?}", g.r.reconfirm);
++}
++
++/// P2: with a timeout charged to the focus, the watch never asks but re-arms every 150 ms.
++#[test]
++fn probe_p2_timeout_charged_spin() {
++    let (mut g, _p) = probe_rig();
++    g.r.timeout_charged = true;
++    g.tick(1);
++    let mut arms = 0;
++    let mut reads = 0;
++    for _ in 0..200 {
++        let fx = g.tick(150);
++        arms += timers(&fx).len();
++        reads += fx.iter().filter(|e| is_state_read(e)).count();
++    }
++    eprintln!("PROBE P2 30 s with timeout charged: timer arms {arms}, reads {reads}");
++}
++
++/// P3: a watch read whose reply carries a changed (title-like) name speaks it.
++#[test]
++fn probe_p3_watch_reply_speaks_name_change() {
++    let (mut g, _p) = probe_rig();
++    g.tick(1);
++    let fx = g.tick(200);
++    assert_eq!(fx.iter().filter(|e| is_state_read(e)).count(), 1);
++    let mut s = (*term_snap()).clone();
++    s.states = StateSet::SHOWING | StateSet::VISIBLE;
++    s.name = Some(Arc::from("me@box: ~/src"));
++    let fx = g.msg(ReaderMsg::Reply(crate::QueryReply {
++        node: node(),
++        epoch: g.epoch.current(),
++        kind: crate::FetchKind::StateChange,
++        result: Ok(Arc::new(s)),
++    }));
++    eprintln!("PROBE P3 spoken on unfocused watch reply: {:?}", spoken(&fx));
++}

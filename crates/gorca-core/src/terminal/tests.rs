@@ -882,3 +882,191 @@ fn a_key_after_a_focus_that_never_finished_presents_it_again_once() {
     let fx = h.typed('l');
     assert_eq!(fetches(&fx), 0);
 }
+
+// ---- protection: a tracked terminal always has a way to get its text events -------------------
+
+fn is_state_read(e: &ReaderEffect) -> bool {
+    matches!(
+        e,
+        ReaderEffect::Fetch {
+            kind: crate::FetchKind::StateChange,
+            ..
+        }
+    )
+}
+
+impl Rig {
+    fn state_reply(&mut self, focused: bool) -> ReaderEffects {
+        let mut s = (*term_snap()).clone();
+        if !focused {
+            s.states = StateSet::SHOWING | StateSet::VISIBLE;
+        }
+        self.msg(ReaderMsg::Reply(crate::QueryReply {
+            node: node(),
+            epoch: self.epoch.current(),
+            kind: crate::FetchKind::StateChange,
+            result: Ok(Arc::new(s)),
+        }))
+    }
+}
+
+/// The kept trace of the VV Alt+Tab flake (docs/reports/terminal-timer-rearm.md): the terminal is
+/// tracked and presented, the application never earned the protection (the real VTE says
+/// `FOCUSED` after it announced the focus), so the app actor drops every text event and the
+/// terminal is silent until a key re-reads the state. A timer must re-read the state on a
+/// backoff until a `FOCUSED` reply earns it.
+#[test]
+fn an_unprotected_tracked_terminal_rereads_its_focus_state_until_it_earns_the_protection() {
+    let mut g = rig();
+    let published = Arc::new(gorca_rt::FocusedApp::new());
+    g.r.focused_app = Some(Arc::clone(&published));
+    g.focus("me@box:~$ ", 10);
+    g.hold_focus_on_terminal();
+    assert!(g.r.term_tracked());
+    // Any message arms the first re-read.
+    let fx = g.tick(1);
+    assert!(!timers(&fx).is_empty(), "a watch timer is armed: {fx:?}");
+    // Not due yet: nothing is read.
+    let fx = g.tick(50);
+    assert!(!fx.iter().any(is_state_read));
+    // Due: the state is read once; a reply without FOCUSED (the VTE is not there yet) leaves the
+    // read open for the next attempt, which comes later.
+    let fx = g.tick(120);
+    assert_eq!(fx.iter().filter(|e| is_state_read(e)).count(), 1, "{fx:?}");
+    assert!(!timers(&fx).is_empty(), "the next attempt is armed");
+    let fx = g.state_reply(false);
+    assert!(!fx.iter().any(is_state_read));
+    assert_eq!(published.get(), None);
+    let fx = g.tick(100);
+    assert!(!fx.iter().any(is_state_read), "backed off: {fx:?}");
+    let fx = g.tick(300);
+    assert_eq!(fx.iter().filter(|e| is_state_read(e)).count(), 1, "{fx:?}");
+    // One read in flight at a time: a timer while it is unanswered asks nothing.
+    let fx = g.tick(3000);
+    assert!(!fx.iter().any(is_state_read), "{fx:?}");
+    // FOCUSED earns the protection; the watch is over.
+    g.state_reply(true);
+    assert_eq!(published.get(), Some(node().app));
+    let fx = g.tick(5000);
+    assert!(!fx.iter().any(is_state_read));
+    assert!(timers(&fx).is_empty(), "nothing left to watch: {fx:?}");
+    assert!(g.r.terminal_reads().protection_reads >= 2);
+}
+
+/// A protected terminal costs nothing, and neither does one nobody tracks.
+#[test]
+fn a_protected_or_untracked_terminal_arms_no_protection_watch() {
+    let mut g = rig();
+    let published = Arc::new(gorca_rt::FocusedApp::new());
+    published.publish(node().app);
+    g.r.focused_app = Some(Arc::clone(&published));
+    g.focus("$ ", 2);
+    g.hold_focus_on_terminal();
+    let fx = g.tick(1);
+    assert!(timers(&fx).is_empty(), "{fx:?}");
+    g.r.text_untrack("test");
+    published.demote();
+    let fx = g.tick(1000);
+    assert!(
+        timers(&fx).is_empty() && !fx.iter().any(is_state_read),
+        "{fx:?}"
+    );
+}
+
+// ---- review fixes: stale reply, spin under a charged timeout, title changes -------------------
+
+fn watch_rig() -> (Rig, Arc<gorca_rt::FocusedApp>) {
+    let mut g = rig();
+    let published = Arc::new(gorca_rt::FocusedApp::new());
+    g.r.focused_app = Some(Arc::clone(&published));
+    g.focus("me@box:~$ ", 10);
+    g.hold_focus_on_terminal();
+    (g, published)
+}
+
+fn state_reply_at(
+    g: &mut Rig,
+    epoch: Epoch,
+    states: StateSet,
+    name: Option<&str>,
+) -> ReaderEffects {
+    let mut s = (*term_snap()).clone();
+    s.states = states;
+    if let Some(n) = name {
+        s.name = Some(Arc::from(n));
+    }
+    g.msg(ReaderMsg::Reply(crate::QueryReply {
+        node: node(),
+        epoch,
+        kind: crate::FetchKind::StateChange,
+        result: Ok(Arc::new(s)),
+    }))
+}
+
+/// F-1: a key press advances the shared epoch while the watch read is in flight; the reply is
+/// stale and dropped, and the watch must still ask again (it wedged for the whole focus).
+#[test]
+fn a_key_during_the_watch_read_does_not_wedge_the_watch() {
+    let (mut g, published) = watch_rig();
+    g.tick(1);
+    let fx = g.tick(200);
+    assert_eq!(fx.iter().filter(|e| is_state_read(e)).count(), 1);
+    let asked_epoch = g.epoch.current();
+    g.epoch.advance();
+    state_reply_at(
+        &mut g,
+        asked_epoch,
+        StateSet::FOCUSED | StateSet::SHOWING,
+        None,
+    );
+    assert_eq!(published.get(), None, "the stale reply is dropped");
+    let mut reads = 0;
+    for _ in 0..8 {
+        let fx = g.tick(1000);
+        reads += fx.iter().filter(|e| is_state_read(e)).count();
+        if reads > 0 {
+            break;
+        }
+    }
+    assert_eq!(reads, 1, "the watch asks again: {:?}", g.r.reconfirm);
+    let now_epoch = g.epoch.current();
+    state_reply_at(
+        &mut g,
+        now_epoch,
+        StateSet::FOCUSED | StateSet::SHOWING,
+        None,
+    );
+    assert_eq!(published.get(), Some(node().app));
+}
+
+/// F-3: a charged timeout bars the reads; the watch must not wake the Reader for it.
+#[test]
+fn a_charged_timeout_does_not_make_the_watch_spin() {
+    let (mut g, _p) = watch_rig();
+    g.r.timeout_charged = true;
+    let mut arms = 0;
+    let mut reads = 0;
+    for _ in 0..200 {
+        let fx = g.tick(150);
+        arms += timers(&fx).len();
+        reads += fx.iter().filter(|e| is_state_read(e)).count();
+    }
+    assert_eq!((arms, reads), (0, 0));
+}
+
+/// F-2: the watch reads the state of an unfocused terminal; a changed title says nothing.
+#[test]
+fn the_watch_reply_of_an_unfocused_terminal_does_not_speak_its_title() {
+    let (mut g, _p) = watch_rig();
+    g.tick(1);
+    let fx = g.tick(200);
+    assert_eq!(fx.iter().filter(|e| is_state_read(e)).count(), 1);
+    let now_epoch = g.epoch.current();
+    let fx = state_reply_at(
+        &mut g,
+        now_epoch,
+        StateSet::SHOWING | StateSet::VISIBLE,
+        Some("me@box: ~/src"),
+    );
+    assert!(spoken(&fx).is_empty(), "{:?}", spoken(&fx));
+}

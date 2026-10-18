@@ -130,6 +130,8 @@ pub(crate) enum Op {
     Gtk4(bool),
     FailFetches(bool),
     HoldReplies(bool),
+    /// The toolkit reports `FOCUSED` only a moment after it announced the focus (the real VTE).
+    LateFocused(bool),
     /// The extension slot changes state (busy, faulted, recovered, absent).
     Ext(ExtState),
     /// A removed node comes back.
@@ -238,7 +240,7 @@ fn gen_key(g: &mut Rng) -> KeyKind {
 
 pub(crate) fn gen_step(g: &mut Rng) -> Step {
     let dt = g.pick(&[1, 5, 20, 40, 80, 200, 600, 1700, 2600]);
-    let op = match g.below(110) {
+    let op = match g.below(112) {
         0..=37 => {
             let m = match g.below(12) {
                 0 => Modifiers::CONTROL,
@@ -270,6 +272,7 @@ pub(crate) fn gen_step(g: &mut Rng) -> Step {
         95..=96 => Op::FailFetches(g.below(2) == 0),
         97 => Op::HoldReplies(g.below(2) == 0),
         98 => Op::Hung,
+        110..=111 => Op::LateFocused(g.below(3) != 0),
         99 => Op::Revive(g.pick(&NODES)),
         104..=105 => Op::Gtk4(g.below(2) == 0),
         106..=109 => Op::TermScroll,
@@ -516,6 +519,7 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
                 s.fail_fetches = b.then_some(gorca_connector_api::BackendError::Timeout);
             }
             Op::HoldReplies(b) => s.hold_replies = b,
+            Op::LateFocused(b) => s.late_focused = b,
             Op::Ext(e) => s.set_ext(e),
             Op::WasmDeployment => {}
             Op::Revive(n) => s.revive(n),
@@ -852,10 +856,55 @@ fn run_inner(steps: &[Step], trace: bool) -> Option<Violation> {
             | Op::Gtk4(_)
             | Op::FailFetches(_)
             | Op::HoldReplies(_)
+            | Op::LateFocused(_)
             | Op::Ext(_)
             | Op::WasmDeployment
             | Op::Revive(_)
             | Op::Hung => {}
+        }
+        // term-unwatched / term-protection-lost: a tracked terminal whose application has not
+        // earned the protection gets no text events from its app actor, so it must always have a
+        // pending re-read of the focus state (the watch), and with healthy fetches the protection
+        // is back within 3 s of the focus (terminal-timer-rearm.md, F-1/F-4).
+        if s.r.term_unwatched() {
+            bail!(
+                "term-unwatched",
+                format!(
+                    "after {:?} the tracked terminal is unprotected and nothing re-reads its focus state",
+                    st.op
+                ),
+            );
+        }
+        // Liveness: a watch whose deadline passed without a firing lost its timer; and with
+        // healthy fetches a few attempts must have earned the protection.
+        if let Some((overdue_ms, attempts)) = s.r.term_watch_probe() {
+            if overdue_ms > 300 {
+                bail!(
+                    "term-watch-stalled",
+                    format!(
+                        "after {:?} the protection watch is {overdue_ms} ms overdue ({})",
+                        st.op,
+                        s.r.protection_debug()
+                    ),
+                );
+            }
+            if attempts >= 6
+                && s.fail_fetches.is_none()
+                && !s.hold_replies
+                && s.held.is_empty()
+                && s.r.timeout_charged_probe()
+                && s.w.focus == Some(TERM)
+                && !s.lose_events
+            {
+                bail!(
+                    "term-protection-lost",
+                    format!(
+                        "after {:?} the focused terminal is still unprotected after {attempts} attempts ({})",
+                        st.op,
+                        s.r.protection_debug()
+                    ),
+                );
+            }
         }
     }
     None
