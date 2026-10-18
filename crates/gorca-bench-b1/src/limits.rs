@@ -234,8 +234,8 @@ pub const GATES: &[Gate] = &[
         "walk",
         "ms",
         Cmp::Rank,
-        500.0,
-        "hung model: 'not responding' spoken within (informational, no producer)",
+        f64::NAN,
+        "hung model: 'not responding' spoken (informational, no producer; target 500 ms)",
     ),
     g(
         "B1-STEP.max_us",

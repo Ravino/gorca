@@ -1,0 +1,16 @@
+private compositor: /tmp/gorca-vte.uayale/x/gorca-vte-1702855
+== reader <repo>/.claude/worktrees/agent-ac00585ae6937e472/target/release/gorca built from 2a017ed3, tree at b43875a3
+== e2e vv-fixed: reader=daemon:<repo>/.claude/worktrees/agent-ac00585ae6937e472/target/release/gorca backend=voicego repeats=12 load=8.42 10.15 11.25 5/2373 1703452
+-- round 1/12 VV (load 8.42 10.15 11.25 4/2373 1703452)
+-- round 2/12 VV (load 12.98 11.31 11.54 3/2376 1710975)
+-- round 3/12 VV (load 11.28 10.86 11.32 1/2425 1720989)
+-- round 4/12 VV (load 7.83 9.38 10.70 1/2423 1725255)
+-- round 5/12 VV (load 15.83 11.03 11.07 4/2318 1729638)
+-- round 6/12 VV (load 11.58 10.90 11.01 2/2503 1733493)
+-- round 7/12 VV (load 10.15 10.25 10.74 2/2560 1735306)
+-- round 8/12 VV (load 7.23 9.19 10.29 1/2536 1737087)
+-- round 9/12 VV (load 10.48 9.14 10.10 5/2358 1739947)
+-- round 10/12 VV (load 9.27 9.06 9.94 1/2474 1742520)
+-- round 11/12 VV (load 7.51 8.20 9.51 1/2806 1745500)
+-- round 12/12 VV (load 9.80 8.46 9.41 5/2503 1748285)
+== wrote bench/results/acceptance/fixes-vv-fixed-20261018T121807Z/res/20261018T124225Z.{json,txt}

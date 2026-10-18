@@ -1,0 +1,84 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling serde v1.0.229
+   Compiling pin-project-lite v0.2.17
+   Compiling winnow v1.0.4
+   Compiling libc v0.2.190
+   Compiling syn v3.0.8
+   Compiling syn v2.0.119
+   Compiling equivalent v1.0.2
+   Compiling hashbrown v0.17.1
+   Compiling toml_parser v1.1.5+spec-1.1.0
+   Compiling indexmap v2.14.2
+   Compiling toml_datetime v1.1.2+spec-1.1.0
+   Compiling toml_edit v0.25.17+spec-1.1.0
+   Compiling futures-core v0.3.34
+   Compiling errno v0.3.14
+   Compiling thiserror v2.0.21
+   Compiling signal-hook-registry v1.4.8
+   Compiling proc-macro-crate v3.5.0
+   Compiling mio v1.2.4
+   Compiling socket2 v0.6.5
+   Compiling gorca-i18n v0.0.0 (<repo>/.claude/worktrees/agent-ac00585ae6937e472/crates/gorca-i18n)
+   Compiling bytes v1.12.1
+   Compiling once_cell v1.21.4
+   Compiling bitflags v2.13.2
+   Compiling endi v1.1.1
+   Compiling tracing-core v0.1.36
+   Compiling crossbeam-utils v0.8.23
+   Compiling parking v2.2.1
+   Compiling enumflags2_derive v0.7.12
+   Compiling tracing-attributes v0.1.31
+   Compiling serde_derive v1.0.229
+   Compiling tokio-macros v2.7.2
+   Compiling thiserror-impl v2.0.21
+   Compiling tokio v1.53.2
+   Compiling zvariant_utils v4.2.0
+   Compiling zcheapstr v1.1.0
+   Compiling enumflags2 v0.7.12
+   Compiling tracing v0.1.44
+   Compiling futures-sink v0.3.34
+   Compiling smallvec v1.16.3
+   Compiling gorca-model v0.0.0 (<repo>/.claude/worktrees/agent-ac00585ae6937e472/crates/gorca-model)
+   Compiling zvariant_derive v5.15.0
+   Compiling zvariant v5.15.0
+   Compiling tokio-util v0.7.20
+   Compiling event-listener v5.4.2
+   Compiling rustix v1.1.5
+   Compiling event-listener-strategy v0.5.4
+   Compiling crossbeam-queue v0.3.14
+   Compiling zbus_names v4.3.4
+   Compiling gorca-rt v0.0.0 (<repo>/.claude/worktrees/agent-ac00585ae6937e472/crates/gorca-rt)
+   Compiling fastrand v2.5.0
+   Compiling futures-io v0.3.34
+   Compiling linux-raw-sys v0.12.1
+   Compiling gorca-ingress v0.0.0 (<repo>/.claude/worktrees/agent-ac00585ae6937e472/crates/gorca-ingress)
+   Compiling futures-lite v2.6.1
+   Compiling zbus_macros v5.19.0
+   Compiling async-broadcast v0.7.2
+   Compiling async-recursion v1.2.0
+   Compiling async-trait v0.1.92
+   Compiling serde_repr v0.1.21
+   Compiling ordered-stream v0.2.0
+   Compiling uuid v1.28.0
+   Compiling zmij v1.0.23
+   Compiling hex v0.4.3
+   Compiling anyhow v1.0.104
+   Compiling rustversion v1.0.23
+   Compiling serde_json v1.0.154
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling saa v5.6.2
+   Compiling zbus v5.19.0
+   Compiling sdd v4.8.11
+   Compiling arc-swap v1.9.2
+   Compiling scc v3.8.8
+   Compiling gorca-mirror v0.0.0 (<repo>/.claude/worktrees/agent-ac00585ae6937e472/crates/gorca-mirror)
+   Compiling gorca-dbus v0.0.0 (<repo>/.claude/worktrees/agent-ac00585ae6937e472/crates/gorca-dbus)
+   Compiling gorca-bench-b2 v0.0.0 (<repo>/.claude/worktrees/agent-ac00585ae6937e472/crates/gorca-bench-b2)
+   Compiling gorca-bench-b1 v0.0.0 (<repo>/.claude/worktrees/agent-ac00585ae6937e472/crates/gorca-bench-b1)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 19.78s
+     Running unittests src/lib.rs (target/debug/deps/gorca_bench_b1-f089e26c5eedcc83)
+error: test failed, to rerun pass `-p gorca-bench-b1 --lib`

@@ -1,0 +1,59 @@
+# e2e vk-check
+# utc=2026-10-18T12:46:34Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=12.86 10.41 9.88 5/2401 1770871
+# git_rev=b43875a3
+# git_dirty=true
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx1
+# topology_expected=-
+# label=vk-check
+# reader=daemon:<repo>/.claude/worktrees/agent-ac00585ae6937e472/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=1200
+# l2_trials=400
+# quick=false
+# loadavg_end=12.86 10.41 9.88 5/2402 1770868
+# reader_env=GORCA_M6=1 GORCA_M6_STRICT=1 GORCA_M6_REAL=1 NO_COLOR=1 GORCA_VK_SECS=200 GORCA_VK_FLOOD_SECS=10 GORCA_TOPOLOGY_REPORT=bench/results/acceptance/fixes-vk-check-20261018T124247Z/res/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=VK: soak of 200 s, per-round series in <repo>/.claude/worktrees/agent-ac00585ae6937e472/bench/results/acceptance/fixes-vk-check-20261018T124247Z/soak.tsv
+
+metric                     bus                median          min          max  n op    threshold  res   note
+VK.vk_flood_key_ms.n       daemon/voicego           16           16           16  1                  info   [samples]
+VK.vk_flood_key_ms.p50     daemon/voicego        0.328        0.328        0.328  1                  info   [ms]
+VK.vk_flood_key_ms.p95     daemon/voicego        0.413        0.413        0.413  1                  info   [ms]
+VK.vk_flood_key_ms.p99     daemon/voicego        0.468        0.468        0.468  1                  info   [ms]
+VK.vk_flood_key_ms.p999    daemon/voicego        0.468        0.468        0.468  1                  info   [ms]
+VK.vk_flood_key_ms.max     daemon/voicego        0.468        0.468        0.468  1                  info   [ms]
+VK.vk_stop_ms.n            daemon/voicego            1            1            1  1                  info   [samples]
+VK.vk_stop_ms.p50          daemon/voicego            0            0            0  1                  info   [ms]
+VK.vk_stop_ms.p95          daemon/voicego            0            0            0  1                  info   [ms]
+VK.vk_stop_ms.p99          daemon/voicego            0            0            0  1                  info   [ms]
+VK.vk_stop_ms.p999         daemon/voicego            0            0            0  1                  info   [ms]
+VK.vk_stop_ms.max          daemon/voicego            0            0            0  1                  info   [ms]
+VK.vk_flood_key_max_ms     daemon/voicego        0.468        0.468        0.468  1                  info   [ms]
+VK.vk_flood_prompt_missing daemon/voicego            0            0            0  1                  info   [floods]
+VK.vk_floods               daemon/voicego            1            1            1  1                  info   [floods]
+VK.vk_reader_deaths        daemon/voicego            0            0            0  1                  info   [events]
+VK.vk_reader_rss_first_kb  daemon/voicego        16720        16720        16720  1                  info   [kB]
+VK.vk_reader_rss_last_kb   daemon/voicego         7900         7900         7900  1                  info   [kB]
+VK.vk_reader_rss_max_kb    daemon/voicego        16720        16720        16720  1                  info   [kB]
+VK.vk_rounds               daemon/voicego            4            4            4  1                  info   [rounds]
+VK.vk_server_aborts        daemon/voicego            0            0            0  1                  info   [events]
+VK.vk_server_criticals     daemon/voicego            0            0            0  1                  info   [lines]
+VK.vk_server_rss_first_kb  daemon/voicego        48152        48152        48152  1                  info   [kB]
+VK.vk_server_rss_last_kb   daemon/voicego        17848        17848        17848  1                  info   [kB]
+VK.vk_stopped_low_mem      daemon/voicego            0            0            0  1                  info   [events]
+VK.vk_vd_failures          daemon/voicego            0            0            0  1                  info   [steps]
+VK.vk_wall_s               daemon/voicego        213.2        213.2        213.2  1                  info   [s]
+
