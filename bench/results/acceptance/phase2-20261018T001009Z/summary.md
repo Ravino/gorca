@@ -1,37 +1,34 @@
 # Phase 2 acceptance: FAIL
 
 Mode: **ACCEPTANCE**. Run dir: `<repo>/bench/results/acceptance/phase2-20261018T001009Z`.
-Resolved topology (from the reader reports): lanes-rtx24, lanes-rtx3, lanes-rtx30, lanes-rtx39, lanes-rtx45, lanes-rtx6, lanes-rtx87.
+Resolved topology (from the reader reports): lanes-rtx24, lanes-rtx30, lanes-rtx39, lanes-rtx6, lanes-rtx87.
 
 ## Steps
 
 | step | result | attempt | wall | load1 min-max | mem PSI max | gated rows | FAIL rows | notes |
 |---|---|---|---|---|---|---|---|---|
 | m1/e2e | PASS | a1 | 830 s | 4.0-8.3 | 0.720 | 31 | 0 | - |
-| m3/e2e | FAIL | a1 | 2246 s | 2.4-9.8 | 4.600 | 37 | 1 | exit 1; 1 gate rows FAIL |
+| m3/e2e | FAIL | a2 | 1 s | 2.4-2.4 | 0 | 0 | 0 | exit 1; 2 attempts, earlier ones kept |
 | m4/e2e | PASS | a1 | 449 s | 2.9-6.0 | 1.360 | 8 | 0 | - |
 | m6/fake | PASS | a1 | 2610 s | 2.5-9.8 | 7.270 | 45 | 0 | - |
-| m6/vv | FAIL | a1 | 371 s | 3.0-7.6 | 0.740 | 24 | 2 | exit 1; 2 gate rows FAIL |
+| m6/vv | FAIL | a2 | 6 s | 2.2-2.4 | 0 | 0 | 0 | exit 1; 2 attempts, earlier ones kept |
 | m7/firefox | PASS | a1 | 3658 s | 2.5-8.5 | 2.960 | 77 | 0 | - |
 | m8/firefox | PASS | a1 | 2096 s | 3.5-8.3 | 2.750 | 46 | 0 | - |
 | m9/chromium-m7 | PASS | a1 | 3427 s | 2.2-10.5 | 2.810 | 77 | 0 | - |
-| m9/chromium-m8 | FAIL | a1 | 1896 s | 3.0-9.5 | 2.340 | 46 | 2 | exit 1; 2 gate rows FAIL |
+| m9/chromium-m8 | FAIL | a2 | 1957 s | 2.2-9.3 | 2.750 | 46 | 2 | exit 1; 2 gate rows FAIL; 2 attempts, earlier ones kept |
 | storm/e2e | PASS | a1 | 622 s | 4.1-8.6 | 0.360 | 30 | 0 | - |
 | x1/hooks | PASS | a1 | 38 s | 4.7-6.2 | 0 | 19 | 0 | - |
-| b1/judge-quick | FAIL | a1 | 5400 s | 0.3-8.5 | 1.920 | 0 | 0 | exit 124 |
+| b1/judge-quick | FAIL | a2 | 1492 s | 0.4-3.8 | 0 | 23 | 0 | exit 1; 2 attempts, earlier ones kept |
 
 ## Failures
 
-- m3/e2e: exit 1, 1 gate rows FAIL
-- m6/vv: exit 1, 2 gate rows FAIL
-- m9/chromium-m8: exit 1, 2 gate rows FAIL
-- b1/judge-quick: exit 124
+- m3/e2e: exit 1, 2 attempts, earlier ones kept
+- m6/vv: exit 1, 2 attempts, earlier ones kept
+- m9/chromium-m8: exit 1, 2 gate rows FAIL, 2 attempts, earlier ones kept
+- b1/judge-quick: exit 1, 2 attempts, earlier ones kept
 
 ## Failing gates
 
-- m3/e2e: C1hs.lost median 0 max 5 events (gate <= 0)
-- m6/vv: VV.vv_focus_failures median 0 max 1 steps (gate <= 0)
-- m6/vv: VV.vv_screen_failures median 0 max 1 steps (gate <= 0)
 - m9/chromium-m8: M8-FL.fail median 3 max 3 steps (gate <= 0)
 - m9/chromium-m8: M8-FLS.fail median 1 max 1 steps (gate <= 0)
 
@@ -73,47 +70,9 @@ Resolved topology (from the reader reports): lanes-rtx24, lanes-rtx3, lanes-rtx3
 | R1s.storm_achieved_eps (daemon/voicego) | >= 45000 ev/s | 49999.525 | 49999.873 | PASS | 4.0-8.3 |
 | RS.rs_failures (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 4.0-8.3 |
 
-### m3/e2e (attempt 1, load 2.4-9.8, mem PSI some avg10 max 4.600)
+### m3/e2e (attempt 2, load 2.4-2.4, mem PSI some avg10 max 0)
 
-| gate | threshold | median | max | verdict | load |
-|---|---|---|---|---|---|
-| C1hs.lost (daemon/voicego) | <= 0 events | 0 | 5 | FAIL | 2.4-9.8 |
-| C1.c1_ms.p99 (daemon/voicego) | <= 15 ms | 0.646 | 0.678 | PASS | 2.4-9.8 |
-| C1.lost (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| C1h.c1h_ipc_calls (daemon/voicego) | <= 0 calls | 0 | 0 | PASS | 2.4-9.8 |
-| C1h.c1h_ms.p99 (daemon/voicego) | <= 3 ms | 0.317 | 0.329 | PASS | 2.4-9.8 |
-| C1h.lost (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| C1hs.c1h_ipc_calls (daemon/voicego) | <= 0 calls | 0 | 0 | PASS | 2.4-9.8 |
-| C1hs.c1hs_ms.p99 (daemon/voicego) | <= 4 ms | 0.308 | 0.312 | PASS | 2.4-9.8 |
-| C2.lost (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| C2.stale_not_cancelled (daemon/voicego) | <= 0 utterances | 0 | 0 | PASS | 2.4-9.8 |
-| C3.c3_wrong (daemon/voicego) | <= 0 moves | 0 | 0 | PASS | 2.4-9.8 |
-| E1.e1_ms.p99 (daemon/voicego) | <= 3 ms | 0.319 | 0.333 | PASS | 2.4-9.8 |
-| E1.e2_double (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| E1.lost (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| E1s.e1s_ms.p99 (daemon/voicego) | <= 4 ms | 0.315 | 0.333 | PASS | 2.4-9.8 |
-| E1s.e2_double (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| E1s.lost (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| E2.e2_double (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| E2.e2_keyname (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| E2.e2_missing (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| E2.e2_wrong (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| E2f.e2f_double (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| E2f.e2f_missing (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| PW.pw_echo_missing (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| PW.pw_log_lines (daemon/voicego) | >= 1 lines | 34 | 34 | PASS | 2.4-9.8 |
-| PW.pw_plaintext_in_logs (daemon/voicego) | <= 0 occurrences | 0 | 0 | PASS | 2.4-9.8 |
-| S2.lost (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| S2.s2_ms.p99 (daemon/voicego) | <= 15 ms | 1.036 | 1.041 | PASS | 2.4-9.8 |
-| SA1.lost (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| SA1.sa1_ms.p99 (daemon/voicego) | <= 15 ms | 1.161 | 1.272 | PASS | 2.4-9.8 |
-| SA2.lost (daemon/voicego) | <= 0 chunks | 0 | 0 | PASS | 2.4-9.8 |
-| SA2.sa2_ahead_ratio (daemon/voicego) | >= 0.990 ratio | 1 | 1 | PASS | 2.4-9.8 |
-| SA3.sa3_caret_wrong (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| SA3.sa3_not_silenced (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| SA3.sa3_stop_ms.p99 (daemon/voicego) | <= 2 ms | 0.425 | 0.457 | PASS | 2.4-9.8 |
-| SA3a.sa3a_caret_moved_back (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
-| SA3a.sa3a_wrong (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.4-9.8 |
+_no gated rows_
 
 ### m4/e2e (attempt 1, load 2.9-6.0, mem PSI some avg10 max 1.360)
 
@@ -178,34 +137,9 @@ Resolved topology (from the reader reports): lanes-rtx24, lanes-rtx3, lanes-rtx3
 | VW.vw_lost (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 2.5-9.8 |
 | VW.vw_ms.p99 (daemon/voicego) | <= 35 ms | 32.129 | 32.312 | PASS | 2.5-9.8 |
 
-### m6/vv (attempt 1, load 3.0-7.6, mem PSI some avg10 max 0.740)
+### m6/vv (attempt 2, load 2.2-2.4, mem PSI some avg10 max 0)
 
-| gate | threshold | median | max | verdict | load |
-|---|---|---|---|---|---|
-| VV.vv_focus_failures (daemon/voicego) | <= 0 steps | 0 | 1 | FAIL | 3.0-7.6 |
-| VV.vv_screen_failures (daemon/voicego) | <= 0 steps | 0 | 1 | FAIL | 3.0-7.6 |
-| VV.vv_failures (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_flood_key_ms.p99 (daemon/voicego) | <= 4 ms | 0.525 | 0.556 | PASS | 3.0-7.6 |
-| VV.vv_key_ms.p99 (daemon/voicego) | <= 3 ms | 0.433 | 0.443 | PASS | 3.0-7.6 |
-| VV.vv_password_echo_double (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_password_echo_extra (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_password_echo_missing (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_password_log_empty (daemon/voicego) | <= 0 files | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_password_plaintext_in_logs (daemon/voicego) | <= 0 occurrences | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_password_prompt_missing (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_seq_flood_unspoken (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_seq_key_lost (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_seq_prompt_missing (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_server_aborts (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_siocinq_p99_kib (daemon/voicego) | <= 1024 KiB | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_stop_ms.p99 (daemon/voicego) | <= 2 ms | 0.133 | 0.280 | PASS | 3.0-7.6 |
-| VV.vv_type_double (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_type_extra (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_type_missing (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_worst_cpu_pct (daemon/voicego) | <= 60 % of one core | 1.617 | 1.648 | PASS | 3.0-7.6 |
-| VV.vv_yes_flood_unspoken (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_yes_key_lost (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 3.0-7.6 |
-| VV.vv_yes_prompt_missing (daemon/voicego) | <= 0 events | 0 | 0 | PASS | 3.0-7.6 |
+_no gated rows_
 
 ### m7/firefox (attempt 1, load 2.5-8.5, mem PSI some avg10 max 2.960)
 
@@ -422,56 +356,56 @@ Resolved topology (from the reader reports): lanes-rtx24, lanes-rtx3, lanes-rtx3
 | W3.lost (daemon/voicego) | <= 0 trials | 0 | 0 | PASS | 2.2-10.5 |
 | W3.w3_ms.p99 (daemon/voicego) | <= 15 ms | 0.271 | 0.311 | PASS | 2.2-10.5 |
 
-### m9/chromium-m8 (attempt 1, load 3.0-9.5, mem PSI some avg10 max 2.340)
+### m9/chromium-m8 (attempt 2, load 2.2-9.3, mem PSI some avg10 max 2.750)
 
 | gate | threshold | median | max | verdict | load |
 |---|---|---|---|---|---|
-| M8-FL.fail (daemon/voicego) | <= 0 steps | 3 | 3 | FAIL | 3.0-9.5 |
-| M8-FLS.fail (daemon/voicego) | <= 0 steps | 1 | 1 | FAIL | 3.0-9.5 |
-| M8-AF.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-AF.mode_ms.p99 (daemon/voicego) | <= 15 ms | 1.684 | 2.156 | PASS | 3.0-9.5 |
-| M8-AN.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-AN.key_ms.p99 (daemon/voicego) | <= 5 ms | 0.393 | 0.482 | PASS | 3.0-9.5 |
-| M8-APP.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-BFB.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-BHO.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-BWG.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-BWG.key_ms.p99 (daemon/voicego) | <= 5 ms | 0.347 | 0.442 | PASS | 3.0-9.5 |
-| M8-EL.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-FM.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-FM.mode_ms.p99 (daemon/voicego) | <= 15 ms | 2.596 | 3.048 | PASS | 3.0-9.5 |
-| M8-FORGE.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-FORGE.live_ms.p99 (daemon/voicego) | <= 100 ms | 80.831 | 89.074 | PASS | 3.0-9.5 |
-| M8-HD.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-IF.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-LM.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-LM.key_ms.p99 (daemon/voicego) | <= 5 ms | 0.418 | 0.435 | PASS | 3.0-9.5 |
-| M8-LV.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-LV.key_ms.p99 (daemon/voicego) | <= 5 ms | 0.446 | 0.492 | PASS | 3.0-9.5 |
-| M8-LV.live_ms.p99 (daemon/voicego) | <= 100 ms | 81.301 | 81.818 | PASS | 3.0-9.5 |
-| M8-NEWS.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-NEWS.key_ms.p99 (daemon/voicego) | <= 5 ms | 0.224 | 0.274 | PASS | 3.0-9.5 |
-| M8-PF1.lost_w1_100k_ms (daemon/voicego) | <= 0 keys | 0 | 0 | PASS | 3.0-9.5 |
-| M8-PF1.w1_100k_ms.p99 (daemon/voicego) | <= 5 ms | 0.408 | 0.416 | PASS | 3.0-9.5 |
-| M8-PF2.lost_tb1k_ms (daemon/voicego) | <= 0 keys | 0 | 0 | PASS | 3.0-9.5 |
-| M8-PF2.tb1k_ms.p99 (daemon/voicego) | <= 5 ms | 0.381 | 0.398 | PASS | 3.0-9.5 |
-| M8-QN.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-QN.key_ms.p99 (daemon/voicego) | <= 5 ms | 0.407 | 0.499 | PASS | 3.0-9.5 |
-| M8-RD.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-RD.key_ms.p99 (daemon/voicego) | <= 5 ms | 0.377 | 0.416 | PASS | 3.0-9.5 |
-| M8-RDESC.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-RINV.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-RNAME.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-RNAMES.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-SH.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-SPA.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-SY.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-TB.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-TB.key_ms.p99 (daemon/voicego) | <= 5 ms | 0.263 | 0.356 | PASS | 3.0-9.5 |
-| M8-TG.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-TG2.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-TG3.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
-| M8-WIKI.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 3.0-9.5 |
+| M8-FL.fail (daemon/voicego) | <= 0 steps | 3 | 3 | FAIL | 2.2-9.3 |
+| M8-FLS.fail (daemon/voicego) | <= 0 steps | 1 | 1 | FAIL | 2.2-9.3 |
+| M8-AF.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-AF.mode_ms.p99 (daemon/voicego) | <= 15 ms | 2.229 | 2.546 | PASS | 2.2-9.3 |
+| M8-AN.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-AN.key_ms.p99 (daemon/voicego) | <= 5 ms | 0.385 | 0.395 | PASS | 2.2-9.3 |
+| M8-APP.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-BFB.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-BHO.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-BWG.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-BWG.key_ms.p99 (daemon/voicego) | <= 5 ms | 0.328 | 0.436 | PASS | 2.2-9.3 |
+| M8-EL.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-FM.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-FM.mode_ms.p99 (daemon/voicego) | <= 15 ms | 2.233 | 2.495 | PASS | 2.2-9.3 |
+| M8-FORGE.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-FORGE.live_ms.p99 (daemon/voicego) | <= 100 ms | 81.482 | 82.344 | PASS | 2.2-9.3 |
+| M8-HD.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-IF.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-LM.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-LM.key_ms.p99 (daemon/voicego) | <= 5 ms | 0.315 | 0.431 | PASS | 2.2-9.3 |
+| M8-LV.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-LV.key_ms.p99 (daemon/voicego) | <= 5 ms | 0.389 | 0.487 | PASS | 2.2-9.3 |
+| M8-LV.live_ms.p99 (daemon/voicego) | <= 100 ms | 80.921 | 87.545 | PASS | 2.2-9.3 |
+| M8-NEWS.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-NEWS.key_ms.p99 (daemon/voicego) | <= 5 ms | 0.338 | 0.415 | PASS | 2.2-9.3 |
+| M8-PF1.lost_w1_100k_ms (daemon/voicego) | <= 0 keys | 0 | 0 | PASS | 2.2-9.3 |
+| M8-PF1.w1_100k_ms.p99 (daemon/voicego) | <= 5 ms | 0.397 | 0.406 | PASS | 2.2-9.3 |
+| M8-PF2.lost_tb1k_ms (daemon/voicego) | <= 0 keys | 0 | 0 | PASS | 2.2-9.3 |
+| M8-PF2.tb1k_ms.p99 (daemon/voicego) | <= 5 ms | 0.407 | 0.431 | PASS | 2.2-9.3 |
+| M8-QN.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-QN.key_ms.p99 (daemon/voicego) | <= 5 ms | 0.417 | 0.483 | PASS | 2.2-9.3 |
+| M8-RD.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-RD.key_ms.p99 (daemon/voicego) | <= 5 ms | 0.368 | 0.402 | PASS | 2.2-9.3 |
+| M8-RDESC.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-RINV.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-RNAME.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-RNAMES.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-SH.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-SPA.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-SY.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-TB.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-TB.key_ms.p99 (daemon/voicego) | <= 5 ms | 0.342 | 0.345 | PASS | 2.2-9.3 |
+| M8-TG.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-TG2.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-TG3.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
+| M8-WIKI.fail (daemon/voicego) | <= 0 steps | 0 | 0 | PASS | 2.2-9.3 |
 
 ### storm/e2e (attempt 1, load 4.1-8.6, mem PSI some avg10 max 0.360)
 
@@ -532,9 +466,33 @@ Resolved topology (from the reader reports): lanes-rtx24, lanes-rtx3, lanes-rtx3
 | X1.wasm-storm_on_event_4t.p99 | <= 100 us | 0.490 | 0.508 | PASS | 4.7-6.2 |
 | X1.wasm-storm_on_event_8t.p99 | <= 100 us | 0.741 | 0.741 | PASS | 4.7-6.2 |
 
-### b1/judge-quick (attempt 1, load 0.3-8.5, mem PSI some avg10 max 1.920)
+### b1/judge-quick (attempt 2, load 0.4-3.8, mem PSI some avg10 max 0)
 
-_no gated rows_
+| gate | threshold | median | max | verdict | load |
+|---|---|---|---|---|---|
+| B1-FF.p99@files (main) | <= 15 ms | 1.289 | 1.289 | PASS | 0.4-3.8 |
+| B1-FF.p99@files-big (main) | <= 15 ms | 1.162 | 1.162 | PASS | 0.4-3.8 |
+| B1-FF.p99@gtk3 (main) | <= 15 ms | 1.968 | 1.968 | PASS | 0.4-3.8 |
+| B1-FF.p99@settings (main) | <= 15 ms | 1.483 | 1.483 | PASS | 0.4-3.8 |
+| B1-FF.p99@shell (main) | <= 15 ms | 1.376 | 1.376 | PASS | 0.4-3.8 |
+| B1-HIT.revisit (main) | >= 0.950 ratio | 0.956 | 0.956 | PASS | 0.4-3.8 |
+| B1-L1c.p99 (main) | <= 15 ms | 3.847 | 3.847 | PASS | 0.4-3.8 |
+| B1-L1h.p99 (main) | <= 2 ms | 0.513 | 0.513 | PASS | 0.4-3.8 |
+| B1-L3.lost (main) | <= 0 count | 0 | 0 | PASS | 0.4-3.8 |
+| B1-L4.p99 (main) | <= 15 ms | 2.850 | 2.850 | PASS | 0.4-3.8 |
+| B1-LOST@walk (main) | <= 0 count | 0 | 0 | PASS | 0.4-3.8 |
+| B1-M6.audible (main) | <= 0.010 ratio | 0 | 0 | PASS | 0.4-3.8 |
+| B1-MSG.idle (main) | <= 0.500 calls/s/app | 0 | 0 | PASS | 0.4-3.8 |
+| B1-MSG.l3 (main) | <= 500 calls/s | 0.010 | 0.010 | PASS | 0.4-3.8 |
+| B1-RSS.big (main) | <= 128 MiB | 2.887 | 2.887 | PASS | 0.4-3.8 |
+| B1-RUNS.invalid (main) | <= 0 runs | 0 | 0 | PASS | 0.4-3.8 |
+| B1-RUNS.invalid (main) | <= 0 runs | 0 | 0 | PASS | 0.4-3.8 |
+| B1-RUNS.invalid (main) | <= 0 runs | 0 | 0 | PASS | 0.4-3.8 |
+| B1-RUNS.invalid (main) | <= 0 runs | 0 | 0 | PASS | 0.4-3.8 |
+| B1-RUNS.invalid (main) | <= 0 runs | 0 | 0 | PASS | 0.4-3.8 |
+| B1-S1.p99 (main) | <= 5 ms | 3.203 | 3.203 | PASS | 0.4-3.8 |
+| B1-STALE@walk (main) | <= 0 count | 0 | 0 | PASS | 0.4-3.8 |
+| B1-STEP.max_us (main) | <= 250 us | 17.704 | 17.795 | PASS | 0.4-3.8 |
 
 ## Host
 
@@ -568,4 +526,34 @@ idle C3_ACPI latency=1048us disabled=1
 load: 3.00 4.72 7.25 1/1934 818234
 git_rev_built=1308ae05 binary=321b3ed0d392dddf mtime=2026-10-18 03:11:02.236923184 +0300
 loadavg_end=2.13 2.14 2.03 2/2175 1148219 elapsed_s=23643
+---- resumed ----
+mode=ACCEPTANCE
+utc=2026-10-18T06:47:23Z
+git_rev=b63baa06 dirty_tracked_files=0 branch=main
+kernel=7.1.8+deb13-rt-amd64 cpus=16
+loadavg=2.40 2.17 2.04 1/2178 1148982
+psi_memory_some_avg10=0.00 psi_memory_full_avg10=0.00
+psi_cpu_some_avg10=0.20 psi_io_some_avg10=0.00
+mem_available_mb=14728
+governor=performance 
+rtkit MaxRealtimePriority: i 20 
+rtkit RTTimeUSecMax: x 200000 
+topology: shipped default (--topology=auto); expected arm: lanes-rt (gated by e2e --expect-topology)
+repeats=3 quick=no suites=m1 m3 m4 m6 m7 m8 m9 storm x1 b1
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=0
+  idle C3_ACPI latency=1048us disabled=0
+  load: 2.40 2.17 2.04 1/2180 1149022
+after quiet-host on:
+governor: performance 
+idle POLL latency=0us disabled=0
+idle C1_ACPI latency=1us disabled=0
+idle C2_ACPI latency=127us disabled=1
+idle C3_ACPI latency=1048us disabled=1
+load: 2.40 2.17 2.04 1/2178 1149172
+git_rev_built=b63baa06 binary=321b3ed0d392dddf mtime=2026-10-18 05:01:57.471879776 +0300
+loadavg_end=2.46 2.14 2.45 2/2161 1201723 elapsed_s=3456
 ```

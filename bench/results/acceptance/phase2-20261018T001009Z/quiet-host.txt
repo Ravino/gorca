@@ -10,3 +10,15 @@ idle C1_ACPI latency=1us disabled=0
 idle C2_ACPI latency=127us disabled=0
 idle C3_ACPI latency=1048us disabled=0
 load: 2.13 2.14 2.03 1/2177 1148312
+governor: performance 
+idle POLL latency=0us disabled=0
+idle C1_ACPI latency=1us disabled=0
+idle C2_ACPI latency=127us disabled=1
+idle C3_ACPI latency=1048us disabled=1
+load: 2.40 2.17 2.04 1/2179 1149155
+governor: performance 
+idle POLL latency=0us disabled=0
+idle C1_ACPI latency=1us disabled=0
+idle C2_ACPI latency=127us disabled=0
+idle C3_ACPI latency=1048us disabled=0
+load: 2.46 2.14 2.45 2/2163 1201810

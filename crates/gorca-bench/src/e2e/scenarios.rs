@@ -100,6 +100,8 @@ pub enum Scn {
     Vv,
     /// M6: flat review of a terminal that keeps printing, across Alt+Tab.
     Vs,
+    /// M6: the 8 h soak: one reader, one real terminal, VD rounds plus floods, time series log.
+    Vk,
     /// M6: a long real-terminal session must never degrade (untracked terminal).
     Vd,
     /// M4b: window and dialog activation speech.
@@ -171,6 +173,7 @@ impl Scn {
             Self::Vv => "VV".into(),
             Self::Vs => "VS".into(),
             Self::Vd => "VD".into(),
+            Self::Vk => "VK".into(),
             Self::A1 => "A1".into(),
             Self::N1 => "N1".into(),
             Self::Ru(r) if *r == u32::MAX => "RU-typ".into(),
@@ -238,6 +241,7 @@ impl Scn {
             "VV" => Self::Vv,
             "VS" => Self::Vs,
             "VD" => Self::Vd,
+            "VK" => Self::Vk,
             "A1" => Self::A1,
             "N1" => Self::N1,
             other => {
@@ -264,7 +268,7 @@ impl Scn {
             "K4", "K4r", "K4h", "R1", "R1s", "RS", "B0", "W1", "BR1", "BR2", "W2", "W2b", "W3",
             "FM1", "FM2", "WD", "C1", "C1h", "C2", "C3", "E1", "E2", "E2f", "S2", "SA1", "SA2",
             "SA3", "SA3a", "PW", "C1hs", "E1s", "V1", "VT", "VH", "V2", "V3", "VP", "VR", "VF",
-            "VB", "VW", "VV", "VS", "VD", "A1", "N1",
+            "VB", "VW", "VV", "VS", "VD", "VK", "A1", "N1",
         ]
         .iter()
         .chain(super::webtext::IDS)
@@ -614,6 +618,7 @@ pub fn run(
         Scn::Vv => super::m6::vv(host, reader, flavor, size, seed, &mut out)?,
         Scn::Vs => super::m6::vs(host, reader, flavor, size, seed, &mut out)?,
         Scn::Vd => super::m6::vd(host, reader, flavor, size, seed, &mut out)?,
+        Scn::Vk => super::m6::vk(host, reader, flavor, size, seed, &mut out)?,
         Scn::A1 => super::m4b::a1(host, reader, flavor, size, seed, &mut out)?,
         Scn::N1 => super::m4b::n1(host, reader, flavor, size, seed, &mut out)?,
     }

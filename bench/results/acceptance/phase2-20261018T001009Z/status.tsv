@@ -10,3 +10,7 @@ m9	chromium-m8	1	1	FAIL
 storm	e2e	1	0	ok
 x1	hooks	1	0	ok
 b1	judge-quick	1	124	FAIL
+m3	e2e	2	1	FAIL
+m6	vv	2	1	FAIL
+m9	chromium-m8	2	1	FAIL
+b1	judge-quick	2	1	FAIL

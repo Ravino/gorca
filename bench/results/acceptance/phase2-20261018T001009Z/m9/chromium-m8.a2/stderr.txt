@@ -1,0 +1,198 @@
+   Compiling gorca-daemon v0.0.0 (<repo>/crates/gorca-daemon)
+    Finished `release` profile [optimized + debuginfo] target(s) in 52.44s
+private compositor: /tmp/gorca-m8c.LZLLnx/x/gorca-m8-1149723
+== e2e-m8 acc-20261018T064723Z-m9-chromium-m8-a2: reader=daemon:<repo>/target/release/gorca backend=voicego repeats=3 load=4.71 2.84 2.28 2/2346 1150803
+-- round 1/3 M8-QN (load 4.71 2.84 2.28 3/2346 1150803)
+kill: (-1150878): No such process
+-- round 1/3 M8-TB (load 4.93 3.08 2.38 2/2339 1151394)
+kill: (-1151469): No such process
+-- round 1/3 M8-FM (load 5.22 3.27 2.45 1/2341 1151817)
+kill: (-1151893): No such process
+-- round 1/3 M8-AF (load 5.07 3.41 2.53 1/2339 1152237)
+kill: (-1152312): No such process
+-- round 1/3 M8-LM (load 5.07 3.41 2.53 3/2340 1152527)
+kill: (-1152602): No such process
+-- round 1/3 M8-LV (load 4.60 3.36 2.52 2/2341 1152849)
+kill: (-1152924): No such process
+-- round 1/3 M8-IF (load 3.74 3.27 2.52 1/2340 1153263)
+kill: (-1153339): No such process
+-- round 1/3 M8-HD (load 3.75 3.31 2.55 1/2340 1153637)
+kill: (-1153713): No such process
+-- round 1/3 M8-AN (load 4.04 3.39 2.59 1/2333 1154020)
+kill: (-1154104): No such process
+-- round 1/3 M8-SY (load 4.31 3.48 2.64 4/2343 1154373)
+kill: (-1154449): No such process
+-- round 1/3 M8-RD (load 4.51 3.58 2.69 1/2345 1154744)
+kill: (-1154819): No such process
+-- round 1/3 M8-SH (load 4.00 3.53 2.69 1/2340 1155113)
+kill: (-1155189): No such process
+-- round 1/3 M8-EL (load 4.08 3.55 2.70 2/2343 1155615)
+kill: (-1155699): No such process
+-- round 1/3 M8-NEWS (load 4.73 3.71 2.76 1/2341 1156027)
+kill: (-1156102): No such process
+-- round 1/3 M8-WIKI (load 4.22 3.64 2.75 1/2338 1156354)
+kill: (-1156430): No such process
+-- round 1/3 M8-FORGE (load 4.27 3.67 2.77 1/2337 1156674)
+kill: (-1156749): No such process
+-- round 1/3 M8-APP (load 4.01 3.62 2.76 1/2339 1156985)
+kill: (-1157060): No such process
+-- round 1/3 M8-SPA (load 4.11 3.66 2.78 2/2342 1157600)
+kill: (-1157681): No such process
+-- round 1/3 M8-BWG (load 4.16 3.69 2.81 1/2326 1157957)
+kill: (-1158032): No such process
+-- round 1/3 M8-BFB (load 3.32 3.55 2.80 1/2320 1158426)
+kill: (-1158501): No such process
+-- round 1/3 M8-BHO (load 3.66 3.62 2.84 2/2320 1158809)
+kill: (-1158884): No such process
+-- round 1/3 M8-TG (load 4.19 3.77 2.91 1/2321 1159227)
+kill: (-1159303): No such process
+-- round 1/3 M8-FL (load 4.46 3.87 2.97 2/2313 1159665)
+kill: (-1159740): No such process
+-- round 1/3 M8-FLS (load 4.57 3.93 3.01 1/2322 1160008)
+kill: (-1160083): No such process
+-- round 1/3 M8-TG2 (load 4.41 3.93 3.03 1/2322 1160392)
+kill: (-1160467): No such process
+-- round 1/3 M8-TG3 (load 5.00 4.10 3.10 1/2316 1160754)
+kill: (-1160829): No such process
+-- round 1/3 M8-RDESC (load 4.65 4.09 3.12 1/2316 1161106)
+kill: (-1161185): No such process
+-- round 1/3 M8-RNAME (load 4.44 4.07 3.12 1/2311 1161457)
+kill: (-1161533): No such process
+-- round 1/3 M8-RINV (load 4.64 4.13 3.15 1/2315 1161814)
+kill: (-1161890): No such process
+-- round 1/3 M8-RNAMES (load 4.86 4.22 3.20 3/2318 1162189)
+kill: (-1162264): No such process
+-- round 1/3 M8-PF1 (load 4.50 4.16 3.20 1/2321 1162506)
+kill: (-1162581): No such process
+-- round 1/3 M8-PF2 (load 4.02 4.16 3.26 3/2322 1163145)
+kill: (-1163221): No such process
+-- round 2/3 M8-TB (load 4.48 4.26 3.33 1/2312 1163602)
+kill: (-1163678): No such process
+-- round 2/3 M8-FM (load 4.48 4.28 3.36 1/2324 1163993)
+kill: (-1164069): No such process
+-- round 2/3 M8-AF (load 5.21 4.44 3.44 1/2309 1164407)
+kill: (-1164484): No such process
+-- round 2/3 M8-LM (load 5.52 4.51 3.47 1/2321 1164703)
+kill: (-1164779): No such process
+-- round 2/3 M8-LV (load 6.04 4.64 3.51 1/2319 1165008)
+kill: (-1165083): No such process
+-- round 2/3 M8-IF (load 6.24 4.82 3.61 1/2317 1165443)
+kill: (-1165527): No such process
+-- round 2/3 M8-HD (load 6.02 4.86 3.65 5/2327 1165830)
+kill: (-1165905): No such process
+-- round 2/3 M8-AN (load 7.17 5.20 3.79 1/2319 1166222)
+kill: (-1166297): No such process
+-- round 2/3 M8-SY (load 6.52 5.13 3.79 2/2325 1166555)
+kill: (-1166630): No such process
+-- round 2/3 M8-RD (load 6.67 5.25 3.86 1/2323 1166953)
+kill: (-1167028): No such process
+-- round 2/3 M8-SH (load 6.05 5.20 3.87 1/2332 1167338)
+kill: (-1167413): No such process
+-- round 2/3 M8-EL (load 5.88 5.19 3.88 2/2323 1167653)
+kill: (-1167728): No such process
+-- round 2/3 M8-NEWS (load 5.73 5.17 3.88 4/2335 1168157)
+kill: (-1168235): No such process
+-- round 2/3 M8-WIKI (load 5.39 5.12 3.88 1/2331 1168585)
+kill: (-1168660): No such process
+-- round 2/3 M8-FORGE (load 5.03 5.05 3.87 1/2323 1168900)
+kill: (-1168975): No such process
+-- round 2/3 M8-APP (load 5.34 5.11 3.90 1/2330 1169218)
+kill: (-1169294): No such process
+-- round 2/3 M8-SPA (load 5.92 5.24 3.96 1/2327 1169539)
+kill: (-1169614): No such process
+-- round 2/3 M8-BWG (load 7.08 5.54 4.08 2/2325 1170181)
+kill: (-1170258): No such process
+-- round 2/3 M8-BFB (load 7.25 5.77 4.22 1/2338 1170666)
+kill: (-1170741): No such process
+-- round 2/3 M8-BHO (load 8.07 6.06 4.35 1/2337 1171050)
+kill: (-1171125): No such process
+-- round 2/3 M8-TG (load 7.91 6.21 4.45 1/2329 1171500)
+kill: (-1171575): No such process
+-- round 2/3 M8-FL (load 8.45 6.56 4.64 6/2329 1171957)
+kill: (-1172033): No such process
+-- round 2/3 M8-FLS (load 7.99 6.53 4.65 1/2337 1172302)
+kill: (-1172378): No such process
+-- round 2/3 M8-TG2 (load 8.65 6.80 4.78 1/2336 1172681)
+kill: (-1172757): No such process
+-- round 2/3 M8-TG3 (load 8.04 6.79 4.82 1/2332 1173045)
+kill: (-1173126): No such process
+-- round 2/3 M8-RDESC (load 6.64 6.54 4.77 1/2332 1173392)
+kill: (-1173470): No such process
+-- round 2/3 M8-RNAME (load 6.42 6.51 4.79 2/2339 1173765)
+kill: (-1173840): No such process
+-- round 2/3 M8-RINV (load 7.07 6.63 4.86 2/2339 1174116)
+kill: (-1174200): No such process
+-- round 2/3 M8-RNAMES (load 6.68 6.58 4.87 5/2332 1174485)
+kill: (-1174562): No such process
+-- round 2/3 M8-PF1 (load 6.93 6.64 4.91 1/2333 1174804)
+kill: (-1174881): No such process
+-- round 2/3 M8-PF2 (load 7.04 6.77 5.07 2/2318 1175435)
+kill: (-1175519): No such process
+-- round 2/3 M8-QN (load 6.84 6.77 5.13 1/2326 1175906)
+kill: (-1175984): No such process
+-- round 3/3 M8-FM (load 7.61 6.97 5.26 1/2327 1176390)
+kill: (-1176466): No such process
+-- round 3/3 M8-AF (load 6.46 6.75 5.24 1/2326 1176814)
+kill: (-1176890): No such process
+-- round 3/3 M8-LM (load 6.58 6.77 5.26 2/2327 1177112)
+kill: (-1177190): No such process
+-- round 3/3 M8-LV (load 6.18 6.68 5.25 1/2329 1177424)
+kill: (-1177508): No such process
+-- round 3/3 M8-IF (load 5.30 6.43 5.20 1/2311 1177832)
+kill: (-1177911): No such process
+-- round 3/3 M8-HD (load 5.95 6.52 5.26 1/2327 1178225)
+kill: (-1178301): No such process
+-- round 3/3 M8-AN (load 4.80 6.21 5.19 3/2316 1178629)
+kill: (-1178712): No such process
+-- round 3/3 M8-SY (load 4.59 6.12 5.17 1/2310 1178961)
+kill: (-1179036): No such process
+-- round 3/3 M8-RD (load 4.73 6.05 5.17 2/2329 1179346)
+kill: (-1179421): No such process
+-- round 3/3 M8-SH (load 4.41 5.88 5.14 1/2331 1179976)
+kill: (-1180051): No such process
+-- round 3/3 M8-EL (load 4.14 5.80 5.11 1/2320 1180372)
+kill: (-1180454): No such process
+-- round 3/3 M8-NEWS (load 3.80 5.70 5.09 1/2329 1180674)
+kill: (-1180752): No such process
+-- round 3/3 M8-WIKI (load 3.69 5.62 5.06 1/2327 1181009)
+kill: (-1181085): No such process
+-- round 3/3 M8-FORGE (load 3.49 5.51 5.04 1/2336 1181325)
+kill: (-1181403): No such process
+-- round 3/3 M8-APP (load 3.18 5.38 5.00 4/2335 1181835)
+kill: (-1181912): No such process
+-- round 3/3 M8-SPA (load 2.92 5.25 4.96 1/2328 1182249)
+kill: (-1182325): No such process
+-- round 3/3 M8-BWG (load 3.54 5.27 4.97 1/2332 1182617)
+kill: (-1182693): No such process
+-- round 3/3 M8-BFB (load 3.44 5.03 4.90 1/2318 1183087)
+kill: (-1183162): No such process
+-- round 3/3 M8-BHO (load 3.44 4.93 4.87 1/2329 1183471)
+kill: (-1183546): No such process
+-- round 3/3 M8-TG (load 3.79 4.90 4.87 3/2337 1183883)
+kill: (-1183958): No such process
+-- round 3/3 M8-FL (load 3.69 4.75 4.82 2/2328 1184331)
+kill: (-1184406): No such process
+-- round 3/3 M8-FLS (load 3.97 4.78 4.82 1/2325 1184653)
+kill: (-1184730): No such process
+-- round 3/3 M8-TG2 (load 3.75 4.68 4.79 3/2328 1185028)
+kill: (-1185103): No such process
+-- round 3/3 M8-TG3 (load 3.93 4.65 4.78 3/2330 1185407)
+kill: (-1185483): No such process
+-- round 3/3 M8-RDESC (load 4.43 4.73 4.81 2/2336 1185765)
+kill: (-1185840): No such process
+-- round 3/3 M8-RNAME (load 5.40 4.94 4.87 1/2334 1186117)
+kill: (-1186196): No such process
+-- round 3/3 M8-RINV (load 5.26 4.93 4.87 1/2327 1186468)
+kill: (-1186544): No such process
+-- round 3/3 M8-RNAMES (load 5.35 4.97 4.88 3/2329 1186882)
+kill: (-1186957): No such process
+-- round 3/3 M8-PF1 (load 4.91 4.88 4.86 4/2349 1187247)
+kill: (-1187330): No such process
+-- round 3/3 M8-PF2 (load 4.07 4.74 4.82 1/2334 1187862)
+kill: (-1187937): No such process
+-- round 3/3 M8-QN (load 4.56 4.80 4.83 1/2330 1188294)
+kill: (-1188369): No such process
+-- round 3/3 M8-TB (load 4.82 4.79 4.83 3/2320 1188755)
+kill: (-1188831): No such process
+== wrote <repo>/bench/results/acceptance/phase2-20261018T001009Z/m9/chromium-m8.a2/res/20261018T072005Z.{json,txt} and -steps.md
+== 2 gate(s) FAILED

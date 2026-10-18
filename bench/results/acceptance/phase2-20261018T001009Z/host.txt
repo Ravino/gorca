@@ -27,3 +27,33 @@ idle C3_ACPI latency=1048us disabled=1
 load: 3.00 4.72 7.25 1/1934 818234
 git_rev_built=1308ae05 binary=321b3ed0d392dddf mtime=2026-10-18 03:11:02.236923184 +0300
 loadavg_end=2.13 2.14 2.03 2/2175 1148219 elapsed_s=23643
+---- resumed ----
+mode=ACCEPTANCE
+utc=2026-10-18T06:47:23Z
+git_rev=b63baa06 dirty_tracked_files=0 branch=main
+kernel=7.1.8+deb13-rt-amd64 cpus=16
+loadavg=2.40 2.17 2.04 1/2178 1148982
+psi_memory_some_avg10=0.00 psi_memory_full_avg10=0.00
+psi_cpu_some_avg10=0.20 psi_io_some_avg10=0.00
+mem_available_mb=14728
+governor=performance 
+rtkit MaxRealtimePriority: i 20 
+rtkit RTTimeUSecMax: x 200000 
+topology: shipped default (--topology=auto); expected arm: lanes-rt (gated by e2e --expect-topology)
+repeats=3 quick=no suites=m1 m3 m4 m6 m7 m8 m9 storm x1 b1
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=0
+  idle C3_ACPI latency=1048us disabled=0
+  load: 2.40 2.17 2.04 1/2180 1149022
+after quiet-host on:
+governor: performance 
+idle POLL latency=0us disabled=0
+idle C1_ACPI latency=1us disabled=0
+idle C2_ACPI latency=127us disabled=1
+idle C3_ACPI latency=1048us disabled=1
+load: 2.40 2.17 2.04 1/2178 1149172
+git_rev_built=b63baa06 binary=321b3ed0d392dddf mtime=2026-10-18 05:01:57.471879776 +0300
+loadavg_end=2.46 2.14 2.45 2/2161 1201723 elapsed_s=3456

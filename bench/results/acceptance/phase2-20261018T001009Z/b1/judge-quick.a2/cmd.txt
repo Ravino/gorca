@@ -1,0 +1,1 @@
+   bench/b1/run-all.sh acc-20261018T064723Z-b1-judge-quick-a2 --arm main:<repo>/target/release/gorca:b63baa06 --out <repo>/bench/results/acceptance/phase2-20261018T001009Z/b1/judge-quick.a2/res --quick

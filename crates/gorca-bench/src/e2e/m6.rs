@@ -3268,6 +3268,363 @@ pub fn vd(
     }
     Ok(())
 }
+
+// ---- VK: the long soak (docs/plan/phase-2.md M6 acceptance: zero server aborts in 8 h) -----------
+
+/// `/proc/<pid>/status` field in kB, 0 when the process is gone.
+fn proc_kb(pid: u32, key: &str) -> u64 {
+    std::fs::read_to_string(format!("/proc/{pid}/status"))
+        .ok()
+        .and_then(|s| {
+            s.lines()
+                .find(|l| l.starts_with(key))
+                .and_then(|l| l.split_whitespace().nth(1).and_then(|n| n.parse().ok()))
+        })
+        .unwrap_or(0)
+}
+
+/// Total CPU ticks (utime + stime) of a process, 0 when it is gone.
+fn proc_ticks(pid: u32) -> u64 {
+    std::fs::read_to_string(format!("/proc/{pid}/stat"))
+        .ok()
+        .and_then(|s| {
+            let rest = s.rsplit_once(')')?.1.to_owned();
+            let f: Vec<&str> = rest.split_whitespace().collect();
+            Some(f.get(11)?.parse::<u64>().ok()? + f.get(12)?.parse::<u64>().ok()?)
+        })
+        .unwrap_or(0)
+}
+
+fn mem_available_mb() -> u64 {
+    proc_kb_of_meminfo("MemAvailable:") / 1024
+}
+
+fn proc_kb_of_meminfo(key: &str) -> u64 {
+    std::fs::read_to_string("/proc/meminfo")
+        .ok()
+        .and_then(|s| {
+            s.lines()
+                .find(|l| l.starts_with(key))
+                .and_then(|l| l.split_whitespace().nth(1).and_then(|n| n.parse().ok()))
+        })
+        .unwrap_or(0)
+}
+
+/// One flood of the soak: `yes` or `seq` in the real terminal, a few keys typed into it, Ctrl+C.
+/// Returns (key latencies ms, stop latency ms, prompt came back).
+fn vk_flood(
+    v: &mut V,
+    name: &str,
+    secs: u64,
+    rng: &mut Rng,
+) -> Result<(Vec<f64>, Option<f64>, bool)> {
+    let cmd = if name == "yes" {
+        "yes"
+    } else {
+        "seq 1 100000000"
+    };
+    v.term.rd_line("key 29 22");
+    std::thread::sleep(Duration::from_millis(300));
+    for ch in cmd.chars() {
+        if ch == ' ' || ch.is_ascii_alphanumeric() {
+            v.type_char(ch)?;
+            std::thread::sleep(Duration::from_millis(60));
+        }
+    }
+    let mark = v.rig.mock.mark();
+    v.press(ENTER, 13, 0, &[28])?;
+    std::thread::sleep(Duration::from_millis(secs * 400));
+    let end = Instant::now() + Duration::from_millis(secs * 600);
+    let mut keyed = Vec::new();
+    while Instant::now() < end {
+        std::thread::sleep(Duration::from_millis(300 + rng.below(200)));
+        let ch = (b'a' + rng.below(26) as u8) as char;
+        let t_key = v.type_char(ch)?;
+        keyed.push(Probe {
+            t_key,
+            expect: name_of(ch),
+            what: "type",
+            contains: false,
+        });
+    }
+    let m2 = v.rig.mock.mark();
+    let t_key = v.ctrl_c()?;
+    let stop = v
+        .rig
+        .mock
+        .wait_for(m2, Duration::from_millis(400), |r| {
+            matches!(
+                &r.kind,
+                Kind::Cancel {
+                    had_speech: true,
+                    ..
+                }
+            )
+        })
+        .map(|r| ms(r.t_ns.saturating_sub(t_key)));
+    std::thread::sleep(Duration::from_millis(2000));
+    let said_dollar = |v: &V, since: u64| {
+        texts(&v.rig.mock.since(mark))
+            .iter()
+            .any(|(ts, s)| *ts > since && (s.contains("dollar") || s.contains('$')))
+    };
+    let mut prompt = said_dollar(v, t_key);
+    if !prompt {
+        // The compositor's virtual keyboard now and then drops a key: press once more.
+        let t2 = v.ctrl_c()?;
+        std::thread::sleep(Duration::from_millis(2000));
+        prompt = said_dollar(v, t2);
+    }
+    let spoken = texts(&v.rig.mock.since(mark));
+    let (lat, ..) = score(&keyed, &spoken);
+    Ok((lat, stop, prompt))
+}
+
+/// VK: the soak. ONE reader and ONE real gnome-terminal-server for `GORCA_VK_SECS` (default 600 s,
+/// 60 s with `--quick`; the 8 h soak is 28800): rounds of the VD disturbances and ordinary bash
+/// use, a `yes` or `seq` flood with typed keys and Ctrl+C every third round (the flooding
+/// producer). Every round appends a line to `GORCA_VK_LOG` (elapsed s, round, reader and server
+/// RSS kB, CPU ticks, threads, MemAvailable, failing VD steps, flood key latency, stop latency).
+/// Gates: `vk_server_aborts` 0, `vk_reader_deaths` 0; the VD failures, flood losses and the RSS
+/// series are reported for the triage.
+pub fn vk(
+    host: &HostEnv,
+    reader: &ReaderSpec,
+    flavor: Flavor,
+    size: Size,
+    _seed: u64,
+    out: &mut RunOut,
+) -> Result<()> {
+    if !gate_open(host, "VK", out)? {
+        return Ok(());
+    }
+    if !(flag(host, "GORCA_M6_REAL") && std::env::var_os("GORCA_VTE_WAYLAND").is_some()) {
+        if flag(host, "GORCA_M6_STRICT") {
+            bail!("VK: GORCA_M6_REAL=1 and the private compositor are required");
+        }
+        out.notes
+            .push("VK SKIPPED: needs GORCA_M6_REAL=1 and tests/term/run_real_vte.sh".to_owned());
+        out.x("skipped", 1.0, "flag");
+        return Ok(());
+    }
+    let root = std::env::var("GORCA_HARNESS_DIR").context("GORCA_HARNESS_DIR not set")?;
+    let cbus = std::env::var("GORCA_VTE_CBUS").context("GORCA_VTE_CBUS not set")?;
+    let log_path = std::env::var_os("GORCA_VK_LOG").map_or_else(
+        || std::path::Path::new(&root).join("vk.tsv"),
+        std::path::PathBuf::from,
+    );
+    let err_path = std::path::Path::new(&root).join("vk-reader.stderr");
+    let mut h = m1_env(host);
+    h.reader_env.retain(|(k, _)| k != "RUST_LOG");
+    h.reader_env
+        .push(("RUST_LOG".to_owned(), "warn".to_owned()));
+    let mut o = super::scenarios::base_opts(reader, flavor);
+    o.keys = true;
+    o.reader_stderr = Some(err_path.clone());
+    let rig = Rig::start(&h, &o)?;
+    if !rig.keys_ok {
+        bail!("the reader did not register with the emulated keyboard monitor (no SetKeyGrabs)");
+    }
+    rig.mock
+        .configure(Duration::from_millis(1), Duration::from_millis(5));
+    let term = RealTerm::start(host)?;
+    let mut v = V {
+        rig,
+        term,
+        ty: Typist::new(),
+    };
+    std::thread::sleep(Duration::from_secs(4));
+    v.term.rd_line("click");
+    std::thread::sleep(Duration::from_secs(1));
+    v.press(
+        K {
+            code: 110,
+            sym: 0xff50,
+        },
+        0,
+        0,
+        &[102],
+    )?;
+    std::thread::sleep(Duration::from_millis(1500));
+    if v.rig.mock.since(0).is_empty() {
+        bail!("the reader never spoke: the terminal did not come up");
+    }
+    let secs = env_num(host, "GORCA_VK_SECS").unwrap_or(if size.n >= 1200 { 600 } else { 60 });
+    let flood_secs = env_num(host, "GORCA_VK_FLOOD_SECS").unwrap_or(25);
+    let reader_pid = v.rig.reader.pid;
+    let server_pid = v.term.server_pid();
+    let mut log = std::fs::File::create(&log_path)
+        .with_context(|| format!("creating {}", log_path.display()))?;
+    {
+        use std::io::Write as _;
+        let _ = writeln!(
+            log,
+            "elapsed_s\tround\tperturb\treader_rss_kb\treader_threads\treader_ticks\tserver_rss_kb\tserver_ticks\tmem_avail_mb\tvd_fail_total\tvd_fail_round\tflood\tflood_keys\tflood_key_p50_ms\tflood_key_max_ms\tstop_ms\tprompt_ok\tserver_alive\treader_alive"
+        );
+    }
+    let mut c = Check {
+        failures: 0,
+        notes: Vec::new(),
+    };
+    let t_start = Instant::now();
+    let end = t_start + Duration::from_secs(secs);
+    let mut rng = Rng::new(23);
+    let (mut aborts, mut deaths, mut floods, mut flood_prompt_missing, mut low_mem) =
+        (0u32, 0u32, 0u32, 0u32, 0u32);
+    let mut key_lat: Vec<f64> = Vec::new();
+    let mut stop_lat: Vec<f64> = Vec::new();
+    let mut rounds = 0usize;
+    let (mut rss0, mut rss_max) = (0u64, 0u64);
+    let mut server_rss0 = 0u64;
+    let mut worst_flood_key = 0.0f64;
+    vd_cycle(&mut v, &mut c, "base0")?;
+    while Instant::now() < end {
+        let r = rounds;
+        // Past 30 rounds the window- and tab-opening disturbances become an Alt+Tab storm, so the
+        // number of windows stays bounded over 8 h.
+        let which = if r >= 30 && matches!(r % 10, 1 | 2) {
+            6
+        } else {
+            r
+        };
+        let before = c.failures;
+        let what = vd_perturb(&mut v, which, &cbus)?;
+        vd_cycle(&mut v, &mut c, &format!("r{r}"))?;
+        let round_fail = c.failures - before;
+        let (mut fname, mut fkeys, mut fp50, mut fmax, mut fstop, mut fprompt) =
+            ("-", 0usize, f64::NAN, f64::NAN, f64::NAN, true);
+        if r % 3 == 2 {
+            let name = if (r / 3).is_multiple_of(2) {
+                "yes"
+            } else {
+                "seq"
+            };
+            let (lat, stop, prompt) = vk_flood(&mut v, name, flood_secs, &mut rng)?;
+            floods += 1;
+            if !prompt {
+                flood_prompt_missing += 1;
+            }
+            fname = name;
+            fkeys = lat.len();
+            let mut s = lat.clone();
+            s.sort_by(f64::total_cmp);
+            if !s.is_empty() {
+                fp50 = s[s.len() / 2];
+                fmax = s[s.len() - 1];
+                worst_flood_key = worst_flood_key.max(fmax);
+            }
+            fstop = stop.unwrap_or(f64::NAN);
+            fprompt = prompt;
+            key_lat.extend(lat);
+            stop_lat.extend(stop);
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        let server_alive = matches!(v.term.server.try_wait(), Ok(None));
+        let reader_alive = v.rig.reader.alive();
+        let rss = proc_kb(reader_pid, "VmRSS:");
+        if rounds == 0 {
+            rss0 = rss;
+            server_rss0 = proc_kb(server_pid, "VmRSS:");
+        }
+        rss_max = rss_max.max(rss);
+        let avail = mem_available_mb();
+        {
+            use std::io::Write as _;
+            let _ = writeln!(
+                log,
+                "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.2}\t{:.2}\t{:.2}\t{}\t{}\t{}",
+                t_start.elapsed().as_secs(),
+                r,
+                what.replace(' ', "_"),
+                rss,
+                proc_kb(reader_pid, "Threads:"),
+                proc_ticks(reader_pid),
+                proc_kb(server_pid, "VmRSS:"),
+                proc_ticks(server_pid),
+                avail,
+                c.failures,
+                round_fail,
+                fname,
+                fkeys,
+                fp50,
+                fmax,
+                fstop,
+                u8::from(fprompt),
+                u8::from(server_alive),
+                u8::from(reader_alive),
+            );
+            let _ = log.flush();
+        }
+        rounds += 1;
+        if !server_alive {
+            aborts += 1;
+            out.notes
+                .push(format!("VK: gnome-terminal-server exited in round {r}"));
+            break;
+        }
+        if !reader_alive {
+            deaths += 1;
+            out.notes.push(format!("VK: the reader died in round {r}"));
+            break;
+        }
+        if avail < 3000 {
+            low_mem += 1;
+            out.notes.push(format!(
+                "VK: stopped early, MemAvailable {avail} MB < 3000 (round {r})"
+            ));
+            break;
+        }
+    }
+    let server_err = std::fs::read_to_string(std::path::Path::new(&root).join("vte-server.err"))
+        .unwrap_or_default();
+    out.x("vk_server_aborts", f64::from(aborts), "events");
+    out.x("vk_reader_deaths", f64::from(deaths), "events");
+    out.x("vk_stopped_low_mem", f64::from(low_mem), "events");
+    out.x(
+        "vk_server_criticals",
+        server_err.matches("CRITICAL").count() as f64,
+        "lines",
+    );
+    out.x("vk_rounds", rounds as f64, "rounds");
+    out.x("vk_floods", f64::from(floods), "floods");
+    out.x("vk_wall_s", t_start.elapsed().as_secs_f64(), "s");
+    out.x("vk_vd_failures", c.failures as f64, "steps");
+    out.x(
+        "vk_flood_prompt_missing",
+        f64::from(flood_prompt_missing),
+        "floods",
+    );
+    out.x("vk_reader_rss_first_kb", rss0 as f64, "kB");
+    out.x("vk_reader_rss_max_kb", rss_max as f64, "kB");
+    out.x(
+        "vk_reader_rss_last_kb",
+        proc_kb(reader_pid, "VmRSS:") as f64,
+        "kB",
+    );
+    out.x("vk_server_rss_first_kb", server_rss0 as f64, "kB");
+    out.x(
+        "vk_server_rss_last_kb",
+        proc_kb(server_pid, "VmRSS:") as f64,
+        "kB",
+    );
+    out.x("vk_flood_key_max_ms", worst_flood_key, "ms");
+    out.s("vk_flood_key_ms", key_lat);
+    out.s("vk_stop_ms", stop_lat);
+    out.notes.extend(std::mem::take(&mut c.notes));
+    out.notes.push(format!(
+        "VK: soak of {secs} s, per-round series in {}",
+        log_path.display()
+    ));
+    if let Some(dir) = std::env::var_os("GORCA_VV_KEEP_DIR") {
+        let dir = std::path::PathBuf::from(dir);
+        let _ = std::fs::create_dir_all(&dir);
+        if let Some(name) = err_path.file_name() {
+            let _ = std::fs::copy(&err_path, dir.join(name));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

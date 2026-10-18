@@ -1,0 +1,2 @@
+== reader <repo>/target/release/gorca built from 1308ae05, tree at b63baa06
+Error: the reader binary was built from 1308ae05 but the tree is at b63baa06: rebuild it (cargo build --release -p gorca-daemon) or pass --allow-stale-reader

@@ -107,3 +107,128 @@ Resolved topology (from the reader reports): lanes-rtx24, lanes-rtx3, lanes-rtx3
 | b1/judge-quick | FAIL | a1 | 5400 s | 0.3-8.5 | 1.920 | 0 | 0 | exit 124 |
 summary: <repo>/bench/results/acceptance/phase2-20261018T001009Z/summary.md (exit 1)
 quiet-host restored
+== phase2 acceptance: ACCEPTANCE
+mode=ACCEPTANCE
+utc=2026-10-18T00:10:09Z
+git_rev=1308ae05 dirty_tracked_files=0 branch=main
+kernel=7.1.8+deb13-rt-amd64 cpus=16
+loadavg=3.00 4.72 7.25 3/1940 818044
+psi_memory_some_avg10=0.30 psi_memory_full_avg10=0.30
+psi_cpu_some_avg10=0.00 psi_io_some_avg10=1.88
+mem_available_mb=14800
+governor=performance 
+rtkit MaxRealtimePriority: i 20 
+rtkit RTTimeUSecMax: x 200000 
+topology: shipped default (--topology=auto); expected arm: lanes-rt (gated by e2e --expect-topology)
+repeats=3 quick=no suites=m1 m3 m4 m6 m7 m8 m9 storm x1 b1
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=1
+  idle C3_ACPI latency=1048us disabled=1
+  load: 3.00 4.72 7.25 3/1935 818084
+after quiet-host on:
+governor: performance 
+idle POLL latency=0us disabled=0
+idle C1_ACPI latency=1us disabled=0
+idle C2_ACPI latency=127us disabled=1
+idle C3_ACPI latency=1048us disabled=1
+load: 3.00 4.72 7.25 1/1934 818234
+git_rev_built=1308ae05 binary=321b3ed0d392dddf mtime=2026-10-18 03:11:02.236923184 +0300
+loadavg_end=2.13 2.14 2.03 2/2175 1148219 elapsed_s=23643
+---- resumed ----
+mode=ACCEPTANCE
+utc=2026-10-18T06:47:23Z
+git_rev=b63baa06 dirty_tracked_files=0 branch=main
+kernel=7.1.8+deb13-rt-amd64 cpus=16
+loadavg=2.40 2.17 2.04 1/2178 1148982
+psi_memory_some_avg10=0.00 psi_memory_full_avg10=0.00
+psi_cpu_some_avg10=0.20 psi_io_some_avg10=0.00
+mem_available_mb=14728
+governor=performance 
+rtkit MaxRealtimePriority: i 20 
+rtkit RTTimeUSecMax: x 200000 
+topology: shipped default (--topology=auto); expected arm: lanes-rt (gated by e2e --expect-topology)
+repeats=3 quick=no suites=m1 m3 m4 m6 m7 m8 m9 storm x1 b1
+quiet-host:
+  governor: performance 
+  idle POLL latency=0us disabled=0
+  idle C1_ACPI latency=1us disabled=0
+  idle C2_ACPI latency=127us disabled=0
+  idle C3_ACPI latency=1048us disabled=0
+  load: 2.40 2.17 2.04 1/2180 1149022
+
+######## suite m1
+== m1/e2e: already ok, skipped (resume)
+
+######## suite m3
+== m3/e2e attempt 2  load 2.40 2.17 2.04 1/2177 1149185  cap 5400s
+   -> FAIL (exit 1, 1 s)
+   stderr: == reader <repo>/target/release/gorca built from 1308ae05, tree at b63baa06
+   stderr: Error: the reader binary was built from 1308ae05 but the tree is at b63baa06: rebuild it (cargo build --release -p gorca-daemon) or pass --allow-stale-reader
+
+######## suite m4
+== m4/e2e: already ok, skipped (resume)
+
+######## suite m6
+== m6/fake: already ok, skipped (resume)
+== m6/vv attempt 2  load 2.40 2.17 2.04 2/2178 1149325  cap 3600s
+   -> FAIL (exit 1, 6 s)
+   stderr: private compositor: /tmp/gorca-vte.0JjtkC/x/gorca-vte-1149329
+   stderr: == reader <repo>/target/release/gorca built from 1308ae05, tree at b63baa06
+   stderr: Error: the reader binary was built from 1308ae05 but the tree is at b63baa06: rebuild it (cargo build --release -p gorca-daemon) or pass --allow-stale-reader
+
+######## suite m7
+== m7/firefox: already ok, skipped (resume)
+
+######## suite m8
+== m8/firefox: already ok, skipped (resume)
+
+######## suite m9
+== m9/chromium-m7: already ok, skipped (resume)
+== m9/chromium-m8 attempt 2  load 2.21 2.13 2.03 1/2187 1149719  cap 9000s
+   -> FAIL (exit 1, 1957 s)
+   stderr: kill: (-1188369): No such process
+   stderr: -- round 3/3 M8-TB (load 4.82 4.79 4.83 3/2320 1188755)
+   stderr: kill: (-1188831): No such process
+   stderr: == wrote <repo>/bench/results/acceptance/phase2-20261018T001009Z/m9/chromium-m8.a2/res/20261018T072005Z.{json,txt} and -steps.md
+   stderr: == 2 gate(s) FAILED
+
+######## suite storm
+== storm/e2e: already ok, skipped (resume)
+
+######## suite x1
+== x1/hooks: already ok, skipped (resume)
+
+######## suite b1
+== b1/judge-quick attempt 2  load 3.78 4.55 4.74 1/2181 1189258  cap 5400s
+   -> FAIL (exit 1, 1492 s)
+   stderr:     Finished `bench` profile [optimized + debuginfo] target(s) in 0.05s
+   stderr:      Running benches/step.rs (target/release/deps/step-a18b2b208eea90d6)
+   stderr: step[focus-prefetch]: median over 7 rounds of the worst step = 17.8 us (gate 250 us)
+   stderr: wrote <repo>/bench/results/acceptance/phase2-20261018T001009Z/b1/judge-quick.a2/res/acc-20261018T064723Z-b1-judge-quick-a2/20261018T074459Z.json
+   stderr: Error: INVALID RUN: service-time fidelity check failed (fail: service-time model off in all 1 attempts; last attempt 1: p50 delta 0.356 ms, p99 delta 1.530 ms (strict=true))
+# Phase 2 acceptance: FAIL
+
+Mode: **ACCEPTANCE**. Run dir: `<repo>/bench/results/acceptance/phase2-20261018T001009Z`.
+Resolved topology (from the reader reports): lanes-rtx24, lanes-rtx30, lanes-rtx39, lanes-rtx6, lanes-rtx87.
+
+## Steps
+
+| step | result | attempt | wall | load1 min-max | mem PSI max | gated rows | FAIL rows | notes |
+|---|---|---|---|---|---|---|---|---|
+| m1/e2e | PASS | a1 | 830 s | 4.0-8.3 | 0.720 | 31 | 0 | - |
+| m3/e2e | FAIL | a2 | 1 s | 2.4-2.4 | 0 | 0 | 0 | exit 1; 2 attempts, earlier ones kept |
+| m4/e2e | PASS | a1 | 449 s | 2.9-6.0 | 1.360 | 8 | 0 | - |
+| m6/fake | PASS | a1 | 2610 s | 2.5-9.8 | 7.270 | 45 | 0 | - |
+| m6/vv | FAIL | a2 | 6 s | 2.2-2.4 | 0 | 0 | 0 | exit 1; 2 attempts, earlier ones kept |
+| m7/firefox | PASS | a1 | 3658 s | 2.5-8.5 | 2.960 | 77 | 0 | - |
+| m8/firefox | PASS | a1 | 2096 s | 3.5-8.3 | 2.750 | 46 | 0 | - |
+| m9/chromium-m7 | PASS | a1 | 3427 s | 2.2-10.5 | 2.810 | 77 | 0 | - |
+| m9/chromium-m8 | FAIL | a2 | 1957 s | 2.2-9.3 | 2.750 | 46 | 2 | exit 1; 2 gate rows FAIL; 2 attempts, earlier ones kept |
+| storm/e2e | PASS | a1 | 622 s | 4.1-8.6 | 0.360 | 30 | 0 | - |
+| x1/hooks | PASS | a1 | 38 s | 4.7-6.2 | 0 | 19 | 0 | - |
+| b1/judge-quick | FAIL | a2 | 1492 s | 0.4-3.8 | 0 | 23 | 0 | exit 1; 2 attempts, earlier ones kept |
+summary: <repo>/bench/results/acceptance/phase2-20261018T001009Z/summary.md (exit 1)
+quiet-host restored
