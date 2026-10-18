@@ -396,3 +396,47 @@ fn a_key_leaving_review_on_a_cold_terminal_starts_one_tracking() {
     let now = s.r.term_trackings();
     assert_eq!(now - started, 1);
 }
+
+/// The key that leaves flat review must both end review and be echoed (owner report: the first
+/// typed character after review was silent in a terminal). Leaving review advances the epoch
+/// (`ModeEffect::AdvanceEpoch`), so the echo of the very key that left it carried an epoch the
+/// speech lane had already moved past: the lane dropped it as stale. The echo must be as new as
+/// the epoch the leaving made.
+#[test]
+fn the_character_that_leaves_review_is_echoed_with_a_current_epoch() {
+    for node in [TERM, ENTRY] {
+        for cmd in [
+            CoreCmd::ReviewCurLine,
+            CoreCmd::ReviewCurWord,
+            CoreCmd::ReviewCurChar,
+        ] {
+            let mut s = Sim::new(true);
+            s.focus_to(node, true, 0);
+            s.settle(3000);
+            s.command(cmd, 1);
+            s.settle(3000);
+            assert!(
+                matches!(s.r.mode(), Mode::Review { .. }),
+                "{cmd:?} starts review"
+            );
+            s.spoken.clear();
+            s.type_key(KeyKind::Letter('x'), Modifiers::empty());
+            s.settle(1000);
+            assert!(
+                !matches!(s.r.mode(), Mode::Review { .. }),
+                "the key ends review"
+            );
+            let echo = s.spoken.iter().find(|u| u.text == "x");
+            let Some(echo) = echo else {
+                let said: Vec<&str> = s.spoken.iter().map(|u| u.text.as_str()).collect();
+                panic!("node {node} {cmd:?}: the typed character is echoed, got {said:?}");
+            };
+            assert!(
+                echo.epoch >= s.epoch.current(),
+                "node {node} {cmd:?}: the echo (epoch {:?}) is stale, current {:?}",
+                echo.epoch,
+                s.epoch.current()
+            );
+        }
+    }
+}

@@ -1577,6 +1577,24 @@ pub fn vr(
         Ok(())
     })?;
     expect("changed under the cursor", "changed line five", &got);
+    // The key that leaves review is the user typing: it ends review and is echoed (twice, once
+    // after a line and once after a character, and the shell's echo comes a frame later).
+    for (i, k) in [KP_CUR_LINE, KP_NEXT_CHAR].into_iter().enumerate() {
+        tap(&mut t, k, 0, 0)?;
+        std::thread::sleep(Duration::from_millis(250));
+        let c = if i == 0 { 'x' } else { 'y' };
+        let got = said_during(&mut t, 400, |t| {
+            type_key(t, c)?;
+            std::thread::sleep(Duration::from_millis(10));
+            feed(&mut t.app, &c.to_string())?;
+            Ok(())
+        })?;
+        expect(
+            &format!("typed after review {i}"),
+            &c.to_string(),
+            &got,
+        );
+    }
     // A series of steps: latency and no IPC.
     let n = n_of(size, 400);
     let mut rng = Rng::new(seed);
