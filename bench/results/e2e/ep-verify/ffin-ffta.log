@@ -1,0 +1,213 @@
+private compositor: /tmp/gorca-ed.eDQrWc/x/gorca-ed-1674059
+== reader <repo>/.claude/worktrees/agent-acdd27aef2e6e0fee/target/release/gorca built from abd07915, tree at 21de4788
+== e2e adhoc: reader=daemon:<repo>/.claude/worktrees/agent-acdd27aef2e6e0fee/target/release/gorca backend=voicego repeats=1 load=11.87 13.74 13.63 3/2858 1674368
+-- round 1/1 ED-FFIN (load 11.87 13.74 13.63 3/2858 1674368)
+2026-10-18T12:04:31.955609Z  INFO gorca_ext_host::host: extension catalog not registered: namespace `ext-gnome-shell` is already registered ext="ext-gnome-shell"
+2026-10-18T12:04:32.033371Z  INFO gorca_ext_host::host: extension catalog not registered: namespace `ext-vte` is already registered ext="ext-vte"
+2026-10-18T12:04:32.033815Z  INFO gorca_daemon::wire: extensions loaded extensions=["ext-gnome-shell", "ext-vte"]
+2026-10-18T12:04:32.035580Z  INFO gorca_daemon: terminal policy: ext-vte WASM component
+2026-10-18T12:04:32.035603Z  INFO gorca_daemon: shell policy: ext-gnome-shell WASM component
+2026-10-18T12:04:32.037923Z  INFO gorca_daemon::topology: lane placed lane=gorca-input tid=1674426 granted=rr:15 via="rtkit" pinned=Some(1) error=None
+2026-10-18T12:04:32.040203Z  INFO gorca_daemon::topology: lane placed lane=gorca-speech-io tid=1674428 granted=rr:12 via="rtkit" pinned=Some(3) error=None
+2026-10-18T12:04:32.042095Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="lanes-rt"
+2026-10-18T12:04:32.042131Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-18T12:04:32.042408Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-18T12:04:32.043522Z  INFO gorca_daemon::topology: lane placed lane=gorca-reader tid=1674433 granted=rr:13 via="rtkit" pinned=Some(2) error=None
+2026-10-18T12:04:32.045533Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-18T12:04:32.046984Z  INFO gorca_daemon::topology: lane placed lane=gorca-drain-0 tid=1674439 granted=rr:12 via="rtkit" pinned=Some(4) error=None
+2026-10-18T12:04:44.315059Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T12:04:44.344952Z  INFO gorca_phase: phase="warm" wall_ms=29.563175 waited_ms=28.707138999999998 blocked_ms=2.055823 slept_ms=26.607461 rounds=2 probes=21 sampled_nodes=4 tagged_nodes=4 ready=true
+2026-10-18T12:04:44.345261Z  INFO gorca_phase: phase="locate" wall_ms=0.26396200000000003
+2026-10-18T12:04:44.345284Z  INFO gorca_phase: phase="create" wall_ms=0.00505
+2026-10-18T12:04:44.347810Z  INFO gorca_phase: phase="fetch" total_ms=2.4817329999999997 warm_ms=0.0 frontier_ms=0.181621 get_tree_ms=0.24107 roles_ms=0.443436 states_ms=0.546207 text_ms=0.266997 assemble_ms=0.003001 heaviest_get_tree_ms=0.102 calls=52 tree_bytes=2008 nodes=12
+2026-10-18T12:04:44.347897Z  INFO gorca_phase: phase="translate" wall_ms=0.044860000000000004 nodes=19
+2026-10-18T12:04:44.907606Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T12:04:44.908791Z  INFO gorca_phase: phase="locate" wall_ms=1.069051
+2026-10-18T12:04:46.337958Z  INFO gorca_phase: phase="web_focus" hit=true
+kill: (-1674444): No such process
+2026-10-18T12:05:09.871889Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-18T12:05:09.872453Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-18T12:05:09.872363Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 11, fetch_failed: 0, fetch_timeout: 0, window_hits: 13, window_dirty: 0, caret_correlated: 15, caret_held_correlated: 0, caret_absorbed: 25, caret_late: 0, caret_edge: 11, boundary_cues: 6, clipboard_spoken: 3, caret_uncorrelated: 1, typed_echoed: 20, keys_seen: 59, keys_typed: 20, inserted_spoken: 0, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 5, text_flood_coalesced: 0, selection_spoken: 10, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-18T12:05:09.874001Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0, review_syncs: 0, retracked_on_key: 0 }
+2026-10-18T12:05:09.879487Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 3, fetch_ok: 3, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 0, utterances: 55, cues: 6, reader_restarts: 0 }
+2026-10-18T12:05:09.879528Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 55, replaced: 1, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-18T12:05:09.889324Z  INFO gorca_daemon: gorca stopped
+-- round 1/1 ED-FFTA (load 10.67 13.20 13.45 5/2970 1676785)
+2026-10-18T12:05:10.054672Z  INFO gorca_ext_host::host: extension catalog not registered: namespace `ext-gnome-shell` is already registered ext="ext-gnome-shell"
+2026-10-18T12:05:10.121823Z  INFO gorca_ext_host::host: extension catalog not registered: namespace `ext-vte` is already registered ext="ext-vte"
+2026-10-18T12:05:10.121993Z  INFO gorca_daemon::wire: extensions loaded extensions=["ext-gnome-shell", "ext-vte"]
+2026-10-18T12:05:10.122017Z  INFO gorca_daemon: terminal policy: ext-vte WASM component
+2026-10-18T12:05:10.122023Z  INFO gorca_daemon: shell policy: ext-gnome-shell WASM component
+2026-10-18T12:05:10.125383Z  INFO gorca_daemon::topology: lane placed lane=gorca-input tid=1676842 granted=rr:15 via="rtkit" pinned=Some(1) error=None
+2026-10-18T12:05:10.129062Z  INFO gorca_daemon::topology: lane placed lane=gorca-speech-io tid=1676844 granted=rr:12 via="rtkit" pinned=Some(3) error=None
+2026-10-18T12:05:10.130457Z  INFO gorca_daemon: gorca started workers=16 speech=Voicego topology="lanes-rt"
+2026-10-18T12:05:10.131012Z  INFO gorca_connector_atspi::connector: connecting to the accessibility bus
+2026-10-18T12:05:10.131359Z  INFO gorca_input_mutter::source: keyboard monitor active
+2026-10-18T12:05:10.133017Z  INFO gorca_connector_atspi::connector: atspi connector running
+2026-10-18T12:05:10.133541Z  INFO gorca_daemon::topology: lane placed lane=gorca-reader tid=1676849 granted=rr:13 via="rtkit" pinned=Some(2) error=None
+2026-10-18T12:05:10.136333Z  INFO gorca_daemon::topology: lane placed lane=gorca-drain-0 tid=1676852 granted=rr:12 via="rtkit" pinned=Some(4) error=None
+2026-10-18T12:05:22.136425Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T12:05:22.199410Z  INFO gorca_phase: phase="warm" wall_ms=62.781015999999994 waited_ms=61.931024 blocked_ms=36.032841000000005 slept_ms=25.845437 rounds=2 probes=21 sampled_nodes=4 tagged_nodes=4 ready=true
+2026-10-18T12:05:22.199790Z  INFO gorca_phase: phase="locate" wall_ms=0.30645500000000003
+2026-10-18T12:05:22.199821Z  INFO gorca_phase: phase="create" wall_ms=0.003621
+2026-10-18T12:05:22.202137Z  INFO gorca_phase: phase="fetch" total_ms=2.262317 warm_ms=0.0 frontier_ms=0.195053 get_tree_ms=0.310664 roles_ms=0.259644 states_ms=0.343914 text_ms=0.26731299999999997 assemble_ms=0.008971 heaviest_get_tree_ms=0.156 calls=52 tree_bytes=2008 nodes=12
+2026-10-18T12:05:22.202268Z  INFO gorca_phase: phase="translate" wall_ms=0.052148 nodes=19
+2026-10-18T12:05:22.734958Z  INFO gorca_phase: phase="web_focus" hit=false
+2026-10-18T12:05:22.735620Z  INFO gorca_phase: phase="locate" wall_ms=0.573504
+2026-10-18T12:05:24.160455Z  INFO gorca_phase: phase="web_focus" hit=true
+kill: (-1676864): No such process
+2026-10-18T12:06:09.130516Z  INFO gorca_daemon::input: input lane statistics keys=490 ambiguous=0 band_forks=0
+2026-10-18T12:06:09.448224Z  INFO gorca_daemon: SIGTERM received, shutting down
+2026-10-18T12:06:09.448324Z  INFO gorca_core::runtime: reader text counters text=TextCounters { fetches: 25, fetch_failed: 0, fetch_timeout: 0, window_hits: 18, window_dirty: 1, caret_correlated: 27, caret_held_correlated: 0, caret_absorbed: 150, caret_late: 0, caret_edge: 11, boundary_cues: 6, clipboard_spoken: 4, caret_uncorrelated: 1, typed_echoed: 142, keys_seen: 202, keys_typed: 142, inserted_spoken: 1, insert_held_claimed: 0, inserts_coalesced: 0, delete_held_claimed: 0, erased_spoken: 7, text_flood_coalesced: 0, selection_spoken: 16, sel_fetch_failed: 0, say_all_chunks: 0, say_all_starved: 0, say_all_watchdog: 0, events_dropped: 0, retargets: 0 }
+2026-10-18T12:06:09.448364Z  INFO gorca_connector_atspi::connector: atspi connector stopping
+2026-10-18T12:06:09.448366Z  INFO gorca_core::runtime: reader terminal counters terminal=TermCounters { fetches: 0, fetch_failed: 0, settled_local: 0, resync_mismatch: 0, output_spoken: 0, output_lines_spoken: 0, output_lines_skipped: 0, repaints: 0, typed_echoed: 0, typed_explained: 0, history_read: 0, secret_prompts: 0 } reads=TermReads { started: 0, answered: 0, failed: 0, events_lost: 0, review_syncs: 0, retracked_on_key: 0 }
+2026-10-18T12:06:09.451443Z  INFO gorca_daemon: core stats=CoreStatsSnapshot { apps_announced: 1, focus_requests: 3, fetch_ok: 3, fetch_timeout: 0, fetch_failed: 0, fetch_refused: 0, stale_dropped: 0, utterances: 199, cues: 6, reader_restarts: 0 }
+2026-10-18T12:06:09.451486Z  INFO gorca_daemon: speech lane stats=SpeechStats { spoken: 199, replaced: 0, stale_dropped: 0, replace_slow: 0, superseded: 0, inbox_dropped: 0, muted_dropped: 0, submit_failed: 0 }
+2026-10-18T12:06:09.469127Z  INFO gorca_daemon: gorca stopped
+# e2e adhoc
+# utc=2026-10-18T12:06:09Z
+# host=debian
+# kernel=7.1.8+deb13-rt-amd64
+# cpu_model=Intel(R) Core(TM) Ultra 9 285H
+# cpus=16
+# governor=performance x16
+# loadavg_start=11.46 12.84 13.30 7/2608 1681419
+# git_rev=21de4788
+# git_dirty=false
+# bus_impl=dbus-daemon (private, tests/harness/run-isolated.sh)
+# python=Python 3.13.5
+# build=release
+# topology_arms=lanes-rtx2
+# topology_expected=-
+# label=adhoc
+# reader=daemon:<repo>/.claude/worktrees/agent-acdd27aef2e6e0fee/target/release/gorca
+# backend=voicego
+# repeats=1
+# samples_per_series=150
+# l2_trials=40
+# quick=true
+# loadavg_end=11.46 12.84 13.30 6/2608 1681416
+# reader_env=GORCA_ED=1 GORCA_ED_STRICT=1 GORCA_M7=1 GORCA_TOPOLOGY_REPORT=bench/results/e2e/adhoc/topology/topology.%p.json
+# gates=L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats
+# reader_args=--impersonate-orca
+# ext_dir=none
+# extensions=none
+# note0=ED-FFIN type: [h | e | l | l | o | comma | space | b | r | a | v | e | space | w | o | r | l | d]
+# note1=ED-FFIN Left: [d]
+# note2=ED-FFIN Right: [blank]
+# note3=ED-FFIN Home: [h]
+# note4=ED-FFIN Left at start: []
+# note5=ED-FFIN End: [blank]
+# note6=ED-FFIN Right at end: []
+# note7=ED-FFIN Ctrl+Left 1: [world]
+# note8=ED-FFIN Ctrl+Left 2: [brave]
+# note9=ED-FFIN Ctrl+Left 3: [hello]
+# note10=ED-FFIN Ctrl+Left 4 at start: []
+# note11=ED-FFIN Ctrl+Right 1: [hello]
+# note12=ED-FFIN Ctrl+Right 2: [brave]
+# note13=ED-FFIN Ctrl+Right 3: [world]
+# note14=ED-FFIN Ctrl+Right 4 at end: []
+# note15=ED-FFIN BackSpace: [d]
+# note16=ED-FFIN Delete at end: []
+# note17=ED-FFIN Home 2: [h]
+# note18=ED-FFIN Delete: [h]
+# note19=ED-FFIN Shift+Right: [e selected]
+# note20=ED-FFIN Shift+Right 2: [l selected]
+# note21=ED-FFIN Shift+Left: [l unselected]
+# note22=ED-FFIN Shift+Left 2: [e unselected]
+# note23=ED-FFIN Ctrl+Shift+Right: [ello, selected]
+# note24=ED-FFIN Ctrl+Shift+Left: [ello, unselected]
+# note25=ED-FFIN Shift+End: [all selected, 16 characters]
+# note26=ED-FFIN Shift+Home: [ello, brave worl unselected]
+# note27=ED-FFIN Ctrl+A: [all selected, 16 characters]
+# note28=ED-FFIN Right collapses: []
+# note29=ED-FFIN End 2: []
+# note30=ED-FFIN Ctrl+BackSpace: [worl]
+# note31=ED-FFIN Ctrl+Delete at end: []
+# note32=ED-FFIN Home 3: [e]
+# note33=ED-FFIN Ctrl+Delete: [ello,]
+# note34=ED-FFIN clip: select all: [all selected, 7 characters]
+# note35=ED-FFIN clip: Ctrl+C: [copied]
+# note36=ED-FFIN clip: Ctrl+X: [cut, brave]
+# note37=ED-FFIN clip: Ctrl+V: heard [] expected one utterance, got 0
+# note38=ED-FFIN clip: Ctrl+Z: [undo]
+# note39=ED-FFIN clip: Ctrl+Y: [redo]
+# note40=ED-FFIN clip: restore: [x | y]
+# note41=ED-FFTA type: [h | e | l | l | o | comma | space | b | r | a | v | e | space | w | o | r | l | d]
+# note42=ED-FFTA Left: [d]
+# note43=ED-FFTA Right: [blank]
+# note44=ED-FFTA Home: [h]
+# note45=ED-FFTA Left at start: []
+# note46=ED-FFTA End: [blank]
+# note47=ED-FFTA Right at end: []
+# note48=ED-FFTA Ctrl+Left 1: [world]
+# note49=ED-FFTA Ctrl+Left 2: [brave]
+# note50=ED-FFTA Ctrl+Left 3: [hello]
+# note51=ED-FFTA Ctrl+Left 4 at start: []
+# note52=ED-FFTA Ctrl+Right 1: [hello]
+# note53=ED-FFTA Ctrl+Right 2: [brave]
+# note54=ED-FFTA Ctrl+Right 3: [world]
+# note55=ED-FFTA Ctrl+Right 4 at end: []
+# note56=ED-FFTA BackSpace: [d]
+# note57=ED-FFTA Delete at end: []
+# note58=ED-FFTA Home 2: [h]
+# note59=ED-FFTA Delete: [h]
+# note60=ED-FFTA Shift+Right: [e selected]
+# note61=ED-FFTA Shift+Right 2: [l selected]
+# note62=ED-FFTA Shift+Left: [l unselected]
+# note63=ED-FFTA Shift+Left 2: [e unselected]
+# note64=ED-FFTA Ctrl+Shift+Right: [ello, selected]
+# note65=ED-FFTA Ctrl+Shift+Left: [ello, unselected]
+# note66=ED-FFTA Shift+End: [all selected, 16 characters]
+# note67=ED-FFTA Shift+Home: [ello, brave worl unselected]
+# note68=ED-FFTA Ctrl+A: [all selected, 16 characters]
+# note69=ED-FFTA Right collapses: []
+# note70=ED-FFTA End 2: []
+# note71=ED-FFTA Ctrl+BackSpace: [worl]
+# note72=ED-FFTA Ctrl+Delete at end: []
+# note73=ED-FFTA Home 3: [e]
+# note74=ED-FFTA Ctrl+Delete: [ello,]
+# note75=ED-FFTA clip: select all: [all selected, 7 characters]
+# note76=ED-FFTA clip: Ctrl+C: [copied]
+# note77=ED-FFTA clip: Ctrl+X: [cut, brave]
+# note78=ED-FFTA clip: Ctrl+V: [pasted, brave]
+# note79=ED-FFTA clip: Ctrl+Z: [undo]
+# note80=ED-FFTA clip: Ctrl+Y: [redo]
+# note81=ED-FFTA clip: restore: [x | y]
+# note82=ED-FFTA select all: [all selected, 9 characters]
+# note83=ED-FFTA clear: [brave xy]
+# note84=ED-FFTA type line 1: [o | n | e | space | t | w | o]
+# note85=ED-FFTA Enter: [new line]
+# note86=ED-FFTA type paragraph: [a | l | p | h | a | space | b | r | a | v | o | space | c | h | a | r | l | i | e | space | d | e | l | t | a | space | e | c | h | o | space | f | o | x | t | r | o | t | space | g | o | l | f | space | h | o | t | e | l | space | i | n | d | i | a | space | j | u | l | i | e | t | space | k | i | l | o | space | l | i | m | a | space | m | i | k | e | space | n | o | v | e | m | b | e | r | space | o | s | c | a | r | space | p | a | p | a | space | q | u | e | b | e | c]
+# note87=ED-FFTA Enter 2: [new line]
+# note88=ED-FFTA type last: [l | a | s | t | space | l | i | n | e]
+# note89=ED-FFTA Up: [papa quebec]
+# note90=ED-FFTA Up 2: [kilo lima mike november oscar]
+# note91=ED-FFTA Up 3: [foxtrot golf hotel india juliet]
+# note92=ED-FFTA Down: [kilo lima mike november oscar]
+# note93=ED-FFTA Ctrl+Up: [alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec]
+# note94=ED-FFTA Ctrl+Up 2: [alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec]
+# note95=ED-FFTA Ctrl+Down: [alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec]
+# note96=ED-FFTA Ctrl+Home: [one two]
+# note97=ED-FFTA Ctrl+End: [last line]
+# note98=ED-FFTA PageUp: [one two]
+# note99=ED-FFTA PageDown: [last line]
+# note100=ED-FFTA Ctrl+Home 2: [one two]
+# note101=ED-FFTA Shift+Down: [one two selected]
+# note102=ED-FFTA Shift+Down 2: [alpha bravo charlie delta echo selected]
+# note103=ED-FFTA Shift+Up: [alpha bravo charlie delta echo unselected]
+# note104=ED-FFTA Ctrl+Shift+Down: [alpha bravo charlie delta echo selected]
+# note105=ED-FFTA Ctrl+Shift+End: [foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec
+last line selected]
+# note106=ED-FFTA BackSpace selection: [one two
+alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec
+last line]
+# note107=ED-FFTA Ctrl+Z: [undo]
+
+metric                     bus                median          min          max  n op    threshold  res   note
+ED-FFIN.ed_failures        daemon/voicego            1            1            1  1                  info   [steps]
+ED-FFIN.ed_steps           daemon/voicego           41           41           41  1                  info   [steps]
+ED-FFTA.ed_failures        daemon/voicego            0            0            0  1                  info   [steps]
+ED-FFTA.ed_steps           daemon/voicego           67           67           67  1                  info   [steps]
+
+== wrote bench/results/e2e/adhoc/20261018T120609Z.{json,txt}
