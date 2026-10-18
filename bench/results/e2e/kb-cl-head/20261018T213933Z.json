@@ -1,0 +1,15 @@
+{
+  "meta": {"utc": "2026-10-18T21:39:33Z", "host": "debian", "kernel": "7.1.8+deb13-rt-amd64", "cpu_model": "Intel(R) Core(TM) Ultra 9 285H", "cpus": "16", "governor": "performance x16", "loadavg_start": "20.15 19.66 17.83 5/1678 2924230", "git_rev": "3c05e863", "git_dirty": "false", "bus_impl": "dbus-daemon (private, tests/harness/run-isolated.sh)", "python": "Python 3.13.5", "build": "release", "topology_arms": "lanes-rtx1", "topology_expected": "-", "label": "kb-cl-head", "reader": "daemon:<repo>/.claude/worktrees/agent-aa129b307e9aa1778/target/release/gorca", "backend": "voicego", "repeats": "1", "samples_per_series": "150", "l2_trials": "40", "quick": "true", "loadavg_end": "20.15 19.66 17.83 7/1678 2924227", "reader_env": "GORCA_M7=1 NO_COLOR=1 RUST_LOG=warn,gorca_phase=info GORCA_TOPOLOGY_REPORT=bench/results/e2e/kb-cl-head/topology/topology.%p.json", "gates": "L1/L3/L4/K1 p99<=15ms, L2 p99<=5ms, lost==0; median over repeats", "reader_args": "--impersonate-orca", "ext_dir": "none", "extensions": "none"},
+  "rows": [
+    {"id": "CL.cl_ms.n", "scenario": "CL", "bus": "daemon/voicego", "value": 150, "min": 150, "max": 150, "runs": 1, "unit": "samples", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "CL.cl_ms.p50", "scenario": "CL", "bus": "daemon/voicego", "value": 0.39331, "min": 0.39331, "max": 0.39331, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "CL.cl_ms.p95", "scenario": "CL", "bus": "daemon/voicego", "value": 0.646081, "min": 0.646081, "max": 0.646081, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "CL.cl_ms.p99", "scenario": "CL", "bus": "daemon/voicego", "value": 0.810286, "min": 0.810286, "max": 0.810286, "runs": 1, "unit": "ms", "op": "<=", "threshold": 5, "verdict": "PASS", "note": ""},
+    {"id": "CL.cl_ms.p999", "scenario": "CL", "bus": "daemon/voicego", "value": 0.893475, "min": 0.893475, "max": 0.893475, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "CL.cl_ms.max", "scenario": "CL", "bus": "daemon/voicego", "value": 0.893475, "min": 0.893475, "max": 0.893475, "runs": 1, "unit": "ms", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "CL.cl_direction_wrong", "scenario": "CL", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "checks", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "CL.late_cl_ms", "scenario": "CL", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "keys", "op": "", "threshold": null, "verdict": "info", "note": ""},
+    {"id": "CL.lost_cl_ms", "scenario": "CL", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "keys", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"},
+    {"id": "CL.not_consumed", "scenario": "CL", "bus": "daemon/voicego", "value": 0, "min": 0, "max": 0, "runs": 1, "unit": "keys", "op": "<=", "threshold": 0, "verdict": "PASS", "note": "gated on the max over repeats"}
+  ]
+}

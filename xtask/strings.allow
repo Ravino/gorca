@@ -109,7 +109,6 @@ crates/gorca-ext-host/src/slot.rs | extension disabled for this application afte
 crates/gorca-ext-host/src/wasm.rs | host work budget exhausted
 crates/gorca-ext-host/src/wasm.rs | cannot refuel: {e:#}
 crates/gorca-input-api/src/keys.rs | Insert
-crates/gorca-input-api/src/keys.rs | KP_Insert
 crates/gorca-input-api/src/keys.rs | Caps_Lock
 crates/gorca-speech/src/failover.rs | deadline exceeded
 crates/gorca-speech/src/verbalize.rs | абвгдеёжзийклмнопрстуфхцчшщъыьэюя
@@ -134,3 +133,5 @@ extensions/ext-vte/src/prompt.rs | \u{43a}\u{43e}\u{434} \u{43f}\u{43e}\u{434}\u
 extensions/ext-vte/src/prompt.rs | \u{441}\u{435}\u{43a}\u{440}\u{435}\u{442}\u{43d}[\u{430}-\u{44f}]*
 extensions/ext-vte/src/prompt.rs | \u{43f}\u{438}\u{43d}-?\u{43a}\u{43e}\u{434}
 extensions/ext-vte/src/prompt.rs | [^:?\u{ff1a}\u{ff1f}]{0,60}[:?\u{ff1a}\u{ff1f}]\s*$
+crates/gorca-core/src/commands/keys.rs | modifier key
+crates/gorca-input-api/src/keys.rs | KP_Insert

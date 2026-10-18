@@ -29,14 +29,54 @@ pub mod sym {
     pub const ISO_LEVEL3_SHIFT: u32 = 0xfe03;
 }
 
+/// A key that can be the gorca modifier. One row per key: the settings names, the grab sets, the
+/// "stuck modifier" notices and the tests all read this table, so Insert, the keypad Insert and
+/// Caps Lock cannot drift apart.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct ModifierKey {
+    /// The name in `keyboard.modifiers`.
+    pub name: &'static str,
+    /// The keysym Mutter reports (and grabs by) while the key is used as a modifier. The keypad
+    /// Insert reports it only with Num Lock off: with Num Lock on the key types `KP_0`, which is
+    /// a digit and never a modifier (ADR-0005 K-6a; NVDA and Orca behave alike).
+    pub keysym: u32,
+    /// XKB keycode of the physical key on the standard PC layout.
+    pub keycode: u16,
+    /// Does holding the key autorepeat? Mutter 48.7 mishandles repeats of a grabbed modifier
+    /// (`docs/reports/live-keys-swallowed.md`); Caps Lock never repeats.
+    pub autorepeats: bool,
+}
+
+/// The keys that can be the gorca modifier, in the default order.
+pub const MODIFIER_KEYS: [ModifierKey; 3] = [
+    ModifierKey {
+        name: "Insert",
+        keysym: sym::INSERT,
+        keycode: 118,
+        autorepeats: true,
+    },
+    ModifierKey {
+        name: "KP_Insert",
+        keysym: sym::KP_INSERT,
+        keycode: 90,
+        autorepeats: true,
+    },
+    ModifierKey {
+        name: "Caps_Lock",
+        keysym: sym::CAPS_LOCK,
+        keycode: 66,
+        autorepeats: false,
+    },
+];
+
+/// The table row of a modifier name from the settings (`Insert`, `KP_Insert`, `Caps_Lock`).
+pub fn modifier_key(name: &str) -> Option<&'static ModifierKey> {
+    MODIFIER_KEYS.iter().find(|m| m.name == name)
+}
+
 /// Keysym of a gorca modifier name from the settings (`Insert`, `KP_Insert`, `Caps_Lock`).
 pub fn modifier_keysym(name: &str) -> Option<u32> {
-    match name {
-        "Insert" => Some(sym::INSERT),
-        "KP_Insert" => Some(sym::KP_INSERT),
-        "Caps_Lock" => Some(sym::CAPS_LOCK),
-        _ => None,
-    }
+    modifier_key(name).map(|m| m.keysym)
 }
 
 /// Shift, Control, Alt, Super, Meta, Hyper, level shifts and Num Lock: keys that never act alone.
@@ -238,6 +278,10 @@ const US_SHIFTED_DIGITS: [u32; 9] = [0x21, 0x40, 0x23, 0x24, 0x25, 0x5e, 0x26, 0
 pub struct KeysymTable {
     /// `(xkb keycode, shift)` to every keysym that key types in some configured layout.
     by_code: std::collections::BTreeMap<(u16, bool), Vec<u32>>,
+    /// Case pairs of the layouts (`Cyrillic_er` and `Cyrillic_ER`, both directions). ASCII
+    /// letters need no row. Caps Lock turns a letter key into its other-case keysym, and Mutter
+    /// matches a key grab by that exact keysym (see [`KeysymTable::case_partner`]).
+    case: std::collections::BTreeMap<u32, u32>,
 }
 
 impl KeysymTable {
@@ -255,6 +299,27 @@ impl KeysymTable {
         if !row.contains(&sym) {
             row.push(sym);
             row.sort_unstable();
+        }
+    }
+
+    /// Record that `lower` and `upper` are the two cases of one letter in some layout.
+    pub fn insert_case_pair(&mut self, lower: u32, upper: u32) {
+        if lower == 0 || upper == 0 || lower == upper {
+            return;
+        }
+        self.case.insert(lower, upper);
+        self.case.insert(upper, lower);
+    }
+
+    /// The keysym the same letter key types with Caps Lock toggled: `h` and `H`, `Cyrillic_er`
+    /// and `Cyrillic_ER`. XKB's alphabetic key type maps Caps Lock to the Shift level and
+    /// Shift+Caps Lock back to the base level, so a bare quick-navigation key with Caps Lock on
+    /// reaches Mutter as the capital and `Shift+H` as the lower case (NVDA ignores Caps Lock
+    /// for single-letter navigation, and so must the grab). `None` for keys without case.
+    pub fn case_partner(&self, sym: u32) -> Option<u32> {
+        match sym {
+            0x41..=0x5a | 0x61..=0x7a => Some(sym ^ 0x20),
+            _ => self.case.get(&sym).copied(),
         }
     }
 
@@ -451,6 +516,33 @@ mod tests {
     }
 
     #[test]
+    fn the_modifier_table_agrees_with_the_key_names() {
+        for m in &MODIFIER_KEYS {
+            assert_eq!(modifier_keysym(m.name), Some(m.keysym));
+            assert_eq!(modifier_key(m.name), Some(m));
+        }
+        // The physical keys of the static resolver (the lane resolves chords by keycode).
+        assert_eq!(static_keycode("insert"), Some(118));
+        assert_eq!(static_keycode("kp_insert"), Some(90));
+        assert_eq!(static_keysym("kp_insert"), Some(sym::KP_INSERT));
+        assert_eq!(static_keysym("insert"), Some(sym::INSERT));
+        assert_eq!(modifier_key("Insert").map(|m| m.keycode), Some(118));
+        assert_eq!(modifier_key("KP_Insert").map(|m| m.keycode), Some(90));
+        // Names, keysyms and keycodes do not collide.
+        for (i, a) in MODIFIER_KEYS.iter().enumerate() {
+            for b in &MODIFIER_KEYS[i + 1..] {
+                assert!(a.name != b.name && a.keysym != b.keysym && a.keycode != b.keycode);
+            }
+        }
+        // Only the keys that repeat can leave Mutter's stale entry behind.
+        assert_eq!(
+            modifier_key("Caps_Lock").map(|m| m.autorepeats),
+            Some(false)
+        );
+        assert_eq!(modifier_key("KP_Insert").map(|m| m.autorepeats), Some(true));
+    }
+
+    #[test]
     fn spoken_names() {
         assert_eq!(spoken_key_name(0x74, 0x74), "T");
         assert_eq!(spoken_key_name(0xffc9, 0), "f 12");
@@ -470,6 +562,21 @@ mod keysym_table_tests {
         assert_eq!(t.syms(43, true), vec![0x48]);
         assert_eq!(t.syms(10, true), vec![0x21]);
         assert_eq!(t.syms(15, true), vec![0x5e]);
+    }
+
+    #[test]
+    fn caps_lock_swaps_the_case_of_ascii_letters_and_registered_pairs_only() {
+        let mut t = KeysymTable::us();
+        assert_eq!(t.case_partner(0x68), Some(0x48));
+        assert_eq!(t.case_partner(0x48), Some(0x68));
+        assert_eq!(t.case_partner(0x32), None, "digits have no case");
+        assert_eq!(t.case_partner(0x5b), None, "[ is not a letter");
+        assert_eq!(t.case_partner(0x6d2), None, "unknown without the layout");
+        t.insert_case_pair(0x6d2, 0x6f2);
+        assert_eq!(t.case_partner(0x6d2), Some(0x6f2));
+        assert_eq!(t.case_partner(0x6f2), Some(0x6d2));
+        t.insert_case_pair(7, 7);
+        assert_eq!(t.case_partner(7), None);
     }
 
     #[test]

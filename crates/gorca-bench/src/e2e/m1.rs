@@ -315,6 +315,99 @@ pub fn k2(
     )
 }
 
+/// KM (keyboard report, bugs 2 and 3): Insert, the keypad Insert and Caps Lock are one modifier.
+/// `gorca+F12` (`info.time_date`) answers with each of them, at the K2 latency, and the double tap
+/// of each passes the modifier key itself to the application: exactly its second press and
+/// release, never another keysym (`km_passthrough_wrong`, gate 0).
+pub fn km(
+    host: &HostEnv,
+    reader: &ReaderSpec,
+    flavor: Flavor,
+    size: Size,
+    seed: u64,
+    out: &mut RunOut,
+) -> Result<()> {
+    if !gate_open(host, "KM", out)? {
+        return Ok(());
+    }
+    let mods = [
+        ("insert", INSERT),
+        (
+            "kp_insert",
+            K {
+                code: 90,
+                sym: 0xff9e,
+            },
+        ),
+        (
+            "caps_lock",
+            K {
+                code: 66,
+                sym: 0xffe5,
+            },
+        ),
+    ];
+    let mut wrong = 0u64;
+    for (name, modifier) in mods {
+        let mut rig = m1_rig(host, reader, flavor)?;
+        // The double tap (press, release, press within the repeat delay, release) comes first, on
+        // a virtual clock before the chords: the series ends by reading the reader's counters,
+        // which stops the reader.
+        let m = mutter(&mut rig)?;
+        m.app_log(true)?;
+        let t = 500_000;
+        for (down, at) in [(false, 0), (true, 40), (false, 150), (true, 190)] {
+            m.key_ex(modifier.code, modifier.sym, 0, down, t + at)?;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+        let log = m.app_log(true)?;
+        let want = vec![
+            (modifier.code, modifier.sym, false),
+            (modifier.code, modifier.sym, true),
+        ];
+        if log != want {
+            wrong += 1;
+            out.notes.push(format!(
+                "km {name}: the application received {log:?}, wanted {want:?}"
+            ));
+        }
+        // A held modifier autorepeats (Mutter 48.7 runs its double-tap rule for the repeats):
+        // whatever reaches the application is the modifier key itself, never another keysym, and
+        // one tap afterwards heals Mutter's stale entry. Caps Lock does not repeat.
+        if modifier.sym != 0xffe5 {
+            let m = mutter(&mut rig)?;
+            m.app_log(true)?;
+            m.hold(modifier.code, modifier.sym, 600_000, 900)?;
+            std::thread::sleep(Duration::from_millis(100));
+            let log = m.app_log(true)?;
+            if log
+                .iter()
+                .any(|(c, s, _)| *c != modifier.code || *s != modifier.sym)
+            {
+                wrong += 1;
+                out.notes.push(format!(
+                    "km {name}: a held modifier delivered another key to the application: {log:?}"
+                ));
+            }
+            m.key_ex(modifier.code, modifier.sym, 0, false, 610_000)?;
+            m.key_ex(modifier.code, modifier.sym, 0, true, 610_050)?;
+        }
+        let chord = Chord { modifier, key: F12 };
+        chord_series(
+            &mut rig,
+            out,
+            &format!("km_{name}_ms"),
+            &chord,
+            size.n.min(300),
+            seed,
+            Before::Nothing,
+            None,
+        )?;
+    }
+    out.x("km_passthrough_wrong", wrong as f64, "modifiers");
+    Ok(())
+}
+
 /// K2s: the same chord while a 50k events/s storm runs on the a11y bus. Gate: K2's ceiling plus
 /// 1 ms, `lost = 0`; the modifier must keep being swallowed under the storm.
 pub fn k2s(
